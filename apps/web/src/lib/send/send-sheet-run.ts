@@ -64,6 +64,7 @@ export type SendSheetPorts = {
     readonly sourceConversationId?: string;
     readonly targetConversationId: string;
     readonly nextClientMessageId: () => string;
+    readonly ephemeralDuration?: number;
   }) => Promise<ForwardResult>;
   readonly sendMessage: (params: { readonly conversationId: string; readonly body: SendMessageBody }) => Promise<ApiResult<SentMessageAck>>;
   readonly uploadFiles: (files: readonly File[]) => Promise<ApiResult<{ readonly attachmentIds: readonly string[] }>>;
@@ -240,8 +241,11 @@ export function createSendRun(params: {
           sourceConversationId: step.sourceConversationId,
           targetConversationId: conversationOf(key),
           nextClientMessageId: () => clientIdFor(`${slot}/${(n += 1)}`),
+          ...(step.ephemeralDuration === undefined ? {} : { ephemeralDuration: step.ephemeralDuration }),
         });
-        if (!result.ok) throw new StepFailed({ kind: 'refused', status: 0, message: result.error });
+        if (!result.ok) {
+          throw new StepFailed({ kind: 'refused', status: result.status ?? 0, message: result.error, ...(result.code === undefined ? {} : { code: result.code }) });
+        }
         return;
       }
       case 'forward-attachment': {

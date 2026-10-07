@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
+import { CaptureShieldOver } from '@/lib/capture/use-capture-shield';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { Attachment, Message } from '@/lib/api/types';
@@ -46,7 +47,10 @@ export default function ThreadMediaViewer({
   onClose,
   onReplyToMedia,
   kind = 'visual',
+  openedIsQuote = false,
 }: {
+  /** `opened` est une CITATION, pas un message du fil : sa nature doit être déclarée pour que sa pièce sorte (#9573). */
+  readonly openedIsQuote?: boolean;
   /** Les vocaux de la conversation (#8333) plutôt que ses images et vidéos — même plateau, page audio. */
   readonly kind?: 'visual' | 'audio';
   readonly opened: Message;
@@ -91,46 +95,54 @@ export default function ThreadMediaViewer({
   );
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = index.query;
 
+  /* « Annoncé ou noir » (#9617) : aucune page de la visionneuse n'est déclarée à une capture. */
+  const shown = useMemo(() => entries.map((entry) => entry.message), [entries]);
   return (
-    <MediaViewer
-      items={items}
-      startIndex={start}
-      onClose={onClose}
-      languages={languages}
-      fallbackLanguage={fallbackLanguage}
-      {...(displayLanguage !== undefined ? { displayLanguage } : {})}
-      fallbackLanguageAt={(at) => entries[at]?.message.originalLanguage}
-      carrierAt={(at) => {
-        const message = entries[at]?.message;
-        if (message === undefined) return undefined;
-        return message.id === opened.id && carrier !== undefined ? carrier : carrierOfMessage(message);
-      }}
-      isMineAt={(at) => {
-        const message = entries[at]?.message;
-        return message !== undefined && isMineOf(message, viewerId);
-      }}
-      onNearStart={() => {
-        if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-      }}
-      actionsAt={(at) => {
-        const entry = entries[at];
-        if (entry === undefined) return null;
-        const offers = mediaPageOffers({ attachment: entry.attachment, message: entry.message, capabilities });
-        return {
-          attachment: entry.attachment,
-          messageId: entry.message.id,
-          conversationId: entry.message.conversationId,
-          offers,
-          ...(offers.share
-            ? { share: attachmentSendRequest({ attachment: entry.attachment, message: entry.message, mine: isMineOf(entry.message, viewerId) }) }
-            : {}),
-          onReply: () => {
-            onClose();
-            onReplyToMedia(entry.message.id, entry.attachment.id);
-          },
-        };
-      }}
-      {...(deps !== undefined ? { deps } : {})}
-    />
+    <>
+      <CaptureShieldOver messages={shown} viewerId={viewerId} />
+      {openedIsQuote ? <CaptureShieldOver messages={[opened]} viewerId={viewerId} quoted /> : null}
+      <MediaViewer
+        items={items}
+        startIndex={start}
+        onClose={onClose}
+        languages={languages}
+        fallbackLanguage={fallbackLanguage}
+        {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+        fallbackLanguageAt={(at) => entries[at]?.message.originalLanguage}
+        carrierAt={(at) => {
+          const message = entries[at]?.message;
+          if (message === undefined) return undefined;
+          return message.id === opened.id && carrier !== undefined ? carrier : carrierOfMessage(message);
+        }}
+        isMineAt={(at) => {
+          const message = entries[at]?.message;
+          return message !== undefined && isMineOf(message, viewerId);
+        }}
+        onNearStart={() => {
+          if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+        }}
+        actionsAt={(at) => {
+          const entry = entries[at];
+          if (entry === undefined) return null;
+          const now = Date.now();
+          const quoted = openedIsQuote && entry.message.id === opened.id;
+          const offers = mediaPageOffers({ attachment: entry.attachment, message: entry.message, capabilities, now, quoted });
+          return {
+            attachment: entry.attachment,
+            messageId: entry.message.id,
+            conversationId: entry.message.conversationId,
+            offers,
+            ...(offers.share
+              ? { share: attachmentSendRequest({ attachment: entry.attachment, message: entry.message, mine: isMineOf(entry.message, viewerId), now, quoted }) }
+              : {}),
+            onReply: () => {
+              onClose();
+              onReplyToMedia(entry.message.id, entry.attachment.id);
+            },
+          };
+        }}
+        {...(deps !== undefined ? { deps } : {})}
+      />
+    </>
   );
 }

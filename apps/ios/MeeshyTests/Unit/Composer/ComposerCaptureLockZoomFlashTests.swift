@@ -101,12 +101,17 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         XCTAssertTrue(ComposerFlashIntensity.showsSlider(flash: .auto))
     }
 
-    func test_curseur_laPisteVaDuPlancherAuPlein() {
-        XCTAssertEqual(ComposerFlashIntensity.level(atX: 0, width: 120), ComposerFlashIntensity.range.lowerBound)
-        XCTAssertEqual(ComposerFlashIntensity.level(atX: 120, width: 120), 1)
-        XCTAssertEqual(ComposerFlashIntensity.level(atX: 500, width: 120), 1, "au-delà de la piste : plein")
-        let milieu = ComposerFlashIntensity.level(atX: 60, width: 120)
-        XCTAssertEqual(ComposerFlashIntensity.fill(milieu), 0.5, accuracy: 0.0001, "remplir est l'inverse de lire")
+    /// La piste est VERTICALE (#9566) : en haut le plein, en bas le plancher.
+    func test_curseur_laPisteVerticaleVaDuPleinEnHautAuPlancherEnBas() {
+        XCTAssertEqual(ComposerFlashIntensity.level(atY: 0, height: 120), 1)
+        XCTAssertEqual(ComposerFlashIntensity.level(atY: 120, height: 120), ComposerFlashIntensity.range.lowerBound,
+                       accuracy: 0.0001)
+        XCTAssertEqual(ComposerFlashIntensity.level(atY: -50, height: 120), 1, "au-dessus de la piste : plein")
+        XCTAssertEqual(ComposerFlashIntensity.level(atY: 30, height: 0), ComposerFlashIntensity.defaultLevel)
+        let milieu = ComposerFlashIntensity.level(atY: 60, height: 120)
+        XCTAssertEqual(ComposerFlashIntensity.thumbPosition(milieu), 0.5, accuracy: 0.0001, "poser est l'inverse de lire")
+        XCTAssertEqual(ComposerFlashIntensity.thumbPosition(1), 0, accuracy: 0.0001)
+        XCTAssertEqual(ComposerFlashIntensity.thumbPosition(ComposerFlashIntensity.range.lowerBound), 1, accuracy: 0.0001)
     }
 
     func test_intensite_reglePlancherBlancEtTorche() {

@@ -76,6 +76,14 @@ struct ForwardPickerSheet: View {
     /// `nil` = rien à signaler. Un échec laisse la feuille montée pour qu'on
     /// puisse réessayer sans la rouvrir.
     @State private var publishFailure: String?
+    /// La durée choisie dans la rangée d'une flamme à durée (#9573). `nil` =
+    /// chaque message garde la durée de SA source.
+    @State private var chosenDurationSeconds: Int?
+
+    /// Ce que la loi de sortie laisse offrir à cette feuille, lu une fois.
+    private var sheetOffer: ForwardSheetOffer {
+        ForwardSheetOffer(message: message, additionalMessages: additionalMessages)
+    }
 
     private var forwardService: MessageForwardServiceProviding { MessageForwardService.shared }
     private var postService: PostServiceProviding { PostService.shared }
@@ -92,6 +100,18 @@ struct ForwardPickerSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 messagePreview
+
+                ForwardDurationRow(
+                    choices: sheetOffer.durationChoices,
+                    selectedSeconds: sheetOffer.selectedDuration(chosen: chosenDurationSeconds),
+                    accentColor: accentColor,
+                    isDark: isDark,
+                    onSelect: { seconds in
+                        HapticFeedback.light()
+                        chosenDurationSeconds = seconds
+                    }
+                )
+                .equatable()
 
                 Divider()
                     .overlay(theme.textMuted.opacity(MeeshyOpacity.light))
@@ -189,7 +209,7 @@ struct ForwardPickerSheet: View {
                 .frame(width: 3, height: 28)
 
             if additionalMessages.isEmpty, let firstAttachment = message.attachments.first {
-                attachmentThumbnail(firstAttachment)
+                attachmentThumbnail(firstAttachment).captureShield(previewCaptureBlocked) // #9574
             }
 
             VStack(alignment: .leading, spacing: 1) {
@@ -203,6 +223,7 @@ struct ForwardPickerSheet: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
+                        .captureShield(previewCaptureBlocked) // #9574
                 } else {
                     Text(
                         String(
@@ -237,6 +258,9 @@ struct ForwardPickerSheet: View {
     }
 
     /// Aperçu digne d'un média : type localisé + compteur, plus jamais « [Media] ».
+    /// Une flamme à durée se transfère : son aperçu se rend dans la couche sécurisée (#9574).
+    private var previewCaptureBlocked: Bool { message.exitOffer.capture.shieldsCapture() }
+
     private var previewText: String {
         if !message.content.isEmpty { return message.content }
         guard let first = message.attachments.first else {
@@ -340,8 +364,18 @@ struct ForwardPickerSheet: View {
     /// Les destinations publiques offertes pour ce média, vides quand il n'en a
     /// aucune (document, PDF, code) — la section n'est alors pas montée du tout,
     /// plutôt que montée vide.
+    ///
+    /// La loi de sortie décide d'abord (#9573) : un contenu qui disparaît, flouté
+    /// ou chiffré ne se publie pas, et aucune pilule n'est rendue.
     private var publicationTargets: [PublicationTarget] {
-        PublicationTargetRule.targets(forMimeType: primaryAttachment?.mimeType)
+        guard sheetOffer.publishes else { return [] }
+        return PublicationTargetRule.targets(forMimeType: primaryAttachment?.mimeType)
+    }
+
+    /// « Imager la discussion » ne s'offre que si l'hôte l'a branché ET que le
+    /// message désigné s'image (#9573).
+    private var offersImageDiscussion: Bool {
+        onImageDiscussion != nil && sheetOffer.imaginesDiscussion
     }
 
     /// **La COMPOSABILITÉ, qui n'est pas la publiabilité.** `publicationTargets`
@@ -363,7 +397,7 @@ struct ForwardPickerSheet: View {
 
     @ViewBuilder
     private var publicationSection: some View {
-        if !publicationTargets.isEmpty || offersCompose || onImageDiscussion != nil {
+        if !publicationTargets.isEmpty || offersCompose || offersImageDiscussion {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(String(localized: "forward.publish-section", defaultValue: "Publier", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -401,7 +435,7 @@ struct ForwardPickerSheet: View {
                             composeEntry
                         }
 
-                        if onImageDiscussion != nil {
+                        if offersImageDiscussion {
                             imageDiscussionEntry
                         }
 
@@ -576,7 +610,7 @@ struct ForwardPickerSheet: View {
     /// mute l'état directement, jamais un `MainActor.run` imbriqué — la vue est
     /// déjà isolée sur le main actor.
     private func performPublish(_ target: PublicationTarget) async {
-        guard let attachment = primaryAttachment else {
+        guard sheetOffer.publishes, let attachment = primaryAttachment else {
             isPublishing = false
             return
         }
@@ -675,7 +709,8 @@ struct ForwardPickerSheet: View {
             let outcome = await forwardService.forward(
                 message: messageToSend,
                 sourceConversationId: sourceConversationId,
-                to: target
+                to: target,
+                chosenDurationSeconds: chosenDurationSeconds
             )
             lastOutcome = outcome
             guard outcome.succeeded else { break }

@@ -325,7 +325,7 @@ describe('EngagementService.recordActivity', () => {
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
 
-    await expect(svc.recordActivity('user-1', 'tool.sticker')).resolves.toBeUndefined();
+    await expect(svc.recordActivity('user-1', 'tool.sticker')).resolves.toBe(true);
     expect(create).toHaveBeenCalledTimes(1);
   });
 });

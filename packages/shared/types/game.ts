@@ -25,7 +25,18 @@ import { FLAME_FORMS } from '../utils/game/flame.js';
 import { MISSION_DIFFICULTIES } from '../utils/game/missions.js';
 import { PERSONAL_MISSION_STATES } from '../utils/game/personal-mission.js';
 import type { EngagementProgressPayload } from './engagement.js';
-import { dayKey, enumOf, fraction, isoDate, nonNegativeInt, requestIdSchema, writeRequest } from './game-schema-kit.js';
+import {
+  dayKey,
+  division5Schema,
+  enumOf,
+  fraction,
+  isoDate,
+  legacyDivisionSchema,
+  mythicSeatSchema,
+  nonNegativeInt,
+  requestIdSchema,
+  writeRequest,
+} from './game-schema-kit.js';
 import { gameBlockExtensionShape } from './game-v2.js';
 
 export * from './game-routes.js';
@@ -54,18 +65,25 @@ export const gameLevelSchema = z.object({
 
 const gloryStepSchema = z.object({
   rank: rankKeys,
-  division: z.union([z.literal(3), z.literal(2), z.literal(1)]),
+  /** Projection héritée (III, II, I) — la seule que les clients publiés décodent. */
+  division: legacyDivisionSchema,
+  /** V (5) à I (1) — #9636. */
+  division5: division5Schema.optional(),
   minGlory: nonNegativeInt,
 });
 
 export const gameGlorySchema = z.object({
   glory: nonNegativeInt,
   rank: rankKeys,
-  /** `null` pour Mythe. */
-  division: z.union([z.literal(3), z.literal(2), z.literal(1)]).nullable(),
+  /** Projection héritée (III, II, I), `null` pour Mythe. */
+  division: legacyDivisionSchema.nullable(),
+  /** V (5) à I (1), `null` pour Mythe — #9636. */
+  division5: division5Schema.nullable().optional(),
   next: gloryStepSchema.nullable(),
   gloryMissing: nonNegativeInt.nullable(),
   progress: fraction,
+  /** La place du Mythe et son numéro, `null` hors du Mythe — #9636. */
+  mythic: mythicSeatSchema.nullable().optional(),
 });
 
 export const gameTreasurySchema = z.object({

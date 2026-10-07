@@ -2,8 +2,10 @@ import type { GameFlame } from '@meeshy/shared/types/game';
 import { FLAME_BONUS_PERCENT_MAX, FLAME_BONUS_PERCENT_PER_DAY } from '@meeshy/shared/utils/game/flame';
 
 import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
+import { freezeDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
+import { GameTouch } from './game-touch';
 
 /**
  * LA FLAMME : GELS ET RALLUMAGE (#9383) — ce qu'on fait de ses Meeshes pour la
@@ -70,9 +72,10 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
         {gameText('game.flame_panel.bonus', { perDay: formatCount(FLAME_BONUS_PERCENT_PER_DAY), max: formatCount(FLAME_BONUS_PERCENT_MAX) })}
       </p>
 
-      <p className="text-body font-semibold" style={{ color: GAME_INK }}>
+      {/* Les gels se touchent : ce qu'est un gel, ce qu'il coûte (#9563). */}
+      <GameTouch detail={freezeDetail(flame)} className="flex items-center self-start rounded-chip text-body font-semibold" style={{ minHeight: 44, color: GAME_INK }}>
         {gameText('game.flame_panel.freezes', { held: formatCount(flame.freezes), max: formatCount(flame.maxFreezes) })}
-      </p>
+      </GameTouch>
       {full ? (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.flame_panel.freeze_full')}

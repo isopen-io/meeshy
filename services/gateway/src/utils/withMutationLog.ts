@@ -190,3 +190,26 @@ export async function withMutationLog<T>(
   }
   return outcome.result;
 }
+
+/**
+ * Le résultat ET la réponse à « vient-il d'être PRODUIT ? » (#9603) — la
+ * projection des routes qui servent un `gone` en 410 par leur `catch` ET portent
+ * un effet APRÈS le journal (crédit, diffusion, notification, traduction).
+ *
+ * `replayed: true` dit que rien n'a été exécuté : le résultat est relu, et tout
+ * ce qui a suivi la première exécution a DÉJÀ eu lieu. Le refaire crédite deux
+ * fois un geste unique, l'annonce deux fois, et le pousse deux fois. Le verdict
+ * vient du journal, jamais de la forme du résultat.
+ *
+ * @throws MutationResultGone quand `replayCost === 'diverges'` et que le
+ *         résultat antérieur a disparu — comme {@link withMutationLog}.
+ */
+export async function withMutationVerdict<T>(
+  args: WithMutationLogArgs<T>
+): Promise<{ readonly result: T & { id: string }; readonly replayed: boolean }> {
+  const outcome = await withMutationOutcome(args);
+  if (outcome.status === 'gone') {
+    throw new MutationResultGone(outcome.resultId, args.kind);
+  }
+  return { result: outcome.result, replayed: outcome.status === 'replayed' };
+}

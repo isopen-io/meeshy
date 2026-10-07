@@ -4,7 +4,7 @@ import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helper
 import { served } from '@/lib/api/prism';
 import type { Attachment, Message } from '@/lib/api/types';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { protectionOf } from '@/lib/reading-mode/protection';
+import { contentExitOf, exitOffers, pieceIsOpen, quotedExitOf } from '@/lib/view/content-exit';
 import { kindOf, waveformOf } from '@/lib/view/message';
 import { quotedPreviewOf } from '@/lib/view/quoted-preview';
 
@@ -15,13 +15,18 @@ import type { CardMedia } from './message-card-media';
  * **CE QU'UNE CARTE D'EXPORT A LE DROIT DE MONTRER** — la loi qui décide si
  * un message s'image, et avec quels mots et quels médias.
  *
- * GARDE : un message protégé (flouté, à vue unique, éphémère échu, supprimé)
- * ne s'image pas — c'est `protectionOf`, la loi qui retire déjà « Copier ».
- * Une image est une copie qu'on partage : ce qui ne se copie pas ne se peint
- * pas. La protection se lit aussi au niveau de la PIÈCE (leçon 275) : une
- * photo à vue unique ou floutée d'un message ordinaire n'est jamais peinte. La
- * CITATION suit `quotedPreviewOf`, le site unique des citations : une citation
- * protégée montre son placeholder, jamais son contenu.
+ * GARDE : la loi de sortie (`lib/view/content-exit.ts`, #9573). Une image est
+ * une copie qu'on partage : un message flouté, à vue unique, supprimé, échu,
+ * ou QUI DISPARAÎT (flamme à durée ou après lecture) ne s'image pas — jugé
+ * sur le message ENTIER, la pièce à vue unique d'un message ordinaire ferme
+ * la carte. Une pièce floutée ou chiffrée n'est jamais peinte.
+ *
+ * LA CITATION EST JUGÉE POUR ELLE-MÊME (`quotedExitOf`) : un message
+ * ordinaire qui cite une flamme s'image SANS elle — ni son texte, ni son
+ * média. Une citation dont la nature n'est pas déclarée dans la charge reçue
+ * est fermée, et une citation voilée (vue unique, flou) ne se peint pas non
+ * plus : la carte ne fait confiance à aucun texte servi pour un contenu qui
+ * n'a pas le droit de sortir.
  *
  * LES MOTS SONT CEUX QUE LE LECTEUR VOIT : le texte SERVI (le Prisme, avec la
  * langue que le lecteur a peut-être imposée par « Traduire »), jamais
@@ -33,7 +38,8 @@ import type { CardMedia } from './message-card-media';
  * audios (leur représentation) ; un document n'a rien à montrer sur une carte.
  * Un message fait d'un seul média s'image, même sans texte. Une pièce CHIFFRÉE
  * ne se peint pas : son fichier n'est pas lisible hors de la bulle. Le message
- * CITÉ apporte aussi ses médias, après ceux de la réponse (#8901). Chaque
+ * CITÉ apporte aussi ses médias, après ceux de la réponse (#8901) — quand la
+ * citation a le droit de sortir. Chaque
  * média porte son AUTEUR (#9236) — le message d'où il vient — pour que la
  * carte puisse signer les visuels comme elle signe les messages.
  */
@@ -114,18 +120,14 @@ export type CardMediaFields = Pick<Attachment, 'id' | 'fileUrl'> & {
   readonly effectFlags?: number | null;
 };
 
-/** Des effets qui MASQUENT un contenu — vue unique, flou. */
+/** Des effets qui MASQUENT un contenu — vue unique, flou. Lu par les cartes de commentaire, qui n'ont pas de nature de disparition. */
 export const maskedByEffects = (effectFlags: number | null | undefined): boolean =>
   ((effectFlags ?? 0) & (MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED)) !== 0;
-
-/** Une pièce MASQUÉE à son propre niveau — vue unique, floutée, chiffrée, ou marquée par ses effets. */
-const maskedPiece = (piece: CardMediaFields): boolean =>
-  piece.isViewOnce === true || piece.isBlurred === true || piece.isEncrypted === true || maskedByEffects(piece.effectFlags);
 
 /** Les médias peignables d'un message, dans leur ordre. */
 export function cardMediaOf(attachments: readonly CardMediaFields[] | null | undefined): readonly MessageCardMediaItem[] {
   return (attachments ?? []).flatMap((piece): MessageCardMediaItem[] => {
-    if (maskedPiece(piece)) return [];
+    if (!pieceIsOpen(piece)) return [];
     const mimeType = piece.mimeType ?? '';
     const kind = kindOf({ mimeType });
     const base = { id: piece.id, url: piece.fileUrl, mimeType, posterUrl: nonBlank(piece.thumbnailUrl) };
@@ -150,7 +152,7 @@ export function messageCardSubjectOf(params: {
   readonly language?: string | null;
 }): MessageCardSubject | null {
   const { message, servedText, viewer } = params;
-  if (protectionOf(message, params.now) !== 'standard') return null;
+  if (!exitOffers(contentExitOf(message, params.now), 'image')) return null;
   const language = params.language ?? null;
   const chosen =
     language === null
@@ -168,12 +170,13 @@ export function messageCardSubjectOf(params: {
   let quotedMedia: readonly MessageCardMediaItem[] = [];
   if (replyTo !== undefined && replyTo !== null) {
     const preview = quotedPreviewOf({ quoted: replyTo, readerLanguages, interfaceLanguage: params.interfaceLanguage });
-    if (preview.text.trim() !== '') {
+    const quotedLeaves = exitOffers(quotedExitOf(replyTo, params.now), 'image') && !preview.isProtected;
+    if (quotedLeaves && preview.text.trim() !== '') {
       quoted = { author: cardAuthorOf(replyTo, viewer), text: preview.text, handle: cardHandleOf(replyTo, viewer) };
       quotedAt = replyTo.createdAt === undefined ? null : new Date(replyTo.createdAt);
     }
     const quotedAuthor: CardMediaAuthor = { name: cardAuthorOf(replyTo, viewer), handle: cardHandleOf(replyTo, viewer), quoted: true };
-    quotedMedia = authoredBy(quotedMediaOf(replyTo, preview.isProtected, params.now), quotedAuthor);
+    quotedMedia = quotedLeaves ? authoredBy(cardMediaOf(replyTo.attachments), quotedAuthor) : [];
   }
   const ownIds = new Set(media.map((item) => item.id));
   return {
@@ -183,21 +186,6 @@ export function messageCardSubjectOf(params: {
     quotedAt,
     media: [...authoredBy(media, mediaAuthorOf(replyPart, false)), ...quotedMedia.filter((item) => !ownIds.has(item.id))],
   };
-}
-
-/**
- * LE MÉDIA DU MESSAGE CITÉ (#8901) — répondre à une photo par du texte, c'est
- * répondre À la photo : la carte la peint, après les médias de la réponse.
- * Mêmes gardes que la citation elle-même (`quotedPreviewOf` : supprimée ou
- * protégée au niveau du message ⇒ rien) et, pièce par pièce, que la réponse
- * (`cardMediaOf` : vue unique, floutée, chiffrée ⇒ jamais peinte). Une
- * citation éphémère ÉCHUE n'apporte plus rien : son fichier a disparu du fil.
- */
-function quotedMediaOf(replyTo: NonNullable<Message['replyTo']>, isProtected: boolean, now: number): readonly MessageCardMediaItem[] {
-  if (isProtected) return [];
-  const expiresAt = replyTo.expiresAt === undefined || replyTo.expiresAt === null ? null : new Date(replyTo.expiresAt).getTime();
-  if (expiresAt !== null && Number.isFinite(expiresAt) && expiresAt <= now) return [];
-  return cardMediaOf(replyTo.attachments);
 }
 
 /** Les langues dans lesquelles la réponse EXISTE : son original d'abord, puis chaque traduction servie. */

@@ -15,11 +15,13 @@ extension ComposerCaptureSession {
     /// suivra le rendu final. Une image sans pixels n'ouvre rien.
     func beginEditing(photo image: UIImage, data: Data? = nil) {
         guard let debout = ComposerPhotoLookSource.upright(image) else { return }
+        screenFlashBurst = false
         editPhoto = debout
         editPhotoData = data
         editSource = ComposerStillSource(debout)
         framing = .identity
         openFamily = nil
+        editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.photo)
         camera.pauseRunning()
     }
@@ -45,6 +47,7 @@ extension ComposerCaptureSession {
         trim = ComposerTrimRule.initialRange(duration: lecteur.duration)
         loopedTrim = trim
         openFamily = nil
+        editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.video(url))
         camera.pauseRunning()
         lecteur.configure(fps: ComposerCaptureSurfaceRule.editFPS(thermalBudget),
@@ -190,6 +193,42 @@ extension ComposerCaptureSession {
         editPhotoData = nil
         editSource = nil
         framing = .identity
+        editAspect = nil
+        cropPresetsOpen = false
+    }
+
+    // MARK: - Le recadrage (#9567)
+
+    /// Ce qui s'ouvre sous la scène de retouche.
+    var editPanel: ComposerEditPanel {
+        guard phase.isEditing else { return .none }
+        return ComposerEditScene.panel(isVideo: loopPlayer != nil, familyOpen: openFamily != nil,
+                                       presetsOpen: cropPresetsOpen)
+    }
+
+    /// **La scène prend ces proportions** — par un crochet tiré ou par un
+    /// preset ; ce qui part les garde. Pendant le rendu de « Terminé », plus
+    /// rien ne bouge.
+    func setEditAspect(_ aspect: CGFloat) {
+        guard phase.isEditing, !isRenderingLook else { return }
+        editAspect = ComposerEditScene.clampedAspect(aspect)
+    }
+
+    func applyCropPreset(_ preset: ComposerCropPreset) {
+        setEditAspect(preset.aspect(source: editExtent?.size ?? .zero))
+    }
+
+    /// Le preset que la scène réalise ; `nil` pour un recadrage libre.
+    var cropPreset: ComposerCropPreset? {
+        editAspect.flatMap { ComposerCropPreset.matching($0, source: editExtent?.size ?? .zero) }
+    }
+
+    /// Les proportions s'ouvrent à la place de la bande, jamais avec elle.
+    func toggleCropPresets() {
+        guard phase.isEditing, !isRenderingLook else { return }
+        cropPresetsOpen.toggle()
+        if cropPresetsOpen { openFamily = nil }
+        HapticFeedback.light()
     }
 
     // MARK: - La découpe (#9353)

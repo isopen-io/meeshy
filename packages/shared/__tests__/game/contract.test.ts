@@ -69,9 +69,34 @@ describe('le bloc game', () => {
   it('lit le niveau, la Gloire, le trésor et la frappe avec les lois partagées', () => {
     const b = block();
     expect(b.level).toMatchObject({ level: 34, tier: 'eclat', record: 36, prestige: 0, canPrestige: false });
-    expect(b.glory).toMatchObject({ glory: 2000, rank: 'voix', division: 3 });
+    expect(b.glory).toMatchObject({ glory: 2000, rank: 'echo', division: 3, division5: 5, mythic: null });
     expect(b.treasury).toMatchObject({ held: 9, tier: 'bourse' });
     expect(b.mint).toMatchObject({ number: 13, price: 1294, edition: 'silver', canMint: true, levelsLost: 2 });
+  });
+
+  it('garde la division héritée (1–3) que les clients publiés décodent, et sert la division à cinq crans à côté (#9636)', () => {
+    const b = block({ glory: 2800 });
+    expect(b.glory).toMatchObject({ rank: 'echo', division: 3, division5: 4 });
+    expect(b.glory.next).toEqual({ rank: 'echo', division: 2, division5: 3, minGlory: 3600 });
+    const parsed = parseGameBlock(b);
+    expect(parsed?.glory).toMatchObject({ division: 3, division5: 4, next: { division: 2, division5: 3 } });
+  });
+
+  it('sert la place du Mythe et son émission, sans division (#9636)', () => {
+    const b = block({ glory: 1_000_000, mythic: true, mythicSeat: { number: 42, edition: 117 } });
+    expect(b.glory).toMatchObject({ rank: 'mythe', division: null, division5: null, mythic: { number: 42, edition: 117 } });
+    expect(parseGameBlock(b)?.glory.mythic).toEqual({ number: 42, edition: 117 });
+  });
+
+  it('un bloc d’avant #9636 (sans division5 ni mythic) reste valide', () => {
+    const { division5: _d, mythic: _m, ...old } = block().glory;
+    const legacy = { ...block(), glory: { ...old, next: old.next === null ? null : { rank: old.next.rank, division: old.next.division, minGlory: old.next.minGlory } } };
+    expect(gameBlockSchema.safeParse(legacy).success).toBe(true);
+  });
+
+  it('refuse une division héritée hors de 1–3 : le fil ne la sert jamais', () => {
+    const b = block();
+    expect(gameBlockSchema.safeParse({ ...b, glory: { ...b.glory, division: 5 } }).success).toBe(false);
   });
 
   it('sert le Vent arrière tant que le niveau est sous le record', () => {

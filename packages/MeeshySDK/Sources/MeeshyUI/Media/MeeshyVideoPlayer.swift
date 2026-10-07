@@ -163,7 +163,7 @@ public struct MeeshyVideoPlayer: View {
 
     public let attachment: MeeshyMessageAttachment
     public let style: Style
-    public let controls: ControlSet
+    public private(set) var controls: ControlSet
     public let accentColor: String
     public let frame: Frame
     public let availability: VideoAvailability
@@ -270,13 +270,25 @@ public struct MeeshyVideoPlayer: View {
         }
     }
 
+    /// Sous un bouclier de capture (#9574), la vidéo protégée n'offre ni PiP
+    /// ni AirPlay : les renderers reçoivent les contrôles PERMIS, et la surface
+    /// ne configure donc aucune fenêtre PiP (`surfaceEnablesPip`).
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
+
+    private var permitted: MeeshyVideoPlayer {
+        var player = self
+        player.controls = ProtectedPlaybackPolicy.of(isCaptureShielded: isCaptureShielded).permitted(controls)
+        return player
+    }
+
     public var body: some View {
+        let player = permitted
         Group {
             switch style {
-            case .flat:       _FlatRenderer(player: self)
-            case .inline:     _InlineRenderer(player: self)
-            case .mini:       _MiniRenderer(player: self)
-            case .fullscreen: _FullscreenRenderer(player: self)
+            case .flat:       _FlatRenderer(player: player)
+            case .inline:     _InlineRenderer(player: player)
+            case .mini:       _MiniRenderer(player: player)
+            case .fullscreen: _FullscreenRenderer(player: player)
             }
         }
     }

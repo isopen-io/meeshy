@@ -142,12 +142,15 @@ const progressionPrestigeScreen = () =>
    pour les quinze concepts : le gabarit est le même, seule la clé change. */
 const progressionConceptScreen = () =>
   Promise.all([import('@/routes/progression-concept'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
-const progressionTableauScreen = () =>
-  Promise.all([import('@/routes/progression-tableau'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionReglagesScreen = () =>
   Promise.all([import('@/routes/progression-reglages'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionBadgesScreen = () =>
   Promise.all([import('@/routes/progression-badges'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+/* Défis et Succès lisent le catalogue du jeu depuis que chaque élément y dit ses précisions (#9563). */
+const progressionDefisScreen = () =>
+  Promise.all([import('@/routes/progression-defis'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionSuccesScreen = () =>
+  Promise.all([import('@/routes/progression-succes'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 const progressionRulesScreen = () =>
   Promise.all([import('@/routes/progression-rules'), loadGameScreenCatalog(currentInterfaceLanguage(), 'rules')]).then(([screen]) => screen);
 const progressionCarnetScreen = () =>
@@ -201,10 +204,12 @@ export const ROUTES = {
      « retour » refermerait l'écran entier au lieu du panneau. */
   /* « PROGRESSION » EN SOUS-MENUS (#9563) — la première page ne porte que des
      cartes de concept ; chaque concept a sa FICHE (`$concept` est une clé de
-     `progressionConcepts`, `packages/shared`), et le TABLEAU DE BORD regroupe
-     toutes les données, concept par concept. PRIVÉES (`session-guard.ts`). */
+     `progressionConcepts`, `packages/shared`). Le TABLEAU DE BORD n'existe plus
+     (amendement n° 4) : son adresse sert Progression, qui la REMPLACE par
+     `/me/progression` (`redirectOf`, `lib/game/progression-nav.ts` — la carte
+     de navigation des trois niveaux). PRIVÉES (`session-guard.ts`). */
   progressionConcept: { pattern: '/me/progression/concept/$concept', screen: progressionConceptScreen },
-  progressionTableau: { pattern: '/me/progression/tableau-de-bord', screen: progressionTableauScreen },
+  progressionTableau: { pattern: '/me/progression/tableau-de-bord', screen: progressionScreen },
   progressionBadges: { pattern: '/me/progression/badges', screen: progressionBadgesScreen },
   /* LA LIGUE (#9384, #9385) — la ligue publique, la ligue entre amis et la
      mission en duo. PRIVÉE : `session-guard.ts`. */
@@ -217,8 +222,8 @@ export const ROUTES = {
   progressionPrestige: { pattern: '/me/progression/prestige', screen: progressionPrestigeScreen },
   /* LES RÉGLAGES DU JEU (#9481) — célébrations, « Jeu masqué », qui voit quoi, ligue publique. PRIVÉE. */
   progressionReglages: { pattern: '/me/progression/reglages', screen: progressionReglagesScreen },
-  progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
-  progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
+  progressionDefis: { pattern: '/me/progression/defis', screen: progressionDefisScreen },
+  progressionSucces: { pattern: '/me/progression/succes', screen: progressionSuccesScreen },
   /* LE CARNET DES RÈGLES (#9379) — « Comment ça marche », depuis Progression :
      les huit règles du jeu et les sept cartes de l'intégration, en entier. Une
      page qui n'explique que ; aucune lecture réseau. */

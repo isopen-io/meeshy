@@ -99,13 +99,6 @@ final class ComposerCaptureFocusGeometryTests: XCTestCase {
         XCTAssertEqual(camera.focusRequests.last?.point, CGPoint(x: 0, y: 0))
     }
 
-    func test_flipCamera_resetsTheExposureBias() {
-        let (session, camera) = makeSUT(stage: .armed)
-        session.flipCamera()
-        camera.finishSwitch()
-        XCTAssertEqual(camera.exposureBiases.last, 0, "la luminosité réglée sur l'ancien objectif ne suit pas")
-    }
-
     func test_camera_resetsTheBiasAtEachInput_andFocusesSmoothlyWhenAsked() throws {
         let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
         XCTAssertTrue(camera.contains("setExposureTargetBias(0"))

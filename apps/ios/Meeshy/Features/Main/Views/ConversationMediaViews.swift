@@ -554,6 +554,8 @@ struct AudioMediaView: View, Equatable {
                 mentionDisplayNames: mentionDisplayNames,
                 onDismissToMessage: onScrollToMessage
             )
+            // Un vocal qui disparaît ne s'enregistre pas (#9573).
+            .mediaExitGate(carriers: allAudioItems.map(\.message))
         }
         .adaptiveOnChange(of: activeAudioLanguageOverride) { _, newLang in
             // Le drapeau de la RANGÉE parle en « override de message »

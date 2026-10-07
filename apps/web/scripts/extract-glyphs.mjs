@@ -538,8 +538,11 @@ emit({
  * `glyphs-feed.ts` : relancer ce script le supprimait en silence, et aucun
  * autre jeu ne pouvait etre regenere sans defaire celui-ci. Il est desormais
  * extrait comme les autres -- le script est idempotent, `git diff` reste vide.
+ *
+ * `sparkle` (#9570) : le tres petit glyphe de POINTS qui precede « +99 » dans
+ * la ligne de metadonnees d'une carte -- ce que le post a rapporte au lecteur.
  */
-const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash', 'arrow-bend-up-left', 'map-pin'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash', 'arrow-bend-up-left', 'map-pin', 'sparkle'];
 
 emit({
   ids: FEED,

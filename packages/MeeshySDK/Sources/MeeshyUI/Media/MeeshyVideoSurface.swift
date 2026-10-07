@@ -40,7 +40,9 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
         player.isMuted = isMuted
         view.onReadyForDisplay = onReadyForDisplay
         view.armReadinessObserver()
-        if enablesPip {
+        let policy = ProtectedPlaybackPolicy.of(isCaptureShielded: context.environment.isCaptureShielded)
+        policy.apply(to: player)
+        if enablesPip, policy.allowsPictureInPicture {
             SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
         }
         return view
@@ -58,7 +60,11 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
         if player.isMuted != isMuted {
             player.isMuted = isMuted
         }
-        if enablesPip {
+        // #9574 — une vidéo sous un bouclier de capture ne sort ni par
+        // AirPlay, ni par la recopie d'écran, ni par une fenêtre PiP.
+        let policy = ProtectedPlaybackPolicy.of(isCaptureShielded: context.environment.isCaptureShielded)
+        policy.apply(to: player)
+        if enablesPip, policy.allowsPictureInPicture {
             // Idempotent : garde d'identité de layer dans `configurePip`.
             SharedAVPlayerManager.shared.configurePip(playerLayer: uiView.playerLayer)
         }

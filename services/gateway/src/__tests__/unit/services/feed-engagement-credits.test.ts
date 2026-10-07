@@ -22,6 +22,8 @@ const COMMENT_ID = '507f1f77bcf86cd799439022';
 const READER_ID = '64a000000000000000000001';
 const AUTHOR_ID = '64a000000000000000000002';
 const MODERATOR_ID = '64a000000000000000000003';
+const REPOST_ID = '507f1f77bcf86cd799439033';
+const REPOSTER_ID = '64a000000000000000000004';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -29,6 +31,7 @@ function makeRecorder() {
   return {
     recordActivity: jest.fn<any>().mockResolvedValue(undefined),
     reclaimContent: jest.fn<any>().mockResolvedValue(0),
+    reclaimSource: jest.fn<any>().mockResolvedValue(0),
   };
 }
 
@@ -46,6 +49,8 @@ const reactionRow = (overrides: Record<string, unknown> = {}) => ({
 describe('tool.post_reaction — PostReactionService.addReaction', () => {
   function makePrisma(existing: unknown) {
     return {
+      user: { findFirst: jest.fn<any>().mockResolvedValue(null), findUnique: jest.fn<any>().mockResolvedValue({ timezone: 'UTC' }) },
+      engagementQuota: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }), findUnique: jest.fn<any>().mockResolvedValue(null) },
       post: { findUnique: jest.fn<any>().mockResolvedValue({ id: POST_ID, deletedAt: null, authorId: AUTHOR_ID }) },
       postReaction: {
         findFirst: jest.fn<any>().mockResolvedValue(existing),
@@ -65,9 +70,24 @@ describe('tool.post_reaction — PostReactionService.addReaction', () => {
 
     expect(result?.unchanged).toBe(false);
     expect(recorder.recordActivity).toHaveBeenCalledWith(READER_ID, 'tool.post_reaction', {
+      postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
+      receipt: 'post-reaction:reaction-1',
     });
+  });
+
+  it('venue d’une republication simple, crédite l’original ET la republication — deux crédits, chacun sa cible et son auteur (#9584)', async () => {
+    const recorder = makeRecorder();
+    const service = new PostReactionService(makePrisma(null) as any, recorder);
+
+    await service.addReaction({ postId: POST_ID, userId: READER_ID, emoji: '❤️', through: { id: REPOST_ID, authorId: REPOSTER_ID } });
+    await settle();
+
+    expect(recorder.recordActivity.mock.calls).toEqual([
+      [READER_ID, 'tool.post_reaction', { postId: POST_ID, targetId: POST_ID, targetOwnerId: AUTHOR_ID, receipt: 'post-reaction:reaction-1' }],
+      [READER_ID, 'tool.post_reaction', { postId: REPOST_ID, targetId: REPOST_ID, targetOwnerId: REPOSTER_ID, receipt: 'post-reaction:reaction-1' }],
+    ]);
   });
 
   it('ne crédite rien quand la réaction existait déjà (unchanged)', async () => {
@@ -97,7 +117,7 @@ describe('tool.comment_like — un like, un crédit, par l’un ou l’autre che
   it('socket (CommentReactionService) : crédite une réaction créée, avec l’auteur du commentaire', async () => {
     const recorder = makeRecorder();
     const prisma = {
-      postComment: { findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, deletedAt: null, authorId: AUTHOR_ID }) },
+      postComment: { findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, postId: POST_ID, deletedAt: null, authorId: AUTHOR_ID }) },
       commentReaction: {
         findFirst: jest.fn<any>().mockResolvedValue(null),
         count: jest.fn<any>().mockResolvedValue(0),
@@ -111,8 +131,10 @@ describe('tool.comment_like — un like, un crédit, par l’un ou l’autre che
     await settle();
 
     expect(recorder.recordActivity).toHaveBeenCalledWith(READER_ID, 'tool.comment_like', {
+      postId: POST_ID,
       targetId: COMMENT_ID,
       targetOwnerId: AUTHOR_ID,
+      receipt: 'comment-reaction:reaction-1',
     });
   });
 
@@ -133,13 +155,13 @@ describe('tool.comment_like — un like, un crédit, par l’un ou l’autre che
   function makeRestPrisma(alreadyHasThisEmoji: boolean) {
     return {
       postComment: {
-        findFirst: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, authorId: AUTHOR_ID }),
+        findFirst: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, postId: POST_ID, authorId: AUTHOR_ID }),
         update: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, likeCount: 1, reactionSummary: {} }),
       },
       commentReaction: {
         findFirst: jest.fn<any>().mockResolvedValue(alreadyHasThisEmoji ? { id: 'reaction-1' } : null),
         count: jest.fn<any>().mockResolvedValue(0),
-        upsert: jest.fn<any>().mockResolvedValue({}),
+        upsert: jest.fn<any>().mockResolvedValue({ id: 'comment-reaction-rest' }),
         groupBy: jest.fn<any>().mockResolvedValue([]),
       },
     };
@@ -153,9 +175,20 @@ describe('tool.comment_like — un like, un crédit, par l’un ou l’autre che
     await settle();
 
     expect(recorder.recordActivity).toHaveBeenCalledWith(READER_ID, 'tool.comment_like', {
+      postId: POST_ID,
       targetId: COMMENT_ID,
       targetOwnerId: AUTHOR_ID,
+      receipt: 'comment-reaction:comment-reaction-rest',
     });
+  });
+
+  it('REST : le post du commentaire est DEMANDÉ à la base — sans lui, le like ne rapporterait à aucun post', async () => {
+    const prisma = makeRestPrisma(false);
+    const service = new PostCommentService(prisma as any, undefined, makeRecorder());
+
+    await service.likeComment(COMMENT_ID, READER_ID, '❤️');
+
+    expect(prisma.postComment.findFirst.mock.calls[0][0].select).toMatchObject({ postId: true, authorId: true });
   });
 
   it('REST en repli derrière un socket qui a déjà posé l’emoji : aucun second crédit', async () => {
@@ -191,6 +224,7 @@ describe('tool.poll_answered — PostInteractiveResponseService.submitResponse',
     await settle();
 
     expect(recorder.recordActivity).toHaveBeenCalledWith(READER_ID, 'tool.poll_answered', {
+      postId: POST_ID,
       targetId: `${POST_ID}:poll-1`,
       targetOwnerId: AUTHOR_ID,
     });
@@ -223,6 +257,7 @@ describe('tool.story_viewed — une vue NOUVELLE d’une story, regardée au moi
     await settle();
 
     expect(recorder.recordActivity).toHaveBeenCalledWith(READER_ID, 'tool.story_viewed', {
+      postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
     });

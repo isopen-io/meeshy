@@ -80,9 +80,16 @@ describe('les autres familles', () => {
     }
   });
 
-  test('un badge, une série ou un niveau ouvrent la progression', () => {
-    for (const type of ['achievement_unlocked', 'badge_earned', 'streak_milestone', 'level_up']) {
-      expect(notificationTarget(record({ type }))).toEqual({ route: 'progression' });
+  /* Carte de navigation (#9563, amendement n° 4) : jamais la racine — la fiche du concept annoncé, même devant l'indice `route: 'progression'`. */
+  test('un succès, un badge, une série ou un niveau ouvrent la fiche de leur concept', () => {
+    for (const [type, section] of [
+      ['achievement_unlocked', 'succes'],
+      ['badge_earned', 'badges'],
+      ['streak_milestone', 'flame'],
+      ['level_up', 'level'],
+    ] as const) {
+      expect(notificationTarget(record({ type }))).toEqual({ route: 'progression', search: { section } });
+      expect(resolveTarget({ type, route: 'progression' })).toEqual({ route: 'progression', search: { section } });
     }
   });
 

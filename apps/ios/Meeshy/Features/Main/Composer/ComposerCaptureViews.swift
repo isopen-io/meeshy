@@ -107,7 +107,9 @@ struct ComposerCapturePreview: View {
         .adaptiveOnChange(of: showsThermalNotice) { _, montree in
             if montree { UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.thermalNotice) }
         }
-        .clipShape(RoundedRectangle(cornerRadius: ComposerSceneCameraFrame.radius(for: size), style: .continuous))
+        .clipShape(RoundedRectangle(
+            cornerRadius: ComposerCapturePlacement.radius(for: size, editing: session.phase.isEditing),
+            style: .continuous))
         .allowsHitTesting(false)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
@@ -119,7 +121,7 @@ struct ComposerCapturePreview: View {
 ///
 /// Chaque geste de la nappe est DÉCIDÉ par la table (`ComposerCaptureGesture`) :
 /// un toucher vise, le second d'un double photographie — lu par le seul
-/// décideur du toucher, qui ne retarde jamais le premier (#9464) —, l'appui long
+/// décideur du toucher, qui ne retarde jamais le premier (#9464, #9566) —, l'appui long
 /// filme un segment, le glissé pilote la prise tenue, zoome une prise en cours
 /// ou range le viseur hors prise, PROGRESSIF et ANNULABLE (directive
 /// 2026-08-30), le pincement zoome. VoiceOver reçoit les mêmes prises en actions
@@ -128,7 +130,8 @@ struct ComposerCapturePreview: View {
 /// **Des segments en attente ne partent jamais en silence** : la croix ou le
 /// glissé qui fermerait le viseur demande d'abord « Abandonner la vidéo ? ».
 ///
-/// **En édition, la même nappe cadre le média** (#9352, spec § 3.3) : un doigt
+/// **En édition, la même nappe cadre le média** (#9352, spec § 3.3), dans sa
+/// scène posée sur le sol (#9567) dont quatre crochets règlent la taille : un doigt
 /// le déplace, deux le zooment — chaque image avance de l'écart depuis la
 /// précédente, donc les deux gestes se composent sans se disputer une ancre.
 /// La croix abandonne la retouche et revient viser ; elle reste vivante pendant
@@ -152,6 +155,8 @@ struct ComposerCaptureChrome: View {
     /// Le dernier pas du glissé et du pincement de cadrage — des états de VUE.
     @State private var reframeStep: ComposerCaptureReframeStep?
     @State private var rezoomStep: CGFloat?
+    /// La fin de la dernière tenue — sa levée ne compte pas pour un toucher.
+    @State private var holdEndedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Le pas d'un balayage VoiceOver sur le média : un quart de plus, ou de moins.
@@ -172,7 +177,7 @@ struct ComposerCaptureChrome: View {
                 let origine = proxy.frame(in: .global).origin
                 Color.clear
                     .contentShape(Rectangle())
-                    .gesture(holdGesture.exclusively(before: tapGesture(origin: origine)))
+                    .gesture(holdGesture.simultaneously(with: tapGesture(origin: origine)))
                     .simultaneousGesture(dragGesture)
                     .simultaneousGesture(pinchGesture)
                     .adaptiveOnChange(of: pinchActive) { _, actif in
@@ -206,6 +211,17 @@ struct ComposerCaptureChrome: View {
                     }
                     .allowsHitTesting(!finishing)
             }
+            if !finishing, let aspect = session.editAspect {
+                GeometryReader { proxy in
+                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panel: session.editPanel)
+                    ComposerCropBrackets(scene: ComposerEditScene.rect(aspect: aspect, in: zone), area: zone) { cadre in
+                        guard cadre.height > 0 else { return }
+                        session.setEditAspect(cadre.width / cadre.height)
+                    }
+                }
+                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
+                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanel)
+            }
             VStack(spacing: 0) {
                 if session.stage != .recording {
                     ComposerSceneCameraBar(
@@ -224,9 +240,9 @@ struct ComposerCaptureChrome: View {
                         flashIntensity: session.barCapture.flashIntensity,
                         onFlashIntensity: { session.setFlashIntensity($0) },
                         flipping: session.barCapture.flipping,
-                        exposureBias: session.exposureBias,
-                        onExposureBias: { session.setExposureBias($0) },
-                        editing: session.phase.isEditing)
+                        editing: session.phase.isEditing,
+                        rendering: session.isRenderingLook,
+                        onDone: { session.finishEditing() })
                     .transition(.opacity)
                 }
                 Spacer(minLength: 0)
@@ -293,8 +309,9 @@ struct ComposerCaptureChrome: View {
         session.stepZoom(up: up)
     }
 
-    /// L'appui long passe avant le toucher, qui ne part que si le doigt se lève
-    /// avant le seuil (#8846).
+    /// L'appui long et le toucher se reconnaissent CÔTE À CÔTE (#9566) : derrière
+    /// un `exclusively(before:)`, le toucher ne partait jamais — ni mise au
+    /// point, ni double. La levée d'une tenue, elle, n'est pas un toucher.
     private var holdGesture: some Gesture {
         LongPressGesture(minimumDuration: ComposerSceneQuickCapture.armedHoldDuration)
             .sequenced(before: DragGesture(minimumDistance: 0))
@@ -302,7 +319,10 @@ struct ComposerCaptureChrome: View {
                 guard case .second(true, _) = valeur, session.holdStartedAt == nil else { return }
                 scene(.longPress)
             }
-            .onEnded { _ in session.endHold() }
+            .onEnded { _ in
+                holdEndedAt = Date()
+                session.endHold()
+            }
     }
 
     private var dragGesture: some Gesture {
@@ -374,7 +394,8 @@ struct ComposerCaptureChrome: View {
     /// cadre ; l'anneau se pose dans celui de la nappe.
     private func tapGesture(origin: CGPoint) -> some Gesture {
         SpatialTapGesture(count: 1, coordinateSpace: .global).onEnded { toucher in
-            guard !session.pinchSpoilsGestures else { return }
+            guard !session.pinchSpoilsGestures, session.holdStartedAt == nil,
+                  !ComposerCaptureTapRule.followsAHold(holdEndedAt, now: Date()) else { return }
             switch session.tapAction(context: context) {
             case .photo: session.perform(.photoToEdit, item: nil)
             case .focus: focus(at: toucher.location, origin: origin)

@@ -1455,10 +1455,10 @@ public actor MessagePersistenceActor {
                 // persisted so the rich call bubble survives a cache reload.
                 let callSummaryJson: Data? = api.callSummary.flatMap { encoder.encodeOrLog($0, field: "callSummaryJson", id: api.id) }
 
-                // Avis d'arrivée — même mécanique : sans cette colonne, le fil
-                // ROUVERT perdait le sens de l'avis et retombait sur le repli
-                // français générique.
-                let joinNoticeJson: Data? = api.joinNotice.flatMap { encoder.encodeOrLog($0, field: "joinNoticeJson", id: api.id) }
+                // Avis d'arrivée OU de capture (#9617, `SystemNoticeColumn`) : sans
+                // cette colonne, le fil ROUVERT perdait le sens de l'avis et
+                // retombait sur le repli français générique.
+                let joinNoticeJson: Data? = api.systemNoticeJson(encoder: encoder)
 
                 // Lieu partagé — même mécanique que callSummaryJson : le
                 // pipeline ne stocke pas l'`APIMessage` brut, seulement des

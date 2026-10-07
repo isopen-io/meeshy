@@ -517,6 +517,8 @@ const pt = {
   'media.audio.position': 'Posição de reprodução',
   'media.audio.speed': 'Velocidade de reprodução',
   'media.video.position.value': '{elapsed} de {total}',
+  'media.video.duration': 'Duração',
+  'media.video.remaining': 'Tempo restante',
   'media.buffering': 'Carregando…',
   'media.video.mute': 'Silenciar',
   'media.video.unmute': 'Ativar som',

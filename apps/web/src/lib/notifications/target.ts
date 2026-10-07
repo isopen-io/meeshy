@@ -131,6 +131,22 @@ const PROGRESSION_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * LA FICHE QUE CHACUNE OUVRE (#9563, carte de navigation) — jamais la racine :
+ * un niveau gagné ouvre la fiche du Niveau, une série la fiche de la Flamme, un
+ * badge celle des Badges, un succès celle des Succès. Le type est plus précis que
+ * l'indice `route: 'progression'` que le serveur pose : il passe AVANT lui.
+ * `?section=<concept>` est l'adresse que Progression redirige vers la fiche
+ * (`redirectOf`, `lib/game/progression-nav.ts`).
+ */
+const PROGRESSION_TYPE_SECTIONS: Readonly<Record<string, string>> = {
+  achievement_unlocked: 'succes',
+  ACHIEVEMENT_UNLOCKED: 'succes',
+  badge_earned: 'badges',
+  streak_milestone: 'flame',
+  level_up: 'level',
+};
+
+/**
  * Les notifications du JEU (#9490) : le serveur leur pose l'indice `route: 'progression'`, qui mène au hub —
  * pas à la chose annoncée. Le type est plus précis. Un duo se joue dans la page Ligue (la mission en duo y
  * est), le résultat d'une ligue aussi ; une étape de saison a sa page.
@@ -207,6 +223,9 @@ export function resolveTarget(input: NotificationTargetInput): PushTapTarget | n
   if (GAME_LEAGUE_TYPES.has(type)) return { route: 'progressionLigue' };
   if (GAME_SEASON_TYPES.has(type)) return { route: 'progressionSaison' };
   if (GAME_MISSION_TYPES.has(type)) return MISSIONS_SECTION;
+  if (PROGRESSION_TYPES.has(type) && Object.hasOwn(PROGRESSION_TYPE_SECTIONS, type)) {
+    return { route: 'progression', search: { [PROGRESSION_SECTION_PARAM]: PROGRESSION_TYPE_SECTIONS[type] ?? '' } };
+  }
 
   const indice = hinted(present(input.route));
   if (indice !== null) return indice;

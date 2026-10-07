@@ -257,6 +257,13 @@ for (const mode of MODES_AVEC_RANGEES) describe(`mode ${mode}`, () => {
     expect(glypheVueUnique).not.toBe(glypheEphemere);
   });
 
+  test('la rangée d’un contenu qui disparaît est SCELLÉE ; une rangée ordinaire non (#9573)', async () => {
+    noteEphemeralReception('m-flamme', Date.now());
+    const host = await monte(mode, [messageOf({ id: 'm-flamme', ephemeralDuration: 600 }), messageOf({ id: 'm-ordinaire' })]);
+    expect(host.querySelector('[data-row="m-flamme"]')?.hasAttribute('data-exit-sealed')).toBe(true);
+    expect(host.querySelector('[data-row="m-ordinaire"]')?.hasAttribute('data-exit-sealed')).toBe(false);
+  });
+
   test('efface le message à l’échéance', async () => {
     const message = messageOf({ id: 'm-echu', ephemeralDuration: 1 });
     noteEphemeralReception('m-echu', Date.now() - 5000);

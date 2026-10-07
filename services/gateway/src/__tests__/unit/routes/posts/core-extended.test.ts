@@ -79,6 +79,7 @@ jest.mock('../../../../middleware/rate-limiter', () => ({
 }));
 
 const mockWithMutationLog = jest.fn<any>().mockImplementation(({ op }: any) => op());
+const mockWithMutationVerdict = jest.fn<any>().mockImplementation(async ({ op }: any) => ({ result: await op(), replayed: false }));
 
 jest.mock('../../../../utils/withMutationLog', () => ({
   // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
@@ -88,6 +89,7 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../../../../utils/withMutationLog') as object),
   withMutationLog: (...args: any[]) => mockWithMutationLog(...args),
+  withMutationVerdict: (...args: any[]) => mockWithMutationVerdict(...args),
 }));
 
 jest.mock('../../../../utils/sanitize.js', () => ({
@@ -196,15 +198,13 @@ describe('POST /posts — invalid body triggers 400', () => {
 
 // ─── POST /posts — onDuplicate callback ──────────────────────────────────────
 
-describe('POST /posts — withMutationLog calls onDuplicate', () => {
+describe('POST /posts — the mutation verdict replays through onDuplicate', () => {
   let app: FastifyInstance;
   beforeAll(async () => { ({ app } = await buildApp()); });
   afterAll(async () => { await app.close(); });
 
   it('returns 201 when onDuplicate replays existing post', async () => {
-    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
-      return onDuplicate(POST_ID);
-    });
+    mockWithMutationVerdict.mockImplementationOnce(async ({ onDuplicate }: any) => ({ result: await onDuplicate(POST_ID), replayed: true }));
     const res = await app.inject({
       method: 'POST', url: '/posts',
       payload: { content: 'Hello world', type: 'POST' },

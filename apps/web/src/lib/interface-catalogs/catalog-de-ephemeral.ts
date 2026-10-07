@@ -19,6 +19,8 @@ const deEphemeral = {
   'message.ephemeral.label.a11y': 'Flüchtige Nachricht',
   'message.blurred.a11y': 'Verschwommen',
   'message.viewOnce.a11y': 'Einmalansicht',
+  /* #9573 — le refus de transfert d'une flamme après lecture. */
+  'forward.refusal.afterRead': 'Eine Nachricht, die nach dem Lesen verschwindet, kann nicht weitergeleitet werden',
 } satisfies EphemeralCatalogSlice;
 
 export default deEphemeral;

@@ -1,4 +1,7 @@
+import { MintStrike, type MintStrikeProps } from '@/components/game-mint-strike';
+import { GameTouch } from '@/components/game-touch';
 import { Glyph, GlyphSvg } from '@/components/glyph';
+import { defiDetail, elanDetail, succesDetail, type ElementDetail } from '@/lib/view/game-detail';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { ProgressBar } from '@/components/progress-bar';
 import {
@@ -55,13 +58,26 @@ function libelleDernierSucces(progress: EngagementProgress): { titre: string; qu
  * peut viser. Une section qui s'efface au premier lancement rend muet le seul
  * moment où l'utilisateur a besoin qu'on lui parle.
  */
+/** Les précisions du dernier succès décroché : celles d'un succès nommé ou d'un défi, selon sa provenance. */
+function detailDuDernier(progress: EngagementProgress): ElementDetail | null {
+  const dernier = lastAchievement(progress);
+  if (dernier === null) return null;
+  if (dernier.kind === 'named') {
+    const succes = progress.achievements.find((achievement) => achievement.key === dernier.key);
+    return succes === undefined ? null : succesDetail(succes);
+  }
+  const entree = (progress.achievementSections ?? []).flatMap((section) => section.entries).find((entry) => entry.key === dernier.key);
+  return entree === undefined ? null : defiDetail(entree);
+}
+
 export function LastAchievementHero({ progress }: { progress: EngagementProgress }) {
   const dernier = libelleDernierSucces(progress);
 
   return (
-    <section
-      aria-labelledby="progression-dernier"
-      className="flex items-center gap-3 rounded-card px-4 py-4"
+    <section aria-labelledby="progression-dernier">
+    <GameTouch
+      detail={detailDuDernier(progress)}
+      className="flex w-full items-center gap-3 rounded-card px-4 py-4"
       style={{
         backgroundColor: `color-mix(in srgb, ${UNLOCKED_TINT} 12%, transparent)`,
         border: `1px solid color-mix(in srgb, ${UNLOCKED_TINT} 28%, transparent)`,
@@ -74,25 +90,26 @@ export function LastAchievementHero({ progress }: { progress: EngagementProgress
       >
         <Glyph name="trophy" size={24} />
       </span>
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <h2 id="progression-dernier" className="text-check font-semibold uppercase tracking-wide" style={{ color: INK_2 }}>
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span id="progression-dernier" className="block text-check font-semibold uppercase tracking-wide" style={{ color: INK_2 }}>
           {dernier === null ? 'Premier succès' : 'Dernier succès'}
-        </h2>
+        </span>
         {dernier === null ? (
-          <p className="text-body font-bold" style={{ color: INK }}>
+          <span className="block text-body font-bold" style={{ color: INK }}>
             Envoyez un message — le premier tombe tout de suite.
-          </p>
+          </span>
         ) : (
           <>
-            <p className="truncate text-body font-bold" style={{ color: INK }}>
+            <span className="block truncate text-body font-bold" style={{ color: INK }}>
               {dernier.titre}
-            </p>
-            <p className="text-caption" style={{ color: INK_2 }}>
+            </span>
+            <span className="block text-caption" style={{ color: INK_2 }}>
               Décroché le {dernier.quand}
-            </p>
+            </span>
           </>
         )}
-      </div>
+      </span>
+    </GameTouch>
     </section>
   );
 }
@@ -201,15 +218,18 @@ export function ElansHero({ progress }: { progress: EngagementProgress }) {
         </p>
       ) : (
         <>
-          <ul className="flex flex-wrap gap-2">
+          <ul className="flex flex-wrap gap-x-2">
             {familles.map((famille) => (
-              <li
-                key={famille}
-                data-chip=""
-                className="whitespace-nowrap rounded-chip px-2.5 py-1 text-check font-semibold"
-                style={{ backgroundColor: `color-mix(in srgb, ${BRAND} 16%, transparent)`, color: INK }}
-              >
-                {FAMILY_LABELS[famille]}
+              <li key={famille} className="max-w-full">
+                <GameTouch detail={elanDetail(famille, elan)} className="inline-flex max-w-full items-center" style={{ minHeight: 44 }}>
+                  <span
+                    data-chip=""
+                    className="max-w-full truncate whitespace-nowrap rounded-chip px-2.5 py-1 text-check font-semibold"
+                    style={{ backgroundColor: `color-mix(in srgb, ${BRAND} 16%, transparent)`, color: INK }}
+                  >
+                    {FAMILY_LABELS[famille]}
+                  </span>
+                </GameTouch>
               </li>
             ))}
           </ul>
@@ -250,21 +270,25 @@ function MintSpinner() {
 /**
  * LE DÉTAIL DES MEESHES ET LEUR FRAPPE, devant un serveur sans bloc `game`.
  *
- * Il vivait dans le sous-menu de l'entrée d'en-tête (#5839) ; la première page
- * ne porte plus aucun geste (#9563), il est donc RANGÉ dans la fiche des
- * Meeshes : le solde, les dates de frappe, le bouton quand les points le
- * permettent, l'échec dit sous l'action. Avec le bloc `game`, c'est le héros de
- * frappe (`game-mint-preview.tsx`) qui tient cette place.
+ * C'est le contenu de la FEUILLE DES MEESHES que le compteur de l'en-tête de la
+ * première page ouvre (#5839, #6480 ; revenu avec l'amendement n° 2 de #9563) :
+ * le solde, les dates de frappe, Mee et Meo qui frappent (#9537), le bouton
+ * quand les points le permettent, l'échec dit sous l'action. Il sert aussi la
+ * fiche des Meeshes devant un serveur sans bloc `game` ; avec le bloc, la fiche
+ * porte le héros de frappe (`game-mint-preview.tsx`).
  */
 export function MeeshDetail({
   meesh,
   onMint,
   isMinting,
   mintError,
+  strike,
 }: {
   meesh: EngagementMeeshProgress;
   onMint: () => void;
   isMinting: boolean;
+  /** Mee et Meo frappent une Meesh AVANT que le compteur monte (#9537) ; absent d'un ancien serveur. */
+  strike?: Omit<MintStrikeProps, 'size'> | undefined;
   /** L'ÉCHEC de la frappe (#6470). Sans lui, le geste échouait en SILENCE et
    * l'on retouchait — la passerelle rejoue les conflits d'écriture (#6467),
    * mais un échec réseau reste possible. */
@@ -272,6 +296,11 @@ export function MeeshDetail({
 }) {
   return (
     <div className="flex flex-col gap-2">
+      {strike === undefined ? null : (
+        <div data-meesh-strike="" className="flex justify-center">
+          <MintStrike size={56} {...strike} />
+        </div>
+      )}
       {/* Les formulations viennent du hero d'origine : « Aucune Meesh » plutôt
           que « 0 Meesh », « Convertir » plutôt que « Frapper ». Une refonte de
           DISPOSITION ne réécrit pas la langue en passant — l'utilisateur

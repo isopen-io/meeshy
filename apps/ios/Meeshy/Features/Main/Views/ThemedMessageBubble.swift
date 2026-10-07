@@ -107,6 +107,7 @@ struct QuickReactionDoubleTap: ViewModifier {
 }
 
 struct ThemedMessageBubble: View {
+    @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
     // MARK: - Public init API (preserved unchanged for all call sites)
 
     let message: Message
@@ -351,6 +352,11 @@ struct ThemedMessageBubble: View {
                         standardLayout(content: content)
                     }
                 }
+                // #9574, #9617 — annoncé OU noir : une vue unique, et une
+                // flamme hors d'une surface qui annonce, se rendent dans la
+                // couche sécurisée. Posé AVANT le cycle de vie : la brûlure et
+                // le filigrane enveloppent la bulle protégée.
+                .captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces: announcesCapture))
                 // #4020 — le double tap ouvre la barre de réaction rapide.
                 // Posé ICI, sur la seule branche que la règle accepte : le
                 // `switch` au-dessus a déjà écarté système, supprimé et
@@ -555,6 +561,9 @@ struct ThemedMessageBubble: View {
             onTapConsentNotice: onTapConsentNotice,
             standalone: standalone
         )
+        // Ce que les visionneuses ouvertes depuis cette bulle peuvent laisser
+        // sortir — enregistrer, partager, copier (#9573, `Message.exitGate`).
+        .contentExitGate(message.exitGate)
         // Cycle de vie (éphémère, flou, profil) et effets : voir le `Group`
         // du `body`, commun à la bulle standard et au sticker.
     }

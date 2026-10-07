@@ -1,5 +1,7 @@
 import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
 
+import { holdViewerPoints } from '@/lib/feed/viewer-points';
+
 import { HASHTAG_QUERY_ROOT } from './card-caches';
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -91,6 +93,7 @@ export const HASHTAG_STALE_TIME = 60_000;
 export function hashtagInfiniteOptions(deps: HashtagDeps & { readonly tag: string }) {
   return {
     queryKey: hashtagQueryKey(deps.tag),
+    structuralSharing: holdViewerPoints,
     staleTime: HASHTAG_STALE_TIME,
     initialPageParam: 0,
     queryFn: ({ pageParam, signal }: { readonly pageParam: number; readonly signal: AbortSignal }) =>

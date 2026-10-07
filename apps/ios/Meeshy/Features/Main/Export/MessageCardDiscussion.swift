@@ -17,8 +17,9 @@ import MeeshySDK
 /// une image décodée de plus en mémoire pendant la peinture.
 ///
 /// LES MÊMES GARDES QUE « Imager » un message : un message protégé (vue unique,
-/// flouté, éphémère échu, supprimé, avis système) n'entre pas dans la fenêtre —
-/// ni son texte, ni ses médias. Les mots sont ceux que le lecteur lit : le
+/// flouté, supprimé, avis système) ou qui DISPARAÎT — flamme à durée ou après
+/// lecture, même vivante : la loi de sortie, #9573 — n'entre pas dans la
+/// fenêtre, ni son texte, ni ses médias. Les mots sont ceux que le lecteur lit : le
 /// texte servi par le Prisme, sinon l'original.
 enum MessageCardDiscussion {
 

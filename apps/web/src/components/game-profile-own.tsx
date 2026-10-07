@@ -12,7 +12,7 @@ import { LevelRing } from './game/level-ring';
 import { RankBlason } from './game/rank-blason';
 import { Trophy } from './game/trophy';
 import { GAME_BRAND, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
-import { shelfOrder } from './game-showcase';
+import { shelfOrder } from './game-trophy-shelf';
 
 /**
  * LE JEU SUR SON PROFIL (#9481) — ce que la personne montre d'elle-même : l'anneau

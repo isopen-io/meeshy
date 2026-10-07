@@ -112,7 +112,7 @@ struct MessageMoreSheet: View {
             isPresented: $showDeleteMediaConfirm,
             titleVisibility: .visible
         ) {
-            if message.attachments.filter({ $0.type != .location }).count == 1 {
+            if message.exitOffer.offers(.save), message.attachments.filter({ $0.type != .location }).count == 1 {
                 Button(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)) {
                     onSaveMedia?()
                     dismiss()
@@ -428,7 +428,11 @@ struct MessageMoreSheet: View {
             }
             .padding(.horizontal, MeeshySpacing.xs)
 
+            // #9574 — les fiches détaillées montrent le texte, ses traductions,
+            // sa transcription et ses versions : celles d'un contenu qui
+            // disparaît se rendent dans la couche sécurisée.
             destination(for: item)
+                .captureShield(message.exitOffer.capture.shieldsCapture())
         }
         .padding(.horizontal, MeeshySpacing.lg)
     }

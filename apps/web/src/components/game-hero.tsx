@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import type { GameBlock } from '@meeshy/shared/types/game';
+import type { EngagementElanProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { GameBird, LevelRing, RankBlason, Signature, useChoreography } from '@/components/game';
 import { earnRules, type EarnRule } from '@/lib/game/earn-rules';
@@ -8,9 +9,10 @@ import { enamelToken } from '@/lib/game/medal';
 import { tierTint } from '@/lib/game/tier-emblem';
 import { familyName, formatCount, gameText, levelTierName, pointsLabel, rankLabel, rankName } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
-import { Link } from '@/routes/route-table';
+import { elanDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
 
 import { GAME_CARD, GAME_INK, GAME_INK_2, GameChip } from './game-surface';
+import { GameTouch } from './game-touch';
 
 /**
  * LE HÉROS DE PROGRESSION (#5841) — pleine largeur, en deuxième position sous
@@ -41,10 +43,17 @@ import { GAME_CARD, GAME_INK, GAME_INK_2, GameChip } from './game-surface';
 
 export type GameHeroProps = {
   readonly game: GameBlock;
-  /** La ligne courte du guide du moment ; `null` ou absente : Mee propose les règles. */
+  /**
+   * La ligne courte du guide du moment ; `null` ou absente : Mee ne se montre
+   * pas — le héros vit dans la fiche du Niveau (niveau 2), et son ancien lien
+   * vers les règles (autre niveau 2) était un chemin transverse que la carte de
+   * navigation retire (#9563, amendement n° 4).
+   */
   readonly guideLine?: string | null;
   /** Les gains énumérés ; par défaut, dérivés du barème. Injectable pour les témoins. */
   readonly rules?: readonly EarnRule[];
+  /** L'élan servi : la précision d'une famille dit si elle est active ces jours-ci ; absent, elle ne le dit pas. */
+  readonly elan?: EngagementElanProgress | undefined;
 };
 
 
@@ -56,25 +65,15 @@ const scrollToGuide = (): void => {
 
 const BIRD_BUTTON = 'flex min-w-0 flex-1 items-center gap-2 text-start';
 
-function MeeCorner({ line }: { readonly line: string | null }) {
-  const body = (
-    <>
+function MeeCorner({ line }: { readonly line: string }) {
+  return (
+    <button type="button" data-game-hero-guide="" data-game-guide-target="game-guide" onClick={scrollToGuide} className={BIRD_BUTTON} style={{ minHeight: 44 }}>
       <span className="min-w-0 flex-1 text-caption font-semibold" style={{ color: GAME_INK }}>
-        {line ?? gameText('game.hero.mee_idle')}
+        {line}
       </span>
       <span aria-hidden="true" className="shrink-0">
         <GameBird bird="meeGuide" size={56} flip />
       </span>
-    </>
-  );
-  const style = { minHeight: 44 } as const;
-  return line === null ? (
-    <Link to="progressionRegles" data-game-hero-guide="" className={BIRD_BUTTON} style={style}>
-      {body}
-    </Link>
-  ) : (
-    <button type="button" data-game-hero-guide="" data-game-guide-target="game-guide" onClick={scrollToGuide} className={BIRD_BUTTON} style={style}>
-      {body}
     </button>
   );
 }
@@ -89,7 +88,7 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
     previousLevel.current = level.level;
   }, [level.level, ring.play]);
 
-  const blason = useChoreography<HTMLDivElement>();
+  const blason = useChoreography<HTMLSpanElement>();
   const previousRank = useRef(`${glory.rank}/${glory.division ?? 0}`);
   useEffect(() => {
     const now = `${glory.rank}/${glory.division ?? 0}`;
@@ -101,7 +100,8 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
   const atTop = level.nextThreshold === null;
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <div ref={ring.ref} className="shrink-0">
+      <GameTouch detail={ringDetail(level)} named className="shrink-0 rounded-full">
+      <div ref={ring.ref}>
         <LevelRing
           level={level.level}
           tier={level.tier}
@@ -113,6 +113,7 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
           label={levelRingLabelWithPrestige(level.level, level.tier, level.prestige)}
         />
       </div>
+      </GameTouch>
       <div className="flex min-w-40 flex-1 flex-col gap-0.5">
         <h2 id="game-hero-title" className="text-title font-bold" style={{ color: GAME_INK }}>
           {gameText('game.level.title', { level: formatCount(level.level), tier: levelTierName(level.tier) })}
@@ -129,46 +130,48 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
           </span>
         ) : null}
       </div>
-      <div id="game-rank" className="flex shrink-0 flex-col items-center gap-0.5 text-center">
-        <div ref={blason.ref}>
-          <RankBlason rank={glory.rank} division={glory.division} size={80} label={rankName(glory.rank)} />
-        </div>
-        <p className="text-caption font-bold" style={{ color: GAME_INK }}>
-          {rankLabel(glory.rank, glory.division)}
-        </p>
-        <p className="text-check" style={{ color: GAME_INK_2 }}>
-          {gameText('game.rank.glory', { glory: formatCount(glory.glory) })}
-        </p>
-      </div>
+      <GameTouch detail={rankDetail(glory)} className="flex shrink-0 flex-col items-center gap-0.5 rounded-card text-center">
+        <span id="game-rank" className="flex flex-col items-center gap-0.5">
+          <span ref={blason.ref}>
+            <RankBlason rank={glory.rank} division={glory.division} size={80} label={rankName(glory.rank)} />
+          </span>
+          <span className="text-caption font-bold" style={{ color: GAME_INK }}>
+            {rankLabel(glory.rank, glory.division)}
+          </span>
+          <span className="text-check" style={{ color: GAME_INK_2 }}>
+            {gameText('game.rank.glory', { glory: formatCount(glory.glory) })}
+          </span>
+        </span>
+      </GameTouch>
     </div>
   );
 }
 
-function HowToEarn({ rules }: { readonly rules: readonly EarnRule[] }) {
+function HowToEarn({ rules, elan }: { readonly rules: readonly EarnRule[]; readonly elan: EngagementElanProgress | undefined }) {
   return (
     <div className="flex flex-col gap-1.5">
       <h3 className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
         {gameText('game.hero.earn_title')}
       </h3>
-      <ul className="flex flex-wrap gap-1.5" data-game-earn="">
+      <ul className="flex flex-wrap gap-x-1.5" data-game-earn="">
         {rules.map(({ family, points }) => (
-          <li key={family}>
-            <Link
-              to="progressionRegles"
-              search={{ regle: '1' }}
-              data-game-earn-chip={family}
-              aria-label={gameText('game.hero.earn_chip_a11y', { family: familyName(family), points: pointsLabel(points) })}
-              data-chip=""
-              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-chip px-3 text-check font-semibold"
-              style={{
-                minHeight: 44,
-                backgroundColor: `color-mix(in srgb, ${enamelToken(family)} 14%, transparent)`,
-                color: GAME_INK,
-              }}
+          <li key={family} className="max-w-full">
+            {/* La famille se touche : ce que rapporte un geste, et si elle est active ces jours-ci (#9563). */}
+            <GameTouch
+              detail={elanDetail(family, elan)}
+              marker={{ 'data-game-earn-chip': family }}
+              className="inline-flex max-w-full items-center"
+              style={{ minHeight: 44 }}
             >
-              <i aria-hidden="true" className="inline-block size-2 rounded-chip" style={{ backgroundColor: enamelToken(family) }} />
-              {gameText('game.hero.earn_chip', { family: familyName(family), points: formatCount(points) })}
-            </Link>
+              <span
+                data-chip=""
+                className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-chip px-3 py-1.5 text-check font-semibold"
+                style={{ backgroundColor: `color-mix(in srgb, ${enamelToken(family)} 14%, transparent)`, color: GAME_INK }}
+              >
+                <i aria-hidden="true" className="inline-block size-2 shrink-0 rounded-chip" style={{ backgroundColor: enamelToken(family) }} />
+                <span className="truncate">{gameText('game.hero.earn_chip', { family: familyName(family), points: formatCount(points) })}</span>
+              </span>
+            </GameTouch>
           </li>
         ))}
       </ul>
@@ -176,7 +179,7 @@ function HowToEarn({ rules }: { readonly rules: readonly EarnRule[] }) {
   );
 }
 
-export function GameHero({ game, guideLine = null, rules }: GameHeroProps) {
+export function GameHero({ game, guideLine = null, rules, elan }: GameHeroProps) {
   const tint = tierTint(game.level.tier);
   return (
     <section
@@ -192,9 +195,9 @@ export function GameHero({ game, guideLine = null, rules }: GameHeroProps) {
       <span aria-hidden="true" data-game-hero-watermark="" className="pointer-events-none absolute -end-10 -top-8 opacity-[0.07]">
         <Signature size={260} color="var(--color-ios-ink)" />
       </span>
-      <MeeCorner line={guideLine} />
+      {guideLine === null ? null : <MeeCorner line={guideLine} />}
       <WhereIAm game={game} />
-      <HowToEarn rules={rules ?? earnRules()} />
+      <HowToEarn rules={rules ?? earnRules()} elan={elan} />
     </section>
   );
 }

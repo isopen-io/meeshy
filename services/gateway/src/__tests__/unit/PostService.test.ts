@@ -1097,8 +1097,8 @@ describe('PostService', () => {
     });
 
     it('lets a non-public original be reposted UNCHANGED — same audience, never broader', async () => {
-      const privateOriginal = makePost({ id: 'private-1', visibility: 'PRIVATE' });
-      prisma.post.findFirst.mockResolvedValue(privateOriginal);
+      prisma.post.findFirst.mockResolvedValue(makePost({ id: 'private-1', visibility: 'PRIVATE' }));
+      prisma.post.create.mockResolvedValue(makePost({ id: 'repost-1', visibility: 'PRIVATE' }));
 
       await expect(service.repostPost('private-1', 'user-reposter')).resolves.not.toBeNull();
     });

@@ -108,10 +108,13 @@ final class ComposerLookStripTests: XCTestCase {
     /// **Chaque miniature vivante est dans le contour de sa case** (#9557) : le
     /// libellé, plus large que la case, ne doit pas en élargir le pas — l'atlas
     /// avance de `pitch`, les contours aussi.
-    func test_cells_advanceByThePitch_whateverTheirLabelWidth() throws {
+    /// Une case n'écrit plus rien (#9566) : elle a exactement la taille de sa
+    /// miniature, donc la bande avance du pas de l'atlas.
+    func test_cells_advanceByThePitch_eachTheSizeOfItsThumbnail() throws {
         let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
-        XCTAssertTrue(bande.contains(".frame(width: cellule.width, alignment: .center)"),
-                      "la case garde la largeur de la miniature ; son libellé déborde, centré")
+        let debut = try XCTUnwrap(bande.range(of: "private func cell(item: ComposerLookStripItem, chosen: Bool)"))
+        let fin = try XCTUnwrap(bande.range(of: "private func glyph(", range: debut.upperBound..<bande.endIndex))
+        XCTAssertTrue(bande[debut.upperBound..<fin.lowerBound].contains(".frame(width: cellule.width, height: cellule.height)"))
     }
 
     /// **Sans filtre ni cadre, rien ne recopie la caméra en bas** (#9557) : la
@@ -129,7 +132,8 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: nu, editing: false), .shutter)
         XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: chaud, editing: false), .thumbnail)
         XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: nu, editing: true), .hidden)
-        XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: chaud, editing: true), .thumbnail)
+        XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: chaud, editing: true), .hidden,
+                       "la miniature seule n'existe que pendant la capture, où elle déclenche (#9567)")
         XCTAssertFalse(ComposerLookStripRule.paintsLive(look: nu, familyOpen: false))
         XCTAssertTrue(ComposerLookStripRule.paintsLive(look: nu, familyOpen: true))
     }
@@ -168,9 +172,50 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertTrue(bande.contains(".simultaneously(with: TapGesture()"), "le toucher n'attend pas l'échec de l'appui long")
         XCTAssertFalse(bande.contains(".exclusively(before: TapGesture()"))
         let fin = Date(timeIntervalSince1970: 1_000)
-        XCTAssertTrue(ComposerLookStrip.followsAHold(fin, now: fin.addingTimeInterval(0.05)))
-        XCTAssertFalse(ComposerLookStrip.followsAHold(fin, now: fin.addingTimeInterval(0.5)))
-        XCTAssertFalse(ComposerLookStrip.followsAHold(nil, now: fin))
+        XCTAssertTrue(ComposerCaptureTapRule.followsAHold(fin, now: fin.addingTimeInterval(0.05)))
+        XCTAssertFalse(ComposerCaptureTapRule.followsAHold(fin, now: fin.addingTimeInterval(0.5)))
+        XCTAssertFalse(ComposerCaptureTapRule.followsAHold(nil, now: fin))
+    }
+
+    // MARK: - La case au centre, un seul nom, un rail sans cadre (#9566)
+
+    func test_band_choosesTheCentredCell_andSnapsCellByCell() throws {
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        XCTAssertTrue(bande.contains("ComposerLookStripRule.centeredIndex("), "le centre se lit du défilement")
+        XCTAssertTrue(bande.contains(".centered(on:"), "le suivi dit quelle case choisir")
+        XCTAssertTrue(bande.contains(".scrollTargetBehavior(.viewAligned(limitBehavior: .never))"),
+                      "la bande s'accroche case par case, aussi loin que le lancer porte")
+        XCTAssertTrue(bande.contains(".scrollTargetLayout()"))
+    }
+
+    func test_band_writesOneName_theChosenOne_largeUnderTheCells() throws {
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let debut = try XCTUnwrap(bande.range(of: "private func cell(item: ComposerLookStripItem, chosen: Bool)"))
+        let fin = try XCTUnwrap(bande.range(of: "private func glyph(", range: debut.upperBound..<bande.endIndex))
+        let cellule = String(bande[debut.upperBound..<fin.lowerBound])
+        XCTAssertFalse(cellule.contains("Text("), "aucune case n'écrit son nom : seul le choix se nomme")
+        XCTAssertEqual(bande.components(separatedBy: "Text(chosenItemName)").count - 1, 1, "UN nom, celui du choix")
+        XCTAssertTrue(bande.contains("MeeshyFont.relative(ComposerLookStripRule.chosenNameSize, weight: .bold)"))
+        XCTAssertGreaterThanOrEqual(ComposerLookStripRule.chosenNameSize, 20, "en grand")
+    }
+
+    func test_rail_framesWearTheCallFrameSymbol_andNoGlassSurroundsTheFamilies() throws {
+        XCTAssertEqual(ComposerCaptureCopy.familySymbol(.frames), "photo.artframe")
+        let appel = try Self.code("Meeshy/Features/Main/Views/CallModeControls.swift")
+        XCTAssertTrue(appel.contains("symbol: \"photo.artframe\""),
+                      "le même pictogramme que le cadre de l'appel vidéo")
+        let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
+        let debut = try XCTUnwrap(bande.range(of: "struct ComposerLookRail: View {"))
+        let fin = try XCTUnwrap(bande.range(of: "struct ComposerLookStrip: View {", range: debut.upperBound..<bande.endIndex))
+        let rail = String(bande[debut.upperBound..<fin.lowerBound])
+        XCTAssertFalse(rail.contains("adaptiveLiquidGlass"), "ni verre ni cadre : le pictogramme et le nom")
+        XCTAssertTrue(rail.contains(".shadow("), "lisibles sur une image claire")
+        XCTAssertTrue(rail.contains("MeeshyControlSize.tapTarget"), "la cible reste de 44 pt")
+    }
+
+    func test_hint_isSilentWhileAFamilyIsOpen_theChosenNameTakesItsPlace() throws {
+        let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        XCTAssertTrue(bas.contains("session.openFamily == nil"))
     }
 
     func test_chosenLookName_saysBothHalvesOfTheLook() {

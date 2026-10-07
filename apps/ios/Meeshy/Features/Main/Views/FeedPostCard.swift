@@ -103,7 +103,7 @@ struct FeedPostCard: View {
     @State var fullscreenPlace: BubbleFullscreenPlace?
     /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
     /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
-    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator(exitGate: .open)
 
     var accentColor: String { post.authorColor }
 

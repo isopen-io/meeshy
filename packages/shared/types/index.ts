@@ -765,3 +765,6 @@ export { AGENT_TYPES, SCAN_STALE_MS, isScanActive } from './agent.js';
 export * from './reading-modes.js';
 export * from './conversation-bridge.js';
 export * from './contact-card.js';
+
+// ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
+export * from './content-capture.js';

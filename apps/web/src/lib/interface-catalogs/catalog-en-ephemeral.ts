@@ -19,6 +19,8 @@ const enEphemeral = {
   'message.ephemeral.label.a11y': 'Ephemeral message',
   'message.blurred.a11y': 'Blurred',
   'message.viewOnce.a11y': 'View once',
+  /* #9573 — le refus de transfert d'une flamme après lecture. */
+  'forward.refusal.afterRead': 'A message that disappears after reading cannot be forwarded',
 } satisfies EphemeralCatalogSlice;
 
 export default enEphemeral;

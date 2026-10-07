@@ -61,24 +61,64 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
-import { admitMessageForward, isForwardRefused } from '../forwardAdmission';
+import { admitMessageForward as admitForward, describeForwardRefusal, isForwardRefused } from '../forwardAdmission';
 
 const SOURCE_ID = '507f1f77bcf86cd799439011';
+const SOURCE_CONVERSATION_ID = '507f1f77bcf86cd799439021';
+const SENDER_ID = '507f1f77bcf86cd799439031';
+const SENDER_USER_ID = '507f1f77bcf86cd799439041';
+const SENDER_IN_SOURCE_ID = '507f1f77bcf86cd799439051';
+const AUTHOR_ID = '507f1f77bcf86cd799439061';
 const AT = new Date('2026-08-12T12:00:00.000Z');
 
 const VIEW_ONCE_BIT = 1 << 2;
 const EPHEMERAL_BIT = 1 << 0;
+const BLURRED_BIT = 1 << 1;
+const AFTER_READ_BIT = 1 << 3;
 
 const messageFindUnique = jest.fn<any>();
 
-const prisma = { message: { findUnique: messageFindUnique } } as any;
+// #9579 — tous les témoins de ce fichier portent sur ce que la source IMPOSE :
+// l'expéditeur y LIT la source (participant actif de sa conversation, sans
+// plancher ni masquage). Le droit de lire a ses propres témoins, sur une base
+// qui évalue les requêtes : `forwardSourceReadAccess.test.ts`.
+const prisma = {
+  message: { findUnique: messageFindUnique },
+  participant: {
+    findUnique: async () => ({ id: SENDER_ID, userId: SENDER_USER_ID }),
+    findFirst: async () => ({
+      id: SENDER_IN_SOURCE_ID,
+      role: 'member',
+      joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+      shareLinkId: null,
+      historyVisibleFrom: null,
+      permissions: null,
+      anonymousSession: null,
+      user: { role: 'USER' },
+    }),
+  },
+  userConversationPreferences: { findFirst: async () => null },
+  userMessageDeletion: { findMany: async () => [] },
+  // Aucun décompte lancé, aucune vue unique ouverte : le contenu est là pour lui.
+  messageStatusEntry: { findFirst: async () => null },
+} as any;
+
+const admitMessageForward = (db: any, params: Record<string, unknown>) =>
+  admitForward(db, { senderParticipantId: SENDER_ID, ...params } as any);
 
 const source = (over: Record<string, unknown> = {}) => ({
+  id: SOURCE_ID,
+  conversationId: SOURCE_CONVERSATION_ID,
+  createdAt: new Date('2026-08-12T11:00:00.000Z'),
+  deletedAt: null,
+  senderId: AUTHOR_ID,
+  viewOnceBurnedAt: null,
   isViewOnce: false,
+  isBlurred: false,
   effectFlags: 0,
   ephemeralDuration: null,
   expiresAt: null,
-  createdAt: new Date('2026-08-12T11:00:00.000Z'),
+  attachments: [],
   // Compté par la MÊME lecture que l'héritage éphémère : c'est ce qui dit si
   // la copie serveur des pièces jointes donnera un corps au transfert.
   _count: { attachments: 0 },
@@ -101,7 +141,7 @@ describe('admitMessageForward', () => {
   it('laisse passer un message ordinaire sans rien lui faire hériter', async () => {
     const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
-    expect(admission).toEqual({ admitted: true });
+    expect(admission).toEqual({ admitted: true, imposes: null });
   });
 
   describe('vue unique — refusée, parce que propager rendrait un budget neuf', () => {
@@ -117,7 +157,7 @@ describe('admitMessageForward', () => {
       // Les deux écritures coexistent : `saveMessage` renseigne la colonne ET
       // le bit. Un client qui n'aurait envoyé que `effectFlags` doit être tenu
       // par la même règle — sinon le contournement est d'un champ.
-      messageFindUnique.mockResolvedValue(source({ isViewOnce: false, effectFlags: VIEW_ONCE_BIT }));
+      messageFindUnique.mockResolvedValue(source({ isViewOnce: false, isBlurred: false, effectFlags: VIEW_ONCE_BIT }));
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
@@ -140,18 +180,13 @@ describe('admitMessageForward', () => {
 
   describe('éphémère — propagé, en repartant du transfert', () => {
     it('fait hériter la DURÉE de la source, recomptée depuis le transfert', async () => {
-      messageFindUnique.mockResolvedValue(
-        source({
-          createdAt: new Date('2026-08-12T11:00:00.000Z'),
-          expiresAt: new Date('2026-08-12T11:00:30.000Z'),
-        }),
-      );
+      messageFindUnique.mockResolvedValue(source({ effectFlags: EPHEMERAL_BIT, ephemeralDuration: 30 }));
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
       // 30 s de durée d'origine. Une DURÉE, pas une échéance : le décompte de
       // la copie repartira de la réception de chaque nouveau destinataire.
-      expect(admission).toEqual({ admitted: true, ephemeralDuration: 30 });
+      expect(admission).toEqual({ admitted: true, imposes: { ephemeralDuration: 30, isBlurred: false } });
     });
 
     it('lit la COLONNE, jamais la distance à `expiresAt`, dès qu\'elle existe (#7451)', async () => {
@@ -162,7 +197,6 @@ describe('admitMessageForward', () => {
       // d'une semaine, sans qu'aucun autre témoin ne tombe.
       messageFindUnique.mockResolvedValue(
         source({
-          createdAt: AT,
           ephemeralDuration: 30,
           expiresAt: new Date(AT.getTime() + 7 * 24 * 60 * 60 * 1000),
         }),
@@ -170,38 +204,34 @@ describe('admitMessageForward', () => {
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
-      expect(admission).toEqual({ admitted: true, ephemeralDuration: 30 });
+      expect(admission).toEqual({ admitted: true, imposes: { ephemeralDuration: 30, isBlurred: false } });
     });
 
-    it('propage aussi quand seul le bit EPHEMERAL est posé mais que l’échéance existe', async () => {
+    it('refuse une échéance sans durée — `expiresAt` est l’heure de destruction, jamais une durée (#9572)', async () => {
+      // Le repli `expiresAt − createdAt` lisait sept jours sur toute ligne dont
+      // la colonne de durée manque : une flamme transférable une semaine. On
+      // ne borne pas une copie par une durée qu'on ne connaît pas : on refuse.
       messageFindUnique.mockResolvedValue(
-        source({
-          effectFlags: EPHEMERAL_BIT,
-          createdAt: new Date('2026-08-12T11:00:00.000Z'),
-          expiresAt: new Date('2026-08-12T12:00:00.000Z'),
-        }),
+        source({ effectFlags: EPHEMERAL_BIT, expiresAt: new Date('2026-08-19T11:00:00.000Z') }),
       );
+      expect(await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT })).toEqual({
+        admitted: false,
+        reason: 'ephemeral-not-forwardable',
+      });
+
+      messageFindUnique.mockResolvedValue(source({ expiresAt: new Date('2026-08-12T11:00:30.000Z') }));
+      expect(await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT })).toEqual({
+        admitted: false,
+        reason: 'ephemeral-not-forwardable',
+      });
+    });
+
+    it('refuse aussi le bit EPHEMERAL nu, sans durée ni échéance (#9572)', async () => {
+      messageFindUnique.mockResolvedValue(source({ effectFlags: EPHEMERAL_BIT }));
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
-      expect(admission).toEqual({ admitted: true, ephemeralDuration: 3600 });
-    });
-
-    it('ne propage AUCUNE durée quand la source legacy naît déjà expirée', async () => {
-      // Décalage d'horloge ou client qui envoyait une échéance passée : la
-      // distance est nulle, donc ce n'est pas une durée. La copie dégénère en
-      // message ordinaire — le seul comportement qui ne la fait pas vivre PLUS
-      // que l'original, là où une durée nulle l'aurait rendue immortelle.
-      messageFindUnique.mockResolvedValue(
-        source({
-          createdAt: new Date('2026-08-12T11:00:00.000Z'),
-          expiresAt: new Date('2026-08-12T10:59:00.000Z'),
-        }),
-      );
-
-      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
-
-      expect(admission).toEqual({ admitted: true });
+      expect(admission).toEqual({ admitted: false, reason: 'ephemeral-not-forwardable' });
     });
 
     it('reste transitif — la copie éphémère est elle-même une source éphémère', async () => {
@@ -209,7 +239,7 @@ describe('admitMessageForward', () => {
       // La transférer à son tour doit rendre la même durée, sans érosion — et
       // sans que le module ait à remonter la chaîne.
       messageFindUnique.mockResolvedValue(
-        source({ createdAt: AT, ephemeralDuration: 30, expiresAt: null }),
+        source({ ephemeralDuration: 30, expiresAt: null }),
       );
 
       const secondForwardAt = new Date(AT.getTime() + 10_000);
@@ -218,7 +248,111 @@ describe('admitMessageForward', () => {
         at: secondForwardAt,
       });
 
-      expect(admission).toEqual({ admitted: true, ephemeralDuration: 30 });
+      expect(admission).toEqual({ admitted: true, imposes: { ephemeralDuration: 30, isBlurred: false } });
+    });
+  });
+
+  describe('la loi de sortie lue sur le message ET sur ses pièces (#9572)', () => {
+    it('lit le flou, le bitfield et la protection de chaque pièce dans la MÊME requête', async () => {
+      await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      // Deux lectures de la source, indépendantes : le droit de la lire
+      // (#9579), puis ce qu'elle impose — UNE requête pour toute la loi.
+      const lawReads = messageFindUnique.mock.calls.filter(([args]: [any]) => args.select.isBlurred === true);
+      expect(lawReads).toHaveLength(1);
+      const { select } = lawReads[0][0];
+      expect(select).toMatchObject({
+        isViewOnce: true,
+        isBlurred: true,
+        effectFlags: true,
+        ephemeralDuration: true,
+        attachments: { select: { isViewOnce: true, isBlurred: true, effectFlags: true } },
+      });
+    });
+
+    it('refuse une pièce en vue unique sous un message qui ne l’est pas', async () => {
+      messageFindUnique.mockResolvedValue(
+        source({ attachments: [{ isViewOnce: false, isBlurred: false, effectFlags: 0 }, { isViewOnce: true, isBlurred: false, effectFlags: 0 }] }),
+      );
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: false, reason: 'view-once-not-forwardable' });
+    });
+
+    it('refuse une pièce dont seul le bitfield dit la vue unique', async () => {
+      messageFindUnique.mockResolvedValue(
+        source({ attachments: [{ isViewOnce: false, isBlurred: false, effectFlags: VIEW_ONCE_BIT }] }),
+      );
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: false, reason: 'view-once-not-forwardable' });
+    });
+
+    it('refuse une flamme après lecture — elle naissait en copie de sept jours, sans le bit', async () => {
+      messageFindUnique.mockResolvedValue(
+        source({
+          effectFlags: EPHEMERAL_BIT | AFTER_READ_BIT,
+          ephemeralDuration: null,
+          expiresAt: new Date('2026-08-19T11:00:00.000Z'),
+        }),
+      );
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: false, reason: 'ephemeral-not-forwardable' });
+    });
+
+    it('refuse de retransférer une copie — elle porte durée ET après lecture', async () => {
+      messageFindUnique.mockResolvedValue(
+        source({ effectFlags: EPHEMERAL_BIT | AFTER_READ_BIT, ephemeralDuration: 30 }),
+      );
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: false, reason: 'ephemeral-not-forwardable' });
+    });
+
+    it('dit la vue unique avant la flamme quand la source porte les deux', async () => {
+      messageFindUnique.mockResolvedValue(
+        source({ effectFlags: EPHEMERAL_BIT | AFTER_READ_BIT, attachments: [{ isViewOnce: true, isBlurred: false, effectFlags: 0 }] }),
+      );
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: false, reason: 'view-once-not-forwardable' });
+    });
+
+    it('impose le flou d’une source ordinaire floutée, colonne ou bit', async () => {
+      messageFindUnique.mockResolvedValue(source({ isBlurred: true }));
+      expect(await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT })).toEqual({
+        admitted: true,
+        imposes: { ephemeralDuration: null, isBlurred: true },
+      });
+
+      messageFindUnique.mockResolvedValue(source({ effectFlags: BLURRED_BIT }));
+      expect(await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT })).toEqual({
+        admitted: true,
+        imposes: { ephemeralDuration: null, isBlurred: true },
+      });
+    });
+
+    it('impose ensemble la durée et le flou d’une flamme floutée', async () => {
+      messageFindUnique.mockResolvedValue(
+        source({ effectFlags: EPHEMERAL_BIT | BLURRED_BIT, isBlurred: true, ephemeralDuration: 60 }),
+      );
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: true, imposes: { ephemeralDuration: 60, isBlurred: true } });
+    });
+
+    it('dit pourquoi au sender, un motif par refus', () => {
+      const phrases = (['view-once-not-forwardable', 'ephemeral-not-forwardable', 'forward-source-unavailable'] as const).map(
+        (reason) => describeForwardRefusal({ admitted: false, reason }),
+      );
+      expect(new Set(phrases).size).toBe(3);
     });
   });
 
@@ -264,21 +398,17 @@ describe('admitMessageForward', () => {
 
       const admission = await admitMessageForward(prisma, BODY_ONLY_FROM_SOURCE);
 
-      expect(admission).toEqual({ admitted: true });
+      expect(admission).toEqual({ admitted: true, imposes: null });
     });
 
     it('fait toujours hériter l’échéance éphémère d’une source qui porte un média', async () => {
       messageFindUnique.mockResolvedValue(
-        source({
-          _count: { attachments: 1 },
-          createdAt: new Date('2026-08-12T11:00:00.000Z'),
-          expiresAt: new Date('2026-08-12T11:00:30.000Z'),
-        }),
+        source({ _count: { attachments: 1 }, ephemeralDuration: 30 }),
       );
 
       const admission = await admitMessageForward(prisma, BODY_ONLY_FROM_SOURCE);
 
-      expect(admission).toEqual({ admitted: true, ephemeralDuration: 30 });
+      expect(admission).toEqual({ admitted: true, imposes: { ephemeralDuration: 30, isBlurred: false } });
     });
 
     it('dit d’abord la vue unique — le motif le plus informatif gagne', async () => {
@@ -296,7 +426,7 @@ describe('admitMessageForward', () => {
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
-      expect(admission).toEqual({ admitted: true });
+      expect(admission).toEqual({ admitted: true, imposes: null });
     });
   });
 
@@ -306,7 +436,7 @@ describe('admitMessageForward', () => {
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
-      expect(admission).toEqual({ admitted: true });
+      expect(admission).toEqual({ admitted: true, sourceUnavailable: true });
     });
 
     it('laisse passer sans héritage quand la lecture de la source échoue', async () => {
@@ -316,7 +446,39 @@ describe('admitMessageForward', () => {
 
       const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
-      expect(admission).toEqual({ admitted: true });
+      expect(admission).toEqual({ admitted: true, sourceUnavailable: true });
+    });
+  });
+
+  describe('fermé par construction — une source mal chargée ne vaut pas « ordinaire » (#9572)', () => {
+    it.each(['isViewOnce', 'isBlurred', 'effectFlags', 'ephemeralDuration', 'expiresAt', 'attachments'])(
+      'refuse quand la ligne rendue ne porte pas `%s`',
+      async (field) => {
+        const { [field]: _forgotten, ...partial } = source() as Record<string, unknown>;
+        messageFindUnique.mockResolvedValue(partial);
+
+        const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+        expect(admission).toEqual({ admitted: false, reason: 'ephemeral-not-forwardable' });
+      },
+    );
+
+    it('refuse quand une pièce est chargée sans sa protection', async () => {
+      messageFindUnique.mockResolvedValue(source({ attachments: [{ isViewOnce: false }] }));
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: false, reason: 'ephemeral-not-forwardable' });
+    });
+
+    it('impose le flou quand seule une pièce de la source est floutée', async () => {
+      messageFindUnique.mockResolvedValue(
+        source({ attachments: [{ isViewOnce: false, isBlurred: true, effectFlags: 0 }] }),
+      );
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: true, imposes: { ephemeralDuration: null, isBlurred: true } });
     });
   });
 });

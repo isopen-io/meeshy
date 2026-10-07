@@ -16,6 +16,7 @@ import { RichText } from './rich-text';
 import { CAPTION_SCRIM } from './feed-media-mosaic';
 import { ViewerCaption } from './viewer-caption';
 import { PrismPastille } from './message-blocks';
+import { PostPointsMark } from './publication-points-mark';
 import { feedCardBody, type FeedCardMedia, type FeedCardModel, type FeedCardText } from '@/lib/feed/card-model';
 import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
 import { SCENE_ASPECT, cardAspect, clampedCardAspect } from '@/lib/feed/scene-framing';
@@ -173,6 +174,9 @@ function FeedPostHeader({ model, storyRing, mood, isDetail, hosts }: { readonly 
               {model.relativeTime}
             </Link>
           )}
+          {/* CE QUE CE POST A RAPPORTÉ AU LECTEUR (#9570) — « · +99 » après la
+              date, à sa taille et à son encre ; absent ou nul, rien. */}
+          {model.viewerPoints === undefined ? null : <PostPointsMark points={model.viewerPoints} language={language} />}
         </div>
       </div>
       {/* LE « ⋯ » EN HAUT À DROITE (#7533) — miroir

@@ -9,7 +9,7 @@ import { ReactionSheet } from '@/components/reaction-sheet';
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
-import { messageDetailExposureOf, messageMenuContextOf, translationChoices } from '@/lib/view/message-actions';
+import { imageableOf, messageDetailExposureOf, messageMenuContextOf, translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import type { MessageMenuController } from '@/lib/view/use-message-menu';
 
@@ -128,7 +128,7 @@ export function ThreadMessageSheets({
         /* Un message protégé (#7580, #8008) : ni langues ni pièces — rien de son contenu. */
         const exposed = messageDetailExposureOf(detailMessage, { now: Date.now() });
         const menuContext = messageMenuContextOf(detailMessage, { now: Date.now() });
-        const imageable = !menuContext.isProtected && (menuContext.hasText || menuContext.hasImageableMedia === true);
+        const imageable = imageableOf(menuContext);
         const composable = menuContext.composableIndex === null || menuContext.composableIndex === undefined ? null : (detailMessage.attachments ?? [])[menuContext.composableIndex];
         return (
           <MessageDetailSheet

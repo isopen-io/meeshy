@@ -16,8 +16,9 @@ describe('le tap d’une notification du jeu, dans la coque', () => {
     expect(shellPushUrl(pushTapTarget({ type: 'game_season_step', route: 'progression' }))).toBe('/me/progression/saison');
   });
 
-  test('un badge ouvre toujours le hub', () => {
-    expect(shellPushUrl(pushTapTarget({ type: 'badge_earned' }))).toBe('/me/progression');
+  /* Carte de navigation (#9563, amendement n° 4) : un badge ouvre la fiche des Badges, par l'adresse que Progression redirige. */
+  test('un badge ouvre la fiche des Badges ; la mission du jour, celle des Missions', () => {
+    expect(shellPushUrl(pushTapTarget({ type: 'badge_earned' }))).toBe('/me/progression?section=badges');
     expect(shellPushUrl(pushTapTarget({ type: 'game_mission_window', route: 'progression' }))).toBe('/me/progression?section=missions');
   });
 });

@@ -69,7 +69,9 @@ final class MediaSaveCoordinatorTests: XCTestCase {
         let resolver = MockMediaSaveResolver()
         let photos = MockPhotoLibrarySaver()
         let reporter = MockDownloadReporter()
-        let sut = MediaSaveCoordinator(resolver: resolver, photoSaver: photos,
+        // Portillon OUVERT : ces témoins éprouvent le transport, pas la loi de
+        // sortie (fermée par défaut — `MessageExitOfferTests`).
+        let sut = MediaSaveCoordinator(exitGate: .open, resolver: resolver, photoSaver: photos,
                                        downloadReporter: reporter, branding: branding)
         return (sut, resolver, photos, reporter)
     }

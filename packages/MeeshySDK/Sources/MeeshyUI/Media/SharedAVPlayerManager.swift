@@ -92,6 +92,10 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// l'utilisateur (X) et la lecture s'arrête, sinon l'audio continuerait
     /// invisible en arrière-plan.
     private var pipTeardownIsInternal = false
+    /// Une fenêtre PiP a été DEMANDÉE et n'a encore ni démarré ni échoué.
+    private var isPipStarting = false
+    /// La surface qui a demandé le PiP s'est fermée derrière sa demande.
+    private var pipFailureHaltsPlayback = false
     private var watchStartTime: Date?
 
     /// Guards `applyResumePositionIfAvailable()` against firing on every
@@ -140,14 +144,6 @@ public final class SharedAVPlayerManager: ObservableObject {
     private var lastHeartbeat: Double = 0
 
     private init() {}
-
-    /// Le player DÉJÀ chargé pour cette pièce jointe, ou `nil` si le
-    /// gestionnaire en porte une autre (O16). Lecture seule : demander la
-    /// continuité ne charge rien et ne préempte aucune surface en cours.
-    public func loadedPlayer(matching attachmentId: String) -> AVPlayer? {
-        guard self.attachmentId == attachmentId else { return nil }
-        return player
-    }
 
     // MARK: - Load
 
@@ -433,20 +429,42 @@ public final class SharedAVPlayerManager: ObservableObject {
     public func configurePip(playerLayer: AVPlayerLayer) {
         guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
         guard pipController?.playerLayer !== playerLayer else { return }
+        // Une fenêtre PiP ouverte (ou en train de s'ouvrir) garde SON
+        // contrôleur : une surface qui se monte pendant ce temps — la bulle
+        // restée sous un plein écran qu'on ferme — le remplacerait et tuerait
+        // la fenêtre que l'utilisateur vient de demander (#9575).
+        guard Self.mayReplacePipController(isPipActive: isPipActive || isPipEngaged || isPipStarting) else { return }
         pipController?.invalidatePlaybackState()
         let controller = AVPictureInPictureController(playerLayer: playerLayer)
         controller?.canStartPictureInPictureAutomaticallyFromInline = true
         let delegate = PipDelegate { [weak self] in
-            Task { @MainActor [weak self] in self?.isPipActive = true }
+            Task { @MainActor [weak self] in
+                self?.isPipStarting = false
+                self?.pipFailureHaltsPlayback = false
+                self?.isPipActive = true
+            }
         } onStop: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                self.isPipStarting = false
                 self.isPipActive = false
                 let wasInternal = self.pipTeardownIsInternal
                 self.pipTeardownIsInternal = false
                 if Self.shouldHaltPlaybackOnPipStop(teardownWasInternal: wasInternal) {
                     self.stop()
                 }
+            }
+        } onFailedToStart: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let halts = self.pipFailureHaltsPlayback
+                self.isPipStarting = false
+                self.pipFailureHaltsPlayback = false
+                if self.isPipActive { self.isPipActive = false }
+                // La surface qui a demandé la fenêtre s'est fermée derrière
+                // elle : plus rien ne montre cette lecture, donc elle s'arrête
+                // au lieu de reprendre dans une bulle sans qu'on l'ait demandé.
+                if halts { self.pause() }
             }
         } onRestore: { [weak self] completion in
             Task { @MainActor [weak self] in
@@ -462,9 +480,29 @@ public final class SharedAVPlayerManager: ObservableObject {
         self.pipDelegate = delegate
     }
 
-    public func startPip() {
-        guard let pipController, pipController.isPictureInPicturePossible else { return }
+    /// Une fenêtre PiP vivante ne change pas de contrôleur sous elle.
+    public nonisolated static func mayReplacePipController(isPipActive: Bool) -> Bool {
+        !isPipActive
+    }
+
+    /// Demande la fenêtre PiP. Rend `true` si la demande est PARTIE — la
+    /// surface qui se ferme derrière sait alors que la lecture a un autre lieu.
+    ///
+    /// `haltsOnFailure` : la surface qui demande va se FERMER (sortie du plein
+    /// écran). Si la fenêtre échoue à s'ouvrir, la lecture s'arrête plutôt que
+    /// de continuer sans lieu. Une surface qui reste à l'écran le laisse à
+    /// `false` : en cas d'échec, elle joue toujours.
+    ///
+    /// `isPipActive` ne se lève qu'au rappel `didStart` : la couche d'origine
+    /// doit rester montée pendant l'ouverture, et le verdict de montage la
+    /// démonterait. `isPipStarting` protège le contrôleur d'ici là.
+    @discardableResult
+    public func startPip(haltsOnFailure: Bool = false) -> Bool {
+        guard let pipController, pipController.isPictureInPicturePossible else { return false }
+        isPipStarting = true
+        pipFailureHaltsPlayback = haltsOnFailure
         pipController.startPictureInPicture()
+        return true
     }
 
     public func stopPip() {
@@ -475,6 +513,8 @@ public final class SharedAVPlayerManager: ObservableObject {
             pipTeardownIsInternal = true
         }
         pipController?.stopPictureInPicture()
+        isPipStarting = false
+        pipFailureHaltsPlayback = false
         if isPipActive { isPipActive = false }
     }
 
@@ -698,6 +738,12 @@ public final class SharedAVPlayerManager: ObservableObject {
         pipController = nil
         pipDelegate = nil
         pipTeardownIsInternal = false
+        isPipStarting = false
+        pipFailureHaltsPlayback = false
+        // Le contrôleur vient de partir, et son délégué avec lui : aucun
+        // `didStop` ne viendra rabaisser le drapeau. Resté levé, il refuserait
+        // le lecteur à toute surface en ligne (#9575).
+        if isPipActive { isPipActive = false }
         // shouldLoop reset : ne traverse pas un changement d'attachment.
         // isForceMuted reset : intention par-surface TRANSITOIRE, ne traverse
         // pas non plus un changement d'attachment/surface.
@@ -717,12 +763,22 @@ private final class PipDelegate: NSObject, AVPictureInPictureControllerDelegate 
     nonisolated deinit {}
     let onStart: () -> Void
     let onStop: () -> Void
+    let onFailedToStart: () -> Void
     let onRestore: (@escaping (Bool) -> Void) -> Void
 
-    init(onStart: @escaping () -> Void, onStop: @escaping () -> Void, onRestore: @escaping (@escaping (Bool) -> Void) -> Void) {
+    init(onStart: @escaping () -> Void,
+         onStop: @escaping () -> Void,
+         onFailedToStart: @escaping () -> Void,
+         onRestore: @escaping (@escaping (Bool) -> Void) -> Void) {
         self.onStart = onStart
         self.onStop = onStop
+        self.onFailedToStart = onFailedToStart
         self.onRestore = onRestore
+    }
+
+    func pictureInPictureController(_ controller: AVPictureInPictureController,
+                                     failedToStartPictureInPictureWithError error: Error) {
+        onFailedToStart()
     }
 
     func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {

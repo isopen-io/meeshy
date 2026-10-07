@@ -57,7 +57,7 @@ export function GameChip({ children, tint }: { readonly children: ReactNode; rea
   return (
     <span
       data-chip=""
-      className="inline-flex items-center whitespace-nowrap rounded-chip px-2 py-0.5 text-check font-semibold"
+      className="max-w-full truncate whitespace-nowrap rounded-chip px-2 py-0.5 text-check font-semibold"
       style={{ backgroundColor: `color-mix(in srgb, ${tint} 16%, transparent)`, color: GAME_INK }}
     >
       {children}

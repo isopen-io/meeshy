@@ -58,11 +58,13 @@ describe('PersonalMissionService.ensure — le tirage', () => {
   });
 
   it('ne lit ni messages ni compteurs quand plus aucune plage ne tient ce soir (revue adversariale #9539)', async () => {
-    const { db, service } = setup({ timezone: 'UTC' });
+    const { db, service, missions } = setup({ timezone: 'UTC' });
+    const late = new Date('2026-10-06T22:30:00Z');
+    const day = await missions.ensureToday(USER, late);
     const messages = jest.spyOn(db.prisma.message, 'findMany');
     const counters = jest.spyOn(db.prisma.engagementCounter, 'findMany');
 
-    expect(await service.ensure(USER, new Date('2026-10-06T22:30:00Z'))).toBeNull();
+    expect(await service.ensure(USER, late, day)).toBeNull();
 
     expect(messages).not.toHaveBeenCalled();
     expect(counters).not.toHaveBeenCalled();
@@ -139,6 +141,7 @@ describe('PersonalMissionService.ensure — le tirage', () => {
       usage: {},
       multilingual: false,
       excludedSignals: standardSignals as never,
+      profile: { capabilities: [], habits: {} },
     })!;
 
     expect(row.templateKey).toBe(expected.mission.templateKey);

@@ -11,20 +11,20 @@ import { gamePrefs } from '@/lib/game/preferences';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { interfaceDirection, SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { conceptView } from '@/lib/view/progression-concepts';
+import { conceptView, ficheView, type DetailRef } from '@/lib/view/progression-concepts';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { ProgressionBody } from './progression';
 import { ConceptFiche } from './progression-concept';
 import type { GameActions } from './progression-game-actions';
-import { TableauBody } from './progression-tableau';
 
 /**
  * « PROGRESSION » EN SOUS-MENUS (#9563) — la première page ne porte que des
  * cartes de concept (tête, données importantes, à quoi ça sert, comment ça
- * marche), chaque concept a sa fiche où vivent ses données et ses gestes, et le
- * tableau de bord regroupe tout, en lecture seule. Les trois écrans parcourent
- * la MÊME liste (`progressionConcepts`, `packages/shared`).
+ * marche), chaque concept a sa fiche où vivent ses données et ses gestes. Les
+ * deux écrans parcourent la MÊME liste (`progressionConcepts`, `packages/shared`).
+ * Le tableau de bord n'existe plus (amendement n° 4) : il redisait la première
+ * page et les fiches.
  */
 
 beforeAll(async () => {
@@ -65,7 +65,6 @@ const dom = (html: string): HTMLElement => {
 const hub = (progress: EngagementWithGame): HTMLElement => dom(renderToStaticMarkup(<ProgressionBody progress={progress} now={NOW} />));
 const fiche = (concept: ProgressionConcept, progress: EngagementWithGame): HTMLElement =>
   dom(renderToStaticMarkup(<ConceptFiche concept={concept} progress={progress} host={{ actions: idle, online: true }} now={NOW} />));
-const tableau = (progress: EngagementWithGame): HTMLElement => dom(renderToStaticMarkup(<TableauBody progress={progress} now={NOW} />));
 
 /** Rendu UNE fois, à la première lecture : le DOM et les catalogues n'existent qu'après `beforeAll`. */
 const once = <T,>(make: () => T): (() => T) => {
@@ -137,23 +136,29 @@ describe('la première page : une carte par concept, et rien d’autre', () => {
     for (const card of page().querySelectorAll('[data-concept-card]')) expect(card.querySelectorAll('[role="progressbar"]').length).toBeLessThanOrEqual(1);
   });
 
-  test('au-dessus de la liste : le tableau de bord ; en dessous : carnet, règles, réglages', () => {
+  test('plus de tableau de bord : les cartes d’abord, puis carnet, règles, réglages', () => {
     const rows = [...page().querySelectorAll('[data-progression-row]')].map((row) => [row.getAttribute('data-progression-row'), row.getAttribute('href')]);
     expect(rows).toEqual([
-      ['tableau', '/me/progression/tableau-de-bord'],
       ['carnet', '/me/progression/carnet'],
       ['regles', '/me/progression/regles'],
       ['reglages', '/me/progression/reglages'],
     ]);
     const order = [...page().querySelectorAll('[data-progression-row], [data-concept-card]')].map((node) => node.getAttribute('data-progression-row') ?? 'carte');
-    expect(order[0]).toBe('tableau');
+    expect(order[0]).toBe('carte');
     expect(order.slice(-3)).toEqual(['carnet', 'regles', 'reglages']);
+    expect(page().querySelector('a[href="/me/progression/tableau-de-bord"]')).toBeNull();
   });
 
   test('chaque carte et chaque ligne est une cible de 44 points', () => {
     for (const target of page().querySelectorAll('[data-concept-card], [data-progression-row]')) {
       expect((target as HTMLElement).style.minHeight).toBe('44px');
     }
+  });
+
+  test('une jauge de carte se remplit depuis sa valeur précédente : elle porte le repère que le style anime', () => {
+    const fills = [...page().querySelectorAll('[data-concept-card] [role="progressbar"] [data-game-gauge-fill]')];
+    expect(fills.length).toBe(page().querySelectorAll('[data-concept-card] [role="progressbar"]').length);
+    expect(fills.length).toBeGreaterThan(5);
   });
 
   test('la ligne de Mee se pose au-dessus de tout quand l’hôte la fournit', () => {
@@ -185,15 +190,13 @@ describe('un ancien serveur, sans bloc `game`', () => {
     expect(page().textContent).not.toContain('0 / 0');
   });
 
-  test('les portes du jeu (carnet, règles, réglages) n’existent pas sans jeu ; le tableau de bord, si', () => {
-    expect([...page().querySelectorAll('[data-progression-row]')].map((row) => row.getAttribute('data-progression-row'))).toEqual(['tableau']);
+  test('les portes du jeu (carnet, règles, réglages) n’existent pas sans jeu', () => {
+    expect(page().querySelectorAll('[data-progression-row]')).toHaveLength(0);
   });
 
-  test('chaque concept restant a sa fiche et son bloc au tableau de bord', () => {
-    const board = tableau(before);
+  test('chaque concept restant a sa fiche', () => {
     for (const concept of progressionConcepts(before)) {
       expect({ concept, fiche: fiche(concept, before).querySelector('[data-concept-fiche]') !== null }).toEqual({ concept, fiche: true });
-      expect({ concept, block: board.querySelector(`[data-dashboard-block="${concept}"]`) !== null }).toEqual({ concept, block: true });
     }
   });
 
@@ -205,13 +208,13 @@ describe('un ancien serveur, sans bloc `game`', () => {
 
 describe('la fiche d’un concept : même gabarit partout', () => {
   for (const concept of PROGRESSION_CONCEPTS) {
-    test(`${concept} : héros, « C’est quoi ? », « Où j’en suis », « Comment en gagner », dans cet ordre`, () => {
+    test(`${concept} : héros, « C’est quoi ? », « Où j’en suis » s’il reste une donnée, « Comment en gagner », dans cet ordre`, () => {
       const page = fiche(concept, playing);
-      const view = conceptView(concept, playing, NOW);
+      const shown = ficheView(concept, playing, NOW);
       const sections = [...page.querySelectorAll('[data-fiche-section]')].map((section) => section.getAttribute('data-fiche-section'));
-      expect(sections.slice(0, 4)).toEqual(['hero', 'what', 'where', 'earn']);
-      expect(page.querySelector('[data-fiche-section="hero"]')?.textContent).toContain(view.value);
-      expect(page.querySelector('[data-fiche-section="where"] [data-concept-facts]')).not.toBeNull();
+      expect(sections.slice(0, shown.facts.length === 0 ? 3 : 4)).toEqual(shown.facts.length === 0 ? ['hero', 'what', 'earn'] : ['hero', 'what', 'where', 'earn']);
+      if (shown.hero === 'generic') expect(page.querySelector('[data-fiche-section="hero"]')?.textContent).toContain(conceptView(concept, playing, NOW).value);
+      expect(page.querySelectorAll('[data-fiche-section="where"] li').length).toBe(shown.facts.length);
       expect(page.querySelectorAll('[data-fiche-section="earn"] li').length).toBeGreaterThanOrEqual(1);
       expect(page.querySelectorAll('[data-fiche-section="earn"] li').length).toBeLessThanOrEqual(3);
     });
@@ -246,11 +249,18 @@ describe('la fiche d’un concept : même gabarit partout', () => {
     ['showcase', '/me/progression/vitrine'],
     ['atlas', '/me/progression/atlas'],
   ] as const) {
-    test(`${concept} : « Aller plus loin » mène à sa sous-page ${href}`, () => {
+    test(`${concept} : « Aller plus loin » mène à sa sous-page ${href}, et à rien d’autre`, () => {
       const more = fiche(concept, playing).querySelector('[data-fiche-section="more"]');
-      expect(more?.querySelector(`a[href="${href}"]`)).not.toBeNull();
+      expect([...(more?.querySelectorAll('a') ?? [])].map((link) => link.getAttribute('href'))).toEqual([href]);
     });
   }
+
+  test('une fiche sans sous-page n’a pas de « Aller plus loin » : aucun lien transverse vers les règles', () => {
+    for (const concept of ['level', 'points', 'meesh', 'glory', 'flame', 'missions', 'elans'] as const) {
+      expect({ concept, more: fiche(concept, playing).querySelector('[data-fiche-section="more"]') !== null }).toEqual({ concept, more: false });
+    }
+    for (const concept of PROGRESSION_CONCEPTS) expect({ concept, rules: fiche(concept, playing).querySelector('a[href="/me/progression/regles"]') !== null }).toEqual({ concept, rules: false });
+  });
 
   test('un concept que le serveur ne sert pas n’a pas de fiche : la page le dit', () => {
     const page = fiche('league', before);
@@ -259,46 +269,29 @@ describe('la fiche d’un concept : même gabarit partout', () => {
   });
 });
 
-describe('le tableau de bord : un bloc par concept, lecture seule', () => {
-  const page = once(() => tableau(playing));
-
-  test('un bloc par concept servi, dans l’ordre de la première page', () => {
-    expect([...page().querySelectorAll('[data-dashboard-block]')].map((block) => block.getAttribute('data-dashboard-block'))).toEqual([...progressionConcepts(playing)]);
-  });
-
-  for (const concept of PROGRESSION_CONCEPTS) {
-    test(`${concept} : le titre du bloc ouvre la fiche, et le bloc porte toutes ses données`, () => {
-      const block = page().querySelector(`[data-dashboard-block="${concept}"]`);
-      const view = conceptView(concept, playing, NOW);
-      expect(block?.querySelector(`a[href="/me/progression/concept/${concept}"]`)?.textContent).toContain(view.name);
-      expect(view.facts.length).toBeGreaterThanOrEqual(1);
-      for (const fact of view.facts) {
-        expect(block?.textContent).toContain(fact.label);
-        expect(block?.textContent).toContain(fact.value);
-      }
-    });
-  }
-
-  test('aucun geste', () => {
-    expect(page().querySelectorAll('button')).toHaveLength(0);
-  });
-});
-
 describe('« Jeu masqué »', () => {
-  test('la carte masquée remplace les cartes du jeu ; ce que la progression d’avant sert reste', () => {
+  /* La carte masquée REMPLACE la liste (#9563, amendement n° 2) : ni carte de concept, ni tableau de bord, ni portes du jeu. Elle porte seule de quoi réafficher le jeu et ouvrir ses réglages. */
+  test('la carte masquée remplace la liste : aucune carte de concept, aucune autre entrée', () => {
     gamePrefs.set({ hidden: true });
     const page = hub(playing);
     expect(page.querySelector('#game-hidden')).not.toBeNull();
-    for (const concept of ['level', 'points', 'meesh', 'glory', 'flame', 'missions', 'league', 'season', 'prestige', 'showcase', 'atlas']) {
-      expect(cards(page)).not.toContain(concept);
-    }
-    expect(cards(page)).toContain('badges');
+    expect(cards(page)).toEqual([]);
+    expect(page.querySelectorAll('[data-progression-row]')).toHaveLength(0);
+    expect(page.querySelector('#game-hidden a[href="/me/progression/reglages"]')).not.toBeNull();
+    expect(page.querySelector('#game-hidden [data-game-show]')).not.toBeNull();
   });
 
-  test('la fiche d’un concept du jeu et le tableau de bord ne montrent rien du jeu', () => {
+  test('la fiche d’un concept ne montre que la carte masquée', () => {
     gamePrefs.set({ hidden: true });
-    expect(fiche('missions', playing).querySelector('#game-missions')).toBeNull();
-    expect(tableau(playing).querySelector('[data-dashboard-block="glory"]')).toBeNull();
+    for (const concept of ['missions', 'badges', 'level'] as const) {
+      const page = fiche(concept, playing);
+      expect({ concept, fiche: page.querySelector('[data-concept-fiche]') !== null, card: page.querySelector('#game-hidden') !== null }).toEqual({ concept, fiche: false, card: true });
+    }
+  });
+
+  test('devant un ancien serveur, « masqué » ne masque rien : il n’y a pas de jeu à masquer', () => {
+    gamePrefs.set({ hidden: true });
+    expect(cards(hub(before))).toEqual([...progressionConcepts(before)]);
   });
 });
 
@@ -316,7 +309,6 @@ describe('aucune chip sur deux lignes, dans les sept langues', () => {
   const surfaces = (): readonly HTMLElement[] => [
     hub(playing),
     hub(before),
-    tableau(playing),
     ...PROGRESSION_CONCEPTS.map((concept) => fiche(concept, playing)),
     ...progressionConcepts(before).map((concept) => fiche(concept, before)),
   ];
@@ -374,5 +366,181 @@ describe('les deux phrases de la carte tiennent sur deux lignes à 320 px', () =
     const name = hub(playing).querySelector('[data-concept-card="missions"] [data-concept-name]');
     expect(name?.className).not.toContain('truncate');
     expect(name?.className).toContain('break-words');
+  });
+});
+
+/**
+ * LES TROIS RÈGLES DE DÉDOUBLONNAGE (#9563, amendement n° 4), posées dans
+ * `conceptView` et `ficheView` :
+ *   1. une donnée appartient à UN concept ;
+ *   2. une pastille ou une ligne ne redit jamais la valeur de tête ;
+ *   3. dans la fiche, une pièce de jeu REMPLACE le héros, et « Où j'en suis » ne
+ *      liste ni la valeur montrée ni ce que la pièce montre.
+ */
+const refKey = (ref: DetailRef): string => {
+  switch (ref.kind) {
+    case 'fact':
+      return ref.fact;
+    case 'element':
+      return `element:${ref.family}`;
+    case 'elan':
+      return `elan:${ref.family}`;
+    case 'note':
+      return 'note';
+  }
+};
+
+const refsOf = (concept: ProgressionConcept, progress: EngagementWithGame): readonly string[] => {
+  const view = conceptView(concept, progress, NOW);
+  /* La valeur de tête est une donnée du concept : son `primary` la désigne. */
+  return [refKey(view.primary), ...view.chips.map((chip) => refKey(chip.ref)), ...view.facts.map((fact) => refKey(fact.ref))];
+};
+
+const owners = (progress: EngagementWithGame, key: string): readonly ProgressionConcept[] =>
+  progressionConcepts(progress).filter((concept) => refsOf(concept, progress).includes(key));
+
+const withGame = (patch: (game: NonNullable<EngagementWithGame['game']>) => NonNullable<EngagementWithGame['game']>): EngagementWithGame => ({
+  ...playing,
+  game: patch(gameBlockWithExtrasFixture()),
+});
+
+describe('règle 1 — une donnée appartient à un seul concept', () => {
+  const windy = withGame((game) => ({ ...game, boosts: { ...game.boosts, tailwind: 2 }, level: { ...game.level, prestige: 2 }, prestige: game.prestige === undefined ? undefined : { ...game.prestige, stars: 2 } }));
+  const short = withGame((game) => ({ ...game, mint: { ...game.mint, canMint: false, missingPoints: 120 } }));
+
+  test('le score est à Points, le multiplicateur à Élans, les étoiles à Prestige, le prix de la Meesh à Meeshes', () => {
+    expect(owners(windy, 'score')).toEqual(['points']);
+    expect(owners(windy, 'factor')).toEqual(['elans']);
+    expect(owners(windy, 'tailwind')).toEqual(['elans']);
+    expect(owners(windy, 'element:star')).toEqual(['prestige']);
+    expect(owners(windy, 'mint_price')).toEqual(['meesh']);
+    expect(owners(windy, 'mint_next')).toEqual(['meesh']);
+  });
+
+  test('ce qui manque pour frapper est à Points ; la frappe possible, à Meeshes', () => {
+    expect(owners(short, 'mint_missing')).toEqual(['points']);
+    expect(owners(playing, 'can_mint')).toEqual(['meesh']);
+    expect(owners(playing, 'mint_missing')).toEqual([]);
+  });
+
+  test('devant un ancien serveur, sans Points, le score reste au Niveau et le manque à Meeshes', () => {
+    const wallet = before.meesh;
+    if (wallet === undefined) throw new Error('fixture sans Meeshes');
+    const short: EngagementWithGame = { ...before, meesh: { ...wallet, canMint: false, missingPoints: 120 } };
+    expect(owners(short, 'score')).toEqual(['level']);
+    expect(owners(short, 'mint_missing')).toEqual(['meesh']);
+  });
+});
+
+describe('règle 2 — une ligne ne redit jamais la valeur de tête', () => {
+  for (const [name, progress] of [['jeu', playing], ['ancien serveur', before]] as const) {
+    test(`${name} : aucune pastille ni aucune ligne n’est la valeur de la carte`, () => {
+      for (const concept of progressionConcepts(progress)) {
+        const view = conceptView(concept, progress, NOW);
+        for (const text of [...view.chips.map((chip) => chip.text), ...view.facts.map((fact) => fact.value)]) {
+          expect({ concept, text, repeats: text === view.value }).toEqual({ concept, text, repeats: false });
+        }
+      }
+    });
+  }
+
+  test('la Ligue a pour valeur sa ligue, la place est une pastille', () => {
+    const game = gameBlockWithExtrasFixture();
+    const current = game.league?.current;
+    const view = conceptView('league', playing, NOW);
+    expect(current).not.toBeNull();
+    expect(view.value).not.toContain(String(current?.rank));
+    expect(view.chips[0]?.text).toContain(String(current?.groupSize));
+  });
+
+  test('au plus trois pastilles par carte, partout', () => {
+    for (const progress of [playing, before]) for (const concept of progressionConcepts(progress)) expect(conceptView(concept, progress, NOW).chips.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('règle 3 — dans la fiche, une pièce de jeu remplace le héros', () => {
+  const PIECES = [
+    ['level', '#game-level'],
+    ['league', '[data-game-league-summary]'],
+    ['elans', '#progression-elans'],
+    ['meesh', '#game-mint'],
+  ] as const;
+
+  for (const [concept, piece] of PIECES) {
+    test(`${concept} : la pièce est le héros, montrée une fois, sans héros générique`, () => {
+      const page = fiche(concept, playing);
+      const hero = page.querySelectorAll('[data-fiche-section="hero"]');
+      expect(hero).toHaveLength(1);
+      expect(hero[0]?.getAttribute('data-fiche-hero')).toBe('piece');
+      expect(hero[0]?.querySelector(piece)).not.toBeNull();
+      expect(page.querySelectorAll(piece)).toHaveLength(1);
+      expect(ficheView(concept, playing, NOW).hero).toBe('piece');
+    });
+  }
+
+  test('« Où j’en suis » ne liste pas ce que la pièce montre', () => {
+    const where = (concept: ProgressionConcept): readonly string[] => ficheView(concept, playing, NOW).facts.map((fact) => refKey(fact.ref));
+    expect(where('level')).toEqual([]);
+    for (const key of where('meesh')) expect(['element:coin', 'element:treasury', 'minted']).toContain(key);
+    for (const key of where('league')) expect(['league_zone', 'league_missing', 'league_friends']).toContain(key);
+    for (const key of where('elans')) expect(['tailwind']).toContain(key);
+    expect(fiche('level', playing).querySelector('[data-fiche-section="where"]')).toBeNull();
+  });
+
+  test('un héros générique ne redit pas ses données dans « Où j’en suis »', () => {
+    for (const concept of progressionConcepts(playing)) {
+      const shown = ficheView(concept, playing, NOW);
+      const value = conceptView(concept, playing, NOW).value;
+      if (shown.hero === 'generic') for (const fact of shown.facts) expect({ concept, value: fact.value === value }).toEqual({ concept, value: false });
+    }
+  });
+});
+
+/**
+ * CE QUI DEMANDE UNE ACTION PASSE EN PREMIER (#9563, amendement n° 4, carte de
+ * navigation § 4) — une pastille d'action au plus, en tête, teintée ; l'ordre des
+ * cartes ne bouge pas.
+ */
+describe('la carte montre d’abord ce qui demande une action', () => {
+  const firstChip = (progress: EngagementWithGame, concept: ProgressionConcept): string | undefined =>
+    hub(progress).querySelector(`[data-concept-card="${concept}"] [data-chip]`)?.textContent ?? undefined;
+  const urgent = (progress: EngagementWithGame): readonly string[] =>
+    [...hub(progress).querySelectorAll('[data-concept-card][data-concept-urgent]')].map((card) => card.getAttribute('data-concept-card') ?? '');
+
+  test('frappe possible : en tête de la carte des Meeshes', () => {
+    expect(firstChip(playing, 'meesh')).toBe('Frappe possible');
+    expect(urgent(playing)).toEqual(['meesh']);
+  });
+
+  test('coffre prêt : en tête de la carte des Missions', () => {
+    const ready = withGame((game) => ({ ...game, chest: { ...game.chest, status: 'ready' } }));
+    expect(firstChip(ready, 'missions')).toBe('Coffre prêt');
+    expect(urgent(ready)).toContain('missions');
+  });
+
+  test('mission qui expire : « Se termine dans … » en tête de la carte des Missions', () => {
+    const item = gameBlockWithExtrasFixture().missions.items[0];
+    if (item === undefined) throw new Error('fixture sans mission');
+    const personal = { ...item, completedAt: null, startsAt: new Date(NOW.getTime() - 3_600_000).toISOString(), endsAt: new Date(NOW.getTime() + 1_800_000).toISOString(), state: 'active' as const };
+    const expiring = withGame((game) => ({ ...game, missions: { ...game.missions, personal } }));
+    expect(firstChip(expiring, 'missions')).toMatch(/^Se termine dans/);
+  });
+
+  test('Flamme en danger : en tête de la carte de la Flamme', () => {
+    const risky = withGame((game) => ({ ...game, flame: { ...game.flame, status: 'at-risk' } }));
+    expect(firstChip(risky, 'flame')).toBe('Fais un geste avant minuit');
+    expect(urgent(risky)).toContain('flame');
+  });
+
+  test('Prestige possible : en tête de la carte du Prestige', () => {
+    const ready = withGame((game) => ({ ...game, prestige: game.prestige === undefined ? undefined : { ...game.prestige, canPrestige: true } }));
+    expect(firstChip(ready, 'prestige')).toBe('Tu peux passer en Prestige');
+  });
+
+  test('rien à faire : aucune carte ne se signale, et l’ordre des cartes ne change jamais', () => {
+    const calm = withGame((game) => ({ ...game, mint: { ...game.mint, canMint: false, missingPoints: 50 } }));
+    expect(urgent(calm)).toEqual([]);
+    const ready = withGame((game) => ({ ...game, chest: { ...game.chest, status: 'ready' }, flame: { ...game.flame, status: 'at-risk' } }));
+    expect(cards(hub(ready))).toEqual(cards(hub(calm)));
   });
 });

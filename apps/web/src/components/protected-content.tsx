@@ -21,6 +21,8 @@ import {
   type RevealPhase,
 } from '@/lib/reading-mode/protection';
 import { RevealPhaseChannel, useRevealPhasePublisher } from '@/lib/reading-mode/reveal-phase-channel';
+import { captureShield } from '@/lib/capture/capture-shield';
+import { useCaptureShield } from '@/lib/capture/use-capture-shield';
 import type { Attachment } from '@/lib/api/types';
 import { purgeViewOnceMedia, viewOnceMediaUrlsOf } from '@/lib/api/view-once';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -293,8 +295,19 @@ export function ProtectedContent({
     [now],
   );
 
+  /**
+   * LA VUE UNIQUE AFFICHÉE TIENT LE BOUCLIER DE CAPTURE (#9574) — texte
+   * ouvert, plein écran ou visionneuse : dans la coque Android, rien ne se
+   * peint avant `FLAG_SECURE` ; une coque sans pont ne l'ouvre pas du tout
+   * (fermé par défaut) ; un pont qui refuse garde la puce à la place du
+   * contenu pendant que le bouclier réessaie.
+   */
+  const viewOnceShown = isViewOnceKind(kind) && (viewing !== null || (rendersContent(kind, phase) && frozen !== null));
+  const shieldState = useCaptureShield(messageId, viewOnceShown);
+  const shieldUnavailable = isViewOnceKind(kind) && captureShield.mode() === 'unguarded';
+
   const viewer =
-    viewing !== null && media !== undefined ? (
+    viewing !== null && media !== undefined && shieldState === 'open' ? (
       <ProtectedMediaViewer items={viewing.items} startIndex={viewing.startIndex} media={media} onClose={closeMedia} />
     ) : null;
 
@@ -346,11 +359,13 @@ export function ProtectedContent({
       );
     }
     if (kind === 'opened' || !showsAffordance(kind, phase)) return <ViewOnceChip state="opened" />;
+    if (shieldUnavailable) return <ProtectionNotice kind="withheld" surface={surface} isMine={isMine} />;
     return <ViewOnceChip state="sealed" onTap={() => openMedia(0)} />;
   }
 
   if (isViewOnceKind(kind)) {
     if (rendersContent(kind, phase) && frozen !== null) {
+      if (shieldState !== 'open') return <ViewOnceChip state="viewing" />;
       const opening = viewOnceOpeningOf({ isBlurred, attachmentCount: frozen.media ? 1 : 0 });
       if (opening === 'fullscreen') {
         return (
@@ -387,6 +402,7 @@ export function ProtectedContent({
       );
     }
     if (kind === 'opened' || !showsAffordance(kind, phase)) return <ViewOnceChip state="opened" />;
+    if (shieldUnavailable) return <ProtectionNotice kind="withheld" surface={surface} isMine={isMine} />;
     const chipLanguage = currentInterfaceLanguage();
     return (
       <>

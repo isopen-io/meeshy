@@ -135,6 +135,20 @@ function SystemNoticeContent({ row }: { readonly row: SystemRow }) {
       </>
     );
   }
+  /* L'avis de capture d'un INVITÉ porte le masque de l'avis d'arrivée (#9617) ;
+     la phrase dit déjà « (invité) », le glyphe le montre sans le redire. */
+  if (row.kind === 'capture') {
+    return (
+      <>
+        {row.notice.actor.isAnonymous ? (
+          <span data-capture-guest="" className="inline-flex">
+            <GlyphSvg glyph={THREAD_IDENTITY_GLYPHS.maskHappy} size={13} style={{ color: 'var(--ios-purple-500)' }} />
+          </span>
+        ) : null}
+        <span>{systemRowText(row)}</span>
+      </>
+    );
+  }
   if (row.kind === 'arrivals') {
     return (
       <>

@@ -1832,10 +1832,10 @@ final class MessageListViewController: UIViewController {
                         peutEditer: canEdit?(messageId) ?? false,
                         editer: editHandler,
                         selectionner: selectHandler,
-                        composer: message.holdsBlur ? nil : composeHandler,
-                        imager: message.holdsBlur || !MessageCardSubject.isExportable(message, now: Date()) ? nil : imagineHandler,
+                        composer: message.exitOffer.offers(.publish) ? composeHandler : nil,
+                        imager: message.exitOffer.offers(.imagine) && MessageCardSubject.isExportable(message, now: Date()) ? imagineHandler : nil,
                         repondre: swipeReplyHandler,
-                        transferer: message.holdsBlur ? nil : swipeForwardHandler,
+                        transferer: message.isForwardable ? swipeForwardHandler : nil,
                         plus: moreSheetHandler
                     )
                 ) {
@@ -1848,7 +1848,7 @@ final class MessageListViewController: UIViewController {
                 .environmentObject(host)
                 .environmentObject(stories)
                 .environmentObject(statuses)
-                .conversationListObject(convList)
+                .conversationListObject(convList).announcesCaptures() // #9617 — le fil déclare ce qu'il montre
                 // Révélé des heures au défilement (successeur de la pilule
                 // « jour · heure »). Observé par `FocalRevealedTime` SEULE —
                 // une `Text` et rien d'autre — donc son basculement

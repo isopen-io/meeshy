@@ -1,5 +1,5 @@
 import type { Message } from '@/lib/api/types';
-import { protectionOf } from '@/lib/reading-mode/protection';
+import { contentExitOf, exitOffers } from '@/lib/view/content-exit';
 
 import { authoredBy, cardAuthorOf, cardHandleOf, cardMediaOf, mediaAuthorOf, type MessageCardMediaItem, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
 
@@ -11,9 +11,11 @@ import { authoredBy, cardAuthorOf, cardHandleOf, cardMediaOf, mediaAuthorOf, typ
  * dernier. Aucun second moteur : la carte, l'atelier et la livraison sont
  * ceux d'un message.
  *
- * MÊMES GARDES QUE LA CARTE D'UN MESSAGE : un message protégé (flouté, vue
- * unique, éphémère échu, supprimé — `protectionOf`) ne se peint pas, et une
- * pièce masquée non plus (`cardMediaOf`). Les mots sont ceux que le lecteur
+ * MÊMES GARDES QUE LA CARTE D'UN MESSAGE : la loi de sortie
+ * (`content-exit.ts`, #9573) — un message flouté, à vue unique, supprimé,
+ * échu ou qui disparaît ne se peint pas, qu'il soit le message choisi (aucune
+ * carte) ou l'un de ceux qui y mènent (sauté) ; une pièce masquée non plus
+ * (`cardMediaOf`). Les mots sont ceux que le lecteur
  * LIT (`servedOf`, le Prisme du fil).
  *
  * CHAQUE MÉDIA EST ATTRIBUÉ À SON MESSAGE (#9236) : ceux du premier suivent
@@ -53,10 +55,11 @@ export function discussionCardSubjectOf(params: {
   const ordered = [...params.messages].sort((a, b) => createdAtOf(a) - createdAtOf(b));
   const anchorIndex = ordered.findIndex((message) => message.id === params.anchorId);
   const anchor = ordered[anchorIndex];
-  if (anchor === undefined || protectionOf(anchor, now) !== 'standard') return null;
+  const paints = (message: Message): boolean => exitOffers(contentExitOf(message, now), 'imageDiscussion');
+  if (anchor === undefined || !paints(anchor)) return null;
 
   const painted = ordered.slice(0, anchorIndex + 1).flatMap((message): Painted[] => {
-    if (protectionOf(message, now) !== 'standard') return [];
+    if (!paints(message)) return [];
     const text = (params.servedOf(message.id) ?? message.content).trim();
     const media = cardMediaOf(message.attachments);
     if (text === '' && media.length === 0) return [];

@@ -128,6 +128,12 @@ export const SERVER_EVENTS = {
    * `user:<id>` du seul crédité, jamais dans la room de la conversation.
    */
   ENGAGEMENT_CONVERSATION_UPDATED: 'engagement:conversation-updated',
+  /**
+   * Les points qu'un POST a rapportés à son LECTEUR ont changé (#9569) —
+   * `PostEngagementSnapshot`, émis dans la room `user:<id>` du seul crédité,
+   * jamais dans la room du post ni à son audience.
+   */
+  ENGAGEMENT_POST_UPDATED: 'engagement:post-updated',
   USER_STATUS: 'user:status',
   /**
    * Snapshot émis à l'authentification socket : liste des userIds actuellement
@@ -616,6 +622,14 @@ export const CLIENT_EVENTS = {
   MESSAGE_SEND_WITH_ATTACHMENTS: 'message:send-with-attachments',
   MESSAGE_EDIT: 'message:edit',
   MESSAGE_DELETE: 'message:delete',
+  /**
+   * #9617 — une capture ou un enregistrement d'écran pendant qu'un contenu qui
+   * disparaît est affiché (`ContentCaptureReport`, accusé `ContentCaptureAck`,
+   * `types/content-capture.ts`). Jumeau REST :
+   * `POST /conversations/:id/messages/capture`. Aucun événement serveur dédié :
+   * l'avis produit est un message système, diffusé sous `message:new`.
+   */
+  MESSAGE_CAPTURE_DETECTED: 'message:capture-detected',
   CONVERSATION_JOIN: 'conversation:join',
   CONVERSATION_LEAVE: 'conversation:leave',
   TYPING_START: 'typing:start',

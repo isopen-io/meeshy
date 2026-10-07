@@ -5,10 +5,8 @@ import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/ap
 
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { Glyph } from '@/components/glyph';
 import { GameBird } from '@/components/game';
 import { GamePhotoFlow } from '@/components/game-photo-flow';
-import { GlassBack } from '@/components/glass-surface';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
@@ -18,7 +16,7 @@ import { referralOf, referralShareText } from '@/lib/game-photo/referral';
 import { dateLabelOf, fileNameOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
 import { gameText } from '@/lib/view/game-copy';
-import { Link } from '@/routes/route-table';
+import { ProgressionShell } from '@/routes/progression-shell';
 
 /**
  * LE CARNET DE PROGRESSION (#9382) — conception, partie VI : « le carnet de
@@ -226,22 +224,8 @@ export default function ProgressionCarnetScreen() {
   /* Les jours de la Flamme du bandeau : lus dans le cache de Progression, jamais redemandés. */
   const flameDays = useQueryClient().getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY)?.game?.flame.days ?? null;
   return (
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <header className="glass z-10 shrink-0">
-        <div className="flex items-center gap-2 px-4 py-2">
-          <Link to="progression" className="grid size-11 shrink-0 place-items-center" style={{ color: GAME_BRAND }} aria-label={gameText('game.page.back')}>
-            <GlassBack label={gameText('game.page.back')}>
-              <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
-            </GlassBack>
-          </Link>
-          <h1 className="flex-1 truncate text-title font-bold" style={{ color: GAME_INK }}>
-            {gameText('game.notebook.page_title')}
-          </h1>
-        </div>
-      </header>
-      <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
-        <CarnetBody env={appPhotoEnv()} flameDays={flameDays} />
-      </main>
-    </div>
+    <ProgressionShell title={gameText('game.notebook.page_title')}>
+      <CarnetBody env={appPhotoEnv()} flameDays={flameDays} />
+    </ProgressionShell>
   );
 }

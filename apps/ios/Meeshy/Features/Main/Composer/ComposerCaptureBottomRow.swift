@@ -9,19 +9,17 @@ import MeeshyUI
 /// **Pendant l'enregistrement, seule la miniature choisie reste** (décision
 /// porteur 2026-10-05), avec le direct, son point rouge et son chrono, et le
 /// cadenas tant que la prise n'est pas verrouillée : le zoom passe au glissé
-/// vertical, la phrase se tait, le rail s'efface et se désactive. Un look figé
-/// par des segments en attente garde le rail visible mais DÉSACTIVÉ, et
-/// VoiceOver le dit.
+/// vertical, la phrase se tait, le rail disparaît. Un look figé par des
+/// segments en attente le retire aussi (porteur 2026-10-07, #9576) : un rail
+/// qu'on ne peut pas ouvrir n'est montré ni à l'œil ni à VoiceOver, et il
+/// revient dès que les segments sont supprimés.
 ///
-/// **En édition, la même rangée, et un seul ajout : ✓ « Terminé »** (#9352,
-/// spec § 3.3). Les crans du zoom — ceux de l'objectif, qui se repose — lui
-/// laissent leur place, au-dessus de la bande qu'il ne recouvre donc jamais ;
-/// les miniatures se peignent sur le média retouché ; la phrase du geste, qui
-/// parle de prises, se tait.
-///
-/// **Une vidéo retouchée reçoit sa piste de découpe** (#9353, spec § 3.3),
-/// AU-DESSUS du rail et de la bande : elle se monte dans le couloir du rail, en
-/// tête, sur toute la largeur — le rail ne bouge pas, « Terminé » non plus.
+/// **En édition, les outils seuls, sous la scène posée sur le sol** (#9352,
+/// porteur 2026-10-07, #9567) : « Filtres », « Cadres », « Recadrer », en
+/// rangée, et au-dessus d'eux UN panneau — la bande ouverte (ses miniatures se
+/// peignent sur le média retouché), les proportions par presets, ou, pour une
+/// vidéo, sa piste de découpe (#9353). Ni miniature seule, ni zoom, ni phrase
+/// du geste ; « Terminé » est en haut, aligné sur la croix.
 struct ComposerCaptureBottomRow: View {
     @ObservedObject var session: ComposerCaptureSession
     let context: ComposerCaptureGestureContext
@@ -49,21 +47,28 @@ struct ComposerCaptureBottomRow: View {
         return (url, lecteur.duration)
     }
 
-    /// La phrase du geste se tait pendant la prise et la retouche — et sous un
-    /// cadre, dont le bas porte sa propre écriture (#9557).
+    /// La phrase du geste se tait pendant la prise et la retouche, sous un
+    /// cadre, dont le bas porte sa propre écriture (#9557) — et bande ouverte,
+    /// où le nom du choix prend sa place (#9566).
     private var showsHint: Bool {
-        !recording && !editing && session.look.frame == ComposerPhotoFrame.none
-    }
-
-    /// La table dit si le rail ouvre une famille ; sinon il reste là, éteint.
-    private var railEnabled: Bool {
-        ComposerCaptureGesture.action(zone: .rail, gesture: .tap, context: context) == .openFamily
+        !recording && !editing && session.look.frame == ComposerPhotoFrame.none && session.openFamily == nil
     }
 
     var body: some View {
+        Group {
+            if editing { editTools } else { captureRow }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsLock)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: recording)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ComposerCaptureGesture.offersRail(context))
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.openFamily)
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editPanel)
+    }
+
+    private var captureRow: some View {
         VStack(spacing: MeeshySpacing.sm) {
             if !recording { zoom }
-            if editing { done }
             ZStack {
                 ComposerLookStrip(session: session, source: source, context: context,
                                   recordingTime: session.camera.recordingDuration)
@@ -91,59 +96,50 @@ struct ComposerCaptureBottomRow: View {
         }
         .padding(.bottom, MeeshySpacing.lg)
         .overlay(alignment: .bottomLeading) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            if ComposerCaptureGesture.offersRail(context) {
+                ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
+                    .padding(.leading, MeeshySpacing.mdPlus)
+                    .padding(.bottom, ComposerLookStripRule.cellSize.height + MeeshySpacing.xxxl * 2)
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    /// **Sous la scène de retouche : un panneau, puis les outils** (#9567) —
+    /// la piste de découpe d'une vidéo, la bande ouverte ou les proportions ;
+    /// puis « Filtres », « Cadres », « Recadrer », et rien d'autre.
+    private var editTools: some View {
+        VStack(spacing: ComposerEditScene.gap) {
+            switch session.editPanel {
+            case .trim:
                 if let trimClip {
                     ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
                         .transition(.opacity)
                 }
-                ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
-                    .disabled(!railEnabled)
-                    .opacity(recording ? 0 : (railEnabled ? 1 : 0.4))
-                    .padding(.leading, MeeshySpacing.mdPlus)
+            case .band:
+                ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
+                    .transition(.opacity)
+            case .presets:
+                ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
+                    .transition(.opacity)
+            case .none:
+                EmptyView()
             }
-            .padding(.bottom, ComposerLookStripRule.cellSize.height + MeeshySpacing.xxxl * 2)
+            ComposerLookRail(open: session.openFamily, axis: .horizontal, cropOpen: session.cropPresetsOpen,
+                             onCrop: { session.toggleCropPresets() }) { famille in session.toggleFamily(famille) }
+                .frame(height: ComposerEditScene.toolsRow)
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsLock)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: recording)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing)
-        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.openFamily)
+        .padding(.bottom, ComposerEditScene.gap)
     }
 
-    /// Les crans sont ceux de l'OBJECTIF : en édition, il se repose.
+    /// Les crans sont ceux de l'OBJECTIF.
     @ViewBuilder
     private var zoom: some View {
-        if !editing {
-            if capture.zoomPresets.count > 1 {
-                ComposerCaptureZoomPresets(factor: capture.zoomFactor, presets: capture.zoomPresets,
-                                           onSelect: { session.controls.setZoom($0) })
-            } else if ComposerCaptureZoom.showsBadge(capture.zoomFactor) {
-                ComposerCaptureZoomChip(factor: capture.zoomFactor, onStep: { session.stepZoom(up: $0) })
-            }
+        if capture.zoomPresets.count > 1 {
+            ComposerCaptureZoomPresets(factor: capture.zoomFactor, presets: capture.zoomPresets,
+                                       onSelect: { session.controls.setZoom($0) })
+        } else if ComposerCaptureZoom.showsBadge(capture.zoomFactor) {
+            ComposerCaptureZoomChip(factor: capture.zoomFactor, onStep: { session.stepZoom(up: $0) })
         }
-    }
-
-    /// **✓ Terminé**, du côté où la lecture finit. Pendant le rendu il attend, et
-    /// le dit : un second toucher ne remet rien.
-    private var done: some View {
-        HStack {
-            Spacer(minLength: 0)
-            Button {
-                HapticFeedback.light()
-                session.finishEditing()
-            } label: {
-                Label(ComposerCaptureCopy.done, systemImage: "checkmark")
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .frame(minHeight: MeeshyControlSize.tapTarget)
-                    .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
-                    .opacity(session.isRenderingLook ? 0.5 : 1)
-            }
-            .buttonStyle(.plain)
-            .disabled(session.isRenderingLook)
-            .accessibilityLabel(ComposerCaptureCopy.done)
-        }
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .transition(.opacity)
     }
 }

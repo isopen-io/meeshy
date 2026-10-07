@@ -30,9 +30,17 @@ const setup = () => {
     { id: 'p-1', conversationId: CONV, userId: USER, isActive: true },
     { id: 'p-2', conversationId: CONV, userId: OTHER, isActive: true },
   );
-  const signals = new MessageGameSignals(db.prisma, { missions: { onSignal }, creditPoints });
-  return { db, signals, onSignal, creditPoints };
+  const detect = jest.fn<(text: string) => Promise<string | null>>().mockResolvedValue('es');
+  const signals = new MessageGameSignals(db.prisma, { missions: { onSignal }, creditPoints, detectLanguage: detect });
+  return { db, signals, onSignal, creditPoints, detect };
 };
+
+/** Une mission du jour en attente de ce signal : c'est elle qui ouvre la détection de langue et les lectures de pair. */
+const pendingMission = (db: FakeGameDb, signal: string) =>
+  db.dailyMission.rows.push({
+    id: `pending-${signal}`, userId: USER, dayKey: '2026-10-05', slot: 1, templateKey: 't', difficulty: 'medium', signal,
+    prism: false, target: 3, progress: 0, reward: 60, glory: 0, seen: [], completedAt: null, paidPoints: null, rerolledAt: null,
+  });
 
 const reply = (overrides: Record<string, unknown> = {}) => ({
   senderUserId: USER,
@@ -41,6 +49,7 @@ const reply = (overrides: Record<string, unknown> = {}) => ({
   replyToId: 'msg-1' as string | null,
   quotedAuthorUserId: OTHER as string | null,
   originalLanguage: 'fr',
+  content: 'Hola amigo, cómo estás hoy?',
   now: NOW,
   ...overrides,
 });
@@ -56,45 +65,71 @@ describe('MessageGameSignals — les signaux de mission', () => {
     expect(onSignal).toHaveBeenCalledWith(USER, 'reply-distinct-conversations', expect.objectContaining({ key: CONV }));
   });
 
-  it('un message qui n’est pas une réponse ne compte pas comme réponse', async () => {
+  it('tout message compte pour sa conversation : écrire dans N conversations ne demande plus de citer (#9635)', async () => {
     const { signals, onSignal } = setup();
 
     await signals.record(reply({ replyToId: null, quotedAuthorUserId: null }));
+    await signals.record(reply({ quotedAuthorUserId: USER, messageId: 'msg-3' }));
 
-    expect(signalsOf(onSignal, 'reply-distinct-conversations')).toHaveLength(0);
+    expect(signalsOf(onSignal, 'reply-distinct-conversations').map((c) => c[2].key)).toEqual([CONV, CONV]);
   });
 
-  it('se répondre à soi-même ne compte pas', async () => {
-    const { signals, onSignal } = setup();
+  it('la langue est celle que le SERVEUR établit, jamais la déclaration du client (#9635)', async () => {
+    const { db, signals, onSignal, detect } = setup();
+    pendingMission(db, 'foreign-language-message');
 
-    await signals.record(reply({ quotedAuthorUserId: USER }));
-
-    expect(signalsOf(onSignal, 'reply-distinct-conversations')).toHaveLength(0);
-  });
-
-  it('un message dans une autre langue que la langue système de l’expéditeur est un message du Prisme', async () => {
-    const { signals, onSignal } = setup();
-
-    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'es' }));
+    detect.mockResolvedValue('es');
+    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'fr' }));
+    detect.mockResolvedValue('fr');
+    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'es', messageId: 'msg-3' }));
 
     expect(signalsOf(onSignal, 'foreign-language-message')).toHaveLength(1);
   });
 
-  it('la même langue, ou une variante régionale d’elle, n’en est pas un', async () => {
-    const { signals, onSignal } = setup();
+  it('une langue que le serveur ne sait pas établir ne compte pas (fail-closed)', async () => {
+    const { db, signals, onSignal, detect } = setup();
+    pendingMission(db, 'foreign-language-message');
+    detect.mockResolvedValue(null);
 
-    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'fr' }));
-    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'fr-CA', messageId: 'msg-3' }));
+    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'es' }));
 
     expect(signalsOf(onSignal, 'foreign-language-message')).toHaveLength(0);
   });
 
-  it('une langue détectée « inconnue » ne compte pas', async () => {
-    const { signals, onSignal } = setup();
+  it('sans défi de langue en attente, aucune détection ne part', async () => {
+    const { signals, detect } = setup();
 
-    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'unknown' }));
+    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null }));
 
-    expect(signalsOf(onSignal, 'foreign-language-message')).toHaveLength(0);
+    expect(detect).not.toHaveBeenCalled();
+  });
+
+  it('répondre dans la langue de l’auteur cité, quand elle n’est pas la sienne (#9635)', async () => {
+    const { db, signals, onSignal, detect } = setup();
+    pendingMission(db, 'reply-in-their-language');
+    detect.mockResolvedValue('en');
+
+    await signals.record(reply());
+
+    expect(signalsOf(onSignal, 'reply-in-their-language')).toHaveLength(1);
+  });
+
+  it('échanger, à deux, avec quelqu’un dont la langue principale diffère ; clé = le pair (#9635)', async () => {
+    const { db, signals, onSignal } = setup();
+    pendingMission(db, 'cross-language-exchange');
+
+    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null }));
+
+    expect(signalsOf(onSignal, 'cross-language-exchange').map((c) => c[2].key)).toEqual([OTHER]);
+  });
+
+  it('répondre à une story, clé = la story (#9635)', async () => {
+    const { db, signals, onSignal } = setup();
+    pendingMission(db, 'story-reply');
+
+    await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, storyReplyToId: 'story-1' }));
+
+    expect(signalsOf(onSignal, 'story-reply').map((c) => c[2].key)).toEqual(['story-1']);
   });
 
   it('l’auteur répondu reçoit le signal « réponse d’un auteur distinct », clé = le répondant', async () => {
@@ -216,6 +251,7 @@ describe('MessageGameSignals — l’entre-soi ne fait avancer aucune mission (#
 
   it('écrire SEUL dans une autre langue ne fait pas avancer une mission du Prisme', async () => {
     const { db, signals, onSignal } = setup();
+    pendingMission(db, 'foreign-language-message');
     alone(db);
 
     await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'es' }));
@@ -234,6 +270,7 @@ describe('MessageGameSignals — l’entre-soi ne fait avancer aucune mission (#
 
   it('écrire dans une autre langue à un compte bloqué ne compte pas', async () => {
     const { db, signals, onSignal } = setup();
+    pendingMission(db, 'foreign-language-message');
     db.user.rows[1]!.blockedUserIds = [USER];
 
     await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'es' }));
@@ -285,12 +322,14 @@ describe('MessageGameSignals — l’Atlas et le chiffrement de bout en bout (#9
   });
 
   it('une conversation chiffrée ne produit ni mission de langue ni tampon', async () => {
-    const { db, signals, onSignal } = setup();
+    const { db, signals, onSignal, detect } = setup();
+    pendingMission(db, 'foreign-language-message');
     db.conversation.rows.push({ id: CONV, encryptionEnabledAt: new Date('2026-10-01T00:00:00Z') });
 
     await signals.record(reply({ replyToId: null, quotedAuthorUserId: null, originalLanguage: 'es' }));
 
     expect(signalsOf(onSignal, 'foreign-language-message')).toHaveLength(0);
+    expect(detect).not.toHaveBeenCalled();
     expect(db.atlasStamp.rows).toHaveLength(0);
   });
 
@@ -303,3 +342,57 @@ describe('MessageGameSignals — l’Atlas et le chiffrement de bout en bout (#9
     expect(onSignal).toHaveBeenCalledWith(USER, 'reply-distinct-conversations', expect.objectContaining({ key: CONV }));
   });
 });
+
+describe('MessageGameSignals — les défis ne se farment pas (#9635, revue de sécurité)', () => {
+  it('« conversation démarrée » : clé = l’ensemble des personnes, pas la conversation jetable', async () => {
+    const { db, signals, onSignal } = setup();
+    db.participant.rows.push(
+      { id: 'p-3', conversationId: 'conv-bis', userId: USER, isActive: true },
+      { id: 'p-4', conversationId: 'conv-bis', userId: OTHER, isActive: true },
+    );
+
+    await signals.recordConversationStarted({ senderUserId: USER, conversationId: CONV, now: NOW });
+    await signals.recordConversationStarted({ senderUserId: USER, conversationId: 'conv-bis', now: NOW });
+
+    expect(signalsOf(onSignal, 'conversation-started').map((c) => c[2].key)).toEqual([OTHER, OTHER]);
+  });
+
+  it('« conversation démarrée » : rien seul, rien face à un compte de moins de 24 h, rien face à un compte bloqué', async () => {
+    const solo = setup();
+    solo.db.participant.rows = solo.db.participant.rows.filter((p) => p.userId === USER);
+    await solo.signals.recordConversationStarted({ senderUserId: USER, conversationId: CONV, now: NOW });
+    expect(signalsOf(solo.onSignal, 'conversation-started')).toHaveLength(0);
+
+    const ghost = setup();
+    ghost.db.user.rows[1]!.createdAt = new Date('2026-10-05T10:00:00Z');
+    await ghost.signals.recordConversationStarted({ senderUserId: USER, conversationId: CONV, now: NOW });
+    expect(signalsOf(ghost.onSignal, 'conversation-started')).toHaveLength(0);
+
+    const blocked = setup();
+    blocked.db.user.rows[1]!.blockedUserIds = [USER];
+    await blocked.signals.recordConversationStarted({ senderUserId: USER, conversationId: CONV, now: NOW });
+    expect(signalsOf(blocked.onSignal, 'conversation-started')).toHaveLength(0);
+  });
+
+  it('face à un compte fantôme (moins de 24 h), aucun fait de l’expéditeur ne part — ni langue, ni pair, ni story', async () => {
+    const { db, signals, onSignal, detect } = setup();
+    for (const signal of ['foreign-language-message', 'cross-language-exchange', 'story-reply', 'reply-in-their-language']) pendingMission(db, signal);
+    db.user.rows[1]!.createdAt = new Date('2026-10-05T10:00:00Z');
+
+    await signals.record(reply({ storyReplyToId: 'story-1' }));
+
+    expect(onSignal.mock.calls.filter((c) => c[0] === USER)).toHaveLength(0);
+    expect(detect).not.toHaveBeenCalled();
+  });
+
+  it('se citer soi-même ne fait jamais « répondre dans la langue de l’autre »', async () => {
+    const { db, signals, onSignal, detect } = setup();
+    pendingMission(db, 'reply-in-their-language');
+    detect.mockResolvedValue('fr');
+
+    await signals.record(reply({ quotedAuthorUserId: USER }));
+
+    expect(signalsOf(onSignal, 'reply-in-their-language')).toHaveLength(0);
+  });
+});
+

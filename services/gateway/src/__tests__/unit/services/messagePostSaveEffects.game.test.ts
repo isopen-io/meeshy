@@ -55,13 +55,43 @@ const run = (params: { engagementService: Record<string, unknown>; message?: Rec
 };
 
 const engagement = (extra: Record<string, unknown> = {}) => ({
-  recordActivity: jest.fn<any>().mockResolvedValue(undefined),
+  recordActivity: jest.fn<any>().mockResolvedValue(true),
   recordConversationActivity: jest.fn<any>().mockResolvedValue(undefined),
   recordMessageSignals: jest.fn<any>().mockResolvedValue(undefined),
   ...extra,
 });
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+describe('runMessagePostSaveEffects — un message que le crédit refuse ne fait avancer aucun défi (#9635)', () => {
+  it('crédit refusé (garde d’abus, plafond du jour, quota) : aucun signal de jeu ne part', async () => {
+    const service = engagement({ recordActivity: jest.fn<any>().mockResolvedValue(false) });
+
+    run({ engagementService: service, message: { replyToId: 'orig-1', quoted: { authorUserId: AUTHOR_ID } } });
+    await settle();
+
+    expect(service.recordActivity).toHaveBeenCalled();
+    expect(service.recordMessageSignals).not.toHaveBeenCalled();
+  });
+
+  it('un crédit qui lève vaut un refus : aucun signal', async () => {
+    const service = engagement({ recordActivity: jest.fn<any>().mockRejectedValue(new Error('down')) });
+
+    run({ engagementService: service });
+    await settle();
+
+    expect(service.recordMessageSignals).not.toHaveBeenCalled();
+  });
+
+  it('un crédit muet (rien ne dit qu’il a crédité) vaut un refus : fail-closed', async () => {
+    const service = engagement({ recordActivity: jest.fn<any>().mockResolvedValue(undefined) });
+
+    run({ engagementService: service });
+    await settle();
+
+    expect(service.recordMessageSignals).not.toHaveBeenCalled();
+  });
+});
 
 describe('runMessagePostSaveEffects — les signaux du jeu', () => {
   it('remet au jeu le message, sa citation et sa langue détectée', async () => {
@@ -77,7 +107,18 @@ describe('runMessagePostSaveEffects — les signaux du jeu', () => {
       replyToId: 'orig-1',
       quotedAuthorUserId: AUTHOR_ID,
       originalLanguage: 'es',
+      content: 'bonjour',
+      storyReplyToId: null,
     });
+  });
+
+  it('remet aussi la story citée : « répondre à une story » se lit sur le message (#9635)', async () => {
+    const service = engagement();
+
+    run({ engagementService: service, message: { storyReplyToId: 'story-1' } });
+    await settle();
+
+    expect(service.recordMessageSignals).toHaveBeenCalledWith(expect.objectContaining({ storyReplyToId: 'story-1' }));
   });
 
   it('un message qui ne répond à rien porte replyToId et auteur cité à null', async () => {

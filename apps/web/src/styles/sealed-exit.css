@@ -1,0 +1,22 @@
+/*
+ * UNE SURFACE SCELLÉE (#9573) — le contenu qui ne sort pas de Meeshy ne se
+ * sélectionne pas, n'ouvre pas le menu d'appui long du mobile et de la coque,
+ * ne se glisse pas hors de la page et ne s'imprime pas. Les écouteurs de
+ * `lib/view/sealed-exit-guard.ts` annulent de plus copie, glisser, menu natif
+ * et clic milieu. Chargée avec l'application : la règle vaut pour toute
+ * surface qui porte l'attribut, pas seulement le fil. Les gestes de Meeshy
+ * restent : le menu du message s'ouvre toujours.
+ */
+[data-exit-sealed],
+[data-exit-sealed] * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
+@media print {
+  [data-exit-sealed] {
+    visibility: hidden;
+  }
+}

@@ -17,6 +17,10 @@ import { ThreadHeader } from './thread-header';
  * ce qu'elle montre, quand elle se tait, ce qu'elle dit à l'oreille, et où
  * elle se pose : l'en-tête du fil. La liste porte la série en rouge à côté
  * de l'heure (`conversation-streak-mark.test.tsx`).
+ *
+ * TROIS FORMES (#9570, directive porteur 2026-10-07) : la série en cours
+ * (« 🔥 4 · 120 », rouge), le cumul SEUL quand aucune série ne court
+ * (« 120 », sans flamme, encre tertiaire), rien quand le cumul est nul.
  */
 
 beforeAll(async () => {
@@ -45,6 +49,7 @@ describe('le modèle de la pastille', () => {
 
   test('la série et le total, avec la phrase entière pour le lecteur d’écran', () => {
     expect(engagementPillModel(snapshot(), '2026-09-30', 'fr')).toEqual({
+      kind: 'streak',
       streakDays: 4,
       totalText: '120',
       label: 'Série de 4 jours, 120 points dont 12 aujourd’hui',
@@ -57,8 +62,20 @@ describe('le modèle de la pastille', () => {
     );
   });
 
-  test('sans série EN COURS, rien : ni flamme ni points (#9044)', () => {
-    expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'fr')).toBeNull();
+  test('sans série EN COURS, le cumul SEUL, sans série — et sa phrase dit le cumul (#9570)', () => {
+    expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'fr')).toEqual({
+      kind: 'total',
+      totalText: '120',
+      label: '120 points gagnés dans cette conversation',
+    });
+    expect(engagementPillModel(snapshot({ totalPoints: 1, todayPoints: 0, streakDays: 0 }), '2026-09-30', 'fr')?.label).toBe(
+      '1 point gagné dans cette conversation',
+    );
+  });
+
+  test('le cumul seul se dit dans la langue d’interface (#9570)', () => {
+    expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'en')?.label).toBe('120 points earned in this conversation');
+    expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'ar')?.label).toBe('120 نقاط مكتسبة في هذه المحادثة');
   });
 
   test('le total s’abrège dans la langue du lecteur : 1,2 k, 12 k, 2,5 M (#9044)', () => {
@@ -80,11 +97,11 @@ describe('le modèle de la pastille', () => {
   });
 
   test('passé minuit : M retombe à 0, la série tient encore un jour', () => {
-    expect(engagementPillModel(snapshot(), '2026-10-01', 'fr')).toMatchObject({ totalText: '120', streakDays: 4 });
+    expect(engagementPillModel(snapshot(), '2026-10-01', 'fr')).toMatchObject({ kind: 'streak', totalText: '120', streakDays: 4 });
   });
 
-  test('un jour manqué : la série tombe, et la pastille avec elle', () => {
-    expect(engagementPillModel(snapshot(), '2026-10-02', 'fr')).toBeNull();
+  test('un jour manqué : la série tombe, le cumul reste (#9570)', () => {
+    expect(engagementPillModel(snapshot(), '2026-10-02', 'fr')).toMatchObject({ kind: 'total', totalText: '120' });
   });
 });
 
@@ -99,8 +116,22 @@ describe('le rendu de la pastille', () => {
     expect(html).toContain('<span class="sr-only">Série de 4 jours, 120 points dont 12 aujourd’hui</span>');
   });
 
-  test('sans série, aucun nœud', () => {
-    expect(renderToStaticMarkup(<EngagementPill snapshot={snapshot({ streakDays: 0 })} language="fr" now={() => NOON_SEPT_30} />)).toBe('');
+  test('sans série : le cumul seul, sans flamme, à l’encre tertiaire — le rouge reste la couleur de la série (#9570)', () => {
+    const html = renderToStaticMarkup(<EngagementPill snapshot={snapshot({ streakDays: 0 })} language="fr" now={() => NOON_SEPT_30} />);
+    expect(html).toContain('data-engagement-pill="total"');
+    expect(html).toContain('>120<');
+    expect(html).not.toContain('data-engagement-streak');
+    expect(html).not.toContain(`d="M173.79`);
+    expect(html).not.toContain('header-flame-count-digits');
+    expect(html).toContain('var(--color-ios-ink-3)');
+    expect(html).toContain('<span class="sr-only">120 points gagnés dans cette conversation</span>');
+  });
+
+  test('avec série : la flamme et les chiffres rouges (#9570)', () => {
+    const html = renderToStaticMarkup(<EngagementPill snapshot={snapshot()} language="fr" now={() => NOON_SEPT_30} />);
+    expect(html).toContain('data-engagement-pill="streak"');
+    expect(html).toContain(`d="M173.79`);
+    expect(html).toContain('header-flame-count-digits');
   });
 
   test('rien à montrer ⇒ aucun nœud', () => {
@@ -114,7 +145,9 @@ describe('le rendu de la pastille', () => {
     expect(renderToStaticMarkup(<EngagementPill snapshot={snapshot()} language="fr" now={() => NOON_OCT_1} />)).toContain(
       'data-engagement-streak="4"',
     );
-    expect(renderToStaticMarkup(<EngagementPill snapshot={snapshot()} language="fr" now={() => NOON_OCT_2} />)).toBe('');
+    expect(renderToStaticMarkup(<EngagementPill snapshot={snapshot()} language="fr" now={() => NOON_OCT_2} />)).toContain(
+      'data-engagement-pill="total"',
+    );
   });
 
   test('dans l’en-tête, elle mène à la Progression', () => {
@@ -159,5 +192,16 @@ describe('l’en-tête du fil porte la pastille', () => {
 
   test('sans point servi : aucune pastille', () => {
     expect(header(RICH_TEXT_DIRECT, false)).not.toContain('data-engagement-pill');
+    expect(header(RICH_TEXT_DIRECT, true)).not.toContain('data-engagement-pill');
+  });
+
+  test('déplié, série tombée : le cumul seul, toujours vers la Progression (#9570)', () => {
+    const lapsed: Conversation = Object.assign({}, RICH_TEXT_DIRECT, {
+      viewerEngagement: snapshot({ day: localDayOf(Date.now() - 3 * 86_400_000) }),
+    });
+    const html = header(lapsed, true);
+    expect(html).toContain('data-engagement-pill="total"');
+    expect(html).toContain('href="/me/progression"');
+    expect(html).toContain('>120<');
   });
 });

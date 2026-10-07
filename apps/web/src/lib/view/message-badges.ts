@@ -2,6 +2,7 @@ import { parseConversationNotice, type ConversationNotice } from '@meeshy/shared
 import { conversationPreviewString } from '@meeshy/shared/utils/conversation-preview-strings';
 import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
 import { arrivalsNoticeText, parseArrivalsNotice, type ArrivalsNoticeMetadata } from '@meeshy/shared/utils/arrivals-notice';
+import { captureNoticeText, parseCaptureNotice, type CaptureNoticeMetadata } from '@meeshy/shared/utils/capture-notice';
 
 import type { Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
@@ -68,6 +69,8 @@ export type SystemRow =
   | { readonly kind: 'group'; readonly notice: ConversationNotice }
   /** Les arrivées REGROUPÉES de Meeshy Global (#7740) — une ligne par fenêtre de dix minutes. */
   | { readonly kind: 'arrivals'; readonly notice: ArrivalsNoticeMetadata }
+  /** La capture d'un contenu qui disparaît (#9617) — l'heure d'ENVOI se dit dans le fuseau du lecteur. */
+  | { readonly kind: 'capture'; readonly notice: CaptureNoticeMetadata }
   | { readonly kind: 'notice'; readonly text: string };
 
 /**
@@ -113,6 +116,11 @@ export function systemRowOf(message: Pick<Message, 'messageType' | 'messageSourc
   const arrivals = parseArrivalsNotice(metadata);
   if (arrivals !== null) return { kind: 'arrivals', notice: arrivals };
 
+  /* Une métadonnée de capture illisible (issue qui contredit la nature, heure
+     invalide) n'est pas un avis : elle retombe sur le repli de `content`. */
+  const capture = parseCaptureNotice(metadata);
+  if (capture !== null) return { kind: 'capture', notice: capture };
+
   if (message.content !== '') return { kind: 'notice', text: message.content };
   return null;
 }
@@ -121,7 +129,7 @@ export function systemRowOf(message: Pick<Message, 'messageType' | 'messageSourc
  * doit prononcer (`composeMessageLabel`) et le seul que `SystemNotice`
  * affiche pour `call`/`notice`. L'avis d'arrivée compose le sien
  * (`bubble.joinNotice.joined`, `BubbleSystemViews.swift:313-319`). */
-export function systemRowText(row: SystemRow, language: string = currentInterfaceLanguage()): string {
+export function systemRowText(row: SystemRow, language: string = currentInterfaceLanguage(), timeZone: string = readerTimeZone()): string {
   switch (row.kind) {
     case 'call':
     case 'notice':
@@ -134,6 +142,17 @@ export function systemRowText(row: SystemRow, language: string = currentInterfac
       return groupNoticeText(row.notice, language);
     case 'arrivals':
       return arrivalsNoticeText(row.notice, language);
+    case 'capture':
+      return captureNoticeText(row.notice, { language, timeZone });
+  }
+}
+
+/** Le fuseau IANA de l'appareil du lecteur ; illisible ⇒ `captureNoticeText` retombe sur UTC. */
+function readerTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return 'UTC';
   }
 }
 

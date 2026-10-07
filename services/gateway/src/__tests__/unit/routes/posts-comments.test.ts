@@ -76,6 +76,7 @@ jest.mock('../../../utils/withMutationLog', () => ({
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn<any>().mockImplementation(({ op }) => op()),
+  withMutationVerdict: jest.fn<any>().mockImplementation(async ({ op }: any) => ({ result: await op(), replayed: false })),
 }));
 
 jest.mock('../../../utils/sanitize.js', () => ({
@@ -174,7 +175,7 @@ async function buildApp({ authenticated = true, withCmidDecoration = false } = {
   // droit de voir (cf. `posts/comments-audience.test.ts`).
   const publicAcl = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] };
   const prisma = {
-    post: {
+    user: { findFirst: jest.fn<any>().mockResolvedValue(null) }, post: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       findFirst: jest.fn<any>().mockResolvedValue(publicAcl),
     },

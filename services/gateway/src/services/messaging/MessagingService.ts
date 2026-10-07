@@ -21,6 +21,7 @@ import { stickerFromMetadata } from '../stickers/messageSticker';
 import {
   admitMessageForward,
   describeForwardRefusal,
+  forwardedCopyRequest,
   isForwardRefused,
   sanitizeForwardReferences
 } from './forwardAdmission';
@@ -417,8 +418,14 @@ export class MessagingService {
       //      tenir. Sans lui, un transfert dont la source a disparu créait une
       //      ligne sans contenu, sans pièce jointe et sans chiffré — une bulle
       //      vide diffusée à tous. Les deux règles évoluent ensemble.
+      //
+      //      #9579 — l'expéditeur est remis au garde : un transfert n'est admis
+      //      que s'il peut LIRE la source, et la conversation de provenance
+      //      n'est gardée que si la source y vit.
       const forwardAdmission = await admitMessageForward(this.prisma, {
         forwardedFromId: request.forwardedFromId,
+        senderParticipantId: participant.id,
+        forwardedFromConversationId: request.forwardedFromConversationId,
         at: new Date(),
         bodyOnlyFromSource: this.bodyOnlyFromSource(request)
       });
@@ -433,18 +440,16 @@ export class MessagingService {
       //    déclenche un duplicate-key, MessageProcessor relit l'existant
       //    et flague `(message as any).isDuplicate = true`.
       //
-      //    `ephemeralDuration` : la DURÉE héritée de la source prime sur celle
-      //    que le client a (ou n'a pas) envoyée — c'est tout l'objet du garde
-      //    ci-dessus. Depuis #7451 c'est bien une durée et non une échéance :
-      //    le décompte de la copie repart de la réception de chaque nouveau
-      //    destinataire. Le bit `EPHEMERAL` s'en déduit dans `saveMessage`.
+      //    `forwardedCopyRequest` (#9572) pose le VERDICT du garde ci-dessus,
+      //    APRÈS le spread de la requête : ce qu'un client aurait glissé sous
+      //    `forwardImposes` est écrasé. `saveMessage` en tire durée bornée,
+      //    bits et flou de la copie ; une source indisponible retire
+      //    `forwardedFromId`, donc rien de la source n'est recopié.
       const message = await performanceLogger.withTiming(
         'messaging.saveMessage',
         () => this.processor.saveMessage({
           ...request,
-          ...(forwardAdmission.ephemeralDuration
-            ? { ephemeralDuration: forwardAdmission.ephemeralDuration }
-            : {}),
+          ...forwardedCopyRequest(request, forwardAdmission),
           originalLanguage,
           conversationId,
           senderId: participant!.id,
@@ -580,7 +585,8 @@ export class MessagingService {
         ...postSaveToolFields(saved),
         content: message.content,
         messageType: message.messageType,
-        replyToId: message.replyToId
+        replyToId: message.replyToId,
+        storyReplyToId: message.storyReplyToId ?? null
       },
       originalLanguage,
       onError: (effect, err) =>

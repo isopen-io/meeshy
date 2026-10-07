@@ -269,7 +269,18 @@ public struct MeeshyScenePlayer: View {
 
     private var playerProvider: SharedCarrierPlayerProvider {
         SharedCarrierPlayerProvider(
-            carrierIdentity: Self.carrierMediaIdentity(in: document, sceneIndex: sceneIndex))
+            carrierIdentity: Self.carrierMediaIdentity(in: document, sceneIndex: sceneIndex),
+            role: Self.carrierSurfaceRole(mode: mode))
+    }
+
+    /// Le rôle sous lequel ce lecteur demande le player partagé (#9575) : la
+    /// carte et l'aperçu vivent DANS un fil, le lecteur et le réel tiennent
+    /// l'écran. Une carte ne reprend pas un player que la fenêtre PiP joue.
+    nonisolated static func carrierSurfaceRole(mode: ScenePlayerMode) -> VideoSurfaceRole {
+        switch mode {
+        case .card, .preview: return .inline
+        case .reader, .reel: return .fullscreen
+        }
     }
 
     private var loopHandler: (@Sendable () -> Void)? {
@@ -303,13 +314,15 @@ public struct MeeshyScenePlayer: View {
 /// et la couche ouvre alors le sien.
 public struct SharedCarrierPlayerProvider: StoryCarrierPlayerProviding {
     public let carrierIdentity: String?
+    public let role: VideoSurfaceRole
 
-    public init(carrierIdentity: String?) {
+    public init(carrierIdentity: String?, role: VideoSurfaceRole = .fullscreen) {
         self.carrierIdentity = carrierIdentity
+        self.role = role
     }
 
     public func player(for mediaIdentity: String) -> AVPlayer? {
         guard let carrierIdentity, mediaIdentity == carrierIdentity else { return nil }
-        return SharedAVPlayerManager.shared.loadedPlayer(matching: mediaIdentity)
+        return SharedAVPlayerManager.shared.loadedPlayer(matching: mediaIdentity, role: role)
     }
 }

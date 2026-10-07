@@ -24,8 +24,8 @@ nonisolated enum ComposerViewfinderRules {
 ///
 /// Les portes qui n'ont PAS de scène — la barre de conversation, le statut, la
 /// page blanche de l'atelier, la citation du fil — reçoivent ici le montage du
-/// composer (`ComposerCaptureMount`), sa taille figée en plein écran et sans
-/// bouton de taille. Elle ne garde ni chrome ni mise en page à elle : mêmes
+/// composer (`ComposerCaptureMount`), plein écran et sans carte où rentrer —
+/// seul un selfie éclairé par l'écran s'y réduit en scène (#9566). Elle ne garde ni chrome ni mise en page à elle : mêmes
 /// couches, mêmes gestes, même rail, même bande.
 ///
 /// Ce que la prise rend part par `onCapture` — une photo regardée, peinte par
@@ -38,6 +38,9 @@ struct ComposerViewfinder: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var capture: ComposerCaptureSession
     @State private var delivered = false
+    /// Cet hôte n'a pas de carte : la taille ne joue que sous le flash d'écran,
+    /// où le selfie se réduit en scène entourée de blanc, ou s'agrandit (#9566).
+    @State private var size = ComposerSceneCameraSize.card
 
     /// Le viseur naît ARMÉ, au mode que la porte a promis : posé dans un
     /// `.onAppear`, la barre annoncerait la photo une image avant de basculer.
@@ -52,7 +55,7 @@ struct ComposerViewfinder: View {
     private var camera: CameraModel { capture.camera }
 
     var body: some View {
-        ComposerCaptureMount(session: capture, size: .constant(.fullScreen), offersSizeToggle: false,
+        ComposerCaptureMount(session: capture, size: $size, offersSizeToggle: false,
                              onDisarm: { close() }, onDeliver: { deliver($0) }) {
             Color.black
                 .ignoresSafeArea()

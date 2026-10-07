@@ -1,6 +1,7 @@
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import {
   EPHEMERAL_UNRECEIVED_RETENTION_MS,
+  ephemeralDestructionAt,
   isAfterReadEphemeral,
   normalizeEphemeralDuration,
 } from '@meeshy/shared/utils/ephemeral-countdown';
@@ -47,6 +48,14 @@ export function ephemeralSendFields(input: {
   readonly isViewOnce?: boolean | null;
   /** Le bitfield RECOMPOSÉ — porte la flamme-œil (#8302). */
   readonly effectFlags?: number | null;
+  /**
+   * #9572 — la COPIE d'une flamme à durée porte durée ET après lecture : la
+   * durée borne (échéance par destinataire, dès la réception ; « envoi +
+   * durée » pour l'expéditeur, #9588), la consommation après lecture retire
+   * plus tôt. Posé par `exitProtectedCopy`, jamais par un envoi ordinaire,
+   * dont la flamme-œil reste sans durée.
+   */
+  readonly durationBoundsAfterRead?: boolean;
   readonly now: Date;
 }): EphemeralSendFields {
   const retentionCap = new Date(input.now.getTime() + EPHEMERAL_UNRECEIVED_RETENTION_MS);
@@ -56,7 +65,19 @@ export function ephemeralSendFields(input: {
   // consommation pose l'échéance de chaque lecteur. La colonne porte le
   // plafond de rétention, le filet d'un message que personne ne lit jamais.
   if (isAfterReadEphemeral(input.effectFlags)) {
-    return { ephemeralDuration: null, expiresAt: retentionCap, ...viewOnce };
+    const bound = input.durationBoundsAfterRead
+      ? normalizeEphemeralDuration({ ephemeralDuration: input.ephemeralDuration, now: input.now })
+      : null;
+    // #9588 — une copie bornée que personne n'a reçue meurt à « envoi + durée
+    // + grâce » : le plafond de sept jours en faisait une flamme d'une semaine
+    // pour celui qui l'avait transférée.
+    const destruction = ephemeralDestructionAt({
+      sentAt: input.now,
+      ephemeralDuration: bound,
+      effectFlags: input.effectFlags,
+      recipientDeadlines: [],
+    });
+    return { ephemeralDuration: bound, expiresAt: destruction ?? retentionCap, ...viewOnce };
   }
 
   const duration = normalizeEphemeralDuration({

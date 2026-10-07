@@ -80,10 +80,10 @@ final class ComposerTrimTrackTests: XCTestCase {
 
     func test_track_sitsAboveTheRailAndTheBand_andCarriesThePrecisionLaw() throws {
         let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
-        let couloir = try XCTUnwrap(bas.range(of: ".overlay(alignment: .bottomLeading) {"))
-        let piste = try XCTUnwrap(bas.range(of: "ComposerTrimTrack(", range: couloir.upperBound..<bas.endIndex),
-                                  "la piste se monte dans le couloir du rail")
-        let rail = try XCTUnwrap(bas.range(of: "ComposerLookRail("))
+        let retouche = try XCTUnwrap(bas.range(of: "private var editTools: some View {"))
+        let piste = try XCTUnwrap(bas.range(of: "ComposerTrimTrack(", range: retouche.upperBound..<bas.endIndex),
+                                  "la piste se monte avec les outils de la retouche")
+        let rail = try XCTUnwrap(bas.range(of: "ComposerLookRail(", range: retouche.upperBound..<bas.endIndex))
         XCTAssertLessThan(piste.lowerBound, rail.lowerBound, "la piste se pose AU-DESSUS du rail, donc de la bande")
         XCTAssertTrue(bas.contains("case .editing(.video(let url)) = session.phase"),
                       "elle n'existe qu'en retouche d'une vidéo")

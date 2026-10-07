@@ -87,16 +87,18 @@ final class EngagementRevealWiringTests: XCTestCase {
         XCTAssertFalse(EngagementReveal.level(3).celebratesUnprompted)
     }
 
-    /// La célébration ne REMPLACE pas le tableau de bord : elle le couvre. Le
-    /// tap continue donc de l'ouvrir, exactement comme avant — sinon refermer
-    /// la célébration laisserait l'utilisateur là d'où il vient.
-    func test_theDashboardIsStillOpened_theRevealOnlyCoversIt() throws {
+    /// La célébration ne REMPLACE pas l'écran du jeu : elle le couvre. Le tap ouvre donc la FICHE du palier, posée
+    /// sur son chemin complet (#9564, carte de navigation) — sinon refermer la célébration laisserait l'utilisateur
+    /// là d'où il vient.
+    func test_theGameIsStillOpened_theRevealOnlyCoversIt() throws {
         let iphone = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
-        XCTAssertTrue(iphone.contains("router.push(.progression)"))
+        let reveal = try XCTUnwrap(iphone.range(of: "router.pendingEngagementReveal = ctx.reveal"))
+        XCTAssertTrue(iphone[reveal.upperBound...].prefix(200).contains("router.openGame(at: GameNavigationMap.entry(for: ctx.type)"))
 
         let ipad = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView.swift"))
-        XCTAssertTrue(ipad.contains("rightPanelRoute = .progression"))
+        XCTAssertEqual(ipad.components(separatedBy: "router.openGame(at: GameNavigationMap.entry(for:").count - 1, 6,
+                       "jeu et paliers, sur les trois gestionnaires iPad")
     }
 }

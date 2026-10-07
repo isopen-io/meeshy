@@ -22,7 +22,14 @@ import MeeshyUI
 
 extension ConversationMediaGalleryView {
 
-    /// **La bande du couloir bas : la progression, et la durée en petit.**
+    /// **La bande du couloir bas : la progression, sur toute la largeur de
+    /// l'ÉCRAN** (#9577, directive porteur 2026-10-07).
+    ///
+    /// Elle était bornée à la largeur du CADRE et partageait sa ligne avec le
+    /// son, le menu (...) et la durée : sur une vidéo 9:16, la seule ligne du
+    /// plateau qu'on saisit au doigt perdait plus d'un tiers de sa course. Le
+    /// son et (...) sont montés dans la colonne d'actions (`cadreTransportRail`),
+    /// la durée dans la ligne d'informations ; la barre prend tout le reste.
     ///
     /// ## Elle n'existe que si le LOT a un temps à montrer
     ///
@@ -33,34 +40,18 @@ extension ConversationMediaGalleryView {
     /// d'une place qui, elle, ne bouge pas — un clignotement à la place d'un
     /// saut, ce qui n'est pas mieux.
     ///
-    /// ## Ce qu'elle montre dépend de ce qui JOUE
-    ///
     /// Tant que le player partagé n'est pas attaché à CE média, il n'y a rien à
     /// parcourir : une ligne de progression y serait un contrôle sans effet
-    /// (loi 4). Seule la durée reste — et elle vient de la pièce jointe, donc
-    /// elle est lisible avant la première image décodée.
+    /// (loi 4).
     @ViewBuilder
     var transportCorridor: some View {
         if stageCorridors.transport > 0 {
-            HStack(spacing: MeeshySpacing.smPlus) {
+            Group {
                 if currentAttachmentIsActiveTrack {
-                    // **La barre du SDK, en gabarit de couloir.** `.duration`
-                    // n'entre PAS dans le jeu : ce serait la durée du PLAYER,
-                    // nulle tant que l'`AVPlayerItem` n'a pas chargé ses pistes
-                    // — donc « 0:00 » sur exactement la page qu'on vient
-                    // d'ouvrir. La durée de la pièce jointe la remplace, à
-                    // droite, et elle ne ment jamais.
-                    //
-                    // `.mute` est ici parce que la bande est le SEUL endroit du
-                    // plateau qui porte encore cette barre : l'en retirer
-                    // priverait la galerie de tout muet, et les gardes qui
-                    // l'affirment (`FullscreenGallerySoundScopeGuardTests`)
-                    // resteraient vertes — elles mesurent la présence du
-                    // composant, pas celle de l'option.
                     VideoTransportControls(
                         manager: videoManager,
                         accentColor: accentColor,
-                        controls: [.scrubber, .mute, .speed, .pip],
+                        controls: [.scrubber],
                         placement: .corridor
                     )
                 } else if let scene = currentScene, scene.timeline != nil {
@@ -69,42 +60,41 @@ extension ConversationMediaGalleryView {
                     // que la barre d'une vidéo, donc sous la même règle de
                     // chrome : elle part avec le plateau en plein cadre et sous
                     // le voile d'une ouverture.
-                    GallerySceneScrubBar(clock: sceneClock, sceneId: scene.id, accentColor: accentColor)
+                    // Une scène n'a pas de ligne d'informations : sa durée
+                    // reste ici, discrète, au bout de sa piste.
+                    HStack(spacing: MeeshySpacing.smPlus) {
+                        GallerySceneScrubBar(clock: sceneClock, sceneId: scene.id, accentColor: accentColor)
+                        if let duree = currentDurationLabel {
+                            transportDurationLabel(duree)
+                        }
+                    }
                 } else {
-                    Spacer(minLength: 0)
-                }
-
-                if let duree = currentDurationLabel {
-                    transportDurationLabel(duree)
+                    Color.clear
                 }
             }
-            .frame(width: currentStage.frame.width,
-                   height: MediaGalleryStage.transportBandHeight)
             .frame(maxWidth: .infinity)
+            .frame(height: MediaGalleryStage.transportBandHeight)
         }
     }
 
-    /// **La durée, discrète** : petite, tabulaire, faible opacité, à droite.
+    /// **Le son et (...), dans la colonne d'actions, sous « Composer »** (#9577).
     ///
-    /// Tabulaire parce qu'elle voisine une ligne qui défile : des chiffres à
-    /// chasse variable désaligneraient la fin de la bande d'une page à l'autre.
-    /// Aucun `accessibilityLabel` : le texte EST la valeur, et VoiceOver lit
-    /// « 0:12 » exactement comme le fait déjà le timecode du SDK — un libellé
-    /// par-dessus ne ferait que répéter ce que l'élément dit.
+    /// Ils quittent la ligne de la barre pour lui rendre sa largeur. C'est le
+    /// gabarit `.rail` du transport partagé : mêmes contrôles, même moteur, même
+    /// muet — la galerie ne tient toujours aucun état de son à elle.
     ///
-    /// **Et elle SCALE** (`MeeshyFont.relative`, doctrine 82i). La tentation
-    /// était de la figer « parce que la bande fait quarante-huit points » : cet
-    /// argument vaut pour le timecode du SDK, qui compte les secondes DANS une
-    /// capsule pleine de voisins. Ici la durée est seule au bout d'une ligne
-    /// flexible — rien ne déborde quand elle grandit, donc rien ne justifie
-    /// qu'elle ignore la personne qui a monté son Dynamic Type.
-    private func transportDurationLabel(_ texte: String) -> some View {
-        Text(texte)
-            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
-            .foregroundColor(MeeshyColors.mediaChromeTertiary)
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.trailing, MediaGalleryStage.gutter)
+    /// Montés seulement quand une piste est ATTACHÉE à la page : un muet sans
+    /// son, une vitesse sans lecture sont des contrôles sans effet (loi 4).
+    @ViewBuilder
+    var cadreTransportRail: some View {
+        if currentAttachmentIsActiveTrack {
+            VideoTransportControls(
+                manager: videoManager,
+                accentColor: accentColor,
+                controls: [.mute, .speed, .pip],
+                placement: .rail
+            )
+        }
     }
 
     /// **Le play/pause reste au centre du média, et devient plus transparent**
@@ -144,18 +134,43 @@ extension ConversationMediaGalleryView {
                 accentColor: accentColor,
                 controls: [.playPause],
                 placement: .center,
-                centerOpacity: 0.55
+                centerOpacity: 0.55,
+                centerVisible: playPauseFade.isVisible
             )
         }
     }
 
-    /// **La durée de la page ouverte, ou rien.**
-    ///
-    /// Le prédicat est le MÊME que celui qui réserve la bande
-    /// (`MediaGalleryStage.carriesDuration`) : une durée nulle n'est pas une
-    /// durée. `durationFormatted` seul rendrait « 0:00 » pour un média dont le
-    /// serveur n'a pas encore calculé la durée — un chiffre FAUX est pire
-    /// qu'une bande vide, parce qu'on le croit.
+    /// **Le bouton central s'efface une seconde après le début de la lecture**
+    /// (#9577). Le délai et l'état sont la règle du SDK
+    /// (`FullscreenPlayPauseFade`) ; cette tâche ne fait que l'attendre. Clée
+    /// sur l'état : un réarmement (toucher, reprise) la relance d'elle-même.
+    func fadePlayPauseAfterDelay() async {
+        guard let delay = playPauseFade.fadeDelay else { return }
+        try? await Task.sleep(for: .seconds(delay))
+        guard !Task.isCancelled else { return }
+        withAnimation(playPauseFadeAnimation) { playPauseFade = playPauseFade.fading() }
+    }
+
+    /// « Réduire les animations » : le bouton part et revient sans fondu.
+    var playPauseFadeAnimation: Animation? {
+        reduceMotion ? nil : .easeOut(duration: 0.25)
+    }
+
+    /// **La durée, discrète** : petite, tabulaire, faible opacité, à droite —
+    /// et elle SCALE (`MeeshyFont.relative`, doctrine 82i) : seule au bout d'une
+    /// ligne flexible, rien ne déborde quand elle grandit.
+    private func transportDurationLabel(_ texte: String) -> some View {
+        Text(texte)
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
+            .foregroundColor(MeeshyColors.mediaChromeTertiary)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.trailing, MediaGalleryStage.gutter)
+    }
+
+    /// **La durée de la page ouverte, ou rien.** Le prédicat est le MÊME que
+    /// celui qui réserve la bande (`MediaGalleryStage.carriesDuration`) : une
+    /// durée nulle n'est pas une durée — un « 0:00 » FAUX est pire qu'un vide.
     var currentDurationLabel: String? {
         guard let att = currentAttachment,
               MediaGalleryStage.carriesDuration([att]) else { return nil }
@@ -184,6 +199,27 @@ extension ConversationMediaGalleryView {
     /// arrêterait la mauvaise piste.
     var currentAttachmentIsActiveTrack: Bool {
         guard let att = currentAttachment, att.type == .video else { return false }
-        return videoManagerActiveURL == att.fileUrl && videoManagerPlayer != nil
+        return videoManagerPlayer != nil
+            && SharedAVPlayerManager.mayMountFullscreenPlayer(surfaceMedia: att.fileUrl,
+                                                              activeMedia: videoManagerActiveURL)
+    }
+}
+
+// MARK: - Le toucher qui ramène le bouton central (#9577)
+
+/// **Quand un toucher sur le média ne fait QUE ramener le bouton pause.**
+///
+/// Dans la galerie, un toucher sur le média bascule le plein cadre (#6142). Le
+/// bouton central, lui, s'efface une seconde après le début de la lecture et
+/// revient au toucher. Sans arbitrage, le même doigt ferait les deux : ramener
+/// le bouton ET retirer tout le plateau — bouton compris.
+///
+/// La règle : sur une piste attachée, plateau à l'écran, bouton effacé ⇒ le
+/// toucher le ramène et s'arrête là. Dans tous les autres cas il garde sa porte.
+nonisolated enum MediaStagePlayPause {
+    static func tapRevealsOnly(fade: FullscreenPlayPauseFade,
+                               holdsTrack: Bool,
+                               chromeVisible: Bool) -> Bool {
+        holdsTrack && chromeVisible && fade.mediaTapEffect == .reveals
     }
 }

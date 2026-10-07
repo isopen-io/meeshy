@@ -66,7 +66,9 @@ struct GameShowcaseScreen: View {
 
     private func trophyCell(view: GameTrophyPresentation, index: Int, count: Int, awardedAt: String?, order: [String]) -> some View {
         VStack(spacing: MeeshySpacing.xs) {
+            // Un trophée SE TOUCHE (#9564) : il rebondit et ouvre ses précisions.
             GameTrophyArt(view: view, height: 84)
+                .gameElement(GameElementDetails.trophy(GameTrophyItem(key: order[index], awardedAt: awardedAt ?? "")))
             Text(view.title)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)

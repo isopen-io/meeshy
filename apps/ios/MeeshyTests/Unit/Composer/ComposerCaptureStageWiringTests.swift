@@ -66,8 +66,8 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
             XCTAssertFalse(code.contains("ComposerCapturePreview("), "\(hote) recâble l'aperçu")
         }
         let viseur = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
-        XCTAssertTrue(viseur.contains("size: .constant(.fullScreen), offersSizeToggle: false"),
-                      "la conversation fige le plein écran, sans bouton de taille")
+        XCTAssertTrue(viseur.contains("size: $size, offersSizeToggle: false"),
+                      "la conversation n'a pas de carte : sa taille ne joue que sous le flash d'écran (#9566)")
         let composer = try Self.code("Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift")
         XCTAssertTrue(composer.contains("size: $sceneCameraSize"), "le composer pilote carte ↔ plein écran")
         XCTAssertFalse(composer.contains("offersSizeToggle: false"))
@@ -99,21 +99,23 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
         XCTAssertLessThan(espace.lowerBound, bascule.lowerBound)
     }
 
-    func test_theExposureSlider_livesUnderTheFlash_andOnlyWhileArmed() throws {
+    /// **Sous le flash, UN curseur vertical : son intensité** (porteur 2026-10-07,
+    /// #9566). Le curseur de luminosité permanent est retiré.
+    func test_theFlashSlider_isVertical_underTheFlash_andOnlyWhileTheFlashIsOn() throws {
         let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
-        XCTAssertTrue(barre.contains("ComposerExposureSlider(bias: exposureBias, onChange: onExposureBias)"))
-        XCTAssertTrue(barre.contains("ComposerExposureRule.shows(stage: stage"))
-        let curseur = try Self.code("Meeshy/Features/Main/Composer/ComposerExposureSlider.swift")
-        XCTAssertTrue(curseur.contains("accessibilityAdjustableAction"), "VoiceOver le règle")
-        XCTAssertTrue(curseur.contains("ComposerExposureRule.stepped("), "par tiers d'EV")
-        let chrome = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("onExposureBias: { session.setExposureBias($0) }"))
-    }
-
-    func test_theStage_resetsTheExposure_atEachOpeningAndClosing() throws {
-        let scene = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureStage.swift")
-        XCTAssertEqual(scene.components(separatedBy: "session.resetExposure()").count - 1, 2,
-                       "neutre à l'ouverture comme à la fermeture du viseur")
+        let rangee = try XCTUnwrap(barre.range(of: "topControls\n"))
+        let curseur = try XCTUnwrap(barre.range(of: "ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity)"))
+        XCTAssertLessThan(rangee.lowerBound, curseur.lowerBound, "sous la rangée haute, donc sous le flash")
+        XCTAssertTrue(barre.contains("ComposerFlashIntensity.showsSlider(flash: flashMode) && !editing"))
+        XCTAssertFalse(barre.contains("Exposure"), "plus de curseur de luminosité permanent")
+        let vue = try Self.code("Meeshy/Features/Main/Composer/ComposerFlashIntensitySlider.swift")
+        XCTAssertTrue(vue.contains("ComposerFlashIntensity.level(atY:"), "le doigt le règle de haut en bas")
+        XCTAssertTrue(vue.contains("accessibilityAdjustableAction"), "VoiceOver le règle")
+        for fichier in ["ComposerCaptureViews.swift", "ComposerCaptureStage.swift", "ComposerCaptureSession.swift",
+                        "ComposerCaptureSession+Switch.swift"] {
+            let code = try Self.code("Meeshy/Features/Main/Composer/\(fichier)")
+            XCTAssertFalse(code.contains("xposure"), "\(fichier) ne règle plus de luminosité")
+        }
     }
 
     // MARK: - Pendant la prise, seule la miniature choisie
@@ -122,7 +124,10 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
         let chrome = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("if session.stage != .recording {"), "la rangée haute se cache pendant la prise")
         let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
-        XCTAssertTrue(bas.contains(".disabled(!railEnabled)"), "le rail se désactive, et VoiceOver le dit")
+        XCTAssertTrue(bas.contains("if ComposerCaptureGesture.offersRail(context) {"),
+                      "le rail n'existe que si la table l'offre (#9576)")
+        XCTAssertFalse(bas.contains(".disabled(!rail"), "un rail éteint n'est plus montré : ni à l'œil, ni à VoiceOver")
+        XCTAssertFalse(bas.contains("0.4"), "plus de rail à demi effacé")
         XCTAssertTrue(bas.contains("if !recording { zoom }"), "le zoom passe au glissé vertical")
         XCTAssertTrue(bas.contains(".environment(\\.layoutDirection, .leftToRight)"),
                       "le cadenas reste à DROITE, là où le glissé verrouille")

@@ -139,6 +139,58 @@ export async function loadEphemeralReaderDeadlines(
 }
 
 /**
+ * L'échéance de CE lecteur pour CE message, lue de façon CIBLÉE et exacte
+ * (#9579) — pour qui DÉCIDE sur elle, et pas seulement l'affiche.
+ *
+ * Le balayage de page ci-dessus ne convient pas à une décision de sortie : il
+ * est plafonné et sans ordre, donc dans une conversation où plus de
+ * destinataires que le plafond ont démarré leur décompte, la ligne du lecteur
+ * peut manquer à la tranche lue — et « absente » s'y lit « décompte pas encore
+ * démarré ». Un écran en retard pour une page ; une porte ouverte pour un
+ * transfert, un téléchargement, une publication.
+ *
+ * Deux lectures, jamais un balayage :
+ *  - un DESTINATAIRE : sa propre ligne, par le couple unique
+ *    `(messageId, participantId)` ;
+ *  - l'AUTEUR : la plus tardive des échéances de ses destinataires, par une
+ *    lecture ORDONNÉE d'une ligne — le maximum réel, où qu'il soit.
+ *
+ * Elle rend la MÊME forme que le balayage (`EphemeralReaderResolution`) : les
+ * lois qui la consomment (`servedEphemeralExpiresAt`,
+ * `isEphemeralServableToReader`) ne voient pas la différence. Seul le champ
+ * que la loi lit pour ce lecteur est renseigné.
+ *
+ * Un message sans échéance par lecteur ne coûte aucune requête. Elle PROPAGE
+ * ses erreurs : une échéance illisible n'est pas une échéance absente, et
+ * c'est à l'appelant de fermer.
+ */
+export async function readEphemeralReaderResolution(
+  prisma: EphemeralDeadlinesPrisma,
+  message: EphemeralRow,
+  readerParticipantId: string,
+): Promise<EphemeralReaderResolution> {
+  const isSender = message.senderId === readerParticipantId;
+  if (!hasPerReaderEphemeralDeadline(message)) return { ...NO_DEADLINE, isSender };
+
+  const started = [{ ephemeralExpiresAt: { isSet: true } }, { ephemeralExpiresAt: { not: null } }];
+  const entry = isSender
+    ? await prisma.messageStatusEntry.findFirst({
+        where: { messageId: message.id, AND: started },
+        orderBy: { ephemeralExpiresAt: 'desc' },
+        select: { ephemeralExpiresAt: true },
+      })
+    : await prisma.messageStatusEntry.findFirst({
+        where: { messageId: message.id, participantId: readerParticipantId, AND: started },
+        select: { ephemeralExpiresAt: true },
+      });
+
+  const deadline = entry?.ephemeralExpiresAt instanceof Date ? entry.ephemeralExpiresAt : null;
+  return isSender
+    ? { isSender, readerDeadline: null, latestRecipientDeadline: deadline }
+    : { isSender, readerDeadline: deadline, latestRecipientDeadline: null };
+}
+
+/**
  * #8562 — la page ET les messages qu'elle CITE : une citation d'éphémère se
  * scelle à l'échéance de CE lecteur, que le message cité soit sur la page ou
  * non. Même lecture, même plafond — une seule requête.

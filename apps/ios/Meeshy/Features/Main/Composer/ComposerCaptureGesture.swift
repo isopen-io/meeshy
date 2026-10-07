@@ -84,6 +84,13 @@ nonisolated enum ComposerCaptureGesture {
         }
     }
 
+    /// **Un rail qu'on ne peut pas ouvrir n'est pas montré** (porteur
+    /// 2026-10-07, #9576) : il n'existe que si son toucher ouvre une famille —
+    /// ni pendant une prise, ni tant que des segments en attente figent le look.
+    static func offersRail(_ context: ComposerCaptureGestureContext) -> Bool {
+        action(zone: .rail, gesture: .tap, context: context) == .openFamily
+    }
+
     /// **Un toucher, lu par la règle du porteur** (#9464) — le SEUL décideur du
     /// toucher : le premier vise tout de suite ; le second, dans la fenêtre,
     /// après l'armement et DANS LA MÊME ZONE, est un double. Un double que la

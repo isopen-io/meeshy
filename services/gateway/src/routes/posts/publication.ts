@@ -48,6 +48,7 @@ import {
 import type { EngagementActivityOptions } from '../../services/engagement/EngagementService';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
+import { creditSource } from '../../services/posts/postEngagementCredits';
 import { postSignalText } from '../../services/posts/storyContentComposition';
 import { resolvePostMentions } from '../../services/posts/postMentions';
 import type {
@@ -120,7 +121,9 @@ export interface PostPublicationEngagementService {
     userId: string,
     operationKey: EngagementOperationKey,
     options?: EngagementActivityOptions,
-  ): Promise<void>;
+  ): Promise<unknown>;
+  /** Un fait de jeu posé à la publication (#9635) — l'INTENTION « réel ». */
+  recordGameSignal?(userId: string, signal: 'reel-published', options?: { readonly key?: string }): Promise<void>;
 }
 
 /**
@@ -347,17 +350,29 @@ function recordPublicationEngagement(params: {
   const operation = contentOperationFor(writtenType, visibility);
   if (!operation) return;
 
-  const credit = (key: EngagementOperationKey, options: EngagementActivityOptions): void => {
-    engagementService.recordActivity(authorId, key, options).catch((err: unknown) => {
-      logError(log, `[${porte}] ${key} engagement recording failed`, err);
-    });
-  };
+  const credit = (key: EngagementOperationKey, options: EngagementActivityOptions): Promise<void> =>
+    engagementService.recordActivity(authorId, key, options).then(
+      () => undefined,
+      (err: unknown) => {
+        logError(log, `[${porte}] ${key} engagement recording failed`, err);
+      },
+    );
 
   const byVisibility = operation === 'content.post' || operation === 'content.story';
-  credit(operation, byVisibility ? { targetId: postId, variant: visibilityVariant(visibility) } : { targetId: postId });
+  // La publication est la SOURCE de ses crédits : la retirer les reprend (#9584).
+  const source = creditSource.post(postId);
+  const content = credit(operation, byVisibility ? { postId, targetId: postId, receipt: source, variant: visibilityVariant(visibility) } : { postId, targetId: postId, receipt: source });
 
   if (operation === 'content.status') return;
-  credit(editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish', { targetId: postId });
+  // L'un APRÈS l'autre (#9569) : les deux crédits nomment le même post, et
+  // chacun annonce à l'auteur ce que ce post lui a rapporté. Lancés ensemble,
+  // leurs annonces pouvaient se croiser et laisser la valeur d'avant le second.
+  // `credit` ne rejette jamais : un contenu en échec n'empêche pas l'axe outil.
+  content
+    .then(() => credit(editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish', { postId, targetId: postId, receipt: source }))
+    .catch((err: unknown) => {
+      logError(log, `[${porte}] publication engagement chain failed`, err);
+    });
 }
 
 /**
@@ -517,6 +532,14 @@ export async function runPublicationEffects(
 
   if (engagementService) {
     recordPublicationEngagement({ engagementService, authorId, postId, writtenType, visibility, editedInApp, porte, log: fastify.log });
+  }
+  // L'INTENTION « réel » (#9635) : un réel demandé et publié compte pour son défi
+  // même quand le service l'a écrit en POST faute de média qualifiant — le geste
+  // de l'auteur est le même. Ses POINTS restent ceux du type écrit (ci-dessus).
+  if (postType === 'REEL' && visibility !== 'PRIVATE' && engagementService?.recordGameSignal) {
+    engagementService.recordGameSignal(authorId, 'reel-published', { key: postId }).catch((err: unknown) => {
+      logError(fastify.log, `[${porte}] reel intent game signal failed`, err);
+    });
   }
 
   return servePublishedPost({ post, references, request });

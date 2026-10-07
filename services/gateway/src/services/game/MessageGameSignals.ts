@@ -1,30 +1,30 @@
 /**
- * LES SIGNAUX D'UN MESSAGE (#9375, #9377) — ce que le jeu observe à l'ÉCRITURE
- * d'un message, une fois qu'il est committé :
+ * LES SIGNAUX D'UN MESSAGE (#9375, #9377, #9635) — ce que le jeu observe à l'ÉCRITURE d'un message, une fois
+ * qu'il est committé :
  *
- *  - « réponse dans une conversation distincte » — le message répond à un autre
- *    compte ; la clé est la conversation (une fois par conversation et par jour) ;
- *  - « message dans une autre langue » — la langue détectée diffère de la
- *    langue système de l'expéditeur (variantes régionales confondues) : c'est le
- *    fait du Prisme que les missions linguistiques attendent ;
- *  - « réponse reçue d'un auteur distinct » — signal de l'AUTEUR répondu, clé = le
- *    répondant ;
- *  - l'ATLAS des langues (#9388) : la langue du message est ENVOYÉE pour l'expéditeur,
- *    REÇUE pour ses destinataires — voir `AtlasService` ;
- *  - **+3 points à l'auteur répondu**, une fois par message d'origine, si la
- *    réponse tombe dans l'heure, d'un autre compte de plus de 24 h et non bloqué,
- *    et au plus `REPLY_RECEIVED_DAILY_CAP` fois par jour civil de l'auteur.
+ *  - « message dans une conversation distincte » (`reply-distinct-conversations`, nom historique) — TOUT message
+ *    compté, clé = la conversation : « écrire dans N conversations » ne demande plus de citer ;
+ *  - « réponse à une story » — le message cite une story (`storyReplyToId`) ;
+ *  - « échange avec quelqu'un d'une autre langue » — conversation à deux, langue principale du pair différente
+ *    de celle de l'expéditeur ; clé = le pair ;
+ *  - « message dans une autre langue » et « réponse dans la langue de l'autre » — la langue est celle que le
+ *    SERVEUR établit (`serverLanguage.ts`), jamais la seule déclaration du client ; la détection ne part que si
+ *    le compte attend l'un de ces signaux (mission du jour ou duo), et échoue fermée ;
+ *  - « réponse reçue d'un auteur distinct » — signal de l'AUTEUR cité, clé = le répondant ;
+ *  - l'ATLAS des langues (#9388) : la langue du message est ENVOYÉE pour l'expéditeur, REÇUE pour ses
+ *    destinataires — voir `AtlasService` ;
+ *  - **+3 points à l'auteur répondu**, une fois par message d'origine, si la réponse tombe dans l'heure, d'un
+ *    autre compte de plus de 24 h et non bloqué, et au plus `REPLY_RECEIVED_DAILY_CAP` fois par jour civil.
  *
- * **Une conversation chiffrée de bout en bout ne nourrit AUCUN signal de langue**
- * (conformité E-3, #9224) : ni la mission « message dans une autre langue », ni
- * l'Atlas. Le serveur n'y voit pas le texte ; sa langue détectée n'est pas un
- * fait sur lequel bâtir un jeu. Les signaux qui ne parlent pas de langue (réponse
- * dans une conversation distincte, réponse reçue) ne changent pas.
+ * Les faits de l'expéditeur ne partent que s'il les attend aujourd'hui (une lecture indexée de ses missions du
+ * jour et de son duo actif) : un message ordinaire ne paie ni détection de langue ni lecture de pair.
  *
- * Aucune règle n'est réécrite ici : les barèmes et la décision d'éligibilité
- * viennent de `GameAbuseGuard`, les paliers de `MissionService`. Chaque branche
- * est isolée — l'échec d'un signal ne retient pas les autres, et rien de tout
- * cela ne remonte jamais au chemin d'envoi d'un message.
+ * **Une conversation chiffrée de bout en bout ne nourrit AUCUN signal de langue** (conformité E-3, #9224) : ni
+ * les défis de langue, ni l'Atlas. Le serveur n'y voit pas le texte.
+ *
+ * Aucune règle n'est réécrite ici : les barèmes et la décision d'éligibilité viennent de `GameAbuseGuard`, les
+ * paliers de `MissionService`. Chaque branche est isolée — l'échec d'un signal ne retient pas les autres, et
+ * rien de tout cela ne remonte jamais au chemin d'envoi d'un message.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -35,7 +35,10 @@ import { EngagementQuotas, dayBucket } from '../engagement/EngagementQuotas';
 import { AtlasService } from './AtlasService';
 import { GameAbuseGuard, quarterPoints, type MessageVerdict } from './GameAbuseGuard';
 import { GAME_BONUS_AXIS, type MissionService } from './MissionService';
+import { addDays } from '@meeshy/shared/utils/game/day-prng';
+import type { MissionFactSignal } from '@meeshy/shared/utils/game/missions';
 import { dayKeyOf } from './gameClock';
+import { baseLanguage, translatorLanguageDetector, type LanguageDetector } from './serverLanguage';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const log = enhancedLogger.child({ module: 'MessageGameSignals' });
@@ -53,6 +56,10 @@ export type MessageSignalInput = {
   /** L'auteur du message auquel on répond (`Participant.userId`, `null` pour un anonyme). */
   readonly quotedAuthorUserId: string | null;
   readonly originalLanguage: string;
+  /** Le texte du message : la langue que le serveur établit se lit dessus. */
+  readonly content?: string;
+  /** La story citée (#9635 « répondre à une story »). */
+  readonly storyReplyToId?: string | null;
   readonly now?: Date;
 };
 
@@ -61,15 +68,11 @@ export type MessageGameSignalsDeps = {
   readonly creditPoints: (userId: string, points: number, axisKey: typeof GAME_BONUS_AXIS) => Promise<void>;
   readonly guard?: GameAbuseGuard;
   readonly atlas?: Pick<AtlasService, 'recordMessage' | 'conversationIsEncrypted'>;
+  readonly detectLanguage?: LanguageDetector;
 };
 
-const baseLanguage = (code: string): string => code.trim().toLowerCase().split(/[-_]/)[0] ?? '';
-
-/** Une langue détectée utilisable : jamais vide, jamais le marqueur d'incertitude. */
-const isKnownLanguage = (code: string): boolean => {
-  const base = baseLanguage(code);
-  return base.length > 0 && base !== 'unknown' && base !== 'auto' && base !== 'und';
-};
+const LANGUAGE_FACTS: readonly MissionFactSignal[] = ['foreign-language-message', 'reply-in-their-language'];
+const NOT_COMPLETED = { OR: [{ completedAt: null }, { completedAt: { isSet: false } }] };
 
 export class MessageGameSignals {
   private readonly guard: GameAbuseGuard;
@@ -78,6 +81,8 @@ export class MessageGameSignals {
 
   private readonly atlas: NonNullable<MessageGameSignalsDeps['atlas']>;
 
+  private readonly detectLanguage: LanguageDetector;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly deps: MessageGameSignalsDeps,
@@ -85,6 +90,7 @@ export class MessageGameSignals {
     this.guard = deps.guard ?? new GameAbuseGuard(prisma);
     this.quotas = new EngagementQuotas(prisma);
     this.atlas = deps.atlas ?? new AtlasService(prisma);
+    this.detectLanguage = deps.detectLanguage ?? translatorLanguageDetector;
   }
 
   async record(input: MessageSignalInput): Promise<void> {
@@ -114,6 +120,37 @@ export class MessageGameSignals {
     }
   }
 
+  /**
+   * Une conversation créée vide vient d'être DÉMARRÉE par ce message (#9635). La MÊME garde que le message :
+   * rien seul, face à un compte de moins de 24 h ou bloqué. La clé est l'ENSEMBLE des personnes, pas la
+   * conversation : rouvrir dix conversations jetables avec la même personne ne démarre qu'une conversation.
+   */
+  async recordConversationStarted(input: { readonly senderUserId: string; readonly conversationId: string; readonly now?: Date }): Promise<void> {
+    const now = input.now ?? new Date();
+    const sender = await this.prisma.user.findUnique({ where: { id: input.senderUserId }, select: { timezone: true } }).catch(() => null);
+    const verdict = await this.messageVerdict(
+      { senderUserId: input.senderUserId, conversationId: input.conversationId, messageId: '', replyToId: null, quotedAuthorUserId: null, originalLanguage: '' },
+      sender?.timezone ?? null,
+      now,
+    );
+    if (verdict === 'none') return;
+    const members = await this.prisma.participant.findMany({
+      where: { conversationId: input.conversationId, isActive: true },
+      select: { userId: true },
+      take: 50,
+    });
+    const peers = [...new Set(members.map((m) => m.userId).filter((id): id is string => typeof id === 'string' && id !== input.senderUserId))].sort();
+    if (peers.length === 0) return;
+    await this.isolated('conversation started', () =>
+      this.deps.missions.onSignal(input.senderUserId, 'conversation-started', {
+        now,
+        dayKey: dayKeyOf(now, sender?.timezone),
+        timezone: sender?.timezone ?? null,
+        key: peers.join('&'),
+      }),
+    );
+  }
+
   /** Les messages déjà crédités aujourd'hui dans la conversation, puis la garde d'entre-soi. */
   private async messageVerdict(input: MessageSignalInput, timezone: string | null, now: Date): Promise<MessageVerdict> {
     const row = await this.prisma.conversationEngagement
@@ -140,6 +177,38 @@ export class MessageGameSignals {
     }
   }
 
+  /** Les faits que le compte attend aujourd'hui : ses missions du jour pas encore faites, et son duo actif. */
+  private async pendingFacts(userId: string, dayKey: string): Promise<ReadonlySet<string>> {
+    const [missions, duo] = await Promise.all([
+      this.prisma.dailyMission.findMany({
+        where: { userId, dayKey: { gte: addDays(dayKey, -1) }, ...NOT_COMPLETED },
+        select: { signal: true },
+        take: 8,
+      }),
+      this.prisma.gameDuo.findFirst({
+        where: { status: 'active', OR: [{ inviterId: userId }, { inviteeId: userId }] },
+        select: { signal: true },
+      }),
+    ]);
+    return new Set([...missions.map((m) => m.signal), ...(duo?.signal ? [duo.signal] : [])]);
+  }
+
+  /** Le seul autre membre inscrit d'une conversation à deux, `null` sinon. */
+  private async onlyPeer(conversationId: string, senderUserId: string): Promise<string | null> {
+    const members = await this.prisma.participant.findMany({
+      where: { conversationId, isActive: true },
+      select: { userId: true },
+      take: 3,
+    });
+    const others = members.map((m) => m.userId).filter((id): id is string => typeof id === 'string' && id !== senderUserId);
+    return members.length === 2 && others.length === 1 ? others[0]! : null;
+  }
+
+  private async systemLanguageOf(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { systemLanguage: true } });
+    return baseLanguage(user?.systemLanguage);
+  }
+
   private async senderSignals(
     input: MessageSignalInput,
     sender: { readonly systemLanguage: string | null; readonly timezone: string | null } | null,
@@ -148,15 +217,31 @@ export class MessageGameSignals {
   ): Promise<void> {
     const dayKey = dayKeyOf(now, sender?.timezone);
     const common = { now, dayKey, timezone: sender?.timezone ?? null };
+    const emit = (signal: MissionFactSignal, key?: string) =>
+      this.deps.missions.onSignal(input.senderUserId, signal, key === undefined ? common : { ...common, key });
 
-    const isReplyToSomeoneElse = input.replyToId !== null && input.quotedAuthorUserId !== null && input.quotedAuthorUserId !== input.senderUserId;
-    if (isReplyToSomeoneElse) {
-      await this.deps.missions.onSignal(input.senderUserId, 'reply-distinct-conversations', { ...common, key: input.conversationId });
+    await emit('reply-distinct-conversations', input.conversationId);
+
+    const pending = await this.pendingFacts(input.senderUserId, dayKey);
+    if (input.storyReplyToId && pending.has('story-reply')) await emit('story-reply', input.storyReplyToId);
+    if (encrypted) return;
+
+    const own = baseLanguage(sender?.systemLanguage);
+    if (pending.has('cross-language-exchange') && own !== '') {
+      const peer = await this.onlyPeer(input.conversationId, input.senderUserId);
+      if (peer !== null) {
+        const theirs = await this.systemLanguageOf(peer);
+        if (theirs !== '' && theirs !== own) await emit('cross-language-exchange', peer);
+      }
     }
 
-    const systemLanguage = sender?.systemLanguage;
-    if (!encrypted && systemLanguage && isKnownLanguage(input.originalLanguage) && baseLanguage(input.originalLanguage) !== baseLanguage(systemLanguage)) {
-      await this.deps.missions.onSignal(input.senderUserId, 'foreign-language-message', common);
+    if (own === '' || !LANGUAGE_FACTS.some((signal) => pending.has(signal)) || !input.content) return;
+    const written = await this.detectLanguage(input.content);
+    if (written === null || written === own) return;
+    if (pending.has('foreign-language-message')) await emit('foreign-language-message');
+    const quoted = input.quotedAuthorUserId;
+    if (pending.has('reply-in-their-language') && input.replyToId !== null && quoted !== null && quoted !== input.senderUserId) {
+      if ((await this.systemLanguageOf(quoted)) === written) await emit('reply-in-their-language', input.messageId);
     }
   }
 

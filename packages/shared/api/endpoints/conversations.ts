@@ -90,6 +90,9 @@ export const byIdMessagesByMessageIdConsume = (id: string, messageId: string): s
 /** PUT · DELETE /api/v1/conversations/:id/messages/:messageId/pin */
 export const byIdMessagesByMessageIdPin = (id: string, messageId: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}/pin`;
 
+/** POST /api/v1/conversations/:id/messages/capture */
+export const byIdMessagesCapture = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/messages/capture`;
+
 /** GET /api/v1/conversations/:id/messages/search */
 export const byIdMessagesSearch = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/messages/search`;
 

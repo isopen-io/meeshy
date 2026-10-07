@@ -14,10 +14,11 @@ import UIKit
 /// luminosité monte au maximum le temps de la prise.
 nonisolated enum ComposerFrontFlash {
 
-    /// Le sol blanc — flash actif (`on` ou `auto` : l'écran ne sait pas mesurer
-    /// la lumière, donc « quand il faut » se lit « oui »), objectif avant,
-    /// viseur ouvert. Il reste allumé tant que le viseur l'est : l'auteur voit
-    /// son visage sous la lumière qui le prendra.
+    /// L'ÉCRAN est le flash — flash actif (`on` ou `auto` : l'écran ne sait pas
+    /// mesurer la lumière, donc « quand il faut » se lit « oui »), objectif
+    /// avant, viseur ouvert. Autour de la scène le sol blanc reste allumé :
+    /// l'auteur voit son visage sous la lumière qui le prendra ; en plein
+    /// écran, l'écran ne blanchit qu'à la prise (`ComposerCapturePlacement`).
     static func lightsFloor(flash: AVCaptureDevice.FlashMode,
                             position: AVCaptureDevice.Position,
                             stage: ComposerSceneCameraStage) -> Bool {
@@ -33,15 +34,6 @@ nonisolated enum ComposerFrontFlash {
         case .auto: return .auto
         default:    return .off
         }
-    }
-
-    /// En plein écran, l'aperçu couvre tout : il se retire d'un anneau pour
-    /// que le sol blanc reste visible autour de lui.
-    static let fullScreenRim: CGFloat = 28
-
-    static func previewRect(_ rect: CGRect, size: ComposerSceneCameraSize, floorLit: Bool) -> CGRect {
-        guard floorLit, size == .fullScreen else { return rect }
-        return rect.insetBy(dx: fullScreenRim, dy: fullScreenRim)
     }
 
     /// Le temps que l'écran monte à pleine luminosité avant le déclenchement.
@@ -145,10 +137,10 @@ nonisolated enum ComposerCameraFlash {
     }
 }
 
-/// **L'intensité du flash — un curseur de verre collé au bouton** (#8671,
+/// **L'intensité du flash — un curseur de verre sous le bouton** (#8671,
 /// directive porteur 2026-09-29 : « quand le flash est activé, une slide
-/// liquid glass s'allonge à droite, collée au bouton, pour décider de
-/// l'intensité du blanc du sol du composeur »).
+/// liquid glass […] pour décider de l'intensité du blanc du sol du
+/// composeur » ; verticale depuis le 2026-10-07, #9566).
 ///
 /// Une seule valeur, deux lumières : le BLANC du sol et la luminosité de
 /// l'écran à l'avant, la puissance de la torche à l'arrière. Elle est
@@ -173,16 +165,18 @@ nonisolated enum ComposerFlashIntensity {
         return min(range.upperBound, max(range.lowerBound, level))
     }
 
-    /// Le doigt posé à `x` sur une piste de `width` points.
-    static func level(atX x: CGFloat, width: CGFloat) -> Double {
-        guard width > 0 else { return defaultLevel }
-        let part = Double(min(max(x / width, 0), 1))
-        return range.lowerBound + part * (range.upperBound - range.lowerBound)
+    /// Le doigt posé à `y` sur une piste VERTICALE de `height` points : en
+    /// haut le plein, en bas le plancher (#9566).
+    static func level(atY y: CGFloat, height: CGFloat) -> Double {
+        guard height > 0 else { return defaultLevel }
+        let part = Double(min(max(y / height, 0), 1))
+        return range.upperBound - part * (range.upperBound - range.lowerBound)
     }
 
-    /// Ce que la piste REMPLIT pour un niveau — l'inverse de `level(atX:)`.
-    static func fill(_ level: Double) -> Double {
-        (clamped(level) - range.lowerBound) / (range.upperBound - range.lowerBound)
+    /// Où se pose le bouton, de 0 (en haut, plein) à 1 (en bas, plancher) —
+    /// l'inverse de `level(atY:)`.
+    static func thumbPosition(_ level: Double) -> CGFloat {
+        CGFloat((range.upperBound - clamped(level)) / (range.upperBound - range.lowerBound))
     }
 
     /// Le blanc du sol : le niveau lui-même, en luminance.

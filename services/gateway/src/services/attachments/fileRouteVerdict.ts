@@ -25,7 +25,9 @@
  *
  * Une clé qu'aucune ligne ne porte n'est PAS une pièce jointe de message —
  * média de post, son, sticker, export filigrané — et garde son régime
- * d'avant : ce module ne décide que pour ce qui lui appartient.
+ * d'avant : ce module ne décide que pour ce qui lui appartient. Exception :
+ * une clé à la FORME d'une piste traduite appartient à ce module même sans
+ * ligne, et se refuse (#9588).
  *
  * ─── PLUSIEURS LIGNES, UN FICHIER ───────────────────────────────────────────
  *
@@ -79,7 +81,8 @@ export async function resolveFileRouteVerdict(
   now: Date
 ): Promise<FileRouteVerdict> {
   const owners = await ownerRowsOf(storageKey, prisma);
-  return owners.length === 0 ? { kind: 'not-an-attachment' } : verdictFor(owners, prisma, now);
+  if (owners.length > 0) return verdictFor(owners, prisma, now);
+  return TRANSLATED_TRACK.test(storageKey) ? { kind: 'gone' } : { kind: 'not-an-attachment' };
 }
 
 /**
@@ -123,9 +126,14 @@ async function ownerRowsOf(storageKey: string, prisma: FileRouteVerdictPrisma): 
 /**
  * La piste porte l'identifiant de la ligne qui l'a fait naître ; ses copies
  * transférées partagent la carte de traductions, donc la piste, en même temps
- * que `filePath`. Une ligne disparue laisse la piste à son régime d'avant : ses
- * copies éventuelles ne se retrouvent pas sans balayer la collection, et
- * `deleteAttachment` efface la piste avec le dernier porteur.
+ * que `filePath`. Une ligne disparue REFUSE la piste (#9588) : `translated/`
+ * n'accueille que des pistes de pièces jointes de message, donc une clé de
+ * cette forme sans ligne n'a plus de porteur dont lire le cycle de vie — la
+ * servir comme un fichier ordinaire donnait un cache d'un an à la piste d'une
+ * flamme. Ses copies éventuelles ne se retrouvent pas sans balayer la
+ * collection (`forwardedFromAttachmentId` n'a pas d'index) : la copie encore
+ * vivante d'un vocal ordinaire dont la source est supprimée retombe sur
+ * l'audio d'origine.
  */
 async function ownerRowsSharingBytesOf(attachmentId: string, prisma: FileRouteVerdictPrisma): Promise<readonly OwnerRow[]> {
   const origin = await prisma.messageAttachment.findUnique({

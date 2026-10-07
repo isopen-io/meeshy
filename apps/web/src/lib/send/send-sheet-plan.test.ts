@@ -324,3 +324,24 @@ describe('planSend — les bornes', () => {
     expect(targetKeyOf(publish('REEL'))).toBe('publish:REEL');
   });
 });
+
+/** #9573 — la durée choisie pour une flamme transférée voyage dans l'étape de transfert, et nulle part ailleurs. */
+describe('planSend — la durée d’une flamme transférée', () => {
+  const flame = messages({ messages: [{ id: 'm1', content: 'Salut', originalLanguage: 'fr', maxDurationSeconds: 300 }] });
+  const target: SendTarget = { kind: 'conversation', conversationId: 'c1', label: 'C1' };
+
+  test('la durée choisie est portée par l’étape de transfert', () => {
+    const plan = planSend({ payload: flame, targets: [target], caption: '', viewerId: 'moi', forwardDuration: 60 });
+    expect(plan.ok && plan.entries[0]?.steps).toEqual([{ kind: 'forward', sourceConversationId: 'src', messages: flame.kind === 'messages' ? flame.messages : [], ephemeralDuration: 60 }]);
+  });
+
+  test('sans choix, l’étape ne porte rien : le transport retombe sur la durée de chaque source', () => {
+    const plan = planSend({ payload: flame, targets: [target], caption: '', viewerId: 'moi' });
+    expect(plan.ok && plan.entries[0]?.steps[0] !== undefined && 'ephemeralDuration' in plan.entries[0].steps[0]).toBe(false);
+  });
+
+  test('la légende qui suit un transfert de flamme ne porte pas de durée', () => {
+    const plan = planSend({ payload: flame, targets: [target], caption: 'regarde', viewerId: 'moi', forwardDuration: 60 });
+    expect(plan.ok && plan.entries[0]?.steps[1]).toEqual({ kind: 'text', text: 'regarde' });
+  });
+});

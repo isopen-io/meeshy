@@ -10,6 +10,7 @@
  * @see docs/product/streaks-badges-modele.md § 3, § 4
  */
 
+import type { MissionFactSignal } from '@meeshy/shared/utils/game/missions';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   BADGE_THRESHOLDS,
@@ -48,6 +49,8 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { ONE_DAY_MS, civilDayInTimezone, civilDayKey } from './civilDay';
 import { ConversationEngagementRecorder, dayCountsFor, isDailyCapReached } from './ConversationEngagementRecorder';
+import { PostPointsRecorder } from './PostPointsRecorder';
+import { EngagementReceipts, receiptBucket } from './EngagementReceipts';
 import { engagementScaleServiceFor, type EngagementScaleSource } from './EngagementScaleService';
 import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
@@ -96,6 +99,8 @@ type ElanInputs = {
   readonly timezone: string | null;
   /** Un e-mail ou un téléphone vérifié — ce qui ouvre les gros poids en entier. */
   readonly verified: boolean;
+  /** Le crédité est un COMPTE — la clé de participant d'un invité de lien n'en est pas un (#9569). */
+  readonly isAccount: boolean;
   readonly expiresAt: number;
 };
 
@@ -133,6 +138,11 @@ export type EngagementActivityOptions = {
    */
   readonly conversationId?: string;
   /**
+   * Le POST où le geste a eu lieu (#9569). Présent ⇒ les points crédités
+   * s'ajoutent à ce que ce post a rapporté au crédité, qui en est prévenu.
+   */
+  readonly postId?: string;
+  /**
    * La CIBLE du geste (post, appel, communauté, personne) — elle porte les
    * plafonds par cible et l'unicité d'un contenu lourd.
    */
@@ -144,6 +154,8 @@ export type EngagementActivityOptions = {
   readonly targetOwnerId?: string | null;
   /** La variante de points (visibilité d'une publication, position en direct ou statique). */
   readonly variant?: string;
+  /** Le contenu qui produit ce crédit (#9584) — une source ne crédite un post qu'une fois, et la retirer le reprend. */
+  readonly receipt?: string;
 };
 
 /** Ce qu'une visite de lien fait savoir au crédit. */
@@ -173,6 +185,10 @@ export class EngagementService {
 
   private readonly conversationRecorder: ConversationEngagementRecorder;
 
+  private readonly postRecorder: PostPointsRecorder;
+
+  private readonly receipts: EngagementReceipts;
+
   private readonly quotas: EngagementQuotas;
 
   /** Le jeu (#9374…#9377) : Vent arrière, frein de l'entre-soi, missions, Gloire. */
@@ -184,7 +200,9 @@ export class EngagementService {
   ) {
     this.scale = deps.scale ?? engagementScaleServiceFor(prisma);
     this.conversationRecorder = new ConversationEngagementRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
+    this.postRecorder = new PostPointsRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
     this.quotas = new EngagementQuotas(prisma);
+    this.receipts = new EngagementReceipts(prisma, this.quotas, this.postRecorder, this.scale);
     this.game = deps.game ?? new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey));
   }
 
@@ -248,6 +266,7 @@ export class EngagementService {
       levelRecord: typeof compte?.levelRecord === 'number' ? compte.levelRecord : null,
       timezone: typeof compte?.timezone === 'string' ? compte.timezone : null,
       verified: Boolean(compte?.emailVerifiedAt ?? compte?.phoneVerifiedAt),
+      isAccount: Boolean(compte),
       expiresAt: maintenant + ELAN_CACHE_TTL_MS,
     };
 
@@ -285,14 +304,18 @@ export class EngagementService {
    * palier `BADGE_THRESHOLDS` franchi par CET incrément précis (jamais un
    * recalcul complet) — un compteur qui passe de N à N+1 ne peut rendre
    * neuf qu'un palier dans `]N, N+1]`.
+   *
+   * Rend `true` quand le geste a été CRÉDITÉ, `false` quand une garde l'a refusé (son propre contenu, plafond
+   * du jour, garde d'abus, reçu déjà pris, quota) : les signaux de jeu d'un message (#9635) ne partent que sur
+   * un `true`, pour ne jamais faire avancer un défi que le crédit a refusé.
    */
   async recordActivity(
     userId: string,
     operationKey: EngagementOperationKey,
     options: EngagementActivityOptions = {},
-  ): Promise<void> {
+  ): Promise<boolean> {
     // Interagir avec ce qu'on a soi-même produit ne rapporte rien.
-    if (options.targetOwnerId && options.targetOwnerId === userId) return;
+    if (options.targetOwnerId && options.targetOwnerId === userId) return false;
 
     // UN SEUL élan pour ce geste, résolu avant toute écriture et partagé par le
     // compteur et le score : deux résolutions indépendantes pourraient tomber
@@ -326,7 +349,7 @@ export class EngagementService {
       operation.capScope === 'conversation-day' &&
       isDailyCapReached(conversationRow, today, operationKey, rule.cap)
     ) {
-      return;
+      return false;
     }
     // Les garde-fous de l'entre-soi (#9377), AVANT de consommer un seau de quota :
     // rien pour un message à soi, à un compte neuf ou bloqué ; ÷4 au-delà de 50
@@ -338,8 +361,10 @@ export class EngagementService {
       operationKey,
       dailyMessages: (dailyCounts['content.text_message'] ?? 0) + (dailyCounts['content.audio_message'] ?? 0),
     });
-    if (verdict === 'none') return;
+    if (verdict === 'none') return false;
     const points = verdict === 'quarter' ? quarterPoints(boosted) : boosted;
+    const receipt = options.receipt === undefined ? undefined : receiptBucket(options.receipt, options.postId);
+    if (receipt !== undefined && !(await this.receipts.claim(userId, operationKey, receipt))) return false;
     const admitted = await this.quotas.admit({
       userId,
       operationKey,
@@ -348,12 +373,17 @@ export class EngagementService {
       heavy,
       ...(options.targetId !== undefined ? { targetId: options.targetId } : {}),
     });
-    if (!admitted) return;
+    if (!admitted) return false;
 
     await this.credit(scale, userId, operationKey, points, options.actorId);
-    if (heavy && options.targetId !== undefined) {
-      await this.quotas.remember(userId, operationKey, options.targetId, points);
+    const rememberedTargetId = heavy ? options.targetId : undefined;
+    if (rememberedTargetId !== undefined) {
+      await this.quotas.remember(userId, operationKey, rememberedTargetId, points);
     }
+    if (options.postId !== undefined && inputs.isAccount) {
+      await this.postRecorder.record({ userId, postId: options.postId, operationKey, points, rememberedTargetId });
+    }
+    if (receipt !== undefined) await this.receipts.keep(userId, operationKey, receipt, rememberedTargetId === undefined ? points : 0);
 
     if (conversationId) {
       await this.conversationRecorder.record({
@@ -373,6 +403,7 @@ export class EngagementService {
       timezone: inputs.timezone,
       record: Math.max(levelFromScore(inputs.engagementScore), inputs.levelRecord ?? 0),
     });
+    return true;
   }
 
   /**
@@ -423,6 +454,16 @@ export class EngagementService {
   /** Un message committé (#9375, #9377) : signaux de mission et réponse reçue. */
   recordMessageSignals(input: MessageSignalInput): Promise<void> {
     return this.game.recordMessage(input);
+  }
+
+  /** Une conversation créée vide vient d'être démarrée par ce message (#9635) — sous la garde d'abus d'un message. */
+  recordConversationStarted(input: { readonly senderUserId: string; readonly conversationId: string }): Promise<void> {
+    return this.game.recordConversationStarted(input);
+  }
+
+  /** Un fait que la passerelle pose au point unique de son geste (#9635) : la mission et le duo qui l'attendent. */
+  recordGameSignal(userId: string, signal: MissionFactSignal, options: { readonly key?: string } = {}): Promise<void> {
+    return this.game.onSignal(userId, signal, options);
   }
 
   /**
@@ -494,31 +535,14 @@ export class EngagementService {
     return points;
   }
 
-  /**
-   * Un contenu lourd SUPPRIMÉ (#8959) : s'il a été publié il y a moins de
-   * `clawbackHours`, ses points sont repris — publier, supprimer, republier ne
-   * pompe rien. Le compteur perd l'action et ses points, le score les points ;
-   * les paliers déjà franchis restent acquis.
-   */
-  async reclaimContent(userId: string, operationKey: EngagementOperationKey, targetId: string): Promise<number> {
-    const scale = await this.scale.current();
-    const since = new Date(Date.now() - scale.abuse.clawbackHours * 3_600_000);
-    const points = await this.quotas.reclaim(userId, operationKey, targetId, since);
-    if (points <= 0) return 0;
-    await this.prisma.engagementCounter.updateMany({
-      where: { userId, axisKey: operationKey, points: { gte: points }, count: { gte: 1 } },
-      data: { count: { decrement: 1 }, points: { decrement: points } },
-    });
-    await this.prisma.$runCommandRaw({
-      findAndModify: 'User',
-      query: { _id: { $oid: userId } },
-      update: [
-        { $set: { engagementScore: { $max: [0, { $subtract: [{ $ifNull: ['$engagementScore', 0] }, points] }] } } },
-      ],
-      new: true,
-      fields: { engagementScore: 1 },
-    } as never);
-    return points;
+  /** Un contenu lourd SUPPRIMÉ dans la fenêtre du barème (#8959) : ses points de publication sont repris. */
+  reclaimContent(userId: string, operationKey: EngagementOperationKey, targetId: string): Promise<number> {
+    return this.receipts.reclaimPublication(userId, operationKey, targetId);
+  }
+
+  /** Un CONTENU retiré (#9584) : chaque crédit qu'il a produit est repris, une fois (`EngagementReceipts`). */
+  reclaimSource(userId: string, source: string, options: { readonly withinClawback?: boolean } = {}): Promise<number> {
+    return this.receipts.reclaim(userId, source, options);
   }
 
   /**

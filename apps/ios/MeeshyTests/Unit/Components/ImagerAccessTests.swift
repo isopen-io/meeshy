@@ -161,6 +161,7 @@ final class ImagerAccessTests: XCTestCase {
             attachmentFacts: ReplyReference.QuotedAttachmentFacts(thumbHash: nil, width: nil, height: nil, durationMs: 12_000, fileSize: nil, pageCount: nil, mimeType: "audio/mp4")
         )
         reference.quotedAudioTracks = .init(originalLanguage: "fr", urlsByLanguage: ["en": "https://x/q-en.m4a"])
+        reference.quotedExitNature = .ordinary
         var reply = MeeshyMessage(id: "r", conversationId: "c1", senderId: "u-me", content: "Trop bien !", originalLanguage: "fr", senderName: "Moi")
         reply.replyTo = reference
         return reply

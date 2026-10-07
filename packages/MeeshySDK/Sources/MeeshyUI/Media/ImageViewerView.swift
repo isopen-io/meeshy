@@ -23,6 +23,10 @@ public struct ImageViewerView: View {
     // in the scroll list). Dark/light comes reactively from the environment
     // instead (cf. ChatBubble.swift precedent).
     @Environment(\.colorScheme) private var colorScheme
+    /// Le portillon de sortie posé par l'hôte (#9573), reposé sur ce que cette vue présente.
+    @Environment(\.contentExitGate) private var exitGate
+    /// Le bouclier de capture de l'hôte (#9574), reposé sur ce que cette vue présente.
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
     @State private var showFullscreen = false
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
@@ -85,6 +89,8 @@ public struct ImageViewerView: View {
                 attachmentId: isOwnMessage ? nil : attachment.id,
                 onSaveRequested: onSaveRequested
             )
+            .contentExitGate(exitGate)
+            .captureShield(isCaptureShielded)
         }
     }
 
@@ -197,6 +203,8 @@ public struct ImageFullscreen: View {
     public var onSaveRequested: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    /// Le portillon de sortie posé par l'hôte (#9573) : fermé, l'enregistrement ne fait rien.
+    @Environment(\.contentExitGate) private var exitGate
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @State private var showControls = true
@@ -278,7 +286,7 @@ public struct ImageFullscreen: View {
             if showControls {
                 VStack {
                     FullscreenTopBar(onClose: { dismiss() }) {
-                        saveButton
+                        ContentExitGated { saveButton }
                     }
                     Spacer()
 
@@ -321,10 +329,12 @@ public struct ImageFullscreen: View {
                 systemImage: saveGlyph,
                 label: String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
             ) {
-                if let onSaveRequested {
-                    onSaveRequested()
-                } else {
-                    saveToPhotos()
+                exitGate.perform {
+                    if let onSaveRequested {
+                        onSaveRequested()
+                    } else {
+                        saveToPhotos()
+                    }
                 }
             }
             .disabled(saveState == .saved)
@@ -351,7 +361,7 @@ public struct ImageFullscreen: View {
     }
 
     private func saveToPhotos() {
-        guard let url = imageUrl else { return }
+        guard exitGate.mayLeave(), let url = imageUrl else { return }
         saveState = .saving
         HapticFeedback.light()
         Task {

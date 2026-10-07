@@ -18,9 +18,30 @@ import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubj
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { EngagementService } from './engagement/EngagementService';
-import { creditPostEngagement, type PostEngagementRecorder } from './posts/postEngagementCredits';
+import { creditPostEngagement, creditSource, reclaimContentCredits, removalReclaimsAuthorCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
+
+/**
+ * La forme d'un commentaire tel que sa CRÉATION le rend — et tel qu'un rejeu
+ * d'idempotence doit le resservir (#9603), à l'identique. `postId` est REQUIS
+ * par le service de la citation (#6578) : la relecture du média cité revérifie
+ * son appartenance au post commenté sur la LIGNE relue.
+ */
+const CREATED_COMMENT_SELECT = {
+  id: true,
+  content: true,
+  originalLanguage: true,
+  translations: true,
+  likeCount: true,
+  replyCount: true,
+  effectFlags: true,
+  parentId: true,
+  createdAt: true,
+  metadata: true,
+  postId: true,
+  author: { select: authorSelect },
+} as const;
 
 export class PostCommentService {
   private readonly trackingLinkService: TrackingLinkService;
@@ -157,24 +178,7 @@ export class PostCommentService {
             }
           : {}),
       },
-      select: {
-        id: true,
-        content: true,
-        originalLanguage: true,
-        translations: true,
-        likeCount: true,
-        replyCount: true,
-        effectFlags: true,
-        parentId: true,
-        createdAt: true,
-        metadata: true,
-        // `postId` est REQUIS par le service de la citation (#6578) : la
-        // re-lecture du média cité revérifie son appartenance au post commenté
-        // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
-        // écrites avant elle.
-        postId: true,
-        author: { select: authorSelect },
-      },
+      select: CREATED_COMMENT_SELECT,
     });
 
     // Lier le média pending au commentaire + persister la transcription mobile éventuelle.
@@ -376,6 +380,24 @@ export class PostCommentService {
   /// Relecture d'un commentaire au FORMAT de `updateComment` — pour le rejeu
   /// idempotent du PATCH (MutationLog) : une ligne Prisma brute n'a ni
   /// `author` ni `media`, et casserait le décodage côté client.
+  /**
+   * Le commentaire au format de sa création (`addComment` : même sélection,
+   * médias compris) — ce qu'un rejeu d'idempotence resert (#9603). `null` s'il
+   * a été supprimé depuis : le rejeu d'une création ne le ressuscite pas.
+   */
+  async getCommentAsCreated(commentId: string) {
+    const comment = await this.prisma.postComment.findFirst({
+      where: { id: commentId, deletedAt: NOT_DELETED },
+      select: CREATED_COMMENT_SELECT,
+    });
+    if (!comment) return null;
+    const media = await this.prisma.postMedia.findMany({
+      where: { commentId },
+      ...commentMediaInclude,
+    });
+    return { ...comment, media };
+  }
+
   async getCommentAsUpdateResult(commentId: string) {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
@@ -592,15 +614,17 @@ export class PostCommentService {
     // `commentCount` by the number of surviving descendants. Collect the subtree
     // breadth-first and remove it atomically-in-count.
     const descendantIds: string[] = [];
+    const descendantAuthors: Array<{ readonly id: string; readonly authorId: string }> = [];
     let frontier = [commentId];
     while (frontier.length > 0) {
       const children = await this.prisma.postComment.findMany({
         where: { parentId: { in: frontier }, deletedAt: NOT_DELETED },
-        select: { id: true },
+        select: { id: true, authorId: true },
       });
       if (children.length === 0) break;
       const childIds = children.map((c) => c.id);
       descendantIds.push(...childIds);
+      descendantAuthors.push(...children);
       frontier = childIds;
     }
 
@@ -615,6 +639,14 @@ export class PostCommentService {
       where: { id: { in: deletedCommentIds } },
       data: { deletedAt },
     });
+
+    // Ce que chaque commentaire retiré a rapporté à SON auteur se reprend
+    // selon `removalReclaimsAuthorCredits` (#9584) : la cible, retirée par son
+    // auteur, oui ; les réponses des AUTRES qu'elle emporte, non. Une
+    // suppression rejouée ne reprend rien.
+    [{ id: commentId, authorId: comment.authorId }, ...descendantAuthors]
+      .filter(({ authorId }) => removalReclaimsAuthorCredits({ removedBy: userId, authorId, byModeration: false }))
+      .forEach(({ id, authorId }) => reclaimContentCredits(this.prisma, authorId, creditSource.comment(id), {}, this.engagement));
 
     await this.prisma.post.update({
       where: { id: comment.postId },
@@ -672,7 +704,7 @@ export class PostCommentService {
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
-      select: { id: true, authorId: true },
+      select: { id: true, postId: true, authorId: true },
     });
     if (!comment) return null;
 
@@ -722,16 +754,23 @@ export class PostCommentService {
     // L'upsert reste idempotent (❤️ sur ❤️ ne change rien), donc le REST demeure
     // un FALLBACK sûr du socket, sans double-comptage si les deux se
     // déclenchent sur le même geste.
-    await this.prisma.commentReaction.upsert({
+    const like = await this.prisma.commentReaction.upsert({
       where: { comment_user_reaction_unique: { commentId, userId, emoji } },
       create: { commentId, userId, emoji },
       update: {},
+      select: { id: true },
     });
     // `tool.comment_like` (#8959) — seulement quand CET emoji n'était pas déjà
     // posé : reconfirmer (ou passer en repli derrière le socket, qui l'a déjà
     // écrit et crédité) ne recrédite pas.
     if (!alreadyHasThisEmoji) {
-      creditPostEngagement(this.prisma, userId, 'tool.comment_like', { targetId: commentId, targetOwnerId: comment.authorId }, this.engagement);
+      creditPostEngagement(
+        this.prisma,
+        userId,
+        'tool.comment_like',
+        { postId: comment.postId, targetId: commentId, targetOwnerId: comment.authorId, receipt: creditSource.commentReaction(like.id) },
+        this.engagement,
+      );
     }
     return this.syncCommentLikeCounters(commentId);
   }
@@ -764,7 +803,7 @@ export class PostCommentService {
     const pile = await this.prisma.commentReaction.findMany({
       where: { commentId, userId, ...(requested ? { emoji: requested } : {}) },
       orderBy: { createdAt: 'desc' },
-      select: { emoji: true },
+      select: { id: true, emoji: true },
       take: 1,
     });
     const cible = pile[0]?.emoji ?? null;
@@ -774,6 +813,8 @@ export class PostCommentService {
     }
 
     await this.prisma.commentReaction.deleteMany({ where: { commentId, userId, emoji: cible } });
+    // Retirer le like reprend ce qu'il a rapporté (#9584).
+    reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(pile[0]!.id), {}, this.engagement);
     // `removedEmoji` voyage AVEC le commentaire, exactement comme sur le chemin
     // des publications (`PostService.unlikePost`). La route diffuse ce que le
     // serveur a FAIT, jamais ce que le client a DEMANDÉ : sans lui, un retrait

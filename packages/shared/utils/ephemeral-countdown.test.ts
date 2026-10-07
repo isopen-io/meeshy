@@ -343,3 +343,88 @@ describe('la destruction d\'un message cité entraîne ses réponses (#8630)', (
     expect(isInheritedEphemeralServable({ inheritedExpiresAt: null, now: OWN_DEATH })).toBe(true);
   });
 });
+
+describe('la COPIE transférée d\'une flamme — durée ET après lecture, le premier des deux l\'emporte (#9588)', () => {
+  const COPY = MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
+  const DURATION = 30;
+  const SENDER_DEADLINE = at(DURATION * 1000);
+  const copy = { ephemeralDuration: DURATION, effectFlags: COPY, isSender: true } as const;
+
+  it('sert à l\'EXPÉDITEUR « envoi + durée » quand personne n\'a reçu — plus jamais « aucune échéance »', () => {
+    expect(
+      servedEphemeralExpiresAt({ ...copy, sentAt: SENT_AT, rawExpiresAt: at(DURATION * 1000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS) }),
+    ).toEqual(SENDER_DEADLINE);
+  });
+
+  it('ne repousse pas l\'échéance de l\'expéditeur quand un destinataire reçoit TARD', () => {
+    const lateDeadline = at(50 * 60 * 1000 + DURATION * 1000);
+    expect(
+      servedEphemeralExpiresAt({
+        ...copy,
+        sentAt: SENT_AT,
+        latestRecipientDeadline: lateDeadline,
+        rawExpiresAt: new Date(lateDeadline.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS),
+      }),
+    ).toEqual(SENDER_DEADLINE);
+  });
+
+  it('rapproche l\'échéance de l\'expéditeur quand tous ont consommé AVANT la durée', () => {
+    expect(
+      servedEphemeralExpiresAt({ ...copy, sentAt: SENT_AT, rawExpiresAt: at(5_000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS) }),
+    ).toEqual(at(5_000));
+  });
+
+  it('sans l\'heure d\'envoi, borne par la destruction moins la grâce — jamais « aucune échéance »', () => {
+    expect(
+      servedEphemeralExpiresAt({ ...copy, rawExpiresAt: at(DURATION * 1000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS) }),
+    ).toEqual(SENDER_DEADLINE);
+  });
+
+  it('accepte une heure d\'envoi sérialisée', () => {
+    expect(servedEphemeralExpiresAt({ ...copy, sentAt: SENT_AT.toISOString() })).toEqual(SENDER_DEADLINE);
+  });
+
+  it('sert au DESTINATAIRE son propre D(u), que la consommation a pu rapprocher', () => {
+    expect(
+      servedEphemeralExpiresAt({ ...copy, isSender: false, sentAt: SENT_AT, readerDeadline: at(90_000) }),
+    ).toEqual(at(90_000));
+  });
+
+  it('laisse la flamme-œil SANS durée à sa règle : son expéditeur ne reçoit aucune échéance', () => {
+    expect(
+      servedEphemeralExpiresAt({ effectFlags: COPY, isSender: true, sentAt: SENT_AT, rawExpiresAt: at(EPHEMERAL_UNRECEIVED_RETENTION_MS) }),
+    ).toBeNull();
+  });
+
+  it('cesse de servir la copie à son expéditeur une heure après « envoi + durée »', () => {
+    const servedExpiresAt = servedEphemeralExpiresAt({ ...copy, sentAt: SENT_AT });
+    const servable = (now: Date) =>
+      isEphemeralServable({ ephemeralDuration: DURATION, effectFlags: COPY, servedExpiresAt, now });
+
+    expect(servable(at(DURATION * 1000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS - 1))).toBe(true);
+    expect(servable(at(DURATION * 1000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS))).toBe(false);
+  });
+
+  it('borne la destruction d\'une copie que personne n\'a reçue à « envoi + durée + grâce », pas à sept jours', () => {
+    expect(
+      ephemeralDestructionAt({ sentAt: SENT_AT, ephemeralDuration: DURATION, effectFlags: COPY, recipientDeadlines: [] }),
+    ).toEqual(at(DURATION * 1000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS));
+  });
+
+  it('laisse sept jours à une flamme à durée ORDINAIRE que personne n\'a reçue', () => {
+    expect(
+      ephemeralDestructionAt({
+        sentAt: SENT_AT,
+        ephemeralDuration: DURATION,
+        effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL,
+        recipientDeadlines: [],
+      }),
+    ).toEqual(at(EPHEMERAL_UNRECEIVED_RETENTION_MS));
+  });
+
+  it('suit le dernier décompte lancé dès qu\'un destinataire de la copie a reçu', () => {
+    expect(
+      ephemeralDestructionAt({ sentAt: SENT_AT, ephemeralDuration: DURATION, effectFlags: COPY, recipientDeadlines: [at(90_000)] }),
+    ).toEqual(at(90_000 + EPHEMERAL_UNAVAILABILITY_GRACE_MS));
+  });
+});

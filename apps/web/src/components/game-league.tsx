@@ -5,10 +5,12 @@ import type { LeagueKey, LeagueZone } from '@meeshy/shared/utils/game/league';
 
 import { formatCount, gameText, pointsLabel } from '@/lib/view/game-copy';
 import { leagueName, remainingLabel, weekLabel, zoneLabel } from '@/lib/view/game-copy-v2';
+import { gemDetail, playerDetail } from '@/lib/view/game-detail';
 
 import { CHOSEN_PSEUDONYM_OPEN, GameLeagueConsent, PseudonymField } from './game-league-consent';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GameCard, GameChip } from './game-surface';
 import { LeagueGem } from './game/league-gem';
+import { GameTouch } from './game-touch';
 import { Trophy } from './game/trophy';
 
 /**
@@ -36,18 +38,19 @@ export type WeekState =
   | { readonly status: 'error'; readonly message: string }
   | { readonly status: 'ready'; readonly week: LeagueWeekResponse };
 
-function StandingRow({ entry }: { readonly entry: LeagueWeekEntry }) {
+function StandingRow({ entry, league }: { readonly entry: LeagueWeekEntry; readonly league: LeagueKey | undefined }) {
   return (
-    <li
-      data-game-standing={entry.rank}
-      data-game-me={entry.isMe ? '' : undefined}
-      className="flex items-center gap-3 rounded-chip px-3"
-      style={{
-        minHeight: 44,
-        backgroundColor: entry.isMe ? `color-mix(in srgb, ${GAME_BRAND} 14%, transparent)` : 'transparent',
-        borderInlineStart: `3px solid ${ZONE_TINT[entry.zone]}`,
-      }}
-    >
+    <li data-game-standing={entry.rank} data-game-me={entry.isMe ? '' : undefined}>
+      {/* La ligne se touche : ses précisions ne disent rien de plus qu'elle (pseudonyme, place, points, zone) — jamais une présence. */}
+      <GameTouch
+        detail={league === undefined ? null : playerDetail(entry, league)}
+        className="flex w-full items-center gap-3 rounded-chip px-3"
+        style={{
+          minHeight: 44,
+          backgroundColor: entry.isMe ? `color-mix(in srgb, ${GAME_BRAND} 14%, transparent)` : 'transparent',
+          borderInlineStart: `3px solid ${ZONE_TINT[entry.zone]}`,
+        }}
+      >
       <span className="w-7 shrink-0 text-body font-bold tabular-nums" style={{ color: GAME_INK_2 }}>
         {formatCount(entry.rank)}
       </span>
@@ -69,12 +72,13 @@ function StandingRow({ entry }: { readonly entry: LeagueWeekEntry }) {
       <span className="shrink-0 text-caption font-semibold tabular-nums" style={{ color: GAME_INK }}>
         {pointsLabel(entry.weekPoints)}
       </span>
+      </GameTouch>
     </li>
   );
 }
 
 /** Le classement du groupe : les zones se nomment (le texte, pas seulement la couleur). */
-export function LeagueStandings({ entries }: { readonly entries: readonly LeagueWeekEntry[] }) {
+export function LeagueStandings({ entries, league }: { readonly entries: readonly LeagueWeekEntry[]; readonly league?: LeagueKey | undefined }) {
   let previous: LeagueZone | null = null;
   return (
     <ol className="flex flex-col gap-1" data-game-standings="">
@@ -93,7 +97,7 @@ export function LeagueStandings({ entries }: { readonly entries: readonly League
                 {zoneLabel(entry.zone)}
               </li>
             ) : null}
-            <StandingRow entry={entry} />
+            <StandingRow entry={entry} league={league} />
           </Fragment>
         );
       })}
@@ -160,7 +164,9 @@ function PlacedHeader({ league, now }: { readonly league: GameLeagueBlock; reado
         : gameText('game.league.to_promotion', { points: pointsLabel(current.pointsToPromotion) });
   return (
     <div className="flex items-center gap-3">
-      <LeagueGem league={key} size={64} />
+      <GameTouch detail={gemDetail(league)} named className="grid shrink-0 place-items-center rounded-card">
+        <LeagueGem league={key} size={64} />
+      </GameTouch>
       <div className="flex min-w-0 flex-col gap-0.5">
         <p className="text-title font-bold" style={{ color: GAME_INK }}>
           {leagueName(key)}
@@ -213,7 +219,7 @@ export function GameLeague(props: GameLeagueProps) {
         <h2 id="game-league-standings-title" className="sr-only">
           {gameText('game.league.tab.mine')}
         </h2>
-        {week.status === 'ready' && week.week.entries.length > 0 ? <LeagueStandings entries={week.week.entries} /> : null}
+        {week.status === 'ready' && week.week.entries.length > 0 ? <LeagueStandings entries={week.week.entries} league={league.current?.league} /> : null}
         {week.status === 'ready' && week.week.entries.length === 0 ? (
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.league.empty')}

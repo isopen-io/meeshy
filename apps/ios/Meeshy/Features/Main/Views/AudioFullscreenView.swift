@@ -252,6 +252,8 @@ private struct AudioFullscreenPage: View {
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
 
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
+    @Environment(\.contentExitGate) private var exitGate
+    @Environment(\.isCaptureShielded) private var isCaptureShielded // #9574 : un son protégé ne part pas sur AirPlay
 
     init(item: AudioFullscreenSource,
          contactColor: String,
@@ -611,7 +613,7 @@ private struct AudioFullscreenPage: View {
 
             Spacer()
 
-            downloadButton
+            ContentExitGated(contentId: attachment.id) { downloadButton }
         }
     }
 
@@ -687,6 +689,8 @@ private struct AudioFullscreenPage: View {
     }
 
     private func requestSave() {
+        saveCoordinator.exitGate = exitGate
+        guard exitGate.mayLeave(attachment.id) else { return }
         HapticFeedback.light()
         saveCoordinator.requestSave(MediaSaveRequest(
             kind: .audio,
@@ -766,10 +770,12 @@ private struct AudioFullscreenPage: View {
             }
             .accessibilityLabel(String(localized: "media.skipForward10s", defaultValue: "Avancer de 10 secondes", bundle: .main))
 
-            AirPlayRoutePicker(tintColor: .white, prioritizesVideoDevices: false)
-                .frame(width: 44, height: 44)
-                .accessibilityLabel(String(localized: "audio.fullscreen.airplay",
-                    defaultValue: "Diffuser sur un appareil", bundle: .main))
+            if !isCaptureShielded {
+                AirPlayRoutePicker(tintColor: .white, prioritizesVideoDevices: false)
+                    .frame(width: 44, height: 44)
+                    .accessibilityLabel(String(localized: "audio.fullscreen.airplay",
+                        defaultValue: "Diffuser sur un appareil", bundle: .main))
+            }
         }
     }
 
@@ -1178,6 +1184,7 @@ extension View {
                 startAttachmentId: src.attachment.id,
                 contactColor: accentColor
             )
+            .contentExitGate(.open) // un son de publication sort ; le défaut est fermé (#9573)
         }
     }
 }

@@ -1,22 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { Glyph } from '@/components/glyph';
-import { GlassBack } from '@/components/glass-surface';
+import { GameDetailHost } from '@/components/game-detail-sheet';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api/engagement';
 import { useGameSettings } from '@/lib/game/use-game-settings';
 import { useOnline } from '@/lib/net/online';
-import { Link } from '@/routes/route-table';
-import { BRAND, INK, INK_2, ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
+import { ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
+import { OfflineNotice, ProgressionShell } from '@/routes/progression-shell';
 
 import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
-const BACK = 'grid size-11 shrink-0 place-items-center';
 
 /**
- * LE CADRE D'UNE PAGE DÉDIÉE — Badges, Défis, Succès (#5843).
+ * LE CADRE D'UNE PAGE DÉDIÉE — Badges, Défis, Succès (#5843), puis toutes les
+ * pages de données de Progression. Son en-tête, son défilement et son RETOUR
+ * sont ceux de la coquille partagée (`progression-shell.tsx`, #9563), qui lit le
+ * parent de la page dans la carte de navigation ; il monte aussi l'hôte de la
+ * modale de précisions.
  *
  * Les trois partagent tout sauf leur contenu : le retour en verre à gauche, le
  * titre, et le COMPTE en haut à droite (« 21 / 85 ») que le porteur a demandé.
@@ -33,16 +35,11 @@ export function ProgressionPage({
   titre,
   teinte,
   compte,
-  concept,
+  fiche,
   children,
 }: {
-  /**
-   * Le concept dont cette page est la SOUS-PAGE (#9563) : « retour » ramène alors
-   * à sa fiche — le sous-menu d'où l'on vient — et non à la première page.
-   * Absent : la page est une fiche ou le tableau de bord, « retour » ramène à
-   * Progression.
-   */
-  concept?: ProgressionConcept;
+  /** La fiche que cette page EST (#9563) : la modale de précisions n'y propose pas « Voir la fiche » de ce concept. */
+  fiche?: ProgressionConcept;
   titre: string;
   teinte: string;
   /** Ce qui s'affiche en haut à droite — `null` quand la page n'a rien à compter. */
@@ -58,55 +55,29 @@ export function ProgressionPage({
   });
 
   const total = query.data === undefined ? null : compte(query.data);
-  const back = (
-    <GlassBack label="Retour à la progression">
-      <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
-    </GlassBack>
-  );
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <header className="glass z-10 shrink-0">
-        <div className="flex items-center gap-2 px-4 py-2">
-          {concept === undefined ? (
-            <Link to="progression" className={BACK} style={{ color: BRAND }} aria-label="Retour à la progression">
-              {back}
-            </Link>
-          ) : (
-            <Link to="progressionConcept" params={{ concept }} className={BACK} style={{ color: BRAND }} aria-label="Retour à la progression" data-page-back={concept}>
-              {back}
-            </Link>
-          )}
-          <h1 className="flex-1 truncate text-title font-bold" style={{ color: INK }}>
-            {titre}
-          </h1>
-          {total === null ? null : (
-            <span className="shrink-0 text-body font-bold" style={{ color: teinte }}>
-              {total}
-            </span>
-          )}
-        </div>
-        {online ? null : (
-          <p
-            role="status"
-            className="flex items-center justify-center gap-1.5 px-4 py-1 text-check font-semibold"
-            style={{ backgroundColor: 'color-mix(in srgb, var(--color-warn) 22%, transparent)', color: INK_2 }}
-          >
-            <Glyph name="warningCircle" size={11} />
-            Hors ligne — tel qu’à la dernière ouverture
-          </p>
-        )}
-      </header>
-
-      <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
-        {query.data !== undefined ? (
+    <ProgressionShell
+      title={titre}
+      trailing={
+        total === null ? null : (
+          <span className="shrink-0 text-body font-bold" style={{ color: teinte }}>
+            {total}
+          </span>
+        )
+      }
+      notice={online ? null : <OfflineNotice>Hors ligne — tel qu’à la dernière ouverture</OfflineNotice>}
+    >
+      {query.data !== undefined ? (
+        <>
           <div className="flex flex-col gap-5 px-4 py-3">{children(query.data)}</div>
-        ) : query.isError ? (
-          <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />
-        ) : (
-          <ProgressionSkeleton />
-        )}
-      </main>
-    </div>
+          <GameDetailHost progress={query.data} fiche={fiche} />
+        </>
+      ) : query.isError ? (
+        <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />
+      ) : (
+        <ProgressionSkeleton />
+      )}
+    </ProgressionShell>
   );
 }

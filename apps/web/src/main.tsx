@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand/react';
 
 import './styles/app.css';
+import './styles/sealed-exit.css';
 
 import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
@@ -14,6 +15,7 @@ import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
 import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
 import { useAnonymousScope } from '@/lib/view/use-anonymous-scope';
+import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';
 import { Router, href, navigate } from '@/routes/route-table';
 
 /**
@@ -134,6 +136,11 @@ function InterfaceLanguageRoot({ children }: { children: ReactNode }) {
 const root = document.getElementById('root');
 if (!root) throw new Error('#root absent du document');
 
+/* Les sorties natives du navigateur sont annulées sur toute surface scellée
+   (#9573) — installée SYNCHRONEMENT avant le premier rendu : aucune peinture
+   sans garde, et aucun chunk à la demande dont l'échec la laisserait absente. */
+installSealedExitGuard(document);
+
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={appQueryClient}>
@@ -155,6 +162,7 @@ createRoot(root).render(
  * `scripts/measure-weight.mjs`).
  */
 void import('@/lib/api/realtime');
+
 
 /**
  * UN LIEN MEESHY OUVERT PAR LE SYSTÈME MÈNE À SON ÉCRAN (#5819) — la coque

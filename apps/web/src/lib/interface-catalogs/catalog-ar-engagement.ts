@@ -8,9 +8,13 @@ const arEngagement = {
   'engagement.pill.streak.other': 'سلسلة {count} أيام',
   'engagement.pill.points.one': '{total} نقطة، منها {today} اليوم',
   'engagement.pill.points.other': '{total} نقاط، منها {today} اليوم',
+  'engagement.pill.total.one': '{total} نقطة مكتسبة في هذه المحادثة',
+  'engagement.pill.total.other': '{total} نقاط مكتسبة في هذه المحادثة',
   'engagement.pill.join': '{streak}، {points}',
   'engagement.pill.open': 'فتح تقدّمي',
   'engagement.flame.label': '{count} نقطة اليوم — المس لإخفاء الشعلة',
+  'engagement.post.points.one': 'منحك هذا المنشور {count} نقطة',
+  'engagement.post.points.other': 'منحك هذا المنشور {count} نقاط',
 } as const;
 
 export default arEngagement;

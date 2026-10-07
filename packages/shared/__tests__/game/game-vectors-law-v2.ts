@@ -60,11 +60,12 @@ import { prestigeTransition } from '../../utils/game/prestige.js';
 import {
   achievementGloryAtEarning,
   measureRarity,
-  mythicUserIds,
   rarityFromShare,
   rarityShareDisplayable,
   RARITY_BORDERS,
 } from '../../utils/game/rarity.js';
+import { assignMythicSeats, mythicCrossedAt, type GloryGain, type MythicArrival } from '../../utils/game/mythe.js';
+import { mythicSignature } from '../../utils/game/mythic-signature.js';
 import {
   canBuySeal,
   claimSeasonStep,
@@ -154,7 +155,9 @@ export type GameVectorInputV2 =
   | { readonly law: 'prestige'; readonly score: number; readonly prestige: number }
   | { readonly law: 'rarity'; readonly holders: number; readonly population: number }
   | { readonly law: 'rarity-display'; readonly holders: number; readonly population: number }
-  | { readonly law: 'mythic'; readonly candidates: readonly { readonly userId: string; readonly glory: number }[] }
+  | { readonly law: 'mythic-seats'; readonly taken: readonly number[]; readonly seated: readonly string[]; readonly arrivals: readonly MythicArrival[] }
+  | { readonly law: 'mythic-crossing'; readonly gains: readonly GloryGain[] }
+  | { readonly law: 'mythic-signature'; readonly edition: number }
   | { readonly law: 'badge-tier'; readonly count: number; readonly threshold: number }
   | { readonly law: 'badge-served'; readonly knowsExtendedTiers: boolean }
   | { readonly law: 'guide-v2'; readonly event: GuideEventV2; readonly seen: readonly string[] }
@@ -200,7 +203,9 @@ export const GAME_VECTOR_LAWS_V2 = [
   'prestige',
   'rarity',
   'rarity-display',
-  'mythic',
+  'mythic-seats',
+  'mythic-crossing',
+  'mythic-signature',
   'badge-tier',
   'badge-served',
   'guide-v2',
@@ -341,8 +346,12 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
     }
     case 'rarity-display':
       return { displayable: rarityShareDisplayable(input) };
-    case 'mythic':
-      return { ids: mythicUserIds(input.candidates) };
+    case 'mythic-seats':
+      return { grants: assignMythicSeats(input) };
+    case 'mythic-crossing':
+      return { crossedAt: mythicCrossedAt(input.gains) };
+    case 'mythic-signature':
+      return { signature: mythicSignature(input.edition) };
     case 'badge-tier':
       return {
         materialOfThreshold: badgeMaterial(input.threshold),
@@ -687,11 +696,30 @@ export function buildGameVectorsV2() {
     [500, 1000],
   ].map(([holders, population]) => vector(`affichage de la rareté, ${holders} détenteurs sur ${population}`, { law: 'rarity-display', holders: holders!, population: population! }));
 
+  const hundred = Array.from({ length: 100 }, (_, i) => i + 1);
+  const arrivalAt = (userId: string, day: number, glory = 1_000_000): MythicArrival => ({ userId, glory, crossedAt: `2027-01-${String(day).padStart(2, '0')}T00:00:00.000Z` });
   const mythics = [
-    [],
-    [{ userId: 'a', glory: 80_010 }, { userId: 'b', glory: 79_999 }, { userId: 'c', glory: 80_500 }],
-    Array.from({ length: 120 }, (_, i) => ({ userId: `u${String(i).padStart(3, '0')}`, glory: 80_000 + (i % 7) })),
-  ].map((candidates, i) => vector(`Mythe, cas ${i + 1}`, { law: 'mythic', candidates }));
+    vector('places du Mythe : aucune arrivée', { law: 'mythic-seats', taken: [], seated: [], arrivals: [] }),
+    vector('places du Mythe : ordre d’arrivée, puis identifiant, 999 999 refusé', {
+      law: 'mythic-seats',
+      taken: [1, 2, 4],
+      seated: ['z'],
+      arrivals: [arrivalAt('b', 2), arrivalAt('a', 2), arrivalAt('c', 1), arrivalAt('z', 1), arrivalAt('low', 1, 999_999)],
+    }),
+    vector('places du Mythe : la 100e se prend, la 101e jamais', { law: 'mythic-seats', taken: hundred.slice(0, 99), seated: [], arrivals: [arrivalAt('u1', 1), arrivalAt('u2', 2)] }),
+    vector('places du Mythe : toutes prises', { law: 'mythic-seats', taken: hundred, seated: [], arrivals: [arrivalAt('u1', 1)] }),
+    vector('places du Mythe : une place libérée revient au plus ancien en attente', { law: 'mythic-seats', taken: hundred.filter((n) => n !== 12), seated: [], arrivals: [arrivalAt('late', 5), arrivalAt('early', 2), arrivalAt('mid', 3)] }),
+    vector('arrivée au Mythe : premier gain qui atteint le seuil', {
+      law: 'mythic-crossing',
+      gains: [
+        { delta: 500_000, createdAt: '2027-01-02T00:00:00.000Z' },
+        { delta: 600_000, createdAt: '2027-03-01T00:00:00.000Z' },
+        { delta: 500_000, createdAt: '2026-12-01T00:00:00.000Z' },
+      ],
+    }),
+    vector('arrivée au Mythe : seuil jamais atteint', { law: 'mythic-crossing', gains: [{ delta: 999_999, createdAt: '2027-01-01T00:00:00.000Z' }] }),
+    ...[1, 2, 10, 11, 42, 50, 91, 100, 101, 301, 1234, 409_600, 409_601, 0].map((edition) => vector(`Signature unique de l’émission ${edition}`, { law: 'mythic-signature', edition })),
+  ];
 
   const badgeTiers = [
     [0, 1],

@@ -42,7 +42,16 @@ extension ConversationView {
         return reply.authorName
     }
 
+    /// #9574 — la réponse en cours à un contenu qui disparaît montre ce
+    /// contenu : elle se rend dans la couche sécurisée. Le message cité réel,
+    /// quand il est dans la fenêtre, fait foi.
     func composerReplyBanner(_ reply: ReplyReference) -> some View {
+        let quoted = viewModel.messages.first { $0.id == reply.messageId }
+        return composerReplyBannerBody(reply)
+            .captureShield(reply.quotedCapture(quotedMessage: quoted).shieldsCapture())
+    }
+
+    private func composerReplyBannerBody(_ reply: ReplyReference) -> some View {
         // Les faits du média cité — « 1024×768 · 0:42 · 1,2 Mo » —, résolus UNE
         // fois : la ligne qui les montre et l'énoncé VoiceOver les partagent.
         // `nil` pour un média protégé (règle partagée, site unique).

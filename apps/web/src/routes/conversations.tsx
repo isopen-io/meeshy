@@ -37,6 +37,8 @@ import { webOriginOf } from '@/lib/links/web-origin';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
+import { createDayPillRevealSubscriber } from '@/lib/view/day-pill-reveal';
+import { useLensMetaReveal } from '@/lib/view/lens-meta-reveal';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -326,6 +328,14 @@ export default function ConversationsScreen() {
    * conversations » au-dessus d'un `role="alert"` masquerait l'alerte pour
    * un lecteur d'écran, qui n'annonce pas le contenu d'une région occupée. */
   const loading = list.data === undefined && !list.isError;
+  /**
+   * L'HEURE ET LES POINTS DES RANGÉES NE PARAISSENT QU'AU DÉFILEMENT (#9570) —
+   * la loi de la pilule de jour du fil, projetée sur `data-row-meta` de CE
+   * scrollport hors React (`lib/view/lens-meta-reveal.ts`). Une fois à
+   * l'ouverture, dès que la première page est là.
+   */
+  const subscribeRowMeta = useMemo(() => createDayPillRevealSubscriber(frame), []);
+  useLensMetaReveal(frame, { subscribe: subscribeRowMeta, ready: list.data !== undefined });
   /**
    * LA PAGINATION (#6195) — `paginationStateOf` DÉRIVE les quatre cas des
    * drapeaux de `useInfiniteQuery`, jamais tenus à part. La SENTINELLE qui

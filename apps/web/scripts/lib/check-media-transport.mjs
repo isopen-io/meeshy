@@ -1,5 +1,10 @@
 /**
- * T1-T5 — LA BARRE DE LECTURE DE LA VISIONNEUSE (#6359), AU NAVIGATEUR. Les
+ * T1-T6 — LA BARRE DE LECTURE DE LA VISIONNEUSE (#6359, #9577, #9578), AU NAVIGATEUR.
+ * Depuis #9578, la barre COLLE sous la scène et la colonne d'actions flotte
+ * SUR la scène, à son bord de fin, sans lui prendre de hauteur (T1 ter).
+ * Depuis #9577, la barre ne porte que la piste, d'un bord à l'autre de
+ * l'écran ; le muet et « ⋯ » vivent dans la colonne d'actions
+ * (`[data-viewer-video-controls]`) et la durée sur la ligne d'informations. Les
  * témoins unitaires (`media-transport.test.tsx`, `media-viewer.test.tsx`)
  * posent la durée et la position à la main ; ici, c'est Chromium qui décode
  * la vraie vidéo de `media-12` (WebM 7 s, `fixtures-media-grid.ts`) et qui dit
@@ -67,6 +72,63 @@ export async function checkViewerVideoTransport({ browser, BASE, expect, setSche
     (await page.locator('[data-media-viewer] [data-viewer-page] [role="slider"]').count()) === 0,
     `${label} la piste n'est jamais posée sur le média`,
   );
+  // ===== T1 bis (#9577) — la piste prend toute la largeur de l'écran, au-dessus de la ligne d'informations et de la pellicule =====
+  const geometry = await page.evaluate(() => {
+    const rectOf = (selector) => {
+      const el = document.querySelector(selector);
+      if (el === null) return null;
+      const rect = el.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    };
+    return {
+      viewport: window.innerWidth,
+      slider: rectOf('[data-viewer-transport-slot] [role="slider"]'),
+      info: rectOf('[data-media-viewer] [data-viewer-meta]'),
+      strip: rectOf('[data-media-viewer] [data-filmstrip-item]'),
+      stage: rectOf('[data-media-viewer] .media-viewer-track-frame'),
+      slot: rectOf('[data-viewer-transport-slot]'),
+      layer: rectOf('[data-media-viewer]'),
+      top: rectOf('[data-viewer-top-bar]'),
+      bottom: rectOf('[data-viewer-bottom-bar]'),
+      column: rectOf('[data-viewer-stage-rail]'),
+      columnButtons: Array.from(document.querySelectorAll('[data-viewer-stage-rail] button')).map((b) => {
+        const rect = b.getBoundingClientRect();
+        return { width: rect.width, height: rect.height, bottom: rect.bottom };
+      }),
+      actionsInCorridor: document.querySelectorAll('[data-viewer-bottom-bar] [data-viewer-action]').length,
+    };
+  });
+  expect(
+    geometry.slider !== null && geometry.slider.left <= 0.5 && geometry.slider.right >= geometry.viewport - 0.5,
+    `${label} la piste va d'un bord à l'autre de l'écran (${JSON.stringify(geometry.slider)} pour ${geometry.viewport})`,
+  );
+  expect(
+    geometry.slider !== null && geometry.stage !== null && geometry.info !== null && geometry.strip !== null &&
+      geometry.stage.bottom <= geometry.slider.top + 0.5 && geometry.slider.bottom <= geometry.info.top + 0.5 && geometry.info.bottom <= geometry.strip.top + 0.5,
+    `${label} de haut en bas : scène, piste, ligne d'informations, pellicule (${JSON.stringify(geometry)})`,
+  );
+  // ===== T1 ter (#9578) — la barre COLLE sous la scène ; la colonne d'actions flotte SUR la scène, sans lui prendre de hauteur =====
+  expect(
+    geometry.slot !== null && geometry.stage !== null && Math.abs(geometry.slot.top - geometry.stage.bottom) <= 1,
+    `${label} la barre de progression commence au pixel où la scène finit (scène ${geometry.stage?.bottom}, barre ${geometry.slot?.top})`,
+  );
+  expect(
+    geometry.column !== null && geometry.stage !== null &&
+      geometry.column.top >= geometry.stage.top - 0.5 && geometry.column.bottom <= geometry.stage.bottom + 0.5 &&
+      geometry.column.right <= geometry.viewport + 0.5,
+    `${label} la colonne d'actions est posée SUR la scène, à son bord de fin (${JSON.stringify(geometry.column)} dans ${JSON.stringify(geometry.stage)})`,
+  );
+  expect(geometry.actionsInCorridor === 0, `${label} aucune action ne vit dans le couloir bas (${geometry.actionsInCorridor})`);
+  expect(
+    geometry.layer !== null && geometry.top !== null && geometry.bottom !== null && geometry.stage !== null &&
+      Math.abs(geometry.stage.bottom - geometry.stage.top - (geometry.bottom.top - geometry.top.bottom)) <= 1,
+    `${label} la scène prend toute la hauteur entre les deux couloirs : la colonne ne lui retranche rien (${JSON.stringify({ stage: geometry.stage, top: geometry.top, bottom: geometry.bottom })})`,
+  );
+  expect(
+    geometry.columnButtons.length >= 2 && geometry.columnButtons.every((b) => b.width >= 44 && b.height >= 44) &&
+      geometry.slider !== null && geometry.columnButtons.every((b) => b.bottom <= geometry.slider.top + 0.5),
+    `${label} les boutons de la colonne gardent leur cible de 44 px et ne recouvrent pas la piste (${JSON.stringify(geometry.columnButtons)})`,
+  );
   const initial = await viewerVideoState(page);
   expect(
     initial !== null && Number.isFinite(initial.duration) && initial.duration > 6,
@@ -101,14 +163,14 @@ export async function checkViewerVideoTransport({ browser, BASE, expect, setSche
     `${label} une vidéo qui jouait joue encore après le parcours — la piste ne met jamais en pause (avant ${playingBefore}, après ${playingAfter})`,
   );
   // Le muet posé pour garantir la lecture est retiré : T3 part d'une vidéo sonore.
-  // `volumechange` arrive dans une tâche à part : on attend que la barre l'ait
-  // RELU (son bouton redevient « Couper le son ») — ce qui prouve au passage
-  // qu'un changement de son fait hors de la barre y est bien reflété.
+  // `volumechange` arrive dans une tâche à part : on attend que le rail l'ait
+  // RELU (son muet n'est plus pressé) — ce qui prouve au passage qu'un
+  // changement de son fait hors du rail y est bien reflété.
   await page.evaluate(() => {
     document.querySelector('[data-media-viewer] [data-viewer-page] video').muted = false;
   });
   await page.waitForFunction(
-    () => Array.from(document.querySelectorAll('[data-viewer-transport-slot] button')).some((b) => b.getAttribute('aria-label') === 'Couper le son'),
+    () => document.querySelector('[data-viewer-video-controls] [data-viewer-action="mute"]')?.getAttribute('aria-pressed') === 'false',
     null,
     { timeout: 3000 },
   );
@@ -116,27 +178,29 @@ export async function checkViewerVideoTransport({ browser, BASE, expect, setSche
   // ===== T3 — le muet agit sur la vidéo sans cacher le chrome =====
   const barLabels = await page.evaluate(() => ({
     lang: document.documentElement.lang,
-    buttons: Array.from(document.querySelectorAll('[data-viewer-transport-slot] button')).map((b) => b.getAttribute('aria-label')),
+    buttons: Array.from(document.querySelectorAll('[data-viewer-video-controls] button')).map((b) => b.getAttribute('aria-label')),
+    barButtons: document.querySelectorAll('[data-viewer-transport-slot] button').length,
   }));
   expect(
     barLabels.buttons.includes('Couper le son') && barLabels.buttons.includes("Plus d'options"),
-    `${label} la barre porte « Couper le son » et « Plus d'options » en français (${JSON.stringify(barLabels)})`,
+    `${label} la colonne d'actions porte « Couper le son » et « Plus d'options » en français (${JSON.stringify(barLabels)})`,
   );
-  await page.locator('[data-viewer-transport-slot]').getByRole('button', { name: 'Couper le son' }).click();
+  expect(barLabels.barButtons === 0, `${label} la barre de progression ne porte plus aucun bouton (#9577)`);
+  await page.locator('[data-viewer-video-controls]').getByRole('button', { name: 'Couper le son' }).click();
   expect((await viewerVideoState(page))?.muted === true, `${label} « Couper le son » coupe réellement la vidéo`);
   expect((await topCorridorOpacity(page)) === '1', `${label} toucher le muet laisse le chrome visible`);
 
   // ===== T4 — la vitesse se choisit dans le menu « ⋯ » =====
-  await page.locator('[data-viewer-transport-slot]').getByRole('button', { name: "Plus d'options" }).click();
+  await page.locator('[data-viewer-video-controls]').getByRole('button', { name: "Plus d'options" }).click();
   await page.getByRole('menuitemradio', { name: '1,5×' }).click();
   expect((await viewerVideoState(page))?.playbackRate === 1.5, `${label} choisir 1,5× règle la vitesse de la vidéo`);
-  expect((await page.locator('[data-viewer-transport-slot] [role="menu"]').count()) === 0, `${label} le menu se referme après le choix`);
+  expect((await page.locator('[data-viewer-video-controls] [role="menu"]').count()) === 0, `${label} le menu se referme après le choix`);
 
   // ===== T5 — Échap dans le menu referme le menu, jamais la visionneuse =====
-  await page.locator('[data-viewer-transport-slot]').getByRole('button', { name: "Plus d'options" }).click();
+  await page.locator('[data-viewer-video-controls]').getByRole('button', { name: "Plus d'options" }).click();
   await page.getByRole('menuitemradio', { name: '1×' }).focus();
   await page.keyboard.press('Escape');
-  expect((await page.locator('[data-viewer-transport-slot] [role="menu"]').count()) === 0, `${label} Échap referme le menu`);
+  expect((await page.locator('[data-viewer-video-controls] [role="menu"]').count()) === 0, `${label} Échap referme le menu`);
   expect((await page.locator('[data-media-viewer]').count()) === 1, `${label} Échap dans le menu laisse la visionneuse ouverte`);
 
   // ===== T6 — le double tap latéral (#6369) avance/recule de 10 s, comme iOS =====

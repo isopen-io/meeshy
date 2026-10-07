@@ -2,9 +2,11 @@ import type { GameAtlasBlock, GameVisibility } from '@meeshy/shared/types/game';
 
 import { formatCount, gameText } from '@/lib/view/game-copy';
 import { dayLabel, languageName } from '@/lib/view/game-copy-v2';
+import { pendingStampDetail, stampDetail } from '@/lib/view/game-detail';
 
 import { AtlasStamp } from './game/atlas-stamp';
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
+import { GameTouch } from './game-touch';
 import { GameVisibilityPicker } from './game-visibility-picker';
 
 /**
@@ -73,14 +75,16 @@ export function GameAtlas({ atlas, visibility, online, savingVisibility, error, 
         ) : null}
         <ul className="grid grid-cols-3 gap-3" data-game-atlas-stamps="">
           {atlas.stamps.map((stamp) => (
-            <li key={stamp.language} data-game-atlas-language={stamp.language} className="flex min-w-0 flex-col items-center gap-0.5 text-center">
-              <AtlasStamp code={stamp.language} size={64} />
-              <span className="text-caption font-semibold" style={{ color: GAME_INK }}>
-                {languageName(stamp.language)}
-              </span>
-              <span className="text-check" style={{ color: GAME_INK_2 }}>
-                {gameText('game.atlas.stamped_on', { date: dayLabel(stamp.stampedOn) })}
-              </span>
+            <li key={stamp.language} data-game-atlas-language={stamp.language} className="flex min-w-0 flex-col items-center text-center">
+              <GameTouch detail={stampDetail(stamp)} className="flex min-w-0 max-w-full flex-col items-center gap-0.5 rounded-card text-center">
+                <AtlasStamp code={stamp.language} size={64} />
+                <span className="text-caption font-semibold" style={{ color: GAME_INK }}>
+                  {languageName(stamp.language)}
+                </span>
+                <span className="text-check" style={{ color: GAME_INK_2 }}>
+                  {gameText('game.atlas.stamped_on', { date: dayLabel(stamp.stampedOn) })}
+                </span>
+              </GameTouch>
             </li>
           ))}
           {remaining === 0
@@ -105,16 +109,18 @@ export function GameAtlas({ atlas, visibility, online, savingVisibility, error, 
           </h2>
           <ul className="flex flex-col gap-1">
             {atlas.pending.map((entry) => (
-              <li key={entry.language} data-game-atlas-pending={entry.language} className="flex items-center gap-3" style={{ minHeight: 44 }}>
-                <AtlasStamp code={null} size={36} />
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-body font-semibold" style={{ color: GAME_INK }}>
-                    {languageName(entry.language)}
+              <li key={entry.language} data-game-atlas-pending={entry.language}>
+                <GameTouch detail={pendingStampDetail(entry)} className="flex w-full items-center gap-3 rounded-card" style={{ minHeight: 44 }}>
+                  <AtlasStamp code={null} size={36} />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-body font-semibold" style={{ color: GAME_INK }}>
+                      {languageName(entry.language)}
+                    </span>
+                    <span className="text-caption" style={{ color: GAME_INK_2 }}>
+                      {entry.sent ? gameText('game.atlas.pending.sent') : gameText('game.atlas.pending.received')}
+                    </span>
                   </span>
-                  <span className="text-caption" style={{ color: GAME_INK_2 }}>
-                    {entry.sent ? gameText('game.atlas.pending.sent') : gameText('game.atlas.pending.received')}
-                  </span>
-                </span>
+                </GameTouch>
               </li>
             ))}
           </ul>

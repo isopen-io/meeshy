@@ -124,6 +124,9 @@ export const userGameProfileResponse = envelope(
           flame: nullableString,
           rank: { type: 'string' },
           division: { type: ['number', 'null'] },
+          // #9636 : la division à cinq crans (V = 5 … I = 1) et la place du Mythe, à côté de la division héritée.
+          division5: { type: ['number', 'null'] },
+          mythic: { anyOf: [{ type: 'null' }, strict({ number: { type: 'number' }, edition: { type: 'number' } })] },
           // Servis aux AMIS seulement (#9541) : absents pour tout autre lecteur — optionnels, jamais requis.
           points: { type: 'number' },
           trophyCount: { type: 'number' },

@@ -27,7 +27,7 @@
  */
 
 import { pickIndex, seededRng } from './day-prng.js';
-import { MISSION_TEMPLATES, missionObjective, missionReward, type DrawnMission, type MissionDifficulty, type MissionSignal } from './missions.js';
+import { MISSION_TEMPLATES, drawnMissionOf, missionAvailableFor, type DrawnMission, type MissionDifficulty, type MissionProfile, type MissionSignal } from './missions.js';
 
 /** L'emplacement de la mission personnelle dans `DailyMission` : les trois premiers sont ceux du jour. */
 export const PERSONAL_MISSION_SLOT = 3;
@@ -77,12 +77,14 @@ export type PersonalMissionInput = {
   readonly nowMinute: number;
   /** Vingt-quatre compteurs d'activité par heure locale ; `null` quand le compte n'a pas d'historique lisible. */
   readonly activeHours: readonly number[] | null;
-  /** Ce que le compte fait déjà : un compte par signal (`axis:…`, `reply-distinct-conversations`). */
+  /** Ce que le compte fait déjà : un compte par signal d'axe (`axis:…`), qui pèse sur le tirage. */
   readonly usage: Readonly<Partial<Record<string, number>>>;
   /** Le compte parle au moins deux langues dans le jeu : les missions du Prisme lui sont ouvertes. */
   readonly multilingual: boolean;
   /** Les signaux des trois missions du jour : la personnelle ne les double pas. */
   readonly excludedSignals?: readonly MissionSignal[];
+  /** Ce que le compte peut faire et fait d'ordinaire (#9635) : un gabarit hors de sa portée n'est pas tiré. */
+  readonly profile?: MissionProfile;
 };
 
 export type PersonalMissionDraw = {
@@ -139,7 +141,8 @@ export function drawPersonalMission(input: PersonalMissionInput): PersonalMissio
   const excluded = new Set<string>(input.excludedSignals ?? []);
   const candidates = PERSONAL_POOL.filter((entry) => entry.tier === tier)
     .map((entry) => ({ entry, template: MISSION_TEMPLATES.find((t) => t.key === entry.key) }))
-    .filter((c): c is { entry: (typeof PERSONAL_POOL)[number]; template: (typeof MISSION_TEMPLATES)[number] } => c.template !== undefined);
+    .filter((c): c is { entry: (typeof PERSONAL_POOL)[number]; template: (typeof MISSION_TEMPLATES)[number] } => c.template !== undefined)
+    .filter((c) => missionAvailableFor(c.template, input.profile));
   const open = candidates.filter((c) => !excluded.has(c.template.signal));
   const pool = open.length > 0 ? open : candidates;
 
@@ -153,15 +156,7 @@ export function drawPersonalMission(input: PersonalMissionInput): PersonalMissio
   const startHour = startHours[weightedIndex(seededRng({ userId: input.userId, dayKey: input.dayKey, salt: 'personal-window' }), hourWeights(input.activeHours, startHours))]!;
   const { template } = picked;
   return {
-    mission: {
-      difficulty: template.difficulty,
-      templateKey: template.key,
-      signal: template.signal,
-      prism: template.prism,
-      target: missionObjective({ baseTarget: template.baseTarget, level: input.level }),
-      reward: missionReward({ basePoints: template.basePoints, level: input.level, flameDays: input.flameDays }),
-      glory: 0,
-    },
+    mission: { ...drawnMissionOf({ template, difficulty: tier, level: input.level, flameDays: input.flameDays, ...(input.profile ? { profile: input.profile } : {}) }), glory: 0 },
     startMinute: startHour * 60,
     endMinute: startHour * 60 + PERSONAL_WINDOW_MINUTES,
   };

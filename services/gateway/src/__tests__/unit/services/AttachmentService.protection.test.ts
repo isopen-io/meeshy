@@ -34,14 +34,18 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 
 import { AttachmentService } from '../../../services/attachments';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 const ATTACH_ID = '507f1f77bcf86cd799439001';
 const MSG_ID = '507f1f77bcf86cd799439002';
 
-function makePrisma() {
+const UNATTACHED = { OR: [{ messageId: null }, { messageId: { isSet: false } }] };
+
+function makePrisma(rows: Array<{ id: string; effectFlags: number | null }> = []) {
   return {
     messageAttachment: {
       updateMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 1 }),
+      findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue(rows),
     },
   };
 }
@@ -54,7 +58,7 @@ describe('AttachmentService.associateAttachmentsToMessage — protection (#7498)
   // la traduction de légende) lisait `false` et laissait passer, pendant que
   // la bulle, elle, affichait bien le voile.
   it('écrit la protection du message sur ses pièces jointes', async () => {
-    const prisma = makePrisma();
+    const prisma = makePrisma([{ id: ATTACH_ID, effectFlags: 0 }]);
     const svc = new AttachmentService(prisma as unknown as PrismaClient);
 
     await svc.associateAttachmentsToMessage([ATTACH_ID], MSG_ID, {
@@ -64,7 +68,7 @@ describe('AttachmentService.associateAttachmentsToMessage — protection (#7498)
     });
 
     expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [ATTACH_ID] } },
+      where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
       data: { messageId: MSG_ID, isViewOnce: true, isBlurred: true, effectFlags: 0b111 },
     });
   });
@@ -80,7 +84,7 @@ describe('AttachmentService.associateAttachmentsToMessage — protection (#7498)
     await svc.associateAttachmentsToMessage([ATTACH_ID], MSG_ID, { isViewOnce: true });
 
     expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [ATTACH_ID] } },
+      where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
       data: { messageId: MSG_ID, isViewOnce: true },
     });
   });
@@ -94,8 +98,74 @@ describe('AttachmentService.associateAttachmentsToMessage — protection (#7498)
     await svc.associateAttachmentsToMessage([ATTACH_ID], MSG_ID);
 
     expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [ATTACH_ID] } },
+      where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
       data: { messageId: MSG_ID },
     });
+  });
+});
+
+describe('AttachmentService.associateAttachmentsToMessage — le lien ne déplace ni ne déprotège (#9587)', () => {
+  const OTHER_ATTACH_ID = '507f1f77bcf86cd799439003';
+  const { EPHEMERAL, BLURRED, EPHEMERAL_AFTER_READ } = MESSAGE_EFFECT_FLAGS;
+
+  it('n’apparie que des pièces NON attachées — `messageId` nul ou absent du document', async () => {
+    const prisma = makePrisma();
+    const svc = new AttachmentService(prisma as unknown as PrismaClient);
+
+    await svc.associateAttachmentsToMessage([ATTACH_ID], MSG_ID, { isViewOnce: false, isBlurred: false, effectFlags: 0 });
+
+    const calls = prisma.messageAttachment.updateMany.mock.calls as Array<[{ where: Record<string, unknown> }]>;
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0].where).toEqual({ id: { in: [ATTACH_ID] }, ...UNATTACHED });
+  });
+
+  it('un message ORDINAIRE n’écrit aucun `false` ni aucun zéro sur la protection d’une pièce', async () => {
+    const prisma = makePrisma();
+    const svc = new AttachmentService(prisma as unknown as PrismaClient);
+
+    await svc.associateAttachmentsToMessage([ATTACH_ID], MSG_ID, { isViewOnce: false, isBlurred: false, effectFlags: 0 });
+
+    expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
+      data: { messageId: MSG_ID },
+    });
+    expect(prisma.messageAttachment.findMany).not.toHaveBeenCalled();
+  });
+
+  it('AJOUTE les bits du message à ceux que la pièce porte déjà, pièce par pièce', async () => {
+    const prisma = makePrisma([
+      { id: ATTACH_ID, effectFlags: EPHEMERAL | EPHEMERAL_AFTER_READ },
+      { id: OTHER_ATTACH_ID, effectFlags: null },
+    ]);
+    const svc = new AttachmentService(prisma as unknown as PrismaClient);
+
+    await svc.associateAttachmentsToMessage([ATTACH_ID, OTHER_ATTACH_ID], MSG_ID, { isBlurred: true, effectFlags: BLURRED });
+
+    expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [ATTACH_ID, OTHER_ATTACH_ID] }, ...UNATTACHED },
+      select: { id: true, effectFlags: true },
+    });
+    const writes = (prisma.messageAttachment.updateMany.mock.calls as Array<[{ where: { id: { in: string[] } }; data: Record<string, unknown> }]>)
+      .map(([args]) => ({ ids: args.where.id.in, data: args.data, where: args.where }));
+    expect(writes).toHaveLength(2);
+    expect(writes).toContainEqual({
+      ids: [ATTACH_ID],
+      where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
+      data: { messageId: MSG_ID, isBlurred: true, effectFlags: EPHEMERAL | EPHEMERAL_AFTER_READ | BLURRED },
+    });
+    expect(writes).toContainEqual({
+      ids: [OTHER_ATTACH_ID],
+      where: { id: { in: [OTHER_ATTACH_ID] }, ...UNATTACHED },
+      data: { messageId: MSG_ID, isBlurred: true, effectFlags: BLURRED },
+    });
+  });
+
+  it('n’écrit rien quand aucune pièce demandée n’est libre', async () => {
+    const prisma = makePrisma([]);
+    const svc = new AttachmentService(prisma as unknown as PrismaClient);
+
+    await svc.associateAttachmentsToMessage([ATTACH_ID], MSG_ID, { effectFlags: BLURRED });
+
+    expect(prisma.messageAttachment.updateMany).not.toHaveBeenCalled();
   });
 });

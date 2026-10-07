@@ -4,6 +4,7 @@
  */
 export { AtlasStamp, stampTone } from './atlas-stamp';
 export { Chest, type ChestState } from './chest';
+export { ConceptMark } from './concept-emblem';
 export { Flame } from './flame';
 export { GameBadge, type GameBadgeShape } from './game-badge';
 export { GameBird } from './game-bird';

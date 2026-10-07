@@ -136,8 +136,9 @@ struct RootRouteDestination: View {
         case .userStats:
             UserStatsView()
                 .navigationBarHidden(true)
-        case .progression:
-            ProgressionView(pendingAnchor: router.pendingGameAnchor, consumeAnchor: { _ = router.consumePendingGameAnchor() })
+        // L'ancien tableau de bord (#9564, amendement n° 4) ouvre la première page, une version durant.
+        case .progression, .progressionDashboard:
+            ProgressionView()
                 .navigationBarHidden(true)
         case .progressionSection(let section):
             // `navigationBarHidden(true)` comme ses voisines : la page porte son
@@ -155,11 +156,8 @@ struct RootRouteDestination: View {
         case .gamePage(let page):
             GamePageView(page: page)
                 .navigationBarHidden(true)
-        case .progressionConcept(let concept):
-            ProgressionConceptPage(concept: concept)
-                .navigationBarHidden(true)
-        case .progressionDashboard:
-            ProgressionDashboardPage()
+        case .progressionConcept(let concept, let section):
+            ProgressionConceptPage(concept: concept, section: section)
                 .navigationBarHidden(true)
         case .links:
             LinksHubView()

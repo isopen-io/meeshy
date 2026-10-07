@@ -223,6 +223,10 @@ struct ConversationMediaGalleryView: View {
     /// contraire de ce qu'on voit. `isPlaying` ne publie qu'aux TRANSITIONS,
     /// contrairement au `currentTime` qui interdit d'observer le manager en bloc.
     @State var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
+    /// #9577 — le bouton pause central s'efface une seconde après le début de
+    /// la lecture ; la règle est au SDK, `+Transport.swift` la peint.
+    @State var playPauseFade = FullscreenPlayPauseFade()
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     /// **La pièce à laquelle la barre RÉPOND** (#6165) — `nil` au repos, ce qui
     /// est l'état nominal : le visualiseur est NU tant qu'on n'a pas demandé à
@@ -396,7 +400,11 @@ struct ConversationMediaGalleryView: View {
         .onDisappear { trackImageOpen(leaving: currentPageID, entering: nil) }
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
-        .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
+        .onReceive(videoManager.$isPlaying) {
+            videoManagerIsPlaying = $0
+            playPauseFade = playPauseFade.playback(isPlaying: $0)
+        }
+        .task(id: playPauseFade) { await fadePlayPauseAfterDelay() }
         .sheet(isPresented: $showFullEmojiPicker) { fullEmojiPickerSheet }
     }
 
@@ -859,6 +867,9 @@ struct ConversationMediaGalleryView: View {
             if currentIndex < allAttachments.count {
                 mediaActions(allAttachments[currentIndex])
             }
+            // #9577 — le son et (...) ont quitté la ligne de la barre : ils
+            // se rangent ici, sous « Composer » (`+Transport.swift`).
+            cadreTransportRail
         }
         // #6709 — la colonne MESURE sa place sur le plateau : c'est elle, et non le
         // média de la page, qui dit ce qui est peint sous ses boutons.
@@ -1015,25 +1026,36 @@ struct ConversationMediaGalleryView: View {
             // pièce est synthétique, et la ligne n'y montrerait qu'un glyphe
             // « photo » qui ment sur ce qu'on regarde. L'auteur et sa date restent.
             if sceneContext?.scenes[att.id] == nil {
-                HStack(spacing: MeeshySpacing.sm) {
+                // **`largeur × hauteur · poids · durée`** (#9577) — les
+                // segments et leur point médian viennent de `MediaInfoLine` ;
+                // la durée est la feuille qui observe le moteur : temps restant
+                // pendant la lecture, durée totale à l'arrêt.
+                HStack(spacing: MeeshySpacing.xs) {
                     // Glyphe de type média décoratif (apparié aux dimensions) —
                     // scale avec le texte mais masqué de VoiceOver.
                     Image(systemName: att.type == .video ? "video.fill" : "photo")
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(MeeshyColors.mediaChromeTertiary)
                         .accessibilityHidden(true)
-                    if let w = att.width, let h = att.height, w > 0, h > 0 {
-                        Text("\(w) \u{00D7} \(h)")
-                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
-                            .foregroundColor(MeeshyColors.mediaChromeTertiary)
-                    }
-                    if att.fileSize > 0 {
-                        Text(att.fileSizeFormatted)
-                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                            .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                        .padding(.trailing, MeeshySpacing.xs)
+                    let segments = MediaInfoLine.segments(
+                        width: att.width, height: att.height,
+                        fileSizeLabel: att.fileSize > 0 ? att.fileSizeFormatted : nil,
+                        hasDuration: MediaGalleryStage.carriesDuration([att]))
+                    ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                        if index > 0 { Text(MediaInfoLine.separatorGlyph) }
+                        switch segment {
+                        case .dimensions(let texte), .fileSize(let texte):
+                            Text(texte)
+                        case .duration:
+                            MediaPlaybackDurationText(
+                                manager: videoManager,
+                                declaredSeconds: Double(att.duration ?? 0) / 1000,
+                                followsEngine: currentAttachmentIsActiveTrack)
+                        }
                     }
                     Spacer()
                 }
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 // Regroupe dimensions + poids en un seul arrêt VoiceOver et
                 // remplace le « × » (lu « multiplication ») par un « par » localisé.
                 .accessibilityElement(children: .ignore)

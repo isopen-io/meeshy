@@ -442,5 +442,9 @@ struct CommentMediaView: View {
             // aucune consommation à reporter.
             reportsAttachmentConsumption: false
         )
+        // Une pièce de publication n'est pas un contenu de conversation qui
+        // disparaît : ses sorties sont offertes. Le portillon est FERMÉ par
+        // défaut (#9573) ; l'hôte l'ouvre, et le dit.
+        .contentExitGate(.open)
     }
 }

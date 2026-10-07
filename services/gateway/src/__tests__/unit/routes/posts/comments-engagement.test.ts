@@ -91,11 +91,32 @@ async function requiredAuth(req: FastifyRequest): Promise<void> {
   };
 }
 
-async function buildApp(): Promise<FastifyInstance> {
+/**
+ * L'INVITÉ d'un lien partagé : authentifié par jeton de session, sans compte —
+ * `authContext.userId` est son `Participant.id`, et il n'a pas de `registeredUser`.
+ */
+const GUEST_PARTICIPANT_ID = '507f1f77bcf86cd799439099';
+async function guestAuth(req: FastifyRequest): Promise<void> {
+  (req as any).authContext = {
+    isAuthenticated: true,
+    isAnonymous: true,
+    type: 'anonymous',
+    userId: GUEST_PARTICIPANT_ID,
+    participantId: GUEST_PARTICIPANT_ID,
+    hasFullAccess: false,
+  };
+}
+
+async function buildApp(
+  auth: (req: FastifyRequest) => Promise<void> = requiredAuth,
+  postRows?: Readonly<Record<string, Record<string, unknown>>>,
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
     post: {
-      findFirst: jest.fn<any>().mockResolvedValue(PUBLIC_ACL),
+      findFirst: postRows
+        ? jest.fn(({ where }: any) => Promise.resolve(postRows[where.id] ?? null))
+        : jest.fn<any>().mockResolvedValue({ id: POST_ID, ...PUBLIC_ACL }),
       findUnique: jest.fn<any>().mockResolvedValue({
         authorId: 'author-1',
         commentCount: 1,
@@ -112,9 +133,14 @@ async function buildApp(): Promise<FastifyInstance> {
       findFirst: jest.fn<any>().mockResolvedValue({ postId: POST_ID, post: PUBLIC_ACL }),
       findUnique: jest.fn<any>().mockResolvedValue(null),
     },
+    user: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findUnique: jest.fn<any>().mockResolvedValue({ timezone: 'UTC' }),
+    },
+    engagementQuota: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
   } as any;
   app.decorate('prisma', prisma);
-  registerCommentRoutes(app, prisma, requiredAuth);
+  registerCommentRoutes(app, prisma, auth);
   await app.ready();
   return app;
 }
@@ -138,7 +164,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.text » 
       payload: { content: 'Nice post!' },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text');
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-004' });
     await app.close();
   });
 
@@ -155,7 +181,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.text » 
       payload: { attachmentIds: ['media-audio-002'] },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.text');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.text', expect.anything());
     await app.close();
   });
 });
@@ -174,7 +200,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
       payload: { attachmentIds: ['media-audio-003'] },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio');
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio', { postId: POST_ID, receipt: 'comment:comment-audio-engagement' });
     await app.close();
   });
 
@@ -190,7 +216,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
       payload: { content: 'Just text, no media' },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio', expect.anything());
     await app.close();
   });
 
@@ -207,7 +233,66 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
       payload: { attachmentIds: ['media-image-001'] },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio', expect.anything());
     await app.close();
+  });
+});
+
+/**
+ * #9569 — aucun crédit de post ne s'inscrit pour un invité. Le commentaire est
+ * le seul geste du fil dont le crédit part de la ROUTE : c'est donc elle qui
+ * doit le refuser avant d'écrire quoi que ce soit, et sa clé de participant ne
+ * doit jamais atteindre le barème.
+ */
+describe('POST /posts/:postId/comments — l’invité d’un lien', () => {
+  it('est refusé : aucun commentaire écrit, aucun crédit inscrit sous sa clé de participant', async () => {
+    mockAddComment.mockResolvedValue({ id: 'comment-guest', content: 'Bonjour', authorId: GUEST_PARTICIPANT_ID, media: [] });
+    const app = await buildApp(guestAuth);
+
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Bonjour' },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(401);
+    expect(mockAddComment).not.toHaveBeenCalled();
+    expect(mockRecordActivity).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #9584 — un commentaire écrit depuis la carte d'une REPUBLICATION SIMPLE est
+ * rangé sur l'original, et ne crédite qu'UN post : celui où il est rangé
+ * (décision porteur 2026-10-07 : « le commentaire n'est pas partagé ; seules
+ * les réactions sont propagées en duplication »).
+ */
+describe('POST /posts/:postId/comments — écrit sous une republication simple, il est à ELLE (#9584, fil propre)', () => {
+  const REPOST_ID = '507f1f77bcf86cd799439055';
+  const rows = {
+    [REPOST_ID]: { id: REPOST_ID, ...PUBLIC_ACL, type: 'POST', isQuote: false, repostOfId: POST_ID, originalRepostOfId: POST_ID, deletedAt: null },
+    [POST_ID]: { id: POST_ID, ...PUBLIC_ACL, type: 'POST', isQuote: false, repostOfId: null, originalRepostOfId: null, deletedAt: null },
+  };
+
+  it('est rangé sous la republication et ne crédite qu’ELLE — l’original ne reçoit rien', async () => {
+    mockAddComment.mockResolvedValue({ id: 'comment-through-repost', content: 'Bravo', authorId: USER_ID, media: [] });
+    const app = await buildApp(requiredAuth, rows);
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${REPOST_ID}/comments`, payload: { content: 'Bravo' } });
+    await app.close();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockAddComment.mock.calls[0]?.[0]).toBe(REPOST_ID);
+    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: REPOST_ID, receipt: 'comment:comment-through-repost' }]]);
+  });
+
+  it('sur l’original lui-même, un seul crédit', async () => {
+    mockAddComment.mockResolvedValue({ id: 'comment-direct', content: 'Bravo', authorId: USER_ID, media: [] });
+    const app = await buildApp(requiredAuth, rows);
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Bravo' } });
+    await app.close();
+
+    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-direct' }]]);
   });
 });

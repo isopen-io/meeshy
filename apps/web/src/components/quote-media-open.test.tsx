@@ -179,7 +179,7 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
   });
 
   test('hors du fil, la pièce citée se partage par ses identifiants, « mine » faux faute de lecteur connu (#8884)', async () => {
-    const host = mount(quoting([VIDEO_SANS_VIGNETTE]));
+    const host = mount(quoting([VIDEO_SANS_VIGNETTE], { effectFlags: 0 }));
     await act(async () => {
       host.querySelector<HTMLButtonElement>('button[data-quote-open="video"]')?.click();
     });

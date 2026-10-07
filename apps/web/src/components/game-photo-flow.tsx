@@ -408,7 +408,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
       style={{ backgroundColor: 'color-mix(in srgb, var(--ios-indigo-950) 60%, transparent)' }}
     >
       <div
-        className="flex max-h-dvh w-full max-w-md flex-col gap-3 overflow-y-auto rounded-card px-4 py-4 pt-safe pb-safe"
+        className="flex max-h-dvh w-full max-w-md flex-col gap-3 overflow-y-auto overflow-x-clip overscroll-x-none rounded-card px-4 py-4 pt-safe pb-safe"
         style={{ backgroundColor: 'var(--color-ios-surface)' }}
       >
         <div className="flex items-center justify-between gap-2">

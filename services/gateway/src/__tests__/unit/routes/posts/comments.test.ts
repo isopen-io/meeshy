@@ -29,7 +29,7 @@ jest.mock('../../../../services/PostCommentService', () => ({
   PostCommentService: jest.fn().mockImplementation(() => ({
     getComments: (...args: any[]) => mockGetComments(...args),
     getReplies: (...args: any[]) => mockGetReplies(...args),
-    addComment: (...args: any[]) => mockAddComment(...args),
+    addComment: (...args: any[]) => mockAddComment(...args), getCommentAsCreated: async (id: string) => ({ id, content: 'Hello', postId: '507f1f77bcf86cd799439022' }),
     likeComment: (...args: any[]) => mockLikeComment(...args),
     unlikeComment: (...args: any[]) => mockUnlikeComment(...args),
     deleteComment: (...args: any[]) => mockDeleteComment(...args),
@@ -72,6 +72,7 @@ jest.mock('../../../../middleware/rate-limiter', () => ({
 }));
 
 const mockWithMutationLog = jest.fn<any>().mockImplementation(({ op }: any) => op());
+const mockWithMutationVerdict = jest.fn<any>().mockImplementation(async ({ op }: any) => ({ result: await op(), replayed: false }));
 jest.mock('../../../../utils/withMutationLog', () => ({
   // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
   // dont les routes font `instanceof`, et `withMutationOutcome` est le
@@ -79,7 +80,7 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   // les laissait à `undefined` — `instanceof undefined` lève un TypeError
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../../../../utils/withMutationLog') as object),
-  withMutationLog: (...args: any[]) => mockWithMutationLog(...args),
+  withMutationLog: (...args: any[]) => mockWithMutationLog(...args), withMutationVerdict: (...args: any[]) => mockWithMutationVerdict(...args),
 }));
 
 jest.mock('../../../../utils/sanitize.js', () => ({
@@ -89,6 +90,7 @@ jest.mock('../../../../utils/sanitize.js', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerCommentRoutes } from '../../../../routes/posts/comments';
+import { MutationResultGone } from '../../../../utils/withMutationLog';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -132,7 +134,7 @@ const PUBLIC_ACL = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserI
  */
 function withPublicAcl<T extends Record<string, any>>(prisma: T): T {
   return {
-    ...prisma,
+    user: { findFirst: jest.fn<any>().mockResolvedValue(null), findUnique: jest.fn<any>().mockResolvedValue({ timezone: 'UTC' }) }, ...prisma,
     post: { ...prisma['post'], findFirst: jest.fn<any>().mockResolvedValue(PUBLIC_ACL) },
     postComment: {
       ...prisma['postComment'],
@@ -410,15 +412,9 @@ describe('POST /posts/:postId/comments — with notification service (reply)', (
 
 describe('POST /posts/:postId/comments — onDuplicate path (idempotent replay)', () => {
   it('returns 201 with replayed existing comment from prisma', async () => {
-    const existingComment = { id: COMMENT_ID, content: 'Hello', authorId: USER_ID };
-    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
-      return onDuplicate(COMMENT_ID);
-    });
-    const prisma = withPublicAcl({
-      post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-      postComment: { findUnique: jest.fn<any>().mockResolvedValue(existingComment) },
-    });
-    const app = await buildApp({ prisma });
+    // #9603 — le rejeu relit le commentaire au format de sa création, et ne refait rien d'autre.
+    mockWithMutationVerdict.mockImplementationOnce(async ({ onDuplicate }: any) => ({ result: await onDuplicate(COMMENT_ID), replayed: true }));
+    const app = await buildApp({ prisma: withPublicAcl({}) });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
       payload: { content: 'Hello' },
@@ -1387,21 +1383,14 @@ describe('GET /posts/:postId/comments/:commentId/replies — une requête malfor
 // ─── Branch coverage: onDuplicate returns null for comment (line 142) ─────────
 
 describe('POST /posts/:postId/comments — onDuplicate with null findUnique result (line 142)', () => {
-  it('returns 404 when replay finds no existing comment', async () => {
-    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
-      return onDuplicate(COMMENT_ID);
-    });
-    const prisma = withPublicAcl({
-      post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-      postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    });
-    const app = await buildApp({ prisma });
+  it('returns 410 when the replayed comment is gone — a create replay never resurrects it (#9603)', async () => {
+    mockWithMutationVerdict.mockImplementationOnce(async ({ kind }: any) => { throw new MutationResultGone(COMMENT_ID, kind); });
+    const app = await buildApp({ prisma: withPublicAcl({}) });
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
       payload: { content: 'Hello' },
     });
-    // Returns null from onDuplicate → sendNotFound
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(410);
     await app.close();
   });
 });

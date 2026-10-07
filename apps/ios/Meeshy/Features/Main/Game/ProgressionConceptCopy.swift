@@ -6,7 +6,7 @@ import MeeshySDK
 // Une SEULE source de texte par concept : la carte de la première page dit « à quoi ça sert » (`why`) et « comment
 // ça marche » (`how`) ; la fiche reprend ces deux phrases sous « C’est quoi ? » et les DÉVELOPPE par deux conseils
 // (`tip1`, `tip2`) — jamais deux formulations du même concept. Les clés `game.concept.<clé>.name|why|how|tip.1|tip.2`,
-// `game.fiche.*` et `game.dashboard.*` sont celles du catalogue du web
+// `game.fiche.*` sont celles du catalogue du web
 // (`apps/web/src/lib/interface-catalogs/catalog-game-<langue>.ts`), dans les sept langues, phrase pour phrase : une
 // demande porteur n'est jamais un écart de plateforme. Chaque accesseur est une CLÉ LITTÉRALE, que la garde du
 // catalogue sait lire. Les nombres arrivent déjà formatés (`GameCopy.formatCount`).
@@ -129,8 +129,6 @@ enum ConceptText {
 
     static var photoOffer: String { String(localized: "game.concept.photo.offer", defaultValue: "Immortaliser ce moment", bundle: .main) }
 
-    static var linkRules: String { String(localized: "game.concept.link.rules", defaultValue: "La règle du jeu", bundle: .main) }
-
     static var linkLeague: String { String(localized: "game.concept.link.league", defaultValue: "Classement de la ligue", bundle: .main) }
 
     static var linkSeason: String { String(localized: "game.concept.link.season", defaultValue: "Parcours de la saison", bundle: .main) }
@@ -167,10 +165,6 @@ enum ConceptText {
 
     static func chipTailwind(_ a: String) -> String {
         String(localized: "game.concept.chip.tailwind", defaultValue: "Vent arrière ×\(a)", bundle: .main)
-    }
-
-    static func chipPrismHour(_ a: String) -> String {
-        String(localized: "game.concept.chip.prism_hour", defaultValue: "Heure Prisme ×\(a)", bundle: .main)
     }
 
     static func chipConvertible(_ a: String) -> String {
@@ -249,15 +243,11 @@ enum ConceptText {
 
     static var factConvertible: String { String(localized: "game.concept.fact.convertible", defaultValue: "Points à convertir", bundle: .main) }
 
-    static var factBalance: String { String(localized: "game.concept.fact.balance", defaultValue: "Solde", bundle: .main) }
-
     static var factMinted: String { String(localized: "game.concept.fact.minted", defaultValue: "Frappées en tout", bundle: .main) }
 
     static var factNextPrice: String { String(localized: "game.concept.fact.next_price", defaultValue: "Prix de la prochaine", bundle: .main) }
 
     static var factMissing: String { String(localized: "game.concept.fact.missing", defaultValue: "Il te manque", bundle: .main) }
-
-    static var factNextCoin: String { String(localized: "game.concept.fact.next_coin", defaultValue: "Prochaine pièce", bundle: .main) }
 
     static func factCoin(_ a: String, _ b: String) -> String {
         String(localized: "game.concept.fact.coin", defaultValue: "n° \(a) · \(b)", bundle: .main)
@@ -272,8 +262,6 @@ enum ConceptText {
     static var factNextRank: String { String(localized: "game.concept.fact.next_rank", defaultValue: "Prochain rang", bundle: .main) }
 
     static var factStreak: String { String(localized: "game.concept.fact.streak", defaultValue: "Série", bundle: .main) }
-
-    static var factForm: String { String(localized: "game.concept.fact.form", defaultValue: "Forme", bundle: .main) }
 
     static var factBonus: String { String(localized: "game.concept.fact.bonus", defaultValue: "Bonus sur les missions", bundle: .main) }
 
@@ -292,8 +280,6 @@ enum ConceptText {
     static var factDone: String { String(localized: "game.concept.fact.done", defaultValue: "Terminées", bundle: .main) }
 
     static var factChest: String { String(localized: "game.concept.fact.chest", defaultValue: "Coffre", bundle: .main) }
-
-    static var factReroll: String { String(localized: "game.concept.fact.reroll", defaultValue: "Changement du jour", bundle: .main) }
 
     static var factWeekPoints: String { String(localized: "game.concept.fact.week_points", defaultValue: "Points de la semaine", bundle: .main) }
 
@@ -321,25 +307,15 @@ enum ConceptText {
 
     static var factWindow: String { String(localized: "game.concept.fact.window", defaultValue: "Fenêtre", bundle: .main) }
 
-    static var factUnlocked: String { String(localized: "game.concept.fact.unlocked", defaultValue: "Obtenus", bundle: .main) }
-
     static var factRemaining: String { String(localized: "game.concept.fact.remaining", defaultValue: "Restants", bundle: .main) }
 
-    static var factTrophies: String { String(localized: "game.concept.fact.trophies", defaultValue: "Trophées", bundle: .main) }
-
     static var factVisible: String { String(localized: "game.concept.fact.visible", defaultValue: "Visible par", bundle: .main) }
-
-    static var factStamps: String { String(localized: "game.concept.fact.stamps", defaultValue: "Tampons", bundle: .main) }
 
     static var factPending: String { String(localized: "game.concept.fact.pending", defaultValue: "À moitié faits", bundle: .main) }
 
     static var factYes: String { String(localized: "game.concept.fact.yes", defaultValue: "Oui", bundle: .main) }
 
     static var factNo: String { String(localized: "game.concept.fact.no", defaultValue: "Non", bundle: .main) }
-
-    static var factAvailable: String { String(localized: "game.concept.fact.available", defaultValue: "Disponible", bundle: .main) }
-
-    static var factUsed: String { String(localized: "game.concept.fact.used", defaultValue: "Déjà utilisé", bundle: .main) }
 
     static var ficheWhat: String { String(localized: "game.fiche.what", defaultValue: "C’est quoi ?", bundle: .main) }
 
@@ -348,10 +324,6 @@ enum ConceptText {
     static var ficheEarn: String { String(localized: "game.fiche.earn", defaultValue: "Comment en gagner", bundle: .main) }
 
     static var ficheMore: String { String(localized: "game.fiche.more", defaultValue: "Aller plus loin", bundle: .main) }
-
-    static var dashboardTitle: String { String(localized: "game.dashboard.title", defaultValue: "Tableau de bord", bundle: .main) }
-
-    static var dashboardHint: String { String(localized: "game.dashboard.hint", defaultValue: "Toutes tes données, concept par concept.", bundle: .main) }
 
     static func chipNextPrice(_ a: String) -> String {
         String(localized: "game.concept.chip.next_price", defaultValue: "Prochaine : \(a)", bundle: .main)

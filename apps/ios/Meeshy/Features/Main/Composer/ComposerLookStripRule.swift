@@ -20,8 +20,76 @@ nonisolated enum ComposerLookStripTrigger: Equatable, Sendable {
     case shutter
     /// Un look est choisi : sa miniature vivante, qui déclenche.
     case thumbnail
-    /// On retouche sans look : rien à montrer, rien à déclencher.
+    /// On retouche : rien à déclencher — la miniature seule n'existe que
+    /// pendant la capture (#9567).
     case hidden
+}
+
+/// **Ce que le défilement choisit** (#9566, porteur 2026-10-07 : « lorsqu'on
+/// scroll les effets ou frames celui qui est au milieu est automatiquement
+/// sélectionné »).
+///
+/// La case arrivée au centre est choisie — sauf pendant un défilement que la
+/// bande fait D'ELLE-MÊME (à l'ouverture, ou vers une case touchée) : les cases
+/// qu'elle traverse alors ne sont pas des choix, et y répondre la ferait courir
+/// après elle-même. Un tel défilement que le doigt interrompt se solde au repos.
+nonisolated struct ComposerLookStripFollow: Equatable, Sendable {
+
+    /// Ce que la bande fait en s'arrêtant.
+    enum Rest: Equatable, Sendable {
+        case nothing
+        /// Elle repose ailleurs que sur le choix : cette case est choisie.
+        case choose(Int)
+        /// Elle n'a pas bougé vers sa cible : elle la rejoint.
+        case rejoin(Int)
+    }
+
+    /// La case que la bande rejoint d'elle-même ; `nil` ⇒ elle suit le doigt.
+    private(set) var target: Int?
+    private(set) var centered: Int?
+    private(set) var hasBegun = false
+    /// Le centre a changé depuis que la cible est posée.
+    private var movedSinceTarget = false
+
+    /// La bande s'ouvre en tête, puis rejoint la case choisie.
+    mutating func begin(chosen: Int?) {
+        hasBegun = true
+        target = chosen
+        movedSinceTarget = false
+    }
+
+    /// `index` est arrivée au centre : la case à choisir, `nil` si rien ne change.
+    mutating func centered(on index: Int, chosen: Int?, selects: Bool) -> Int? {
+        let avant = centered
+        centered = index
+        guard let target else { return selects && index != chosen ? index : nil }
+        if let avant, avant != index { movedSinceTarget = true }
+        if target == index { self.target = nil }
+        return nil
+    }
+
+    /// Le choix vient de changer : la case où défiler, `nil` si elle est déjà
+    /// au centre — un choix né du défilement ne fait rien défiler.
+    mutating func chose(_ index: Int) -> Int? {
+        movedSinceTarget = false
+        guard index != centered else {
+            target = nil
+            return nil
+        }
+        target = index
+        return index
+    }
+
+    /// La bande s'est arrêtée. Une cible qu'elle n'a pas commencé à rejoindre
+    /// se rejoint — jamais « Aucun » choisi parce que la bande s'est ouverte en
+    /// tête ; un trajet que le doigt a coupé choisit la case où il s'arrête.
+    mutating func settled(chosen: Int?, selects: Bool) -> Rest {
+        if let target, !movedSinceTarget { return .rejoin(target) }
+        target = nil
+        movedSinceTarget = false
+        guard selects, let centered, centered != chosen else { return .nothing }
+        return .choose(centered)
+    }
 }
 
 /// **Les lois de la bande** (#9351, spec § 3.1 et § 5) — décision du porteur :
@@ -36,8 +104,8 @@ nonisolated enum ComposerLookStripRule {
     /// La bande repliée devient un déclencheur simple ; en retouche, où rien ne
     /// se déclenche, elle s'efface.
     static func collapsedTrigger(look: ComposerPhotoLook, editing: Bool) -> ComposerLookStripTrigger {
-        guard look.isUntouched else { return .thumbnail }
-        return editing ? .hidden : .shutter
+        guard !editing else { return .hidden }
+        return look.isUntouched ? .shutter : .thumbnail
     }
 
     /// La bande peint-elle des trames ? Ouverte, toujours ; repliée, seulement
@@ -47,6 +115,15 @@ nonisolated enum ComposerLookStripRule {
     }
     static let spacing: CGFloat = 8
     static var pitch: CGFloat { cellSize.width + spacing }
+    /// Le nom du choix, seul et en grand sous la bande (#9566).
+    static let chosenNameSize: CGFloat = 20
+
+    /// La case sous le milieu de la bande, pour un défilement de `scrolled`
+    /// points depuis la première ; les rebonds restent sur les bords.
+    static func centeredIndex(scrolled: CGFloat, count: Int) -> Int? {
+        guard count > 0 else { return nil }
+        return min(count - 1, max(0, Int((scrolled / pitch).rounded())))
+    }
 
     /// « Aucun » en tête, puis la famille dans son ordre — chaque cadre une fois.
     /// Calculée UNE fois : le défilement relit la bande à chaque image.

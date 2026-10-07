@@ -774,7 +774,11 @@ export default defineConfig({
                   handler: 'NetworkFirst',
                   options: {
                     cacheName: SW_RUNTIME_CACHES.api,
-                    networkTimeoutSeconds: 3,
+                    /* AUCUN `networkTimeoutSeconds` (#9637) : la copie ne sert
+                       que si le réseau ÉCHOUE. Sur un délai, un lecteur en
+                       ligne recevait une liste rangée qui écrasait l'aperçu
+                       posé par le temps réel ; l'instantané est l'affaire du
+                       cache persisté de TanStack. */
                     expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
                     /* CHAQUE RÉPONSE SOUS L'IDENTITÉ QUI L'A DEMANDÉE (#8674) :
                        sans lui, deux comptes du même appareil partageaient

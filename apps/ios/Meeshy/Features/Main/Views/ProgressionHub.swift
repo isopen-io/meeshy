@@ -264,8 +264,12 @@ struct ProgressionElansHero: View {
                     .font(.caption)
                     .foregroundStyle(theme.textMuted)
             } else {
-                ProgressionWrap(items: famillesActives.map { ProgressionCopy.title(for: $0) })
-                    .foregroundStyle(theme.textPrimary)
+                // Une famille d'élan SE TOUCHE (#9564) : sa pastille rebondit et ouvre ses précisions.
+                ProgressionWrap(
+                    items: famillesActives.map { ProgressionCopy.title(for: $0) },
+                    details: famillesActives.map { GameElementDetails.elanFamily($0, elan: progress.elan) }
+                )
+                .foregroundStyle(theme.textPrimary)
                 Text(explication)
                     .font(.caption)
                     .foregroundStyle(theme.textMuted)
@@ -365,19 +369,27 @@ struct ProgressionFlammeHero: View {
 /// le disait — « `FlowLayout` existe déjà dans l'app ».
 struct ProgressionWrap: View {
     let items: [String]
+    /// Les précisions de chaque pastille, dans l'ordre de `items` ; vide : les pastilles se lisent sans se toucher.
+    var details: [GameElementDetail] = []
 
     var body: some View {
         FlowLayout(spacing: 8) {
-            ForEach(items, id: \.self) { item in
-                Text(item)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .padding(.horizontal, MeeshySpacing.smPlus)
-                    .padding(.vertical, MeeshySpacing.xs)
-                    .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.16)))
+            ForEach(Array(items.enumerated()), id: \.element) { index, item in
+                pill(item)
+                    .frame(minHeight: details.indices.contains(index) ? MeeshyControlSize.tapTarget : nil)
+                    .gameElement(details.indices.contains(index) ? details[index] : nil)
             }
         }
+    }
+
+    private func pill(_ item: String) -> some View {
+        Text(item)
+            .font(.caption)
+            .lineLimit(1)
+            .minimumScaleFactor(GameChip.minimumScale)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.16)))
     }
 }
 
@@ -405,7 +417,6 @@ struct ProgressionSectionPage: View {
     /// rend instantané : aucun spinner ne s'ajoute (Cache-First).
     @StateObject private var viewModel = ProgressionViewModel()
 
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var progress: EngagementProgress? { viewModel.progress }
@@ -448,65 +459,35 @@ struct ProgressionSectionPage: View {
     }
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                HStack {
-                    // Le retour passe par la PILE — pas par une fermeture de
-                    // feuille. Le glissement depuis le bord gauche fait donc le
-                    // même geste, sans qu'aucun code ne le porte.
-                    Button {
-                        HapticFeedback.light()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "chevron.backward")
-                            .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                            .foregroundColor(MeeshyColors.brandPrimary)
-                            .frame(width: 44, height: 44)
-                    }
-                    .adaptiveGlass(in: Circle(), interactive: true)
-                    .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
-
-                    Text(titre)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(theme.textPrimary)
-                        .accessibilityAddTraits(.isHeader)
-
-                    Spacer(minLength: MeeshySpacing.sm)
-
-                    // La VALEUR est du verre elle aussi : posée nue sur le
-                    // dégradé, elle flottait sans matière, et rien ne disait
-                    // qu'elle appartenait au chrome plutôt qu'au contenu.
+        // L'en-tête dynamique des pages de Progression (#9564) : grand titre au repos, barre compacte au
+        // défilement, retour en disque de verre — et le geste de bord, que `navigationBarHidden(true)` retire.
+        GamePageScaffold(
+            title: titre,
+            onRefresh: { await viewModel.load(forceNetwork: true) },
+            trailing: {
+                // La VALEUR est du verre elle aussi : posée nue sur le
+                // dégradé, elle flottait sans matière, et rien ne disait
+                // qu'elle appartenait au chrome plutôt qu'au contenu.
+                if let progress {
+                    Text(compte(progress))
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(teinte)
+                        .lineLimit(1)
+                        .minimumScaleFactor(GameChip.minimumScale)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
+                        .adaptiveGlass(in: Capsule(), tint: teinte.opacity(0.18))
+                }
+            },
+            content: {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                     if let progress {
-                        Text(compte(progress))
-                            .font(.body.weight(.bold))
-                            .foregroundStyle(teinte)
-                            .padding(.horizontal, MeeshySpacing.md)
-                            .padding(.vertical, MeeshySpacing.xsPlus)
-                            .adaptiveGlass(in: Capsule(), tint: teinte.opacity(0.18))
+                        contenu(progress)
                     }
                 }
-                .padding(.horizontal, MeeshySpacing.lg)
-
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                        if let progress {
-                            contenu(progress)
-                        }
-                        Spacer().frame(height: 40)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.top, MeeshySpacing.sm)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-        }
-        // Le geste de bord, que `navigationBarHidden(true)` retire en silence.
-        // Sans lui, la page est bien POUSSÉE mais ne se quitte qu'au bouton —
-        // et l'utilisateur qui glisse depuis le bord n'obtient rien, ce qui se
-        // lit comme une page bloquée plutôt que comme un geste non servi.
-        .background(InteractivePopEnabler())
+        )
         .task { await viewModel.load() }
         .fullScreenCover(item: $reveal) { palier in
             AchievementRevealView(
@@ -536,6 +517,8 @@ struct ProgressionSectionPage: View {
                             ForEach(Array(group.axes.enumerated()), id: \.element.id) { index, axis in
                                 if index > 0 { Divider().overlay(theme.textMuted.opacity(0.2)) }
                                 ProgressionAxisRow(axis: axis)
+                                    // Le badge de l'axe SE TOUCHE (#9564) : sa ligne rebondit et ouvre ses précisions.
+                                    .gameElement(GameElementDetails.badge(for: axis, progress: progress))
                             }
                         }
                     }
@@ -547,7 +530,10 @@ struct ProgressionSectionPage: View {
                 VStack(spacing: 0) {
                     ForEach(Array(progress.achievements.enumerated()), id: \.element.id) { index, achievement in
                         if index > 0 { Divider().overlay(theme.textMuted.opacity(0.2)) }
+                        // Un succès SE TOUCHE : il rebondit, et sa précision reste la célébration en grand — jamais
+                        // deux modales pour un même élément.
                         Button {
+                            HapticFeedback.light()
                             reveal = ProgressionRevealRequest(
                                 reveal: .achievement(achievement.key),
                                 reachedAt: achievement.reachedAt,
@@ -556,7 +542,7 @@ struct ProgressionSectionPage: View {
                         } label: {
                             ProgressionAchievementRow(achievement: achievement, rarity: viewModel.game?.wave2.achievementRarities?[achievement.key.rawValue])
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(GameBounceButtonStyle())
                         .accessibilityAddTraits(.isButton)
                         .accessibilityHint(Text(String(
                             localized: "progression.achievement.a11y.hint",

@@ -110,7 +110,11 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
         XCTAssertEqual(ComposerCaptureGesture.action(zone: .scene, gesture: .doubleTap,
                                                      context: ComposerCaptureGestureContext()), .photoToEdit)
         let chrome = try source("ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("holdGesture.exclusively(before:tapGesture("))
+        XCTAssertTrue(chrome.contains("holdGesture.simultaneously(with:tapGesture("),
+                      "derrière l'appui long, le toucher ne partait jamais : ni mise au point ni double (#9566)")
+        XCTAssertFalse(chrome.contains("holdGesture.exclusively(before:tapGesture("))
+        XCTAssertTrue(chrome.contains("ComposerCaptureTapRule.followsAHold(holdEndedAt,now:Date())"),
+                      "la levée d'une tenue n'est pas un toucher")
         XCTAssertTrue(chrome.contains("session.tapAction(context:context)"),
                       "le second toucher se lit par le seul décideur du toucher (#9464)")
         XCTAssertTrue(chrome.contains("case.photo:session.perform(.photoToEdit,item:nil)"),

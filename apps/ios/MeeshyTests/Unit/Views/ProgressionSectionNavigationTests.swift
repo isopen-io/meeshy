@@ -59,8 +59,10 @@ final class ProgressionSectionNavigationTests: XCTestCase {
         XCTAssertTrue(vue.contains("router.push(.progressionConcept("),
                       "La fiche doit être POUSSÉE — c'est ce qui lui donne le `<` et le glissement du bord.")
         let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
-        XCTAssertTrue(fiche.contains("router.push(.progressionSection(section))"),
+        XCTAssertTrue(fiche.contains("router.push(GameNavigationMap.route(for: link))"),
                       "La section doit être POUSSÉE depuis la fiche de son concept.")
+        XCTAssertTrue(try source("Meeshy/Features/Main/Game/GameNavigationMap.swift").contains("case .section(let section): .progressionSection(section)"),
+                      "La carte de navigation mène la section à sa route de la pile (#9564).")
         for code in [vue, fiche] {
             XCTAssertFalse(code.contains(".sheet(item: $destination)"),
                            "Une feuille n'a ni historique ni geste de bord : c'est précisément ce que le porteur retire.")

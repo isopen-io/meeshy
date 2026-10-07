@@ -1,0 +1,30 @@
+## 2026-10-07 : une vidéo ne joue qu'à UN endroit, et son plein écran laisse toute la largeur à la progression
+**Statut**: Accepté (#9575, #9577 — milestone « Une vidéo ne joue qu'à un endroit, et son plein écran laisse toute la largeur à la progression »). Supplante la disposition centrée de `docs/superpowers/specs/2026-08-10-inline-video-top-controls-centered-design.md` et amende `docs/superpowers/specs/2026-09-12-lecture-media-plateau-design.md` § 2.2. Fermeture des issues en attente de la vérification sur appareil (le simulateur ne fait pas de PiP).
+
+**Contexte**: directive porteur du 2026-10-07 (spec `docs/superpowers/specs/2026-10-07-contenus-ephemeres-sortie-et-lecteur-video-design.md` §§ 5 et 6). Relevé sur `dev` :
+1. `SharedAVPlayerManager` tient un seul `AVPlayer`. Sept surfaces le montaient sur « l'URL active est la mienne » sans lire le PiP : pendant que la fenêtre PiP jouait, la bulle d'origine remontait le MÊME player dans sa couche — deux images pour une lecture. Rien n'arrêtait le PiP au retour au premier plan.
+2. Le lecteur plein écran du SDK (`_FullscreenRenderer`) appelait `startPip()` sans jamais avoir configuré de contrôleur (surface montée sans `enablesPip`) : le glissement vers le bas ne produisait aucune fenêtre, et la fermeture laissait le player tourner « pour une continuation en ligne » — la bulle derrière reprenait la lecture, son compris.
+3. En plein écran, la progression était bornée à la largeur du CADRE et partageait sa ligne avec le son, le menu (...) et la durée ; le bouton pause central restait posé sur l'image pendant toute la lecture.
+
+**Décision**:
+- **Un verdict de montage, au moteur.** `SharedAVPlayerManager.mayMountPlayer(role:surfaceMedia:activeMedia:isPipActive:)` (pure, `nonisolated static`) répond pour trois rôles (`VideoSurfaceRole` : `.inline`, `.fullscreen`, `.pictureInPicture`). Une surface en ligne ne monte rien tant que le PiP est actif ; un plein écran monte toujours le sien — c'est lui qui REPREND la vidéo (`reclaimFromPip(urlString:)`, à l'ouverture et sur `willEnterForeground`). Les sept sites le consomment : `_InlineRenderer`, `GalleryVideoPage`, `currentAttachmentIsActiveTrack`, `_FullscreenRenderer`, `ReelVideoView`, `ReelFeedVideoSurface`, `MeeshyScenePlayer` (par `loadedPlayer(matching:role:)`, le rôle venant du mode).
+- **Fermer un plein écran n'abandonne la lecture qu'au PiP** (`fullscreenCloseDisposition(pipHandedOff:)`). `startPip(haltsOnFailure:)` dit si la demande est partie ; si elle échoue après la fermeture, la lecture s'arrête. La galerie et le lecteur du SDK suivent la même règle.
+- **Une fenêtre PiP vivante garde son contrôleur** (`mayReplacePipController`) : une surface qui se monte pendant l'ouverture ne le remplace plus. `isPipActive` ne se lève qu'au rappel `didStart` — la couche d'origine doit rester montée pendant l'animation d'ouverture — et `cleanup()` le rabaisse avec le contrôleur.
+- **Vidéo en ligne** : agrandir au bord gauche, le son au bord droit ; PiP, AirPlay et vitesse groupés à droite avant le son (`_InlineOverlayControls.topBarLayout`).
+- **Plein écran** : la progression prend toute la largeur de l'écran et ne porte plus qu'elle (`TransportLayout.Placement.corridor`) ; le son et (...) sont un gabarit `.rail` monté dans la colonne d'actions, sous « Composer » ; la ligne d'informations se lit `largeur × hauteur · poids · durée` (`MediaInfoLine`), la durée décomptant pendant la lecture (`MediaPlaybackDurationText`, seule feuille à observer le moteur).
+- **Le bouton pause s'efface une seconde après le début de la lecture** : `FullscreenChromeMetrics.playPauseFadeDelay = 1`, constante distincte de `autoHideDelay = 3`. L'état est la valeur pure `FullscreenPlayPauseFade` ; chaque hôte l'attend par une tâche clée sur l'état, sans minuteur. Dans la galerie, le toucher qui ramène le bouton ne bascule pas le plein cadre (`MediaStagePlayPause.tapRevealsOnly`).
+- Placement (pureté du SDK) : le verdict, la répartition des contrôles, l'effacement et le formatage sont des lois sans état du lecteur → SDK. « Quand ce toucher ne fait que ramener le bouton », « sous quelle action se range le rail » → application.
+
+**Alternatives rejetées**:
+- Laisser chaque surface lire `isPipActive` dans son prédicat local : sept écritures de la même règle, dont une (`ReelFeedVideoSurface`) sert aussi à décider qui relâche le moteur. Une huitième surface l'aurait oubliée sans qu'aucun témoin ne rougisse.
+- Lever `isPipActive` dès `startPip()` : la bulle d'origine se démonterait pendant l'animation d'ouverture de la fenêtre, dont elle est la source.
+- Garder le son et (...) sur la ligne de la barre en la laissant seulement s'élargir : la barre gagne la marge du cadre, pas la place des deux boutons — et c'est la place qu'une vidéo 9:16 n'avait pas.
+- Effacer le bouton central avec le reste du chrome (3 s) : il est posé SUR l'image, le reste autour ; trois secondes de bouton au centre d'une vidéo de douze sont un quart du contenu masqué.
+- Laisser le toucher ramener le bouton ET basculer le plein cadre : le plateau qui porte le bouton disparaît au moment où on le ramène.
+
+**Conséquences**:
+- Aucune surface ne joue en même temps que la fenêtre PiP. Pendant le PiP, la bulle rend sa vignette et son bouton de lecture.
+- Entrer en plein cadre depuis une vidéo qui joue, bouton effacé, demande deux touchers (le premier ramène le bouton) ; l'appui long et le glissement vers le haut y mènent toujours en un geste.
+- Le lecteur plein écran du SDK configure le PiP dès que son jeu de contrôles le porte : l'application qui passe en arrière-plan depuis ce lecteur ouvre la fenêtre PiP d'elle-même, et la retrouve refermée au retour.
+- La scène d'un post (bouton de lecture d'une scène) n'a pas reçu la règle d'effacement : elle ne passe pas par le moteur vidéo partagé. À porter dans une issue si le porteur la veut aussi.
+- Miroir Kotlin : rien reçu (gel du 2026-09-16) — dette consignée, non soldée.

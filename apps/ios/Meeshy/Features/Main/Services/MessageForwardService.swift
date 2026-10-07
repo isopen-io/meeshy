@@ -31,15 +31,82 @@ extension ForwardOutcome {
     }
 }
 
+/// **Pourquoi un transfert est refusé — une raison, puis sa phrase** (#9573).
+///
+/// Deux sources la donnent : la loi de sortie, lue AVANT d'envoyer
+/// (`Message.exitOffer`), et la passerelle, qui fait foi et répond par la phrase
+/// de `describeForwardRefusal` (`services/gateway/.../forwardAdmission.ts`) —
+/// sans code machine. La phrase affichée est celle du catalogue, dans la langue
+/// du lecteur, jamais celle du serveur.
+nonisolated enum ForwardRefusalReason: Equatable, CaseIterable, Sendable {
+    case viewOnce
+    case afterRead
+    case blurred
+    case sourceUnavailable
+
+    /// Ce que la loi de sortie refuse pour ce message, ou `nil` s'il se transfère.
+    static func local(for message: Message) -> ForwardRefusalReason? {
+        let offer = message.exitOffer
+        guard !offer.offers(.forward) else { return nil }
+        if case .refused(let refusal) = offer.law.forward {
+            return refusal == .viewOnce ? .viewOnce : .afterRead
+        }
+        return .blurred
+    }
+
+    /// La raison que porte la phrase de refus du serveur, ou `nil` si ce n'en est pas une.
+    static func server(message: String?) -> ForwardRefusalReason? {
+        guard let message = message?.lowercased() else { return nil }
+        if message.contains("vue unique") { return .viewOnce }
+        if message.contains("après lecture") { return .afterRead }
+        if message.contains("plus disponible") { return .sourceUnavailable }
+        return nil
+    }
+
+    var explanation: String {
+        switch self {
+        case .viewOnce:
+            return String(localized: "forward.refused.view-once",
+                          defaultValue: "Un message à vue unique ne peut pas être transféré.", bundle: .main)
+        case .afterRead:
+            return String(localized: "forward.refused.after-read",
+                          defaultValue: "Un message qui disparaît après lecture ne peut pas être transféré.", bundle: .main)
+        case .blurred:
+            return String(localized: "forward.refused.blurred",
+                          defaultValue: "Un message flouté ne peut pas être transféré.", bundle: .main)
+        case .sourceUnavailable:
+            return String(localized: "forward.refused.source-unavailable",
+                          defaultValue: "Le message d’origine n’est plus disponible.", bundle: .main)
+        }
+    }
+}
+
 protocol MessageForwardServiceProviding {
-    func forward(message: Message, sourceConversationId: String?, to targetConversationId: String) async -> ForwardOutcome
-    func forward(message: Message, sourceConversationId: String?, to target: ForwardTarget) async -> ForwardOutcome
+    /// - Parameter chosenDurationSeconds: la durée choisie dans la feuille pour
+    ///   une flamme à durée ; `nil` ⇒ celle de la source. Ramenée à la source
+    ///   par la loi de sortie, ignorée pour un message ordinaire.
+    func forward(message: Message, sourceConversationId: String?, to targetConversationId: String, chosenDurationSeconds: Int?) async -> ForwardOutcome
+    func forward(message: Message, sourceConversationId: String?, to target: ForwardTarget, chosenDurationSeconds: Int?) async -> ForwardOutcome
+}
+
+extension MessageForwardServiceProviding {
+    func forward(message: Message, sourceConversationId: String?, to targetConversationId: String) async -> ForwardOutcome {
+        await forward(message: message, sourceConversationId: sourceConversationId, to: targetConversationId, chosenDurationSeconds: nil)
+    }
+
+    func forward(message: Message, sourceConversationId: String?, to target: ForwardTarget) async -> ForwardOutcome {
+        await forward(message: message, sourceConversationId: sourceConversationId, to: target, chosenDurationSeconds: nil)
+    }
 }
 
 /// Chemin UNIQUE du transfert de message (spec 2026-08-19, Volet A.3) : tous
 /// les points d'entrée (picker, swipe, rangée quick-reaction) convergent ici.
 ///
 /// Invariants :
+/// - Ce que la loi de sortie refuse (vue unique, flamme après lecture, flou)
+///   ne part pas : échec immédiat avec sa phrase, ni requête ni enfilage. La
+///   copie d'une flamme à durée porte `ephemeralDuration` — le choix de la
+///   feuille, jamais plus que la source —, en ligne comme en file (#9573).
 /// - Jamais d'`attachmentIds` ni de re-upload — le gateway copie les
 ///   attachments de la source (`MessageProcessor.copyForwardedAttachments`).
 /// - Une conversation source inconnue s'OMET (`""` cassait l'écriture Prisma
@@ -87,7 +154,11 @@ final class MessageForwardService: MessageForwardServiceProviding {
         self.authManager = authManager
     }
 
-    func forward(message: Message, sourceConversationId: String?, to targetConversationId: String) async -> ForwardOutcome {
+    func forward(message: Message, sourceConversationId: String?, to targetConversationId: String, chosenDurationSeconds: Int?) async -> ForwardOutcome {
+        if let refusal = ForwardRefusalReason.local(for: message) {
+            return .failed(reason: refusal.explanation)
+        }
+        let ephemeralDuration = message.contentExitLaw.forward.requestedDuration(chosen: chosenDurationSeconds)
         let dedupKey = "\(message.id)→\(targetConversationId)"
         let clientMessageId = clientMessageIds[dedupKey] ?? ClientMessageId.generate()
         clientMessageIds[dedupKey] = clientMessageId
@@ -100,7 +171,8 @@ final class MessageForwardService: MessageForwardServiceProviding {
                     content: message.content,
                     clientMessageId: clientMessageId,
                     forwardedFromId: message.id,
-                    forwardedFromConversationId: sourceId
+                    forwardedFromConversationId: sourceId,
+                    protection: MessageProtectionIntent(ephemeralDurationSeconds: ephemeralDuration)
                 ))
                 return .queuedOffline(conversationId: targetConversationId)
             } catch {
@@ -113,6 +185,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
                 content: message.content.isEmpty ? nil : message.content,
                 forwardedFromId: message.id,
                 forwardedFromConversationId: sourceId,
+                ephemeralDuration: ephemeralDuration,
                 clientMessageId: clientMessageId
             )
             let _: APIResponse<SendMessageResponseData> = try await api.post(
@@ -122,6 +195,9 @@ final class MessageForwardService: MessageForwardServiceProviding {
             clientMessageIds.removeValue(forKey: dedupKey)
             return .sent(conversationId: targetConversationId)
         } catch {
+            // Un REFUS n'est pas un échec à rejouer : rien n'a été créé, et la
+            // clé de dédoublonnage n'a plus rien à protéger.
+            if Self.refusal(in: error) != nil { clientMessageIds.removeValue(forKey: dedupKey) }
             return .failed(reason: Self.failureReason(for: error))
         }
     }
@@ -143,9 +219,15 @@ final class MessageForwardService: MessageForwardServiceProviding {
     /// La résolution — et donc toute création de conversation — n'a lieu
     /// QU'ICI, à l'envoi. Sélectionner un contact dans le picker puis fermer
     /// la feuille sans envoyer ne crée jamais de conversation vide.
-    func forward(message: Message, sourceConversationId: String?, to target: ForwardTarget) async -> ForwardOutcome {
+    func forward(message: Message, sourceConversationId: String?, to target: ForwardTarget, chosenDurationSeconds: Int?) async -> ForwardOutcome {
+        // Avant toute résolution : un contact ne reçoit pas une conversation
+        // créée pour un transfert que la loi refuse.
+        if let refusal = ForwardRefusalReason.local(for: message) {
+            return .failed(reason: refusal.explanation)
+        }
         if let conversationId = target.conversationId {
-            return await forward(message: message, sourceConversationId: sourceConversationId, to: conversationId)
+            return await forward(message: message, sourceConversationId: sourceConversationId, to: conversationId,
+                                 chosenDurationSeconds: chosenDurationSeconds)
         }
         guard let userId = target.userId else {
             return .failed(reason: Self.genericFailure)
@@ -158,13 +240,20 @@ final class MessageForwardService: MessageForwardServiceProviding {
                 with: userId,
                 currentUserId: authManager.currentUser?.id ?? ""
             )
-            return await forward(message: message, sourceConversationId: sourceConversationId, to: conversation.id)
+            return await forward(message: message, sourceConversationId: sourceConversationId, to: conversation.id,
+                                 chosenDurationSeconds: chosenDurationSeconds)
         } catch {
             return .failed(reason: Self.failureReason(for: error))
         }
     }
 
+    private static func refusal(in error: Error) -> ForwardRefusalReason? {
+        guard case let APIError.serverError(_, serverMessage) = error else { return nil }
+        return ForwardRefusalReason.server(message: serverMessage)
+    }
+
     private static func failureReason(for error: Error) -> String {
+        if let refusal = refusal(in: error) { return refusal.explanation }
         if case let APIError.serverError(_, serverMessage) = error {
             return serverMessage ?? genericFailure
         }

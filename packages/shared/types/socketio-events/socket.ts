@@ -15,6 +15,13 @@ export interface SocketIOResponse<T = unknown> {
   readonly code?: string;
   /** Seconds to wait before retrying — only on a temporary refusal (`NEWCOMER_SLOW_MODE`, #7740). */
   readonly retryAfter?: number;
+  /**
+   * The instant (ISO 8601) a DAILY refusal lifts — midnight of the account's
+   * civil day, in its timezone (`DAILY_COMMENT_LIMIT` / `DAILY_REACTION_LIMIT`, #9584).
+   */
+  readonly resetAt?: string;
+  /** The daily limit that was reached, alongside `resetAt`. */
+  readonly limit?: number;
 }
 
 // ===== TYPES POUR LES CONNEXIONS =====

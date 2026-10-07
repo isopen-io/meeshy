@@ -115,6 +115,15 @@ describe('la mission personnelle', () => {
     expect(polyglot.some(Boolean)).toBe(true);
   });
 
+  it('ne tire jamais un gabarit hors de portée du profil (#9635)', () => {
+    const nobody = { capabilities: [], habits: {} };
+    for (let i = 0; i < 90; i += 1) {
+      const draw = drawPersonalMission(input({ userId: `n${i}`, level: [6, 20, 45][i % 3]!, multilingual: true, profile: nobody }))!;
+      const template = MISSION_TEMPLATES.find((t) => t.key === draw.mission.templateKey)!;
+      expect({ key: template.key, requires: template.requires ?? [] }).toEqual({ key: template.key, requires: [] });
+    }
+  });
+
   it('ne reprend jamais le signal d’une mission du jour', () => {
     for (let i = 0; i < 30; i += 1) {
       const draw = drawPersonalMission(input({ userId: `x${i}`, level: 6, excludedSignals: ['axis:tool.reaction', 'axis:content.audio_message'] }))!;

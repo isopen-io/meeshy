@@ -3,7 +3,9 @@
  * toutes les tables que le Jeu Meeshy tient PAR COMPTE disparaissent avec lui
  * (RGPD art. 17 ; App Store 5.1.1(v) ; Google Play) : missions, jours de jeu,
  * quotas, registres de Gloire et de Meeshes, réglages, pseudonyme, ligues,
- * points de semaine, duos, saisons, trophées, Atlas et leurs colonnes de `User`.
+ * points de semaine, duos, saisons, trophées, Atlas et leurs colonnes de `User` —
+ * et ce que chaque post a rapporté au compte (#9569) : une ligne par post, donc
+ * la trace de ses gestes, de même nature que les quotas par cible.
  *
  * Ce que la purge garantit au-delà de l'effacement (intégrité référentielle) :
  *  - un duo OUVERT est terminé proprement avant d'être effacé : le partenaire qui
@@ -36,6 +38,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { MythicSeatService } from './MythicSeatService';
 
 /** Les modèles purgés par `userId`. */
 export const GAME_PURGED_MODELS = [
@@ -52,12 +55,15 @@ export const GAME_PURGED_MODELS = [
   'gameSeason',
   'gameTrophy',
   'atlasStamp',
+  'engagementPostPoints',
 ] as const;
 
 /** Les modèles de jeu par compte qui ne se purgent PAS par `deleteMany({ userId })`, et la raison. */
 export const GAME_PURGE_EXCEPTIONS: Readonly<Record<string, string>> = {
   gameDuo: "partagé entre deux comptes : terminé proprement (partenaire payé de sa part simple), puis supprimé par ses deux bouts",
   affiliateVisitSession: "le parrain voit ses visites supprimées, le visiteur converti est dépersonnalisé (`referredUserId` à null)",
+  mythicSeat:
+    "la place du Mythe (#9636) est effacée puis rendue au compte en attente le plus ancien (décision porteur 2026-10-08) — `MythicSeatService.release`, qui relance l'attribution ; l'émission reste au registre `MythicEdition`, sans aucun lien de compte",
 };
 
 export type GamePurgeSummary = {
@@ -66,9 +72,11 @@ export type GamePurgeSummary = {
   readonly duosSettled: number;
   readonly duoNotificationsErased: number;
   readonly leagueGroupsTouched: number;
+  /** La place du Mythe libérée (0 ou 1) et rendue au suivant. */
+  readonly mythicSeatsReleased: number;
 };
 
-type PurgeDb = Pick<PrismaClient, (typeof GAME_PURGED_MODELS)[number] | 'gameDuo' | 'user' | 'leagueGroupWeek' | 'affiliateVisitSession' | 'notification'>;
+type PurgeDb = Pick<PrismaClient, (typeof GAME_PURGED_MODELS)[number] | 'gameDuo' | 'user' | 'leagueGroupWeek' | 'affiliateVisitSession' | 'notification' | 'mythicSeat' | 'mythicEdition'>;
 
 /** Les notifications de jeu qui NOMMENT un autre joueur (`actor`) : celles d'un duo. */
 const DUO_NOTIFICATION_TYPES = ['game_duo_invited', 'game_duo_accepted'] as const;
@@ -192,10 +200,14 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
     prisma.gameSeason.deleteMany({ where }),
     prisma.gameTrophy.deleteMany({ where }),
     prisma.atlasStamp.deleteMany({ where }),
+    prisma.engagementPostPoints.deleteMany({ where }),
   ]);
   const deleted = Object.fromEntries(GAME_PURGED_MODELS.map((model, index) => [model, counts[index]!.count]));
 
-  // 4. Les visites de parrainage : celles du parrain disparaissent, le visiteur converti est dépersonnalisé.
+  // 4. La place du Mythe se libère et revient au plus ancien en attente : rien du compte effacé ne reste au registre.
+  const mythicSeatsReleased = await new MythicSeatService(prisma).release(userId);
+
+  // 5. Les visites de parrainage : celles du parrain disparaissent, le visiteur converti est dépersonnalisé.
   await prisma.affiliateVisitSession.deleteMany({ where: { affiliateUserId: userId } });
   await prisma.affiliateVisitSession.updateMany({ where: { referredUserId: userId }, data: { referredUserId: null } });
 
@@ -218,5 +230,5 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
       brokenStreakLastDay: null,
     },
   });
-  return { deleted, duosDeleted, duosSettled, duoNotificationsErased, leagueGroupsTouched };
+  return { deleted, duosDeleted, duosSettled, duoNotificationsErased, leagueGroupsTouched, mythicSeatsReleased };
 }

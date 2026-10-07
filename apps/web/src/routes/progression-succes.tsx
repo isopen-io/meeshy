@@ -55,7 +55,6 @@ export default function ProgressionSuccesScreen() {
   const flameDays = cached?.game?.flame.days ?? null;
   return (
     <ProgressionPage
-      concept="succes"
       titre="Succès"
       teinte={UNLOCKED_TINT}
       compte={(p) => `${p.achievements.filter((a) => a.unlocked).length} / ${p.achievements.length}`}

@@ -56,6 +56,8 @@ export {
   CLIENT_MESSAGE_ID_REGEX,
 } from './client-message-id.js';
 export * from './message-protection.js';
+export * from './content-exit-law.js';
+export * from './capture-notice.js';
 export * from './conversation-preview-strings.js';
 export * from './conversation-preview.js';
 export * from './conversation-list-rank.js';

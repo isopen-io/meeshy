@@ -156,7 +156,9 @@ extension BubbleContent {
             ?? preferredTranslation?.targetLanguage
             ?? preferredAudioLangCode
             ?? message.originalLanguage
-        let effective = Self.resolveEffectiveContent(
+        // #9617 — l'avis de capture se compose CHEZ LE LECTEUR (langue
+        // d'interface, fuseau) ; son `content` n'est que le repli français.
+        let effective = Self.captureNoticeText(for: message) ?? Self.resolveEffectiveContent(
             message: message,
             translations: translations,
             preferredTranslation: preferredTranslation,
@@ -299,6 +301,8 @@ extension BubbleContent {
         self.protection = message.isViewOnceRevealed ? protection.withoutViewOnce : protection
         self.isBurning = message.isBurning
         self.isViewOnceRevealed = message.isViewOnceRevealed && message.holdsViewOnce
+        self.exitGate = message.exitGate
+        self.captureVerdict = ContentCaptureVisibility.renderedVerdict(for: message)
 
         // --- Other flags ---
         self.isBlurred = message.isBlurred
@@ -380,6 +384,20 @@ extension BubbleContent {
             emoji: sticker.emoji,
             picture: picture
         )
+    }
+
+    /// **La phrase d'un avis de capture** (#9617) pour CE lecteur : langue
+    /// d'interface, fuseau de l'appareil, heure d'ENVOI de l'éphémère capturé.
+    /// `nil` pour tout autre message — et pour un avis dont la métadonnée ne se
+    /// lit pas, qui retombe sur son `content`. Partagée par les quatre modes :
+    /// Bulles, Focal et Script lisent `text.raw`, la Rivière l'appelle.
+    static func captureNoticeText(
+        for message: Message,
+        language: String? = Bundle.main.preferredLocalizations.first,
+        timeZone: TimeZone = .current
+    ) -> String? {
+        guard message.messageSource == .system, let notice = message.captureNotice else { return nil }
+        return CaptureNoticeText.compose(notice, language: language, timeZone: timeZone)
     }
 
     static func resolveEffectiveContent(

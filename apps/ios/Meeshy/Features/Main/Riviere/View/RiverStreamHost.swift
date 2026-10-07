@@ -106,6 +106,8 @@ struct RiverStreamHost: View {
     /// #8310 — le plein écran d'un média flouté, ouvert par `ConversationView`.
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
 
+    /// #9617 — reçoit les cadres mesurés : une capture y lit ce qui est à l'écran.
+    var captureSurface: MeasuredCaptureSurface? = nil
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -202,6 +204,12 @@ struct RiverStreamHost: View {
             }
         }
         return Double(best?.rank ?? navigation.cursor.rank)
+    }
+
+    /// La partie LUE du pane, dans le repère des cadres : sous l'en-tête et
+    /// au-dessus du composeur (#9617).
+    private var readViewport: CGRect {
+        CGRect(x: 0, y: headerInset, width: paneWidth, height: max(0, paneHeight - headerInset - bottomInset))
     }
 
     /// La ligne de lecture — un tiers sous le haut du pane, là où l'œil se
@@ -376,7 +384,10 @@ struct RiverStreamHost: View {
                 topExclusion: headerInset + RiverMetrics.LaneHeader.height
             )
         )
-        .onPreferenceChange(MessageFramePreferenceKey.self) { frames = $0 }
+        .onPreferenceChange(MessageFramePreferenceKey.self) { measured in
+            frames = measured
+            captureSurface?.update(frames: measured, viewport: readViewport)
+        }
         .onPreferenceChange(HorizontalScrollOffsetKey.self) { horizontalOffset = $0 } // iOS 16–17
         .trackScrollContentOffsetX { horizontalOffset = $0 } // iOS 18+
         // La bande NOMME les couloirs et suit leur défilement horizontal : sa

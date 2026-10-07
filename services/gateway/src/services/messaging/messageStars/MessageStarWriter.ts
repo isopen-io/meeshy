@@ -9,11 +9,8 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-import { unsetOrNull } from '../../../utils/prisma-unset';
-import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor } from '../../historyFloor';
-import { loadPersonalHistoryHiding } from '../../personalHistoryFilter';
-import { shareLinkHasExpired } from '../../shareLinkReadGate';
-import { readableByReader, starredMessageVerdict } from './starredMessageVerdict';
+import { readerMayReadMessage } from '../messageReadAccess';
+import { starredMessageVerdict } from './starredMessageVerdict';
 
 /** Ce que la pose rend — la route en dérive le statut, jamais l'inverse. */
 export type StarOutcome =
@@ -58,35 +55,24 @@ export class MessageStarWriter {
     });
     if (!message) return NOT_FOUND;
 
-    // La participation AVANT le verdict : un 409 « vue unique » dirait à un
+    // Le droit de LIRE avant le verdict : un 409 « vue unique » dirait à un
     // non-participant qu'un tel message existe dans une conversation qui lui
-    // est fermée. Tous les refus qui précèdent sont donc un même 404.
-    const participation = await this.prisma.participant.findFirst({
-      where: { conversationId: message.conversationId, userId, isActive: true, ...unsetOrNull('bannedAt') },
-      select: HISTORY_FLOOR_PARTICIPANT_SELECT,
-    });
-    if (!participation) return NOT_FOUND;
-
+    // est fermée. Tous les refus qui précèdent sont donc un même 404. La loi
+    // de lecture — participation courante, lien de partage, plancher,
+    // masquage personnel — vit dans `messageReadAccess.ts` : c'est la même
+    // que celle d'un transfert (#9579), jamais une seconde écriture.
     const now = this.now();
+    const mayRead = await readerMayReadMessage(this.prisma, {
+      reader: { kind: 'user', userId },
+      message,
+      now,
+      // Décision #7377 : le masquage personnel est une courtoisie, illisible il sert.
+      whenHidingUnreadable: 'serve',
+    });
+    if (!mayRead) return NOT_FOUND;
+
     const verdict = starredMessageVerdict(message, now);
     if (verdict === 'gone') return NOT_FOUND;
-
-    // Un lien de partage ÉCHU ferme la lecture — la même porte que le fil
-    // (`shareLinkReadGate.ts`). Le lien lu sert ensuite au plancher, qui n'a
-    // pas à le relire.
-    const link = participation.shareLinkId
-      ? await this.prisma.conversationShareLink.findUnique({
-          where: { id: participation.shareLinkId },
-          select: { id: true, allowViewHistory: true, expiresAt: true },
-        })
-      : null;
-    if (shareLinkHasExpired(link, now)) return NOT_FOUND;
-
-    const [floor, hiding] = await Promise.all([
-      loadHistoryFloor(this.prisma, participation, { link }),
-      loadPersonalHistoryHiding(this.prisma, { userId, conversationId: message.conversationId }),
-    ]);
-    if (!readableByReader(message, { floor, hiding })) return NOT_FOUND;
     if (verdict === 'view-once') return NOT_STARRABLE;
 
     const star = await this.placeStar(userId, message.id, message.conversationId);

@@ -37,6 +37,7 @@ import type { PresenceViewer } from '../PresenceVisibilityService';
 import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
 import { GameProfileService } from './GameProfileService';
 import { gloryTotalFromLedger } from './GloryService';
+import { MythicSeatService } from './MythicSeatService';
 
 const CLOSED: UserGameProfileResponse = { visible: false, standing: null, treasury: null };
 
@@ -90,14 +91,14 @@ export class GameStandingService {
     now: Date,
     reader: { readonly intimate: boolean; readonly trophies: boolean },
   ): Promise<GameStanding> {
-    const [glory, settings, trophyCount] = await Promise.all([
+    const [glory, mythicSeat, trophyCount] = await Promise.all([
       gloryTotalFromLedger(this.prisma, userId),
-      this.profile.settings(userId),
+      new MythicSeatService(this.prisma).seatOf(userId),
       reader.intimate && reader.trophies ? this.prisma.gameTrophy.count({ where: { userId } }) : Promise.resolve(null),
     ]);
     const score = Math.max(0, Math.trunc(user.engagementScore ?? 0));
     const level = levelFromScore(score);
-    const rank = gloryStanding({ glory, mythic: settings.mythic });
+    const rank = gloryStanding({ glory, mythicSeat });
     return {
       level,
       tier: levelTierKey(level),
@@ -105,6 +106,8 @@ export class GameStandingService {
       flame: reader.intimate ? shownFlame(user, now) : null,
       rank: rank.rank,
       division: rank.division,
+      division5: rank.division5,
+      mythic: rank.mythic,
       // Les clés sont ABSENTES, jamais nulles, pour un lecteur qui n'y a pas droit : rien à lire, rien à deviner.
       ...(reader.intimate ? { points: score } : {}),
       ...(trophyCount === null ? {} : { trophyCount }),

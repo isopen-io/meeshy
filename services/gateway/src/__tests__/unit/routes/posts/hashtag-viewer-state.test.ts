@@ -51,6 +51,8 @@ type FakePost = {
 };
 type Reaction = { readonly userId: string; readonly postId: string; readonly emoji: string };
 type Bookmark = { readonly userId: string; readonly postId: string };
+type Points = { readonly userId: string; readonly postId: string; readonly totalPoints: number };
+type PublicationMemory = { readonly userId: string; readonly operationKey: string; readonly bucket: string; readonly points: number };
 
 const idDe = (n: number) => `aaaaaaaaaaaaaaaaaaaa${String(n).padStart(4, '0')}`;
 
@@ -102,6 +104,8 @@ function doublePrisma(etat: {
   readonly posts: readonly FakePost[];
   readonly reactions?: readonly Reaction[];
   readonly bookmarks?: readonly Bookmark[];
+  readonly points?: readonly Points[];
+  readonly publications?: readonly PublicationMemory[];
 }) {
   const parLecteur = <R extends { userId: string; postId: string }>(lignes: readonly R[]) =>
     jest.fn(async ({ where }: any) => lignes.filter((l) => l.userId === where.userId && contient(where.postId, l.postId)));
@@ -121,6 +125,14 @@ function doublePrisma(etat: {
     },
     postReaction: { findMany: parLecteur(etat.reactions ?? []) },
     postBookmark: { findMany: parLecteur(etat.bookmarks ?? []) },
+    engagementPostPoints: { findMany: parLecteur(etat.points ?? []) },
+    engagementQuota: {
+      findMany: jest.fn(async ({ where }: any) =>
+        (etat.publications ?? []).filter(
+          (l) => l.userId === where.userId && contient(where.operationKey, l.operationKey) && contient(where.bucket, l.bucket),
+        ),
+      ),
+    },
   };
 }
 
@@ -216,7 +228,7 @@ describe('scope=hashtag — l’état du LECTEUR sur chaque publication (#7396)'
     await app.close();
   });
 
-  it('ce qui part À CÔTÉ : la page n’ajoute que les quatre clés du lecteur, aucune donnée sur les autres', async () => {
+  it('ce qui part À CÔTÉ : la page n’ajoute que les clés du lecteur, aucune donnée sur les autres', async () => {
     const prisma = scenarioNominal();
     const app = await monter(prisma);
 
@@ -224,7 +236,7 @@ describe('scope=hashtag — l’état du LECTEUR sur chaque publication (#7396)'
 
     const servie = parId(res.json().data).get(AIMEE) as Record<string, unknown>;
     const ajoutees = Object.keys(servie).filter((cle) => !(cle in publication(AIMEE))).sort();
-    expect(ajoutees).toEqual(['currentUserReactions', 'isBookmarkedByMe', 'isLikedByMe', 'isRepostedByMe', 'mentions']);
+    expect(ajoutees).toEqual(['currentUserReactions', 'isBookmarkedByMe', 'isLikedByMe', 'isRepostedByMe', 'mentions', 'viewerPoints']);
     expect(servie.currentUserReactions).toEqual(['❤️']);
     await app.close();
   });
@@ -279,5 +291,73 @@ describe('le visiteur non connecté', () => {
     expect(prisma.postReaction.findMany).not.toHaveBeenCalled();
     expect(prisma.postBookmark.findMany).not.toHaveBeenCalled();
     await app.close();
+  });
+});
+
+/**
+ * #9569 — ce que chaque publication a RAPPORTÉ au lecteur, servi avec son état.
+ *
+ * Lu sur la réponse HTTP, comme le reste : c'est ce qui sort du sérialiseur qui
+ * dit ce qu'un client reçoit. Le double ne rend une ligne de cumul qu'au
+ * lecteur qui la possède — un `where` sans `userId` ne rendrait rien.
+ */
+describe('scope=hashtag — ce que chaque publication a rapporté au LECTEUR (#9569)', () => {
+  const MIENNE = idDe(20);
+  const AVEC_GESTES = idDe(21);
+  const SANS_RIEN = idDe(22);
+
+  const scenario = () =>
+    doublePrisma({
+      posts: [publication(MIENNE, { authorId: LECTEUR }), publication(AVEC_GESTES), publication(SANS_RIEN)],
+      points: [
+        { userId: LECTEUR, postId: AVEC_GESTES, totalPoints: 4 },
+        { userId: LECTEUR, postId: MIENNE, totalPoints: 3 },
+        { userId: AUTRE_LECTEUR, postId: AVEC_GESTES, totalPoints: 40 },
+      ],
+      publications: [
+        { userId: LECTEUR, operationKey: 'content.post', bucket: `content:${MIENNE}`, points: 99 },
+        { userId: AUTEUR, operationKey: 'content.post', bucket: `content:${AVEC_GESTES}`, points: 69 },
+      ],
+    });
+
+  const lire = async (prisma: Double, lecteur: string) => {
+    const app = await monter(prisma);
+    const res = await app.inject({ method: 'GET', url: '/social/posts?scope=hashtag&tag=livraison', headers: { 'x-test-user-id': lecteur } });
+    await app.close();
+    return parId(res.json().data);
+  };
+
+  it('sert sur chaque publication ce qu’elle a rapporté au lecteur — ses gestes, et sa publication s’il en est l’auteur', async () => {
+    const servies = await lire(scenario(), LECTEUR);
+
+    expect(servies.get(AVEC_GESTES)?.viewerPoints).toBe(4);
+    expect(servies.get(MIENNE)?.viewerPoints).toBe(102);
+  });
+
+  it('sert zéro, et non l’absence, sur une publication qui n’a rien rapporté', async () => {
+    const servies = await lire(scenario(), LECTEUR);
+
+    expect(servies.get(SANS_RIEN)).toHaveProperty('viewerPoints', 0);
+  });
+
+  it('un AUTRE lecteur reçoit les siens — jamais ceux du premier, ni le crédit de publication de l’auteur', async () => {
+    const servies = await lire(scenario(), AUTRE_LECTEUR);
+
+    expect(servies.get(AVEC_GESTES)?.viewerPoints).toBe(40);
+    expect(servies.get(MIENNE)?.viewerPoints).toBe(0);
+  });
+
+  it('une page coûte UNE lecture du cumul, bornée au lecteur et aux publications de la page', async () => {
+    const prisma = scenario();
+
+    await lire(prisma, LECTEUR);
+
+    expect(prisma.engagementPostPoints.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.engagementPostPoints.findMany.mock.calls[0][0].where).toEqual({
+      userId: LECTEUR,
+      postId: { in: [MIENNE, AVEC_GESTES, SANS_RIEN] },
+    });
+    expect(prisma.engagementQuota.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.engagementQuota.findMany.mock.calls[0][0].where.bucket).toEqual({ in: [`content:${MIENNE}`] });
   });
 });

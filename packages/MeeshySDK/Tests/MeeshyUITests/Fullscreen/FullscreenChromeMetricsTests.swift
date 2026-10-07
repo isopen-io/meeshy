@@ -38,6 +38,12 @@ struct FullscreenChromeMetricsTests {
         #expect(FullscreenChromeMetrics.autoHideDelay == 3)
     }
 
+    @Test("Le bouton central part au bout d'une seconde, avant le reste du chrome (#9577)")
+    func test_playPauseFadeDelay_isItsOwnConstant() {
+        #expect(FullscreenChromeMetrics.playPauseFadeDelay == 1)
+        #expect(FullscreenChromeMetrics.playPauseFadeDelay < FullscreenChromeMetrics.autoHideDelay)
+    }
+
     @Test("Un verbe, un glyphe")
     func test_symbols_pinned() {
         #expect(FullscreenChromeSymbol.close == "xmark")

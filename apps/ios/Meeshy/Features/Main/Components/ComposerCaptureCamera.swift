@@ -22,8 +22,6 @@ protocol ComposerCaptureCameraProviding: AnyObject {
     /// Vise ce point du capteur ; `false` ⇒ l'objectif n'a rien réglé.
     /// `smooth` : la netteté glisse (pendant une prise).
     func focus(at devicePoint: CGPoint, smooth: Bool) -> Bool
-    /// La luminosité visée, en EV — le curseur vertical du viseur (Task 15).
-    func setExposureBias(_ bias: Float)
     /// Attend, au plus `timeout`, que l'objectif puisse prendre — jamais pendant
     /// une bascule. `false` ⇒ il ne l'a pas pu.
     func waitUntilCaptureReady(timeout: TimeInterval) async -> Bool

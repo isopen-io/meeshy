@@ -26,7 +26,8 @@ struct GameHeroView: View {
     var haptics: GameHapticsProviding = GameHaptics.shared
     /// Aucun geste du jeu n'est en vol : seule une montée lue ALORS est « gagnée ».
     var settled = true
-    let onOpenRule: (Int) -> Void
+    /// L'élan servi : les puces « Comment gagner » disent quelles familles sont actives ; `nil` devant un ancien serveur.
+    var elan: EngagementElanProgress?
     let onOpenGuide: () -> Void
 
     @State private var shownLevel: Int
@@ -38,13 +39,13 @@ struct GameHeroView: View {
 
     init(game: GameBlock, cornerFigure: String? = nil, cornerLine: String? = nil,
          haptics: GameHapticsProviding = GameHaptics.shared, settled: Bool = true,
-         onOpenRule: @escaping (Int) -> Void, onOpenGuide: @escaping () -> Void) {
+         elan: EngagementElanProgress? = nil, onOpenGuide: @escaping () -> Void) {
         self.game = game
         self.cornerFigure = cornerFigure
         self.cornerLine = cornerLine
         self.haptics = haptics
         self.settled = settled
-        self.onOpenRule = onOpenRule
+        self.elan = elan
         self.onOpenGuide = onOpenGuide
         _shownLevel = State(initialValue: game.level.level)
         _shownProgress = State(initialValue: game.level.progress)
@@ -62,7 +63,7 @@ struct GameHeroView: View {
             if let cornerLine { corner(cornerLine) }
             levelRow
             rankRow
-            GameHeroEarn(onOpenRule: onOpenRule)
+            GameHeroEarn(elan: elan)
         }
         .padding(MeeshySpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -148,6 +149,8 @@ struct GameHeroView: View {
                 accessibilityLabel: GameCopy.levelRingAccessibility(level: shownLevel, tier: level.tier)
             )
             .frame(width: 88, height: 88)
+            // L'anneau SE TOUCHE (#9564) : il rebondit et ouvre les précisions du niveau.
+            .gameElement(GameElementDetails.levelRing(level), identifier: "game.hero.level")
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(GameCopy.tierName(level.tier))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -163,7 +166,12 @@ struct GameHeroView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 bar
                 if level.record > level.level {
-                    GameChip(text: recordText, tint: MeeshyColors.warning)
+                    // DEUX pastilles, jamais une longue (#9564) : « Record : niveau 100 · Vent arrière ×1,25 » tenait
+                    // sur deux lignes, puis — une fois interdite de passer à la ligne — poussait le héro hors de l'écran.
+                    FlowLayout(spacing: MeeshySpacing.xs) {
+                        GameChip(text: recordText, tint: MeeshyColors.warning)
+                        if let tailwindText { GameChip(text: tailwindText, tint: MeeshyColors.warning) }
+                    }
                 }
             }
         }
@@ -198,14 +206,17 @@ struct GameHeroView: View {
     }
 
     private var recordText: String {
-        let record = String(
+        String(
             localized: "game.level.record",
             defaultValue: "Record : niveau \(GameCopy.formatCount(level.record))",
             bundle: .main
         )
-        guard game.boosts.tailwind > 1 else { return record }
-        let factor = game.boosts.tailwind.formatted(.number.precision(.fractionLength(0...2)))
-        return record + String(localized: "game.level.tailwind", defaultValue: " · Vent arrière ×\(factor)", bundle: .main)
+    }
+
+    /// Le Vent arrière, quand il souffle : il a sa propre pastille.
+    private var tailwindText: String? {
+        guard game.boosts.tailwind > 1 else { return nil }
+        return ConceptText.chipTailwind(GameCopy.factor(game.boosts.tailwind))
     }
 
     // MARK: - Le blason et la division
@@ -228,6 +239,8 @@ struct GameHeroView: View {
         }
         .id(GameAnchor.rank)
         .accessibilityElement(children: .combine)
+        // Le blason SE TOUCHE : il rebondit et ouvre les précisions du rang.
+        .gameElement(GameElementDetails.rank(glory), identifier: "game.hero.rank")
     }
 
     // MARK: - Les animations

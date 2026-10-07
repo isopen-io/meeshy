@@ -18,6 +18,8 @@ import {
   hardenedRateLimitConfig,
 } from './socialRateLimit';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
+import { DailyGestureLimitReached } from '../../services/engagement/DailyGestureGate';
+import { refuseDailyGesture } from '../../utils/daily-gesture-refusal';
 import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLog';
 import { MutationInFlight } from '../../services/MutationLogService';
 import { validatePagination } from '../../utils/pagination';
@@ -147,7 +149,9 @@ export function registerInteractionRoutes(
         // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
         replayCost: 'converges',
         op: async () => {
-          const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji);
+          // #9584 — venu d'une republication simple, le like la crédite AUSSI,
+          // pour de vrai : la résolution ci-dessus l'a traversée et la rend.
+          const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji, { through: target.redirectedFrom });
           if (!res) throw new Error('POST_NOT_FOUND');
           // Les deux branches rendent la MÊME forme de post : `likePost` porte
           // la relation brute `postMentions`, `getPostById` sa forme aplatie et
@@ -242,6 +246,9 @@ export function registerInteractionRoutes(
       // while keeping a reachable domain error out of INTERNAL_ERROR.
       if (error instanceof ConflictError) {
         return sendConflict(reply, error.message, { code: error.code });
+      }
+      if (error instanceof DailyGestureLimitReached) {
+        return refuseDailyGesture(reply, error);
       }
       enhancedLogger.error('[POST /posts/:postId/like]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });

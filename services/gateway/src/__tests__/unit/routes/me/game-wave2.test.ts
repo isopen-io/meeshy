@@ -329,7 +329,7 @@ describe('la vitrine, la visibilité, le Prestige', () => {
 
     db.user.rows[0]!.engagementScore = 100_000;
     const res = await call(app, 'POST', GAME_ROUTES.prestige, { requestId: 'prest-0002' });
-    expect(prestigeResponseSchema.parse(res.json().data)).toMatchObject({ status: 'passed', prestige: 1, gloryGained: 1000 });
+    expect(prestigeResponseSchema.parse(res.json().data)).toMatchObject({ status: 'passed', prestige: 1, gloryGained: 10_000 });
     await app.close();
   });
 });

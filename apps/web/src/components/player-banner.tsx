@@ -54,7 +54,9 @@ import '@/styles/player-banner.css';
  * `prefers-reduced-motion`. Aux très grandes tailles de texte (au-delà de XXL)
  * la jauge passe sous l'anneau.
  *
- * UN seul élément lu par le lecteur d'écran : le lien vers Progression, nommé
+ * UN seul élément lu par le lecteur d'écran : le lien vers la fiche du Niveau
+ * (carte de navigation de #9563 : une entrée extérieure ouvre la fiche du
+ * concept, ici l'anneau et sa jauge, jamais la racine), nommé
  * d'une phrase complète (`playerBannerLabel`) ; ses enfants sont des dessins
  * et des chiffres cachés (`aria-hidden`), puisque la phrase dit tout. Cible de
  * 56 px de haut.
@@ -168,7 +170,8 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
   return (
     <div className="pointer-events-none flex w-full justify-center">
       <Link
-        to="progression"
+        to="progressionConcept"
+        params={{ concept: 'level' }}
         data-player-banner=""
         aria-label={playerBannerLabel(model, language)}
         {...(large ? { 'data-large-text': '' } : {})}

@@ -201,7 +201,7 @@ struct MessageOverlayMenu: View {
             saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
             canComposeMedia: ComposableAttachment.offers(message: message),
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-            isForwardable: message.isForwardable, isViewOnce: message.holdsViewOnce, isBlurred: message.holdsBlur,
+            exits: message.exitOffer, isViewOnce: message.holdsViewOnce, isBlurred: message.holdsBlur,
             hasDefaultExportFormat: MessageCardExportMenu.hasDefaultFormat, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: message).isEmpty
         )
     }

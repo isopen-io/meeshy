@@ -25,6 +25,7 @@ import MeeshyUI
 /// `.onTapGesture` car ce sont des ZONES DE RANGÉE, pas des CONTRÔLES
 /// (même patron que la bulle historique, `mediaWithReplyContainer`).
 struct FocalRow: View {
+    @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
     let input: FocalRowInput
     let actions: FocalRowActions
 
@@ -73,6 +74,8 @@ struct FocalRow: View {
         // #7467 — la destruction se VOIT, dans la rangée plate comme dans la
         // bulle : même modificateur, même durée, même repli.
         .ephemeralBurn(isBurning: content.isBurning)
+        // Ce que les visionneuses ouvertes depuis cette rangée laissent sortir (#9573).
+        .contentExitGate(content.exitGate)
         .padding(.top, input.isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0)
         .padding(.vertical, FocalMetrics.Row.paddingVertical)
         .padding(.horizontal, FocalMetrics.Row.paddingHorizontal)
@@ -316,6 +319,8 @@ struct FocalRow: View {
                     contentSections.viewOnceRetouch(isActive: content.viewOnceRetouchIsActive) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
                 }
             }
+            // #9574, #9617 — annoncé OU noir (Focal et Script).
+            .captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces: announcesCapture))
             .focalElectedLoupe(isFocused: input.isFocused, rowWidth: input.availableWidth)
 
             failedRetrySection

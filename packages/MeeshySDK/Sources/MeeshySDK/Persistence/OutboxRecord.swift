@@ -69,6 +69,12 @@ public enum OutboxKind: String, Codable, CaseIterable, Sendable {
     /// SORTIE de la conversation (`POST …/messages/after-read/consume`).
     /// Idempotente côté passerelle : un rejeu ne consomme rien de plus.
     case consumeAfterRead
+    /// #9617 — la déclaration d'une capture d'un contenu qui disparaît,
+    /// DURABLE : une capture faite hors ligne, socket coupée ou application
+    /// tuée s'annonce quand même tant que la passerelle l'accepte (24 h après
+    /// la lecture). Idempotente côté passerelle : une annonce au plus par
+    /// (acteur, message, sorte de capture).
+    case reportContentCapture
 }
 
 extension OutboxKind {
@@ -93,7 +99,7 @@ extension OutboxKind {
     /// geste pour l'écarter.
     public var countsTowardSyncIndicator: Bool {
         switch self {
-        case .markAsRead, .reportAttachmentStatus, .markStoryViewed, .consumeAfterRead:
+        case .markAsRead, .reportAttachmentStatus, .markStoryViewed, .consumeAfterRead, .reportContentCapture:
             return false
         default:
             return true
@@ -131,6 +137,7 @@ extension OutboxKind {
              .markStoryViewed,
              .reportAttachmentStatus,
              .consumeAfterRead,
+             .reportContentCapture,
              .sendFriendRequest,
              .respondFriendRequest,
              .blockUser,

@@ -9,7 +9,8 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
-import type { ConversationEngagementSnapshot } from '../engagement-scale.js';
+import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
+import type { ContentCaptureAck, ContentCaptureReportInput } from '../content-capture.js';
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
 import type {
   CommentAddedEventData,
@@ -258,6 +259,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.VIEWING_SNAPSHOT]: (data: ViewingSnapshotEvent) => void;
   [SERVER_EVENTS.VIEWING_ACTIVITY]: (data: ViewingEvent) => void;
   [SERVER_EVENTS.ENGAGEMENT_CONVERSATION_UPDATED]: (data: ConversationEngagementSnapshot) => void;
+  [SERVER_EVENTS.ENGAGEMENT_POST_UPDATED]: (data: PostEngagementSnapshot) => void;
   [SERVER_EVENTS.USER_STATUS]: (data: UserStatusEvent) => void;
   [SERVER_EVENTS.PRESENCE_SNAPSHOT]: (data: PresenceSnapshotEventData) => void;
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
@@ -459,6 +461,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS]: (data: MessageSendWithAttachmentsData, callback?: (response: SocketIOResponse<MessageSendResponseData>) => void) => void;
   [CLIENT_EVENTS.MESSAGE_EDIT]: (data: MessageEditData, callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.MESSAGE_DELETE]: (data: MessageDeleteData, callback?: (response: SocketIOResponse) => void) => void;
+  [CLIENT_EVENTS.MESSAGE_CAPTURE_DETECTED]: (data: ContentCaptureReportInput, callback?: (response: ContentCaptureAck) => void) => void;
   [CLIENT_EVENTS.CONVERSATION_JOIN]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.CONVERSATION_LEAVE]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.TYPING_START]: (data: TypingActionData) => void;

@@ -32,6 +32,7 @@ extension ComposerCaptureSession {
     /// quelle : la replier annulerait l'appui long qui tient la prise.
     func toggleFamily(_ family: ComposerLookFamily) {
         guard !lookIsLocked else { return }
+        cropPresetsOpen = false
         openFamily = openFamily == family ? nil : family
         HapticFeedback.light()
     }

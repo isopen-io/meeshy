@@ -29,4 +29,14 @@ nonisolated enum ComposerCaptureTapRule {
         if let armedAt, lastTapAt <= armedAt { return .focus }
         return .photo
     }
+
+    /// Le délai sous lequel un toucher est encore la levée de la tenue.
+    static let holdReleaseWindow: TimeInterval = 0.3
+
+    /// La levée d'une tenue n'est pas un toucher : celui qui la suit de trop
+    /// près est le même doigt (#9557, #9566).
+    static func followsAHold(_ endedAt: Date?, now: Date) -> Bool {
+        guard let endedAt else { return false }
+        return now.timeIntervalSince(endedAt) < holdReleaseWindow
+    }
 }

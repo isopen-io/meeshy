@@ -57,3 +57,24 @@
 .media-filmstrip-item {
   border-radius: 0.375rem;
 }
+
+/**
+ * LA COLONNE D'ACTIONS FLOTTE SUR LA SCÈNE (#9578), miroir `cadreActionColumn`
+ * de la galerie iOS : posée au bord de FIN du plateau (côté gauche en RTL),
+ * elle ne retranche aucune hauteur à la scène. La boîte laisse passer le doigt
+ * (le plateau garde ses gestes) ; seuls ses boutons le prennent.
+ */
+.media-viewer-stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.media-viewer-stage-rail {
+  position: absolute;
+  inset-inline-end: 0.5rem;
+  bottom: 0.75rem;
+  z-index: 10;
+}

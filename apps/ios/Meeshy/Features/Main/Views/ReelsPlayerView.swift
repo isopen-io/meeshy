@@ -72,7 +72,7 @@ struct ReelsPlayerView: View {
     /// share button can't fire two mints (mirrors the feed's `postShareInFlightIds`).
     @State private var shareInFlightIds: Set<String> = []
     /// Flux « Enregistrer en local » du menu « … » de la barre haute.
-    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator(exitGate: .open)
 
     var body: some View {
         ZStack {

@@ -261,6 +261,23 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:message:delete'
   },
+  // #9617 — `message:capture-detected` et son jumeau REST : une déclaration de
+  // capture d'écran ou d'enregistrement, par acteur ET par conversation (clé
+  // composée par `captureRateLimitKey`). Une personne prend rarement plus de
+  // six captures par minute ; le budget arrête l'inondation d'avis système.
+  MESSAGE_CAPTURE: {
+    maxRequests: 6,
+    windowMs: 60000,
+    keyPrefix: 'socket:message:capture'
+  },
+  // #9617 (audit A1) — les AVIS écrits, par acteur et conversation : au plus
+  // trente par heure, quel que soit le nombre de déclarations. Chaque avis
+  // compte comme non lu pour tous et fait remonter la conversation.
+  MESSAGE_CAPTURE_NOTICES_HOURLY: {
+    maxRequests: 30,
+    windowMs: 3600000,
+    keyPrefix: 'capture:notices:hourly'
+  },
   // #8892 — `viewing:start` : une ouverture de conversation. Le geste est
   // rare (naviguer d'un fil à l'autre) ; le budget n'arrête que le script.
   CONVERSATION_VIEWING: {

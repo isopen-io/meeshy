@@ -44,6 +44,23 @@
  *
  *   4. rien ne défile : l'écran tient entier dans la vue.
  *
+ * et, pour « PROGRESSION » (#9563, amendement n° 3 du porteur : « la vue
+ * Progression ne doit pas défiler horizontalement »), avec le jeu aux VALEURS
+ * LONGUES (niveau 97 et record 100, des millions de points, « Ambassadeur III »,
+ * 999 jours de Flamme — `src/lib/api/game-fixture-long.ts`, armé par le drapeau
+ * `meeshy.fixtures.gameLong`), à 320 px dans les sept langues, 375 px en
+ * allemand et en arabe, 260 px en allemand (le texte agrandi par le système) :
+ *
+ *   5. sur la première page, les quinze fiches et les onze
+ *      sous-pages, AUCUN conteneur ne défile de côté — bande comprise : ici une
+ *      rangée trop longue passe à la ligne entre ses éléments — rien ne dépasse
+ *      le conteneur qui défile, et ce conteneur verrouille l'axe horizontal
+ *      sans rien cacher (`scrollWidth` égale `clientWidth`).
+ *
+ * La démonstration ordinaire est confortable : la mesure de 1. et 2. était verte
+ * sur elle pendant que « Ligue » s'écrasait lettre à lettre à côté de
+ * « Améthyste · rang 30 ».
+ *
  * GARDES DE VACUITÉ — un témoin d'absence est vert sur une page vide : chaque
  * adresse doit avoir peint au moins un contenu perceptible, et le relevé doit
  * avoir mesuré au moins un champ de saisie et au moins une bande.
@@ -52,6 +69,14 @@ import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { waitForValueSettled } from './lib/settle-value.mjs';
 import { v31Routes } from './lib/v31-routes.mjs';
+import {
+  GAME_LONG_FLAG,
+  LANGUAGE_KEY,
+  LONG_LEVEL,
+  PROGRESSION_GABARITS,
+  PROGRESSION_PAGES,
+  sidewaysReleve,
+} from './lib/progression-sideways.mjs';
 
 const TELEPHONES = [
   { width: 320, height: 568 },
@@ -88,8 +113,15 @@ const concretise = (pattern) =>
     return valeur;
   });
 
-const ADRESSES = v31Routes().map(({ url }) => concretise(url));
-const CONNEXION = ['/login', '/login?methode=password'];
+/**
+ * `PHONE_FRAME_ONLY=progression` ne joue que la mesure 5 (Progression aux valeurs
+ * longues) : c'est la boucle courte de qui retouche ces pages. La CI ne pose
+ * jamais la variable, elle joue tout.
+ */
+const SEULEMENT_PROGRESSION = process.env.PHONE_FRAME_ONLY === 'progression';
+
+const ADRESSES = SEULEMENT_PROGRESSION ? [] : v31Routes().map(({ url }) => concretise(url));
+const CONNEXION = SEULEMENT_PROGRESSION ? [] : ['/login', '/login?methode=password'];
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const served = await startDistServer(DIST, { serviceWorker: false });
@@ -100,7 +132,7 @@ const failures = [];
 const constate = (vrai, quoi) => {
   if (!vrai) failures.push(quoi);
 };
-const bilan = { mesures: 0, champs: 0, bandes: 0 };
+const bilan = { mesures: 0, champs: 0, bandes: 0, progression: 0 };
 
 /** Le relevé, dans la page — voir le doc-comment de tête. */
 const releve = () => {
@@ -240,6 +272,43 @@ try {
     await context.close();
   }
 
+  /* 5. PROGRESSION, AUX VALEURS LONGUES — voir le doc-comment de tête. */
+  for (const { viewport, langues } of PROGRESSION_GABARITS) {
+    for (const langue of langues) {
+      const context = await ouvre(viewport);
+      await context.addInitScript(
+        ([drapeau, clef, valeur]) => {
+          localStorage.setItem(drapeau, '1');
+          localStorage.setItem(clef, valeur);
+        },
+        [GAME_LONG_FLAG, LANGUAGE_KEY, langue],
+      );
+      /* UN onglet par langue, rechargé d'adresse en adresse : 280 relevés ne paient pas 280 ouvertures. */
+      const page = await context.newPage();
+      for (const adresse of PROGRESSION_PAGES) {
+        const tag = `${adresse} @ ${viewport.width} px, ${langue}, valeurs longues`;
+        await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
+        await page.waitForLoadState('networkidle').catch(() => undefined);
+        const m = await waitForValueSettled(page, sidewaysReleve);
+        if (m === undefined || m.sansContenu) {
+          constate(false, `${tag} : la page n'a rien peint de mesurable — le témoin ne mesure rien`);
+          continue;
+        }
+        bilan.progression += 1;
+        constate(m.elements >= 10, `${tag} : ${m.elements} élément(s) seulement — la page n'est pas celle attendue (${m.chemin})`);
+        if (adresse === '/me/progression') {
+          constate((m.niveau ?? '').includes(LONG_LEVEL), `${tag} : la première page ne sert pas les valeurs longues (niveau lu : ${m.niveau}) — la mesure porterait sur les valeurs confortables`);
+        }
+        for (const d of m.defilants) constate(false, `${tag} : ${d} — dans Progression, rien ne défile de côté`);
+        for (const d of m.debords) constate(false, `${tag} : ${d} dépasse la page`);
+        constate(m.rogne <= TOLERANCE, `${tag} : le conteneur rogne ${m.rogne} px de contenu — le verrou cache un débordement (un mot insécable, souvent)`);
+        constate(m.verrou, `${tag} : le conteneur qui défile ne verrouille pas l'axe horizontal (overflow-x-clip)`);
+        constate(m.surdefilement === 'none', `${tag} : le conteneur laisse le surdéfilement horizontal (overscroll-behavior-x : ${m.surdefilement})`);
+      }
+      await context.close();
+    }
+  }
+
   const context = await ouvre(IPHONE_SE);
   for (const adresse of CONNEXION) {
     const tag = `${adresse} @ ${IPHONE_SE.width}×${IPHONE_SE.height}`;
@@ -259,8 +328,11 @@ try {
   served.close();
 }
 
-constate(bilan.champs > 0, 'aucun champ de saisie mesuré sur toutes les adresses — la règle des 16 px ne mesure rien');
-constate(bilan.bandes > 0, 'aucune bande horizontale rencontrée — l’exemption des bandes ne se prouve sur rien');
+if (!SEULEMENT_PROGRESSION) {
+  constate(bilan.champs > 0, 'aucun champ de saisie mesuré sur toutes les adresses — la règle des 16 px ne mesure rien');
+  constate(bilan.bandes > 0, 'aucune bande horizontale rencontrée — l’exemption des bandes ne se prouve sur rien');
+}
+constate(bilan.progression > 0, 'aucune page de Progression mesurée aux valeurs longues');
 
 if (failures.length > 0) {
   console.error(`\ncheck-phone-frame : ${failures.length} échec(s)`);
@@ -269,5 +341,6 @@ if (failures.length > 0) {
 }
 console.log(
   `\ncheck-phone-frame : vert — ${ADRESSES.length} adresses × ${TELEPHONES.length} téléphones (${bilan.mesures} relevés, ${bilan.champs} champs, ${bilan.bandes} bandes) : ` +
-    `aucun cadre ne défile de côté, aucun champ sous ${CHAMP_MIN_PX} px, la connexion tient dans ${IPHONE_SE.width}×${IPHONE_SE.height}.\n`,
+    `aucun cadre ne défile de côté, aucun champ sous ${CHAMP_MIN_PX} px, la connexion tient dans ${IPHONE_SE.width}×${IPHONE_SE.height} ; ` +
+    `Progression aux valeurs longues : ${bilan.progression} relevés (${PROGRESSION_PAGES.length} pages), rien ne glisse ni ne dépasse.\n`,
 );

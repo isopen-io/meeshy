@@ -510,6 +510,8 @@ const fr = {
   'media.audio.position': 'Position de lecture',
   'media.audio.speed': 'Vitesse de lecture',
   'media.video.position.value': '{elapsed} sur {total}',
+  'media.video.duration': 'Durée',
+  'media.video.remaining': 'Temps restant',
   'media.buffering': 'Chargement…',
   'media.video.mute': 'Couper le son',
   'media.video.unmute': 'Réactiver le son',

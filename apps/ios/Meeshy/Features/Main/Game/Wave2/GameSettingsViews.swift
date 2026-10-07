@@ -29,8 +29,6 @@ struct GameSettingsScreen: View {
     @ObservedObject private var notificationPrefs = UserPreferencesManager.shared
     let game: GameBlock
 
-    @EnvironmentObject private var router: Router
-
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -40,7 +38,6 @@ struct GameSettingsScreen: View {
         if let visibility = game.visibility { visibilityCard(visibility) }
         if let league = game.league { leagueCard(league) }
         friendsLeague
-        doors
     }
 
     // MARK: Les célébrations
@@ -120,9 +117,6 @@ struct GameSettingsScreen: View {
         let inLeague = league.access == .open
         return GameCard(title: GameText.settingsLeagueTitle) {
             GameNote(text: leagueSentence(league, inLeague: inLeague))
-            GameQuietButton(title: GameText.settingsLeagueManage, identifier: "game.settings.league.manage") {
-                router.push(.gamePage(.league))
-            }
             if inLeague {
                 GameQuietButton(
                     title: GameText.leagueConsentLeave, destructive: true,
@@ -158,34 +152,4 @@ struct GameSettingsScreen: View {
         .accessibilityIdentifier("game.settings.friends-league.card")
     }
 
-    // MARK: Les règles et le carnet
-
-    private var doors: some View {
-        VStack(spacing: MeeshySpacing.sm) {
-            door(GameText.settingsHelp, symbol: "questionmark.circle", id: "game.settings.help") {
-                router.push(.progressionRules(rule: nil))
-            }
-            door(String(localized: "game.door.notebook", defaultValue: "Carnet de progression", bundle: .main), symbol: "book.closed", id: "game.settings.notebook") {
-                router.push(.progressionNotebook)
-            }
-        }
-    }
-
-    private func door(_ title: String, symbol: String, id: String, action: @escaping () -> Void) -> some View {
-        Button {
-            HapticFeedback.light()
-            action()
-        } label: {
-            HStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: symbol)
-                Text(title)
-            }
-            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-            .foregroundColor(MeeshyColors.brandPrimary)
-            .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget)
-            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.backgroundSecondary))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(id)
-    }
 }

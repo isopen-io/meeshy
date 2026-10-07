@@ -71,6 +71,11 @@ extension ConversationMediaGalleryView {
         if att.fileSize > 0 {
             parts.append(att.fileSizeFormatted)
         }
+        // #9577 — la durée fait partie de la ligne ; VoiceOver en lit le TOTAL,
+        // pas le décompte (un libellé qui change chaque seconde se relirait).
+        if MediaGalleryStage.carriesDuration([att]), let duree = att.durationFormatted {
+            parts.append(duree)
+        }
         return ListFormatter.localizedString(byJoining: parts)
     }
 }

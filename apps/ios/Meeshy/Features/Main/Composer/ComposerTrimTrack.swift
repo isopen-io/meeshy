@@ -81,7 +81,9 @@ nonisolated enum ComposerTrimThumbnails {
 
 /// **La piste de découpe** (#9353, spec § 3.3) : `[poignée] ── vignettes (forme
 /// d'onde en filigrane) ── [poignée]`, une tête de lecture qui parcourt la plage
-/// en boucle ; toucher les vignettes y place la tête.
+/// en boucle ; toucher les vignettes y place la tête. Les deux poignées et le
+/// liseré ferment UN cadre arrondi autour de la plage gardée, et ses bornes se
+/// lisent en permanence au-dessus, à la milliseconde (porteur 2026-10-07, #9567).
 ///
 /// **Appui long sur une poignée ⇒ précision à la milliseconde** : la piste se
 /// dilate autour d'elle sous un trait FIXE, et le doigt fait défiler la bande —
@@ -97,7 +99,9 @@ struct ComposerTrimTrack: View {
     let duration: TimeInterval
 
     static let height: CGFloat = 52
-    private static let handleWidth: CGFloat = 22
+    private static let boundsHeight: CGFloat = 16
+    private static let handleWidth: CGFloat = 18
+    private static let frameRadius: CGFloat = 10
     private static let thumbnailCount = 12
     private static let waveformSamples = 256
     /// Le pas d'un balayage VoiceOver sur une poignée, et sur la tête.
@@ -124,21 +128,24 @@ struct ComposerTrimTrack: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let piste = ComposerTrimTrackGeometry(totalWidth: proxy.size.width,
-                                                  inset: MeeshySpacing.mdPlus + Self.handleWidth,
-                                                  duration: duration)
-            ZStack(alignment: .leading) {
-                strip(piste)
-                selectionEdges(piste)
-                playheadLine(piste)
-                handle(.start, piste)
-                handle(.end, piste)
+        VStack(spacing: MeeshySpacing.xs) {
+            bounds
+            GeometryReader { proxy in
+                let piste = ComposerTrimTrackGeometry(totalWidth: proxy.size.width,
+                                                      inset: MeeshySpacing.mdPlus + Self.handleWidth,
+                                                      duration: duration)
+                ZStack(alignment: .leading) {
+                    strip(piste)
+                    selectionEdges(piste)
+                    playheadLine(piste)
+                    handle(.start, piste)
+                    handle(.end, piste)
+                }
+                .frame(width: proxy.size.width, height: Self.height, alignment: .leading)
             }
-            .frame(width: proxy.size.width, height: Self.height, alignment: .leading)
+            .frame(height: Self.height)
+            .overlay(alignment: .top) { readout }
         }
-        .frame(height: Self.height)
-        .overlay(alignment: .top) { readout }
         .environment(\.layoutDirection, .leftToRight)
         .disabled(!trimmable)
         .opacity(trimmable ? 1 : 0.4)
@@ -166,6 +173,31 @@ struct ComposerTrimTrack: View {
         session.setTrim(range, committed: true)
     }
 
+    // MARK: - Les bornes
+
+    /// **Le début, la durée gardée, la fin — toujours lisibles**, à la
+    /// milliseconde : on rogne en lisant, pas en devinant. Pendant un réglage
+    /// de précision, le temps de la poignée tenue prend leur place.
+    private var bounds: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Text(ComposerTrimRule.millisecondText(range.lowerBound))
+            Spacer(minLength: 0)
+            Text(ComposerTrimRule.millisecondText(range.upperBound - range.lowerBound))
+                .foregroundStyle(Color.yellow)
+            Spacer(minLength: 0)
+            Text(ComposerTrimRule.millisecondText(range.upperBound))
+        }
+        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
+        .foregroundStyle(.white.opacity(0.9))
+        .shadow(color: .black.opacity(0.6), radius: 2, y: 1)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .padding(.horizontal, MeeshySpacing.mdPlus + Self.handleWidth)
+        .frame(height: Self.boundsHeight)
+        .opacity(precise == nil ? 1 : 0)
+        .accessibilityHidden(true)
+    }
+
     // MARK: - La bande
 
     /// La piste à l'échelle 1 ; en précision, une LOUPE par-dessus — jamais la
@@ -191,7 +223,6 @@ struct ComposerTrimTrack: View {
             if let precise { loupe(precise, piste) }
         }
         .frame(width: piste.width, height: Self.height, alignment: .leading)
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous))
         .contentShape(Rectangle())
         .gesture(SpatialTapGesture(count: 1, coordinateSpace: .local).onEnded { toucher in
             HapticFeedback.light()
@@ -307,18 +338,23 @@ struct ComposerTrimTrack: View {
 
     // MARK: - Les poignées
 
-    /// Une poignée : sa barre jaune au bord de la plage, dans une cible de 44 pt.
+    /// Une poignée : sa barre jaune au bord de la plage, arrondie vers
+    /// l'extérieur, une prise sobre en son milieu, dans une cible de 44 pt.
     /// Tenue en précision, elle se range sous le trait fixe, au centre ; l'autre
     /// s'efface, la loupe ne montrant que les abords de la première.
     private func handle(_ poignee: ComposerTrimHandle, _ piste: ComposerTrimTrackGeometry) -> some View {
         let temps = time(of: poignee)
         let bord = precise == poignee ? piste.inset + piste.width / 2 : piste.x(for: temps)
         let centre = poignee == .start ? bord - Self.handleWidth / 2 : bord + Self.handleWidth / 2
-        return RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
+        let dehors = Self.frameRadius
+        return UnevenRoundedRectangle(topLeadingRadius: poignee == .start ? dehors : 0,
+                                      bottomLeadingRadius: poignee == .start ? dehors : 0,
+                                      bottomTrailingRadius: poignee == .end ? dehors : 0,
+                                      topTrailingRadius: poignee == .end ? dehors : 0,
+                                      style: .continuous)
             .fill(Color.yellow)
-            .overlay(Image(systemName: poignee == .start ? "chevron.compact.left" : "chevron.compact.right")
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundStyle(.black))
+            .overlay(Capsule().fill(Color.black.opacity(0.55)).frame(width: 3, height: 18))
+            .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
             .frame(width: Self.handleWidth, height: Self.height)
             .frame(width: MeeshyControlSize.tapTarget, height: Self.height)
             .contentShape(Rectangle())

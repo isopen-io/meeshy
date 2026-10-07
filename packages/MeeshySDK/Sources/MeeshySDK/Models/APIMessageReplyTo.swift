@@ -210,6 +210,17 @@ public extension APIMessageReplyTo {
         // traduites d'un audio cité pour élire hors fenêtre la piste du
         // vocal d'origine. Jamais les pistes d'un média protégé.
         reference.quotedExpiresAt = expiresAt
+        // #9573 — la nature de disparition du cité, lue par la loi de sortie
+        // sur ce que le fil déclare. Sans `effectFlags`, rien n'est déclaré :
+        // la citation reste illisible, et son contenu ne sortira pas.
+        reference.quotedExitNature = effectFlags.map { flags in
+            ContentExitLaw.of(ContentExitLaw.Subject(
+                isViewOnce: isViewOnce, isBlurred: isBlurred, effectFlags: flags, expiresAt: expiresAt,
+                attachments: (attachments ?? []).map {
+                    ContentExitLaw.Piece(isViewOnce: $0.isViewOnce, isBlurred: $0.isBlurred, effectFlags: $0.effectFlags)
+                }
+            )).nature
+        }
         if let representative, !reference.quotedMediaIsProtected, reference.attachmentFileUrl != nil,
            AttachmentKind(mimeType: representative.mimeType ?? "") == .audio {
             reference.quotedAudioTracks = ReplyReference.QuotedAudioTracks(

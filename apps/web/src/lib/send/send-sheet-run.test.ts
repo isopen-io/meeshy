@@ -361,3 +361,28 @@ describe('hors ligne, échec et rejeu', () => {
     expect(failedKeysOf(run.getState())).toEqual(['conversation:c1', 'conversation:c2']);
   });
 });
+
+/** #9573 — le moteur remet la durée choisie au transport, et garde le statut et le code d'un refus. */
+describe('transfert d’une flamme à durée', () => {
+  const flamePayload: SendPayload = { kind: 'messages', conversationId: 'src', messages: [{ ...message('m1'), maxDurationSeconds: 300 }], preview: { kind: 'messages', count: 1 } };
+
+  test('la durée de l’étape arrive au port de transfert', async () => {
+    const seen: (number | undefined)[] = [];
+    const h = harness();
+    const ports: SendSheetPorts = { ...h.ports, forward: async (p) => (seen.push(p.ephemeralDuration), { ok: true, count: p.messages.length }) };
+    const planned = planSend({ payload: flamePayload, targets: [conversation('c1')], caption: '', viewerId: 'me', forwardDuration: 60 });
+    if (!planned.ok) throw new Error('plan refusé');
+    await createSendRun({ entries: planned.entries, payload: flamePayload, language: 'fr', ports }).start();
+    expect(seen).toEqual([60]);
+  });
+
+  test('un refus du transfert garde le statut et le code du serveur', async () => {
+    const h = harness();
+    const ports: SendSheetPorts = { ...h.ports, forward: async () => ({ ok: false, error: 'non', status: 400, code: 'ephemeral-not-forwardable' }) };
+    const planned = planSend({ payload: flamePayload, targets: [conversation('c1')], caption: '', viewerId: 'me' });
+    if (!planned.ok) throw new Error('plan refusé');
+    const run = createSendRun({ entries: planned.entries, payload: flamePayload, language: 'fr', ports });
+    await run.start();
+    expect(run.getState().statuses['conversation:c1']).toEqual({ state: 'failed', failure: { kind: 'refused', status: 400, message: 'non', code: 'ephemeral-not-forwardable' } });
+  });
+});

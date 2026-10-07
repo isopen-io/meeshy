@@ -1,0 +1,39 @@
+/*
+ * L'HEURE ET LES POINTS D'UNE RANGÉE NE PARAISSENT QU'AU DÉFILEMENT (#9570).
+ *
+ * Au repos, la liste respire : le nom, l'aperçu, le badge de non-lus. La
+ * feuille `.lens-row-meta` (`lens-row.tsx` — la marque de points, puis
+ * l'heure) est rendue en permanence et masquée par l'OPACITÉ seule : sa place
+ * reste réservée, aucune rangée ne se remet en page quand elle paraît. Le
+ * lecteur d'écran la lit toujours — l'opacité ne retire rien de l'arbre.
+ *
+ * `data-row-meta="revealed"` est posé sur le défileur, hors React, par
+ * `useLensMetaReveal` (`lib/view/lens-meta-reveal.ts`) : pendant un
+ * défilement de l'utilisateur et une fenêtre après, et une fois à
+ * l'ouverture. Même fondu que la pilule de jour du fil (`thread-scene.css`).
+ *
+ * Le focus clavier d'une rangée révèle les siens ; le survol aussi, mais
+ * seulement sur un appareil qui survole vraiment — au doigt, `:hover` colle
+ * après un toucher.
+ */
+.lens-row-meta {
+  opacity: 0;
+  transition: opacity var(--day-pill-fade-ms, 180ms) ease-in-out;
+}
+
+[data-row-meta='revealed'] .lens-row-meta,
+[data-row]:focus-within .lens-row-meta {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  [data-row]:hover .lens-row-meta {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lens-row-meta {
+    transition: none;
+  }
+}

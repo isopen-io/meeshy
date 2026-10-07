@@ -13,6 +13,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
 import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { DUO_TEMPLATES } from '@meeshy/shared/utils/game/duo';
 import { MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { GameAbuseGuard, quarterPoints, type MessageVerdict } from './GameAbuseGuard';
@@ -28,9 +29,13 @@ import type { StreakPlan } from './FlameService';
 
 const log = enhancedLogger.child({ module: 'EngagementGameHooks' });
 
-/** Les signaux d'axe qu'au moins un gabarit attend : les autres n'ouvrent aucune lecture. */
+/**
+ * Les signaux d'axe qu'au moins un gabarit attend — mission du jour OU duo de la semaine : les autres n'ouvrent
+ * aucune lecture. Le duo est compté à part entière : retirer une mission du jour (#9634) ne doit jamais couper
+ * l'axe d'un duo en cours.
+ */
 const MISSION_AXIS_SIGNALS: ReadonlySet<string> = new Set(
-  MISSION_TEMPLATES.map((template) => template.signal).filter((signal) => signal.startsWith('axis:')),
+  [...MISSION_TEMPLATES, ...DUO_TEMPLATES].map((template) => template.signal).filter((signal) => signal.startsWith('axis:')),
 );
 
 export { quarterPoints };
@@ -141,6 +146,11 @@ export class EngagementGameHooks {
   /** Un message committé : les signaux de mission et les +3 points de la réponse reçue. */
   recordMessage(input: MessageSignalInput): Promise<void> {
     return this.signals.record(input);
+  }
+
+  /** Une conversation créée vide vient d'être démarrée (#9635) : sous la garde d'un message. */
+  recordConversationStarted(input: { readonly senderUserId: string; readonly conversationId: string }): Promise<void> {
+    return this.signals.recordConversationStarted(input);
   }
 
   private async isolated(label: string, work: () => Promise<void>): Promise<void> {

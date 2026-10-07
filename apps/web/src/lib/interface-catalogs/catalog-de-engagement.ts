@@ -8,9 +8,13 @@ const deEngagement = {
   'engagement.pill.streak.other': 'Serie von {count} Tagen',
   'engagement.pill.points.one': '{total} Punkt, davon {today} heute',
   'engagement.pill.points.other': '{total} Punkte, davon {today} heute',
+  'engagement.pill.total.one': '{total} Punkt in dieser Unterhaltung gesammelt',
+  'engagement.pill.total.other': '{total} Punkte in dieser Unterhaltung gesammelt',
   'engagement.pill.join': '{streak}, {points}',
   'engagement.pill.open': 'Meinen Fortschritt öffnen',
   'engagement.flame.label': '{count} Punkte heute — tippen, um die Flamme auszublenden',
+  'engagement.post.points.one': 'Dieser Beitrag hat dir {count} Punkt eingebracht',
+  'engagement.post.points.other': 'Dieser Beitrag hat dir {count} Punkte eingebracht',
 } as const;
 
 export default deEngagement;

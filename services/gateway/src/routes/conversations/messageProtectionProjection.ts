@@ -43,11 +43,15 @@ export const MESSAGE_PROTECTION_SELECT = {
  * montrant MOINS, jamais plus. Un appelant qui n'a pas résolu les échéances
  * sert donc un message sans décompte, jamais le décompte de quelqu'un d'autre.
  *
+ * L'expéditeur d'une COPIE transférée (durée ET après lecture, #9588) reçoit
+ * « envoi + durée » : d'où `createdAt`, lu sur la ligne quand elle le porte.
+ * Sans lui, la destruction moins la grâce borne seule.
+ *
  * Un message NON éphémère (`ephemeralDuration` nul) garde la colonne intacte :
  * c'est le chemin de la grâce de vue unique, que ce lot ne touche pas.
  */
 export function mapMessageProtectionFields(
-  message: MessageProtectionRow,
+  message: MessageProtectionRow & { readonly createdAt?: Date | string | null },
   reader?: EphemeralReaderResolution,
 ): MessageProtectionRow {
   return {
@@ -61,6 +65,7 @@ export function mapMessageProtectionFields(
       ephemeralDuration: message.ephemeralDuration,
       effectFlags: message.effectFlags,
       rawExpiresAt: message.expiresAt ?? null,
+      sentAt: message.createdAt ?? null,
       isSender: reader?.isSender ?? false,
       readerDeadline: reader?.readerDeadline ?? null,
       latestRecipientDeadline: reader?.latestRecipientDeadline ?? null,

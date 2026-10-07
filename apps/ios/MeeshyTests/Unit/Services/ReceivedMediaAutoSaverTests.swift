@@ -68,10 +68,20 @@ final class ReceivedMediaAutoSaverTests: XCTestCase {
         }
     }
 
-    func test_policy_pièceProtégée_nEstJamaisEnregistrée() {
-        let eligible = ReceivedMediaAutoSavePolicy.eligibleMedia(
-            in: message([photo("flou", isBlurred: true), photo("unique", isViewOnce: true), photo("net")]))
-        XCTAssertEqual(eligible.map(\.id), ["net"])
+    /// La loi de sortie lit le message ET ses pièces, la plus restrictive gagne
+    /// (#9573) : une pièce floutée ou à vue unique protège le message entier,
+    /// sa voisine nette comprise.
+    func test_policy_pièceProtégée_protègeToutLeMessage() {
+        for protégée in [photo("flou", isBlurred: true), photo("unique", isViewOnce: true)] {
+            let eligible = ReceivedMediaAutoSavePolicy.eligibleMedia(in: message([protégée, photo("net")]))
+            XCTAssertTrue(eligible.isEmpty, "\(protégée.id) : rien du message ne rejoint l'album")
+        }
+    }
+
+    func test_policy_flammeÀDurée_nEstJamaisEnregistrée() {
+        var flamme = message([photo()], flags: .ephemeral)
+        flamme.effects.ephemeralDuration = 300
+        XCTAssertTrue(ReceivedMediaAutoSavePolicy.eligibleMedia(in: flamme).isEmpty)
     }
 
     // MARK: - L'orchestrateur

@@ -40,6 +40,8 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     /// la galerie est fermée : il s'ouvre avec elle (index persisté, puis pages
     /// `view=media` en arrière-plan) et se vide à sa fermeture.
     @StateObject private var catalog: ConversationMediaCatalog
+    /// #9617 — la surface que ce plein écran présente au rapporteur de capture.
+    @State private var fullscreenCapture: FullscreenCaptureSurface?
 
     init(viewModel: ConversationViewModel,
          scrollState: Binding<ConversationScrollState>,
@@ -59,12 +61,71 @@ struct ConversationMediaGalleryLayer: ViewModifier {
                                 onDismiss: handleGalleryDismiss) { startAttachment in
             // Un vocal (cité, #8230) a son propre plein écran ; la galerie ne
             // sait rendre que l'image et la vidéo.
-            if startAttachment.type == .audio {
-                audioFullscreen(start: startAttachment)
-            } else {
-                gallery(start: startAttachment)
+            Group {
+                if startAttachment.type == .audio {
+                    audioFullscreen(start: startAttachment)
+                        .captureShield(captureScope.shields(startAttachment.id))
+                } else {
+                    gallery(start: startAttachment)
+                }
             }
+            // Posé sur le CONTENU présenté : c'est lui qui rend les boutons
+            // d'enregistrement et de partage (#9573).
+            .contentExitGate(mediaExitGate)
+            // Et chaque page d'une pièce protégée se rend dans la couche
+            // sécurisée (#9574).
+            .captureShieldScope(captureScope)
+            // #9617 — une capture déclare la pièce à l'écran, pas le fil dessous.
+            .onAppear { registerFullscreenCapture(start: startAttachment) }
+            .onDisappear(perform: unregisterFullscreenCapture)
         }
+    }
+
+    private func registerFullscreenCapture(start: MessageAttachment) {
+        let viewModel = viewModel
+        let catalog = catalog
+        let surface = FullscreenCaptureSurface(
+            startAttachmentId: start.id,
+            carrier: { attachmentId in
+                viewModel.messages.first { $0.attachments.contains { $0.id == attachmentId } }
+                    ?? catalog.snapshot.carrier(ofAttachment: attachmentId)
+            },
+            // La passerelle n'annonce qu'un message LU : ce qui est en grand l'est.
+            acknowledgeRead: { viewModel.markAsRead(messageIds: [$0.id]) }
+        )
+        unregisterFullscreenCapture()
+        fullscreenCapture = surface
+        ContentCaptureReporter.shared.register(surface)
+    }
+
+    private func unregisterFullscreenCapture() {
+        if let fullscreenCapture { ContentCaptureReporter.shared.unregister(fullscreenCapture) }
+        fullscreenCapture = nil
+    }
+
+    /// **Les pièces que le plein écran peut laisser sortir** (#9573) : celles
+    /// d'un message dont la loi de sortie offre l'enregistrement. La photo
+    /// d'une flamme, d'une vue unique ou d'un message flouté n'en est pas ;
+    /// une pièce dont le porteur est inconnu non plus. Le porteur se lit dans
+    /// la fenêtre, sinon dans l'index des médias.
+    private var mediaExitGate: ContentExitGate {
+        let windowed = Set(viewModel.messages.flatMap { $0.attachments.map(\.id) })
+        let indexed = catalog.snapshot.attachments
+            .filter { !windowed.contains($0.id) }
+            .compactMap { catalog.snapshot.carrier(ofAttachment: $0.id) }
+        return MessageExitOffer.mediaExitGate(for: viewModel.messages + indexed)
+    }
+
+    /// Les pièces que le plein écran rend dans la couche sécurisée (#9574) —
+    /// mêmes porteurs que `mediaExitGate`, verdict de capture.
+    private var captureScope: CaptureShieldScope {
+        let windowed = Set(viewModel.messages.flatMap { $0.attachments.map(\.id) })
+        let indexed = catalog.snapshot.attachments
+            .filter { !windowed.contains($0.id) }
+            .compactMap { catalog.snapshot.carrier(ofAttachment: $0.id) }
+        // #9617 — ce plein écran est enregistré auprès du détecteur de
+        // capture (`registerFullscreenCapture`) : une flamme y est annoncée.
+        return MessageExitOffer.captureShieldScope(for: viewModel.messages + indexed, surfaceAnnounces: true)
     }
 
     private func gallery(start startAttachment: MessageAttachment) -> some View {
@@ -79,6 +140,10 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             onSendReplyToMedia: sendReplyToMedia,
             replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id, carrier: carrier(of: $0)) },
             onReactToMedia: reactToMedia,
+            // « Composer » n'existe que si l'armer produit une cible (loi 4) :
+            // la règle d'offre lit la loi de sortie (#9573), donc la pièce d'une
+            // flamme ou d'une vue unique n'a pas ce bouton.
+            composableMedia: { carrier(of: $0).map(ComposableAttachment.offers(message:)) ?? false },
             reactableMedia: { catalog.snapshot.isLoaded($0.id) }
         )
         .onAppear(perform: openCatalog)

@@ -1168,18 +1168,14 @@ struct RootView: View {
             // charge ne dit pas lequel — on n'en invente pas, et le tap se
             // comporte alors exactement comme avant.
             router.pendingEngagementReveal = ctx.reveal
-            router.push(.progression)
+            // … puis ouvre la FICHE de son concept, au-dessus de la première page (#9564, carte de navigation).
+            router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
 
-        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep:
-            // Une notification du jeu (#9490) ouvre la page qui la restitue : la Ligue (son duo y est posé)
-            // ou la Saison. Le type décide, jamais la forme de la métadonnée.
-            router.push(.gamePage(GamePage.opened(by: ctx.type) ?? .league))
-
-        case .gameMissionWindow:
-            // La plage de la mission personnelle s'est ouverte (#9539) : le toucher ouvre Progression sur la
-            // section Héro des missions — pas une page du jeu.
-            router.pendingGameAnchor = .missions
-            router.push(.progression)
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
+            // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme (#9564) : le
+            // Classement pour un duo ou un résultat de ligue, la Saison pour une étape, la fiche des Missions à ses
+            // gestes — posé sur son chemin complet, le retour remonte la chaîne. Le type décide, jamais la métadonnée.
+            router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
 
         case .legacyAffiliateSignup:
             router.push(.affiliate)

@@ -141,7 +141,7 @@ struct ReelFeedCard: View, Equatable {
     /// Flux « Enregistrer en local » du menu « … » : pour un réel, Enregistrer
     /// télécharge le MÉDIA (image/vidéo) dans Photos — distinct du bouton
     /// favori dédié (bookmark) qui, lui, enregistre le poste dans l'app.
-    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator(exitGate: .open)
 
     // MARK: - Bouton de son du fil (S2, exigence produit 2026-08-22)
     //

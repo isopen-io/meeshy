@@ -4,7 +4,7 @@
  *
  * Workbox range une réponse sous son URL. Deux comptes qui lisent
  * la liste des conversations (`conversations.root`) sur le même appareil partageaient donc UNE
- * entrée : sur un réseau lent (`networkTimeoutSeconds: 3`) ou hors ligne, le
+ * entrée : hors ligne (et, avant #9637, sur un simple réseau lent), le
  * NetworkFirst resservait au compte B la liste du compte A. La purge au
  * changement d'identité ne fermait pas la course : une réponse d'A encore en
  * vol au moment de la bascule s'écrivait dans le seau APRÈS la purge.

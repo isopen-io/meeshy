@@ -25,6 +25,7 @@ import MeeshyUI
 /// toutes les autres pages réalisées — à la fréquence d'affichage.
 struct GalleryImagePage: View, Equatable {
     let attachment: MessageAttachment
+    @Environment(\.captureShieldScope) private var captureScope
     /// **Le cadre de CETTE page**, résolu par `MediaStageFraming` (#6141). La
     /// page ne calcule aucune cote : elle reçoit celles du plateau, les mêmes
     /// que l'overlay pose une couche plus haut — c'est ce qui garantit que le
@@ -120,7 +121,14 @@ struct GalleryImagePage: View, Equatable {
             .accessibilityHidden(true)
     }
 
+    /// #9574 — la page d'une pièce protégée se rend dans la couche sécurisée ;
+    /// la portée est posée par l'hôte de la galerie.
     var body: some View {
+        pageBody.captureShield(captureScope.shields(attachment.id))
+    }
+
+    @ViewBuilder
+    private var pageBody: some View {
         // **Le cadre arrondi** (#6141), et son hors-champ HABILLÉ (#6143) : le
         // fond est celui du CADRE, pas de l'écran — au-delà de lui c'est le
         // plateau qui se voit. Il porte le ThumbHash flouté du média quand
@@ -398,6 +406,8 @@ struct GalleryImagePage: View, Equatable {
 /// traverser une conversation de vingt vidéos en lançait vingt.
 struct GalleryVideoPage: View, Equatable {
     let attachment: MessageAttachment
+    @Environment(\.captureShieldScope) private var captureScope
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
     /// Le cadre de cette page — voir `GalleryImagePage.stage` (#6141).
     let stage: MediaStageFraming.Result
     /// Voir `GalleryImagePage.presentation` (#6142).
@@ -489,7 +499,7 @@ struct GalleryVideoPage: View, Equatable {
     }
 
     private var isPlayerActive: Bool {
-        videoManagerActiveURL == attachment.fileUrl && videoManagerIsPlaying
+        isPlayerAttached && videoManagerIsPlaying
     }
 
     /// La vidéo est-elle prête à jouer sans téléchargement ? Gouverne
@@ -499,15 +509,24 @@ struct GalleryVideoPage: View, Equatable {
         return false
     }
 
+    /// Le verdict de montage du MOTEUR (#9575), au rôle plein écran : la page
+    /// reprend sa vidéo, PiP compris — c'est elle qui referme la fenêtre.
     private var isPlayerAttached: Bool {
-        videoManagerActiveURL == attachment.fileUrl
+        SharedAVPlayerManager.mayMountFullscreenPlayer(surfaceMedia: attachment.fileUrl,
+                                                       activeMedia: videoManagerActiveURL)
     }
 
     private func resolveAvailability() async {
         resolvedAvailability = await VideoAvailability.resting(for: attachment)
     }
 
+    /// #9574 — voir `GalleryImagePage.body`.
     var body: some View {
+        pageBody.captureShield(captureScope.shields(attachment.id))
+    }
+
+    @ViewBuilder
+    private var pageBody: some View {
         // **Le cadre arrondi** (#6141) et son hors-champ habillé (#6143) — voir
         // `GalleryImagePage.body`. La couche `AVPlayerLayer` cesse d'ignorer la
         // zone sûre : elle vit maintenant DANS le cadre, et c'est lui qui la
@@ -660,6 +679,20 @@ struct GalleryVideoPage: View, Equatable {
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
         .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
+        // **Le plein écran REPREND sa vidéo** (#9575) : au retour au premier
+        // plan, la fenêtre PiP ouverte en quittant l'application se referme et
+        // la lecture continue sur la page — jamais aux deux endroits. La page
+        // COURANTE seule : une voisine ne décide pas pour une piste qu'on ne
+        // regarde pas.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            guard isActive else { return }
+            videoManager.reclaimFromPip(urlString: attachment.fileUrl)
+        }
+        // Même reprise à l'ouverture sur un média que la fenêtre PiP jouait.
+        .task(id: "\(attachment.id)#reclaim#\(isActive)") {
+            guard isActive else { return }
+            videoManager.reclaimFromPip(urlString: attachment.fileUrl)
+        }
     }
 
     /// **Le glissement vertical : le bas ferme, le haut ouvre** (#6142). Voir
@@ -689,14 +722,19 @@ struct GalleryVideoPage: View, Equatable {
             .onEnded { value in
                 switch resolveDrag(value.translation) {
                 case .dismisses:
-                    if videoManager.isPlaying && videoManager.activeURL == attachment.fileUrl {
-                        videoManager.startPip()
-                    } else if videoManager.activeURL == attachment.fileUrl {
-                        // Vidéo EN PAUSE : pas de handoff PiP — sans cette
-                        // libération, le player partagé restait attaché
-                        // (`activeURL` posé) et la bulle en dessous rendait la
-                        // frame gelée au lieu de son thumbnail, footer masqué.
-                        videoManager.release(urlString: attachment.fileUrl)
+                    // **Sortir n'abandonne la lecture qu'au PiP** (#9575). Une
+                    // vidéo en pause, ou une fenêtre PiP qui ne part pas
+                    // (appareil sans PiP), LIBÈRE le player : sinon la bulle
+                    // restée dessous reprenait la lecture, ou sa frame gelée,
+                    // sans que personne l'ait demandé.
+                    if videoManager.mayMountPlayer(role: .fullscreen, urlString: attachment.fileUrl) {
+                        let handedOff = videoManager.isPlaying
+                            && !isCaptureShielded
+                            && videoManager.startPip(haltsOnFailure: true)
+                        if SharedAVPlayerManager.fullscreenCloseDisposition(
+                            pipHandedOff: handedOff || videoManager.isPipActive) == .stops {
+                            videoManager.release(urlString: attachment.fileUrl)
+                        }
                     }
                     onDismiss()
                 case .entersFull:

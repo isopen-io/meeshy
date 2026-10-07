@@ -21,6 +21,7 @@ const quoted = (overrides: Partial<Message> = {}): Message =>
     content: 'Where do we meet tonight?',
     originalLanguage: 'en',
     translations: [translation('m-quoted', 'fr', 'On se retrouve où ce soir ?')],
+    effectFlags: 0,
     createdAt: new Date('2026-09-28T11:00:00.000Z'),
     ...overrides,
   });
@@ -82,9 +83,9 @@ describe('messageCardSubjectOf — ce que la carte a le droit de montrer', () =>
     expect(subjectOf(reply({ expiresAt: new Date(NOW - 1000) }))).toBeNull();
   });
 
-  test('une citation protégée ne montre que son placeholder, jamais son contenu', () => {
+  test('une citation protégée ne se peint pas : ni placeholder servi, ni contenu (#9573)', () => {
     const subject = subjectOf(reply({ replyTo: quoted({ isViewOnce: true, content: '👁️' }) }));
-    expect(subject?.quoted?.text).toBe('👁️');
+    expect(subject?.quoted).toBeNull();
     expect(JSON.stringify(subject)).not.toContain('On se retrouve');
   });
 
@@ -133,9 +134,10 @@ describe('les médias qu’une carte peut montrer (#8693)', () => {
     expect(subject?.media).toHaveLength(1);
   });
 
-  test('une pièce à VUE UNIQUE ou FLOUTÉE n’est jamais peinte — et seule, elle ne donne pas de carte', () => {
-    const subject = subjectOf(standalone({ attachments: [piece({ id: 'a-open' }), piece({ id: 'a-once', isViewOnce: true }), piece({ id: 'a-blur', isBlurred: true })] }));
+  test('une pièce FLOUTÉE n’est jamais peinte — et seule, elle ne donne pas de carte ; une pièce à VUE UNIQUE ferme la carte du message entier (#9573)', () => {
+    const subject = subjectOf(standalone({ attachments: [piece({ id: 'a-open' }), piece({ id: 'a-blur', isBlurred: true })] }));
     expect(subject?.media.map((item) => item.id)).toEqual(['a-open']);
+    expect(subjectOf(standalone({ attachments: [piece({ id: 'a-open' }), piece({ id: 'a-once', isViewOnce: true })] }))).toBeNull();
     expect(subjectOf(standalone({ content: '', attachments: [piece({ isBlurred: true })] }))).toBeNull();
   });
 
@@ -183,9 +185,12 @@ describe('le message CITÉ apporte son média (#8901)', () => {
 
   test('une pièce citée protégée à SON niveau n’est pas peinte, ses voisines le sont', () => {
     const subject = subjectOf(
-      reply({ replyTo: quoted({ attachments: [piece({ id: 'q-once', isViewOnce: true }), piece({ id: 'q-blur', isBlurred: true }), piece({ id: 'q-e2ee', isEncrypted: true }), piece({ id: 'q-open' })] }) }),
+      reply({ replyTo: quoted({ attachments: [piece({ id: 'q-blur', isBlurred: true }), piece({ id: 'q-e2ee', isEncrypted: true }), piece({ id: 'q-open' })] }) }),
     );
     expect(subject?.media.map((item) => item.id)).toEqual(['q-open']);
+    const withOnce = subjectOf(reply({ replyTo: quoted({ attachments: [piece({ id: 'q-once', isViewOnce: true }), piece({ id: 'q-open' })] }) }));
+    expect(withOnce?.media).toEqual([]);
+    expect(withOnce?.quoted).toBeNull();
   });
 
   test('chaque média porte son AUTEUR (#9236) : la réponse les siens, la citation les siens — même sans texte cité', () => {

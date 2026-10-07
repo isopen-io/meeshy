@@ -138,9 +138,10 @@ public enum GameDuo {
         GameOrdering.compare(a, b) <= 0 ? "\(a)&\(b)" : "\(b)&\(a)"
     }
 
-    /// Chaque gabarit de duo reste un signal que la passerelle observe déjà.
+    /// Chaque gabarit de duo reste un signal que la passerelle observe déjà — la liste des signaux, pas celle
+    /// des gabarits du jour : retirer une mission du jour (#9634) ne change pas le duo d'une semaine en cours.
     private static var catalog: [DuoTemplate] {
-        let known = Set(GameMissions.templates.map(\.signal))
+        let known = Set(MissionSignal.observed)
         return templates.filter { known.contains($0.signal) }
     }
 

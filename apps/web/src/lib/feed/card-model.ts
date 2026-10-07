@@ -14,6 +14,7 @@ import type { SceneCarrier } from '@/lib/canvas/carrier';
 import { feedMediaKindOf, postMediaRatio, reelCardRatio, type FeedMediaKind } from './layout';
 import { resolveMosaicLayout, type MosaicLayoutMode } from './mosaic-layout';
 import { resolveFeedText } from './text';
+import { servedViewerPoints } from './viewer-points';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 
 /**
@@ -218,6 +219,14 @@ export type FeedCardModel = {
    * `carousel` quand le document n'en dit rien. */
   readonly layout: MosaicLayoutMode;
   readonly stats: FeedCardStats;
+  /**
+   * CE QUE CE POST A RAPPORTÉ AU LECTEUR (#9570) — `FeedPost.viewerPoints`,
+   * présent seulement quand il vaut plus que zéro : absent (ancien serveur,
+   * lecteur sans compte) ou nul, la carte ne porte aucune marque. Toujours
+   * celui de CE post : une republication porte le sien, jamais celui de son
+   * original.
+   */
+  readonly viewerPoints?: number;
 };
 
 const FALLBACK_AUTHOR_NAME = 'Quelqu’un';
@@ -507,6 +516,8 @@ export function resolveFeedCardModel(
           },
         };
 
+  const viewerPoints = servedViewerPoints(post.viewerPoints);
+
   return {
     id: post.id,
     viewer: { liked: post.isLikedByMe === true, bookmarked: post.isBookmarkedByMe === true, reposted: post.isRepostedByMe === true },
@@ -543,6 +554,7 @@ export function resolveFeedCardModel(
       bookmarkCount: numberOrUndefined(post.bookmarkCount) ?? 0,
       shareCount: numberOrUndefined(post.shareCount) ?? 0,
     },
+    ...(viewerPoints !== undefined && viewerPoints > 0 ? { viewerPoints } : {}),
   };
 }
 

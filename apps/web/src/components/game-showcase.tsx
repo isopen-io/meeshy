@@ -2,11 +2,13 @@ import type { GameTrophiesBlock, GameVisibility } from '@meeshy/shared/types/gam
 
 import { gameText } from '@/lib/view/game-copy';
 import { awardedDate, trophyView } from '@/lib/view/game-copy-v2';
+import { trophyDetail } from '@/lib/view/game-detail';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
-import { GameTrophyShelf, type ShelfEntry } from './game-trophy-shelf';
+import { GameTouch } from './game-touch';
+import { GameTrophyShelf, shelfOrder, type ShelfEntry } from './game-trophy-shelf';
 import { GameVisibilityPicker } from './game-visibility-picker';
 
 /**
@@ -37,12 +39,7 @@ export type GameShowcaseProps = {
 };
 
 /** L'ordre PARCOURU : les clés rangées qui existent, puis tout ce que l'ordre ne cite pas, dans l'ordre servi. */
-export function shelfOrder(trophies: GameTrophiesBlock): readonly string[] {
-  const owned = new Set(trophies.items.map((item) => item.key));
-  const ordered = trophies.order.filter((key, index) => owned.has(key) && trophies.order.indexOf(key) === index);
-  const rest = trophies.items.map((item) => item.key).filter((key) => !ordered.includes(key));
-  return [...ordered, ...rest];
-}
+export { shelfOrder };
 
 const moved = (order: readonly string[], index: number, delta: -1 | 1): readonly string[] => {
   const target = index + delta;
@@ -84,6 +81,12 @@ export function GameShowcase(props: GameShowcaseProps) {
         key,
         view,
         caption: at === undefined ? '' : gameText('game.showcase.awarded', { date: awardedDate(at, language) }),
+        /* La coupe se touche : elle ouvre SES précisions (#9563). */
+        wrap: (trophy) => (
+          <GameTouch detail={at === undefined ? null : trophyDetail({ key, awardedAt: at })} className="flex min-w-0 flex-col items-center rounded-card">
+            {trophy}
+          </GameTouch>
+        ),
         controls: (
           <div className="flex gap-1">
             {button('data-game-trophy-up', -1, gameText('game.showcase.move_up', { name: view.title }), '↑', index === 0)}

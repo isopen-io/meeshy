@@ -486,6 +486,26 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "Masquer ici laisserait vivre, chez qui a effacé l'original de son historique, " +
       "une réponse à un éphémère déjà détruit pour lui.",
   },
+  'messaging/attachmentSendAdmission.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Admission des pièces d'un envoi (#9587) : elle lit l'identifiant, la " +
+      "conversation et le `clientMessageId` des messages qui PORTENT déjà les " +
+      "pièces déclarées, pour reconnaître le réessai idempotent du MÊME envoi. " +
+      "Elle ne rend aucun contenu ; masquer ici refuserait le réessai d'un " +
+      "envoi de l'auteur sous prétexte qu'il a effacé son propre historique.",
+  },
+  'messaging/contentCaptureNotices.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Avis de capture (#9617) : il lit la protection et l'expéditeur des " +
+      "messages déclarés capturés, et ne rend aucun contenu. Le droit du " +
+      "lecteur, masquage personnel COMPRIS, est jugé message par message par " +
+      "`readerMayReadMessage` avec `whenHidingUnreadable: 'refuse'` : un " +
+      "message masqué pour l'acteur n'est jamais annoncé.",
+  },
   'messaging/ephemeralCountdown.ts': {
     kind: 'exempt',
     reads: 1,

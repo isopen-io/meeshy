@@ -11,7 +11,7 @@ import type { CommentReactionAggregation } from '@meeshy/shared/types/post';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { assertValidObjectId } from '../utils/object-id.js';
 import { EngagementService } from './engagement/EngagementService';
-import { creditPostEngagement, type PostEngagementRecorder } from './posts/postEngagementCredits';
+import { creditPostEngagement, creditSource, reclaimContentCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
 
 export interface CommentReactionData {
   readonly id: string;
@@ -159,7 +159,13 @@ export class CommentReactionService {
       });
 
       await this.updateCommentReactionSummary(commentId);
-      creditPostEngagement(this.prisma, userId, 'tool.comment_like', { targetId: commentId, targetOwnerId: comment.authorId }, this.engagement);
+      creditPostEngagement(
+        this.prisma,
+        userId,
+        'tool.comment_like',
+        { postId: comment.postId, targetId: commentId, targetOwnerId: comment.authorId, receipt: creditSource.commentReaction(reaction.id) },
+        this.engagement,
+      );
 
       return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {
@@ -184,6 +190,10 @@ export class CommentReactionService {
       throw new Error('Invalid emoji format');
     }
 
+    const removed = await this.prisma.commentReaction.findMany({
+      where: { commentId, userId, emoji: sanitized },
+      select: { id: true },
+    });
     const result = await this.prisma.commentReaction.deleteMany({
       where: {
         commentId,
@@ -194,6 +204,8 @@ export class CommentReactionService {
 
     if (result.count > 0) {
       await this.updateCommentReactionSummary(commentId);
+      // Retirer le like reprend ce qu'il a rapporté (#9584).
+      removed.forEach(({ id }) => reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(id), {}, this.engagement));
     }
 
     return result.count > 0;

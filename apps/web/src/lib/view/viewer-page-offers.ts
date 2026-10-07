@@ -2,6 +2,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment, Message } from '@/lib/api/types';
 import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
 
+import { loosePieceLeaves, mediaLeaves, type ExitMessage } from './content-exit';
 import { kindOf } from './message';
 import { quotedIsProtected } from './quoted-protection';
 
@@ -12,16 +13,21 @@ import { quotedIsProtected } from './quoted-protection';
  * PARTAGER : la pièce part vers une personne, plusieurs, un groupe, ou se
  * publie (feuille d'envoi commune, `openSendSheet`).
  *
- * DEUX QUESTIONS, DANS CET ORDRE.
- *  1. **La pièce a-t-elle le droit de sortir ?** Une vue unique, un flou ou un
- *     chiffrement — au niveau du MESSAGE comme de la PIÈCE — ferme les quatre
- *     portes d'un coup (`FullscreenReplyRoute`, `AttachmentReactionOffer`,
- *     `ComposableAttachment.isProtected` : le même prédicat, lu une fois). La
- *     garde vit au rang de l'EXISTENCE du bouton, jamais d'un bouton qui
- *     refuserait après le tap. Elle se lit sur la pièce ORIGINALE : une pièce
- *     floutée que l'on vient de révéler (`revealedAttachment`) reste une pièce
- *     floutée pour ce qu'elle a le droit de quitter.
- *  2. **L'hôte sait-il faire l'action ?** Loi 4 — un contrôle existe s'il a un
+ * TROIS QUESTIONS, DANS CET ORDRE.
+ *  1. **La pièce est-elle voilée ?** Une vue unique, un flou ou un
+ *     chiffrement — au niveau du MESSAGE comme de la PIÈCE — ferme les cinq
+ *     portes d'un coup. La garde vit au rang de l'EXISTENCE du bouton, jamais
+ *     d'un bouton qui refuserait après le tap. Elle se lit sur la pièce
+ *     ORIGINALE : une pièce floutée que l'on vient de révéler
+ *     (`revealedAttachment`) reste une pièce floutée pour ce qu'elle a le
+ *     droit de quitter.
+ *  2. **A-t-elle le droit de SORTIR ?** (#9573) Enregistrer, Partager et
+ *     Créer font quitter Meeshy à la pièce : la loi de sortie les retire à
+ *     tout contenu qui disparaît (`mediaLeaves`, `content-exit.ts`), jugée sur
+ *     le message ENTIER — la pièce ordinaire d'un message dont une autre pièce
+ *     est à vue unique ne sort pas. Réagir et Répondre ne sortent rien : ils
+ *     restent.
+ *  3. **L'hôte sait-il faire l'action ?** Loi 4 — un contrôle existe s'il a un
  *     effet : chaque capacité est déclarée par l'hôte (le fil sait répondre,
  *     l'écran des médias non ; un hôte sans porte de fichier ne sait pas
  *     enregistrer).
@@ -45,26 +51,27 @@ export const NO_MEDIA_OFFERS: MediaPageOffers = { save: false, react: false, rep
 
 const isLocalSend = (id: string): boolean => id.startsWith('cid_');
 
-export type ProtectableMessage = Pick<Message, 'id' | 'isViewOnce' | 'isBlurred' | 'isEncrypted'> & {
-  readonly effectFlags?: number;
-};
+export type ProtectableMessage = ExitMessage & Pick<Message, 'id'>;
 
 export function mediaPageOffers(params: {
   readonly attachment: Attachment;
   readonly message: ProtectableMessage;
   readonly capabilities: MediaViewerCapabilities;
+  readonly now: number;
+  /** Le porteur est une CITATION : sa nature doit être déclarée pour que la pièce sorte. */
+  readonly quoted?: boolean;
 }): MediaPageOffers {
-  const { attachment, message, capabilities } = params;
+  const { attachment, message, capabilities, now } = params;
   if (quotedIsProtected(message) || quotedIsProtected(attachment) || isLocalSend(message.id)) return NO_MEDIA_OFFERS;
   const kind = kindOf(attachment);
   const visual = kind === 'image' || kind === 'video';
-  const hasFile = attachment.fileUrl !== '';
+  const leaves = attachment.fileUrl !== '' && mediaLeaves({ message, piece: attachment, now, source: params.quoted === true ? 'quote' : 'message' });
   return {
-    save: capabilities.save && hasFile,
+    save: capabilities.save && leaves,
     react: capabilities.react,
     reply: capabilities.reply,
-    compose: capabilities.compose && visual && hasFile,
-    share: capabilities.share && hasFile,
+    compose: capabilities.compose && visual && leaves,
+    share: capabilities.share && leaves,
   };
 }
 
@@ -98,18 +105,21 @@ const previewUrlOf = (attachment: Attachment): string =>
  * LA PIÈCE D'UN MESSAGE, TELLE QUE LA FEUILLE D'ENVOI LA REÇOIT (#8884) — elle
  * voyage par ses IDENTIFIANTS, jamais par son fichier : la passerelle la copie
  * ou la transfère sans ré-upload. `mine` dit si la copie serveur lui est permise.
- * `mediaPageOffers` a déjà retiré l'action d'une pièce voilée (vue unique,
- * flou, chiffrement) ; reste l'ÉPHÉMÈRE, qui se TRANSFÈRE (la copie hérite de
- * sa durée) mais ne se PUBLIE pas — la passerelle le refuse en
- * `PROTECTED_MEDIA`, donc la feuille n'offre aucune pastille de publication.
+ * `mediaPageOffers` n'offre « Partager » qu'à une pièce qui a le droit de
+ * sortir ; `protected` redit ce verdict dans la charge, pour que le plan
+ * d'envoi refuse la publication même si une autre entrée l'ouvrait.
  */
 export function attachmentSendRequest(params: {
   readonly attachment: Attachment;
-  readonly message: Pick<Message, 'id' | 'conversationId'> & Partial<Pick<Message, 'expiresAt'>>;
+  readonly message: Pick<Message, 'id' | 'conversationId'> & Partial<ExitMessage>;
   /** Le lecteur est l'auteur du message (`isMineOf`) — l'hôte qui ne le sait pas dit `false`, la voie sûre (transfert, jamais copie serveur). */
   readonly mine: boolean;
+  readonly now: number;
+  readonly quoted?: boolean;
 }): SendSheetRequest {
-  const { attachment, message, mine } = params;
+  const { attachment, message, mine, now } = params;
+  const carrier: ExitMessage = { isViewOnce: false, isBlurred: false, ...message };
+  const leaves = mediaLeaves({ message: carrier, piece: attachment, now, source: params.quoted === true ? 'quote' : 'message' });
   return {
     intent: 'share',
     payload: {
@@ -120,7 +130,7 @@ export function attachmentSendRequest(params: {
       mime: attachment.mimeType,
       previewUrl: previewUrlOf(attachment),
       mine,
-      protected: message.expiresAt != null,
+      protected: !leaves,
     },
   };
 }
@@ -139,12 +149,13 @@ export function sharePage(attachment: Attachment, share: SendSheetRequest): Medi
 /**
  * UN MÉDIA NU — l'image d'un commentaire, le média d'une publication : aucun
  * message ne le porte, la feuille le traite comme un fichier (téléchargé une
- * fois, envoyé ou publié). `null` quand il ne peut pas sortir : protégé (vue
- * unique, flou, chiffré — lu sur la pièce, comme `mediaPageOffers`), sans
- * fichier, ou encore un aperçu `blob:` de l'appareil.
+ * fois, envoyé ou publié). `null` quand il ne peut pas sortir : la loi de
+ * sortie lue sur la pièce seule (`loosePieceLeaves` — vue unique, bit
+ * éphémère, flou, chiffré), sans fichier, ou encore un aperçu `blob:` de
+ * l'appareil.
  */
 export function standaloneSharePage(attachment: Attachment): MediaViewerPage | null {
-  if (quotedIsProtected(attachment) || attachment.fileUrl === '' || attachment.fileUrl.startsWith('blob:')) return null;
+  if (!loosePieceLeaves(attachment) || attachment.fileUrl === '' || attachment.fileUrl.startsWith('blob:')) return null;
   const video = isVideo(attachment);
   return sharePage(attachment, {
     intent: 'share',

@@ -319,6 +319,9 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
   };
 
   const corridor = (body: HTMLElement): HTMLElement => body.querySelector<HTMLElement>('[data-viewer-transport-slot]')!;
+  const railControls = (body: HTMLElement): HTMLElement => body.querySelector<HTMLElement>('[data-viewer-video-controls]')!;
+  const infoLine = (body: HTMLElement): HTMLElement | null => body.querySelector<HTMLElement>('[data-viewer-meta]');
+  const centerToggle = (body: HTMLElement): HTMLButtonElement => currentPage(body).querySelector<HTMLButtonElement>('[data-viewer-center-toggle]')!;
 
   /**
    * La barre est un chunk À LA DEMANDE (`lazy`) : on attend que son module
@@ -329,6 +332,7 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
     const { items, videoIndex } = tripleVideoIndex();
     const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
     await act(async () => {
+      await import('./viewer-video-page');
       await import('./media-transport');
     });
     return { body, videoIndex };
@@ -344,11 +348,12 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
     return video;
   }
 
-  test('avant ses métadonnées, le couloir bas montre la durée de la PIÈCE, sans piste', async () => {
+  test('avant ses métadonnées, aucune piste — et la durée de la PIÈCE se lit déjà sur la ligne d’informations', async () => {
     const { body } = await mountVideo();
 
     expect(corridor(body).querySelector('[role="slider"]')).toBeNull();
-    expect(corridor(body).textContent).toContain('0:07');
+    expect(corridor(body).textContent).toBe('');
+    expect(infoLine(body)?.textContent).toContain('0:07');
   });
 
   test('une fois la durée connue, la piste vit dans le couloir bas, jamais sur le média', async () => {
@@ -399,7 +404,7 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
     const video = await loadActiveVideo(body, 60);
     const topCorridor = body.querySelector<HTMLElement>('[data-media-viewer] > div')!;
     const buttonIn = (label: string): HTMLButtonElement =>
-      Array.from(corridor(body).querySelectorAll<HTMLButtonElement>('button')).find((b) => b.getAttribute('aria-label') === label)!;
+      Array.from(railControls(body).querySelectorAll<HTMLButtonElement>('button')).find((b) => b.getAttribute('aria-label') === label)!;
 
     // L'opacité se lit APRÈS CHAQUE geste : deux bascules du plateau
     // s'annulent, et une lecture unique en fin de test resterait verte
@@ -413,14 +418,14 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
     await act(async () => {
       buttonIn("Plus d'options").click();
     });
-    expect(corridor(body).querySelector('[role="menu"]')).not.toBeNull();
+    expect(railControls(body).querySelector('[role="menu"]')).not.toBeNull();
     expect(topCorridor.style.opacity).toBe('1');
   });
 
-  test('Espace sur un bouton de la barre l’active, sans remonter au raccourci lecture/pause de la visionneuse', async () => {
+  test('Espace sur un bouton du rail l’active, sans remonter au raccourci lecture/pause de la visionneuse', async () => {
     const { body } = await mountVideo();
     await loadActiveVideo(body, 60);
-    const mute = Array.from(corridor(body).querySelectorAll<HTMLButtonElement>('button')).find((b) => b.getAttribute('aria-label') === 'Couper le son')!;
+    const mute = Array.from(railControls(body).querySelectorAll<HTMLButtonElement>('button')).find((b) => b.getAttribute('aria-label') === 'Couper le son')!;
     expect(currentPage(body).querySelector('button[aria-label="Pause"]')).not.toBeNull();
 
     await act(async () => {
@@ -430,11 +435,126 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
     expect(currentPage(body).querySelector('button[aria-label="Pause"]')).not.toBeNull();
   });
 
+  /**
+   * LE PLEIN ÉCRAN LAISSE TOUTE LA LARGEUR À LA PROGRESSION (#9577) — de haut
+   * en bas : scène, barre de progression, ligne d'informations, pellicule. Le
+   * muet et « ⋯ » quittent la barre pour la colonne d'actions ; le temps se
+   * lit sur la ligne d'informations, où il décompte.
+   */
+  test('#9577 — sous la scène : la barre de progression, puis la ligne d’informations, puis la pellicule', async () => {
+    const { body } = await mountVideo();
+    await loadActiveVideo(body, 7);
+    const bar = body.querySelector<HTMLElement>('[data-viewer-bottom-bar]')!;
+    const slot = corridor(body);
+    const info = infoLine(body)!;
+    const strip = body.querySelector<HTMLElement>('[data-filmstrip-item]')!;
+
+    expect(slot.parentElement).toBe(bar);
+    expect(slot.compareDocumentPosition(info) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(info.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('#9577 — la barre ne porte que la piste : ni bouton ni temps ne lui prennent de la largeur', async () => {
+    const { body } = await mountVideo();
+    await loadActiveVideo(body, 60);
+
+    expect(corridor(body).querySelector('[role="slider"]')).not.toBeNull();
+    expect(corridor(body).querySelector('button')).toBeNull();
+    expect(corridor(body).textContent).toBe('');
+  });
+
+  test('#9577 — le muet et « ⋯ » vivent dans la colonne d’actions, dans cet ordre', async () => {
+    const { body } = await mountVideo();
+    await loadActiveVideo(body, 60);
+
+    expect(railControls(body).closest('[data-viewer-rail-slot]')).not.toBeNull();
+    expect(Array.from(railControls(body).querySelectorAll('button')).map((b) => b.getAttribute('data-viewer-action'))).toEqual(['mute', 'more']);
+  });
+
+  test('#9577 — la durée décompte pendant la lecture, et redit la durée totale à l’arrêt', async () => {
+    const { body } = await mountVideo();
+    const video = await loadActiveVideo(body, 60);
+    const duration = (): HTMLElement => infoLine(body)!.querySelector<HTMLElement>('[data-viewer-duration]')!;
+
+    expect(centerToggle(body).getAttribute('aria-label')).toBe('Pause');
+    expect(duration().textContent).toContain('1:00');
+    expect(duration().getAttribute('data-viewer-duration')).toBe('remaining');
+
+    await act(async () => {
+      video.currentTime = 12.4;
+      video.dispatchEvent(new Event('timeupdate'));
+    });
+    expect(duration().textContent).toContain('0:48');
+    expect(duration().textContent).toContain('Temps restant');
+
+    await act(async () => {
+      centerToggle(body).click();
+    });
+    expect(duration().textContent).toContain('1:00');
+    expect(duration().textContent).toContain('Durée');
+    expect(duration().getAttribute('data-viewer-duration')).toBe('total');
+  });
+
+  test('#9577 — le décompte n’est pas une région vivante : un lecteur d’écran ne le lit pas chaque seconde', async () => {
+    const { body } = await mountVideo();
+    await loadActiveVideo(body, 60);
+
+    expect(infoLine(body)!.closest('[aria-live]')).toBeNull();
+    expect(infoLine(body)!.querySelector('[aria-live]')).toBeNull();
+  });
+
+  test('#9577 — la pause s’efface une seconde après le début de la lecture, un toucher la ramène, et elle reste en pause', async () => {
+    const { body } = await mountVideo();
+    await loadActiveVideo(body, 60);
+    const waitMs = async (ms: number): Promise<void> => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, ms));
+      });
+    };
+
+    expect(centerToggle(body).getAttribute('data-effaced')).toBe('false');
+    await waitMs(1_100);
+    expect(centerToggle(body).getAttribute('data-effaced')).toBe('true');
+
+    // Effacé, il reste nommé et focalisable : ni piège de focus, ni contrôle perdu pour un lecteur d'écran.
+    expect(centerToggle(body).getAttribute('aria-label')).toBe('Pause');
+    expect(centerToggle(body).hasAttribute('aria-hidden')).toBe(false);
+    expect(centerToggle(body).hasAttribute('disabled')).toBe(false);
+    expect(centerToggle(body).getAttribute('tabindex')).not.toBe('-1');
+
+    // Un toucher sur la scène le ramène — sans mettre en pause.
+    await act(async () => {
+      currentPage(body).querySelector('video')!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, pointerType: 'touch', isPrimary: true }));
+    });
+    expect(centerToggle(body).getAttribute('data-effaced')).toBe('false');
+    expect(centerToggle(body).getAttribute('aria-label')).toBe('Pause');
+
+    // Le toucher a réarmé la seconde.
+    await waitMs(1_100);
+    expect(centerToggle(body).getAttribute('data-effaced')).toBe('true');
+
+    // Y arriver au clavier le ramène aussi.
+    await act(async () => {
+      centerToggle(body).focus();
+    });
+    expect(centerToggle(body).getAttribute('data-effaced')).toBe('false');
+
+    // Un toucher sur le bouton visible met en pause ; en pause, il reste affiché.
+    await act(async () => {
+      centerToggle(body).click();
+    });
+    expect(centerToggle(body).getAttribute('aria-label')).toBe('Lire la vidéo');
+    await waitMs(1_100);
+    expect(centerToggle(body).getAttribute('data-effaced')).toBe('false');
+  }, 10_000);
+
   test('CONTRE-ÉPREUVE : une page IMAGE n’a ni barre, ni play/pause, ni ligne de progression décorative', () => {
     const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
     const body = mount({ items, startIndex: 0, onClose: () => {} });
 
     expect(body.querySelector('[data-media-transport]')).toBeNull();
+    expect(body.querySelector('[data-viewer-video-controls]')).toBeNull();
+    expect(body.querySelector('[data-viewer-duration]')).toBeNull();
     expect(body.querySelector('.media-viewer-progress-track')).toBeNull();
     expect(currentPage(body).querySelector('button')).toBeNull();
   });
@@ -451,6 +571,10 @@ describe('MediaViewer — le double tap latéral, ±10 s comme iOS (#6369)', () 
     const items = attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID);
     const videoIndex = items.findIndex((a) => a.mimeType.startsWith('video/'));
     const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    // La page vidéo est un chunk À LA DEMANDE (#9577) : on attend son module comme la visionneuse l'attend.
+    await act(async () => {
+      await import('./viewer-video-page');
+    });
     const video = currentPage(body).querySelector('video')!;
     await act(async () => {
       Object.defineProperty(video, 'duration', { value: duration, configurable: true });
@@ -613,8 +737,11 @@ describe('MediaViewer — le pied porte le carrier, absent sans lui (#6169)', ()
     const footer = body.querySelector('[data-viewer-meta]');
     expect(footer).not.toBeNull();
     expect(footer!.textContent).not.toContain('Kwame Mensah');
-    expect(footer!.textContent).toContain('640 × 427');
-    expect(footer!.textContent).toContain('1 Ko');
+    expect(footer!.textContent).toBe('640 × 427·1 Ko');
+    /* La ligne d'informations vit SOUS la place de la barre de progression, hors de la rangée de la légende (#9577). */
+    expect(footer!.closest('[data-viewer-bottom-row]')).toBeNull();
+    const slot = body.querySelector('[data-viewer-transport-slot]')!;
+    expect(slot.compareDocumentPosition(footer!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     const caption = body.querySelector('[data-viewer-caption-text]');
     expect(caption).not.toBeNull();

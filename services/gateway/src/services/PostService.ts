@@ -14,7 +14,7 @@ import { triggerMediaAltTranslations, writeMediaAlt, type WrittenMediaAlt } from
 import { engagementAggregateIncrements } from './posts/engagementIncrements';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
-import { isEphemeralPostType } from './posts/postVisibility';
+import { isEphemeralPostType, type RepostPassage } from './posts/postVisibility';
 import {
   isRepostVisibilityAllowed,
   repostVisibilityInheritsAudienceList,
@@ -35,7 +35,7 @@ import { syncPostTrackingLinks } from './posts/publicationTrackingLinks';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
-import { creditPostEngagement, creditStoryViewed } from './posts/postEngagementCredits';
+import { creditPostEngagement, creditSource, creditStoryViewed } from './posts/postEngagementCredits';
 import { retractReactionNotifications } from './notifications/retractReactionNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
@@ -1436,9 +1436,9 @@ export class PostService {
     return updated;
   }
 
-  async likePost(postId: string, userId: string, emoji: string = '❤️') {
+  async likePost(postId: string, userId: string, emoji: string = '❤️', passage: { readonly through?: RepostPassage } = {}) {
     try {
-      await this.postReactionService.addReaction({ postId, userId, emoji });
+      await this.postReactionService.addReaction({ postId, userId, emoji, ...passage });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
       if (message.includes('not found') || message.includes('deleted')) {
@@ -1565,7 +1565,7 @@ export class PostService {
       data: { bookmarkCount: { increment: 1 } },
       select: { bookmarkCount: true },
     });
-    creditPostEngagement(this.prisma, userId, 'tool.post_bookmark', { targetId: postId, targetOwnerId: post.authorId });
+    creditPostEngagement(this.prisma, userId, 'tool.post_bookmark', { postId, targetId: postId, targetOwnerId: post.authorId });
 
     return { success: true, bookmarkCount: updated.bookmarkCount };
   }
@@ -1670,7 +1670,7 @@ export class PostService {
       // `reused: true` : elles réutilisent un lien déjà émis, et les créditer
       // ferait gagner des points en pressant « Partager » en boucle. Un axe
       // d'engagement qui se farme ne mesure plus rien.
-      creditPostEngagement(this.prisma, userId, 'social.share', { targetId: postId, targetOwnerId: post.authorId });
+      creditPostEngagement(this.prisma, userId, 'social.share', { postId, targetId: postId, targetOwnerId: post.authorId });
       return { shared: true, shareCount: created.shareCount, token: created.link.token, shortUrl: `${baseUrl}${created.link.shortUrl}`, reused: false };
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
@@ -2500,7 +2500,7 @@ export class PostService {
           await this.orphanCleanup.untrackBatch(orphanRowIds);
         }
 
-        creditPostEngagement(this.prisma, userId, 'social.repost', { targetId: postId, targetOwnerId: original.authorId });
+        creditPostEngagement(this.prisma, userId, 'social.repost', { postId, targetId: postId, targetOwnerId: original.authorId, receipt: creditSource.post(finalRepost.id) });
         return finalRepost;
       } catch (err) {
         // Inline (best-effort) compensation. Same as before — fast-path
@@ -2543,7 +2543,7 @@ export class PostService {
       where: { id: postId },
       data: { repostCount: { increment: 1 } },
     });
-    creditPostEngagement(this.prisma, userId, 'social.repost', { targetId: postId, targetOwnerId: original.authorId });
+    creditPostEngagement(this.prisma, userId, 'social.repost', { postId, targetId: postId, targetOwnerId: original.authorId, receipt: creditSource.post(repost.id) });
 
     return repost;
   }

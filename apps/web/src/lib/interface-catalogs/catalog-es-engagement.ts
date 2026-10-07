@@ -8,9 +8,13 @@ const esEngagement = {
   'engagement.pill.streak.other': 'Racha de {count} días',
   'engagement.pill.points.one': '{total} punto, {today} hoy',
   'engagement.pill.points.other': '{total} puntos, {today} hoy',
+  'engagement.pill.total.one': '{total} punto ganado en esta conversación',
+  'engagement.pill.total.other': '{total} puntos ganados en esta conversación',
   'engagement.pill.join': '{streak}, {points}',
   'engagement.pill.open': 'Abrir mi progreso',
   'engagement.flame.label': '{count} puntos hoy — toca para ocultar la llama',
+  'engagement.post.points.one': 'Esta publicación te ha dado {count} punto',
+  'engagement.post.points.other': 'Esta publicación te ha dado {count} puntos',
 } as const;
 
 export default esEngagement;

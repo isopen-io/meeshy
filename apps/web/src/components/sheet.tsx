@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from 'react';
 
 import { Glyph } from './glyph';
 import { translate } from '@/lib/i18n-catalog';
@@ -47,6 +47,8 @@ export function Sheet({
   accessory,
   closeLabel,
   backEntry = true,
+  restoreFocusTo,
+  dialogData,
   onClose,
   children,
 }: {
@@ -91,8 +93,22 @@ export function Sheet({
    * d'administration (graphiques, classements) qu'une carte résumée ouvre
    * (`AdminDetailSheet`). Sur un téléphone, elle prend la largeur moins la
    * gouttière, comme la centrée.
+   *
+   * `'bottom'` — une FEUILLE BASSE (#9563) : les précisions d'un élément du jeu,
+   * qu'on ouvre d'un toucher et qu'on referme aussitôt. Sur un téléphone elle
+   * monte du bas, sur toute la largeur, coins hauts arrondis ; à partir de
+   * 640 px c'est un dialogue centré (32 rem). Un toucher sur le voile la ferme,
+   * et elle rend le focus à l'élément qui l'a ouverte.
    */
-  presentation?: 'fullscreen' | 'centered' | 'wide';
+  presentation?: 'fullscreen' | 'centered' | 'wide' | 'bottom';
+  /**
+   * L'élément à qui RENDRE le focus à la fermeture (#9563). `<dialog>` le rend de
+   * lui-même à l'élément actif d'avant `showModal()` ; le nommer le garantit
+   * quand la feuille est montée par un hôte éloigné du bouton touché.
+   */
+  restoreFocusTo?: HTMLElement | null;
+  /** Des attributs `data-*` posés sur le `<dialog>` : ce que la feuille montre, pour qui la cherche. */
+  dialogData?: Readonly<Record<`data-${string}`, string>>;
   /** Les gestes propres à la feuille, au bout de l'en-tête (le composer d'export : « Au hasard », « Format par défaut »). */
   accessory?: ReactNode;
   /**
@@ -108,6 +124,7 @@ export function Sheet({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const restoreRef = useRef(restoreFocusTo ?? null);
 
   /**
    * LE RETOUR MATÉRIEL FERME LA FEUILLE, PAS L'ÉCRAN (correction de revue,
@@ -135,11 +152,23 @@ export function Sheet({
     if (!dialog.open) dialog.showModal();
     return () => {
       if (dialog.open) dialog.close();
+      restoreRef.current?.focus();
     };
   }, []);
 
   const centree = presentation !== 'fullscreen';
+  const basse = presentation === 'bottom';
   const largeur = presentation === 'wide' ? 'w-[min(64rem,calc(100%-2rem))]' : 'w-[min(36rem,calc(100%-2rem))]';
+  /* Basse : collée au bas de l'écran et pleine largeur sur un téléphone ; centrée et bornée dès 640 px. */
+  const cadre = basse
+    ? 'mx-auto mb-0 mt-auto w-full max-w-full rounded-t-card sm:m-auto sm:w-[min(32rem,calc(100%-2rem))] sm:rounded-card max-h-[min(88dvh,calc(100%-1rem))]'
+    : `m-auto ${largeur} max-h-[min(90dvh,calc(100%-2rem))] rounded-card`;
+  /* Un toucher sur le VOILE ferme la feuille basse : le voile est le `<dialog>` lui-même, hors de son contenu. */
+  const onBackdrop = basse
+    ? (event: MouseEvent<HTMLDialogElement>) => {
+        if (event.target === event.currentTarget) ref.current?.close();
+      }
+    : undefined;
 
   return (
     <dialog
@@ -147,7 +176,9 @@ export function Sheet({
       onClose={onClose}
       aria-labelledby={titleId}
       data-sheet-presentation={presentation}
-      className={centree ? `m-auto ${largeur} max-h-[min(90dvh,calc(100%-2rem))] overflow-hidden rounded-card p-0 backdrop:bg-veil` : undefined}
+      {...dialogData}
+      {...(onBackdrop === undefined ? {} : { onClick: onBackdrop })}
+      className={centree ? `${cadre} overflow-hidden p-0 backdrop:bg-veil` : undefined}
       style={
         centree
           ? {
@@ -174,6 +205,7 @@ export function Sheet({
           <button
             type="button"
             onClick={() => ref.current?.close()}
+            data-sheet-close=""
             className="grid place-items-center rounded-chip"
             style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
             aria-label={closeLabel ?? translate(currentInterfaceLanguage(), 'common.close')}
@@ -216,7 +248,7 @@ export function Sheet({
         {bodyAs === 'ul' ? (
           <ul className={`min-h-0 flex-1 overflow-y-auto ${centree ? 'pb-2' : 'pb-safe'}`}>{children}</ul>
         ) : (
-          <div className={`flex min-h-0 flex-1 flex-col ${centree ? 'overflow-y-auto pb-2' : 'pb-safe'}`}>{children}</div>
+          <div className={`flex min-h-0 flex-1 flex-col ${centree ? `overflow-y-auto overflow-x-clip overscroll-x-none ${basse ? 'pb-safe' : 'pb-2'}` : 'pb-safe'}`}>{children}</div>
         )}
       </div>
     </dialog>

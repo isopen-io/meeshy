@@ -46,8 +46,8 @@ describe('les destinations', () => {
     expect(guideActionTarget('see-mint-preview')).toEqual({ kind: 'fiche', concept: 'meesh' });
   });
 
-  test('les badges : leur page', () => {
-    expect(guideActionTarget('relight-badge')).toEqual({ kind: 'route', to: 'progressionBadges' });
+  test('les badges : leur fiche (la page des badges est à un toucher, sous elle)', () => {
+    expect(guideActionTarget('relight-badge')).toEqual({ kind: 'fiche', concept: 'badges' });
   });
 
   test('le premier geste se fait AILLEURS : la liste des conversations', () => {
@@ -62,10 +62,11 @@ describe('les destinations', () => {
 });
 
 describe('les destinations de la vague 2 (#9481)', () => {
-  test('chaque nouveau bouton mène à sa page', () => {
-    expect(guideActionTarget('see-league')).toEqual({ kind: 'route', to: 'progressionLigue' });
-    expect(guideActionTarget('see-season')).toEqual({ kind: 'route', to: 'progressionSaison' });
-    expect(guideActionTarget('see-trophies')).toEqual({ kind: 'route', to: 'progressionVitrine' });
-    expect(guideActionTarget('see-atlas')).toEqual({ kind: 'route', to: 'progressionAtlas' });
+  /* La carte de navigation (#9563, amendement n° 4) : le guide ouvre la FICHE du concept, sa sous-page est à un toucher. */
+  test('chaque nouveau bouton mène à la fiche de son concept', () => {
+    expect(guideActionTarget('see-league')).toEqual({ kind: 'fiche', concept: 'league' });
+    expect(guideActionTarget('see-season')).toEqual({ kind: 'fiche', concept: 'season' });
+    expect(guideActionTarget('see-trophies')).toEqual({ kind: 'fiche', concept: 'showcase' });
+    expect(guideActionTarget('see-atlas')).toEqual({ kind: 'fiche', concept: 'atlas' });
   });
 });

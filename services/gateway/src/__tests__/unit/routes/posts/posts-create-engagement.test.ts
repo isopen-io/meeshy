@@ -116,9 +116,11 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));
 
 const mockRecordActivity = jest.fn<any>().mockResolvedValue(undefined);
+const mockRecordGameSignal = jest.fn<any>().mockResolvedValue(undefined);
 jest.mock('../../../../services/engagement/EngagementService', () => ({
   EngagementService: jest.fn().mockImplementation(() => ({
     recordActivity: (...args: any[]) => mockRecordActivity(...args),
+    recordGameSignal: (...args: any[]) => mockRecordGameSignal(...args),
   })),
 }));
 
@@ -168,7 +170,7 @@ const ATTACHMENT_ROW = {
     isBlurred: false,
     isEncrypted: false,
     effectFlags: 0,
-    expiresAt: null,
+    expiresAt: null, ephemeralDuration: null, attachments: [{ isViewOnce: false, isBlurred: false, effectFlags: 0 }],
     createdAt: new Date('2026-09-01T00:00:00.000Z'),
   },
 };
@@ -364,6 +366,30 @@ describe('POST /posts — axe d\'engagement « content.reel » (#5535)', () => {
     expect(res.statusCode).toBe(201);
     expect(creditedKeys()).not.toContain('content.reel');
 
+    await app.close();
+  });
+
+  it('un REEL demandé compte pour son défi, même écrit en POST : l’intention « réel » (#9635)', async () => {
+    mockRecordGameSignal.mockClear();
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW); // écrit comme POST
+    const app = await buildApp();
+
+    await app.inject({ method: 'POST', url: '/posts', payload: { type: 'REEL', content: 'Bonjour tout le monde' } });
+    await settle();
+
+    expect(mockRecordGameSignal).toHaveBeenCalledWith(USER_ID, 'reel-published', { key: PUBLISHED_ROW.id });
+    await app.close();
+  });
+
+  it('un POST demandé ne porte aucune intention « réel » (#9635)', async () => {
+    mockRecordGameSignal.mockClear();
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW);
+    const app = await buildApp();
+
+    await app.inject({ method: 'POST', url: '/posts', payload: { type: 'POST', content: 'Bonjour tout le monde' } });
+    await settle();
+
+    expect(mockRecordGameSignal).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -634,27 +660,27 @@ describe('POST /posts — cible et variante du barème (#8959)', () => {
     const res = await publish({ ...PUBLISHED_ROW, visibility }, { content: 'Bonjour' });
 
     expect(res.statusCode).toBe(201);
-    expect(creditOptions('content.post')).toEqual({ targetId: PUBLISHED_ROW.id, variant });
+    expect(creditOptions('content.post')).toEqual({ postId: PUBLISHED_ROW.id, targetId: PUBLISHED_ROW.id, variant, receipt: `post:${PUBLISHED_ROW.id}` });
   });
 
   it('une STORY crédite content.story avec la variante de sa visibilité et sa cible', async () => {
     const row = storyRow();
     await publish(row, { type: 'STORY', content: 'Bonjour' });
 
-    expect(creditOptions('content.story')).toEqual({ targetId: row.id, variant: 'friends' });
+    expect(creditOptions('content.story')).toEqual({ postId: row.id, targetId: row.id, variant: 'friends', receipt: `post:${row.id}` });
   });
 
   it('un REEL crédite content.reel avec sa cible, sans variante', async () => {
     const row = reelRow();
     await publish(row, { type: 'REEL', content: 'Bonjour' });
 
-    expect(creditOptions('content.reel')).toEqual({ targetId: row.id });
+    expect(creditOptions('content.reel')).toEqual({ postId: row.id, targetId: row.id, receipt: `post:${row.id}` });
   });
 
   it('les axes outil portent la cible de la publication', async () => {
     await publish(PUBLISHED_ROW, { content: 'Bonjour', editedInApp: true });
 
-    expect(creditOptions('tool.in_app_edit')).toEqual({ targetId: PUBLISHED_ROW.id });
+    expect(creditOptions('tool.in_app_edit')).toEqual({ postId: PUBLISHED_ROW.id, targetId: PUBLISHED_ROW.id, receipt: `post:${PUBLISHED_ROW.id}` });
   });
 
   it('un STATUS crédite content.status avec sa cible, et aucun axe outil', async () => {
@@ -662,7 +688,52 @@ describe('POST /posts — cible et variante du barème (#8959)', () => {
     await publish(row, { type: 'STATUS', content: 'Bonjour', moodEmoji: '😀' });
 
     expect(creditedKeys()).toEqual(['content.status']);
-    expect(creditOptions('content.status')).toEqual({ targetId: row.id });
+    expect(creditOptions('content.status')).toEqual({ postId: row.id, targetId: row.id, receipt: `post:${row.id}` });
+  });
+
+  /**
+   * Les deux crédits d'une publication nomment le MÊME post (#9569). Lancés
+   * ensemble, leurs annonces `engagement:post-updated` pouvaient se croiser et
+   * laisser au client la valeur d'avant le second. L'un après l'autre, la
+   * dernière annonce porte le total.
+   */
+  it('l’axe outil ne part qu’une fois le contenu crédité — les deux crédits d’un post s’enchaînent', async () => {
+    let finishContent: () => void = () => undefined;
+    mockRecordActivity.mockImplementation((_userId: string, key: string) =>
+      key === 'content.post' ? new Promise<void>((resolve) => { finishContent = resolve; }) : Promise.resolve(),
+    );
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW);
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Bonjour' } });
+    await settle();
+    const beforeContentSettles = creditedKeys();
+    finishContent();
+    await settle();
+    const afterContentSettles = creditedKeys();
+    await app.close();
+    mockRecordActivity.mockReset().mockResolvedValue(undefined);
+
+    expect(res.statusCode).toBe(201);
+    expect(beforeContentSettles).toEqual(['content.post']);
+    expect(afterContentSettles).toEqual(['content.post', 'tool.direct_publish']);
+  });
+
+  it('un crédit de contenu en échec n’empêche pas l’axe outil', async () => {
+    mockRecordActivity.mockImplementation((_userId: string, key: string) =>
+      key === 'content.post' ? Promise.reject(new Error('mongo down')) : Promise.resolve(),
+    );
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW);
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Bonjour' } });
+    await settle();
+    const keys = creditedKeys();
+    await app.close();
+    mockRecordActivity.mockReset().mockResolvedValue(undefined);
+
+    expect(res.statusCode).toBe(201);
+    expect(keys).toEqual(['content.post', 'tool.direct_publish']);
   });
 
   it('un STATUS brouillon (PRIVATE) ne crédite rien', async () => {

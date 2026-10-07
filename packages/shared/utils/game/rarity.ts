@@ -4,11 +4,13 @@
  *
  * | rareté      | part des comptes | liseré  | Gloire |
  * |-------------|------------------|---------|--------|
- * | commun      | plus de 40 %     | ardoise | 10     |
- * | rare        | 10 à 40 %        | bleu    | 25     |
- * | épique      | 2 à 10 %         | violet  | 60     |
- * | légendaire  | 0,2 à 2 %        | or      | 150    |
- * | mythique    | moins de 0,2 %   | prisme  | 400    |
+ * | commun      | plus de 40 %     | ardoise | 100    |
+ * | rare        | 10 à 40 %        | bleu    | 250    |
+ * | épique      | 2 à 10 %         | violet  | 600    |
+ * | légendaire  | 0,2 à 2 %        | or      | 1 500  |
+ * | mythique    | moins de 0,2 %   | prisme  | 4 000  |
+ *
+ * (Gloire ×10 depuis l'échelle de #9636 ; un succès déjà obtenu garde la sienne.)
  *
  * Les bornes se lisent « borne basse incluse, borne haute exclue » : 10 % pile est
  * rare, 2 % pile est épique, 0,2 % pile est légendaire. Le commun est la seule
@@ -32,15 +34,9 @@
  * qu'il n'a qu'un détenteur gonflerait la Gloire pour rien. En dessous de
  * `RARITY_MIN_POPULATION`, la rareté est NON MESURÉE (`null`) et le succès vaut
  * un commun. Le seuil est un réglage de produit — tunable ici, sans autre trace.
- *
- * ## Le Mythe
- *
- * Mythe n'est pas un seuil de Gloire : ce sont les 100 Légendes les plus
- * glorieuses. `mythicUserIds` le calcule pour la passerelle, qui sert le drapeau
- * aux clients (jamais calculé côté client, `gloryStanding({ mythic })`).
  */
 
-import { GLORY_RANKS, gloryForAchievement, type AchievementRarity } from './glory.js';
+import { gloryForAchievement, type AchievementRarity } from './glory.js';
 
 export const RARITY_MIN_POPULATION = 1000;
 /**
@@ -50,7 +46,6 @@ export const RARITY_MIN_POPULATION = 1000;
  * (conformité G-2, RGPD art. 5(1)(c)). La Gloire, elle, reste figée à l'obtention.
  */
 export const RARITY_MIN_DISPLAY_HOLDERS = 20;
-export const MYTHE_SIZE = 100;
 
 export const RARITY_BORDERS: Readonly<Record<AchievementRarity, 'slate' | 'blue' | 'violet' | 'gold' | 'prism'>> = {
   common: 'slate',
@@ -90,19 +85,3 @@ export const rarityShareDisplayable = (params: { readonly holders: number; reado
 
 /** La Gloire d'un succès au moment où il est obtenu : celle de la rareté mesurée ce jour-là, commun sinon. */
 export const achievementGloryAtEarning = (measured: AchievementRarity | null): number => gloryForAchievement(measured ?? 'common');
-
-export type MythicCandidate = { readonly userId: string; readonly glory: number };
-
-/**
- * Les 100 Légendes les plus glorieuses — classées par Gloire, puis par identifiant.
- * La passerelle n'en tire qu'un DRAPEAU par compte : aucune liste globale n'est
- * publiée (conformité A-13) — le statut Mythe se montre selon la visibilité du rang.
- */
-export function mythicUserIds(candidates: readonly MythicCandidate[]): readonly string[] {
-  const legendStart = GLORY_RANKS.at(-1)!.minGlory;
-  return candidates
-    .filter((c) => c.glory >= legendStart)
-    .sort((a, b) => (b.glory !== a.glory ? b.glory - a.glory : a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0))
-    .slice(0, MYTHE_SIZE)
-    .map((c) => c.userId);
-}

@@ -85,7 +85,7 @@ final class ComposerSingleViewfinderTests: XCTestCase {
     /// La croix, elle, reste — quitter à tout moment (#8653).
     func test_leViseurPleinEcran_neProposePasDeReduction() throws {
         let viseur = try code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
-        XCTAssertTrue(viseur.contains("size: .constant(.fullScreen)"))
+        XCTAssertTrue(viseur.contains("size: $size"))
         XCTAssertTrue(viseur.contains("offersSizeToggle: false"))
         XCTAssertTrue(viseur.contains("ComposerCaptureMount(session: capture"),
                       "le montage unique rend le panneau de refus, pas un aperçu noir (#9134, #9351)")
@@ -190,7 +190,7 @@ final class ComposerPhotoLookTests: XCTestCase {
     // MARK: - Le relief Liquid Glass (#9330)
 
     func test_lesBoutonsDuViseur_ontLeReliefLiquidGlass() throws {
-        for fichier in ["ComposerSceneCameraBar.swift", "ComposerCaptureRefusedChrome.swift", "ComposerExposureSlider.swift"] {
+        for fichier in ["ComposerSceneCameraBar.swift", "ComposerCaptureRefusedChrome.swift", "ComposerFlashIntensitySlider.swift"] {
             let code = try Self.code("Meeshy/Features/Main/Composer/\(fichier)")
             XCTAssertFalse(code.contains(".adaptiveGlass(in:"),
                            "\(fichier) : un verre plat sous iOS 26 — le relief passe par adaptiveLiquidGlass")

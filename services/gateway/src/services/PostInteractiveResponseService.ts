@@ -148,7 +148,7 @@ export class PostInteractiveResponseService {
         this.prisma,
         userId,
         'tool.poll_answered',
-        { targetId: `${postId}:${objectId}`, targetOwnerId: post.authorId },
+        { postId, targetId: `${postId}:${objectId}`, targetOwnerId: post.authorId },
         this.engagement,
       );
     }

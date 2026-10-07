@@ -45,7 +45,6 @@ export default function ProgressionPrestigeScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
-      concept="prestige"
       titre={gameText('game.prestige.title')}
       teinte={GAME_BRAND}
       compte={(p) => {

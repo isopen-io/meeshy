@@ -112,6 +112,24 @@ final class MediaSaveCoordinator: ObservableObject {
     @Published private(set) var isProcessing = false
     @Published private(set) var lastOutcome: Outcome?
 
+    /// **Le portillon de sortie de l'hôte qui possède ce coordinateur** (#9573).
+    ///
+    /// FERMÉ tant qu'il n'est pas posé : `nil` refuse toute requête — ni feuille
+    /// de destinations, ni Photos, ni Fichiers, ni partage. La garde vit ICI,
+    /// dans le gestionnaire, pas seulement dans le bouton de l'hôte.
+    ///
+    /// - Une visionneuse de conversation y pose le portillon de son
+    ///   environnement, dérivé du message qui porte la pièce.
+    /// - Le menu d'un message y pose celui du message (`MessageExitTransport`).
+    /// - Un hôte de PUBLICATION (post, réel) le crée ouvert, et le dit :
+    ///   `MediaSaveCoordinator(exitGate: .open)`.
+    var exitGate: ContentExitGate?
+
+    /// La pièce de cette requête peut-elle partir par ce coordinateur ?
+    func mayLeave(_ attachmentId: String?) -> Bool {
+        exitGate?.mayLeave(attachmentId) ?? false
+    }
+
     /// Requête en cours de traitement (après le choix de destination) —
     /// portée jusqu'à la complétion différée de l'export Fichiers pour le
     /// report « downloaded ».
@@ -122,10 +140,12 @@ final class MediaSaveCoordinator: ObservableObject {
     private let downloadReporter: MediaSaveDownloadReporting
     private let branding: MediaSaveBranding
 
-    init(resolver: MediaSaveSourceResolving = AttachmentMediaSaveResolver(),
+    init(exitGate: ContentExitGate? = nil,
+         resolver: MediaSaveSourceResolving = AttachmentMediaSaveResolver(),
          photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
          downloadReporter: MediaSaveDownloadReporting = AttachmentStatusDownloadReporter(),
          branding: MediaSaveBranding = MeeshyMediaSaveBranding()) {
+        self.exitGate = exitGate
         self.resolver = resolver
         self.photoSaver = photoSaver
         self.downloadReporter = downloadReporter
@@ -133,6 +153,7 @@ final class MediaSaveCoordinator: ObservableObject {
     }
 
     func requestSave(_ request: MediaSaveRequest) {
+        guard mayLeave(request.attachmentId) else { return }
         lastOutcome = nil
         activeRequest = nil
         pendingRequest = request
@@ -142,6 +163,7 @@ final class MediaSaveCoordinator: ObservableObject {
     /// Meeshy, sans demander où** (#8307, directive porteur 2026-09-27). Les
     /// documents et l'audio gardent le choix de destination (Fichiers, partage).
     func save(_ request: MediaSaveRequest) {
+        guard mayLeave(request.attachmentId) else { return }
         guard Self.savesStraightToAlbum(request.kind) else { return requestSave(request) }
         lastOutcome = nil
         activeRequest = nil
@@ -167,6 +189,7 @@ final class MediaSaveCoordinator: ObservableObject {
     func pick(_ destination: MediaSaveDestination, request explicitRequest: MediaSaveRequest? = nil) async {
         guard let request = explicitRequest ?? pendingRequest else { return }
         pendingRequest = nil
+        guard mayLeave(request.attachmentId) else { return }
         guard destination.accepts(request.kind) else {
             lastOutcome = .failed(MediaSaveError.destinationUnsupported.localizedDescription)
             return

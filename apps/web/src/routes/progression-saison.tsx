@@ -49,7 +49,6 @@ export default function ProgressionSaisonScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
-      concept="season"
       titre={gameText('game.season.title')}
       teinte={GAME_BRAND}
       compte={(p) => {

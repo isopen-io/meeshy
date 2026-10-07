@@ -23,6 +23,8 @@ const frEphemeral = {
   'message.ephemeral.label.a11y': 'Message éphémère',
   'message.blurred.a11y': 'Flouté',
   'message.viewOnce.a11y': 'Vue unique',
+  /* #9573 — le refus de transfert d'une flamme après lecture. */
+  'forward.refusal.afterRead': 'Un message qui disparaît après lecture ne peut pas être transféré',
 } as const;
 
 export type EphemeralCatalogSlice = Readonly<Record<keyof typeof frEphemeral, string>>;

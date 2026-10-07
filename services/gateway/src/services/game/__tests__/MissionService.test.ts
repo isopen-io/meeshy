@@ -22,6 +22,8 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 const NOW = new Date('2026-10-05T10:00:00Z');
 const DAY = '2026-10-05';
 const LEVEL_20 = 10 * 20 * 20;
+/** Le profil d'un compte sans compteur, sans contact, sans communauté et d'une seule langue — celui de `seedUser`. */
+const NO_PROFILE = { capabilities: [], habits: {} } as const;
 
 const setup = (userFields: Record<string, unknown> = {}) => {
   const db = fakeGameDb();
@@ -74,7 +76,7 @@ describe('MissionService.ensureToday — le tirage paresseux', () => {
 
     const today = await service.ensureToday(USER, NOW);
 
-    const expected = drawDailyMissions({ userId: USER, dayKey: DAY, level: 20, flameDays: 0, treasury: 0 });
+    const expected = drawDailyMissions({ userId: USER, dayKey: DAY, level: 20, flameDays: 0, treasury: 0, profile: NO_PROFILE });
     expect(today.dayKey).toBe(DAY);
     expect(today.unlocked).toBe(true);
     expect(db.dailyMission.rows.map((r) => r.templateKey)).toEqual(expected.missions.map((m) => m.templateKey));
@@ -122,7 +124,7 @@ describe('MissionService.ensureToday — le tirage paresseux', () => {
 
     await service.ensureToday(USER, NOW);
 
-    const expected = drawDailyMissions({ userId: USER, dayKey: DAY, level: 6, flameDays: 25, treasury: 50 });
+    const expected = drawDailyMissions({ userId: USER, dayKey: DAY, level: 6, flameDays: 25, treasury: 50, profile: NO_PROFILE });
     expect(db.dailyMission.rows.map((r) => r.reward)).toEqual(expected.missions.map((m) => m.reward));
     expect(db.dailyMission.rows[2]?.difficulty).toBe('gold');
   });

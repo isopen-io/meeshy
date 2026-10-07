@@ -5,6 +5,25 @@ import MeeshyUI
 
 // MARK: - iPad Root View Right Panel Content (Hub Routes)
 
+/// La pile du JEU au-dessus de la route racine du panneau droit (#9564, amendement n° 4). Elle ne vaut que pour SA
+/// racine : un panneau ouvert sur une autre route part d'une pile vide, sans jamais rejouer une page d'avant.
+struct GamePanelTrail {
+    var root: Route?
+    var path = NavigationPath()
+
+    func path(over route: Route) -> NavigationPath { root == route ? path : NavigationPath() }
+
+    mutating func push(_ route: Route, over root: Route) {
+        if self.root != root { self = GamePanelTrail(root: root) }
+        path.append(route)
+    }
+
+    mutating func pop() {
+        guard !path.isEmpty else { return }
+        path.removeLast()
+    }
+}
+
 /// Le panneau droit de l'iPad quand une route (autre qu'une conversation) y
 /// est ouverte : une `NavigationStack` locale autour de `iPadPanelDestination`.
 ///
@@ -16,12 +35,14 @@ import MeeshyUI
 struct iPadRightPanel: View {
     let route: Route
     @Binding var rightPanelRoute: Route?
+    /// La pile du jeu au-dessus de `route` (#9564) : vide hors de Progression.
+    @Binding var gamePath: NavigationPath
     let notificationManager: NotificationToastManager
     let onOpenConversation: (Conversation) -> Void
     let onNotificationTap: (APINotification) -> Void
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $gamePath) {
             iPadPanelDestination(
                 route: route,
                 rightPanelRoute: $rightPanelRoute,
@@ -29,6 +50,17 @@ struct iPadRightPanel: View {
                 onOpenConversation: onOpenConversation,
                 onNotificationTap: onNotificationTap
             )
+            // Les pages du jeu poussées DANS le panneau : fiche, sous-page — le retour système et le glissement
+            // depuis le bord y ramènent à la page d'au-dessus (#9564).
+            .navigationDestination(for: Route.self) { pushed in
+                iPadPanelDestination(
+                    route: pushed,
+                    rightPanelRoute: $rightPanelRoute,
+                    notificationManager: notificationManager,
+                    onOpenConversation: onOpenConversation,
+                    onNotificationTap: onNotificationTap
+                )
+            }
             // Filet de sécurité pour les écrans qui délèguent leur chrome à la
             // barre système (membres d'une communauté…) :
             // racine du panneau, ils n'ont ni bouton retour propre ni geste de
@@ -61,9 +93,6 @@ struct iPadRightPanel: View {
 /// `_ConditionalContent` plus la chaîne de chaque cas — entrait dans le type
 /// concret de `iPadRootView.body`. Ici la racine ne voit qu'un nom.
 struct iPadPanelDestination: View {
-    /// Le routeur de la racine, déjà dans l'environnement de ses panneaux (Progression s'en sert pour ses pushes) :
-    /// l'ancre d'une notification de mission en part (#9539).
-    @EnvironmentObject private var router: Router
     let route: Route
     @Binding var rightPanelRoute: Route?
     let notificationManager: NotificationToastManager
@@ -160,8 +189,9 @@ struct iPadPanelDestination: View {
         case .userStats:
             UserStatsView()
                                 .navigationBarHidden(true)
-        case .progression:
-            ProgressionView(pendingAnchor: router.pendingGameAnchor, consumeAnchor: { _ = router.consumePendingGameAnchor() })
+        // L'ancien tableau de bord (#9564, amendement n° 4) ouvre la première page, une version durant.
+        case .progression, .progressionDashboard:
+            ProgressionView()
                                 .navigationBarHidden(true)
         case .progressionSection(let section):
             ProgressionSectionPage(section: section)
@@ -175,11 +205,8 @@ struct iPadPanelDestination: View {
         case .gamePage(let page):
             GamePageView(page: page)
                 .navigationBarHidden(true)
-        case .progressionConcept(let concept):
-            ProgressionConceptPage(concept: concept)
-                .navigationBarHidden(true)
-        case .progressionDashboard:
-            ProgressionDashboardPage()
+        case .progressionConcept(let concept, let section):
+            ProgressionConceptPage(concept: concept, section: section)
                 .navigationBarHidden(true)
         case .links:
             LinksHubView()

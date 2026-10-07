@@ -114,6 +114,7 @@ describe('PostReactionService.addReaction — plafond de 5 réactions par person
 
   it('retirer une réaction libère une place — removeReaction ne consulte aucun plafond et supprime la ligne', async () => {
     const prisma = makePrisma(MAX_REACTIONS_PER_OBJECT);
+    (prisma.postReaction as any).findMany = jest.fn<any>().mockResolvedValue([{ id: 'reaction-removed' }]);
     (prisma.postReaction as any).deleteMany = jest.fn<any>().mockResolvedValue({ count: 1 });
     const service = new PostReactionService(prisma as any);
 

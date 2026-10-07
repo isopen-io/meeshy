@@ -1,22 +1,20 @@
 /**
  * La rareté des succès (#9390), mesurée chaque nuit et figée à l'obtention :
  * commun > 40 %, rare 10–40, épique 2–10, légendaire 0,2–2, mythique < 0,2 ;
- * Gloire 10 / 25 / 60 / 150 / 400. Le Mythe : les 100 Légendes les plus glorieuses.
+ * Gloire 100 / 250 / 600 / 1 500 / 4 000 (#9636). Le Mythe a quitté la rareté : `mythe.test.ts`.
  */
 
 import { describe, it, expect } from 'vitest';
 import {
-  MYTHE_SIZE,
   RARITY_BORDERS,
   RARITY_MIN_DISPLAY_HOLDERS,
   RARITY_MIN_POPULATION,
   rarityShareDisplayable,
   achievementGloryAtEarning,
   measureRarity,
-  mythicUserIds,
   rarityFromShare,
 } from '../../utils/game/rarity.js';
-import { ACHIEVEMENT_RARITIES, GLORY_RANKS, gloryForAchievement } from '../../utils/game/glory.js';
+import { ACHIEVEMENT_RARITIES, gloryForAchievement } from '../../utils/game/glory.js';
 
 /** Une population de 100 000 comptes : un pour mille = 100 détenteurs. */
 const POP = 100_000;
@@ -76,52 +74,12 @@ describe('la mesure de la nuit', () => {
 });
 
 describe('la Gloire figée à l\'obtention', () => {
-  it('suit la rareté du jour où le succès est obtenu — 10, 25, 60, 150, 400', () => {
-    expect(ACHIEVEMENT_RARITIES.map((r) => achievementGloryAtEarning(r))).toEqual([10, 25, 60, 150, 400]);
+  it('suit la rareté du jour où le succès est obtenu — 100, 250, 600, 1 500, 4 000', () => {
+    expect(ACHIEVEMENT_RARITIES.map((r) => achievementGloryAtEarning(r))).toEqual([100, 250, 600, 1500, 4000]);
     expect(achievementGloryAtEarning('legendary')).toBe(gloryForAchievement('legendary'));
   });
 
   it('vaut un succès commun tant que la rareté n\'est pas mesurée', () => {
-    expect(achievementGloryAtEarning(null)).toBe(10);
-  });
-});
-
-describe('le Mythe', () => {
-  const legend = GLORY_RANKS.at(-1)!.minGlory;
-  const candidate = (userId: string, glory: number) => ({ userId, glory });
-
-  it('compte 100 places', () => {
-    expect(MYTHE_SIZE).toBe(100);
-  });
-
-  it('ne rend que des Légendes, classées par Gloire', () => {
-    const picked = mythicUserIds([candidate('a', legend + 10), candidate('b', legend - 1), candidate('c', legend + 500)]);
-    expect(picked).toEqual(['c', 'a']);
-  });
-
-  it('s\'arrête aux 100 plus glorieuses, et départage les égalités par identifiant', () => {
-    const many = Array.from({ length: 150 }, (_, i) => candidate(`u${String(i).padStart(3, '0')}`, legend + (i % 10)));
-    const picked = mythicUserIds(many);
-    expect(picked).toHaveLength(100);
-    expect(new Set(picked).size).toBe(100);
-    expect(mythicUserIds([...many].reverse())).toEqual(picked);
-  });
-
-  it('est vide sans Légende', () => {
-    expect(mythicUserIds([candidate('a', 1000)])).toEqual([]);
-    expect(mythicUserIds([])).toEqual([]);
-  });
-});
-
-describe('l\'affichage du pourcentage', () => {
-  it('attend assez de titulaires : sous 20, « rareté en cours de mesure », jamais un pourcentage qui désigne une personne', () => {
-    expect(RARITY_MIN_DISPLAY_HOLDERS).toBe(20);
-    expect(rarityShareDisplayable({ holders: 19, population: 50_000 })).toBe(false);
-    expect(rarityShareDisplayable({ holders: 20, population: 50_000 })).toBe(true);
-  });
-
-  it('attend aussi la population minimale', () => {
-    expect(rarityShareDisplayable({ holders: 20, population: RARITY_MIN_POPULATION - 1 })).toBe(false);
-    expect(rarityShareDisplayable({ holders: Number.NaN, population: 50_000 })).toBe(false);
+    expect(achievementGloryAtEarning(null)).toBe(100);
   });
 });

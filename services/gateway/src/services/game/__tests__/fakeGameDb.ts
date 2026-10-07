@@ -252,6 +252,7 @@ export type FakeGameDb = {
   readonly participant: Model;
   readonly message: Model;
   readonly conversationEngagement: Model;
+  readonly engagementPostPoints: Model;
   readonly gameProfile: Model;
   readonly leaguePseudonym: Model;
   readonly leagueGroupWeek: Model;
@@ -268,6 +269,9 @@ export type FakeGameDb = {
   readonly notification: Model;
   readonly conversation: Model;
   readonly affiliateVisitSession: Model;
+  readonly communityMember: Model;
+  readonly mythicSeat: Model;
+  readonly mythicEdition: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -282,6 +286,7 @@ export function fakeGameDb(): FakeGameDb {
   const participant = new Model();
   const message = new Model();
   const conversationEngagement = flattenCompound(new Model({ uniques: [['userId', 'conversationId']] }));
+  const engagementPostPoints = flattenCompound(new Model({ uniques: [['userId', 'postId']] }));
   const gameProfile = flattenCompound(new Model({ uniques: [['userId']] }));
   const leaguePseudonym = flattenCompound(new Model({ uniques: [['userId'], ['pseudonymKey']] }));
   const leagueGroupWeek = flattenCompound(new Model({ uniques: [['groupId']], optional: ['snapshotDay', 'snapshot', 'settledAt'] }));
@@ -307,6 +312,10 @@ export function fakeGameDb(): FakeGameDb {
   const notification = new Model();
   const conversation = new Model();
   const affiliateVisitSession = flattenCompound(new Model({ uniques: [['sessionKey']] }));
+  const communityMember = new Model();
+  // `_id` dérivé du numéro (`mythicSeatId`, `mythicEditionId`) : l'index `_id` existe toujours, d'où l'unique sur `id`.
+  const mythicSeat = flattenCompound(new Model({ uniques: [['id'], ['number'], ['userId'], ['edition']] }));
+  const mythicEdition = flattenCompound(new Model({ uniques: [['id'], ['edition']] }));
   const models = {
     user,
     gloryLedger,
@@ -319,6 +328,7 @@ export function fakeGameDb(): FakeGameDb {
     participant,
     message,
     conversationEngagement,
+    engagementPostPoints,
     gameProfile,
     leaguePseudonym,
     leagueGroupWeek,
@@ -335,23 +345,41 @@ export function fakeGameDb(): FakeGameDb {
     notification,
     conversation,
     affiliateVisitSession,
+    communityMember,
+    mythicSeat,
+    mythicEdition,
   };
 
   /**
-   * La seule commande brute que le service émet : `findAndModify` sur `User`
-   * avec un pipeline `$add` / `$ifNull` — l'incrément qui lit l'ABSENCE comme zéro.
+   * Les deux commandes brutes que le service émet : `findAndModify` sur `User`
+   * avec un pipeline `$add` / `$ifNull` — l'incrément qui lit l'ABSENCE comme
+   * zéro — et, à la reprise d'un contenu, `$max` / `$subtract` qui retire sans
+   * descendre sous zéro.
    */
+  const evaluate = (expression: unknown, row: Row): number => {
+    if (typeof expression === 'number') return expression;
+    if (typeof expression === 'string') return row[expression.slice(1)] as number;
+    const [operator, operands] = Object.entries(expression as Record<string, unknown[]>)[0]!;
+    if (operator === '$ifNull') {
+      const value = evaluate(operands[0], row);
+      return typeof value === 'number' ? value : evaluate(operands[1], row);
+    }
+    const values = operands.map((operand) => evaluate(operand, row));
+    if (operator === '$add') return values.reduce((sum, value) => sum + value, 0);
+    if (operator === '$subtract') return values[0]! - values[1]!;
+    if (operator === '$max') return Math.max(...values);
+    throw new Error(`opérateur de pipeline non reproduit par le faux : ${operator}`);
+  };
   const $runCommandRaw = async (command: {
     findAndModify: string;
     query: { _id: { $oid: string } };
-    update: { $set: Record<string, { $add: [{ $ifNull: [string, number] }, number] }> }[];
+    update: { $set: Record<string, unknown> }[];
     fields?: Record<string, number>;
   }) => {
     const row = user.rows.find((r) => r.id === command.query._id.$oid);
     if (!row) return { ok: 1, value: null };
     for (const [key, expression] of Object.entries(command.update[0]!.$set)) {
-      const before = row[key];
-      row[key] = (typeof before === 'number' ? before : expression.$add[0].$ifNull[1]) + expression.$add[1];
+      row[key] = evaluate(expression, row);
     }
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(command.fields ?? {})) out[key] = row[key] ?? null;

@@ -309,18 +309,22 @@ extension ConversationView {
                 }
                 closeReactionBar()
             }
-            messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: MeeshyColors.trackingAccentHex) {
-                if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                    // Prisme: copy what's actually DISPLAYED (the preferred
-                    // translation when one is showing), never blindly the
-                    // original — matches the long-press menu's Copier below.
-                    UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
+            // La loi de sortie décide (#9573) : un contenu qui disparaît, ou
+            // flouté, ne se copie pas — le bouton n'est pas rendu.
+            if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].exitOffer.offers(.copy) }) ?? false {
+                messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: MeeshyColors.trackingAccentHex) {
+                    if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
+                        // Prisme: copy what's actually DISPLAYED (the preferred
+                        // translation when one is showing), never blindly the
+                        // original — matches the long-press menu's Copier below.
+                        MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg)
+                    }
+                    closeReactionBar()
                 }
-                closeReactionBar()
             }
             // Le bouton disparaît plutôt que d'offrir une action condamnée
-            // (`Message.isForwardable`).
-            if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].isForwardable }) ?? true {
+            // (`Message.isForwardable`, projection de la loi de sortie).
+            if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].isForwardable }) ?? false {
                 messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transférer"), color: MeeshyColors.warningHex) {
                     composerState.forwardMessage = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] })
                     closeReactionBar()

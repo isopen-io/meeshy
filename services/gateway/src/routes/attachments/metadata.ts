@@ -21,6 +21,7 @@ import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInterna
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
 import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
+import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from '../../services/attachments/readerAttachmentLifecycle';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
@@ -132,7 +133,7 @@ export async function registerMetadataRoutes(
    */
   async function attachmentDetailIsVisible(
     request: FastifyRequest,
-    attachment: { messageId: string | null; uploadedBy: string | null }
+    attachment: { messageId: string | null; uploadedBy: string | null; isViewOnce?: boolean | null }
   ): Promise<boolean> {
     const authContext = (request as UnifiedAuthRequest).authContext;
 
@@ -145,7 +146,7 @@ export async function registerMetadataRoutes(
 
     const message = await prisma.message.findUnique({
       where: { id: attachment.messageId },
-      select: { id: true, conversationId: true, deletedAt: true, expiresAt: true, viewOnceBurnAt: true },
+      select: { id: true, conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT },
     });
     if (!message) return false;
 
@@ -153,7 +154,7 @@ export async function registerMetadataRoutes(
     // participant sans ligne `User` (invité de lien) se résout par `id`,
     // jamais par `userId`.
     const isAnonymous = Boolean(authContext.isAnonymous && authContext.participantId);
-    const participantSelect = { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT } as const;
+    const participantSelect = { id: true, conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT } as const;
     const participant = isAnonymous
       ? await prisma.participant.findUnique({ where: { id: authContext.participantId }, select: participantSelect })
       : await prisma.participant.findFirst({
@@ -165,7 +166,19 @@ export async function registerMetadataRoutes(
 
     // Les octets suivent la vie du message porteur — rappelé, expiré, ou
     // brûlure de vue unique consommée (cf. `carrierMessageLifecycle.ts`).
-    if (!carrierMessageStillServesBytes(message, new Date())) return false;
+    const now = new Date();
+    if (!carrierMessageStillServesBytes(message, now)) return false;
+
+    // #9589 — puis l'échéance de CE lecteur (décompte, consommation après
+    // lecture, vue unique ouverte) : même loi que `GET /attachments/:id`.
+    const readerReads = await readerStillReadsBytes(prisma, {
+      messageId: message.id,
+      message,
+      attachmentIsViewOnce: attachment.isViewOnce,
+      readerParticipantId: participant.id,
+      now,
+    });
+    if (!readerReads) return false;
 
     const [historyFloor, personalHiding] = await Promise.all([
       loadHistoryFloor(prisma, participant),

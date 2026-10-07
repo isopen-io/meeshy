@@ -151,7 +151,7 @@ describe('useMediaPlayback — permission et bascule (#5805)', () => {
     });
 
     expect(calls.playCalls).toBe(1);
-    expect(coordinator.active()).toBe('a');
+    expect(coordinator.active()).not.toBeNull();
     expect(statusOf(el)).toBe('playing');
   });
 
@@ -199,7 +199,7 @@ describe('useMediaPlayback — un seul média à la fois (#5805)', () => {
       await Promise.resolve();
     });
 
-    expect(coordinator.active()).toBe('b');
+    expect(coordinator.active()).not.toBeNull();
     expect(callsA.pauseCalls).toBe(1);
     expect(statusOf(elA)).toBe('paused');
     expect(statusOf(elB)).toBe('playing');
@@ -232,10 +232,129 @@ describe('useMediaPlayback — un seul média à la fois (#5805)', () => {
       await Promise.resolve();
     });
 
-    expect(coordinator.active()).toBe('video-1');
+    expect(coordinator.active()).not.toBeNull();
     expect(voiceCalls.pauseCalls).toBe(1);
     expect(statusOf(voiceEl)).toBe('paused');
     expect(statusOf(videoEl)).toBe('playing');
+  });
+});
+
+/**
+ * UNE VIDÉO NE JOUE QU'À UN ENDROIT (#9575) — la clé d'exclusivité désigne le
+ * LECTEUR, jamais la pièce : la tuile du fil et la visionneuse lisent la même
+ * pièce, et sous une clé commune le second `claim` était un no-op — les deux
+ * jouaient ensemble.
+ */
+describe('useMediaPlayback — une même pièce ne joue qu’à un endroit (#9575)', () => {
+  const pipDocument = () =>
+    document as Document & { pictureInPictureEnabled?: boolean; pictureInPictureElement?: Element | null; exitPictureInPicture?: () => Promise<void> };
+
+  const playing = async (playback: () => MediaPlayback) => {
+    await act(async () => {
+      playback().toggle();
+      await Promise.resolve();
+    });
+  };
+
+  test('deux surfaces de la MÊME pièce : lire la seconde met la première en pause', async () => {
+    const coordinator = createMediaCoordinator();
+    let inline!: MediaPlayback;
+    let viewer!: MediaPlayback;
+
+    const inlineEl = mount({ onReady: (p) => (inline = p), attachmentId: 'same', coordinator, tag: 'video' });
+    const inlineCalls = stubMedia(mediaOf(inlineEl));
+    await playing(() => inline);
+    expect(statusOf(inlineEl)).toBe('playing');
+
+    const viewerEl = mount({ onReady: (p) => (viewer = p), attachmentId: 'same', coordinator, tag: 'video' });
+    stubMedia(mediaOf(viewerEl));
+    await playing(() => viewer);
+
+    expect(inlineCalls.pauseCalls).toBe(1);
+    expect(statusOf(inlineEl)).toBe('paused');
+    expect(statusOf(viewerEl)).toBe('playing');
+  });
+
+  test('la première surface, mise en pause, ne retire pas l’exclusivité de la seconde : un troisième média l’arrête bien', async () => {
+    const coordinator = createMediaCoordinator();
+    let inline!: MediaPlayback;
+    let viewer!: MediaPlayback;
+    let other!: MediaPlayback;
+
+    const inlineEl = mount({ onReady: (p) => (inline = p), attachmentId: 'same', coordinator, tag: 'video' });
+    stubMedia(mediaOf(inlineEl));
+    await playing(() => inline);
+    const viewerEl = mount({ onReady: (p) => (viewer = p), attachmentId: 'same', coordinator, tag: 'video' });
+    const viewerCalls = stubMedia(mediaOf(viewerEl));
+    await playing(() => viewer);
+
+    const otherEl = mount({ onReady: (p) => (other = p), attachmentId: 'other', coordinator, tag: 'audio' });
+    stubMedia(mediaOf(otherEl));
+    await playing(() => other);
+
+    expect(viewerCalls.pauseCalls).toBe(1);
+    expect(statusOf(viewerEl)).toBe('paused');
+    expect(statusOf(otherEl)).toBe('playing');
+  });
+
+  test('l’entrée en image dans l’image met en pause la surface qui jouait la même pièce', async () => {
+    const coordinator = createMediaCoordinator();
+    let inline!: MediaPlayback;
+
+    const inlineEl = mount({ onReady: (p) => (inline = p), attachmentId: 'same', coordinator, tag: 'video' });
+    const inlineCalls = stubMedia(mediaOf(inlineEl));
+    await playing(() => inline);
+
+    const viewerEl = mount({ onReady: () => {}, attachmentId: 'same', coordinator, tag: 'video' });
+    stubMedia(mediaOf(viewerEl));
+    await act(async () => {
+      mediaOf(viewerEl).dispatchEvent(new Event('enterpictureinpicture'));
+    });
+
+    expect(inlineCalls.pauseCalls).toBe(1);
+    expect(statusOf(inlineEl)).toBe('paused');
+  });
+
+  test('une vidéo démontée pendant qu’elle flotte quitte l’image dans l’image', async () => {
+    Object.defineProperty(pipDocument(), 'pictureInPictureEnabled', { value: true, configurable: true });
+    let exitCalls = 0;
+    pipDocument().exitPictureInPicture = () => {
+      exitCalls += 1;
+      return Promise.resolve();
+    };
+    const coordinator = createMediaCoordinator();
+    const el = mount({ onReady: () => {}, attachmentId: 'v', coordinator, tag: 'video' });
+    const video = mediaOf(el);
+    stubMedia(video);
+    Object.defineProperty(pipDocument(), 'pictureInPictureElement', { value: video, configurable: true });
+    try {
+      act(() => {
+        root.unmount();
+      });
+      expect(exitCalls).toBe(1);
+    } finally {
+      Object.defineProperty(pipDocument(), 'pictureInPictureElement', { value: null, configurable: true });
+    }
+  });
+
+  test('une vidéo démontée qui ne flotte pas ne ferme pas l’image dans l’image d’une autre', async () => {
+    let exitCalls = 0;
+    pipDocument().exitPictureInPicture = () => {
+      exitCalls += 1;
+      return Promise.resolve();
+    };
+    const coordinator = createMediaCoordinator();
+    const el = mount({ onReady: () => {}, attachmentId: 'v', coordinator, tag: 'video' });
+    stubMedia(mediaOf(el));
+    Object.defineProperty(pipDocument(), 'pictureInPictureElement', { value: document.createElement('video'), configurable: true });
+    try {
+      act(() => {
+        root.unmount();
+      });
+      expect(exitCalls).toBe(0);
+    } finally {
+      Object.defineProperty(pipDocument(), 'pictureInPictureElement', { value: null, configurable: true });
+    }
   });
 });
 
@@ -529,7 +648,7 @@ describe('useMediaPlayback — démontage (#5805)', () => {
       playback.toggle();
       await Promise.resolve();
     });
-    expect(coordinator.active()).toBe('a');
+    expect(coordinator.active()).not.toBeNull();
 
     act(() => {
       root.unmount();

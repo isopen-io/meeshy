@@ -53,6 +53,21 @@ final class MediaGalleryGestureArbitrationTests: XCTestCase {
         code.components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
+    /// **Le corps RENDU d'une page, là où vit sa chaîne de gestes.** Depuis
+    /// #9574 (d24f0e02f3), `body` n'est plus qu'une enveloppe — la page entière
+    /// passe dans la couche sécurisée par `pageBody.captureShield(…)`, que
+    /// `CaptureShieldCoverageGuardTests` tient — et le cadre, ses gestes et
+    /// leurs portes ont déménagé TELS QUELS dans `pageBody`. Relocalisation
+    /// pure : les assertions ne changent ni de texte ni de force, seule
+    /// l'adresse suit. Et l'enveloppe est vérifiée au passage : un `body` qui
+    /// cesserait de rendre `pageBody` rendrait ces témoins vides, donc il ne
+    /// rend rien ici.
+    private func renderedBody(of page: String) -> String? {
+        guard let body = declarationBody(startingAt: "var body: some View", in: page),
+              compact(body).contains("pageBody.captureShield(") else { return nil }
+        return declarationBody(startingAt: "private var pageBody: some View", in: page)
+    }
+
     func test_theGuardReadsANonEmptySource() throws {
         XCTAssertGreaterThan(try source().count, 5_000)
     }
@@ -128,8 +143,8 @@ final class MediaGalleryGestureArbitrationTests: XCTestCase {
     func test_theVerticalDrag_ofTheImagePage_mountsOnTheFrame_notOnTheFittedMedium() throws {
         let code = try source()
         guard let image = declarationBody(startingAt: "struct GalleryImagePage", in: code),
-              let corps = declarationBody(startingAt: "var body: some View", in: image) else {
-            XCTFail("`GalleryImagePage.body` introuvable"); return
+              let corps = renderedBody(of: image) else {
+            XCTFail("`GalleryImagePage.body` → `pageBody` introuvable"); return
         }
 
         guard let forme = corps.range(of: ".contentShape(Rectangle())"),
@@ -151,8 +166,8 @@ final class MediaGalleryGestureArbitrationTests: XCTestCase {
     func test_theVerticalDrag_ofTheVideoPage_disarmsTheNeighbourPages() throws {
         let code = try source()
         guard let video = declarationBody(startingAt: "struct GalleryVideoPage", in: code),
-              let corps = declarationBody(startingAt: "var body: some View", in: video) else {
-            XCTFail("`GalleryVideoPage.body` introuvable"); return
+              let corps = renderedBody(of: video) else {
+            XCTFail("`GalleryVideoPage.body` → `pageBody` introuvable"); return
         }
 
         XCTAssertTrue(compact(corps).contains(".gesture(stageDragGesture,including:isActive?.all:.none)"),

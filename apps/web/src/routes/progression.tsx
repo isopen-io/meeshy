@@ -1,30 +1,31 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { GameBird } from '@/components/game';
 import { GameHiddenCard } from '@/components/game-hidden-card';
-import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
-import { Glyph } from '@/components/glyph';
-import { GlassBack } from '@/components/glass-surface';
+import { GameDetailHost } from '@/components/game-detail-sheet';
+import { GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
+import { PRESS } from '@/components/game-touch';
 import { MascotCoach } from '@/components/mascot';
 import { ConceptCard, ProgressionRow, RowEmblem } from '@/components/progression-concept';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, type EngagementWithGame } from '@/lib/api/engagement';
 import { useGamePrefs } from '@/lib/game/preferences';
-import { progressionSection } from '@/lib/game/progression-section';
+import { redirectOf } from '@/lib/game/progression-nav';
 import { useGameSettings } from '@/lib/game/use-game-settings';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { PROGRESSION_SECTION_PARAM } from '@/lib/notifications/target';
 import { useOptionalRoute } from '@/lib/router';
 import { gameText } from '@/lib/view/game-copy';
 import { conceptView, shownConcepts, shownProgress } from '@/lib/view/progression-concepts';
 import { useMinute } from '@/lib/view/use-minute';
+import { ProgressionHeaderGroup } from '@/routes/progression-header-group';
 import { GameLead } from '@/routes/progression-lead';
 import { ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
-import { Link, href, navigate } from '@/routes/route-table';
+import { OfflineNotice, ProgressionShell, pathOfTarget } from '@/routes/progression-shell';
+import { Link, navigate } from '@/routes/route-table';
 
 import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import { mascotEvent as detectMascotEvent, mascotMoment, type MascotEvent } from '@meeshy/shared/utils/mascot';
@@ -40,16 +41,21 @@ export { ElansHero, LastAchievementHero, LevelHero, MeeshDetail } from '@/routes
  * d'un coup d'œil. Il devient un SOMMAIRE : une carte par concept (tête, données
  * importantes, à quoi ça sert, comment ça marche), qui ouvre sa fiche
  * (`progression-concept.tsx`) — c'est là que vivent toutes ses données et ses
- * gestes. Le tableau de bord (`progression-tableau.tsx`) regroupe tout, en
- * lecture seule.
+ * gestes. Le Tableau de bord, qui redisait cette page et les fiches, n'existe
+ * plus (amendement n° 4) : son adresse ouvre cette page.
  *
  * Ce fichier ne décide ni de l'ordre ni de ce qui existe : il PARCOURT
- * `progressionConcepts` (`packages/shared`), que la fiche, le tableau de bord et
- * l'app iOS parcourent aussi. Ce qu'une carte dit vient de `conceptView`
- * (`lib/view/progression-concepts.ts`), écrit une fois pour les trois écrans.
+ * `progressionConcepts` (`packages/shared`), que la fiche et l'app iOS
+ * parcourent aussi. Ce qu'une carte dit vient de `conceptView`
+ * (`lib/view/progression-concepts.ts`), écrit une fois pour les deux écrans ; où
+ * mène chaque toucher, de la carte de navigation (`lib/game/progression-nav.ts`).
  *
- * AUCUN GESTE ICI : ni frappe, ni coffre, ni gel. Une première page qui agit
- * redevient l'écran qu'on vient de quitter.
+ * AUCUN GESTE DANS LA PAGE : ni frappe, ni coffre, ni gel. Une première page qui
+ * agit redevient l'écran qu'on vient de quitter. L'en-tête, lui, garde ce que le
+ * porteur y avait posé (#5839, #6480) : le blason du rang et le compteur de
+ * Meeshes (`progression-header-group.tsx`) — le compteur ouvre la fiche des
+ * Meeshes, seul site de la frappe —, sur la coquille partagée dont l'en-tête se
+ * réduit quand la page défile dessous (`progression-shell.tsx`).
  */
 
 const ROW_GAP = 'flex flex-col gap-2';
@@ -64,7 +70,10 @@ export function ProgressionBody({
   guide,
   mascotEvent = null,
   now,
+  entering = false,
 }: {
+  /** Première ouverture de la visite : les cartes entrent en scène, l'une après l'autre. */
+  readonly entering?: boolean;
   readonly progress: EngagementWithGame;
   readonly guide?: ReactNode;
   /** Ce qui vient de se passer (#8907) — la mascotte le célèbre avant de revenir à l'état. */
@@ -82,15 +91,9 @@ export function ProgressionBody({
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
       {hidden ? <GameHiddenCard /> : playing ? (guide ?? null) : <MascotCoach moment={mascotMoment(progress, mascotEvent)} />}
-      <ProgressionRow
-        target={{ to: 'progressionTableau' }}
-        marker="tableau"
-        emblem={<RowEmblem />}
-        name={gameText('game.dashboard.title')}
-      />
       <ul data-progression-concepts="" className={ROW_GAP}>
-        {shownConcepts(progress, hidden).map((concept) => (
-          <li key={concept}>
+        {shownConcepts(progress, hidden).map((concept, index) => (
+          <li key={concept} {...(entering ? { 'data-game-enter': '', style: { '--game-enter-index': Math.min(index, 8) } as CSSProperties } : {})}>
             <ConceptCard concept={conceptView(concept, view, clock)} view={view} />
           </li>
         ))}
@@ -106,7 +109,7 @@ export function ProgressionBody({
   );
 }
 
-const MEE_LINE = 'flex w-full items-center gap-3 rounded-card px-4 py-2 text-start';
+const MEE_LINE = `${PRESS} flex w-full items-center gap-3 rounded-card px-4 py-2 text-start`;
 
 /**
  * LA LIGNE DE MEE — le guide du moment, en UNE ligne courte. La carte complète
@@ -152,23 +155,65 @@ function ProgressionGuide({ view }: { readonly view: EngagementWithGame }) {
 }
 
 /**
- * `?section=missions` (#9539) : le toucher de l'annonce d'une mission
- * personnelle ouvre désormais la FICHE des missions. L'entrée de l'historique est
- * REMPLACÉE : « retour » depuis la fiche ramène à la première page, pas à
- * l'adresse qui renverrait aussitôt vers la fiche.
+ * LES REDIRECTIONS DE PROGRESSION (carte de navigation, `redirectOf`) :
+ * `?section=<concept>` ouvre la FICHE de ce concept — le toucher d'une
+ * notification du jeu (#9539) —, et l'ancienne adresse du Tableau de bord ouvre
+ * cette page. L'entrée de l'historique est REMPLACÉE : « retour » ne repasse
+ * jamais par l'adresse qui renverrait aussitôt ailleurs, et la fiche reçoit
+ * Progression sous elle (`progression-shell.tsx`).
  */
-function useSectionRedirect(): void {
-  const concept = progressionSection(useOptionalRoute()?.search.get(PROGRESSION_SECTION_PARAM) ?? null);
+function useProgressionRedirect(): void {
+  /* Le contexte de route ne sert qu'à re-rendre à chaque changement d'adresse ; l'adresse se lit telle quelle. */
+  const route = useOptionalRoute();
+  const target = route === null ? null : redirectOf(`${window.location.pathname}${window.location.search}`, pathOfTarget);
   useEffect(() => {
-    if (concept !== undefined) navigate(href('progressionConcept', { concept }), true);
-  }, [concept]);
+    if (target !== null) navigate(target, true);
+  }, [target]);
+}
+
+/**
+ * LE PREMIER TOUCHER SUR UNE CARTE N'ATTEND RIEN — l'écran des fiches est
+ * préchargé quand le navigateur est au repos, une fois la page peinte. Sans lui,
+ * un doigt (qui ne survole rien, donc ne déclenche aucun préchargement à
+ * l'intention) voyait le squelette de route s'intercaler entre la carte et sa
+ * fiche. Le catalogue du jeu est déjà là : c'est le seul octet qui manquait.
+ */
+function usePreloadFiches(): void {
+  useEffect(() => {
+    const idle = (window as Window & { readonly requestIdleCallback?: (run: () => void) => number }).requestIdleCallback;
+    const load = (): void => void import('@/routes/progression-concept');
+    if (idle === undefined) {
+      const timer = setTimeout(load, 600);
+      return () => clearTimeout(timer);
+    }
+    const handle = idle(load);
+    return () => (window as Window & { readonly cancelIdleCallback?: (id: number) => void }).cancelIdleCallback?.(handle);
+  }, []);
+}
+
+/**
+ * L'ENTRÉE EN SCÈNE, UNE SEULE FOIS — les cartes de la première page montent
+ * l'une après l'autre à la première ouverture de la visite, jamais au retour
+ * depuis une fiche : un sommaire qu'on rejoue à chaque retour arrière fait
+ * attendre celui qui sait déjà où il va.
+ */
+let hubHasEntered = false;
+
+function useFirstEntrance(): boolean {
+  const first = useRef(!hubHasEntered);
+  useEffect(() => {
+    hubHasEntered = true;
+  }, []);
+  return first.current;
 }
 
 export default function ProgressionScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   const online = useOnline();
   useGameSettings(true);
-  useSectionRedirect();
+  useProgressionRedirect();
+  usePreloadFiches();
+  const entering = useFirstEntrance();
 
   /**
    * LA MASCOTTE CÉLÈBRE CE QUI CHANGE (#8907) — jamais l'état de la première
@@ -191,39 +236,21 @@ export default function ProgressionScreen() {
   }, [query.data]);
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <header className="glass z-10 shrink-0">
-        <div className="flex items-center gap-2 px-4 py-2">
-          <Link to="list" className="grid size-11 shrink-0 place-items-center" style={{ color: GAME_BRAND }} aria-label="Retour">
-            <GlassBack>
-              <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
-            </GlassBack>
-          </Link>
-          <h1 className="flex-1 truncate text-title font-bold" style={{ color: GAME_INK }}>
-            {gameText('game.progression.title')}
-          </h1>
-        </div>
-        {online ? null : (
-          <p
-            role="status"
-            className="flex items-center justify-center gap-1.5 px-4 py-1 text-check font-semibold"
-            style={{ backgroundColor: 'color-mix(in srgb, var(--color-warn) 22%, transparent)', color: GAME_INK }}
-          >
-            <Glyph name="warningCircle" size={11} />
-            Hors ligne — progression telle qu’à la dernière ouverture
-          </p>
-        )}
-      </header>
-
-      <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
-        {query.data !== undefined ? (
-          <ProgressionBody progress={query.data} mascotEvent={mascotEvent} guide={<ProgressionGuide view={query.data} />} />
-        ) : query.isError ? (
-          <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />
-        ) : (
-          <ProgressionSkeleton />
-        )}
-      </main>
-    </div>
+    <ProgressionShell
+      title={gameText('game.progression.title')}
+      trailing={query.data === undefined ? null : <ProgressionHeaderGroup progress={query.data} />}
+      notice={online ? null : <OfflineNotice>Hors ligne — progression telle qu’à la dernière ouverture</OfflineNotice>}
+    >
+      {query.data !== undefined ? (
+        <>
+          <ProgressionBody progress={query.data} mascotEvent={mascotEvent} guide={<ProgressionGuide view={query.data} />} entering={entering} />
+          <GameDetailHost progress={query.data} />
+        </>
+      ) : query.isError ? (
+        <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />
+      ) : (
+        <ProgressionSkeleton />
+      )}
+    </ProgressionShell>
   );
 }

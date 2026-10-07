@@ -151,14 +151,14 @@ describe('SeasonService.claim', () => {
     expect(without.seal).toBeNull();
   });
 
-  it('l’étape 40 règle la saison : coupe, +500 de Gloire, trophée daté — une seule fois', async () => {
+  it('l’étape 40 règle la saison : coupe, +5 000 de Gloire (#9636), trophée daté — une seule fois', async () => {
     const { db, service } = setup(160);
 
     const result = await service.claim({ userId: USER, step: 40, now: IN_SEASON });
 
-    expect(result).toMatchObject({ status: 'claimed', completed: true, gloryGained: 500, reward: { kind: 'season-cup' } });
+    expect(result).toMatchObject({ status: 'claimed', completed: true, gloryGained: 5000, reward: { kind: 'season-cup' } });
     expect(db.gloryLedger.rows).toHaveLength(1);
-    expect(db.gloryLedger.rows[0]).toMatchObject({ reason: 'season', requestId: 'season:1', delta: 500 });
+    expect(db.gloryLedger.rows[0]).toMatchObject({ reason: 'season', requestId: 'season:1', delta: 5000 });
     expect(db.gameTrophy.rows.map((t) => t.key)).toEqual(['trophy.season-cup.1']);
     expect(db.gameSeason.rows[0]!.settledAt).not.toBeNull();
 

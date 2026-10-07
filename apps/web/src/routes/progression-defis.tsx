@@ -1,3 +1,5 @@
+import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { ProgressionPage } from '@/routes/progression-page';
 import { GeneratedAchievements, STREAK_TINT } from '@/routes/progression-parts';
 
@@ -13,9 +15,10 @@ import { GeneratedAchievements, STREAK_TINT } from '@/routes/progression-parts';
  * `isAttainable` refuse déjà en amont.
  */
 export default function ProgressionDefisScreen() {
+  /* Chaque palier se touche et dit ses précisions (#9563) : la page lit donc le catalogue du jeu, comme ses voisines. */
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
-      concept="defis"
       titre="Défis"
       teinte={STREAK_TINT}
       compte={(p) => {

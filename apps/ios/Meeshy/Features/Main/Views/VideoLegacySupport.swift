@@ -48,7 +48,9 @@ struct FullscreenAVPlayerLayerView: UIViewRepresentable {
         view.playerLayer.player = player
         view.onReadyForDisplay = onReadyForDisplay
         view.armReadinessObserver()
-        if configurePip {
+        let policy = ProtectedPlaybackPolicy.of(isCaptureShielded: context.environment.isCaptureShielded)
+        policy.apply(to: player)
+        if configurePip, policy.allowsPictureInPicture {
             SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
         }
         return view
@@ -58,7 +60,11 @@ struct FullscreenAVPlayerLayerView: UIViewRepresentable {
         uiView.onReadyForDisplay = onReadyForDisplay
         uiView.updatePlayer(player)
         uiView.updateGravity(gravity)
-        if configurePip {
+        // #9574 — une vidéo protégée ne sort ni par AirPlay, ni par la
+        // recopie d'écran, ni par une fenêtre PiP.
+        let policy = ProtectedPlaybackPolicy.of(isCaptureShielded: context.environment.isCaptureShielded)
+        policy.apply(to: player)
+        if configurePip, policy.allowsPictureInPicture {
             SharedAVPlayerManager.shared.configurePip(playerLayer: uiView.playerLayer)
         }
     }

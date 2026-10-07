@@ -42,7 +42,7 @@ function schemaModels(): SchemaModel[] {
 const MODELS = schemaModels();
 
 /** Les noms qui disent « jeu » même quand leur documentation ne cite pas d'issue. */
-const GAME_NAME = /^(Game|League|Atlas|Achievement|DailyMission|GloryLedger|MeeshLedger|EngagementQuota|AffiliateVisit)/;
+const GAME_NAME = /^(Game|League|Atlas|Achievement|DailyMission|GloryLedger|MeeshLedger|EngagementQuota|EngagementPostPoints|AffiliateVisit)/;
 
 /** Les modèles du schéma qui portent une ligne PAR COMPTE et se réclament du jeu (issues #9373 à #9392, ou nom de jeu). */
 const gameModelsInSchema = MODELS
@@ -93,6 +93,7 @@ describe('purgeGameData', () => {
       gameSeason: [{ id: 'k', userId: USER }],
       gameTrophy: [{ id: 'l', userId: USER }],
       atlasStamp: [{ id: 'm', userId: USER }],
+      engagementPostPoints: [{ id: 'o', userId: USER, postId: 'p1', totalPoints: 4 }, { id: 'o2', userId: OTHER, postId: 'p1', totalPoints: 7 }],
       gameDuo: [{ id: 'n', inviterId: USER, inviteeId: OTHER }, { id: 'n2', inviterId: OTHER, inviteeId: USER }, { id: 'n3', inviterId: OTHER, inviteeId: '68a0000000000000000000ff' }],
     })) (db as unknown as Record<string, { rows: unknown[] }>)[model]!.rows.push(...rows);
     return db;
@@ -110,6 +111,14 @@ describe('purgeGameData', () => {
     expect(db.dailyMission.rows.map((r) => r.id)).toEqual(['a2']);
     expect(db.leagueMembership.rows.map((r) => r.id)).toEqual(['h2']);
     expect(db.gameDuo.rows.map((r) => r.id)).toEqual(['n3']);
+  });
+
+  it('retire ce que les posts ont rapporté au compte (#9569) — la trace de ses gestes post par post —, pas ce qu’ils ont rapporté aux autres', async () => {
+    const db = seed();
+    const summary = await purgeGameData(db.prisma, USER);
+
+    expect(summary.deleted.engagementPostPoints).toBe(1);
+    expect(db.engagementPostPoints.rows.map((r) => r.id)).toEqual(['o2']);
   });
 
   it('dépersonnalise les dons faits aux autres (actorId), sans supprimer leur historique', async () => {

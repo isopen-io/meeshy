@@ -60,6 +60,7 @@ import MeeshyUI
 ///
 /// Gardes : `BubbleQuotedReplyZoneLawTests`.
 struct BubbleQuotedReply: View, Equatable {
+    @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
     /// Style d'enveloppe de la citation.
     /// - `.card` : variante historique — RR12 + bgColor teinté + paddings extérieurs (top 6, horizontal 6). Hôte = bulle chat colorée.
     /// - `.inline` : sans RR12 ni paddings extérieurs — la surface vient du parent (widget audio `playerBackground` ou conteneur unifié média+reply).
@@ -549,7 +550,14 @@ struct BubbleQuotedReply: View, Equatable {
         }
     }
 
+    /// #9574 — la citation d'un contenu qui disparaît se rend dans la couche
+    /// sécurisée, même dans un message ordinaire.
     var body: some View {
+        quotedBody.captureShield(reply.quotedCapture(quotedMessage: nil).shieldsCapture(surfaceAnnounces: announcesCapture))
+    }
+
+    @ViewBuilder
+    private var quotedBody: some View {
         let accentBarColor = Color(hex: reply.isMe ? accentHex : reply.authorColor)
         let nameColor: Color = parentIsMe
             ? .white.opacity(MeeshyOpacity.intense)

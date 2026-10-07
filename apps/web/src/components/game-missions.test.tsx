@@ -49,7 +49,7 @@ describe('les missions du jour', () => {
 
   test('trois missions, dites en clair, avec leur avancement et leur récompense', () => {
     expect(page).toContain('Envoyer 5 messages');
-    expect(page).toContain('Répondre dans 3 conversations différentes');
+    expect(page).toContain('Écrire dans 3 conversations différentes');
     expect(page).toContain('Publier 2 posts');
     expect(page).toContain('5 / 5');
     expect(page).toContain('1 / 3');

@@ -42,11 +42,10 @@ extension ConversationView {
             saveableAttachmentCount: msg.attachments.filter { $0.type != .location }.count,
             canComposeMedia: ComposableAttachment.offers(message: msg),
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-            // `isForwardable` profitait ici de son défaut `true`, inoffensif
-            // tant que `primaryActions` ne le lisait pas. Le lot 5 le rend
-            // LOAD-BEARING : sans lui, « Composer » s'offrirait sur une vue
-            // unique, et la clause O13 tomberait par un simple défaut.
-            isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur,
+            // `exits` est LOAD-BEARING (#9573) : son défaut laisse tout
+            // sortir, et « Copier », « Imager », « Enregistrer » ou
+            // « Composer » s'offriraient sur un contenu qui disparaît.
+            exits: msg.exitOffer, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur,
             hasDefaultExportFormat: MessageCardExportMenu.hasDefaultFormat, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: msg).isEmpty
         )
         let actions = MessageActionResolver.primaryActions(ctx)
@@ -136,22 +135,14 @@ extension ConversationView {
             }
         case .copy:
             Button {
-                UIPasteboard.general.string = msg.content
+                guard MessageExitTransport.copy(msg.content, of: msg) else { return }
                 HapticFeedback.success()
             } label: {
                 Label(String(localized: "action.copy", defaultValue: "Copier", bundle: .main), systemImage: "doc.on.doc")
             }
         case .saveMedia:
             Button {
-                guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
-                HapticFeedback.light()
-                mediaSaveCoordinator.save(MediaSaveRequest(
-                    kind: attachment.kind,
-                    origin: .transmitted,
-                    remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
-                    suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-                    attachmentId: attachment.id.isEmpty ? nil : attachment.id
-                ))
+                if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() }
             } label: {
                 Label(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main), systemImage: "arrow.down.to.line")
             }

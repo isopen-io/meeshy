@@ -229,3 +229,132 @@
 [data-game-level-pill]:has([aria-disabled='true']) {
   opacity: 0.6;
 }
+
+/* LE REBOND DU JEU (#9563, amendement n° 2) — UNE courbe pour tout ce qui se
+   touche : une carte de concept, un badge, une pastille, le blason de l'en-tête.
+   L'élément s'ENFONCE au contact (`--game-press-scale`, vite), puis REBONDIT au
+   relâché : il dépasse sa taille et revient s'y poser (`--game-spring`).
+   Transform seulement : aucune mise en page ne bouge autour de lui.
+
+   `--game-spring` est un ressort amorti écrit en `linear()` ; un navigateur qui
+   ne le connaît pas garde la courbe de Bézier à dépassement déclarée d'abord.
+
+   L'état `:active` est celui du navigateur : un doigt, une souris, Espace sur un
+   bouton. Rien ne reste « collé » — au relâché l'état tombe, la courbe joue.
+
+   « Animations réduites » : ni échelle ni ressort, un simple fondu. */
+:root {
+  --game-press-scale: 0.94;
+  --game-press-in: 90ms;
+  --game-spring-duration: 460ms;
+  --game-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --game-pop-from: 0.6;
+  --game-enter-shift: 10px;
+  --game-enter-stagger: 35ms;
+}
+
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --game-spring: linear(0, 0.34 8%, 0.82 18%, 1.06 27%, 1.13 33%, 1.11 40%, 1.03 52%, 0.99 63%, 0.995 76%, 1);
+  }
+}
+
+.game-press {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .game-press {
+    transition: transform var(--game-spring-duration) var(--game-spring);
+  }
+
+  .game-press:active {
+    transform: scale(var(--game-press-scale));
+    transition: transform var(--game-press-in) ease-out;
+  }
+
+  /* L'emblème de la modale ENTRE avec le même ressort. */
+  .game-pop {
+    animation: gamePop var(--game-spring-duration) var(--game-spring) both;
+  }
+
+  /* La feuille monte du bas de l'écran ; en large, elle se pose au centre. */
+  dialog[data-sheet-presentation='bottom'] {
+    animation: gameSheetRise 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  dialog[data-sheet-presentation='bottom']::backdrop {
+    animation: gameFade 200ms linear both;
+  }
+
+  /* L'ENTRÉE EN SCÈNE d'une carte, une seule fois par visite (`data-game-enter`
+     n'est posé qu'au premier rendu) : elle monte de quelques points, l'une
+     après l'autre. */
+  [data-game-enter] {
+    animation: gameEnter 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: calc(var(--game-enter-index, 0) * var(--game-enter-stagger));
+  }
+
+  /* Une jauge se remplit depuis sa valeur précédente. */
+  [data-game-gauge-fill] {
+    transition: width 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-press {
+    transition: opacity 120ms linear;
+  }
+
+  .game-press:active {
+    opacity: 0.6;
+  }
+
+  .game-pop,
+  dialog[data-sheet-presentation='bottom'] {
+    animation: gameFade 160ms linear both;
+  }
+}
+
+@keyframes gamePop {
+  from {
+    opacity: 0;
+    transform: scale(var(--game-pop-from));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gameSheetRise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gameFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes gameEnter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--game-enter-shift));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

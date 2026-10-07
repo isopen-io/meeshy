@@ -1,5 +1,7 @@
 ## Le transfert d'un contenu éphémère ou à vue unique — refuser d'un côté, propager de l'autre
 
+> **Amendée le 2026-10-07 (#9572)** par `2026-10-07-un-contenu-qui-disparait-ne-sort-pas-de-meeshy-la-copie-ne-peut-pas-etre-moins-protegee-que-sa-source-9572.md` : la flamme après lecture et la pièce en vue unique sont refusées, la durée est bornée par celle de la source, la copie porte durée ET après lecture, et le repli `expiresAt − createdAt` est retiré.
+
 **Contexte** : transférer un message crée une ligne `Message` INDÉPENDANTE. `forwardedFromId` ne
 pointe que vers l'origine, il ne transporte aucun état : la copie naissait sans `expiresAt`, sans
 `isViewOnce` et sans le bit `EPHEMERAL`. Le balayage du cycle 92 détruisait donc l'original à

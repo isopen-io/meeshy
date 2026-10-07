@@ -25,10 +25,13 @@ private extension EngagementAxisFamily {
 }
 
 /// « Comment gagner » : une puce par famille, DÉRIVÉE du barème, triée par poids décroissant,
-/// avec son pictogramme et ses points. Un toucher ouvre le carnet des règles à « Chaque geste
-/// rapporte ».
+/// avec son pictogramme et ses points. Une puce SE TOUCHE (#9564) : elle rebondit et ouvre les précisions de SA
+/// famille — ce qu'un geste rapporte, et si elle est active ces jours-ci. Elle n'ouvre plus le carnet des règles :
+/// un lien d'une fiche vers une autre page du deuxième niveau est un chemin transverse que la carte de navigation
+/// retire (amendement n° 4).
 struct GameHeroEarn: View {
-    let onOpenRule: (Int) -> Void
+    /// L'élan servi : il dit quelles familles sont actives ; `nil` devant un ancien serveur.
+    var elan: EngagementElanProgress?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -49,36 +52,31 @@ struct GameHeroEarn: View {
 
     private func chip(_ item: GameHero.EarnItem) -> some View {
         let title = ProgressionCopy.title(for: item.family)
-        return Button {
-            HapticFeedback.light()
-            onOpenRule(GameHero.earnRule)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: item.family.heroSymbol)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(item.family.heroTint)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-                Text("+" + GameCopy.formatCount(item.weight))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
-            }
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(Capsule().fill(item.family.heroTint.opacity(0.16)))
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+        return HStack(spacing: 6) {
+            Image(systemName: item.family.heroSymbol)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundColor(item.family.heroTint)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundColor(theme.textPrimary)
+            Text("+" + GameCopy.formatCount(item.weight))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
         }
-        .buttonStyle(.plain)
+        .lineLimit(1)
+        .minimumScaleFactor(GameChip.minimumScale)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
+        .background(Capsule().fill(item.family.heroTint.opacity(0.16)))
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(
             localized: "game.hero.earn.a11y",
             defaultValue: "\(title), \(GameCopy.points(item.weight)) par geste",
             bundle: .main
         ))
-        .accessibilityIdentifier("game.hero.earn.\(item.family.rawValue)")
+        .gameElement(GameElementDetails.elanFamily(item.family, elan: elan), identifier: "game.hero.earn.\(item.family.rawValue)")
     }
 }

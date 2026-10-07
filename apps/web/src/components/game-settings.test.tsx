@@ -169,19 +169,18 @@ describe('la ligue publique', () => {
     expect(left).toBe(1);
   });
 
-  test('dehors : on le dit, il n’y a rien à quitter, la porte vers la ligue reste', () => {
+  test('dehors : on le dit, il n’y a rien à quitter', () => {
     const closed = game.league === undefined ? undefined : { ...game.league, access: 'consent-required' as const, current: null };
     const html = renderToStaticMarkup(<GameSettings {...props({ league: closed })} />);
     expect(text(html)).toContain('Tu n’es pas dans la ligue publique');
     expect(html).not.toContain('data-game-setting-league-leave');
-    expect(html).toContain('href="/me/progression/ligue"');
   });
 });
 
-describe('le carnet', () => {
-  test('les règles et le carnet de progression sont à portée', () => {
+/* Carte de navigation (#9563, amendement n° 4) : les Réglages sont un niveau 2 sous Progression ; règles, carnet et classement ont leur propre chemin. */
+describe('aucun lien transverse', () => {
+  test('ni les règles, ni le carnet, ni le classement : un écran du jeu n’a qu’un parent', () => {
     const html = renderToStaticMarkup(<GameSettings {...props()} />);
-    expect(html).toContain('href="/me/progression/regles"');
-    expect(html).toContain('href="/me/progression/carnet"');
+    for (const path of ['/me/progression/regles', '/me/progression/carnet', '/me/progression/ligue']) expect(html).not.toContain(`href="${path}"`);
   });
 });

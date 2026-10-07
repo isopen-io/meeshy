@@ -1,5 +1,7 @@
 import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 
+import { holdViewerPoints } from '@/lib/feed/viewer-points';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import { CANVAS_CAPS_HEADERS, type FeedPost } from './feed-pages';
@@ -74,6 +76,7 @@ export const PUBLICATION_STALE_TIME = 5 * 60_000;
 export function postQueryOptions(deps: PublicationDeps & { readonly postId: string }) {
   return {
     queryKey: postQueryKey(deps.postId),
+    structuralSharing: holdViewerPoints,
     staleTime: PUBLICATION_STALE_TIME,
     queryFn: ({ signal }: { readonly signal: AbortSignal }) => loadPost({ ...deps, signal }).then(unwrap),
   };

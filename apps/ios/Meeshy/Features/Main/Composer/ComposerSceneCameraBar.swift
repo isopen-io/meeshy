@@ -16,8 +16,9 @@ import MeeshyUI
 /// scène et la miniature choisie, en bas, prennent la photo et la vidéo ; le
 /// rail, en bas à gauche, ouvre les filtres et les cadres.
 ///
-/// **La croix en haut à GAUCHE, le flash en haut à DROITE, et sous lui le
-/// curseur vertical de la luminosité** (décision porteur 2026-10-05).
+/// **La croix en haut à GAUCHE, le flash en haut à DROITE, et sous lui — flash
+/// actif seulement — le curseur vertical de son intensité** (décision porteur
+/// 2026-10-05, précisée le 2026-10-07, #9566 : aucun curseur permanent).
 struct ComposerSceneCameraBar: View {
 
     let stage: ComposerSceneCameraStage
@@ -48,11 +49,12 @@ struct ComposerSceneCameraBar: View {
     /// Une bascule d'objectif est en cours, ou la prise précédente se
     /// finalise : le bouton se tait (#9464, #9351).
     var flipping = false
-    var exposureBias: Float = ComposerExposureRule.neutral
-    var onExposureBias: (Float) -> Void = { _ in }
-    /// **On retouche** (#9352) : l'objectif se repose, donc ni flash, ni
-    /// retournement, ni luminosité — et la croix abandonne la retouche.
+    /// **On retouche** (#9352) : l'objectif se repose, donc ni flash ni
+    /// retournement — et la croix abandonne la retouche.
     var editing = false
+    /// « Terminé » rend : il attend, et le dit.
+    var rendering = false
+    var onDone: () -> Void = {}
 
     /// **Ce que la machine sait du doigt, du zoom et de la lumière** (#8671) —
     /// lu par le bas de la capture (`ComposerCaptureBottomRow`).
@@ -77,10 +79,10 @@ struct ComposerSceneCameraBar: View {
         VStack(spacing: 0) {
             topControls
             if !segments.isEmpty, !editing { segmentStrip }
-            if ComposerExposureRule.shows(stage: stage, editing: editing) {
+            if ComposerFlashIntensity.showsSlider(flash: flashMode) && !editing {
                 HStack {
                     Spacer(minLength: 0)
-                    ComposerExposureSlider(bias: exposureBias, onChange: onExposureBias)
+                    ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity)
                 }
                 .padding(.top, MeeshySpacing.sm)
                 .transition(.opacity)
@@ -88,6 +90,8 @@ struct ComposerSceneCameraBar: View {
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.top, MeeshySpacing.md)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2),
+                   value: ComposerFlashIntensity.showsSlider(flash: flashMode))
     }
 
     // MARK: - En tête de la carte
@@ -114,37 +118,41 @@ struct ComposerSceneCameraBar: View {
                              action: onFlipCamera)
                     .disabled(flipping)
                 flashCluster
+            } else {
+                doneButton
             }
         }
     }
 
-    /// **Le flash et son curseur, dans UNE capsule de verre** (#8671). Le flash
-    /// vit au bord droit : son curseur d'intensité s'allonge à sa GAUCHE quand
-    /// il s'allume, et se replie quand il s'éteint.
+    /// **Le flash, au bord droit** (#8671). Allumé, son curseur d'intensité
+    /// paraît SOUS lui, vertical (#9566).
     private var flashCluster: some View {
-        HStack(spacing: 0) {
-            if ComposerFlashIntensity.showsSlider(flash: flashMode) {
-                ComposerFlashIntensitySlider(level: flashIntensity,
-                                             onChange: onFlashIntensity)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
-            Button {
-                onCycleFlash()
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: ComposerCameraFlash.symbol(for: flashMode))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundStyle(flashMode == .off ? .white.opacity(0.75) : .yellow)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(ComposerCameraFlash.label(for: flashMode))
+        glassControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
+                     label: ComposerCameraFlash.label(for: flashMode),
+                     tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
+                     action: onCycleFlash)
+    }
+
+    /// **✓ Terminé, en haut à droite, aligné sur la croix** (porteur 2026-10-07,
+    /// #9567) : les deux sont au-dessus du sol, jamais sur la scène retouchée.
+    /// Pendant le rendu il attend : un second toucher ne remet rien.
+    private var doneButton: some View {
+        Button {
+            HapticFeedback.light()
+            onDone()
+        } label: {
+            Label(ComposerCaptureCopy.done, systemImage: "checkmark")
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .frame(minHeight: 40)
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
+                .opacity(rendering ? 0.5 : 1)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
         }
-        .clipShape(Capsule())
-        .adaptiveLiquidGlass(in: Capsule(), interactive: true)
-        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82),
-                   value: ComposerFlashIntensity.showsSlider(flash: flashMode))
+        .buttonStyle(.plain)
+        .disabled(rendering)
+        .accessibilityLabel(ComposerCaptureCopy.done)
     }
 
     /// **Sur du verre, jamais à nu.** Ces contrôles flottent sur une image que
@@ -243,60 +251,6 @@ struct ComposerSceneCameraBar: View {
             }
         }
         .padding(.top, MeeshySpacing.smPlus)
-    }
-}
-
-// MARK: - Le curseur d'intensité du flash (#8671)
-
-/// **Le curseur de verre** : une piste que le doigt règle d'un glissé, et que
-/// VoiceOver règle d'un balayage — un élément AJUSTABLE, jamais une piste
-/// muette. La loi (`ComposerFlashIntensity`) convertit la position en niveau.
-struct ComposerFlashIntensitySlider: View {
-    let level: Double
-    let onChange: (Double) -> Void
-
-    private static let trackWidth: CGFloat = 96
-    private static let thumb: CGFloat = 18
-
-    var body: some View {
-        let remplissage = CGFloat(ComposerFlashIntensity.fill(level))
-        return ZStack(alignment: .leading) {
-            Capsule()
-                .fill(.white.opacity(0.28))
-                .frame(height: 4)
-            Capsule()
-                .fill(Color.yellow)
-                .frame(width: max(Self.thumb / 2, Self.trackWidth * remplissage), height: 4)
-            Circle()
-                .fill(Color.white)
-                .frame(width: Self.thumb, height: Self.thumb)
-                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
-                .offset(x: (Self.trackWidth - Self.thumb) * remplissage)
-        }
-        .frame(width: Self.trackWidth, height: 44)
-        // La piste se lit toujours du faible au fort dans le sens de la
-        // position du doigt : sa géométrie ne se retourne pas en arabe, la
-        // capsule qui la porte, si.
-        .environment(\.layoutDirection, .leftToRight)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { valeur in
-                    onChange(ComposerFlashIntensity.level(atX: valeur.location.x,
-                                                          width: Self.trackWidth))
-                }
-        )
-        .padding(.leading, MeeshySpacing.mdPlus)
-        .accessibilityElement()
-        .accessibilityLabel(ComposerSceneCameraCopy.flashIntensityLabel)
-        .accessibilityValue(ComposerSceneCameraCopy.flashIntensityValue(level))
-        .accessibilityAdjustableAction { sens in
-            switch sens {
-            case .increment: onChange(ComposerFlashIntensity.stepped(level, up: true))
-            case .decrement: onChange(ComposerFlashIntensity.stepped(level, up: false))
-            @unknown default: break
-            }
-        }
     }
 }
 

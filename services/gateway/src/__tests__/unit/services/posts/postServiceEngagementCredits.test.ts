@@ -23,10 +23,12 @@ jest.mock('../../../../services/ZmqSingleton', () => ({
 
 const mockRecordActivity = jest.fn<any>().mockResolvedValue(undefined);
 const mockReclaimContent = jest.fn<any>().mockResolvedValue(0);
+const mockReclaimSource = jest.fn<any>().mockResolvedValue(0);
 jest.mock('../../../../services/engagement/EngagementService', () => ({
   EngagementService: jest.fn().mockImplementation(() => ({
     recordActivity: (...args: unknown[]) => mockRecordActivity(...args),
     reclaimContent: (...args: unknown[]) => mockReclaimContent(...args),
+    reclaimSource: (...args: unknown[]) => mockReclaimSource(...args),
   })),
 }));
 
@@ -96,6 +98,7 @@ const serviceFor = (prisma: ReturnType<typeof makePrisma>) =>
 beforeEach(() => {
   mockRecordActivity.mockClear();
   mockReclaimContent.mockClear();
+  mockReclaimSource.mockClear();
 });
 
 describe('tool.post_bookmark — PostService.bookmarkPost', () => {
@@ -104,6 +107,7 @@ describe('tool.post_bookmark — PostService.bookmarkPost', () => {
     await settle();
 
     expect(mockRecordActivity).toHaveBeenCalledWith(READER_ID, 'tool.post_bookmark', {
+      postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
     });
@@ -129,6 +133,7 @@ describe('social.share — PostService.shareWithTrackingLink', () => {
 
     expect(prisma.post.findFirst.mock.calls[0][0].select).toMatchObject({ authorId: true });
     expect(mockRecordActivity).toHaveBeenCalledWith(READER_ID, 'social.share', {
+      postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
     });
@@ -147,15 +152,26 @@ describe('social.share — PostService.shareWithTrackingLink', () => {
 });
 
 describe('social.repost — PostService.repostPost', () => {
-  it('crédite le reposteur, propriétaire = auteur de l’original', async () => {
+  it('crédite le reposteur UNE fois, sur l’original — la republication produite est son propre post, qui ne lui rapporte rien (#9584)', async () => {
     const repost = await serviceFor(makePrisma())
       .repostPost(POST_ID, READER_ID, { targetType: 'POST' as any });
     await settle();
 
     expect(repost).not.toBeNull();
+    expect(mockRecordActivity.mock.calls).toEqual([
+      [READER_ID, 'social.repost', { postId: POST_ID, targetId: POST_ID, targetOwnerId: AUTHOR_ID, receipt: 'post:repost-1' }],
+    ]);
+  });
+
+  it('une CITATION : même crédit, sur l’original seul', async () => {
+    await serviceFor(makePrisma()).repostPost(POST_ID, READER_ID, { targetType: 'POST' as any, isQuote: true, content: 'Lisez ça' });
+    await settle();
+
     expect(mockRecordActivity).toHaveBeenCalledWith(READER_ID, 'social.repost', {
+      postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
+      receipt: 'post:repost-1',
     });
   });
 
@@ -178,6 +194,7 @@ describe('tool.story_viewed — PostService.recordView', () => {
     await settle();
 
     expect(mockRecordActivity).toHaveBeenCalledWith(READER_ID, 'tool.story_viewed', {
+      postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
     });
@@ -212,5 +229,6 @@ describe('reprise anti-abus — PostService.deletePost', () => {
     await settle();
 
     expect(mockReclaimContent).toHaveBeenCalledWith(AUTHOR_ID, 'content.story', POST_ID);
+    expect(mockReclaimSource).toHaveBeenCalledWith(AUTHOR_ID, `post:${POST_ID}`, { withinClawback: true });
   });
 });

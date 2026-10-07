@@ -16,6 +16,7 @@ import { pendingTileGlyph } from '@/lib/send/pending-tile-glyph';
 import { type PendingAttachment } from '@/lib/send/attachments';
 import { retouchSeriesOf } from '@/lib/stories/studio-retouch-series';
 import type { SharedPlace } from '@/lib/send/shared-place';
+import { coordinateNativeMedia } from '@/lib/view/native-media-coordination';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { MIN_SENDABLE_DURATION_MS, type RecorderState } from '@/lib/view/use-recorder';
 import { interpolatedLevel, waveformBarCount } from '@/lib/view/waveform';
@@ -374,9 +375,9 @@ function PendingMediaPreview({ attachment, onClose }: { readonly attachment: Pen
       className="fixed inset-0 z-50 grid place-items-center bg-black/90 p-4"
     >
       {attachment.kind === 'video' ? (
-        <video src={url} controls autoPlay playsInline className="max-h-full max-w-full" />
+        <video ref={coordinateNativeMedia} src={url} controls autoPlay playsInline className="max-h-full max-w-full" />
       ) : (
-        <audio src={url} controls autoPlay className="w-full max-w-md" />
+        <audio ref={coordinateNativeMedia} src={url} controls autoPlay className="w-full max-w-md" />
       )}
       <button
         type="button"

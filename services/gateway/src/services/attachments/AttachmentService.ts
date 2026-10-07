@@ -24,6 +24,7 @@ import {
 } from './UploadProcessor';
 import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { unsetOrNull } from '../../utils/prisma-unset';
 import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
 import { derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
 
@@ -137,6 +138,12 @@ export class AttachmentService {
    * jamais sur la charge reçue : c'est la ligne qui a composé `effectFlags`
    * depuis toutes ses sources. Une clé ABSENTE ne touche pas sa colonne —
    * l'appelant qui ne déclare rien n'écrase rien.
+   *
+   * LE LIEN NE DÉPLACE NI NE DÉPROTÈGE (#9587). Il n'apparie que des pièces
+   * NON attachées (`messageId` nul ou absent du document) : une pièce déjà
+   * portée par un message y reste. Et il n'AJOUTE que de la protection — un
+   * `false` ou un zéro du message n'efface rien de ce que la pièce porte, les
+   * bits se composent par OU.
    */
   async associateAttachmentsToMessage(
     attachmentIds: readonly string[],
@@ -148,21 +155,34 @@ export class AttachmentService {
       readonly maxViewOnceCount?: number | null;
     }
   ): Promise<void> {
-    await this.prisma.messageAttachment.updateMany({
-      where: {
-        id: { in: [...attachmentIds] },
-      },
-      data: {
-        messageId: messageId,
-        // Écrit seulement ce que le message DÉCLARE. Poser `false` en l'absence
-        // d'appelant renseigné écraserait la protection d'une pièce qui la
-        // porterait déjà par un autre chemin — un `undefined` laisse Prisma
-        // ne pas toucher la colonne.
-        ...(protection?.isViewOnce === undefined ? {} : { isViewOnce: protection.isViewOnce }),
-        ...(protection?.isBlurred === undefined ? {} : { isBlurred: protection.isBlurred }),
-        ...(protection?.effectFlags === undefined ? {} : { effectFlags: protection.effectFlags }),
-      },
+    const unattached = { id: { in: [...attachmentIds] }, ...unsetOrNull('messageId') };
+    const added = {
+      messageId,
+      ...(protection?.isViewOnce === true ? { isViewOnce: true } : {}),
+      ...(protection?.isBlurred === true ? { isBlurred: true } : {}),
+    };
+    const addedFlags = protection?.effectFlags ?? 0;
+    if (addedFlags === 0) {
+      await this.prisma.messageAttachment.updateMany({ where: unattached, data: added });
+      return;
+    }
+
+    const free = await this.prisma.messageAttachment.findMany({
+      where: unattached,
+      select: { id: true, effectFlags: true },
     });
+    const idsByFlags = free.reduce(
+      (groups, row) => groups.set(row.effectFlags ?? 0, [...(groups.get(row.effectFlags ?? 0) ?? []), row.id]),
+      new Map<number, readonly string[]>(),
+    );
+    await Promise.all(
+      [...idsByFlags].map(([carried, ids]) =>
+        this.prisma.messageAttachment.updateMany({
+          where: { id: { in: [...ids] }, ...unsetOrNull('messageId') },
+          data: { ...added, effectFlags: carried | addedFlags },
+        }),
+      ),
+    );
   }
 
   private toAttachment(attachment: {

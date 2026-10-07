@@ -2,7 +2,6 @@ import { useCallback, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { prismFor, served, type Served } from '@/lib/api/prism';
-import { protectionOf } from '@/lib/reading-mode/protection';
 import { reactAction } from '@/lib/api/query';
 import { reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
@@ -14,6 +13,7 @@ import { safeLocalStorage } from '@/lib/storage';
 
 import {
   forwardMenuItems,
+  imageableOf,
   messageMenuContextOf,
   messageMenuItems,
   translationChoices,
@@ -21,7 +21,8 @@ import {
   type MessageMenuItem,
   type TranslationChoice,
 } from './message-actions';
-import { admitForward, forwardRequestOf } from './forward';
+import { contentExitOf, exitOffers } from './content-exit';
+import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
 import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
@@ -41,6 +42,12 @@ import { useMessageStar, type MessageStarEntry } from './use-message-star';
  * (`api/query.ts`, qui délègue à `performReaction`). Ce fichier ne fait que
  * les COMPOSER derrière une surface stable pour l'hôte.
  */
+
+const FORWARD_REFUSAL_KEY = {
+  'view-once': 'forward.refusal.viewOnce',
+  'after-read': 'forward.refusal.afterRead',
+  unavailable: 'forward.refusal.unavailable',
+} as const satisfies Readonly<Record<ForwardRefusal, string>>;
 
 /** `scope: 'discussion'` (#9039) — la carte de la discussion qui mène à ce message ; absent : la carte du seul message. */
 export type MessageExportRequest = { readonly messageId: string; readonly quick: boolean; readonly scope?: 'message' | 'discussion' };
@@ -103,25 +110,19 @@ export function useMessageMenu(params: {
   );
 
   /**
-   * LE TEXTE COPIABLE — `servedOf` GARDÉ par la protection (D-23).
+   * LE TEXTE COPIABLE — `servedOf` GARDÉ par la loi de sortie (`content-exit.ts`).
    *
-   * Défaut trouvé en revue (#5814), BLOQUANT : le menu retire bien « Copier »
-   * d'un message protégé (`messageMenuItems`), mais le mode SÉLECTION n'a
-   * qu'un bouton « Copier » pour TOUTE la sélection, et il lisait `servedOf`
-   * en direct. Sélectionner un message FLOUTÉ, à VUE UNIQUE, ÉPHÉMÈRE ou
-   * SUPPRIMÉ puis « Copier » mettait donc son texte EN CLAIR dans le
-   * presse-papiers — le contenu que `check-thread-states.mjs` § 5 vérifie
-   * absent du DOM entier partait par une AUTRE porte. C'est la question du
-   * cycle 123 du `CLAUDE.md` racine (« que transporte-t-on À CÔTÉ de ce
-   * qu'on garde ? ») : la garde vivait sur la LISTE d'actions, pas sur le
-   * TEXTE. Elle vit désormais sur le texte, et les deux chemins de copie
-   * (l'entrée du menu, la barre de sélection) passent par elle.
+   * La garde vit sur le TEXTE, pas sur la liste d'actions (revue #5814) : le
+   * menu retire « Copier » d'un message qui ne sort pas, mais la barre de
+   * sélection n'a qu'un bouton pour TOUTE la sélection, et l'étiquette du menu
+   * cite un extrait. Les trois chemins passent par ici — un message flouté, à
+   * vue unique, supprimé, échu, ou qui disparaît (#9573) n'y rend rien.
    */
   const copyableTextOf = useCallback(
     (messageId: string): string | undefined => {
       const message = messageOf(messageId);
       if (message === undefined) return undefined;
-      if (protectionOf(message, Date.now()) !== 'standard') return undefined;
+      if (!exitOffers(contentExitOf(message, Date.now()), 'copy')) return undefined;
       return servedOf(messageId)?.text;
     },
     [messageOf, servedOf],
@@ -214,6 +215,14 @@ export function useMessageMenu(params: {
        * Le porteur a accepté ce geste supplémentaire au cas nominal pour que
        * le même mot ait le même effet quelle que soit la porte (dimension 6).
        */
+      if (id === 'forward') {
+        const message = messageOf(messageId);
+        const refusal = message === undefined ? 'unavailable' : forwardRefusalOf(message, Date.now());
+        if (refusal !== null) {
+          announce(translate(currentInterfaceLanguage(), FORWARD_REFUSAL_KEY[refusal]));
+          return;
+        }
+      }
       if (id === 'select' || id === 'forward') {
         focusTakenRef.current = true;
         setSelection({ ids: [messageId] });
@@ -223,20 +232,17 @@ export function useMessageMenu(params: {
         setDetailFor(messageId);
         return;
       }
-      if (id === 'export' || id === 'exportQuick') {
+      if (id === 'export' || id === 'exportQuick' || id === 'exportDiscussion') {
+        const message = messageOf(messageId);
+        if (message === undefined || !imageableOf(messageMenuContextOf(message, { now: Date.now() }))) return;
         focusTakenRef.current = true;
-        setExportFor({ messageId, quick: id === 'exportQuick' });
-        return;
-      }
-      if (id === 'exportDiscussion') {
-        focusTakenRef.current = true;
-        setExportFor({ messageId, quick: false, scope: 'discussion' });
+        setExportFor(id === 'exportDiscussion' ? { messageId, quick: false, scope: 'discussion' } : { messageId, quick: id === 'exportQuick' });
         return;
       }
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce],
+    [copyableTextOf, params, announce, messageOf],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -261,9 +267,10 @@ export function useMessageMenu(params: {
   /**
    * LE GESTE DE LA BARRE (#5866, #8884) — il ADMET d'abord, il ouvre ensuite.
    *
-   * `admitForward` (`view/forward.ts`) rejoue `admitMessageForward`
-   * (`forwardAdmission.ts`) : une vue unique est refusée, une source disparue
-   * aussi. Le refus s'ANNONCE ici, avant tout aller-retour — c'est la
+   * `admitForward` (`view/forward.ts`) lit la loi de sortie que
+   * `admitMessageForward` applique : vue unique, flamme après lecture et
+   * source disparue sont refusées. La barre n'offre déjà plus le bouton
+   * (`selectionOffers`) ; le refus s'ANNONCE ici pour toute autre porte, avant tout aller-retour — c'est la
    * différence entre « le serveur dira non » et « l'utilisateur l'apprend
    * après avoir choisi un destinataire ».
    *
@@ -286,12 +293,7 @@ export function useMessageMenu(params: {
       const now = Date.now();
       const admission = admitForward(candidates, now);
       if (!admission.admitted) {
-        const lang = currentInterfaceLanguage();
-        announce(
-          admission.reason === 'view-once'
-            ? translate(lang, 'forward.refusal.viewOnce')
-            : translate(lang, 'forward.refusal.unavailable'),
-        );
+        announce(translate(currentInterfaceLanguage(), FORWARD_REFUSAL_KEY[admission.reason]));
         return;
       }
       setSelection(null);
@@ -299,6 +301,21 @@ export function useMessageMenu(params: {
     },
     [selection, messageOf, announce, conversationId],
   );
+
+  /**
+   * CE QUE LA BARRE OFFRE POUR CETTE SÉLECTION (#9573) — « Transférer » n'est
+   * pas rendu dès qu'UN message coché ne se transfère pas (le lot part entier
+   * ou pas du tout, `admitForward`) ; « Copier » n'est pas rendu quand rien de
+   * coché ne se copie. Un bouton interdit n'existe pas, il ne se grise pas.
+   */
+  const selectionOffers = ((): { readonly forward: boolean; readonly copy: boolean } => {
+    if (selection === null) return { forward: false, copy: false };
+    const picked = selection.ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
+    return {
+      forward: admitForward(picked, Date.now()).admitted,
+      copy: selection.ids.some((id) => (copyableTextOf(id) ?? '') !== ''),
+    };
+  })();
 
   const onCopySelection = useCallback(
     (placed: readonly { readonly message: { readonly id: string } }[]) => {
@@ -392,6 +409,7 @@ export function useMessageMenu(params: {
     onEndSelection,
     onCopySelection,
     onForwardSelection,
+    selectionOffers,
     detailFor,
     setDetailFor,
     reactionSheetFor,

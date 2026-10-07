@@ -216,13 +216,12 @@ const GENERIC_ERROR = (status: number): string => `Erreur ${status}`;
  * 1,86 × 3 ≈ 5,6 s, largement sous le plafond. `15_000` n'est donc plus
  * PROVISOIRE : c'est une garde large, mesurée, pas une estimation.
  *
- * CE N'EST PAS LA SEULE HORLOGE SUR CE CHEMIN (revue-correction) : dans la
- * VARIANTE A (PWA), le service worker route `/api/**` en NetworkFirst avec
- * `networkTimeoutSeconds: 3` (`vite.config.ts` § runtimeCaching). C'est LUI
- * qui tranche le premier — au-delà de trois secondes il sert le cache
- * disque au lieu d'attendre, ce qui est la dégradation hors-ligne VOULUE,
- * pas une panne. Ce délai-ci reste la garde du chemin sans service worker
- * (variante B Capacitor, `bunx vite` en développement, et tout témoin).
+ * C'EST LA SEULE HORLOGE SUR CE CHEMIN, service worker compris : dans la
+ * VARIANTE A (PWA), le service worker route `/api/**` en NetworkFirst SANS
+ * délai (`vite.config.ts` § runtimeCaching) — sa copie disque ne sert que si
+ * le réseau ÉCHOUE. Il tranchait jadis à trois secondes, et un lecteur EN
+ * LIGNE recevait alors une réponse rangée qui écrasait le temps réel
+ * (#9637).
  */
 const DEFAULT_TIMEOUT_MS = 15_000;
 

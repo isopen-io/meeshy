@@ -35,6 +35,18 @@ const photo = (id: string): Attachment =>
     createdAt: '2026-09-20T10:00:00.000Z',
   }) as unknown as Attachment;
 
+const clip = (id: string): Attachment =>
+  ({
+    ...photo(id),
+    fileName: `${id}.mp4`,
+    originalName: `${id}.mp4`,
+    mimeType: 'video/mp4',
+    fileUrl: `/uploads/${id}.mp4`,
+    width: 1920,
+    height: 1080,
+    duration: 42_000,
+  }) as unknown as Attachment;
+
 const carrier: MediaCarrier = {
   sender: { displayName: 'Nour Haddad', avatarUrl: null },
   sentAt: '2026-09-20T10:13:00.000Z',
@@ -75,8 +87,16 @@ afterEach(() => {
   container.remove();
 });
 
-async function mount(params: { readonly offers: MediaPageOffers; readonly onReply?: () => void; readonly onClose?: () => void; readonly withCarrier?: boolean; readonly carrier?: MediaCarrier }): Promise<HTMLElement> {
-  const items = [photo('a'), photo('b')];
+async function mount(params: {
+  readonly offers: MediaPageOffers;
+  readonly onReply?: () => void;
+  readonly onClose?: () => void;
+  readonly withCarrier?: boolean;
+  readonly carrier?: MediaCarrier;
+  readonly items?: readonly Attachment[];
+  readonly withoutActions?: boolean;
+}): Promise<HTMLElement> {
+  const items = params.items ?? [photo('a'), photo('b')];
   container = document.createElement('div');
   container.id = 'root';
   document.body.appendChild(container);
@@ -90,16 +110,227 @@ async function mount(params: { readonly offers: MediaPageOffers; readonly onRepl
         languages={['fr']}
         fallbackLanguage="fr"
         {...(params.withCarrier === false ? {} : { carrier: params.carrier ?? carrier })}
-        actionsAt={(index) => pageOf(items[index]!, params.offers, params.onReply)}
+        {...(params.withoutActions === true ? {} : { actionsAt: (index: number) => pageOf(items[index]!, params.offers, params.onReply) })}
       />,
     );
   });
   await act(async () => {
     await import('./viewer-media-actions');
+    await import('./viewer-video-page');
+    await import('./media-transport');
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   return document.body.querySelector<HTMLElement>('[data-media-viewer]')!;
 }
+
+/** `a` vient-il AVANT `b` dans le document — donc dans l'ordre de tabulation et de lecture ? */
+const precedes = (a: Element, b: Element): boolean => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+
+/**
+ * #9578 — LA COLONNE D'ACTIONS FLOTTE SUR LA SCÈNE, miroir `cadreActionColumn`
+ * (galerie iOS) : posée au bord de fin du plateau, elle ne prend plus de
+ * hauteur à la scène. Directement sous la scène, la barre de progression d'un
+ * bord à l'autre ; puis la ligne d'informations, la légende, la capsule
+ * « Répondre » et la pellicule.
+ */
+describe('MediaViewer — la colonne flotte sur la scène, la barre colle sous elle (#9578)', () => {
+  const stubPlayback = (): (() => void) => {
+    const { play, pause } = HTMLMediaElement.prototype;
+    HTMLMediaElement.prototype.play = function stubbedPlay(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    };
+    HTMLMediaElement.prototype.pause = function stubbedPause(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('pause'));
+    };
+    return () => {
+      HTMLMediaElement.prototype.play = play;
+      HTMLMediaElement.prototype.pause = pause;
+    };
+  };
+
+  async function mountClip(): Promise<{ readonly dialog: HTMLElement; readonly restore: () => void }> {
+    const restore = stubPlayback();
+    const dialog = await mount({ offers: { ...ALL, share: true }, onReply: () => {}, items: [clip('v'), photo('p')] });
+    const video = dialog.querySelector('[data-viewer-page] video')!;
+    await act(async () => {
+      Object.defineProperty(video, 'duration', { value: 42, configurable: true });
+      video.dispatchEvent(new Event('loadedmetadata'));
+    });
+    return { dialog, restore };
+  }
+
+  test('les actions et les contrôles de la vidéo vivent SUR la scène, jamais dans le couloir bas', async () => {
+    const { dialog, restore } = await mountClip();
+    try {
+      const stage = dialog.querySelector('[data-viewer-stage]')!;
+      const column = dialog.querySelector('[data-viewer-stage-rail]')!;
+      expect(stage.contains(column)).toBe(true);
+      expect(stage.contains(dialog.querySelector('.media-viewer-track-frame'))).toBe(true);
+      for (const action of ['react', 'compose', 'mute', 'more']) {
+        expect(column.querySelector(`[data-viewer-action="${action}"]`)).not.toBeNull();
+      }
+      expect(dialog.querySelector('[data-viewer-bottom-bar] [data-viewer-action]')).toBeNull();
+      expect(dialog.querySelector('[data-viewer-bottom-bar] [data-viewer-rail]')).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test('sous la scène, de haut en bas : la piste, la ligne d’informations, la légende, « Répondre », la pellicule', async () => {
+    const { dialog, restore } = await mountClip();
+    try {
+      const bar = dialog.querySelector('[data-viewer-bottom-bar]')!;
+      const slot = dialog.querySelector('[data-viewer-transport-slot]')!;
+      const ordered = [
+        slot.querySelector('[role="slider"]'),
+        dialog.querySelector('[data-viewer-meta]'),
+        dialog.querySelector('[data-viewer-caption-text]'),
+        dialog.querySelector('[data-viewer-reply]'),
+        dialog.querySelector('[data-filmstrip-item]'),
+      ];
+      expect(ordered.every((el) => el !== null && bar.contains(el))).toBe(true);
+      expect(bar.firstElementChild).toBe(slot);
+      ordered.slice(1).forEach((el, at) => expect(precedes(ordered[at]!, el!)).toBe(true));
+    } finally {
+      restore();
+    }
+  });
+
+  test('au clavier, la colonne précède la piste : l’ordre de tabulation suit l’ordre visuel', async () => {
+    const { dialog, restore } = await mountClip();
+    try {
+      const lastAction = dialog.querySelector('[data-viewer-stage-rail] [data-viewer-action="more"]')!;
+      const slider = dialog.querySelector('[data-viewer-transport-slot] [role="slider"]')!;
+      const firstAction = dialog.querySelector('[data-viewer-stage-rail] [data-viewer-action="react"]')!;
+      const center = dialog.querySelector('[data-viewer-center-toggle]')!;
+      expect(precedes(center, firstAction)).toBe(true);
+      expect(precedes(lastAction, slider)).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  test('le plein cadre fait céder la colonne flottante : invisible ET intouchable', async () => {
+    const { dialog, restore } = await mountClip();
+    try {
+      act(() => {
+        dialog.querySelector('.media-viewer-track-frame')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      const column = dialog.querySelector<HTMLElement>('[data-viewer-stage-rail]')!;
+      expect(column.hasAttribute('inert')).toBe(true);
+      expect(column.style.opacity).toBe('0');
+    } finally {
+      restore();
+    }
+  });
+
+  test('un vocal garde sa colonne dans le couloir : posée sur la scène, elle couvrirait ses commandes et sa transcription', async () => {
+    const voice = { ...photo('s'), fileName: 's.m4a', originalName: 's.m4a', mimeType: 'audio/mp4', fileUrl: '/uploads/s.m4a', duration: 12_000 } as unknown as Attachment;
+    const dialog = await mount({ offers: ALL, items: [voice] });
+    expect(dialog.querySelector('[data-viewer-stage-rail]')).toBeNull();
+    expect(dialog.querySelector('[data-viewer-bottom-bar] [data-viewer-rail]')).not.toBeNull();
+  });
+
+  test('une photo sans vidéo garde sa colonne sur la scène, et une page sans action n’en a aucune', async () => {
+    const dialog = await mount({ offers: ALL, onReply: () => {} });
+    expect(dialog.querySelector('[data-viewer-stage] [data-viewer-stage-rail] [data-viewer-rail]')).not.toBeNull();
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    const bare = await mount({ offers: NO_MEDIA_OFFERS });
+    expect(bare.querySelector('[data-viewer-stage-rail]')).toBeNull();
+  });
+});
+
+/**
+ * #9577 — LE MUET ET « ⋯ » D'UNE VIDÉO REJOIGNENT LA COLONNE D'ACTIONS, sous
+ * « Composer » ; la ligne d'informations dit « cotes · poids · durée ».
+ */
+describe('MediaViewer — une vidéo en plein écran (#9577)', () => {
+  const stubPlayback = (): (() => void) => {
+    const { play, pause } = HTMLMediaElement.prototype;
+    HTMLMediaElement.prototype.play = function stubbedPlay(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    };
+    HTMLMediaElement.prototype.pause = function stubbedPause(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('pause'));
+    };
+    return () => {
+      HTMLMediaElement.prototype.play = play;
+      HTMLMediaElement.prototype.pause = pause;
+    };
+  };
+
+  const actionsOf = (dialog: HTMLElement): readonly (string | null)[] =>
+    Array.from(dialog.querySelectorAll('[data-viewer-rail-slot] [data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
+
+  test('le muet puis « ⋯ » suivent « Composer » dans la colonne d’actions', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: { ...ALL, share: true }, items: [clip('v')] });
+      expect(actionsOf(dialog).slice(-3)).toEqual(['compose', 'mute', 'more']);
+      expect(actionsOf(dialog)[0]).toBe('react');
+    } finally {
+      restore();
+    }
+  });
+
+  test('une vidéo dont la page n’offre AUCUNE action garde son muet et son « ⋯ »', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: NO_MEDIA_OFFERS, items: [clip('v')], withoutActions: true });
+      expect(actionsOf(dialog)).toEqual(['mute', 'more']);
+    } finally {
+      restore();
+    }
+  });
+
+  test('le plein cadre fait céder le muet et « ⋯ » avec le reste du chrome : invisibles ET intouchables', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: ALL, items: [clip('v')] });
+      act(() => {
+        dialog.querySelector('.media-viewer-track-frame')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(dialog.querySelector('[data-viewer-action="mute"]')!.closest('[inert]')).not.toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test('la ligne d’informations dit « largeur × hauteur · poids · durée »', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: ALL, items: [clip('v')] });
+      const parts = Array.from(dialog.querySelectorAll('[data-viewer-meta] > span:not([aria-hidden])')).map((el) => el.textContent);
+      expect(parts).toEqual(['1920 × 1080', '4 Ko', 'Durée 0:42']);
+      expect(dialog.querySelectorAll('[data-viewer-meta] > span[aria-hidden="true"]').length).toBe(2);
+    } finally {
+      restore();
+    }
+  });
+
+  test('sans porteur, ni cotes ni poids — mais la durée reste : c’est le seul temps que la visionneuse montre', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: ALL, items: [clip('v')], withCarrier: false });
+      const parts = Array.from(dialog.querySelectorAll('[data-viewer-meta] > span:not([aria-hidden])')).map((el) => el.textContent);
+      expect(parts).toEqual(['Durée 0:42']);
+    } finally {
+      restore();
+    }
+  });
+
+  test('une photo garde « largeur × hauteur · poids », sans durée', async () => {
+    const dialog = await mount({ offers: ALL });
+    const parts = Array.from(dialog.querySelectorAll('[data-viewer-meta] > span:not([aria-hidden])')).map((el) => el.textContent);
+    expect(parts).toEqual(['800 × 600', '4 Ko']);
+    expect(dialog.querySelector('[data-viewer-video-controls]')).toBeNull();
+  });
+});
 
 describe('MediaViewer — le chrome commun des plein écrans (#8879)', () => {
   test('la croix est EN FIN de barre haute, après l’identité de l’auteur (heure comprise)', async () => {
@@ -149,9 +380,9 @@ describe('MediaViewer — le chrome commun des plein écrans (#8879)', () => {
     expect(dialog.querySelector('[data-viewer-reply]')).toBeNull();
   });
 
-  test('Réagir et Créer forment le rail vertical à droite de la légende ; Enregistrer n’y est pas', async () => {
+  test('Réagir et Créer forment la colonne verticale au bord de fin de la scène ; Enregistrer n’y est pas', async () => {
     const dialog = await mount({ offers: ALL, onReply: () => {} });
-    const rail = dialog.querySelector('[data-viewer-bottom-bar] [data-viewer-rail]')!;
+    const rail = dialog.querySelector('[data-viewer-stage-rail] [data-viewer-rail]')!;
     const actions = Array.from(rail.querySelectorAll('[data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
     expect(actions).toEqual(['react', 'compose']);
     expect(rail.getAttribute('aria-label')).toBe('Réagir');
