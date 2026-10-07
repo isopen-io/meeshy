@@ -89,7 +89,7 @@ struct GameBricksRenderTests {
 
     // MARK: - Les médailles (#9466)
 
-    private func medal(_ family: GameMedalFamily = .content, glyph: GameMedalGlyph = .text, material: GameMaterial = .gold,
+    private func medal(_ family: GameMedalFamily = .content, glyph: GameMedalGlyph = .textMessage, material: GameMaterial = .gold,
                        state: GameMedalView.State = .lit, progress: Double = 0.5, label: String? = "100") throws -> GameRenderProbe {
         try probe(GameMedalView(family: family, glyph: glyph, material: material, state: state, progress: progress, label: label),
                   width: 100, height: 112)
@@ -117,7 +117,7 @@ struct GameBricksRenderTests {
         }
     }
 
-    @Test("les neuf pictogrammes d'axe se distinguent")
+    @Test("les vingt pictogrammes d'axe se distinguent (#9639)")
     func medalGlyphs() throws {
         let probes = try GameMedalGlyph.allCases.map { try medal(glyph: $0, label: nil) }
         for (index, lhs) in probes.enumerated() {
