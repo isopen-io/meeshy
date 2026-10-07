@@ -11,6 +11,7 @@ export * from './chest.js';
 export * from './guide.js';
 export * from './game-block.js';
 export * from './badge-tiers.js';
+export * from './badge-guide.js';
 export * from './league.js';
 export * from './duo.js';
 export * from './season.js';

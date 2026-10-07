@@ -1,0 +1,1523 @@
+[
+  {
+    "_label": "zéro : aucune étoile, le cuivre à 1",
+    "input": {
+      "axisKey": "content.post",
+      "count": 0,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "content.post",
+      "family": "content",
+      "count": 0,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 0,
+      "reached": null,
+      "next": {
+        "threshold": 1,
+        "material": "cuivre",
+        "missing": 1
+      }
+    }
+  },
+  {
+    "_label": "1 : le cuivre, seuil 1 franchi",
+    "input": {
+      "axisKey": "social.friendship",
+      "count": 1,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "social.friendship",
+      "family": "social",
+      "count": 1,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 1,
+      "reached": {
+        "threshold": 1,
+        "material": "cuivre",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 10,
+        "material": "bronze",
+        "missing": 9
+      }
+    }
+  },
+  {
+    "_label": "9 : toujours le cuivre, 1 de plus pour le bronze",
+    "input": {
+      "axisKey": "social.tracked_link",
+      "count": 9,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "social.tracked_link",
+      "family": "social",
+      "count": 9,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 1,
+      "reached": {
+        "threshold": 1,
+        "material": "cuivre",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 10,
+        "material": "bronze",
+        "missing": 1
+      }
+    }
+  },
+  {
+    "_label": "10 : le bronze pile au seuil",
+    "input": {
+      "axisKey": "social.share",
+      "count": 10,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "social.share",
+      "family": "social",
+      "count": 10,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 2,
+      "reached": {
+        "threshold": 10,
+        "material": "bronze",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 50,
+        "material": "argent",
+        "missing": 40
+      }
+    }
+  },
+  {
+    "_label": "37 : le bronze, 13 vers l’argent",
+    "input": {
+      "axisKey": "content.text_message",
+      "count": 37,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "content.text_message",
+      "family": "content",
+      "count": 37,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 2,
+      "reached": {
+        "threshold": 10,
+        "material": "bronze",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 50,
+        "material": "argent",
+        "missing": 13
+      }
+    }
+  },
+  {
+    "_label": "99 : l’argent, 1 vers l’or",
+    "input": {
+      "axisKey": "comment.text",
+      "count": 99,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "comment.text",
+      "family": "comment",
+      "count": 99,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 3,
+      "reached": {
+        "threshold": 50,
+        "material": "argent",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 100,
+        "material": "or",
+        "missing": 1
+      }
+    }
+  },
+  {
+    "_label": "100 : l’or et son ruban",
+    "input": {
+      "axisKey": "comment.audio",
+      "count": 100,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "comment.audio",
+      "family": "comment",
+      "count": 100,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 4,
+      "reached": {
+        "threshold": 100,
+        "material": "or",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 500,
+        "material": "platine",
+        "missing": 400
+      }
+    }
+  },
+  {
+    "_label": "999 : le platine, 1 vers l’obsidienne",
+    "input": {
+      "axisKey": "tool.reaction",
+      "count": 999,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "tool.reaction",
+      "family": "tool",
+      "count": 999,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 5,
+      "reached": {
+        "threshold": 500,
+        "material": "platine",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 1000,
+        "material": "obsidienne",
+        "missing": 1
+      }
+    }
+  },
+  {
+    "_label": "1 000 : l’obsidienne",
+    "input": {
+      "axisKey": "tool.attachment",
+      "count": 1000,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "tool.attachment",
+      "family": "tool",
+      "count": 1000,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 6,
+      "reached": {
+        "threshold": 1000,
+        "material": "obsidienne",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 5000,
+        "material": "prisme",
+        "missing": 4000
+      }
+    }
+  },
+  {
+    "_label": "5 000 : le prisme, plus de prochaine étoile",
+    "input": {
+      "axisKey": "tool.sticker",
+      "count": 5000,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "tool.sticker",
+      "family": "tool",
+      "count": 5000,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        }
+      ],
+      "stars": 7,
+      "reached": {
+        "threshold": 5000,
+        "material": "prisme",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": null
+    }
+  },
+  {
+    "_label": "12 345 : toujours le prisme",
+    "input": {
+      "axisKey": "conversation.private",
+      "count": 12345,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "conversation.private",
+      "family": "conversation",
+      "count": 12345,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        }
+      ],
+      "stars": 7,
+      "reached": {
+        "threshold": 5000,
+        "material": "prisme",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": null
+    }
+  },
+  {
+    "_label": "paliers datés par la trace servie",
+    "input": {
+      "axisKey": "content.story",
+      "count": 12,
+      "served": [
+        {
+          "threshold": 1,
+          "reachedAt": "2026-09-01T10:00:00.000Z"
+        },
+        {
+          "threshold": 10,
+          "reachedAt": "2026-10-02T10:00:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "axisKey": "content.story",
+      "family": "content",
+      "count": 12,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": "2026-09-01T10:00:00.000Z"
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": "2026-10-02T10:00:00.000Z"
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 2,
+      "reached": {
+        "threshold": 10,
+        "material": "bronze",
+        "reason": "threshold-crossed",
+        "reachedAt": "2026-10-02T10:00:00.000Z"
+      },
+      "next": {
+        "threshold": 50,
+        "material": "argent",
+        "missing": 38
+      }
+    }
+  },
+  {
+    "_label": "palier tenu par sa seule trace, compteur redescendu",
+    "input": {
+      "axisKey": "content.reel",
+      "count": 40,
+      "served": [
+        {
+          "threshold": 50,
+          "reachedAt": "2026-08-01T00:00:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "axisKey": "content.reel",
+      "family": "content",
+      "count": 40,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": "2026-08-01T00:00:00.000Z"
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 3,
+      "reached": {
+        "threshold": 50,
+        "material": "argent",
+        "reason": "served",
+        "reachedAt": "2026-08-01T00:00:00.000Z"
+      },
+      "next": {
+        "threshold": 100,
+        "material": "or",
+        "missing": 60
+      }
+    }
+  },
+  {
+    "_label": "seuil servi hors échelle ignoré",
+    "input": {
+      "axisKey": "conversation.public",
+      "count": 3,
+      "served": [
+        {
+          "threshold": 7,
+          "reachedAt": "2026-08-01T00:00:00.000Z"
+        }
+      ]
+    },
+    "expected": {
+      "axisKey": "conversation.public",
+      "family": "conversation",
+      "count": 3,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 1,
+      "reached": {
+        "threshold": 1,
+        "material": "cuivre",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 10,
+        "material": "bronze",
+        "missing": 7
+      }
+    }
+  },
+  {
+    "_label": "compteur négatif : zéro",
+    "input": {
+      "axisKey": "conversation.community",
+      "count": -4,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "conversation.community",
+      "family": "conversation",
+      "count": 0,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 0,
+      "reached": null,
+      "next": {
+        "threshold": 1,
+        "material": "cuivre",
+        "missing": 1
+      }
+    }
+  },
+  {
+    "_label": "compteur fractionnaire : tronqué",
+    "input": {
+      "axisKey": "conversation.group_created",
+      "count": 9.8,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "conversation.group_created",
+      "family": "conversation",
+      "count": 9,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 1,
+      "reached": {
+        "threshold": 1,
+        "material": "cuivre",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 10,
+        "material": "bronze",
+        "missing": 1
+      }
+    }
+  },
+  {
+    "_label": "invité venu : 2",
+    "input": {
+      "axisKey": "social.invite_joined",
+      "count": 2,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "social.invite_joined",
+      "family": "social",
+      "count": 2,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 1,
+      "reached": {
+        "threshold": 1,
+        "material": "cuivre",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 10,
+        "material": "bronze",
+        "missing": 8
+      }
+    }
+  },
+  {
+    "_label": "montage dans l’app : 50",
+    "input": {
+      "axisKey": "tool.in_app_edit",
+      "count": 50,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "tool.in_app_edit",
+      "family": "tool",
+      "count": 50,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 3,
+      "reached": {
+        "threshold": 50,
+        "material": "argent",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 100,
+        "material": "or",
+        "missing": 50
+      }
+    }
+  },
+  {
+    "_label": "publication directe : 500",
+    "input": {
+      "axisKey": "tool.direct_publish",
+      "count": 500,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "tool.direct_publish",
+      "family": "tool",
+      "count": 500,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 5,
+      "reached": {
+        "threshold": 500,
+        "material": "platine",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 1000,
+        "material": "obsidienne",
+        "missing": 500
+      }
+    }
+  },
+  {
+    "_label": "message vocal : 4 999",
+    "input": {
+      "axisKey": "content.audio_message",
+      "count": 4999,
+      "served": []
+    },
+    "expected": {
+      "axisKey": "content.audio_message",
+      "family": "content",
+      "count": 4999,
+      "rungs": [
+        {
+          "threshold": 1,
+          "material": "cuivre",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 10,
+          "material": "bronze",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 50,
+          "material": "argent",
+          "ribbon": false,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 100,
+          "material": "or",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 500,
+          "material": "platine",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 1000,
+          "material": "obsidienne",
+          "ribbon": true,
+          "reached": true,
+          "reachedAt": null
+        },
+        {
+          "threshold": 5000,
+          "material": "prisme",
+          "ribbon": true,
+          "reached": false,
+          "reachedAt": null
+        }
+      ],
+      "stars": 6,
+      "reached": {
+        "threshold": 1000,
+        "material": "obsidienne",
+        "reason": "threshold-crossed",
+        "reachedAt": null
+      },
+      "next": {
+        "threshold": 5000,
+        "material": "prisme",
+        "missing": 1
+      }
+    }
+  }
+]
