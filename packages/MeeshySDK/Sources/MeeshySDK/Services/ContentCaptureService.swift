@@ -39,10 +39,17 @@ public final class ContentCaptureService: ContentCaptureSending, @unchecked Send
         } catch let refusal as ContentCaptureRefusal where refusal.isFinal {
             throw refusal
         } catch {
-            let response: APIResponse<Noticed> = try await api.post(
-                ConversationsEndpoint.byIdMessagesCapture(id: report.conversationId), body: report.body
-            )
-            return response.data.noticedMessageIds
+            do {
+                let response: APIResponse<Noticed> = try await api.post(
+                    ConversationsEndpoint.byIdMessagesCapture(id: report.conversationId), body: report.body
+                )
+                return response.data.noticedMessageIds
+            } catch APIError.serverError(let status, _) where (400..<500).contains(status) {
+                // 403, 410 (conversation close), 429 (budget) : un refus, pas une panne.
+                throw ContentCaptureRefusal(code: "HTTP_\(status)")
+            } catch APIError.unauthorized {
+                throw ContentCaptureRefusal(code: "UNAUTHENTICATED")
+            }
         }
     }
 }

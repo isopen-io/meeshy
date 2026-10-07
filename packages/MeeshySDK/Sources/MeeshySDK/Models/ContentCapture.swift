@@ -8,7 +8,9 @@ import Foundation
 // fichier ne porte que des valeurs et des règles pures : QUI détecte, et QUOI
 // est visible, est l'affaire de l'application.
 
-/// `screenshot` : une capture ; `recording` : un enregistrement ou une recopie d'écran.
+/// `screenshot` : une capture ; `recording` : un enregistrement ou une recopie
+/// d'écran. La passerelle annonce chaque sorte au plus une fois par message et
+/// par acteur.
 public enum ContentCaptureKind: String, Codable, Sendable, Equatable, CaseIterable {
     case screenshot
     case recording
@@ -49,8 +51,10 @@ public struct ContentCaptureReport: Equatable, Sendable, Encodable {
     public let kind: ContentCaptureKind
     public let captureId: String
 
-    /// `CONTENT_CAPTURE_MAX_MESSAGES` — un écran n'en montre pas davantage.
-    public static let maxMessages = 50
+    /// Messages par déclaration : la passerelle accepte jusqu'à 50
+    /// (`CONTENT_CAPTURE_MAX_MESSAGES`) mais n'annonce que 10 avis par
+    /// déclaration — au-delà, un message ne s'annoncerait pas.
+    public static let maxMessages = 10
 
     public init(conversationId: String, messageIds: [String], kind: ContentCaptureKind, captureId: String) {
         self.conversationId = conversationId
@@ -73,7 +77,9 @@ public struct ContentCaptureReport: Equatable, Sendable, Encodable {
 
     public var body: Body { Body(messageIds: messageIds, kind: kind, captureId: captureId) }
 
-    /// 8 à 64 caractères `[A-Za-z0-9_-]` — l'identifiant entre dans une clé de déduplication.
+    /// 8 à 64 caractères `[A-Za-z0-9_-]`. FACULTATIF côté passerelle, qui ne
+    /// s'en sert plus que pour corréler : elle annonce au plus une fois par
+    /// (acteur, message, sorte de capture), quel que soit l'identifiant.
     public static func isValidCaptureId(_ value: String) -> Bool {
         (8...64).contains(value.utf8.count)
             && value.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) && $0.isASCII || $0 == "_" || $0 == "-" }

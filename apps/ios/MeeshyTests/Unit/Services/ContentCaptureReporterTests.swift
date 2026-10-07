@@ -275,7 +275,7 @@ final class ContentCaptureReporterTests: XCTestCase {
     private func captureNotice(guest: Bool = false) throws -> CaptureNoticeMetadata {
         let actor = guest
             ? #"{"participantId":"p-2","displayName":"Bob","isAnonymous":true}"#
-            : #"{"participantId":"p-1","displayName":"Alice"}"#
+            : #"{"participantId":"p-1","displayName":"Alice","isAnonymous":false}"#
         let json = #"{"kind":"content-capture","actor":\#(actor),"capturedMessageId":"\#(Self.flameId)","nature":"timed-flame","outcome":"announced","captureKind":"screenshot","sentAt":"2026-10-07T12:05:00.000Z"}"#
         return try JSONDecoder().decode(CaptureNoticeMetadata.self, from: Data(json.utf8))
     }

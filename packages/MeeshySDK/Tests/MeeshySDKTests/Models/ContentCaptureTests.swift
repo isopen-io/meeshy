@@ -52,13 +52,13 @@ struct ContentCaptureTests {
         #expect(reports.isEmpty)
     }
 
-    @Test("un lot par conversation, dédoublonné, au plus 50 messages")
+    @Test("un lot par conversation, dédoublonné, au plus 10 messages — la passerelle n'annonce pas davantage par déclaration")
     func groupsDedupesAndChunks() {
-        let many = (0..<55).map { Self.candidate(String(format: "%024x", $0), .announced) }
+        let many = (0..<25).map { Self.candidate(String(format: "%024x", $0), .announced) }
         let other = Self.candidate(Self.flameId, .announced, conversation: "conv-2")
         let reports = ContentCaptureReport.reports(for: many + [other, many[0]], kind: .screenshot, captureId: "cap_0123456789")
-        #expect(reports.map(\.conversationId) == ["conv-1", "conv-1", "conv-2"])
-        #expect(reports.map(\.messageIds.count) == [50, 5, 1])
+        #expect(reports.map(\.conversationId) == ["conv-1", "conv-1", "conv-1", "conv-2"])
+        #expect(reports.map(\.messageIds.count) == [10, 10, 5, 1])
     }
 
     @Test("un identifiant de capture neuf est valide, et deux ne se ressemblent pas")
@@ -156,6 +156,8 @@ struct ContentCaptureTests {
         #expect(throws: ContentCaptureRefusal(code: "RATE_LIMITED")) { try MessageSocketManager.contentCaptureAck(refused).get() }
         #expect(throws: ContentCaptureRefusal(code: "TIMEOUT")) { try MessageSocketManager.contentCaptureAck("NO ACK").get() }
         #expect(ContentCaptureRefusal(code: "RATE_LIMITED").isFinal)
+        #expect(ContentCaptureRefusal(code: "CONVERSATION_CLOSED").isFinal)
+        #expect(ContentCaptureRefusal(code: "HTTP_410").isFinal)
         #expect(!ContentCaptureRefusal(code: "TIMEOUT").isFinal)
     }
 
@@ -192,7 +194,7 @@ struct ContentCaptureTests {
         outcome: String = "announced",
         captureKind: String = "screenshot",
         sentAt: String = "2026-10-07T12:05:00.000Z",
-        actor: String = #"{"participantId":"p-actor","displayName":"Alice"}"#
+        actor: String = #"{"participantId":"p-actor","displayName":"Alice","isAnonymous":false}"#
     ) -> Data {
         Data(#"{"kind":"content-capture","actor":\#(actor),"capturedMessageId":"\#(flameId)","nature":"\#(nature)","outcome":"\#(outcome)","captureKind":"\#(captureKind)","sentAt":"\#(sentAt)"}"#.utf8)
     }
@@ -202,7 +204,7 @@ struct ContentCaptureTests {
         outcome: String = "announced",
         captureKind: String = "screenshot",
         sentAt: String = "2026-10-07T12:05:00.000Z",
-        actor: String = #"{"participantId":"p-actor","displayName":"Alice"}"#
+        actor: String = #"{"participantId":"p-actor","displayName":"Alice","isAnonymous":false}"#
     ) throws -> CaptureNoticeMetadata {
         try JSONDecoder().decode(
             CaptureNoticeMetadata.self,
@@ -234,10 +236,19 @@ struct ContentCaptureTests {
         #expect(throws: (any Error).self) { try Self.notice(nature: "ordinary", outcome: "announced") }
     }
 
-    @Test("tolère les champs de l'acteur ajoutés par la passerelle (invité, pseudo)")
-    func toleratesActorExtensions() throws {
-        let guest = try Self.notice(actor: #"{"participantId":"p-2","displayName":"Bob","isAnonymous":true}"#)
+    @Test("un acteur sans isAnonymous, ou au pseudo qui n'est pas un texte, ne se lit pas — repli sur content (A8)")
+    func actorMustSayWhetherItIsAGuest() {
+        #expect(throws: (any Error).self) { try Self.notice(actor: #"{"participantId":"p-actor","displayName":"Alice"}"#) }
+        #expect(throws: (any Error).self) {
+            try Self.notice(actor: #"{"participantId":"p-actor","displayName":"Alice","isAnonymous":false,"username":7}"#)
+        }
+    }
+
+    @Test("relit l'invité et le pseudo ; un invité ne garde jamais de pseudo ; un champ inconnu est toléré")
+    func readsGuestAndUsername() throws {
+        let guest = try Self.notice(actor: #"{"participantId":"p-2","displayName":"Bob","isAnonymous":true,"username":"ano_x"}"#)
         #expect(guest.actor.isAnonymous)
+        #expect(guest.actor.username == nil)
         let member = try Self.notice(actor: #"{"participantId":"p-1","displayName":"Bob","isAnonymous":false,"username":"bob","extra":1}"#)
         #expect(member.actor.username == "bob")
     }

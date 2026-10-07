@@ -83,21 +83,30 @@ public enum CaptureNoticeText {
         if actor.isAnonymous {
             return "\(name) (\(guestWords[normalizedLanguage(language)] ?? "invité"))"
         }
-        guard let username = actor.username.map(sanitizedName), username != "?", username != name else { return name }
-        return "\(name) (@\(username))"
+        guard let username = actor.username, !username.isEmpty else { return name }
+        return "\(name) (@\(sanitizedName(username)))"
     }
 
     /// Sans contrôle de direction ni caractère de contrôle, espaces resserrés,
     /// 64 caractères au plus ; vide ⇒ « ? ». La passerelle assainit à
     /// l'écriture ; le lecteur le refait pour un avis plus ancien.
     public static func sanitizedName(_ raw: String) -> String {
-        let kept = raw.unicodeScalars.filter { scalar in
-            let category = scalar.properties.generalCategory
-            return category != .format && category != .control || scalar == " "
-        }
-        let words = String(String.UnicodeScalarView(kept)).split(whereSeparator: \.isWhitespace)
-        let joined = String(words.joined(separator: " ").prefix(64))
-        return joined.isEmpty ? "?" : joined
+        let kept = String(String.UnicodeScalarView(raw.unicodeScalars.filter { !isUnsafe($0) }))
+        let collapsed = kept.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let bounded = String(String.UnicodeScalarView(collapsed.unicodeScalars.prefix(64)))
+            .trimmingCharacters(in: .whitespaces)
+        return bounded.isEmpty ? "?" : bounded
+    }
+
+    /// Contrôles C0/C1, marques et isolats de direction, séparateurs de ligne —
+    /// la même classe que `UNSAFE_NAME_CHARACTERS` du jumeau TS.
+    private static let unsafeRanges: [ClosedRange<UInt32>] = [
+        0x0000...0x001F, 0x007F...0x009F, 0x061C...0x061C, 0x200B...0x200F,
+        0x2028...0x202E, 0x2060...0x2069, 0xFEFF...0xFEFF,
+    ]
+
+    private static func isUnsafe(_ scalar: Unicode.Scalar) -> Bool {
+        unsafeRanges.contains { $0.contains(scalar.value) }
     }
 
     public static func compose(_ notice: CaptureNoticeMetadata, language: String?, timeZone: TimeZone?) -> String {

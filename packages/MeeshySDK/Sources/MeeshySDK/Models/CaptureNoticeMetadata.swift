@@ -23,16 +23,18 @@ public struct CaptureNoticeMetadata: Codable, Sendable, Equatable {
     public struct Actor: Codable, Sendable, Equatable {
         public let participantId: String
         public let displayName: String
-        /// Un invité sans compte — FACULTATIF : une passerelle antérieure ne le
-        /// dit pas, et une valeur absente n'affirme rien.
+        /// Un invité sans compte — OBLIGATOIRE (audit #9617, A8) : un nom
+        /// affiché n'est pas une identité, un invité peut s'appeler « Bob ».
+        /// Un avis qui ne le dit pas ne se lit pas (repli sur `content`).
         public let isAnonymous: Bool
+        /// Pseudo d'un inscrit ; jamais retenu pour un invité.
         public let username: String?
 
         public init(participantId: String, displayName: String, isAnonymous: Bool = false, username: String? = nil) {
             self.participantId = participantId
             self.displayName = displayName
             self.isAnonymous = isAnonymous
-            self.username = username
+            self.username = isAnonymous ? nil : username.flatMap { $0.isEmpty ? nil : $0 }
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -46,8 +48,9 @@ public struct CaptureNoticeMetadata: Codable, Sendable, Equatable {
             guard !participantId.isEmpty, !displayName.isEmpty else {
                 throw DecodingError.dataCorruptedError(forKey: .displayName, in: c, debugDescription: "actor incomplet")
             }
-            isAnonymous = (try? c.decodeIfPresent(Bool.self, forKey: .isAnonymous)) ?? false
-            username = try? c.decodeIfPresent(String.self, forKey: .username)
+            isAnonymous = try c.decode(Bool.self, forKey: .isAnonymous)
+            let rawUsername = try c.decodeIfPresent(String.self, forKey: .username)
+            username = isAnonymous ? nil : rawUsername.flatMap { $0.isEmpty ? nil : $0 }
         }
 
         public func encode(to encoder: Encoder) throws {

@@ -5,8 +5,8 @@ import SocketIO
 // `MessageSocketManager.swift` est hors budget de taille.
 
 /// Un refus d'ensemble de la passerelle (`UNAUTHENTICATED`, `VALIDATION_ERROR`,
-/// `NOT_A_PARTICIPANT`, `RATE_LIMITED`), une échéance (`TIMEOUT`) ou une
-/// absence de socket (`NO_SOCKET`).
+/// `NOT_A_PARTICIPANT`, `RATE_LIMITED`, `CONVERSATION_CLOSED`), une échéance
+/// (`TIMEOUT`) ou une absence de socket (`NO_SOCKET`).
 public struct ContentCaptureRefusal: Error, Sendable, Equatable {
     public let code: String
 
@@ -16,7 +16,8 @@ public struct ContentCaptureRefusal: Error, Sendable, Equatable {
 
     /// Un refus qui ne changera pas en réessayant par l'autre transport.
     public var isFinal: Bool {
-        ["UNAUTHENTICATED", "VALIDATION_ERROR", "NOT_A_PARTICIPANT", "RATE_LIMITED"].contains(code)
+        ["UNAUTHENTICATED", "VALIDATION_ERROR", "NOT_A_PARTICIPANT", "RATE_LIMITED", "CONVERSATION_CLOSED"].contains(code)
+            || code.hasPrefix("HTTP_4")
     }
 }
 
