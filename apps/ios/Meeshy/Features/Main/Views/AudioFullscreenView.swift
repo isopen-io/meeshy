@@ -252,6 +252,7 @@ private struct AudioFullscreenPage: View {
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
 
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
+    @Environment(\.contentExitGate) private var exitGate
 
     init(item: AudioFullscreenSource,
          contactColor: String,
@@ -687,6 +688,8 @@ private struct AudioFullscreenPage: View {
     }
 
     private func requestSave() {
+        saveCoordinator.exitGate = exitGate
+        guard exitGate.mayLeave(attachment.id) else { return }
         HapticFeedback.light()
         saveCoordinator.requestSave(MediaSaveRequest(
             kind: .audio,
@@ -1178,6 +1181,7 @@ extension View {
                 startAttachmentId: src.attachment.id,
                 contactColor: accentColor
             )
+            .contentExitGate(.open) // un son de publication sort ; le défaut est fermé (#9573)
         }
     }
 }

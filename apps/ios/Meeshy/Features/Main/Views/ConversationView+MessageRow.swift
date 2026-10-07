@@ -317,7 +317,7 @@ extension ConversationView {
                         // Prisme: copy what's actually DISPLAYED (the preferred
                         // translation when one is showing), never blindly the
                         // original — matches the long-press menu's Copier below.
-                        UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
+                        MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg)
                     }
                     closeReactionBar()
                 }

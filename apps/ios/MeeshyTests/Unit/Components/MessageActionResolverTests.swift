@@ -862,6 +862,246 @@ final class MessageExitOfferTests: XCTestCase {
         }
     }
 
+    // MARK: - Le geste lui-même : second verrou (#9573)
+
+    private var sealedNatures: [Message] {
+        [message(of: .timedFlame, attachments: [photo()]), message(of: .afterReadFlame, attachments: [photo()]),
+         message(of: .viewOnce, attachments: [photo()]), message(attachments: [photo(isBlurred: true)])]
+    }
+
+    func test_transport_copy_writesNothingForAContentThatMayNotLeave() {
+        let pasteboard = UIPasteboard.withUniqueName()
+        pasteboard.string = "avant"
+        for sealed in sealedNatures {
+            XCTAssertFalse(MessageExitTransport.copy("secret", of: sealed, to: pasteboard))
+            XCTAssertEqual(pasteboard.string, "avant", "le presse-papiers n'est pas touché")
+        }
+        XCTAssertTrue(MessageExitTransport.copy("bonjour", of: message(of: .ordinary), to: pasteboard))
+        XCTAssertEqual(pasteboard.string, "bonjour")
+    }
+
+    func test_transport_save_composesNoRequestForAContentThatMayNotLeave() {
+        for sealed in sealedNatures {
+            XCTAssertNil(MessageExitTransport.saveRequest(for: sealed))
+        }
+        let request = MessageExitTransport.saveRequest(for: message(of: .ordinary, attachments: [photo()]))
+        XCTAssertEqual(request?.attachmentId, "p1")
+        XCTAssertNil(MessageExitTransport.saveRequest(for: message(of: .ordinary)), "sans pièce, rien à enregistrer")
+    }
+
+    func test_transport_share_followsTheOffer() {
+        XCTAssertTrue(MessageExitTransport.mayShare(message(of: .ordinary)))
+        XCTAssertTrue(sealedNatures.allSatisfy { !MessageExitTransport.mayShare($0) })
+    }
+
+    private func audioRequest(_ id: String?) -> MediaSaveRequest {
+        MediaSaveRequest(kind: .audio, origin: .transmitted, remoteURLString: "https://cdn.example/a.m4a", attachmentId: id)
+    }
+
+    /// Le coordinateur d'une visionneuse refuse ce que son portillon retient :
+    /// ni feuille de destinations, ni traitement.
+    func test_saveCoordinator_underASealedGate_acceptsNoRequest() async {
+        let coordinator = MediaSaveCoordinator(exitGate: .sealed)
+        coordinator.requestSave(audioRequest("a1"))
+        XCTAssertNil(coordinator.pendingRequest)
+        coordinator.save(audioRequest("a1"))
+        XCTAssertNil(coordinator.pendingRequest)
+        await coordinator.pick(.share, request: audioRequest("a1"))
+        XCTAssertNil(coordinator.shareURL)
+        XCTAssertNil(coordinator.lastOutcome, "rien n'a été tenté, donc rien n'a échoué")
+        XCTAssertFalse(coordinator.isProcessing)
+    }
+
+    func test_saveCoordinator_underAListedGate_isClosedByDefault() {
+        let coordinator = MediaSaveCoordinator(exitGate: .only(["a1"]))
+        coordinator.requestSave(audioRequest("a2"))
+        XCTAssertNil(coordinator.pendingRequest, "une pièce absente de la liste ne sort pas")
+        coordinator.requestSave(audioRequest(nil))
+        XCTAssertNil(coordinator.pendingRequest, "une pièce sans identifiant non plus")
+        coordinator.requestSave(audioRequest("a1"))
+        XCTAssertEqual(coordinator.pendingRequest?.attachmentId, "a1")
+    }
+
+    /// `nil` ⇒ FERMÉ : un hôte qui oublie de poser le portillon n'enregistre rien.
+    func test_saveCoordinator_withoutAGate_isClosed() async {
+        let coordinator = MediaSaveCoordinator()
+        XCTAssertFalse(coordinator.mayLeave("a1"))
+        coordinator.requestSave(audioRequest("a1"))
+        coordinator.save(audioRequest("a1"))
+        await coordinator.pick(.share, request: audioRequest("a1"))
+        XCTAssertNil(coordinator.pendingRequest)
+        XCTAssertNil(coordinator.shareURL)
+        XCTAssertNil(coordinator.lastOutcome)
+    }
+
+    func test_saveCoordinator_openedByAPublicationHost_serves() {
+        let coordinator = MediaSaveCoordinator(exitGate: .open)
+        coordinator.requestSave(audioRequest("a1"))
+        XCTAssertEqual(coordinator.pendingRequest?.attachmentId, "a1")
+    }
+
+    /// Le menu d'un message remet au coordinateur le portillon DE CE MESSAGE :
+    /// même resté ouvert par le message précédent, il se referme.
+    func test_transport_save_handsTheMessageGateToTheCoordinator() {
+        let coordinator = MediaSaveCoordinator(exitGate: .open)
+        for sealed in sealedNatures {
+            XCTAssertFalse(MessageExitTransport.save(sealed, through: coordinator))
+            XCTAssertEqual(coordinator.exitGate, .sealed)
+            coordinator.requestSave(audioRequest("p1"))
+            XCTAssertNil(coordinator.pendingRequest, "le coordinateur refuse de lui-même")
+        }
+        let document = MeeshyMessageAttachment(id: "d1", mimeType: "application/pdf", fileUrl: "https://cdn.example/d.pdf")
+        XCTAssertTrue(MessageExitTransport.save(message(of: .ordinary, attachments: [document]), through: coordinator))
+        XCTAssertEqual(coordinator.exitGate, .open)
+        XCTAssertEqual(coordinator.pendingRequest?.attachmentId, "d1", "un document ouvre la feuille de destinations")
+    }
+
+    /// Le plein écran d'un média : la pièce d'une flamme, d'une flamme après
+    /// lecture, d'une vue unique, et la pièce CITÉE par un message ordinaire —
+    /// présente ou non dans la fenêtre — n'ont ni sortie offerte ni exécutable.
+    func test_fullscreen_noExitOfferedNorExecutable_forProtectedOrQuotedPieces() {
+        let quotedFlame = message(of: .timedFlame, id: "q", attachments: [photo("citee")])
+        var citing = message(of: .ordinary, id: "r", attachments: [photo("propre")])
+        citing.replyTo = ReplyReference(messageId: "q", authorName: "Awa", previewText: "📷", attachmentId: "citee")
+        let carriers = [message(of: .timedFlame, id: "a", attachments: [photo("flamme")]),
+                        message(of: .afterReadFlame, id: "b", attachments: [photo("apres-lecture")]),
+                        message(of: .viewOnce, id: "c", attachments: [photo("vue-unique")]),
+                        quotedFlame, citing]
+        for gate in [MessageExitOffer.mediaExitGate(for: carriers),
+                     MessageExitOffer.mediaExitGate(for: [citing])] {
+            let coordinator = MediaSaveCoordinator(exitGate: gate)
+            for piece in ["flamme", "apres-lecture", "vue-unique", "citee"] {
+                XCTAssertFalse(gate.mayLeave(piece), "\(piece) : aucun bouton")
+                XCTAssertFalse(gate.perform(piece) { XCTFail("\(piece) : le geste s'est exécuté") })
+                coordinator.requestSave(MediaSaveRequest(kind: .audio, origin: .transmitted, remoteURLString: "https://x/\(piece)", attachmentId: piece))
+                XCTAssertNil(coordinator.pendingRequest, "\(piece) : le coordinateur refuse")
+            }
+            XCTAssertTrue(gate.mayLeave("propre"), "la pièce propre du message citant, ordinaire, sort")
+        }
+    }
+
+    // MARK: - Chaque surface passe par un verrou (gardes de source)
+
+    private func source(_ relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Components
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main")
+        let code = AppSourceGuard.stripComments(
+            try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+        )
+        XCTAssertGreaterThan(code.count, 200, "\(relativePath) introuvable — ce témoin ne mesurerait rien")
+        return code.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// Aucun site de conversation n'écrit dans le presse-papiers ni ne compose
+    /// une requête d'enregistrement lui-même : tous passent par le transport.
+    func test_conversationSurfaces_neverExitWithoutTheTransport() throws {
+        for path in ["Views/ConversationView.swift", "Views/ConversationView+MessageRow.swift",
+                     "Views/ConversationView+NativeMessageMenu.swift", "Components/MessageOverlayMenu.swift",
+                     "Components/MessageMoreSheet.swift"] {
+            let code = try source(path)
+            XCTAssertFalse(code.contains("UIPasteboard.general.string="), "\(path) : la copie passe par MessageExitTransport.copy")
+            XCTAssertFalse(code.contains("mediaSaveCoordinator.save("),
+                           "\(path) : l'enregistrement passe par MessageExitTransport.save")
+        }
+        let host = try source("Views/ConversationView.swift")
+        XCTAssertEqual(host.components(separatedBy: "MessageExitTransport.copy(").count - 1, 2)
+        XCTAssertEqual(host.components(separatedBy: "MessageExitTransport.save(msg,through:mediaSaveCoordinator)").count - 1, 2)
+        XCTAssertTrue(host.contains("onShare:{ifMessageExitTransport.mayShare(msg){overlayState.shareMessage=msg}}"))
+    }
+
+    func test_river_copyIsGuardedInTheGestureToo() throws {
+        let code = try source("Riviere/View/RiverBubbleView.swift")
+        XCTAssertTrue(code.contains("ifcontent.viewOnceChip==nil,content.offersCopy{Button{ifcontent.offersCopy{UIPasteboard.general.string=content.text}}"))
+        XCTAssertEqual(code.components(separatedBy: "UIPasteboard").count - 1, 1)
+    }
+
+    func test_gallery_bothTransportsAskTheGate_andTheMenuHandsItToTheCoordinator() throws {
+        let code = try source("Views/ConversationMediaGalleryView+Menu.swift")
+        XCTAssertTrue(code.contains("funcrequestSaveCurrent(){guardletsubject=currentSaveSubject,saveCoordinator.mayLeave(currentExitContentId)else{return}"))
+        XCTAssertTrue(code.contains("funcshareCurrentOutsideMeeshy(){guardletrequest=currentSaveRequest,saveCoordinator.mayLeave(currentExitContentId)else{return}"))
+        XCTAssertTrue(code.contains("GalleryExitGatedMenu(contentId:currentExitContentId,coordinator:saveCoordinator)"))
+        XCTAssertTrue(code.contains(".onAppear{coordinator.exitGate=exitGate}"))
+        XCTAssertTrue(code.contains("ifletcontentId,exitGate.mayLeave(contentId){menu()}"))
+    }
+
+    func test_audioFullscreen_saveIsGatedInButtonAndGesture() throws {
+        let code = try source("Views/AudioFullscreenView.swift")
+        XCTAssertTrue(code.contains("ContentExitGated(contentId:attachment.id){downloadButton}"))
+        XCTAssertTrue(code.contains("privatefuncrequestSave(){saveCoordinator.exitGate=exitGateguardexitGate.mayLeave(attachment.id)else{return}"))
+        XCTAssertEqual(code.components(separatedBy: "saveCoordinator.requestSave(").count - 1, 1)
+    }
+
+    func test_bubbleFullscreen_saveIsGatedInTheGesture() throws {
+        let code = try source("Components/MediaSaveFlowHost.swift")
+        XCTAssertTrue(code.contains("privatefuncrequestSave(){saveCoordinator.exitGate=exitGateguardexitGate.mayLeave(attachment.id)else{return}"))
+    }
+
+    /// **Aucun `.open` n'est posé en dur sur un site de conversation.** Les
+    /// seuls portillons ouverts du dépôt sont ceux d'un contenu qui n'est pas
+    /// un contenu de conversation, chacun justifié par son site ; tout nouveau
+    /// site rougit ici et doit dire pourquoi.
+    func test_everyOpenGate_isAPublicationOrAPreSendPreview() throws {
+        let legitimate: [String: Int] = [
+            "Views/SocialMediaGalleryPresentation.swift": 1,   // pièces d'une publication
+            "Views/CommentMediaView.swift": 1,                 // pièce d'un commentaire
+            "Views/AudioFullscreenView.swift": 1,              // `audioFullscreenCover` : son de publication
+        ]
+        let coordinators: [String: Int] = [
+            "Views/PostDetailView.swift": 1, "Views/ReelFeedCard.swift": 1,
+            "Views/ReelsPlayerView.swift": 1, "Views/FeedPostCard.swift": 1,
+        ]
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let files = (FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL } ?? []).filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(files.count, 500, "l'arbre de l'application est introuvable — ce témoin ne mesurerait rien")
+        var gates: [String: Int] = [:]
+        var openCoordinators: [String: Int] = [:]
+        let prefix = root.appendingPathComponent("Features/Main").path + "/"
+        for file in files {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: file, encoding: .utf8))
+                .components(separatedBy: .whitespacesAndNewlines).joined()
+            let name = file.path.replacingOccurrences(of: prefix, with: "")
+            let posed = code.components(separatedBy: "contentExitGate(.open)").count - 1
+                + code.components(separatedBy: "contentExitGate(ContentExitGate.open)").count - 1
+            if posed > 0 { gates[name] = posed }
+            let opened = code.components(separatedBy: "MediaSaveCoordinator(exitGate:.open").count - 1
+            if opened > 0 { openCoordinators[name] = opened }
+            XCTAssertFalse(code.contains("exitGate=.open"), "\(name) : un portillon ne se rouvre pas par affectation")
+        }
+        XCTAssertEqual(gates, legitimate)
+        XCTAssertEqual(openCoordinators, coordinators)
+        // L'aperçu AVANT envoi : le seul portillon ouvert de l'écran de
+        // conversation, nommé par son type et réservé au média du composeur.
+        let host = try source("Views/ConversationView.swift")
+        XCTAssertEqual(host.components(separatedBy: "ComposerPreviewExit.gate").count - 1, 1)
+        XCTAssertTrue(host.contains(".conversationCover(item:$composerState.previewMedia)"))
+        XCTAssertTrue(host.contains("ImageFullscreen(imageUrl:media.url,accentColor:accentColor).contentExitGate(ComposerPreviewExit.gate)"))
+    }
+
+    /// Le portillon est fermé par défaut : chaque hôte de conversation pose
+    /// celui de son porteur, et seuls les hôtes de PUBLICATION ouvrent.
+    func test_hosts_poseTheGateOfTheirCarrier() throws {
+        XCTAssertTrue(try source("Views/ThemedMessageBubble.swift").contains(".contentExitGate(message.exitGate)"))
+        XCTAssertTrue(try source("Focal/Row/FocalRow.swift").contains(".contentExitGate(content.exitGate)"))
+        XCTAssertTrue(try source("Views/ConversationView+MediaGallery.swift").contains(".contentExitGate(mediaExitGate)"))
+        XCTAssertTrue(try source("Views/ConversationMediaViews.swift").contains(".mediaExitGate(carriers:allAudioItems.map(\\.message))"))
+        let hub = try source("Components/MediaHub/ConversationMediaHubView.swift")
+        XCTAssertTrue(hub.contains(".contentExitGate(model.carrier(item.messageId)?.exitGate??.sealed)"))
+        XCTAssertFalse(hub.contains(".contentExitGate(.open)"))
+        for conversationHost in ["Views/ThemedMessageBubble.swift", "Focal/Row/FocalRow.swift",
+                                 "Views/ConversationView+MediaGallery.swift", "Views/ConversationMediaViews.swift"] {
+            XCTAssertFalse(try source(conversationHost).contains(".contentExitGate(.open)"),
+                           "\(conversationHost) : un hôte de conversation n'ouvre jamais d'office")
+        }
+    }
+
     // MARK: - Rivière
 
     func test_river_copyFollowsTheOffer() {

@@ -543,7 +543,7 @@ struct RiverBubbleView: View, Equatable {
         }
         if content.viewOnceChip == nil, content.offersCopy {
             Button {
-                UIPasteboard.general.string = content.text
+                if content.offersCopy { UIPasteboard.general.string = content.text }
             } label: {
                 Label(String(localized: "action.copy", defaultValue: "Copier", bundle: .main), systemImage: "doc.on.doc")
             }

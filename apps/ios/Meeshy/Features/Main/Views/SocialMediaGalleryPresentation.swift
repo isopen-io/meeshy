@@ -329,6 +329,10 @@ struct SocialMediaGalleryContent: View {
                 captionLanguages: langues
             )
         )
+        // Une pièce de publication n'est pas un contenu de conversation qui
+        // disparaît : ses sorties sont offertes. Le portillon est FERMÉ par
+        // défaut (#9573) ; l'hôte l'ouvre, et le dit.
+        .contentExitGate(.open)
         .task(id: post.id) { await refreshComments() }
         .onReceive(SocialSocketManager.shared.commentAdded.receive(on: DispatchQueue.main)) { recu in
             guard recu.postId == post.id else { return }

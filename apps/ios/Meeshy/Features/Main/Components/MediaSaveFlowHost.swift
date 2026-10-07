@@ -173,6 +173,7 @@ struct SavableMediaFullscreen<Content: View>: View {
     }
 
     private func requestSave() {
+        saveCoordinator.exitGate = exitGate
         guard exitGate.mayLeave(attachment.id) else { return }
         HapticFeedback.light()
         saveCoordinator.save(MediaSaveRequest(

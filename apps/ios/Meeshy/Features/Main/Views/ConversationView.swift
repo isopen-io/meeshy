@@ -826,7 +826,7 @@ struct ConversationView: View {
                 case "audio":
                     VideoFullscreenPlayer(urlString: media.url.absoluteString, speed: .x1_0)
                 default:
-                    ImageFullscreen(imageUrl: media.url, accentColor: accentColor)
+                    ImageFullscreen(imageUrl: media.url, accentColor: accentColor).contentExitGate(ComposerPreviewExit.gate)
                 }
             }
             .mediaSaveFlow(mediaSaveCoordinator)
@@ -872,15 +872,7 @@ struct ConversationView: View {
                         overlayState.showReplyThread = true
                     },
                     onSaveMedia: {
-                        guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
-                        HapticFeedback.light()
-                        mediaSaveCoordinator.save(MediaSaveRequest(
-                            kind: attachment.kind,
-                            origin: .transmitted,
-                            remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
-                            suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-                            attachmentId: attachment.id.isEmpty ? nil : attachment.id
-                        ))
+                        if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() }
                     },
                     onDeleteMedia: {
                         if let attId = msg.attachments.first?.id {
@@ -898,10 +890,10 @@ struct ConversationView: View {
                     onDeleteMessage: { requestDeleteMessage(msg.id) },
                     onEdit: { beginEdit(msg) },
                     onCopy: {
-                        UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
+                        guard MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg) else { return }
                         HapticFeedback.success()
                     },
-                    onShare: { overlayState.shareMessage = msg }, onImagine: { beginMessageExport(msg, quick: false) },
+                    onShare: { if MessageExitTransport.mayShare(msg) { overlayState.shareMessage = msg } }, onImagine: { beginMessageExport(msg, quick: false) },
                     onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
                     onSelectTranslation: { translation in
                         viewModel.setActiveTranslation(for: msg.id, translation: translation)
@@ -2429,7 +2421,7 @@ struct ConversationView: View {
                 onCopy: {
                     // Prisme: copy what's DISPLAYED (the preferred translation when
                     // one is showing), never the original — like the quick bar's Copier.
-                    UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
+                    guard MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg) else { return }
                     HapticFeedback.success()
                 },
                 onEdit: { beginEdit(msg) },
@@ -2444,15 +2436,7 @@ struct ConversationView: View {
                 onSaveMedia: {
                     // Composant unifié « Enregistrer » — l'action n'apparaît
                     // que pour un message à exactement UN attachment.
-                    guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
-                    HapticFeedback.light()
-                    mediaSaveCoordinator.save(MediaSaveRequest(
-                        kind: attachment.kind,
-                        origin: .transmitted,
-                        remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
-                        suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-                        attachmentId: attachment.id.isEmpty ? nil : attachment.id
-                    ))
+                    if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() }
                 },
                 onCompose: {
                     // L'overlay ne monte rien : il rend la main. Le même état

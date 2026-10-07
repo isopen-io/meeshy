@@ -135,22 +135,14 @@ extension ConversationView {
             }
         case .copy:
             Button {
-                UIPasteboard.general.string = msg.content
+                guard MessageExitTransport.copy(msg.content, of: msg) else { return }
                 HapticFeedback.success()
             } label: {
                 Label(String(localized: "action.copy", defaultValue: "Copier", bundle: .main), systemImage: "doc.on.doc")
             }
         case .saveMedia:
             Button {
-                guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
-                HapticFeedback.light()
-                mediaSaveCoordinator.save(MediaSaveRequest(
-                    kind: attachment.kind,
-                    origin: .transmitted,
-                    remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
-                    suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-                    attachmentId: attachment.id.isEmpty ? nil : attachment.id
-                ))
+                if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() }
             } label: {
                 Label(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main), systemImage: "arrow.down.to.line")
             }

@@ -66,17 +66,27 @@ enum GallerySaveSubject {
 /// Monte le menu ⋯ quand le portillon de sortie laisse partir la pièce de la
 /// page ; sinon réserve sa place, pour que le couloir haut ne bouge pas d'une
 /// page à l'autre.
+///
+/// Il remet aussi le portillon au coordinateur d'enregistrement de la galerie :
+/// les deux transports du menu (`requestSaveCurrent`, `shareCurrentOutsideMeeshy`)
+/// vivent dans une extension, qui ne lit pas l'environnement — c'est le
+/// coordinateur qui refuse pour eux.
 struct GalleryExitGatedMenu<Menu: View>: View {
     let contentId: String?
+    let coordinator: MediaSaveCoordinator
     @ViewBuilder let menu: () -> Menu
     @Environment(\.contentExitGate) private var exitGate
 
     var body: some View {
-        if let contentId, exitGate.mayLeave(contentId) {
-            menu()
-        } else {
-            Color.clear.frame(width: FullscreenChromeMetrics.tapTarget, height: FullscreenChromeMetrics.tapTarget)
+        Group {
+            if let contentId, exitGate.mayLeave(contentId) {
+                menu()
+            } else {
+                Color.clear.frame(width: FullscreenChromeMetrics.tapTarget, height: FullscreenChromeMetrics.tapTarget)
+            }
         }
+        .onAppear { coordinator.exitGate = exitGate }
+        .adaptiveOnChange(of: exitGate) { _, gate in coordinator.exitGate = gate }
     }
 }
 
@@ -131,7 +141,7 @@ extension ConversationMediaGalleryView {
     @ViewBuilder
     var overflowMenu: some View {
         if let subject = currentSaveSubject {
-            GalleryExitGatedMenu(contentId: currentExitContentId) {
+            GalleryExitGatedMenu(contentId: currentExitContentId, coordinator: saveCoordinator) {
                 FullscreenMoreMenu(isBusy: saveCoordinator.isProcessing) {
                     Button {
                         requestSaveCurrent()
@@ -201,7 +211,7 @@ extension ConversationMediaGalleryView {
     /// ligne « Mes stories » quand son anneau n'est pas à l'écran. Un second
     /// tap pendant le bake est ignoré par `bakeThenSave` (garde `jobs`).
     func requestSaveCurrent() {
-        guard let subject = currentSaveSubject else { return }
+        guard let subject = currentSaveSubject, saveCoordinator.mayLeave(currentExitContentId) else { return }
         HapticFeedback.light()
         switch subject {
         case .scene(let scene):
@@ -215,7 +225,7 @@ extension ConversationMediaGalleryView {
     /// destination : c'est tout ce que « Partager hors de Meeshy » promet, et
     /// lui faire traverser une sheet intermédiaire trahirait le verbe.
     func shareCurrentOutsideMeeshy() {
-        guard let request = currentSaveRequest else { return }
+        guard let request = currentSaveRequest, saveCoordinator.mayLeave(currentExitContentId) else { return }
         HapticFeedback.light()
         Task { await saveCoordinator.pick(.share, request: request) }
     }
