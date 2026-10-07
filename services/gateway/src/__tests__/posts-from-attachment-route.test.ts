@@ -156,6 +156,8 @@ const makeAttachmentRow = (
     isEncrypted: false,
     effectFlags: 0,
     expiresAt: null,
+    ephemeralDuration: null,
+    attachments: [{ isViewOnce: false, isBlurred: false, effectFlags: 0 }],
     createdAt: new Date('2026-08-26T00:00:00.000Z'),
     ...messageOverrides,
   },
@@ -285,6 +287,46 @@ describe('POST /posts/from-attachment — iOS-01 : refus d\'un média protégé'
 
   it('refuse un message CHIFFRÉ (isEncrypted sur le message parent)', async () => {
     await expectRefused(makeAttachmentRow({}, { isEncrypted: true }));
+  });
+
+  // #9572 — le verdict « exporter » de la loi de sortie, lue sur le message ET
+  // sur TOUTES ses pièces, pas sur la seule pièce qu'on publie.
+  it('refuse la pièce ORDINAIRE d’un message dont une AUTRE pièce est à vue unique', async () => {
+    await expectRefused(
+      makeAttachmentRow({}, {
+        attachments: [
+          { isViewOnce: false, isBlurred: false, effectFlags: 0 },
+          { isViewOnce: true, isBlurred: false, effectFlags: 0 },
+        ],
+      }),
+    );
+  });
+
+  it('refuse une flamme à durée que seule la colonne `ephemeralDuration` déclare', async () => {
+    await expectRefused(makeAttachmentRow({}, { ephemeralDuration: 30 }));
+  });
+
+  it('refuse une flamme après lecture', async () => {
+    await expectRefused(makeAttachmentRow({}, { effectFlags: 1 | 8 }));
+  });
+
+  it('refuse quand la protection du message n’a pas pu être lue en entier — fermé', async () => {
+    const row = makeAttachmentRow();
+    const { ephemeralDuration: _forgotten, ...partialMessage } = row.message as Record<string, unknown>;
+    await expectRefused({ ...row, message: partialMessage });
+  });
+
+  it('demande à la base la durée et la protection de chaque pièce du message', async () => {
+    const findUnique = jest.fn<any>().mockResolvedValue(makeAttachmentRow());
+    const { app } = await buildApp({ messageAttachment: { findUnique } });
+
+    await app.inject({ method: 'POST', url: '/posts/from-attachment', payload: { attachmentId: ATTACHMENT_ID } });
+
+    expect(findUnique.mock.calls[0][0].select.message.select).toMatchObject({
+      ephemeralDuration: true,
+      attachments: { select: { isViewOnce: true, isBlurred: true, effectFlags: true } },
+    });
+    await app.close();
   });
 });
 

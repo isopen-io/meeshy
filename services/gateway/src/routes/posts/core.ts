@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest, requirePublishingGrace, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
+import { withViewerPoints } from '../../services/engagement/viewerPostPoints';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import {
@@ -34,6 +35,7 @@ import {
 // de réécrire la règle, garantit qu'un post publié ne fuit pas ce qu'un push
 // masque.
 import { protectedPreview, maskedAttachment } from '../../services/notifications/notification-preview';
+import { contentExitLawOfSource } from '@meeshy/shared/utils/content-exit-law';
 import { canAccessConversation } from '../conversations/utils/access-control';
 import { mayServePostToAnonymous } from './anonymousPostGate';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
@@ -263,6 +265,11 @@ export function registerCoreRoutes(
             conversation: { select: { identifier: true } },
             messageType: true, isViewOnce: true, isBlurred: true, isEncrypted: true,
             effectFlags: true, expiresAt: true, createdAt: true,
+            // #9572 — la loi de sortie lit la durée ET chaque pièce du message :
+            // publier la pièce ordinaire d'un message dont une AUTRE pièce est
+            // à vue unique reste une sortie de ce message.
+            ephemeralDuration: true,
+            attachments: { select: { isViewOnce: true, isBlurred: true, effectFlags: true } },
           } },
         },
       });
@@ -283,7 +290,10 @@ export function registerCoreRoutes(
           isViewOnce: attachment?.isViewOnce,
           isBlurred: attachment?.isBlurred,
           effectFlags: attachment?.effectFlags,
-        });
+        })
+        // Le verdict « exporter » de la loi de sortie, FERMÉ sur une projection
+        // incomplète. Sans message parent, l'appartenance refuse plus bas.
+        || (attachment?.message != null && !contentExitLawOfSource(attachment.message).exportable);
 
       // L'appartenance est établie AVANT de planifier : le plan lui-même refuse
       // sans elle, mais lui donner un verdict d'accès faux le rendrait complice.
@@ -559,13 +569,21 @@ export function registerCoreRoutes(
 
       reply.header('Cache-Control', 'private, no-cache');
 
+      // `viewerPoints` (#9569) — ce que ce post a rapporté au LECTEUR. Posé
+      // ICI et non dans `getPostById` : ce dernier nourrit aussi les réponses
+      // d'ÉCRITURE (like, republication, rejeu), qui partent avant que le
+      // crédit du geste soit écrit — elles serviraient une valeur périmée
+      // qu'un client poserait par-dessus celle de `engagement:post-updated`.
+      // Une lecture le sert ; une écriture ne le porte pas.
+      const [served] = await withViewerPoints(prisma, viewerUserId, [post]);
+
       // `getPostById` a déjà aplati ET projeté la racine pour CE lecteur —
       // `withMentions` y est neutre. Ce qu'il reste à faire est l'imbriqué : le
       // post ORIGINAL d'une republication porte, lui, la relation sous son nom
       // de schéma (`repostOfInclude`), et un client ne décode pas
       // `repostOf.postMentions`.
       return sendSuccess(reply, servePublishedPost({
-        post: post as unknown as Record<string, unknown>,
+        post: served as unknown as Record<string, unknown>,
         references: undefined,
         request,
       }));
