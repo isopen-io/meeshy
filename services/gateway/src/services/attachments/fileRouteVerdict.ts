@@ -9,8 +9,10 @@
  * ({@link carrierMessageStillServesBytes}) : un fichier dont tous les messages
  * porteurs sont rappelés, expirés ou brûlés ne se sert plus.
  *
- * Réserver les fichiers aux membres de leur conversation est le lot suivant
- * (URL signée), qui attend la télémétrie de version des clients (#9231).
+ * Le lecteur, lui, est jugé par l'adresse SIGNÉE (#9600,
+ * `readerFileSignature.ts`) : ce module dit seulement si un fichier se lit par
+ * lecteur (`readerBound`), et son adresse nue est mesurée puis refusée
+ * (`readerFileGate.ts`, #9647).
  *
  * ─── QUELLE LIGNE PORTE CE FICHIER ? ─────────────────────────────────────────
  *
@@ -45,11 +47,21 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { carrierMessageStillServesBytes } from './carrierMessageLifecycle';
+import { attachmentIsReaderBound } from './signedAttachmentUrls';
 
+/**
+ * `readerBound` (#9600) : TOUS les porteurs vivants de ce fichier sont des
+ * contenus qui disparaissent (vue unique, flamme — la nature de la loi de
+ * sortie, sur le message et sur sa pièce). Ses octets se lisent alors par
+ * lecteur, et leur adresse servie est signée (`signedAttachmentUrls.ts`) ;
+ * l'adresse NUE de ce fichier est celle que la transition mesure, puis refuse.
+ * Un seul porteur ordinaire vivant suffit à le délier : ses lecteurs ont
+ * légitimement l'adresse nue des mêmes octets.
+ */
 export type FileRouteVerdict =
   | { readonly kind: 'not-an-attachment' }
   | { readonly kind: 'gone' }
-  | { readonly kind: 'serve'; readonly cacheControl: string };
+  | { readonly kind: 'serve'; readonly cacheControl: string; readonly readerBound: boolean };
 
 export type FileRouteVerdictPrisma = {
   readonly messageAttachment: Pick<PrismaClient['messageAttachment'], 'findMany' | 'findUnique'>;
@@ -71,9 +83,25 @@ export const ORDINARY_ATTACHMENT_BY_ID_CACHE = 'private, max-age=31536000, immut
 const TRANSLATED_TRACK = /^translated\/([0-9a-f]{24})_[^/]+$/;
 const RESPONSIVE_VARIANT = /^(.+)_\d+w\.webp$/;
 
-type OwnerRow = { readonly messageId: string | null; readonly isViewOnce: boolean };
+type OwnerRow = {
+  readonly messageId: string | null;
+  readonly isViewOnce: boolean;
+  readonly isBlurred?: boolean | null;
+  readonly effectFlags?: number | null;
+};
 
-const OWNER_SELECT = { messageId: true, isViewOnce: true } as const;
+const OWNER_SELECT = { messageId: true, isViewOnce: true, isBlurred: true, effectFlags: true } as const;
+
+const CARRIER_SELECT = {
+  id: true,
+  deletedAt: true,
+  expiresAt: true,
+  viewOnceBurnAt: true,
+  isViewOnce: true,
+  isBlurred: true,
+  effectFlags: true,
+  ephemeralDuration: true,
+} as const;
 
 export async function resolveFileRouteVerdict(
   storageKey: string,
@@ -153,17 +181,25 @@ async function verdictFor(
   const messageIds = [...new Set(owners.flatMap((row) => (row.messageId ? [row.messageId] : [])))];
   const carriers = messageIds.length === 0 ? [] : await prisma.message.findMany({
     where: { id: { in: messageIds } },
-    select: { id: true, deletedAt: true, expiresAt: true, viewOnceBurnAt: true, isViewOnce: true },
+    select: CARRIER_SELECT,
   });
   const living = carriers.filter((carrier) => carrierMessageStillServesBytes(carrier, now));
   if (living.length === 0 && !pending) return { kind: 'gone' };
+
+  const readerBound =
+    !pending &&
+    living.every((carrier) =>
+      owners
+        .filter((row) => row.messageId === carrier.id)
+        .every((row) => attachmentIsReaderBound(carrier, row)),
+    );
 
   const livingIds = new Set(living.map((carrier) => carrier.id));
   const viewOnce =
     living.some((carrier) => carrier.isViewOnce || carrier.viewOnceBurnAt) ||
     owners.some((row) => row.isViewOnce && (row.messageId === null || livingIds.has(row.messageId)));
-  if (viewOnce) return { kind: 'serve', cacheControl: VIEW_ONCE_ATTACHMENT_CACHE };
+  if (viewOnce) return { kind: 'serve', cacheControl: VIEW_ONCE_ATTACHMENT_CACHE, readerBound };
 
   const ephemeral = living.some((carrier) => carrier.expiresAt);
-  return { kind: 'serve', cacheControl: ephemeral ? EPHEMERAL_ATTACHMENT_CACHE : ORDINARY_ATTACHMENT_CACHE };
+  return { kind: 'serve', cacheControl: ephemeral ? EPHEMERAL_ATTACHMENT_CACHE : ORDINARY_ATTACHMENT_CACHE, readerBound };
 }

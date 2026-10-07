@@ -9,7 +9,7 @@
  * retélécharge les octets tant qu'un autre lecteur les garde vivants.
  *
  * La signature porte l'identité DANS l'adresse. Elle lie, sous une clé secrète
- * du serveur (HMAC-SHA-256) :
+ * du serveur (HMAC-SHA-256, tronqué à 128 bits) :
  *
  *  - la clé de stockage servie (original, miniature, variante, piste traduite) ;
  *  - la pièce jointe dont l'adresse a été servie ;
@@ -69,6 +69,10 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { apiPath } from '@meeshy/shared/api/prefix';
 
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+const log = enhancedLogger.child({ module: 'ReaderFileSignature' });
+
 export const ATTACHMENT_URL_SIGNING_KEY_ENV = 'ATTACHMENT_URL_SIGNING_KEY';
 export const ATTACHMENT_URL_SIGNING_PREVIOUS_KEY_ENV = 'ATTACHMENT_URL_SIGNING_KEY_PREVIOUS';
 export const ATTACHMENT_URL_SIGNATURE_ENFORCE_ENV = 'ATTACHMENT_URL_SIGNATURE_ENFORCE';
@@ -87,7 +91,14 @@ const KEY_BYTES = 32;
 const KEY_SHAPE = /^[A-Za-z0-9+/]{43}=$/;
 const OBJECT_ID = /^[0-9a-f]{24}$/;
 const EXPIRY = /^[1-9][0-9]{0,11}$/;
-const MAC = /^[A-Za-z0-9_-]{43}$/;
+/**
+ * Le MAC est TRONQUÉ à 128 bits (RFC 2104 § 5, NIST SP 800-107 § 5.3.4) : le
+ * jeton tient ainsi dans un paramètre de route (`maxParamLength` de Fastify,
+ * 100 caractères — 83 ici). 128 bits restent hors de portée d'une forge en
+ * ligne, seule attaque possible contre une clé que le client ne voit jamais.
+ */
+const MAC_BYTES = 16;
+const MAC = /^[A-Za-z0-9_-]{22}$/;
 const DOMAIN = 'meeshy:attachment-file:v1';
 
 export type SigningKeys = { readonly current: Buffer | null; readonly previous: Buffer | null };
@@ -125,10 +136,13 @@ export type ReaderFileUrlSigner = {
   readonly sign: (grant: ReaderFileGrant) => string;
 };
 
-function mac(key: Buffer, grant: ReaderFileGrant, expiresAtSeconds: string): Buffer {
+/** Le MAC sous sa forme CANONIQUE (base64url) : la comparaison porte sur la chaîne, aucune autre écriture des mêmes bits n'est admise. */
+function mac(key: Buffer, grant: ReaderFileGrant, expiresAtSeconds: string): string {
   return createHmac('sha256', key)
     .update([DOMAIN, grant.storageKey, grant.attachmentId, grant.readerParticipantId, expiresAtSeconds].join('\n'))
-    .digest();
+    .digest()
+    .subarray(0, MAC_BYTES)
+    .toString('base64url');
 }
 
 function expiryFor(now: Date): number {
@@ -146,23 +160,47 @@ export function readerFileUrlSigner(input: { readonly keys: SigningKeys; readonl
   const expiresAt = String(expiryFor(input.now));
   return {
     sign: (grant) => {
-      const signature = mac(key, grant, expiresAt).toString('base64url');
+      const signature = mac(key, grant, expiresAt);
       const token = [grant.attachmentId, grant.readerParticipantId, expiresAt, signature].join('.');
       return apiPath(`${SIGNED_FILE_ROUTE}/${token}/${encodeURIComponent(grant.storageKey)}`);
     },
   };
 }
 
-export function readerFileUrlSignerFromEnv(now: Date): ReaderFileUrlSigner | null {
-  return readerFileUrlSigner({ keys: readSigningKeys(), now });
+/**
+ * Une clé POSÉE mais illisible désarme la signature sans bruit : la passerelle
+ * le dit, une fois par processus et par variable, sans jamais citer la valeur.
+ */
+const misconfigurationReported = new Set<string>();
+
+function reportUnreadableKeys(env: Env, keys: SigningKeys): void {
+  const unreadable = [
+    [ATTACHMENT_URL_SIGNING_KEY_ENV, keys.current],
+    [ATTACHMENT_URL_SIGNING_PREVIOUS_KEY_ENV, keys.previous],
+  ] as const;
+  unreadable
+    .filter(([name, key]) => key === null && (env[name]?.trim() ?? '') !== '' && !misconfigurationReported.has(name))
+    .forEach(([name]) => {
+      misconfigurationReported.add(name);
+      log.error(`${name} is set but is not 32 non-zero bytes of strict base64 — reader-signed file addresses are disabled for it`);
+    });
+}
+
+export function readerFileUrlSignerFromEnv(now: Date, env: Env = process.env): ReaderFileUrlSigner | null {
+  const keys = readSigningKeys(env);
+  reportUnreadableKeys(env, keys);
+  return readerFileUrlSigner({ keys, now });
 }
 
 export type ReaderFileTokenCheck =
   | { readonly kind: 'valid'; readonly attachmentId: string; readonly readerParticipantId: string }
   | { readonly kind: 'invalid'; readonly reason: 'malformed' | 'no-key' | 'mismatch' | 'expired' | 'beyond-lifetime' };
 
-const sameMac = (expected: Buffer, given: Buffer): boolean =>
-  expected.length === given.length && timingSafeEqual(expected, given);
+const sameMac = (expected: string, given: string): boolean => {
+  const a = Buffer.from(expected);
+  const b = Buffer.from(given);
+  return a.length === b.length && timingSafeEqual(a, b);
+};
 
 /**
  * Vérifie le jeton d'une adresse signée contre la clé de stockage RÉSOLUE par
@@ -185,9 +223,8 @@ export function checkReaderFileToken(input: {
   const keys = [input.keys.current, input.keys.previous].filter((key): key is Buffer => key !== null);
   if (keys.length === 0) return { kind: 'invalid', reason: 'no-key' };
 
-  const given = Buffer.from(signature, 'base64url');
   const grant = { storageKey: input.storageKey, attachmentId, readerParticipantId };
-  if (!keys.some((key) => sameMac(mac(key, grant, expiresAt), given))) return { kind: 'invalid', reason: 'mismatch' };
+  if (!keys.some((key) => sameMac(mac(key, grant, expiresAt), signature))) return { kind: 'invalid', reason: 'mismatch' };
 
   const remaining = Number(expiresAt) - Math.floor(input.now.getTime() / 1000);
   if (remaining <= 0) return { kind: 'invalid', reason: 'expired' };

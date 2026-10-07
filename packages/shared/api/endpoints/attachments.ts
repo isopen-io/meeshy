@@ -45,6 +45,9 @@ export const fileByWildcard = (wildcard: string): string => `/api/v1/attachments
 /** GET /api/v1/attachments/search */
 export const search = '/api/v1/attachments/search';
 
+/** GET /api/v1/attachments/signed/:token/* */
+export const signedByTokenByWildcard = (token: string, wildcard: string): string => `/api/v1/attachments/signed/${encodeURIComponent(token)}/${wildcard.split('/').map(encodeURIComponent).join('/')}`;
+
 /** POST /api/v1/attachments/upload */
 export const upload = '/api/v1/attachments/upload';
 

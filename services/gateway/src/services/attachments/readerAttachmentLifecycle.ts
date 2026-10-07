@@ -20,9 +20,10 @@
  * après lecture, #9588) lui pose une échéance — « envoi + durée » ; ailleurs
  * il suit la vie globale du message, comme sa bulle.
  *
- * Ne vaut que là où le lecteur est CONNU : les routes par identifiant. La
- * route par chemin n'a pas d'identité et reste à la loi globale
- * (`fileRouteVerdict.ts`).
+ * Ne vaut que là où le lecteur est CONNU : les routes par identifiant, et
+ * l'adresse SIGNÉE par lecteur (#9600, `resolveSignedReaderVerdict`). L'adresse
+ * NUE par chemin n'a pas d'identité et reste à la loi globale
+ * (`fileRouteVerdict.ts`) jusqu'à son refus (#9647).
  *
  * Une lecture de statut en panne REMONTE : « encore lisible » n'est jamais le
  * verdict par défaut d'une garde.

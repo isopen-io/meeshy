@@ -3,6 +3,8 @@ import { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from '../conversations/utils/message-sender-select';
 import { serializeAttachmentForSocket } from '../../socketio/serializeAttachmentForSocket';
+import { signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
+import { readerFileUrlSignerFromEnv, type ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { messageAttachmentSchema, messageTranslationSchema, sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
@@ -200,6 +202,11 @@ export const syncMessagePlan: ColumnPlan<typeof syncMessageSelect> = {
   pinned: [...SYNC_MESSAGE_PINNED],
   columns: {
     content: ['content', ...PROTECTION_KEYS],
+    // #9600 — une pièce servie se signe sur la nature de son message : sans le
+    // bloc chargé, `?fields=messages.attachments` signerait toute pièce,
+    // ordinaire comprise (fail-closed), et ses caches clients changeraient
+    // d'adresse à chaque pas.
+    attachments: ['attachments', ...PROTECTION_KEYS],
   },
 };
 
@@ -254,6 +261,7 @@ function servedPinnedFor(fields: FieldSet): readonly string[] {
 function serializeSyncMessage(
   message: SyncMessage,
   readerParticipantId: string | undefined,
+  signer: ReaderFileUrlSigner | null,
 ): Record<string, unknown> {
   // `translations` et `attachments` sont des colonnes PROJETABLES depuis
   // #4173 : une projection qui ne les nomme pas les laisse absentes de la
@@ -274,8 +282,10 @@ function serializeSyncMessage(
     ...(brut.attachments === undefined
       ? {}
       : {
-          attachments: brut.attachments.map((attachment) =>
-            serializeAttachmentForSocket(attachment, readerParticipantId),
+          // #9600 — l'adresse d'une pièce protégée est celle de CE lecteur.
+          attachments: signReaderAttachmentsIn(
+            brut.attachments.map((attachment) => serializeAttachmentForSocket(attachment, readerParticipantId)),
+            { message: brut, readerParticipantId, signer },
           ),
         }),
   };
@@ -558,13 +568,14 @@ export async function syncMessages(opts: {
   // #7950 — la citation d'une story RETIRÉE par son auteur sort expurgée de
   // `metadata.postReplyTo` : UNE requête pour la page.
   const withdrawnCitations = await loadWithdrawnCitations(prisma, visible);
+  const fileUrlSigner = readerFileUrlSignerFromEnv(new Date());
   const serialize = (m: SyncMessage): Record<string, unknown> =>
     projectViewOnceForReader(
       servePostReplyCitation(hoistLocationOnto(
         withReaderReactions(
           m,
           restrictFields(
-            serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId)),
+            serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId), fileUrlSigner),
             fields,
             servedPinned,
           ),

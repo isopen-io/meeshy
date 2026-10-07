@@ -50,36 +50,83 @@ export async function resolveAttachmentReadVerdict(
     return Boolean(caller) && caller === attachment.uploadedBy ? 'allow' : 'forbidden';
   }
 
+  // Le discriminant est le type d'identité : un participant anonyme muni
+  // d'un jeton de session est authentifié lui aussi.
+  const participantWhere = (conversationId: string) =>
+    authContext.isAnonymous && authContext.participantId
+      ? { id: authContext.participantId, conversationId, isActive: true }
+      : { userId: authContext.userId, conversationId, isActive: true };
+
+  return memberReadVerdict(prisma, {
+    messageId: attachment.messageId,
+    attachmentIsViewOnce: attachment.isViewOnce,
+    participantWhere,
+    now: new Date(),
+  });
+}
+
+/**
+ * Le lecteur d'une ADRESSE SIGNÉE (#9600) : la même loi, le participant
+ * venant de la signature au lieu de la session. Une `<img>` ou un lecteur
+ * média n'envoient aucun jeton ; la signature, vérifiée en amont
+ * (`readerFileSignature.ts`), est leur seule identité. La pièce est relue ici
+ * — son message porteur et sa vue unique propre ne voyagent pas dans l'adresse.
+ */
+export async function resolveSignedReaderVerdict(
+  prisma: Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry' | 'messageAttachment'>,
+  input: { readonly attachmentId: string; readonly readerParticipantId: string; readonly now: Date }
+): Promise<AttachmentReadVerdict> {
+  const attachment = await prisma.messageAttachment.findUnique({
+    where: { id: input.attachmentId },
+    select: { messageId: true, isViewOnce: true },
+  });
+  if (!attachment?.messageId) return 'forbidden';
+
+  return memberReadVerdict(prisma, {
+    messageId: attachment.messageId,
+    attachmentIsViewOnce: attachment.isViewOnce,
+    participantWhere: (conversationId) => ({ id: input.readerParticipantId, conversationId, isActive: true }),
+    now: input.now,
+  });
+}
+
+/**
+ * Le cœur commun : appartenance ACTIVE à la conversation du message, puis vie
+ * du porteur, puis échéance de CE lecteur. L'appartenance d'abord, pour la
+ * raison écrite en tête de fichier.
+ */
+async function memberReadVerdict(
+  prisma: Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry'>,
+  input: {
+    readonly messageId: string;
+    readonly attachmentIsViewOnce?: boolean | null;
+    readonly participantWhere: (conversationId: string) => { conversationId: string; isActive: boolean; id?: string; userId?: string };
+    readonly now: Date;
+  }
+): Promise<AttachmentReadVerdict> {
   const message = await prisma.message.findUnique({
-    where: { id: attachment.messageId },
+    where: { id: input.messageId },
     // `deletedAt`/`expiresAt` voyagent avec `conversationId` : la garde de
     // cycle de vie ne coûte aucun aller-retour de plus.
     select: { conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT }
   });
   if (!message) return 'forbidden';
 
-  // Le discriminant est le type d'identité : un participant anonyme muni
-  // d'un jeton de session est authentifié lui aussi.
-  const where = authContext.isAnonymous && authContext.participantId
-    ? { id: authContext.participantId, conversationId: message.conversationId, isActive: true }
-    : { userId: authContext.userId, conversationId: message.conversationId, isActive: true };
-
-  const participant = await prisma.participant.findFirst({ where, select: { id: true } });
+  const participant = await prisma.participant.findFirst({ where: input.participantWhere(message.conversationId), select: { id: true } });
   if (participant === null) return 'forbidden';
 
   // Le dernier maillon de la chaîne de destruction des cycles 92 à 94 : les
   // octets suivent la vie du message porteur. Cf. `carrierMessageLifecycle`.
-  const now = new Date();
-  if (!carrierMessageStillServesBytes(message, now)) return 'gone';
+  if (!carrierMessageStillServesBytes(message, input.now)) return 'gone';
 
   // #9589 — puis l'échéance de CE lecteur : son décompte, sa consommation
   // après lecture, sa vue unique ouverte. Cf. `readerAttachmentLifecycle`.
   const readerReads = await readerStillReadsBytes(prisma, {
-    messageId: attachment.messageId,
+    messageId: input.messageId,
     message,
-    attachmentIsViewOnce: attachment.isViewOnce,
+    attachmentIsViewOnce: input.attachmentIsViewOnce,
     readerParticipantId: participant.id,
-    now,
+    now: input.now,
   });
   return readerReads ? 'allow' : 'gone';
 }

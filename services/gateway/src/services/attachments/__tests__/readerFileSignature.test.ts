@@ -7,7 +7,15 @@
  *
  * @jest-environment node
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
+
+const mockError = jest.fn<(...args: unknown[]) => void>();
+
+jest.mock('../../../utils/logger-enhanced', () => ({
+  enhancedLogger: {
+    child: () => ({ error: (...a: unknown[]) => mockError(...a), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }),
+  },
+}));
 
 import {
   READER_FILE_URL_LIFETIME_SECONDS,
@@ -16,6 +24,7 @@ import {
   readerFileUrlSigner,
   readSigningKeys,
   readerFileSignatureEnforced,
+  readerFileUrlSignerFromEnv,
   type SigningKeys,
 } from '../readerFileSignature';
 
@@ -135,6 +144,21 @@ describe('checkReaderFileToken', () => {
     expect(checkReaderFileToken({ token, storageKey, keys: keysOf(KEY_A), now: NOW })).toEqual({ kind: 'invalid', reason: 'mismatch' });
   });
 
+  it('tient dans un paramètre de route Fastify (100 caractères au plus)', () => {
+    expect(tokenAndKeyOf(signedUrl(keys)).token.length).toBeLessThanOrEqual(100);
+  });
+
+  it("refuse une AUTRE écriture des mêmes bits de MAC — seule la forme canonique passe", () => {
+    const { token, storageKey } = tokenAndKeyOf(signedUrl(keys));
+    const parts = token.split('.');
+    const sig = parts[3] as string;
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    const last = alphabet.indexOf(sig.slice(-1));
+    const sibling = alphabet[last ^ 1] as string;
+    const variant = [...parts.slice(0, 3), sig.slice(0, -1) + sibling].join('.');
+    expect(checkReaderFileToken({ token: variant, storageKey, keys, now: NOW })).toEqual({ kind: 'invalid', reason: 'mismatch' });
+  });
+
   it('refuse tout quand aucune clé n\'est posée', () => {
     const { token, storageKey } = tokenAndKeyOf(signedUrl(keys));
     expect(checkReaderFileToken({ token, storageKey, keys: keysOf(undefined), now: NOW })).toEqual({ kind: 'invalid', reason: 'no-key' });
@@ -143,10 +167,10 @@ describe('checkReaderFileToken', () => {
   it.each([
     [''],
     ['a.b.c.d'],
-    [`${ATTACHMENT}.${READER}.12.${'A'.repeat(43)}.extra`],
-    [`${ATTACHMENT}.${READER}.-12.${'A'.repeat(43)}`],
-    [`${ATTACHMENT}.${READER}.1760000000.${'A'.repeat(42)}`],
-    [`${ATTACHMENT.toUpperCase()}.${READER}.1760000000.${'A'.repeat(43)}`],
+    [`${ATTACHMENT}.${READER}.12.${'A'.repeat(22)}.extra`],
+    [`${ATTACHMENT}.${READER}.-12.${'A'.repeat(22)}`],
+    [`${ATTACHMENT}.${READER}.1760000000.${'A'.repeat(21)}`],
+    [`${ATTACHMENT.toUpperCase()}.${READER}.1760000000.${'A'.repeat(22)}`],
   ])('refuse un jeton malformé (%s)', (token) => {
     expect(checkReaderFileToken({ token, storageKey: STORAGE_KEY, keys, now: NOW })).toEqual({ kind: 'invalid', reason: 'malformed' });
   });
@@ -158,5 +182,21 @@ describe('readerFileSignatureEnforced', () => {
     expect(readerFileSignatureEnforced({ ATTACHMENT_URL_SIGNATURE_ENFORCE: ' TRUE ' })).toBe(true);
     expect(readerFileSignatureEnforced({ ATTACHMENT_URL_SIGNATURE_ENFORCE: '1' })).toBe(false);
     expect(readerFileSignatureEnforced({})).toBe(false);
+  });
+});
+
+describe('readerFileUrlSignerFromEnv', () => {
+  it('dit UNE fois qu\'une clé posée est illisible, sans jamais citer sa valeur', () => {
+    const env = { ATTACHMENT_URL_SIGNING_KEY: 'cle-mal-formee-secrete' };
+    expect(readerFileUrlSignerFromEnv(NOW, env)).toBeNull();
+    readerFileUrlSignerFromEnv(NOW, env);
+    expect(mockError).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(mockError.mock.calls)).not.toContain('cle-mal-formee-secrete');
+  });
+
+  it('se tait sur une clé simplement absente', () => {
+    mockError.mockClear();
+    expect(readerFileUrlSignerFromEnv(NOW, { ATTACHMENT_URL_SIGNING_KEY_PREVIOUS: '' })).toBeNull();
+    expect(mockError).not.toHaveBeenCalled();
   });
 });

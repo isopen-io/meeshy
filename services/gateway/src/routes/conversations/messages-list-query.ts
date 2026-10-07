@@ -27,6 +27,8 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/locat
 import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
+import { signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
+import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
 import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
 import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import {
@@ -593,6 +595,11 @@ export type MessageRowMappingContext = {
   ephemeralDeadlines?: Map<string, EphemeralReaderResolution>;
   /** #7936 — les emojis que CE lecteur a posés, par message. Absente ⇒ `[]`. */
   readerReactions?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * #9600 — signe, pour `currentParticipantId`, les adresses des pièces
+   * protégées. Absent ou `null` (aucune clé posée) ⇒ l'adresse d'avant.
+   */
+  readerFileUrlSigner?: ReaderFileUrlSigner | null;
 };
 
 /** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
@@ -722,7 +729,13 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
               { onMissingEntry: listMissingEntry },
             );
           })() : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, ctx.consumptionMap),
+          // #9600 — en DERNIER : l'adresse servie d'une pièce protégée est
+          // celle de CE lecteur. La protection se lit sur la ligne BRUTE
+          // (`expiresAt` de la colonne, pas l'échéance servie au lecteur).
+          attachments: signReaderAttachmentsIn(
+            cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, ctx.consumptionMap),
+            { message, readerParticipantId: currentParticipantId, signer: ctx.readerFileUrlSigner },
+          ),
           _count: message._count
         };
 

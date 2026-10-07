@@ -67,6 +67,7 @@ import {
   enrichPostReplyMessagesForList,
   parseLanguageFilterParam
 } from './messages-list-query';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import type { RawMessageRow } from './messages-list-query-types';
 import { loadReaderReactionsByMessage } from './messages-reader-reactions';
 import {
@@ -726,6 +727,7 @@ export function registerMessagesListRoute(
         consumptionMap,
         ephemeralDeadlines,
         readerReactions,
+        readerFileUrlSigner: readerFileUrlSignerFromEnv(new Date()),
       }));
 
       // ===== ENRICHIR LES MESSAGES FORWARDÉS =====

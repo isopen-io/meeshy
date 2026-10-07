@@ -12,7 +12,9 @@ import {
   resolveFileRouteVerdict,
   type FileRouteVerdictPrisma,
 } from '../../services/attachments/fileRouteVerdict';
-import { createReadStream } from 'fs';
+import { admitUnsignedFile, resolveSignedFileAccess } from '../../services/attachments/readerFileGate';
+import { readSigningKeys, readerFileSignatureEnforced, SIGNED_FILE_ROUTE } from '../../services/attachments/readerFileSignature';
+import { createReadStream, type Stats } from 'fs';
 import { stat } from 'fs/promises';
 import { relative as pathRelative, resolve as pathResolve, sep as pathSep } from 'path';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -252,6 +254,7 @@ export async function registerDownloadRoutes(
   // donne un site UNIQUE — un alias qui RECOPIERAIT le handler recréerait la
   // jumelle qu'il prétend fermer (issue #4187).
   registerFileStreamRoute(fastify, prisma);
+  registerSignedFileRoute(fastify, prisma);
 }
 
 /**
@@ -321,66 +324,26 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
       // `reply.send(undefined)` → `ERR_HTTP_HEADERS_SENT` crash bursts (frequent
       // on missing avatars). Keeping this hook synchronous leaves cgo as the
       // only async onSend hook — the proven-safe state every other route has.
-      onSend: (request, reply, payload, done) => {
-        reply.removeHeader('X-Frame-Options');
-        // #3627 — un SVG a déjà posé la CSP `sandbox` dans le handler (même
-        // garde que `GET /attachments/:attachmentId`) ; l'écraser ici par
-        // `frame-ancestors *` la neutraliserait pour TOUT le monde, y
-        // compris les navigateurs qui n'honorent que la dernière valeur de
-        // l'en-tête. Ce hook ne pose `frame-ancestors *` que pour tout ce
-        // qui n'est PAS un SVG.
-        if (reply.getHeader('Content-Type') !== 'image/svg+xml') {
-          reply.header('Content-Security-Policy', "frame-ancestors *");
-        }
-        crossOriginMediaHeaders(request, reply, payload, done);
-      }
+      onSend: frameableMediaHeaders
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const fullPath = (request.params as any)['*'];
-        const decodedPath = decodeURIComponent(fullPath);
-
-        const uploadBasePath = process.env.UPLOAD_PATH || 'uploads/attachments';
-        // Sandbox check : path.join() collapses `..` segments WITHOUT
-        // verifying the result still lies inside uploadBasePath. A request
-        // like `/attachments/file/%2F..%2F..%2Fetc%2Fpasswd` would resolve
-        // to /etc/passwd. We resolve both base and candidate, then require
-        // a strict prefix match (with separator) to reject every form of
-        // traversal. Without this guard, the route is a textbook
-        // path-traversal vulnerability.
-        const baseAbs = pathResolve(uploadBasePath);
-        const filePath = pathResolve(uploadBasePath, decodedPath);
-        if (filePath !== baseAbs && !filePath.startsWith(baseAbs + pathSep)) {
+        const decodedPath = decodeURIComponent((request.params as { '*': string })['*']);
+        const located = locateStoredFile(decodedPath);
+        if (located.kind === 'outside') {
           log.warn('Path traversal attempt rejected', { decodedPath });
           return sendForbidden(reply, 'Forbidden');
         }
+        if (located.kind === 'hidden') return sendNotFound(reply, 'File not found');
 
-        // #9315 — un segment caché n'est jamais un média : `.tus-resumable/`
-        // porte les envois EN COURS, pas encore rattachés à un message. 404
-        // avant tout accès disque, pour que leur existence ne se lise pas.
-        if (pathRelative(baseAbs, filePath).split(pathSep).some((segment) => segment.startsWith('.'))) {
-          return sendNotFound(reply, 'File not found');
-        }
-
-        // Single stat() — was previously called twice with a race window
-        // between the existence probe and the metadata read.
-        let fileStats;
-        try {
-          fileStats = await stat(filePath);
-        } catch (statError: any) {
-          log.info('File not found on disk', {
-            filePath,
-            code: statError?.code,
-          });
-          return sendNotFound(reply, 'File not found');
-        }
-        const fileSize = fileStats.size;
+        const fileStats = await statOrNull(located.filePath);
+        if (!fileStats) return sendNotFound(reply, 'File not found');
 
         // #9315 — le même cycle de vie que les routes par identifiant. La clé
         // est relue sur le chemin RÉSOLU : double barre, `./`, remontée ou
         // double encodage atteignent le même fichier, donc le même verdict. Un
         // refus rend la réponse exacte d'un fichier déjà effacé du disque.
-        const storageKey = pathRelative(baseAbs, filePath).split(pathSep).join('/');
+        const { storageKey } = located;
         const isStableProfilePath = storageKey.split('/')[0] === 'avatars';
         const verdict = isStableProfilePath
           ? { kind: 'not-an-attachment' as const }
@@ -389,35 +352,20 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
           return sendNotFound(reply, 'File not found');
         }
 
-        const ext = decodedPath.toLowerCase().slice(decodedPath.lastIndexOf('.'));
-        const mimeTypes: Record<string, string> = {
-          '.jpg': 'image/jpeg',
-          '.jpeg': 'image/jpeg',
-          '.png': 'image/png',
-          '.gif': 'image/gif',
-          '.webp': 'image/webp',
-          '.svg': 'image/svg+xml',
-          '.pdf': 'application/pdf',
-          '.txt': 'text/plain',
-          '.mp4': 'video/mp4',
-          '.mov': 'video/quicktime',
-          '.webm': 'audio/webm',
-          '.ogg': 'audio/ogg',
-          '.mp3': 'audio/mpeg',
-          '.wav': 'audio/wav',
-          '.m4a': 'audio/mp4',
-        };
-        const mimeType = mimeTypes[ext] || 'application/octet-stream';
+        // #9600 — l'adresse NUE d'un fichier dont tous les porteurs vivants
+        // disparaissent : comptée pendant la transition, refusée après.
+        const unsigned = admitUnsignedFile({
+          verdict,
+          enforced: readerFileSignatureEnforced(),
+          request: {
+            route: request.routeOptions?.url,
+            platformHeader: headerOf(request, 'x-meeshy-platform') ?? headerOf(request, 'x-app-platform'),
+            versionHeader: headerOf(request, 'x-meeshy-version') ?? headerOf(request, 'x-app-version'),
+            userAgent: headerOf(request, 'user-agent'),
+          },
+        });
+        if (unsigned === 'refuse') return sendNotFound(reply, 'File not found');
 
-        // Weak ETag based on mtime+size — sufficient for HTTP cache
-        // revalidation (If-None-Match → 304). The Cache-Control directive
-        // intentionally drops `immutable` here : `immutable` tells the
-        // client never to revalidate during max-age, which makes the ETag
-        // moot. Snapshot files (UUID-named, never overwritten) ARE
-        // semantically immutable, but the route also serves user-uploaded
-        // originals which may legitimately change. Keep the long max-age
-        // for browser cache reuse, but allow ETag revalidation.
-        const etag = `W/"${fileSize}-${Math.floor(fileStats.mtimeMs)}"`;
         // Stable-path files (legacy `avatars/user/<userId>.jpg`) keep the SAME
         // URL when their content changes — a year-long max-age freezes the old
         // image in every client/CDN cache. Serve them with `no-cache` so each
@@ -435,83 +383,255 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
             ? 'public, no-cache'
             : 'private, max-age=31536000';
 
-        const ifNoneMatch = request.headers['if-none-match'];
-        if (ifNoneMatch && ifNoneMatch === etag) {
-          reply.header('ETag', etag);
-          reply.header('Cache-Control', cacheControl);
-          return reply.code(304).send();
-        }
-
-        const isMediaFile = mimeType.startsWith('audio/') || mimeType.startsWith('video/');
-        if (isMediaFile) {
-          reply.header('Accept-Ranges', 'bytes');
-
-          const range = request.headers.range;
-          if (range) {
-            // Parse + validate per RFC 7233. Reject malformed / out-of-bounds
-            // ranges with 416 instead of crashing on negative chunkSize or
-            // streaming junk.
-            const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-            if (!match) {
-              reply.header('Content-Range', `bytes */${fileSize}`);
-              return sendError(reply, 416, 'Range Not Satisfiable');
-            }
-            const startStr = match[1];
-            const endStr = match[2];
-            const start = startStr === '' ? 0 : parseInt(startStr, 10);
-            const end = endStr === '' ? fileSize - 1 : parseInt(endStr, 10);
-            if (
-              !Number.isFinite(start)
-              || !Number.isFinite(end)
-              || start < 0
-              || end >= fileSize
-              || start > end
-            ) {
-              reply.header('Content-Range', `bytes */${fileSize}`);
-              return sendError(reply, 416, 'Range Not Satisfiable');
-            }
-            const chunkSize = (end - start) + 1;
-
-            reply.code(206);
-            reply.header('Content-Range', `bytes ${start}-${end}/${fileSize}`);
-            reply.header('Content-Length', chunkSize);
-            reply.header('Content-Type', mimeType);
-            reply.header('ETag', etag);
-            reply.header('Cache-Control', cacheControl);
-
-            const stream = createReadStream(filePath, { start, end });
-            return reply.send(stream);
-          }
-        }
-
-        reply.header('Content-Type', mimeType);
-        reply.header('Content-Length', fileSize);
-        reply.header('ETag', etag);
-        // #3627 — même garde que `GET /attachments/:attachmentId` : un SVG
-        // peut porter du JavaScript et l'exécuterait dans l'origine de la
-        // passerelle s'il était servi `inline`. Cette route PAR CHEMIN sert
-        // les mêmes octets (c'est l'alias legacy non versionné, #4187) et
-        // n'avait jamais reçu cette garde — un fichier `.svg` uploadé
-        // légitimement (déclaré `image/svg+xml`, sans concept d'EXIF/binaire,
-        // voir `ContentSignature.verifyDeclaredMimeType`) restait servi
-        // inline par cette seule porte.
-        if (mimeType === 'image/svg+xml') {
-          reply.header('Content-Disposition', `attachment; filename="${sanitizeAsciiFilename(decodedPath.split('/').pop() || 'file.svg')}"`);
-          reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
-        } else {
-          reply.header('Content-Disposition', 'inline');
-        }
-        reply.header('X-Content-Type-Options', 'nosniff');
-        reply.header('Cache-Control', cacheControl);
-
-        const stream = createReadStream(filePath);
-        return reply.send(stream);
-      } catch (error: any) {
-        log.error('Error serving file by path', { error: error?.message });
+        return streamStoredFile(request, reply, { filePath: located.filePath, decodedPath, fileStats, cacheControl });
+      } catch (error: unknown) {
+        log.error('Error serving file by path', { error: error instanceof Error ? error.message : String(error) });
         return sendInternalError(reply, 'Error serving file');
       }
     }
   );
+}
+
+/**
+ * `GET /attachments/signed/:token/*` — le fichier d'une ADRESSE SIGNÉE pour
+ * son lecteur (#9600).
+ *
+ * Servie sous `/api/v1` seulement : aucune adresse de cette forme n'a jamais
+ * été persistée, elle n'a donc pas d'alias legacy à honorer. Le jeton porte la
+ * pièce, le participant lecteur et l'échéance ; le chemin, la clé de stockage
+ * que la signature couvre. Tout refus — signature fausse ou échue, fichier
+ * mort, lecteur sorti ou dont le contenu a disparu — rend la réponse d'un
+ * fichier absent : la route ne dit jamais laquelle des portes a fermé.
+ *
+ * Mêmes octets, mêmes en-têtes et même lecture par plages que la route par
+ * chemin (`streamStoredFile`), sous le cache que le fichier autorise.
+ */
+function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient): void {
+  fastify.get(
+    `${SIGNED_FILE_ROUTE}/:token/*`,
+    {
+      schema: {
+        description: 'Stream a protected file through a reader-signed address (#9600). The token binds the attachment, the reading participant and an expiry to the storage key; the route then replays the carrier message lifecycle and this reader\'s own deadline. Supports Range requests. Any refusal is a 404.',
+        tags: ['attachments'],
+        summary: 'Get file by reader-signed address',
+        params: {
+          type: 'object',
+          properties: {
+            token: { type: 'string', description: '<attachmentId>.<participantId>.<expiresAt>.<signature>' },
+            '*': { type: 'string', description: 'Storage key, encoded once' },
+          },
+        },
+        response: {
+          200: { description: 'File stream returned successfully', type: 'string', format: 'binary' },
+          206: { description: 'Partial content (Range request for media files)', type: 'string', format: 'binary' },
+          404: { description: 'File not found, or address refused', ...errorResponseSchema },
+          500: { description: 'Internal server error', ...errorResponseSchema },
+        },
+      },
+      onSend: frameableMediaHeaders,
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const params = request.params as { token: string; '*': string };
+        const decodedPath = decodeURIComponent(params['*']);
+        const located = locateStoredFile(decodedPath);
+        if (located.kind !== 'file') return sendNotFound(reply, 'File not found');
+
+        const access = await resolveSignedFileAccess(prisma, {
+          token: params.token,
+          storageKey: located.storageKey,
+          keys: readSigningKeys(),
+          now: new Date(),
+        });
+        if (access.kind === 'refuse') {
+          log.debug('Signed file address refused', { reason: access.reason });
+          return sendNotFound(reply, 'File not found');
+        }
+
+        const fileStats = await statOrNull(located.filePath);
+        if (!fileStats) return sendNotFound(reply, 'File not found');
+
+        return streamStoredFile(request, reply, { filePath: located.filePath, decodedPath, fileStats, cacheControl: access.cacheControl });
+      } catch (error: unknown) {
+        log.error('Error serving signed file', { error: error instanceof Error ? error.message : String(error) });
+        return sendInternalError(reply, 'Error serving file');
+      }
+    }
+  );
+}
+
+/**
+ * SYNCHRONOUS on purpose — see the by-path route : a second *async* onSend hook
+ * next to the app-wide `conditionalGetOnSend` makes a void-returning handler
+ * resolve `undefined` and Fastify double-sends. #3627 : a SVG keeps the
+ * `sandbox` CSP its handler set; everything else may be framed.
+ */
+function frameableMediaHeaders(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  payload: unknown,
+  done: (err: Error | null, payload?: unknown) => void
+) {
+  reply.removeHeader('X-Frame-Options');
+  if (reply.getHeader('Content-Type') !== 'image/svg+xml') {
+    reply.header('Content-Security-Policy', "frame-ancestors *");
+  }
+  crossOriginMediaHeaders(request, reply, payload, done);
+}
+
+const headerOf = (request: FastifyRequest, name: string): string | undefined => {
+  const value = request.headers[name];
+  return typeof value === 'string' ? value : undefined;
+};
+
+type LocatedFile =
+  | { readonly kind: 'file'; readonly filePath: string; readonly storageKey: string }
+  | { readonly kind: 'outside' }
+  | { readonly kind: 'hidden' };
+
+/**
+ * Le fichier qu'un chemin demandé désigne dans le volume des dépôts.
+ *
+ * Sandbox check : path.join() collapses `..` segments WITHOUT verifying the
+ * result still lies inside uploadBasePath. A request like
+ * `/attachments/file/%2F..%2F..%2Fetc%2Fpasswd` would resolve to /etc/passwd.
+ * We resolve both base and candidate, then require a strict prefix match (with
+ * separator) to reject every form of traversal.
+ *
+ * #9315 — un segment caché n'est jamais un média : `.tus-resumable/` porte les
+ * envois EN COURS, pas encore rattachés à un message. Refusé avant tout accès
+ * disque, pour que leur existence ne se lise pas.
+ */
+function locateStoredFile(decodedPath: string): LocatedFile {
+  const uploadBasePath = process.env.UPLOAD_PATH || 'uploads/attachments';
+  const baseAbs = pathResolve(uploadBasePath);
+  const filePath = pathResolve(uploadBasePath, decodedPath);
+  if (filePath !== baseAbs && !filePath.startsWith(baseAbs + pathSep)) return { kind: 'outside' };
+  const segments = pathRelative(baseAbs, filePath).split(pathSep);
+  if (segments.some((segment) => segment.startsWith('.'))) return { kind: 'hidden' };
+  return { kind: 'file', filePath, storageKey: segments.join('/') };
+}
+
+/** Single stat() — was previously called twice with a race window between the existence probe and the metadata read. */
+async function statOrNull(filePath: string): Promise<Stats | null> {
+  try {
+    return await stat(filePath);
+  } catch (statError: unknown) {
+    log.info('File not found on disk', { filePath, code: (statError as { code?: string } | null)?.code });
+    return null;
+  }
+}
+
+const MIME_TYPES: Readonly<Record<string, string>> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain',
+  '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'audio/webm',
+  '.ogg': 'audio/ogg',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+};
+
+/**
+ * Le flux d'octets d'un fichier déjà admis — partagé par la route par chemin et
+ * par l'adresse signée, qui servent les mêmes octets sous les mêmes gardes.
+ */
+function streamStoredFile(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  input: { readonly filePath: string; readonly decodedPath: string; readonly fileStats: Stats; readonly cacheControl: string }
+) {
+  const { filePath, decodedPath, cacheControl } = input;
+  const fileSize = input.fileStats.size;
+  const mimeType = MIME_TYPES[decodedPath.toLowerCase().slice(decodedPath.lastIndexOf('.'))] || 'application/octet-stream';
+
+  // Weak ETag based on mtime+size — sufficient for HTTP cache
+  // revalidation (If-None-Match → 304). The Cache-Control directive
+  // intentionally drops `immutable` here : `immutable` tells the
+  // client never to revalidate during max-age, which makes the ETag
+  // moot. Snapshot files (UUID-named, never overwritten) ARE
+  // semantically immutable, but the route also serves user-uploaded
+  // originals which may legitimately change. Keep the long max-age
+  // for browser cache reuse, but allow ETag revalidation.
+  const etag = `W/"${fileSize}-${Math.floor(input.fileStats.mtimeMs)}"`;
+
+  const ifNoneMatch = request.headers['if-none-match'];
+  if (ifNoneMatch && ifNoneMatch === etag) {
+    reply.header('ETag', etag);
+    reply.header('Cache-Control', cacheControl);
+    return reply.code(304).send();
+  }
+
+  const isMediaFile = mimeType.startsWith('audio/') || mimeType.startsWith('video/');
+  if (isMediaFile) {
+    reply.header('Accept-Ranges', 'bytes');
+
+    const range = request.headers.range;
+    if (range) {
+      // Parse + validate per RFC 7233. Reject malformed / out-of-bounds
+      // ranges with 416 instead of crashing on negative chunkSize or
+      // streaming junk.
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (!match) {
+        reply.header('Content-Range', `bytes */${fileSize}`);
+        return sendError(reply, 416, 'Range Not Satisfiable');
+      }
+      const startStr = match[1];
+      const endStr = match[2];
+      const start = startStr === '' ? 0 : parseInt(startStr, 10);
+      const end = endStr === '' ? fileSize - 1 : parseInt(endStr, 10);
+      if (
+        !Number.isFinite(start)
+        || !Number.isFinite(end)
+        || start < 0
+        || end >= fileSize
+        || start > end
+      ) {
+        reply.header('Content-Range', `bytes */${fileSize}`);
+        return sendError(reply, 416, 'Range Not Satisfiable');
+      }
+      const chunkSize = (end - start) + 1;
+
+      reply.code(206);
+      reply.header('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+      reply.header('Content-Length', chunkSize);
+      reply.header('Content-Type', mimeType);
+      reply.header('ETag', etag);
+      reply.header('Cache-Control', cacheControl);
+
+      return reply.send(createReadStream(filePath, { start, end }));
+    }
+  }
+
+  reply.header('Content-Type', mimeType);
+  reply.header('Content-Length', fileSize);
+  reply.header('ETag', etag);
+  // #3627 — même garde que `GET /attachments/:attachmentId` : un SVG
+  // peut porter du JavaScript et l'exécuterait dans l'origine de la
+  // passerelle s'il était servi `inline`. Cette route PAR CHEMIN sert
+  // les mêmes octets (c'est l'alias legacy non versionné, #4187) et
+  // n'avait jamais reçu cette garde — un fichier `.svg` uploadé
+  // légitimement (déclaré `image/svg+xml`, sans concept d'EXIF/binaire,
+  // voir `ContentSignature.verifyDeclaredMimeType`) restait servi
+  // inline par cette seule porte.
+  if (mimeType === 'image/svg+xml') {
+    reply.header('Content-Disposition', `attachment; filename="${sanitizeAsciiFilename(decodedPath.split('/').pop() || 'file.svg')}"`);
+    reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+  } else {
+    reply.header('Content-Disposition', 'inline');
+  }
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('Cache-Control', cacheControl);
+
+  return reply.send(createReadStream(filePath));
 }
 
 // MARK: - Filename safety helpers (RFC 5987 / 6266)
