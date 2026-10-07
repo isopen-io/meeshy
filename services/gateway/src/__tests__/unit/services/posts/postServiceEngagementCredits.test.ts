@@ -149,12 +149,25 @@ describe('social.share — PostService.shareWithTrackingLink', () => {
 });
 
 describe('social.repost — PostService.repostPost', () => {
-  it('crédite le reposteur, propriétaire = auteur de l’original', async () => {
+  it('crédite le reposteur une fois, propriétaire = auteur de l’original, attribué à l’original ET à la republication produite (#9584)', async () => {
     const repost = await serviceFor(makePrisma())
       .repostPost(POST_ID, READER_ID, { targetType: 'POST' as any });
     await settle();
 
     expect(repost).not.toBeNull();
+    expect(mockRecordActivity).toHaveBeenCalledTimes(1);
+    expect(mockRecordActivity).toHaveBeenCalledWith(READER_ID, 'social.repost', {
+      postId: POST_ID,
+      repostId: 'repost-1',
+      targetId: POST_ID,
+      targetOwnerId: AUTHOR_ID,
+    });
+  });
+
+  it('une CITATION garde sa propre vie sociale : le crédit reste attribué à l’original seul', async () => {
+    await serviceFor(makePrisma()).repostPost(POST_ID, READER_ID, { targetType: 'POST' as any, isQuote: true, content: 'Lisez ça' });
+    await settle();
+
     expect(mockRecordActivity).toHaveBeenCalledWith(READER_ID, 'social.repost', {
       postId: POST_ID,
       targetId: POST_ID,

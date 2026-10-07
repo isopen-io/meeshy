@@ -22,6 +22,7 @@ const COMMENT_ID = '507f1f77bcf86cd799439022';
 const READER_ID = '64a000000000000000000001';
 const AUTHOR_ID = '64a000000000000000000002';
 const MODERATOR_ID = '64a000000000000000000003';
+const REPOST_ID = '507f1f77bcf86cd799439033';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -66,6 +67,22 @@ describe('tool.post_reaction — PostReactionService.addReaction', () => {
     expect(result?.unchanged).toBe(false);
     expect(recorder.recordActivity).toHaveBeenCalledWith(READER_ID, 'tool.post_reaction', {
       postId: POST_ID,
+      targetId: POST_ID,
+      targetOwnerId: AUTHOR_ID,
+    });
+  });
+
+  it('venue d’une republication simple, nomme aussi la republication — un seul crédit (#9584)', async () => {
+    const recorder = makeRecorder();
+    const service = new PostReactionService(makePrisma(null) as any, recorder);
+
+    await service.addReaction({ postId: POST_ID, userId: READER_ID, emoji: '❤️', repostId: REPOST_ID });
+    await settle();
+
+    expect(recorder.recordActivity).toHaveBeenCalledTimes(1);
+    expect(recorder.recordActivity).toHaveBeenCalledWith(READER_ID, 'tool.post_reaction', {
+      postId: POST_ID,
+      repostId: REPOST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
     });

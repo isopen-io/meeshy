@@ -107,11 +107,16 @@ async function guestAuth(req: FastifyRequest): Promise<void> {
   };
 }
 
-async function buildApp(auth: (req: FastifyRequest) => Promise<void> = requiredAuth): Promise<FastifyInstance> {
+async function buildApp(
+  auth: (req: FastifyRequest) => Promise<void> = requiredAuth,
+  postRows?: Readonly<Record<string, Record<string, unknown>>>,
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
     post: {
-      findFirst: jest.fn<any>().mockResolvedValue({ id: POST_ID, ...PUBLIC_ACL }),
+      findFirst: postRows
+        ? jest.fn(({ where }: any) => Promise.resolve(postRows[where.id] ?? null))
+        : jest.fn<any>().mockResolvedValue({ id: POST_ID, ...PUBLIC_ACL }),
       findUnique: jest.fn<any>().mockResolvedValue({
         authorId: 'author-1',
         commentCount: 1,
@@ -248,5 +253,41 @@ describe('POST /posts/:postId/comments — l’invité d’un lien', () => {
     expect(res.statusCode).toBe(401);
     expect(mockAddComment).not.toHaveBeenCalled();
     expect(mockRecordActivity).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #9584 — un commentaire écrit depuis la carte d'une REPUBLICATION SIMPLE
+ * atterrit sur le fil de l'original ; son crédit est AUSSI attribué à la
+ * republication par laquelle il est passé. La route connaît les deux
+ * identifiants : celui du chemin et la cible résolue.
+ */
+describe('POST /posts/:postId/comments — par où le commentaire est passé (#9584)', () => {
+  const REPOST_ID = '507f1f77bcf86cd799439055';
+  const rows = {
+    [REPOST_ID]: { id: REPOST_ID, ...PUBLIC_ACL, type: 'POST', isQuote: false, repostOfId: POST_ID, originalRepostOfId: POST_ID, deletedAt: null },
+    [POST_ID]: { id: POST_ID, ...PUBLIC_ACL, type: 'POST', isQuote: false, repostOfId: null, originalRepostOfId: null, deletedAt: null },
+  };
+
+  it('écrit le commentaire sur l’original et nomme la republication pour l’attribution', async () => {
+    mockAddComment.mockResolvedValue({ id: 'comment-through-repost', content: 'Bravo', authorId: USER_ID, media: [] });
+    const app = await buildApp(requiredAuth, rows);
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${REPOST_ID}/comments`, payload: { content: 'Bravo' } });
+    await app.close();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockAddComment.mock.calls[0]?.[0]).toBe(POST_ID);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text', { postId: POST_ID, repostId: REPOST_ID });
+  });
+
+  it('sur l’original lui-même, ne nomme aucune republication', async () => {
+    mockAddComment.mockResolvedValue({ id: 'comment-direct', content: 'Bravo', authorId: USER_ID, media: [] });
+    const app = await buildApp(requiredAuth, rows);
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Bravo' } });
+    await app.close();
+
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text', { postId: POST_ID });
   });
 });
