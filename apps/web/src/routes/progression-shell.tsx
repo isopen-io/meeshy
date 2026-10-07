@@ -48,10 +48,11 @@ function navigationApi(): NavigationLike | null {
   return navigation !== undefined && typeof navigation.entries === 'function' && navigation.currentEntry !== undefined ? (navigation as NavigationLike) : null;
 }
 
+/** L'adresse d'une entrée, chemin et recherche : `navigation.entries()` ne rend que celles de l'origine courante. */
 const pathOfUrl = (url: string | null): string => {
   if (url === null) return '';
   const parsed = new URL(url, window.location.href);
-  return parsed.origin === window.location.origin ? `${parsed.pathname}${parsed.search}` : '';
+  return `${parsed.pathname}${parsed.search}`;
 };
 
 /** L'historique de l'onglet, tel que l'API Navigation le montre ; `null` là où elle n'existe pas. */
