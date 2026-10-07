@@ -149,9 +149,18 @@ export type EngagementPathFamily = 'comment' | 'reaction';
  * REFUSÉ jusqu'au lendemain (et ne rapporte donc rien) ; en deçà, il rapporte
  * ce que le barème lui accorde, sans autre plafond quotidien — les opérations
  * qu'elles gouvernent n'en ont pas (`capScope: 'none'`), si bien que gestes et
- * points ne peuvent pas diverger. `null` = aucune limite.
+ * points ne peuvent pas diverger.
+ *
+ * Il n'existe PAS de « sans limite » : chaque valeur est un entier de 0 à
+ * `DAILY_GESTURE_LIMIT_CEILING`. Une valeur absente, `null`, négative,
+ * fractionnaire ou au-delà du plafond ne se lit jamais comme une absence de
+ * limite — le parseur refuse le barème (et la passerelle sert alors les
+ * défauts), et `dailyGestureLimit` retombe sur le défaut du code.
  */
-export type EngagementPathCaps = Readonly<Record<EngagementPathFamily, Readonly<Record<EngagementPostPath, number | null>>>>;
+export type EngagementPathCaps = Readonly<Record<EngagementPathFamily, Readonly<Record<EngagementPostPath, number>>>>;
+
+/** Le plafond dur d'une limite quotidienne de gestes, quel que soit le réglage. */
+export const DAILY_GESTURE_LIMIT_CEILING = 1_000;
 
 export type EngagementScale = {
   readonly operations: Readonly<Record<EngagementOperationKey, EngagementOperationRule>>;
@@ -226,9 +235,17 @@ export function gestureFamilyOf(operationKey: EngagementOperationKey): Engagemen
   return GESTURE_FAMILY_OF_OPERATION[operationKey] ?? null;
 }
 
-/** La limite quotidienne d'une famille de gestes sur un chemin — `null` : aucune. */
-export function dailyGestureLimit(scale: EngagementScale, family: EngagementPathFamily, path: EngagementPostPath): number | null {
-  return (scale.pathCaps ?? DEFAULT_PATH_CAPS)[family][path];
+const isGestureLimit = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= DAILY_GESTURE_LIMIT_CEILING;
+
+/**
+ * La limite quotidienne d'une famille de gestes sur un chemin — toujours un
+ * entier borné. Un barème forgé ou partiel (valeur absente, `null`, hors bornes)
+ * retombe sur le défaut du code, jamais sur « sans limite ».
+ */
+export function dailyGestureLimit(scale: EngagementScale, family: EngagementPathFamily, path: EngagementPostPath): number {
+  const configured: unknown = (scale.pathCaps as Record<string, Record<string, unknown> | undefined> | undefined)?.[family]?.[path];
+  return isGestureLimit(configured) ? configured : DEFAULT_PATH_CAPS[family][path];
 }
 
 /** Les défauts fixés par le porteur (2026-09-30) — ce que crédite un barème jamais réglé. */
@@ -380,10 +397,10 @@ function parsePathCaps(value: unknown): EngagementPathCaps | null {
   if (value === undefined) return DEFAULT_PATH_CAPS;
   if (!isRecord(value) || !isRecord(value.comment) || !isRecord(value.reaction)) return null;
   const { comment, reaction } = value;
-  if (![comment.original, comment.repost, reaction.original, reaction.repost].every(isCap)) return null;
+  if (![comment.original, comment.repost, reaction.original, reaction.repost].every(isGestureLimit)) return null;
   return {
-    comment: { original: comment.original as number | null, repost: comment.repost as number | null },
-    reaction: { original: reaction.original as number | null, repost: reaction.repost as number | null },
+    comment: { original: comment.original as number, repost: comment.repost as number },
+    reaction: { original: reaction.original as number, repost: reaction.repost as number },
   };
 }
 
