@@ -137,6 +137,20 @@ extension View {
     }
 }
 
+extension View {
+    /// Pose le portillon de sortie des visionneuses d'après les messages
+    /// PORTEURS de leurs pièces (#9573). Sans porteur connu — une surface hors
+    /// conversation — le portillon de l'hôte reste tel quel.
+    @ViewBuilder
+    func mediaExitGate(carriers: [Message]) -> some View {
+        if carriers.isEmpty {
+            self
+        } else {
+            contentExitGate(MessageExitOffer.mediaExitGate(for: carriers))
+        }
+    }
+}
+
 // MARK: - Wrapper de présentation fullscreen
 
 /// Enveloppe le CONTENU d'une présentation fullscreen (cover/sheet) avec le
@@ -149,6 +163,9 @@ struct SavableMediaFullscreen<Content: View>: View {
     @ViewBuilder let content: (_ requestSave: @escaping () -> Void) -> Content
 
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
+    /// Le portillon de sortie posé par l'hôte (#9573) — second verrou : le
+    /// bouton n'est déjà pas rendu par la visionneuse, la requête ne part pas.
+    @Environment(\.contentExitGate) private var exitGate
 
     var body: some View {
         content(requestSave)
@@ -156,6 +173,7 @@ struct SavableMediaFullscreen<Content: View>: View {
     }
 
     private func requestSave() {
+        guard exitGate.mayLeave(attachment.id) else { return }
         HapticFeedback.light()
         saveCoordinator.save(MediaSaveRequest(
             kind: attachment.kind,

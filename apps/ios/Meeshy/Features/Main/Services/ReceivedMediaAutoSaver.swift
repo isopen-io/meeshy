@@ -12,23 +12,19 @@ private let autoSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-au
 /// (#8307, directive porteur 2026-09-27) — une seule fois par pièce, jamais une
 /// pièce protégée.
 ///
-/// La protection se lit aux deux niveaux qui la déclarent : le MESSAGE
-/// (éphémère, flamme-œil, flou, vue unique, chiffré) et la PIÈCE
-/// (`ComposableAttachment.isProtected`, la garde des menus). Le
-/// flou n'est qu'un masque de rendu : enregistrer la pièce la sortirait EN CLAIR.
+/// Un enregistrement automatique est une SORTIE : la loi de sortie décide
+/// (`Message.exitOffer`, #9573 — éphémère, flamme-œil, vue unique, flou, lus sur
+/// le message ET sur ses pièces). S'y ajoutent le chiffrement du message et la
+/// protection de la PIÈCE (`ComposableAttachment.isProtected`, la garde des
+/// menus). Le flou n'est qu'un masque de rendu : enregistrer la pièce la
+/// sortirait EN CLAIR.
 enum ReceivedMediaAutoSavePolicy {
-
-    static let protectingFlags: MessageEffectFlags = [.ephemeral, .ephemeralAfterRead, .blurred, .viewOnce]
 
     static func eligibleMedia(in message: Message) -> [MessageAttachment] {
         guard !message.isMe,
               message.deletedAt == nil,
               !message.isEncrypted,
-              !message.isBlurred,
-              !message.isViewOnce,
-              message.expiresAt == nil,
-              (message.effects.ephemeralDuration ?? 0) <= 0,
-              message.effects.flags.isDisjoint(with: protectingFlags) else { return [] }
+              message.exitOffer.offers(.save) else { return [] }
         return message.attachments.filter { attachment in
             (attachment.type == .image || attachment.type == .video)
                 && !ComposableAttachment.isProtected(attachment)

@@ -73,6 +73,8 @@ struct FocalRow: View {
         // #7467 — la destruction se VOIT, dans la rangée plate comme dans la
         // bulle : même modificateur, même durée, même repli.
         .ephemeralBurn(isBurning: content.isBurning)
+        // Ce que les visionneuses ouvertes depuis cette rangée laissent sortir (#9573).
+        .contentExitGate(content.exitGate)
         .padding(.top, input.isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0)
         .padding(.vertical, FocalMetrics.Row.paddingVertical)
         .padding(.horizontal, FocalMetrics.Row.paddingHorizontal)

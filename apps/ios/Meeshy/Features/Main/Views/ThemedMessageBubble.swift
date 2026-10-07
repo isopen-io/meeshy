@@ -555,6 +555,9 @@ struct ThemedMessageBubble: View {
             onTapConsentNotice: onTapConsentNotice,
             standalone: standalone
         )
+        // Ce que les visionneuses ouvertes depuis cette bulle peuvent laisser
+        // sortir — enregistrer, partager, copier (#9573, `Message.exitGate`).
+        .contentExitGate(message.exitGate)
         // Cycle de vie (éphémère, flou, profil) et effets : voir le `Group`
         // du `body`, commun à la bulle standard et au sticker.
     }

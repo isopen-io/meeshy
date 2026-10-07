@@ -63,6 +63,23 @@ enum GallerySaveSubject {
     }
 }
 
+/// Monte le menu ⋯ quand le portillon de sortie laisse partir la pièce de la
+/// page ; sinon réserve sa place, pour que le couloir haut ne bouge pas d'une
+/// page à l'autre.
+struct GalleryExitGatedMenu<Menu: View>: View {
+    let contentId: String?
+    @ViewBuilder let menu: () -> Menu
+    @Environment(\.contentExitGate) private var exitGate
+
+    var body: some View {
+        if let contentId, exitGate.mayLeave(contentId) {
+            menu()
+        } else {
+            Color.clear.frame(width: FullscreenChromeMetrics.tapTarget, height: FullscreenChromeMetrics.tapTarget)
+        }
+    }
+}
+
 extension ConversationMediaGalleryView {
 
     /// **Le sujet de cette page**, lu une fois pour les trois. La scène d'abord :
@@ -104,42 +121,56 @@ extension ConversationMediaGalleryView {
     /// ce que la page sait TENIR (`GallerySaveSubject.offersExternalShare`).
     /// Une scène sait s'enregistrer — l'œuvre bakée, sans prélude ni outro —
     /// et ne sait pas encore se partager.
+    ///
+    /// **Et une pièce que la loi de sortie retient n'a pas de menu** (#9573).
+    /// Ses deux verbes sont deux SORTIES — enregistrer, partager hors de
+    /// Meeshy — et l'hôte dit par `contentExitGate` quelles pièces peuvent
+    /// sortir : la photo d'une flamme ou d'une vue unique n'en fait pas partie.
+    /// Le portillon se lit par `GalleryExitGatedMenu`, dans l'environnement,
+    /// parce qu'une extension ne peut pas déclarer `@Environment`.
     @ViewBuilder
     var overflowMenu: some View {
         if let subject = currentSaveSubject {
-            FullscreenMoreMenu(isBusy: saveCoordinator.isProcessing) {
-                Button {
-                    requestSaveCurrent()
-                } label: {
-                    // Trois vues dans le label d'une entrée de menu : titre,
-                    // SOUS-TITRE, glyphe. C'est le seul emplacement où la note
-                    // de marque peut vivre sous son verbe plutôt qu'à côté.
-                    Text(saveVerb)
-                    Text(brandingNote)
-                    Image(systemName: "arrow.down.to.line")
-                }
-                .accessibilityLabel(saveVerb)
-                .accessibilityHint(brandingNote)
-
-                if subject.offersExternalShare {
+            GalleryExitGatedMenu(contentId: currentExitContentId) {
+                FullscreenMoreMenu(isBusy: saveCoordinator.isProcessing) {
                     Button {
-                        shareCurrentOutsideMeeshy()
+                        requestSaveCurrent()
                     } label: {
-                        Label(shareVerb, systemImage: "square.and.arrow.up")
+                        // Trois vues dans le label d'une entrée de menu : titre,
+                        // SOUS-TITRE, glyphe. C'est le seul emplacement où la note
+                        // de marque peut vivre sous son verbe plutôt qu'à côté.
+                        Text(saveVerb)
+                        Text(brandingNote)
+                        Image(systemName: "arrow.down.to.line")
                     }
-                    .accessibilityLabel(shareVerb)
+                    .accessibilityLabel(saveVerb)
+                    .accessibilityHint(brandingNote)
+
+                    if subject.offersExternalShare {
+                        Button {
+                            shareCurrentOutsideMeeshy()
+                        } label: {
+                            Label(shareVerb, systemImage: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel(shareVerb)
+                    }
                 }
+                .disabled(saveCoordinator.isProcessing)
+                .accessibilityLabel(
+                    String(localized: "gallery.menu.more", defaultValue: "Autres actions", bundle: .main))
+                .accessibilityValue(saveStateAccessibilityValue)
+                // Le flux vit DANS la présentation plein écran : une sheet attachée
+                // sous un `fullScreenCover` ne se présente pas (SwiftUI iOS 16).
+                .mediaSaveFlow(saveCoordinator)
             }
-            .disabled(saveCoordinator.isProcessing)
-            .accessibilityLabel(
-                String(localized: "gallery.menu.more", defaultValue: "Autres actions", bundle: .main))
-            .accessibilityValue(saveStateAccessibilityValue)
-            // Le flux vit DANS la présentation plein écran : une sheet attachée
-            // sous un `fullScreenCover` ne se présente pas (SwiftUI iOS 16).
-            .mediaSaveFlow(saveCoordinator)
         } else {
             Color.clear.frame(width: FullscreenChromeMetrics.tapTarget, height: FullscreenChromeMetrics.tapTarget)
         }
+    }
+
+    /// L'identifiant que le portillon juge : celui de la pièce affichée.
+    private var currentExitContentId: String? {
+        currentIndex < allAttachments.count ? allAttachments[currentIndex].id : nil
     }
 
     // MARK: - Les deux transports

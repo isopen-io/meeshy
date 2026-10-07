@@ -286,6 +286,7 @@ nonisolated enum RiverConversationMapping {
                 protection: message.holdsViewOnce ? message.protection().withoutViewOnce : message.protection(),
                 isBurning: message.isBurning,
                 viewOnceChip: message.isViewOnceSealed ? .sealed : (message.isViewOnceOpened ? .opened : nil),
+                offersCopy: message.exitOffer.offers(.copy),
                 isViewOnceRevealed: message.isViewOnceRevealed && message.holdsViewOnce && !message.isViewOnceOpened,
                 protectedTap: protectedTap(of: message),
                 tapAfterReveal: tapAfterReveal(of: message),

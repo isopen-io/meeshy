@@ -1,0 +1,39 @@
+## 2026-10-07 : un contenu qui disparaît n'offre aucune sortie — la loi a son miroir Swift, l'application une seule projection
+**Statut**: Accepté (#9573 — milestone « Un contenu qui disparaît ne sort jamais de Meeshy : ni transfert libre, ni enregistrement, ni capture »). Applique côté iOS la décision gateway `services/gateway/decisions/2026-10-07-un-contenu-qui-disparait-ne-sort-pas-de-meeshy-la-copie-ne-peut-pas-etre-moins-protegee-que-sa-source-9572.md`. L'anti-capture d'écran est le lot suivant (#9574).
+
+**Contexte**: directive porteur du 2026-10-07 (spec `docs/superpowers/specs/2026-10-07-contenus-ephemeres-sortie-et-lecteur-video-design.md` §§ 1 et 3). Relevé sur `dev` :
+1. Cinq prédicats épars décidaient des sorties — `Message.isForwardable` (vue unique seule), `Message.holdsBlur`, `MeeshyMessage.holdsViewOnce`, `ComposableAttachment.isProtected`, `MessageCardSubject.isExportable` — et aucun ne lisait l'éphémère vivant. Une flamme se copiait, s'imageait, s'enregistrait, se partageait et se publiait ; `MessageCardFormatTests` l'affirmait (« une échéance à +60 s s'exporte »).
+2. Les visionneuses n'interrogeaient personne. Le menu ⋯ de la galerie offrait « Enregistrer » et « Partager hors de Meeshy » sur toute pièce — y compris la photo d'une vue unique, ouverte seule dans la même galerie. Les visionneuses du SDK (image, vidéo, document, code) et le plein écran audio portaient leurs propres boutons, sans paramètre pour les retirer.
+3. La rangée rapide offrait « Copier » sur tout message ; la Rivière aussi, hors puce de vue unique.
+4. La feuille de transfert n'envoyait aucune durée, et le refus du serveur s'affichait dans sa phrase française, quelle que soit la langue du lecteur.
+
+**Décision**:
+- **La loi a son miroir dans le SDK** : `ContentExitLaw` (`packages/MeeshySDK/Sources/MeeshySDK/Models/ContentExitLaw.swift`), modèle sans état, jumeau de `contentExitLaw` / `forwardedCopyProtection` (`packages/shared/utils/content-exit-law.ts`). `ContentExitLaw.of(_:)` rend la nature (`ordinary`, `timedFlame`, `afterReadFlame`, `viewOnce`) et les trois verdicts ; `MeeshyMessage.contentExitLaw` la projette sur un message. `ContentExitLawTests` reprend la table TypeScript cas pour cas, sous les mêmes libellés. `contentExitLawOfSource` (l'entrée d'autorisation du serveur) n'a pas de miroir : un client n'autorise rien.
+- **L'application a UNE projection** : `MessageExitOffer` (`apps/ios/Meeshy/Features/Main/Models/Message.swift`), posée par `Message.exitOffer`. Elle compose la loi avec le flou (rien ne sort d'un message flouté, #8009) et le chiffrement (un message chiffré ne se publie pas), et répond `offers(_:)` pour six sorties : transférer, copier, enregistrer, partager, imager, publier. `Message.isForwardable` en est une projection ; `MessageCardSubject.isExportable` consulte la loi ; `ReceivedMediaAutoSavePolicy` et `ComposableAttachment.seedPlan` lisent la projection au lieu de leurs drapeaux.
+
+  | nature | transférer | copier, enregistrer, partager, imager, publier |
+  |---|---|---|
+  | ordinaire | oui | oui |
+  | flamme à durée | oui, durée ≤ source | non |
+  | flamme après lecture, vue unique | non | non |
+
+- **Un bouton interdit n'est pas rendu.** `MessageMenuContext.exits` remplace `isForwardable` ; le résolveur retire copier, imager, enregistrer, composer, transférer et partager selon la projection. La rangée rapide, le balayage, le menu d'édition système, la feuille « Plus » (dialogue « Ce média » compris) et la barre de sélection la lisent aussi. Une sélection qui contient un message non transférable n'a pas d'action Transférer.
+- **Les visionneuses reçoivent un portillon opaque.** `ContentExitGate` (SDK, `open` / `sealed` / `only(ids)`) voyage par l'environnement (`\.contentExitGate`, MeeshyUI). L'hôte le pose depuis la projection — bulle (`ThemedMessageBubble`), rangée Focal (`BubbleContent.exitGate`), galerie et plein écran audio de conversation, hub de médias — et les visionneuses du SDK n'y rendent ni enregistrement, ni partage, ni copie. Le SDK ignore la raison (pureté) ; `only` est fermé par défaut : une pièce dont le porteur est inconnu ne sort pas.
+- **La feuille de transfert offre la durée d'une flamme** : `ForwardDurationRow`, durée de la source présélectionnée, seuls les paliers inférieurs ou égaux, une durée hors palier en tête (`ContentExitLaw.ForwardVerdict.durationChoices`). La valeur part dans `ephemeralDuration`, en ligne comme dans la file hors ligne (`OfflineQueueItem.ephemeralDuration`, rejouée par `OutboxDispatcher`). Un lot est borné par sa plus longue flamme, chaque message restant ramené à la sienne. Les pilules de publication, « Composer » et « Imager la discussion » ne se montent que si la projection l'offre.
+- **Le client refuse avant d'envoyer, et dit pourquoi** : `MessageForwardService` rend l'échec avec sa phrase sans requête ni enfilage ni création de conversation quand la loi refuse. Le refus du serveur est reconnu à sa phrase (`ForwardRefusalReason.server`) et affiché dans la langue du lecteur ; sa clé de dédoublonnage est libérée — un refus ne se rejoue pas.
+- Le verdict `capture` est exposé par `MessageExitOffer.capture` pour #9574.
+
+**Alternatives rejetées**:
+- **Un paramètre `allowsExit` sur chaque visionneuse** : sept signatures à étendre et autant d'hôtes qui peuvent l'oublier, dont trois visionneuses présentées par d'autres visionneuses. L'environnement se pose une fois par hôte et se repose là où une présentation le perdrait.
+- **Retirer les flammes de la galerie**, comme les vues uniques : on doit pouvoir les regarder en grand ; seules leurs sorties disparaissent.
+- **Garder cinq prédicats et leur ajouter l'éphémère** : la table de parité ne garderait qu'un d'eux, et la prochaine nature ou la prochaine surface en oublierait un.
+- **Un portillon ouvert par défaut pour une pièce inconnue** : la photo d'une vue unique ouverte par sa puce n'appartient à aucune liste — c'est exactement la pièce que le menu ⋯ laissait sortir.
+- **Lire la durée dans `expiresAt`** : c'est l'heure interne de destruction (#7451) ; une flamme de trente secondes deviendrait une copie d'une semaine.
+
+**Conséquences**:
+- Une pièce floutée ou à vue unique protège désormais son message ENTIER pour l'enregistrement automatique : sa voisine nette ne rejoint plus l'album (la loi lit le message et ses pièces, la plus restrictive gagne).
+- L'auteur d'une flamme est jugé comme ses lecteurs : il ne l'enregistre ni ne l'image depuis la conversation.
+- Dans le hub de médias, une pièce dont le porteur n'est pas chargé n'a ni enregistrement ni partage tant qu'il ne l'est pas.
+- Le refus du serveur ne porte pas de code machine : sa reconnaissance tient à trois fragments de phrase. Un code côté passerelle la rendrait exacte (issue de suivi).
+- Ce que le système ne permet pas de fermer depuis ce lot : la capture et l'enregistrement d'écran (#9574), la photo de l'écran par un autre appareil, et ce que VoiceOver lit à voix haute.
+- Miroir Kotlin : rien reçu (gel du 2026-09-16) — ni la loi, ni la projection, ni la rangée de durée. Dette consignée, non soldée.

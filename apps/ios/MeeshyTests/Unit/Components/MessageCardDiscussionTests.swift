@@ -46,6 +46,21 @@ final class MessageCardDiscussionTests: XCTestCase {
         XCTAssertEqual(window.map(\.id), ["a", "b"], "ce qui ne se copie pas ne se peint pas")
     }
 
+    /// La loi de sortie (#9573) : une flamme, même vivante, n'entre pas dans
+    /// l'image d'une discussion.
+    func test_window_skipsMessagesThatDisappear_evenAlive() {
+        var timed = Self.message("flamme", "Dans trente secondes", at: 1)
+        timed.effects = MessageEffects(flags: .ephemeral, ephemeralDuration: 30)
+        var afterRead = Self.message("oeil", "Après lecture", at: 2)
+        afterRead.effects = MessageEffects(flags: [.ephemeral, .ephemeralAfterRead])
+        let messages = [Self.message("a", "Salut"), timed, afterRead, Self.message("b", "Ça va ?", at: 3)]
+
+        let window = MessageCardDiscussion.window(of: messages, endingAt: "b", now: Self.now)
+
+        XCTAssertEqual(window.map(\.id), ["a", "b"], "ce qui disparaît ne sort pas en image")
+        XCTAssertTrue(MessageCardDiscussion.window(of: messages, endingAt: "flamme", now: Self.now).map(\.id) == ["a"])
+    }
+
     func test_window_ofAnUnknownMessage_isEmpty() {
         XCTAssertTrue(MessageCardDiscussion.window(of: Self.thread(3), endingAt: "absent", now: Self.now).isEmpty)
     }

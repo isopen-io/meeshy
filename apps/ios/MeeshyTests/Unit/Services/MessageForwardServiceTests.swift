@@ -15,16 +15,22 @@ final class MessageForwardServiceTests: XCTestCase {
 
     private func makeMessage(
         id: String = "6a0ad86a6e21a483b4443d11",
-        content: String = ""
+        content: String = "",
+        effects: MessageEffects = .none
     ) -> Message {
         Message(
             id: id,
             conversationId: sourceConvId,
             senderId: "sender-1",
             content: content,
+            effects: effects,
             createdAt: Date(),
             updatedAt: Date()
         )
+    }
+
+    private func timedFlame(seconds: Int) -> Message {
+        makeMessage(content: "x", effects: MessageEffects(flags: .ephemeral, ephemeralDuration: seconds))
     }
 
     private func makeSUT(
@@ -219,8 +225,145 @@ final class MessageForwardServiceTests: XCTestCase {
         guard case .failed(let reason) = outcome else {
             return XCTFail("expected .failed, got \(outcome)")
         }
-        XCTAssertTrue(reason.contains("vue unique"),
-                      "la raison serveur doit survivre jusqu'à l'affichage — reçu : \(reason)")
+        XCTAssertEqual(reason, ForwardRefusalReason.viewOnce.explanation,
+                       "le refus du serveur s'affiche par la phrase du catalogue, dans la langue du lecteur")
+    }
+
+    func test_forward_serverFailure_thatIsNotARefusal_keepsTheServerMessage() async {
+        let (sut, api, _, _) = makeSUT()
+        api.errorToThrow = APIError.serverError(500, "boom")
+
+        let outcome = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target)
+
+        XCTAssertEqual(outcome, .failed(reason: "boom"))
+    }
+
+    // MARK: - La loi de sortie (#9573)
+
+    func test_serverRefusalSentences_mapToTheirReason() {
+        // Les trois phrases de `describeForwardRefusal` (forwardAdmission.ts).
+        XCTAssertEqual(ForwardRefusalReason.server(message: "Un message à vue unique ne peut pas être transféré"), .viewOnce)
+        XCTAssertEqual(
+            ForwardRefusalReason.server(message: "Un message qui disparaît après lecture ne peut pas être transféré"),
+            .afterRead
+        )
+        XCTAssertEqual(
+            ForwardRefusalReason.server(message: "Le message d’origine n’est plus disponible : rien à transférer"),
+            .sourceUnavailable
+        )
+        XCTAssertNil(ForwardRefusalReason.server(message: "boom"))
+        XCTAssertNil(ForwardRefusalReason.server(message: nil))
+    }
+
+    func test_everyRefusalReason_hasItsOwnNonEmptyExplanation() {
+        let explanations = ForwardRefusalReason.allCases.map(\.explanation)
+        XCTAssertFalse(explanations.contains(where: \.isEmpty))
+        XCTAssertEqual(Set(explanations).count, ForwardRefusalReason.allCases.count)
+    }
+
+    func test_localRefusal_followsTheExitLaw() {
+        XCTAssertNil(ForwardRefusalReason.local(for: makeMessage(content: "x")))
+        XCTAssertNil(ForwardRefusalReason.local(for: timedFlame(seconds: 30)))
+        XCTAssertEqual(ForwardRefusalReason.local(for: makeMessage(effects: MessageEffects(flags: .viewOnce))), .viewOnce)
+        XCTAssertEqual(
+            ForwardRefusalReason.local(for: makeMessage(effects: MessageEffects(flags: [.ephemeral, .ephemeralAfterRead]))),
+            .afterRead
+        )
+        XCTAssertEqual(ForwardRefusalReason.local(for: makeMessage(effects: MessageEffects(flags: .ephemeral))), .afterRead,
+                       "un éphémère sans durée lisible est jugé après lecture")
+        XCTAssertEqual(ForwardRefusalReason.local(for: makeMessage(effects: MessageEffects(flags: .blurred))), .blurred)
+    }
+
+    func test_forward_ordinaryMessage_sendsNoEphemeralDuration() async throws {
+        let (sut, api, _, _) = makeSUT()
+        stubSendSuccess(api, target: target)
+
+        _ = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target, chosenDurationSeconds: 30)
+
+        XCTAssertNil(try postedBody(api)["ephemeralDuration"], "une source ordinaire n'impose aucune durée à sa copie")
+    }
+
+    func test_forward_timedFlame_sendsTheSourceDurationByDefault() async throws {
+        let (sut, api, _, _) = makeSUT()
+        stubSendSuccess(api, target: target)
+
+        let outcome = await sut.forward(message: timedFlame(seconds: 300), sourceConversationId: nil, to: target)
+
+        XCTAssertEqual(outcome, .sent(conversationId: target))
+        XCTAssertEqual(try postedBody(api)["ephemeralDuration"] as? Int, 300)
+    }
+
+    func test_forward_timedFlame_sendsTheChosenDuration_neverMoreThanTheSource() async throws {
+        let (sut, api, _, _) = makeSUT()
+        stubSendSuccess(api, target: target)
+        stubSendSuccess(api, target: otherTarget)
+
+        _ = await sut.forward(message: timedFlame(seconds: 300), sourceConversationId: nil, to: target, chosenDurationSeconds: 30)
+        _ = await sut.forward(message: timedFlame(seconds: 300), sourceConversationId: nil, to: otherTarget, chosenDurationSeconds: 3600)
+
+        XCTAssertEqual(try postedBody(api, at: 0)["ephemeralDuration"] as? Int, 30)
+        XCTAssertEqual(try postedBody(api, at: 1)["ephemeralDuration"] as? Int, 300)
+    }
+
+    func test_forward_timedFlame_offline_queuesTheDuration() async throws {
+        let (sut, _, queue, _) = makeSUT(online: false)
+
+        let outcome = await sut.forward(message: timedFlame(seconds: 300), sourceConversationId: nil, to: target, chosenDurationSeconds: 60)
+
+        XCTAssertEqual(outcome, .queuedOffline(conversationId: target))
+        let queued = await queue.enqueuedItems
+        let item = try XCTUnwrap(queued.first)
+        XCTAssertEqual(item.ephemeralDuration, 60)
+        XCTAssertEqual(item.replayProtection.ephemeralDurationSeconds, 60, "le rejeu de l'outbox renvoie la durée choisie")
+    }
+
+    func test_forward_ordinaryMessage_offline_queuesNoProtection() async throws {
+        let (sut, _, queue, _) = makeSUT(online: false)
+
+        _ = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target)
+
+        let queued = await queue.enqueuedItems
+        let item = try XCTUnwrap(queued.first)
+        XCTAssertNil(item.ephemeralDuration)
+        XCTAssertTrue(item.replayProtection.isEmpty)
+    }
+
+    func test_forward_whatTheLawRefuses_neverLeaves_onlineOrOffline() async {
+        let refused: [(Message, ForwardRefusalReason)] = [
+            (makeMessage(content: "x", effects: MessageEffects(flags: .viewOnce)), .viewOnce),
+            (makeMessage(content: "x", effects: MessageEffects(flags: [.ephemeral, .ephemeralAfterRead])), .afterRead),
+            (makeMessage(content: "x", effects: MessageEffects(flags: [.ephemeral, .ephemeralAfterRead], ephemeralDuration: 30)), .afterRead),
+            (makeMessage(content: "x", effects: MessageEffects(flags: .blurred)), .blurred),
+        ]
+        for online in [true, false] {
+            for (message, reason) in refused {
+                let (sut, api, queue, creator) = makeSUT(online: online)
+
+                let direct = await sut.forward(message: message, sourceConversationId: nil, to: target)
+                let viaContact = await sut.forward(message: message, sourceConversationId: nil, to: makeContactTarget())
+
+                XCTAssertEqual(direct, .failed(reason: reason.explanation))
+                XCTAssertEqual(viaContact, .failed(reason: reason.explanation))
+                XCTAssertEqual(api.postCount, 0, "aucune requête ne part pour un transfert que la loi refuse")
+                XCTAssertEqual(creator.createCallCount, 0, "aucune conversation n'est créée pour un transfert refusé")
+                let queued = await queue.enqueuedItems
+                XCTAssertTrue(queued.isEmpty, "rien ne s'enfile pour un transfert que la loi refuse")
+            }
+        }
+    }
+
+    func test_forward_afterServerRefusal_releasesTheDedupKey() async throws {
+        let (sut, api, _, _) = makeSUT()
+        api.errorToThrow = APIError.serverError(400, "Un message qui disparaît après lecture ne peut pas être transféré")
+        _ = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target)
+        let refusedCid = try postedBody(api, at: 0)["clientMessageId"] as? String
+
+        api.errorToThrow = nil
+        stubSendSuccess(api, target: target)
+        _ = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target)
+
+        XCTAssertNotEqual(try postedBody(api, at: 1)["clientMessageId"] as? String, refusedCid,
+                          "un refus n'est pas un échec à rejouer : sa clé ne survit pas")
     }
 
     // MARK: - Résolution de cible (ForwardTarget)

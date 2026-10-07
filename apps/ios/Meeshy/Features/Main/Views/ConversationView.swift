@@ -848,7 +848,7 @@ struct ConversationView: View {
                     // par un grisé.
                     stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
                     showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-                    isForwardable: msg.isForwardable, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: msg).isEmpty
+                    exits: msg.exitOffer, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: msg).isEmpty
                 )
                 MessageMoreSheet(
                     message: msg,

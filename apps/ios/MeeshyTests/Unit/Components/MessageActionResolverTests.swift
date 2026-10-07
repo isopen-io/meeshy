@@ -12,7 +12,7 @@ final class MessageActionResolverTests: XCTestCase {
         saveableAttachmentCount: Int = 0,
         canComposeMedia: Bool = false,
         showReadReceipts: Bool = true,
-        isForwardable: Bool = true
+        exits: MessageExitOffer = .unrestricted
     ) -> MessageMenuContext {
         MessageMenuContext(isMine: isMine, canEdit: canEdit, canDelete: canDelete,
             hasText: hasText, hasMedia: hasMedia, hasTimebasedMedia: hasTimebasedMedia,
@@ -21,8 +21,11 @@ final class MessageActionResolverTests: XCTestCase {
             saveableAttachmentCount: saveableAttachmentCount,
             canComposeMedia: canComposeMedia,
             showReadReceipts: showReadReceipts,
-            isForwardable: isForwardable)
+            exits: exits)
     }
+
+    private let afterRead = MessageExitOffer(law: .afterReadFlame, holdsBlur: false, isEncrypted: false)
+    private let timedFlame = MessageExitOffer(law: .timedFlame(seconds: 30), holdsBlur: false, isEncrypted: false)
 
     private func message(isViewOnce: Bool) -> Message {
         var msg = Message(
@@ -189,8 +192,8 @@ final class MessageActionResolverTests: XCTestCase {
             message: msg(attachments: [piece("image/jpeg"), piece("video/mp4")])))
     }
 
-    /// **Une VUE UNIQUE ne se compose pas** — clause O13, lue par le prédicat
-    /// qui l'énonce déjà une fois (`Message.isForwardable`).
+    /// **Une VUE UNIQUE ne se compose pas** — clause O13, lue sur la loi de
+    /// sortie (`Message.exitOffer`), qui l'énonce une fois.
     func test_offers_viewOnceMessage_isRefused() {
         XCTAssertFalse(ComposableAttachment.offers(
             message: msg(attachments: [piece("image/jpeg")], isViewOnce: true)))
@@ -198,8 +201,8 @@ final class MessageActionResolverTests: XCTestCase {
 
     /// **La protection se lit aux DEUX niveaux qui la déclarent.**
     ///
-    /// `Message.isForwardable` ne dit que la vue unique du MESSAGE. Le dépôt
-    /// déclare la protection une seconde fois sur la PIÈCE JOINTE
+    /// La loi de sortie juge la disparition. Le dépôt déclare une autre
+    /// protection sur la PIÈCE JOINTE
     /// (`MeeshyMessageAttachment.isViewOnce` / `.isBlurred`), et cinq gardes de
     /// production la lisent déjà sous ce nom — `attachmentIsProtected`. Sans ce
     /// second niveau, une photo FLOUTÉE offrait « Composer », et la porte
@@ -222,7 +225,7 @@ final class MessageActionResolverTests: XCTestCase {
 
     /// Le MESSAGE flouté, lui aussi : `BubbleContentBuilder` le lit et le rend
     /// masqué, et « Composer » n'a aucune raison d'être la seule surface qui
-    /// l'ignore. La vue unique passe déjà par `isForwardable` ; le flou n'avait
+    /// l'ignore. La vue unique passe déjà par la loi de sortie ; le flou n'avait
     /// AUCUN lecteur dans les trois portes de « Composer ».
     func test_offers_blurredMessage_isRefused() {
         XCTAssertFalse(ComposableAttachment.offers(
@@ -342,27 +345,34 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertEqual(Array(items.prefix(3)), [.reply, .forward, .thread])
     }
 
-    // Le serveur refuse le transfert d'une vue unique (`forwardAdmission`,
-    // `view-once-not-forwardable`) — offrir l'action condamnait l'utilisateur
-    // à un échec muet. Spec 2026-08-19, Volet A.2.
+    // Le serveur refuse le transfert d'une vue unique et d'une flamme après
+    // lecture (`forwardAdmission`) — offrir l'action condamnait l'utilisateur à
+    // un échec. Spec 2026-08-19, Volet A.2 ; loi de sortie #9573.
     func test_moreSections_notForwardable_omitsForward() {
-        let items = actionItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true, isForwardable: false)))
+        let items = actionItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true, exits: afterRead)))
         XCTAssertFalse(items.contains(.forward),
-                       "Une vue unique n'offre pas un transfert que le serveur refuse")
+                       "Une flamme après lecture n'offre pas un transfert que le serveur refuse")
         XCTAssertEqual(Array(items.prefix(2)), [.reply, .thread])
     }
 
-    func test_moreSections_notForwardable_keepsEveryOtherAction() {
-        let normal = actionItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true)))
-        let viewOnce = actionItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true, isForwardable: false)))
-        XCTAssertEqual(viewOnce, normal.filter { $0 != .forward })
+    /// Une flamme après lecture ne perd QUE ses sorties : répondre, discussion,
+    /// épingler, favori, supprimer restent.
+    func test_moreSections_afterReadFlame_losesOnlyItsExits() {
+        let normal = actionItems(MessageActionResolver.moreSections(ctx(hasText: true, hasMedia: true, canDelete: true)))
+        let flame = actionItems(MessageActionResolver.moreSections(ctx(hasText: true, hasMedia: true, canDelete: true, exits: afterRead)))
+        XCTAssertEqual(flame, normal.filter { ![.forward, .copy, .share, .imager].contains($0) })
     }
 
-    // MARK: - Prédicat de transférabilité (site d'énonciation UNIQUE)
+    /// Une flamme à durée garde le transfert, et lui seul.
+    func test_moreSections_timedFlame_keepsForwardOnly() {
+        let normal = actionItems(MessageActionResolver.moreSections(ctx(hasText: true, hasMedia: true, canDelete: true)))
+        let flame = actionItems(MessageActionResolver.moreSections(ctx(hasText: true, hasMedia: true, canDelete: true, exits: timedFlame)))
+        XCTAssertEqual(flame, normal.filter { ![.copy, .share, .imager].contains($0) })
+        XCTAssertTrue(flame.contains(.forward))
+    }
 
-    /// La règle « vue unique ⇒ pas de transfert » vivait ré-encodée en six
-    /// points d'UI. Elle se nomme désormais une fois, sur le message ; le
-    /// résolveur n'en reçoit que le verdict.
+    // MARK: - Prédicat de transférabilité (projection de la loi de sortie)
+
     func test_isForwardable_viewOnce_isFalse() {
         XCTAssertFalse(message(isViewOnce: true).isForwardable,
                        "Le serveur refuse le transfert d'une vue unique — l'UI ne doit pas l'offrir")
@@ -376,7 +386,7 @@ final class MessageActionResolverTests: XCTestCase {
     /// de la règle entre le message et le menu.
     func test_moreSections_viewOnceMessage_omitsForward_endToEnd() {
         let items = actionItems(MessageActionResolver.moreSections(
-            ctx(hasText: true, isForwardable: message(isViewOnce: true).isForwardable)
+            ctx(hasText: true, exits: message(isViewOnce: true).exitOffer)
         ))
         XCTAssertFalse(items.contains(.forward))
     }
@@ -565,5 +575,297 @@ final class MessageActionResolverTests: XCTestCase {
         let message = msg(attachments: [piece("image/jpeg")], content: "x")
         XCTAssertEqual(ComposableAttachment.target(in: message)?.id,
                        ComposableAttachment.seedPlan(in: message)?.media?.id)
+    }
+}
+
+// MARK: - La loi de sortie, projetée sur l'application (#9573)
+
+/// **La matrice nature × sortie × surface.** Chaque case a son témoin : ce que
+/// `MessageExitOffer` offre, puis ce que chaque surface qui la lit rend — menu
+/// d'appui long, feuille « Plus », sélection multiple, feuille de transfert,
+/// visionneuses, « Composer », enregistrement automatique.
+@MainActor
+final class MessageExitOfferTests: XCTestCase {
+
+    private enum Nature: CaseIterable {
+        case ordinary, timedFlame, afterReadFlame, viewOnce
+    }
+
+    private func photo(_ id: String = "p1", isViewOnce: Bool = false, isBlurred: Bool = false,
+                       isEncrypted: Bool = false, effectFlags: UInt32? = nil) -> MessageAttachment {
+        MeeshyMessageAttachment(id: id, mimeType: "image/jpeg", fileUrl: "https://cdn.example/\(id).jpg",
+                                isViewOnce: isViewOnce, isBlurred: isBlurred, effectFlags: effectFlags,
+                                isEncrypted: isEncrypted)
+    }
+
+    private func message(_ id: String = "m1", effects: MessageEffects = .none, expiresAt: Date? = nil,
+                         attachments: [MessageAttachment] = [], isEncrypted: Bool = false,
+                         isMe: Bool = false) -> Message {
+        MeeshyMessage(id: id, conversationId: "c1", senderId: "u2", content: "secret",
+                      expiresAt: expiresAt, effects: effects, isEncrypted: isEncrypted,
+                      attachments: attachments, isMe: isMe)
+    }
+
+    private func message(of nature: Nature, id: String = "m1", attachments: [MessageAttachment] = []) -> Message {
+        switch nature {
+        case .ordinary:
+            return message(id, attachments: attachments)
+        case .timedFlame:
+            return message(id, effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 300), attachments: attachments)
+        case .afterReadFlame:
+            return message(id, effects: MessageEffects(flags: [.ephemeral, .ephemeralAfterRead]), attachments: attachments)
+        case .viewOnce:
+            return message(id, effects: MessageEffects(flags: .viewOnce), attachments: attachments)
+        }
+    }
+
+    private func offered(_ offer: MessageExitOffer) -> Set<MessageExit> {
+        Set(MessageExit.allCases.filter(offer.offers))
+    }
+
+    // MARK: - La matrice nature × sortie
+
+    func test_matrix_ordinary_offersEveryExit() {
+        XCTAssertEqual(offered(message(of: .ordinary).exitOffer), Set(MessageExit.allCases))
+    }
+
+    func test_matrix_timedFlame_offersForwardOnly() {
+        XCTAssertEqual(offered(message(of: .timedFlame).exitOffer), [.forward])
+    }
+
+    func test_matrix_afterReadFlame_offersNothing() {
+        XCTAssertEqual(offered(message(of: .afterReadFlame).exitOffer), [])
+    }
+
+    func test_matrix_viewOnce_offersNothing() {
+        XCTAssertEqual(offered(message(of: .viewOnce).exitOffer), [])
+    }
+
+    func test_matrix_theNatureIsTheOneTheLawReads() {
+        XCTAssertEqual(message(of: .ordinary).exitOffer.nature, .ordinary)
+        XCTAssertEqual(message(of: .timedFlame).exitOffer.nature, .timedFlame)
+        XCTAssertEqual(message(of: .afterReadFlame).exitOffer.nature, .afterReadFlame)
+        XCTAssertEqual(message(of: .viewOnce).exitOffer.nature, .viewOnce)
+    }
+
+    /// Fermé par défaut : un éphémère déclaré sans durée lisible est jugé
+    /// « après lecture » — `expiresAt` est l'heure interne de destruction.
+    func test_matrix_ephemeralWithoutReadableDuration_offersNothing() {
+        XCTAssertEqual(offered(message(effects: MessageEffects(flags: .ephemeral)).exitOffer), [])
+        XCTAssertEqual(offered(message(expiresAt: Date().addingTimeInterval(3600)).exitOffer), [])
+    }
+
+    /// La copie transférée d'une flamme porte durée ET après lecture : elle ne
+    /// se retransfère pas.
+    func test_matrix_forwardedCopy_isNotForwardableAgain() {
+        let copy = message(effects: MessageEffects(flags: [.ephemeral, .ephemeralAfterRead], ephemeralDuration: 30))
+        XCTAssertEqual(offered(copy.exitOffer), [])
+    }
+
+    /// La plus restrictive gagne, pièce comprise.
+    func test_matrix_theMostRestrictivePieceWins() {
+        XCTAssertEqual(offered(message(attachments: [photo(), photo("p2", isViewOnce: true)]).exitOffer), [])
+        let afterReadBit = MessageEffectFlags.ephemeralAfterRead.rawValue
+        XCTAssertEqual(offered(message(of: .timedFlame, attachments: [photo(effectFlags: afterReadBit)]).exitOffer), [])
+    }
+
+    /// Le flou et le chiffrement gardent leurs restrictions, composées avec la loi.
+    func test_matrix_blurAndEncryption_composeWithTheLaw() {
+        XCTAssertEqual(offered(message(effects: MessageEffects(flags: .blurred)).exitOffer), [],
+                       "un message flouté ne laisse rien sortir (#8009)")
+        XCTAssertEqual(offered(message(attachments: [photo(isBlurred: true)]).exitOffer), [])
+        XCTAssertEqual(offered(message(isEncrypted: true).exitOffer), Set(MessageExit.allCases).subtracting([.publish]),
+                       "un message chiffré ne se publie pas")
+        XCTAssertEqual(offered(message(attachments: [photo(isEncrypted: true)]).exitOffer),
+                       Set(MessageExit.allCases).subtracting([.publish]))
+    }
+
+    /// Le verdict de capture voyage tel que la loi le rend (#9574 le consomme).
+    func test_capture_followsTheLaw() {
+        XCTAssertEqual(message(of: .ordinary).exitOffer.capture, .free)
+        for nature in [Nature.timedFlame, .afterReadFlame, .viewOnce] {
+            XCTAssertEqual(message(of: nature).exitOffer.capture, .blocked)
+        }
+    }
+
+    // MARK: - Menu d'appui long et feuille « Plus »
+
+    private func context(_ message: Message) -> MessageMenuContext {
+        MessageMenuContext(isMine: false, canEdit: false, canDelete: true, hasText: true, hasMedia: true,
+                           hasTimebasedMedia: false, isPinned: false, isStarred: false, isEdited: false,
+                           hasEditRevisions: false, saveableAttachmentCount: 1, canComposeMedia: true,
+                           exits: message.exitOffer, isViewOnce: message.holdsViewOnce, isBlurred: message.holdsBlur,
+                           hasDefaultExportFormat: true, hasPaintableMedia: true)
+    }
+
+    private let exitActions: Set<PrimaryAction> = [.copy, .exportImage, .exportQuick, .saveMedia, .compose]
+    private let exitItems: Set<MoreItem> = [.forward, .copy, .share, .imager]
+
+    private func primaryExits(_ message: Message) -> Set<PrimaryAction> {
+        Set(MessageActionResolver.primaryActions(context(message))).intersection(exitActions)
+    }
+
+    private func moreExits(_ message: Message) -> Set<MoreItem> {
+        let items = MessageActionResolver.moreSections(context(message)).flatMap { section -> [MoreItem] in
+            if case .actions(let items) = section { return items }
+            return []
+        }
+        return Set(items).intersection(exitItems)
+    }
+
+    func test_menus_ordinary_renderEveryExit() {
+        let ordinary = message(of: .ordinary, attachments: [photo()])
+        XCTAssertEqual(primaryExits(ordinary), exitActions)
+        XCTAssertEqual(moreExits(ordinary), exitItems)
+    }
+
+    func test_menus_timedFlame_renderForwardOnly() {
+        let flame = message(of: .timedFlame, attachments: [photo()])
+        XCTAssertEqual(primaryExits(flame), [])
+        XCTAssertEqual(moreExits(flame), [.forward])
+    }
+
+    func test_menus_afterReadFlame_renderNoExit() {
+        let flame = message(of: .afterReadFlame, attachments: [photo()])
+        XCTAssertEqual(primaryExits(flame), [])
+        XCTAssertEqual(moreExits(flame), [])
+    }
+
+    func test_menus_viewOnce_renderNoExit() {
+        let once = message(of: .viewOnce, attachments: [photo()])
+        XCTAssertEqual(primaryExits(once), [])
+        XCTAssertEqual(moreExits(once), [])
+    }
+
+    /// Ce qui n'est pas une sortie reste : traduire, sélectionner, répondre.
+    func test_menus_flame_keepsWhatIsNotAnExit() {
+        let flame = message(of: .afterReadFlame, attachments: [photo()])
+        let primary = MessageActionResolver.primaryActions(context(flame))
+        XCTAssertTrue(primary.contains(.translate))
+        XCTAssertTrue(primary.contains(.select))
+        XCTAssertEqual(primary.last, .more)
+    }
+
+    // MARK: - « Composer » et publication
+
+    func test_compose_isOfferedOnlyOnAnOrdinaryMessage() {
+        XCTAssertTrue(ComposableAttachment.offers(message: message(of: .ordinary, attachments: [photo()])))
+        for nature in [Nature.timedFlame, .afterReadFlame, .viewOnce] {
+            XCTAssertFalse(ComposableAttachment.offers(message: message(of: nature, attachments: [photo()])),
+                           "\(nature) : publier ce qui disparaît le ferait sortir de Meeshy")
+        }
+    }
+
+    // MARK: - Sélection multiple
+
+    func test_selection_offersForward_onlyWhenEveryMessageForwards() {
+        let ordinary = message(of: .ordinary, id: "a")
+        let timed = message(of: .timedFlame, id: "b")
+        XCTAssertTrue(MessageExitOffer.selectionOffersForward([]))
+        XCTAssertTrue(MessageExitOffer.selectionOffersForward([ordinary, timed]))
+        for nature in [Nature.afterReadFlame, .viewOnce] {
+            XCTAssertFalse(MessageExitOffer.selectionOffersForward([ordinary, message(of: nature, id: "c"), timed]),
+                           "\(nature) : un seul message non transférable retire l'action")
+        }
+        XCTAssertFalse(MessageExitOffer.selectionOffersForward([ordinary, message("d", effects: MessageEffects(flags: .blurred))]))
+    }
+
+    // MARK: - Feuille de transfert
+
+    func test_forwardSheet_ordinary_hasNoDurationRow_andPublishes() {
+        let offer = ForwardSheetOffer(message: message(of: .ordinary))
+        XCTAssertTrue(offer.durationChoices.isEmpty)
+        XCTAssertNil(offer.selectedDuration(chosen: nil))
+        XCTAssertTrue(offer.publishes)
+        XCTAssertTrue(offer.imaginesDiscussion)
+    }
+
+    func test_forwardSheet_timedFlame_offersTiersUpToTheSource_preselected_andNothingElse() {
+        let offer = ForwardSheetOffer(message: message(of: .timedFlame))
+        XCTAssertEqual(offer.durationChoices.map(\.seconds), [15, 30, 60, 300])
+        XCTAssertEqual(offer.selectedDuration(chosen: nil), 300, "la durée de la source est présélectionnée")
+        XCTAssertEqual(offer.selectedDuration(chosen: 30), 30)
+        XCTAssertEqual(offer.selectedDuration(chosen: 3600), 300, "un palier au-dessus de la source n'est pas un choix")
+        XCTAssertFalse(offer.publishes)
+        XCTAssertFalse(offer.imaginesDiscussion)
+    }
+
+    func test_forwardSheet_offTierSource_showsItsDurationFirst() {
+        let flame = message(effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 45))
+        let offer = ForwardSheetOffer(message: flame)
+        XCTAssertEqual(offer.durationChoices.map(\.seconds), [45, 15, 30])
+        XCTAssertEqual(offer.selectedDuration(chosen: nil), 45)
+    }
+
+    func test_forwardSheet_batch_isBoundedByItsLongestFlame() {
+        let short = message("a", effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 30))
+        let long = message("b", effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 300))
+        let offer = ForwardSheetOffer(message: short, additionalMessages: [message(of: .ordinary, id: "c"), long])
+        XCTAssertEqual(offer.durationChoices.map(\.seconds), [15, 30, 60, 300])
+        XCTAssertFalse(offer.publishes, "le message désigné est une flamme")
+    }
+
+    func test_forwardSheet_refusedBatch_hasNoDurationRow() {
+        let offer = ForwardSheetOffer(message: message(of: .timedFlame, id: "a"),
+                                      additionalMessages: [message(of: .viewOnce, id: "b")])
+        XCTAssertFalse(offer.forward.isAllowed)
+        XCTAssertTrue(offer.durationChoices.isEmpty)
+    }
+
+    func test_durationRow_speaksAWholeDuration() {
+        XCTAssertFalse(ForwardDurationRow.spokenDuration(seconds: 30).isEmpty)
+        XCTAssertNotEqual(ForwardDurationRow.spokenDuration(seconds: 30), ForwardDurationRow.spokenDuration(seconds: 300))
+    }
+
+    // MARK: - Visionneuses
+
+    func test_viewerGate_letsOutOnlyThePiecesOfAMessageThatSaves() {
+        let gate = MessageExitOffer.mediaExitGate(for: [
+            message(of: .ordinary, id: "a", attachments: [photo("ordinaire")]),
+            message(of: .timedFlame, id: "b", attachments: [photo("flamme")]),
+            message(of: .afterReadFlame, id: "c", attachments: [photo("apres-lecture")]),
+            message(of: .viewOnce, id: "d", attachments: [photo("vue-unique")]),
+            message("e", attachments: [photo("floutee", isBlurred: true)]),
+        ])
+        XCTAssertTrue(gate.mayLeave("ordinaire"))
+        for sealed in ["flamme", "apres-lecture", "vue-unique", "floutee", "inconnue"] {
+            XCTAssertFalse(gate.mayLeave(sealed), "\(sealed) : ni Enregistrer ni Partager dans la visionneuse")
+        }
+    }
+
+    func test_messageGate_isOpenOnlyForAMessageThatSaves() {
+        XCTAssertEqual(message(of: .ordinary).exitGate, .open)
+        for nature in [Nature.timedFlame, .afterReadFlame, .viewOnce] {
+            XCTAssertEqual(message(of: nature).exitGate, .sealed)
+        }
+        XCTAssertEqual(message(effects: MessageEffects(flags: .blurred)).exitGate, .sealed)
+    }
+
+    func test_bubbleContent_carriesTheGateOfItsMessage() {
+        // Le portillon du modèle de bulle est celui du message : c'est lui que
+        // la rangée Focal pose sur ses visionneuses.
+        func gate(_ message: Message) -> ContentExitGate {
+            BubbleContent(message: message, translations: [], preferredTranslation: nil, currentUserId: "u1").exitGate
+        }
+        XCTAssertEqual(gate(message(of: .ordinary)), .open)
+        XCTAssertEqual(gate(message(of: .timedFlame)), .sealed)
+        XCTAssertEqual(gate(message(of: .viewOnce)), .sealed)
+    }
+
+    // MARK: - Enregistrement automatique
+
+    func test_autoSave_neverTakesAContentThatDisappears() {
+        XCTAssertEqual(ReceivedMediaAutoSavePolicy.eligibleMedia(in: message(of: .ordinary, attachments: [photo()])).map(\.id), ["p1"])
+        for nature in [Nature.timedFlame, .afterReadFlame, .viewOnce] {
+            XCTAssertTrue(ReceivedMediaAutoSavePolicy.eligibleMedia(in: message(of: nature, attachments: [photo()])).isEmpty,
+                          "\(nature) : l'album ne garde pas ce qui disparaît")
+        }
+    }
+
+    // MARK: - Rivière
+
+    func test_river_copyFollowsTheOffer() {
+        XCTAssertTrue(message(of: .ordinary).exitOffer.offers(.copy))
+        XCTAssertFalse(message(of: .timedFlame).exitOffer.offers(.copy))
     }
 }
