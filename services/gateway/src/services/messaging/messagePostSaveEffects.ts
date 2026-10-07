@@ -75,6 +75,8 @@ export interface PostSaveMessage extends TranslatableMessage {
    * lisible (#8959 `tool.quote_reply` ne crédite pas).
    */
   readonly quoted?: { readonly authorUserId: string | null } | null;
+  /** La story citée (#9635 « répondre à une story »). */
+  readonly storyReplyToId?: string | null;
 }
 
 /**
@@ -165,7 +167,11 @@ export interface PostSaveEngagementService {
     readonly replyToId: string | null;
     readonly quotedAuthorUserId: string | null;
     readonly originalLanguage: string;
+    readonly content?: string;
+    readonly storyReplyToId?: string | null;
   }): Promise<void>;
+  /** Un fait de jeu posé au geste (#9635) — ici, la conversation que ce message démarre. */
+  recordGameSignal?(userId: string, signal: 'conversation-started', options?: { readonly key?: string }): Promise<void>;
 }
 
 /**
@@ -328,13 +334,20 @@ export function runMessagePostSaveEffects(params: {
   // pour TOUS les messages, pas seulement le premier. Ne concerne que les
   // DM créés vides (Prisme design doc 2026-08-04) ; `count` à 0 signifie
   // "pas le premier message" ou "conversation non concernée" — no-op.
+  //
+  // La bascule GAGNÉE est le point unique où une conversation créée vide est
+  // DÉMARRÉE (#9635 « démarrer une conversation ») : son auteur en reçoit le
+  // fait de jeu, une fois, quel que soit le transport d'envoi.
   void Promise.resolve()
-    .then(() =>
-      prisma.conversation.updateMany({
+    .then(async () => {
+      const flipped = await prisma.conversation.updateMany({
         where: { id: message.conversationId, firstMessageSentAt: null },
         data: { firstMessageSentAt: new Date() },
-      })
-    )
+      });
+      if (flipped.count === 1 && message.senderUserId && engagementService?.recordGameSignal) {
+        await engagementService.recordGameSignal(message.senderUserId, 'conversation-started', { key: message.conversationId });
+      }
+    })
     .catch(report('firstMessageSentAt'));
 
   if (translationService) {
@@ -489,6 +502,8 @@ export function runMessagePostSaveEffects(params: {
           replyToId: message.replyToId ?? null,
           quotedAuthorUserId: message.quoted?.authorUserId ?? null,
           originalLanguage,
+          content: message.content,
+          storyReplyToId: message.storyReplyToId ?? null,
         })
       )
       .catch(report('gameSignals'));

@@ -59,32 +59,91 @@ public struct MissionSignal: RawRepresentable, Codable, Sendable, Hashable {
         MissionSignal("axis:\(key.rawValue)")
     }
 
-    /// Les deux faits hors axe ne nourrissent plus que le DUO de la semaine (#9634).
+    /// Une opération créditée hors des axes (`tool.post_reaction`, `social.email_invite`…).
+    public static func operation(_ key: String) -> MissionSignal {
+        MissionSignal("axis:\(key)")
+    }
+
     public static let replyDistinctConversations = MissionSignal("reply-distinct-conversations")
     public static let foreignLanguageMessage = MissionSignal("foreign-language-message")
+    public static let repliesReceivedDistinctAuthors = MissionSignal("replies-received-distinct-authors")
+    public static let reelPublished = MissionSignal("reel-published")
+    public static let conversationStarted = MissionSignal("conversation-started")
+    public static let storyReply = MissionSignal("story-reply")
+    public static let commentOthersPost = MissionSignal("comment-others-post")
+    public static let commentStrangerPublicPost = MissionSignal("comment-stranger-public-post")
+    public static let crossLanguageExchange = MissionSignal("cross-language-exchange")
+    public static let replyInTheirLanguage = MissionSignal("reply-in-their-language")
 
-    /// Tout ce que la passerelle observe : chaque axe d'engagement, puis les deux faits hors axe.
-    public static let observed: [MissionSignal] =
-        EngagementAxisKey.allCases.map { axis($0) } + [replyDistinctConversations, foreignLanguageMessage]
+    /// Les faits que la passerelle pose au point unique du geste (#9635).
+    public static let facts: [MissionSignal] = [
+        replyDistinctConversations, foreignLanguageMessage, repliesReceivedDistinctAuthors, reelPublished,
+        conversationStarted, storyReply, commentOthersPost, commentStrangerPublicPost, crossLanguageExchange,
+        replyInTheirLanguage,
+    ]
+
+    /// Ce que la passerelle observe et qu'un duo peut attendre : chaque axe d'engagement, puis les faits.
+    public static let observed: [MissionSignal] = EngagementAxisKey.allCases.map { axis($0) } + facts
+}
+
+/// Les quatre buts du porteur (#9635).
+public enum MissionGoal: String, CaseIterable, Sendable, Equatable {
+    case animate
+    case courage
+    case languages
+    case reach
+}
+
+/// Ce qu'un défi peut exiger du profil.
+public enum MissionCapability: String, CaseIterable, Sendable, Equatable {
+    case contacts
+    case activeConversations = "active-conversations"
+    case communities
+    case multilingual
 }
 
 public struct MissionTemplate: Sendable, Equatable {
     public let key: String
     public let difficulty: MissionDifficulty
+    public let goal: MissionGoal
     public let signal: MissionSignal
+    /// L'objectif quand le profil n'est pas connu, avant la bande de niveau.
     public let baseTarget: Int
-    public let basePoints: Int
-    /// Mission du Prisme (langues, traduction) : au moins un jour sur trois.
+    public let minTarget: Int
+    public let maxTarget: Int
+    /// Points par unité d'objectif, en plus de la base de la difficulté.
+    public let unitPoints: Int
+    /// Gloire à l'achèvement ; l'Or en porte au moins 40.
+    public let glory: Int
+    /// Défi de langue : le jour du Prisme en garantit un.
     public let prism: Bool
+    public let weight: Int
+    public let requires: [MissionCapability]
 
-    public init(key: String, difficulty: MissionDifficulty, signal: MissionSignal, baseTarget: Int,
-                basePoints: Int, prism: Bool) {
+    public init(key: String, difficulty: MissionDifficulty, goal: MissionGoal, signal: MissionSignal, baseTarget: Int,
+                minTarget: Int, maxTarget: Int, unitPoints: Int, glory: Int = 0, prism: Bool = false, weight: Int = 4,
+                requires: [MissionCapability] = []) {
         self.key = key
         self.difficulty = difficulty
+        self.goal = goal
         self.signal = signal
         self.baseTarget = baseTarget
-        self.basePoints = basePoints
+        self.minTarget = minTarget
+        self.maxTarget = maxTarget
+        self.unitPoints = unitPoints
+        self.glory = glory
         self.prism = prism
+        self.weight = weight
+        self.requires = requires
+    }
+
+    /// La base de points de sa difficulté.
+    public var basePoints: Int { GameMissions.basePoints(for: difficulty) }
+
+    func promoted(to difficulty: MissionDifficulty) -> MissionTemplate {
+        MissionTemplate(key: key, difficulty: difficulty, goal: goal, signal: signal, baseTarget: baseTarget,
+                        minTarget: minTarget, maxTarget: maxTarget, unitPoints: unitPoints, glory: glory,
+                        prism: prism, weight: weight, requires: requires)
     }
 }
 
@@ -97,7 +156,7 @@ public struct DrawnMission: Sendable, Equatable {
     public let target: Int
     /// Points crédités à la validation, bonus de Flamme compris.
     public let reward: Int
-    /// Gloire de la mission : 40 pour l'Or, `0` sinon.
+    /// Gloire de la mission : celle du gabarit, au moins 40 pour l'Or.
     public let glory: Int
 
     public init(difficulty: MissionDifficulty, templateKey: String, signal: MissionSignal, prism: Bool,
@@ -157,48 +216,78 @@ public enum GameMissions {
     public static let goldMinLevel = 50
     public static let goldMinTreasury = 50
 
-    private static func template(_ key: String, _ difficulty: MissionDifficulty, _ signal: MissionSignal,
-                                 _ baseTarget: Int, prism: Bool = false) -> MissionTemplate {
-        let basePoints: Int = switch difficulty {
-        case .easy: 30
-        case .medium: 60
-        case .hard: 120
-        case .gold: 250
+    /// La base de points de chaque difficulté, avant l'objectif, la bande et la Flamme.
+    public static func basePoints(for difficulty: MissionDifficulty) -> Int {
+        switch difficulty {
+        case .easy: 40
+        case .medium: 80
+        case .hard: 160
+        case .gold: 320
         }
-        return MissionTemplate(key: key, difficulty: difficulty, signal: signal, baseTarget: baseTarget,
-                               basePoints: basePoints, prism: prism)
     }
 
-    /// Le catalogue — neuf gabarits tracés, du plus doux au difficile (#9634).
+    private static func t(_ key: String, _ difficulty: MissionDifficulty, _ goal: MissionGoal, _ signal: MissionSignal,
+                          base: Int, min: Int, max: Int, unit: Int, glory: Int = 0, prism: Bool = false,
+                          weight: Int = 4, requires: [MissionCapability] = []) -> MissionTemplate {
+        MissionTemplate(key: key, difficulty: difficulty, goal: goal, signal: signal, baseTarget: base,
+                        minTarget: min, maxTarget: max, unitPoints: unit, glory: glory, prism: prism,
+                        weight: weight, requires: requires)
+    }
+
+    /// Le catalogue (#9635) — MIROIR de `packages/shared/utils/game/mission-catalog.ts`, dans le même ordre.
     public static let templates: [MissionTemplate] = [
-        template("react-messages", .easy, .axis(.reaction), 5),
-        template("send-voice", .easy, .axis(.audioMessage), 1),
-        template("send-texts", .easy, .axis(.textMessage), 5),
-        template("send-attachments", .easy, .axis(.attachment), 2),
+        t("send-texts", .easy, .animate, .axis(.textMessage), base: 5, min: 1, max: 15, unit: 12),
+        t("send-attachments", .easy, .animate, .axis(.attachment), base: 2, min: 1, max: 6, unit: 16),
+        t("react-messages", .easy, .animate, .axis(.reaction), base: 5, min: 1, max: 15, unit: 8, requires: [.contacts]),
+        t("react-posts", .easy, .animate, .operation("tool.post_reaction"), base: 5, min: 1, max: 15, unit: 6),
+        t("use-stickers", .easy, .animate, .axis(.sticker), base: 2, min: 1, max: 6, unit: 6),
+        t("comment-text", .medium, .animate, .commentOthersPost, base: 3, min: 1, max: 6, unit: 12),
+        t("publish-story", .medium, .animate, .axis(.story), base: 1, min: 1, max: 2, unit: 40),
+        t("publish-post", .medium, .animate, .axis(.post), base: 1, min: 1, max: 1, unit: 40),
+        t("reply-story", .medium, .animate, .storyReply, base: 1, min: 1, max: 3, unit: 15, requires: [.contacts]),
+        t("reply-conversations", .medium, .animate, .replyDistinctConversations, base: 3, min: 1, max: 4, unit: 15,
+          requires: [.contacts]),
+        t("join-community", .medium, .animate, .operation("social.community_joined"), base: 1, min: 1, max: 1, unit: 15),
+        t("long-chat", .hard, .animate, .axis(.textMessage), base: 10, min: 3, max: 40, unit: 12),
+        t("publish-posts", .hard, .animate, .axis(.post), base: 2, min: 2, max: 3, unit: 40),
+        t("publish-reel", .hard, .animate, .reelPublished, base: 1, min: 1, max: 1, unit: 250),
+        t("voice-comments", .hard, .animate, .axis(.audioComment), base: 2, min: 1, max: 3, unit: 20),
+        t("reply-conversations-wide", .hard, .animate, .replyDistinctConversations, base: 6, min: 2, max: 8, unit: 15,
+          requires: [.activeConversations]),
+        t("gold-reply-conversations", .gold, .animate, .replyDistinctConversations, base: 8, min: 3, max: 12, unit: 15,
+          requires: [.activeConversations]),
+        t("gold-replies-received", .gold, .animate, .repliesReceivedDistinctAuthors, base: 4, min: 2, max: 6, unit: 25,
+          requires: [.activeConversations]),
 
-        template("comment-text", .medium, .axis(.textComment), 3),
-        template("publish-story", .medium, .axis(.story), 1),
-        template("publish-post", .medium, .axis(.post), 1),
+        t("send-voice", .easy, .courage, .axis(.audioMessage), base: 1, min: 1, max: 5, unit: 20),
+        t("write-someone-new", .medium, .courage, .axis(.privateConversation), base: 1, min: 1, max: 3, unit: 20),
+        t("start-conversation", .medium, .courage, .conversationStarted, base: 1, min: 1, max: 2, unit: 25),
+        t("community-hello", .medium, .courage, .axis(.communityConversation), base: 1, min: 1, max: 2, unit: 20,
+          requires: [.communities]),
+        t("comment-stranger-post", .medium, .courage, .commentStrangerPublicPost, base: 1, min: 1, max: 3, unit: 20),
 
-        template("publish-posts", .hard, .axis(.post), 2),
-        // La difficile de `send-texts` : même geste, deux fois son objectif.
-        template("long-chat", .hard, .axis(.textMessage), 10),
+        t("prism-foreign-messages", .medium, .languages, .foreignLanguageMessage, base: 2, min: 1, max: 6, unit: 15,
+          prism: true, requires: [.multilingual]),
+        t("cross-language-chat", .medium, .languages, .crossLanguageExchange, base: 1, min: 1, max: 3, unit: 20,
+          prism: true, requires: [.contacts]),
+        t("prism-foreign-exchange", .hard, .languages, .foreignLanguageMessage, base: 5, min: 2, max: 15, unit: 15,
+          prism: true, requires: [.multilingual]),
+        t("reply-their-language", .hard, .languages, .replyInTheirLanguage, base: 1, min: 1, max: 5, unit: 25,
+          prism: true, requires: [.multilingual, .contacts]),
+
+        t("create-invite-link", .easy, .reach, .operation("social.affiliate_link_created"), base: 1, min: 1, max: 1,
+          unit: 10, glory: 5),
+        t("share-link", .medium, .reach, .axis(.share), base: 1, min: 1, max: 3, unit: 30, glory: 10),
+        t("invite-contact", .medium, .reach, .operation("social.email_invite"), base: 1, min: 1, max: 3, unit: 20,
+          glory: 10),
+        t("invite-joined", .gold, .reach, .axis(.inviteJoined), base: 1, min: 1, max: 1, unit: 400, glory: 60, weight: 1),
     ]
 
-    /// Les gabarits retirés par l'audit du 2026-10-07 : une mission achevée sur l'un d'eux garde sa phrase.
-    public static let retiredTemplateKeys: Set<String> = [
-        "share-link", "prism-foreign-messages", "prism-foreign-exchange", "gold-replies-received", "use-stickers",
-        "voice-comments", "publish-reel", "reply-conversations", "reply-conversations-wide", "gold-reply-conversations",
-    ]
-
-    private static let goldTemplates: [MissionTemplate] = templates
-        .filter { $0.difficulty == .hard }
-        .map { MissionTemplate(key: $0.key, difficulty: .gold, signal: $0.signal, baseTarget: $0.baseTarget,
-                               basePoints: 250, prism: $0.prism) }
-
-    /// Les gabarits d'une difficulté ; ceux de l'Or sont les difficiles portés à l'Or.
+    /// Les gabarits d'une difficulté ; l'Or tire parmi les siens ET les difficiles portés à l'Or.
     public static func catalog(for difficulty: MissionDifficulty) -> [MissionTemplate] {
-        difficulty == .gold ? goldTemplates : templates.filter { $0.difficulty == difficulty }
+        guard difficulty == .gold else { return templates.filter { $0.difficulty == difficulty } }
+        return templates.filter { $0.difficulty == .gold }
+            + templates.filter { $0.difficulty == .hard }.map { $0.promoted(to: .gold) }
     }
 
     private static func clampLevel(_ level: Int) -> Int {
@@ -224,15 +313,28 @@ public enum GameMissions {
     }
 
     private static func drawn(_ template: MissionTemplate, level: Int, flameDays: Int) -> DrawnMission {
-        DrawnMission(
+        let target = min(template.maxTarget, max(template.minTarget, objective(baseTarget: template.baseTarget, level: level)))
+        return DrawnMission(
             difficulty: template.difficulty,
             templateKey: template.key,
             signal: template.signal,
             prism: template.prism,
-            target: objective(baseTarget: template.baseTarget, level: level),
-            reward: reward(basePoints: template.basePoints, level: level, flameDays: flameDays),
-            glory: template.difficulty == .gold ? GameGlory.points.goldMission : 0
+            target: target,
+            reward: reward(basePoints: template.basePoints + template.unitPoints * target, level: level, flameDays: flameDays),
+            glory: max(template.glory, template.difficulty == .gold ? GameGlory.points.goldMission : 0)
         )
+    }
+
+    /// Un tirage pondéré : une valeur du générateur ; à poids égaux, le même indice que `pickIndex`.
+    private static func pickWeighted(_ rng: inout GameRandom, _ pool: [MissionTemplate]) -> MissionTemplate? {
+        let weights = pool.map { max(0, $0.weight) }
+        let ticket = rng.next() * Double(weights.reduce(0, +))
+        var sum = 0
+        for (index, weight) in weights.enumerated() {
+            sum += weight
+            if Double(sum) > ticket { return pool[index] }
+        }
+        return pool.last
     }
 
     private static func pool(_ difficulty: MissionDifficulty, excluding excluded: Set<MissionSignal>,
@@ -262,9 +364,7 @@ public enum GameMissions {
         var byDifficulty: [MissionDifficulty: DrawnMission] = [:]
         for difficulty in [top, .medium, .easy] {
             let candidates = pool(difficulty, excluding: used, prismOnly: prismDay && difficulty == prismDifficulty)
-            let index = rng.pickIndex(length: candidates.count)
-            guard candidates.indices.contains(index) else { continue }
-            let picked = candidates[index]
+            guard let picked = pickWeighted(&rng, candidates) else { continue }
             used.insert(picked.signal)
             byDifficulty[difficulty] = drawn(picked, level: level, flameDays: input.flameDays)
         }
@@ -289,8 +389,7 @@ public enum GameMissions {
             .filter { $0.key != current.templateKey }
         var rng = GameRandom(parts: GameSeedParts(
             userId: userId, dayKey: dayKey, salt: "reroll:\(index):\(max(0, rerollCount))"))
-        let picked = rng.pickIndex(length: candidates.count)
-        guard candidates.indices.contains(picked) else { return nil }
-        return drawn(candidates[picked], level: clampLevel(level), flameDays: flameDays)
+        guard let picked = pickWeighted(&rng, candidates) else { return nil }
+        return drawn(picked, level: clampLevel(level), flameDays: flameDays)
     }
 }

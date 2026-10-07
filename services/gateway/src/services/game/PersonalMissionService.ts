@@ -17,19 +17,20 @@
 import type { DailyMission, PrismaClient } from '@meeshy/shared/prisma/client';
 import { flameStatus } from '@meeshy/shared/utils/game/flame';
 import { levelFromScore } from '@meeshy/shared/utils/game/levels';
-import { isRetiredMissionTemplate, type MissionSignal } from '@meeshy/shared/utils/game/missions';
+import { isMissionStillPossible, type MissionDifficulty, type MissionSignal } from '@meeshy/shared/utils/game/missions';
 import { PERSONAL_MISSION_SLOT, drawPersonalMission, personalWindowStillFits } from '@meeshy/shared/utils/game/personal-mission';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
 import type { GameNotificationEvent, GameNotifyResult } from './GameNotifier';
-import { activeHoursOf, isMultilingual, usageOf } from './MissionHabits';
-import { replaceRetiredMissionRows, type MissionDay, type MissionService } from './MissionService';
+import { MISSION_PROFILE_USER_SELECT, activeHoursOf, isMultilingual, missionProfileOf, usageOf } from './MissionHabits';
+import { replaceImpossibleMissionRows, type MissionDay, type MissionService } from './MissionService';
 import { dayKeyOf, instantOfLocal, minuteOfDayInTimezone } from './gameClock';
 
 const log = enhancedLogger.child({ module: 'PersonalMissionService' });
 
 const USER_SELECT = {
   ...FLAME_USER_SELECT,
+  ...MISSION_PROFILE_USER_SELECT,
   engagementScore: true,
   levelRecord: true,
   systemLanguage: true,
@@ -72,7 +73,7 @@ export class PersonalMissionService {
     const today = day ?? (await this.deps.missions.ensureToday(userId, now));
     if (!today.unlocked) return null;
     const existing = await this.personalRow(userId, today.dayKey);
-    if (existing && (existing.completedAt !== null || !isRetiredMissionTemplate(existing.templateKey))) return existing;
+    if (existing && (existing.completedAt !== null || isMissionStillPossible({ ...existing, difficulty: existing.difficulty as MissionDifficulty }))) return existing;
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_SELECT });
     if (!user) return existing;
@@ -81,7 +82,7 @@ export class PersonalMissionService {
     const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: today.dayKey, streak: facts.streak, freezes: facts.freezes });
     const flameDays = status === 'out' ? 0 : facts.streak;
     if (existing) {
-      const rows = await replaceRetiredMissionRows(this.prisma, { userId, dayKey: today.dayKey, level, flameDays, rows: [...today.rows, existing] });
+      const rows = await replaceImpossibleMissionRows(this.prisma, { userId, dayKey: today.dayKey, level, flameDays, rows: [...today.rows, existing] });
       return rows[rows.length - 1] ?? existing;
     }
     // La plage se pose sur le jour CIVIL et la mission n'avance que dans SA journée de jeu : quand les deux
@@ -91,9 +92,10 @@ export class PersonalMissionService {
     const nowMinute = minuteOfDayInTimezone(now, user.timezone);
     if (civilDay !== today.dayKey || !personalWindowStillFits(nowMinute)) return null;
 
-    const [activeHours, usage] = await Promise.all([
+    const [activeHours, usage, profile] = await Promise.all([
       activeHoursOf({ prisma: this.prisma, userId, timezone: user.timezone, now }),
       usageOf(this.prisma, userId),
+      missionProfileOf({ prisma: this.prisma, userId, user, now }),
     ]);
     const draw = drawPersonalMission({
       userId,
@@ -105,6 +107,7 @@ export class PersonalMissionService {
       usage,
       multilingual: isMultilingual(user),
       excludedSignals: today.rows.map((row) => row.signal as MissionSignal),
+      profile,
     });
     if (draw === null) return null;
 

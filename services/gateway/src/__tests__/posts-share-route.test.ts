@@ -8,8 +8,13 @@ import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
-const sharePost = jest.fn<(...a: unknown[]) => Promise<{ shareCount: number } | null>>()
-  .mockResolvedValue({ shareCount: 3 });
+const sharePost = jest.fn<(...a: unknown[]) => Promise<{ shareCount: number; authorId: string } | null>>()
+  .mockResolvedValue({ shareCount: 3, authorId: 'author-1' });
+const creditPostEngagement = jest.fn();
+jest.mock('../services/posts/postEngagementCredits', () => ({
+  ...(jest.requireActual('../services/posts/postEngagementCredits') as object),
+  creditPostEngagement: (...args: unknown[]) => creditPostEngagement(...args),
+}));
 const shareWithTrackingLink = jest.fn<(...a: unknown[]) => Promise<unknown>>()
   .mockResolvedValue({ shared: true, shareCount: 4, token: 'tok123', shortUrl: 'https://meeshy.me/l/tok123', reused: false });
 const getPostShareLink = jest.fn<(...a: unknown[]) => Promise<unknown>>()
@@ -76,6 +81,16 @@ describe('POST /posts/:postId/share', () => {
     expect(res.json().data).toMatchObject({ shared: true, shareCount: 3 });
     expect(res.json().data.token).toBeUndefined();
     expect(sharePost).toHaveBeenCalled();
+  });
+
+  it('le partage simple crédite social.share comme le partage suivi — une fois par post, jamais pour le sien (#9635)', async () => {
+    creditPostEngagement.mockClear();
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: {} });
+    expect(creditPostEngagement).toHaveBeenCalledWith(expect.anything(), 'u1', 'social.share', {
+      postId: POST_ID,
+      targetId: POST_ID,
+      targetOwnerId: 'author-1',
+    });
   });
 
   it('tracked share (generateLink) returns token + shortUrl via shareWithTrackingLink', async () => {

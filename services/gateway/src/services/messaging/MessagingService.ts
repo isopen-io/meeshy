@@ -585,7 +585,8 @@ export class MessagingService {
         ...postSaveToolFields(saved),
         content: message.content,
         messageType: message.messageType,
-        replyToId: message.replyToId
+        replyToId: message.replyToId,
+        storyReplyToId: message.storyReplyToId ?? null
       },
       originalLanguage,
       onError: (effect, err) =>

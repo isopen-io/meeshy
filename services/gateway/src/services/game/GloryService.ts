@@ -27,6 +27,7 @@ export type GloryReason =
   | 'level'
   | 'flame-record'
   | 'mission-gold'
+  | 'mission'
   | 'achievement'
   | 'league'
   | 'season'

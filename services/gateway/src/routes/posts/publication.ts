@@ -122,6 +122,8 @@ export interface PostPublicationEngagementService {
     operationKey: EngagementOperationKey,
     options?: EngagementActivityOptions,
   ): Promise<void>;
+  /** Un fait de jeu posé à la publication (#9635) — l'INTENTION « réel ». */
+  recordGameSignal?(userId: string, signal: 'reel-published', options?: { readonly key?: string }): Promise<void>;
 }
 
 /**
@@ -527,6 +529,14 @@ export async function runPublicationEffects(
 
   if (engagementService) {
     recordPublicationEngagement({ engagementService, authorId, postId, writtenType, visibility, editedInApp, porte, log: fastify.log });
+  }
+  // L'INTENTION « réel » (#9635) : un réel demandé et publié compte pour son défi
+  // même quand le service l'a écrit en POST faute de média qualifiant — le geste
+  // de l'auteur est le même. Ses POINTS restent ceux du type écrit (ci-dessus).
+  if (postType === 'REEL' && visibility !== 'PRIVATE' && engagementService?.recordGameSignal) {
+    engagementService.recordGameSignal(authorId, 'reel-published', { key: postId }).catch((err: unknown) => {
+      logError(fastify.log, `[${porte}] reel intent game signal failed`, err);
+    });
   }
 
   return servePublishedPost({ post, references, request });

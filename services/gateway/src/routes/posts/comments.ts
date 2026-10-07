@@ -1,3 +1,4 @@
+import { recordCommentFacts } from '../../services/game/commentGameFacts';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -403,13 +404,25 @@ export function registerCommentRoutes(
       // seules les réactions se dupliquent. Il est la SOURCE de son crédit :
       // le supprimer le reprend. Un geste que la limite du jour n'a pas pu
       // compter (compteur muet) passe, mais ne rapporte rien.
-      const commentAxis = linkedMedia?.mimeType?.startsWith('audio/') ? 'comment.audio' : 'comment.text';
+      //
+      // #9635 — N'IMPORTE QUEL média audio du commentaire fait un commentaire
+      // vocal, pas seulement le premier : le pipeline ci-dessus ne traite que le
+      // premier, le geste, lui, ne dépend pas de l'ordre des pièces.
+      const commentMedia = (comment as unknown as { media?: Array<{ mimeType?: string }> }).media ?? [];
+      const commentAxis = commentMedia.some((media) => media.mimeType?.startsWith('audio/')) ? 'comment.audio' : 'comment.text';
       if (counted) engagementService
         .recordActivity(authContext.registeredUser.id, commentAxis, {
           postId: targetPostId,
           receipt: creditSource.comment(comment.id),
         })
         .catch((err) => enhancedLogger.warn(`[POST /posts/:postId/comments]: engagement ${commentAxis} failed`, { err }));
+      if (counted) recordCommentFacts({
+        prisma,
+        engagement: engagementService,
+        commenterId: authContext.registeredUser.id,
+        postId: targetPostId,
+        post,
+      }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: comment game facts failed', { err }));
 
       const newCommentMentionedUsers = parsed.data.content
         ? await resolveMentionedUsers(prisma, [parsed.data.content])

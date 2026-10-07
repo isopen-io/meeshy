@@ -269,6 +269,7 @@ export type FakeGameDb = {
   readonly notification: Model;
   readonly conversation: Model;
   readonly affiliateVisitSession: Model;
+  readonly communityMember: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -309,6 +310,7 @@ export function fakeGameDb(): FakeGameDb {
   const notification = new Model();
   const conversation = new Model();
   const affiliateVisitSession = flattenCompound(new Model({ uniques: [['sessionKey']] }));
+  const communityMember = new Model();
   const models = {
     user,
     gloryLedger,
@@ -338,6 +340,7 @@ export function fakeGameDb(): FakeGameDb {
     notification,
     conversation,
     affiliateVisitSession,
+    communityMember,
   };
 
   /**

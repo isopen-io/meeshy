@@ -303,15 +303,20 @@ struct GameLawTests {
         #expect(rich.missions.last?.difficulty == .gold)
     }
 
-    @Test("le catalogue ne garde que des gestes crédités, deux gabarits au moins par difficulté, l'Or porté depuis la difficile (#9634)")
-    func catalogKeepsOnlyTracedGestures() {
-        #expect(GameMissions.templates.allSatisfy { !GameMissions.retiredTemplateKeys.contains($0.key) })
-        #expect(GameMissions.templates.allSatisfy { $0.signal.rawValue.hasPrefix("axis:") && !$0.prism })
+    @Test("le catalogue couvre les quatre buts, deux gabarits au moins par difficulté, l'Or porte aussi les difficiles (#9635)")
+    func catalogCoversTheFourGoals() {
+        let keys = GameMissions.templates.map(\.key)
+        #expect(Set(keys).count == keys.count)
+        for goal in MissionGoal.allCases {
+            #expect(GameMissions.templates.filter { $0.goal == goal }.count >= 3)
+        }
         for difficulty in MissionDifficulty.allCases {
             #expect(GameMissions.catalog(for: difficulty).count >= 2)
         }
-        #expect(GameMissions.catalog(for: .gold).map(\.key) == GameMissions.catalog(for: .hard).map(\.key))
-        #expect(GameMissions.catalog(for: .gold).allSatisfy { $0.difficulty == .gold && $0.basePoints == 250 })
+        let gold = GameMissions.catalog(for: .gold)
+        #expect(gold.allSatisfy { $0.difficulty == .gold && $0.basePoints == 320 })
+        #expect(GameMissions.catalog(for: .hard).allSatisfy { hard in gold.contains { $0.key == hard.key } })
+        #expect(GameMissions.templates.filter { $0.goal == .reach }.allSatisfy { $0.glory > 0 })
     }
 
     @Test("un signal impossible pour ce compte n'est jamais tiré")

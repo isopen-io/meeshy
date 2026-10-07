@@ -14,6 +14,8 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
+import type { MissionCapability, MissionProfile } from '@meeshy/shared/utils/game/missions';
 import { activeHoursHistogram } from '@meeshy/shared/utils/game/personal-mission';
 import { minuteOfDayInTimezone } from './gameClock';
 
@@ -65,3 +67,59 @@ export const isMultilingual = (user: LanguageFields): boolean =>
       .map((language) => (language ?? '').trim().toLowerCase().split(/[-_]/)[0] ?? '')
       .filter((language) => language !== ''),
   ).size >= 2;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** La moyenne quotidienne lisse sur l'âge du compte, borné : un compte neuf ne paraît pas hyperactif, un ancien pas endormi. */
+const HABIT_MIN_DAYS = 7;
+const HABIT_MAX_DAYS = 60;
+const ACTIVE_WINDOW_MS = 7 * DAY_MS;
+const ACTIVE_CONVERSATIONS = 2;
+
+type ProfileUser = LanguageFields & { readonly createdAt?: Date | null };
+
+/**
+ * CE QUE LE COMPTE PEUT FAIRE ET FAIT D'ORDINAIRE (#9635) — l'entrée du tirage des défis du jour :
+ *
+ *  - ses habitudes : chaque compteur d'engagement ÷ l'âge du compte en jours (borné entre 7 et 60). La base ne
+ *    garde aucun historique par jour (`EngagementCounter` est cumulatif, `ConversationEngagement` ne tient que
+ *    le jour courant) : c'est une moyenne lissée, pas « les 7 derniers jours » ;
+ *  - ses capacités : des contacts (un ami accepté ou une conversation où il a écrit), des conversations actives
+ *    (au moins deux où il a écrit depuis 7 jours), une communauté, plusieurs langues.
+ *
+ * Lue une fois par jour, au tirage (ou à un changement de mission), jamais sur la voie chaude d'un geste.
+ */
+export async function missionProfileOf(params: {
+  readonly prisma: PrismaClient;
+  readonly userId: string;
+  readonly user: ProfileUser | null;
+  readonly now: Date;
+}): Promise<MissionProfile> {
+  const { prisma, userId, user, now } = params;
+  const [counters, friend, wrote, active, community] = await Promise.all([
+    prisma.engagementCounter.findMany({ where: { userId }, select: { axisKey: true, count: true }, take: MISSION_HABIT_COUNTER_LIMIT }),
+    prisma.friendRequest.findFirst({ where: { status: 'accepted', OR: [{ senderId: userId }, { receiverId: userId }] }, select: { id: true } }),
+    prisma.conversationEngagement.findFirst({ where: { userId }, select: { id: true } }),
+    prisma.conversationEngagement.count({ where: { userId, day: { gte: new Date(now.getTime() - ACTIVE_WINDOW_MS) } } }),
+    prisma.communityMember.findFirst({ where: { userId, isActive: true }, select: { id: true } }),
+  ]);
+  const ageDays = user?.createdAt ? (now.getTime() - user.createdAt.getTime()) / DAY_MS : HABIT_MIN_DAYS;
+  const days = Math.min(HABIT_MAX_DAYS, Math.max(HABIT_MIN_DAYS, ageDays));
+  const habits: Partial<Record<EngagementOperationKey, number>> = Object.fromEntries(
+    counters.map((c) => [c.axisKey as EngagementOperationKey, c.count / days]),
+  );
+  const capabilities: readonly MissionCapability[] = [
+    ...(friend !== null || wrote !== null ? (['contacts'] as const) : []),
+    ...(active >= ACTIVE_CONVERSATIONS ? (['active-conversations'] as const) : []),
+    ...(community !== null ? (['communities'] as const) : []),
+    ...(user !== null && isMultilingual(user) ? (['multilingual'] as const) : []),
+  ];
+  return { capabilities, habits };
+}
+
+/** Les colonnes du compte que `missionProfileOf` lit. */
+export const MISSION_PROFILE_USER_SELECT = {
+  createdAt: true,
+  systemLanguage: true,
+  regionalLanguage: true,
+  customDestinationLanguage: true,
+} as const;

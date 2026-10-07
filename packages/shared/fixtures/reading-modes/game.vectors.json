@@ -2254,29 +2254,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-texts",
-            "signal": "axis:content.text_message",
+            "templateKey": "react-posts",
+            "signal": "axis:tool.post_reaction",
             "prism": false,
             "target": 8,
-            "reward": 43,
+            "reward": 126,
             "glory": 0
           },
           {
             "difficulty": "medium",
             "templateKey": "comment-text",
-            "signal": "axis:comment.text",
+            "signal": "comment-others-post",
             "prism": false,
             "target": 5,
-            "reward": 86,
+            "reward": 200,
             "glory": 0
           },
           {
             "difficulty": "hard",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
+            "templateKey": "publish-reel",
+            "signal": "reel-published",
             "prism": false,
-            "target": 4,
-            "reward": 172,
+            "target": 1,
+            "reward": 586,
             "glory": 0
           }
         ]
@@ -2299,29 +2299,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-texts",
-            "signal": "axis:content.text_message",
+            "templateKey": "use-stickers",
+            "signal": "axis:tool.sticker",
             "prism": false,
-            "target": 13,
-            "reward": 77,
+            "target": 5,
+            "reward": 179,
             "glory": 0
           },
           {
             "difficulty": "medium",
             "templateKey": "comment-text",
-            "signal": "axis:comment.text",
+            "signal": "comment-others-post",
             "prism": false,
-            "target": 8,
-            "reward": 153,
+            "target": 6,
+            "reward": 388,
             "glory": 0
           },
           {
             "difficulty": "gold",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
+            "templateKey": "long-chat",
+            "signal": "axis:content.text_message",
             "prism": false,
-            "target": 5,
-            "reward": 639,
+            "target": 25,
+            "reward": 1584,
             "glory": 40
           }
         ]
@@ -2344,29 +2344,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-voice",
-            "signal": "axis:content.audio_message",
+            "templateKey": "react-messages",
+            "signal": "axis:tool.reaction",
             "prism": false,
-            "target": 2,
-            "reward": 43,
+            "target": 8,
+            "reward": 149,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
+            "templateKey": "comment-stranger-post",
+            "signal": "comment-stranger-public-post",
             "prism": false,
             "target": 2,
-            "reward": 86,
+            "reward": 172,
             "glory": 0
           },
           {
             "difficulty": "hard",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
-            "prism": false,
-            "target": 4,
-            "reward": 172,
+            "templateKey": "prism-foreign-exchange",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 8,
+            "reward": 400,
             "glory": 0
           }
         ]
@@ -2389,30 +2389,30 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-voice",
-            "signal": "axis:content.audio_message",
+            "templateKey": "react-messages",
+            "signal": "axis:tool.reaction",
             "prism": false,
-            "target": 2,
-            "reward": 50,
+            "target": 7,
+            "reward": 161,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
-            "prism": false,
+            "templateKey": "cross-language-chat",
+            "signal": "cross-language-exchange",
+            "prism": true,
             "target": 2,
-            "reward": 101,
+            "reward": 201,
             "glory": 0
           },
           {
             "difficulty": "gold",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
+            "templateKey": "invite-joined",
+            "signal": "axis:social.invite_joined",
             "prism": false,
-            "target": 3,
-            "reward": 420,
-            "glory": 40
+            "target": 1,
+            "reward": 1209,
+            "glory": 60
           }
         ]
       }
@@ -2434,29 +2434,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-texts",
-            "signal": "axis:content.text_message",
+            "templateKey": "react-posts",
+            "signal": "axis:tool.post_reaction",
             "prism": false,
             "target": 8,
-            "reward": 43,
+            "reward": 126,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
+            "templateKey": "start-conversation",
+            "signal": "conversation-started",
             "prism": false,
             "target": 2,
-            "reward": 86,
+            "reward": 186,
             "glory": 0
           },
           {
             "difficulty": "hard",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
+            "templateKey": "voice-comments",
+            "signal": "axis:comment.audio",
             "prism": false,
-            "target": 4,
-            "reward": 172,
+            "target": 3,
+            "reward": 315,
             "glory": 0
           }
         ]
@@ -2479,29 +2479,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-texts",
-            "signal": "axis:content.text_message",
+            "templateKey": "react-posts",
+            "signal": "axis:tool.post_reaction",
             "prism": false,
             "target": 13,
-            "reward": 77,
+            "reward": 301,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
+            "templateKey": "start-conversation",
+            "signal": "conversation-started",
             "prism": false,
-            "target": 3,
-            "reward": 153,
+            "target": 2,
+            "reward": 332,
             "glory": 0
           },
           {
             "difficulty": "gold",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
+            "templateKey": "publish-reel",
+            "signal": "reel-published",
             "prism": false,
-            "target": 5,
-            "reward": 639,
+            "target": 1,
+            "reward": 1456,
             "glory": 40
           }
         ]
@@ -2524,20 +2524,20 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-voice",
-            "signal": "axis:content.audio_message",
+            "templateKey": "react-messages",
+            "signal": "axis:tool.reaction",
             "prism": false,
-            "target": 2,
-            "reward": 43,
+            "target": 8,
+            "reward": 149,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
-            "prism": false,
-            "target": 2,
-            "reward": 86,
+            "templateKey": "prism-foreign-messages",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 4,
+            "reward": 200,
             "glory": 0
           },
           {
@@ -2545,8 +2545,8 @@
             "templateKey": "publish-posts",
             "signal": "axis:content.post",
             "prism": false,
-            "target": 4,
-            "reward": 172,
+            "target": 3,
+            "reward": 400,
             "glory": 0
           }
         ]
@@ -2569,29 +2569,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-voice",
-            "signal": "axis:content.audio_message",
+            "templateKey": "react-messages",
+            "signal": "axis:tool.reaction",
             "prism": false,
-            "target": 2,
-            "reward": 50,
+            "target": 7,
+            "reward": 161,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
+            "templateKey": "comment-stranger-post",
+            "signal": "comment-stranger-public-post",
             "prism": false,
             "target": 2,
-            "reward": 101,
+            "reward": 201,
             "glory": 0
           },
           {
             "difficulty": "gold",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
+            "templateKey": "long-chat",
+            "signal": "axis:content.text_message",
             "prism": false,
-            "target": 3,
-            "reward": 420,
+            "target": 13,
+            "reward": 799,
             "glory": 40
           }
         ]
@@ -2614,29 +2614,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "react-messages",
-            "signal": "axis:tool.reaction",
+            "templateKey": "send-texts",
+            "signal": "axis:content.text_message",
             "prism": false,
             "target": 8,
-            "reward": 43,
+            "reward": 194,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
-            "prism": false,
+            "templateKey": "cross-language-chat",
+            "signal": "cross-language-exchange",
+            "prism": true,
             "target": 2,
-            "reward": 86,
+            "reward": 172,
             "glory": 0
           },
           {
             "difficulty": "hard",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
-            "prism": false,
-            "target": 4,
-            "reward": 172,
+            "templateKey": "prism-foreign-exchange",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 8,
+            "reward": 400,
             "glory": 0
           }
         ]
@@ -2659,20 +2659,20 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "react-messages",
-            "signal": "axis:tool.reaction",
+            "templateKey": "send-texts",
+            "signal": "axis:content.text_message",
             "prism": false,
             "target": 13,
-            "reward": 77,
+            "reward": 501,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
-            "prism": false,
+            "templateKey": "cross-language-chat",
+            "signal": "cross-language-exchange",
+            "prism": true,
             "target": 3,
-            "reward": 153,
+            "reward": 358,
             "glory": 0
           },
           {
@@ -2680,8 +2680,8 @@
             "templateKey": "publish-posts",
             "signal": "axis:content.post",
             "prism": false,
-            "target": 5,
-            "reward": 639,
+            "target": 3,
+            "reward": 1124,
             "glory": 40
           }
         ]
@@ -2704,29 +2704,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-texts",
-            "signal": "axis:content.text_message",
+            "templateKey": "use-stickers",
+            "signal": "axis:tool.sticker",
             "prism": false,
-            "target": 8,
-            "reward": 43,
+            "target": 4,
+            "reward": 92,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
+            "templateKey": "invite-contact",
+            "signal": "axis:social.email_invite",
             "prism": false,
             "target": 2,
-            "reward": 86,
-            "glory": 0
+            "reward": 172,
+            "glory": 10
           },
           {
             "difficulty": "hard",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
+            "templateKey": "long-chat",
+            "signal": "axis:content.text_message",
             "prism": false,
-            "target": 4,
-            "reward": 172,
+            "target": 16,
+            "reward": 503,
             "glory": 0
           }
         ]
@@ -2749,29 +2749,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-texts",
-            "signal": "axis:content.text_message",
+            "templateKey": "react-posts",
+            "signal": "axis:tool.post_reaction",
             "prism": false,
             "target": 7,
-            "reward": 50,
+            "reward": 138,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
+            "templateKey": "invite-contact",
+            "signal": "axis:social.email_invite",
             "prism": false,
             "target": 2,
-            "reward": 101,
-            "glory": 0
+            "reward": 201,
+            "glory": 10
           },
           {
             "difficulty": "gold",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
+            "templateKey": "gold-reply-conversations",
+            "signal": "reply-distinct-conversations",
             "prism": false,
-            "target": 3,
-            "reward": 420,
+            "target": 11,
+            "reward": 814,
             "glory": 40
           }
         ]
@@ -2794,20 +2794,20 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-voice",
-            "signal": "axis:content.audio_message",
+            "templateKey": "react-messages",
+            "signal": "axis:tool.reaction",
             "prism": false,
-            "target": 2,
-            "reward": 43,
+            "target": 8,
+            "reward": 149,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
-            "prism": false,
-            "target": 2,
-            "reward": 86,
+            "templateKey": "prism-foreign-messages",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 4,
+            "reward": 200,
             "glory": 0
           },
           {
@@ -2815,8 +2815,8 @@
             "templateKey": "publish-posts",
             "signal": "axis:content.post",
             "prism": false,
-            "target": 4,
-            "reward": 172,
+            "target": 3,
+            "reward": 400,
             "glory": 0
           }
         ]
@@ -2839,29 +2839,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-voice",
-            "signal": "axis:content.audio_message",
+            "templateKey": "react-messages",
+            "signal": "axis:tool.reaction",
             "prism": false,
-            "target": 3,
-            "reward": 77,
+            "target": 13,
+            "reward": 368,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-story",
-            "signal": "axis:content.story",
-            "prism": false,
-            "target": 3,
-            "reward": 153,
+            "templateKey": "prism-foreign-messages",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 5,
+            "reward": 396,
             "glory": 0
           },
           {
             "difficulty": "gold",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
+            "templateKey": "gold-replies-received",
+            "signal": "replies-received-distinct-authors",
             "prism": false,
-            "target": 5,
-            "reward": 639,
+            "target": 6,
+            "reward": 1201,
             "glory": 40
           }
         ]
@@ -2884,29 +2884,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-attachments",
-            "signal": "axis:tool.attachment",
+            "templateKey": "use-stickers",
+            "signal": "axis:tool.sticker",
             "prism": false,
             "target": 4,
-            "reward": 43,
+            "reward": 92,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-post",
-            "signal": "axis:content.post",
+            "templateKey": "invite-contact",
+            "signal": "axis:social.email_invite",
             "prism": false,
             "target": 2,
-            "reward": 86,
-            "glory": 0
+            "reward": 172,
+            "glory": 10
           },
           {
             "difficulty": "hard",
-            "templateKey": "long-chat",
-            "signal": "axis:content.text_message",
-            "prism": false,
-            "target": 16,
-            "reward": 172,
+            "templateKey": "reply-their-language",
+            "signal": "reply-in-their-language",
+            "prism": true,
+            "target": 2,
+            "reward": 300,
             "glory": 0
           }
         ]
@@ -2929,29 +2929,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-attachments",
-            "signal": "axis:tool.attachment",
+            "templateKey": "use-stickers",
+            "signal": "axis:tool.sticker",
             "prism": false,
             "target": 3,
-            "reward": 50,
+            "reward": 97,
             "glory": 0
           },
           {
             "difficulty": "medium",
-            "templateKey": "publish-post",
-            "signal": "axis:content.post",
+            "templateKey": "invite-contact",
+            "signal": "axis:social.email_invite",
             "prism": false,
             "target": 2,
-            "reward": 101,
-            "glory": 0
+            "reward": 201,
+            "glory": 10
           },
           {
             "difficulty": "gold",
-            "templateKey": "long-chat",
-            "signal": "axis:content.text_message",
-            "prism": false,
-            "target": 13,
-            "reward": 420,
+            "templateKey": "prism-foreign-exchange",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 7,
+            "reward": 714,
             "glory": 40
           }
         ]
@@ -2977,29 +2977,29 @@
         "missions": [
           {
             "difficulty": "easy",
-            "templateKey": "send-texts",
-            "signal": "axis:content.text_message",
+            "templateKey": "use-stickers",
+            "signal": "axis:tool.sticker",
             "prism": false,
-            "target": 8,
-            "reward": 43,
+            "target": 4,
+            "reward": 92,
             "glory": 0
           },
           {
             "difficulty": "medium",
             "templateKey": "comment-text",
-            "signal": "axis:comment.text",
+            "signal": "comment-others-post",
             "prism": false,
             "target": 5,
-            "reward": 86,
+            "reward": 200,
             "glory": 0
           },
           {
             "difficulty": "hard",
-            "templateKey": "publish-posts",
-            "signal": "axis:content.post",
+            "templateKey": "publish-reel",
+            "signal": "reel-published",
             "prism": false,
-            "target": 4,
-            "reward": 172,
+            "target": 1,
+            "reward": 586,
             "glory": 0
           }
         ]
@@ -3019,11 +3019,11 @@
       "expected": {
         "mission": {
           "difficulty": "easy",
-          "templateKey": "send-voice",
-          "signal": "axis:content.audio_message",
+          "templateKey": "use-stickers",
+          "signal": "axis:tool.sticker",
           "prism": false,
-          "target": 2,
-          "reward": 48,
+          "target": 4,
+          "reward": 102,
           "glory": 0
         }
       }
@@ -3042,11 +3042,11 @@
       "expected": {
         "mission": {
           "difficulty": "medium",
-          "templateKey": "publish-story",
-          "signal": "axis:content.story",
+          "templateKey": "start-conversation",
+          "signal": "conversation-started",
           "prism": false,
           "target": 2,
-          "reward": 96,
+          "reward": 207,
           "glory": 0
         }
       }
@@ -3063,7 +3063,15 @@
         "rerollCount": 1
       },
       "expected": {
-        "mission": null
+        "mission": {
+          "difficulty": "hard",
+          "templateKey": "publish-posts",
+          "signal": "axis:content.post",
+          "prism": false,
+          "target": 3,
+          "reward": 447,
+          "glory": 0
+        }
       }
     },
     {

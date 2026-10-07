@@ -34,7 +34,7 @@ import {
   MISSION_REROLL_PER_DAY,
   MISSION_REROLL_PRICE,
   drawDailyMissions,
-  replaceRetiredMissions,
+  replaceImpossibleMissions,
   rerollDailyMission,
   resolveGameDayKey,
   type DrawnMission,
@@ -47,6 +47,7 @@ import { FLAME_USER_SELECT, STREAK_WRITE_ATTEMPTS, flameFactsOf, flameFreezesUnc
 import { GloryService } from './GloryService';
 import { MeeshSpend } from './MeeshSpend';
 import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
+import { MISSION_PROFILE_USER_SELECT, missionProfileOf } from './MissionHabits';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
@@ -63,7 +64,7 @@ export const GAME_BONUS_AXIS: EngagementAxisKey = 'content.text_message';
 /** Trois missions par jour : facile, moyenne, difficile (ou Or). */
 export const DAILY_MISSION_SLOTS = 3;
 
-const USER_GAME_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, levelRecord: true } as const;
+const USER_GAME_SELECT = { ...FLAME_USER_SELECT, ...MISSION_PROFILE_USER_SELECT, engagementScore: true, levelRecord: true } as const;
 
 /**
  * Les trois missions du JOUR, à l'exclusion de la mission personnelle (#9539, emplacement 3) : le coffre,
@@ -153,13 +154,13 @@ const drawnOf = (row: DailyMission): DrawnMission => ({
 });
 
 /**
- * Les missions tirées sur un gabarit RETIRÉ (#9634) et pas encore achevées reçoivent un gabarit tracé de même
- * emplacement et même difficulté (la loi : `replaceRetiredMissions`). La ligne garde son identité, son
- * emplacement, `rerolledAt` et sa plage ; ni `GameDay` (coffre, changements du jour) ni une mission achevée ne
- * bougent. L'écriture est conditionnelle sur le gabarit LU et sur « pas encore faite » : deux chargements
+ * Les missions devenues IMPOSSIBLES (gabarit inconnu du catalogue) et pas encore achevées reçoivent un gabarit
+ * de même emplacement et même difficulté (la loi : `replaceImpossibleMissions`). La ligne garde son identité,
+ * son emplacement, `rerolledAt` et sa plage ; ni `GameDay` (coffre, changements du jour) ni une mission achevée
+ * ne bougent. L'écriture est conditionnelle sur le gabarit LU et sur « pas encore faite » : deux chargements
  * concurrents n'en écrivent qu'un, et une mission achevée entre-temps garde le sien.
  */
-export async function replaceRetiredMissionRows(
+export async function replaceImpossibleMissionRows(
   prisma: Pick<PrismaClient, 'dailyMission'>,
   params: {
     readonly userId: string;
@@ -169,7 +170,7 @@ export async function replaceRetiredMissionRows(
     readonly rows: readonly DailyMission[];
   },
 ): Promise<DailyMission[]> {
-  const replacements = replaceRetiredMissions({
+  const replacements = replaceImpossibleMissions({
     userId: params.userId,
     dayKey: params.dayKey,
     level: params.level,
@@ -258,7 +259,7 @@ export class MissionService {
     const facts = flameFactsOf(user ?? {}, now);
     const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: dayKey, streak: facts.streak, freezes: facts.freezes });
     const flameDays = status === 'out' ? 0 : facts.streak;
-    const existing = await replaceRetiredMissionRows(this.prisma, {
+    const existing = await replaceImpossibleMissionRows(this.prisma, {
       userId,
       dayKey,
       level,
@@ -270,13 +271,17 @@ export class MissionService {
     if (existing.length >= DAILY_MISSION_SLOTS || !unlocked) return { dayKey, unlocked, rows: existing };
     const taken = new Set(existing.map((row) => row.slot));
 
-    const treasury = (await meeshTotalsFromLedger(this.prisma, userId)).balance;
+    const [treasury, profile] = await Promise.all([
+      meeshTotalsFromLedger(this.prisma, userId).then((totals) => totals.balance),
+      missionProfileOf({ prisma: this.prisma, userId, user: user ?? null, now }),
+    ]);
     const draw = drawDailyMissions({
       userId,
       dayKey,
       level,
       flameDays,
       treasury,
+      profile,
     });
 
     for (const [slot, mission] of draw.missions.entries()) {
@@ -402,7 +407,7 @@ export class MissionService {
         await this.glory.credit({
           userId: row.userId,
           delta: row.glory,
-          reason: 'mission-gold',
+          reason: row.difficulty === 'gold' ? 'mission-gold' : 'mission',
           requestId: `mission:${row.id}`,
           meta: { templateKey: row.templateKey, dayKey: row.dayKey },
         });
@@ -474,7 +479,9 @@ export class MissionService {
         const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: dayKey, streak: facts.streak, freezes: facts.freezes });
         const day = await tx.gameDay.findUnique({ where: { userId_dayKey: { userId, dayKey } }, select: { rerollCount: true } });
         const all = await tx.dailyMission.findMany({ where: { userId, dayKey, slot: { lt: DAILY_MISSION_SLOTS } }, orderBy: { slot: 'asc' } });
+        const profile = await missionProfileOf({ prisma: this.prisma, userId, user: account ?? null, now });
         const next = rerollDailyMission({
+          profile,
           userId,
           dayKey,
           level: levelFromScore(account?.engagementScore ?? 0),

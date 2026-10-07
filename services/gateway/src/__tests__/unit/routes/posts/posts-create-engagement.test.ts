@@ -116,9 +116,11 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));
 
 const mockRecordActivity = jest.fn<any>().mockResolvedValue(undefined);
+const mockRecordGameSignal = jest.fn<any>().mockResolvedValue(undefined);
 jest.mock('../../../../services/engagement/EngagementService', () => ({
   EngagementService: jest.fn().mockImplementation(() => ({
     recordActivity: (...args: any[]) => mockRecordActivity(...args),
+    recordGameSignal: (...args: any[]) => mockRecordGameSignal(...args),
   })),
 }));
 
@@ -364,6 +366,30 @@ describe('POST /posts — axe d\'engagement « content.reel » (#5535)', () => {
     expect(res.statusCode).toBe(201);
     expect(creditedKeys()).not.toContain('content.reel');
 
+    await app.close();
+  });
+
+  it('un REEL demandé compte pour son défi, même écrit en POST : l’intention « réel » (#9635)', async () => {
+    mockRecordGameSignal.mockClear();
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW); // écrit comme POST
+    const app = await buildApp();
+
+    await app.inject({ method: 'POST', url: '/posts', payload: { type: 'REEL', content: 'Bonjour tout le monde' } });
+    await settle();
+
+    expect(mockRecordGameSignal).toHaveBeenCalledWith(USER_ID, 'reel-published', { key: PUBLISHED_ROW.id });
+    await app.close();
+  });
+
+  it('un POST demandé ne porte aucune intention « réel » (#9635)', async () => {
+    mockRecordGameSignal.mockClear();
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW);
+    const app = await buildApp();
+
+    await app.inject({ method: 'POST', url: '/posts', payload: { type: 'POST', content: 'Bonjour tout le monde' } });
+    await settle();
+
+    expect(mockRecordGameSignal).not.toHaveBeenCalled();
     await app.close();
   });
 });

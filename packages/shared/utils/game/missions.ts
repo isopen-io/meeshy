@@ -1,128 +1,102 @@
 /**
- * LES MISSIONS DU JOUR (#9373) — trois par jour (facile, moyenne, difficile),
- * la difficile devenant mission d'Or à partir du niveau 50 ou de 50 Meeshes
- * gardées. `docs/product/jeu-meeshy-conception.html` § II.5.
+ * LES DÉFIS DU JOUR (#9373, #9635) — trois par jour (facile, moyenne, difficile), la difficile devenant mission
+ * d'Or à partir du niveau 50 ou de 50 Meeshes gardées, plus la mission personnelle (#9539).
+ * `docs/product/jeu-meeshy-conception.html` § II.5.
  *
- * ## Ce qu'un GABARIT peut demander (#9634)
+ * ## Le catalogue
  *
- * Seulement un GESTE de l'utilisateur que la passerelle CRÉDITE sur un axe
- * d'engagement (`ENGAGEMENT_AXES`), et dont le libellé dit exactement le geste
- * compté. L'audit du 2026-10-07 a retiré du catalogue ce qui avançait mal ou
- * jamais : un fait de TIERS (les réponses reçues), une langue déclarée par le
- * client (le Prisme), un geste plus étroit que son libellé (répondre = citer,
- * sticker = `metadata.sticker`, réel = qualification du média, commentaire
- * vocal = premier média), un partage que le web ne crédite pas.
- * `RETIRED_MISSION_TEMPLATE_KEYS` les nomme : une mission du jour déjà tirée
- * sur l'un d'eux est remplacée au prochain chargement
- * (`replaceRetiredMissions`), une mission achevée garde le sien.
+ * `mission-catalog.ts`, rangé par les quatre buts du porteur. Un gabarit n'attend qu'un signal que la
+ * PASSERELLE établit (un geste crédité, ou un fait posé au point unique du geste) : jamais la seule
+ * déclaration d'un client.
  *
- * ## La mission d'Or
+ * ## À la mesure de chacun
  *
- * Elle n'a plus de gabarits à elle : c'est la difficile PORTÉE à l'Or
- * (`missionTemplatesFor('gold')`) — mêmes gestes, même objectif, points et
- * Gloire de l'Or.
+ * Avec un `MissionProfile`, l'objectif dérive de la moyenne quotidienne du geste (`missionTarget`) : un compte
+ * peu actif commence au plancher du gabarit, un compte actif est poussé au-delà de sa moyenne selon la
+ * difficulté, la bande de niveau s'applique, le plafond borne. Un gabarit dont le profil n'a pas les
+ * `requires` n'est pas tiré pour lui. Sans profil (les clients, les vecteurs), l'objectif est
+ * `⌈ baseTarget × (1 + 0,3 × bande) ⌉`, borné de même.
+ *
+ * ## Ce qui est payé
+ *
+ * `(base de la difficulté + unitPoints × objectif) × bande × Flamme` points, la Gloire du gabarit (l'Or en
+ * porte au moins 40), les étoiles de saison de la difficulté, et le tiers du coffre pour une mission du jour
+ * (`missionArtifacts`).
  *
  * ## Le tirage
  *
- * Déterministe : mulberry32 sur un hachage de `userId|jour|missions`
- * (`day-prng.ts`). Le jour, le fuseau et la graine sont des PARAMÈTRES. Le
- * nombre de tirages consommés est fixe (un par emplacement, plus un pour
- * l'emplacement Prisme), de sorte que les entrées identiques rendent des
- * sorties identiques sur tous les clients. Sans gabarit Prisme au catalogue,
- * le jour Prisme retombe sur le catalogue entier (`poolOf`).
+ * Déterministe : mulberry32 sur un hachage de `userId|jour|missions` (`day-prng.ts`). Un tirage pondéré
+ * consomme une valeur par emplacement, plus une pour l'emplacement Prisme, quel que soit le catalogue. La
+ * mission d'Or tire parmi ses gabarits ET les difficiles portés à l'Or.
  *
- * Objectif et récompense sont calculés en ENTIERS exacts : le flottant
- * `1 + 0,3 × bande` se trompe d'un ulp là où `⌈⌉` ne pardonne pas.
+ * Objectif et récompense sont calculés en ENTIERS exacts : le flottant `1 + 0,3 × bande` se trompe d'un ulp
+ * là où `⌈⌉` ne pardonne pas.
  */
 
-import { ENGAGEMENT_AXES, type EngagementAxisKey } from '../../types/engagement.js';
+import { ENGAGEMENT_AXES } from '../../types/engagement.js';
+import { EXTRA_ENGAGEMENT_OPERATIONS, type EngagementOperationKey } from '../../types/engagement-operations.js';
 import { dayNumber, fnv1a, pickIndex, seededRng } from './day-prng.js';
 import { flameBonusPercent } from './flame.js';
 import { GLORY_POINTS } from './glory.js';
 import { GAME_LEVEL_MAX, GAME_LEVEL_MIN } from './levels.js';
+import {
+  MISSION_FACT_SIGNALS,
+  MISSION_TEMPLATES,
+  type AxisMissionSignal,
+  type MissionCapability,
+  type MissionSignal,
+  type MissionTemplate,
+} from './mission-catalog.js';
+import { seasonStarsForMission } from './season.js';
+
+export {
+  MISSION_CAPABILITIES,
+  MISSION_FACT_SIGNALS,
+  MISSION_GOALS,
+  MISSION_TEMPLATES,
+  type AxisMissionSignal,
+  type MissionCapability,
+  type MissionFactSignal,
+  type MissionGoal,
+  type MissionSignal,
+  type MissionTemplate,
+} from './mission-catalog.js';
 
 export const MISSION_DIFFICULTIES = ['easy', 'medium', 'hard', 'gold'] as const;
 export type MissionDifficulty = (typeof MISSION_DIFFICULTIES)[number];
 
-export type AxisMissionSignal = `axis:${EngagementAxisKey}`;
+export const axisSignal = (operation: EngagementOperationKey): AxisMissionSignal => `axis:${operation}`;
 
-/**
- * Les deux faits hors axe ne nourrissent plus que le DUO de la semaine
- * (`duo.ts`) : aucun gabarit du jour ne les attend depuis #9634.
- */
-export type MissionSignal = AxisMissionSignal | 'reply-distinct-conversations' | 'foreign-language-message';
+/** Tout ce que la passerelle observe : chaque opération créditée, puis les faits posés au geste. */
+export const MISSION_SIGNALS: readonly MissionSignal[] = /* @__PURE__ */ (() => [
+  ...[...ENGAGEMENT_AXES, ...EXTRA_ENGAGEMENT_OPERATIONS].map(axisSignal),
+  ...MISSION_FACT_SIGNALS,
+])();
 
-export const axisSignal = (axis: EngagementAxisKey): AxisMissionSignal => `axis:${axis}`;
+/** La base de points de chaque difficulté, avant l'objectif, la bande et la Flamme. */
+export const MISSION_BASE_POINTS: Readonly<Record<MissionDifficulty, number>> = { easy: 40, medium: 80, hard: 160, gold: 320 };
 
-export const MISSION_SIGNALS: readonly MissionSignal[] = [
-  ...ENGAGEMENT_AXES.map(axisSignal),
-  'reply-distinct-conversations',
-  'foreign-language-message',
-];
-
-export type MissionTemplate = {
-  readonly key: string;
-  readonly difficulty: MissionDifficulty;
-  readonly signal: MissionSignal;
-  readonly baseTarget: number;
-  readonly basePoints: number;
-  /** Mission du Prisme (langues, traduction) : au moins un jour sur trois. */
-  readonly prism: boolean;
+/** Ce qu'un compte apporte au tirage : ce qu'il peut faire, et ce qu'il fait d'ordinaire (par jour, par opération). */
+export type MissionProfile = {
+  readonly capabilities: readonly MissionCapability[];
+  readonly habits: Readonly<Partial<Record<EngagementOperationKey, number>>>;
 };
 
-const MISSION_BASE_POINTS: Readonly<Record<MissionDifficulty, number>> = { easy: 30, medium: 60, hard: 120, gold: 250 };
+/** Le facteur appliqué à l'habitude du compte, par difficulté : une difficile pousse au-delà de la moyenne. */
+export const MISSION_HABIT_FACTOR: Readonly<Record<MissionDifficulty, number>> = { easy: 0.5, medium: 1, hard: 1.25, gold: 1.5 };
 
-const template = (
-  key: string,
-  difficulty: MissionDifficulty,
-  signal: MissionSignal,
-  baseTarget: number,
-  prism = false,
-): MissionTemplate => ({
-  key,
-  difficulty,
-  signal,
-  baseTarget,
-  basePoints: MISSION_BASE_POINTS[difficulty],
-  prism,
-});
-
-export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
-  template('react-messages', 'easy', axisSignal('tool.reaction'), 5),
-  template('send-voice', 'easy', axisSignal('content.audio_message'), 1),
-  template('send-texts', 'easy', axisSignal('content.text_message'), 5),
-  template('send-attachments', 'easy', axisSignal('tool.attachment'), 2),
-
-  template('comment-text', 'medium', axisSignal('comment.text'), 3),
-  template('publish-story', 'medium', axisSignal('content.story'), 1),
-  template('publish-post', 'medium', axisSignal('content.post'), 1),
-
-  template('publish-posts', 'hard', axisSignal('content.post'), 2),
-  // La difficile de `send-texts` : même geste, deux fois son objectif (20 n'a jamais été atteint en production).
-  template('long-chat', 'hard', axisSignal('content.text_message'), 10),
-];
-
-/** Les gabarits retirés par l'audit du 2026-10-07 (#9634) : jamais tirés, remplacés s'ils l'ont été aujourd'hui. */
-export const RETIRED_MISSION_TEMPLATE_KEYS = [
-  'share-link',
-  'prism-foreign-messages',
-  'prism-foreign-exchange',
-  'gold-replies-received',
-  'use-stickers',
-  'voice-comments',
-  'publish-reel',
-  'reply-conversations',
-  'reply-conversations-wide',
-  'gold-reply-conversations',
-] as const;
-
-export const isRetiredMissionTemplate = (key: string): boolean => (RETIRED_MISSION_TEMPLATE_KEYS as readonly string[]).includes(key);
-
-/** Les gabarits d'une difficulté ; ceux de l'Or sont les difficiles portés à l'Or (calculés à l'appel : la première peinture du web importe ce module). */
+/** Les gabarits d'une difficulté ; l'Or tire parmi les siens ET les difficiles portés à l'Or. */
 export const missionTemplatesFor = (difficulty: MissionDifficulty): readonly MissionTemplate[] =>
   difficulty === 'gold'
-    ? MISSION_TEMPLATES.filter((t) => t.difficulty === 'hard').map((t) => ({ ...t, difficulty, basePoints: MISSION_BASE_POINTS.gold }))
+    ? [
+        ...MISSION_TEMPLATES.filter((t) => t.difficulty === 'gold'),
+        ...MISSION_TEMPLATES.filter((t) => t.difficulty === 'hard').map((t) => ({ ...t, difficulty })),
+      ]
     : MISSION_TEMPLATES.filter((t) => t.difficulty === difficulty);
+
+/** Un gabarit que ce profil peut faire. Sans profil, tous. */
+export const missionAvailableFor = (template: MissionTemplate, profile: MissionProfile | undefined): boolean =>
+  profile === undefined || (template.requires ?? []).every((capability) => profile.capabilities.includes(capability));
 
 /** Les missions du jour s'ouvrent au niveau 5. */
 export const MISSIONS_MIN_LEVEL = 5;
@@ -181,6 +155,33 @@ export const missionReward = (params: {
   return Math.floor((numerator + 5000) / 10_000);
 };
 
+const clampTarget = (template: MissionTemplate, target: number): number =>
+  Math.min(template.maxTarget, Math.max(template.minTarget, target));
+
+/**
+ * L'objectif d'un gabarit pour un compte. Sans habitude connue : `⌈ baseTarget × (1 + 0,3 × bande) ⌉`. Avec :
+ * `⌈ habitude × facteur de la difficulté × (1 + 0,3 × bande) ⌉` — 0 pour un compte qui ne fait pas ce geste,
+ * donc le plancher. Toujours borné par le plancher et le plafond du gabarit.
+ */
+export function missionTarget(params: {
+  readonly template: MissionTemplate;
+  readonly difficulty: MissionDifficulty;
+  readonly level: number;
+  readonly profile?: MissionProfile;
+}): number {
+  const { template, difficulty, level, profile } = params;
+  if (profile === undefined) return clampTarget(template, missionObjective({ baseTarget: template.baseTarget, level }));
+  if (template.habit === undefined) return template.minTarget;
+  const perDay = profile.habits[template.habit.operation] ?? 0;
+  const habit = Number.isFinite(perDay) && perDay > 0 ? perDay * (template.habit.ratio ?? 1) : 0;
+  const scaled = habit * MISSION_HABIT_FACTOR[difficulty] * (10 + 3 * missionBand(level));
+  return clampTarget(template, Math.ceil(scaled / 10 - 1e-9));
+}
+
+/** La Gloire d'un gabarit tiré à cette difficulté : la sienne, et au moins celle de l'Or pour une mission d'Or. */
+export const missionGlory = (template: MissionTemplate, difficulty: MissionDifficulty): number =>
+  Math.max(template.glory ?? 0, difficulty === 'gold' ? GLORY_POINTS.goldMission : 0);
+
 export type MissionSlot = 'easy' | 'medium' | 'hard' | 'gold';
 
 export type DrawnMission = {
@@ -191,9 +192,25 @@ export type DrawnMission = {
   readonly target: number;
   /** Points crédités à la validation, bonus de Flamme compris. */
   readonly reward: number;
-  /** Gloire de la mission : 40 pour l'Or, `0` sinon. */
+  /** Gloire de la mission : celle du gabarit, au moins 40 pour l'Or. */
   readonly glory: number;
 };
+
+/** Ce que l'achèvement d'une mission paie, tout compris. */
+export type MissionArtifacts = {
+  readonly points: number;
+  readonly glory: number;
+  readonly seasonStars: number;
+  /** Une mission du jour compte pour le coffre ; la mission personnelle, non. */
+  readonly chest: boolean;
+};
+
+export const missionArtifacts = (mission: Pick<DrawnMission, 'difficulty' | 'reward' | 'glory'>, slot: number): MissionArtifacts => ({
+  points: mission.reward,
+  glory: mission.glory,
+  seasonStars: seasonStarsForMission(mission.difficulty),
+  chest: slot < 3,
+});
 
 export type DailyMissionDraw = {
   readonly dayKey: string;
@@ -212,25 +229,50 @@ export type MissionDrawInput = {
   readonly treasury: number;
   /** Signaux impossibles pour CE compte — jamais tirés. */
   readonly unavailableSignals?: readonly MissionSignal[];
+  /** Ce que le compte peut faire et fait d'ordinaire ; absent : tous les gabarits, objectifs de base. */
+  readonly profile?: MissionProfile;
 };
 
-const toDrawn = (t: MissionTemplate, level: number, flameDays: number): DrawnMission => ({
-  difficulty: t.difficulty,
-  templateKey: t.key,
-  signal: t.signal,
-  prism: t.prism,
-  target: missionObjective({ baseTarget: t.baseTarget, level }),
-  reward: missionReward({ basePoints: t.basePoints, level, flameDays }),
-  glory: t.difficulty === 'gold' ? GLORY_POINTS.goldMission : 0,
-});
+/** Une mission tirée sur ce gabarit, à cette difficulté, pour ce compte. */
+export function drawnMissionOf(params: {
+  readonly template: MissionTemplate;
+  readonly difficulty: MissionDifficulty;
+  readonly level: number;
+  readonly flameDays: number;
+  readonly profile?: MissionProfile;
+}): DrawnMission {
+  const { template, difficulty, flameDays, profile } = params;
+  const level = clampLevel(params.level);
+  const target = missionTarget({ template, difficulty, level, ...(profile ? { profile } : {}) });
+  return {
+    difficulty,
+    templateKey: template.key,
+    signal: template.signal,
+    prism: template.prism ?? false,
+    target,
+    reward: missionReward({ basePoints: MISSION_BASE_POINTS[difficulty] + template.unitPoints * target, level, flameDays }),
+    glory: missionGlory(template, difficulty),
+  };
+}
+
+const DEFAULT_WEIGHT = 4;
+
+/** Une valeur du générateur par tirage ; à poids égaux, le même indice que `pickIndex`. */
+const pickWeighted = <T extends { readonly weight?: number }>(rng: () => number, pool: readonly T[]): T | undefined => {
+  const weights = pool.map((t) => Math.max(0, t.weight ?? DEFAULT_WEIGHT));
+  const ticket = rng() * weights.reduce((sum, w) => sum + w, 0);
+  const index = weights.findIndex((_, i) => weights.slice(0, i + 1).reduce((sum, w) => sum + w, 0) > ticket);
+  return pool[index >= 0 ? index : pool.length - 1];
+};
 
 const poolOf = (
   difficulty: MissionDifficulty,
   excluded: ReadonlySet<MissionSignal>,
   prismOnly: boolean,
+  profile: MissionProfile | undefined,
 ): readonly MissionTemplate[] => {
-  const pool = missionTemplatesFor(difficulty).filter((t) => !excluded.has(t.signal));
-  const prism = pool.filter((t) => t.prism);
+  const pool = missionTemplatesFor(difficulty).filter((t) => !excluded.has(t.signal) && missionAvailableFor(t, profile));
+  const prism = pool.filter((t) => t.prism === true);
   return prismOnly && prism.length > 0 ? prism : pool;
 };
 
@@ -251,12 +293,11 @@ export function drawDailyMissions(input: MissionDrawInput): DailyMissionDraw {
   const used = new Set<MissionSignal>(input.unavailableSignals ?? []);
   const order: readonly MissionDifficulty[] = [topDifficulty, 'medium', 'easy'];
   const drawn = order.flatMap((difficulty) => {
-    const pool = poolOf(difficulty, used, prismDay && difficulty === prismDifficulty);
-    const index = pickIndex(rng, pool.length);
-    const picked = pool[index];
+    const pool = poolOf(difficulty, used, prismDay && difficulty === prismDifficulty, input.profile);
+    const picked = pickWeighted(rng, pool);
     if (picked === undefined) return [];
     used.add(picked.signal);
-    return [toDrawn(picked, level, input.flameDays)];
+    return [drawnMissionOf({ template: picked, difficulty, level, flameDays: input.flameDays, ...(input.profile ? { profile: input.profile } : {}) })];
   });
 
   const byDifficulty = new Map(drawn.map((m) => [m.difficulty, m]));
@@ -282,6 +323,7 @@ export function rerollDailyMission(params: {
   readonly index: number;
   readonly rerollCount: number;
   readonly unavailableSignals?: readonly MissionSignal[];
+  readonly profile?: MissionProfile;
 }): DrawnMission | null {
   const current = params.missions[params.index];
   if (current === undefined) return null;
@@ -290,14 +332,16 @@ export function rerollDailyMission(params: {
     ...(params.unavailableSignals ?? []),
     ...params.missions.map((m) => m.signal),
   ]);
-  const pool = poolOf(current.difficulty, excluded, false).filter((t) => t.key !== current.templateKey);
+  const pool = poolOf(current.difficulty, excluded, false, params.profile).filter((t) => t.key !== current.templateKey);
   const rng = seededRng({
     userId: params.userId,
     dayKey: params.dayKey,
     salt: `reroll:${params.index}:${Math.max(0, Math.trunc(params.rerollCount))}`,
   });
-  const picked = pool[pickIndex(rng, pool.length)];
-  return picked === undefined ? null : toDrawn(picked, level, params.flameDays);
+  const picked = pickWeighted(rng, pool);
+  return picked === undefined
+    ? null
+    : drawnMissionOf({ template: picked, difficulty: current.difficulty, level, flameDays: params.flameDays, ...(params.profile ? { profile: params.profile } : {}) });
 }
 
 /** Une mission du jour telle qu'elle est posée en base : tirée, et peut-être déjà achevée. */
@@ -305,31 +349,45 @@ export type DayMission = DrawnMission & { readonly completed: boolean };
 
 export type MissionReplacement = { readonly index: number; readonly mission: DrawnMission };
 
+/** Le gabarit est-il encore tirable à cette difficulté — connu du catalogue, et à portée de ce profil ? */
+export const isMissionStillPossible = (params: {
+  readonly templateKey: string;
+  readonly difficulty: MissionDifficulty;
+  readonly signal: MissionSignal | string;
+  readonly unavailableSignals?: readonly (MissionSignal | string)[];
+}): boolean =>
+  missionTemplatesFor(params.difficulty).some((t) => t.key === params.templateKey) &&
+  !(params.unavailableSignals ?? []).includes(params.signal);
+
 /**
- * Les missions du jour tirées sur un gabarit RETIRÉ (#9634), et pas encore achevées : chacune reçoit un
- * gabarit tracé de MÊME difficulté, au signal libre ce jour-là — à défaut, n'importe quel gabarit de sa
- * difficulté, plutôt qu'une mission que plus rien ne fait avancer. Dans l'ordre des positions, chaque
- * remplacement écarte le signal du précédent. Déterministe (`retired:<position>`).
+ * Les missions du jour devenues IMPOSSIBLES (gabarit inconnu du catalogue, ou signal que le compte ne peut plus
+ * produire), et pas encore achevées : chacune reçoit un gabarit de MÊME difficulté, au signal libre ce jour-là
+ * — à défaut, n'importe quel gabarit de sa difficulté, plutôt qu'une mission que plus rien ne fait avancer. Dans
+ * l'ordre des positions, chaque remplacement écarte le signal du précédent. Déterministe (`replaced:<position>`).
  */
-export function replaceRetiredMissions(params: {
+export function replaceImpossibleMissions(params: {
   readonly userId: string;
   readonly dayKey: string;
   readonly level: number;
   readonly flameDays: number;
   readonly missions: readonly DayMission[];
+  readonly unavailableSignals?: readonly MissionSignal[];
+  readonly profile?: MissionProfile;
 }): readonly MissionReplacement[] {
   const level = clampLevel(params.level);
+  const unavailable = params.unavailableSignals ?? [];
   const initial: { readonly signals: readonly MissionSignal[]; readonly replaced: readonly MissionReplacement[] } = {
     signals: params.missions.map((m) => m.signal),
     replaced: [],
   };
   return params.missions.reduce((acc, current, index) => {
-    if (current.completed || !isRetiredMissionTemplate(current.templateKey)) return acc;
-    const open = poolOf(current.difficulty, new Set(acc.signals.filter((_, i) => i !== index)), false);
-    const pool = open.length > 0 ? open : missionTemplatesFor(current.difficulty);
-    const picked = pool[pickIndex(seededRng({ userId: params.userId, dayKey: params.dayKey, salt: `retired:${index}` }), pool.length)];
+    if (current.completed || isMissionStillPossible({ ...current, unavailableSignals: unavailable })) return acc;
+    const taken = new Set<MissionSignal>([...unavailable, ...acc.signals.filter((_, i) => i !== index)]);
+    const open = poolOf(current.difficulty, taken, false, params.profile);
+    const pool = open.length > 0 ? open : poolOf(current.difficulty, new Set(unavailable), false, params.profile);
+    const picked = pickWeighted(seededRng({ userId: params.userId, dayKey: params.dayKey, salt: `replaced:${index}` }), pool);
     if (picked === undefined) return acc;
-    const mission = toDrawn(picked, level, params.flameDays);
+    const mission = drawnMissionOf({ template: picked, difficulty: current.difficulty, level, flameDays: params.flameDays, ...(params.profile ? { profile: params.profile } : {}) });
     return {
       signals: acc.signals.map((signal, i) => (i === index ? mission.signal : signal)),
       replaced: [...acc.replaced, { index, mission }],

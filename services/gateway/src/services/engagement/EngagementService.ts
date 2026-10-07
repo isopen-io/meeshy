@@ -10,6 +10,7 @@
  * @see docs/product/streaks-badges-modele.md § 3, § 4
  */
 
+import type { MissionFactSignal } from '@meeshy/shared/utils/game/missions';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   BADGE_THRESHOLDS,
@@ -448,6 +449,11 @@ export class EngagementService {
   /** Un message committé (#9375, #9377) : signaux de mission et réponse reçue. */
   recordMessageSignals(input: MessageSignalInput): Promise<void> {
     return this.game.recordMessage(input);
+  }
+
+  /** Un fait que la passerelle pose au point unique de son geste (#9635) : la mission et le duo qui l'attendent. */
+  recordGameSignal(userId: string, signal: MissionFactSignal, options: { readonly key?: string } = {}): Promise<void> {
+    return this.game.onSignal(userId, signal, options);
   }
 
   /**
