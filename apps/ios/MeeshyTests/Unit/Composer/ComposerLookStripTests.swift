@@ -129,7 +129,8 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: nu, editing: false), .shutter)
         XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: chaud, editing: false), .thumbnail)
         XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: nu, editing: true), .hidden)
-        XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: chaud, editing: true), .thumbnail)
+        XCTAssertEqual(ComposerLookStripRule.collapsedTrigger(look: chaud, editing: true), .hidden,
+                       "la miniature seule n'existe que pendant la capture, où elle déclenche (#9567)")
         XCTAssertFalse(ComposerLookStripRule.paintsLive(look: nu, familyOpen: false))
         XCTAssertTrue(ComposerLookStripRule.paintsLive(look: nu, familyOpen: true))
     }
