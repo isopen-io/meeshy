@@ -319,7 +319,7 @@ describe('AttachmentService — direct-access methods', () => {
       await svc.associateAttachmentsToMessage([ATTACH_ID, 'att-2'], MSG_ID);
 
       expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: [ATTACH_ID, 'att-2'] } },
+        where: { id: { in: [ATTACH_ID, 'att-2'] }, OR: [{ messageId: null }, { messageId: { isSet: false } }] },
         data: { messageId: MSG_ID },
       });
     });

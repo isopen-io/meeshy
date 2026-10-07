@@ -331,6 +331,8 @@ export function registerSendMessageRoute(
         const attachmentAdmission = await admitMessageAttachments(prisma, {
           attachmentIds,
           ownerId: userId ?? participantId,
+          conversationId,
+          clientMessageId,
         });
         if (!attachmentAdmission.ok) {
           return sendNotFound(reply, 'Attachment not found', {

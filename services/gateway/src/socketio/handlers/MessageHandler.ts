@@ -68,6 +68,7 @@ import { agentSenderIdentity } from './agentSenderIdentity.js';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
+import { admitLoadedMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import type {
   MessageRequest,
@@ -554,11 +555,12 @@ export class MessageHandler {
       // Le tableau reste aligné sur `attachmentIds`, donc `invalidIndex`
       // ci-dessous continue de nommer la pièce fautive.
       const attachments = await attachmentService.getAttachmentsByIds(validated.attachmentIds);
-      const invalidIndex = attachments.findIndex(
-        (attachment) => !attachment || attachment.uploadedBy !== (userId || participantId)
-      );
-      if (invalidIndex !== -1) {
-        this._sendError(callback, `Attachment ${validated.attachmentIds[invalidIndex]} invalid`, socket);
+      const admission = await admitLoadedMessageAttachments(this.prisma, {
+        attachments, attachmentIds: validated.attachmentIds, ownerId: userId || participantId,
+        conversationId: validated.conversationId, clientMessageId: validated.clientMessageId,
+      });
+      if (!admission.ok) {
+        this._sendError(callback, `Attachment ${admission.invalidAttachmentId} invalid`, socket);
         return;
       }
 
