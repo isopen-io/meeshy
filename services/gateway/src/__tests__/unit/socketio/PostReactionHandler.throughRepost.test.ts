@@ -32,6 +32,7 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
 
 import { PostReactionHandler } from '../../../socketio/handlers/PostReactionHandler';
 import { validateSocketEvent } from '../../../middleware/validation';
+import { DailyGestureLimitReached } from '../../../services/engagement/DailyGestureGate';
 
 const READER = '507f1f77bcf86cd799439033';
 const AUTHOR = '507f1f77bcf86cd799439044';
@@ -111,5 +112,31 @@ describe('post:reaction-add depuis la carte d’une republication simple', () =>
     await handler.handleAddReaction(socket as never, { postId: REPOST, emoji: '👍' }, jest.fn());
 
     expect(addReaction).toHaveBeenCalledWith({ postId: REPOST, userId: READER, emoji: '👍' });
+  });
+});
+
+describe('post:reaction-add au-delà de la limite quotidienne (#9584)', () => {
+  it('acquitte un refus stable — code, remise à zéro, secondes et limite — et ne diffuse rien', async () => {
+    const { handler, addReaction, socket } = build({
+      [REPOST]: row(REPOST, { authorId: REPOSTER, repostOfId: ORIGINAL, originalRepostOfId: ORIGINAL }),
+      [ORIGINAL]: row(ORIGINAL),
+    });
+    const resetAt = new Date(Date.now() + 3_600_000);
+    addReaction.mockRejectedValue(new DailyGestureLimitReached('reaction', 'repost', 50, resetAt));
+    const ack = jest.fn();
+
+    await handler.handleAddReaction(socket as never, { postId: REPOST, emoji: '👍' }, ack);
+
+    expect(ack).toHaveBeenCalledWith({
+      success: false,
+      error: expect.any(String),
+      code: 'DAILY_REACTION_LIMIT',
+      resetAt: resetAt.toISOString(),
+      retryAfter: expect.any(Number),
+      limit: 50,
+    });
+    const [{ retryAfter }] = ack.mock.calls[0] as [{ retryAfter: number }];
+    expect(retryAfter).toBeGreaterThan(3590);
+    expect(retryAfter).toBeLessThanOrEqual(3600);
   });
 });

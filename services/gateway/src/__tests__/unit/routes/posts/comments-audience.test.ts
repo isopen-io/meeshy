@@ -464,7 +464,12 @@ describe('POST/DELETE .../like — liker un commentaire suit l’audience d’IN
   });
 });
 
-// ─── Repost simple → redirection du fil vers la racine (tâche 9) ─────────────
+// ─── Repost simple : SON propre fil (#9584, « fil propre », 2026-10-07) ───────
+//
+// La tâche 9 rangeait sur la RACINE tout commentaire écrit depuis une
+// republication simple ; le porteur a tranché l'inverse : la republication a
+// son propre fil. La redirection reste la garde d'audience (la republication ET
+// sa racine doivent être lisibles), et les réactions restent redirigées.
 
 const ROOT_ID = '507f1f77bcf86cd799439ccc';
 
@@ -484,8 +489,15 @@ function rootAcl(overrides: Partial<PostAcl> = {}): PostAcl {
   };
 }
 
-function makeRepostPrisma(byId: Record<string, PostAcl | null>) {
+function makeRepostPrisma(
+  byId: Record<string, PostAcl | null>,
+  opts: { blockedWith?: string; commentOn?: { id: string; postId: string; post: PostAcl } } = {},
+) {
   return {
+    user: {
+      findFirst: jest.fn<any>().mockImplementation(({ where }: { where: { OR: Array<{ id: string; blockedUserIds: { has: string } }> } }) =>
+        Promise.resolve(where.OR.some((side) => side.id === opts.blockedWith || side.blockedUserIds.has === opts.blockedWith) ? { id: 'x' } : null)),
+    },
     post: {
       findFirst: jest.fn<any>().mockImplementation(({ where }: { where: { id: string } }) =>
         Promise.resolve(byId[where.id] ?? null)),
@@ -495,7 +507,8 @@ function makeRepostPrisma(byId: Record<string, PostAcl | null>) {
       }),
     },
     postComment: {
-      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findFirst: jest.fn<any>().mockImplementation(({ where }: { where: { id: string } }) =>
+        Promise.resolve(opts.commentOn && where.id === opts.commentOn.id ? { postId: opts.commentOn.postId, post: opts.commentOn.post } : null)),
       findUnique: jest.fn<any>().mockResolvedValue({ id: COMMENT_ID, content: 'hi', authorId: AUTHOR_ID }),
     },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
@@ -504,15 +517,51 @@ function makeRepostPrisma(byId: Record<string, PostAcl | null>) {
   } as any;
 }
 
-describe('GET /posts/:postId/comments — repost simple renvoie le fil de la RACINE', () => {
-  it('lit le fil de la racine, pas celui (vide) du repost affiché', async () => {
+describe('GET /posts/:postId/comments — une republication simple montre SON fil (#9584)', () => {
+  it('lit le fil de la republication, pas celui de sa racine', async () => {
     const prisma = makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl() });
     const app = await buildApp(prisma);
 
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments` });
 
     expect(res.statusCode).toBe(200);
+    expect(mockGetComments).toHaveBeenCalledWith(POST_ID, undefined, 20, VIEWER_ID);
+    await app.close();
+  });
+
+  it('lire l’original lui-même rend toujours le fil de l’original', async () => {
+    const prisma = makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl() });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/posts/${ROOT_ID}/comments` });
+
+    expect(res.statusCode).toBe(200);
     expect(mockGetComments).toHaveBeenCalledWith(ROOT_ID, undefined, 20, VIEWER_ID);
+    await app.close();
+  });
+
+  it('les réponses d’un commentaire rangé sous une republication se ferment avec sa racine', async () => {
+    const thread = { id: COMMENT_ID, postId: POST_ID, post: repostAcl() };
+    const open = await buildApp(makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl() }, { commentOn: thread }));
+    const closed = await buildApp(makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl({ visibility: 'PRIVATE' }) }, { commentOn: thread }));
+
+    const readable = await open.inject({ method: 'GET', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/replies` });
+    const refused = await closed.inject({ method: 'GET', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/replies` });
+
+    expect(readable.statusCode).toBe(200);
+    expect(refused.statusCode).toBe(404);
+    await open.close();
+    await closed.close();
+  });
+
+  it('liker un commentaire rangé sous une republication exige aussi l’original', async () => {
+    const thread = { id: COMMENT_ID, postId: POST_ID, post: repostAcl() };
+    const app = await buildApp(makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl({ visibility: 'PRIVATE' }) }, { commentOn: thread }));
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`, payload: { emoji: '❤️' } });
+
+    expect(res.statusCode).toBe(404);
+    expect(mockLikeComment).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -593,21 +642,64 @@ describe('POST /posts/:postId/comments — commentsDisabled bloque TOUT commenta
   });
 });
 
-describe('POST /posts/:postId/comments — repost simple atterrit sur le fil de la RACINE', () => {
-  it('crée le commentaire sur la RACINE, pas sur le repost affiché', async () => {
+describe('POST /posts/:postId/comments — écrit sous une republication simple, rangé sous ELLE (#9584)', () => {
+  it('crée le commentaire sur la republication, pas sur sa racine', async () => {
     const prisma = makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl() });
     const app = await buildApp(prisma);
 
     const res = await app.inject({
       method: 'POST',
       url: `/posts/${POST_ID}/comments`,
-      payload: { content: 'sur la racine' },
+      payload: { content: 'sous la republication' },
     });
 
     expect(res.statusCode).toBe(201);
     expect(mockAddComment).toHaveBeenCalledWith(
-      ROOT_ID, VIEWER_ID, 'sur la racine', expect.objectContaining({ parentId: undefined }),
+      POST_ID, VIEWER_ID, 'sous la republication', expect.objectContaining({ parentId: undefined }),
     );
+    await app.close();
+  });
+
+  it('une RÉPONSE à un commentaire resté sur l’original (écrit avant la règle) le rejoint sur l’original', async () => {
+    const parent = { id: COMMENT_ID, postId: ROOT_ID, post: rootAcl() };
+    const app = await buildApp(makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl() }, { commentOn: parent }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'réponse', parentId: COMMENT_ID },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockAddComment).toHaveBeenCalledWith(ROOT_ID, VIEWER_ID, 'réponse', expect.objectContaining({ parentId: COMMENT_ID }));
+    await app.close();
+  });
+
+  it.each([
+    ['la republication', { [POST_ID]: repostAcl({ commentsDisabled: true }), [ROOT_ID]: rootAcl() }],
+    ['l’original', { [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl({ commentsDisabled: true }) }],
+  ])('commentaires fermés sur %s ⇒ 403 COMMENTS_DISABLED, rien n’est écrit', async (_label, byId) => {
+    const app = await buildApp(makeRepostPrisma(byId));
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'x' } });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('COMMENTS_DISABLED');
+    expect(mockAddComment).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([
+    ['l’auteur de l’original', 'root-author-1'],
+    ['l’auteur de la republication', AUTHOR_ID],
+  ])('un blocage avec %s refuse comme un post introuvable — rien n’est écrit', async (_label, blockedWith) => {
+    const app = await buildApp(makeRepostPrisma({ [POST_ID]: repostAcl(), [ROOT_ID]: rootAcl() }, { blockedWith }));
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'x' } });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('POST_NOT_FOUND');
+    expect(mockAddComment).not.toHaveBeenCalled();
     await app.close();
   });
 

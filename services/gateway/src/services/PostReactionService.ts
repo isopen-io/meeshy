@@ -13,7 +13,15 @@ import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { assertValidObjectId } from '../utils/object-id.js';
 import { EngagementService } from './engagement/EngagementService';
-import { creditPostGesture, postsCreditedBy, type PostEngagementRecorder } from './posts/postEngagementCredits';
+import { DailyGestureGate } from './engagement/DailyGestureGate';
+import { receiptBucket } from './engagement/EngagementReceipts';
+import {
+  creditPostGesture,
+  creditSource,
+  postsCreditedBy,
+  reclaimContentCredits,
+  type PostEngagementRecorder,
+} from './posts/postEngagementCredits';
 import type { RepostPassage } from './posts/postVisibility';
 
 export interface PostReactionAggregation {
@@ -95,6 +103,7 @@ export class PostReactionService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly engagement: PostEngagementRecorder = new EngagementService(prisma),
+    private readonly gestures: Pick<DailyGestureGate, 'admit' | 'release'> = new DailyGestureGate(prisma),
   ) {}
 
   async addReaction(options: AddPostReactionOptions): Promise<AddPostReactionResult | null> {
@@ -137,6 +146,7 @@ export class PostReactionService {
     });
 
     if (existingReaction) {
+      await this.reconfirmThrough(userId, existingReaction.id, through);
       return { ...this.mapReactionToData(existingReaction), unchanged: true };
     }
 
@@ -153,6 +163,11 @@ export class PostReactionService {
     // déjà sur `instanceof ConflictError` pour répondre 409 (refus légitime), pas 500.
     assertReactionAllowed(existingReactionCount);
 
+    // #9584 — la limite quotidienne de réactions, AVANT l'écriture : au-delà,
+    // le geste est refusé (`DailyGestureLimitReached`), ne consomme rien et ne
+    // rapporte rien. Venue d'une republication, elle compte sous les republications.
+    const ticket = await this.gestures.admit(userId, 'reaction', through ? 'repost' : 'original');
+
     try {
       const reaction = await this.prisma.postReaction.create({
         data: {
@@ -167,18 +182,23 @@ export class PostReactionService {
         this.prisma,
         userId,
         'tool.post_reaction',
-        postsCreditedBy({ id: postId, authorId: post.authorId }, through),
+        { posts: postsCreditedBy({ id: postId, authorId: post.authorId }, through), source: creditSource.postReaction(reaction.id) },
         this.engagement,
       );
 
       return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {
+      // La réaction n'a pas été posée par CE geste : sa place du jour lui revient.
+      await this.gestures.release(ticket);
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
         // Concurrent insert race: treat as idempotent success, summary already correct.
         const existing = await this.prisma.postReaction.findFirst({
           where: { postId, userId, emoji: sanitized }
         });
-        if (existing) return { ...this.mapReactionToData(existing), unchanged: true };
+        if (existing) {
+          await this.reconfirmThrough(userId, existing.id, through);
+          return { ...this.mapReactionToData(existing), unchanged: true };
+        }
       }
       throw err;
     }
@@ -194,6 +214,12 @@ export class PostReactionService {
       throw new Error('Invalid emoji format');
     }
 
+    // Les lignes AVANT leur retrait : c'est leur identifiant qui nomme les
+    // crédits à reprendre (#9584).
+    const removed = await this.prisma.postReaction.findMany({
+      where: { postId, userId, emoji: sanitized },
+      select: { id: true },
+    });
     const result = await this.prisma.postReaction.deleteMany({
       where: {
         postId,
@@ -204,9 +230,54 @@ export class PostReactionService {
 
     if (result.count > 0) {
       await this.updatePostReactionSummary(postId);
+      // Retirer la réaction reprend ce qu'elle a rapporté — sur l'original et
+      // sur chaque republication par laquelle elle a été posée ou reconfirmée.
+      removed.forEach(({ id }) =>
+        reclaimContentCredits(this.prisma, userId, creditSource.postReaction(id), {}, this.engagement),
+      );
     }
 
     return result.count > 0;
+  }
+
+  /**
+   * Une réaction DÉJÀ posée sur l'original, reconfirmée depuis une republication
+   * simple (#9584) : l'original ne se recrédite pas — il l'a été à la pose —,
+   * la republication reçoit son propre crédit, une fois (le reçu de la réaction
+   * pour CE post le garde). C'est alors un geste sous une republication, qui
+   * prend sa place du jour ; rien à créditer — déjà fait, ou sa propre
+   * republication — n'est pas un geste.
+   */
+  private async reconfirmThrough(userId: string, reactionId: string, through: RepostPassage | undefined): Promise<void> {
+    if (!through || through.authorId === userId) return;
+    if (await this.creditedThrough(userId, reactionId, through.id)) return;
+    await this.gestures.admit(userId, 'reaction', 'repost');
+    creditPostGesture(
+      this.prisma,
+      userId,
+      'tool.post_reaction',
+      { posts: [through], source: creditSource.postReaction(reactionId) },
+      this.engagement,
+    );
+  }
+
+  /** Cette réaction a-t-elle déjà crédité cette republication ? (son reçu existe) */
+  private async creditedThrough(userId: string, reactionId: string, repostId: string): Promise<boolean> {
+    try {
+      const receipt = await this.prisma.engagementQuota.findUnique({
+        where: {
+          userId_operationKey_bucket: {
+            userId,
+            operationKey: 'tool.post_reaction',
+            bucket: receiptBucket(creditSource.postReaction(reactionId), repostId),
+          },
+        },
+        select: { id: true },
+      });
+      return receipt != null;
+    } catch {
+      return false;
+    }
   }
 
   async getPostReactions(options: GetPostReactionsOptions): Promise<PostReactionSync> {

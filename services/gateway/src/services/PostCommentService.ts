@@ -18,7 +18,7 @@ import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubj
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { EngagementService } from './engagement/EngagementService';
-import { creditPostEngagement, type PostEngagementRecorder } from './posts/postEngagementCredits';
+import { creditPostEngagement, creditSource, reclaimContentCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 
@@ -614,15 +614,17 @@ export class PostCommentService {
     // `commentCount` by the number of surviving descendants. Collect the subtree
     // breadth-first and remove it atomically-in-count.
     const descendantIds: string[] = [];
+    const descendantAuthors: Array<{ readonly id: string; readonly authorId: string }> = [];
     let frontier = [commentId];
     while (frontier.length > 0) {
       const children = await this.prisma.postComment.findMany({
         where: { parentId: { in: frontier }, deletedAt: NOT_DELETED },
-        select: { id: true },
+        select: { id: true, authorId: true },
       });
       if (children.length === 0) break;
       const childIds = children.map((c) => c.id);
       descendantIds.push(...childIds);
+      descendantAuthors.push(...children);
       frontier = childIds;
     }
 
@@ -637,6 +639,12 @@ export class PostCommentService {
       where: { id: { in: deletedCommentIds } },
       data: { deletedAt },
     });
+
+    // Chaque commentaire retiré — la cible et ses réponses — reprend ce qu'il a
+    // rapporté à SON auteur (#9584). Une suppression rejouée ne reprend rien.
+    [{ id: commentId, authorId: comment.authorId }, ...descendantAuthors].forEach(({ id, authorId }) =>
+      reclaimContentCredits(this.prisma, authorId, creditSource.comment(id), {}, this.engagement),
+    );
 
     await this.prisma.post.update({
       where: { id: comment.postId },
@@ -744,16 +752,23 @@ export class PostCommentService {
     // L'upsert reste idempotent (❤️ sur ❤️ ne change rien), donc le REST demeure
     // un FALLBACK sûr du socket, sans double-comptage si les deux se
     // déclenchent sur le même geste.
-    await this.prisma.commentReaction.upsert({
+    const like = await this.prisma.commentReaction.upsert({
       where: { comment_user_reaction_unique: { commentId, userId, emoji } },
       create: { commentId, userId, emoji },
       update: {},
+      select: { id: true },
     });
     // `tool.comment_like` (#8959) — seulement quand CET emoji n'était pas déjà
     // posé : reconfirmer (ou passer en repli derrière le socket, qui l'a déjà
     // écrit et crédité) ne recrédite pas.
     if (!alreadyHasThisEmoji) {
-      creditPostEngagement(this.prisma, userId, 'tool.comment_like', { postId: comment.postId, targetId: commentId, targetOwnerId: comment.authorId }, this.engagement);
+      creditPostEngagement(
+        this.prisma,
+        userId,
+        'tool.comment_like',
+        { postId: comment.postId, targetId: commentId, targetOwnerId: comment.authorId, receipt: creditSource.commentReaction(like.id) },
+        this.engagement,
+      );
     }
     return this.syncCommentLikeCounters(commentId);
   }
@@ -786,7 +801,7 @@ export class PostCommentService {
     const pile = await this.prisma.commentReaction.findMany({
       where: { commentId, userId, ...(requested ? { emoji: requested } : {}) },
       orderBy: { createdAt: 'desc' },
-      select: { emoji: true },
+      select: { id: true, emoji: true },
       take: 1,
     });
     const cible = pile[0]?.emoji ?? null;
@@ -796,6 +811,8 @@ export class PostCommentService {
     }
 
     await this.prisma.commentReaction.deleteMany({ where: { commentId, userId, emoji: cible } });
+    // Retirer le like reprend ce qu'il a rapporté (#9584).
+    reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(pile[0]!.id), {}, this.engagement);
     // `removedEmoji` voyage AVEC le commentaire, exactement comme sur le chemin
     // des publications (`PostService.unlikePost`). La route diffuse ce que le
     // serveur a FAIT, jamais ce que le client a DEMANDÉ : sans lui, un retrait

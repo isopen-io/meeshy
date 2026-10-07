@@ -982,11 +982,10 @@ describe('PostReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
     });
 
-    it('test_handleJoinPost_simpleRepost_joinsRootRoom', async () => {
-      // Review task-9, important #1 : rejoindre un repost simple rejoint la
-      // room de sa RACINE (même redirection que like/comment/lecture) — sinon
-      // le viewer n'entend plus jamais les broadcasts, tous partis vers la
-      // room de la racine.
+    it('test_handleJoinPost_simpleRepost_joinsRootAndOwnThreadRooms', async () => {
+      // Rejoindre un repost simple rejoint la room de sa RACINE (ses réactions,
+      // task-9) ET la sienne : depuis #9584 il a son propre fil de
+      // commentaires, dont les `comment:*` partent vers SA room.
       const ROOT_ID = '507f1f77bcf86cd799439077';
       const socket = createMockSocket();
       const data = { postId: POST_ID };
@@ -1025,7 +1024,7 @@ describe('PostReactionHandler', () => {
       await handler.handleJoinPost(socket as any, data, callback);
 
       expect(socket.join).toHaveBeenCalledWith(ROOMS.post(ROOT_ID));
-      expect(socket.join).not.toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(socket.join).toHaveBeenCalledWith(ROOMS.post(POST_ID));
       expect(callback).toHaveBeenCalledWith({ success: true });
     });
 
@@ -1122,7 +1121,7 @@ describe('PostReactionHandler', () => {
       });
     });
 
-    it('test_handleLeavePost_simpleRepost_leavesRootRoom', async () => {
+    it('test_handleLeavePost_simpleRepost_leavesRootAndOwnThreadRooms', async () => {
       // Symétrique de `handleJoinPost` (review task-9, important #1) : sans
       // cette résolution, `leave` viserait la room DU REPOST — où le socket
       // n'a jamais mis les pieds (le join a rejoint la racine) — et la vraie
@@ -1165,7 +1164,7 @@ describe('PostReactionHandler', () => {
       await handler.handleLeavePost(socket as any, data, callback);
 
       expect(socket.leave).toHaveBeenCalledWith(ROOMS.post(ROOT_ID));
-      expect(socket.leave).not.toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(socket.leave).toHaveBeenCalledWith(ROOMS.post(POST_ID));
       expect(callback).toHaveBeenCalledWith({ success: true });
     });
 

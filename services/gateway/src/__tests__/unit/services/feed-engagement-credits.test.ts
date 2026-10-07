@@ -31,6 +31,7 @@ function makeRecorder() {
   return {
     recordActivity: jest.fn<any>().mockResolvedValue(undefined),
     reclaimContent: jest.fn<any>().mockResolvedValue(0),
+    reclaimSource: jest.fn<any>().mockResolvedValue(0),
   };
 }
 
@@ -70,6 +71,7 @@ describe('tool.post_reaction — PostReactionService.addReaction', () => {
       postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
+      receipt: 'post-reaction:reaction-1',
     });
   });
 
@@ -81,8 +83,8 @@ describe('tool.post_reaction — PostReactionService.addReaction', () => {
     await settle();
 
     expect(recorder.recordActivity.mock.calls).toEqual([
-      [READER_ID, 'tool.post_reaction', { postId: POST_ID, targetId: POST_ID, targetOwnerId: AUTHOR_ID }],
-      [READER_ID, 'tool.post_reaction', { postId: REPOST_ID, targetId: REPOST_ID, targetOwnerId: REPOSTER_ID }],
+      [READER_ID, 'tool.post_reaction', { postId: POST_ID, targetId: POST_ID, targetOwnerId: AUTHOR_ID, receipt: 'post-reaction:reaction-1' }],
+      [READER_ID, 'tool.post_reaction', { postId: REPOST_ID, targetId: REPOST_ID, targetOwnerId: REPOSTER_ID, receipt: 'post-reaction:reaction-1' }],
     ]);
   });
 
@@ -130,6 +132,7 @@ describe('tool.comment_like — un like, un crédit, par l’un ou l’autre che
       postId: POST_ID,
       targetId: COMMENT_ID,
       targetOwnerId: AUTHOR_ID,
+      receipt: 'comment-reaction:reaction-1',
     });
   });
 
@@ -156,7 +159,7 @@ describe('tool.comment_like — un like, un crédit, par l’un ou l’autre che
       commentReaction: {
         findFirst: jest.fn<any>().mockResolvedValue(alreadyHasThisEmoji ? { id: 'reaction-1' } : null),
         count: jest.fn<any>().mockResolvedValue(0),
-        upsert: jest.fn<any>().mockResolvedValue({}),
+        upsert: jest.fn<any>().mockResolvedValue({ id: 'comment-reaction-rest' }),
         groupBy: jest.fn<any>().mockResolvedValue([]),
       },
     };
@@ -173,6 +176,7 @@ describe('tool.comment_like — un like, un crédit, par l’un ou l’autre che
       postId: POST_ID,
       targetId: COMMENT_ID,
       targetOwnerId: AUTHOR_ID,
+      receipt: 'comment-reaction:comment-reaction-rest',
     });
   });
 

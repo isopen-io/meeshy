@@ -32,6 +32,8 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { resolveInteractionTarget, resolveConsumptionTarget } from '../../services/posts/postVisibility.js';
+import { DailyGestureLimitReached } from '../../services/engagement/DailyGestureGate.js';
+import { dailyGestureAck } from '../../utils/daily-gesture-refusal.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
 import { emitServerEvent } from '../serverEmit';
 
@@ -58,6 +60,12 @@ export interface PostReactionHandlerDependencies {
   socketToUser: Map<string, string>;
   socialEvents: SocialEventsHandler;
 }
+
+/** Les rooms d'un post résolu : la sienne, et celle de la republication simple traversée (#9584). */
+const postRoomsOf = (target: { readonly id: string; readonly redirectedFrom?: { readonly id: string } }): string[] => [
+  ROOMS.post(target.id),
+  ...(target.redirectedFrom ? [ROOMS.post(target.redirectedFrom.id)] : []),
+];
 
 export class PostReactionHandler {
   private io: SocketIOServer;
@@ -257,6 +265,11 @@ export class PostReactionHandler {
       this._createPostReactionNotification(targetPostId, validated.emoji, userId)
         .catch(err => this.logger.error('post reaction notification failed', err, { postId: targetPostId }));
     } catch (error: unknown) {
+      // #9584 — la limite quotidienne : un refus stable, avec sa remise à zéro.
+      if (error instanceof DailyGestureLimitReached) {
+        if (callback) callback(dailyGestureAck(error));
+        return;
+      }
       this.logger.error('Failed to add post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: AckResponseOf<'post:reaction-add'> = {
         success: false,
@@ -519,7 +532,10 @@ export class PostReactionHandler {
         return callback?.({ success: false, error: 'Post not found' });
       }
 
-      await socket.join(ROOMS.post(target.id));
+      // #9584 — une republication simple a désormais SON fil : ses
+      // `comment:*` partent vers SA room, ses réactions vers celle de
+      // l'original. Le lecteur rejoint les deux.
+      await Promise.all(postRoomsOf(target).map((room) => socket.join(room)));
       callback?.({ success: true });
     } catch (error: unknown) {
       this.logger.error('Failed to join post room', error, { postId: (data as { postId?: string }).postId });
@@ -573,7 +589,8 @@ export class PostReactionHandler {
       // sur une room absente est un no-op, jamais une erreur visible pour
       // l'appelant.
       const target = await resolveConsumptionTarget(this.prisma, validated.postId, userId);
-      await socket.leave(ROOMS.post(target?.id ?? validated.postId));
+      const rooms = target ? postRoomsOf(target) : [ROOMS.post(validated.postId)];
+      await Promise.all(rooms.map((room) => socket.leave(room)));
       if (callback) callback({ success: true });
     } catch (error: unknown) {
       this.logger.error('Failed to leave post room', error, { postId: (data as { postId?: string }).postId });

@@ -49,6 +49,7 @@ import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { ONE_DAY_MS, civilDayInTimezone, civilDayKey } from './civilDay';
 import { ConversationEngagementRecorder, dayCountsFor, isDailyCapReached } from './ConversationEngagementRecorder';
 import { PostPointsRecorder } from './PostPointsRecorder';
+import { EngagementReceipts, receiptBucket } from './EngagementReceipts';
 import { engagementScaleServiceFor, type EngagementScaleSource } from './EngagementScaleService';
 import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
@@ -152,6 +153,8 @@ export type EngagementActivityOptions = {
   readonly targetOwnerId?: string | null;
   /** La variante de points (visibilité d'une publication, position en direct ou statique). */
   readonly variant?: string;
+  /** Le contenu qui produit ce crédit (#9584) — une source ne crédite un post qu'une fois, et la retirer le reprend. */
+  readonly receipt?: string;
 };
 
 /** Ce qu'une visite de lien fait savoir au crédit. */
@@ -183,6 +186,8 @@ export class EngagementService {
 
   private readonly postRecorder: PostPointsRecorder;
 
+  private readonly receipts: EngagementReceipts;
+
   private readonly quotas: EngagementQuotas;
 
   /** Le jeu (#9374…#9377) : Vent arrière, frein de l'entre-soi, missions, Gloire. */
@@ -196,6 +201,7 @@ export class EngagementService {
     this.conversationRecorder = new ConversationEngagementRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
     this.postRecorder = new PostPointsRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
     this.quotas = new EngagementQuotas(prisma);
+    this.receipts = new EngagementReceipts(prisma, this.quotas, this.postRecorder, this.scale);
     this.game = deps.game ?? new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey));
   }
 
@@ -352,6 +358,8 @@ export class EngagementService {
     });
     if (verdict === 'none') return;
     const points = verdict === 'quarter' ? quarterPoints(boosted) : boosted;
+    const receipt = options.receipt === undefined ? undefined : receiptBucket(options.receipt, options.postId);
+    if (receipt !== undefined && !(await this.receipts.claim(userId, operationKey, receipt))) return;
     const admitted = await this.quotas.admit({
       userId,
       operationKey,
@@ -370,6 +378,7 @@ export class EngagementService {
     if (options.postId !== undefined && inputs.isAccount) {
       await this.postRecorder.record({ userId, postId: options.postId, operationKey, points, rememberedTargetId });
     }
+    if (receipt !== undefined) await this.receipts.keep(userId, operationKey, receipt, rememberedTargetId === undefined ? points : 0);
 
     if (conversationId) {
       await this.conversationRecorder.record({
@@ -510,31 +519,14 @@ export class EngagementService {
     return points;
   }
 
-  /**
-   * Un contenu lourd SUPPRIMÉ (#8959) : s'il a été publié il y a moins de
-   * `clawbackHours`, ses points sont repris — publier, supprimer, republier ne
-   * pompe rien. Le compteur perd l'action et ses points, le score les points ;
-   * les paliers déjà franchis restent acquis.
-   */
-  async reclaimContent(userId: string, operationKey: EngagementOperationKey, targetId: string): Promise<number> {
-    const scale = await this.scale.current();
-    const since = new Date(Date.now() - scale.abuse.clawbackHours * 3_600_000);
-    const points = await this.quotas.reclaim(userId, operationKey, targetId, since);
-    if (points <= 0) return 0;
-    await this.prisma.engagementCounter.updateMany({
-      where: { userId, axisKey: operationKey, points: { gte: points }, count: { gte: 1 } },
-      data: { count: { decrement: 1 }, points: { decrement: points } },
-    });
-    await this.prisma.$runCommandRaw({
-      findAndModify: 'User',
-      query: { _id: { $oid: userId } },
-      update: [
-        { $set: { engagementScore: { $max: [0, { $subtract: [{ $ifNull: ['$engagementScore', 0] }, points] }] } } },
-      ],
-      new: true,
-      fields: { engagementScore: 1 },
-    } as never);
-    return points;
+  /** Un contenu lourd SUPPRIMÉ dans la fenêtre du barème (#8959) : ses points de publication sont repris. */
+  reclaimContent(userId: string, operationKey: EngagementOperationKey, targetId: string): Promise<number> {
+    return this.receipts.reclaimPublication(userId, operationKey, targetId);
+  }
+
+  /** Un CONTENU retiré (#9584) : chaque crédit qu'il a produit est repris, une fois (`EngagementReceipts`). */
+  reclaimSource(userId: string, source: string, options: { readonly withinClawback?: boolean } = {}): Promise<number> {
+    return this.receipts.reclaim(userId, source, options);
   }
 
   /**

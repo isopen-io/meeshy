@@ -112,11 +112,33 @@ export class PostPointsRecorder {
     });
   }
 
+  /**
+   * Retire `points` de ce que ce post a rapporté à `userId` — la reprise d'un
+   * contenu retiré (`EngagementReceipts`) — puis annonce la valeur, qui BAISSE.
+   * Jamais sous zéro : une ligne qui n'a pas reçu ces points n'est pas touchée.
+   */
+  async takeBack(userId: string, postId: string, points: number): Promise<void> {
+    try {
+      await this.prisma.engagementPostPoints.updateMany({
+        where: { userId, postId, totalPoints: { gte: points } },
+        data: { totalPoints: { decrement: points } },
+      });
+    } catch (error) {
+      log.warn('post points not taken back after the credit was reclaimed', { userId, postId, error: messageOf(error) });
+      return;
+    }
+    try {
+      await this.announce(userId, postId);
+    } catch (error) {
+      log.warn('engagement:post-updated not announced', { userId, postId, error: messageOf(error) });
+    }
+  }
+
   private async announce(userId: string, postId: string): Promise<void> {
     const io = this.emitIO();
     if (!io) return;
     const points = await loadViewerPostPoints(this.prisma, userId, [{ id: postId }]);
-    const snapshot: PostEngagementSnapshot = { postId, viewerPoints: points.get(postId) ?? 0 };
+    const snapshot: PostEngagementSnapshot = { postId, viewerPoints: points.get(postId) ?? 0, at: Date.now() };
     io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.ENGAGEMENT_POST_UPDATED, snapshot);
   }
 }

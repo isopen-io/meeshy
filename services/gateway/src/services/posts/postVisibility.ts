@@ -316,13 +316,39 @@ export async function loadPostAcl(
 export async function loadCommentPostAcl(
   prisma: PostAclPrisma,
   commentId: string,
-): Promise<{ postId: string; post: PostVisibilityRecord } | null> {
+): Promise<CommentThreadAcl | null> {
   const comment = await prisma.postComment.findFirst({
     where: { id: commentId, deletedAt: NOT_DELETED },
-    select: { postId: true, post: { select: POST_ACL_SELECT } },
+    select: { postId: true, post: { select: { ...POST_ACL_SELECT, isQuote: true, repostOfId: true, originalRepostOfId: true } } },
   });
   if (!comment?.post) return null;
   return { postId: comment.postId, post: comment.post };
+}
+
+/** Le post qui porte un commentaire, et ce qui dit s'il est une republication simple. */
+export type CommentThreadAcl = {
+  readonly postId: string;
+  readonly post: PostVisibilityRecord & {
+    readonly isQuote?: boolean;
+    readonly repostOfId?: string | null;
+    readonly originalRepostOfId?: string | null;
+  };
+};
+
+/**
+ * Le fil d'un commentaire est-il ouvert à cet acteur, en LECTURE ? Le post qui
+ * le porte d'abord ; s'il est une REPUBLICATION SIMPLE — qui a son propre fil
+ * depuis #9584 —, son original aussi : c'est la règle des republications, celle
+ * de `resolveConsumptionTarget` (un original illisible ou supprimé ferme le fil
+ * de ses republications ; une republication d'éphémère garde sa vie propre).
+ */
+export async function canUserConsumeThread(prisma: PostAclPrisma, thread: CommentThreadAcl, userId?: string): Promise<boolean> {
+  return (await canUserConsumePost(prisma, thread.post, userId)) && isRepostRootOpen(prisma, thread.post, userId, canUserConsumePost);
+}
+
+/** Le même fil, en INTERACTION (amis stricts sur la republication ET sur l'original). */
+export async function canUserInteractWithThread(prisma: PostAclPrisma, thread: CommentThreadAcl, userId?: string): Promise<boolean> {
+  return (await canUserInteractWithPost(prisma, thread.post, userId)) && isRepostRootOpen(prisma, thread.post, userId, canUserInteractWithPost);
 }
 
 /**
@@ -388,10 +414,10 @@ export type PostRedirectRecord = PostVisibilityRecord & {
   /**
    * La REPUBLICATION SIMPLE que la redirection a traversée pour arriver ici
    * (#9584) — absente quand le post nommé est la cible elle-même. La résolution
-   * vient d'en vérifier l'audience : un geste qui l'emprunte la crédite AUSSI,
-   * sans seconde lecture.
+   * vient d'en vérifier l'audience : une réaction qui l'emprunte la crédite
+   * AUSSI, un commentaire s'y range (`commentHome`), sans seconde lecture.
    */
-  redirectedFrom?: RepostPassage;
+  redirectedFrom?: RepostPassage & { readonly commentsDisabled: boolean };
 };
 
 /** Le post traversé par une redirection — ce qu'un crédit doit savoir de lui. */
@@ -503,18 +529,44 @@ async function resolveRedirectTarget(
   const post = await loadPostRedirectRecord(prisma, postId);
   if (!post || !(await verdict(prisma, post, userId))) return null;
 
-  const isSimpleRepost = !post.isQuote && Boolean(post.repostOfId);
-  if (!isSimpleRepost) return post;
-
-  const rootId = post.originalRepostOfId ?? post.repostOfId!;
-  if (rootId === post.id) return post;
+  const rootId = simpleRepostRootId(post);
+  if (rootId === null) return post;
 
   const root = await loadPostRedirectRoot(prisma, rootId);
   if (!root) return null;
   if (isEphemeralPostType(root.type)) return post;
 
   if (root.deletedAt != null || !(await verdict(prisma, root, userId))) return null;
-  return { ...root, redirectedFrom: { id: post.id, authorId: post.authorId } };
+  return { ...root, redirectedFrom: { id: post.id, authorId: post.authorId, commentsDisabled: post.commentsDisabled } };
+}
+
+type RepostShape = {
+  readonly id: string;
+  readonly isQuote?: boolean;
+  readonly repostOfId?: string | null;
+  readonly originalRepostOfId?: string | null;
+};
+
+/** La racine d'une republication SIMPLE (jamais le parent intermédiaire d'une chaîne), `null` sinon. */
+function simpleRepostRootId(post: RepostShape): string | null {
+  if (post.isQuote || !post.repostOfId) return null;
+  const rootId = post.originalRepostOfId ?? post.repostOfId;
+  return rootId === post.id ? null : rootId;
+}
+
+/** La racine d'une republication simple est-elle ouverte à cet acteur ? Vrai pour tout autre post. */
+async function isRepostRootOpen(
+  prisma: PostAclPrisma,
+  post: RepostShape,
+  userId: string | undefined,
+  verdict: (prisma: PostAclPrisma, post: PostVisibilityRecord, userId?: string) => Promise<boolean>,
+): Promise<boolean> {
+  const rootId = simpleRepostRootId(post);
+  if (rootId === null) return true;
+  const root = await loadPostRedirectRoot(prisma, rootId);
+  if (!root) return false;
+  if (isEphemeralPostType(root.type)) return true;
+  return root.deletedAt == null && verdict(prisma, root, userId);
 }
 
 /** Redirection pour ÉCRIRE/RÉAGIR (like, réaction, commentaire) — amis stricts. */

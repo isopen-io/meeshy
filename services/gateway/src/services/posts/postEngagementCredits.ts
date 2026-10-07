@@ -13,7 +13,7 @@ const log = enhancedLogger.child({ module: 'postEngagementCredits' });
  * décide QUAND un geste du fil crédite vit ici, et le service n'y ajoute qu'un
  * appel par geste.
  */
-export type PostEngagementRecorder = Pick<EngagementService, 'recordActivity' | 'reclaimContent'>;
+export type PostEngagementRecorder = Pick<EngagementService, 'recordActivity' | 'reclaimContent' | 'reclaimSource'>;
 
 /**
  * Ce qu'un geste du fil déclare à son crédit : le POST où il a eu lieu est
@@ -38,13 +38,13 @@ export function creditPostEngagement(
 }
 
 /**
- * Les posts qu'un geste CRÉDITE (#9584, décision porteur 2026-10-07) : celui où
- * il atterrit et, s'il est passé par une REPUBLICATION SIMPLE redirigée vers
- * son original, cette republication aussi — chacun pour un crédit RÉEL, avec
- * son barème, ses plafonds, ses quotas par cible et son auteur (« jamais sur
- * son propre post » s'y lit séparément). La somme des marques affichées est
- * donc toujours ce que le score a réellement reçu : chaque carte porte ce que
- * SON crédit a rapporté, et un crédit refusé ne marque que la sienne.
+ * Les posts qu'une RÉACTION crédite (#9584, décision porteur 2026-10-07) :
+ * celui où elle atterrit et, si elle est passée par une REPUBLICATION SIMPLE
+ * redirigée vers son original, cette republication aussi — chacun pour un
+ * crédit RÉEL, avec son barème, ses quotas par cible et son auteur (« jamais
+ * sur son propre post » s'y lit séparément). La somme des marques affichées est
+ * donc toujours ce que le score a réellement reçu. Un commentaire, lui, ne
+ * crédite que le post où il est rangé (`commentHome`).
  */
 export const postsCreditedBy = (
   landed: RepostPassage,
@@ -52,31 +52,52 @@ export const postsCreditedBy = (
 ): readonly RepostPassage[] => [landed, ...(through && through.id !== landed.id ? [through] : [])];
 
 /**
- * Le SEUL post qu'un commentaire crédite (#9584, décision porteur 2026-10-07 :
- * « le commentaire appartient au reposte et n'est pas partagé ; seules les
- * réactions sont propagées en duplication »). C'est le post où le commentaire
- * est RANGÉ — aujourd'hui l'original, un commentaire écrit depuis une
- * republication simple étant redirigé vers lui.
- *
- * Le rangement lui-même est une question ouverte au porteur : s'il décide
- * qu'un tel commentaire est rangé sur la republication, c'est cette ligne, et
- * elle seule, qui devient `route.redirectedFrom?.id ?? route.id`.
+ * Un crédit par post crédité : la cible et son auteur portent les plafonds et
+ * le refus de soi ; `source` — la ligne du contenu — rend chaque crédit unique
+ * par post et repris quand le contenu est retiré.
  */
-export const postCreditedByComment = (route: { readonly id: string; readonly redirectedFrom?: RepostPassage }): string =>
-  route.id;
-
-/** Un crédit par post crédité : la cible et son auteur portent les plafonds et le refus de soi. */
 export function creditPostGesture(
   prisma: PrismaClient,
   userId: string,
   operationKey: EngagementOperationKey,
-  posts: readonly RepostPassage[],
+  gesture: { readonly posts: readonly RepostPassage[]; readonly source: string },
   recorder?: PostEngagementRecorder,
 ): void {
-  posts.forEach((post) =>
-    creditPostEngagement(prisma, userId, operationKey, { postId: post.id, targetId: post.id, targetOwnerId: post.authorId }, recorder),
+  gesture.posts.forEach((post) =>
+    creditPostEngagement(
+      prisma,
+      userId,
+      operationKey,
+      { postId: post.id, targetId: post.id, targetOwnerId: post.authorId, receipt: gesture.source },
+      recorder,
+    ),
   );
 }
+
+/**
+ * Un CONTENU retiré reprend ce qu'il a rapporté (#9584, décision porteur
+ * 2026-10-07) — fire-and-forget : une reprise ratée ne fait jamais échouer le
+ * retrait, et une reprise rejouée ne reprend rien (`EngagementReceipts`).
+ */
+export function reclaimContentCredits(
+  prisma: PrismaClient,
+  userId: string,
+  source: string,
+  options: { readonly withinClawback?: boolean } = {},
+  recorder: PostEngagementRecorder = new EngagementService(prisma),
+): void {
+  recorder.reclaimSource(userId, source, options).catch((error: unknown) => {
+    log.warn('engagement reclaim failed', { source, error });
+  });
+}
+
+/** Les sources de crédit des contenus de post — une ligne, un préfixe. */
+export const creditSource = {
+  postReaction: (reactionId: string) => `post-reaction:${reactionId}`,
+  comment: (commentId: string) => `comment:${commentId}`,
+  commentReaction: (reactionId: string) => `comment-reaction:${reactionId}`,
+  post: (postId: string) => `post:${postId}`,
+} as const;
 
 /**
  * Durée d'exposition au-delà de laquelle une vue de story compte comme
@@ -131,6 +152,10 @@ export function reclaimRemovedContent(
   post: { readonly id: string; readonly authorId: string; readonly type?: string | null },
   recorder: PostEngagementRecorder = new EngagementService(prisma),
 ): void {
+  // Tout ce que la publication a rapporté à son auteur, hors mémoire par
+  // contenu — une publication légère, l'axe outil, une republication — dans la
+  // MÊME fenêtre que la mémoire (#9584) : la règle d'âge reste celle du barème.
+  reclaimContentCredits(prisma, post.authorId, creditSource.post(post.id), { withinClawback: true }, recorder);
   const operationKey = reclaimableContentOperation(post.type);
   if (!operationKey) return;
   recorder.reclaimContent(post.authorId, operationKey, post.id).catch((error: unknown) => {

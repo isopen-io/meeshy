@@ -6,7 +6,11 @@ import { retractReactionNotifications } from '../../services/notifications/retra
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
 import { EngagementService } from '../../services/engagement/EngagementService';
-import { postCreditedByComment } from '../../services/posts/postEngagementCredits';
+import { creditSource } from '../../services/posts/postEngagementCredits';
+import { admitCommentHome, commentThreadOf } from '../../services/posts/commentHome';
+import { notifyCommentAdded } from './commentAddedNotifications';
+import { DailyGestureGate, DailyGestureLimitReached } from '../../services/engagement/DailyGestureGate';
+import { refuseDailyGesture } from '../../utils/daily-gesture-refusal';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema, TranslatePostSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
@@ -24,8 +28,8 @@ import { admitQuotedPostMedia } from '../../services/posts/quotedPostMediaSnapsh
 import { serveCitedPostMedia } from '../../services/posts/citedPostMediaBackfill';
 import {
   loadCommentPostAcl,
-  canUserConsumePost,
-  canUserInteractWithPost,
+  canUserConsumeThread,
+  canUserInteractWithThread,
   resolveInteractionTarget,
   resolveConsumptionTarget,
 } from '../../services/posts/postVisibility';
@@ -66,6 +70,7 @@ export function registerCommentRoutes(
   const commentService = new PostCommentService(prisma);
   const mentionService = new MentionService(prisma);
   const engagementService = new EngagementService(prisma);
+  const gestureGate = new DailyGestureGate(prisma);
 
   // GET /posts/:postId/comments — Top-level comments, cursor-paginated
   fastify.get('/posts/:postId/comments', {
@@ -91,17 +96,15 @@ export function registerCommentRoutes(
       // qu'on n'a pas le droit de voir, c'est en lire le contenu. Refus en 404
       // et non 403 — distinguer révélerait l'existence du post.
       //
-      // Repost simple → racine (tâche 9) : un repost `isQuote:false` n'a pas
-      // de fil propre — lire ses commentaires renvoie ceux de sa RACINE
-      // (`resolveConsumptionTarget`, même point unique que l'écriture ci-dessous,
-      // avec le verdict de CONSOMMATION — amis ∪ contacts DM). Une citation
-      // garde son propre fil.
+      // Une republication simple a SON fil (#9584, `commentThreadOf`), lisible
+      // si elle ET son original le sont (`resolveConsumptionTarget` vérifie les
+      // deux, verdict de CONSOMMATION — amis ∪ contacts DM).
       const target = await resolveConsumptionTarget(prisma, postId, currentUserId);
       if (!target) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      const result = await commentService.getComments(target.id, cursor, limit, currentUserId);
+      const result = await commentService.getComments(commentThreadOf(target), cursor, limit, currentUserId);
 
       const commentContents = result.items
         .map((c: any) => c.content as string)
@@ -152,7 +155,7 @@ export function registerCommentRoutes(
       // cible que par `commentId`, donc le `:postId` du chemin peut nommer
       // n'importe quel post public tout en visant le fil d'un post privé.
       const thread = await loadCommentPostAcl(prisma, commentId);
-      if (!thread || !(await canUserConsumePost(prisma, thread.post, currentUserId))) {
+      if (!thread || !(await canUserConsumeThread(prisma, thread, currentUserId))) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
@@ -203,35 +206,37 @@ export function registerCommentRoutes(
       // l'écriture — sans elle, le commentaire était persisté puis notifiait
       // l'auteur, qui découvrait un intrus dans un fil restreint.
       //
-      // Repost simple → racine (tâche 9) : un repost `isQuote:false` n'a pas
-      // de fil propre — le commentaire atterrit sur le fil de sa RACINE
-      // (`resolveInteractionTarget`, même point unique que REST like/unlike
-      // et le socket `post:reaction-add/remove`). Une citation garde son
-      // propre fil. Racine invisible pour l'acteur → refus standard.
+      // Sous une republication simple, le commentaire est rangé dans SON fil
+      // (#9584, `admitCommentHome`) : interaction sur elle ET sur l'original,
+      // commentaires ouverts des deux côtés (#3959, fail-closed, auteur
+      // compris), aucun blocage avec l'un ou l'autre auteur.
       const target = await resolveInteractionTarget(prisma, postId, authContext.registeredUser.id);
       if (!target) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
-      const targetPostId = target.id;
-
-      // #3959 — réglage AUTEUR posé à la publication : désactivé bloque TOUT
-      // commentaire (création ET réponse, même endpoint via `parentId`),
-      // auteur compris — fail-closed, pas d'exception qui rouvrirait le fil.
-      if (target.commentsDisabled) {
+      const admission = await admitCommentHome(prisma, target, {
+        commenterId: authContext.registeredUser.id,
+        parentId: parsed.data.parentId,
+      });
+      if (admission.refusal === 'COMMENTS_DISABLED') {
         return sendForbidden(reply, 'Comments are disabled on this post', { code: 'COMMENTS_DISABLED' });
       }
+      if (admission.refusal) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      const home = admission.home;
+      const targetPostId = home.id;
 
       // #6578 — LA GARDE D'ÉCRITURE DE LA CITATION, avant toute écriture.
       //
       // Elle précède `withMutationLog` à dessein : un `postMediaId` étranger au
       // post commenté est une FUITE (on citerait le média d'une publication
       // qu'on ne lit pas), et refuser APRÈS avoir inséré la ligne laisserait le
-      // commentaire publié. `targetPostId` — la CIBLE réelle, donc la racine
-      // pour un repost simple — et jamais le `:postId` du chemin : commenter
-      // un repost atterrit sur le fil de sa racine, donc citer y vise les
-      // médias de la racine.
+      // commentaire publié. `target.id` — le post dont les médias sont À
+      // L'ÉCRAN, la racine pour une republication simple, qui n'en a pas — et
+      // jamais le `:postId` du chemin.
       const citation = await admitQuotedPostMedia(prisma, {
-        postId: targetPostId,
+        postId: target.id,
         quotedPostMedia: parsed.data.quotedPostMedia,
       });
       if (!citation.ok) {
@@ -256,6 +261,10 @@ export function registerCommentRoutes(
         // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
         replayCost: 'diverges',
         op: async () => {
+          // #9584 — la limite quotidienne de commentaires, AVANT l'écriture et
+          // dans l'op : un rejeu ne prend pas de place, un refus n'en consomme
+          // pas, un commentaire qui n'a pas pu s'écrire rend la sienne.
+          const ticket = await gestureGate.admit(authContext.registeredUser.id, 'comment', home.path);
           const c = await commentService.addComment(
             targetPostId,
             authContext.registeredUser.id,
@@ -272,8 +281,14 @@ export function registerCommentRoutes(
               sticker: parsed.data.sticker,
               quotedPostMedia: citation.snapshot,
             },
-          );
-          if (!c) throw new Error('POST_NOT_FOUND');
+          ).catch(async (err: unknown) => {
+            await gestureGate.release(ticket);
+            throw err;
+          });
+          if (!c) {
+            await gestureGate.release(ticket);
+            throw new Error('POST_NOT_FOUND');
+          }
           return c as CommentResult & { id: string };
         },
         // Relu au format de la CRÉATION — la ligne brute (`authorId`, sans
@@ -311,9 +326,9 @@ export function registerCommentRoutes(
         });
       }
 
-      // Broadcast comment added via Socket.IO — porte l'id de la CIBLE réelle
-      // (`targetPostId`, la racine pour un repost simple) : les clients
-      // patchent l'original partout où il apparaît.
+      // Broadcast comment added via Socket.IO — porte l'id du post où le
+      // commentaire est RANGÉ (`targetPostId`, la republication pour un
+      // commentaire écrit sous elle) : son compteur et son fil.
       const socialEvents = fastify.socialEvents;
       const post = await fastify.prisma?.post?.findUnique({
         where: { id: targetPostId },
@@ -330,114 +345,16 @@ export function registerCommentRoutes(
         }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: broadcast comment added failed', { err }));
       }
 
-      const notifService = fastify.notificationService;
-
-      // Mention persistence + notifications (Phase 2B) — resolved FIRST so the
-      // mentioned users can be excluded from the lower-priority recipient buckets
-      // (priority: user_mentioned > comment_reply > post_comment > story_new_comment
-      // > story_thread_reply > friend_story_comment). Sans cette résolution amont,
-      // répondre à un commentaire EN mentionnant son auteur lui envoyait DEUX
-      // notifications (user_mentioned + comment_reply) au lieu de la seule mention.
-      let mentionedUserIds: string[] = [];
-      // `post` conditionne le lot : c'est lui qui porte l'audience. Sans lui, on
-      // ne peut pas établir qui a le droit d'être prévenu — donc on ne prévient
-      // personne, plutôt que de pousser un extrait à l'aveugle.
-      if (parsed.data.content && notifService && post) {
-        const mentionedUsernames = mentionService.extractMentions(parsed.data.content);
-        if (mentionedUsernames.length > 0) {
-          const resolvedUsers = await mentionService.resolveUsernames(mentionedUsernames);
-          mentionedUserIds = Array.from(resolvedUsers.values()).map(u => u.id);
-
-          if (mentionedUserIds.length > 0) {
-            mentionService.createCommentMentions(comment.id, mentionedUserIds)
-              .catch(err => enhancedLogger.error('comment mention persistence failed', err));
-
-            notifService.createCommentMentionNotificationsBatch({
-              commentId: comment.id,
-              postId: targetPostId,
-              commenterId: authContext.registeredUser.id,
-              mentionedUserIds,
-              commentExcerpt: sliceCodePointsOrUndefined(parsed.data.content, 100),
-              // Discriminant d'entité → surface ouverte au tap côté client.
-              postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
-              // Un commentaire n'a pas d'audience propre : il hérite de celle du
-              // post. Sans ce passage, nommer quelqu'un hors audience lui
-              // poussait un extrait du commentaire — donc du fil d'un post qu'il
-              // n'a pas le droit d'ouvrir.
-              postAuthorId: post.authorId,
-              visibility: post.visibility,
-              visibilityUserIds: post.visibilityUserIds ?? [],
-            }).catch(err => enhancedLogger.error('comment mention notification failed', err));
-          }
-        }
-      }
-
-      // Notify post author (or parent comment author for replies) — but SKIP a
-      // recipient already mentioned above: la mention (user_mentioned) prime sur
-      // comment_reply / post_comment pour un même destinataire.
-      if (notifService) {
-        if (parsed.data.parentId) {
-          // Reply to a comment — notify the parent comment author. Le contenu
-          // du commentaire parent voyage en subtitle (« En réponse à « … » »)
-          // pour que le destinataire sache À QUOI on lui répond.
-          const parentComment = await fastify.prisma?.postComment?.findUnique({
-            where: { id: parsed.data.parentId },
-            select: { authorId: true, content: true },
-          });
-          if (parentComment?.authorId && !mentionedUserIds.includes(parentComment.authorId)) {
-            notifService.createCommentReplyNotification({
-              actorId: authContext.registeredUser.id,
-              postId: targetPostId,
-              commentAuthorId: parentComment.authorId,
-              commentId: comment.id,
-              parentCommentId: parsed.data.parentId,
-              replyPreview: parsed.data.content,
-              parentCommentPreview: sliceCodePointsOrUndefined(parentComment.content, 80),
-              // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).
-              postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
-              postCreatedAt: post?.createdAt ?? undefined,
-              postExpiresAt: post?.expiresAt ?? undefined,
-            }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: notify comment reply failed', { err }));
-          }
-        } else if (post?.authorId && post.type !== 'STORY' && !mentionedUserIds.includes(post.authorId)) {
-          // Top-level comment on a regular post/mood/status — notify the
-          // author with the typed subtitle. Pour une STORY, l'auteur est
-          // notifié par le bucket story_new_comment du fan-out ci-dessous
-          // (avant ce gate, il recevait DEUX notifications pour le même
-          // commentaire : post_comment + story_new_comment).
-          notifService.createPostCommentNotification({
-            actorId: authContext.registeredUser.id,
-            postId: targetPostId,
-            postAuthorId: post.authorId,
-            commentId: comment.id,
-            commentPreview: parsed.data.content,
-            postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-            postCreatedAt: post.createdAt ?? undefined,
-            postExpiresAt: post.expiresAt ?? undefined,
-          }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: notify post comment failed', { err }));
-        }
-      }
-
-      // Story comment fan-out notifications (Phase 1D)
-      // excludeUserIds: skip users who already received user_mentioned (higher priority)
-      if (notifService && post?.authorId && !parsed.data.parentId) {
-        notifService.createStoryCommentNotificationsBatch({
-          postId: targetPostId,
-          commentId: comment.id,
-          storyAuthorId: post.authorId,
-          commenterId: authContext.registeredUser.id,
-          commentExcerpt: sliceCodePointsOrUndefined(parsed.data.content, 100),
-          postType: post.type as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL',
-          postCreatedAt: post.createdAt ?? undefined,
-          postExpiresAt: post.expiresAt ?? undefined,
-          excludeUserIds: mentionedUserIds,
-          // Passée BRUTE : un `?? 'PUBLIC'` ici rétablirait, un étage plus haut
-          // et hors de vue du build, le défaut permissif que le paramètre vient
-          // de perdre. Une visibilité absente doit restreindre, pas ouvrir.
-          visibility: post.visibility,
-          visibilityUserIds: post.visibilityUserIds ?? [],
-        }).catch(err => enhancedLogger.error('story comment notification fan-out failed', err));
-      }
+      await notifyCommentAdded({
+        fastify,
+        mentionService,
+        commenterId: authContext.registeredUser.id,
+        commentId: comment.id,
+        postId: targetPostId,
+        post,
+        content: parsed.data.content,
+        parentId: parsed.data.parentId,
+      });
 
       // Trigger async translation for comment content (fire-and-forget)
       if (parsed.data.content) {
@@ -478,11 +395,15 @@ export function registerCommentRoutes(
       // pipeline audio ci-dessus : un commentaire SANS pièce jointe audio
       // crédite `comment.text`, un commentaire AVEC crédite `comment.audio`.
       //
-      // #9584 — un commentaire ne crédite qu'UN post, celui où il est rangé
-      // (`postCreditedByComment`) : seules les réactions se dupliquent.
+      // #9584 — un commentaire ne crédite qu'UN post, celui où il est rangé :
+      // seules les réactions se dupliquent. Il est la SOURCE de son crédit :
+      // le supprimer le reprend.
       const commentAxis = linkedMedia?.mimeType?.startsWith('audio/') ? 'comment.audio' : 'comment.text';
       engagementService
-        .recordActivity(authContext.registeredUser.id, commentAxis, { postId: postCreditedByComment(target) })
+        .recordActivity(authContext.registeredUser.id, commentAxis, {
+          postId: targetPostId,
+          receipt: creditSource.comment(comment.id),
+        })
         .catch((err) => enhancedLogger.warn(`[POST /posts/:postId/comments]: engagement ${commentAxis} failed`, { err }));
 
       const newCommentMentionedUsers = parsed.data.content
@@ -498,6 +419,9 @@ export function registerCommentRoutes(
       // rien à refaire.
       if (error instanceof MutationResultGone) {
         return sendGone(reply, 'Comment already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
+      if (error instanceof DailyGestureLimitReached) {
+        return refuseDailyGesture(reply, error);
       }
       // Une requête jumelle (même cmid) applique ce commentaire en ce moment :
       // ni resservir ni rejouer. 409, que la file durable iOS retente.
@@ -682,7 +606,7 @@ export function registerCommentRoutes(
       // Lecture-scope : même garde que le fil (un lecteur autorisé à VOIR le
       // fil peut en demander la traduction).
       const thread = await loadCommentPostAcl(prisma, commentId);
-      if (!thread || !(await canUserConsumePost(prisma, thread.post, authContext.registeredUser.id))) {
+      if (!thread || !(await canUserConsumeThread(prisma, thread, authContext.registeredUser.id))) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
@@ -718,7 +642,7 @@ export function registerCommentRoutes(
       // est une interaction. Le post est résolu depuis le commentaire, jamais
       // depuis le `:postId` du chemin.
       const thread = await loadCommentPostAcl(prisma, commentId);
-      if (!thread || !(await canUserInteractWithPost(prisma, thread.post, authContext.registeredUser.id))) {
+      if (!thread || !(await canUserInteractWithThread(prisma, thread, authContext.registeredUser.id))) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
@@ -817,7 +741,7 @@ export function registerCommentRoutes(
       // Retirer une réaction reste une interaction avec le fil — même garde
       // que la pose, pour que l'ACL ne dépende pas du sens du geste.
       const thread = await loadCommentPostAcl(prisma, commentId);
-      if (!thread || !(await canUserInteractWithPost(prisma, thread.post, authContext.registeredUser.id))) {
+      if (!thread || !(await canUserInteractWithThread(prisma, thread, authContext.registeredUser.id))) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 

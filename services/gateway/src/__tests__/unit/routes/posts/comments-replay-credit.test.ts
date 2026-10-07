@@ -53,6 +53,8 @@ import { registerClientMutationIdHook } from '../../../../middleware/clientMutat
 import { setEngagementEmitIOProvider } from '../../../../services/engagement/engagement-emit-registry';
 import { fakeGameDb, seedUser } from '../../../../services/game/__tests__/fakeGameDb';
 import { inMemoryMutationLog } from '../../../helpers/inMemoryMutationLog';
+import { dayKeyOf } from '../../../../services/game/gameClock';
+import { nextMidnight } from '../../../../services/engagement/DailyGestureGate';
 
 const COMMENTER = '68a000000000000000000031';
 const AUTHOR = '68a000000000000000000032';
@@ -220,3 +222,83 @@ describe('POST /posts/:postId/comments — un rejeu ne crédite ni n’annonce u
     expect(commentCredits(db)).toBe(2);
   });
 });
+
+/**
+ * #9584 — la limite quotidienne de commentaires (50 sur des originaux par
+ * défaut), sur le même chemin réel : la porte se prend DANS l'op du journal,
+ * avant l'écriture. Au bord, le geste est refusé sans rien écrire ; un rejeu
+ * ne prend pas de place ; un commentaire qui ne s'écrit pas rend la sienne.
+ */
+describe('POST /posts/:postId/comments — la limite quotidienne de commentaires (#9584)', () => {
+  const today = () => dayKeyOf(new Date(), 'UTC');
+  const places = (db: ReturnType<typeof fakeGameDb>) =>
+    (db.engagementQuota.rows.find((row) => row.userId === COMMENTER && row.operationKey === 'gesture:comment' && row.bucket === `original:day:${today()}`)
+      ?.count as number | undefined) ?? 0;
+  const seedPlaces = (db: ReturnType<typeof fakeGameDb>, count: number) =>
+    db.engagementQuota.rows.push({
+      id: '68e000000000000000000001', userId: COMMENTER, operationKey: 'gesture:comment', bucket: `original:day:${today()}`,
+      count, points: 0, createdAt: new Date(), updatedAt: new Date(),
+    });
+
+  it('au bord, 429 DAILY_COMMENT_LIMIT AVANT toute écriture — aucun commentaire, aucun crédit, aucune diffusion — avec sa remise à zéro', async () => {
+    const { app, db, emissions, broadcastCommentAdded } = await build();
+    seedPlaces(db, 50);
+
+    const res = await comment(app, CMID);
+    await settled();
+    await app.close();
+
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toMatchObject({
+      success: false,
+      code: 'DAILY_COMMENT_LIMIT',
+      resetAt: nextMidnight(today(), 'UTC').toISOString(),
+      limit: 50,
+      path: 'original',
+    });
+    expect(Number(res.headers['retry-after'])).toBe(res.json().retryAfter);
+    expect(mockAddComment).not.toHaveBeenCalled();
+    expect(commentCredits(db)).toBe(0);
+    expect(postUpdates(emissions)).toHaveLength(0);
+    expect(broadcastCommentAdded).not.toHaveBeenCalled();
+    expect(places(db)).toBe(50);
+  });
+
+  it('le cmid refusé reste libre : renvoyé quand une place existe, il s’écrit', async () => {
+    const { app, db } = await build();
+    seedPlaces(db, 50);
+    await comment(app, CMID);
+    db.engagementQuota.rows[0]!.count = 49;
+
+    const retried = await comment(app, CMID);
+    await settled();
+    await app.close();
+
+    expect(retried.statusCode).toBe(201);
+    expect(mockAddComment).toHaveBeenCalledTimes(1);
+    expect(places(db)).toBe(50);
+  });
+
+  it('un rejeu ne prend pas de place', async () => {
+    const { app, db } = await build();
+
+    await comment(app, CMID);
+    await comment(app, CMID);
+    await settled();
+    await app.close();
+
+    expect(places(db)).toBe(1);
+  });
+
+  it('un commentaire qui ne s’écrit pas rend sa place', async () => {
+    const { app, db } = await build();
+    mockAddComment.mockRejectedValueOnce(new Error('MEDIA_NOT_AVAILABLE'));
+
+    const res = await comment(app, CMID);
+    await app.close();
+
+    expect(res.statusCode).toBe(400);
+    expect(places(db)).toBe(0);
+  });
+});
+

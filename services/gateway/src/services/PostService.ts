@@ -35,7 +35,7 @@ import { syncPostTrackingLinks } from './posts/publicationTrackingLinks';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
-import { creditPostEngagement, creditStoryViewed } from './posts/postEngagementCredits';
+import { creditPostEngagement, creditSource, creditStoryViewed } from './posts/postEngagementCredits';
 import { retractReactionNotifications } from './notifications/retractReactionNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
@@ -2500,7 +2500,7 @@ export class PostService {
           await this.orphanCleanup.untrackBatch(orphanRowIds);
         }
 
-        creditPostEngagement(this.prisma, userId, 'social.repost', { postId, targetId: postId, targetOwnerId: original.authorId });
+        creditPostEngagement(this.prisma, userId, 'social.repost', { postId, targetId: postId, targetOwnerId: original.authorId, receipt: creditSource.post(finalRepost.id) });
         return finalRepost;
       } catch (err) {
         // Inline (best-effort) compensation. Same as before — fast-path
@@ -2543,7 +2543,7 @@ export class PostService {
       where: { id: postId },
       data: { repostCount: { increment: 1 } },
     });
-    creditPostEngagement(this.prisma, userId, 'social.repost', { postId, targetId: postId, targetOwnerId: original.authorId });
+    creditPostEngagement(this.prisma, userId, 'social.repost', { postId, targetId: postId, targetOwnerId: original.authorId, receipt: creditSource.post(repost.id) });
 
     return repost;
   }

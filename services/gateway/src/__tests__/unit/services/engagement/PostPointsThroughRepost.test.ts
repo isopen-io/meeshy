@@ -17,10 +17,11 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { DEFAULT_ENGAGEMENT_SCALE } from '@meeshy/shared/types/engagement-scale';
+import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
 import { PostReactionService } from '../../../../services/PostReactionService';
+import { DailyGestureGate, DailyGestureLimitReached } from '../../../../services/engagement/DailyGestureGate';
 import { loadViewerPostPoints } from '../../../../services/engagement/viewerPostPoints';
 import { fakeGameDb, seedUser, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
 import type { RepostPassage } from '../../../../services/posts/postVisibility';
@@ -44,7 +45,13 @@ type Emission = { readonly room: string | string[]; readonly event: string; read
 
 const REACTION = DEFAULT_ENGAGEMENT_SCALE.operations['tool.post_reaction'];
 
-function setup() {
+/** Des limites de réactions ramenées à deux et trois, pour atteindre le bord sans boucler cent fois. */
+const SMALL_LIMITS: EngagementScale = {
+  ...DEFAULT_ENGAGEMENT_SCALE,
+  pathCaps: { comment: { original: 50, repost: 10 }, reaction: { original: 3, repost: 2 } },
+};
+
+function setup(scale: EngagementScale = DEFAULT_ENGAGEMENT_SCALE) {
   const db = fakeGameDb();
   for (const id of [READER, AUTHOR, REPOSTER]) {
     seedUser(db, { emailVerifiedAt: new Date('2026-01-01T00:00:00Z'), engagementScore: 0 }, id);
@@ -56,7 +63,7 @@ function setup() {
     }),
   };
   const engine = new EngagementService(db.prisma, {
-    scale: { current: async () => DEFAULT_ENGAGEMENT_SCALE },
+    scale: { current: async () => scale },
     emitIO: () => io as never,
   });
   const inFlight: Promise<unknown>[] = [];
@@ -67,6 +74,11 @@ function setup() {
       return credit;
     },
     reclaimContent: (...args: Parameters<EngagementService['reclaimContent']>) => engine.reclaimContent(...args),
+    reclaimSource: (...args: Parameters<EngagementService['reclaimSource']>) => {
+      const reclaim = engine.reclaimSource(...args);
+      inFlight.push(reclaim);
+      return reclaim;
+    },
   };
   const reactions: Array<{ id: string; postId: string; userId: string; emoji: string; createdAt: Date }> = [];
   const authors: Record<string, string> = { [ORIGINAL]: AUTHOR, [REPOST]: REPOSTER };
@@ -84,16 +96,34 @@ function setup() {
         reactions.push(created);
         return created;
       },
+      findMany: async ({ where }: { where: { postId: string; userId: string; emoji: string } }) =>
+        reactions.filter((r) => r.postId === where.postId && r.userId === where.userId && r.emoji === where.emoji).map(({ id }) => ({ id })),
+      deleteMany: async ({ where }: { where: { postId: string; userId: string; emoji: string } }) => {
+        const gone = reactions.filter((r) => r.postId === where.postId && r.userId === where.userId && r.emoji === where.emoji);
+        gone.forEach((r) => reactions.splice(reactions.indexOf(r), 1));
+        return { count: gone.length };
+      },
     },
+    engagementQuota: db.prisma.engagementQuota,
     $transaction: async () => undefined,
   };
-  const service = new PostReactionService(posts as never, recorder);
+  const gate = new DailyGestureGate(db.prisma, { current: async () => scale });
+  const service = new PostReactionService(posts as never, recorder, gate);
   const react = async (input: { readonly userId: string; readonly postId: string; readonly emoji?: string; readonly through?: RepostPassage }) => {
     await service.addReaction({ emoji: '❤️', ...input });
     await Promise.all(inFlight.splice(0));
   };
-  return { db, emissions, react, engine };
+  const unreact = async (input: { readonly userId: string; readonly postId: string; readonly emoji?: string }) => {
+    await service.removeReaction({ emoji: '❤️', ...input });
+    await Promise.all(inFlight.splice(0));
+  };
+  return { db, emissions, react, unreact, reactions, engine };
 }
+
+const placesTaken = (db: FakeGameDb, userId: string, path: 'original' | 'repost'): number =>
+  db.engagementQuota.rows
+    .filter((row) => row.userId === userId && row.operationKey === 'gesture:reaction' && String(row.bucket).startsWith(`${path}:day:`))
+    .reduce((sum, row) => sum + (row.count as number), 0);
 
 const scoreOf = (db: FakeGameDb, userId: string): number =>
   (db.user.rows.find((row) => row.id === userId)?.engagementScore as number | undefined) ?? 0;
@@ -136,56 +166,129 @@ describe('une réaction posée depuis une republication simple', () => {
 
     expect(postUpdates(emissions)).toEqual(
       expect.arrayContaining([
-        { room: ROOMS.user(READER), event: 'engagement:post-updated', payload: { postId: ORIGINAL, viewerPoints: REACTION.points } },
-        { room: ROOMS.user(READER), event: 'engagement:post-updated', payload: { postId: REPOST, viewerPoints: REACTION.points } },
+        { room: ROOMS.user(READER), event: 'engagement:post-updated', payload: { postId: ORIGINAL, viewerPoints: REACTION.points, at: expect.any(Number) } },
+        { room: ROOMS.user(READER), event: 'engagement:post-updated', payload: { postId: REPOST, viewerPoints: REACTION.points, at: expect.any(Number) } },
       ]),
     );
     expect(postUpdates(emissions)).toHaveLength(2);
   });
 
-  it('au bord du plafond du jour, un seul des deux passe : il marque sa carte, l’autre ne marque rien, la somme reste le score', async () => {
-    const { db, react, emissions } = setup();
-    const cap = REACTION.cap as number;
-    for (let n = 0; n < cap - 1; n += 1) {
-      await react({ userId: READER, postId: elsewhere(n) });
-    }
-    const before = scoreOf(db, READER);
-    const announcedBefore = postUpdates(emissions).length;
-
-    await react({ userId: READER, postId: ORIGINAL, through: viaRepost });
-
-    const gained = scoreOf(db, READER) - before;
-    const cards = [await markOf(db, READER, ORIGINAL), await markOf(db, READER, REPOST)];
-    expect(gained).toBe(REACTION.points);
-    expect(cards.filter((points) => points > 0)).toEqual([REACTION.points]);
-    expect(cards[0]! + cards[1]!).toBe(gained);
-    expect(postUpdates(emissions).length - announcedBefore).toBe(1);
-  });
-
-  it('plafond atteint : aucun des deux ne passe, aucune carte ne marque, rien n’est annoncé', async () => {
-    const { db, react, emissions } = setup();
-    for (let n = 0; n < (REACTION.cap as number); n += 1) {
-      await react({ userId: READER, postId: elsewhere(n) });
-    }
-    const before = scoreOf(db, READER);
-    const announcedBefore = postUpdates(emissions).length;
-
-    await react({ userId: READER, postId: ORIGINAL, through: viaRepost });
-
-    expect(scoreOf(db, READER)).toBe(before);
-    expect(await marks(db, READER)).toBe(0);
-    expect(postUpdates(emissions)).toHaveLength(announcedBefore);
-  });
-
-  it('une réaction déjà posée sur l’original ne recrédite ni l’un ni l’autre', async () => {
+  it('une réaction déjà posée, reconfirmée par une AUTRE republication, ne recrédite pas l’original : la nouvelle republication reçoit son crédit, une fois', async () => {
     const { db, react } = setup();
+    const other: RepostPassage = { id: elsewhere(90), authorId: REPOSTER };
     await react({ userId: READER, postId: ORIGINAL, through: viaRepost });
     const after = scoreOf(db, READER);
 
+    await react({ userId: READER, postId: ORIGINAL, through: other });
+    await react({ userId: READER, postId: ORIGINAL, through: other });
+
+    expect(scoreOf(db, READER)).toBe(after + REACTION.points);
+    expect(await markOf(db, READER, ORIGINAL)).toBe(REACTION.points);
+    expect(await markOf(db, READER, REPOST)).toBe(REACTION.points);
+    expect(await markOf(db, READER, other.id)).toBe(REACTION.points);
+  });
+
+  it('retirer la réaction reprend ses crédits sur les DEUX posts, une seule fois — une reprise rejouée ne reprend rien', async () => {
+    const { db, react, unreact, reactions, engine } = setup();
+    await react({ userId: READER, postId: elsewhere(5) });
+    await react({ userId: READER, postId: ORIGINAL, through: viaRepost });
+    const removed = reactions.find((r) => r.postId === ORIGINAL)!.id;
+
+    await unreact({ userId: READER, postId: ORIGINAL });
+    await engine.reclaimSource(READER, `post-reaction:${removed}`);
+
+    expect(scoreOf(db, READER)).toBe(REACTION.points);
+    expect(await marks(db, READER)).toBe(0);
+    expect(await markOf(db, READER, elsewhere(5))).toBe(REACTION.points);
+  });
+});
+
+/**
+ * Les limites quotidiennes de GESTES (#9584, porteur 2026-10-07) : par jour civil
+ * du compte, sous les republications et sur les originaux, chacune la sienne. Au
+ * bord, le geste est REFUSÉ avant d'être écrit — il ne consomme rien, ne
+ * rapporte rien, n'annonce rien —, et le retirer ne rend pas sa place.
+ */
+describe('la limite quotidienne de réactions', () => {
+  it('sous les republications : au-delà de la limite, la réaction est refusée avant d’être écrite', async () => {
+    const { db, react, reactions, emissions } = setup(SMALL_LIMITS);
+    await react({ userId: READER, postId: elsewhere(1), through: { id: elsewhere(51), authorId: REPOSTER } });
+    await react({ userId: READER, postId: elsewhere(2), through: { id: elsewhere(52), authorId: REPOSTER } });
+    const score = scoreOf(db, READER);
+    const announced = postUpdates(emissions).length;
+
+    const refused = react({ userId: READER, postId: ORIGINAL, through: viaRepost });
+
+    await expect(refused).rejects.toBeInstanceOf(DailyGestureLimitReached);
+    await expect(refused).rejects.toMatchObject({ code: 'DAILY_REACTION_LIMIT', family: 'reaction', path: 'repost', limit: 2 });
+    expect(reactions.filter((r) => r.postId === ORIGINAL)).toHaveLength(0);
+    expect(scoreOf(db, READER)).toBe(score);
+    expect(await marks(db, READER)).toBe(0);
+    expect(postUpdates(emissions)).toHaveLength(announced);
+  });
+
+  it('un geste refusé ne consomme rien : le compteur du jour reste à la limite', async () => {
+    const { db, react } = setup(SMALL_LIMITS);
+    await react({ userId: READER, postId: elsewhere(1), through: { id: elsewhere(51), authorId: REPOSTER } });
+    await react({ userId: READER, postId: elsewhere(2), through: { id: elsewhere(52), authorId: REPOSTER } });
+
+    await expect(react({ userId: READER, postId: ORIGINAL, through: viaRepost })).rejects.toBeInstanceOf(DailyGestureLimitReached);
+    await expect(react({ userId: READER, postId: ORIGINAL, through: viaRepost })).rejects.toBeInstanceOf(DailyGestureLimitReached);
+
+    expect(placesTaken(db, READER, 'repost')).toBe(2);
+  });
+
+  it('la limite des originaux est la sienne : atteinte sous les republications, une réaction sur un original passe', async () => {
+    const { db, react } = setup(SMALL_LIMITS);
+    await react({ userId: READER, postId: elsewhere(1), through: { id: elsewhere(51), authorId: REPOSTER } });
+    await react({ userId: READER, postId: elsewhere(2), through: { id: elsewhere(52), authorId: REPOSTER } });
+
+    await react({ userId: READER, postId: ORIGINAL });
+
+    expect(await markOf(db, READER, ORIGINAL)).toBe(REACTION.points);
+    expect(placesTaken(db, READER, 'original')).toBe(1);
+  });
+
+  it('chaque réaction admise rapporte : gestes et points ne divergent pas, même au-delà de l’ancien plafond de 30', async () => {
+    const { db, react } = setup();
+    for (let n = 0; n < 31; n += 1) {
+      await react({ userId: READER, postId: elsewhere(n) });
+    }
+
+    expect(scoreOf(db, READER)).toBe(31 * REACTION.points);
+    expect(placesTaken(db, READER, 'original')).toBe(31);
+  });
+
+  it('retirer une réaction ne rend pas sa place du jour', async () => {
+    const { db, react, unreact } = setup(SMALL_LIMITS);
+    await react({ userId: READER, postId: elsewhere(1), through: { id: elsewhere(51), authorId: REPOSTER } });
+    await react({ userId: READER, postId: elsewhere(2), through: { id: elsewhere(52), authorId: REPOSTER } });
+
+    await unreact({ userId: READER, postId: elsewhere(2) });
+
+    expect(placesTaken(db, READER, 'repost')).toBe(2);
+    await expect(react({ userId: READER, postId: elsewhere(2), through: { id: elsewhere(52), authorId: REPOSTER } })).rejects.toBeInstanceOf(DailyGestureLimitReached);
+  });
+
+  it('reconfirmer par une autre republication est un geste sous les republications, qui prend sa place', async () => {
+    const { db, react } = setup(SMALL_LIMITS);
+    await react({ userId: READER, postId: ORIGINAL, through: viaRepost });
+
     await react({ userId: READER, postId: ORIGINAL, through: { id: elsewhere(90), authorId: REPOSTER } });
 
-    expect(scoreOf(db, READER)).toBe(after);
-    expect(await markOf(db, READER, elsewhere(90))).toBe(0);
+    expect(placesTaken(db, READER, 'repost')).toBe(2);
+    await expect(react({ userId: READER, postId: ORIGINAL, through: { id: elsewhere(91), authorId: REPOSTER } })).rejects.toBeInstanceOf(DailyGestureLimitReached);
+  });
+
+  it('reconfirmer sans rien de neuf à créditer n’est pas un geste : aucune place prise', async () => {
+    const { db, react } = setup(SMALL_LIMITS);
+    await react({ userId: READER, postId: ORIGINAL, through: viaRepost });
+
+    await react({ userId: READER, postId: ORIGINAL, through: viaRepost });
+    await react({ userId: READER, postId: ORIGINAL });
+
+    expect(placesTaken(db, READER, 'repost')).toBe(1);
+    expect(placesTaken(db, READER, 'original')).toBe(0);
   });
 });
 

@@ -23,10 +23,12 @@ jest.mock('../../../../services/ZmqSingleton', () => ({
 
 const mockRecordActivity = jest.fn<any>().mockResolvedValue(undefined);
 const mockReclaimContent = jest.fn<any>().mockResolvedValue(0);
+const mockReclaimSource = jest.fn<any>().mockResolvedValue(0);
 jest.mock('../../../../services/engagement/EngagementService', () => ({
   EngagementService: jest.fn().mockImplementation(() => ({
     recordActivity: (...args: unknown[]) => mockRecordActivity(...args),
     reclaimContent: (...args: unknown[]) => mockReclaimContent(...args),
+    reclaimSource: (...args: unknown[]) => mockReclaimSource(...args),
   })),
 }));
 
@@ -96,6 +98,7 @@ const serviceFor = (prisma: ReturnType<typeof makePrisma>) =>
 beforeEach(() => {
   mockRecordActivity.mockClear();
   mockReclaimContent.mockClear();
+  mockReclaimSource.mockClear();
 });
 
 describe('tool.post_bookmark — PostService.bookmarkPost', () => {
@@ -156,7 +159,7 @@ describe('social.repost — PostService.repostPost', () => {
 
     expect(repost).not.toBeNull();
     expect(mockRecordActivity.mock.calls).toEqual([
-      [READER_ID, 'social.repost', { postId: POST_ID, targetId: POST_ID, targetOwnerId: AUTHOR_ID }],
+      [READER_ID, 'social.repost', { postId: POST_ID, targetId: POST_ID, targetOwnerId: AUTHOR_ID, receipt: 'post:repost-1' }],
     ]);
   });
 
@@ -168,6 +171,7 @@ describe('social.repost — PostService.repostPost', () => {
       postId: POST_ID,
       targetId: POST_ID,
       targetOwnerId: AUTHOR_ID,
+      receipt: 'post:repost-1',
     });
   });
 
@@ -225,5 +229,6 @@ describe('reprise anti-abus — PostService.deletePost', () => {
     await settle();
 
     expect(mockReclaimContent).toHaveBeenCalledWith(AUTHOR_ID, 'content.story', POST_ID);
+    expect(mockReclaimSource).toHaveBeenCalledWith(AUTHOR_ID, `post:${POST_ID}`, { withinClawback: true });
   });
 });

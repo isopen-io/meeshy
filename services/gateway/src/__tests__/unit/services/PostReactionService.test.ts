@@ -360,6 +360,7 @@ describe('PostReactionService', () => {
 
   describe('removeReaction', () => {
     beforeEach(() => {
+      mockPrisma.postReaction.findMany.mockResolvedValue([{ id: 'reaction-removed' }]);
       mockPrisma.postReaction.deleteMany.mockResolvedValue({ count: 1 });
       mockPrisma.post.findUnique.mockResolvedValue(createMockPost());
       mockPrisma.post.update.mockResolvedValue(createMockPost());
@@ -400,11 +401,7 @@ describe('PostReactionService', () => {
 
       expect(result).toBe(true);
       expect(mockPrisma.postReaction.deleteMany).toHaveBeenCalledWith({
-        where: {
-          postId: testPostId,
-          userId: testUserId2,
-          emoji: '❤️'
-        }
+        where: { postId: testPostId, userId: testUserId2, emoji: '❤️' }
       });
     });
 

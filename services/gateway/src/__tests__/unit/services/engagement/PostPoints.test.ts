@@ -111,7 +111,7 @@ describe('un geste crédité sur un post', () => {
       {
         room: ROOMS.user(READER),
         event: 'engagement:post-updated',
-        payload: { postId: POST, viewerPoints: credited(db, READER) },
+        payload: { postId: POST, viewerPoints: credited(db, READER), at: expect.any(Number) },
       },
     ]);
   });
@@ -124,8 +124,8 @@ describe('un geste crédité sur un post', () => {
     await service.recordActivity(READER, 'comment.text', { postId: POST });
 
     expect(postUpdates(emissions).map((emission) => emission.payload)).toEqual([
-      { postId: POST, viewerPoints: first },
-      { postId: POST, viewerPoints: credited(db, READER) },
+      { postId: POST, viewerPoints: first, at: expect.any(Number) },
+      { postId: POST, viewerPoints: credited(db, READER), at: expect.any(Number) },
     ]);
   });
 });
@@ -190,7 +190,7 @@ describe('le crédit de publication', () => {
     expect(publication).toBeGreaterThanOrEqual(DEFAULT_ENGAGEMENT_SCALE.abuse.heavyPoints);
     expect(await pointsOf(db, AUTHOR, POST)).toBe(publication);
     expect(postUpdates(emissions)).toEqual([
-      { room: ROOMS.user(AUTHOR), event: 'engagement:post-updated', payload: { postId: POST, viewerPoints: publication } },
+      { room: ROOMS.user(AUTHOR), event: 'engagement:post-updated', payload: { postId: POST, viewerPoints: publication, at: expect.any(Number) } },
     ]);
   });
 
@@ -286,7 +286,7 @@ describe('un post publié avant ce lot', () => {
     await service.recordActivity(AUTHOR, 'comment.text', { postId: POST });
 
     expect(postUpdates(emissions).map((emission) => emission.payload)).toEqual([
-      { postId: POST, viewerPoints: LEGACY_POINTS + credited(db, AUTHOR, ['comment.text']) },
+      { postId: POST, viewerPoints: LEGACY_POINTS + credited(db, AUTHOR, ['comment.text']), at: expect.any(Number) },
     ]);
   });
 });
@@ -434,7 +434,7 @@ describe('deux premiers gestes simultanés sur le même post', () => {
 
     expect(await pointsOf(db, READER, POST)).toBe(credited(db, READER));
     expect(postUpdates(emissions).map((emission) => emission.payload)).toEqual([
-      { postId: POST, viewerPoints: credited(db, READER) },
+      { postId: POST, viewerPoints: credited(db, READER), at: expect.any(Number) },
     ]);
   });
 });

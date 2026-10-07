@@ -18,6 +18,8 @@ import {
   hardenedRateLimitConfig,
 } from './socialRateLimit';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
+import { DailyGestureLimitReached } from '../../services/engagement/DailyGestureGate';
+import { refuseDailyGesture } from '../../utils/daily-gesture-refusal';
 import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLog';
 import { MutationInFlight } from '../../services/MutationLogService';
 import { validatePagination } from '../../utils/pagination';
@@ -244,6 +246,9 @@ export function registerInteractionRoutes(
       // while keeping a reachable domain error out of INTERNAL_ERROR.
       if (error instanceof ConflictError) {
         return sendConflict(reply, error.message, { code: error.code });
+      }
+      if (error instanceof DailyGestureLimitReached) {
+        return refuseDailyGesture(reply, error);
       }
       enhancedLogger.error('[POST /posts/:postId/like]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });

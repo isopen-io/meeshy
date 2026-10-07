@@ -48,6 +48,7 @@ import {
 import type { EngagementActivityOptions } from '../../services/engagement/EngagementService';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
+import { creditSource } from '../../services/posts/postEngagementCredits';
 import { postSignalText } from '../../services/posts/storyContentComposition';
 import { resolvePostMentions } from '../../services/posts/postMentions';
 import type {
@@ -353,7 +354,9 @@ function recordPublicationEngagement(params: {
     });
 
   const byVisibility = operation === 'content.post' || operation === 'content.story';
-  const content = credit(operation, byVisibility ? { postId, targetId: postId, variant: visibilityVariant(visibility) } : { postId, targetId: postId });
+  // La publication est la SOURCE de ses crédits : la retirer les reprend (#9584).
+  const source = creditSource.post(postId);
+  const content = credit(operation, byVisibility ? { postId, targetId: postId, receipt: source, variant: visibilityVariant(visibility) } : { postId, targetId: postId, receipt: source });
 
   if (operation === 'content.status') return;
   // L'un APRÈS l'autre (#9569) : les deux crédits nomment le même post, et
@@ -361,7 +364,7 @@ function recordPublicationEngagement(params: {
   // leurs annonces pouvaient se croiser et laisser la valeur d'avant le second.
   // `credit` ne rejette jamais : un contenu en échec n'empêche pas l'axe outil.
   content
-    .then(() => credit(editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish', { postId, targetId: postId }))
+    .then(() => credit(editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish', { postId, targetId: postId, receipt: source }))
     .catch((err: unknown) => {
       logError(log, `[${porte}] publication engagement chain failed`, err);
     });

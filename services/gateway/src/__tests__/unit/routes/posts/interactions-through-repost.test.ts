@@ -31,6 +31,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
+import { DailyGestureLimitReached } from '../../../../services/engagement/DailyGestureGate';
 
 const READER = '507f1f77bcf86cd799439011';
 const AUTHOR = '507f1f77bcf86cd799439044';
@@ -106,5 +107,25 @@ describe('POST /posts/:postId/like — par où le like est passé (#9584)', () =
 
     expect(mockLikePost.mock.calls[0]?.[0]).toBe(REPOST);
     expect(mockLikePost.mock.calls[0]?.[3]).toEqual({ through: undefined });
+  });
+});
+
+describe('POST /posts/:postId/like au-delà de la limite quotidienne (#9584)', () => {
+  it('429 DAILY_REACTION_LIMIT avec l’instant de la remise à zéro, les secondes qui y mènent et la limite', async () => {
+    const resetAt = new Date(Date.now() + 7_200_000);
+    mockLikePost.mockRejectedValue(new DailyGestureLimitReached('reaction', 'original', 100, resetAt));
+
+    const res = await like({ [ORIGINAL]: row(ORIGINAL) }, `/posts/${ORIGINAL}/like`);
+
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toMatchObject({
+      success: false,
+      code: 'DAILY_REACTION_LIMIT',
+      resetAt: resetAt.toISOString(),
+      limit: 100,
+      path: 'original',
+    });
+    expect(Number(res.headers['retry-after'])).toBe(res.json().retryAfter);
+    expect(res.json().retryAfter).toBeGreaterThan(7190);
   });
 });
