@@ -1,0 +1,357 @@
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { act } from 'react';
+
+import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+import { PROGRESSION_CONCEPTS } from '@meeshy/shared/utils/progression-layout';
+
+import { GameDetailHost } from '@/components/game-detail-sheet';
+import type { EngagementWithGame } from '@/lib/api/engagement';
+import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
+import { GAME_EXTRAS_TODAY, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { GAME_DETAIL_FAMILIES, GAME_DETAIL_HOW, type GameDetailFamily } from '@/lib/game/detail-families';
+import { loadGameCatalog } from '@/lib/i18n-game-catalog';
+import { interfaceDirection, SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+import { detailStore } from '@/lib/view/detail-store';
+import {
+  badgeDetail,
+  chestDetail,
+  coinDetail,
+  defiDetail,
+  elanDetail,
+  flameDetail,
+  freezeDetail,
+  gemDetail,
+  missionDetail,
+  playerDetail,
+  rankDetail,
+  ringDetail,
+  sealDetail,
+  stampDetail,
+  starDetail,
+  stepDetail,
+  succesDetail,
+  treasuryDetail,
+  trophyDetail,
+  type ElementDetail,
+} from '@/lib/view/game-detail';
+import { conceptView } from '@/lib/view/progression-concepts';
+import { createActMounter } from '@/test-support/act-mount';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { ConceptFiche } from './progression-concept';
+import type { GameActions } from './progression-game-actions';
+import { ProgressionHeaderGroup } from './progression-header-group';
+import { TableauBody } from './progression-tableau';
+import { ProgressionBody } from './progression';
+
+/**
+ * TOUT ÉLÉMENT SE TOUCHE (#9563, amendement n° 2) — un rebond, puis une modale
+ * avec les précisions de CET élément. Ce témoin garde les trois choses que le
+ * porteur a demandées et qu'aucun typage ne tient :
+ *   · chaque famille d'élément a son modèle de précisions (une fonction pure) ;
+ *   · chaque élément rendu sur une fiche ou au tableau de bord est un BOUTON qui
+ *     ouvre la modale de SON élément, et la modale rend le focus à ce bouton ;
+ *   · l'en-tête de la première page porte le blason et le compteur de Meeshes
+ *     quand ils sont servis, rien sinon — et aucune page ne monte d'en-tête statique.
+ */
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+const LANGUAGES = SUPPORTED_INTERFACE_LANGUAGES as readonly InterfaceLanguage[];
+const SRC = resolve(import.meta.dirname, '..');
+const mounter = createActMounter();
+
+beforeAll(async () => {
+  ensureHappyDomRegistered({ url: 'http://localhost/me/progression' });
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await Promise.all(LANGUAGES.map((language) => loadGameCatalog(language)));
+});
+afterEach(() => {
+  act(() => detailStore.close());
+  mounter.unmountAll();
+  document.documentElement.lang = 'fr';
+  document.documentElement.dir = 'ltr';
+});
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+const idle: GameActions = {
+  mint: () => undefined,
+  reroll: () => undefined,
+  claimChest: () => undefined,
+  buyFreeze: () => undefined,
+  relight: () => undefined,
+  pending: { mint: false, rerollId: null, chest: false, freeze: false, relight: false },
+  errors: {},
+  celebration: null,
+  strikeKey: 0,
+};
+
+const NOW = new Date(`${GAME_EXTRAS_TODAY}T10:00:00.000Z`);
+const before = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
+const playing: EngagementWithGame = { ...before, game: gameBlockWithExtrasFixture(), mintBadgeLoss: 2 };
+
+const must = <T,>(value: T | null | undefined, what: string): T => {
+  if (value === null || value === undefined) throw new Error(`fixture incomplète : ${what}`);
+  return value;
+};
+
+/** Un exemple par famille, bâti sur la fixture : c'est la table que « chaque famille a son modèle » parcourt. */
+const samples = (): Readonly<Record<GameDetailFamily, ElementDetail>> => {
+  const game = must(playing.game, 'game');
+  const season = must(game.season, 'season');
+  const league = must(game.league, 'league');
+  const prestige = must(game.prestige, 'prestige');
+  const trophies = must(game.trophies, 'trophies');
+  const atlas = must(game.atlas, 'atlas');
+  return {
+    badge: badgeDetail(must(playing.axes[0], 'axes')),
+    succes: succesDetail(must(playing.achievements[0], 'achievements'), game.achievementRarities),
+    defi: defiDetail(must((playing.achievementSections ?? [])[0]?.entries[0], 'défis')),
+    trophy: must(trophyDetail(must(trophies.items[0], 'trophées')), 'trophée lisible'),
+    stamp: stampDetail(must(atlas.stamps[0], 'tampons')),
+    step: stepDetail(season, 1),
+    seal: sealDetail(season),
+    gem: gemDetail(league),
+    star: starDetail(prestige, 1),
+    rank: rankDetail(game.glory),
+    flame: flameDetail(game.flame),
+    freeze: freezeDetail(game.flame),
+    mission: missionDetail(must(game.missions.items[0], 'missions')),
+    chest: chestDetail(game.chest),
+    coin: must(coinDetail(playing), 'pièce'),
+    ring: ringDetail(game.level),
+    treasury: treasuryDetail(game.treasury),
+    elan: elanDetail('content', playing),
+  };
+};
+
+describe('chaque famille d’élément a son modèle de précisions', () => {
+  for (const family of GAME_DETAIL_FAMILIES) {
+    test(`${family} : un nom, un état, ce que c’est, et « ${GAME_DETAIL_HOW[family] === 'obtain' ? 'comment l’obtenir' : 'ce que ça donne'} »`, () => {
+      const detail = samples()[family];
+      expect(detail.family).toBe(family);
+      expect(detail.id.startsWith(`${family}:`)).toBe(true);
+      expect(detail.name.trim()).not.toBe('');
+      expect(detail.state.line.trim()).not.toBe('');
+      expect(detail.what.trim()).not.toBe('');
+      expect(detail.how?.label).toBe(GAME_DETAIL_HOW[family]);
+      expect(detail.how?.text.trim()).not.toBe('');
+      expect(detail.concept).not.toBeNull();
+      expect(JSON.stringify(detail)).not.toMatch(/undefined|NaN|\{[a-z]+\}/);
+    });
+  }
+
+  test('dans les sept langues, aucun modèle ne rend une clé nue ni un paramètre resté en clair', () => {
+    for (const language of LANGUAGES) {
+      document.documentElement.lang = language;
+      document.documentElement.dir = interfaceDirection(language);
+      for (const detail of Object.values(samples())) {
+        expect({ language, id: detail.id, clean: !/game\.[a-z_.]+|\{[a-z]+\}/.test(JSON.stringify({ ...detail, id: '' })) }).toEqual({ language, id: detail.id, clean: true });
+      }
+    }
+  });
+
+  test('ce que la passerelle ne sert pas ne s’affiche pas : sans date servie, « Obtenu » sans date ; sans rareté, aucune rareté', () => {
+    const succes = must(playing.achievements.find((achievement) => achievement.unlocked), 'succès décroché');
+    expect(succesDetail({ ...succes, reachedAt: null }).state).toEqual({ kind: 'earned', line: 'Obtenu' });
+    expect(succesDetail(succes).rarity).toBeNull();
+    expect(succesDetail(succes).state.line).toMatch(/^Obtenu le /);
+  });
+
+  test('un élément verrouillé dit ce qu’il manque et sa jauge quand ils sont servis', () => {
+    const off = must(playing.axes.find((axis) => axis.reachedCount === 0 && axis.nextThreshold !== null), 'badge éteint');
+    const state = badgeDetail(off).state;
+    expect(state.kind).toBe('locked');
+    if (state.kind === 'locked') {
+      expect(state.missing).toMatch(/^Il manque /);
+      expect(state.gauge).not.toBeNull();
+    }
+  });
+
+  test('une ligne du classement ne dit rien de plus que la page : pseudonyme, place, points, zone', () => {
+    const detail = playerDetail({ rank: 3, displayName: 'Colibri-4821', weekPoints: 410, zone: 'promotion', cup: null }, 'jade');
+    expect(detail.concept).toBeNull();
+    expect(detail.name).toBe('Colibri-4821');
+    expect(JSON.stringify(detail)).not.toMatch(/online|lastActive|présen|userId/i);
+  });
+});
+
+const tree = (progress: EngagementWithGame, page: React.ReactNode, fiche?: Parameters<typeof GameDetailHost>[0]['fiche']) => (
+  <>
+    {page}
+    <GameDetailHost progress={progress} {...(fiche === undefined ? {} : { fiche })} />
+  </>
+);
+
+const dialogOf = (): HTMLDialogElement | null => document.querySelector('dialog[data-game-detail]');
+
+describe('chaque élément d’une fiche est un bouton qui ouvre la modale de SON élément', () => {
+  for (const concept of PROGRESSION_CONCEPTS) {
+    test(`${concept} : l’emblème du héros, chaque pastille et chaque ligne de donnée s’ouvrent`, async () => {
+      const host = await mounter.mount(tree(playing, <ConceptFiche concept={concept} progress={playing} host={{ actions: idle, online: true }} now={NOW} />, concept));
+      const view = conceptView(concept, playing, NOW);
+      const touches = [...host.querySelectorAll<HTMLButtonElement>('[data-fiche-section="hero"] button[data-detail], [data-fiche-section="where"] button[data-detail]')];
+      expect(touches.length).toBeGreaterThanOrEqual(view.facts.length);
+      for (const button of touches) {
+        expect(button.className).toContain('game-press');
+        await mounter.click(button);
+        const dialog = dialogOf();
+        expect({ id: button.dataset.detail, open: dialog !== null }).toEqual({ id: button.dataset.detail, open: true });
+        expect(dialog?.dataset.gameDetail).toBe(button.dataset.detail);
+        expect(dialog?.querySelector('h2')?.textContent).toBe(button.dataset.detailName);
+        expect(button.dataset.detailName?.trim()).not.toBe('');
+        await mounter.click(dialog?.querySelector<HTMLButtonElement>('button[data-sheet-close]') ?? null);
+        expect(dialogOf()).toBeNull();
+      }
+    });
+  }
+
+  test('sur la fiche du concept, la modale ne propose pas « Voir la fiche » ; ailleurs, si', async () => {
+    const onFiche = await mounter.mount(tree(playing, <ConceptFiche concept="flame" progress={playing} host={{ actions: idle, online: true }} now={NOW} />, 'flame'));
+    await mounter.click(onFiche.querySelector<HTMLButtonElement>('[data-fiche-section="where"] button[data-detail]'));
+    expect(dialogOf()?.querySelector('a[data-detail-fiche]')).toBeNull();
+    await mounter.click(dialogOf()?.querySelector<HTMLButtonElement>('button[data-sheet-close]') ?? null);
+    mounter.unmountAll();
+
+    const board = await mounter.mount(tree(playing, <TableauBody progress={playing} now={NOW} />));
+    await mounter.click(board.querySelector<HTMLButtonElement>('[data-dashboard-block="flame"] button[data-detail]'));
+    expect(dialogOf()?.querySelector('a[data-detail-fiche]')?.getAttribute('href')).toBe('/me/progression/concept/flame');
+  });
+});
+
+describe('le tableau de bord : chaque ligne de donnée s’ouvre', () => {
+  test('autant de boutons que de données, chacun ouvre la modale à son nom', async () => {
+    const host = await mounter.mount(tree(playing, <TableauBody progress={playing} now={NOW} />));
+    for (const concept of PROGRESSION_CONCEPTS) {
+      const view = conceptView(concept, playing, NOW);
+      const touches = [...host.querySelectorAll<HTMLButtonElement>(`[data-dashboard-block="${concept}"] button[data-detail]`)];
+      expect({ concept, touches: touches.length }).toEqual({ concept, touches: view.facts.length });
+    }
+    const first = must(host.querySelector<HTMLButtonElement>('[data-dashboard-block="glory"] button[data-detail]'), 'ligne de Gloire');
+    await mounter.click(first);
+    expect(dialogOf()?.querySelector('h2')?.textContent).toBe(first.dataset.detailName);
+  });
+
+  test('le titre d’un bloc reste un lien vers la fiche', () => {
+    const page = renderToStaticMarkup(<TableauBody progress={playing} now={NOW} />);
+    expect(page).toContain('href="/me/progression/concept/glory"');
+  });
+});
+
+describe('la modale', () => {
+  test('c’est un dialogue modal nommé par son titre ; elle dit l’état, ce que c’est, comment l’obtenir', async () => {
+    const host = await mounter.mount(tree(playing, <ConceptFiche concept="glory" progress={playing} host={{ actions: idle, online: true }} now={NOW} />, 'glory'));
+    await mounter.click(host.querySelector<HTMLButtonElement>('[data-fiche-section="hero"] button[data-detail]'));
+    const dialog = must(dialogOf(), 'modale');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-labelledby')).toBe(dialog.querySelector('h2')?.id);
+    expect(dialog.dataset.sheetPresentation).toBe('bottom');
+    expect(dialog.querySelector('[data-detail-emblem]')?.className).toContain('game-pop');
+    expect(dialog.querySelector('[data-detail-state]')?.textContent).toContain('Gloire');
+    expect(dialog.querySelector('[data-detail-what]')?.textContent).toContain('Ton blason montre ton rang');
+    expect(dialog.querySelector('[data-detail-how]')?.textContent).toContain('Comment l’obtenir');
+  });
+
+  test('fermée, elle rend le focus à l’élément touché', async () => {
+    const host = await mounter.mount(tree(playing, <ConceptFiche concept="flame" progress={playing} host={{ actions: idle, online: true }} now={NOW} />, 'flame'));
+    const button = must(host.querySelector<HTMLButtonElement>('[data-fiche-section="where"] button[data-detail]'), 'ligne de donnée');
+    button.focus();
+    await mounter.click(button);
+    expect(dialogOf()).not.toBeNull();
+    await mounter.click(dialogOf()?.querySelector<HTMLButtonElement>('button[data-sheet-close]') ?? null);
+    expect(dialogOf()).toBeNull();
+    expect(document.activeElement).toBe(button);
+  });
+
+  test('un toucher en dehors la ferme', async () => {
+    const host = await mounter.mount(tree(playing, <ConceptFiche concept="flame" progress={playing} host={{ actions: idle, online: true }} now={NOW} />, 'flame'));
+    await mounter.click(host.querySelector<HTMLButtonElement>('[data-fiche-section="where"] button[data-detail]'));
+    await mounter.click(dialogOf());
+    expect(dialogOf()).toBeNull();
+  });
+});
+
+describe('la première page : une carte reste UN lien, ses pastilles ne s’ouvrent pas', () => {
+  test('aucun bouton dans les cartes ; chaque carte rebondit', () => {
+    const page = document.createElement('div');
+    page.innerHTML = renderToStaticMarkup(<ProgressionBody progress={playing} now={NOW} />);
+    const cards = [...page.querySelectorAll('[data-concept-card]')];
+    expect(cards).toHaveLength(PROGRESSION_CONCEPTS.length);
+    for (const card of cards) {
+      expect(card.tagName).toBe('A');
+      expect(card.querySelector('button')).toBeNull();
+      expect(card.className).toContain('game-press');
+    }
+  });
+});
+
+describe('l’en-tête de la première page', () => {
+  test('servis : UN groupe, le blason du rang puis le nombre de Meeshes avec sa pièce, chacun un bouton qui rebondit', () => {
+    const group = document.createElement('div');
+    group.innerHTML = renderToStaticMarkup(<ProgressionHeaderGroup progress={playing} actions={idle} />);
+    const surface = must(group.querySelector('[data-progression-header-group]'), 'groupe');
+    expect(group.querySelectorAll('[data-progression-header-group]')).toHaveLength(1);
+    const buttons = [...surface.querySelectorAll('button')];
+    expect(buttons.map((button) => button.dataset.headerItem)).toEqual(['rank', 'meesh']);
+    for (const button of buttons) expect(button.className).toContain('game-press');
+    expect(surface.querySelector('[data-header-item="meesh"]')?.textContent).toContain(String(playing.meesh?.balance));
+    expect(surface.querySelector('[data-header-item="rank"]')?.getAttribute('aria-label')).toContain('Écho');
+  });
+
+  test('rien si la donnée n’est pas servie : ni blason sans le jeu, ni compteur sans solde, ni groupe vide', () => {
+    const { meesh: _meesh, ...sansSolde } = before;
+    expect(renderToStaticMarkup(<ProgressionHeaderGroup progress={sansSolde} actions={idle} />)).toBe('');
+    const avecSolde = renderToStaticMarkup(<ProgressionHeaderGroup progress={before} actions={idle} />);
+    expect(avecSolde).toContain('data-header-item="meesh"');
+    expect(avecSolde).not.toContain('data-header-item="rank"');
+  });
+
+  test('le blason ouvre la modale du rang ; le compteur rouvre la feuille des Meeshes, avec la frappe quand les points le permettent', async () => {
+    const mints: number[] = [];
+    const actions: GameActions = { ...idle, mint: () => void mints.push(1) };
+    const canMint: EngagementWithGame = { ...playing, meesh: { ...must(playing.meesh, 'solde'), canMint: true, missingPoints: 0 } };
+    const host = await mounter.mount(tree(canMint, <ProgressionHeaderGroup progress={canMint} actions={actions} />));
+    await mounter.click(host.querySelector<HTMLButtonElement>('[data-header-item="rank"]'));
+    expect(dialogOf()?.dataset.gameDetail).toMatch(/^rank:/);
+    await mounter.click(dialogOf()?.querySelector<HTMLButtonElement>('button[data-sheet-close]') ?? null);
+
+    await mounter.click(host.querySelector<HTMLButtonElement>('[data-header-item="meesh"]'));
+    const sheet = must(document.querySelector('dialog[data-meesh-sheet]'), 'feuille des Meeshes');
+    await mounter.click(sheet.querySelector<HTMLButtonElement>('[data-meesh-mint]'));
+    expect(mints).toHaveLength(1);
+  });
+});
+
+describe('aucune page de Progression ne monte d’en-tête statique', () => {
+  const routes = readdirSync(join(SRC, 'routes')).filter((name) => name.startsWith('progression') && name.endsWith('.tsx') && !name.includes('.test.'));
+  const read = (name: string): string => readFileSync(join(SRC, 'routes', name), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  test('aucune route n’écrit son `<header>` ni son `<main id="contenu">` : elles passent par la coquille partagée', () => {
+    expect(routes.length).toBeGreaterThan(15);
+    for (const name of routes.filter((route) => route !== 'progression-shell.tsx')) {
+      const source = read(name);
+      expect({ name, header: /<header\b/.test(source), main: /<main\b/.test(source) }).toEqual({ name, header: false, main: false });
+    }
+  });
+
+  test('la coquille pose l’en-tête qui se réduit DANS le conteneur qui défile : le contenu passe dessous', () => {
+    const shell = read('progression-shell.tsx');
+    expect(shell).toContain('<CollapsingHeader');
+    expect(shell.indexOf('<main')).toBeLessThan(shell.indexOf('<CollapsingHeader'));
+    expect(shell.indexOf('<CollapsingHeader')).toBeLessThan(shell.indexOf('</main>'));
+  });
+
+  test('chaque écran de Progression rend la coquille', () => {
+    const screens = routes.filter((name) => /export default function/.test(read(name)));
+    expect(screens.length).toBeGreaterThanOrEqual(14);
+    for (const name of screens) {
+      expect({ name, shell: /<ProgressionShell\b|<ProgressionPage\b/.test(read(name)) }).toEqual({ name, shell: true });
+    }
+    expect(read('progression-page.tsx')).toContain('<ProgressionShell');
+  });
+});
