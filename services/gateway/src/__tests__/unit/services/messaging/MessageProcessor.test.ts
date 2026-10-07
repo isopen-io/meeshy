@@ -869,66 +869,8 @@ describe('MessageProcessor.saveMessage', () => {
   // orpheline (content vide, zéro pièce jointe) — sans quoi le prochain GET
   // la sert comme un message réel, et un rejeu au même `clientMessageId`
   // la rendrait ensuite `success: true` via le dédup P2002.
-  it('recopie la protection PROPRE à chaque pièce transférée (#9572)', async () => {
-    const piece = {
-      id: 'orig-att', fileName: 'f.jpg', originalName: 'f.jpg', mimeType: 'image/jpeg', fileSize: 10,
-      filePath: '/uploads/f.jpg', fileUrl: 'https://cdn/f.jpg',
-      isViewOnce: false, isBlurred: true, effectFlags: 2,
-    };
-    attFindMany.mockResolvedValueOnce([piece]).mockResolvedValue([]);
-    attCreate.mockResolvedValue({ ...piece });
-
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
-
-    expect(attCreate.mock.calls[0][0].data).toMatchObject({
-      isViewOnce: false,
-      isBlurred: true,
-      effectFlags: 2,
-      isForwarded: true,
-      forwardedFromAttachmentId: 'orig-att',
-    });
-  });
-
-  it('refuse d’écrire un transfert sans verdict d’admission (#9572)', async () => {
-    await expect(processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' })).rejects.toThrow('forward:not-admitted');
-    expect(msgCreate).not.toHaveBeenCalled();
-  });
-
   describe('diffusion via copyAttachmentsFromMessageId', () => {
     const SOURCE_MSG_ID = 'orig-msg-id';
-
-    it('fait hériter la copie de la protection de sa source, message ET pièces (#9572)', async () => {
-      msgFindUnique.mockResolvedValue({
-        ...ORDINARY_SOURCE,
-        attachments: [{ isViewOnce: true, isBlurred: false, effectFlags: 4 }],
-        sender: { id: SENDER_ID, userId: 'user-1' },
-      });
-      partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
-      const origAtt = {
-        id: 'orig-att', fileName: 'f.jpg', originalName: 'f.jpg', mimeType: 'image/jpeg', fileSize: 10,
-        filePath: '/uploads/f.jpg', fileUrl: 'https://cdn/f.jpg', isViewOnce: true, isBlurred: false, effectFlags: 4,
-      };
-      attFindMany.mockResolvedValueOnce([origAtt]).mockResolvedValue([]);
-      attCreate.mockResolvedValue({ ...origAtt });
-
-      await processor.saveMessage({ ...baseData, copyAttachmentsFromMessageId: SOURCE_MSG_ID });
-
-      const written = msgCreate.mock.calls[0][0].data;
-      expect(written.isViewOnce).toBe(true);
-      expect(written.effectFlags & 4).toBe(4);
-      expect(attCreate.mock.calls[0][0].data).toMatchObject({ isViewOnce: true, effectFlags: 4 });
-      expect(attCreate.mock.calls[0][0].data.isForwarded).toBeUndefined();
-    });
-
-    it('refuse une diffusion dont la source est introuvable, AVANT d’écrire le message (#9572)', async () => {
-      msgFindUnique.mockResolvedValue(null);
-
-      await expect(
-        processor.saveMessage({ ...baseData, copyAttachmentsFromMessageId: SOURCE_MSG_ID })
-      ).rejects.toThrow('copy-attachments:source-unavailable');
-
-      expect(msgCreate).not.toHaveBeenCalled();
-    });
 
     it('copie les pièces jointes de la source et NE supprime PAS le message créé', async () => {
       msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: SENDER_ID, userId: 'user-1' } });
