@@ -232,7 +232,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
         objectif.currentPosition = .front
         let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
         session.flash = .on
-        XCTAssertTrue(session.floorIsLit)
+        XCTAssertTrue(session.screenIsTheFlash)
         session.takePhoto()
         session.takePhoto(intent: .gallery)
         XCTAssertEqual(session.photoInFlightIntent, .edit, "la seconde demande n'écrase pas la photo en vol")
@@ -240,6 +240,48 @@ final class ComposerCaptureTakesTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 400_000_000)
         XCTAssertEqual(objectif.photoFlashes, [.off], "un seul déclenchement pour la rampe")
         session.disarm()
+    }
+
+    /// L'écran blanchit de la rampe à la fin de la prise (#9566) — et jamais
+    /// sur la photo qui s'ouvre en retouche, ni dans un viseur fermé.
+    func test_takePhoto_underTheScreenFlash_burstsFromTheRampUntilThePhotoOpens() async {
+        let objectif = MockComposerCaptureCamera()
+        objectif.currentPosition = .front
+        let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
+        XCTAssertFalse(session.screenFlashBurst)
+        session.flash = .on
+        XCTAssertFalse(session.screenFlashBurst, "armer le flash ne blanchit rien")
+        session.takePhoto()
+        XCTAssertTrue(session.screenFlashBurst, "l'écran éclaire dès la rampe")
+        await Self.waitUntil(timeout: 2) { !objectif.photoFlashes.isEmpty }
+        XCTAssertTrue(session.screenFlashBurst, "et encore quand l'obturateur part")
+        Self.publishPhoto(on: session)
+        XCTAssertEqual(session.phase, .editing(.photo))
+        XCTAssertFalse(session.screenFlashBurst, "la retouche s'ouvre sur la photo, pas sur du blanc")
+        session.disarm()
+    }
+
+    func test_takePhoto_underTheScreenFlash_theBurstEndsByItself_andWithTheViewfinder() async {
+        let objectif = MockComposerCaptureCamera()
+        objectif.currentPosition = .front
+        let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
+        session.flash = .on
+        session.takePhoto()
+        await Self.waitUntil(timeout: 3) { !session.screenFlashBurst }
+        XCTAssertFalse(session.screenFlashBurst, "sans photo rendue, l'écran ne reste pas blanc")
+        session.takePhoto()
+        XCTAssertTrue(session.screenFlashBurst)
+        session.disarm()
+        XCTAssertFalse(session.screenFlashBurst, "un viseur fermé n'éclaire plus")
+    }
+
+    func test_takePhoto_atTheBack_neverBurstsTheScreen() {
+        let objectif = MockComposerCaptureCamera()
+        let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
+        session.flash = .on
+        session.takePhoto()
+        XCTAssertFalse(session.screenFlashBurst, "à l'arrière, c'est la lampe qui éclaire")
+        XCTAssertEqual(objectif.photoFlashes, [.on])
     }
 
     /// m-b : la rampe ne déclenche pas dans un viseur fermé.

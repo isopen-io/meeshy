@@ -227,8 +227,8 @@ final class ComposerCaptureEditTests: XCTestCase {
     func test_theTopRow_whileEditing_hidesFlashFlipAndExposure_andTheCrossCancels() throws {
         let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains("var editing = false"))
-        XCTAssertTrue(barre.contains("ComposerExposureRule.shows(stage: stage, editing: editing)"),
-                      "le curseur de luminosité ne règle que l'objectif qui vise")
+        XCTAssertTrue(barre.contains("ComposerFlashIntensity.showsSlider(flash: flashMode) && !editing"),
+                      "le curseur du flash ne règle que l'objectif qui vise")
         XCTAssertFalse(barre.contains("editing: false"), "l'édition n'est plus niée en dur")
         guard let debut = barre.range(of: "private var topControls: some View {"),
               let fin = barre.range(of: "private var flashCluster", range: debut.upperBound..<barre.endIndex)

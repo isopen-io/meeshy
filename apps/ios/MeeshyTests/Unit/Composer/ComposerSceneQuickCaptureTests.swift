@@ -164,14 +164,81 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
         XCTAssertEqual(ComposerFrontFlash.torch(flash: .on, position: .front), .off)
     }
 
-    func test_previewRect_pleinEcranAllume_laisseUnAnneauBlanc() {
+    // MARK: - La place du viseur sous le flash d'écran (#9566)
+
+    func test_placement_enRetouche_toujoursPleinEcran() {
+        for demandee in ComposerSceneCameraSize.allCases {
+            for carte in [true, false] {
+                for flash in [true, false] {
+                    XCTAssertEqual(ComposerCapturePlacement.size(requested: demandee, hostHasCard: carte,
+                                                                 screenFlash: flash, editing: true), .fullScreen)
+                }
+            }
+        }
+    }
+
+    func test_placement_unHoteACarte_suitLaTailleDemandee() {
+        XCTAssertEqual(ComposerCapturePlacement.size(requested: .card, hostHasCard: true,
+                                                     screenFlash: false, editing: false), .card)
+        XCTAssertEqual(ComposerCapturePlacement.size(requested: .fullScreen, hostHasCard: true,
+                                                     screenFlash: true, editing: false), .fullScreen,
+                       "agrandi, le selfie éclairé prend tout l'écran")
+    }
+
+    func test_placement_viseurServiSeul_neSeReduitEnSceneQueSousLeFlashDEcran() {
+        XCTAssertEqual(ComposerCapturePlacement.size(requested: .card, hostHasCard: false,
+                                                     screenFlash: false, editing: false), .fullScreen,
+                       "sans carte ni flash d'écran, il n'a nulle part où rentrer")
+        XCTAssertEqual(ComposerCapturePlacement.size(requested: .card, hostHasCard: false,
+                                                     screenFlash: true, editing: false), .card)
+        XCTAssertEqual(ComposerCapturePlacement.size(requested: .fullScreen, hostHasCard: false,
+                                                     screenFlash: true, editing: false), .fullScreen)
+    }
+
+    func test_placement_laSceneDUnViseurServiSeul_estLEcranMoinsUnAnneau() {
         let plein = CGRect(x: 0, y: 0, width: 390, height: 844)
-        XCTAssertEqual(ComposerFrontFlash.previewRect(plein, size: .fullScreen, floorLit: false), plein)
-        XCTAssertEqual(ComposerFrontFlash.previewRect(plein, size: .card, floorLit: true), plein,
-                       "en carte, le sol autour de la carte suffit")
-        let bague = ComposerFrontFlash.previewRect(plein, size: .fullScreen, floorLit: true)
-        XCTAssertEqual(bague, plein.insetBy(dx: ComposerFrontFlash.fullScreenRim,
-                                            dy: ComposerFrontFlash.fullScreenRim))
+        let ancre = CGRect(x: 40, y: 120, width: 300, height: 533)
+        XCTAssertEqual(ComposerCapturePlacement.card(anchor: ancre, full: plein, hostHasCard: true), ancre)
+        XCTAssertEqual(ComposerCapturePlacement.card(anchor: plein, full: plein, hostHasCard: false),
+                       plein.insetBy(dx: ComposerCapturePlacement.sceneRim, dy: ComposerCapturePlacement.sceneRim))
+    }
+
+    func test_placement_leSolBlancNEntoureQueLaScene_jamaisLePleinEcran() {
+        XCTAssertTrue(ComposerCapturePlacement.showsFloor(size: .card, screenFlash: true))
+        XCTAssertFalse(ComposerCapturePlacement.showsFloor(size: .fullScreen, screenFlash: true),
+                       "agrandi : plus de blanc en continu")
+        XCTAssertFalse(ComposerCapturePlacement.showsFloor(size: .card, screenFlash: false))
+    }
+
+    func test_placement_enPleinEcran_lEcranNeBlanchitQuALaPrise() {
+        XCTAssertTrue(ComposerCapturePlacement.showsBurst(bursting: true, size: .fullScreen))
+        XCTAssertFalse(ComposerCapturePlacement.showsBurst(bursting: false, size: .fullScreen))
+        XCTAssertFalse(ComposerCapturePlacement.showsBurst(bursting: true, size: .card),
+                       "en scène le sol éclaire déjà : rien ne recouvre l'aperçu")
+    }
+
+    func test_placement_leBoutonDeTaille_resteOffertSousLeFlashDEcran_etSeTaitEnRetouche() {
+        XCTAssertTrue(ComposerCapturePlacement.offersSizeToggle(hostHasCard: true, screenFlash: false, editing: false))
+        XCTAssertFalse(ComposerCapturePlacement.offersSizeToggle(hostHasCard: false, screenFlash: false, editing: false))
+        XCTAssertTrue(ComposerCapturePlacement.offersSizeToggle(hostHasCard: false, screenFlash: true, editing: false),
+                      "le selfie éclairé peut toujours s'agrandir")
+        XCTAssertFalse(ComposerCapturePlacement.offersSizeToggle(hostHasCard: true, screenFlash: true, editing: true))
+    }
+
+    func test_montage_placeLeViseurParLaRegle_etArronditLaScene() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer")
+        let montage = AppSourceGuard.stripComments(try String(
+            contentsOf: racine.appendingPathComponent("ComposerCaptureMount.swift"), encoding: .utf8))
+        XCTAssertTrue(montage.contains("ComposerCapturePlacement.size("))
+        XCTAssertTrue(montage.contains("ComposerCapturePlacement.showsFloor("))
+        XCTAssertTrue(montage.contains("ComposerCapturePlacement.showsBurst("))
+        XCTAssertTrue(montage.contains("ComposerCapturePlacement.offersSizeToggle("))
+        XCTAssertFalse(montage.contains("size: size,"), "les couches reçoivent la taille PLACÉE, jamais la demandée")
+        XCTAssertEqual(ComposerSceneCameraFrame.radius(for: .card), ComposerSceneCameraFrame.cardRadius,
+                       "la scène entourée de blanc a des coins arrondis")
     }
 
     // MARK: - La luminosité : montée le temps de la prise, puis RENDUE

@@ -61,6 +61,61 @@ final class ComposerLookStripRuleTests: XCTestCase {
                        serrees, "le même défilement peint les mêmes cases")
     }
 
+    // MARK: - La case au centre est la case choisie (#9566)
+
+    func test_centeredIndex_isTheCellUnderTheMiddleOfTheBand() {
+        let pas = ComposerLookStripRule.pitch
+        XCTAssertEqual(ComposerLookStripRule.centeredIndex(scrolled: 0, count: 40), 0)
+        XCTAssertEqual(ComposerLookStripRule.centeredIndex(scrolled: pas * 3, count: 40), 3)
+        XCTAssertEqual(ComposerLookStripRule.centeredIndex(scrolled: pas * 3 + pas * 0.49, count: 40), 3)
+        XCTAssertEqual(ComposerLookStripRule.centeredIndex(scrolled: pas * 3 + pas * 0.51, count: 40), 4,
+                       "passé la moitié de l'écart, c'est la suivante")
+        XCTAssertEqual(ComposerLookStripRule.centeredIndex(scrolled: -80, count: 40), 0, "le rebond de tête reste sur la première")
+        XCTAssertEqual(ComposerLookStripRule.centeredIndex(scrolled: pas * 90, count: 40), 39, "celui de queue sur la dernière")
+        XCTAssertNil(ComposerLookStripRule.centeredIndex(scrolled: 0, count: 0))
+    }
+
+    func test_follow_theScrollChoosesTheCentredCell_onceAndOnlyWhenTheLookMayChange() {
+        var suivi = ComposerLookStripFollow()
+        suivi.begin(chosen: 0)
+        XCTAssertNil(suivi.centered(on: 0, chosen: 0, selects: true), "déjà choisie : rien à choisir")
+        XCTAssertEqual(suivi.centered(on: 1, chosen: 0, selects: true), 1, "la case arrivée au centre est choisie")
+        XCTAssertNil(suivi.centered(on: 1, chosen: 1, selects: true))
+        XCTAssertNil(suivi.centered(on: 2, chosen: 1, selects: false), "un look figé par la prise ne change pas au défilement")
+    }
+
+    func test_follow_aBandOpenedOnAChosenCell_doesNotChooseTheFirstOne() {
+        var suivi = ComposerLookStripFollow()
+        suivi.begin(chosen: 5)
+        XCTAssertNil(suivi.centered(on: 0, chosen: 5, selects: true),
+                     "la bande s'ouvre en tête avant de rejoindre la case choisie : « Aucun » ne l'écrase pas")
+        XCTAssertNil(suivi.centered(on: 3, chosen: 5, selects: true))
+        XCTAssertNil(suivi.centered(on: 5, chosen: 5, selects: true))
+        XCTAssertEqual(suivi.centered(on: 6, chosen: 5, selects: true), 6, "arrivée, la bande suit de nouveau le doigt")
+    }
+
+    func test_follow_aTappedCell_scrollsToTheCentre_withoutChoosingTheCellsItCrosses() {
+        var suivi = ComposerLookStripFollow()
+        suivi.begin(chosen: 0)
+        _ = suivi.centered(on: 0, chosen: 0, selects: true)
+        XCTAssertEqual(suivi.chose(4), 4, "la case touchée rejoint le centre")
+        XCTAssertNil(suivi.centered(on: 1, chosen: 4, selects: true))
+        XCTAssertNil(suivi.centered(on: 3, chosen: 4, selects: true))
+        XCTAssertNil(suivi.centered(on: 4, chosen: 4, selects: true))
+        XCTAssertNil(suivi.chose(4), "un choix né du défilement est déjà au centre : rien ne défile contre le doigt")
+    }
+
+    func test_follow_aProgrammedScrollCutShort_choosesWhereTheBandRests() {
+        var suivi = ComposerLookStripFollow()
+        suivi.begin(chosen: 0)
+        _ = suivi.centered(on: 0, chosen: 0, selects: true)
+        _ = suivi.chose(9)
+        XCTAssertNil(suivi.centered(on: 2, chosen: 9, selects: true))
+        XCTAssertEqual(suivi.settled(chosen: 9, selects: true), 2, "le doigt a repris la bande : elle choisit où elle s'arrête")
+        XCTAssertNil(suivi.settled(chosen: 2, selects: true))
+        XCTAssertEqual(suivi.centered(on: 3, chosen: 2, selects: true), 3)
+    }
+
     func test_paintedIndices_recording_onlyTheChosen_orNothingWhenCut() {
         XCTAssertEqual(ComposerLookStripRule.paintedIndices(visible: 0...7, count: 40, cells: 1, chosen: 5, recording: true), [5])
         XCTAssertEqual(ComposerLookStripRule.paintedIndices(visible: 0...7, count: 40, cells: 0, chosen: 5, recording: false), [])

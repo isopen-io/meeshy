@@ -51,7 +51,7 @@ final class ComposerCaptureSwitchFollowTests: XCTestCase {
         session.flipCamera()
         camera.finishSwitch()
         XCTAssertEqual(camera.torchRequests.last, .off)
-        XCTAssertTrue(session.floorIsLit, "à l'avant, c'est l'écran qui éclaire")
+        XCTAssertTrue(session.screenIsTheFlash, "à l'avant, c'est l'écran qui éclaire")
     }
 
     func test_flipCamera_notRecording_leavesTheTorchAlone() {
