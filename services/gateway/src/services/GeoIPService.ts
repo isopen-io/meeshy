@@ -1,27 +1,37 @@
 /**
- * GeoIP Service - Capture location data from IP addresses
- * Uses ip-api.com (free tier: 45 requests/minute) or falls back gracefully
+ * GeoIP Service — le contexte d'une requête : adresse attestée, appareil lu
+ * dans l'agent, relevé déclaré par le client, et le LIEU déduit de l'adresse.
+ *
+ * Le lieu se lit dans une base LOCALE (DB-IP Lite, `geoip/local-geoip-database.ts`,
+ * #9609) : aucune adresse ne part chez un tiers. Absente, la base laisse pays et
+ * ville inconnus. La ville est APPROXIMATIVE et ne porte jamais de coordonnées.
  */
 
+import { isIP } from 'node:net';
 import { FastifyRequest } from 'fastify';
 import * as UAParserModule from 'ua-parser-js';
+import { readClientSessionHeaders, type ClientSessionInfo } from '@meeshy/shared/utils/client-session';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { defaultGeoIpDatabase, type GeoIpDatabase, type GeoIpDatabaseStatus, type GeoIpRecord } from './geoip/local-geoip-database';
 
 const logger = enhancedLogger.child({ module: 'GeoIPService' });
 
 // UAParser v2 exports both as function and class
 const UAParser = UAParserModule.UAParser || (UAParserModule as any).default || UAParserModule;
 
+/**
+ * Le lieu déduit d'une adresse. Plus aucune coordonnée (#9609) : une latitude
+ * tirée d'une adresse IP affirme une précision qu'elle n'a pas, et elle partait
+ * jusque dans une carte tierce de l'e-mail « nouvelle connexion ».
+ */
 export interface GeoIpData {
   ip: string;
   country: string | null;      // ISO 3166-1 alpha-2 (e.g., "FR", "US")
   countryName: string | null;  // Full name (e.g., "France", "United States")
-  city: string | null;
+  city: string | null;         // approximative
   region: string | null;
   timezone: string | null;     // IANA timezone (e.g., "Europe/Paris")
   location: string | null;     // Formatted "City, Country"
-  latitude: number | null;     // GPS latitude
-  longitude: number | null;    // GPS longitude
 }
 
 export interface DeviceInfo {
@@ -52,9 +62,15 @@ export interface RequestContext {
   userAgent: string | null;
   geoData: GeoIpData | null;
   deviceInfo: DeviceInfo | null;
+  /**
+   * Ce que le client DÉCLARE (#9610) — version, build, plateforme, nom
+   * d'appareil. Facultatif : un contexte composé à la main (tâche de fond,
+   * repli) n'en porte pas, et la session s'ouvre sans.
+   */
+  client?: ClientSessionInfo;
 }
 
-// Cache to avoid hitting rate limits (5 min TTL)
+// Cache des lieux déjà lus (5 min) — la base locale répond vite, le cache borne les relectures d’une même adresse.
 const geoCache = new Map<string, { data: GeoIpData; expiry: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -196,81 +212,97 @@ export function parseUserAgent(userAgent: string | null): DeviceInfo | null {
   }
 }
 
-/** Combien de temps attendre le tiers de géolocalisation, par défaut. */
-const GEO_TIMEOUT_MS = 3000;
+/**
+ * LA BASE EN SERVICE. Une seule par processus, remplaçable par les témoins.
+ */
+let geoIpDatabase: GeoIpDatabase | null = null;
+
+function currentGeoIpDatabase(): GeoIpDatabase {
+  geoIpDatabase ??= defaultGeoIpDatabase();
+  return geoIpDatabase;
+}
+
+/** Remplace la base (`null` : revient à la base du disque). Réservé aux témoins. */
+export function useGeoIpDatabaseForTests(database: GeoIpDatabase | null): void {
+  geoIpDatabase = database;
+}
+
+/** Charge la base au démarrage, pour que la première connexion n'attende pas sa lecture. */
+export async function warmGeoIpDatabase(): Promise<GeoIpDatabaseStatus> {
+  await currentGeoIpDatabase().source();
+  return geoIpDatabaseStatus();
+}
+
+/** L'état de la base, sans l'attendre — servi par `/health`. */
+export function geoIpDatabaseStatus(): GeoIpDatabaseStatus {
+  return currentGeoIpDatabase().status?.() ?? 'unchecked';
+}
+
+const LOCAL_GEO = (ip: string): GeoIpData => ({
+  ip,
+  country: null,
+  countryName: null,
+  city: null,
+  region: null,
+  timezone: null,
+  location: 'Local',
+});
+
+function toGeoIpData(ip: string, record: GeoIpRecord): GeoIpData | null {
+  const country = record.country?.iso_code ?? null;
+  const countryName = record.country?.names?.en ?? null;
+  const city = record.city?.names?.en ?? null;
+  if (country === null && city === null) return null;
+  return {
+    ip,
+    country,
+    countryName,
+    city,
+    region: record.subdivisions?.[0]?.names?.en ?? null,
+    timezone: record.location?.time_zone ?? null,
+    location: formatLocation(city, countryName ?? country),
+  };
+}
+
+/** `::ffff:a.b.c.d` se cherche sur son IPv4 : la base range les IPv4 sous leur forme native. */
+function lookupForm(ip: string): string {
+  const mapped = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  return mapped ? mapped[1] : ip;
+}
+
+const withTimeout = <T>(work: Promise<T>, timeoutMs: number | undefined, fallback: T): Promise<T> =>
+  timeoutMs === undefined
+    ? work
+    : Promise.race([work, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), timeoutMs).unref())]);
 
 /**
- * Look up geolocation data for an IP address
- * Uses ip-api.com free tier (no API key needed)
+ * Le lieu d'une adresse, lu dans la base LOCALE (#9609). Rend `null` quand il
+ * est inconnu : base absente, adresse absente de la base ou mal formée.
  *
- * `timeoutMs` est un PARAMÈTRE parce que la patience acceptable dépend du
- * chemin (#5216). Trois secondes sont raisonnables sur une tâche de fond ;
- * elles sont inacceptables sur l'inscription, où elles s'ajoutent telles quelles
- * au temps que la personne passe devant un écran de chargement. La porte
- * d'inscription accorde 400 ms, puis reprend la recherche APRÈS la réponse :
- * la ligne se complète, et personne n'attend.
+ * `timeoutMs` borne l'attente du seul cas lent — la PREMIÈRE lecture, quand le
+ * fichier n'est pas encore chargé (#5216 : l'inscription n'accorde que 400 ms).
+ * La base se charge au démarrage (`warmGeoIpDatabase`), si bien que ce cas ne
+ * se présente qu'avant la fin du chargement.
  */
 export async function lookupGeoIp(
   ip: string,
   options?: { readonly timeoutMs?: number }
 ): Promise<GeoIpData | null> {
-  // Don't lookup localhost/private IPs
-  if (isPrivateIp(ip)) {
-    return {
-      ip,
-      country: null,
-      countryName: null,
-      city: null,
-      region: null,
-      timezone: null,
-      location: 'Local',
-      latitude: null,
-      longitude: null
-    };
-  }
+  if (isPrivateIp(ip)) return LOCAL_GEO(ip);
 
-  // Check cache
   const cached = cachedGeo(ip);
-  if (cached !== null) {
-    return cached;
-  }
+  if (cached !== null) return cached;
+
+  const address = lookupForm(ip);
+  if (isIP(address) === 0) return null;
 
   try {
-    // ip-api.com free tier (HTTP only, 45 req/min)
-    const response = await fetch(
-      `http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,timezone,lat,lon`,
-      { signal: AbortSignal.timeout(options?.timeoutMs ?? GEO_TIMEOUT_MS) }
-    );
-
-    if (!response.ok) {
-      logger.warn('API request failed', { status: response.status });
-      return null;
-    }
-
-    const data = await response.json();
-
-    if (data.status !== 'success') {
-      logger.warn('Lookup failed', { message: data.message });
-      return null;
-    }
-
-    const geoData: GeoIpData = {
-      ip,
-      country: data.countryCode || null,
-      countryName: data.country || null,
-      city: data.city || null,
-      region: data.regionName || null,
-      timezone: data.timezone || null,
-      location: formatLocation(data.city, data.country),
-      latitude: data.lat || null,
-      longitude: data.lon || null
-    };
-
-    // Cache result
-    rememberGeo(ip, geoData);
-
+    const source = await withTimeout(currentGeoIpDatabase().source(), options?.timeoutMs, null);
+    if (source === null) return null;
+    const record = source.get(address);
+    const geoData = record === null ? null : toGeoIpData(ip, record);
+    if (geoData !== null) rememberGeo(ip, geoData);
     return geoData;
-
   } catch (error) {
     logger.warn('Lookup error', error instanceof Error ? error : { error });
     return null;
@@ -297,7 +329,13 @@ export async function getRequestContext(
   const { deviceInfo: enrichedDevice, geoData: enrichedGeo } =
     mergeClientHeaders(deviceInfo, geoData, request.headers);
 
-  return { ip, userAgent, geoData: enrichedGeo, deviceInfo: enrichedDevice };
+  return {
+    ip,
+    userAgent,
+    geoData: enrichedGeo,
+    deviceInfo: enrichedDevice,
+    client: readClientSessionHeaders(request.headers),
+  };
 }
 
 /**
@@ -348,7 +386,6 @@ export function mergeClientHeaders(
         ...(geoData ?? {
           ip: '', country: null, countryName: null,
           city: null, region: null, timezone: null, location: null,
-          latitude: null, longitude: null,
         }),
         timezone,
       }
@@ -370,14 +407,10 @@ function formatLocation(city: string | null, country: string | null): string | n
 /**
  * Check if IP is private/localhost.
  *
- * This is the gate that keeps an internal address from being sent to the
- * third-party geo API (ip-api.com). Exportée depuis #5216 : l'inscription
- * reprend la géolocalisation APRÈS avoir répondu, et n'a de raison de la
- * reprendre que pour une adresse PUBLIQUE — une adresse privée a déjà rendu
- * tout ce qu'elle rendra jamais (`location: 'Local'`), sans appel réseau. It must recognise BOTH families: a private
- * IPv6 address that slips through would leak internal network topology to an
- * external service AND burn the 45/min rate-limit budget on a lookup that can
- * only fail.
+ * Une adresse privée n'a pas de lieu : elle rend `location: 'Local'` sans
+ * consulter la base. Exportée depuis #5216 : l'inscription reprend la
+ * géolocalisation APRÈS avoir répondu, et n'a de raison de la reprendre que
+ * pour une adresse PUBLIQUE. Les DEUX familles sont reconnues (IPv4 et IPv6).
  */
 export function isPrivateIp(ip: string): boolean {
   // IPv4-mapped IPv6 (`::ffff:a.b.c.d`) — re-check on the embedded IPv4.

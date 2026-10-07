@@ -227,9 +227,6 @@ export class MagicLinkService {
           userAgent,
           deviceFingerprint,
           geoLocation: geoData?.location || 'Unknown',
-          geoCoordinates: geoData?.latitude && geoData?.longitude
-            ? `${geoData.latitude},${geoData.longitude}`
-            : null,
           rememberDevice: rememberDevice || false // Store server-side for security
         }
       });

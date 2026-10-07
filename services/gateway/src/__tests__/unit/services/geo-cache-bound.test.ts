@@ -45,8 +45,6 @@ const geo = (ip: string): GeoIpData => ({
   region: 'Île-de-France',
   timezone: 'Europe/Paris',
   location: 'Paris, France',
-  latitude: 48.85,
-  longitude: 2.35,
 });
 
 const T0 = 1_760_000_000_000;

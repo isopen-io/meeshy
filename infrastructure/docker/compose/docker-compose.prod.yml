@@ -328,6 +328,9 @@ services:
       - gateway_sounds:/app/sounds
       - /opt/meeshy/secrets/firebase-admin-sdk.json:/app/secrets/firebase-admin-sdk.json
       - /opt/meeshy/secrets/apns_key.p8:/app/secrets/apns_key.p8:ro
+      # #9609 — base de géolocalisation LOCALE (DB-IP Lite), tenue à jour sur l'hôte
+      # par infrastructure/scripts/geoip-update-dbip.sh ; lecture seule, jamais dans l'image.
+      - ${GEOIP_HOST_DIR:-/opt/meeshy/geoip}:/app/geoip:ro
     depends_on:
       database:
         condition: service_healthy

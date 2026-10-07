@@ -162,8 +162,6 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
       country: geoData?.country || null,
       city: geoData?.city || null,
       location: geoData?.location || null,
-      latitude: geoData?.latitude || null,
-      longitude: geoData?.longitude || null,
       timezone: geoData?.timezone || null,
       // Flags
       isValid: true,

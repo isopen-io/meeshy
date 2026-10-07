@@ -36,7 +36,7 @@ describe('GeoIPService — mergeClientHeaders', () => {
     const geoData = {
       ip: '1.2.3.4', country: 'US', countryName: 'United States',
       city: 'New York', region: 'NY', timezone: 'America/New_York',
-      location: 'New York, US', latitude: 40.7, longitude: -74.0,
+      location: 'New York, US',
     };
     const result = mergeClientHeaders(null, geoData, {});
     expect(result.geoData?.country).toBe('US');
@@ -47,7 +47,7 @@ describe('GeoIPService — mergeClientHeaders', () => {
     const geoData = {
       ip: '1.2.3.4', country: 'FR', countryName: 'France',
       city: 'Paris', region: 'IDF', timezone: 'Europe/Paris',
-      location: 'Paris, France', latitude: 48.8, longitude: 2.3,
+      location: 'Paris, France',
     };
     const result = mergeClientHeaders(null, geoData, {
       'x-meeshy-country': 'US', 'x-meeshy-city': 'Boston', 'x-meeshy-region': 'MA',

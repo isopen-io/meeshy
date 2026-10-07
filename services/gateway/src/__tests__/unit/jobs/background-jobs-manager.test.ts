@@ -66,6 +66,8 @@ jest.mock('../../../services/CacheStore', () => ({
 jest.mock('../../../services/GeoIPService', () => ({
   GeoIPService: jest.fn().mockImplementation(() => ({})),
   cleanGeoCache: jest.fn(() => 0),
+  // #9609 — `startAll()` charge la base géoIP locale au démarrage.
+  warmGeoIpDatabase: jest.fn(() => Promise.resolve('loaded')),
 }));
 
 jest.mock('../../../services/RedisDeliveryQueue', () => ({

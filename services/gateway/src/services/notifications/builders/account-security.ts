@@ -86,8 +86,6 @@ export async function createLoginNewDeviceNotification(
       city?: string | null;
       location?: string | null;
       timezone?: string | null;
-      latitude?: number | null;
-      longitude?: number | null;
     } | null;
     revokeToken?: string;
   }
@@ -134,8 +132,10 @@ export async function createLoginNewDeviceNotification(
     ip: params.ipAddress || null,
     loginTime: new Date(),
     timezone: geo?.timezone || null,
-    latitude: geo?.latitude ?? null,
-    longitude: geo?.longitude ?? null,
+    // #9609 — plus aucune coordonnée : l'e-mail n'affiche plus de carte
+    // chargée chez un tiers à partir d'un lieu tiré de l'adresse IP.
+    latitude: null,
+    longitude: null,
     previousDeviceName,
     previousLocation,
     previousLoginTime,

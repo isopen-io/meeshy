@@ -305,6 +305,9 @@ services:
       - gateway_staging_uploads:/app/uploads
       - gateway_staging_sounds:/app/sounds
       - ./secrets/firebase-admin-sdk.json:/app/secrets/firebase-admin-sdk.json:ro
+      # #9609 — base de géolocalisation LOCALE (DB-IP Lite), tenue à jour sur l'hôte
+      # par infrastructure/scripts/geoip-update-dbip.sh ; lecture seule, jamais dans l'image.
+      - ${GEOIP_HOST_DIR:-/opt/meeshy/geoip}:/app/geoip:ro
     depends_on:
       mongo-init-staging:
         condition: service_completed_successfully

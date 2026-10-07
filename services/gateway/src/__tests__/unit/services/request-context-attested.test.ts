@@ -28,6 +28,7 @@ import {
   mergeClientHeaders,
   resetGeoCacheForTests,
   parseUserAgent,
+  useGeoIpDatabaseForTests,
   type GeoIpData,
 } from '../../../services/GeoIPService';
 import { resolveTrustProxy } from '../../../config/trust-proxy';
@@ -58,14 +59,15 @@ const VICTIME_HEADERS = {
   'x-meeshy-timezone': 'Europe/Paris',
 };
 
+/** La base LOCALE (#9609) qui situe toute adresse publique dans `country`/`city`. */
 function geoApi(country: string, city: string) {
-  return jest.fn(async () => ({
-    ok: true,
-    json: async () => ({
-      status: 'success', countryCode: country, country: country === 'DE' ? 'Germany' : 'France',
-      regionName: 'R', city, timezone: 'Europe/Berlin', lat: 1, lon: 2,
-    }),
-  }));
+  const record = {
+    country: { iso_code: country, names: { en: country === 'DE' ? 'Germany' : 'France' } },
+    city: { names: { en: city } },
+    subdivisions: [{ names: { en: 'R' } }],
+    location: { time_zone: 'Europe/Berlin' },
+  };
+  return { source: async () => ({ get: () => record }) };
 }
 
 async function contextBehindTraefik(headers: Record<string, string>) {
@@ -83,12 +85,11 @@ async function contextBehindTraefik(headers: Record<string, string>) {
 }
 
 describe("#9608 — l'adresse est celle que le proxy atteste", () => {
-  const fetchOriginal = global.fetch;
   beforeEach(() => { resetGeoCacheForTests(); });
-  afterEach(() => { global.fetch = fetchOriginal; });
+  afterEach(() => { useGeoIpDatabaseForTests(null); });
 
   it('derrière Traefik (un maillon de confiance), les en-têtes forgés ne choisissent PAS l’adresse', async () => {
-    global.fetch = geoApi('DE', 'Berlin') as unknown as typeof fetch;
+    useGeoIpDatabaseForTests(geoApi('DE', 'Berlin'));
 
     const contexte = await contextBehindTraefik({ ...FORGE });
 
@@ -106,7 +107,7 @@ describe("#9608 — l'adresse est celle que le proxy atteste", () => {
   });
 
   it("le pays, la ville et le lieu viennent de l'IP — X-Meeshy-Country / City / Region n'y touchent plus", async () => {
-    global.fetch = geoApi('DE', 'Berlin') as unknown as typeof fetch;
+    useGeoIpDatabaseForTests(geoApi('DE', 'Berlin'));
 
     const contexte = await contextBehindTraefik({ ...VICTIME_HEADERS });
 
@@ -117,7 +118,7 @@ describe("#9608 — l'adresse est celle que le proxy atteste", () => {
   });
 
   it('ce que le serveur ne peut pas savoir reste remis par le client : modèle, système, fuseau', async () => {
-    global.fetch = geoApi('DE', 'Berlin') as unknown as typeof fetch;
+    useGeoIpDatabaseForTests(geoApi('DE', 'Berlin'));
 
     const contexte = await contextBehindTraefik({ ...VICTIME_HEADERS });
 

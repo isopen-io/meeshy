@@ -18,7 +18,7 @@ import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
 import { getCacheStore } from '../services/CacheStore';
-import { GeoIPService, cleanGeoCache } from '../services/GeoIPService';
+import { GeoIPService, cleanGeoCache, warmGeoIpDatabase } from '../services/GeoIPService';
 import { BanService } from '../services/admin/ban.service';
 import { UserAuditService } from '../services/admin/user-audit.service';
 import { UserManagementService } from '../services/admin/user-management.service';
@@ -136,6 +136,19 @@ export class BackgroundJobsManager {
       }
     };
     purgerLeCacheGeo();
+
+    /* LA BASE GÉOIP LOCALE SE CHARGE AU DÉMARRAGE (#9609), et son ABSENCE
+       se dit en ERREUR : sans elle, le pays de chaque connexion est inconnu
+       et le critère « pays » de l'alerte de nouvelle connexion s'éteint. Un
+       déploiement sans le fichier ne doit pas se dégrader en silence ; l'état
+       est aussi servi par `/health` (`services.geoip`). */
+    warmGeoIpDatabase()
+      .then((status) => {
+        if (status === 'loaded') logger.info('GeoIP database ready (DB-IP Lite, local)');
+        else logger.error(`GeoIP database ${status} — country and city of sessions stay unknown; mount the DB-IP Lite file (GEOIP_DATABASE_PATH)`);
+      })
+      .catch((err) => logger.error('GeoIP database warm-up failed', err));
+
     this.geoCacheInterval = guardedInterval({ name: 'geo-cache-purge', everyMs: 10 * 60 * 1000, logger, run: purgerLeCacheGeo });
     this.geoCacheInterval.unref();
 
