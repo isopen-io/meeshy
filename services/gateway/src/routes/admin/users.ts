@@ -169,7 +169,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
   // Historique de connexion (#6821) : `UserSession` / `SecurityEvent` étaient
   // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
-  registerUserSessionRoutes(fastify, { userAuditService });
+  registerUserSessionRoutes(fastify, { userAuditService, emailService });
   // #8051 — les quatre niveaux de mot de passe proposés AVANT `reset-password`
   // ci-dessous, sous les mêmes gardes : voir `user-password-proposals.ts`.
   registerUserPasswordProposalRoutes(fastify);

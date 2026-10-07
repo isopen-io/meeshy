@@ -720,6 +720,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         io: fastify.socketIOHandler?.getManager?.()?.getIO(),
         userId,
         sessionId,
+        reason: 'user_revoke',
         onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on session revoke', error),
       });
 
@@ -794,6 +795,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           io,
           userId,
           sessionId,
+          reason: 'user_revoke',
           message: 'This device was signed out from another device.',
           onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on revoke-others', error),
         });

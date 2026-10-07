@@ -169,6 +169,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
           io,
           userId,
           sessionId,
+          reason: 'password_changed',
           message: 'This device was signed out because the password changed.',
           onError: (error) => logWarn(fastify.log, '[PASSWORD_CHANGE] socket cut failed', error),
         });

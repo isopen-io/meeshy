@@ -508,6 +508,7 @@ export function getAlertTypeLabel(alertType: string, language: string): { label:
       user_mentioned: { label: 'Nouvelle mention', description: 'Vous avez ete mentionne.', icon: '💬', isInfo: true },
       missed_call: { label: 'Appel manque', description: 'Vous avez un appel manque.', icon: '📞', isInfo: true },
       generic_notification: { label: 'Nouvelle notification', description: 'Vous avez une nouvelle notification.', icon: '🔔', isInfo: true },
+      sessions_closed_by_team: { label: 'Vos sessions ont été fermées par l’équipe Meeshy', description: 'Toutes vos sessions Meeshy ont été fermées par l’équipe Meeshy. Reconnectez-vous pour continuer ; si vous ne comprenez pas pourquoi, écrivez à security@meeshy.me.', icon: '🔒', isInfo: false },
     },
     en: {
       login_new_device: { label: 'New login detected', description: 'A login was made from a new device or browser.', icon: '🔐', isInfo: true },
@@ -518,6 +519,7 @@ export function getAlertTypeLabel(alertType: string, language: string): { label:
       user_mentioned: { label: 'New mention', description: 'You were mentioned.', icon: '💬', isInfo: true },
       missed_call: { label: 'Missed call', description: 'You have a missed call.', icon: '📞', isInfo: true },
       generic_notification: { label: 'New notification', description: 'You have a new notification.', icon: '🔔', isInfo: true },
+      sessions_closed_by_team: { label: 'Your sessions were closed by the Meeshy team', description: 'All your Meeshy sessions were closed by the Meeshy team. Sign in again to continue; if you do not understand why, write to security@meeshy.me.', icon: '🔒', isInfo: false },
     },
     es: {
       login_new_device: { label: 'Nuevo inicio de sesión detectado', description: 'Se ha iniciado sesión desde un nuevo dispositivo o navegador.', icon: '🔐', isInfo: true },
@@ -528,6 +530,7 @@ export function getAlertTypeLabel(alertType: string, language: string): { label:
       user_mentioned: { label: 'Nueva mención', description: 'Te han mencionado.', icon: '💬', isInfo: true },
       missed_call: { label: 'Llamada perdida', description: 'Tienes una llamada perdida.', icon: '📞', isInfo: true },
       generic_notification: { label: 'Nueva notificación', description: 'Tienes una nueva notificación.', icon: '🔔', isInfo: true },
+      sessions_closed_by_team: { label: 'El equipo de Meeshy ha cerrado tus sesiones', description: 'El equipo de Meeshy ha cerrado todas tus sesiones. Vuelve a iniciar sesión para continuar; si no entiendes por qué, escribe a security@meeshy.me.', icon: '🔒', isInfo: false },
     },
     pt: {
       login_new_device: { label: 'Novo início de sessão detetado', description: 'Foi efetuado um início de sessão a partir de um novo dispositivo ou navegador.', icon: '🔐', isInfo: true },
@@ -538,6 +541,7 @@ export function getAlertTypeLabel(alertType: string, language: string): { label:
       user_mentioned: { label: 'Nova menção', description: 'Você foi mencionado.', icon: '💬', isInfo: true },
       missed_call: { label: 'Chamada perdida', description: 'Tem uma chamada perdida.', icon: '📞', isInfo: true },
       generic_notification: { label: 'Nova notificação', description: 'Tem uma nova notificação.', icon: '🔔', isInfo: true },
+      sessions_closed_by_team: { label: 'A equipa Meeshy terminou as suas sessões', description: 'A equipa Meeshy terminou todas as suas sessões. Inicie sessão novamente para continuar; se não perceber porquê, escreva para security@meeshy.me.', icon: '🔒', isInfo: false },
     },
     it: {
       login_new_device: { label: 'Nuovo accesso rilevato', description: 'È stato effettuato un accesso da un nuovo dispositivo o browser.', icon: '🔐', isInfo: true },
@@ -548,6 +552,7 @@ export function getAlertTypeLabel(alertType: string, language: string): { label:
       user_mentioned: { label: 'Nuova menzione', description: 'Sei stato menzionato.', icon: '💬', isInfo: true },
       missed_call: { label: 'Chiamata persa', description: 'Hai una chiamata persa.', icon: '📞', isInfo: true },
       generic_notification: { label: 'Nuova notifica', description: 'Hai una nuova notifica.', icon: '🔔', isInfo: true },
+      sessions_closed_by_team: { label: 'Il team Meeshy ha chiuso le tue sessioni', description: 'Il team Meeshy ha chiuso tutte le tue sessioni. Accedi di nuovo per continuare; se non capisci perché, scrivi a security@meeshy.me.', icon: '🔒', isInfo: false },
     },
     de: {
       login_new_device: { label: 'Neue Anmeldung erkannt', description: 'Es wurde eine Anmeldung von einem neuen Gerät oder Browser vorgenommen.', icon: '🔐', isInfo: true },
@@ -558,6 +563,7 @@ export function getAlertTypeLabel(alertType: string, language: string): { label:
       user_mentioned: { label: 'Neue Erwähnung', description: 'Du wurdest erwähnt.', icon: '💬', isInfo: true },
       missed_call: { label: 'Verpasster Anruf', description: 'Du hast einen verpassten Anruf.', icon: '📞', isInfo: true },
       generic_notification: { label: 'Neue Benachrichtigung', description: 'Du hast eine neue Benachrichtigung.', icon: '🔔', isInfo: true },
+      sessions_closed_by_team: { label: 'Das Meeshy-Team hat deine Sitzungen beendet', description: 'Das Meeshy-Team hat alle deine Sitzungen beendet. Melde dich erneut an, um fortzufahren; wenn du nicht verstehst, warum, schreibe an security@meeshy.me.', icon: '🔒', isInfo: false },
     },
   };
   const lang = labels[language] ? language : 'fr';

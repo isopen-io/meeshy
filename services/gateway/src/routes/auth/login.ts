@@ -515,6 +515,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
           io: fastify.socketIOHandler?.getManager?.()?.getIO(),
           userId,
           sessionId,
+          reason: 'logout',
           message: 'Signed out.',
           onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on logout', error),
         });
