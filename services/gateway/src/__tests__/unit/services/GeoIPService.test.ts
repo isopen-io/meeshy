@@ -17,15 +17,18 @@ describe('GeoIPService — mergeClientHeaders', () => {
     expect(result.deviceInfo?.vendor).toBe('Apple');
   });
 
-  it('enrichit geoData avec les headers X-Meeshy-Country/City/Timezone', () => {
+  // #9608 — le LIEU vient de l'adresse attestée ; les en-têtes ne le décident plus.
+  it('ne fabrique aucun lieu depuis X-Meeshy-Country/City/Region ; le fuseau reste remis par le client', () => {
     const result = mergeClientHeaders(null, null, {
       'x-meeshy-country': 'FR',
       'x-meeshy-city': 'Paris',
       'x-meeshy-timezone': 'Europe/Paris',
       'x-meeshy-region': 'Île-de-France',
     });
-    expect(result.geoData?.country).toBe('FR');
-    expect(result.geoData?.city).toBe('Paris');
+    expect(result.geoData?.country).toBeNull();
+    expect(result.geoData?.city).toBeNull();
+    expect(result.geoData?.region).toBeNull();
+    expect(result.geoData?.location).toBeNull();
     expect(result.geoData?.timezone).toBe('Europe/Paris');
   });
 
@@ -40,35 +43,15 @@ describe('GeoIPService — mergeClientHeaders', () => {
     expect(result.geoData?.city).toBe('New York');
   });
 
-  it('construit location depuis city + country quand les deux headers sont présents', () => {
-    const result = mergeClientHeaders(null, null, {
-      'x-meeshy-city': 'Lyon',
-      'x-meeshy-country': 'FR',
-    });
-    expect(result.geoData?.location).toBe('Lyon, FR');
-  });
-
-  it('recalcule location cohérente avec un override country partiel (client prioritaire)', () => {
+  it("un en-tête de pays ou de ville n'écrase pas le lieu déduit de l'IP — même un utilisateur VPN", () => {
     const geoData = {
       ip: '1.2.3.4', country: 'FR', countryName: 'France',
       city: 'Paris', region: 'IDF', timezone: 'Europe/Paris',
-      location: 'Paris, FR', latitude: 48.8, longitude: 2.3,
+      location: 'Paris, France', latitude: 48.8, longitude: 2.3,
     };
-    // Utilisateur VPN : le client affirme US, seul le header country est envoyé.
-    const result = mergeClientHeaders(null, geoData, { 'x-meeshy-country': 'US' });
-    expect(result.geoData?.country).toBe('US');
-    expect(result.geoData?.city).toBe('Paris');
-    // location ne doit plus contredire le country prioritaire.
-    expect(result.geoData?.location).toBe('Paris, US');
-  });
-
-  it('recalcule location avec un override city partiel sur un geoData existant', () => {
-    const geoData = {
-      ip: '1.2.3.4', country: 'US', countryName: 'United States',
-      city: 'New York', region: 'NY', timezone: 'America/New_York',
-      location: 'New York, US', latitude: 40.7, longitude: -74.0,
-    };
-    const result = mergeClientHeaders(null, geoData, { 'x-meeshy-city': 'Boston' });
-    expect(result.geoData?.location).toBe('Boston, US');
+    const result = mergeClientHeaders(null, geoData, {
+      'x-meeshy-country': 'US', 'x-meeshy-city': 'Boston', 'x-meeshy-region': 'MA',
+    });
+    expect(result.geoData).toEqual(geoData);
   });
 });

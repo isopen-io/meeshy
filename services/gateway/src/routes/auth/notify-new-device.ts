@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
-import { deviceIdentityFromInfo, isLoginFromNewDevice, type DeviceIdentity } from '../../utils/new-device';
+import { isLoginFromUnrecognisedDevice, type SessionEvidence } from '../../utils/new-device';
+import { parseUserAgent } from '../../services/GeoIPService';
 
 /**
  * **Le site UNIQUE qui décide si une connexion mérite une alerte** (#7035).
@@ -22,11 +23,12 @@ export type NewDeviceContext = {
   readonly deviceInfo: { type?: string | null; vendor?: string | null; model?: string | null; os?: string | null; browser?: string | null } | null;
   readonly userAgent: string | null;
   readonly ipAddress: string;
-  readonly geoData: unknown;
+  /** Le lieu déduit par le SERVEUR de l'adresse attestée (#9608) — jamais d'un en-tête. */
+  readonly geoData: { readonly country?: string | null } | null;
 };
 
 type SessionReader = {
-  findMany(args: unknown): Promise<DeviceIdentity[]>;
+  findMany(args: unknown): Promise<SessionEvidence[]>;
 };
 
 type NotificationSender = {
@@ -65,8 +67,6 @@ export async function notifyIfLoginFromNewDevice(
 ): Promise<'alerte-emise' | 'appareil-connu' | 'indisponible'> {
   if (!sessions || !notifications) return 'indisponible';
 
-  const courant = deviceIdentityFromInfo(context.deviceInfo, context.userAgent);
-
   const precedentes = await sessions.findMany({
     where: {
       userId: context.userId,
@@ -79,12 +79,24 @@ export async function notifyIfLoginFromNewDevice(
       osName: true,
       browserName: true,
       userAgent: true,
+      country: true,
     },
     orderBy: { createdAt: 'desc' },
     take: HISTORIQUE_MAX,
   });
 
-  if (!isLoginFromNewDevice(precedentes, courant)) return 'appareil-connu';
+  // #9608 — l'appareil se relit dans l'agent, le lieu dans l'adresse attestée ;
+  // le modèle déclaré par l'en-tête ne peut qu'ajouter une alerte.
+  const inconnu = isLoginFromUnrecognisedDevice(
+    precedentes,
+    {
+      userAgent: context.userAgent,
+      declaredModel: context.deviceInfo?.model ?? null,
+      attestedCountry: context.geoData?.country ?? null,
+    },
+    parseUserAgent
+  );
+  if (!inconnu) return 'appareil-connu';
 
   const revokeToken = jwt.sign({ userId: context.userId, action: 'revoke-all' }, jwtSecret, {
     expiresIn: '24h',

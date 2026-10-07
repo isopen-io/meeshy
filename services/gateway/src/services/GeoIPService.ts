@@ -126,36 +126,23 @@ export function resetGeoCacheForTests(): void {
 }
 
 /**
- * Extract real IP from request, handling proxies
+ * **L'adresse du client est celle que NOTRE proxy atteste** (#9608).
+ *
+ * Elle lisait `cf-connecting-ip`, puis `x-real-ip`, puis le PREMIER maillon de
+ * `x-forwarded-for` — trois en-têtes que l'appelant écrit lui-même (Traefik ne
+ * retire ni `cf-connecting-ip` ni la gauche de la chaîne) : n'importe qui
+ * choisissait l'IP enregistrée sur sa session, donc le pays et la ville
+ * affichés dans « Sessions », et l'adresse de l'alerte « nouvelle connexion ».
+ *
+ * `request.ip` est résolu par Fastify sous `trustProxy` BORNÉ
+ * (`config/trust-proxy.ts`, #4137) : il ne croit que les `TRUST_PROXY_HOPS`
+ * derniers maillons de `X-Forwarded-For`, ceux que notre infrastructure a
+ * posés. C'est la même valeur que la clé de débit (`utils/client-rate-key.ts`)
+ * — une seule adresse par requête dans toute la passerelle.
  */
 export function extractIpFromRequest(request: FastifyRequest): string {
-  // Check various headers for proxy/load balancer setups
-  const xForwardedFor = request.headers['x-forwarded-for'];
-  const xRealIp = request.headers['x-real-ip'];
-  const cfConnectingIp = request.headers['cf-connecting-ip']; // Cloudflare
-
-  let ip: string;
-
-  if (cfConnectingIp && typeof cfConnectingIp === 'string') {
-    ip = cfConnectingIp;
-  } else if (xRealIp && typeof xRealIp === 'string') {
-    ip = xRealIp;
-  } else if (xForwardedFor) {
-    // X-Forwarded-For can be a comma-separated list, take the first
-    const forwardedIps = typeof xForwardedFor === 'string'
-      ? xForwardedFor
-      : xForwardedFor[0];
-    ip = forwardedIps.split(',')[0].trim();
-  } else {
-    ip = request.ip;
-  }
-
-  // Handle IPv6 localhost
-  if (ip === '::1' || ip === '::ffff:127.0.0.1') {
-    ip = '127.0.0.1';
-  }
-
-  return ip;
+  const ip = request.ip;
+  return ip === '::1' || ip === '::ffff:127.0.0.1' ? '127.0.0.1' : ip;
 }
 
 /**
@@ -314,8 +301,19 @@ export async function getRequestContext(
 }
 
 /**
- * Enrichit deviceInfo et geoData depuis les headers X-Meeshy-* envoyés par le client iOS.
- * Les valeurs client ont priorité sur la déduction UA/IP (plus précises).
+ * **Les en-têtes `X-Meeshy-*` ne remettent que ce que le serveur ne peut pas
+ * savoir** (#9608) : le MODÈLE exact de l'appareil, la VERSION du système, la
+ * PLATEFORME, le FUSEAU horaire.
+ *
+ * Le LIEU — pays, ville, région, et le `location` qui en dérive — se déduit de
+ * l'adresse attestée par le proxy, et de rien d'autre. Ces en-têtes l'écrasaient :
+ * `X-Meeshy-Country` est la RÉGION réglée dans iOS (`Locale.current.region`),
+ * pas l'endroit où se trouve l'appareil, et tous trois sont écrits par
+ * l'appelant. Un voleur de mot de passe y posait la ville de sa victime.
+ *
+ * Le FUSEAU reste remis par le client : il dit comment afficher l'heure à la
+ * personne, et le serveur ne le connaît qu'à travers l'IP — approximatif, faux
+ * derrière un VPN.
  */
 export function mergeClientHeaders(
   deviceInfo: DeviceInfo | null,
@@ -330,49 +328,31 @@ export function mergeClientHeaders(
   const platform  = get('x-meeshy-platform');
   const device    = get('x-meeshy-device');
   const osVersion = get('x-meeshy-os');
-  const country   = get('x-meeshy-country');
-  const city      = get('x-meeshy-city');
   const timezone  = get('x-meeshy-timezone');
-  const region    = get('x-meeshy-region');
 
-  // Enrichir deviceInfo si headers présents
-  let enrichedDevice = deviceInfo;
-  if (platform || device || osVersion) {
-    const isIos = platform === 'ios';
-    enrichedDevice = {
-      ...(deviceInfo ?? {
-        type: 'mobile', vendor: null, model: null,
-        os: null, osVersion: null, browser: null, browserVersion: null,
-        isMobile: true, isTablet: false, rawUserAgent: '',
-      }),
-      ...(device    ? { model: device }        : {}),
-      ...(osVersion ? { osVersion }             : {}),
-      ...(isIos     ? { os: 'iOS', vendor: 'Apple', type: 'mobile', isMobile: true } : {}),
-    };
-  }
+  const enrichedDevice: DeviceInfo | null = platform || device || osVersion
+    ? {
+        ...(deviceInfo ?? {
+          type: 'mobile', vendor: null, model: null,
+          os: null, osVersion: null, browser: null, browserVersion: null,
+          isMobile: true, isTablet: false, rawUserAgent: '',
+        }),
+        ...(device    ? { model: device } : {}),
+        ...(osVersion ? { osVersion }     : {}),
+        ...(platform === 'ios' ? { os: 'iOS', vendor: 'Apple', type: 'mobile', isMobile: true } : {}),
+      }
+    : deviceInfo;
 
-  // Enrichir geoData si headers présents
-  let enrichedGeo = geoData;
-  if (country || city || timezone || region) {
-    // `location` doit refléter le résultat de la fusion (valeurs client
-    // prioritaires), pas le couple brut des headers : un override partiel
-    // (ex. `x-meeshy-country` seul) laissait sinon la `location` déduite de
-    // l'IP en contradiction avec le `country` client.
-    const mergedCity    = city    || geoData?.city    || null;
-    const mergedCountry = country || geoData?.country || null;
-    enrichedGeo = {
-      ...(geoData ?? {
-        ip: '', country: null, countryName: null,
-        city: null, region: null, timezone: null, location: null,
-        latitude: null, longitude: null,
-      }),
-      ...(country  ? { country }  : {}),
-      ...(city     ? { city }     : {}),
-      ...(timezone ? { timezone } : {}),
-      ...(region   ? { region }   : {}),
-      location: formatLocation(mergedCity, mergedCountry) ?? geoData?.location ?? null,
-    };
-  }
+  const enrichedGeo: GeoIpData | null = timezone
+    ? {
+        ...(geoData ?? {
+          ip: '', country: null, countryName: null,
+          city: null, region: null, timezone: null, location: null,
+          latitude: null, longitude: null,
+        }),
+        timezone,
+      }
+    : geoData;
 
   return { deviceInfo: enrichedDevice, geoData: enrichedGeo };
 }

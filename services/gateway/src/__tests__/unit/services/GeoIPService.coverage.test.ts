@@ -65,32 +65,16 @@ describe('extractIpFromRequest', () => {
     expect(extractIpFromRequest(req)).toBe('1.2.3.4');
   });
 
-  it('prefers cf-connecting-ip over other headers', () => {
+  it('returns request.ip even when the caller forges cf-connecting-ip, x-real-ip and x-forwarded-for (#9608)', () => {
     const req = makeRequest({
       ip: '9.9.9.9',
       headers: {
         'cf-connecting-ip': '5.5.5.5',
-        'x-forwarded-for': '4.4.4.4',
+        'x-forwarded-for': ['11.11.11.11, 12.12.12.12'],
         'x-real-ip': '3.3.3.3',
       },
     });
-    expect(extractIpFromRequest(req)).toBe('5.5.5.5');
-  });
-
-  it('uses x-real-ip when no cf-connecting-ip', () => {
-    const req = makeRequest({
-      ip: '9.9.9.9',
-      headers: { 'x-real-ip': '6.6.6.6', 'x-forwarded-for': '4.4.4.4' },
-    });
-    expect(extractIpFromRequest(req)).toBe('6.6.6.6');
-  });
-
-  it('uses first IP from x-forwarded-for (comma-separated)', () => {
-    const req = makeRequest({
-      ip: '9.9.9.9',
-      headers: { 'x-forwarded-for': '7.7.7.7, 8.8.8.8, 9.9.9.9' },
-    });
-    expect(extractIpFromRequest(req)).toBe('7.7.7.7');
+    expect(extractIpFromRequest(req)).toBe('9.9.9.9');
   });
 
   it('normalises IPv6 localhost ::1 to 127.0.0.1', () => {
@@ -101,14 +85,6 @@ describe('extractIpFromRequest', () => {
   it('normalises ::ffff:127.0.0.1 to 127.0.0.1', () => {
     const req = makeRequest({ ip: '::ffff:127.0.0.1' });
     expect(extractIpFromRequest(req)).toBe('127.0.0.1');
-  });
-
-  it('handles x-forwarded-for as array', () => {
-    const req = makeRequest({
-      ip: '9.9.9.9',
-      headers: { 'x-forwarded-for': ['11.11.11.11, 12.12.12.12'] },
-    });
-    expect(extractIpFromRequest(req)).toBe('11.11.11.11');
   });
 });
 
