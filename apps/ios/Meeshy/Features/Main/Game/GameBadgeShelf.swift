@@ -86,6 +86,8 @@ nonisolated enum GameBadges {
 /// L'étagère : une carte, une grille de badges. Absente quand rien n'a encore été gagné.
 struct GameBadgeShelfView: View {
     let items: [GameBadgeItem]
+    /// La progression servie : elle donne la DATE d'un badge obtenu à ses précisions ; `nil` : pas de date.
+    var progress: EngagementProgress?
     var haptics: GameHapticsProviding = GameHaptics.shared
 
     private let columns = [GridItem(.adaptive(minimum: 72, maximum: 96), spacing: MeeshySpacing.md)]
@@ -102,7 +104,9 @@ struct GameBadgeShelfView: View {
                 ProgressionCard(tint: MeeshyColors.brandPrimary) {
                     LazyVGrid(columns: columns, spacing: MeeshySpacing.md) {
                         ForEach(items) { item in
+                            // Un badge SE TOUCHE (#9564) : il rebondit et ouvre ses précisions.
                             GameBadgeCell(item: item, haptics: haptics)
+                                .gameElement(GameElementDetails.badge(item, progress: progress))
                         }
                     }
                 }

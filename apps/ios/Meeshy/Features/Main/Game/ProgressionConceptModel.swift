@@ -12,6 +12,8 @@ import MeeshySDK
 struct ProgressionConceptFact: Equatable, Identifiable {
     let label: String
     let value: String
+    /// La donnée dont la ligne parle, quand elle a SA phrase au catalogue (`game.detail.fact.<donnée>`).
+    var detail: GameDetailFactKey?
 
     var id: String { label }
 }
@@ -365,8 +367,8 @@ enum ProgressionConceptModel {
 
     // MARK: - Où j'en suis
 
-    private static func fact(_ label: String, _ value: String) -> ProgressionConceptFact {
-        ProgressionConceptFact(label: label, value: value)
+    private static func fact(_ label: String, _ value: String, _ detail: GameDetailFactKey? = nil) -> ProgressionConceptFact {
+        ProgressionConceptFact(label: label, value: value, detail: detail)
     }
 
     private static func yesNo(_ value: Bool) -> String { value ? ConceptText.factYes : ConceptText.factNo }
@@ -380,33 +382,33 @@ enum ProgressionConceptModel {
             if let level = game?.level {
                 rows = [
                     fact(ConceptText.name(.level), count(level.level)),
-                    fact(ConceptText.factTier, GameCopy.tierName(level.tier)),
-                    fact(ConceptText.name(.points), GameCopy.points(level.score)),
+                    fact(ConceptText.factTier, GameCopy.tierName(level.tier), .tier),
+                    fact(ConceptText.name(.points), GameCopy.points(level.score), .score),
                     fact(ConceptText.factNextLevel, level.nextThreshold == nil
-                        ? GameText.bannerTop : ConceptText.chipMissing(GameCopy.points(level.pointsToNext))),
-                    fact(ConceptText.factRecord, GameText.bannerLevel(level: count(level.record))),
+                        ? GameText.bannerTop : ConceptText.chipMissing(GameCopy.points(level.pointsToNext)), .levelNext),
+                    fact(ConceptText.factRecord, GameText.bannerLevel(level: count(level.record)), .levelRecord),
                     level.prestige > 0 ? fact(ConceptText.factStars, count(level.prestige)) : nil,
                 ]
             } else {
                 rows = [
                     fact(ConceptText.name(.level), count(progress.level.level)),
-                    fact(ConceptText.name(.points), GameCopy.points(progress.level.scale.value)),
+                    fact(ConceptText.name(.points), GameCopy.points(progress.level.scale.value), .score),
                     progress.level.scale.remainingToNext.map {
-                        fact(ConceptText.factNextLevel, ConceptText.chipMissing(GameCopy.points($0)))
+                        fact(ConceptText.factNextLevel, ConceptText.chipMissing(GameCopy.points($0)), .levelNext)
                     },
                 ]
             }
         case .points:
             guard let game else { return [] }
             rows = [
-                fact(ConceptText.name(.points), GameCopy.points(game.level.score)),
+                fact(ConceptText.name(.points), GameCopy.points(game.level.score), .score),
                 progress.meesh.map { fact(ConceptText.factConvertible, GameCopy.points($0.debitablePoints)) },
-                fact(ConceptText.factTailwind, ConceptText.valueFactor(GameCopy.factor(game.boosts.tailwind))),
+                fact(ConceptText.factTailwind, ConceptText.valueFactor(GameCopy.factor(game.boosts.tailwind)), .tailwind),
                 game.boosts.prismHour.map { fact(ConceptText.factPrismHour, ConceptText.valueFactor(GameCopy.factor($0.multiplier))) },
             ]
         case .meesh:
             let balance: ProgressionConceptFact? = progress.meesh.map { fact(ConceptText.factBalance, GameCopy.meeshes($0.balance)) }
-            let minted: ProgressionConceptFact? = progress.meesh.map { fact(ConceptText.factMinted, count($0.mintedLifetime)) }
+            let minted: ProgressionConceptFact? = progress.meesh.map { fact(ConceptText.factMinted, count($0.mintedLifetime), .minted) }
             if let game {
                 let nextTreasury: ProgressionConceptFact? = game.treasury.next.map {
                     fact(ConceptText.factNextTreasury, GameCopy.treasuryName($0.key) + " · " + ConceptText.chipMissing(count($0.missing)))
@@ -414,9 +416,9 @@ enum ProgressionConceptModel {
                 rows = [
                     balance,
                     minted,
-                    fact(ConceptText.factNextPrice, GameCopy.points(game.mint.price)),
-                    fact(ConceptText.factMissing, GameCopy.points(game.mint.missingPoints)),
-                    fact(ConceptText.factNextCoin, ConceptText.factCoin(count(game.mint.number), GameCopy.editionName(game.mint.edition))),
+                    fact(ConceptText.factNextPrice, GameCopy.points(game.mint.price), .mintPrice),
+                    fact(ConceptText.factMissing, GameCopy.points(game.mint.missingPoints), .mintMissing),
+                    fact(ConceptText.factNextCoin, ConceptText.factCoin(count(game.mint.number), GameCopy.editionName(game.mint.edition)), .mintNext),
                     fact(ConceptText.factTreasury, game.treasury.tier.map { GameCopy.treasuryName($0) } ?? GameCopy.meeshes(game.treasury.held)),
                     nextTreasury,
                 ]
@@ -424,8 +426,8 @@ enum ProgressionConceptModel {
                 rows = [
                     balance,
                     minted,
-                    progress.meesh.map { fact(ConceptText.factNextPrice, GameCopy.points($0.mintCost)) },
-                    progress.meesh.map { fact(ConceptText.factMissing, GameCopy.points($0.missingPoints)) },
+                    progress.meesh.map { fact(ConceptText.factNextPrice, GameCopy.points($0.mintCost), .mintPrice) },
+                    progress.meesh.map { fact(ConceptText.factMissing, GameCopy.points($0.missingPoints), .mintMissing) },
                 ]
             }
         case .glory:
@@ -433,25 +435,25 @@ enum ProgressionConceptModel {
             let missing: String = glory.gloryMissing.map { " · " + ConceptText.chipMissing(count($0)) } ?? ""
             rows = [
                 fact(ConceptText.factRank, GameCopy.rankLabel(glory.rank, division: glory.division)),
-                fact(ConceptText.name(.glory), count(glory.glory)),
-                glory.next.map { fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division: $0.division) + missing) },
+                fact(ConceptText.name(.glory), count(glory.glory), .glory),
+                glory.next.map { fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division: $0.division) + missing, .gloryMissing) },
             ]
         case .flame:
             let flame = game?.flame
             rows = [
-                fact(ConceptText.factStreak, GameCopy.flameDays(flame?.days ?? progress.streak.currentDays)),
-                fact(ConceptText.factRecord, GameCopy.days(progress.streak.longestDays)),
+                fact(ConceptText.factStreak, GameCopy.flameDays(flame?.days ?? progress.streak.currentDays), .streak),
+                fact(ConceptText.factRecord, GameCopy.days(progress.streak.longestDays), .streakRecord),
                 flame?.form.map { fact(ConceptText.factForm, GameCopy.flameFormName($0)) },
                 flame.map { fact(ConceptText.factBonus, ConceptText.factPercent(count($0.bonusPercent))) },
                 flame.map { fact(ConceptText.factFreezes, ratio($0.freezes, $0.maxFreezes)) },
                 flame.map { fact(ConceptText.factFreezePrice, GameCopy.meeshes($0.freezePrice)) },
                 flame.map { fact(ConceptText.factRelightPrice, GameCopy.meeshes($0.relightPrice)) },
-                flame.flatMap { GameCopy.flameStatus($0.status) }.map { fact(ConceptText.factState, $0) },
+                flame.flatMap { GameCopy.flameStatus($0.status) }.map { fact(ConceptText.factState, $0, .flameState) },
             ]
         case .missions:
             guard let game else { return [] }
             rows = [
-                fact(ConceptText.factDone, ratio(game.missions.items.filter(\.isCompleted).count, game.missions.items.count)),
+                fact(ConceptText.factDone, ratio(game.missions.items.filter(\.isCompleted).count, game.missions.items.count), .missionsDone),
                 fact(ConceptText.factChest, chest(game.chest.status)),
                 fact(ConceptText.factReroll, game.missions.rerollAvailable ? ConceptText.factAvailable : ConceptText.factUsed),
                 fact(ConceptText.chipPrismDay, yesNo(game.missions.prismDay)),
@@ -460,18 +462,19 @@ enum ProgressionConceptModel {
         case .league:
             guard let league = game?.league else { return [] }
             let friends = fact(ConceptText.factFriends,
-                               GameText.leagueRankLine(rank: count(league.friends.rank), size: count(league.friends.size)))
+                               GameText.leagueRankLine(rank: count(league.friends.rank), size: count(league.friends.size)),
+                               .leagueFriends)
             if let current = GameLeagueDetail.current(of: league) {
                 let toPromotion: ProgressionConceptFact? = current.pointsToPromotion.flatMap {
-                    $0 > 0 ? fact(ConceptText.factToPromotion, ConceptText.chipMissing(GameCopy.points($0))) : nil
+                    $0 > 0 ? fact(ConceptText.factToPromotion, ConceptText.chipMissing(GameCopy.points($0)), .leagueMissing) : nil
                 }
                 rows = [
                     fact(ConceptText.name(.league), GameText.leagueName(current.league)),
-                    fact(ConceptText.factRank, GameText.leagueRankLine(rank: count(current.rank), size: count(current.groupSize))),
-                    fact(ConceptText.factWeekPoints, GameCopy.points(current.weekPoints)),
-                    fact(ConceptText.factZone, GameText.zoneLabel(current.zone)),
+                    fact(ConceptText.factRank, GameText.leagueRankLine(rank: count(current.rank), size: count(current.groupSize)), .leaguePlace),
+                    fact(ConceptText.factWeekPoints, GameCopy.points(current.weekPoints), .weekPoints),
+                    fact(ConceptText.factZone, GameText.zoneLabel(current.zone), .leagueZone),
                     toPromotion,
-                    fact(ConceptText.factCloses, GameWave2Format.remaining(closes: league.closes, now: now)),
+                    fact(ConceptText.factCloses, GameWave2Format.remaining(closes: league.closes, now: now), .leagueCloses),
                     friends,
                 ]
             } else {
@@ -482,10 +485,10 @@ enum ProgressionConceptModel {
                 return [fact(ConceptText.name(.season), GameText.doorSeasonNone)]
             }
             rows = [
-                fact(ConceptText.name(.season), count(season.number)),
-                fact(ConceptText.factWeek, ratio(season.week, GameSeason.weeks)),
-                fact(ConceptText.factStars, count(season.stars)),
-                fact(ConceptText.factSteps, ratio(season.steps, season.stepsTotal)),
+                fact(ConceptText.name(.season), count(season.number), .season),
+                fact(ConceptText.factWeek, ratio(season.week, GameSeason.weeks), .seasonWeek),
+                fact(ConceptText.factStars, count(season.stars), .seasonStars),
+                fact(ConceptText.factSteps, ratio(season.steps, season.stepsTotal), .seasonSteps),
                 season.completed ? nil : fact(ConceptText.factNextStep, ConceptText.chipMissing(GameText.seasonStars(count: season.starsToNext))),
                 fact(ConceptText.factSeal, yesNo(season.sealOwned)),
             ]
@@ -494,7 +497,7 @@ enum ProgressionConceptModel {
             rows = [
                 fact(ConceptText.factStars, ratio(prestige.stars, prestige.max)),
                 fact(ConceptText.factAvailable, yesNo(prestige.canPrestige)),
-                fact(ConceptText.factGloryOnPass, count(prestige.gloryOnPass)),
+                fact(ConceptText.factGloryOnPass, count(prestige.gloryOnPass), .prestigeGlory),
             ]
         case .elans:
             guard let elan = progress.elan else {
@@ -502,8 +505,8 @@ enum ProgressionConceptModel {
             }
             let names: [String] = elan.activeFamilies.map { ProgressionCopy.title(for: $0) }
             rows = [
-                fact(ConceptText.factFactor, ConceptText.valueFactor(GameCopy.factor(elan.factor))),
-                fact(ConceptText.factFamilies, names.isEmpty ? count(elan.activeFamilyCount) : names.joined(separator: ", ")),
+                fact(ConceptText.factFactor, ConceptText.valueFactor(GameCopy.factor(elan.factor)), .factor),
+                fact(ConceptText.factFamilies, names.isEmpty ? count(elan.activeFamilyCount) : names.joined(separator: ", "), .elanFamilies),
                 fact(ConceptText.factWindow, GameCopy.days(elan.windowDays)),
             ]
         case .badges:
@@ -513,35 +516,35 @@ enum ProgressionConceptModel {
                 return fact(ProgressionCopy.title(for: group.family), ratio(reached, total))
             }
             return [
-                fact(ConceptText.factUnlocked, ratio(progress.badgesEarned, progress.badgesTotal)),
+                fact(ConceptText.factUnlocked, ratio(progress.badgesEarned, progress.badgesTotal), .badgesEarned),
                 fact(ConceptText.factRemaining, count(max(0, progress.badgesTotal - progress.badgesEarned))),
             ] + families
         case .defis:
             let done = defisDone(progress)
             let total = defisTotal(progress)
             rows = [
-                fact(ConceptText.factUnlocked, ratio(done, total)),
+                fact(ConceptText.factUnlocked, ratio(done, total), .defisEarned),
                 fact(ConceptText.factRemaining, count(max(0, total - done))),
             ]
         case .succes:
             let done = progress.unlockedAchievementCount
             let total = progress.achievements.count
             rows = [
-                fact(ConceptText.factUnlocked, ratio(done, total)),
+                fact(ConceptText.factUnlocked, ratio(done, total), .succesEarned),
                 fact(ConceptText.factRemaining, count(max(0, total - done))),
             ]
         case .showcase:
             guard let game, let trophies = game.trophies else { return [] }
             rows = [
-                fact(ConceptText.factTrophies, count(trophies.items.count)),
-                game.visibility.map { fact(ConceptText.factVisible, GameText.visibilityLabel($0.showcase)) },
+                fact(ConceptText.factTrophies, count(trophies.items.count), .trophies),
+                game.visibility.map { fact(ConceptText.factVisible, GameText.visibilityLabel($0.showcase), .showcaseVisibility) },
             ]
         case .atlas:
             guard let atlas = game?.atlas else { return [] }
             rows = [
-                fact(ConceptText.factStamps, ratio(atlas.stamped, atlas.total)),
+                fact(ConceptText.factStamps, ratio(atlas.stamped, atlas.total), .atlasStamps),
                 fact(ConceptText.factRemaining, count(max(0, atlas.total - atlas.stamped))),
-                fact(ConceptText.factPending, count(atlas.pending.count)),
+                fact(ConceptText.factPending, count(atlas.pending.count), .atlasPending),
                 game?.visibility.map { fact(ConceptText.factVisible, GameText.visibilityLabel($0.atlas)) },
             ]
         }

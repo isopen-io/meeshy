@@ -124,7 +124,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     /// avant les autres, et tombe si la descente ne voit plus rien.
     func test_theHarnessActuallyReadsTheRenderedTree() async {
         let vm = await loadedViewModel(payload())
-        let ecran = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         XCTAssertFalse(
             ecran.labels.isEmpty,
@@ -140,7 +140,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         // Deux causes rendraient l'entrée absente — un modèle sans bloc Meesh,
         // ou un en-tête qui ne le monte pas. On les sépare AVANT d'accuser.
         XCTAssertNotNil(vm.progress?.meesh, "Le modèle n'a pas de bloc Meesh : ce n'est pas la vue qui est en cause.")
-        let ecran = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         let identifiants = ecran.identifiers
         XCTAssertNotNil(
@@ -153,7 +153,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     /// nombre est une icône, pas ce que le porteur a demandé.
     func test_theEntryAnnouncesTheBalance() async {
         let vm = await loadedViewModel(payload(balance: 3))
-        let ecran = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         // Interroger TOUT l'arbre laisserait « 3 » venir du niveau ou d'un
         // compteur : la première version de ce témoin passait ainsi au vert
@@ -173,7 +173,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             level: .init(engagementScore: 10)
         )
         let vm = await loadedViewModel(sans)
-        let ecran = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         XCTAssertNil(
             ecran.node("progression.meesh.entry"),

@@ -4,7 +4,7 @@ import MeeshyUI
 
 // MARK: - Les pièces communes des pages de la vague 2 (#9481)
 //
-// Le cadre d'une page (retour, titre, défilement), l'hôte qui lit la progression CACHE-FIRST et distribue
+// Le cadre d'une page (l'en-tête qui se réduit de `GamePageScaffold`), l'hôte qui lit la progression CACHE-FIRST et distribue
 // le bloc `game`, le choix « qui voit », la barre de progression et les petites lignes que les cartes
 // partagent. Chaque écran de la vague 2 est une page POUSSÉE dans la pile (`Route.gamePage`) — jamais
 // une feuille : le glissement depuis le bord et l'historique lui reviennent gratuitement.
@@ -16,24 +16,13 @@ struct GamePageShell<Content: View>: View {
     let identifier: String
     @ViewBuilder let content: () -> Content
 
-    @Environment(\.dismiss) private var dismiss
-    private var theme: ThemeManager { ThemeManager.shared }
-
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-            VStack(spacing: 0) {
-                GamePageHeader(title: title, onBack: { dismiss() })
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                        content()
-                    }
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.vertical, MeeshySpacing.md)
-                }
+        // L'en-tête dynamique de toutes les pages de Progression (#9564) : grand titre, barre compacte au défilement.
+        GamePageScaffold(title: title, identifier: identifier) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+                content()
             }
         }
-        .accessibilityIdentifier(identifier)
     }
 }
 

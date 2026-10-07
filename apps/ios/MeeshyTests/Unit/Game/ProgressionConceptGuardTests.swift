@@ -68,13 +68,19 @@ final class ProgressionConceptGuardTests: XCTestCase {
     // MARK: - La première page ne porte que des cartes
 
     func test_theFrontPage_mountsNoGestureView() throws {
-        let front = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
-            + (try source("Meeshy/Features/Main/Views/ProgressionView.swift"))
+        // La LISTE ne porte aucun geste. L'en-tête, lui, retrouve le compteur de Meeshes et sa feuille (amendement n° 2).
+        let list = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
         for gesture in ["GameMintPreviewView(", "GameMissionsView(", "GameFlamePanelView(", "GameHeroView(", "GameGaugesView(",
                         "GameBadgeShelfView(", "ProgressionMeeshEntry(", "ProgressionMeeshDetail(", "GameLeagueDetailCard",
                         "viewModel.mint()", "claimChest()", "buyFreeze()", "relight()", "reroll("] {
-            XCTAssertFalse(front.contains(gesture), "« \(gesture) » est sur la première page : les gestes vivent dans les fiches")
+            XCTAssertFalse(list.contains(gesture), "« \(gesture) » est dans la liste de la première page : les gestes vivent dans les fiches")
         }
+        let page = try source("Meeshy/Features/Main/Views/ProgressionView.swift")
+        for gesture in ["GameMintPreviewView(", "GameMissionsView(", "GameFlamePanelView(", "GameHeroView(", "GameGaugesView(",
+                        "GameBadgeShelfView(", "claimChest()", "buyFreeze()", "relight()", "reroll("] {
+            XCTAssertFalse(page.contains(gesture), "« \(gesture) » est sur la première page : les gestes vivent dans les fiches")
+        }
+        let front = list
         XCTAssertTrue(front.contains("ProgressionConceptModel.cards(progress: progress, game: game)"),
                       "la première page PARCOURT la liste des concepts, elle ne la compose pas")
     }
@@ -82,7 +88,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
     func test_theSheet_hostsTheGesturesTheFrontPageLost() throws {
         let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
         for gesture in ["GameMintPreviewView(", "GameMissionsView(", "GameFlamePanelView(", "GameHeroView(", "GameBadgeShelfView(",
-                        "ProgressionMeeshEntry(", "ProgressionLastAchievementHero(", "ProgressionElansHero(", "GameLeagueDetailCard.make("] {
+                        "ProgressionLastAchievementHero(", "ProgressionElansHero(", "GameLeagueDetailCard.make("] {
             XCTAssertTrue(fiche.contains(gesture), "« \(gesture) » n'est rangé dans aucune fiche : une vue écrite et montée par personne")
         }
         let dashboard = try source("Meeshy/Features/Main/Game/ProgressionDashboardPage.swift")
