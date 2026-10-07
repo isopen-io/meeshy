@@ -790,7 +790,7 @@ export class MessageHandler {
           authorUserId: message.sender?.userId,
           conversationId: message.conversationId,
           conversation: message.conversation,
-          createdAt: message.createdAt,
+          createdAt: message.createdAt, messageType: message.messageType, metadata: message.metadata,
         },
         onError: (err) => console.error('[MESSAGE_HANDLER] Edit admission lookup failed:', err),
       });
@@ -1103,7 +1103,7 @@ export class MessageHandler {
         deleterUserId: userId,
         message: {
           authorUserId: message.sender?.userId,
-          conversationId: message.conversationId,
+          conversationId: message.conversationId, messageType: message.messageType, metadata: message.metadata,
         },
         onError: (err) => handlerLogger.warn('delete admission read failed', { messageId: validated.messageId, error: err }),
       });

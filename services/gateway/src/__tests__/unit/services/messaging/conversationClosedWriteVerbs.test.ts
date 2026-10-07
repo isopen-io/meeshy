@@ -78,6 +78,8 @@ const admitEdit = (params: {
       conversationId: CONV,
       conversation: params.conversation,
       createdAt: params.createdAt ?? new Date(NOW - 60_000),
+      messageType: 'text',
+      metadata: null,
     },
     now: NOW,
   });
@@ -132,6 +134,8 @@ describe('éditer — un fil terminé gèle son contenu', () => {
         conversationId: CONV,
         conversation: CLOSED_SHAPES[0].row,
         createdAt: new Date(NOW - 60_000),
+        messageType: 'text',
+        metadata: null,
       },
       now: NOW,
     });

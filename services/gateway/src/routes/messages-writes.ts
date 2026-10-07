@@ -184,6 +184,8 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           conversationId: message.conversationId,
           conversation: message.conversation,
           createdAt: message.createdAt,
+          messageType: message.messageType,
+          metadata: message.metadata,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err as Error),
       });
@@ -500,6 +502,8 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         message: {
           authorUserId: message.sender?.userId,
           conversationId: message.conversationId,
+          messageType: message.messageType,
+          metadata: message.metadata,
         },
         onError: (err) => logger.error('delete admission read failed', err as Error),
       });

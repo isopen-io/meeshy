@@ -212,6 +212,8 @@ export function registerEditMessagePutRoute(
           conversationId,
           conversation: existingMessage.conversation,
           createdAt: existingMessage.createdAt,
+          messageType: existingMessage.messageType,
+          metadata: existingMessage.metadata,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err),
       });
@@ -647,6 +649,8 @@ export function registerEditMessagePatchRoute(
           // `include` : l'état terminal était en main, sans personne pour le lire.
           conversation: message.conversation,
           createdAt: message.createdAt,
+          messageType: message.messageType,
+          metadata: message.metadata,
         },
         onError: (err) => logger.error('Patch edit - admission lookup failed', err),
       });

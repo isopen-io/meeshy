@@ -129,6 +129,8 @@ export function registerDeleteMessageRoute(
         message: {
           authorUserId: existingMessage.sender?.userId,
           conversationId,
+          messageType: existingMessage.messageType,
+          metadata: existingMessage.metadata,
         },
         onError: (err) => logger.error('[CONVERSATIONS] delete admission read failed', err),
       });
