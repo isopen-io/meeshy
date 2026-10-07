@@ -162,12 +162,13 @@ describe('accessible', () => {
 });
 
 describe('le toucher', () => {
-  test('un toucher ouvre Progression', async () => {
+  /* Carte de navigation (#9563, amendement n° 4) : une entrée extérieure ouvre la fiche du concept — l'anneau et sa jauge, la fiche du Niveau. */
+  test('un toucher ouvre la fiche du Niveau', async () => {
     const host = await mount(<PlayerBanner model={newcomer()} />);
     const link = host.querySelector<HTMLAnchorElement>('a[data-player-banner]');
-    expect(link?.getAttribute('href')).toBe('/me/progression');
+    expect(link?.getAttribute('href')).toBe('/me/progression/concept/level');
     await click(link);
-    expect(window.location.pathname).toBe('/me/progression');
+    expect(window.location.pathname).toBe('/me/progression/concept/level');
   });
 });
 

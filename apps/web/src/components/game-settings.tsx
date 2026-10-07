@@ -3,16 +3,17 @@ import { ATLAS_DEFAULT_VISIBILITY, SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/s
 
 import type { GameDevicePrefs } from '@/lib/game/preferences';
 import { gameText } from '@/lib/view/game-copy';
-import { Link } from '@/routes/route-table';
 
-import { GAME_BRAND, GAME_CARD, GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
+import { GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
 import { GameVisibilityPicker } from './game-visibility-picker';
 
 /**
  * LES RÉGLAGES DU JEU (#9481) — un seul écran pour ce que le jeu laisse
  * choisir : les célébrations de Mee et Meo, les notifications du jeu (#9490), le mode « Jeu masqué », qui voit
  * quoi (rang, trésor, vitrine, Atlas — #5738), la ligue publique (consentement
- * et pseudonyme), et le carnet des règles.
+ * et pseudonyme). Aucun lien transverse (carte de navigation, #9563, amendement
+ * n° 4) : les règles et le carnet sont des portes de Progression, et la ligue se
+ * rejoint depuis sa fiche — un écran du jeu n'a qu'un parent.
  *
  * **« Jeu masqué » est un geste composé, et il le dit.** Il masque le jeu sur le
  * compte (`PUT /me/game/privacy` ; `gamePrefs.hidden` n'en est que la copie du
@@ -169,9 +170,6 @@ export function GameSettings(props: GameSettingsProps) {
                 : gameText('game.settings.league.on', { name: league.pseudonym })
               : gameText('game.settings.league.off')}
           </p>
-          <Link to="progressionLigue" data-game-settings-league-manage="" className="flex items-center rounded-chip px-1 text-body font-semibold" style={{ minHeight: 44, color: GAME_BRAND }}>
-            {gameText('game.settings.league.manage')}
-          </Link>
           {inLeague ? (
             <button
               type="button"
@@ -193,12 +191,6 @@ export function GameSettings(props: GameSettingsProps) {
         </GameCard>
       )}
 
-      <Link to="progressionRegles" className="flex items-center justify-center rounded-card px-4 text-body font-semibold" style={{ minHeight: 44, backgroundColor: GAME_CARD, color: GAME_BRAND }}>
-        {gameText('game.settings.help')}
-      </Link>
-      <Link to="progressionCarnet" className="flex items-center justify-center rounded-card px-4 text-body font-semibold" style={{ minHeight: 44, backgroundColor: GAME_CARD, color: GAME_BRAND }}>
-        {gameText('game.door.notebook')}
-      </Link>
     </>
   );
 }

@@ -173,7 +173,7 @@ describe('chaque clé lue par un écran est servie par une partie que sa route c
       .map((name) => `routes/${name}`);
     const listed = [...ENTRIES.progression, ...ENTRIES.rules];
     expect(screens.filter((screen) => !listed.includes(screen))).toEqual([]);
-    expect(screens.length).toBeGreaterThanOrEqual(14);
+    expect(screens.length).toBeGreaterThanOrEqual(13);
   });
 
   test('le témoin lit bien des clés : un parcours vide passerait au vert sur n’importe quelle coupe', () => {

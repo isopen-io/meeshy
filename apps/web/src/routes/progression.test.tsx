@@ -117,8 +117,8 @@ describe('le hub — un utilisateur à mi-chemin', () => {
    * pas ce bloc ne compile même plus : la séquence partagée est un type
    * SOMME, `ProgressionBody` doit épuiser ses cas.
    */
+  /* La série EST la valeur de tête (« N jours ») : aucune ligne « Série » ne la redit (#9563, amendement n° 4, règle 2). */
   test('le hero de la flamme dit la série qu\'il a recueillie', () => {
-    expect(html).toContain('Série');
     expect(html).toContain(`>${fixture.streak.value} jours<`);
     expect(html).toContain(`Record : ${ENGAGEMENT_PROGRESS_FIXTURE.streak.longestStreakDays} jours`);
   });

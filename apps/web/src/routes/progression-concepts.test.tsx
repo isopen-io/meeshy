@@ -392,7 +392,8 @@ const refKey = (ref: DetailRef): string => {
 
 const refsOf = (concept: ProgressionConcept, progress: EngagementWithGame): readonly string[] => {
   const view = conceptView(concept, progress, NOW);
-  return [...view.chips.map((chip) => refKey(chip.ref)), ...view.facts.map((fact) => refKey(fact.ref))];
+  /* La valeur de tête est une donnée du concept : son `primary` la désigne. */
+  return [refKey(view.primary), ...view.chips.map((chip) => refKey(chip.ref)), ...view.facts.map((fact) => refKey(fact.ref))];
 };
 
 const owners = (progress: EngagementWithGame, key: string): readonly ProgressionConcept[] =>
@@ -404,7 +405,7 @@ const withGame = (patch: (game: NonNullable<EngagementWithGame['game']>) => NonN
 });
 
 describe('règle 1 — une donnée appartient à un seul concept', () => {
-  const windy = withGame((game) => ({ ...game, boosts: { ...game.boosts, tailwind: 3 }, level: { ...game.level, prestige: 2 }, prestige: game.prestige === undefined ? undefined : { ...game.prestige, stars: 2 } }));
+  const windy = withGame((game) => ({ ...game, boosts: { ...game.boosts, tailwind: 2 }, level: { ...game.level, prestige: 2 }, prestige: game.prestige === undefined ? undefined : { ...game.prestige, stars: 2 } }));
   const short = withGame((game) => ({ ...game, mint: { ...game.mint, canMint: false, missingPoints: 120 } }));
 
   test('le score est à Points, le multiplicateur à Élans, les étoiles à Prestige, le prix de la Meesh à Meeshes', () => {

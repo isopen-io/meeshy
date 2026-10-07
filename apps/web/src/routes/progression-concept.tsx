@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
@@ -16,7 +16,8 @@ import { useGamePrefs } from '@/lib/game/preferences';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { useParams } from '@/lib/router';
+import { FICHE_SECTION_PARAM, ficheSection } from '@/lib/game/progression-nav';
+import { useOptionalRoute, useParams } from '@/lib/router';
 import { gameText } from '@/lib/view/game-copy';
 import { detailOfRef } from '@/lib/view/game-detail';
 import { conceptView, ficheView, isProgressionConcept, shownConcepts, shownProgress, type ConceptView } from '@/lib/view/progression-concepts';
@@ -185,6 +186,24 @@ function gesturesOf(concept: ProgressionConcept, view: EngagementWithGame, host:
   }
 }
 
+/**
+ * LA SECTION QU'UNE ENTRÉE VISE (`?section=gestures`, carte de navigation) — la
+ * notification de la mission du jour ouvre la fiche des missions défilée
+ * jusqu'à la liste et au coffre. La demande est CONSOMMÉE : l'adresse la perd
+ * aussitôt (sans nouvelle entrée), pour qu'un retour sur cette fiche retrouve
+ * la position laissée plutôt que de redéfiler.
+ */
+function useFicheFocus(article: RefObject<HTMLElement | null>): void {
+  const asked = ficheSection(useOptionalRoute()?.search.get(FICHE_SECTION_PARAM) ?? null);
+  useLayoutEffect(() => {
+    if (asked === undefined) return;
+    article.current?.querySelector(`[data-fiche-section="${asked}"]`)?.scrollIntoView({ block: 'start' });
+    const url = new URL(window.location.href);
+    url.searchParams.delete(FICHE_SECTION_PARAM);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [asked, article]);
+}
+
 export function ConceptFiche({
   concept,
   progress,
@@ -202,6 +221,8 @@ export function ConceptFiche({
   const prefs = useGamePrefs();
   const hidden = progress.game !== undefined && prefs.hidden;
   const view = shownProgress(progress, hidden);
+  const article = useRef<HTMLElement>(null);
+  useFicheFocus(article);
 
   if (!shownConcepts(progress, hidden).includes(concept)) {
     return (
@@ -219,7 +240,7 @@ export function ConceptFiche({
   const piece = pieceOf(concept, view, host, clock);
   const gestures = gesturesOf(concept, view, host);
   return (
-    <article data-concept-fiche={concept} className="flex flex-col gap-4">
+    <article ref={article} data-concept-fiche={concept} className="flex flex-col gap-4">
       {piece === null ? (
         <Hero concept={shown} view={view} />
       ) : (

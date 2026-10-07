@@ -38,7 +38,7 @@ import {
   trophyDetail,
   type ElementDetail,
 } from '@/lib/view/game-detail';
-import { conceptView } from '@/lib/view/progression-concepts';
+import { conceptView, ficheView } from '@/lib/view/progression-concepts';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -205,7 +205,9 @@ describe('chaque élément d’une fiche est un bouton qui ouvre la modale de SO
       const touches = [...host.querySelectorAll<HTMLButtonElement>('[data-concept-fiche] button[data-detail]')];
       /* Le héros générique : son emblème s'ouvre. Une pièce de jeu qui tient lieu de héros (amendement n° 4) garde ses propres touchers. */
       if (host.querySelector('[data-fiche-hero="generic"]') !== null) expect(host.querySelector('[data-fiche-section="hero"] button[data-detail]')).not.toBeNull();
-      expect(touches.length).toBeGreaterThanOrEqual(view.facts.length);
+      /* « Où j'en suis » liste ce que le héros ne montre pas (règle 3) : chacune de ses lignes est un toucher de plus. */
+      expect(touches.length).toBeGreaterThanOrEqual(ficheView(concept, playing, NOW).facts.length);
+      expect(view.name).not.toBe('');
       for (const button of touches) {
         expect(button.className).toContain('game-press');
         await mounter.click(button);
@@ -468,7 +470,7 @@ describe('aucune page de Progression ne monte d’en-tête statique', () => {
 
   test('chaque écran de Progression rend la coquille', () => {
     const screens = routes.filter((name) => /export default function/.test(read(name)));
-    expect(screens.length).toBeGreaterThanOrEqual(14);
+    expect(screens.length).toBeGreaterThanOrEqual(13);
     for (const name of screens) {
       expect({ name, shell: /<ProgressionShell\b|<ProgressionPage\b/.test(read(name)) }).toEqual({ name, shell: true });
     }

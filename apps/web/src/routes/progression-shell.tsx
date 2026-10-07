@@ -166,7 +166,7 @@ export function ProgressionShell({
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <main ref={main} id="contenu" className="relative flex-1 overflow-y-auto overflow-x-clip overscroll-x-none break-words pb-safe">
+      <main id="contenu" className="relative flex-1 overflow-y-auto overflow-x-clip overscroll-x-none break-words pb-safe" ref={main}>
         <CollapsingHeader title={title} back={<BackLink screen={screen} />} trailing={trailing} notice={notice} />
         {children}
       </main>

@@ -51,7 +51,7 @@
  * `meeshy.fixtures.gameLong`), à 320 px dans les sept langues, 375 px en
  * allemand et en arabe, 260 px en allemand (le texte agrandi par le système) :
  *
- *   5. sur la première page, le tableau de bord, les quinze fiches et les onze
+ *   5. sur la première page, les quinze fiches et les onze
  *      sous-pages, AUCUN conteneur ne défile de côté — bande comprise : ici une
  *      rangée trop longue passe à la ligne entre ses éléments — rien ne dépasse
  *      le conteneur qui défile, et ce conteneur verrouille l'axe horizontal

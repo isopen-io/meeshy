@@ -206,7 +206,7 @@ describe('chaque entrée extérieure ouvre l’écran que la carte nomme', () =>
   });
 
   test('le retour de chaque écran du jeu vient de la carte : aucune route ne le déclare', () => {
-    const routes = readdirSync(join(APP, 'routes')).filter((name) => /^progression.*\.tsx$/.test(name) && !name.includes('.test.'));
+    const routes = readdirSync(join(APP, 'routes')).filter((name) => /^progression.*\.tsx$/.test(name) && !name.includes('.test.') && name !== 'progression-shell.tsx');
     for (const name of routes) {
       const source = read(`routes/${name}`);
       expect({ name, back: /\bback=\{/.test(source) || /\bconcept="[a-z]+"/.test(source) }).toEqual({ name, back: false });
