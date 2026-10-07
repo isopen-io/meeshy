@@ -1,7 +1,7 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 
 import { dropCardPost, mapCardPosts, type CardPages } from '@/lib/feed/interactions';
-import { servedViewerPoints, withKeptViewerPoints } from '@/lib/feed/viewer-points';
+import { servedOverHeld } from '@/lib/feed/viewer-points';
 
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
 import { FEED_QUERY_KEY } from './feed';
@@ -232,17 +232,17 @@ export function removeCardPost(queryClient: QueryClient, postId: string): void {
  * `likeCount` est un agrégat que le serveur tient mieux que nous.
  *
  * `viewerPoints` (#9570) appartient au lecteur lui aussi : une réponse
- * d'écriture et une diffusion ne le portent jamais (contrat #9569), et la
- * valeur ne décroît pas — la carte garde la plus grande (`withKeptViewerPoints`).
+ * d'écriture et une diffusion ne le portent jamais (contrat #9569) — la carte
+ * garde alors la sienne et l'instant de sa dernière annonce (`servedOverHeld`).
  */
 export function mergeServedPost(incoming: FeedPost, held: FeedPost): FeedPost {
-  return withKeptViewerPoints(
+  return servedOverHeld(
     {
       ...incoming,
       ...(held.isLikedByMe == null ? {} : { isLikedByMe: held.isLikedByMe }),
       ...(held.isBookmarkedByMe == null ? {} : { isBookmarkedByMe: held.isBookmarkedByMe }),
     },
-    servedViewerPoints(held.viewerPoints),
+    held,
   );
 }
 

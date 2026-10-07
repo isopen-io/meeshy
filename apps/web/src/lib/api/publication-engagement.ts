@@ -3,19 +3,20 @@ import type { QueryClient } from '@tanstack/react-query';
 import { isPostEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
-import { withKeptViewerPoints } from '@/lib/feed/viewer-points';
+import { withAnnouncedViewerPoints } from '@/lib/feed/viewer-points';
 import type { SocketClient } from '@/lib/net/socket';
 
 import { updateCardPost } from './card-caches';
 
 /**
- * `engagement:post-updated` (#9570, contrat passerelle #9569) — après un geste
- * crédité, la passerelle pousse au SEUL lecteur crédité ce que le post lui a
- * rapporté depuis toujours (`{ postId, viewerPoints }`, valeur absolue). Elle
- * se pose sur CHAQUE caisse qui montre la carte de cet identifiant (le
- * registre, `card-caches.ts`, Réels et fiche compris), par la loi monotone :
- * une valeur plus petite est une annonce plus ancienne arrivée en retard, et
- * ne fait jamais reculer la carte. Rien n'est additionné ni deviné ici.
+ * `engagement:post-updated` (#9570, contrat passerelle #9569, reprises #9584)
+ * — après un geste crédité ou repris, la passerelle pousse au SEUL lecteur
+ * concerné ce que le post lui a rapporté (`{ postId, viewerPoints, at }`,
+ * valeur absolue, instant serveur). Elle se pose sur CHAQUE caisse qui montre
+ * la carte de cet identifiant (le registre, `card-caches.ts`, Réels et fiche
+ * compris), par la loi partagée : la plus récente gagne, qu'elle monte ou
+ * qu'elle baisse ; une annonce plus ancienne arrivée en retard ne change rien.
+ * Rien n'est additionné ni deviné ici.
  *
  * L'identifiant est celui du post CRÉDITÉ : une republication simple a sa
  * propre carte et sa propre valeur, que l'annonce de son original ne touche
@@ -25,7 +26,8 @@ import { updateCardPost } from './card-caches';
  */
 export function applyPostEngagement(queryClient: QueryClient, payload: unknown): void {
   if (!isPostEngagementSnapshot(payload)) return;
-  updateCardPost(queryClient, payload.postId, (post) => withKeptViewerPoints(post, payload.viewerPoints));
+  const announced = { viewerPoints: payload.viewerPoints, at: payload.at };
+  updateCardPost(queryClient, payload.postId, (post) => withAnnouncedViewerPoints(post, announced));
 }
 
 /** Branche l'événement sur le cache de requêtes ; rend le débranchement. */

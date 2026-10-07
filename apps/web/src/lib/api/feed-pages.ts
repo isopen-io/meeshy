@@ -181,10 +181,17 @@ export type FeedPost = {
   /**
    * CE QUE CE POST A RAPPORTÉ AU LECTEUR (#9570, contrat #9569) — entier ≥ 0,
    * servi sur les LECTURES à un lecteur connecté, jamais sur `repostOf` ni sur
-   * une réponse d'écriture. Absent ⇒ « garde ce que tu sais », jamais zéro :
-   * la loi est `lib/feed/viewer-points.ts`.
+   * une réponse d'écriture. Absent ⇒ « garde ce que tu sais », jamais zéro.
+   * Il peut BAISSER (une reprise, #9584) : la loi est `lib/feed/viewer-points.ts`.
    */
   readonly viewerPoints?: number | null;
+  /**
+   * L'INSTANT SERVEUR DE LA DERNIÈRE ANNONCE appliquée à `viewerPoints`
+   * (`engagement:post-updated`, ms) — JAMAIS servi : le client le pose dans
+   * son cache pour qu'une annonce plus ancienne arrivée en retard ne défasse
+   * pas une plus récente. `null`/absent ⇒ aucune annonce appliquée.
+   */
+  readonly viewerPointsAt?: number | null;
   /**
    * L'AUDIENCE DE LA CARTE (#6484) — `postScalarSelect` la sert TOUJOURS
    * (`postIncludes.ts:341`) ; absente seulement quand un `select` plus

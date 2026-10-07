@@ -17,10 +17,11 @@ import { FEED_GLYPHS } from './glyphs-feed';
  * n'ouvre rien.
  *
  * La valeur est celle que la passerelle sert (`viewerPoints`), gardée par la
- * loi monotone (`lib/feed/viewer-points.ts`) : jamais devinée ici. Quand un
- * geste la fait monter (`engagement:post-updated`), le nombre ROULE vers sa
- * nouvelle valeur (`useRollingNumber` — sauté sous `prefers-reduced-motion`) ;
- * la phrase lue au lecteur d'écran dit déjà la cible.
+ * loi partagée (`lib/feed/viewer-points.ts`) : jamais devinée ici. Quand un
+ * geste la fait monter, ou une reprise baisser (`engagement:post-updated`),
+ * le nombre ROULE vers sa nouvelle valeur (`useRollingNumber` — sauté sous
+ * `prefers-reduced-motion`) ; la phrase lue au lecteur d'écran dit déjà la
+ * cible. Revenue à zéro, la marque s'en va.
  *
  * L'hôte ne la monte que pour une valeur > 0 (`FeedCardModel.viewerPoints`).
  */
