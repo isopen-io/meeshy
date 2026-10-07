@@ -227,7 +227,7 @@ describe('le duo, la saison, les trophées, l\'Atlas et le Prestige dans le bloc
   it('range la vitrine, résume l\'Atlas et dit si le Prestige s\'offre', () => {
     const extras = buildGameBlockExtras(extrasFacts({ score: levelThreshold(100) }));
     expect(extras.atlas).toMatchObject({ stamped: 1, stamps: [{ language: 'ja', stampedOn: '2026-10-13' }], pending: [] });
-    expect(extras.prestige).toEqual({ stars: 0, max: 5, canPrestige: true, gloryOnPass: 1000 });
+    expect(extras.prestige).toEqual({ stars: 0, max: 5, canPrestige: true, gloryOnPass: 10_000 });
     expect(buildGameBlockExtras(extrasFacts()).prestige.canPrestige).toBe(false);
     expect(buildGameBlockExtras(extrasFacts({ score: levelThreshold(100), prestige: 5 })).prestige.canPrestige).toBe(false);
     expect(extras.visibility).toEqual({ showcase: 'friends', rank: 'friends', treasury: 'friends', atlas: 'me' });

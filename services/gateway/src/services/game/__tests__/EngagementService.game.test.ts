@@ -200,13 +200,13 @@ describe('la série : un gel couvre le jour manqué, sinon la Flamme s’éteint
 });
 
 describe('la Gloire du premier passage d’un niveau', () => {
-  it('un geste qui fait franchir le niveau 2 grave 20 de Gloire et monte le record', async () => {
+  it('un geste qui fait franchir le niveau 2 grave 100 de Gloire et monte le record (#9636)', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 40 - 1, levelRecord: 1 });
 
     await service(db).recordActivity(USER, 'content.text_message');
 
-    expect(db.gloryLedger.rows.filter((r) => r.reason === 'level')).toEqual([expect.objectContaining({ delta: 20, reason: 'level', requestId: 'level:2' })]);
+    expect(db.gloryLedger.rows.filter((r) => r.reason === 'level')).toEqual([expect.objectContaining({ delta: 100, reason: 'level', requestId: 'level:2' })]);
     expect(db.user.rows[0]?.levelRecord).toBe(2);
   });
 
@@ -219,14 +219,14 @@ describe('la Gloire du premier passage d’un niveau', () => {
     expect(db.gloryLedger.rows.filter((r) => r.reason === 'level')).toHaveLength(0);
   });
 
-  it('le tout premier contenu grave, lui, la Gloire de son succès (10, commun faute d’instantané)', async () => {
+  it('le tout premier contenu grave, lui, la Gloire de son succès (100, commun faute d’instantané — #9636)', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 500, levelRecord: 7 });
 
     await service(db).recordActivity(USER, 'content.text_message');
 
     expect(db.gloryLedger.rows.filter((r) => r.reason === 'achievement')).toEqual([
-      expect.objectContaining({ delta: 10, requestId: 'achievement:achievement.first_content' }),
+      expect.objectContaining({ delta: 100, requestId: 'achievement:achievement.first_content' }),
     ]);
   });
 });

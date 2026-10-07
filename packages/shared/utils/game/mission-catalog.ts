@@ -7,7 +7,7 @@
  *  - son objectif : `baseTarget` sans profil connu, sinon tiré des habitudes du compte (`habit`), toujours
  *    borné par `minTarget` / `maxTarget` ;
  *  - ce qu'il paie : `unitPoints` par unité d'objectif en plus de la base de sa difficulté (la Gloire ne se fixe
- *    pas ici : elle se lit dans `GLORY_POINTS`, voir `missionGlory`) ;
+ *    pas ici : elle se lit dans `MISSION_GLORY`, voir `missionGlory`) ;
  *  - ce qu'il exige du profil (`requires`) : un défi impossible pour un compte n'est pas tiré pour lui ;
  *  - son poids de tirage (`weight`, 4 par défaut ; un défi rare pèse 1).
  *

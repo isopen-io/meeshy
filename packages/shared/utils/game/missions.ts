@@ -19,8 +19,8 @@
  *
  * ## Ce qui est payé
  *
- * `(base de la difficulté + unitPoints × objectif) × bande × Flamme` points, de la Gloire pour l'Or et les défis
- * « faire connaître » (montant lu dans `GLORY_POINTS`), les étoiles de saison de la difficulté, et le tiers du
+ * `(base de la difficulté + unitPoints × objectif) × bande × Flamme` points, la Gloire de la difficulté
+ * (40 / 100 / 250 / 500, lue dans `MISSION_GLORY`), les étoiles de saison de la difficulté, et le tiers du
  * coffre pour une mission du jour (`missionArtifacts`).
  *
  * ## Le tirage
@@ -37,7 +37,7 @@ import { ENGAGEMENT_AXES } from '../../types/engagement.js';
 import { EXTRA_ENGAGEMENT_OPERATIONS, type EngagementOperationKey } from '../../types/engagement-operations.js';
 import { dayNumber, fnv1a, pickIndex, seededRng } from './day-prng.js';
 import { flameBonusPercent } from './flame.js';
-import { GLORY_POINTS } from './glory.js';
+import { gloryForMission } from './glory.js';
 import { GAME_LEVEL_MAX, GAME_LEVEL_MIN } from './levels.js';
 import {
   MISSION_FACT_SIGNALS,
@@ -179,11 +179,10 @@ export function missionTarget(params: {
 }
 
 /**
- * La Gloire d'un défi : l'Or et les défis « faire connaître » en portent, les autres non. Le MONTANT n'est pas
- * fixé ici : il se lit dans `GLORY_POINTS` (`glory.ts`), seule table des valeurs de Gloire.
+ * La Gloire d'un défi, par difficulté (#9636) : 40 / 100 / 250 / 500. Le MONTANT n'est pas fixé ici : il se lit
+ * dans `MISSION_GLORY` (`glory.ts`), seule table des valeurs de Gloire.
  */
-export const missionGlory = (template: MissionTemplate, difficulty: MissionDifficulty): number =>
-  difficulty === 'gold' || template.goal === 'reach' ? GLORY_POINTS.goldMission : 0;
+export const missionGlory = (difficulty: MissionDifficulty): number => gloryForMission(difficulty);
 
 export type MissionSlot = 'easy' | 'medium' | 'hard' | 'gold';
 
@@ -195,7 +194,7 @@ export type DrawnMission = {
   readonly target: number;
   /** Points crédités à la validation, bonus de Flamme compris. */
   readonly reward: number;
-  /** Gloire de la mission : `missionGlory`, lue dans `GLORY_POINTS`. */
+  /** Gloire de la mission : `missionGlory`, lue dans `MISSION_GLORY`. */
   readonly glory: number;
 };
 
@@ -254,7 +253,7 @@ export function drawnMissionOf(params: {
     prism: template.prism ?? false,
     target,
     reward: missionReward({ basePoints: MISSION_BASE_POINTS[difficulty] + template.unitPoints * target, level, flameDays }),
-    glory: missionGlory(template, difficulty),
+    glory: missionGlory(difficulty),
   };
 }
 

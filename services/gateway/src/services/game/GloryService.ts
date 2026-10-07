@@ -14,6 +14,10 @@
  *
  * Les barèmes (`GLORY_POINTS`, `FLAME_RECORD_GLORY`) et la loi des niveaux
  * viennent de `@meeshy/shared/utils/game` : rien n'est réécrit ici.
+ *
+ * Une ligne POSITIVE gravée peut faire franchir 1 000 000 : le crédit demande
+ * alors sa place du Mythe (#9636, `MythicSeatService`) — un appoint, qui ne
+ * fait jamais échouer le crédit déjà gravé.
  */
 
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
@@ -21,6 +25,10 @@ import { FLAME_RECORD_GLORY, GLORY_POINTS } from '@meeshy/shared/utils/game/glor
 import { levelFromScore, newLevelsReached, recordLevel } from '@meeshy/shared/utils/game/levels';
 import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
 import { achievementGloryAtEarning } from '@meeshy/shared/utils/game/rarity';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+import { MythicSeatService } from './MythicSeatService';
+
+const log = enhancedLogger.child({ module: 'GloryService' });
 
 export type GloryReason =
   | 'mint'
@@ -56,7 +64,14 @@ export async function gloryTotalFromLedger(db: GloryDb, userId: string): Promise
 }
 
 export class GloryService {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly seats: Pick<MythicSeatService, 'claimIfEligible'>;
+
+  constructor(
+    private readonly prisma: PrismaClient,
+    deps: { readonly seats?: Pick<MythicSeatService, 'claimIfEligible'> } = {},
+  ) {
+    this.seats = deps.seats ?? new MythicSeatService(prisma);
+  }
 
   async total(userId: string): Promise<number> {
     return gloryTotalFromLedger(this.prisma, userId);
@@ -83,10 +98,23 @@ export class GloryService {
           ...(entry.meta !== undefined ? { meta: entry.meta } : {}),
         },
       });
-      return true;
     } catch (err) {
       if (isP2002(err)) return false;
       throw err;
+    }
+    if (entry.delta > 0) await this.claimMythicSeat(entry.userId);
+    return true;
+  }
+
+  /** La place du Mythe si cette Gloire l'ouvre — jamais une raison de faire échouer le crédit. */
+  private async claimMythicSeat(userId: string): Promise<void> {
+    try {
+      await this.seats.claimIfEligible(userId);
+    } catch (error) {
+      log.warn('mythic seat claim failed, the nightly sweep will retry', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

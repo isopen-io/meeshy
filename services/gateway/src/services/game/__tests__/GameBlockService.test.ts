@@ -39,13 +39,13 @@ describe('GameBlockService.build', () => {
     seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 25, currentStreakDays: 12, lastStreakDate: new Date('2026-10-04T00:00:00Z'), flameFreezes: 1 });
     counter(db, 4000);
     grant(db, 7);
-    db.gloryLedger.rows.push({ id: 'l1', userId: USER, delta: 600, reason: 'level', requestId: 'level:2' });
+    db.gloryLedger.rows.push({ id: 'l1', userId: USER, delta: 2800, reason: 'level', requestId: 'level:2' });
 
     const block = await build(db);
 
     expect(gameBlockSchema.safeParse(block).success).toBe(true);
     expect(block.level).toMatchObject({ level: 20, record: 25 });
-    expect(block.glory).toMatchObject({ glory: 600, rank: 'echo' });
+    expect(block.glory).toMatchObject({ glory: 2800, rank: 'echo', division: 3, division5: 4, mythic: null });
     expect(block.treasury).toMatchObject({ held: 7, tier: 'bourse' });
     expect(block.flame).toMatchObject({ days: 12, freezes: 1, status: 'at-risk' });
     expect(block.boosts.tailwind).toBe(1.25);

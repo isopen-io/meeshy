@@ -133,18 +133,18 @@ describe('GET /users/:userId/game', () => {
     veteran(db, USER);
     veteran(db, OTHER);
     befriend(db);
-    seedWealth(db, USER, 63, 4000);
+    seedWealth(db, USER, 63, 16_000);
 
     const res = await get(await profileApp(db, OTHER), gameUserGamePath(USER));
 
     const data = userGameProfileResponseSchema.parse(res.json().data);
     expect(data).toEqual({
       visible: true,
-      standing: { level: 34, tier: 'eclat', prestige: 2, flame: 'brasier', rank: 'conteur', division: 3, points: 12_180, trophyCount: 0 },
+      standing: { level: 34, tier: 'eclat', prestige: 2, flame: 'brasier', rank: 'conteur', division: 3, division5: 5, mythic: null, points: 12_180, trophyCount: 0 },
       treasury: { tier: 'coffret' },
     });
     const raw = JSON.stringify(res.json());
-    for (const forbidden of ['"63"', '4000', 'currentStreakDays', 'held', 'glory', 'lastStreakDate', 'lastActive']) {
+    for (const forbidden of ['"63"', '16000', 'currentStreakDays', 'held', 'glory', 'lastStreakDate', 'lastActive']) {
       expect(raw).not.toContain(forbidden);
     }
   });
@@ -153,14 +153,14 @@ describe('GET /users/:userId/game', () => {
     const db = fakeGameDb();
     veteran(db, USER);
     veteran(db, STRANGER);
-    seedWealth(db, USER, 63, 4000);
+    seedWealth(db, USER, 63, 16_000);
     db.gameProfile.rows.push({ id: 'gp', userId: USER, rankVisibility: 'everyone', showcaseVisibility: 'everyone' });
 
     const res = await get(await profileApp(db, STRANGER), gameUserGamePath(USER));
 
     const data = userGameProfileResponseSchema.parse(res.json().data);
     expect(data.visible).toBe(true);
-    expect(data.standing).toEqual({ level: 34, tier: 'eclat', prestige: 2, flame: null, rank: 'conteur', division: 3 });
+    expect(data.standing).toEqual({ level: 34, tier: 'eclat', prestige: 2, flame: null, rank: 'conteur', division: 3, division5: 5, mythic: null });
     const raw = JSON.stringify(res.json());
     for (const forbidden of ['points', 'trophyCount', '12180', 'brasier']) expect(raw).not.toContain(forbidden);
   });
@@ -169,7 +169,7 @@ describe('GET /users/:userId/game', () => {
     const db = fakeGameDb();
     veteran(db, USER);
     veteran(db, STRANGER);
-    seedWealth(db, USER, 63, 4000);
+    seedWealth(db, USER, 63, 16_000);
     const app = await profileApp(db, STRANGER);
 
     const refused = (await get(app, gameUserGamePath(USER))).json();
@@ -183,7 +183,7 @@ describe('GET /users/:userId/game', () => {
     const db = fakeGameDb();
     veteran(db, USER);
     veteran(db, STRANGER);
-    seedWealth(db, USER, 63, 4000);
+    seedWealth(db, USER, 63, 16_000);
     db.gameProfile.rows.push({ id: 'gp', userId: USER, rankVisibility: 'everyone', treasuryVisibility: 'me' });
 
     const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, STRANGER), gameUserGamePath(USER))).json().data);
@@ -240,15 +240,26 @@ describe('GET /users/:userId/game', () => {
     expect(res.json().data).toEqual({ visible: false, standing: null, treasury: null });
   });
 
-  it('Mythe : le drapeau du compte l’emporte sur la division, et il suit la visibilité du RANG', async () => {
+  it('Mythe : la place du compte l’emporte sur la division, avec son numéro, et elle suit la visibilité du RANG (#9636)', async () => {
     const db = fakeGameDb();
     veteran(db, USER);
     veteran(db, OTHER);
     befriend(db);
-    seedWealth(db, USER, 0, 90_000);
+    seedWealth(db, USER, 0, 1_000_000);
+    db.mythicSeat.rows.push({ id: '6d7974686500000000000007', number: 7, userId: USER, glory: 1_000_000, grantedAt: new Date() });
+    const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data);
+    expect(data.standing).toMatchObject({ rank: 'mythe', division: null, division5: null, mythic: { number: 7 } });
+  });
+
+  it('l’ancien drapeau « top 100 du moment » (mythicAt) ne fait plus un Mythe (#9636)', async () => {
+    const db = fakeGameDb();
+    veteran(db, USER);
+    veteran(db, OTHER);
+    befriend(db);
+    seedWealth(db, USER, 0, 700_000);
     db.gameProfile.rows.push({ id: 'gp', userId: USER, mythicAt: new Date() });
     const data = userGameProfileResponseSchema.parse((await get(await profileApp(db, OTHER), gameUserGamePath(USER))).json().data);
-    expect(data.standing).toMatchObject({ rank: 'mythe', division: null });
+    expect(data.standing).toMatchObject({ rank: 'legende', division: 3, division5: 4, mythic: null });
   });
 
   it('une Flamme éteinte ne se montre pas : forme nulle, jamais « éteinte depuis »', async () => {

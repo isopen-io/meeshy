@@ -52,8 +52,12 @@ export type GameBlockFacts = {
   readonly levelRecord: number | null;
   readonly prestige: number;
   readonly glory: number;
-  /** Drapeau Mythe fourni par le serveur (les 100 Légendes les plus glorieuses). */
+  /**
+   * Le Mythe, fourni par le serveur (#9636) : `mythicNumber` est la place (1 à 100), définitive. `mythic`
+   * reste pour l'appelant qui ne connaît que le rang servi.
+   */
   readonly mythic: boolean;
+  readonly mythicNumber?: number | null;
   readonly mintedLifetime: number;
   readonly debitablePoints: number;
   /** Meeshes gardées (le trésor). */
@@ -98,7 +102,7 @@ export type GameBlockFacts = {
 export function buildGameBlock(facts: GameBlockFacts): GameBlock {
   const progress = levelProgress(facts.score);
   const record = recordLevel({ level: progress.level, previousRecord: facts.levelRecord });
-  const standing = gloryStanding({ glory: facts.glory, mythic: facts.mythic });
+  const standing = gloryStanding({ glory: facts.glory, mythic: facts.mythic, mythicNumber: facts.mythicNumber ?? null });
   const treasury = treasuryTier(facts.balance);
 
   const flameToday = facts.flameToday ?? facts.today;
@@ -138,9 +142,11 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       glory: standing.glory,
       rank: standing.rank,
       division: standing.division,
+      division5: standing.division5,
       next: standing.next,
       gloryMissing: standing.gloryMissing,
       progress: standing.progress,
+      mythic: standing.mythic,
     },
     treasury: { held: treasury.held, tier: treasury.tier, next: treasury.next },
     mint: previewMint({

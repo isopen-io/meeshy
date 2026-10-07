@@ -23,7 +23,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
   const skip = page.offset;
   const clip = <T>(rows: T[]): { items: T[]; more: boolean } => ({ items: rows.slice(0, page.limit), more: rows.length > page.limit });
 
-  const [account, settings, pseudonym, memberships, weekPoints, duosAsInviter, duosAsInvitee, seasons, trophies, atlas, missions, glory, meeshes] =
+  const [account, settings, pseudonym, memberships, weekPoints, duosAsInviter, duosAsInvitee, seasons, trophies, atlas, missions, glory, meeshes, mythicSeat] =
     await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
@@ -75,6 +75,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
       }),
       prisma.gloryLedger.findMany({ where: { userId }, select: { delta: true, reason: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take, skip }),
       prisma.meeshLedger.findMany({ where: { userId }, select: { delta: true, reason: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take, skip }),
+      prisma.mythicSeat.findUnique({ where: { userId }, select: { number: true, grantedAt: true } }),
     ]);
 
   const duos = [
@@ -108,6 +109,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
           mythicAt: asIso(settings.mythicAt),
         }
       : null,
+    mythicSeat: mythicSeat ? { number: mythicSeat.number, grantedAt: asIso(mythicSeat.grantedAt) } : null,
     pseudonym,
     leagueHistory: lists.leagueHistory.items,
     weekPoints: lists.weekPoints.items,

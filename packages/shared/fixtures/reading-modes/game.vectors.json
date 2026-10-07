@@ -1,7 +1,7 @@
 {
   "$format": {
-    "input": "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
-    "expected": "La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax} ; mint-price → {price, edition} ; glory-standing → {rank, division, …} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.",
+    "input": "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic-seats, mythic-crossing, mythic-signature, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
+    "expected": "La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax} ; mint-price → {price, edition} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.",
     "provenance": "Contrat cross-plateforme de la loi du Jeu Meeshy (#9373, vague 2 #9384 à #9392 : les cas de la vague 2 viennent APRÈS ceux de la vague 1, jamais mêlés). TS le produit (__tests__/game/game-vectors-law.ts) et le rejoue (__tests__/vectors/game.vectors.test.ts) ; iOS le rejoue (GameLawVectorTests). Sur divergence, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui. Régénérer : UPDATE_GAME_VECTORS=1 npx vitest run __tests__/vectors/game.vectors.test.ts."
   },
   "vectors": [
@@ -577,7 +577,7 @@
         "levelBefore": 34,
         "levelAfter": 32,
         "levelsLost": 2,
-        "gloryGained": 100
+        "gloryGained": 1000
       }
     },
     {
@@ -597,7 +597,7 @@
         "levelBefore": 15,
         "levelAfter": 10,
         "levelsLost": 5,
-        "gloryGained": 100
+        "gloryGained": 1000
       }
     },
     {
@@ -617,7 +617,7 @@
         "levelBefore": 100,
         "levelAfter": 98,
         "levelsLost": 2,
-        "gloryGained": 100
+        "gloryGained": 1000
       }
     },
     {
@@ -657,7 +657,7 @@
         "levelBefore": 30,
         "levelAfter": 20,
         "levelsLost": 10,
-        "gloryGained": 100
+        "gloryGained": 1000
       }
     },
     {
@@ -677,7 +677,7 @@
         "levelBefore": 11,
         "levelAfter": 2,
         "levelsLost": 9,
-        "gloryGained": 100
+        "gloryGained": 1000
       }
     },
     {
@@ -690,408 +690,774 @@
       "expected": {
         "rank": "murmure",
         "division": 3,
+        "division5": 5,
         "divisionMinGlory": 0,
         "nextRank": "murmure",
-        "nextDivision": 2,
-        "nextMinGlory": 166,
-        "gloryMissing": 166,
-        "progress": 0
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 400,
+        "gloryMissing": 400,
+        "progress": 0,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 499 de Gloire",
+      "_label": "rang pour 399 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 499,
+        "glory": 399,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "murmure",
+        "division": 3,
+        "division5": 5,
+        "divisionMinGlory": 0,
+        "nextRank": "murmure",
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 400,
+        "gloryMissing": 1,
+        "progress": 0.9975,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 400 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 400,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "murmure",
+        "division": 3,
+        "division5": 4,
+        "divisionMinGlory": 400,
+        "nextRank": "murmure",
+        "nextDivision": 2,
+        "nextDivision5": 3,
+        "nextMinGlory": 800,
+        "gloryMissing": 400,
+        "progress": 0,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 1999 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 1999,
         "mythic": false
       },
       "expected": {
         "rank": "murmure",
         "division": 1,
-        "divisionMinGlory": 333,
+        "division5": 1,
+        "divisionMinGlory": 1600,
         "nextRank": "echo",
         "nextDivision": 3,
-        "nextMinGlory": 500,
+        "nextDivision5": 5,
+        "nextMinGlory": 2000,
         "gloryMissing": 1,
-        "progress": 0.994012
+        "progress": 0.9975,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 500 de Gloire",
+      "_label": "rang pour 2000 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 500,
+        "glory": 2000,
         "mythic": false
       },
       "expected": {
         "rank": "echo",
         "division": 3,
-        "divisionMinGlory": 500,
+        "division5": 5,
+        "divisionMinGlory": 2000,
         "nextRank": "echo",
-        "nextDivision": 2,
-        "nextMinGlory": 833,
-        "gloryMissing": 333,
-        "progress": 0
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 2800,
+        "gloryMissing": 800,
+        "progress": 0,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 1499 de Gloire",
+      "_label": "rang pour 2799 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 1499,
+        "glory": 2799,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "echo",
+        "division": 3,
+        "division5": 5,
+        "divisionMinGlory": 2000,
+        "nextRank": "echo",
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 2800,
+        "gloryMissing": 1,
+        "progress": 0.99875,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 2800 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 2800,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "echo",
+        "division": 3,
+        "division5": 4,
+        "divisionMinGlory": 2800,
+        "nextRank": "echo",
+        "nextDivision": 2,
+        "nextDivision5": 3,
+        "nextMinGlory": 3600,
+        "gloryMissing": 800,
+        "progress": 0,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 3600 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 3600,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "echo",
+        "division": 2,
+        "division5": 3,
+        "divisionMinGlory": 3600,
+        "nextRank": "echo",
+        "nextDivision": 2,
+        "nextDivision5": 2,
+        "nextMinGlory": 4400,
+        "gloryMissing": 800,
+        "progress": 0,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 4400 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 4400,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "echo",
+        "division": 2,
+        "division5": 2,
+        "divisionMinGlory": 4400,
+        "nextRank": "echo",
+        "nextDivision": 1,
+        "nextDivision5": 1,
+        "nextMinGlory": 5200,
+        "gloryMissing": 800,
+        "progress": 0,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 5199 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 5199,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "echo",
+        "division": 2,
+        "division5": 2,
+        "divisionMinGlory": 4400,
+        "nextRank": "echo",
+        "nextDivision": 1,
+        "nextDivision5": 1,
+        "nextMinGlory": 5200,
+        "gloryMissing": 1,
+        "progress": 0.99875,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 5200 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 5200,
         "mythic": false
       },
       "expected": {
         "rank": "echo",
         "division": 1,
-        "divisionMinGlory": 1166,
+        "division5": 1,
+        "divisionMinGlory": 5200,
         "nextRank": "voix",
         "nextDivision": 3,
-        "nextMinGlory": 1500,
-        "gloryMissing": 1,
-        "progress": 0.997006
+        "nextDivision5": 5,
+        "nextMinGlory": 6000,
+        "gloryMissing": 800,
+        "progress": 0,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 1500 de Gloire",
+      "_label": "rang pour 5999 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 1500,
+        "glory": 5999,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "echo",
+        "division": 1,
+        "division5": 1,
+        "divisionMinGlory": 5200,
+        "nextRank": "voix",
+        "nextDivision": 3,
+        "nextDivision5": 5,
+        "nextMinGlory": 6000,
+        "gloryMissing": 1,
+        "progress": 0.99875,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 6000 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 6000,
         "mythic": false
       },
       "expected": {
         "rank": "voix",
         "division": 3,
-        "divisionMinGlory": 1500,
+        "division5": 5,
+        "divisionMinGlory": 6000,
         "nextRank": "voix",
-        "nextDivision": 2,
-        "nextMinGlory": 2166,
-        "gloryMissing": 666,
-        "progress": 0
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 7800,
+        "gloryMissing": 1800,
+        "progress": 0,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 2165 de Gloire",
+      "_label": "rang pour 14999 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 2165,
-        "mythic": false
-      },
-      "expected": {
-        "rank": "voix",
-        "division": 3,
-        "divisionMinGlory": 1500,
-        "nextRank": "voix",
-        "nextDivision": 2,
-        "nextMinGlory": 2166,
-        "gloryMissing": 1,
-        "progress": 0.998498
-      }
-    },
-    {
-      "_label": "rang pour 2166 de Gloire",
-      "input": {
-        "law": "glory-standing",
-        "glory": 2166,
-        "mythic": false
-      },
-      "expected": {
-        "rank": "voix",
-        "division": 2,
-        "divisionMinGlory": 2166,
-        "nextRank": "voix",
-        "nextDivision": 1,
-        "nextMinGlory": 2833,
-        "gloryMissing": 667,
-        "progress": 0
-      }
-    },
-    {
-      "_label": "rang pour 2832 de Gloire",
-      "input": {
-        "law": "glory-standing",
-        "glory": 2832,
-        "mythic": false
-      },
-      "expected": {
-        "rank": "voix",
-        "division": 2,
-        "divisionMinGlory": 2166,
-        "nextRank": "voix",
-        "nextDivision": 1,
-        "nextMinGlory": 2833,
-        "gloryMissing": 1,
-        "progress": 0.998501
-      }
-    },
-    {
-      "_label": "rang pour 2833 de Gloire",
-      "input": {
-        "law": "glory-standing",
-        "glory": 2833,
+        "glory": 14999,
         "mythic": false
       },
       "expected": {
         "rank": "voix",
         "division": 1,
-        "divisionMinGlory": 2833,
+        "division5": 1,
+        "divisionMinGlory": 13200,
         "nextRank": "conteur",
         "nextDivision": 3,
-        "nextMinGlory": 3500,
-        "gloryMissing": 667,
-        "progress": 0
-      }
-    },
-    {
-      "_label": "rang pour 3499 de Gloire",
-      "input": {
-        "law": "glory-standing",
-        "glory": 3499,
-        "mythic": false
-      },
-      "expected": {
-        "rank": "voix",
-        "division": 1,
-        "divisionMinGlory": 2833,
-        "nextRank": "conteur",
-        "nextDivision": 3,
-        "nextMinGlory": 3500,
+        "nextDivision5": 5,
+        "nextMinGlory": 15000,
         "gloryMissing": 1,
-        "progress": 0.998501
+        "progress": 0.999444,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 3500 de Gloire",
+      "_label": "rang pour 15000 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 3500,
+        "glory": 15000,
         "mythic": false
       },
       "expected": {
         "rank": "conteur",
         "division": 3,
-        "divisionMinGlory": 3500,
+        "division5": 5,
+        "divisionMinGlory": 15000,
         "nextRank": "conteur",
-        "nextDivision": 2,
-        "nextMinGlory": 4666,
-        "gloryMissing": 1166,
-        "progress": 0
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 19000,
+        "gloryMissing": 4000,
+        "progress": 0,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 6999 de Gloire",
+      "_label": "rang pour 34999 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 6999,
+        "glory": 34999,
         "mythic": false
       },
       "expected": {
         "rank": "conteur",
         "division": 1,
-        "divisionMinGlory": 5833,
+        "division5": 1,
+        "divisionMinGlory": 31000,
         "nextRank": "passeur",
         "nextDivision": 3,
-        "nextMinGlory": 7000,
+        "nextDivision5": 5,
+        "nextMinGlory": 35000,
         "gloryMissing": 1,
-        "progress": 0.999143
+        "progress": 0.99975,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 12000 de Gloire",
+      "_label": "rang pour 35000 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 12000,
+        "glory": 35000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "passeur",
+        "division": 3,
+        "division5": 5,
+        "divisionMinGlory": 35000,
+        "nextRank": "passeur",
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 42000,
+        "gloryMissing": 7000,
+        "progress": 0,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 69999 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 69999,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "passeur",
+        "division": 1,
+        "division5": 1,
+        "divisionMinGlory": 63000,
+        "nextRank": "polyglotte",
+        "nextDivision": 3,
+        "nextDivision5": 5,
+        "nextMinGlory": 70000,
+        "gloryMissing": 1,
+        "progress": 0.999857,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 70000 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 70000,
         "mythic": false
       },
       "expected": {
         "rank": "polyglotte",
         "division": 3,
-        "divisionMinGlory": 12000,
+        "division5": 5,
+        "divisionMinGlory": 70000,
         "nextRank": "polyglotte",
-        "nextDivision": 2,
-        "nextMinGlory": 14666,
-        "gloryMissing": 2666,
-        "progress": 0
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 82000,
+        "gloryMissing": 12000,
+        "progress": 0,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 31999 de Gloire",
+      "_label": "rang pour 129999 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 31999,
+        "glory": 129999,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "polyglotte",
+        "division": 1,
+        "division5": 1,
+        "divisionMinGlory": 118000,
+        "nextRank": "ambassadeur",
+        "nextDivision": 3,
+        "nextDivision5": 5,
+        "nextMinGlory": 130000,
+        "gloryMissing": 1,
+        "progress": 0.999917,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 130000 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 130000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "ambassadeur",
+        "division": 3,
+        "division5": 5,
+        "divisionMinGlory": 130000,
+        "nextRank": "ambassadeur",
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 150000,
+        "gloryMissing": 20000,
+        "progress": 0,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 229999 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 229999,
         "mythic": false
       },
       "expected": {
         "rank": "ambassadeur",
         "division": 1,
-        "divisionMinGlory": 28000,
+        "division5": 1,
+        "divisionMinGlory": 210000,
         "nextRank": "orateur",
         "nextDivision": 3,
-        "nextMinGlory": 32000,
+        "nextDivision5": 5,
+        "nextMinGlory": 230000,
         "gloryMissing": 1,
-        "progress": 0.99975
+        "progress": 0.99995,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 79999 de Gloire",
+      "_label": "rang pour 230000 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 79999,
+        "glory": 230000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "orateur",
+        "division": 3,
+        "division5": 5,
+        "divisionMinGlory": 230000,
+        "nextRank": "orateur",
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 260000,
+        "gloryMissing": 30000,
+        "progress": 0,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 379999 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 379999,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "orateur",
+        "division": 1,
+        "division5": 1,
+        "divisionMinGlory": 350000,
+        "nextRank": "oracle",
+        "nextDivision": 3,
+        "nextDivision5": 5,
+        "nextMinGlory": 380000,
+        "gloryMissing": 1,
+        "progress": 0.999967,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 380000 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 380000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "oracle",
+        "division": 3,
+        "division5": 5,
+        "divisionMinGlory": 380000,
+        "nextRank": "oracle",
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 424000,
+        "gloryMissing": 44000,
+        "progress": 0,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 599999 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 599999,
         "mythic": false
       },
       "expected": {
         "rank": "oracle",
         "division": 1,
-        "divisionMinGlory": 70000,
+        "division5": 1,
+        "divisionMinGlory": 556000,
         "nextRank": "legende",
         "nextDivision": 3,
-        "nextMinGlory": 80000,
+        "nextDivision5": 5,
+        "nextMinGlory": 600000,
         "gloryMissing": 1,
-        "progress": 0.9999
+        "progress": 0.999977,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 80000 de Gloire",
+      "_label": "rang pour 600000 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 80000,
+        "glory": 600000,
         "mythic": false
       },
       "expected": {
         "rank": "legende",
         "division": 3,
-        "divisionMinGlory": 80000,
+        "division5": 5,
+        "divisionMinGlory": 600000,
         "nextRank": "legende",
-        "nextDivision": 2,
-        "nextMinGlory": 120000,
-        "gloryMissing": 40000,
-        "progress": 0
+        "nextDivision": 3,
+        "nextDivision5": 4,
+        "nextMinGlory": 680000,
+        "gloryMissing": 80000,
+        "progress": 0,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 119999 de Gloire",
+      "_label": "rang pour 680000 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 119999,
+        "glory": 680000,
         "mythic": false
       },
       "expected": {
         "rank": "legende",
         "division": 3,
-        "divisionMinGlory": 80000,
+        "division5": 4,
+        "divisionMinGlory": 680000,
         "nextRank": "legende",
         "nextDivision": 2,
-        "nextMinGlory": 120000,
-        "gloryMissing": 1,
-        "progress": 0.999975
+        "nextDivision5": 3,
+        "nextMinGlory": 760000,
+        "gloryMissing": 80000,
+        "progress": 0,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 120000 de Gloire",
+      "_label": "rang pour 919999 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 120000,
+        "glory": 919999,
         "mythic": false
       },
       "expected": {
         "rank": "legende",
         "division": 2,
-        "divisionMinGlory": 120000,
+        "division5": 2,
+        "divisionMinGlory": 840000,
         "nextRank": "legende",
         "nextDivision": 1,
-        "nextMinGlory": 160000,
-        "gloryMissing": 40000,
-        "progress": 0
-      }
-    },
-    {
-      "_label": "rang pour 159999 de Gloire",
-      "input": {
-        "law": "glory-standing",
-        "glory": 159999,
-        "mythic": false
-      },
-      "expected": {
-        "rank": "legende",
-        "division": 2,
-        "divisionMinGlory": 120000,
-        "nextRank": "legende",
-        "nextDivision": 1,
-        "nextMinGlory": 160000,
+        "nextDivision5": 1,
+        "nextMinGlory": 920000,
         "gloryMissing": 1,
-        "progress": 0.999975
+        "progress": 0.999988,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 160000 de Gloire",
+      "_label": "rang pour 920000 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 160000,
+        "glory": 920000,
         "mythic": false
       },
       "expected": {
         "rank": "legende",
         "division": 1,
-        "divisionMinGlory": 160000,
+        "division5": 1,
+        "divisionMinGlory": 920000,
         "nextRank": null,
         "nextDivision": null,
+        "nextDivision5": null,
         "nextMinGlory": null,
         "gloryMissing": null,
-        "progress": 1
+        "progress": 1,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "rang pour 900000 de Gloire",
+      "_label": "rang pour 999999 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 900000,
+        "glory": 999999,
         "mythic": false
       },
       "expected": {
         "rank": "legende",
         "division": 1,
-        "divisionMinGlory": 160000,
+        "division5": 1,
+        "divisionMinGlory": 920000,
         "nextRank": null,
         "nextDivision": null,
+        "nextDivision5": null,
         "nextMinGlory": null,
         "gloryMissing": null,
-        "progress": 1
+        "progress": 1,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "Mythe sur le drapeau du serveur",
+      "_label": "rang pour 1000000 de Gloire",
       "input": {
         "law": "glory-standing",
-        "glory": 200000,
+        "glory": 1000000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "legende",
+        "division": 1,
+        "division5": 1,
+        "divisionMinGlory": 920000,
+        "nextRank": null,
+        "nextDivision": null,
+        "nextDivision5": null,
+        "nextMinGlory": null,
+        "gloryMissing": null,
+        "progress": 1,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "rang pour 3000000 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 3000000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "legende",
+        "division": 1,
+        "division5": 1,
+        "divisionMinGlory": 920000,
+        "nextRank": null,
+        "nextDivision": null,
+        "nextDivision5": null,
+        "nextMinGlory": null,
+        "gloryMissing": null,
+        "progress": 1,
+        "mythicNumber": null
+      }
+    },
+    {
+      "_label": "Mythe n° 1 servi par le serveur",
+      "input": {
+        "law": "glory-standing",
+        "glory": 1000000,
+        "mythic": true,
+        "mythicNumber": 1
+      },
+      "expected": {
+        "rank": "mythe",
+        "division": null,
+        "division5": null,
+        "divisionMinGlory": null,
+        "nextRank": null,
+        "nextDivision": null,
+        "nextDivision5": null,
+        "nextMinGlory": null,
+        "gloryMissing": null,
+        "progress": 1,
+        "mythicNumber": 1
+      }
+    },
+    {
+      "_label": "Mythe n° 100, place définitive même sous le seuil",
+      "input": {
+        "law": "glory-standing",
+        "glory": 3000,
+        "mythic": true,
+        "mythicNumber": 100
+      },
+      "expected": {
+        "rank": "mythe",
+        "division": null,
+        "division5": null,
+        "divisionMinGlory": null,
+        "nextRank": null,
+        "nextDivision": null,
+        "nextDivision5": null,
+        "nextMinGlory": null,
+        "gloryMissing": null,
+        "progress": 1,
+        "mythicNumber": 100
+      }
+    },
+    {
+      "_label": "Mythe sur le seul drapeau, sans numéro",
+      "input": {
+        "law": "glory-standing",
+        "glory": 1200000,
         "mythic": true
       },
       "expected": {
         "rank": "mythe",
         "division": null,
+        "division5": null,
         "divisionMinGlory": null,
         "nextRank": null,
         "nextDivision": null,
+        "nextDivision5": null,
         "nextMinGlory": null,
         "gloryMissing": null,
-        "progress": 1
+        "progress": 1,
+        "mythicNumber": null
       }
     },
     {
-      "_label": "Mythe refusé sous Légende",
+      "_label": "numéro 101 ignoré : Légende I",
       "input": {
         "law": "glory-standing",
-        "glory": 3000,
-        "mythic": true
+        "glory": 1000000,
+        "mythic": false,
+        "mythicNumber": 101
       },
       "expected": {
-        "rank": "voix",
+        "rank": "legende",
         "division": 1,
-        "divisionMinGlory": 2833,
-        "nextRank": "conteur",
-        "nextDivision": 3,
-        "nextMinGlory": 3500,
-        "gloryMissing": 500,
-        "progress": 0.250375
+        "division5": 1,
+        "divisionMinGlory": 920000,
+        "nextRank": null,
+        "nextDivision": null,
+        "nextDivision5": null,
+        "nextMinGlory": null,
+        "gloryMissing": null,
+        "progress": 1,
+        "mythicNumber": null
       }
     },
     {
@@ -1105,8 +1471,8 @@
         "longest": 7
       },
       "expected": {
-        "achievement": 10,
-        "newLevels": 80,
+        "achievement": 100,
+        "newLevels": 400,
         "flameRecords": 50
       }
     },
@@ -1121,7 +1487,7 @@
         "longest": 31
       },
       "expected": {
-        "achievement": 25,
+        "achievement": 250,
         "newLevels": 0,
         "flameRecords": 200
       }
@@ -1137,8 +1503,8 @@
         "longest": 365
       },
       "expected": {
-        "achievement": 60,
-        "newLevels": 20,
+        "achievement": 600,
+        "newLevels": 100,
         "flameRecords": 2500
       }
     },
@@ -1153,8 +1519,8 @@
         "longest": 400
       },
       "expected": {
-        "achievement": 150,
-        "newLevels": 20,
+        "achievement": 1500,
+        "newLevels": 100,
         "flameRecords": 0
       }
     },
@@ -1169,8 +1535,8 @@
         "longest": 0
       },
       "expected": {
-        "achievement": 400,
-        "newLevels": 40,
+        "achievement": 4000,
+        "newLevels": 200,
         "flameRecords": 0
       }
     },
@@ -2259,7 +2625,7 @@
             "prism": false,
             "target": 8,
             "reward": 126,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2268,7 +2634,7 @@
             "prism": false,
             "target": 5,
             "reward": 200,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "hard",
@@ -2277,7 +2643,7 @@
             "prism": false,
             "target": 1,
             "reward": 586,
-            "glory": 0
+            "glory": 250
           }
         ]
       }
@@ -2304,7 +2670,7 @@
             "prism": false,
             "target": 5,
             "reward": 179,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2313,7 +2679,7 @@
             "prism": false,
             "target": 6,
             "reward": 388,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "gold",
@@ -2322,7 +2688,7 @@
             "prism": false,
             "target": 25,
             "reward": 1584,
-            "glory": 40
+            "glory": 500
           }
         ]
       }
@@ -2349,7 +2715,7 @@
             "prism": false,
             "target": 8,
             "reward": 149,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2358,7 +2724,7 @@
             "prism": false,
             "target": 2,
             "reward": 172,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "hard",
@@ -2367,7 +2733,7 @@
             "prism": true,
             "target": 8,
             "reward": 400,
-            "glory": 0
+            "glory": 250
           }
         ]
       }
@@ -2394,7 +2760,7 @@
             "prism": false,
             "target": 7,
             "reward": 161,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2403,7 +2769,7 @@
             "prism": true,
             "target": 2,
             "reward": 201,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "gold",
@@ -2412,7 +2778,7 @@
             "prism": false,
             "target": 1,
             "reward": 1209,
-            "glory": 40
+            "glory": 500
           }
         ]
       }
@@ -2439,7 +2805,7 @@
             "prism": false,
             "target": 8,
             "reward": 126,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2448,7 +2814,7 @@
             "prism": false,
             "target": 2,
             "reward": 186,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "hard",
@@ -2457,7 +2823,7 @@
             "prism": false,
             "target": 3,
             "reward": 315,
-            "glory": 0
+            "glory": 250
           }
         ]
       }
@@ -2484,7 +2850,7 @@
             "prism": false,
             "target": 13,
             "reward": 301,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2493,7 +2859,7 @@
             "prism": false,
             "target": 2,
             "reward": 332,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "gold",
@@ -2502,7 +2868,7 @@
             "prism": false,
             "target": 1,
             "reward": 1456,
-            "glory": 40
+            "glory": 500
           }
         ]
       }
@@ -2529,7 +2895,7 @@
             "prism": false,
             "target": 8,
             "reward": 149,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2538,7 +2904,7 @@
             "prism": true,
             "target": 4,
             "reward": 200,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "hard",
@@ -2547,7 +2913,7 @@
             "prism": false,
             "target": 3,
             "reward": 400,
-            "glory": 0
+            "glory": 250
           }
         ]
       }
@@ -2574,7 +2940,7 @@
             "prism": false,
             "target": 7,
             "reward": 161,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2583,7 +2949,7 @@
             "prism": false,
             "target": 2,
             "reward": 201,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "gold",
@@ -2592,7 +2958,7 @@
             "prism": false,
             "target": 13,
             "reward": 799,
-            "glory": 40
+            "glory": 500
           }
         ]
       }
@@ -2619,7 +2985,7 @@
             "prism": false,
             "target": 8,
             "reward": 194,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2628,7 +2994,7 @@
             "prism": true,
             "target": 2,
             "reward": 172,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "hard",
@@ -2637,7 +3003,7 @@
             "prism": true,
             "target": 8,
             "reward": 400,
-            "glory": 0
+            "glory": 250
           }
         ]
       }
@@ -2664,7 +3030,7 @@
             "prism": false,
             "target": 13,
             "reward": 501,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2673,7 +3039,7 @@
             "prism": true,
             "target": 3,
             "reward": 358,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "gold",
@@ -2682,7 +3048,7 @@
             "prism": false,
             "target": 3,
             "reward": 1124,
-            "glory": 40
+            "glory": 500
           }
         ]
       }
@@ -2709,7 +3075,7 @@
             "prism": false,
             "target": 4,
             "reward": 92,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2718,7 +3084,7 @@
             "prism": false,
             "target": 2,
             "reward": 172,
-            "glory": 40
+            "glory": 100
           },
           {
             "difficulty": "hard",
@@ -2727,7 +3093,7 @@
             "prism": false,
             "target": 16,
             "reward": 503,
-            "glory": 0
+            "glory": 250
           }
         ]
       }
@@ -2754,7 +3120,7 @@
             "prism": false,
             "target": 7,
             "reward": 138,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2763,7 +3129,7 @@
             "prism": false,
             "target": 2,
             "reward": 201,
-            "glory": 40
+            "glory": 100
           },
           {
             "difficulty": "gold",
@@ -2772,7 +3138,7 @@
             "prism": false,
             "target": 11,
             "reward": 814,
-            "glory": 40
+            "glory": 500
           }
         ]
       }
@@ -2799,7 +3165,7 @@
             "prism": false,
             "target": 8,
             "reward": 149,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2808,7 +3174,7 @@
             "prism": true,
             "target": 4,
             "reward": 200,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "hard",
@@ -2817,7 +3183,7 @@
             "prism": false,
             "target": 3,
             "reward": 400,
-            "glory": 0
+            "glory": 250
           }
         ]
       }
@@ -2844,7 +3210,7 @@
             "prism": false,
             "target": 13,
             "reward": 368,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2853,7 +3219,7 @@
             "prism": true,
             "target": 5,
             "reward": 396,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "gold",
@@ -2862,7 +3228,7 @@
             "prism": false,
             "target": 6,
             "reward": 1201,
-            "glory": 40
+            "glory": 500
           }
         ]
       }
@@ -2889,7 +3255,7 @@
             "prism": false,
             "target": 4,
             "reward": 92,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2898,7 +3264,7 @@
             "prism": false,
             "target": 2,
             "reward": 172,
-            "glory": 40
+            "glory": 100
           },
           {
             "difficulty": "hard",
@@ -2907,7 +3273,7 @@
             "prism": true,
             "target": 2,
             "reward": 300,
-            "glory": 0
+            "glory": 250
           }
         ]
       }
@@ -2934,7 +3300,7 @@
             "prism": false,
             "target": 3,
             "reward": 97,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2943,7 +3309,7 @@
             "prism": false,
             "target": 2,
             "reward": 201,
-            "glory": 40
+            "glory": 100
           },
           {
             "difficulty": "gold",
@@ -2952,7 +3318,7 @@
             "prism": true,
             "target": 7,
             "reward": 714,
-            "glory": 40
+            "glory": 500
           }
         ]
       }
@@ -2982,7 +3348,7 @@
             "prism": false,
             "target": 4,
             "reward": 92,
-            "glory": 0
+            "glory": 40
           },
           {
             "difficulty": "medium",
@@ -2991,7 +3357,7 @@
             "prism": false,
             "target": 5,
             "reward": 200,
-            "glory": 0
+            "glory": 100
           },
           {
             "difficulty": "hard",
@@ -3000,7 +3366,7 @@
             "prism": false,
             "target": 1,
             "reward": 586,
-            "glory": 0
+            "glory": 250
           }
         ]
       }
@@ -3024,7 +3390,7 @@
           "prism": false,
           "target": 4,
           "reward": 102,
-          "glory": 0
+          "glory": 40
         }
       }
     },
@@ -3047,7 +3413,7 @@
           "prism": false,
           "target": 2,
           "reward": 207,
-          "glory": 0
+          "glory": 100
         }
       }
     },
@@ -3070,7 +3436,7 @@
           "prism": false,
           "target": 3,
           "reward": 447,
-          "glory": 0
+          "glory": 250
         }
       }
     },
@@ -6573,7 +6939,7 @@
             "nextLeague": "saphir",
             "promoted": true,
             "relegated": false,
-            "glory": 130
+            "glory": 1300
           }
         },
         "promoted": [
@@ -6606,7 +6972,7 @@
             "bronze"
           ]
         ],
-        "gloryTotal": 510,
+        "gloryTotal": 5100,
         "pointsToPromotion": 0
       }
     },
@@ -6816,7 +7182,7 @@
             "bronze"
           ]
         ],
-        "gloryTotal": 510,
+        "gloryTotal": 5100,
         "pointsToPromotion": 51
       }
     },
@@ -7026,7 +7392,7 @@
             "bronze"
           ]
         ],
-        "gloryTotal": 510,
+        "gloryTotal": 5100,
         "pointsToPromotion": 231
       }
     },
@@ -7203,7 +7569,7 @@
             "nextLeague": "prisme",
             "promoted": false,
             "relegated": false,
-            "glory": 100
+            "glory": 1000
           }
         },
         "promoted": [],
@@ -7228,7 +7594,7 @@
             "bronze"
           ]
         ],
-        "gloryTotal": 300,
+        "gloryTotal": 3000,
         "pointsToPromotion": null
       }
     },
@@ -7432,7 +7798,7 @@
             "bronze"
           ]
         ],
-        "gloryTotal": 510,
+        "gloryTotal": 5100,
         "pointsToPromotion": 231
       }
     },
@@ -7514,7 +7880,7 @@
             "nextLeague": "jade",
             "promoted": true,
             "relegated": false,
-            "glory": 130
+            "glory": 1300
           }
         },
         "promoted": [
@@ -7533,7 +7899,7 @@
             "gold"
           ]
         ],
-        "gloryTotal": 130,
+        "gloryTotal": 1300,
         "pointsToPromotion": 0
       }
     },
@@ -7594,7 +7960,7 @@
             "silver"
           ]
         ],
-        "gloryTotal": 230,
+        "gloryTotal": 2300,
         "pointsToPromotion": 81
       }
     },
@@ -7626,7 +7992,7 @@
             "nextLeague": "rubis",
             "promoted": false,
             "relegated": false,
-            "glory": 100
+            "glory": 1000
           }
         },
         "promoted": [],
@@ -7637,7 +8003,7 @@
             "gold"
           ]
         ],
-        "gloryTotal": 100,
+        "gloryTotal": 1000,
         "pointsToPromotion": 0
       }
     },
@@ -9353,7 +9719,7 @@
       },
       "expected": {
         "completed": true,
-        "glory": 500,
+        "glory": 5000,
         "cup": true,
         "badgeKey": "season.1"
       }
@@ -9395,7 +9761,7 @@
       },
       "expected": {
         "completed": true,
-        "glory": 500,
+        "glory": 5000,
         "cup": true,
         "badgeKey": "season.1"
       }
@@ -10569,7 +10935,7 @@
         "scoreAfter": 0,
         "levelAfter": 1,
         "levelRecordAfter": 1,
-        "gloryGained": 1000,
+        "gloryGained": 10000,
         "trophyKey": "trophy.prestige.1"
       }
     },
@@ -10610,7 +10976,7 @@
         "scoreAfter": 0,
         "levelAfter": 1,
         "levelRecordAfter": 1,
-        "gloryGained": 1000,
+        "gloryGained": 10000,
         "trophyKey": "trophy.prestige.5"
       }
     },
@@ -10649,7 +11015,7 @@
         "rarity": "common",
         "measured": "common",
         "border": "slate",
-        "glory": 10
+        "glory": 100
       }
     },
     {
@@ -10663,7 +11029,7 @@
         "rarity": "common",
         "measured": "common",
         "border": "slate",
-        "glory": 10
+        "glory": 100
       }
     },
     {
@@ -10677,7 +11043,7 @@
         "rarity": "rare",
         "measured": "rare",
         "border": "blue",
-        "glory": 25
+        "glory": 250
       }
     },
     {
@@ -10691,7 +11057,7 @@
         "rarity": "rare",
         "measured": "rare",
         "border": "blue",
-        "glory": 25
+        "glory": 250
       }
     },
     {
@@ -10705,7 +11071,7 @@
         "rarity": "epic",
         "measured": "epic",
         "border": "violet",
-        "glory": 60
+        "glory": 600
       }
     },
     {
@@ -10719,7 +11085,7 @@
         "rarity": "epic",
         "measured": "epic",
         "border": "violet",
-        "glory": 60
+        "glory": 600
       }
     },
     {
@@ -10733,7 +11099,7 @@
         "rarity": "legendary",
         "measured": "legendary",
         "border": "gold",
-        "glory": 150
+        "glory": 1500
       }
     },
     {
@@ -10747,7 +11113,7 @@
         "rarity": "legendary",
         "measured": "legendary",
         "border": "gold",
-        "glory": 150
+        "glory": 1500
       }
     },
     {
@@ -10761,7 +11127,7 @@
         "rarity": "mythic",
         "measured": "mythic",
         "border": "prism",
-        "glory": 400
+        "glory": 4000
       }
     },
     {
@@ -10775,7 +11141,7 @@
         "rarity": "mythic",
         "measured": "mythic",
         "border": "prism",
-        "glory": 400
+        "glory": 4000
       }
     },
     {
@@ -10789,7 +11155,7 @@
         "rarity": "legendary",
         "measured": "legendary",
         "border": "gold",
-        "glory": 150
+        "glory": 1500
       }
     },
     {
@@ -10803,7 +11169,7 @@
         "rarity": "mythic",
         "measured": null,
         "border": null,
-        "glory": 10
+        "glory": 100
       }
     },
     {
@@ -10817,7 +11183,7 @@
         "rarity": "legendary",
         "measured": "legendary",
         "border": "gold",
-        "glory": 150
+        "glory": 1500
       }
     },
     {
@@ -10865,631 +11231,1344 @@
       }
     },
     {
-      "_label": "Mythe, cas 1",
+      "_label": "places du Mythe : aucune arrivée",
       "input": {
-        "law": "mythic",
-        "candidates": []
+        "law": "mythic-seats",
+        "taken": 0,
+        "seated": [],
+        "arrivals": []
       },
       "expected": {
-        "ids": []
+        "grants": []
       }
     },
     {
-      "_label": "Mythe, cas 2",
+      "_label": "places du Mythe : ordre d’arrivée, puis identifiant, 999 999 refusé",
       "input": {
-        "law": "mythic",
-        "candidates": [
-          {
-            "userId": "a",
-            "glory": 80010
-          },
+        "law": "mythic-seats",
+        "taken": 3,
+        "seated": [
+          "z"
+        ],
+        "arrivals": [
           {
             "userId": "b",
-            "glory": 79999
+            "glory": 1000000,
+            "crossedAt": "2027-01-02T00:00:00.000Z"
+          },
+          {
+            "userId": "a",
+            "glory": 1000000,
+            "crossedAt": "2027-01-02T00:00:00.000Z"
           },
           {
             "userId": "c",
-            "glory": 80500
+            "glory": 1000000,
+            "crossedAt": "2027-01-01T00:00:00.000Z"
+          },
+          {
+            "userId": "z",
+            "glory": 1000000,
+            "crossedAt": "2027-01-01T00:00:00.000Z"
+          },
+          {
+            "userId": "low",
+            "glory": 999999,
+            "crossedAt": "2027-01-01T00:00:00.000Z"
           }
         ]
       },
       "expected": {
-        "ids": [
-          "c",
-          "a"
+        "grants": [
+          {
+            "userId": "c",
+            "number": 4
+          },
+          {
+            "userId": "a",
+            "number": 5
+          },
+          {
+            "userId": "b",
+            "number": 6
+          }
         ]
       }
     },
     {
-      "_label": "Mythe, cas 3",
+      "_label": "places du Mythe : la 100e se prend, la 101e jamais",
       "input": {
-        "law": "mythic",
-        "candidates": [
-          {
-            "userId": "u000",
-            "glory": 80000
-          },
-          {
-            "userId": "u001",
-            "glory": 80001
-          },
-          {
-            "userId": "u002",
-            "glory": 80002
-          },
-          {
-            "userId": "u003",
-            "glory": 80003
-          },
-          {
-            "userId": "u004",
-            "glory": 80004
-          },
-          {
-            "userId": "u005",
-            "glory": 80005
-          },
-          {
-            "userId": "u006",
-            "glory": 80006
-          },
-          {
-            "userId": "u007",
-            "glory": 80000
-          },
-          {
-            "userId": "u008",
-            "glory": 80001
-          },
-          {
-            "userId": "u009",
-            "glory": 80002
-          },
-          {
-            "userId": "u010",
-            "glory": 80003
-          },
-          {
-            "userId": "u011",
-            "glory": 80004
-          },
-          {
-            "userId": "u012",
-            "glory": 80005
-          },
-          {
-            "userId": "u013",
-            "glory": 80006
-          },
-          {
-            "userId": "u014",
-            "glory": 80000
-          },
-          {
-            "userId": "u015",
-            "glory": 80001
-          },
-          {
-            "userId": "u016",
-            "glory": 80002
-          },
-          {
-            "userId": "u017",
-            "glory": 80003
-          },
-          {
-            "userId": "u018",
-            "glory": 80004
-          },
-          {
-            "userId": "u019",
-            "glory": 80005
-          },
-          {
-            "userId": "u020",
-            "glory": 80006
-          },
-          {
-            "userId": "u021",
-            "glory": 80000
-          },
-          {
-            "userId": "u022",
-            "glory": 80001
-          },
-          {
-            "userId": "u023",
-            "glory": 80002
-          },
-          {
-            "userId": "u024",
-            "glory": 80003
-          },
-          {
-            "userId": "u025",
-            "glory": 80004
-          },
-          {
-            "userId": "u026",
-            "glory": 80005
-          },
-          {
-            "userId": "u027",
-            "glory": 80006
-          },
-          {
-            "userId": "u028",
-            "glory": 80000
-          },
-          {
-            "userId": "u029",
-            "glory": 80001
-          },
-          {
-            "userId": "u030",
-            "glory": 80002
-          },
-          {
-            "userId": "u031",
-            "glory": 80003
-          },
-          {
-            "userId": "u032",
-            "glory": 80004
-          },
-          {
-            "userId": "u033",
-            "glory": 80005
-          },
-          {
-            "userId": "u034",
-            "glory": 80006
-          },
-          {
-            "userId": "u035",
-            "glory": 80000
-          },
-          {
-            "userId": "u036",
-            "glory": 80001
-          },
-          {
-            "userId": "u037",
-            "glory": 80002
-          },
-          {
-            "userId": "u038",
-            "glory": 80003
-          },
-          {
-            "userId": "u039",
-            "glory": 80004
-          },
-          {
-            "userId": "u040",
-            "glory": 80005
-          },
-          {
-            "userId": "u041",
-            "glory": 80006
-          },
-          {
-            "userId": "u042",
-            "glory": 80000
-          },
-          {
-            "userId": "u043",
-            "glory": 80001
-          },
-          {
-            "userId": "u044",
-            "glory": 80002
-          },
-          {
-            "userId": "u045",
-            "glory": 80003
-          },
-          {
-            "userId": "u046",
-            "glory": 80004
-          },
-          {
-            "userId": "u047",
-            "glory": 80005
-          },
-          {
-            "userId": "u048",
-            "glory": 80006
-          },
-          {
-            "userId": "u049",
-            "glory": 80000
-          },
-          {
-            "userId": "u050",
-            "glory": 80001
-          },
-          {
-            "userId": "u051",
-            "glory": 80002
-          },
-          {
-            "userId": "u052",
-            "glory": 80003
-          },
-          {
-            "userId": "u053",
-            "glory": 80004
-          },
-          {
-            "userId": "u054",
-            "glory": 80005
-          },
-          {
-            "userId": "u055",
-            "glory": 80006
-          },
-          {
-            "userId": "u056",
-            "glory": 80000
-          },
-          {
-            "userId": "u057",
-            "glory": 80001
-          },
-          {
-            "userId": "u058",
-            "glory": 80002
-          },
-          {
-            "userId": "u059",
-            "glory": 80003
-          },
-          {
-            "userId": "u060",
-            "glory": 80004
-          },
-          {
-            "userId": "u061",
-            "glory": 80005
-          },
-          {
-            "userId": "u062",
-            "glory": 80006
-          },
-          {
-            "userId": "u063",
-            "glory": 80000
-          },
-          {
-            "userId": "u064",
-            "glory": 80001
-          },
-          {
-            "userId": "u065",
-            "glory": 80002
-          },
-          {
-            "userId": "u066",
-            "glory": 80003
-          },
-          {
-            "userId": "u067",
-            "glory": 80004
-          },
-          {
-            "userId": "u068",
-            "glory": 80005
-          },
-          {
-            "userId": "u069",
-            "glory": 80006
-          },
-          {
-            "userId": "u070",
-            "glory": 80000
-          },
-          {
-            "userId": "u071",
-            "glory": 80001
-          },
-          {
-            "userId": "u072",
-            "glory": 80002
-          },
-          {
-            "userId": "u073",
-            "glory": 80003
-          },
-          {
-            "userId": "u074",
-            "glory": 80004
-          },
-          {
-            "userId": "u075",
-            "glory": 80005
-          },
-          {
-            "userId": "u076",
-            "glory": 80006
-          },
-          {
-            "userId": "u077",
-            "glory": 80000
-          },
-          {
-            "userId": "u078",
-            "glory": 80001
-          },
-          {
-            "userId": "u079",
-            "glory": 80002
-          },
-          {
-            "userId": "u080",
-            "glory": 80003
-          },
-          {
-            "userId": "u081",
-            "glory": 80004
-          },
-          {
-            "userId": "u082",
-            "glory": 80005
-          },
-          {
-            "userId": "u083",
-            "glory": 80006
-          },
-          {
-            "userId": "u084",
-            "glory": 80000
-          },
-          {
-            "userId": "u085",
-            "glory": 80001
-          },
-          {
-            "userId": "u086",
-            "glory": 80002
-          },
-          {
-            "userId": "u087",
-            "glory": 80003
-          },
-          {
-            "userId": "u088",
-            "glory": 80004
-          },
-          {
-            "userId": "u089",
-            "glory": 80005
-          },
-          {
-            "userId": "u090",
-            "glory": 80006
-          },
-          {
-            "userId": "u091",
-            "glory": 80000
-          },
-          {
-            "userId": "u092",
-            "glory": 80001
-          },
-          {
-            "userId": "u093",
-            "glory": 80002
-          },
-          {
-            "userId": "u094",
-            "glory": 80003
-          },
-          {
-            "userId": "u095",
-            "glory": 80004
-          },
-          {
-            "userId": "u096",
-            "glory": 80005
-          },
-          {
-            "userId": "u097",
-            "glory": 80006
-          },
-          {
-            "userId": "u098",
-            "glory": 80000
-          },
-          {
-            "userId": "u099",
-            "glory": 80001
-          },
-          {
-            "userId": "u100",
-            "glory": 80002
-          },
-          {
-            "userId": "u101",
-            "glory": 80003
-          },
-          {
-            "userId": "u102",
-            "glory": 80004
-          },
-          {
-            "userId": "u103",
-            "glory": 80005
-          },
-          {
-            "userId": "u104",
-            "glory": 80006
-          },
-          {
-            "userId": "u105",
-            "glory": 80000
-          },
-          {
-            "userId": "u106",
-            "glory": 80001
-          },
-          {
-            "userId": "u107",
-            "glory": 80002
-          },
-          {
-            "userId": "u108",
-            "glory": 80003
-          },
-          {
-            "userId": "u109",
-            "glory": 80004
-          },
-          {
-            "userId": "u110",
-            "glory": 80005
-          },
-          {
-            "userId": "u111",
-            "glory": 80006
-          },
-          {
-            "userId": "u112",
-            "glory": 80000
-          },
-          {
-            "userId": "u113",
-            "glory": 80001
-          },
-          {
-            "userId": "u114",
-            "glory": 80002
-          },
-          {
-            "userId": "u115",
-            "glory": 80003
-          },
-          {
-            "userId": "u116",
-            "glory": 80004
-          },
-          {
-            "userId": "u117",
-            "glory": 80005
-          },
-          {
-            "userId": "u118",
-            "glory": 80006
-          },
-          {
-            "userId": "u119",
-            "glory": 80000
+        "law": "mythic-seats",
+        "taken": 99,
+        "seated": [],
+        "arrivals": [
+          {
+            "userId": "u1",
+            "glory": 1000000,
+            "crossedAt": "2027-01-01T00:00:00.000Z"
+          },
+          {
+            "userId": "u2",
+            "glory": 1000000,
+            "crossedAt": "2027-01-02T00:00:00.000Z"
           }
         ]
       },
       "expected": {
-        "ids": [
-          "u006",
-          "u013",
-          "u020",
-          "u027",
-          "u034",
-          "u041",
-          "u048",
-          "u055",
-          "u062",
-          "u069",
-          "u076",
-          "u083",
-          "u090",
-          "u097",
-          "u104",
-          "u111",
-          "u118",
-          "u005",
-          "u012",
-          "u019",
-          "u026",
-          "u033",
-          "u040",
-          "u047",
-          "u054",
-          "u061",
-          "u068",
-          "u075",
-          "u082",
-          "u089",
-          "u096",
-          "u103",
-          "u110",
-          "u117",
-          "u004",
-          "u011",
-          "u018",
-          "u025",
-          "u032",
-          "u039",
-          "u046",
-          "u053",
-          "u060",
-          "u067",
-          "u074",
-          "u081",
-          "u088",
-          "u095",
-          "u102",
-          "u109",
-          "u116",
-          "u003",
-          "u010",
-          "u017",
-          "u024",
-          "u031",
-          "u038",
-          "u045",
-          "u052",
-          "u059",
-          "u066",
-          "u073",
-          "u080",
-          "u087",
-          "u094",
-          "u101",
-          "u108",
-          "u115",
-          "u002",
-          "u009",
-          "u016",
-          "u023",
-          "u030",
-          "u037",
-          "u044",
-          "u051",
-          "u058",
-          "u065",
-          "u072",
-          "u079",
-          "u086",
-          "u093",
-          "u100",
-          "u107",
-          "u114",
-          "u001",
-          "u008",
-          "u015",
-          "u022",
-          "u029",
-          "u036",
-          "u043",
-          "u050",
-          "u057",
-          "u064",
-          "u071",
-          "u078",
-          "u085",
-          "u092",
-          "u099"
+        "grants": [
+          {
+            "userId": "u1",
+            "number": 100
+          }
         ]
+      }
+    },
+    {
+      "_label": "places du Mythe : toutes prises",
+      "input": {
+        "law": "mythic-seats",
+        "taken": 100,
+        "seated": [],
+        "arrivals": [
+          {
+            "userId": "u1",
+            "glory": 1000000,
+            "crossedAt": "2027-01-01T00:00:00.000Z"
+          }
+        ]
+      },
+      "expected": {
+        "grants": []
+      }
+    },
+    {
+      "_label": "arrivée au Mythe : premier gain qui atteint le seuil",
+      "input": {
+        "law": "mythic-crossing",
+        "gains": [
+          {
+            "delta": 500000,
+            "createdAt": "2027-01-02T00:00:00.000Z"
+          },
+          {
+            "delta": 600000,
+            "createdAt": "2027-03-01T00:00:00.000Z"
+          },
+          {
+            "delta": 500000,
+            "createdAt": "2026-12-01T00:00:00.000Z"
+          }
+        ]
+      },
+      "expected": {
+        "crossedAt": "2027-01-02T00:00:00.000Z"
+      }
+    },
+    {
+      "_label": "arrivée au Mythe : seuil jamais atteint",
+      "input": {
+        "law": "mythic-crossing",
+        "gains": [
+          {
+            "delta": 999999,
+            "createdAt": "2027-01-01T00:00:00.000Z"
+          }
+        ]
+      },
+      "expected": {
+        "crossedAt": null
+      }
+    },
+    {
+      "_label": "Signature unique du Mythe n° 1",
+      "input": {
+        "law": "mythic-signature",
+        "number": 1
+      },
+      "expected": {
+        "signature": {
+          "number": 1,
+          "hue": 0,
+          "halo": {
+            "cx": 512,
+            "cy": 512,
+            "inner": 380,
+            "outer": 430,
+            "strokeWidth": 28
+          },
+          "rays": [
+            {
+              "x1": 512,
+              "y1": 132,
+              "x2": 512,
+              "y2": 82
+            },
+            {
+              "x1": 702,
+              "y1": 182.9,
+              "x2": 727,
+              "y2": 139.6
+            },
+            {
+              "x1": 841.1,
+              "y1": 322,
+              "x2": 884.4,
+              "y2": 297
+            },
+            {
+              "x1": 892,
+              "y1": 512,
+              "x2": 942,
+              "y2": 512
+            },
+            {
+              "x1": 841.1,
+              "y1": 702,
+              "x2": 884.4,
+              "y2": 727
+            },
+            {
+              "x1": 702,
+              "y1": 841.1,
+              "x2": 727,
+              "y2": 884.4
+            },
+            {
+              "x1": 512,
+              "y1": 892,
+              "x2": 512,
+              "y2": 942
+            },
+            {
+              "x1": 322,
+              "y1": 841.1,
+              "x2": 297,
+              "y2": 884.4
+            },
+            {
+              "x1": 182.9,
+              "y1": 702,
+              "x2": 139.6,
+              "y2": 727
+            },
+            {
+              "x1": 132,
+              "y1": 512,
+              "x2": 82,
+              "y2": 512
+            },
+            {
+              "x1": 182.9,
+              "y1": 322,
+              "x2": 139.6,
+              "y2": 297
+            },
+            {
+              "x1": 322,
+              "y1": 182.9,
+              "x2": 297,
+              "y2": 139.6
+            }
+          ],
+          "gem": {
+            "cx": 659.7,
+            "cy": 57.4,
+            "r": 30,
+            "orbit": 478,
+            "angle": 18
+          },
+          "numeral": "1",
+          "engraving": {
+            "x": 512,
+            "y": 830
+          }
+        }
+      }
+    },
+    {
+      "_label": "Signature unique du Mythe n° 2",
+      "input": {
+        "law": "mythic-signature",
+        "number": 2
+      },
+      "expected": {
+        "signature": {
+          "number": 2,
+          "hue": 138,
+          "halo": {
+            "cx": 512,
+            "cy": 512,
+            "inner": 380,
+            "outer": 430,
+            "strokeWidth": 28
+          },
+          "rays": [
+            {
+              "x1": 512,
+              "y1": 132,
+              "x2": 512,
+              "y2": 82
+            },
+            {
+              "x1": 702,
+              "y1": 182.9,
+              "x2": 727,
+              "y2": 139.6
+            },
+            {
+              "x1": 841.1,
+              "y1": 322,
+              "x2": 884.4,
+              "y2": 297
+            },
+            {
+              "x1": 892,
+              "y1": 512,
+              "x2": 942,
+              "y2": 512
+            },
+            {
+              "x1": 841.1,
+              "y1": 702,
+              "x2": 884.4,
+              "y2": 727
+            },
+            {
+              "x1": 702,
+              "y1": 841.1,
+              "x2": 727,
+              "y2": 884.4
+            },
+            {
+              "x1": 512,
+              "y1": 892,
+              "x2": 512,
+              "y2": 942
+            },
+            {
+              "x1": 322,
+              "y1": 841.1,
+              "x2": 297,
+              "y2": 884.4
+            },
+            {
+              "x1": 182.9,
+              "y1": 702,
+              "x2": 139.6,
+              "y2": 727
+            },
+            {
+              "x1": 132,
+              "y1": 512,
+              "x2": 82,
+              "y2": 512
+            },
+            {
+              "x1": 182.9,
+              "y1": 322,
+              "x2": 139.6,
+              "y2": 297
+            },
+            {
+              "x1": 322,
+              "y1": 182.9,
+              "x2": 297,
+              "y2": 139.6
+            }
+          ],
+          "gem": {
+            "cx": 898.7,
+            "cy": 231,
+            "r": 30,
+            "orbit": 478,
+            "angle": 54
+          },
+          "numeral": "2",
+          "engraving": {
+            "x": 512,
+            "y": 830
+          }
+        }
+      }
+    },
+    {
+      "_label": "Signature unique du Mythe n° 10",
+      "input": {
+        "law": "mythic-signature",
+        "number": 10
+      },
+      "expected": {
+        "signature": {
+          "number": 10,
+          "hue": 158,
+          "halo": {
+            "cx": 512,
+            "cy": 512,
+            "inner": 380,
+            "outer": 430,
+            "strokeWidth": 28
+          },
+          "rays": [
+            {
+              "x1": 512,
+              "y1": 132,
+              "x2": 512,
+              "y2": 82
+            },
+            {
+              "x1": 702,
+              "y1": 182.9,
+              "x2": 727,
+              "y2": 139.6
+            },
+            {
+              "x1": 841.1,
+              "y1": 322,
+              "x2": 884.4,
+              "y2": 297
+            },
+            {
+              "x1": 892,
+              "y1": 512,
+              "x2": 942,
+              "y2": 512
+            },
+            {
+              "x1": 841.1,
+              "y1": 702,
+              "x2": 884.4,
+              "y2": 727
+            },
+            {
+              "x1": 702,
+              "y1": 841.1,
+              "x2": 727,
+              "y2": 884.4
+            },
+            {
+              "x1": 512,
+              "y1": 892,
+              "x2": 512,
+              "y2": 942
+            },
+            {
+              "x1": 322,
+              "y1": 841.1,
+              "x2": 297,
+              "y2": 884.4
+            },
+            {
+              "x1": 182.9,
+              "y1": 702,
+              "x2": 139.6,
+              "y2": 727
+            },
+            {
+              "x1": 132,
+              "y1": 512,
+              "x2": 82,
+              "y2": 512
+            },
+            {
+              "x1": 182.9,
+              "y1": 322,
+              "x2": 139.6,
+              "y2": 297
+            },
+            {
+              "x1": 322,
+              "y1": 182.9,
+              "x2": 297,
+              "y2": 139.6
+            }
+          ],
+          "gem": {
+            "cx": 364.3,
+            "cy": 57.4,
+            "r": 30,
+            "orbit": 478,
+            "angle": 342
+          },
+          "numeral": "10",
+          "engraving": {
+            "x": 512,
+            "y": 830
+          }
+        }
+      }
+    },
+    {
+      "_label": "Signature unique du Mythe n° 11",
+      "input": {
+        "law": "mythic-signature",
+        "number": 11
+      },
+      "expected": {
+        "signature": {
+          "number": 11,
+          "hue": 295,
+          "halo": {
+            "cx": 512,
+            "cy": 512,
+            "inner": 380,
+            "outer": 430,
+            "strokeWidth": 28
+          },
+          "rays": [
+            {
+              "x1": 512,
+              "y1": 132,
+              "x2": 512,
+              "y2": 82
+            },
+            {
+              "x1": 676.9,
+              "y1": 169.6,
+              "x2": 698.6,
+              "y2": 124.6
+            },
+            {
+              "x1": 809.1,
+              "y1": 275.1,
+              "x2": 848.2,
+              "y2": 243.9
+            },
+            {
+              "x1": 882.5,
+              "y1": 427.4,
+              "x2": 931.2,
+              "y2": 416.3
+            },
+            {
+              "x1": 882.5,
+              "y1": 596.6,
+              "x2": 931.2,
+              "y2": 607.7
+            },
+            {
+              "x1": 809.1,
+              "y1": 748.9,
+              "x2": 848.2,
+              "y2": 780.1
+            },
+            {
+              "x1": 676.9,
+              "y1": 854.4,
+              "x2": 698.6,
+              "y2": 899.4
+            },
+            {
+              "x1": 512,
+              "y1": 892,
+              "x2": 512,
+              "y2": 942
+            },
+            {
+              "x1": 347.1,
+              "y1": 854.4,
+              "x2": 325.4,
+              "y2": 899.4
+            },
+            {
+              "x1": 214.9,
+              "y1": 748.9,
+              "x2": 175.8,
+              "y2": 780.1
+            },
+            {
+              "x1": 141.5,
+              "y1": 596.6,
+              "x2": 92.8,
+              "y2": 607.7
+            },
+            {
+              "x1": 141.5,
+              "y1": 427.4,
+              "x2": 92.8,
+              "y2": 416.3
+            },
+            {
+              "x1": 214.9,
+              "y1": 275.1,
+              "x2": 175.8,
+              "y2": 243.9
+            },
+            {
+              "x1": 347.1,
+              "y1": 169.6,
+              "x2": 325.4,
+              "y2": 124.6
+            }
+          ],
+          "gem": {
+            "cx": 659.7,
+            "cy": 57.4,
+            "r": 30,
+            "orbit": 478,
+            "angle": 18
+          },
+          "numeral": "11",
+          "engraving": {
+            "x": 512,
+            "y": 830
+          }
+        }
+      }
+    },
+    {
+      "_label": "Signature unique du Mythe n° 42",
+      "input": {
+        "law": "mythic-signature",
+        "number": 42
+      },
+      "expected": {
+        "signature": {
+          "number": 42,
+          "hue": 238,
+          "halo": {
+            "cx": 512,
+            "cy": 512,
+            "inner": 380,
+            "outer": 430,
+            "strokeWidth": 28
+          },
+          "rays": [
+            {
+              "x1": 512,
+              "y1": 132,
+              "x2": 512,
+              "y2": 82
+            },
+            {
+              "x1": 629.4,
+              "y1": 150.6,
+              "x2": 644.9,
+              "y2": 103
+            },
+            {
+              "x1": 735.4,
+              "y1": 204.6,
+              "x2": 764.7,
+              "y2": 164.1
+            },
+            {
+              "x1": 819.4,
+              "y1": 288.6,
+              "x2": 859.9,
+              "y2": 259.3
+            },
+            {
+              "x1": 873.4,
+              "y1": 394.6,
+              "x2": 921,
+              "y2": 379.1
+            },
+            {
+              "x1": 892,
+              "y1": 512,
+              "x2": 942,
+              "y2": 512
+            },
+            {
+              "x1": 873.4,
+              "y1": 629.4,
+              "x2": 921,
+              "y2": 644.9
+            },
+            {
+              "x1": 819.4,
+              "y1": 735.4,
+              "x2": 859.9,
+              "y2": 764.7
+            },
+            {
+              "x1": 735.4,
+              "y1": 819.4,
+              "x2": 764.7,
+              "y2": 859.9
+            },
+            {
+              "x1": 629.4,
+              "y1": 873.4,
+              "x2": 644.9,
+              "y2": 921
+            },
+            {
+              "x1": 512,
+              "y1": 892,
+              "x2": 512,
+              "y2": 942
+            },
+            {
+              "x1": 394.6,
+              "y1": 873.4,
+              "x2": 379.1,
+              "y2": 921
+            },
+            {
+              "x1": 288.6,
+              "y1": 819.4,
+              "x2": 259.3,
+              "y2": 859.9
+            },
+            {
+              "x1": 204.6,
+              "y1": 735.4,
+              "x2": 164.1,
+              "y2": 764.7
+            },
+            {
+              "x1": 150.6,
+              "y1": 629.4,
+              "x2": 103,
+              "y2": 644.9
+            },
+            {
+              "x1": 132,
+              "y1": 512,
+              "x2": 82,
+              "y2": 512
+            },
+            {
+              "x1": 150.6,
+              "y1": 394.6,
+              "x2": 103,
+              "y2": 379.1
+            },
+            {
+              "x1": 204.6,
+              "y1": 288.6,
+              "x2": 164.1,
+              "y2": 259.3
+            },
+            {
+              "x1": 288.6,
+              "y1": 204.6,
+              "x2": 259.3,
+              "y2": 164.1
+            },
+            {
+              "x1": 394.6,
+              "y1": 150.6,
+              "x2": 379.1,
+              "y2": 103
+            }
+          ],
+          "gem": {
+            "cx": 898.7,
+            "cy": 231,
+            "r": 30,
+            "orbit": 478,
+            "angle": 54
+          },
+          "numeral": "42",
+          "engraving": {
+            "x": 512,
+            "y": 830
+          }
+        }
+      }
+    },
+    {
+      "_label": "Signature unique du Mythe n° 50",
+      "input": {
+        "law": "mythic-signature",
+        "number": 50
+      },
+      "expected": {
+        "signature": {
+          "number": 50,
+          "hue": 258,
+          "halo": {
+            "cx": 512,
+            "cy": 512,
+            "inner": 380,
+            "outer": 430,
+            "strokeWidth": 28
+          },
+          "rays": [
+            {
+              "x1": 512,
+              "y1": 132,
+              "x2": 512,
+              "y2": 82
+            },
+            {
+              "x1": 629.4,
+              "y1": 150.6,
+              "x2": 644.9,
+              "y2": 103
+            },
+            {
+              "x1": 735.4,
+              "y1": 204.6,
+              "x2": 764.7,
+              "y2": 164.1
+            },
+            {
+              "x1": 819.4,
+              "y1": 288.6,
+              "x2": 859.9,
+              "y2": 259.3
+            },
+            {
+              "x1": 873.4,
+              "y1": 394.6,
+              "x2": 921,
+              "y2": 379.1
+            },
+            {
+              "x1": 892,
+              "y1": 512,
+              "x2": 942,
+              "y2": 512
+            },
+            {
+              "x1": 873.4,
+              "y1": 629.4,
+              "x2": 921,
+              "y2": 644.9
+            },
+            {
+              "x1": 819.4,
+              "y1": 735.4,
+              "x2": 859.9,
+              "y2": 764.7
+            },
+            {
+              "x1": 735.4,
+              "y1": 819.4,
+              "x2": 764.7,
+              "y2": 859.9
+            },
+            {
+              "x1": 629.4,
+              "y1": 873.4,
+              "x2": 644.9,
+              "y2": 921
+            },
+            {
+              "x1": 512,
+              "y1": 892,
+              "x2": 512,
+              "y2": 942
+            },
+            {
+              "x1": 394.6,
+              "y1": 873.4,
+              "x2": 379.1,
+              "y2": 921
+            },
+            {
+              "x1": 288.6,
+              "y1": 819.4,
+              "x2": 259.3,
+              "y2": 859.9
+            },
+            {
+              "x1": 204.6,
+              "y1": 735.4,
+              "x2": 164.1,
+              "y2": 764.7
+            },
+            {
+              "x1": 150.6,
+              "y1": 629.4,
+              "x2": 103,
+              "y2": 644.9
+            },
+            {
+              "x1": 132,
+              "y1": 512,
+              "x2": 82,
+              "y2": 512
+            },
+            {
+              "x1": 150.6,
+              "y1": 394.6,
+              "x2": 103,
+              "y2": 379.1
+            },
+            {
+              "x1": 204.6,
+              "y1": 288.6,
+              "x2": 164.1,
+              "y2": 259.3
+            },
+            {
+              "x1": 288.6,
+              "y1": 204.6,
+              "x2": 259.3,
+              "y2": 164.1
+            },
+            {
+              "x1": 394.6,
+              "y1": 150.6,
+              "x2": 379.1,
+              "y2": 103
+            }
+          ],
+          "gem": {
+            "cx": 364.3,
+            "cy": 57.4,
+            "r": 30,
+            "orbit": 478,
+            "angle": 342
+          },
+          "numeral": "50",
+          "engraving": {
+            "x": 512,
+            "y": 830
+          }
+        }
+      }
+    },
+    {
+      "_label": "Signature unique du Mythe n° 91",
+      "input": {
+        "law": "mythic-signature",
+        "number": 91
+      },
+      "expected": {
+        "signature": {
+          "number": 91,
+          "hue": 136,
+          "halo": {
+            "cx": 512,
+            "cy": 512,
+            "inner": 380,
+            "outer": 430,
+            "strokeWidth": 28
+          },
+          "rays": [
+            {
+              "x1": 512,
+              "y1": 132,
+              "x2": 512,
+              "y2": 82
+            },
+            {
+              "x1": 591,
+              "y1": 140.3,
+              "x2": 601.4,
+              "y2": 91.4
+            },
+            {
+              "x1": 666.6,
+              "y1": 164.9,
+              "x2": 686.9,
+              "y2": 119.2
+            },
+            {
+              "x1": 735.4,
+              "y1": 204.6,
+              "x2": 764.7,
+              "y2": 164.1
+            },
+            {
+              "x1": 794.4,
+              "y1": 257.7,
+              "x2": 831.6,
+              "y2": 224.3
+            },
+            {
+              "x1": 841.1,
+              "y1": 322,
+              "x2": 884.4,
+              "y2": 297
+            },
+            {
+              "x1": 873.4,
+              "y1": 394.6,
+              "x2": 921,
+              "y2": 379.1
+            },
+            {
+              "x1": 889.9,
+              "y1": 472.3,
+              "x2": 939.6,
+              "y2": 467.1
+            },
+            {
+              "x1": 889.9,
+              "y1": 551.7,
+              "x2": 939.6,
+              "y2": 556.9
+            },
+            {
+              "x1": 873.4,
+              "y1": 629.4,
+              "x2": 921,
+              "y2": 644.9
+            },
+            {
+              "x1": 841.1,
+              "y1": 702,
+              "x2": 884.4,
+              "y2": 727
+            },
+            {
+              "x1": 794.4,
+              "y1": 766.3,
+              "x2": 831.6,
+              "y2": 799.7
+            },
+            {
+              "x1": 735.4,
+              "y1": 819.4,
+              "x2": 764.7,
+              "y2": 859.9
+            },
+            {
+              "x1": 666.6,
+              "y1": 859.1,
+              "x2": 686.9,
+              "y2": 904.8
+            },
+            {
+              "x1": 591,
+              "y1": 883.7,
+              "x2": 601.4,
+              "y2": 932.6
+            },
+            {
+              "x1": 512,
+              "y1": 892,
+              "x2": 512,
+              "y2": 942
+            },
+            {
+              "x1": 433,
+              "y1": 883.7,
+              "x2": 422.6,
+              "y2": 932.6
+            },
+            {
+              "x1": 357.4,
+              "y1": 859.1,
+              "x2": 337.1,
+              "y2": 904.8
+            },
+            {
+              "x1": 288.6,
+              "y1": 819.4,
+              "x2": 259.3,
+              "y2": 859.9
+            },
+            {
+              "x1": 229.6,
+              "y1": 766.3,
+              "x2": 192.4,
+              "y2": 799.7
+            },
+            {
+              "x1": 182.9,
+              "y1": 702,
+              "x2": 139.6,
+              "y2": 727
+            },
+            {
+              "x1": 150.6,
+              "y1": 629.4,
+              "x2": 103,
+              "y2": 644.9
+            },
+            {
+              "x1": 134.1,
+              "y1": 551.7,
+              "x2": 84.4,
+              "y2": 556.9
+            },
+            {
+              "x1": 134.1,
+              "y1": 472.3,
+              "x2": 84.4,
+              "y2": 467.1
+            },
+            {
+              "x1": 150.6,
+              "y1": 394.6,
+              "x2": 103,
+              "y2": 379.1
+            },
+            {
+              "x1": 182.9,
+              "y1": 322,
+              "x2": 139.6,
+              "y2": 297
+            },
+            {
+              "x1": 229.6,
+              "y1": 257.7,
+              "x2": 192.4,
+              "y2": 224.3
+            },
+            {
+              "x1": 288.6,
+              "y1": 204.6,
+              "x2": 259.3,
+              "y2": 164.1
+            },
+            {
+              "x1": 357.4,
+              "y1": 164.9,
+              "x2": 337.1,
+              "y2": 119.2
+            },
+            {
+              "x1": 433,
+              "y1": 140.3,
+              "x2": 422.6,
+              "y2": 91.4
+            }
+          ],
+          "gem": {
+            "cx": 659.7,
+            "cy": 57.4,
+            "r": 30,
+            "orbit": 478,
+            "angle": 18
+          },
+          "numeral": "91",
+          "engraving": {
+            "x": 512,
+            "y": 830
+          }
+        }
+      }
+    },
+    {
+      "_label": "Signature unique du Mythe n° 100",
+      "input": {
+        "law": "mythic-signature",
+        "number": 100
+      },
+      "expected": {
+        "signature": {
+          "number": 100,
+          "hue": 293,
+          "halo": {
+            "cx": 512,
+            "cy": 512,
+            "inner": 380,
+            "outer": 430,
+            "strokeWidth": 28
+          },
+          "rays": [
+            {
+              "x1": 512,
+              "y1": 132,
+              "x2": 512,
+              "y2": 82
+            },
+            {
+              "x1": 591,
+              "y1": 140.3,
+              "x2": 601.4,
+              "y2": 91.4
+            },
+            {
+              "x1": 666.6,
+              "y1": 164.9,
+              "x2": 686.9,
+              "y2": 119.2
+            },
+            {
+              "x1": 735.4,
+              "y1": 204.6,
+              "x2": 764.7,
+              "y2": 164.1
+            },
+            {
+              "x1": 794.4,
+              "y1": 257.7,
+              "x2": 831.6,
+              "y2": 224.3
+            },
+            {
+              "x1": 841.1,
+              "y1": 322,
+              "x2": 884.4,
+              "y2": 297
+            },
+            {
+              "x1": 873.4,
+              "y1": 394.6,
+              "x2": 921,
+              "y2": 379.1
+            },
+            {
+              "x1": 889.9,
+              "y1": 472.3,
+              "x2": 939.6,
+              "y2": 467.1
+            },
+            {
+              "x1": 889.9,
+              "y1": 551.7,
+              "x2": 939.6,
+              "y2": 556.9
+            },
+            {
+              "x1": 873.4,
+              "y1": 629.4,
+              "x2": 921,
+              "y2": 644.9
+            },
+            {
+              "x1": 841.1,
+              "y1": 702,
+              "x2": 884.4,
+              "y2": 727
+            },
+            {
+              "x1": 794.4,
+              "y1": 766.3,
+              "x2": 831.6,
+              "y2": 799.7
+            },
+            {
+              "x1": 735.4,
+              "y1": 819.4,
+              "x2": 764.7,
+              "y2": 859.9
+            },
+            {
+              "x1": 666.6,
+              "y1": 859.1,
+              "x2": 686.9,
+              "y2": 904.8
+            },
+            {
+              "x1": 591,
+              "y1": 883.7,
+              "x2": 601.4,
+              "y2": 932.6
+            },
+            {
+              "x1": 512,
+              "y1": 892,
+              "x2": 512,
+              "y2": 942
+            },
+            {
+              "x1": 433,
+              "y1": 883.7,
+              "x2": 422.6,
+              "y2": 932.6
+            },
+            {
+              "x1": 357.4,
+              "y1": 859.1,
+              "x2": 337.1,
+              "y2": 904.8
+            },
+            {
+              "x1": 288.6,
+              "y1": 819.4,
+              "x2": 259.3,
+              "y2": 859.9
+            },
+            {
+              "x1": 229.6,
+              "y1": 766.3,
+              "x2": 192.4,
+              "y2": 799.7
+            },
+            {
+              "x1": 182.9,
+              "y1": 702,
+              "x2": 139.6,
+              "y2": 727
+            },
+            {
+              "x1": 150.6,
+              "y1": 629.4,
+              "x2": 103,
+              "y2": 644.9
+            },
+            {
+              "x1": 134.1,
+              "y1": 551.7,
+              "x2": 84.4,
+              "y2": 556.9
+            },
+            {
+              "x1": 134.1,
+              "y1": 472.3,
+              "x2": 84.4,
+              "y2": 467.1
+            },
+            {
+              "x1": 150.6,
+              "y1": 394.6,
+              "x2": 103,
+              "y2": 379.1
+            },
+            {
+              "x1": 182.9,
+              "y1": 322,
+              "x2": 139.6,
+              "y2": 297
+            },
+            {
+              "x1": 229.6,
+              "y1": 257.7,
+              "x2": 192.4,
+              "y2": 224.3
+            },
+            {
+              "x1": 288.6,
+              "y1": 204.6,
+              "x2": 259.3,
+              "y2": 164.1
+            },
+            {
+              "x1": 357.4,
+              "y1": 164.9,
+              "x2": 337.1,
+              "y2": 119.2
+            },
+            {
+              "x1": 433,
+              "y1": 140.3,
+              "x2": 422.6,
+              "y2": 91.4
+            }
+          ],
+          "gem": {
+            "cx": 364.3,
+            "cy": 57.4,
+            "r": 30,
+            "orbit": 478,
+            "angle": 342
+          },
+          "numeral": "100",
+          "engraving": {
+            "x": 512,
+            "y": 830
+          }
+        }
+      }
+    },
+    {
+      "_label": "Signature unique du Mythe n° 0",
+      "input": {
+        "law": "mythic-signature",
+        "number": 0
+      },
+      "expected": {
+        "signature": null
+      }
+    },
+    {
+      "_label": "Signature unique du Mythe n° 101",
+      "input": {
+        "law": "mythic-signature",
+        "number": 101
+      },
+      "expected": {
+        "signature": null
       }
     },
     {

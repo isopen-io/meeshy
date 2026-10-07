@@ -1,36 +1,58 @@
 /**
- * GLOIRE ET RANGS (#9373) — la Gloire s'accumule dans un registre en ajout
- * seul, elle ne baisse jamais ; le rang se lit sur elle.
+ * GLOIRE ET RANGS (#9373, échelle de #9636) — la Gloire s'accumule dans un
+ * registre en ajout seul, elle ne baisse jamais ; le rang se lit sur elle.
  * `docs/product/jeu-meeshy-conception.html` § II.4.
  *
- * Dix rangs en trois divisions (III, II, I). Chaque intervalle est coupé en
- * tiers égaux (début + ⌊étendue × k ÷ 3⌋, en entiers). Légende n'a pas de
- * borne haute : ses divisions avancent par paliers de 40 000. Mythe n'est pas
- * un seuil mais un DRAPEAU que le serveur fournit (les 100 Légendes les plus
- * glorieuses) : le client ne le calcule jamais.
+ * Dix rangs, de Murmure (0) à Légende (600 000), chacun coupé en CINQ divisions
+ * égales : V au départ du rang, I juste avant le rang suivant (début +
+ * ⌊étendue × k ÷ 5⌋, en entiers). Légende a désormais une borne haute, le seuil
+ * du Mythe (1 000 000) : au-delà, faute de place, on reste Légende I.
+ *
+ * Mythe n'est pas un seuil mais une PLACE : les 100 premiers comptes qui
+ * atteignent 1 000 000 de Gloire, dans l'ordre d'arrivée, chacun avec son numéro
+ * (1 à 100). La place est définitive — la passerelle l'attribue et la sert, le
+ * client ne la calcule jamais (`mythe.ts`, `MythicSeat`).
+ *
+ * ## Rétrocompatibilité du fil (#9223)
+ *
+ * Les clients publiés ne connaissent que trois divisions (III, II, I) et les
+ * décodent STRICTEMENT (iOS : `GloryDivision` à trois cas ; web : `isDivision`).
+ * Le fil garde donc `division` dans 1–3 — sa projection héritée,
+ * `legacyGloryDivision` : V et IV → III, III et II → II, I → I — et porte la
+ * division à cinq crans dans un champ NEUF, `division5`.
  */
 
 import { newLevelsReached } from './levels.js';
 
+/** La Gloire de chaque source ponctuelle — les missions ont leur table, `MISSION_GLORY`. */
 export const GLORY_POINTS = {
-  mint: 100,
-  firstLevel: 20,
-  goldMission: 40,
-  leagueUp: 30,
-  leagueCup: 100,
-  season: 500,
-  prestige: 1000,
+  mint: 1000,
+  firstLevel: 100,
+  leagueUp: 300,
+  leagueCup: 1000,
+  season: 5000,
+  prestige: 10_000,
 } as const;
+
+/**
+ * La Gloire d'une mission du jour, par difficulté — la SEULE table que les
+ * missions lisent (`missionGlory`, `missions.ts`). Gravée sur la mission au
+ * tirage : un barème qui bouge ne réécrit pas une mission déjà tirée.
+ */
+export const MISSION_GLORY = { easy: 40, medium: 100, hard: 250, gold: 500 } as const;
+export type MissionGloryDifficulty = keyof typeof MISSION_GLORY;
+
+export const gloryForMission = (difficulty: MissionGloryDifficulty): number => MISSION_GLORY[difficulty];
 
 export const ACHIEVEMENT_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'] as const;
 export type AchievementRarity = (typeof ACHIEVEMENT_RARITIES)[number];
 
 const ACHIEVEMENT_GLORY: Readonly<Record<AchievementRarity, number>> = {
-  common: 10,
-  rare: 25,
-  epic: 60,
-  legendary: 150,
-  mythic: 400,
+  common: 100,
+  rare: 250,
+  epic: 600,
+  legendary: 1500,
+  mythic: 4000,
 };
 
 export const gloryForAchievement = (rarity: AchievementRarity): number => ACHIEVEMENT_GLORY[rarity];
@@ -52,83 +74,127 @@ export const gloryForFlameRecords = (params: { readonly previousLongest: number;
     0,
   );
 
+/** Le seuil du Mythe — et la borne haute de Légende. */
+export const MYTHE_GLORY = 1_000_000;
+/** Le nombre de places du Mythe : jamais une de plus. */
+export const MYTHE_SIZE = 100;
+
 export const GLORY_RANKS = [
   { key: 'murmure', minGlory: 0 },
-  { key: 'echo', minGlory: 500 },
-  { key: 'voix', minGlory: 1500 },
-  { key: 'conteur', minGlory: 3500 },
-  { key: 'passeur', minGlory: 7000 },
-  { key: 'polyglotte', minGlory: 12_000 },
-  { key: 'ambassadeur', minGlory: 20_000 },
-  { key: 'orateur', minGlory: 32_000 },
-  { key: 'oracle', minGlory: 50_000 },
-  { key: 'legende', minGlory: 80_000 },
+  { key: 'echo', minGlory: 2000 },
+  { key: 'voix', minGlory: 6000 },
+  { key: 'conteur', minGlory: 15_000 },
+  { key: 'passeur', minGlory: 35_000 },
+  { key: 'polyglotte', minGlory: 70_000 },
+  { key: 'ambassadeur', minGlory: 130_000 },
+  { key: 'orateur', minGlory: 230_000 },
+  { key: 'oracle', minGlory: 380_000 },
+  { key: 'legende', minGlory: 600_000 },
 ] as const;
 
 export type GloryRankKey = (typeof GLORY_RANKS)[number]['key'];
 export type GloryRankOrMythic = GloryRankKey | 'mythe';
+
+/** La division à cinq crans : 5 = V (la plus faible), 1 = I (la plus haute). */
+export type GloryDivision5 = 5 | 4 | 3 | 2 | 1;
+/** La division HÉRITÉE du fil, la seule que les clients publiés savent lire. */
 export type GloryDivision = 3 | 2 | 1;
 
-/** Largeur d'une division de Légende — au-delà, il n'y a plus de rang. */
-export const LEGEND_DIVISION_STEP = 40_000;
+export const GLORY_DIVISIONS: readonly GloryDivision5[] = [5, 4, 3, 2, 1];
 
-const DIVISIONS: readonly GloryDivision[] = [3, 2, 1];
+const LEGACY_DIVISION: Readonly<Record<GloryDivision5, GloryDivision>> = { 5: 3, 4: 3, 3: 2, 2: 2, 1: 1 };
+
+/** La projection d'une division à cinq crans sur les trois que lisent les clients publiés. */
+export const legacyGloryDivision = (division: GloryDivision5): GloryDivision => LEGACY_DIVISION[division];
 
 export type GloryStep = {
   readonly rank: GloryRankKey;
+  /** Projection héritée (1–3) — voir `legacyGloryDivision`. */
   readonly division: GloryDivision;
+  readonly division5: GloryDivision5;
   readonly minGlory: number;
 };
 
 const divisionStart = (rankIndex: number, divisionIndex: number): number => {
   const rank = GLORY_RANKS[rankIndex]!;
-  const following = GLORY_RANKS[rankIndex + 1];
-  if (following === undefined) return rank.minGlory + LEGEND_DIVISION_STEP * divisionIndex;
-  return rank.minGlory + Math.floor(((following.minGlory - rank.minGlory) * divisionIndex) / 3);
+  const upper = GLORY_RANKS[rankIndex + 1]?.minGlory ?? MYTHE_GLORY;
+  return rank.minGlory + Math.floor(((upper - rank.minGlory) * divisionIndex) / GLORY_DIVISIONS.length);
 };
 
-/** Toutes les marches, du plus bas au plus haut : 10 rangs × 3 divisions. */
-const STEPS: readonly GloryStep[] = GLORY_RANKS.flatMap((rank, rankIndex) =>
-  DIVISIONS.map((division, divisionIndex) => ({
-    rank: rank.key,
-    division,
-    minGlory: divisionStart(rankIndex, divisionIndex),
-  })),
-);
+/** Toutes les marches, du plus bas au plus haut : 10 rangs × 5 divisions, calculées à l'appel. */
+export const gloryLadder = (): readonly GloryStep[] =>
+  GLORY_RANKS.flatMap((rank, rankIndex) =>
+    GLORY_DIVISIONS.map((division5, divisionIndex) => ({
+      rank: rank.key,
+      division: legacyGloryDivision(division5),
+      division5,
+      minGlory: divisionStart(rankIndex, divisionIndex),
+    })),
+  );
+
+/** Un numéro de place du Mythe : un entier de 1 à 100. */
+export const isMythicNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MYTHE_SIZE;
 
 export type GloryStanding = {
   readonly glory: number;
   readonly rank: GloryRankOrMythic;
-  /** `null` pour Mythe. */
+  /** Projection héritée (1–3), `null` pour Mythe. */
   readonly division: GloryDivision | null;
+  /** V (5) à I (1), `null` pour Mythe. */
+  readonly division5: GloryDivision5 | null;
   /** Gloire où commence la division courante — `null` pour Mythe. */
   readonly divisionMinGlory: number | null;
-  /** La division suivante, `null` en division I de Légende et pour Mythe. */
+  /** La division suivante, `null` en Légende I et pour Mythe. */
   readonly next: GloryStep | null;
   readonly gloryMissing: number | null;
   /** Fraction parcourue dans la division, de 0 à 1 ; `1` quand il n'y a pas de suite. */
   readonly progress: number;
+  /** La place du Mythe, quand le serveur l'a servie avec son numéro. */
+  readonly mythic: { readonly number: number } | null;
 };
 
-export function gloryStanding(params: { readonly glory: number; readonly mythic: boolean }): GloryStanding {
+/**
+ * Le rang lu sur la Gloire. Mythe vient du SERVEUR, jamais du seuil : `mythicNumber`
+ * (la place, 1 à 100) ou, pour un appelant qui ne connaît que le rang servi,
+ * `mythic: true`. La place est définitive : Mythe ne dépend plus de la Gloire.
+ */
+export function gloryStanding(params: {
+  readonly glory: number;
+  readonly mythic?: boolean;
+  readonly mythicNumber?: number | null;
+}): GloryStanding {
   const glory = Number.isFinite(params.glory) ? Math.max(0, Math.trunc(params.glory)) : 0;
-  const legendStart = GLORY_RANKS.at(-1)!.minGlory;
+  const seat = isMythicNumber(params.mythicNumber) ? { number: params.mythicNumber } : null;
 
-  if (params.mythic && glory >= legendStart) {
-    return { glory, rank: 'mythe', division: null, divisionMinGlory: null, next: null, gloryMissing: null, progress: 1 };
+  if (seat !== null || params.mythic === true) {
+    return {
+      glory,
+      rank: 'mythe',
+      division: null,
+      division5: null,
+      divisionMinGlory: null,
+      next: null,
+      gloryMissing: null,
+      progress: 1,
+      mythic: seat,
+    };
   }
 
-  const stepIndex = STEPS.reduce((found, step, index) => (glory >= step.minGlory ? index : found), 0);
-  const step = STEPS[stepIndex]!;
-  const next = STEPS[stepIndex + 1] ?? null;
+  const steps = gloryLadder();
+  const stepIndex = steps.reduce((found, step, index) => (glory >= step.minGlory ? index : found), 0);
+  const step = steps[stepIndex]!;
+  const next = steps[stepIndex + 1] ?? null;
 
   return {
     glory,
     rank: step.rank,
     division: step.division,
+    division5: step.division5,
     divisionMinGlory: step.minGlory,
     next,
     gloryMissing: next === null ? null : next.minGlory - glory,
     progress: next === null ? 1 : (glory - step.minGlory) / (next.minGlory - step.minGlory),
+    mythic: null,
   };
 }

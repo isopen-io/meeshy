@@ -59,7 +59,7 @@ describe('l\'aperçu d\'une frappe', () => {
     expect(preview.levelBefore).toBe(34);
     expect(preview.levelAfter).toBe(32);
     expect(preview.levelsLost).toBe(2);
-    expect(preview.gloryGained).toBe(100);
+    expect(preview.gloryGained).toBe(1000);
     expect(preview.missingPoints).toBe(0);
   });
 

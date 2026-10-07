@@ -45,7 +45,6 @@ export type GameSettings = {
   readonly gameHidden: boolean;
   readonly friendsLeagueOptedOut: boolean;
   readonly showcaseOrder: readonly string[];
-  readonly mythic: boolean;
 };
 
 type StoredProfile = {
@@ -56,7 +55,6 @@ type StoredProfile = {
   readonly gameHiddenAt?: Date | null;
   readonly friendsLeagueOptOutAt?: Date | null;
   readonly showcaseOrder?: readonly string[] | null;
-  readonly mythicAt?: Date | null;
 };
 
 const PROFILE_SELECT = {
@@ -68,7 +66,6 @@ const PROFILE_SELECT = {
   gameHiddenAt: true,
   friendsLeagueOptOutAt: true,
   showcaseOrder: true,
-  mythicAt: true,
 } as const;
 
 /** Les champs stockés de chaque facette, et leur défaut — le SITE UNIQUE de la correspondance. */
@@ -101,7 +98,6 @@ export function settingsOf(stored: StoredProfile | null | undefined): GameSettin
     gameHidden: stored?.gameHiddenAt != null,
     friendsLeagueOptedOut: stored?.friendsLeagueOptOutAt != null,
     showcaseOrder: stored?.showcaseOrder ?? [],
-    mythic: stored?.mythicAt != null,
   };
 }
 
@@ -153,10 +149,6 @@ export class GameProfileService {
     const kept = sanitizeShowcaseOrder({ order, ownedKeys });
     await this.write(userId, { showcaseOrder: [...kept] });
     return kept;
-  }
-
-  async setMythic(userId: string, mythic: boolean, now: Date = new Date()): Promise<void> {
-    await this.write(userId, { mythicAt: mythic ? now : null });
   }
 
   /** Quel lecteur est CE lecteur pour ce membre — ni plus, ni moins que la loi de présence. */

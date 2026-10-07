@@ -65,7 +65,7 @@ describe('MeeshService.mint — le prix monte avec les Meeshes déjà frappées'
 });
 
 describe('MeeshService.mint — la Gloire part dans la même transaction', () => {
-  it('+100 de Gloire, numéro et édition dans la ligne, niveau avant et après dans le reçu', async () => {
+  it('+1 000 de Gloire (#9636), numéro et édition dans la ligne, niveau avant et après dans le reçu', async () => {
     const db = fakeGameDb();
     richAccount(db, { score: 10 * 20 * 20, levelRecord: 20 });
 
@@ -73,10 +73,10 @@ describe('MeeshService.mint — la Gloire part dans la même transaction', () =>
 
     expect(issue).toMatchObject({
       status: 'minted',
-      receipt: { number: 1, edition: 'silver', price: 1221, gloryGained: 100, levelBefore: 20, levelAfter: 16 },
+      receipt: { number: 1, edition: 'silver', price: 1221, gloryGained: 1000, levelBefore: 20, levelAfter: 16 },
     });
     expect(db.gloryLedger.rows).toHaveLength(1);
-    expect(db.gloryLedger.rows[0]).toMatchObject({ delta: 100, reason: 'mint' });
+    expect(db.gloryLedger.rows[0]).toMatchObject({ delta: 1000, reason: 'mint' });
     expect(db.gloryLedger.rows[0]?.meta).toMatchObject({ number: 1, edition: 'silver', price: 1221, levelBefore: 20, levelAfter: 16 });
   });
 

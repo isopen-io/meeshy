@@ -18,3 +18,15 @@ export const writeRequest = z.object({ requestId: requestIdSchema });
 
 /** Une énumération Zod bâtie sur une liste de clés du catalogue — la clé reste typée. */
 export const enumOf = <T extends string>(values: readonly T[]) => z.enum(values as unknown as readonly [T, ...T[]]);
+
+/**
+ * La division HÉRITÉE du rang (III, II, I) — la seule que les clients publiés savent décoder (#9223) ; la division
+ * à cinq crans voyage à côté, dans `division5` (#9636, `legacyGloryDivision`).
+ */
+export const legacyDivisionSchema = z.union([z.literal(3), z.literal(2), z.literal(1)]);
+
+/** V (5) à I (1). Optionnelle sur le fil : un serveur d'avant #9636 ne la sert pas. */
+export const division5Schema = z.union([z.literal(5), z.literal(4), z.literal(3), z.literal(2), z.literal(1)]);
+
+/** La place du Mythe (1 à 100), définitive. Optionnelle sur le fil : un serveur d'avant #9636 ne la sert pas. */
+export const mythicSeatSchema = z.object({ number: z.number().int().min(1).max(100) });

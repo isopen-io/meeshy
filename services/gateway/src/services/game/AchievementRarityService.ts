@@ -1,8 +1,10 @@
 /**
- * LA RARETÉ DES SUCCÈS (#9390) et LE DRAPEAU MYTHE (#9391, #9390) — l'instantané
- * recalculé chaque nuit. La LOI (bandes de rareté, population minimale,
- * affichage dès 20 titulaires, les 100 Légendes les plus glorieuses) vient de
- * `@meeshy/shared/utils/game/rarity` ; ce service compte et la lui passe.
+ * LA RARETÉ DES SUCCÈS (#9390) et LE RATTRAPAGE DU MYTHE (#9636) — le calcul de
+ * chaque nuit. La LOI (bandes de rareté, population minimale, affichage dès 20
+ * titulaires) vient de `@meeshy/shared/utils/game/rarity` ; ce service compte et
+ * la lui passe. Le Mythe n'est plus recalculé : ses cent places sont définitives
+ * (`MythicSeatService`), la nuit ne fait qu'attribuer celles qu'un compte a
+ * méritées sans passer par un crédit de Gloire.
  *
  *  - **un instantané, jamais une mesure en direct** : `AchievementRarityStat`
  *    porte `(titulaires, population, rareté)` par succès. Aucun parcours de la
@@ -14,9 +16,9 @@
  *    pourcentage sur dix personnes n'est pas une rareté ;
  *  - **la Gloire d'un succès est FIGÉE à l'obtention** (`GloryService.creditAchievement`) :
  *    cet instantané ne change JAMAIS ce qui a déjà été payé ;
- *  - **aucune liste globale des Mythes** (conformité A-13) : un drapeau
- *    (`GameProfile.mythicAt`) par compte, que les écrans servent selon la
- *    visibilité du rang du compte.
+ *  - **aucune liste globale des Mythes** (conformité A-13) : une place
+ *    (`MythicSeat`) par compte, que les écrans servent selon la visibilité du
+ *    rang du compte.
  *
  * Idempotent : un passage recalcule tout depuis l'état courant, le rejouer ne
  * change rien.
@@ -25,8 +27,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameAchievementRarities } from '@meeshy/shared/types/game';
 import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
-import { ACHIEVEMENT_RARITIES, GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
-import { measureRarity, mythicUserIds, rarityShareDisplayable } from '@meeshy/shared/utils/game/rarity';
+import { ACHIEVEMENT_RARITIES } from '@meeshy/shared/utils/game/glory';
+import { measureRarity, rarityShareDisplayable } from '@meeshy/shared/utils/game/rarity';
+import { MythicSeatService } from './MythicSeatService';
 import { unsetOrNull } from '../../utils/prisma-unset';
 
 const PAGE = 500;
@@ -138,24 +141,12 @@ export class AchievementRarityService {
   }
 
   /**
-   * Pose le drapeau Mythe sur les 100 Légendes les plus glorieuses et le retire
-   * aux autres. Les comptes supprimés ou inactifs n'y concourent pas.
+   * Le rattrapage du Mythe (#9636) : attribue, dans l'ordre d'arrivée, les places
+   * des comptes actifs qui ont atteint 1 000 000 de Gloire sans en avoir. Ne
+   * retire jamais rien. Rend les comptes servis par CE passage.
    */
   async recomputeMythic(now: Date = new Date()): Promise<readonly string[]> {
-    const legendStart = GLORY_RANKS.at(-1)!.minGlory;
-    const sums = await this.prisma.gloryLedger.groupBy({ by: ['userId'], _sum: { delta: true }, having: { delta: { _sum: { gte: legendStart } } } });
-    const ids = sums.map((row) => row.userId);
-    const live = new Set(
-      ids.length === 0
-        ? []
-        : (await this.prisma.user.findMany({ where: { id: { in: ids }, isActive: true, ...unsetOrNull('deletedAt') }, select: { id: true }, take: ids.length })).map((u) => u.id),
-    );
-    const chosen = mythicUserIds(sums.filter((row) => live.has(row.userId)).map((row) => ({ userId: row.userId, glory: row._sum.delta ?? 0 })));
-
-    for (const userId of chosen) {
-      await this.prisma.gameProfile.upsert({ where: { userId }, create: { userId, mythicAt: now }, update: { mythicAt: now }, select: { id: true } });
-    }
-    await this.prisma.gameProfile.updateMany({ where: { mythicAt: { not: null }, userId: { notIn: [...chosen] } }, data: { mythicAt: null } });
-    return chosen;
+    const granted = await new MythicSeatService(this.prisma).sweep(now);
+    return granted.map((grant) => grant.userId);
   }
 }

@@ -149,52 +149,44 @@ describe('AchievementRarityService.served — la carte servie dans le bloc game 
   });
 });
 
-describe('AchievementRarityService.recomputeMythic', () => {
-  const glory = (db: FakeGameDb, n: number, delta: number) =>
-    db.gloryLedger.rows.push({ id: `g${n}`, userId: uid(n), delta, reason: 'mint', requestId: `r${n}` });
+describe('AchievementRarityService.recomputeMythic — le rattrapage des places du Mythe (#9636)', () => {
+  const glory = (db: FakeGameDb, n: number, delta: number, at = '2027-01-01T00:00:00Z') =>
+    db.gloryLedger.rows.push({ id: `g${n}-${at}`, userId: uid(n), delta, reason: 'mint', requestId: `r${n}-${at}`, createdAt: new Date(at) });
 
-  it('pose le drapeau sur les 100 Légendes les plus glorieuses, jamais en dessous de 80 000', async () => {
+  it('attribue une place aux comptes à 1 000 000, dans l’ordre d’arrivée, jamais en dessous', async () => {
     const db = fakeGameDb();
-    accounts(db, 120);
-    for (let n = 1; n <= 110; n += 1) glory(db, n, 90_000 + n);
-    glory(db, 111, 79_999);
+    accounts(db, 3);
+    glory(db, 1, 1_000_000, '2027-02-01T00:00:00Z');
+    glory(db, 2, 1_000_000, '2027-01-01T00:00:00Z');
+    glory(db, 3, 999_999);
 
-    const chosen = await new AchievementRarityService(db.prisma).recomputeMythic();
-
-    expect(chosen).toHaveLength(100);
-    expect(chosen).toContain(uid(110));
-    expect(chosen).not.toContain(uid(10));
-    expect(chosen).not.toContain(uid(111));
-    expect(db.gameProfile.rows.filter((p) => p.mythicAt != null)).toHaveLength(100);
+    expect(await new AchievementRarityService(db.prisma).recomputeMythic()).toEqual([uid(2), uid(1)]);
+    expect(db.mythicSeat.rows.map((r) => [r.userId, r.number])).toEqual([
+      [uid(2), 1],
+      [uid(1), 2],
+    ]);
   });
 
-  it('retire le drapeau à qui sort du top, et ignore les comptes supprimés', async () => {
+  it('ne retire jamais rien, et ignore les comptes supprimés ; `deletedAt` ABSENT ne vaut pas suppression', async () => {
     const db = fakeGameDb();
-    accounts(db, 3, (n) => (n === 3 ? { isActive: false, deletedAt: new Date() } : {}));
-    glory(db, 1, 90_000);
-    glory(db, 2, 95_000);
-    glory(db, 3, 99_000);
-    db.gameProfile.rows.push({ id: 'old', userId: uid(9), mythicAt: new Date('2026-01-01T00:00:00Z') });
+    accounts(db, 2, (n) => (n === 2 ? { isActive: false, deletedAt: new Date() } : {}));
+    db.user.rows.push({ id: uid(3), isActive: true });
+    glory(db, 2, 1_000_000);
+    glory(db, 3, 1_000_000);
+    db.mythicSeat.rows.push({ id: '6d7974686500000000000001', number: 1, userId: uid(9), glory: 1_000_000, grantedAt: new Date() });
 
-    const chosen = await new AchievementRarityService(db.prisma).recomputeMythic();
-
-    expect(chosen).toEqual([uid(2), uid(1)]);
-    expect(db.gameProfile.rows.find((p) => p.userId === uid(9))?.mythicAt).toBeNull();
+    expect(await new AchievementRarityService(db.prisma).recomputeMythic()).toEqual([uid(3)]);
+    expect(db.mythicSeat.rows.map((r) => [r.userId, r.number])).toEqual([
+      [uid(9), 1],
+      [uid(3), 2],
+    ]);
   });
 
-  it('une Légende dont `deletedAt` est ABSENT reçoit son drapeau : l’absence ne vaut pas suppression', async () => {
-    const db = fakeGameDb();
-    db.user.rows.push({ id: uid(1), isActive: true });
-    glory(db, 1, 90_000);
-
-    expect(await new AchievementRarityService(db.prisma).recomputeMythic()).toEqual([uid(1)]);
-  });
-
-  it('aucune liste globale n’est écrite : seul le drapeau par compte l’est', async () => {
+  it('n’écrit plus aucun drapeau « top 100 du moment »', async () => {
     const db = fakeGameDb();
     accounts(db, 1);
-    glory(db, 1, 90_000);
+    glory(db, 1, 1_000_000);
     await new AchievementRarityService(db.prisma).recomputeMythic();
-    expect(Object.keys(db.gameProfile.rows[0]!).sort()).toEqual(['createdAt', 'id', 'mythicAt', 'userId']);
+    expect(db.gameProfile.rows).toHaveLength(0);
   });
 });

@@ -29,7 +29,17 @@ import { TREASURY_TIERS } from '../utils/game/treasury.js';
 import { LEAGUE_KEYS, isValidLeaguePseudonym } from '../utils/game/league.js';
 import { SEASON_STEPS } from '../utils/game/season.js';
 import { SHOWCASE_VISIBILITIES } from '../utils/game/trophies.js';
-import { dayKey, enumOf, fraction, isoDate, nonNegativeInt, writeRequest } from './game-schema-kit.js';
+import {
+  dayKey,
+  division5Schema,
+  enumOf,
+  fraction,
+  isoDate,
+  legacyDivisionSchema,
+  mythicSeatSchema,
+  nonNegativeInt,
+  writeRequest,
+} from './game-schema-kit.js';
 
 const leagueKeys = enumOf(LEAGUE_KEYS);
 const cupKeys = z.enum(['gold', 'silver', 'bronze']);
@@ -346,8 +356,12 @@ export const gameStandingSchema = z.object({
   /** `null` : pas de Flamme allumée — ou celle-ci n'est pas à montrer. */
   flame: enumOf(FLAME_FORMS.map((form) => form.key)).nullable(),
   rank: enumOf<(typeof GLORY_RANKS)[number]['key'] | 'mythe'>([...GLORY_RANKS.map((r) => r.key), 'mythe']),
-  /** `null` pour Mythe. */
-  division: z.union([z.literal(3), z.literal(2), z.literal(1)]).nullable(),
+  /** Projection héritée (III, II, I), `null` pour Mythe. */
+  division: legacyDivisionSchema.nullable(),
+  /** V (5) à I (1), `null` pour Mythe — #9636. */
+  division5: division5Schema.nullable().optional(),
+  /** La place du Mythe et son numéro (la Signature unique en dérive), `null` hors du Mythe — #9636. */
+  mythic: mythicSeatSchema.nullable().optional(),
   /**
    * Ses points et le nombre de ses trophées — servis aux AMIS seulement (décision porteur 2026-10-06, #9541),
    * jamais à un autre lecteur : absents, le client n'affiche rien. Optionnels, car un ancien serveur n'en sert pas.

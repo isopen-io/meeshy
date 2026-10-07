@@ -169,8 +169,8 @@ describe('LeagueSettlement.settleDue', () => {
     expect(membership(4)).toMatchObject({ finalRank: 4, cup: null });
     // Un groupe de 4 : moitié = 2 — deux montent (les deux premiers), deux descendent… sauf au plancher.
     expect(membership(1).zone).toBe('promotion');
-    expect(await gloryTotalFromLedger(db.prisma, id(1))).toBe(30 + 100);
-    expect(await gloryTotalFromLedger(db.prisma, id(3))).toBe(100);
+    expect(await gloryTotalFromLedger(db.prisma, id(1))).toBe(300 + 1000);
+    expect(await gloryTotalFromLedger(db.prisma, id(3))).toBe(1000);
     expect(db.gameTrophy.rows.map((t) => t.key).sort()).toEqual([
       `trophy.league-cup.${WEEK}.quartz.bronze`,
       `trophy.league-cup.${WEEK}.quartz.gold`,

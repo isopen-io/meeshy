@@ -86,7 +86,7 @@ function base() {
     notification,
     // Le jeu (#9384) : des collections vides.
     ...Object.fromEntries(
-      [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession'].map((model) => [model, table([])]),
+      [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat'].map((model) => [model, table([])]),
     ),
     user: { updateMany: async () => ({ count: 1 }) },
   };

@@ -23,9 +23,9 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { FLAME_USER_SELECT, brokenFlame, flameFactsOf } from './FlameService';
 import { GameBlockExtrasService } from './GameBlockExtrasService';
-import { GameProfileService } from './GameProfileService';
 import type { PersonalMissionService } from './PersonalMissionService';
 import { gloryTotalFromLedger } from './GloryService';
+import { MythicSeatService } from './MythicSeatService';
 import { toGameMission, type MissionService } from './MissionService';
 
 const log = enhancedLogger.child({ module: 'GameBlockService' });
@@ -39,7 +39,7 @@ export type AxisRow = { readonly axisKey: string; readonly count: number; readon
 export class GameBlockService {
   private readonly extras: Pick<GameBlockExtrasService, 'build'>;
 
-  private readonly profile: Pick<GameProfileService, 'settings'>;
+  private readonly seats: Pick<MythicSeatService, 'claimIfEligible'>;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -47,13 +47,14 @@ export class GameBlockService {
       readonly missions: Pick<MissionService, 'ensureToday' | 'gameDay'>;
       /** Les sept extensions de la vague 2 ; remplaçable en test. */
       readonly extras?: Pick<GameBlockExtrasService, 'build'>;
-      readonly profile?: Pick<GameProfileService, 'settings'>;
+      /** Les places du Mythe (#9636) ; remplaçable en test. */
+      readonly seats?: Pick<MythicSeatService, 'claimIfEligible'>;
       /** La mission personnelle du jour (#9539) : absente, le bloc garde la forme d'avant. */
       readonly personal?: Pick<PersonalMissionService, 'ensure'>;
     },
   ) {
     this.extras = deps.extras ?? new GameBlockExtrasService(prisma);
-    this.profile = deps.profile ?? new GameProfileService(prisma);
+    this.seats = deps.seats ?? new MythicSeatService(prisma);
   }
 
   /**
@@ -80,7 +81,12 @@ export class GameBlockService {
     });
 
     const facts = flameFactsOf(user ?? {}, now);
-    const settings = await this.profile.settings(userId).catch(() => null);
+    // La place du Mythe (#9636) : celle du compte, ou celle qu'une Gloire gravée hors d'un crédit (la frappe)
+    // vient d'ouvrir. Une lecture qui tombe rend le rang sur la Gloire, jamais le bloc entier.
+    const mythicNumber = await this.seats.claimIfEligible(userId, glory, now).catch((error: unknown) => {
+      log.warn('mythic seat unavailable, rank served from glory', { userId, error: error instanceof Error ? error.message : String(error) });
+      return null;
+    });
     const plan = computeMeeshMintPlan(
       counters
         .filter((c) => (ENGAGEMENT_AXES as readonly string[]).includes(c.axisKey))
@@ -96,9 +102,9 @@ export class GameBlockService {
       levelRecord: user?.levelRecord ?? null,
       prestige: user?.prestige ?? 0,
       glory,
-      // Le drapeau Mythe (les 100 Légendes les plus glorieuses), posé chaque nuit :
-      // un drapeau PAR COMPTE, jamais une liste globale (conformité A-13).
-      mythic: settings?.mythic ?? false,
+      // La place du Mythe, définitive : celle de CE compte, jamais une liste globale (conformité A-13).
+      mythic: mythicNumber !== null,
+      mythicNumber,
       mintedLifetime: totals.mintedLifetime,
       debitablePoints: plan.debitablePoints,
       balance: totals.balance,

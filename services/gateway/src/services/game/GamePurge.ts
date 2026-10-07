@@ -38,6 +38,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { MythicSeatService } from './MythicSeatService';
 
 /** Les modèles purgés par `userId`. */
 export const GAME_PURGED_MODELS = [
@@ -61,6 +62,8 @@ export const GAME_PURGED_MODELS = [
 export const GAME_PURGE_EXCEPTIONS: Readonly<Record<string, string>> = {
   gameDuo: "partagé entre deux comptes : terminé proprement (partenaire payé de sa part simple), puis supprimé par ses deux bouts",
   affiliateVisitSession: "le parrain voit ses visites supprimées, le visiteur converti est dépersonnalisé (`referredUserId` à null)",
+  mythicSeat:
+    "la place du Mythe est définitive (#9636) : elle reste PRISE, jamais réattribuée, mais `userId` reçoit un identifiant neuf tiré au hasard — elle ne nomme plus personne",
 };
 
 export type GamePurgeSummary = {
@@ -69,9 +72,11 @@ export type GamePurgeSummary = {
   readonly duosSettled: number;
   readonly duoNotificationsErased: number;
   readonly leagueGroupsTouched: number;
+  /** La place du Mythe dépersonnalisée (0 ou 1) — jamais libérée. */
+  readonly mythicSeatsVacated: number;
 };
 
-type PurgeDb = Pick<PrismaClient, (typeof GAME_PURGED_MODELS)[number] | 'gameDuo' | 'user' | 'leagueGroupWeek' | 'affiliateVisitSession' | 'notification'>;
+type PurgeDb = Pick<PrismaClient, (typeof GAME_PURGED_MODELS)[number] | 'gameDuo' | 'user' | 'leagueGroupWeek' | 'affiliateVisitSession' | 'notification' | 'mythicSeat'>;
 
 /** Les notifications de jeu qui NOMMENT un autre joueur (`actor`) : celles d'un duo. */
 const DUO_NOTIFICATION_TYPES = ['game_duo_invited', 'game_duo_accepted'] as const;
@@ -199,7 +204,10 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
   ]);
   const deleted = Object.fromEntries(GAME_PURGED_MODELS.map((model, index) => [model, counts[index]!.count]));
 
-  // 4. Les visites de parrainage : celles du parrain disparaissent, le visiteur converti est dépersonnalisé.
+  // 4. La place du Mythe reste prise, mais ne nomme plus le compte effacé.
+  const mythicSeatsVacated = await new MythicSeatService(prisma).vacate(userId);
+
+  // 5. Les visites de parrainage : celles du parrain disparaissent, le visiteur converti est dépersonnalisé.
   await prisma.affiliateVisitSession.deleteMany({ where: { affiliateUserId: userId } });
   await prisma.affiliateVisitSession.updateMany({ where: { referredUserId: userId }, data: { referredUserId: null } });
 
@@ -222,5 +230,5 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
       brokenStreakLastDay: null,
     },
   });
-  return { deleted, duosDeleted, duosSettled, duoNotificationsErased, leagueGroupsTouched };
+  return { deleted, duosDeleted, duosSettled, duoNotificationsErased, leagueGroupsTouched, mythicSeatsVacated };
 }
