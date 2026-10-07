@@ -118,15 +118,11 @@ export const RETIRED_MISSION_TEMPLATE_KEYS = [
 
 export const isRetiredMissionTemplate = (key: string): boolean => (RETIRED_MISSION_TEMPLATE_KEYS as readonly string[]).includes(key);
 
-const GOLD_TEMPLATES: readonly MissionTemplate[] = MISSION_TEMPLATES.filter((t) => t.difficulty === 'hard').map((t) => ({
-  ...t,
-  difficulty: 'gold',
-  basePoints: MISSION_BASE_POINTS.gold,
-}));
-
-/** Les gabarits d'une difficulté ; ceux de l'Or sont les difficiles portés à l'Or. */
+/** Les gabarits d'une difficulté ; ceux de l'Or sont les difficiles portés à l'Or (calculés à l'appel : la première peinture du web importe ce module). */
 export const missionTemplatesFor = (difficulty: MissionDifficulty): readonly MissionTemplate[] =>
-  difficulty === 'gold' ? GOLD_TEMPLATES : MISSION_TEMPLATES.filter((t) => t.difficulty === difficulty);
+  difficulty === 'gold'
+    ? MISSION_TEMPLATES.filter((t) => t.difficulty === 'hard').map((t) => ({ ...t, difficulty, basePoints: MISSION_BASE_POINTS.gold }))
+    : MISSION_TEMPLATES.filter((t) => t.difficulty === difficulty);
 
 /** Les missions du jour s'ouvrent au niveau 5. */
 export const MISSIONS_MIN_LEVEL = 5;
