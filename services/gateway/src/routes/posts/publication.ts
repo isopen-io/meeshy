@@ -347,17 +347,24 @@ function recordPublicationEngagement(params: {
   const operation = contentOperationFor(writtenType, visibility);
   if (!operation) return;
 
-  const credit = (key: EngagementOperationKey, options: EngagementActivityOptions): void => {
+  const credit = (key: EngagementOperationKey, options: EngagementActivityOptions): Promise<void> =>
     engagementService.recordActivity(authorId, key, options).catch((err: unknown) => {
       logError(log, `[${porte}] ${key} engagement recording failed`, err);
     });
-  };
 
   const byVisibility = operation === 'content.post' || operation === 'content.story';
-  credit(operation, byVisibility ? { postId, targetId: postId, variant: visibilityVariant(visibility) } : { postId, targetId: postId });
+  const content = credit(operation, byVisibility ? { postId, targetId: postId, variant: visibilityVariant(visibility) } : { postId, targetId: postId });
 
   if (operation === 'content.status') return;
-  credit(editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish', { postId, targetId: postId });
+  // L'un APRÈS l'autre (#9569) : les deux crédits nomment le même post, et
+  // chacun annonce à l'auteur ce que ce post lui a rapporté. Lancés ensemble,
+  // leurs annonces pouvaient se croiser et laisser la valeur d'avant le second.
+  // `credit` ne rejette jamais : un contenu en échec n'empêche pas l'axe outil.
+  content
+    .then(() => credit(editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish', { postId, targetId: postId }))
+    .catch((err: unknown) => {
+      logError(log, `[${porte}] publication engagement chain failed`, err);
+    });
 }
 
 /**
