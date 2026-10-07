@@ -52,6 +52,8 @@ struct GamePrestigeScreen: View {
                 playKey: playKey, reduceMotion: reduceMotion
             )
             .frame(maxWidth: .infinity)
+            // L'étoile de Prestige SE TOUCHE (#9564) : la scène rebondit et ouvre les précisions de la prochaine étoile.
+            .gameElement(GameElementDetails.prestigeStar(min(prestige.stars + 1, prestige.max), in: prestige))
             Text(GameText.prestigeStars(stars: GameCopy.formatCount(prestige.stars), max: GameCopy.formatCount(prestige.max)))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)

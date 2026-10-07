@@ -212,9 +212,12 @@ private struct GameLeaguePlacedCard: View {
 
     private func placed(_ current: GameLeagueBlock.Current) -> some View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
+            // La gemme SE TOUCHE (#9564) : elle rebondit et ouvre les précisions de la ligue — rien que la page
+            // n'affiche déjà.
             LeagueGemView(league: current.league)
                 .frame(width: 64, height: 64)
                 .accessibilityHidden(true)
+                .gameElement(GameElementDetails.leagueGem(league))
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(GameText.leagueName(current.league))
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
@@ -341,6 +344,9 @@ private struct LeagueStandingRow: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
+        // Une ligne du classement SE TOUCHE (#9564) : elle rebondit et redit ce que la page montre déjà — jamais
+        // une présence, jamais un identifiant.
+        .gameElement(GameElementDetails.player(entry))
     }
 }
 

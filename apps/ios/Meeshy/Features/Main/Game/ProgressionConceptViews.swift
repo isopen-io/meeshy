@@ -35,7 +35,7 @@ struct ProgressionConceptEmblem: View {
                 signature(.flat, MeeshyColors.brandPrimary)
             }
         case .points:
-            signature(.struck, MeeshyColors.warning)
+            ConceptMarkView(kind: .points)
         case .meesh:
             MeeshCoinView(face: .obverse, edition: game?.mint.edition ?? .silver, figures: nil)
         case .glory:
@@ -55,7 +55,7 @@ struct ProgressionConceptEmblem: View {
         case .prestige:
             TrophyView(material: .prism, label: "")
         case .elans:
-            signature(.flat, MeeshyColors.success)
+            ConceptMarkView(kind: .elans)
         case .badges:
             GameBadgeView(material: .gold, surface: theme.backgroundPrimary, muted: theme.textMuted)
         case .defis:
@@ -156,6 +156,21 @@ struct ProgressionConceptHead: View {
             .foregroundColor(theme.textPrimary)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
+            .modifier(GameValueRoll(value: value))
+    }
+}
+
+/// Une valeur qui CHANGE roule chiffre par chiffre (un geste fait dans une fiche se relit ici au retour) ; rien ne
+/// joue au premier rendu, et rien sous « réduire les animations ».
+struct GameValueRoll: ViewModifier {
+    let value: String
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .contentTransition(reduceMotion ? .identity : .numericText())
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.35), value: value)
     }
 }
 
@@ -167,24 +182,26 @@ struct ProgressionConceptHead: View {
 struct ProgressionConceptCardView: View {
     let card: ProgressionConceptCard
     let game: GameBlock?
+    /// La carte est entrée en scène : sa jauge monte alors, une fois — jamais au retour d'une fiche.
+    var entered = true
     let onOpen: () -> Void
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var theme: ThemeManager { ThemeManager.shared }
 
     /// Deux lignes au plus par phrase ; aux tailles d'accessibilité, la phrase se lit en entier plutôt que coupée.
     private var sentenceLines: Int? { typeSize.isAccessibilitySize ? nil : 2 }
 
     var body: some View {
-        Button {
-            HapticFeedback.light()
-            onOpen()
-        } label: {
+        // La carte ENTIÈRE rebondit et ouvre la fiche : ses pastilles ne s'ouvrent pas séparément.
+        GameBounceButton(action: onOpen) {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 ProgressionConceptHead(concept: card.concept, name: card.name, value: card.value, game: game)
                 ProgressionConceptChips(items: card.chips, tint: card.concept.tint)
                 if let gauge = card.gauge {
-                    ProgressionBar(progress: gauge, tint: card.concept.tint, label: card.name)
+                    ProgressionBar(progress: entered ? gauge : 0, tint: card.concept.tint, label: card.name)
+                        .animation(reduceMotion ? nil : .easeOut(duration: GameTimeline.levelGainDuration), value: entered)
                 }
                 Text(card.why)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -204,12 +221,31 @@ struct ProgressionConceptCardView: View {
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(theme.backgroundSecondary))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.accessibilityLabel)
         .accessibilityHint(ConceptText.cardHint)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("progression.concept.\(card.concept.rawValue)")
+    }
+}
+
+/// L'ENTRÉE EN SCÈNE d'une carte de la première page : elle monte de quelques points et s'éclaircit, l'une après
+/// l'autre. Sobre, et UNE fois — l'hôte garde `entered` tant que la page vit, donc rien ne rejoue au retour d'une
+/// fiche. Sous « réduire les animations », la carte est simplement là.
+struct GameStaggeredEntrance: ViewModifier {
+    let index: Int
+    let entered: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Le décalage entre deux cartes, plafonné : la quinzième n'attend pas une seconde.
+    static func delay(for index: Int) -> Double { min(Double(index) * 0.04, 0.4) }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(entered || reduceMotion ? 1 : 0.35)
+            .offset(y: entered || reduceMotion ? 0 : 14)
+            .animation(reduceMotion ? nil : GameMotion.release.delay(Self.delay(for: index)), value: entered)
     }
 }
 
@@ -220,23 +256,30 @@ struct ProgressionConceptCardView: View {
 struct ProgressionConceptRow: View {
     let title: String
     var subtitle: String?
-    let symbol: String
+    /// Le pictogramme système de la ligne ; ignoré quand `mark` est donné.
+    var symbol: String = ""
+    /// Un emblème DESSINÉ à la place du pictogramme (le tableau de bord a le sien).
+    var mark: ConceptEmblemDesign.Kind?
     let identifier: String
     let action: () -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        Button {
-            HapticFeedback.light()
-            action()
-        } label: {
+        GameBounceButton(action: action) {
             HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: symbol)
-                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
-                    .frame(width: 40)
-                    .accessibilityHidden(true)
+                Group {
+                    if let mark {
+                        ConceptMarkView(kind: mark)
+                            .frame(width: 36, height: 36)
+                    } else {
+                        Image(systemName: symbol)
+                            .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
+                            .foregroundColor(MeeshyColors.brandPrimary)
+                    }
+                }
+                .frame(width: 40)
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
@@ -262,7 +305,6 @@ struct ProgressionConceptRow: View {
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(theme.backgroundSecondary))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier(identifier)
@@ -271,9 +313,12 @@ struct ProgressionConceptRow: View {
 
 // MARK: - Où j'en suis
 
-/// Les données d'un concept, en lignes libellé → valeur. Chaque ligne est UN élément pour VoiceOver.
+/// Les données d'un concept, en lignes libellé → valeur. Chaque ligne est UN élément pour VoiceOver. Avec un
+/// `concept`, chaque ligne REBONDIT au toucher et ouvre les précisions de CETTE donnée ; sans, elle se lit seulement
+/// (c'est la forme que la feuille de précisions emploie pour ses propres lignes).
 struct ProgressionConceptFacts: View {
     let facts: [ProgressionConceptFact]
+    var concept: ProgressionConcept?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -281,21 +326,34 @@ struct ProgressionConceptFacts: View {
         VStack(spacing: 0) {
             ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
                 if index > 0 { Divider().overlay(theme.textMuted.opacity(0.2)) }
-                HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.md) {
-                    Text(fact.label)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: MeeshySpacing.sm)
-                    Text(fact.value)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .multilineTextAlignment(.trailing)
-                        .fixedSize(horizontal: false, vertical: true)
+                if let concept {
+                    row(fact)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
+                        .accessibilityElement(children: .combine)
+                        .gameElement(GameElementDetails.fact(fact, of: concept))
+                } else {
+                    row(fact)
+                        .padding(.vertical, MeeshySpacing.xs)
+                        .accessibilityElement(children: .combine)
                 }
-                .padding(.vertical, MeeshySpacing.xs)
-                .accessibilityElement(children: .combine)
             }
+        }
+    }
+
+    private func row(_ fact: ProgressionConceptFact) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.md) {
+            Text(fact.label)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: MeeshySpacing.sm)
+            Text(fact.value)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .modifier(GameValueRoll(value: fact.value))
         }
     }
 }
@@ -328,10 +386,7 @@ struct ProgressionGuideLine: View {
     }
 
     var body: some View {
-        Button {
-            HapticFeedback.light()
-            onOpen()
-        } label: {
+        GameBounceButton(action: onOpen) {
             HStack(alignment: .center, spacing: MeeshySpacing.md) {
                 MeeStickerFilmView(filmID: filmID, animated: false, side: 40, animates: false, pixelCap: 160)
                     .frame(width: 40, height: 40)
@@ -353,7 +408,6 @@ struct ProgressionGuideLine: View {
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(MeeshyColors.brandPrimary.opacity(0.12)))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.copy.short)
         .accessibilityHint(ConceptText.guideHint)
