@@ -24,8 +24,10 @@ final class ProgressionHeroWiringTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(chemin))
     }
 
+    /// Le héros du dernier succès et sa célébration vivent dans la FICHE des succès depuis #9564 : la première
+    /// page ne porte plus que des cartes.
     private func tableauDeBord() throws -> String {
-        try source("Meeshy/Features/Main/Views/ProgressionView.swift")
+        try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
     }
 
     private func hub() throws -> String {

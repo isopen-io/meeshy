@@ -164,17 +164,23 @@ final class GameMintHeroTests: XCTestCase {
         XCTAssertFalse(hero.contains("GameHeroMint"), "le héro de niveau ne porte plus de « Comment frapper »")
         let parts = try source("Meeshy/Features/Main/Game/GameHeroParts.swift")
         XCTAssertFalse(parts.contains("struct GameHeroMint"), "le doublon est supprimé, pas masqué")
-        let section = try source("Meeshy/Features/Main/Game/GameSection.swift")
-        XCTAssertEqual(section.components(separatedBy: "GameMintPreviewView(").count - 1, 1, "UN héro de frappe dans la section du jeu")
+        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        XCTAssertEqual(fiche.components(separatedBy: "GameMintPreviewView(").count - 1, 1, "UN héro de frappe, dans la fiche des Meeshes (#9564)")
+        let front = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
+        XCTAssertFalse(front.contains("GameMintPreviewView("), "la première page ne porte plus la frappe")
     }
 
     // MARK: - Le détail de ligue AVANT la frappe (#9541)
 
-    func test_theLeagueDetailComesBeforeTheMintHero() throws {
-        let section = try source("Meeshy/Features/Main/Game/GameSection.swift")
-        let league = try XCTUnwrap(section.range(of: "GameLeagueDetailCard.make(")?.lowerBound)
-        let mint = try XCTUnwrap(section.range(of: "GameMintPreviewView(")?.lowerBound)
-        XCTAssertLessThan(league, mint, "le détail de ligue se place avant le bouton de frappe")
+    /// Depuis #9564 la ligue et la frappe ne partagent plus un écran : chacune vit dans la fiche de SON concept, et
+    /// l'ordre des concepts (`ProgressionConcept`) range la Ligue… après les Meeshes. Ce que #9541 voulait — lire sa
+    /// ligue sans passer par le bouton qui coûte — tient autrement : la carte de la Ligue dit son rang dès la première page.
+    func test_theLeagueDetailLivesInTheLeagueSheet_notNextToTheMint() throws {
+        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        XCTAssertTrue(fiche.contains("GameLeagueDetailCard.make(league: game?.league, onOpen: { onOpenLink(.page(.league)) })"),
+                      "le détail de ligue est monté par la fiche de la Ligue, et son toucher ouvre le classement")
+        let front = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
+        XCTAssertFalse(front.contains("GameLeagueDetailCard"), "la première page ne porte que des cartes de concept")
     }
 
     private func block(access: LeagueAccess, current: GameLeagueBlock.Current?) -> GameLeagueBlock {
