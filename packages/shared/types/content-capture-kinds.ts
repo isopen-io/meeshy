@@ -10,3 +10,15 @@ export type ContentCaptureKind = (typeof CONTENT_CAPTURE_KINDS)[number];
 
 /** Messages déclarés au plus par capture — un écran n'en montre pas davantage. */
 export const CONTENT_CAPTURE_MAX_MESSAGES = 50;
+
+/**
+ * LES PLAFONDS DE LA PASSERELLE (#9617, audit A1) — au plus
+ * {@link CONTENT_CAPTURE_NOTICES_PER_REPORT} avis par déclaration,
+ * {@link CONTENT_CAPTURE_REPORTS_PER_MINUTE} déclarations par minute et
+ * {@link CONTENT_CAPTURE_NOTICES_PER_HOUR} avis par heure, par acteur et
+ * conversation. Un client les lit ici pour découper ses déclarations et pour
+ * noircir ce qu'il ne pourrait plus annoncer (« annoncé ou noir »).
+ */
+export const CONTENT_CAPTURE_NOTICES_PER_REPORT = 10;
+export const CONTENT_CAPTURE_REPORTS_PER_MINUTE = 6;
+export const CONTENT_CAPTURE_NOTICES_PER_HOUR = 30;
