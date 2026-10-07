@@ -23,6 +23,9 @@ import { SEALED_ROW_ATTRIBUTE } from './sealed-exit-guard';
  * | flamme à durée | oui, durée ≤ source | non |
  * | flamme après lecture | non | non |
  * | vue unique | non | non |
+ *
+ * Une réponse qui CITE un contenu qui ne sort pas ne s'image pas, ni seule ni
+ * dans une discussion (`messageExitOffers`, décision porteur du 2026-10-08).
  */
 
 export type ExitAction = 'forward' | 'copy' | 'image' | 'imageDiscussion' | 'save' | 'share' | 'compose' | 'publish';
@@ -138,10 +141,28 @@ export const loosePieceLeaves = (piece: ExitPiece): boolean => contentExitLaw({ 
 export type SealedSubject = ExitMessage & { readonly replyTo?: ExitMessage | null };
 
 export function sealedProps(message: SealedSubject, now: number): { readonly [SEALED_ROW_ATTRIBUTE]?: '' } {
-  const quoted = message.replyTo;
-  const open = contentExitOf(message, now).leaves && (quoted == null || quotedExitOf(quoted, now).leaves);
+  const open = contentExitOf(message, now).leaves && !citesSealed(message, now);
   return open ? {} : { [SEALED_ROW_ATTRIBUTE]: '' };
 }
+
+/** Le message CITE un contenu qui ne sort pas — qui disparaît, voilé, chiffré, ou dont la nature n'est pas déclarée (`quotedExitOf`). */
+export function citesSealed(message: SealedSubject, now: number): boolean {
+  const quoted = message.replyTo;
+  return quoted != null && !quotedExitOf(quoted, now).leaves;
+}
+
+/**
+ * CE QU'UN MESSAGE OFFRE, CITATION COMPRISE (décision porteur du 2026-10-08,
+ * #9573) — citer un contenu protégé reste permis, et la réponse se copie, se
+ * transfère et se compose avec ses propres médias : aucun de ces gestes ne
+ * transporte la citation. « Imager » et « Imager la discussion » sont fermés
+ * sur une réponse qui CITE un contenu qui ne sort pas : la carte est une image
+ * de l'échange, et la réponse sans ce qu'elle cite n'en est plus une.
+ */
+const PICTURES_THE_EXCHANGE: ReadonlySet<ExitAction> = new Set<ExitAction>(['image', 'imageDiscussion']);
+
+export const messageExitOffers = (message: SealedSubject, action: ExitAction, now: number): boolean =>
+  exitOffers(contentExitOf(message, now), action) && !(PICTURES_THE_EXCHANGE.has(action) && citesSealed(message, now));
 
 /**
  * CE QU'UNE RANGÉE DU FIL MONTRE À UNE CAPTURE (#9617, #9574) — la colonne

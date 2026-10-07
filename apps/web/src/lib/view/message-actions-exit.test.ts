@@ -4,6 +4,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 
 import { translation } from '@/lib/api/fixtures-base';
 
+import type { ExitMessage } from './content-exit';
 import { forwardMenuItems, imageableOf, messageMenuContextOf, messageMenuItems } from './message-actions';
 
 /**
@@ -91,5 +92,44 @@ describe('menu du message, sous-menu de Transférer et « Plus… » — nature 
     const ctx = messageMenuContextOf({ ...base, content: '', attachments: [{ ...photo, isEncrypted: true }] }, { now: NOW });
     expect(ctx.hasImageableMedia).toBe(false);
     expect(ctx.composableIndex).toBeNull();
+  });
+});
+
+/**
+ * UNE RÉPONSE QUI CITE UN CONTENU PROTÉGÉ (décision porteur du 2026-10-08,
+ * #9573) — citer reste permis, la réponse se copie, se transfère et se
+ * compose avec SES médias ; seules « Imager » et « Imager la discussion »
+ * disparaissent, la carte étant la seule sortie qui peigne la citation.
+ */
+describe('une réponse qui cite un contenu protégé ne s’image pas', () => {
+  const quoted: ExitMessage = { isViewOnce: false, isBlurred: false, effectFlags: 0 };
+  const replying = (quote: ExitMessage) => ({ ...base, replyTo: quote });
+
+  const QUOTED_NATURES: readonly (readonly [string, ExitMessage])[] = [
+    ['une flamme à durée', { ...quoted, effectFlags: EPHEMERAL, ephemeralDuration: 300 }],
+    ['une flamme après lecture', { ...quoted, effectFlags: EPHEMERAL | EPHEMERAL_AFTER_READ }],
+    ['une vue unique', { ...quoted, isViewOnce: true }],
+    ['un message flouté', { ...quoted, isBlurred: true }],
+    ['un message chiffré', { ...quoted, isEncrypted: true }],
+    ['un message dont la nature n’est pas déclarée', { isViewOnce: false, isBlurred: false }],
+  ];
+
+  test('témoin : une citation ordinaire laisse tout offert', () => {
+    expect(surfaces(replying(quoted))).toEqual({
+      menu: ['select', 'translate', 'copy', 'forward', 'reply', 'export', 'more'],
+      forwardSubmenu: ['forward', 'exportDiscussion'],
+      plusImager: true,
+      plusComposer: 0,
+    });
+  });
+
+  QUOTED_NATURES.forEach(([label, quote]) => {
+    test(`citer ${label} : ni Imager, ni Export rapide, ni Imager la discussion — le reste demeure`, () => {
+      const ctx = { ...messageMenuContextOf(replying(quote), { now: NOW }), hasDefaultExportFormat: true };
+      expect(messageMenuItems(ctx).map((item) => item.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'more']);
+      expect(forwardMenuItems(ctx).map((item) => item.id)).toEqual(['forward']);
+      expect(imageableOf(ctx)).toBe(false);
+      expect(ctx.composableIndex).toBe(0);
+    });
   });
 });

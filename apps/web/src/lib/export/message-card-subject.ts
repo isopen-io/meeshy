@@ -4,7 +4,7 @@ import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helper
 import { served } from '@/lib/api/prism';
 import type { Attachment, Message } from '@/lib/api/types';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { contentExitOf, exitOffers, pieceIsOpen, quotedExitOf } from '@/lib/view/content-exit';
+import { messageExitOffers, pieceIsOpen } from '@/lib/view/content-exit';
 import { kindOf, waveformOf } from '@/lib/view/message';
 import { quotedPreviewOf } from '@/lib/view/quoted-preview';
 
@@ -21,12 +21,11 @@ import type { CardMedia } from './message-card-media';
  * sur le message ENTIER, la pièce à vue unique d'un message ordinaire ferme
  * la carte. Une pièce floutée ou chiffrée n'est jamais peinte.
  *
- * LA CITATION EST JUGÉE POUR ELLE-MÊME (`quotedExitOf`) : un message
- * ordinaire qui cite une flamme s'image SANS elle — ni son texte, ni son
- * média. Une citation dont la nature n'est pas déclarée dans la charge reçue
- * est fermée, et une citation voilée (vue unique, flou) ne se peint pas non
- * plus : la carte ne fait confiance à aucun texte servi pour un contenu qui
- * n'a pas le droit de sortir.
+ * UNE RÉPONSE QUI CITE UN CONTENU PROTÉGÉ NE S'IMAGE PAS (décision porteur
+ * du 2026-10-08, `messageExitOffers`) : qu'elle cite une flamme, une vue
+ * unique, un flou, un chiffré ou une citation dont la nature n'est pas
+ * déclarée dans la charge reçue (`quotedExitOf`), la carte se refuse
+ * entière — la réponse peinte sans ce qu'elle cite n'est plus l'échange.
  *
  * LES MOTS SONT CEUX QUE LE LECTEUR VOIT : le texte SERVI (le Prisme, avec la
  * langue que le lecteur a peut-être imposée par « Traduire »), jamais
@@ -152,7 +151,7 @@ export function messageCardSubjectOf(params: {
   readonly language?: string | null;
 }): MessageCardSubject | null {
   const { message, servedText, viewer } = params;
-  if (!exitOffers(contentExitOf(message, params.now), 'image')) return null;
+  if (!messageExitOffers(message, 'image', params.now)) return null;
   const language = params.language ?? null;
   const chosen =
     language === null
@@ -170,7 +169,7 @@ export function messageCardSubjectOf(params: {
   let quotedMedia: readonly MessageCardMediaItem[] = [];
   if (replyTo !== undefined && replyTo !== null) {
     const preview = quotedPreviewOf({ quoted: replyTo, readerLanguages, interfaceLanguage: params.interfaceLanguage });
-    const quotedLeaves = exitOffers(quotedExitOf(replyTo, params.now), 'image') && !preview.isProtected;
+    const quotedLeaves = !preview.isProtected;
     if (quotedLeaves && preview.text.trim() !== '') {
       quoted = { author: cardAuthorOf(replyTo, viewer), text: preview.text, handle: cardHandleOf(replyTo, viewer) };
       quotedAt = replyTo.createdAt === undefined ? null : new Date(replyTo.createdAt);

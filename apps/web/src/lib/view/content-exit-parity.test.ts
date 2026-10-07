@@ -8,9 +8,9 @@ import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { messageCardSubjectOf } from '@/lib/export/message-card-subject';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { contentExitOf, exitOffers, mediaLeaves, quotedExitOf, sealedProps, EXIT_ACTIONS } from './content-exit';
+import { citesSealed, contentExitOf, exitOffers, mediaLeaves, messageExitOffers, quotedExitOf, sealedProps, EXIT_ACTIONS } from './content-exit';
 import { forwardRefusalOf, forwardRequestOf } from './forward';
-import { imageableOf, messageMenuContextOf, messageMenuItems } from './message-actions';
+import { forwardMenuItems, imageableOf, messageMenuContextOf, messageMenuItems } from './message-actions';
 import { SEALED_ROW_ATTRIBUTE } from './sealed-exit-guard';
 import { attachmentSendRequest, mediaPageOffers } from './viewer-page-offers';
 
@@ -137,6 +137,82 @@ describe('parité — un seul verdict, partout', () => {
         ];
         expect(pieceLeaves.filter((says) => says && !leaves)).toEqual([]);
         expect(new Set(pieceLeaves).size).toBe(1);
+      });
+    });
+  });
+});
+
+/**
+ * LA RÉPONSE QUI CITE (décision porteur du 2026-10-08) — sur les mêmes 135
+ * combinaisons, prises cette fois comme CITATION d'une réponse ordinaire :
+ * « Imager » (projection, menu, « Plus… », carte) et « Imager la discussion »
+ * (sous-menu, carte, et la discussion d'un message ordinaire qui la contient)
+ * suivent le verdict de la citation, le sceau aussi ; Copier et Transférer la
+ * réponse, eux, restent offerts quelle que soit la citation.
+ */
+describe('parité — une réponse ordinaire qui cite chaque combinaison', () => {
+  const replyTo = (quoted: Message): Message =>
+    message({
+      id: '65f0a1b2c3d4e5f6a7b8c9d1',
+      conversationId: 'c-1',
+      senderId: 'u-tiers',
+      content: 'la réponse',
+      originalLanguage: 'fr',
+      translations: [],
+      effectFlags: 0,
+      createdAt: new Date(NOW - 30_000),
+      attachments: [],
+      replyTo: quoted,
+    });
+  const after = message({
+    id: '65f0a1b2c3d4e5f6a7b8c9d2',
+    conversationId: 'c-1',
+    senderId: 'u-tiers',
+    content: 'la suite',
+    originalLanguage: 'fr',
+    translations: [],
+    effectFlags: 0,
+    createdAt: new Date(NOW - 10_000),
+    attachments: [],
+  });
+  const discussionOf = (messages: readonly Message[], anchorId: string) =>
+    discussionCardSubjectOf({ messages, anchorId, servedOf: () => undefined, viewer: VIEWER, now: NOW }) !== null;
+
+  CASES.forEach(({ label, subject }) => {
+    test(`cite ${label}`, () => {
+      const quotedLeaves = quotedExitOf(subject, NOW).leaves;
+      const reply = replyTo(subject);
+      const ctx = { ...messageMenuContextOf(reply, { now: NOW }), hasDefaultExportFormat: true };
+      const menu = messageMenuItems(ctx).map((item) => item.id);
+
+      expect(citesSealed(reply, NOW)).toBe(!quotedLeaves);
+      expect({
+        image: messageExitOffers(reply, 'image', NOW),
+        imageDiscussion: messageExitOffers(reply, 'imageDiscussion', NOW),
+        menuImage: menu.includes('export'),
+        menuQuick: menu.includes('exportQuick'),
+        plus: imageableOf(ctx),
+        submenu: forwardMenuItems(ctx).some((item) => item.id === 'exportDiscussion'),
+        card: messageCardSubjectOf({ message: reply, servedText: undefined, viewer: VIEWER, readerLanguages: ['fr'], interfaceLanguage: 'fr', now: NOW }) !== null,
+        discussion: discussionOf([subject, reply], reply.id),
+        containing: discussionOf([subject, reply, after], after.id),
+        sealOpen: !(SEALED_ROW_ATTRIBUTE in sealedProps(reply, NOW)),
+      }).toEqual({
+        image: quotedLeaves,
+        imageDiscussion: quotedLeaves,
+        menuImage: quotedLeaves,
+        menuQuick: quotedLeaves,
+        plus: quotedLeaves,
+        submenu: quotedLeaves,
+        card: quotedLeaves,
+        discussion: quotedLeaves,
+        containing: quotedLeaves,
+        sealOpen: quotedLeaves,
+      });
+      expect({ copy: menu.includes('copy'), forward: menu.includes('forward'), others: EXIT_ACTIONS.filter((action) => action !== 'image' && action !== 'imageDiscussion').every((action) => messageExitOffers(reply, action, NOW)) }).toEqual({
+        copy: true,
+        forward: true,
+        others: true,
       });
     });
   });

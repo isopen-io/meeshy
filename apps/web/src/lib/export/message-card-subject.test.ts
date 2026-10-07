@@ -83,10 +83,8 @@ describe('messageCardSubjectOf — ce que la carte a le droit de montrer', () =>
     expect(subjectOf(reply({ expiresAt: new Date(NOW - 1000) }))).toBeNull();
   });
 
-  test('une citation protégée ne se peint pas : ni placeholder servi, ni contenu (#9573)', () => {
-    const subject = subjectOf(reply({ replyTo: quoted({ isViewOnce: true, content: '👁️' }) }));
-    expect(subject?.quoted).toBeNull();
-    expect(JSON.stringify(subject)).not.toContain('On se retrouve');
+  test('une réponse qui cite un contenu protégé ne s’image pas (#9573, décision porteur du 2026-10-08)', () => {
+    expect(subjectOf(reply({ replyTo: quoted({ isViewOnce: true, content: '👁️' }) }))).toBeNull();
   });
 
   test('un message sans texte n’a rien à peindre', () => {
@@ -176,21 +174,19 @@ describe('le message CITÉ apporte son média (#8901)', () => {
     expect(subject?.media.map((item) => item.id)).toEqual(['r-1', 'q-vid']);
   });
 
-  test('une citation PROTÉGÉE n’apporte aucun média — vue unique, floutée, chiffrée, supprimée', () => {
+  test('une citation PROTÉGÉE ferme la carte — vue unique, floutée, chiffrée, supprimée', () => {
     const cases: readonly Partial<Message>[] = [{ isViewOnce: true, content: '👁️' }, { isBlurred: true }, { isEncrypted: true }, { deletedAt: new Date('2026-09-28T11:30:00.000Z') }];
     for (const protection of cases) {
-      expect(subjectOf(reply({ replyTo: quoted({ attachments: [piece({})], ...protection }) }))?.media).toEqual([]);
+      expect(subjectOf(reply({ replyTo: quoted({ attachments: [piece({})], ...protection }) }))).toBeNull();
     }
   });
 
-  test('une pièce citée protégée à SON niveau n’est pas peinte, ses voisines le sont', () => {
+  test('une pièce citée floutée ou chiffrée n’est pas peinte, ses voisines le sont ; une pièce citée à vue unique ferme la carte', () => {
     const subject = subjectOf(
       reply({ replyTo: quoted({ attachments: [piece({ id: 'q-blur', isBlurred: true }), piece({ id: 'q-e2ee', isEncrypted: true }), piece({ id: 'q-open' })] }) }),
     );
     expect(subject?.media.map((item) => item.id)).toEqual(['q-open']);
-    const withOnce = subjectOf(reply({ replyTo: quoted({ attachments: [piece({ id: 'q-once', isViewOnce: true }), piece({ id: 'q-open' })] }) }));
-    expect(withOnce?.media).toEqual([]);
-    expect(withOnce?.quoted).toBeNull();
+    expect(subjectOf(reply({ replyTo: quoted({ attachments: [piece({ id: 'q-once', isViewOnce: true }), piece({ id: 'q-open' })] }) }))).toBeNull();
   });
 
   test('chaque média porte son AUTEUR (#9236) : la réponse les siens, la citation les siens — même sans texte cité', () => {
@@ -202,9 +198,8 @@ describe('le message CITÉ apporte son média (#8901)', () => {
     ]);
   });
 
-  test('une citation ÉCHUE n’apporte plus son média', () => {
-    const subject = subjectOf(reply({ replyTo: quoted({ attachments: [piece({})], expiresAt: new Date(NOW - 1000) }) }));
-    expect(subject?.media).toEqual([]);
+  test('une citation ÉCHUE ferme la carte', () => {
+    expect(subjectOf(reply({ replyTo: quoted({ attachments: [piece({})], expiresAt: new Date(NOW - 1000) }) }))).toBeNull();
   });
 });
 
