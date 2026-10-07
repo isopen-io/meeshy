@@ -39,7 +39,12 @@ import { CAPTURE_NOTICE_KIND } from '@meeshy/shared/utils/capture-notice';
 
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { unsetOrNull } from '../../utils/prisma-unset';
-import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsForOrFail, type HistoryFloorJoin } from '../historyFloor';
+import {
+  HISTORY_FLOOR_PARTICIPANT_SELECT,
+  loadHistoryFloorsForOrFail,
+  type HistoryFloorJoin,
+  type HistoryReader,
+} from '../historyFloor';
 import {
   NO_PERSONAL_HIDING,
   readPersonalHistoryHidingByUser,
@@ -105,13 +110,30 @@ export const NOT_A_CAPTURE_NOTICE_WHERE = {
 } satisfies Prisma.MessageWhereInput;
 
 /**
+ * Une ligne PROJETÉE (une projection peut omettre ces colonnes) peut-elle être
+ * un avis ? Une colonne non chargée ne prouve rien : elle laisse la question
+ * ouverte, et la ligne part au classement.
+ */
+export function mayBeCaptureNotice(row: {
+  readonly messageSource?: string | null;
+  readonly messageType?: string | null;
+  readonly expiresAt?: Date | string | null;
+}): boolean {
+  return (
+    (row.messageSource === undefined || row.messageSource === 'system') &&
+    (row.messageType === undefined || row.messageType === 'system') &&
+    (row.expiresAt === undefined || row.expiresAt !== null)
+  );
+}
+
+/**
  * Écarte les avis de capture d'une clause `where` — l'aperçu de liste et
  * l'horloge du fil, qui ne sont PAR LECTEUR nulle part. Rendu sous `AND`, jamais
  * à plat : la clause de l'appelant peut porter son propre `OR` (pagination,
  * `unsetOrNull`).
  */
-export function withoutCaptureNotices<W extends Record<string, unknown>>(where: W): W & { AND: unknown[] } {
-  const prior = where.AND;
+export function withoutCaptureNotices<W extends Record<string, unknown>>(where: W): W & { AND: Prisma.MessageWhereInput[] } {
+  const prior = where.AND as Prisma.MessageWhereInput | Prisma.MessageWhereInput[] | undefined;
   const and = prior === undefined ? [] : Array.isArray(prior) ? prior : [prior];
   return { ...where, AND: [...and, NOT_A_CAPTURE_NOTICE_WHERE] };
 }
@@ -206,9 +228,11 @@ async function loadCaptureNotices(
   prisma: PrismaClient,
   scope: { readonly conversationId: string } | { readonly ids: readonly string[] },
 ): Promise<CaptureNotice[]> {
-  const where: Prisma.MessageWhereInput = 'ids' in scope
-    ? { id: { in: [...scope.ids] } }
-    : { conversationId: scope.conversationId, ...CAPTURE_NOTICE_CANDIDATE_WHERE, AND: [...CAPTURE_NOTICE_CANDIDATE_WHERE.AND, unsetOrNull('deletedAt')] };
+  const where: Prisma.MessageWhereInput = {
+    ...('ids' in scope ? { id: { in: [...scope.ids] } } : { conversationId: scope.conversationId }),
+    ...CAPTURE_NOTICE_CANDIDATE_WHERE,
+    AND: [...CAPTURE_NOTICE_CANDIDATE_WHERE.AND, unsetOrNull('deletedAt')],
+  };
   const rows = (await prisma.message.findMany({ where, select: NOTICE_SELECT })) as NoticeSourceRow[];
   return rows.map(captureNoticeOf).filter((notice): notice is CaptureNotice => notice !== null);
 }
@@ -258,6 +282,94 @@ export async function unservedCaptureNoticeIds(
       isAnnouncementChannel: announcement,
     }))
     .map((notice) => notice.id);
+}
+
+/**
+ * Le masquage d'une surface qui SERT le fil à un lecteur (page, recherche,
+ * `/sync`) : le sien, plus les avis de capture qu'il ne doit pas voir. À poser
+ * là où la surface lit déjà son masquage — chaque requête qui l'applique écarte
+ * alors l'avis, compte de pagination compris. PROPAGE.
+ */
+export async function hidingServedTo(
+  prisma: PrismaClient,
+  params: {
+    readonly conversationId: string;
+    readonly participant: { readonly id: string; readonly role?: string | null } | null | undefined;
+    readonly floor: Date | null;
+    readonly hiding: PersonalHistoryHiding;
+  },
+): Promise<PersonalHistoryHiding> {
+  const { conversationId, participant, floor, hiding } = params;
+  const unserved = await unservedCaptureNoticeIds(prisma, {
+    conversationId,
+    viewer: { participantId: participant?.id ?? null, conversationRole: participant?.role ?? null, floor, hiding },
+  });
+  return hidingWithCaptureNotices(hiding, unserved);
+}
+
+/**
+ * La même chose pour une surface qui ne tient que le LECTEUR (la recherche) :
+ * sa ligne dans la conversation se lit ici — identité et rang, rien d'autre.
+ */
+export async function hidingServedToReader(
+  prisma: PrismaClient,
+  params: {
+    readonly conversationId: string;
+    readonly reader: HistoryReader | null;
+    readonly floor: Date | null;
+    readonly hiding: PersonalHistoryHiding;
+  },
+): Promise<PersonalHistoryHiding> {
+  const { conversationId, reader, floor, hiding } = params;
+  const participant = reader
+    ? await prisma.participant.findFirst({
+        where: reader.kind === 'anonymous'
+          ? { id: reader.participantId, conversationId, isActive: true }
+          : { userId: reader.userId, conversationId, isActive: true },
+        select: { id: true, role: true },
+      })
+    : null;
+  return hidingServedTo(prisma, { conversationId, participant, floor, hiding });
+}
+
+/**
+ * La forme ENSEMBLISTE, pour une surface qui sert plusieurs conversations à la
+ * fois (`/sync`) : parmi les lignes qu'elle s'apprête à servir, les avis que le
+ * lecteur ne doit pas voir. `viewerOf` rend le lecteur DANS la conversation de
+ * l'avis ; `null` (conversation hors de son appartenance) ⇒ l'avis ne se sert
+ * pas. PROPAGE.
+ */
+export async function unservedCaptureNoticeIdsAmong(
+  prisma: PrismaClient,
+  params: { readonly ids: readonly string[]; readonly viewerOf: (conversationId: string) => CaptureNoticeViewer | null },
+): Promise<ReadonlySet<string>> {
+  if (params.ids.length === 0) return new Set();
+  const notices = await loadCaptureNotices(prisma, { ids: params.ids });
+  if (notices.length === 0) return new Set();
+  const conversationIds = [...new Set(notices.map((n) => n.conversationId))];
+  const [captured, conversations] = await Promise.all([
+    loadCapturedMessages(prisma, notices),
+    prisma.conversation.findMany({
+      where: { id: { in: conversationIds } },
+      select: { id: true, isAnnouncementChannel: true },
+    }),
+  ]);
+  const announcement = new Set(conversations.filter((c) => c.isAnnouncementChannel !== false).map((c) => c.id));
+  const known = new Set(conversations.map((c) => c.id));
+  return new Set(
+    notices
+      .filter((notice) => {
+        const viewer = params.viewerOf(notice.conversationId);
+        if (!viewer) return true;
+        return !captureNoticeServedTo({
+          notice,
+          captured: capturedOf(captured, notice),
+          viewer,
+          isAnnouncementChannel: announcement.has(notice.conversationId) || !known.has(notice.conversationId),
+        });
+      })
+      .map((notice) => notice.id),
+  );
 }
 
 /**

@@ -25,6 +25,7 @@ import {
   truncateMessagePreview
 } from './utils/last-message-preview';
 import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
+import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
 
 const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 
@@ -170,9 +171,8 @@ export function registerSearchRoutes(
             take: 5,
           },
           messages: {
-            where: {
-              deletedAt: null
-            },
+            // #9630 — un avis de capture n'est jamais l'aperçu d'une ligne.
+            where: withoutCaptureNotices({ deletedAt: null }),
             orderBy: { createdAt: 'desc' },
             take: 1,
             include: conversationSearchPreviewInclude,

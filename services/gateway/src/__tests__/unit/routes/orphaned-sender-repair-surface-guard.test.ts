@@ -253,6 +253,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #9641 — la suppression d'un avis de capture relit l'expéditeur
   // (`senderId`) du message qu'il nomme, jamais la relation `sender`.
   'messaging/messageDeleteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9629 — la durée des avis : identité, horloge, métadonnée, échéance.
+  'messaging/captureNoticeRetention.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   // #9629 — l'audience d'un avis de capture : `NOTICE_SELECT` et
   // `CAPTURED_SELECT`, identité, horloge, `senderId` et métadonnée — jamais la
   // relation `sender`.

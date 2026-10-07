@@ -510,6 +510,15 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "Elle ne rend aucun contenu ; masquer ici refuserait le réessai d'un " +
       "envoi de l'auteur sous prétexte qu'il a effacé son propre historique.",
   },
+  'messaging/captureNoticeRetention.ts': {
+    kind: 'exempt',
+    reads: 3,
+    why:
+      "Durée des avis de capture (#9629) : la cascade relit les avis vivants d'une " +
+      "conversation pour avancer leur échéance, le rattrapage relit ceux qui n'en " +
+      "ont pas et l'échéance des messages qu'ils nomment. Aucun contenu n'est " +
+      "servi : ce sont des écritures d'échéance, pour TOUS les lecteurs à la fois.",
+  },
   'messaging/captureNoticeVisibility.ts': {
     kind: 'exempt',
     reads: 2,

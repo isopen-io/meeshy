@@ -31,7 +31,9 @@ import type { SyncIdentity } from './identity';
  */
 export type SyncMembership = {
   /** Participation du lecteur — `id` est SON `Participant.id` par conversation, utile aux collections qui doivent reconnaître « le mien ». */
-  readonly memberships: ReadonlyArray<{ readonly id: string; readonly conversationId: string }>;
+  readonly memberships: ReadonlyArray<{ readonly id: string; readonly conversationId: string; readonly role?: string | null }>;
+  /** `conversationId` → plancher d'historique du lecteur ; absente = aucun plancher (#9629 : l'avis de capture se juge dessus). */
+  readonly floors: ReadonlyMap<string, Date>;
   /** Conversations dont le plancher a pu être établi — celles à retirer en sont déjà exclues. */
   readonly conversationIds: readonly string[];
   /** Fragment Prisma à étaler dans un `where` de message (ou de sa relation) — `{}` si aucun plancher n'existe. */
@@ -63,7 +65,7 @@ export async function resolveSyncMembership(opts: {
     },
   });
   if (memberships.length === 0) {
-    return { memberships: [], conversationIds: [], historyFloor: {}, droppedCount: 0 };
+    return { memberships: [], conversationIds: [], historyFloor: {}, floors: new Map(), droppedCount: 0 };
   }
 
   // Ce que le lien d'entrée interdit de relire. La lecture est un CONTRÔLE
@@ -77,9 +79,10 @@ export async function resolveSyncMembership(opts: {
     .filter((id) => !dropped.has(id));
 
   return {
-    memberships: memberships.map((m) => ({ id: m.id, conversationId: m.conversationId })),
+    memberships: memberships.map((m) => ({ id: m.id, conversationId: m.conversationId, role: m.role ?? null })),
     conversationIds,
     historyFloor: historyFloorClause(conversationIds, floors),
+    floors,
     droppedCount: dropped.size,
   };
 }

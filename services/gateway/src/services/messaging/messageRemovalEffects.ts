@@ -15,6 +15,8 @@ export type {
   RetractedNotification,
   RetractedNotificationAnnouncer,
 } from './retractMessageNotifications';
+import { withoutCaptureNotices } from './captureNoticeVisibility';
+import { expireCaptureNoticesNaming } from './captureNoticeRetention';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -240,8 +242,9 @@ export async function recomputeConversationLastMessageAt(
   });
   if (!conversation) return;
 
+  // #9630 — l'horloge du fil ne se pose jamais sur un avis de capture.
   const lastAlive = await prisma.message.findFirst({
-    where: { conversationId, deletedAt: null },
+    where: withoutCaptureNotices({ conversationId, deletedAt: null }),
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true },
   });
@@ -252,10 +255,17 @@ export async function recomputeConversationLastMessageAt(
   });
 }
 
+/**
+ * `cause` : `deleted` (le défaut — un retrait voulu, par l'auteur, un
+ * modérateur, une suppression de compte) emporte les avis de capture qui
+ * nomment le message (#9629) ; `expired` (le balayage des éphémères) les
+ * laisse vivre leurs vingt-quatre heures de plus.
+ */
 export async function applyMessageRemovalEffects(
   prisma: PrismaClient,
   message: RemovedMessageRecord,
-  announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService()
+  announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+  cause: 'deleted' | 'expired' = 'deleted'
 ): Promise<void> {
   // Le décompte des compteurs de conversation. Il vivait recopié dans UNE
   // seule des quatre routes de suppression — celle qu'empruntent iOS et la vue
@@ -302,5 +312,15 @@ export async function applyMessageRemovalEffects(
       conversationId: message.conversationId,
       err,
     });
+  }
+  if (cause === 'expired') return;
+  try {
+    await expireCaptureNoticesNaming(prisma, {
+      conversationId: message.conversationId,
+      capturedMessageId: message.id,
+      now: new Date(),
+    });
+  } catch (err) {
+    log.warn('message removal: capture notices not expired', { messageId: message.id, err });
   }
 }

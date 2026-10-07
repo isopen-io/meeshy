@@ -15,6 +15,7 @@ import {
   historyReaderFromAuthContext,
   loadReaderHistoryFloor
 } from '../../services/historyFloor';
+import { hidingServedToReader } from '../../services/messaging/captureNoticeVisibility';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import {
   loadPersonalHistoryHiding,
@@ -208,15 +209,21 @@ export function registerMessageSearchRoute(
       // La recherche est la surface la plus facile à oublier et la plus
       // révélatrice : elle rend un message par son CONTENU, donc un historique
       // effacé y ressort intégralement dès qu'on en connaît un mot.
-      const searchHiding = await loadPersonalHistoryHiding(prisma, {
+      const personalSearchHiding = await loadPersonalHistoryHiding(prisma, {
         userId: authRequest.authContext.type === 'anonymous' ? null : userId,
         conversationId
       });
       // Même raison pour le plancher : chercher un mot est le moyen le plus
       // court de lire ce qui précède son arrivée.
-      const searchFloor = await loadReaderHistoryFloor(prisma, {
+      const searchReader = historyReaderFromAuthContext(authRequest.authContext);
+      const searchFloor = await loadReaderHistoryFloor(prisma, { conversationId, reader: searchReader });
+      // #9629 — un avis de capture ne se trouve pas par son texte chez qui ne
+      // lit pas le message qu'il nomme.
+      const searchHiding = await hidingServedToReader(prisma, {
         conversationId,
-        reader: historyReaderFromAuthContext(authRequest.authContext)
+        reader: searchReader,
+        floor: searchFloor,
+        hiding: personalSearchHiding
       });
 
       // Search content AND translations in parallel

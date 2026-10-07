@@ -11,7 +11,8 @@ import { hoistLocationOnto } from '../../services/location/sharedPlace';
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import { MESSAGE_PROTECTION_SELECT } from '../conversations/messages-list-query';
 import { logger } from '../../utils/logger';
-import { loadPersonalHistoryHidingByConversation } from '../../services/personalHistoryFilter';
+import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
+import { mayBeCaptureNotice, unservedCaptureNoticeIdsAmong } from '../../services/messaging/captureNoticeVisibility';
 import type { CursorKey, SyncCursor } from './cursor';
 import { encodeSyncCursor } from './cursor';
 import type { SyncIdentity } from './identity';
@@ -173,7 +174,10 @@ export const SYNC_MESSAGE_SERVED_FIELDS = Object.keys(syncMessageSelect) as read
  *   `delete-for-me`) se résout par conversation. Une garde qui dépendrait d'un
  *   paramètre d'appelant n'en serait plus une : l'omettre lèverait le masquage.
  */
-const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt'] as const;
+// `messageSource`, `messageType`, `expiresAt` : la marque d'un avis de capture
+// (#9629), lue pour le CLASSER, jamais servie hors projection — sans elle, toute
+// ligne projetée partirait au classement.
+const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt', 'messageSource', 'messageType', 'expiresAt'] as const;
 
 /**
  * Les SIX colonnes de `MESSAGE_PROTECTION_SELECT`, relevées mécaniquement
@@ -519,7 +523,7 @@ export async function syncMessages(opts: {
     userId: identity.kind === 'user' ? identity.userId : null,
     conversationIds,
   });
-  const visible = hidingByConversation.size === 0
+  const unhidden = hidingByConversation.size === 0
     ? changedPage
     : changedPage.filter((m) => {
         const hiding = hidingByConversation.get(m.conversationId);
@@ -527,6 +531,24 @@ export async function syncMessages(opts: {
         if (hiding.hiddenMessageIds.includes(m.id)) return false;
         return hiding.clearHistoryBefore === null || m.createdAt >= hiding.clearHistoryBefore;
       });
+
+  // #9629 — un avis de capture ne se rattrape que chez qui lit le message qu'il
+  // nomme. APRÈS le keyset, comme le masquage : le curseur ne recule pas.
+  const membershipByConversation = new Map(membership.memberships.map((m) => [m.conversationId, m] as const));
+  const unservedNotices = await unservedCaptureNoticeIdsAmong(prisma, {
+    ids: unhidden.filter(mayBeCaptureNotice).map((m) => m.id),
+    viewerOf: (conversationId) => {
+      const member = membershipByConversation.get(conversationId);
+      if (!member) return null;
+      return {
+        participantId: member.id,
+        conversationRole: member.role ?? null,
+        floor: membership.floors.get(conversationId) ?? null,
+        hiding: hidingByConversation.get(conversationId) ?? NO_PERSONAL_HIDING,
+      };
+    },
+  });
+  const visible = unservedNotices.size === 0 ? unhidden : unhidden.filter((m) => !unservedNotices.has(m.id));
 
   // La sérialisation s'applique APRÈS le masquage et APRÈS le budget, sur les
   // seules lignes réellement LIVRÉES.

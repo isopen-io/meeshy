@@ -7,6 +7,7 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { PREVIEW_ATTACHMENT_SUMMARY_LIMIT } from './utils/last-message-nature';
+import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
 
 /**
  * Participant fields fetched + serialized per participant in the GET
@@ -299,10 +300,9 @@ export const conversationListQuerySelect = (viewerId: string) => ({
     take: 1,
     select: conversationUserPreferencesSelect
   },
+  // #9630 — un avis de capture est une ligne silencieuse : jamais l'aperçu.
   messages: {
-    where: {
-      deletedAt: null
-    },
+    where: withoutCaptureNotices({ deletedAt: null }),
     orderBy: { createdAt: 'desc' as const },
     take: 1,
     select: conversationLastMessagePreviewSelect
