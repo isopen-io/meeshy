@@ -489,7 +489,7 @@ struct GalleryVideoPage: View, Equatable {
     }
 
     private var isPlayerActive: Bool {
-        videoManagerActiveURL == attachment.fileUrl && videoManagerIsPlaying
+        isPlayerAttached && videoManagerIsPlaying
     }
 
     /// La vidéo est-elle prête à jouer sans téléchargement ? Gouverne
@@ -499,8 +499,11 @@ struct GalleryVideoPage: View, Equatable {
         return false
     }
 
+    /// Le verdict de montage du MOTEUR (#9575), au rôle plein écran : la page
+    /// reprend sa vidéo, PiP compris — c'est elle qui referme la fenêtre.
     private var isPlayerAttached: Bool {
-        videoManagerActiveURL == attachment.fileUrl
+        SharedAVPlayerManager.mayMountFullscreenPlayer(surfaceMedia: attachment.fileUrl,
+                                                       activeMedia: videoManagerActiveURL)
     }
 
     private func resolveAvailability() async {
@@ -660,6 +663,20 @@ struct GalleryVideoPage: View, Equatable {
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
         .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
+        // **Le plein écran REPREND sa vidéo** (#9575) : au retour au premier
+        // plan, la fenêtre PiP ouverte en quittant l'application se referme et
+        // la lecture continue sur la page — jamais aux deux endroits. La page
+        // COURANTE seule : une voisine ne décide pas pour une piste qu'on ne
+        // regarde pas.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            guard isActive else { return }
+            videoManager.reclaimFromPip(urlString: attachment.fileUrl)
+        }
+        // Même reprise à l'ouverture sur un média que la fenêtre PiP jouait.
+        .task(id: "\(attachment.id)#reclaim#\(isActive)") {
+            guard isActive else { return }
+            videoManager.reclaimFromPip(urlString: attachment.fileUrl)
+        }
     }
 
     /// **Le glissement vertical : le bas ferme, le haut ouvre** (#6142). Voir
@@ -689,14 +706,18 @@ struct GalleryVideoPage: View, Equatable {
             .onEnded { value in
                 switch resolveDrag(value.translation) {
                 case .dismisses:
-                    if videoManager.isPlaying && videoManager.activeURL == attachment.fileUrl {
-                        videoManager.startPip()
-                    } else if videoManager.activeURL == attachment.fileUrl {
-                        // Vidéo EN PAUSE : pas de handoff PiP — sans cette
-                        // libération, le player partagé restait attaché
-                        // (`activeURL` posé) et la bulle en dessous rendait la
-                        // frame gelée au lieu de son thumbnail, footer masqué.
-                        videoManager.release(urlString: attachment.fileUrl)
+                    // **Sortir n'abandonne la lecture qu'au PiP** (#9575). Une
+                    // vidéo en pause, ou une fenêtre PiP qui ne part pas
+                    // (appareil sans PiP), LIBÈRE le player : sinon la bulle
+                    // restée dessous reprenait la lecture, ou sa frame gelée,
+                    // sans que personne l'ait demandé.
+                    if videoManager.mayMountPlayer(role: .fullscreen, urlString: attachment.fileUrl) {
+                        let handedOff = videoManager.isPlaying
+                            && videoManager.startPip(haltsOnFailure: true)
+                        if SharedAVPlayerManager.fullscreenCloseDisposition(
+                            pipHandedOff: handedOff || videoManager.isPipActive) == .stops {
+                            videoManager.release(urlString: attachment.fileUrl)
+                        }
                     }
                     onDismiss()
                 case .entersFull:

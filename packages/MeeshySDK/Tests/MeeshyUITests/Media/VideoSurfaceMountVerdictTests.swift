@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import MeeshyUI
 
 /// **Une vidéo ne joue qu'à UN endroit** (#9575, directive porteur 2026-10-07).
@@ -106,16 +107,47 @@ final class VideoSurfaceMountVerdictTests: XCTestCase {
     @MainActor
     func test_theCarrierPlayer_isDeclinedToAnInlineSurface_whileThePipPlays() {
         let manager = SharedAVPlayerManager.shared
+        let previousPlayer = manager.player
         let previousAttachment = manager.attachmentId
         let previousPip = manager.isPipActive
         defer {
+            manager.player = previousPlayer
             manager.attachmentId = previousAttachment
             manager.isPipActive = previousPip
         }
-
+        let shared = AVPlayer()
+        manager.player = shared
         manager.attachmentId = "64b0000000000000000000aa"
+
+        manager.isPipActive = false
+        XCTAssertTrue(manager.loadedPlayer(matching: "64b0000000000000000000aa", role: .inline) === shared,
+                      "hors PiP, la carte reprend le player du porteur — le témoin peut donc tomber")
+
         manager.isPipActive = true
         XCTAssertNil(manager.loadedPlayer(matching: "64b0000000000000000000aa", role: .inline),
                      "la carte du fil ne reprend pas le player que la fenêtre PiP joue")
+        XCTAssertTrue(manager.loadedPlayer(matching: "64b0000000000000000000aa", role: .fullscreen) === shared,
+                      "le lecteur plein écran, lui, le reprend")
+        XCTAssertNil(manager.loadedPlayer(matching: "64b0000000000000000000bb", role: .fullscreen))
+    }
+
+    func test_aLivePipWindow_keepsItsController() {
+        XCTAssertFalse(SharedAVPlayerManager.mayReplacePipController(isPipActive: true),
+                       "une surface qui se monte pendant le PiP ne remplace pas le contrôleur de la fenêtre")
+        XCTAssertTrue(SharedAVPlayerManager.mayReplacePipController(isPipActive: false))
+    }
+
+    func test_theScenePlayer_asksAsInlineInAFeed_andAsFullscreenInAReader() {
+        XCTAssertEqual(MeeshyScenePlayer.carrierSurfaceRole(mode: .card), .inline)
+        XCTAssertEqual(MeeshyScenePlayer.carrierSurfaceRole(mode: .preview), .inline)
+        XCTAssertEqual(MeeshyScenePlayer.carrierSurfaceRole(mode: .reader), .fullscreen)
+        XCTAssertEqual(MeeshyScenePlayer.carrierSurfaceRole(mode: .reel), .fullscreen)
+    }
+
+    func test_theFullscreenVerdict_ignoresThePip() {
+        XCTAssertTrue(SharedAVPlayerManager.mayMountFullscreenPlayer(
+            surfaceMedia: Self.media, activeMedia: Self.media))
+        XCTAssertFalse(SharedAVPlayerManager.mayMountFullscreenPlayer(
+            surfaceMedia: Self.media, activeMedia: ""))
     }
 }

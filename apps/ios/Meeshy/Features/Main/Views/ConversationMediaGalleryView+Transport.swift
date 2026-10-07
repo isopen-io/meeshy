@@ -184,6 +184,8 @@ extension ConversationMediaGalleryView {
     /// arrêterait la mauvaise piste.
     var currentAttachmentIsActiveTrack: Bool {
         guard let att = currentAttachment, att.type == .video else { return false }
-        return videoManagerActiveURL == att.fileUrl && videoManagerPlayer != nil
+        return videoManagerPlayer != nil
+            && SharedAVPlayerManager.mayMountFullscreenPlayer(surfaceMedia: att.fileUrl,
+                                                              activeMedia: videoManagerActiveURL)
     }
 }

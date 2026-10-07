@@ -49,8 +49,10 @@ struct ReelVideoView: View {
     @State private var player: AVPlayer?
 
     private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
+    /// Le verdict de montage du MOTEUR (#9575), au rôle plein écran.
     private var isShowingThis: Bool {
-        player != nil && activeURL == attachment.fileUrl
+        player != nil && SharedAVPlayerManager.mayMountFullscreenPlayer(
+            surfaceMedia: attachment.fileUrl, activeMedia: activeURL)
     }
 
     var body: some View {
@@ -59,6 +61,12 @@ struct ReelVideoView: View {
         }
         .onReceive(manager.$activeURL) { activeURL = $0 }
         .onReceive(manager.$player) { player = $0 }
+        // Le réel plein écran REPREND sa vidéo au retour au premier plan : la
+        // fenêtre PiP se referme, la lecture continue ici (#9575).
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            guard isActive else { return }
+            manager.reclaimFromPip(urlString: attachment.fileUrl)
+        }
     }
 
     /// Ratio du média, 9:16 par défaut quand les dimensions manquent — le même

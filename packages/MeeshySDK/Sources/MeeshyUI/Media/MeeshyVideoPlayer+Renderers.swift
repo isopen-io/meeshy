@@ -2,62 +2,6 @@ import SwiftUI
 import AVFoundation
 import MeeshySDK
 
-// MARK: - Flat Renderer
-
-/// Renders a `.flat` style player : no chrome, autoplay + loop + muted.
-/// Used for SwiftUI previews of story foreground/background hors canvas.
-/// In the canvas itself, `MeeshyVideoCanvasLayer` is used directly.
-internal struct _FlatRenderer: View {
-    let player: MeeshyVideoPlayer
-
-    @State private var avPlayer: AVQueuePlayer?
-    @State private var looper: AVPlayerLooper?
-    @State private var aspectRatio: CGFloat?
-
-    var body: some View {
-        ZStack {
-            Color.black
-            if let p = avPlayer {
-                MeeshyVideoSurface(player: p, gravity: .resizeAspectFill, isMuted: true)
-            }
-        }
-        .aspectRatio(player.frame.maxAspectRatio == nil ? aspectRatio : nil, contentMode: .fit)
-        .applyVideoFrame(player.frame)
-        .onAppear { setup() }
-        .onDisappear { teardown() }
-    }
-
-    private func setup() {
-        guard avPlayer == nil,
-              let url = MeeshyConfig.resolveMediaURL(player.attachment.fileUrl) else { return }
-        let item = AVPlayerItem(url: url)
-        item.preferredForwardBufferDuration = player.performance.preferredForwardBufferDuration
-        let queue = AVQueuePlayer(playerItem: item)
-        queue.isMuted = true
-        /* UN LECTEUR EN BOUCLE NE VEILLE PAS L'ÉCRAN (#6221, volet énergie).
-           `preventsDisplaySleepDuringVideoPlayback` vaut `true` par DÉFAUT :
-           cette vignette muette, qui boucle indéfiniment dans chaque bulle,
-           carte de feed, commentaire et rangée Focal, empêchait l'écran de
-           s'éteindre tant qu'elle était montée. Personne ne « regarde » une
-           vignette silencieuse en boucle — c'est la définition d'un décor.
-           `RecentMediaStrip:900` et `AttachmentQuickLookPreview:50` le
-           posaient déjà ; ce site, le plus instancié des six, ne l'avait pas. */
-        queue.preventsDisplaySleepDuringVideoPlayback = false
-        queue.automaticallyWaitsToMinimizeStalling = player.performance.waitsToMinimizeStalling
-        looper = AVPlayerLooper(player: queue, templateItem: item)
-        avPlayer = queue
-        aspectRatio = player.attachment.videoAspectRatio
-        queue.playImmediately(atRate: 1.0)
-    }
-
-    private func teardown() {
-        looper?.disableLooping()
-        looper = nil
-        avPlayer?.pause()
-        avPlayer = nil
-    }
-}
-
 // MARK: - Inline Renderer
 //
 // Plays through `SharedAVPlayerManager` (single active inline at a time).
@@ -92,6 +36,7 @@ internal struct _InlineRenderer: View {
     @State private var enginePlayer: AVPlayer? = SharedAVPlayerManager.shared.player
     @State private var engineDuration: Double = SharedAVPlayerManager.shared.duration
     @State private var engineIsMuted: Bool = SharedAVPlayerManager.shared.isMuted
+    @State private var engineIsPipActive: Bool = SharedAVPlayerManager.shared.isPipActive
 
     /// Aspect ratio DISPLAY (post-rotation) résolu async depuis le
     /// `preferredTransform` de l'AVAsset (priorité 1 une fois en cache).
@@ -102,8 +47,14 @@ internal struct _InlineRenderer: View {
     /// ratio reflète l'orientation d'affichage attendue.
     @State private var thumbnailAspectRatio: CGFloat?
 
+    /// Le verdict est celui du MOTEUR (#9575) : une surface en ligne ne monte
+    /// pas le lecteur tant que la fenêtre PiP le joue — elle rend sa vignette.
     private var isThisActive: Bool {
-        activeURL == player.attachment.fileUrl && enginePlayer != nil
+        enginePlayer != nil && SharedAVPlayerManager.mayMountPlayer(
+            role: .inline,
+            surfaceMedia: player.attachment.fileUrl,
+            activeMedia: activeURL,
+            isPipActive: engineIsPipActive)
     }
 
     /// Ratio source-de-vérité unique pour cette bulle. Ordre de priorité :
@@ -179,6 +130,7 @@ internal struct _InlineRenderer: View {
         .onReceive(manager.$player) { enginePlayer = $0 }
         .onReceive(manager.$duration) { engineDuration = $0 }
         .onReceive(manager.$isMuted) { engineIsMuted = $0 }
+        .onReceive(manager.$isPipActive) { engineIsPipActive = $0 }
         .applyVideoFrame(player.frame)
         .task(id: player.attachment.fileUrl) {
             // Lance les deux résolutions en parallèle. La plus rapide (le
@@ -533,7 +485,8 @@ internal struct _FullscreenRenderer: View {
     @State private var showControls: Bool = true
     @State private var controlsTimer: Timer?
     @State private var videoGravity: AVLayerVideoGravity = .resizeAspect
-    @State private var saveState: SaveState = .idle
+    /// `internal` — `saveToPhotos()` l'écrit depuis `+FullscreenSave.swift`.
+    @State var saveState: SaveState = .idle
     @State private var dismissOffset: CGFloat = 0
     @State private var watchStartTime: Date?
     // NOTE (BUG B fix): the fullscreen renderer no longer registers its own
@@ -563,6 +516,7 @@ internal struct _FullscreenRenderer: View {
     private let manager = SharedAVPlayerManager.shared
     @State private var enginePlayer: AVPlayer? = SharedAVPlayerManager.shared.player
     @State private var engineIsMuted: Bool = SharedAVPlayerManager.shared.isMuted
+    @State private var engineActiveURL: String = SharedAVPlayerManager.shared.activeURL
     /// Poster NET (opaque, résolu par l'app) : lu au montage, résolu sinon.
     @State private var poster: UIImage?
     /// Fond décoratif pendant la résolution — le thumbHash, flou assumé. La
@@ -645,28 +599,50 @@ internal struct _FullscreenRenderer: View {
         .task(id: enginePlayer != nil) { await armSurfaceReadyFailsafe() }
         .onReceive(manager.$player) { enginePlayer = $0 }
         .onReceive(manager.$isMuted) { engineIsMuted = $0 }
+        .onReceive(manager.$activeURL) { engineActiveURL = $0 }
+        // **Le plein écran REPREND sa vidéo** (#9575) : au retour au premier
+        // plan, la fenêtre PiP ouverte en quittant l'application se referme et
+        // la lecture continue ici — jamais aux deux endroits.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            manager.reclaimFromPip(urlString: player.attachment.fileUrl)
+        }
         .onAppear {
             watchStartTime = Date()
             // Defensive : reset l'auto-hide state à l'entrée du fullscreen.
             showControls = true
+            manager.reclaimFromPip(urlString: player.attachment.fileUrl)
         }
         .onDisappear { onDisappearTeardown() }
         .statusBarHidden(true)
     }
 
     private var isActive: Bool {
-        manager.player != nil && manager.activeURL == player.attachment.fileUrl
+        manager.player != nil
+            && manager.mayMountPlayer(role: .fullscreen, urlString: player.attachment.fileUrl)
+    }
+
+    /// Le player que CETTE surface monte : celui du moteur, si le verdict de
+    /// montage le lui accorde (#9575). Un moteur occupé par un autre média ne
+    /// prête pas son image à ce plein écran.
+    private var mountedPlayer: AVPlayer? {
+        SharedAVPlayerManager.mayMountFullscreenPlayer(
+            surfaceMedia: player.attachment.fileUrl,
+            activeMedia: engineActiveURL) ? enginePlayer : nil
     }
 
     // MARK: Player content (active)
 
     private var playerContent: some View {
         ZStack {
-            if let p = enginePlayer {
+            if let p = mountedPlayer {
+                // `enablesPip` : la fenêtre PiP se CONFIGURE avant de se
+                // demander — sans contrôleur attaché à cette couche,
+                // `startPip()` ne faisait rien (#9575).
                 MeeshyVideoSurface(
                     player: p,
                     gravity: videoGravity,
                     isMuted: engineIsMuted,
+                    enablesPip: _InlineRenderer.surfaceEnablesPip(controls: player.controls),
                     onReadyForDisplay: { surfaceReady = true }
                 )
                     .ignoresSafeArea()
@@ -995,8 +971,11 @@ internal struct _FullscreenRenderer: View {
             }
             .onEnded { value in
                 if value.translation.height > 150 {
-                    if manager.isPlaying { manager.startPip() }
-                    closePlayer()
+                    // Le glissement vers le bas DEMANDE le PiP ; s'il ne part
+                    // pas (appareil sans PiP, surface sans l'option), fermer
+                    // arrête la lecture comme la croix.
+                    let handedOff = manager.isPlaying && manager.startPip(haltsOnFailure: true)
+                    closePlayer(pipHandedOff: handedOff || manager.isPipActive)
                 } else {
                     dismissOffset = 0
                 }
@@ -1023,18 +1002,21 @@ internal struct _FullscreenRenderer: View {
         watchStartTime = nil
     }
 
-    private func closePlayer() {
+    /// **Fermer n'abandonne la lecture qu'au PiP** (#9575).
+    ///
+    /// Jusqu'ici, fermer pendant la lecture laissait le player tourner « pour
+    /// une continuation en ligne » : la bulle restée derrière se remettait à
+    /// jouer, son compris, sans que personne l'ait demandé. Le seul lieu où la
+    /// lecture survit à la fermeture est une fenêtre PiP — demandée par le
+    /// glissement vers le bas, ou déjà ouverte depuis le menu.
+    private func closePlayer(pipHandedOff: Bool? = nil) {
         // Reset loop défensif : sans ça, le flag persisterait jusqu'au prochain
         // load() et pourrait faire boucler une vidéo inline ouverte ensuite.
         manager.shouldLoop = false
-        // BUG E fix : si la lecture est en pause/terminée au moment de la
-        // fermeture, on libère le player pour vider `activeURL`. Sans ça,
-        // `hasPlayingInlineVideo` reste vrai côté bulle (footer/timestamp
-        // masqué) et le player traîne en mémoire. Choix : ne PAS stopper un
-        // player encore en lecture — l'utilisateur peut vouloir un handoff PIP
-        // ou une continuation inline ; seul un dismiss "à l'arrêt" coupe.
-        if !manager.isPlaying {
-            manager.stop()
+        let handedOff = pipHandedOff ?? manager.isPipActive
+        if SharedAVPlayerManager.fullscreenCloseDisposition(pipHandedOff: handedOff) == .stops {
+            // URL-gated : ne touche pas un autre média qui aurait pris le moteur.
+            manager.release(urlString: player.attachment.fileUrl)
         }
         player.onClose?()
     }
@@ -1082,53 +1064,6 @@ internal struct _FullscreenRenderer: View {
             VideoPlaybackPositionStore.shared.clear(for: attId)
         } else {
             VideoPlaybackPositionStore.shared.save(currentSec, for: attId)
-        }
-    }
-
-    private func saveToPhotos() {
-        guard let url = MeeshyConfig.resolveMediaURL(player.attachment.fileUrl) else { return }
-        saveState = .saving
-        HapticFeedback.light()
-        Task {
-            do {
-                let tempFile = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("save_\(UUID().uuidString).mp4")
-                if let cached = CacheCoordinator.videoLocalFileURL(for: url.absoluteString) {
-                    // Cache-first : l'état .ready qui a permis la lecture implique
-                    // que le fichier est déjà dans le DiskCacheStore vidéo — le
-                    // copier évite de re-télécharger un média déjà sur disque.
-                    try FileManager.default.copyItem(at: cached, to: tempFile)
-                } else {
-                    // Pull from URLSession.download (streams to disk) — avoids
-                    // double-loading a 200MB file into memory like .data(from:) would.
-                    let (tempURL, _) = try await URLSession.shared.download(from: url)
-                    try FileManager.default.moveItem(at: tempURL, to: tempFile)
-                }
-                let ok = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
-                try? FileManager.default.removeItem(at: tempFile)
-                await MainActor.run {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        saveState = ok ? .saved : .failed
-                    }
-                    if ok {
-                        HapticFeedback.success()
-                        player.onSaveSuccess?()
-                    } else {
-                        HapticFeedback.error()
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    withAnimation { saveState = .failed }
-                    HapticFeedback.error()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
-                }
-            }
         }
     }
 }
