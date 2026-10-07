@@ -94,12 +94,16 @@ export function ConceptEmblem({ concept, view, size }: { readonly concept: Progr
  * UNE CHIP NE SE COUPE JAMAIS (#9563) : `whitespace-nowrap` sur la chip,
  * `flex-wrap` sur sa rangée — une rangée trop longue passe à la ligne ENTRE deux
  * chips. Un libellé trop long se raccourcit dans le catalogue.
+ *
+ * ET ELLE N'ÉLARGIT JAMAIS SA CARTE (amendement n° 3) : `max-w-full` la borne à
+ * sa rangée, `truncate` la coupe d'une ellipse en DERNIER recours — un texte
+ * agrandi par le système, une valeur que personne n'avait prévue.
  */
 export function ConceptChip({ children, tint = 'var(--color-ios-ink-3)' }: { readonly children: ReactNode; readonly tint?: string }) {
   return (
     <span
       data-chip=""
-      className="inline-flex items-center whitespace-nowrap rounded-chip px-2.5 py-1 text-check font-semibold"
+      className="max-w-full truncate whitespace-nowrap rounded-chip px-2.5 py-1 text-check font-semibold"
       style={{ backgroundColor: `color-mix(in srgb, ${tint} 14%, transparent)`, color: GAME_INK }}
     >
       {children}
@@ -110,7 +114,7 @@ export function ConceptChip({ children, tint = 'var(--color-ios-ink-3)' }: { rea
 export function ConceptChips({ chips }: { readonly chips: readonly string[] }) {
   if (chips.length === 0) return null;
   return (
-    <span data-chips="" className="flex flex-wrap gap-1.5">
+    <span data-chips="" className="flex min-w-0 max-w-full flex-wrap gap-1.5">
       {chips.map((chip) => (
         <ConceptChip key={chip}>{chip}</ConceptChip>
       ))}
@@ -126,21 +130,31 @@ function Chevron() {
   );
 }
 
-/** La tête d'une carte ou d'une ligne : emblème, nom (il passe à la ligne plutôt que de se couper), valeur sur UNE ligne, chevron. */
+/**
+ * La tête d'une carte ou d'une ligne : emblème, nom, valeur, chevron.
+ *
+ * Le nom et la valeur partagent une rangée qui PASSE À LA LIGNE ENTRE EUX
+ * (#9563, amendement n° 3) : « Ligue » et « Améthyste · rang 30 » ne tiennent pas
+ * côte à côte à 320 px, et les serrer écrasait le nom lettre à lettre pendant que
+ * la valeur se tronquait. Trop longs ensemble, la valeur descend sous le nom,
+ * entière ; elle ne se tronque que si elle dépasse la rangée à elle seule.
+ */
 function Head({ emblem, name, value }: { readonly emblem: ReactNode; readonly name: string; readonly value?: string }) {
   return (
     <span className="flex items-center gap-3">
       <span className="grid size-10 shrink-0 place-items-center" aria-hidden="true">
         {emblem}
       </span>
-      <span data-concept-name="" className="min-w-0 flex-1 break-words text-body font-semibold leading-tight" style={{ color: GAME_INK }}>
-        {name}
-      </span>
-      {value === undefined ? null : (
-        <span data-concept-value="" className="max-w-[60%] shrink-0 truncate text-body font-bold" style={{ color: GAME_BRAND }}>
-          {value}
+      <span data-concept-head="" className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+        <span data-concept-name="" className="min-w-0 max-w-full break-words text-body font-semibold leading-tight" style={{ color: GAME_INK }}>
+          {name}
         </span>
-      )}
+        {value === undefined ? null : (
+          <span data-concept-value="" className="min-w-0 max-w-full truncate text-body font-bold" style={{ color: GAME_BRAND }}>
+            {value}
+          </span>
+        )}
+      </span>
       <Chevron />
     </span>
   );

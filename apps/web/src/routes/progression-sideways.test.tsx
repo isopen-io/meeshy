@@ -62,6 +62,19 @@ describe('aucun conteneur ne défile de côté', () => {
       expect({ file, clip: classes.includes('overflow-x-clip'), overscroll: classes.includes('overscroll-x-none') }).toEqual({ file, clip: true, overscroll: true });
     }
   });
+
+  /**
+   * Un mot plus large que la page (« Missionsbelohnungen » sur un texte agrandi) ne dépasse aucune
+   * BOÎTE : seul son texte sort, et le verrou le rognerait en silence. `break-words` s'hérite : posé
+   * sur la page, il vaut pour tout ce qu'elle contient.
+   */
+  test('chaque page laisse un mot insécable passer à la ligne plutôt que de le rogner', () => {
+    const pages = PROGRESSION_SOURCES.flatMap((file) =>
+      [...read(file).matchAll(/<main id="contenu" className="([^"]*)"/g)].map((match) => ({ file, classes: match[1] ?? '' })),
+    );
+    expect(pages.length).toBeGreaterThanOrEqual(4);
+    for (const { file, classes } of pages) expect({ file, wraps: classes.includes('break-words') }).toEqual({ file, wraps: true });
+  });
 });
 
 describe('les valeurs longues', () => {

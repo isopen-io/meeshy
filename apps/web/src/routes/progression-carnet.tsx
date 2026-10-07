@@ -239,7 +239,7 @@ export default function ProgressionCarnetScreen() {
           </h1>
         </div>
       </header>
-      <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
+      <main id="contenu" className="flex-1 overflow-y-auto overflow-x-clip overscroll-x-none break-words pb-safe">
         <CarnetBody env={appPhotoEnv()} flameDays={flameDays} />
       </main>
     </div>

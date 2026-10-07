@@ -215,7 +215,7 @@ export default function ProgressionScreen() {
         )}
       </header>
 
-      <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
+      <main id="contenu" className="flex-1 overflow-y-auto overflow-x-clip overscroll-x-none break-words pb-safe">
         {query.data !== undefined ? (
           <ProgressionBody progress={query.data} mascotEvent={mascotEvent} guide={<ProgressionGuide view={query.data} />} />
         ) : query.isError ? (

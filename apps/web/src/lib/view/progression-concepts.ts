@@ -278,8 +278,8 @@ function missions(view: EngagementWithGame): Body {
   const chestFact = fact(gameText('game.chest.title'), chestState);
   if (!served.unlocked) {
     return {
-      value: gameText('game.door.league.locked', { level: formatCount(MISSIONS_MIN_LEVEL) }),
-      chips: [chestState],
+      value: levelValue(MISSIONS_MIN_LEVEL),
+      chips: [gameText('game.door.league.locked', { level: formatCount(MISSIONS_MIN_LEVEL) })],
       gauge: null,
       facts: [chestFact],
     };

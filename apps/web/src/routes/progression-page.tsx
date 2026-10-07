@@ -98,7 +98,7 @@ export function ProgressionPage({
         )}
       </header>
 
-      <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
+      <main id="contenu" className="flex-1 overflow-y-auto overflow-x-clip overscroll-x-none break-words pb-safe">
         {query.data !== undefined ? (
           <div className="flex flex-col gap-5 px-4 py-3">{children(query.data)}</div>
         ) : query.isError ? (

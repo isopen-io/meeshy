@@ -276,8 +276,10 @@ export function AchievementsSection({
  *    pas masqué en CSS : un objectif qu'on ne peut pas tenir ne doit pas
  *    exister dans l'arbre, même invisible.
  *
- * La rangée défile dans SON conteneur (`overflow-x`), jamais le document : la
- * page ne défile jamais horizontalement.
+ * Les paliers se rangent en GRILLE qui passe à la ligne (#9563, amendement
+ * n° 3) : la rangée était un carrousel (`overflow-x`), seule surface de
+ * Progression à glisser de côté sous le doigt — et le prochain objectif, dernier
+ * de la rangée, restait hors de l'écran tant qu'on ne la faisait pas défiler.
  */
 export function GeneratedAchievements({ sections }: { sections: readonly AchievementSectionView[] }) {
   if (sections.length === 0) return null;
@@ -300,13 +302,13 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
             </span>
           </div>
           <ul
-            className="scrollbar-none flex gap-2 overflow-x-auto pb-1"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-3"
             aria-label={`${ACHIEVEMENT_SECTION_TITLES[vue.section]} — ${vue.unlockedCount} sur ${vue.attainableCount}`}
           >
             {vue.entries.map((entry) => (
               <li
                 key={entry.key}
-                className="flex min-w-36 shrink-0 flex-col gap-1 rounded-card px-3 py-2"
+                className="flex min-w-0 flex-col gap-1 rounded-card px-3 py-2"
                 style={{
                   backgroundColor: entry.unlocked
                     ? 'color-mix(in srgb, var(--color-ok) 14%, transparent)'
@@ -319,7 +321,7 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
                 >
                   <GlyphSvg glyph={entry.unlocked ? PROGRESSION_GLYPHS.star : PROGRESSION_GLYPHS.medal} size={13} />
                 </span>
-                <span className="text-check font-semibold" style={{ color: INK }}>
+                <span className="break-words text-check font-semibold" style={{ color: INK }}>
                   {generatedAchievementLabel(entry.family, entry.tier)}
                 </span>
                 {entry.unlocked ? (

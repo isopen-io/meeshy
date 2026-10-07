@@ -206,7 +206,7 @@ export function ElansHero({ progress }: { progress: EngagementProgress }) {
               <li
                 key={famille}
                 data-chip=""
-                className="whitespace-nowrap rounded-chip px-2.5 py-1 text-check font-semibold"
+                className="max-w-full truncate whitespace-nowrap rounded-chip px-2.5 py-1 text-check font-semibold"
                 style={{ backgroundColor: `color-mix(in srgb, ${BRAND} 16%, transparent)`, color: INK }}
               >
                 {FAMILY_LABELS[famille]}

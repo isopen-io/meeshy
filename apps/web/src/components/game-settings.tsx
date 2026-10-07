@@ -57,7 +57,7 @@ const DEFAULT_LEVEL: Readonly<Record<(typeof FIELDS)[number], GameVisibility['sh
 function SwitchRow({ marker, label, checked, disabled, onChange }: { readonly marker: string; readonly label: string; readonly checked: boolean; readonly disabled?: boolean; readonly onChange: (on: boolean) => void }) {
   return (
     <label className="flex cursor-pointer items-center justify-between gap-3 rounded-chip px-1 has-[:disabled]:opacity-60" style={{ minHeight: 44 }}>
-      <span className="text-body font-semibold" style={{ color: GAME_INK }}>
+      <span className="min-w-0 break-words text-body font-semibold" style={{ color: GAME_INK }}>
         {label}
       </span>
       <input

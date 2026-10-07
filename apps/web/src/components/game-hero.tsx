@@ -152,14 +152,14 @@ function HowToEarn({ rules }: { readonly rules: readonly EarnRule[] }) {
       </h3>
       <ul className="flex flex-wrap gap-1.5" data-game-earn="">
         {rules.map(({ family, points }) => (
-          <li key={family}>
+          <li key={family} className="max-w-full">
             <Link
               to="progressionRegles"
               search={{ regle: '1' }}
               data-game-earn-chip={family}
               aria-label={gameText('game.hero.earn_chip_a11y', { family: familyName(family), points: pointsLabel(points) })}
               data-chip=""
-              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-chip px-3 text-check font-semibold"
+              className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap rounded-chip px-3 text-check font-semibold"
               style={{
                 minHeight: 44,
                 backgroundColor: `color-mix(in srgb, ${enamelToken(family)} 14%, transparent)`,
@@ -167,7 +167,7 @@ function HowToEarn({ rules }: { readonly rules: readonly EarnRule[] }) {
               }}
             >
               <i aria-hidden="true" className="inline-block size-2 rounded-chip" style={{ backgroundColor: enamelToken(family) }} />
-              {gameText('game.hero.earn_chip', { family: familyName(family), points: formatCount(points) })}
+              <span className="truncate">{gameText('game.hero.earn_chip', { family: familyName(family), points: formatCount(points) })}</span>
             </Link>
           </li>
         ))}

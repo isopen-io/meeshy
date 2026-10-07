@@ -100,7 +100,7 @@ function FriendPicker({ friends, online, busy, onInvite }: { readonly friends: r
           {gameText('game.duo.search.none')}
         </p>
       ) : (
-        <ul data-game-duo-friends="" className="flex max-h-72 flex-col gap-1 overflow-y-auto" aria-label={gameText('game.duo.pick')}>
+        <ul data-game-duo-friends="" className="flex max-h-72 flex-col gap-1 overflow-y-auto overflow-x-clip overscroll-x-none" aria-label={gameText('game.duo.pick')}>
           {shown.map((friend) => (
             <li key={friend.id}>
               <Action marker="data-game-duo-invite" tint={GAME_BRAND} busy={busy} disabled={!online} onClick={() => onInvite(friend)}>
