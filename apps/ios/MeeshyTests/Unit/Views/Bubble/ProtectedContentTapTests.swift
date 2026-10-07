@@ -398,12 +398,12 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
 
     func test_theProjections_readTheExitOfferOnce() throws {
         XCTAssertTrue(try code("Views/Bubble/BubbleContentBuilder.swift")
-            .contains("self.captureVerdict=message.exitOffer.capture"))
+            .contains("self.captureVerdict=ContentCaptureVisibility.renderedVerdict(for:message)"))
         XCTAssertTrue(try code("Riviere/Core/RiverConversationMapping.swift")
             .contains("capturesBlocked:message.exitOffer.capture.shieldsCapture(),"),
                       "la Rivière ne pose aucun accusé de lecture par bulle : elle n'annonce pas, la flamme y reste noire")
         XCTAssertTrue(try code("Models/Message.swift")
-            .contains("!$0.exitOffer.capture.shieldsCapture(surfaceAnnounces:surfaceAnnounces)"))
+            .contains("!ContentCaptureVisibility.renderedVerdict(for:$0).shieldsCapture(surfaceAnnounces:surfaceAnnounces)"))
     }
 
     // MARK: - #9617 — annoncé OU noir, jamais capturé en silence

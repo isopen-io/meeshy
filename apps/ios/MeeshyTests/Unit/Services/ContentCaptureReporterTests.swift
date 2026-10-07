@@ -29,18 +29,11 @@ final class ContentCaptureReporterTests: XCTestCase {
         return message
     }
 
-    private final class RecordingSender: ContentCaptureSending, @unchecked Sendable {
-        private let lock = NSLock()
-        private var stored: [ContentCaptureReport] = []
-        var onSend: (@Sendable () -> Void)?
-
-        var reports: [ContentCaptureReport] { lock.withLock { stored } }
-
-        func sendContentCapture(_ report: ContentCaptureReport) async throws -> [String] {
-            lock.withLock { stored.append(report) }
-            onSend?()
-            return report.messageIds
-        }
+    @MainActor
+    private final class RecordingDeclarer: ContentCaptureDeclaring {
+        nonisolated deinit {}
+        private(set) var reports: [ContentCaptureReport] = []
+        func declare(_ reports: [ContentCaptureReport]) { self.reports += reports }
     }
 
     @MainActor
@@ -70,24 +63,17 @@ final class ContentCaptureReporterTests: XCTestCase {
     private func makeSUT(
         covered: Bool = false,
         ids: [String] = ["cap_first00001", "cap_second0002"]
-    ) -> (sut: ContentCaptureReporter, sender: RecordingSender) {
-        let sender = RecordingSender()
+    ) -> (sut: ContentCaptureReporter, sender: RecordingDeclarer) {
+        let sender = RecordingDeclarer()
         let queue = IdQueue(ids)
         let sut = ContentCaptureReporter(
-            sender: sender,
+            declarer: sender,
             isConversationCovered: { covered },
             isScreenCaptured: { false },
             now: { Date(timeIntervalSince1970: 1_000) },
-            newCaptureId: { queue.next() },
-            readSettleDelay: .zero
+            newCaptureId: { queue.next() }
         )
         return (sut, sender)
-    }
-
-    private func waitForSends(_ sender: RecordingSender, count: Int) async {
-        for _ in 0..<200 where sender.reports.count < count {
-            await Task.yield()
-        }
     }
 
     // MARK: - Ce qu'une rangée montre
@@ -123,6 +109,38 @@ final class ContentCaptureReporterTests: XCTestCase {
         XCTAssertEqual(declared.map(\.capture), [.announced])
     }
 
+    /// Une citation dont la nature n'est pas déclarée (flamme après lecture pas
+    /// encore consommée : ni échéance, ni drapeau) se déclare quand même — la
+    /// passerelle juge sur le cité réel.
+    func test_candidates_quoteOfUndeclaredNature_isDeclaredAnyway() {
+        var reply = message(Self.plainId)
+        reply.replyTo = ReplyReference(messageId: Self.flameId, authorName: "Bob", previewText: "…")
+        let declared = ContentCaptureVisibility.candidates(for: reply, serverId: Self.plainId).filter(\.isDeclared)
+        XCTAssertEqual(declared.map(\.messageId), [Self.flameId])
+    }
+
+    /// Une réponse encore en vol montre sa citation : la citation se déclare.
+    func test_candidates_inFlightReply_stillDeclaresItsQuote() {
+        var reply = message("cid_0f3c0b9e-1b2a-4c5d-8e7f-001122334455", isMe: true)
+        var quote = ReplyReference(messageId: Self.flameId, authorName: "Bob", previewText: "secret")
+        quote.quotedExitNature = .timedFlame
+        reply.replyTo = quote
+        let declared = ContentCaptureVisibility.candidates(for: reply, serverId: nil).filter(\.isDeclared)
+        XCTAssertEqual(declared.map(\.messageId), [Self.flameId])
+    }
+
+    /// Annoncé OU noir : une flamme d'autrui sans identifiant serveur ne peut
+    /// pas s'annoncer — la peau la rend noire.
+    func test_renderedVerdict_flameWithoutServerId_isBlack_untilResolved() {
+        let unresolved = message("cid_0f3c0b9e-1b2a-4c5d-8e7f-001122334455", flags: .ephemeral, duration: 30)
+        XCTAssertEqual(ContentCaptureVisibility.renderedVerdict(for: unresolved), .blocked)
+        XCTAssertTrue(ContentCaptureVisibility.renderedVerdict(for: unresolved).shieldsCapture(surfaceAnnounces: true))
+        let resolved = message(Self.flameId, flags: .ephemeral, duration: 30)
+        XCTAssertEqual(ContentCaptureVisibility.renderedVerdict(for: resolved), .announced)
+        let mine = message("cid_0f3c0b9e-1b2a-4c5d-8e7f-001122334455", flags: .ephemeral, duration: 30, isMe: true)
+        XCTAssertEqual(ContentCaptureVisibility.renderedVerdict(for: mine), .announced)
+    }
+
     func test_candidates_presentedViewOnceMedia_isATry() {
         let once = message(Self.onceId, flags: .viewOnce)
         XCTAssertEqual(ContentCaptureVisibility.candidates(forPresented: once).map(\.capture), [.blocked])
@@ -140,7 +158,6 @@ final class ContentCaptureReporterTests: XCTestCase {
         sut.register(source)
 
         sut.screenshotTaken()
-        await waitForSends(sender, count: 1)
 
         XCTAssertEqual(sender.reports, [
             ContentCaptureReport(conversationId: "conv-1", messageIds: [Self.flameId], kind: .screenshot, captureId: "cap_first00001"),
@@ -158,45 +175,7 @@ final class ContentCaptureReporterTests: XCTestCase {
         sut.register(source)
         sut.screenshotTaken()
         XCTAssertEqual(source.acknowledgements, 1)
-        await waitForSends(sender, count: 1)
         XCTAssertEqual(sender.reports.count, 1)
-    }
-
-    func test_aFinalRefusal_isNotRetriedDuringARecording() async {
-        let sender = RefusingSender()
-        let clock = Clock()
-        let sut = ContentCaptureReporter(
-            sender: sender, isConversationCovered: { false }, isScreenCaptured: { false },
-            now: { clock.now }, newCaptureId: { "rec_0123456789" }, readSettleDelay: .zero
-        )
-        let source = StubSource(candidates: [
-            ContentCaptureCandidate(conversationId: "conv-1", messageId: Self.flameId, capture: .announced, isMine: false),
-        ])
-        sut.register(source)
-        sut.screenCaptureChanged(isCaptured: true)
-        for _ in 0..<200 { await Task.yield() }
-        clock.now = clock.now.addingTimeInterval(60)
-        sut.recordingBeat()
-        for _ in 0..<200 { await Task.yield() }
-        XCTAssertEqual(sender.calls, 1, "RATE_LIMITED est final : pas de boucle, le message reste annonçable plus tard")
-        sut.screenCaptureChanged(isCaptured: false)
-    }
-
-    @MainActor
-    private final class Clock {
-        nonisolated deinit {}
-        var now = Date(timeIntervalSince1970: 1_000)
-    }
-
-    private final class RefusingSender: ContentCaptureSending, @unchecked Sendable {
-        private let lock = NSLock()
-        private var count = 0
-        var calls: Int { lock.withLock { count } }
-
-        func sendContentCapture(_ report: ContentCaptureReport) async throws -> [String] {
-            lock.withLock { count += 1 }
-            throw ContentCaptureRefusal(code: "RATE_LIMITED")
-        }
     }
 
     func test_screenshot_withNothingDeclarable_sendsNothing() async {
@@ -206,7 +185,6 @@ final class ContentCaptureReporterTests: XCTestCase {
         ])
         sut.register(source)
         sut.screenshotTaken()
-        await waitForSends(sender, count: 1)
         XCTAssertEqual(sender.reports, [])
     }
 
@@ -222,7 +200,6 @@ final class ContentCaptureReporterTests: XCTestCase {
         sut.register(gallery)
 
         sut.screenshotTaken()
-        await waitForSends(sender, count: 1)
 
         XCTAssertEqual(sender.reports.flatMap(\.messageIds), [Self.onceId], "le fil sous un plein écran n'est pas à l'écran")
     }
@@ -235,7 +212,6 @@ final class ContentCaptureReporterTests: XCTestCase {
         sut.register(source)
         sut.screenshotTaken()
         sut.screenshotTaken()
-        await waitForSends(sender, count: 2)
         XCTAssertEqual(Set(sender.reports.map(\.captureId)), ["cap_first00001", "cap_second0002"])
     }
 
@@ -251,7 +227,6 @@ final class ContentCaptureReporterTests: XCTestCase {
             ContentCaptureCandidate(conversationId: "conv-1", messageId: Self.onceId, capture: .blocked, isMine: false)
         )
         sut.screenCaptureChanged(isCaptured: false)
-        await waitForSends(sender, count: 2)
 
         XCTAssertEqual(sender.reports.map(\.kind), [.recording, .recording])
         XCTAssertEqual(Set(sender.reports.map(\.captureId)), ["cap_first00001"], "UN identifiant pour tout l'enregistrement")
@@ -266,7 +241,6 @@ final class ContentCaptureReporterTests: XCTestCase {
         sut.register(source)
         sut.unregister(source)
         sut.screenshotTaken()
-        await waitForSends(sender, count: 1)
         XCTAssertEqual(sender.reports, [])
     }
 

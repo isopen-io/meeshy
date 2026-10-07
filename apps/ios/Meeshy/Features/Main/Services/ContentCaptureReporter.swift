@@ -78,13 +78,31 @@ nonisolated enum ContentCaptureVisibility {
             )]
         }()
         guard let reply = message.replyTo, !reply.messageId.isEmpty, !reply.isQuotedMessageDeleted else { return own }
+        // Une citation dont la nature n'est pas DÉCLARÉE peut être celle d'une
+        // flamme après lecture pas encore consommée (ni échéance, ni drapeau) :
+        // elle se déclare quand même — la passerelle juge sur le cité réel, et
+        // un cité ordinaire ne produit aucun avis.
+        let verdict = reply.quotedCapture(quotedMessage: nil)
         let quoted = ContentCaptureCandidate(
             conversationId: message.conversationId,
             messageId: reply.messageId,
-            capture: reply.quotedCapture(quotedMessage: nil),
+            capture: verdict == .free && reply.quotedExitNature == nil ? .announced : verdict,
             isMine: reply.isMe
         )
         return own + [quoted]
+    }
+
+    /// **Le verdict que la peau rend** — annoncé OU noir : une flamme d'autrui
+    /// dont l'identifiant n'est pas encore celui du serveur ne peut pas
+    /// s'annoncer (la passerelle ne jugerait pas un `cid_…`) ; elle reste
+    /// noire jusqu'à ce qu'il le soit. Ses propres messages ne s'annoncent
+    /// jamais (la passerelle les ignore) : ils gardent leur verdict.
+    static func renderedVerdict(for message: Message) -> ContentExitLaw.CaptureVerdict {
+        let verdict = message.exitOffer.capture
+        guard verdict == .announced, !message.isMe, !ContentCaptureReport.isDeclarableMessageId(message.id) else {
+            return verdict
+        }
+        return .blocked
     }
 
     /// La pièce d'un plein écran : celle de son porteur, ouverte — une vue
@@ -119,13 +137,8 @@ protocol ContentCaptureReporterProviding: AnyObject {
 /// disponibles d'iOS 16 à 26 ; `sceneCaptureState` (iOS 17+) n'apporterait rien
 /// de plus et laisserait iOS 16 sans détection.
 ///
-/// La déclaration part par le socket, sinon le jumeau REST
-/// (`ContentCaptureService`). Pas de file hors ligne : la passerelle n'annonce
-/// qu'un affichage récent (5 min après la fin d'un éphémère, 15 min après
-/// l'ouverture d'une vue unique) — une déclaration rejouée au retour du réseau
-/// serait refusée. Un échec de capture d'écran s'abandonne en silence (journal) ;
-/// un échec pendant un enregistrement se rejoue au battement suivant, sous le
-/// même identifiant.
+/// La déclaration est DURABLE (`ContentCaptureDeclaring`) : une flamme montrée
+/// en clair dont la capture ne s'annoncerait pas serait une capture silencieuse.
 @MainActor
 final class ContentCaptureReporter: ContentCaptureReporterProviding {
     // SE-0466 : la deinit synthétisée serait isolée au MainActor (cible app).
@@ -137,14 +150,11 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
         weak var value: ContentCaptureSource?
     }
 
-    private let sender: ContentCaptureSending
+    private let declarer: ContentCaptureDeclaring
     private let isConversationCovered: @MainActor () -> Bool
     private let isScreenCaptured: @MainActor () -> Bool
     private let now: @MainActor () -> Date
     private let newCaptureId: @MainActor () -> String
-    /// Le temps laissé à l'accusé de lecture de précéder la déclaration.
-    private let readSettleDelay: Duration
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "content-capture")
 
     private var sources: [WeakSource] = []
     private var observers: [NSObjectProtocol] = []
@@ -153,21 +163,19 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
     private(set) var fullscreenAttachmentId: String?
 
     init(
-        sender: ContentCaptureSending = ContentCaptureService.shared,
+        declarer: ContentCaptureDeclaring = OutboxContentCaptureDeclarer(),
         isConversationCovered: @escaping @MainActor () -> Bool = { ConversationViewingReporter.shared.isCovered },
         isScreenCaptured: @escaping @MainActor () -> Bool = {
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.contains { $0.screen.isCaptured }
         },
         now: @escaping @MainActor () -> Date = { Date() },
-        newCaptureId: @escaping @MainActor () -> String = { ContentCaptureReport.newCaptureId() },
-        readSettleDelay: Duration = .milliseconds(1500)
+        newCaptureId: @escaping @MainActor () -> String = { ContentCaptureReport.newCaptureId() }
     ) {
-        self.sender = sender
+        self.declarer = declarer
         self.isConversationCovered = isConversationCovered
         self.isScreenCaptured = isScreenCaptured
         self.now = now
         self.newCaptureId = newCaptureId
-        self.readSettleDelay = readSettleDelay
     }
 
     /// Installé UNE fois au lancement. Un enregistrement déjà en cours à
@@ -253,27 +261,58 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
     }
 
     /// Les surfaces posent d'abord l'accusé de lecture de ce qu'elles
-    /// montrent ; la déclaration part après `readSettleDelay`.
+    /// montrent, puis la déclaration entre dans la file durable.
     private func declare(_ reports: [ContentCaptureReport]) {
         guard !reports.isEmpty else { return }
         visibleSources().forEach { $0.acknowledgeVisibleReads() }
-        let sender = sender
+        declarer.declare(reports)
+    }
+}
+
+// MARK: - La déclaration durable
+
+/// **Déclarer une capture sans jamais la perdre** — protocole avant
+/// l'implémentation.
+@MainActor
+protocol ContentCaptureDeclaring: AnyObject {
+    func declare(_ reports: [ContentCaptureReport])
+}
+
+/// Chaque déclaration entre dans la file hors ligne (`OutboxKind
+/// .reportContentCapture`) : persistée, elle survit à l'arrière-plan, à la
+/// perte du réseau et au relancement, et se rejoue avec le recul exponentiel
+/// de la file tant que la passerelle l'accepte (24 h après la lecture) ; seul
+/// un refus FINAL la fait partir (`ContentCaptureDispatchOutcome`). La file
+/// est vidée après `readSettleDelay`, le temps que l'accusé de lecture posé à
+/// l'instant de la capture précède la déclaration.
+@MainActor
+final class OutboxContentCaptureDeclarer: ContentCaptureDeclaring {
+    nonisolated deinit {}
+
+    private let readSettleDelay: Duration
+    private let logger = Logger(subsystem: "me.meeshy.app", category: "content-capture")
+
+    init(readSettleDelay: Duration = .milliseconds(1500)) {
+        self.readSettleDelay = readSettleDelay
+    }
+
+    func declare(_ reports: [ContentCaptureReport]) {
         let delay = readSettleDelay
-        for report in reports {
-            Task { @MainActor [weak self] in
-                if delay > .zero { try? await Task.sleep(for: delay) }
+        let logger = logger
+        Task { @MainActor in
+            for report in reports {
                 do {
-                    let noticed = try await sender.sendContentCapture(report)
-                    self?.logger.info("capture declared kind=\(report.kind.rawValue, privacy: .public) noticed=\(noticed.count, privacy: .public)/\(report.messageIds.count, privacy: .public)")
-                } catch let refusal as ContentCaptureRefusal where refusal.isFinal {
-                    // Budget, conversation fermée, non-participant : pas de
-                    // boucle — le message reste annonçable plus tard.
-                    self?.logger.info("capture declaration refused code=\(refusal.code, privacy: .public)")
+                    try await OfflineQueue.shared.enqueue(
+                        .reportContentCapture,
+                        payload: ReportContentCapturePayload(report: report),
+                        conversationId: report.conversationId
+                    )
                 } catch {
-                    self?.tracker.reportFailed(report)
-                    self?.logger.warning("capture declaration dropped kind=\(report.kind.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    logger.error("capture declaration not queued conv=\(report.conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 }
             }
+            try? await Task.sleep(for: delay)
+            await OutboxFlushTrigger.flushNow()
         }
     }
 }

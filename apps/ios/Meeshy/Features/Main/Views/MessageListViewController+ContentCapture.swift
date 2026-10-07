@@ -22,13 +22,15 @@ extension MessageListViewController: ContentCaptureSource {
     func visibleCaptureCandidates() -> [ContentCaptureCandidate] {
         guard isViewLoaded, dataSource != nil, rendersThread, view.window != nil else { return [] }
         return collectionView.indexPathsForVisibleItems.flatMap { indexPath -> [ContentCaptureCandidate] in
+            // Pas de garde sur l'identifiant serveur : une réponse encore en vol
+            // montre quand même sa citation. Un message d'autrui sans
+            // identifiant serveur est rendu NOIR (`renderedVerdict`).
             guard case .message(let localId)? = dataSource.itemIdentifier(for: indexPath),
-                  let serverId = store.message(for: localId)?.serverId,
                   var message = store.domainMessage(for: localId, currentUserId: currentUserId) else { return [] }
             // La vue unique texte RÉVÉLÉE vit à la visite, pas en base : la
             // même pose que la cellule (`applyVisitState`).
             applyVisitState(to: &message)
-            return ContentCaptureVisibility.candidates(for: message, serverId: serverId)
+            return ContentCaptureVisibility.candidates(for: message, serverId: store.message(for: localId)?.serverId)
         }
     }
 }

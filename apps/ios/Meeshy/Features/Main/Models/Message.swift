@@ -99,7 +99,7 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
     /// ANNONCE sa capture (`surfaceAnnounces`, fermé par défaut). Une pièce
     /// dont le porteur est inconnu est protégée.
     static func captureShieldScope(for messages: [Message], surfaceAnnounces: Bool = false) -> CaptureShieldScope {
-        .allExcept(Set(messages.filter { !$0.exitOffer.capture.shieldsCapture(surfaceAnnounces: surfaceAnnounces) }
+        .allExcept(Set(messages.filter { !ContentCaptureVisibility.renderedVerdict(for: $0).shieldsCapture(surfaceAnnounces: surfaceAnnounces) }
             .flatMap { $0.attachments.map(\.id) }))
     }
 }

@@ -39,7 +39,7 @@ public struct ContentCaptureCandidate: Equatable, Hashable, Sendable {
     }
 
     static func isObjectId(_ value: String) -> Bool {
-        value.utf8.count == 24 && value.allSatisfy(\.isHexDigit)
+        ContentCaptureReport.isDeclarableMessageId(value)
     }
 }
 
@@ -83,6 +83,13 @@ public struct ContentCaptureReport: Equatable, Sendable, Encodable {
     public static func isValidCaptureId(_ value: String) -> Bool {
         (8...64).contains(value.utf8.count)
             && value.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) && $0.isASCII || $0 == "_" || $0 == "-" }
+    }
+
+    /// Un identifiant que la passerelle sait juger : un ObjectId. Un message
+    /// encore en vol (`cid_…`) ne s'annonce pas — il ne se montre donc pas en
+    /// clair (`announced OU noir`).
+    public static func isDeclarableMessageId(_ value: String) -> Bool {
+        value.utf8.count == 24 && value.allSatisfy(\.isHexDigit)
     }
 
     /// Un identifiant NEUF : un par capture d'écran, un seul pour tout un enregistrement.
@@ -199,5 +206,65 @@ public struct ContentCaptureTracker: Equatable, Sendable {
 
     private static func key(_ candidate: ContentCaptureCandidate) -> String {
         candidate.conversationId + "|" + candidate.messageId
+    }
+}
+
+// MARK: - La déclaration durable (file hors ligne)
+
+/// La charge de la ligne `OutboxKind.reportContentCapture` : la déclaration
+/// telle qu'elle partira, rejouée par la file jusqu'à ce que la passerelle la
+/// juge.
+public struct ReportContentCapturePayload: Codable, Sendable, Equatable {
+    public let clientMutationId: String
+    public let conversationId: String
+    public let messageIds: [String]
+    public let kind: ContentCaptureKind
+    public let captureId: String
+
+    public init(clientMutationId: String = ClientMutationId.generate(), report: ContentCaptureReport) {
+        self.clientMutationId = clientMutationId
+        self.conversationId = report.conversationId
+        self.messageIds = report.messageIds
+        self.kind = report.kind
+        self.captureId = report.captureId
+    }
+
+    public var report: ContentCaptureReport {
+        ContentCaptureReport(conversationId: conversationId, messageIds: messageIds, kind: kind, captureId: captureId)
+    }
+}
+
+/// **Ce que la file fait d'une déclaration après un essai** — règle pure,
+/// lue par le répartiteur de la file.
+public enum ContentCaptureDispatchOutcome: Equatable, Sendable {
+    /// La passerelle a jugé : la ligne part.
+    case done
+    /// À rejouer, avec le recul exponentiel de la file.
+    case retry
+    /// Refus FINAL (non-participant, conversation close, forme refusée) : la
+    /// ligne part sans rien annoncer.
+    case drop
+
+    /// Essais au-delà desquels un message JUGÉ mais non annoncé n'est plus
+    /// rejoué : la passerelle exige sa lecture (`readAt`), que l'accusé de
+    /// lecture posé à l'instant de la capture peut n'avoir pas encore livré.
+    public static let unnoticedRetries = 2
+
+    public static func of(
+        _ result: Result<[String], Error>,
+        declared: [String],
+        attempts: Int
+    ) -> ContentCaptureDispatchOutcome {
+        switch result {
+        case .success(let noticed):
+            let missing = Set(declared).subtracting(noticed)
+            return missing.isEmpty || attempts >= unnoticedRetries ? .done : .retry
+        case .failure(let refusal as ContentCaptureRefusal) where refusal.code == "RATE_LIMITED":
+            return .retry
+        case .failure(let refusal as ContentCaptureRefusal) where refusal.isFinal:
+            return .drop
+        case .failure:
+            return .retry
+        }
     }
 }

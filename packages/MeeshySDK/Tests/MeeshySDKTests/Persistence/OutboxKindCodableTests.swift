@@ -65,7 +65,7 @@ final class OutboxKindCodableTests: XCTestCase {
     /// pour la même raison : c'est de la télémétrie de consommation, pas un
     /// contenu que l'utilisateur attend de voir partir.
     func test_allKindsExceptAcknowledgements_countTowardSyncIndicator() {
-        let acquittements: Set<OutboxKind> = [.markAsRead, .reportAttachmentStatus, .markStoryViewed, .consumeAfterRead]
+        let acquittements: Set<OutboxKind> = [.markAsRead, .reportAttachmentStatus, .markStoryViewed, .consumeAfterRead, .reportContentCapture]
         for kind in OutboxKind.allCases where !acquittements.contains(kind) {
             XCTAssertTrue(
                 kind.countsTowardSyncIndicator,
@@ -80,6 +80,24 @@ final class OutboxKindCodableTests: XCTestCase {
         XCTAssertEqual(OutboxKind.consumeAfterRead.rawValue, "consumeAfterRead")
         XCTAssertFalse(OutboxKind.consumeAfterRead.countsTowardSyncIndicator)
         XCTAssertTrue(OutboxKind.consumeAfterRead.isDiscardableWhenTerminal)
+    }
+
+    /// #9617 — la déclaration d'une capture est durable mais n'est pas un
+    /// contenu de l'utilisateur : ni pastille, ni ligne gardée à vie.
+    func test_reportContentCapture_isAnAcknowledgement_discardableWhenTerminal() {
+        XCTAssertEqual(OutboxKind.reportContentCapture.rawValue, "reportContentCapture")
+        XCTAssertFalse(OutboxKind.reportContentCapture.countsTowardSyncIndicator)
+        XCTAssertTrue(OutboxKind.reportContentCapture.isDiscardableWhenTerminal)
+    }
+
+    func test_reportContentCapturePayload_roundTrips() throws {
+        let report = ContentCaptureReport(
+            conversationId: "c1", messageIds: [String(repeating: "a", count: 24)], kind: .recording, captureId: "rec_0123456789"
+        )
+        let payload = ReportContentCapturePayload(clientMutationId: "cmid_1", report: report)
+        let decoded = try JSONDecoder().decode(ReportContentCapturePayload.self, from: JSONEncoder().encode(payload))
+        XCTAssertEqual(decoded, payload)
+        XCTAssertEqual(decoded.report, report)
     }
 
     func test_consumeAfterReadPayload_roundTrips() throws {

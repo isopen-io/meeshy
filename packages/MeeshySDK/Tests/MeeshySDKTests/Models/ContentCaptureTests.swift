@@ -187,6 +187,37 @@ struct ContentCaptureTests {
         #expect(api.requestCount == 0)
     }
 
+    // MARK: - La déclaration durable : jamais perdue, jamais en boucle
+
+    private struct Offline: Error {}
+
+    @Test("une panne ou un budget dépassé se rejouent, un refus final part sans rien annoncer")
+    func dispatchOutcome_retriesTransientFailures_dropsFinalRefusals() {
+        let declared = [Self.flameId]
+        #expect(ContentCaptureDispatchOutcome.of(.failure(Offline()), declared: declared, attempts: 5) == .retry,
+                "une capture hors ligne n'est jamais perdue : la file la garde")
+        #expect(ContentCaptureDispatchOutcome.of(.failure(ContentCaptureRefusal(code: "TIMEOUT")), declared: declared, attempts: 0) == .retry)
+        #expect(ContentCaptureDispatchOutcome.of(.failure(ContentCaptureRefusal(code: "RATE_LIMITED")), declared: declared, attempts: 0) == .retry,
+                "le budget dépassé laisse le message annonçable plus tard")
+        #expect(ContentCaptureDispatchOutcome.of(.failure(ContentCaptureRefusal(code: "CONVERSATION_CLOSED")), declared: declared, attempts: 0) == .drop)
+        #expect(ContentCaptureDispatchOutcome.of(.failure(ContentCaptureRefusal(code: "HTTP_410")), declared: declared, attempts: 0) == .drop)
+    }
+
+    @Test("un message déclaré mais pas encore annoncé (lecture pas encore livrée) se rejoue, borné")
+    func dispatchOutcome_unnoticedIsRetriedAFewTimes() {
+        let declared = [Self.flameId, Self.onceId]
+        #expect(ContentCaptureDispatchOutcome.of(.success(declared), declared: declared, attempts: 0) == .done)
+        #expect(ContentCaptureDispatchOutcome.of(.success([Self.flameId]), declared: declared, attempts: 0) == .retry)
+        #expect(ContentCaptureDispatchOutcome.of(.success([Self.flameId]), declared: declared,
+                                                 attempts: ContentCaptureDispatchOutcome.unnoticedRetries) == .done)
+    }
+
+    @Test("un identifiant en vol n'est pas déclarable")
+    func inFlightIdIsNotDeclarable() {
+        #expect(ContentCaptureReport.isDeclarableMessageId(Self.flameId))
+        #expect(!ContentCaptureReport.isDeclarableMessageId("cid_0f3c0b9e-1b2a-4c5d-8e7f-001122334455"))
+    }
+
     // MARK: - L'avis : la métadonnée VALIDÉE, jamais castée
 
     private static func noticeJSON(

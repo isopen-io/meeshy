@@ -44,11 +44,13 @@ public final class ContentCaptureService: ContentCaptureSending, @unchecked Send
                     ConversationsEndpoint.byIdMessagesCapture(id: report.conversationId), body: report.body
                 )
                 return response.data.noticedMessageIds
-            } catch APIError.serverError(let status, _) where (400..<500).contains(status) {
-                // 403, 410 (conversation close), 429 (budget) : un refus, pas une panne.
+            } catch MeeshyError.server(let status, _) where status == 429 {
+                throw ContentCaptureRefusal(code: "RATE_LIMITED")
+            } catch MeeshyError.server(let status, _) where (400..<500).contains(status) {
+                // 404, 410 (conversation close), 422 : un refus, pas une panne.
                 throw ContentCaptureRefusal(code: "HTTP_\(status)")
-            } catch APIError.unauthorized {
-                throw ContentCaptureRefusal(code: "UNAUTHENTICATED")
+            } catch MeeshyError.forbidden {
+                throw ContentCaptureRefusal(code: "NOT_A_PARTICIPANT")
             }
         }
     }

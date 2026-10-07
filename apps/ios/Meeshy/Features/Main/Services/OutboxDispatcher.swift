@@ -65,6 +65,9 @@ struct OutboxDispatcher: OutboxDispatching {
         case .consumeAfterRead:
             try await dispatchConsumeAfterRead(record)
 
+        case .reportContentCapture:
+            try await dispatchReportContentCapture(record)
+
         case .reportAttachmentStatus:
             try await dispatchReportAttachmentStatus(record)
 
@@ -347,6 +350,30 @@ struct OutboxDispatcher: OutboxDispatching {
             logger.info("consumeAfterRead dispatched conv=\(payload.conversationId, privacy: .public) consumed=\(consumed.count, privacy: .public)/\(payload.messageIds.count, privacy: .public)")
         } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
             logger.warning("consumeAfterRead 404 conv=\(payload.conversationId, privacy: .public) — conversation disparue, accepté")
+        }
+    }
+
+    /// #9617 — une capture d'un contenu qui disparaît, déclarée tant que la
+    /// passerelle l'accepte : une panne ou un budget dépassé se rejouent avec
+    /// le recul exponentiel de la file, un refus FINAL fait partir la ligne.
+    /// Sans risque de double annonce : la passerelle en écrit au plus une par
+    /// (acteur, message, sorte de capture).
+    private func dispatchReportContentCapture(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: ReportContentCapturePayload.self)
+        let result: Result<[String], Error>
+        do {
+            result = .success(try await ContentCaptureService.shared.sendContentCapture(payload.report))
+        } catch {
+            result = .failure(error)
+        }
+        switch ContentCaptureDispatchOutcome.of(result, declared: payload.messageIds, attempts: record.attempts) {
+        case .done:
+            logger.info("reportContentCapture dispatched conv=\(payload.conversationId, privacy: .public) kind=\(payload.kind.rawValue, privacy: .public)")
+        case .drop:
+            logger.warning("reportContentCapture refused for good conv=\(payload.conversationId, privacy: .public)")
+        case .retry:
+            if case .failure(let error) = result { throw error }
+            throw ContentCaptureRefusal(code: "NOT_YET_NOTICED")
         }
     }
 
