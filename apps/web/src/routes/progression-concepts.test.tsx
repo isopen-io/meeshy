@@ -341,3 +341,38 @@ describe('aucune chip sur deux lignes, dans les sept langues', () => {
     for (const pill of pills) expect({ text: pill.textContent, declared: pill.hasAttribute('data-chip') }).toEqual({ text: pill.textContent, declared: true });
   });
 });
+
+/**
+ * DEUX LIGNES AU PLUS pour « à quoi ça sert » et pour « comment ça marche ».
+ * Mesuré dans un navigateur à 320 px, dans les sept langues : une phrase de 72
+ * caractères tient sur deux lignes du corps de la carte ; au-delà, elle est
+ * coupée par des points de suspension au milieu de son explication. La borne se
+ * garde ici, dans le catalogue, là où la phrase s'écrit.
+ */
+const SENTENCE_MAX_CHARS = 72;
+
+describe('les deux phrases de la carte tiennent sur deux lignes à 320 px', () => {
+  for (const language of SUPPORTED_INTERFACE_LANGUAGES as readonly InterfaceLanguage[]) {
+    test(`${language} : aucune phrase de carte ne dépasse ${SENTENCE_MAX_CHARS} caractères`, () => {
+      inLanguage(language);
+      for (const concept of PROGRESSION_CONCEPTS) {
+        const view = conceptView(concept, playing, NOW);
+        for (const sentence of [view.why, view.how]) {
+          expect({ language, concept, sentence, fits: [...sentence].length <= SENTENCE_MAX_CHARS }).toEqual({ language, concept, sentence, fits: true });
+        }
+      }
+    });
+  }
+
+  test('un lecteur d’écran entend le libellé de chaque phrase, que l’œil ne voit pas', () => {
+    const card = hub(playing).querySelector('[data-concept-card="level"]');
+    const hidden = [...(card?.querySelectorAll('.sr-only') ?? [])].map((label) => label.textContent);
+    expect(hidden).toEqual(['À quoi ça sert :', 'Comment ça marche :']);
+  });
+
+  test('le nom d’un concept passe à la ligne plutôt que de se couper', () => {
+    const name = hub(playing).querySelector('[data-concept-card="missions"] [data-concept-name]');
+    expect(name?.className).not.toContain('truncate');
+    expect(name?.className).toContain('break-words');
+  });
+});

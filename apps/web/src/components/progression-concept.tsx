@@ -126,14 +126,14 @@ function Chevron() {
   );
 }
 
-/** La tête d'une carte ou d'une ligne : emblème, nom, valeur sur UNE ligne, chevron. */
+/** La tête d'une carte ou d'une ligne : emblème, nom (il passe à la ligne plutôt que de se couper), valeur sur UNE ligne, chevron. */
 function Head({ emblem, name, value }: { readonly emblem: ReactNode; readonly name: string; readonly value?: string }) {
   return (
     <span className="flex items-center gap-3">
       <span className="grid size-10 shrink-0 place-items-center" aria-hidden="true">
         {emblem}
       </span>
-      <span data-concept-name="" className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: GAME_INK }}>
+      <span data-concept-name="" className="min-w-0 flex-1 break-words text-body font-semibold leading-tight" style={{ color: GAME_INK }}>
         {name}
       </span>
       {value === undefined ? null : (
@@ -150,7 +150,10 @@ function Head({ emblem, name, value }: { readonly emblem: ReactNode; readonly na
  * LA CARTE D'UN CONCEPT sur la première page — trois étages, et la carte
  * entière ouvre la fiche : la tête ; les données importantes en chips (et la
  * jauge fine quand il y a une étape suivante) ; à quoi ça sert et comment ça
- * marche, deux lignes au plus chacune. Aucun geste ici : ils vivent dans la fiche.
+ * marche, deux lignes au plus chacune — sans libellé visible, la place manque à
+ * 320 px : la première phrase est à l'encre, la seconde en retrait, et un
+ * lecteur d'écran entend « à quoi ça sert » puis « comment ça marche ». Aucun
+ * geste ici : ils vivent dans la fiche.
  */
 export function ConceptCard({ concept, view }: { readonly concept: ConceptView; readonly view: EngagementWithGame }) {
   return (
@@ -164,12 +167,12 @@ export function ConceptCard({ concept, view }: { readonly concept: ConceptView; 
       <Head emblem={<ConceptEmblem concept={concept.key} view={view} size={36} />} name={concept.name} value={concept.value} />
       <ConceptChips chips={concept.chips} />
       {concept.gauge === null ? null : <ProgressBar progress={concept.gauge} tint={GAME_BRAND} label={`${concept.name} — ${concept.value}`} />}
+      <span className="sr-only">{gameText('game.concept.why_label')} :</span>
       <span data-concept-why="" className="line-clamp-2 text-caption" style={{ color: GAME_INK }}>
-        <span className="font-semibold">{gameText('game.concept.why_label')} : </span>
         {concept.why}
       </span>
+      <span className="sr-only">{gameText('game.concept.how_label')} :</span>
       <span data-concept-how="" className="line-clamp-2 text-caption" style={{ color: GAME_INK_2 }}>
-        <span className="font-semibold">{gameText('game.concept.how_label')} : </span>
         {concept.how}
       </span>
     </Link>

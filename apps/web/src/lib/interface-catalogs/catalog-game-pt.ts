@@ -766,7 +766,7 @@ const pt = {
   'game.concept.points.tip.2': 'Ative um impulso para multiplicar seus pontos.',
   'game.concept.meesh.name': 'Meeshes',
   'game.concept.meesh.why': 'A Meesh é a moeda rara do Meeshy: você guarda ou gasta.',
-  'game.concept.meesh.how': 'Você a cunha com seus pontos. Quanto mais se cunha, mais a próxima custa.',
+  'game.concept.meesh.how': 'Você a cunha com seus pontos. Cada cunhagem encarece a próxima.',
   'game.concept.meesh.tip.1': 'Guarde suas Meeshes para fazer seu tesouro crescer.',
   'game.concept.meesh.tip.2': 'Gaste-as para proteger sua Chama ou trocar uma missão.',
   'game.concept.glory.name': 'Glória',
