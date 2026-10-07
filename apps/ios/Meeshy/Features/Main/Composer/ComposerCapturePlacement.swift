@@ -19,8 +19,9 @@ nonisolated enum ComposerCapturePlacement {
     /// L'anneau de sol qu'un hôte sans carte laisse autour de sa scène.
     static let sceneRim: CGFloat = 28
 
-    /// La taille que le viseur prend. La retouche est toujours plein écran ;
-    /// un hôte sans carte ne se réduit que si l'écran est le flash.
+    /// La taille que le viseur prend. La retouche occupe toujours l'écran — sa
+    /// scène s'y pose sur le sol (`ComposerEditScene`) ; un hôte sans carte ne
+    /// se réduit que si l'écran est le flash.
     static func size(requested: ComposerSceneCameraSize, hostHasCard: Bool,
                      screenFlash: Bool, editing: Bool) -> ComposerSceneCameraSize {
         guard !editing else { return .fullScreen }
@@ -42,6 +43,12 @@ nonisolated enum ComposerCapturePlacement {
     /// éclaire déjà et rien ne recouvre l'aperçu.
     static func showsBurst(bursting: Bool, size: ComposerSceneCameraSize) -> Bool {
         bursting && size == .fullScreen
+    }
+
+    /// Les coins : une carte en a, un plein écran non — et la scène de
+    /// retouche, posée sur le sol, en a toujours (#9567).
+    static func radius(for size: ComposerSceneCameraSize, editing: Bool) -> CGFloat {
+        editing ? ComposerSceneCameraFrame.cardRadius : ComposerSceneCameraFrame.radius(for: size)
     }
 
     /// Le bouton de taille : offert par un hôte à carte, et à tout selfie

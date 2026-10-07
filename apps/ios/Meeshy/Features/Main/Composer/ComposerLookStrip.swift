@@ -67,35 +67,53 @@ extension View {
 // MARK: - Le rail
 
 /// **Le rail vertical, en bas à gauche** (#9351) : Filtres, Cadres. Toucher une
-/// famille ouvre sa bande ; la retoucher la replie. Ni verre ni cadre : le
+/// famille ouvre sa bande ; la retoucher la replie. En retouche il se couche
+/// sous la scène et gagne « Recadrer » (#9567). Ni verre ni cadre : le
 /// pictogramme et le nom, ombrés pour rester lisibles (porteur 2026-10-07,
 /// #9566) — « Cadres » porte le pictogramme du cadre de l'appel vidéo.
 struct ComposerLookRail: View {
     let open: ComposerLookFamily?
+    /// Vertical pendant la capture ; en rangée sous la scène de retouche (#9567).
+    var axis: Axis = .vertical
+    /// Les proportions sont-elles ouvertes ? `nil` ⇒ l'outil « Recadrer » n'est
+    /// pas offert : il n'existe qu'en retouche, après « Cadres ».
+    var cropOpen: Bool?
+    var onCrop: () -> Void = {}
     let onSelect: (ComposerLookFamily) -> Void
 
     var body: some View {
-        VStack(spacing: MeeshySpacing.sm) {
+        let disposition = axis == .vertical
+            ? AnyLayout(VStackLayout(spacing: MeeshySpacing.sm))
+            : AnyLayout(HStackLayout(spacing: MeeshySpacing.xl))
+        disposition {
             ForEach(ComposerLookFamily.allCases, id: \.self) { famille in
-                Button { onSelect(famille) } label: {
-                    VStack(spacing: MeeshySpacing.xxs) {
-                        Image(systemName: ComposerCaptureCopy.familySymbol(famille))
-                            .font(MeeshyFont.relative(17, weight: .semibold))
-                        Text(ComposerCaptureCopy.familyName(famille))
-                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    .foregroundStyle(open == famille ? Color.yellow : .white)
-                    .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
-                    .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(ComposerCaptureCopy.familyName(famille))
-                .accessibilityAddTraits(open == famille ? .isSelected : [])
+                tool(symbol: ComposerCaptureCopy.familySymbol(famille), name: ComposerCaptureCopy.familyName(famille),
+                     selected: open == famille) { onSelect(famille) }
+            }
+            if let cropOpen {
+                tool(symbol: "crop", name: ComposerCaptureCopy.reframe, selected: cropOpen, action: onCrop)
             }
         }
+    }
+
+    private func tool(symbol: String, name: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: symbol)
+                    .font(MeeshyFont.relative(17, weight: .semibold))
+                Text(name)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .foregroundStyle(selected ? Color.yellow : .white)
+            .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

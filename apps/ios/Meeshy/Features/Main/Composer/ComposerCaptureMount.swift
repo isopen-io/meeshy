@@ -54,23 +54,40 @@ struct ComposerCaptureMount<Content: View>: View {
         let taille = placed
         return content()
             .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in
-                GeometryReader { proxy in
-                    if let ancre, session.stage != .off {
-                        // **Le sol en BLANC brillant** (#8653) : l'écran est le
-                        // flash, autour de la SCÈNE seulement — son intensité
-                        // suit le curseur (#8671).
-                        if ComposerCapturePlacement.showsFloor(size: taille, screenFlash: screenFlash) {
-                            Color(white: session.floorWhite)
-                        }
-                        image(rect: rect(card: proxy[ancre], in: proxy.size, taille), taille)
-                        // En plein écran, l'écran ne blanchit qu'à la prise.
-                        if ComposerCapturePlacement.showsBurst(bursting: session.screenFlashBurst, size: taille) {
-                            Color(white: session.floorWhite).allowsHitTesting(false)
+                // Les marges système se lisent ICI : la couche qui les ignore ne les voit plus.
+                GeometryReader { marges in
+                    GeometryReader { proxy in
+                        if let ancre, session.stage != .off {
+                            if let aspect = session.editAspect {
+                                // **La retouche pose sa scène sur le sol** (#9567) :
+                                // cette couche ignore les marges système, la règle
+                                // les lui rend pour tomber sous les crochets.
+                                Color.black
+                                image(rect: ComposerEditScene.rect(
+                                    aspect: aspect,
+                                    in: ComposerEditScene.area(container: proxy.size, top: marges.safeAreaInsets.top,
+                                                               bottom: marges.safeAreaInsets.bottom,
+                                                               panel: session.editPanel)), taille)
+                            } else {
+                                // **Le sol en BLANC brillant** (#8653) : l'écran est
+                                // le flash, autour de la SCÈNE seulement — son
+                                // intensité suit le curseur (#8671).
+                                if ComposerCapturePlacement.showsFloor(size: taille, screenFlash: screenFlash) {
+                                    Color(white: session.floorWhite)
+                                }
+                                image(rect: rect(card: proxy[ancre], in: proxy.size, taille), taille)
+                                // En plein écran, l'écran ne blanchit qu'à la prise.
+                                if ComposerCapturePlacement.showsBurst(bursting: session.screenFlashBurst, size: taille) {
+                                    Color(white: session.floorWhite).allowsHitTesting(false)
+                                }
+                            }
                         }
                     }
+                    .ignoresSafeArea()
+                    .animation(Self.growth, value: taille)
+                    .animation(Self.growth, value: session.editAspect)
+                    .animation(Self.growth, value: session.editPanel)
                 }
-                .ignoresSafeArea()
-                .animation(Self.growth, value: taille)
             }
             .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in
                 GeometryReader { proxy in

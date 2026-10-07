@@ -107,7 +107,9 @@ struct ComposerCapturePreview: View {
         .adaptiveOnChange(of: showsThermalNotice) { _, montree in
             if montree { UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.thermalNotice) }
         }
-        .clipShape(RoundedRectangle(cornerRadius: ComposerSceneCameraFrame.radius(for: size), style: .continuous))
+        .clipShape(RoundedRectangle(
+            cornerRadius: ComposerCapturePlacement.radius(for: size, editing: session.phase.isEditing),
+            style: .continuous))
         .allowsHitTesting(false)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
@@ -128,7 +130,8 @@ struct ComposerCapturePreview: View {
 /// **Des segments en attente ne partent jamais en silence** : la croix ou le
 /// glissé qui fermerait le viseur demande d'abord « Abandonner la vidéo ? ».
 ///
-/// **En édition, la même nappe cadre le média** (#9352, spec § 3.3) : un doigt
+/// **En édition, la même nappe cadre le média** (#9352, spec § 3.3), dans sa
+/// scène posée sur le sol (#9567) dont quatre crochets règlent la taille : un doigt
 /// le déplace, deux le zooment — chaque image avance de l'écart depuis la
 /// précédente, donc les deux gestes se composent sans se disputer une ancre.
 /// La croix abandonne la retouche et revient viser ; elle reste vivante pendant
@@ -208,6 +211,17 @@ struct ComposerCaptureChrome: View {
                     }
                     .allowsHitTesting(!finishing)
             }
+            if !finishing, let aspect = session.editAspect {
+                GeometryReader { proxy in
+                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panel: session.editPanel)
+                    ComposerCropBrackets(scene: ComposerEditScene.rect(aspect: aspect, in: zone), area: zone) { cadre in
+                        guard cadre.height > 0 else { return }
+                        session.setEditAspect(cadre.width / cadre.height)
+                    }
+                }
+                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
+                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanel)
+            }
             VStack(spacing: 0) {
                 if session.stage != .recording {
                     ComposerSceneCameraBar(
@@ -226,7 +240,9 @@ struct ComposerCaptureChrome: View {
                         flashIntensity: session.barCapture.flashIntensity,
                         onFlashIntensity: { session.setFlashIntensity($0) },
                         flipping: session.barCapture.flipping,
-                        editing: session.phase.isEditing)
+                        editing: session.phase.isEditing,
+                        rendering: session.isRenderingLook,
+                        onDone: { session.finishEditing() })
                     .transition(.opacity)
                 }
                 Spacer(minLength: 0)

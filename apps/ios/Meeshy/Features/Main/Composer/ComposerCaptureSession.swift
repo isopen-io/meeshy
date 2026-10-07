@@ -69,6 +69,11 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var framing = ComposerFraming.identity
     /// On vise, ou on retouche (#9352).
     @Published var phase = ComposerCapturePhase.capturing
+    /// Les proportions de la scène de retouche (#9567) — ce qui partira ;
+    /// `nil` hors retouche.
+    @Published var editAspect: CGFloat?
+    /// Les proportions par presets sont ouvertes sous la scène.
+    @Published var cropPresetsOpen = false
     /// La photo figée de l'édition, debout.
     var editPhoto: CGImage?
     /// Les octets de la prise : leur EXIF suit le rendu final.

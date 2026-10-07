@@ -52,6 +52,9 @@ struct ComposerSceneCameraBar: View {
     /// **On retouche** (#9352) : l'objectif se repose, donc ni flash ni
     /// retournement — et la croix abandonne la retouche.
     var editing = false
+    /// « Terminé » rend : il attend, et le dit.
+    var rendering = false
+    var onDone: () -> Void = {}
 
     /// **Ce que la machine sait du doigt, du zoom et de la lumière** (#8671) —
     /// lu par le bas de la capture (`ComposerCaptureBottomRow`).
@@ -115,6 +118,8 @@ struct ComposerSceneCameraBar: View {
                              action: onFlipCamera)
                     .disabled(flipping)
                 flashCluster
+            } else {
+                doneButton
             }
         }
     }
@@ -126,6 +131,28 @@ struct ComposerSceneCameraBar: View {
                      label: ComposerCameraFlash.label(for: flashMode),
                      tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
                      action: onCycleFlash)
+    }
+
+    /// **✓ Terminé, en haut à droite, aligné sur la croix** (porteur 2026-10-07,
+    /// #9567) : les deux sont au-dessus du sol, jamais sur la scène retouchée.
+    /// Pendant le rendu il attend : un second toucher ne remet rien.
+    private var doneButton: some View {
+        Button {
+            HapticFeedback.light()
+            onDone()
+        } label: {
+            Label(ComposerCaptureCopy.done, systemImage: "checkmark")
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .frame(minHeight: 40)
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
+                .opacity(rendering ? 0.5 : 1)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+        }
+        .buttonStyle(.plain)
+        .disabled(rendering)
+        .accessibilityLabel(ComposerCaptureCopy.done)
     }
 
     /// **Sur du verre, jamais à nu.** Ces contrôles flottent sur une image que

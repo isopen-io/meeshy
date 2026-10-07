@@ -20,7 +20,8 @@ nonisolated enum ComposerLookStripTrigger: Equatable, Sendable {
     case shutter
     /// Un look est choisi : sa miniature vivante, qui déclenche.
     case thumbnail
-    /// On retouche sans look : rien à montrer, rien à déclencher.
+    /// On retouche : rien à déclencher — la miniature seule n'existe que
+    /// pendant la capture (#9567).
     case hidden
 }
 
@@ -103,8 +104,8 @@ nonisolated enum ComposerLookStripRule {
     /// La bande repliée devient un déclencheur simple ; en retouche, où rien ne
     /// se déclenche, elle s'efface.
     static func collapsedTrigger(look: ComposerPhotoLook, editing: Bool) -> ComposerLookStripTrigger {
-        guard look.isUntouched else { return .thumbnail }
-        return editing ? .hidden : .shutter
+        guard !editing else { return .hidden }
+        return look.isUntouched ? .shutter : .thumbnail
     }
 
     /// La bande peint-elle des trames ? Ouverte, toujours ; repliée, seulement

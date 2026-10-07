@@ -399,7 +399,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         let montage = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureMount.swift")
         XCTAssertTrue(montage.contains("ComposerEditScene.area("), "les deux couches lisent la même zone")
         XCTAssertTrue(montage.contains("ComposerEditScene.rect("))
-        XCTAssertTrue(montage.contains("proxy.safeAreaInsets"), "la couche de l'image retrouve les marges qu'elle ignore")
+        XCTAssertTrue(montage.contains("marges.safeAreaInsets"), "la couche de l'image retrouve les marges qu'elle ignore")
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("ComposerCropBrackets("), "quatre crochets aux angles de la scène")
         XCTAssertTrue(chrome.contains("session.setEditAspect("))
