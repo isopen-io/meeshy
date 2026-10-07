@@ -50,6 +50,7 @@ export default function ProgressionVitrineScreen() {
   suspendForGameCatalog(currentInterfaceLanguage());
   return (
     <ProgressionPage
+      concept="showcase"
       titre={gameText('game.showcase.title')}
       teinte={GAME_BRAND}
       compte={(p) => {

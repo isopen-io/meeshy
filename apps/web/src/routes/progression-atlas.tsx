@@ -47,6 +47,7 @@ export default function ProgressionAtlasScreen() {
   suspendForGameCatalog(currentInterfaceLanguage());
   return (
     <ProgressionPage
+      concept="atlas"
       titre={gameText('game.atlas.title')}
       teinte={GAME_BRAND}
       compte={(p) => {

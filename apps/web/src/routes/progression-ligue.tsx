@@ -202,6 +202,7 @@ export default function ProgressionLigueScreen() {
   suspendForGameCatalog(currentInterfaceLanguage());
   return (
     <ProgressionPage
+      concept="league"
       titre={gameText('game.league.title')}
       teinte={GAME_BRAND}
       compte={(p) => {

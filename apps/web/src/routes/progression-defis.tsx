@@ -15,6 +15,7 @@ import { GeneratedAchievements, STREAK_TINT } from '@/routes/progression-parts';
 export default function ProgressionDefisScreen() {
   return (
     <ProgressionPage
+      concept="defis"
       titre="Défis"
       teinte={STREAK_TINT}
       compte={(p) => {

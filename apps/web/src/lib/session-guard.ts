@@ -53,6 +53,9 @@ export type RouteKey =
   | 'progressionAtlas'
   | 'progressionPrestige'
   | 'progressionReglages'
+  /** LA FICHE D'UN CONCEPT ET LE TABLEAU DE BORD (#9563) — PRIVÉES, même raison. */
+  | 'progressionConcept'
+  | 'progressionTableau'
   /**
    * LES PUBLICATIONS ENREGISTRÉES (#7286) — PRIVÉE, comme `feed` et pour la
    * même raison : `GET /social/posts?scope=bookmarks` lit la table des favoris
@@ -315,6 +318,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'progressionAtlas',
   'progressionPrestige',
   'progressionReglages',
+  'progressionConcept',
+  'progressionTableau',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — voir la raison écrite sur
      `RouteKey` plus haut. */
   'bookmarks',

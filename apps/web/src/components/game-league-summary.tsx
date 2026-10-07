@@ -16,7 +16,7 @@ import { LeagueGem } from './game/league-gem';
  *
  * Il n'existe que si le joueur est PLACÉ dans la ligue publique : verrouillée,
  * fermée aux mineurs, sans consentement ou sans groupe, la ligue n'a rien à
- * détailler — la porte de la ligue (`game-doors`) dit déjà pourquoi. Le détail
+ * détailler — la carte et la fiche de la ligue disent déjà pourquoi. Le détail
  * lit le bloc `game` (cache d'abord) ; l'horloge est celle de la minute.
  */
 export function GameLeagueSummary({ league, now }: { readonly league: GameLeagueBlock | undefined; readonly now?: Date }) {

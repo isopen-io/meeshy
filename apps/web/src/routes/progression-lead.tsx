@@ -12,11 +12,14 @@ import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { photoMomentFromCard, photoMomentOfEmblemV2, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import { useGamePrefs } from '@/lib/game/preferences';
+import { gameText } from '@/lib/view/game-copy';
 import { useViewerId } from '@/routes/game-friends';
 import { useGameGuide } from '@/routes/progression-guide';
 import { GAME_MUTATION_KEY } from '@/routes/progression-game-actions';
 import { usePhotoMoments } from '@/routes/progression-photo';
 import { href, navigate } from '@/routes/route-table';
+
+import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
 /**
  * LE GUIDE ET LES PHOTOS SUR « PROGRESSION » (#9379, #9382) — l'assemblage de
@@ -27,19 +30,17 @@ import { href, navigate } from '@/routes/route-table';
  * Une proposition de photo ne double pas la carte du guide : quand la carte
  * affichée propose déjà ce moment-là (« Immortaliser »), la proposition se
  * tait. Le bouton d'une carte mène où la loi le dit (`guideActionTarget`) :
- * défiler jusqu'à la carte visée, ouvrir une autre page, ou ouvrir la photo.
+ * ouvrir la fiche du concept visé, ouvrir une autre page, ou ouvrir la photo.
  *
- * `env`, `transport`, `navigateTo` et `scrollTo` sont injectables : l'écran
+ * REPLIÉ (`collapsed`, #9563) : la première page n'en montre que la ligne courte
+ * (`onGuideLine`) ; la carte et les propositions de photo ne se peignent qu'une
+ * fois la ligne de Mee touchée. Une photo déjà ouverte, elle, reste ouverte.
+ *
+ * `env`, `transport`, `navigateTo` et `openConcept` sont injectables : l'écran
  * passe les vrais, les témoins des doubles.
  */
 
-const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-const defaultScrollTo = (id: string): void => {
-  requestAnimationFrame(() => {
-    document.getElementById(id)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
-  });
-};
+const defaultOpenConcept = (concept: ProgressionConcept): void => navigate(href('progressionConcept', { concept }));
 
 const defaultNavigateTo = (to: GuideRoute): void => navigate(href(to));
 
@@ -48,16 +49,19 @@ export function GameLead({
   env = appPhotoEnv,
   transport,
   navigateTo = defaultNavigateTo,
-  scrollTo = defaultScrollTo,
+  openConcept = defaultOpenConcept,
   onGuideLine,
+  collapsed = false,
 }: {
   readonly view: EngagementWithGame;
   readonly env?: () => PhotoEnv;
   readonly transport?: HttpTransport;
   readonly navigateTo?: (to: GuideRoute) => void;
-  readonly scrollTo?: (id: string) => void;
+  readonly openConcept?: (concept: ProgressionConcept) => void;
   /** La ligne COURTE de la carte affichée (`null` : aucune carte) — Mee la dit sur le coin du héros (#5841). */
   readonly onGuideLine?: (line: string | null) => void;
+  /** Replié : ni carte ni proposition de photo, seule la ligne courte est remontée à l'hôte. */
+  readonly collapsed?: boolean;
 }) {
   const settled = useIsMutating({ mutationKey: GAME_MUTATION_KEY }) === 0;
   const userId = useViewerId();
@@ -85,23 +89,24 @@ export function GameLead({
       /* Une étape qui ATTEND son geste n'est pas consommée par son bouton : il
          y mène, et la carte avance quand le geste a eu lieu (`gesture.ts`). */
       if (card.awaiting !== true) guide.dismiss();
-      if (target.kind === 'scroll') scrollTo(target.id);
+      if (target.kind === 'fiche') openConcept(target.concept);
       else if (target.kind === 'route') navigateTo(target.to);
       else {
         const moment = cardMoment(card);
         if (moment !== null) photo.start(moment);
       }
     },
-    [guide, scrollTo, navigateTo, photo, cardMoment],
+    [guide, openConcept, navigateTo, photo, cardMoment],
   );
 
   const card = guide.card;
-  const shortLine = card === null ? null : card.copy.short;
+  const cardPhoto = card === null || !card.photo ? null : cardMoment(card);
+  const offers = photo.offers.filter((offer) => offer.id !== cardPhoto?.id);
+  /* Sans carte mais avec une photo à proposer, la ligne le dit : sinon la proposition resterait repliée sans que rien ne l'annonce. */
+  const shortLine = card !== null ? card.copy.short : offers.length > 0 ? gameText('game.photo.offer.title') : null;
   useEffect(() => {
     onGuideLine?.(shortLine);
   }, [shortLine, onGuideLine]);
-  const cardPhoto = card === null || !card.photo ? null : cardMoment(card);
-  const offers = photo.offers.filter((offer) => offer.id !== cardPhoto?.id);
 
   const later = useCallback(
     (moment: PhotoMoment) => {
@@ -110,6 +115,9 @@ export function GameLead({
     },
     [photo, env],
   );
+
+  const flow = photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} flameDays={game?.flame.days ?? null} onClose={photo.close} />;
+  if (collapsed) return flow;
 
   return (
     <>
@@ -125,7 +133,7 @@ export function GameLead({
       {offers.map((offer) => (
         <GamePhotoOffer key={offer.id} moment={offer} onStart={photo.start} onLater={later} />
       ))}
-      {photo.active === null ? null : <GamePhotoFlow moment={photo.active} env={env()} flameDays={game?.flame.days ?? null} onClose={photo.close} />}
+      {flow}
     </>
   );
 }

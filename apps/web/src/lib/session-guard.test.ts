@@ -25,6 +25,8 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'progressionAtlas',
   'progressionPrestige',
   'progressionReglages',
+  'progressionConcept',
+  'progressionTableau',
   'bookmarks',
   'starredMessages',
   'stories',

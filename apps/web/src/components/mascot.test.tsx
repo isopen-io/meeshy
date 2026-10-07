@@ -136,7 +136,7 @@ describe('ProgressionBody — la mascotte ouvre l’écran', () => {
   const progress = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
 
   test('dit ce que la loi décide pour la progression servie', () => {
-    const html = renderToStaticMarkup(<ProgressionBody progress={progress} onMint={() => {}} isMinting={false} />);
+    const html = renderToStaticMarkup(<ProgressionBody progress={progress} />);
     expect(html).toContain('data-mascot-coach');
   });
 
@@ -144,8 +144,6 @@ describe('ProgressionBody — la mascotte ouvre l’écran', () => {
     const html = renderToStaticMarkup(
       <ProgressionBody
         progress={progress}
-        onMint={() => {}}
-        isMinting={false}
         mascotEvent={{ kind: 'meesh-minted', balance: 4 }}
       />,
     );

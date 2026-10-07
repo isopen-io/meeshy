@@ -12,7 +12,7 @@ import { guideActionTarget } from './action-target';
 describe('chaque action de la loi a une destination', () => {
   for (const action of GUIDE_ACTIONS) {
     test(`${action} mène quelque part`, () => {
-      expect(guideActionTarget(action).kind).toMatch(/^(scroll|route|photo)$/);
+      expect(guideActionTarget(action).kind).toMatch(/^(fiche|route|photo)$/);
     });
   }
 });
@@ -20,30 +20,30 @@ describe('chaque action de la loi a une destination', () => {
 describe('les destinations', () => {
   test('voir son niveau, sa progression, le palier suivant : la jauge du niveau', () => {
     for (const action of ['see-level', 'see-progress', 'see-next-tier', 'prestige-or-stay'] as const) {
-      expect(guideActionTarget(action)).toEqual({ kind: 'scroll', id: 'game-level' });
+      expect(guideActionTarget(action)).toEqual({ kind: 'fiche', concept: 'level' });
     }
   });
 
   test('les missions : la carte des missions', () => {
     for (const action of ['see-missions', 'open-first-mission', 'regain-levels', 'do-easy-mission-or-freeze', 'do-easiest-mission'] as const) {
-      expect(guideActionTarget(action)).toEqual({ kind: 'scroll', id: 'game-missions' });
+      expect(guideActionTarget(action)).toEqual({ kind: 'fiche', concept: 'missions' });
     }
   });
 
   test('la Flamme se voit en jauge, se rallume au panneau', () => {
-    expect(guideActionTarget('see-flame')).toEqual({ kind: 'scroll', id: 'game-flame' });
-    expect(guideActionTarget('relight-flame')).toEqual({ kind: 'scroll', id: 'game-flame-panel' });
+    expect(guideActionTarget('see-flame')).toEqual({ kind: 'fiche', concept: 'flame' });
+    expect(guideActionTarget('relight-flame')).toEqual({ kind: 'fiche', concept: 'flame' });
   });
 
   test('le trésor et le rang', () => {
-    expect(guideActionTarget('see-meeshes')).toEqual({ kind: 'scroll', id: 'game-treasury' });
-    expect(guideActionTarget('keep-or-spend')).toEqual({ kind: 'scroll', id: 'game-treasury' });
-    expect(guideActionTarget('see-rank')).toEqual({ kind: 'scroll', id: 'game-rank' });
+    expect(guideActionTarget('see-meeshes')).toEqual({ kind: 'fiche', concept: 'meesh' });
+    expect(guideActionTarget('keep-or-spend')).toEqual({ kind: 'fiche', concept: 'meesh' });
+    expect(guideActionTarget('see-rank')).toEqual({ kind: 'fiche', concept: 'glory' });
   });
 
   test('l’aperçu de frappe', () => {
-    expect(guideActionTarget('mint-or-climb')).toEqual({ kind: 'scroll', id: 'game-mint' });
-    expect(guideActionTarget('see-mint-preview')).toEqual({ kind: 'scroll', id: 'game-mint' });
+    expect(guideActionTarget('mint-or-climb')).toEqual({ kind: 'fiche', concept: 'meesh' });
+    expect(guideActionTarget('see-mint-preview')).toEqual({ kind: 'fiche', concept: 'meesh' });
   });
 
   test('les badges : leur page', () => {

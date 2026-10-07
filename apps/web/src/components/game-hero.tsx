@@ -158,7 +158,8 @@ function HowToEarn({ rules }: { readonly rules: readonly EarnRule[] }) {
               search={{ regle: '1' }}
               data-game-earn-chip={family}
               aria-label={gameText('game.hero.earn_chip_a11y', { family: familyName(family), points: pointsLabel(points) })}
-              className="inline-flex items-center gap-1.5 rounded-chip px-3 text-check font-semibold"
+              data-chip=""
+              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-chip px-3 text-check font-semibold"
               style={{
                 minHeight: 44,
                 backgroundColor: `color-mix(in srgb, ${enamelToken(family)} 14%, transparent)`,
