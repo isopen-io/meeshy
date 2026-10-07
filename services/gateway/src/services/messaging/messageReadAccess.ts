@@ -52,6 +52,14 @@
  * contenu déjà parti de l'écran de celui qui le désigne. Même borne stricte
  * pour la vue unique ouverte et la flamme après lecture consommée.
  *
+ * Et une réponse MEURT avec ce qu'elle cite (#8630) : le fil lui sert la plus
+ * proche des échéances de sa chaîne de citations (`quoteCascade.ts`), et sa
+ * bulle part à cet instant. La borne lit donc la même chaîne, maillon par
+ * maillon, sur les mêmes {@link MAX_QUOTE_DEPTH} crans — mais de façon CIBLÉE
+ * (un message par identifiant, l'échéance de CE lecteur par sa ligne) : le
+ * chargeur du fil est plafonné et SERT quand il échoue (#9625). Une réponse à
+ * une flamme morte pour lui, contaminée (#8557) ou non, ne se désigne plus.
+ *
  * L'AUTEUR suit la même loi, avec SON échéance servie : la plus tardive de
  * celles de ses destinataires. Tant que personne n'a reçu, rien ne décompte
  * pour lui ; quand le dernier décompte est fini, sa bulle part aussi. Et
@@ -66,9 +74,22 @@
  * Ce qui PROPAGE n'est pas rattrapé ici : une lecture qui ne conclut pas
  * n'autorise rien, et c'est à l'appelant de dire ce que « rien » veut dire
  * chez lui (un 404, une source indisponible).
+ *
+ * ─── LE COÛT NE DIT RIEN NON PLUS ───────────────────────────────────────────
+ *
+ * Une réponse identique ne suffit pas si le TRAVAIL diffère : un identifiant
+ * qui ne désigne rien coûtait deux lectures, un message d'une conversation
+ * d'où l'on est absent en coûtait trois. L'identifiant inconnu paie donc la
+ * même lecture de participation — dans une conversation qui n'existe pas
+ * ({@link NO_CONVERSATION}). Ce qui suit la participation n'est payé que par
+ * qui lit déjà la conversation du message.
  */
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
-import { hasPerReaderEphemeralDeadline, servedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
+import {
+  hasPerReaderEphemeralDeadline,
+  inheritedEphemeralExpiresAt,
+  servedEphemeralExpiresAt,
+} from '@meeshy/shared/utils/ephemeral-countdown';
 
 import {
   readEphemeralReaderResolution,
@@ -79,6 +100,7 @@ import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, type HistoryReader 
 import { loadPersonalHistoryHiding, readPersonalHistoryHiding } from '../personalHistoryFilter';
 import { shareLinkHasExpired } from '../shareLinkReadGate';
 import { readableByReader } from './messageStars/starredMessageVerdict';
+import { MAX_QUOTE_DEPTH } from './quoteCascade';
 import { readViewOnceOpenedByReader } from './viewOnceAudience';
 
 /** Les colonnes dont dépend le droit du LECTEUR — aucun contenu. */
@@ -91,6 +113,7 @@ export type ReadableMessageRow = {
 
 /** Celles dont dépend, en plus, ce que le contenu est encore POUR lui. */
 export type ReaderVisibleMessageRow = ReadableMessageRow & {
+  readonly replyToId: string | null;
   readonly senderId: string;
   readonly ephemeralDuration: number | null;
   readonly effectFlags: number | null;
@@ -104,6 +127,7 @@ export const READER_VISIBLE_MESSAGE_SELECT = {
   conversationId: true,
   createdAt: true,
   deletedAt: true,
+  replyToId: true,
   senderId: true,
   ephemeralDuration: true,
   effectFlags: true,
@@ -111,6 +135,37 @@ export const READER_VISIBLE_MESSAGE_SELECT = {
   isViewOnce: true,
   viewOnceBurnedAt: true,
 } as const;
+
+/** Ce que la chaîne de citations demande à chaque maillon — aucun contenu. */
+const QUOTED_LINK_SELECT = {
+  id: true,
+  replyToId: true,
+  senderId: true,
+  createdAt: true,
+  ephemeralDuration: true,
+  effectFlags: true,
+  expiresAt: true,
+} as const;
+
+type BubbleRow = Pick<
+  ReaderVisibleMessageRow,
+  'id' | 'senderId' | 'ephemeralDuration' | 'effectFlags' | 'expiresAt' | 'createdAt'
+>;
+type QuotedLink = BubbleRow & { readonly replyToId: string | null };
+
+/**
+ * Un ObjectId valide qu'aucune conversation ne porte (horodatage nul) : la
+ * conversation d'un identifiant qui ne désigne rien. Voir l'en-tête, « le coût
+ * ne dit rien ».
+ */
+const NO_CONVERSATION = '000000000000000000000000';
+
+const unknownMessage = (id: string): ReadableMessageRow => ({
+  id,
+  conversationId: NO_CONVERSATION,
+  createdAt: new Date(0),
+  deletedAt: null,
+});
 
 /** Ce que vaut un masquage personnel ILLISIBLE — chaque appelant le dit. */
 export type UnreadableHidingPosture = 'serve' | 'refuse';
@@ -172,26 +227,42 @@ export async function readerMayReadMessage(
   return (await readerParticipation(prisma, params)) !== null;
 }
 
-/**
- * LA BORNE DE LA BULLE : l'éphémère est-il encore à l'écran de ce lecteur ?
- * `D(u)` exclu — à l'instant de l'échéance, la bulle est partie. Aucune grâce
- * (voir l'en-tête). Un décompte qui n'a pas démarré ne ferme rien.
- */
-export function ephemeralStillOnReaderScreen(
-  message: Pick<ReaderVisibleMessageRow, 'ephemeralDuration' | 'effectFlags' | 'expiresAt' | 'createdAt'>,
-  resolution: EphemeralReaderResolution,
-  now: Date,
-): boolean {
-  const servedDeadline = servedEphemeralExpiresAt({
-    ephemeralDuration: message.ephemeralDuration,
-    effectFlags: message.effectFlags,
-    rawExpiresAt: message.expiresAt,
-    sentAt: message.createdAt,
+/** L'échéance que CE lecteur voit sur une bulle — `null` quand rien ne décompte pour lui. */
+function servedBubbleDeadline(row: BubbleRow, resolution: EphemeralReaderResolution): Date | null {
+  return servedEphemeralExpiresAt({
+    ephemeralDuration: row.ephemeralDuration,
+    effectFlags: row.effectFlags,
+    rawExpiresAt: row.expiresAt,
+    sentAt: row.createdAt,
     isSender: resolution.isSender,
     readerDeadline: resolution.readerDeadline,
     latestRecipientDeadline: resolution.latestRecipientDeadline,
   });
-  return servedDeadline === null || now.getTime() < servedDeadline.getTime();
+}
+
+async function readerBubbleDeadline(
+  prisma: PrismaClient,
+  row: BubbleRow,
+  readerParticipantId: string,
+): Promise<Date | null> {
+  if (!hasPerReaderEphemeralDeadline(row)) return null;
+  return servedBubbleDeadline(row, await readEphemeralReaderResolution(prisma, row, readerParticipantId));
+}
+
+/**
+ * La chaîne de ce qu'un message cite, maillon par maillon, sur les crans de
+ * la loi du fil. Elle s'arrête sur un maillon introuvable ou déjà vu, comme
+ * `quoteCascade`, et PROPAGE ses erreurs.
+ */
+async function readQuotedChain(
+  prisma: PrismaClient,
+  quotedId: string | null,
+  seen: ReadonlySet<string>,
+): Promise<readonly QuotedLink[]> {
+  if (!quotedId || seen.has(quotedId) || seen.size > MAX_QUOTE_DEPTH) return [];
+  const link = await prisma.message.findUnique({ where: { id: quotedId }, select: QUOTED_LINK_SELECT });
+  if (!link) return [];
+  return [link, ...(await readQuotedChain(prisma, link.replyToId, new Set([...seen, link.id])))];
 }
 
 /**
@@ -208,10 +279,15 @@ export async function contentStillVisibleToReader(
 ): Promise<boolean> {
   const { readerParticipantId, message, now } = params;
 
-  if (hasPerReaderEphemeralDeadline(message)) {
-    const resolution = await readEphemeralReaderResolution(prisma, message, readerParticipantId);
-    if (!ephemeralStillOnReaderScreen(message, resolution, now)) return false;
-  }
+  // LA BORNE DE LA BULLE : la plus proche des échéances servies à ce lecteur,
+  // sur le message et sur ce qu'il cite. `D(u)` exclu, aucune grâce (voir
+  // l'en-tête). Un décompte qui n'a pas démarré ne ferme rien.
+  const chain = await readQuotedChain(prisma, message.replyToId, new Set([message.id]));
+  const deadlines = await Promise.all(
+    [message, ...chain].map((row) => readerBubbleDeadline(prisma, row, readerParticipantId)),
+  );
+  const bubbleGoneAt = inheritedEphemeralExpiresAt(deadlines);
+  if (bubbleGoneAt && now.getTime() >= bubbleGoneAt.getTime()) return false;
 
   if (message.isViewOnce === true) {
     if (message.viewOnceBurnedAt) return false;
@@ -254,15 +330,15 @@ export async function loadMessageReadableByParticipant(
     messageReaderOfParticipant(prisma, params.participantId),
     prisma.message.findUnique({ where: { id: params.messageId }, select: READER_VISIBLE_MESSAGE_SELECT }),
   ]);
-  if (!reader || !message) return null;
+  if (!reader) return null;
 
   const participation = await readerParticipation(prisma, {
     reader,
-    message,
+    message: message ?? unknownMessage(params.messageId),
     now: params.now,
     whenHidingUnreadable: 'refuse',
   });
-  if (!participation) return null;
+  if (!message || !participation) return null;
 
   const visible = await contentStillVisibleToReader(prisma, {
     readerParticipantId: participation.id,
