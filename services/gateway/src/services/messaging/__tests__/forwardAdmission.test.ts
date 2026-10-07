@@ -61,9 +61,14 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
-import { admitMessageForward, describeForwardRefusal, isForwardRefused } from '../forwardAdmission';
+import { admitMessageForward as admitForward, describeForwardRefusal, isForwardRefused } from '../forwardAdmission';
 
 const SOURCE_ID = '507f1f77bcf86cd799439011';
+const SOURCE_CONVERSATION_ID = '507f1f77bcf86cd799439021';
+const SENDER_ID = '507f1f77bcf86cd799439031';
+const SENDER_USER_ID = '507f1f77bcf86cd799439041';
+const SENDER_IN_SOURCE_ID = '507f1f77bcf86cd799439051';
+const AUTHOR_ID = '507f1f77bcf86cd799439061';
 const AT = new Date('2026-08-12T12:00:00.000Z');
 
 const VIEW_ONCE_BIT = 1 << 2;
@@ -73,9 +78,43 @@ const AFTER_READ_BIT = 1 << 3;
 
 const messageFindUnique = jest.fn<any>();
 
-const prisma = { message: { findUnique: messageFindUnique } } as any;
+// #9579 — tous les témoins de ce fichier portent sur ce que la source IMPOSE :
+// l'expéditeur y LIT la source (participant actif de sa conversation, sans
+// plancher ni masquage). Le droit de lire a ses propres témoins, sur une base
+// qui évalue les requêtes : `forwardSourceReadAccess.test.ts`.
+const prisma = {
+  message: { findUnique: messageFindUnique },
+  participant: {
+    findUnique: async () => ({ id: SENDER_ID, userId: SENDER_USER_ID }),
+    findMany: async () => [],
+    count: async () => 2,
+    findFirst: async () => ({
+      id: SENDER_IN_SOURCE_ID,
+      role: 'member',
+      joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+      shareLinkId: null,
+      historyVisibleFrom: null,
+      permissions: null,
+      anonymousSession: null,
+      user: { role: 'USER' },
+    }),
+  },
+  userConversationPreferences: { findFirst: async () => null },
+  userMessageDeletion: { findMany: async () => [] },
+  // Aucun décompte lancé, aucune vue unique ouverte : le contenu est là pour lui.
+  messageStatusEntry: { findMany: async () => [] },
+} as any;
+
+const admitMessageForward = (db: any, params: Record<string, unknown>) =>
+  admitForward(db, { senderParticipantId: SENDER_ID, ...params } as any);
 
 const source = (over: Record<string, unknown> = {}) => ({
+  id: SOURCE_ID,
+  conversationId: SOURCE_CONVERSATION_ID,
+  createdAt: new Date('2026-08-12T11:00:00.000Z'),
+  deletedAt: null,
+  senderId: AUTHOR_ID,
+  viewOnceBurnedAt: null,
   isViewOnce: false,
   isBlurred: false,
   effectFlags: 0,
@@ -219,8 +258,11 @@ describe('admitMessageForward', () => {
     it('lit le flou, le bitfield et la protection de chaque pièce dans la MÊME requête', async () => {
       await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
 
-      expect(messageFindUnique).toHaveBeenCalledTimes(1);
-      const { select } = messageFindUnique.mock.calls[0][0];
+      // Deux lectures de la source, indépendantes : le droit de la lire
+      // (#9579), puis ce qu'elle impose — UNE requête pour toute la loi.
+      const lawReads = messageFindUnique.mock.calls.filter(([args]: [any]) => args.select.isBlurred === true);
+      expect(lawReads).toHaveLength(1);
+      const { select } = lawReads[0][0];
       expect(select).toMatchObject({
         isViewOnce: true,
         isBlurred: true,

@@ -79,38 +79,54 @@ export async function loadEphemeralReaderDeadlines(
   messages: readonly EphemeralRow[],
   readerParticipantId: string | undefined,
 ): Promise<Map<string, EphemeralReaderResolution>> {
-  const resolutions = new Map<string, EphemeralReaderResolution>();
-
-  const ephemeralIds = messages
-    .filter((message) => hasPerReaderEphemeralDeadline(message))
-    .map((message) => message.id);
-  if (ephemeralIds.length === 0) return resolutions;
-
-  let entries: Array<{ messageId: string; participantId: string; ephemeralExpiresAt: Date | null }>;
   try {
-    entries = (await prisma.messageStatusEntry.findMany({
-      where: {
-        messageId: { in: ephemeralIds },
-        AND: [
-          { ephemeralExpiresAt: { isSet: true } },
-          { ephemeralExpiresAt: { not: null } },
-        ],
-      },
-      select: { messageId: true, participantId: true, ephemeralExpiresAt: true },
-      // Borné : une page sert au plus une centaine de messages, et seuls les
-      // destinataires dont le décompte a DÉMARRÉ ont une ligne appariée. Le
-      // plafond couvre donc largement le cas nominal tout en refusant qu'une
-      // conversation à des milliers de membres fasse payer la page entière.
-      take: EPHEMERAL_DEADLINE_SCAN_CAP,
-    })) as Array<{ messageId: string; participantId: string; ephemeralExpiresAt: Date | null }>;
+    return await readEphemeralReaderDeadlines(prisma, messages, readerParticipantId);
   } catch (err) {
     // Fermé par défaut : sans échéances, chaque éphémère est servi SANS
     // décompte. Les clients l'affichent alors comme « en attente de
     // réception » — un écran en retard, jamais l'échéance de quelqu'un d'autre.
     logger.warn('ephemeral reader deadlines query failed', { err });
-    for (const id of ephemeralIds) resolutions.set(id, NO_DEADLINE);
-    return resolutions;
+    return new Map(perReaderEphemeralIds(messages).map((id) => [id, NO_DEADLINE] as const));
   }
+}
+
+const perReaderEphemeralIds = (messages: readonly EphemeralRow[]): string[] =>
+  messages.filter((message) => hasPerReaderEphemeralDeadline(message)).map((message) => message.id);
+
+/**
+ * La MÊME résolution, sans la posture de service : elle PROPAGE (#9579).
+ *
+ * Pour une PAGE, une lecture d'échéances qui échoue sert l'éphémère sans
+ * décompte — un écran en retard. Pour un appelant qui décide, sur cette
+ * échéance, si un contenu peut encore SORTIR (un transfert), « sans décompte »
+ * voudrait dire « encore vivant » : il doit pouvoir distinguer une échéance
+ * absente d'une échéance illisible.
+ */
+export async function readEphemeralReaderDeadlines(
+  prisma: EphemeralDeadlinesPrisma,
+  messages: readonly EphemeralRow[],
+  readerParticipantId: string | undefined,
+): Promise<Map<string, EphemeralReaderResolution>> {
+  const resolutions = new Map<string, EphemeralReaderResolution>();
+
+  const ephemeralIds = perReaderEphemeralIds(messages);
+  if (ephemeralIds.length === 0) return resolutions;
+
+  const entries = (await prisma.messageStatusEntry.findMany({
+    where: {
+      messageId: { in: ephemeralIds },
+      AND: [
+        { ephemeralExpiresAt: { isSet: true } },
+        { ephemeralExpiresAt: { not: null } },
+      ],
+    },
+    select: { messageId: true, participantId: true, ephemeralExpiresAt: true },
+    // Borné : une page sert au plus une centaine de messages, et seuls les
+    // destinataires dont le décompte a DÉMARRÉ ont une ligne appariée. Le
+    // plafond couvre donc largement le cas nominal tout en refusant qu'une
+    // conversation à des milliers de membres fasse payer la page entière.
+    take: EPHEMERAL_DEADLINE_SCAN_CAP,
+  })) as Array<{ messageId: string; participantId: string; ephemeralExpiresAt: Date | null }>;
 
   const senderOf = new Map(messages.map((message) => [message.id, message.senderId ?? null]));
   const byMessage = new Map<string, { reader: Date | null; latest: Date | null }>();

@@ -418,8 +418,14 @@ export class MessagingService {
       //      tenir. Sans lui, un transfert dont la source a disparu créait une
       //      ligne sans contenu, sans pièce jointe et sans chiffré — une bulle
       //      vide diffusée à tous. Les deux règles évoluent ensemble.
+      //
+      //      #9579 — l'expéditeur est remis au garde : un transfert n'est admis
+      //      que s'il peut LIRE la source, et la conversation de provenance
+      //      n'est gardée que si la source y vit.
       const forwardAdmission = await admitMessageForward(this.prisma, {
         forwardedFromId: request.forwardedFromId,
+        senderParticipantId: participant.id,
+        forwardedFromConversationId: request.forwardedFromConversationId,
         at: new Date(),
         bodyOnlyFromSource: this.bodyOnlyFromSource(request)
       });

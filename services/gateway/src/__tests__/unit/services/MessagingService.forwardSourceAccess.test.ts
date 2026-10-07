@@ -82,6 +82,7 @@ import {
   MSG_1,
   OTHER_USER_ID,
   USER_ID,
+  matchesWhere,
   makePrisma,
   makeStore,
   messageRow,
@@ -90,6 +91,9 @@ import {
 } from '../routes/me/starred-messages-harness';
 
 type Row = Record<string, unknown>;
+
+/** La base du favori, plus les accusés par lecteur (décomptes, ouvertures). */
+type Scenario = Store & { statusEntries?: Row[] };
 
 /** La conversation où le message SOURCE vit, et celle où l'expéditeur ÉCRIT. */
 const SOURCE_CONVERSATION = CONV_A;
@@ -107,11 +111,28 @@ const OWN_TEXT = 'Le texte que l’expéditeur envoie lui-même';
 
 const AFTER_THE_SOURCE = new Date('2026-09-20T11:00:00.000Z');
 
+/** La ligne de l'expéditeur DANS la conversation de la source — la clé de ses accusés. */
+const SENDER_IN_SOURCE = '68b000000000000000000011';
+const EPHEMERAL_BIT = 1 << 0;
+const VIEW_ONCE_BIT = 1 << 2;
+const AFTER_READ_BIT = 1 << 3;
+
+/** `handleMessage` lit l'horloge du mur : les échéances se datent par rapport à elle. */
+const fromNow = (seconds: number): Date => new Date(Date.now() + seconds * 1000);
+
+const flameSource = (overrides: Row = {}): Row =>
+  sourceMessage({ effectFlags: EPHEMERAL_BIT, ephemeralDuration: 30, expiresAt: fromNow(7 * 24 * 3600), ...overrides });
+const afterReadSource = (): Row => flameSource({ effectFlags: EPHEMERAL_BIT | AFTER_READ_BIT, ephemeralDuration: null });
+const viewOnceSource = (): Row => sourceMessage({ isViewOnce: true, effectFlags: VIEW_ONCE_BIT });
+
+const withEntries = (store: Store, statusEntries: Row[]): Scenario => ({ ...store, statusEntries });
+const countdown = (deadline: Date): Row => ({ messageId: SOURCE_MESSAGE, participantId: SENDER_IN_SOURCE, ephemeralExpiresAt: deadline });
+
 const sourceMessage = (overrides: Row = {}): Row =>
   messageRow({
     content: SOURCE_SECRET,
     ephemeralDuration: null,
-    viewOnceBurnAt: null,
+    viewOnceBurnedAt: null,
     attachments: [{ id: '68b0000000000000000000c1', mimeType: 'image/jpeg', fileUrl: SOURCE_FILE, thumbnailUrl: null, isViewOnce: false, isBlurred: false, effectFlags: 0 }],
     _count: { attachments: 1 },
     ...overrides,
@@ -136,7 +157,7 @@ const readableStore = (overrides: Partial<Store> = {}): Store =>
  * Chaque façon de NE PAS pouvoir lire la source. Toutes doivent rendre la même
  * chose qu'un identifiant qui ne désigne rien.
  */
-const UNREADABLE: ReadonlyArray<readonly [string, () => Store, string?]> = [
+const UNREADABLE: ReadonlyArray<readonly [string, () => Scenario, string?]> = [
   ['n’a jamais participé à la conversation de la source', () => readableStore({ participants: [senderInTarget()] })],
   ['a QUITTÉ la conversation de la source', () => readableStore({ participants: [senderInTarget(), participantRow({ isActive: false })] })],
   ['en est BANNI, sa ligne restée active', () => readableStore({ participants: [senderInTarget(), participantRow({ bannedAt: new Date('2026-09-10T00:00:00.000Z') })] })],
@@ -161,14 +182,29 @@ const UNREADABLE: ReadonlyArray<readonly [string, () => Store, string?]> = [
     }),
     GUEST_IN_TARGET,
   ],
+  // Le contenu a disparu POUR LUI : il lit la conversation, plus ce message.
+  ['a vu son décompte finir sur cette flamme', () => withEntries(readableStore({ messages: [flameSource()] }), [countdown(fromNow(-1))])],
+  ['a déjà consommé cette flamme après lecture', () => withEntries(readableStore({ messages: [afterReadSource()] }), [countdown(fromNow(-5))])],
+  [
+    'a déjà ouvert cette vue unique',
+    () => withEntries(readableStore({ messages: [viewOnceSource()] }), [{ messageId: SOURCE_MESSAGE, participantId: SENDER_IN_SOURCE, viewedOnceAt: fromNow(-60) }]),
+  ],
+  // La NATURE d'une source ne se dit pas à qui ne la lit pas.
+  ['n’y a jamais participé, et la source est à vue unique', () => readableStore({ messages: [viewOnceSource()], participants: [senderInTarget()] })],
+  ['n’y a jamais participé, et la source est une flamme après lecture', () => readableStore({ messages: [afterReadSource()], participants: [senderInTarget()] })],
 ];
 
 describe('MessagingService.handleMessage — on ne transfère que ce qu’on a le droit de lire (#9579)', () => {
   let service: MessagingService;
   let mockPrisma: any;
 
-  const mount = (store: Store) => {
+  const mount = (store: Scenario) => {
     const db = makePrisma(store);
+    mockPrisma.messageStatusEntry = {
+      findMany: async (args: { where?: Row }) => (store.statusEntries ?? []).filter((entry) => matchesWhere(entry, args.where)),
+    };
+    mockPrisma.participant.count = async (args: { where?: Row }) =>
+      store.participants.filter((p) => matchesWhere(p, args.where)).length;
     mockPrisma.message.findUnique.mockImplementation(db.message.findUnique);
     mockPrisma.message.findMany.mockImplementation(db.message.findMany);
     mockPrisma.participant.findFirst.mockImplementation(db.participant.findFirst);
@@ -296,6 +332,16 @@ describe('MessagingService.handleMessage — on ne transfère que ce qu’on a l
       expect(served.forwardedFromConversation).toMatchObject({ id: SOURCE_CONVERSATION });
     });
 
+    it('transfère une flamme dont son décompte court encore : la durée de la source borne la copie', async () => {
+      mount(withEntries(readableStore({ messages: [flameSource()] }), [countdown(fromNow(3600))]));
+
+      const response = await send({ forwardedFromId: SOURCE_MESSAGE, ephemeralDuration: 86_400 } as Row);
+
+      expect(response.success).toBe(true);
+      expect(written()?.forwardedFromId).toBe(SOURCE_MESSAGE);
+      expect(written()?.ephemeralDuration).toBe(30);
+    });
+
     it('transfère un média sans texte : les pièces de la source font le corps', async () => {
       mount(readableStore());
 
@@ -405,7 +451,10 @@ describe('MessagingService.handleMessage — on ne transfère que ce qu’on a l
       expect(response.success).toBe(true);
       expect(written()?.forwardedFromId).toBe(SOURCE_MESSAGE);
       expect(written()?.forwardedFromConversationId ?? null).toBeNull();
-      expect((await servedByThread(store)).forwardedFromConversation ?? null).toBeNull();
+      const served = await servedByThread(store);
+      expect(served.forwardedFromConversation ?? null).toBeNull();
+      expect(JSON.stringify(served)).not.toContain('Une tierce conversation');
+      expect(JSON.stringify(served)).not.toContain('mshy_tierce');
     });
 
     it('retire une conversation nommée SANS message source', async () => {

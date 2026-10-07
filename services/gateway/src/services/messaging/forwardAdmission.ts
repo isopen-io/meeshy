@@ -4,6 +4,8 @@ import {
   type ContentExitProjection,
 } from '@meeshy/shared/utils/content-exit-law';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { loadMessageReadableByParticipant, type ReaderVisibleMessageRow } from './messageReadAccess';
 
 /**
  * Ce qui empêche le transfert de défaire ce que les cycles 92 et 93 ont détruit.
@@ -98,11 +100,34 @@ import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
  * fourni par le client) se DIT : `sourceUnavailable`. L'appelant retire alors
  * `forwardedFromId`, sans quoi `saveMessage` recopierait les pièces d'une
  * source dont on n'a pas pu lire la protection.
+ *
+ * ─── ON NE TRANSFÈRE QUE CE QU'ON A LE DROIT DE LIRE (#9579) ────────────────
+ *
+ * Tout ce qui précède lit ce que la source IMPOSE. Rien ne demandait si
+ * l'EXPÉDITEUR a le droit de la lire — or un transfert en tire des pièces
+ * recopiées, puis une provenance que le fil sert. Ce droit se juge EN PREMIER,
+ * par la loi de lecture de la messagerie (`messageReadAccess.ts`) : participant
+ * actif de la conversation de la source, message non supprimé, historique ni
+ * borné ni masqué pour lui — et contenu encore à SON écran : un éphémère dont
+ * son décompte est fini, une flamme qu'il a consommée, une vue unique qu'il a
+ * ouverte ne se désignent plus (borne de la bulle, sans la grâce du service).
+ *
+ * Une source que l'expéditeur ne lit pas est une source INDISPONIBLE — le même
+ * verdict qu'un identifiant qui ne désigne rien, pour qu'aucune réponse ne
+ * distingue « n'existe pas » de « existe, mais pas pour toi ». Elle ne passe
+ * donc jamais par la loi de sortie : sa nature ne se dit pas à qui ne la lit
+ * pas. Et une lecture d'accès qui échoue ferme de la même façon — ce droit-là
+ * n'a pas de best-effort.
+ *
+ * La CONVERSATION de provenance suit la même loi : c'est un fait lu sur la
+ * source, jamais une déclaration. `provenanceConversationId` n'est rendu que
+ * si l'envoi nomme la conversation où la source vit réellement.
  */
 
 /**
- * La seule lecture que la décision demande, en structural : le double de test
- * reste trivial et l'unité n'importe pas `PrismaClient`.
+ * La seule lecture que la LOI DE SORTIE demande, en structural : son double de
+ * test reste trivial. Le droit de lire, lui, passe par `messageReadAccess.ts`
+ * et le vrai client (#9579).
  *
  * Le `select` est typé en littéraux `true` — et non en `Record<string, boolean>`
  * — pour que la surcharge générique de Prisma résolve la ligne rendue. La forme
@@ -135,6 +160,13 @@ export interface ForwardSourceRow extends ContentExitProjection {
 export interface ForwardAdmissionParams {
   /** Absent quand l'envoi n'est pas un transfert — le cas très majoritaire. */
   readonly forwardedFromId?: string;
+  /**
+   * La ligne `Participant` de l'expéditeur (#9579). REQUISE : c'est lui qui
+   * doit pouvoir lire la source, et sans lui personne ne la lit.
+   */
+  readonly senderParticipantId: string;
+  /** La conversation de provenance que l'envoi DÉCLARE — retenue seulement si la source y vit. */
+  readonly forwardedFromConversationId?: string;
   /** L'instant de l'envoi du transfert. D'où repart le minuteur hérité. */
   readonly at: Date;
   /**
@@ -170,6 +202,12 @@ export type ForwardAdmission =
        * jamais une échéance : le serveur la dérive à la réception (#7451).
        */
       readonly imposes?: ForwardImposition | null;
+      /**
+       * La conversation de provenance PROUVÉE (#9579) : celle que l'envoi
+       * déclare, quand la source y vit. Absente ⇒ rien n'est prouvé, et
+       * l'appelant ne garde aucune conversation de provenance.
+       */
+      readonly provenanceConversationId?: string;
       /**
        * La source est introuvable ou illisible et le message porte son propre
        * corps : l'envoi dégénère en message ORDINAIRE. L'appelant DOIT alors
@@ -222,8 +260,52 @@ export const describeForwardRefusal = (refusal: ForwardRefused): string => {
  * socket texte et socket pièces jointes convergent avant l'écriture — un garde
  * posé plus près de chaque route aurait été la quatrième copie d'une règle de
  * permission, exactement la maladie que `messageEditAdmission` soigne.
+ *
+ * Deux gardes INDÉPENDANTES, dans cet ordre : le droit de l'expéditeur à lire
+ * la source (#9579), puis ce que la source impose à sa copie (#9572). La
+ * seconde n'est jamais consultée pour une source que la première refuse.
  */
 export async function admitMessageForward(
+  prisma: ForwardSourceReader & PrismaClient,
+  params: ForwardAdmissionParams,
+): Promise<ForwardAdmission> {
+  if (!params.forwardedFromId) return NOT_A_FORWARD;
+
+  const readable = await sourceReadableBySender(prisma, {
+    senderParticipantId: params.senderParticipantId,
+    forwardedFromId: params.forwardedFromId,
+    at: params.at,
+  });
+  if (!readable) return params.bodyOnlyFromSource ? SOURCE_UNAVAILABLE : DEGRADED_TO_ORDINARY;
+
+  const admission = await admitReadableSource(prisma, params);
+  if (isForwardRefused(admission) || admission.sourceUnavailable) return admission;
+  if (params.forwardedFromConversationId !== readable.conversationId) return admission;
+  return { ...admission, provenanceConversationId: readable.conversationId };
+}
+
+/**
+ * Fermé sur tout ce qui n'est pas une preuve : expéditeur inconnu, source
+ * introuvable, source que l'expéditeur ne lit pas ou dont le contenu a déjà
+ * disparu POUR LUI (décompte fini, flamme consommée, vue unique ouverte),
+ * lecture qui échoue — une seule réponse, `null`.
+ */
+async function sourceReadableBySender(
+  prisma: PrismaClient,
+  params: { readonly senderParticipantId: string; readonly forwardedFromId: string; readonly at: Date },
+): Promise<ReaderVisibleMessageRow | null> {
+  try {
+    return await loadMessageReadableByParticipant(prisma, {
+      participantId: params.senderParticipantId,
+      messageId: params.forwardedFromId,
+      now: params.at,
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function admitReadableSource(
   prisma: ForwardSourceReader,
   params: ForwardAdmissionParams,
 ): Promise<ForwardAdmission> {
@@ -317,6 +399,11 @@ export function sanitizeForwardReferences<
  * répandre APRÈS la requête : le verdict remplace tout `forwardImposes` venu
  * d'un client, et une source indisponible retire les références de transfert —
  * l'envoi devient un message ordinaire, et `saveMessage` ne recopie rien.
+ *
+ * `forwardedFromConversationId` est TOUJOURS posé (#9579), sur les trois
+ * sorties : la conversation que l'admission a prouvée, ou rien. Ce que la
+ * requête déclarait ne survit jamais par défaut — ni sans message source, ni
+ * à côté d'une source qui vit ailleurs.
  */
 export function forwardedCopyRequest(
   request: { readonly forwardedFromId?: string },
@@ -324,11 +411,11 @@ export function forwardedCopyRequest(
 ): {
   readonly forwardImposes: ForwardImposition | null | undefined;
   readonly forwardedFromId?: undefined;
-  readonly forwardedFromConversationId?: undefined;
+  readonly forwardedFromConversationId: string | undefined;
 } {
-  if (!request.forwardedFromId) return { forwardImposes: undefined };
+  if (!request.forwardedFromId) return { forwardImposes: undefined, forwardedFromConversationId: undefined };
   if (admission.sourceUnavailable || admission.imposes === undefined) {
     return { forwardImposes: undefined, forwardedFromId: undefined, forwardedFromConversationId: undefined };
   }
-  return { forwardImposes: admission.imposes };
+  return { forwardImposes: admission.imposes, forwardedFromConversationId: admission.provenanceConversationId };
 }

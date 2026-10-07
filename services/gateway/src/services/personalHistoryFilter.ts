@@ -156,30 +156,48 @@ export interface LoadPersonalHistoryHidingParams {
   readonly conversationId: string;
 }
 
-export async function loadPersonalHistoryHiding(
+/**
+ * The same lookup, WITHOUT the courtesy posture: it propagates.
+ *
+ * Serving a reader their own conversation is the product, so a failed lookup
+ * there degrades to "serve" (`loadPersonalHistoryHiding` below). A caller that
+ * EXPORTS content on the strength of "this reader can still see it" — a
+ * forward (#9579) — cannot conclude anything from a lookup that did not
+ * answer, and must be able to tell the two apart. `NO_PERSONAL_HIDING` alone
+ * cannot say which one happened.
+ */
+export async function readPersonalHistoryHiding(
   prisma: PrismaClient,
   { userId, conversationId }: LoadPersonalHistoryHidingParams
 ): Promise<PersonalHistoryHiding> {
   if (!userId) return NO_PERSONAL_HIDING;
 
+  const [prefs, deletions] = await Promise.all([
+    prisma.userConversationPreferences.findFirst({
+      where: { userId, conversationId },
+      select: { clearHistoryBefore: true },
+    }),
+    prisma.userMessageDeletion.findMany({
+      where: { userId, message: { conversationId } },
+      select: { messageId: true },
+    }),
+  ]);
+
+  const clearHistoryBefore = prefs?.clearHistoryBefore ?? null;
+  const hiddenMessageIds = deletions.map((d) => d.messageId);
+
+  if (clearHistoryBefore === null && hiddenMessageIds.length === 0) return NO_PERSONAL_HIDING;
+
+  return { clearHistoryBefore, hiddenMessageIds };
+}
+
+export async function loadPersonalHistoryHiding(
+  prisma: PrismaClient,
+  params: LoadPersonalHistoryHidingParams
+): Promise<PersonalHistoryHiding> {
+  const { conversationId } = params;
   try {
-    const [prefs, deletions] = await Promise.all([
-      prisma.userConversationPreferences.findFirst({
-        where: { userId, conversationId },
-        select: { clearHistoryBefore: true },
-      }),
-      prisma.userMessageDeletion.findMany({
-        where: { userId, message: { conversationId } },
-        select: { messageId: true },
-      }),
-    ]);
-
-    const clearHistoryBefore = prefs?.clearHistoryBefore ?? null;
-    const hiddenMessageIds = deletions.map((d) => d.messageId);
-
-    if (clearHistoryBefore === null && hiddenMessageIds.length === 0) return NO_PERSONAL_HIDING;
-
-    return { clearHistoryBefore, hiddenMessageIds };
+    return await readPersonalHistoryHiding(prisma, params);
   } catch (error) {
     logger.warn('[personalHistoryFilter] hiding lookup failed, serving unfiltered', {
       conversationId,
