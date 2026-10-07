@@ -340,3 +340,85 @@ final class ProtectedContentTapTests: XCTestCase {
                       || hint.localizedCaseInsensitiveContains("full screen"), hint)
     }
 }
+
+// MARK: - #9574 — toute surface qui rend un contenu de message passe par le bouclier
+
+/// **Garde de couverture de l'anti-capture** (#9574). Chaque surface qui rend
+/// le contenu d'un message, d'une citation ou d'une pièce protégée le pose dans
+/// la couche sécurisée — et la décision vient d'UNE lecture,
+/// `exitOffer.capture`, jamais d'un prédicat réécrit. Une surface qui affiche
+/// `Text(<message>.content)` sans bouclier, ni hôte déclaré qui l'enveloppe,
+/// fait rougir ce témoin.
+final class CaptureShieldCoverageGuardTests: XCTestCase {
+
+    private static let mainRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()   // .../Bubble
+        .deletingLastPathComponent()   // .../Views
+        .deletingLastPathComponent()   // .../Unit
+        .deletingLastPathComponent()   // .../MeeshyTests
+        .deletingLastPathComponent()   // .../apps/ios
+        .appendingPathComponent("Meeshy/Features/Main")
+
+    private func code(_ relative: String) throws -> String {
+        let text = try String(contentsOf: Self.mainRoot.appendingPathComponent(relative), encoding: .utf8)
+        XCTAssertGreaterThan(text.count, 200, "\(relative) introuvable — ce témoin ne mesurerait rien")
+        return AppSourceGuard.stripComments(text).components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// Les surfaces, et ce que chacune doit porter.
+    private static let surfaces: [(file: String, shield: String)] = [
+        ("Views/ThemedMessageBubble.swift", ".captureShield(content.capturesBlocked)"),
+        ("Focal/Row/FocalRow.swift", ".captureShield(content.capturesBlocked)"),
+        ("Riviere/View/RiverBubbleView.swift", "messageBox.captureShield(content.capturesBlocked)"),
+        ("Riviere/View/RiverBubbleView.swift", ".captureShield(reply.capturesBlocked)"),
+        ("Views/Bubble/BubbleQuotedReply.swift", "quotedBody.captureShield(reply.quotedCapture(quotedMessage:nil)==.blocked)"),
+        ("Focal/Row/FocalQuotedReplyView.swift", "quotedBody.captureShield(reference.quotedCapture(quotedMessage:nil)==.blocked)"),
+        ("Views/ConversationView+MediaGallery.swift", ".captureShieldScope(captureScope)"),
+        ("Views/ConversationMediaGalleryView+Pages.swift", "pageBody.captureShield(captureScope.shields(attachment.id))"),
+        ("Components/MediaHub/ConversationMediaHubView.swift", ".captureShieldScope(MessageExitOffer.captureShieldScope("),
+        ("Components/MessageMoreSheet.swift", ".captureShield(message.exitOffer.capture==.blocked)"),
+        ("Components/ConversationInfoSheet+Pinned.swift", ".captureShield(msg.exitOffer.capture==.blocked)"),
+        ("Views/ThreadView.swift", ".captureShield(parentMessage.exitOffer.capture==.blocked)"),
+        ("Components/ForwardPickerSheet.swift", "message.exitOffer.capture==.blocked"),
+        ("Views/ConversationView+ComposerBanners.swift", ".captureShield(reply.quotedCapture(quotedMessage:quoted)==.blocked)"),
+        ("Views/ConversationPreviewLine.swift", ".captureShield(preview.icon==.ephemeral)"),
+    ]
+
+    func test_everyMessageContentSurface_isShielded() throws {
+        for surface in Self.surfaces {
+            XCTAssertTrue(try code(surface.file).contains(surface.shield),
+                          "\(surface.file) : le contenu protégé doit passer par `\(surface.shield)`")
+        }
+    }
+
+    func test_theProjections_readTheExitOfferOnce() throws {
+        XCTAssertTrue(try code("Views/Bubble/BubbleContentBuilder.swift")
+            .contains("self.capturesBlocked=message.exitOffer.capture==.blocked"))
+        XCTAssertTrue(try code("Riviere/Core/RiverConversationMapping.swift")
+            .contains("capturesBlocked:message.exitOffer.capture==.blocked"))
+        XCTAssertTrue(try code("Models/Message.swift")
+            .contains("$0.exitOffer.capture==.free"))
+    }
+
+    /// Les fichiers qui affichent le texte brut d'un message, et l'hôte qui
+    /// les enveloppe quand ils ne le font pas eux-mêmes.
+    private static let wrappedBy: [String: String] = [
+        "Views/Bubble/BubbleStandardLayout.swift": "Views/ThemedMessageBubble.swift",
+        "Components/MessageDetail/MessageLanguageDetailView.swift": "Components/MessageMoreSheet.swift",
+    ]
+
+    func test_noRawMessageText_escapesTheShield() throws {
+        let pattern = try NSRegularExpression(pattern: #"Text\((message|msg|parentMessage)\.content\)"#)
+        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: Self.mainRoot, includingPropertiesForKeys: nil))
+        var offenders: [String] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
+            let text = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            guard pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil else { continue }
+            if text.contains("captureShield(") { continue }
+            if let host = Self.wrappedBy[relative], try code(host).contains("captureShield(") { continue }
+            offenders.append(relative)
+        }
+        XCTAssertEqual(offenders, [], "ces surfaces rendent le texte d'un message hors de la couche sécurisée")
+    }
+}
