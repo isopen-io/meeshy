@@ -294,7 +294,7 @@ describe('getUnreadCountsForParticipants — le badge POUSSÉ à chaque message'
     expect(counts.get(OTHER_PARTICIPANT)).toBe(0);
   });
 
-  it('ne demande pas les ids des messages quand personne ne masque de message individuel', async () => {
+  it('ne lit aucun contenu : l’horloge, l’expéditeur et de quoi reconnaître un avis de capture (#9630)', async () => {
     const prisma = makePrisma({
       cursors: [],
       messages: rows,
@@ -304,8 +304,12 @@ describe('getUnreadCountsForParticipants — le badge POUSSÉ à chaque message'
     await serviceOn(prisma).getUnreadCountsForParticipants(participants, CONV);
 
     expect(callArgs(prisma.message.findMany).select).toEqual({
+      id: true,
       createdAt: true,
       senderId: true,
+      messageSource: true,
+      messageType: true,
+      expiresAt: true,
     });
   });
 

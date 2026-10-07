@@ -250,6 +250,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/attachmentSendAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/copyExitProtection.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9641 — la suppression d'un avis de capture relit l'expéditeur
+  // (`senderId`) du message qu'il nomme, jamais la relation `sender`.
+  'messaging/messageDeleteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9629 — l'audience d'un avis de capture : `NOTICE_SELECT` et
   // `CAPTURED_SELECT`, identité, horloge, `senderId` et métadonnée — jamais la
   // relation `sender`.
@@ -276,6 +279,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `senderId` (pour soustraire les messages du lecteur lui-même), jamais la
   // relation `sender` : un expéditeur disparu n'entre dans aucune de ses branches.
   'unreadCountsCore.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9630 — les candidats avis de capture du compteur unitaire : identité et marque.
+  'unreadCountOfParticipant.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 
   // #6501 — balayage de rétention SANS lecteur, portée GLOBALE par
   // construction (`expiresAt` à travers toute la base, jamais une seule

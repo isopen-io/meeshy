@@ -27,8 +27,6 @@ import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 import { loadPrivacyPreferencesCached } from './preferences/privacy-cache';
 import {
   NO_PERSONAL_HIDING,
-  applyPersonalHistoryHiding,
-  loadPersonalHistoryHiding,
   loadPersonalHistoryHidingByConversation,
   loadPersonalHistoryHidingByUser,
 } from './personalHistoryFilter';
@@ -36,6 +34,7 @@ import {
 // `getUnreadCountsForUser` en sont deux orchestrateurs autour du MÊME cœur —
 // voir le doc-comment du module.
 import { computeUnreadCounts, unreadFloorFor } from './unreadCountsCore';
+import { readUnreadCount } from './unreadCountOfParticipant';
 import {
   freezeMessageStatus,
   type FreezeMessageStatusParams,
@@ -180,119 +179,14 @@ export class MessageReadStatusService {
   }
 
   /**
-   * Calcule le nombre de messages non lus dans une conversation pour un participant.
-   *
-   * The unread count is computed FRESH on every call — the cursor's
-   * denormalized `unreadCount` field is intentionally ignored because it
-   * is only updated on `markAsRead` / `markAsReceived` and never on new
-   * message creation. Trusting it produced wildly inflated counts (e.g.
-   * 75 for users who had read everything) by silently falling back to a
-   * "count all historical messages from others" path.
-   *
-   * Accepts either a `Participant.id` OR a `User.id` for backwards
-   * compatibility with callers that previously passed the room target
-   * (`participant.userId || participant.id`). The participant is resolved
-   * internally; the senderId-equality check uses the resolved
-   * `Participant.id`, not the user-provided identifier.
-   *
-   * Counting floor: `cursor.lastReadMessageCreatedAt` (the chronological
-   * position of the read cursor) → `cursor.lastReadAt` (legacy rows) →
-   * `participant.joinedAt`. The position — not the wall-clock `lastReadAt`,
-   * which is `now` after an exact partial-prefix read — keeps skipped
-   * messages counted (design lecture-exacte §3 : « le badge reste haut »).
-   * A new participant therefore sees only messages received since they
-   * joined, NOT the entire historical backlog of the conversation.
-   *
-   * The count is also narrowed by the reader's PERSONAL hiding — the messages
-   * they removed from their own view, and the history they cleared. A badge
-   * counting messages the list refuses to show is a badge scrolling cannot put
-   * out: there is nothing left to scroll.
+   * Le non-lu d'UN participant dans UNE conversation — `readUnreadCount`
+   * (`./unreadCountOfParticipant`), extrait de ce fichier hors budget (#9630).
    */
   async getUnreadCount(
     participantIdOrUserId: string,
     conversationId: string
   ): Promise<number> {
-    try {
-      // First attempt: treat the caller's id as a Participant.id directly.
-      // This is the common path for anonymous users and for callers that
-      // already resolved to a participant.
-      let cursor = await this.prisma.conversationReadCursor.findUnique({
-        where: {
-          conversation_participant_cursor: {
-            participantId: participantIdOrUserId,
-            conversationId,
-          },
-        },
-      });
-
-      // Resolve the actual Participant row. The cursor lookup may have
-      // missed because the caller passed a User.id rather than the
-      // Participant.id — try resolving via either column.
-      const participant = await this.prisma.participant.findFirst({
-        where: {
-          conversationId,
-          isActive: true,
-          OR: [
-            { id: participantIdOrUserId },
-            { userId: participantIdOrUserId },
-          ],
-        },
-        select: { id: true, userId: true, joinedAt: true },
-      });
-
-      if (!participant) {
-        // Unknown participant in this conversation — refuse to fall back
-        // to a "count everything from others" sweep. Returning 0 is the
-        // safe default; callers that genuinely need the historical count
-        // should pass a known Participant.id.
-        return 0;
-      }
-
-      // If the first lookup missed and the resolved Participant.id differs
-      // from what the caller passed, retry the cursor lookup with the
-      // correct id.
-      if (!cursor && participant.id !== participantIdOrUserId) {
-        cursor = await this.prisma.conversationReadCursor.findUnique({
-          where: {
-            conversation_participant_cursor: {
-              participantId: participant.id,
-              conversationId,
-            },
-          },
-        });
-      }
-
-      // Plancher = position CHRONOLOGIQUE du curseur, pas l'horloge murale.
-      // En mode exact le curseur s'arrête au préfixe contigu : `lastReadAt` vaut
-      // `now` (postérieur à tous les messages en base) tandis que
-      // `lastReadMessageCreatedAt` est le `createdAt` du dernier message
-      // réellement lu. Compter `createdAt > lastReadAt` déclarerait lus les
-      // messages sautés — le badge tomberait à 0 (design lecture-exacte §3 :
-      // « le badge reste haut »). Repli sur `lastReadAt` pour les curseurs
-      // hérités sans clé chronologique, puis `joinedAt`.
-      const floor: Date | null =
-        cursor?.lastReadMessageCreatedAt ?? cursor?.lastReadAt ?? participant.joinedAt ?? null;
-
-      const hiding = await loadPersonalHistoryHiding(this.prisma, {
-        userId: participant.userId,
-        conversationId,
-      });
-
-      return await this.prisma.message.count({
-        where: applyPersonalHistoryHiding(
-          {
-            conversationId,
-            deletedAt: null,
-            senderId: { not: participant.id },
-            ...(floor ? { createdAt: { gt: floor } } : {}),
-          },
-          hiding
-        ),
-      });
-    } catch (error) {
-      logger.error("[MessageReadStatus] Error getting unread count", error);
-      return 0;
-    }
+    return readUnreadCount(this.prisma, participantIdOrUserId, conversationId);
   }
 
   /**

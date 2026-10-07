@@ -313,7 +313,16 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // 5 → 4 (#7451) : le GEL par message est parti dans
   // `messaging/freezeMessageStatus.ts` (déclaré plus bas). La lecture a changé
   // de fichier, pas de nature — elle ne servait déjà aucun contenu.
-  'MessageReadStatusService.ts': { kind: 'applies', reads: 4, applications: 1 },
+  // 4 → 3 lectures, 1 → 0 application (#9630) : le compteur UNITAIRE
+  // (`getUnreadCount`) est parti, entier, dans `unreadCountOfParticipant.ts`
+  // (déclaré ci-dessous) — ce fichier hors budget ne pouvait plus grandir pour
+  // y écarter les avis de capture. Aucune lecture n'a disparu.
+  'MessageReadStatusService.ts': { kind: 'applies', reads: 3, applications: 0 },
+  // #9630 — le compteur unitaire : le `count` sous `applyPersonalHistoryHiding`
+  // (masquage personnel ET avis de capture non adressés à ce lecteur), plus la
+  // lecture des CANDIDATS avis de la fenêtre (identité et marque, aucun contenu)
+  // dont il tire ce qu'il écarte — d'où une application pour deux lectures.
+  'unreadCountOfParticipant.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
