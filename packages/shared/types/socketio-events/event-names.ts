@@ -622,6 +622,14 @@ export const CLIENT_EVENTS = {
   MESSAGE_SEND_WITH_ATTACHMENTS: 'message:send-with-attachments',
   MESSAGE_EDIT: 'message:edit',
   MESSAGE_DELETE: 'message:delete',
+  /**
+   * #9617 — une capture ou un enregistrement d'écran pendant qu'un contenu qui
+   * disparaît est affiché (`ContentCaptureReport`, accusé `ContentCaptureAck`,
+   * `types/content-capture.ts`). Jumeau REST :
+   * `POST /conversations/:id/messages/capture`. Aucun événement serveur dédié :
+   * l'avis produit est un message système, diffusé sous `message:new`.
+   */
+  MESSAGE_CAPTURE_DETECTED: 'message:capture-detected',
   CONVERSATION_JOIN: 'conversation:join',
   CONVERSATION_LEAVE: 'conversation:leave',
   TYPING_START: 'typing:start',
