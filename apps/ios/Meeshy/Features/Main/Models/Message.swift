@@ -59,8 +59,9 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
 
     var nature: ContentExitLaw.Nature { law.nature }
 
-    /// Le verdict de capture d'écran, tel que la loi le rend — consommé par
-    /// l'anti-capture (#9574).
+    /// Le verdict de capture d'écran, tel que la loi le rend : `blocked` (vue
+    /// unique) se rend dans la couche sécurisée (#9574), `announced` (les deux
+    /// flammes) reste capturable et se déclare (#9617), `free` ne fait rien.
     var capture: ContentExitLaw.CaptureVerdict { law.capture }
 
     func offers(_ exit: MessageExit) -> Bool {
@@ -93,10 +94,11 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
     }
 
     /// Les pièces qu'une visionneuse rend dans la couche sécurisée (#9574) :
-    /// toutes, SAUF celles d'un message dont la capture est libre. Une pièce
-    /// dont le porteur est inconnu est protégée.
+    /// toutes, SAUF celles d'un message dont la capture n'est pas noire — une
+    /// flamme est annoncée, pas noircie (#9617). Une pièce dont le porteur est
+    /// inconnu est protégée.
     static func captureShieldScope(for messages: [Message]) -> CaptureShieldScope {
-        .allExcept(Set(messages.filter { $0.exitOffer.capture == .free }.flatMap { $0.attachments.map(\.id) }))
+        .allExcept(Set(messages.filter { $0.exitOffer.capture != .blocked }.flatMap { $0.attachments.map(\.id) }))
     }
 }
 

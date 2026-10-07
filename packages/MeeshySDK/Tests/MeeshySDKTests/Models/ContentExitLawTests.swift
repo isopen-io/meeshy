@@ -108,11 +108,11 @@ struct ContentExitLawTests {
         let timed = ContentExitLaw.timedFlame(seconds: 30)
         #expect(timed.forward == .allowed(maxDurationSeconds: 30))
         #expect(!timed.exportable)
-        #expect(timed.capture == .blocked)
+        #expect(timed.capture == .announced)
 
         #expect(ContentExitLaw.afterReadFlame.forward == .refused(.afterRead))
         #expect(!ContentExitLaw.afterReadFlame.exportable)
-        #expect(ContentExitLaw.afterReadFlame.capture == .blocked)
+        #expect(ContentExitLaw.afterReadFlame.capture == .announced)
 
         #expect(ContentExitLaw.viewOnce.forward == .refused(.viewOnce))
         #expect(!ContentExitLaw.viewOnce.exportable)
@@ -124,8 +124,25 @@ struct ContentExitLawTests {
         #expect(ContentExitLaw.Nature.allCases.map(\.rawValue) == ["ordinary", "timed-flame", "after-read-flame", "view-once"])
         #expect(ContentExitLaw.ForwardRefusal.viewOnce.rawValue == "view-once")
         #expect(ContentExitLaw.ForwardRefusal.afterRead.rawValue == "after-read")
-        #expect(ContentExitLaw.CaptureVerdict.free.rawValue == "free")
-        #expect(ContentExitLaw.CaptureVerdict.blocked.rawValue == "blocked")
+        #expect(ContentExitLaw.CaptureVerdict.allCases.map(\.rawValue) == ["free", "announced", "blocked"])
+    }
+
+    /// Jumeau du témoin TS « la capture : noire pour la vue unique, annoncée
+    /// pour les deux flammes, libre sinon » (porteur 2026-10-07, #9617).
+    @Test("la capture : noire pour la vue unique, annoncée pour les deux flammes, libre sinon")
+    func test_capture_noireVueUnique_annonceeFlammes_libreSinon() {
+        #expect(ContentExitLaw.of(Subject(isViewOnce: true)).capture == .blocked)
+        #expect(ContentExitLaw.of(Subject(effectFlags: Self.ephemeral, ephemeralDuration: 30)).capture == .announced)
+        #expect(ContentExitLaw.of(Subject(effectFlags: Self.ephemeral | Self.afterRead)).capture == .announced)
+        #expect(ContentExitLaw.of(Subject(effectFlags: Self.ephemeral | Self.afterRead, ephemeralDuration: 30)).capture == .announced)
+        #expect(ContentExitLaw.of(Subject()).capture == .free)
+    }
+
+    @Test("seule une capture libre ne se déclare pas")
+    func test_captureVerdict_isDeclared() {
+        #expect(!ContentExitLaw.CaptureVerdict.free.isDeclared)
+        #expect(ContentExitLaw.CaptureVerdict.announced.isDeclared)
+        #expect(ContentExitLaw.CaptureVerdict.blocked.isDeclared)
     }
 
     // MARK: - forwardedCopyProtection

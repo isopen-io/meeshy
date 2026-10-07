@@ -680,11 +680,11 @@ final class MessageExitOfferTests: XCTestCase {
                        Set(MessageExit.allCases).subtracting([.publish]))
     }
 
-    /// Le verdict de capture voyage tel que la loi le rend (#9574 le consomme).
+    /// Le verdict de capture voyage tel que la loi le rend (#9574, #9617).
     func test_capture_followsTheLaw() {
         XCTAssertEqual(message(of: .ordinary).exitOffer.capture, .free)
-        for nature in [Nature.timedFlame, .afterReadFlame, .viewOnce] {
-            XCTAssertEqual(message(of: nature).exitOffer.capture, .blocked)
+        for (nature, verdict) in [(Nature.timedFlame, ContentExitLaw.CaptureVerdict.announced), (.afterReadFlame, .announced), (.viewOnce, .blocked)] {
+            XCTAssertEqual(message(of: nature).exitOffer.capture, verdict, "\(nature)")
         }
     }
 

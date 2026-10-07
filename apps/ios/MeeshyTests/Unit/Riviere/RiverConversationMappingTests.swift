@@ -593,9 +593,9 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertNotEqual(cle(thread, viewerId: "moi"), cle(thread, viewerId: "toi"))
     }
 
-    // MARK: - #9574 — un contenu qui disparaît se rend dans la couche sécurisée
+    // MARK: - #9574, #9617 — seule la vue unique se rend dans la couche sécurisée
 
-    func test_contents_disappearingMessage_isCaptureBlocked_anOrdinaryOneIsNot() {
+    func test_contents_onlyTheViewOnce_isCaptureBlocked_aFlameIsAnnouncedNotBlackened() {
         var flame = message("m1", sender: "bob", minutes: 0)
         flame.effects = MessageEffects(flags: .ephemeral, ephemeralDuration: 30)
         var viewOnce = message("m2", sender: "bob", minutes: 1)
@@ -605,7 +605,7 @@ final class RiverConversationMappingTests: XCTestCase {
         blurred.effects.flags.insert(.blurred)
 
         let byId = Dictionary(uniqueKeysWithValues: contents(of: [flame, viewOnce, ordinary, blurred]).map { ($0.bubble.messageId, $0) })
-        XCTAssertEqual(byId["m1"]?.capturesBlocked, true, "une flamme à durée est noire dans une capture")
+        XCTAssertEqual(byId["m1"]?.capturesBlocked, false, "une flamme à durée se capture : elle est annoncée, pas noircie (#9617)")
         XCTAssertEqual(byId["m3"]?.capturesBlocked, false, "un message ordinaire n'est pas enveloppé")
         XCTAssertEqual(byId["m4"]?.capturesBlocked, false, "le flou n'est pas une nature de disparition : la capture reste libre")
         if let sealed = byId["m2"] {
@@ -613,11 +613,15 @@ final class RiverConversationMappingTests: XCTestCase {
         }
     }
 
-    func test_contents_quoteOfADisappearingMessage_isCaptureBlocked_evenInAnOrdinaryReply() {
+    func test_contents_quoteOfAViewOnce_isCaptureBlocked_evenInAnOrdinaryReply_aQuotedFlameIsNot() {
         var flameQuote = ReplyReference(messageId: "m1", authorName: "Alice", previewText: "Le code est 4521")
         flameQuote.quotedExpiresAt = Self.t0.addingTimeInterval(60)
-        XCTAssertEqual(quoteContent(flameQuote)?.replyPreview?.capturesBlocked, true)
-        XCTAssertEqual(quoteContent(flameQuote)?.capturesBlocked, false, "seule la citation est enveloppée, pas la réponse")
+        XCTAssertEqual(quoteContent(flameQuote)?.replyPreview?.capturesBlocked, false, "la citation d'une flamme est annoncée, pas noircie")
+
+        var onceQuote = ReplyReference(messageId: "m1", authorName: "Alice", previewText: "👁️")
+        onceQuote.quotedExitNature = .viewOnce
+        XCTAssertEqual(quoteContent(onceQuote)?.replyPreview?.capturesBlocked, true)
+        XCTAssertEqual(quoteContent(onceQuote)?.capturesBlocked, false, "seule la citation est enveloppée, pas la réponse")
 
         let plainQuote = ReplyReference(messageId: "m1", authorName: "Alice", previewText: "Bonjour")
         XCTAssertEqual(quoteContent(plainQuote)?.replyPreview?.capturesBlocked, false)

@@ -10,9 +10,15 @@ import Foundation
 /// | nature | transférer | enregistrer, imager, partager, publier | capture |
 /// |---|---|---|---|
 /// | `ordinary` | oui | oui | libre |
-/// | `timedFlame` | oui, durée ≤ source | non | bloquée |
-/// | `afterReadFlame` | non | non | bloquée |
+/// | `timedFlame` | oui, durée ≤ source | non | annoncée |
+/// | `afterReadFlame` | non | non | annoncée |
 /// | `viewOnce` | non | non | bloquée |
+///
+/// LA CAPTURE (décision porteur 2026-10-07, #9617). `blocked` : la capture et
+/// l'enregistrement d'écran rendent du NOIR, et toute tentative s'annonce à la
+/// conversation. `announced` : l'image n'est pas noircie, mais la capture
+/// s'annonce à toute la conversation. Les deux flammes, copie transférée
+/// comprise, sont annoncées ; seule la vue unique est noire.
 ///
 /// FERMÉ PAR DÉFAUT : un contenu DÉCLARÉ éphémère dont la durée ne se lit pas
 /// (bit `ephemeral` nu, `expiresAt` sans `ephemeralDuration`) reçoit les
@@ -58,9 +64,14 @@ public struct ContentExitLaw: Equatable, Sendable {
         }
     }
 
-    public enum CaptureVerdict: String, Equatable, Sendable {
+    /// `free` : rien. `announced` : capture permise, annoncée. `blocked` : noire, et la tentative annoncée.
+    public enum CaptureVerdict: String, Equatable, Sendable, CaseIterable {
         case free
+        case announced
         case blocked
+
+        /// Une capture de ce contenu se DÉCLARE à la passerelle (#9617).
+        public var isDeclared: Bool { self != .free }
     }
 
     /// Ce que la loi lit d'une pièce jointe — ses propres drapeaux, indépendants du message.
@@ -152,7 +163,7 @@ public struct ContentExitLaw: Equatable, Sendable {
     )
 
     public static let afterReadFlame = ContentExitLaw(
-        nature: .afterReadFlame, forward: .refused(.afterRead), exportable: false, capture: .blocked
+        nature: .afterReadFlame, forward: .refused(.afterRead), exportable: false, capture: .announced
     )
 
     public static let viewOnce = ContentExitLaw(
@@ -161,7 +172,7 @@ public struct ContentExitLaw: Equatable, Sendable {
 
     public static func timedFlame(seconds: Int) -> ContentExitLaw {
         ContentExitLaw(
-            nature: .timedFlame, forward: .allowed(maxDurationSeconds: seconds), exportable: false, capture: .blocked
+            nature: .timedFlame, forward: .allowed(maxDurationSeconds: seconds), exportable: false, capture: .announced
         )
     }
 

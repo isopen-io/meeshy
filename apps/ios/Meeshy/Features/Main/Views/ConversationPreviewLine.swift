@@ -142,12 +142,11 @@ struct ConversationPreviewLine: View {
     @ViewBuilder
     private func line(_ preview: ConversationPreview, at now: Date) -> some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
-            // #9574 — l'aperçu d'une flamme à durée montre son texte : il se
-            // rend dans la couche sécurisée. Les autres protections ne
-            // montrent qu'un libellé.
+            // #9617 — une flamme se capture (annoncée depuis le fil, pas
+            // noircie) ; une vue unique ne montre qu'un libellé ici. Rien à
+            // poser dans la couche sécurisée.
             styledText(preview, at: now)
                 .lineLimit(lineLimit)
-                .captureShield(preview.icon == .ephemeral)
             if preview.offersJoin, let onJoin {
                 Button(action: onJoin) {
                     Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))

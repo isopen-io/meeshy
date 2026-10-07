@@ -343,9 +343,10 @@ final class ProtectedContentTapTests: XCTestCase {
 
 // MARK: - #9574 — toute surface qui rend un contenu de message passe par le bouclier
 
-/// **Garde de couverture de l'anti-capture** (#9574). Chaque surface qui rend
-/// le contenu d'un message, d'une citation ou d'une pièce protégée le pose dans
-/// la couche sécurisée — et la décision vient d'UNE lecture,
+/// **Garde de couverture de l'anti-capture** (#9574, #9617). Chaque surface
+/// qui rend le contenu d'un message, d'une citation ou d'une pièce protégée le
+/// pose dans la couche sécurisée — pour la VUE UNIQUE seulement depuis #9617 :
+/// une flamme est annoncée, jamais noircie — et la décision vient d'UNE lecture,
 /// `exitOffer.capture`, jamais d'un prédicat réécrit. Une surface qui affiche
 /// `Text(<message>.content)` sans bouclier, ni hôte déclaré qui l'enveloppe,
 /// fait rougir ce témoin.
@@ -381,7 +382,6 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         ("Views/ThreadView.swift", ".captureShield(parentMessage.exitOffer.capture==.blocked)"),
         ("Components/ForwardPickerSheet.swift", "message.exitOffer.capture==.blocked"),
         ("Views/ConversationView+ComposerBanners.swift", ".captureShield(reply.quotedCapture(quotedMessage:quoted)==.blocked)"),
-        ("Views/ConversationPreviewLine.swift", ".captureShield(preview.icon==.ephemeral)"),
     ]
 
     func test_everyMessageContentSurface_isShielded() throws {
@@ -397,7 +397,54 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         XCTAssertTrue(try code("Riviere/Core/RiverConversationMapping.swift")
             .contains("capturesBlocked:message.exitOffer.capture==.blocked"))
         XCTAssertTrue(try code("Models/Message.swift")
-            .contains("$0.exitOffer.capture==.free"))
+            .contains("$0.exitOffer.capture!=.blocked"))
+    }
+
+    // MARK: - #9617 — le bouclier est réservé à la vue unique
+
+    /// Ce qu'un `captureShield(` peut lire : un verdict `blocked` (vue unique),
+    /// ou une projection / portée qui en dérive.
+    private static let blockedReadings = ["==.blocked", "apturesBlocked", "aptureBlocked", "captureScope"]
+    /// Ce qu'il ne lit jamais : une flamme est annoncée, pas noircie (porteur 2026-10-07).
+    private static let flameReadings = [".announced", "!=.free", "isDeclared", ".ephemeral", "==.free"]
+
+    func test_theShield_isReservedToTheViewOnce_neverToAFlame() throws {
+        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: Self.mainRoot, includingPropertiesForKeys: nil))
+        var offenders: [String] = []
+        var shields = 0
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
+            let text = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+                .components(separatedBy: .whitespacesAndNewlines).joined()
+            for chunk in text.components(separatedBy: "captureShield(").dropFirst() {
+                let argument = Self.balancedArgument(chunk)
+                shields += 1
+                let readsBlocked = Self.blockedReadings.contains { argument.contains($0) }
+                let readsAFlame = Self.flameReadings.contains { argument.contains($0) }
+                if !readsBlocked || readsAFlame { offenders.append("\(relative) : captureShield(\(argument))") }
+            }
+        }
+        XCTAssertGreaterThan(shields, 10, "le témoin ne voit plus les boucliers — il ne mesurerait rien")
+        XCTAssertEqual(offenders, [], "un bouclier ne lit que le verdict blocked de la vue unique")
+    }
+
+    /// Le texte jusqu'à la parenthèse qui ferme `captureShield(` — les appels
+    /// imbriqués (`quotedCapture(quotedMessage: nil) == .blocked`) en font partie.
+    private static func balancedArgument(_ chunk: String) -> String {
+        var depth = 0
+        var argument = ""
+        for character in chunk {
+            if character == ")" && depth == 0 { break }
+            if character == "(" { depth += 1 }
+            if character == ")" { depth -= 1 }
+            argument.append(character)
+        }
+        return argument
+    }
+
+    func test_thePreviewLine_ofAFlame_isNotShielded() throws {
+        XCTAssertFalse(try code("Views/ConversationPreviewLine.swift").contains("captureShield("),
+                       "l'aperçu d'une flamme se capture : il est annoncé, pas noirci (#9617)")
     }
 
     /// Les fichiers qui affichent le texte brut d'un message, et l'hôte qui
