@@ -276,8 +276,33 @@ describe('MessagingService', () => {
       };
       beforeEach(() => armForwardSourceReader(mockPrisma));
 
+      it('fait hériter la copie de la DURÉE éphémère de la source (#7451)', async () => {
+        mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
+          isViewOnce: false, effectFlags: 1, ephemeralDuration: 30,
+          expiresAt: new Date('2026-08-19T11:00:00.000Z')
+        });
+
+        const before = Date.now();
+        const response = await service.handleMessage({ ...validRequest, forwardedFromId }, testParticipantId);
+        const after = Date.now();
+
+        expect(response.success).toBe(true);
+        const written = mockPrisma.message.create.mock.calls[0][0].data;
+        // Une DURÉE, jamais une échéance : le décompte repart de la réception.
+        expect(written.ephemeralDuration).toBe(30);
+        // `expiresAt` en base = l'heure INTERNE de destruction. Copie bornée
+        // (#9572) que personne n'a reçue : « envoi + durée + grâce » (#9588).
+        const DUREE_ET_GRACE_MS = 30_000 + 60 * 60 * 1000;
+        expect(written.expiresAt.getTime()).toBeGreaterThanOrEqual(before + DUREE_ET_GRACE_MS);
+        expect(written.expiresAt.getTime()).toBeLessThanOrEqual(after + DUREE_ET_GRACE_MS);
+        // Le bit EPHEMERAL se déduit de la DURÉE dans `saveMessage`.
+        expect(written.effectFlags & 1).toBe(1);
+      });
+
       describe('le serveur impose la protection de la copie (#9572)', () => {
         const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
+        const GRACE_MS = 60 * 60 * 1000;
         const FLAME = 1 | 8;
         const flameSource = (over: Record<string, unknown> = {}) => ({
           ...LOADED_SOURCE,
@@ -306,15 +331,35 @@ describe('MessagingService', () => {
             testParticipantId
           );
 
+          const after = Date.now();
+
           expect(response.success).toBe(true);
           // La durée BORNÉE survit jusqu'à la colonne : c'est elle que
           // `startEphemeralCountdowns` lit pour poser l'échéance de chaque
           // destinataire. Sans elle la copie n'aurait que le plafond de sept jours.
           expect(written().ephemeralDuration).toBe(15);
           expect(written().effectFlags & FLAME).toBe(FLAME);
-          expect(written().expiresAt.getTime()).toBeGreaterThanOrEqual(before + SEPT_JOURS_MS);
+          // Personne n'a encore rien reçu : la copie bornée meurt à « envoi +
+          // durée bornée + grâce » (#9588), jamais au plafond de sept jours.
+          expect(written().expiresAt.getTime()).toBeGreaterThanOrEqual(before + 15_000 + GRACE_MS);
+          expect(written().expiresAt.getTime()).toBeLessThanOrEqual(after + 15_000 + GRACE_MS);
           expect(written().expiresAt.getTime()).toBeLessThan(new Date('2030-01-01T00:00:00.000Z').getTime());
           expect(written().forwardedFromId).toBe(forwardedFromId);
+        });
+
+        // Le contraste : le plafond de sept jours (#7450) reste celui d'un envoi
+        // à durée qui n'est PAS une copie — rien ne le borne, rien ne l'a reçu.
+        it('laisse au plafond de sept jours un envoi à durée qui n’est pas une copie', async () => {
+          const before = Date.now();
+          const response = await service.handleMessage({ ...validRequest, ephemeralDuration: 30 } as any, testParticipantId);
+          const after = Date.now();
+
+          expect(response.success).toBe(true);
+          expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
+          expect(written().ephemeralDuration).toBe(30);
+          expect(written().effectFlags & 8).toBe(0);
+          expect(written().expiresAt.getTime()).toBeGreaterThanOrEqual(before + SEPT_JOURS_MS);
+          expect(written().expiresAt.getTime()).toBeLessThanOrEqual(after + SEPT_JOURS_MS);
         });
 
         it('garde une durée demandée plus courte que celle de la source', async () => {

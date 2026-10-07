@@ -276,6 +276,12 @@ describe('MessageProcessor.saveMessage', () => {
     });
   });
 
+  it('handles empty original attachments on forward gracefully', async () => {
+    attFindMany.mockResolvedValueOnce([]).mockResolvedValue([]);
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
+    expect(attCreate).not.toHaveBeenCalled();
+  });
+
   it('refuse d’écrire un transfert sans verdict d’admission (#9572)', async () => {
     await expect(processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' })).rejects.toThrow('forward:not-admitted');
     expect(msgCreate).not.toHaveBeenCalled();

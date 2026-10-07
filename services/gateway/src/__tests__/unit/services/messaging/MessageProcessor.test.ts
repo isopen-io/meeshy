@@ -805,12 +805,6 @@ describe('MessageProcessor.saveMessage', () => {
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'file' } }));
   });
 
-  it('handles empty original attachments on forward gracefully', async () => {
-    attFindMany.mockResolvedValueOnce([]).mockResolvedValue([]);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
-    expect(attCreate).not.toHaveBeenCalled();
-  });
-
   it('updates tracking link messageIds when <url> was processed', async () => {
     // La réécriture est le SIGNAL : `saveMessage` rattache les liens au message
     // seulement quand le contenu traité diffère de celui qu'on lui a donné.

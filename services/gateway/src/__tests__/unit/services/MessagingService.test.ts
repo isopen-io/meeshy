@@ -319,31 +319,6 @@ describe('MessagingService', () => {
         expect(mockPrisma.message.create).not.toHaveBeenCalled();
       });
 
-      it('fait hériter la copie de la DURÉE éphémère de la source (#7451)', async () => {
-        mockPrisma.message.findUnique.mockResolvedValue({
-          ...LOADED_SOURCE,
-          ...LOADED_SOURCE,
-          isViewOnce: false, effectFlags: 1, ephemeralDuration: 30,
-          expiresAt: new Date('2026-08-19T11:00:00.000Z')
-        });
-
-        const before = Date.now();
-        const response = await service.handleMessage({ ...validRequest, forwardedFromId }, testParticipantId);
-        const after = Date.now();
-
-        expect(response.success).toBe(true);
-        const written = mockPrisma.message.create.mock.calls[0][0].data;
-        // Une DURÉE, jamais une échéance : le décompte repart de la réception.
-        expect(written.ephemeralDuration).toBe(30);
-        // `expiresAt` en base = l'heure INTERNE de destruction : le plafond de
-        // rétention (#7450), personne n'ayant encore rien reçu.
-        const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
-        expect(written.expiresAt.getTime()).toBeGreaterThanOrEqual(before + SEPT_JOURS_MS);
-        expect(written.expiresAt.getTime()).toBeLessThanOrEqual(after + SEPT_JOURS_MS);
-        // Le bit EPHEMERAL se déduit de la DURÉE dans `saveMessage`.
-        expect(written.effectFlags & 1).toBe(1);
-      });
-
       it('n’impose aucune échéance quand la source est un message ordinaire', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
           ...LOADED_SOURCE,
@@ -1877,7 +1852,7 @@ describe('MessagingService', () => {
       );
 
       expect(mockPrisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: attachmentIds } },
+        where: { id: { in: attachmentIds }, OR: [{ messageId: null }, { messageId: { isSet: false } }] },
         data: { messageId: testMessageId }
       });
     });
