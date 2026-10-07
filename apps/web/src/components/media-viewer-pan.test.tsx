@@ -136,4 +136,18 @@ describe('MediaViewer — déplacer une photo agrandie (#9562)', () => {
     zoomIn(img);
     expect(img.style.transform).toBe('scale(2.5)');
   });
+
+  test('un pincement après le recentrage repart du centre, pas de l’ancien déplacement', () => {
+    const img = activeImage(mount());
+    zoomIn(img);
+    drag(img, [200, 300], [150, 280]);
+    zoomIn(img);
+    finger(img, 'pointerdown', 1, 100);
+    finger(img, 'pointerdown', 2, 200);
+    finger(img, 'pointermove', 2, 300);
+    expect(img.style.transform).toBe('scale(2)');
+    finger(img, 'pointerup', 2, 300);
+    finger(img, 'pointerup', 1, 100);
+    expect(img.style.transform).toBe('scale(2)');
+  });
 });
