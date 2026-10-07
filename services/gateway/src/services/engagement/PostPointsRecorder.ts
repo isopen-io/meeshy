@@ -56,13 +56,15 @@ export class PostPointsRecorder {
 
   async record(credit: PostPointsCredit): Promise<void> {
     const { userId, postId } = credit;
+    // Un crédit que le barème paie zéro ne change rien : ni ligne, ni annonce.
+    if (credit.points <= 0) return;
     try {
       const heldByPublicationMemory = creditLivesInPublicationMemory({
         operationKey: credit.operationKey,
         postId,
         rememberedTargetId: credit.rememberedTargetId,
       });
-      if (!heldByPublicationMemory && credit.points > 0) await this.add(userId, postId, credit.points);
+      if (!heldByPublicationMemory) await this.add(userId, postId, credit.points);
       await this.announce(userId, postId);
     } catch (error) {
       log.warn('post points not recorded after the credit was written', { userId, postId, error: messageOf(error) });

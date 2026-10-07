@@ -153,6 +153,16 @@ describe('un crédit refusé n’ajoute rien', () => {
     expect(postUpdates(emissions)).toEqual([]);
   });
 
+  it('une publication que le barème paie zéro n’écrit ni n’annonce rien — le nombre ne roule que s’il change', async () => {
+    const { db, service, emissions } = setup();
+
+    await service.recordActivity(AUTHOR, 'content.post', { postId: POST, targetId: POST, variant: 'other' });
+
+    expect(credited(db, AUTHOR)).toBe(0);
+    expect(db.engagementPostPoints.rows).toEqual([]);
+    expect(postUpdates(emissions)).toEqual([]);
+  });
+
   it('un geste qui ne nomme aucun post n’écrit ni n’annonce rien de post', async () => {
     const { db, service, emissions } = setup();
 
