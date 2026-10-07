@@ -203,11 +203,13 @@ struct ProgressionConceptContent: View {
     // MARK: - Les sections
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+        // Le contenu est bâti ICI : la carte garde sa fermeture, elle ne peut pas retenir un paramètre non échappant.
+        let lines = content()
+        return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             ProgressionConceptSectionTitle(text: title)
             ProgressionCard(tint: concept.tint) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                    content()
+                    lines
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
