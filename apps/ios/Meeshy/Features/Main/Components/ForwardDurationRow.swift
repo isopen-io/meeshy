@@ -77,6 +77,7 @@ struct ForwardDurationRow: View, Equatable {
 
     private func chip(_ choice: ForwardDurationChoice) -> some View {
         let isSelected = choice.seconds == selectedSeconds
+        let spoken: String = [title, Self.spokenDuration(seconds: choice.seconds)].joined(separator: ", ")
         return Button {
             onSelect(choice.seconds)
         } label: {
@@ -91,7 +92,7 @@ struct ForwardDurationRow: View, Equatable {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(Self.spokenDuration(seconds: choice.seconds))")
+        .accessibilityLabel(spoken)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
