@@ -5,6 +5,7 @@ import { API_RESPONSE_CACHE_PATTERN } from '@/lib/net/api-runtime-cache';
 import { mediaCacheFreshnessPlugin } from '@/lib/net/media-cache-freshness';
 
 import {
+  auditDelaiDuSeauApi,
   auditFraicheurDuSeauMedias,
   auditIdentiteDuSeauApi,
   auditRoutage,
@@ -34,9 +35,10 @@ import {
  * seule dont la réponse soit observable par l'utilisateur.
  */
 
-/** Le seau `api`, tel que Workbox le sérialise. */
-const SEAU_API = (matcher: string) =>
-  `s.registerRoute(${matcher},new s.NetworkFirst({cacheName:"api",networkTimeoutSeconds:3,` +
+/** Le seau `api`, tel que Workbox le sérialise — avec le délai réseau des
+ * artefacts livrés avant #9637 quand `delai` le demande. */
+const SEAU_API = (matcher: string, { delai = false }: { readonly delai?: boolean } = {}) =>
+  `s.registerRoute(${matcher},new s.NetworkFirst({cacheName:"api",${delai ? 'networkTimeoutSeconds:3,' : ''}` +
   `plugins:[new s.ExpirationPlugin({maxEntries:200,maxAgeSeconds:604800})]}),"GET")`;
 
 /** Le seau `medias`, avec ou sans sa garde de réponse cachable. */
@@ -260,6 +262,30 @@ describe('le découpage du premier argument', () => {
     expect(decoupePremierArgument('registerRoute(({url:u})=>f(u,1),new X())', 'registerRoute('.length)).toBe(
       '({url:u})=>f(u,1)',
     );
+  });
+});
+
+describe('#9637 — le seau `api` ne rend sa copie que sur un ÉCHEC du réseau, jamais sur un délai', () => {
+  /*
+   * `networkTimeoutSeconds: 3` rendait la réponse RANGÉE dès que la passerelle
+   * mettait plus de trois secondes, à un lecteur EN LIGNE : la liste relue
+   * était celle d'une lecture précédente, et TanStack l'écrivait par-dessus
+   * l'aperçu que `message:new` venait de poser. L'affichage instantané est
+   * l'affaire du cache persisté de TanStack ; la copie du seau sert le hors
+   * ligne, c'est-à-dire un réseau qui ÉCHOUE.
+   */
+  test('l’artefact livré avec un délai réseau est dénoncé', () => {
+    const violations = auditDelaiDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API(MATCHER_JUSTE, { delai: true })));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('networkTimeoutSeconds');
+  });
+
+  test('l’artefact sans délai est accepté', () => {
+    expect(auditDelaiDuSeauApi(CONFORME)).toEqual([]);
+  });
+
+  test('un artefact sans seau `api` laisse ce verdict à l’audit du seau', () => {
+    expect(auditDelaiDuSeauApi('self.define([],function(){})')).toEqual([]);
   });
 });
 
