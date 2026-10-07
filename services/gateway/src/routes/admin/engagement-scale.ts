@@ -67,6 +67,18 @@ const engagementScaleSchema = {
         },
       },
     },
+    // #9584 — les limites du jour par chemin (commentaire / réaction, sur un original / via une
+    // republication). Non déclarées, fast-json-stringify les retirait : l'éditeur du barème ne les
+    // voyait pas, et un barème réenregistré retombait sur les défauts.
+    pathCaps: {
+      type: 'object',
+      properties: Object.fromEntries(
+        (['comment', 'reaction'] as const).map((family) => [
+          family,
+          { type: 'object', properties: { original: { type: 'integer' }, repost: { type: 'integer' } } },
+        ]),
+      ),
+    },
     linkVisits: {
       type: 'object',
       properties: {
