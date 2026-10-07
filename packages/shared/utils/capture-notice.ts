@@ -16,8 +16,7 @@
  * tel quel dans une conversation chiffrée de bout en bout.
  */
 
-import type { ContentCaptureKind } from '../types/content-capture.js';
-import { CONTENT_CAPTURE_KINDS } from '../types/content-capture.js';
+import { CONTENT_CAPTURE_KINDS, type ContentCaptureKind } from '../types/content-capture-kinds.js';
 import type { ContentCaptureVerdict, ContentExitNature } from './content-exit-law.js';
 import { parseNoticeActor, type NoticeActor } from './conversation-notice.js';
 import {

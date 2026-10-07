@@ -25,11 +25,9 @@
 
 import { z } from 'zod';
 
-export const CONTENT_CAPTURE_KINDS = ['screenshot', 'recording'] as const;
-export type ContentCaptureKind = (typeof CONTENT_CAPTURE_KINDS)[number];
+import { CONTENT_CAPTURE_KINDS, CONTENT_CAPTURE_MAX_MESSAGES } from './content-capture-kinds.js';
 
-/** Messages déclarés au plus par capture — un écran n'en montre pas davantage. */
-export const CONTENT_CAPTURE_MAX_MESSAGES = 50;
+export { CONTENT_CAPTURE_KINDS, CONTENT_CAPTURE_MAX_MESSAGES, type ContentCaptureKind } from './content-capture-kinds.js';
 
 const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
 /** Ni `:` ni espace : l'identifiant entre dans une clé de déduplication. */
