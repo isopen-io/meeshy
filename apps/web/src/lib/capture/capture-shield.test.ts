@@ -292,3 +292,63 @@ describe('un appel resté sans réponse', () => {
     expect(lease.state()).toBe('open');
   });
 });
+
+describe('des transitions qui se croiseraient', () => {
+  function manualShell() {
+    const calls: { secure: boolean; resolve: () => void }[] = [];
+    const coque: CoqueNative = {
+      getPlatform: () => 'android',
+      PluginHeaders: [{ name: CAPTURE_SHIELD_PLUGIN, methods: [{ name: 'setSecure' }] }],
+      nativePromise: (_plugin, _method, options) =>
+        new Promise<unknown>((resolve) => calls.push({ secure: (options as { secure: boolean }).secure, resolve: () => resolve({}) })),
+    };
+    return { coque, calls };
+  }
+
+  test('une seule transition en vol ; la dernière demande est rejouée à son retour, rien n’est montré entre-temps', async () => {
+    const { coque, calls } = manualShell();
+    const shield = createCaptureShield(() => coque, testEnv().env);
+    shield.hold('m1').release();
+    const second = shield.hold('m2');
+    expect(calls.map((call) => call.secure)).toEqual([true]);
+    expect(second.state()).toBe('pending');
+    calls[0]?.resolve();
+    await settle();
+    expect(calls.map((call) => call.secure)).toEqual([true]);
+    expect(second.state()).toBe('open');
+    second.release();
+    await settle();
+    const third = shield.hold('m3');
+    expect(calls.map((call) => call.secure)).toEqual([true, false]);
+    expect(third.state()).toBe('pending');
+    calls[1]?.resolve();
+    await settle();
+    expect(third.state()).toBe('pending');
+    expect(calls.map((call) => call.secure)).toEqual([true, false, true]);
+    calls[2]?.resolve();
+    await settle();
+    expect(third.state()).toBe('open');
+    expect(shield.secured()).toBe(true);
+  });
+
+  test('un retrait ancien qui répond APRÈS une pose plus récente (coque remplacée) est ignoré', async () => {
+    const old = manualShell();
+    const fresh = manualShell();
+    const current = { coque: old.coque };
+    const shield = createCaptureShield(() => current.coque, testEnv().env);
+    shield.hold('m1').release();
+    old.calls[0]?.resolve();
+    await settle();
+    expect(old.calls.map((call) => call.secure)).toEqual([true, false]);
+    current.coque = fresh.coque;
+    const lease = shield.hold('m2');
+    fresh.calls[0]?.resolve();
+    await settle();
+    expect(lease.state()).toBe('open');
+    old.calls[1]?.resolve();
+    await settle();
+    expect(lease.state()).toBe('open');
+    expect(shield.secured()).toBe(true);
+    expect(fresh.calls.map((call) => call.secure)).toEqual([true]);
+  });
+});

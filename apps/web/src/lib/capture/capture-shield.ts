@@ -128,7 +128,7 @@ export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env:
    */
   let confirmed: { readonly coque: CoqueNative | undefined; readonly secure: boolean } | 'initial' | null = 'initial';
   /** La coque dont un appel est en vol — un appel resté sans réponse sur une coque remplacée ne bloque pas la nouvelle. */
-  let inFlight: { readonly coque: CoqueNative | undefined } | null = null;
+  let inFlight: { readonly coque: CoqueNative | undefined; readonly secure: boolean } | null = null;
   let failedToSecure = false;
   let retryArmed = false;
   let secureWatchers: readonly (() => void)[] = [];
@@ -179,6 +179,10 @@ export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env:
     return confirmed !== null && confirmed.coque === coqueOf() ? confirmed : null;
   };
 
+  /** Sécurisée À CET INSTANT : confirmée, et aucun retrait en vol qui pourrait déjà l'avoir levée. */
+  const securedNow = (): boolean =>
+    confirmedNow()?.secure === true && !(inFlight !== null && inFlight.coque === coqueOf() && !inFlight.secure);
+
   const tellSecure = () => secureWatchers.forEach((watcher) => watcher());
 
   const sync = (): void => {
@@ -194,7 +198,7 @@ export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env:
     if (inFlight !== null && inFlight.coque === coque) return;
     const want = desired();
     if (confirmedNow()?.secure === want) return;
-    const call = { coque };
+    const call = { coque, secure: want };
     inFlight = call;
     void apply(want).then((ok) => {
       if (inFlight !== call) return;
@@ -215,7 +219,7 @@ export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env:
   };
 
   const shieldState = (): CaptureShieldState => {
-    if (confirmedNow()?.secure === true) return 'open';
+    if (securedNow()) return 'open';
     return failedToSecure ? 'closed' : 'pending';
   };
 
@@ -259,7 +263,7 @@ export function createCaptureShield(coqueOf: () => CoqueNative | undefined, env:
     ...new Set(holders.filter((holder) => holder.origin === 'display').map((holder) => holder.messageId)),
   ];
 
-  const secured = (): boolean => mode() === 'guarded' && confirmedNow()?.secure === true;
+  const secured = (): boolean => mode() === 'guarded' && securedNow();
 
   const host = (): CaptureHost => {
     if (mode() === 'browser') return { kind: 'browser' };
