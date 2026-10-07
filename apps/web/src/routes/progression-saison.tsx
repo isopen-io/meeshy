@@ -46,9 +46,10 @@ function SaisonScreenBody({ progress }: { readonly progress: EngagementWithGame 
 }
 
 export default function ProgressionSaisonScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
+      concept="season"
       titre={gameText('game.season.title')}
       teinte={GAME_BRAND}
       compte={(p) => {

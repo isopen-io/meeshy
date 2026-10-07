@@ -58,3 +58,21 @@ struct GameMintFrame: Equatable {
     let meesh: EngagementMeeshProgress
     let next: GameMintNext?
 }
+
+extension GameMintStrike {
+
+    /// LA pièce que la scène de la feuille montre, et sur quelle face.
+    ///
+    ///  - une frappe vient de RÉUSSIR : la pièce frappée (`struck`) repose sur son revers, à SON numéro. Le vivant
+    ///    annonce déjà la suivante (`shown.next`), qui n'existe pas encore : la graver au repos montrait une pièce
+    ///    jamais frappée — et, sans points pour la suivante, la scène disparaissait avec le bouton ;
+    ///  - une frappe se joue, a été refusée, ou n'a pas encore eu lieu : la prochaine pièce, sur son avers ;
+    ///  - ni frappe possible ni frappe en cours, ou un ancien serveur qui ne dit pas la prochaine pièce : pas de scène.
+    static func scene(shown: GameMintFrame, struck: GameMintNext?, isStriking: Bool, play: Int, failed: Bool) -> GameMintStrike? {
+        if play > 0, !isStriking, !failed, let struck {
+            return GameMintStrike(number: struck.number, edition: struck.edition, play: play, restsReversed: true)
+        }
+        guard let next = shown.next, shown.meesh.canMint || isStriking else { return nil }
+        return GameMintStrike(number: next.number, edition: next.edition, play: play, restsReversed: false)
+    }
+}

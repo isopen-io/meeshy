@@ -104,7 +104,7 @@ final class AchievementRevealMedalTests: XCTestCase {
     func test_everyDoorToTheCelebrationPassesTheRarity() throws {
         for host in ["Meeshy/Features/Main/Views/EngagementRevealHost.swift",
                      "Meeshy/Features/Main/Views/ProgressionHub.swift",
-                     "Meeshy/Features/Main/Views/ProgressionView.swift"] {
+                     "Meeshy/Features/Main/Game/ProgressionConceptPage.swift"] {
             XCTAssertTrue(try source(host).contains("RevealRim.entry("), "\(host) doit passer la rareté mesurée à la célébration")
         }
     }

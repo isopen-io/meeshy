@@ -32,6 +32,8 @@ struct ProgressionMeeshEntry: View {
     @State private var ouvert = false
     @State private var sequence = GameMintSequence<GameMintFrame>()
     @State private var strikePlay = 0
+    /// La pièce que la dernière frappe a gravée : frappée, c'est elle qui repose sur son revers, pas la suivante.
+    @State private var struck: GameMintNext?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let tint = MeeshyColors.warning
 
@@ -40,18 +42,14 @@ struct ProgressionMeeshEntry: View {
         sequence.shown(live: GameMintFrame(meesh: meesh, next: next))
     }
 
-    /// La scène : seulement quand une frappe est possible (ou en train de se jouer) et que la pièce suivante est connue.
+    /// La scène : la prochaine pièce tant qu'une frappe est possible ou se joue, puis la pièce FRAPPÉE sur son revers.
     private var strike: GameMintStrike? {
-        let frame = shown
-        guard let next = frame.next, frame.meesh.canMint || sequence.isStriking else { return nil }
-        return GameMintStrike(
-            number: next.number, edition: next.edition, play: strikePlay,
-            restsReversed: strikePlay > 0 && mintError == nil && !sequence.isStriking
-        )
+        GameMintStrike.scene(shown: shown, struck: struck, isStriking: sequence.isStriking, play: strikePlay, failed: mintError != nil)
     }
 
     private func startStrike() {
         guard sequence.begin(holding: GameMintFrame(meesh: meesh, next: next)) else { return }
+        struck = next
         strikePlay += 1
         haptics.play(GameHapticPattern.strike)
         onMint()

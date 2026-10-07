@@ -1,68 +1,52 @@
 import SwiftUI
 import MeeshySDK
 
-// MARK: - Le bandeau de parrainage de la carte partagée (#7742)
+// MARK: - Le bandeau de parrainage de la carte partagée (#7742, #9554)
 //
-// MIROIR du bandeau de `docs/product/jeu-meeshy-conception.html` (§ XII.3) : en bas de la carte
-// 9:16 d'un moment photo, un bandeau indigo (86 %) qui porte la Signature, « Rejoins-moi sur
-// Meeshy », le lien de parrainage court de l'utilisateur et sa Flamme.
+// En bas de la carte d'un moment photo, un bandeau indigo (86 %) qui porte la Signature,
+// « Rejoins-moi sur Meeshy », la Flamme de l'utilisateur et son lien de parrainage en CARRÉ QR
+// (#9554) : le lien ne s'écrit plus, il se capture. Sa géométrie est celle du web
+// (`GameReferralBannerMetrics`) : le carré en fin de ligne, le bandeau retourné en entier en arabe.
 //
 // La brique dessine ; elle ne sait rien du lien. L'hôte lui passe les phrases localisées et le
 // lien tel qu'il part — et ne monte JAMAIS ce bandeau sans lien : « sans lien disponible, la
 // carte part sans lui, et sans placeholder qui ressemblerait à un lien » (conformité H-8).
 //
 // UNE exception, décidée par le porteur : dans l'APERÇU, tant que l'utilisateur n'a aucun jeton (le
-// jeton se crée au toucher de « Partager », jamais avant), le lien est un EMPLACEMENT « meeshy.me/r/… »
-// cerné de pointillés (`isPlaceholder`). L'hôte ne le monte jamais dans une image qui sort de l'app.
+// jeton se crée au toucher de « Partager », jamais avant), la place du carré est un EMPLACEMENT VIDE
+// cerné de pointillés (`link == nil`) — ni module, ni fond clair. L'hôte ne le monte jamais dans une
+// image qui sort de l'app.
 //
-// Tout se dessine à l'échelle de la HAUTEUR offerte (66 unités sur la planche) : le bandeau tient
-// de 3,5:1 (carré) à 3,8:1 (story) sans rien déformer. Les couleurs sont fixes — la carte est une
-// IMAGE partagée hors de l'app, jamais habillée par le thème de celui qui la compose.
+// Tout se dessine à l'échelle de la HAUTEUR offerte. Les couleurs sont fixes — la carte est une
+// IMAGE partagée hors de l'app, jamais habillée par le thème de celui qui la compose. Seul le carré
+// s'annonce au lecteur d'écran ; le reste est un décor.
 
 public struct GameReferralBannerView: View {
 
     private let title: String
-    private let link: String
+    private let link: String?
+    private let qrLabel: String
     private let flameForm: FlameFormKey?
     private let flameLabel: String?
-    private let isPlaceholder: Bool
+    private let rightToLeft: Bool
 
     /// - Parameters:
     ///   - title: « Rejoins-moi sur Meeshy ».
-    ///   - link: le lien court, sans schéma (« meeshy.me/signup/affiliate/AMANI7 »).
+    ///   - link: le lien COMPLET que le carré QR encode (« https://meeshy.me/signup/affiliate/AMANI7 ») ;
+    ///     `nil` ⇒ le lien n'existe pas encore : la place du carré est un emplacement vide en pointillé.
+    ///   - qrLabel: ce que le lecteur d'écran dit du carré (« QR code de ton lien d'invitation »).
     ///   - flameForm: la forme de la Flamme de l'utilisateur ; `nil` ⇒ pas de Flamme sur la carte
     ///     (il l'a retirée, ou n'en a pas).
     ///   - flameLabel: « 23 j », sous la Flamme.
-    ///   - isPlaceholder: `true` ⇒ le lien n'existe pas encore : son texte est un emplacement cerné de pointillés.
-    public init(title: String, link: String, flameForm: FlameFormKey? = nil, flameLabel: String? = nil,
-                isPlaceholder: Bool = false) {
+    ///   - rightToLeft: `true` ⇒ le bandeau se retourne, le carré passe à gauche.
+    public init(title: String, link: String?, qrLabel: String, flameForm: FlameFormKey? = nil, flameLabel: String? = nil,
+                rightToLeft: Bool = false) {
         self.title = title
         self.link = link
+        self.qrLabel = qrLabel
         self.flameForm = flameForm
         self.flameLabel = flameLabel
-        self.isPlaceholder = isPlaceholder
-    }
-
-    /// Le lien ; ou, sans jeton, son EMPLACEMENT : même texte, atténué, dans un cadre en pointillé.
-    @ViewBuilder
-    private func linkText(k: CGFloat) -> some View {
-        let text = Text(link)
-            .font(.system(size: 10.5 * k, weight: .medium, design: .monospaced))
-            .foregroundColor(Self.linkInk)
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-        if isPlaceholder {
-            text
-                .opacity(0.8)
-                .padding(.horizontal, 5 * k)
-                .padding(.vertical, 1.5 * k)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4 * k, style: .continuous)
-                        .strokeBorder(Self.linkInk.opacity(0.85), style: StrokeStyle(lineWidth: max(0.75, 0.9 * k), dash: [3 * k, 2.5 * k]))
-                )
-        } else {
-            text
-        }
+        self.rightToLeft = rightToLeft
     }
 
     private static let ink = Color(hex: "1c1941")
@@ -70,36 +54,70 @@ public struct GameReferralBannerView: View {
 
     public var body: some View {
         GeometryReader { proxy in
+            let metrics = GameReferralBannerMetrics(size: proxy.size, rightToLeft: rightToLeft, hasFlame: flameForm != nil)
             let k = proxy.size.height / 66
-            HStack(spacing: 12 * k) {
-                SignatureMark(style: .flat, color: .white, strokeWidth: 110)
-                    .frame(width: 30 * k, height: 30 * k)
-                VStack(alignment: .leading, spacing: 4 * k) {
-                    Text(title)
-                        .font(.system(size: 13 * k, weight: .heavy, design: .rounded))
+            ZStack(alignment: .topLeading) {
+                decor(metrics, k: k)
+                    .accessibilityHidden(true)
+                slot(metrics.qr, k: k)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+            .environment(\.layoutDirection, .leftToRight)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func decor(_ metrics: GameReferralBannerMetrics, k: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 16 * k, style: .continuous).fill(Self.ink.opacity(0.86))
+            SignatureMark(style: .flat, color: .white, strokeWidth: 110)
+                .placed(metrics.signature)
+            Text(title)
+                .font(.system(size: metrics.titleSize, weight: .heavy, design: .rounded))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(width: metrics.title.width, height: metrics.title.height, alignment: rightToLeft ? .trailing : .leading)
+                .offset(x: metrics.title.minX, y: metrics.title.minY)
+            if let flameForm {
+                FlameView(form: flameForm, flickers: false)
+                    .placed(metrics.flame)
+                if let flameLabel {
+                    Text(flameLabel)
+                        .font(.system(size: metrics.flameLabelSize, weight: .medium, design: .monospaced))
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
-                    linkText(k: k)
-                }
-                Spacer(minLength: 0)
-                if let flameForm {
-                    VStack(spacing: 1 * k) {
-                        FlameView(form: flameForm, flickers: false)
-                            .frame(width: 30 * k, height: 30 * k)
-                        if let flameLabel {
-                            Text(flameLabel)
-                                .font(.system(size: 9 * k, weight: .medium, design: .monospaced))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                        }
-                    }
+                        .placed(metrics.flameLabel)
                 }
             }
-            .padding(.horizontal, 14 * k)
-            .frame(width: proxy.size.width, height: proxy.size.height)
-            .background(RoundedRectangle(cornerRadius: 16 * k, style: .continuous).fill(Self.ink.opacity(0.86)))
         }
-        .accessibilityHidden(true)
+    }
+
+    /// Le carré QR du lien ; ou, sans jeton, son EMPLACEMENT : un cadre en pointillé, vide.
+    @ViewBuilder
+    private func slot(_ rect: CGRect, k: CGFloat) -> some View {
+        if let link {
+            if let square = GameReferralQRSquare.make(link: link, side: Int(rect.width)) {
+                GameReferralQRView(square: square)
+                    .accessibilityElement()
+                    .accessibilityLabel(qrLabel)
+                    .accessibilityAddTraits(.isImage)
+                    .placed(rect)
+            }
+        } else {
+            RoundedRectangle(cornerRadius: 4 * k, style: .continuous)
+                .strokeBorder(Self.linkInk.opacity(0.85), style: StrokeStyle(lineWidth: max(2, rect.width * 0.02), dash: [rect.width * 0.08, rect.width * 0.06]))
+                .placed(rect)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+private extension View {
+    /// Posée à sa place dans le repère du bandeau.
+    func placed(_ rect: CGRect) -> some View {
+        frame(width: rect.width, height: rect.height)
+            .offset(x: rect.minX, y: rect.minY)
     }
 }

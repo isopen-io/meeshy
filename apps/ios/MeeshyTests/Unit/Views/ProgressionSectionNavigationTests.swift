@@ -54,11 +54,17 @@ final class ProgressionSectionNavigationTests: XCTestCase {
     }
 
     func test_leTableauDeBordPousseLaSectionAuLieuDeLaPresenter() throws {
+        // Depuis #9564 la première page pousse la FICHE du concept, et la fiche pousse la section (« Aller plus loin »).
         let vue = try tableauDeBord()
-        XCTAssertTrue(vue.contains("router.push(.progressionSection("),
-                      "La section doit être POUSSÉE — c'est ce qui lui donne le `<` et le glissement du bord.")
-        XCTAssertFalse(vue.contains(".sheet(item: $destination)"),
-                       "Une feuille n'a ni historique ni geste de bord : c'est précisément ce que le porteur retire.")
+        XCTAssertTrue(vue.contains("router.push(.progressionConcept("),
+                      "La fiche doit être POUSSÉE — c'est ce qui lui donne le `<` et le glissement du bord.")
+        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        XCTAssertTrue(fiche.contains("router.push(.progressionSection(section))"),
+                      "La section doit être POUSSÉE depuis la fiche de son concept.")
+        for code in [vue, fiche] {
+            XCTAssertFalse(code.contains(".sheet(item: $destination)"),
+                           "Une feuille n'a ni historique ni geste de bord : c'est précisément ce que le porteur retire.")
+        }
     }
 
     /// La célébration restait attachée à la PAGE parce qu'elle était présentée

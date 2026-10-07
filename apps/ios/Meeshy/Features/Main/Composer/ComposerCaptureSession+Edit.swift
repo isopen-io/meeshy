@@ -95,11 +95,12 @@ extension ComposerCaptureSession {
         let cache = scenes
         let galerie = gallery
         let prise = editPhotoData
+        let proportions = canvasAspect
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
             let peinte = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
-                                                               person: auteur, date: date, scenes: cache)
+                                                               aspect: proportions, person: auteur, date: date, scenes: cache)
             guard isStillEditing(source) else { return }
             guard let rendu = peinte else {
                 isRenderingLook = false
@@ -132,11 +133,12 @@ extension ComposerCaptureSession {
         let galerie = gallery
         let espace = loopPlayer?.declaredSpace?.name as String?
         let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
+        let proportions = canvasAspect
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
             let rendue = await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, timeRange: plage,
-                                                                person: auteur, date: date,
+                                                                aspect: proportions, person: auteur, date: date,
                                                                 declaredSpaceName: espace)
             guard let rendue else {
                 guard isStillEditing(source) else { return }
@@ -218,14 +220,16 @@ extension ComposerCaptureSession {
         return editSource?.latestImage()?.extent
     }
 
-    /// Les proportions de la case où le média se pose : la découpe du cadre, le
-    /// canevas 9:16 sinon. La scène de l'aperçu ou de la miniature sert si elle est
-    /// cuite ; sinon la miniature (162×288, une milliseconde) se cuit ici — un cache
-    /// froid ne doit jamais faire cadrer en 9:16 un média qui part dans une case 4:5.
+    /// Les proportions de la case où le média se pose : la découpe du cadre, la
+    /// toile du viseur sinon. La scène de l'aperçu sert si elle est cuite ; sinon
+    /// une toile de sonde, aux mêmes proportions et de la taille d'une miniature
+    /// (une milliseconde), se cuit ici — un cache froid ne doit jamais faire
+    /// cadrer plein viseur un média qui part dans une case 4:5.
     var framingAspect: CGFloat {
-        let neutre = ComposerLookPainter.designCanvas.width / ComposerLookPainter.designCanvas.height
+        let neutre = canvasAspect
         guard look.frame != ComposerPhotoFrame.none else { return neutre }
-        let cles = [ComposerLookPainter.designCanvas, ComposerLookPainter.thumbnailCanvas].map {
+        let sonde = ComposerLookPainter.canvas(for: ComposerLookPainter.thumbnailCanvas, aspect: neutre)
+        let cles = [ComposerLookPainter.previewCanvas(aspect: neutre), sonde].map {
             ComposerLookSceneKey(look: look, canvas: $0, date: lookDate, person: lookPerson)
         }
         let scene = cles.lazy.compactMap { self.scenes.cached($0) }.first ?? ComposerLookPainter.scene(for: cles[1])

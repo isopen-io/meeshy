@@ -67,7 +67,7 @@ async function render(initial: EngagementWithGame, mountView: EngagementWithGame
   function Host() {
     const [shown, set] = useState(mountView);
     setView = set;
-    return <GameLead view={shown} env={() => b.env} transport={b.transport} navigateTo={(to) => b.log.navigated.push(to)} scrollTo={(id) => b.log.scrolled.push(id)} />;
+    return <GameLead view={shown} env={() => b.env} transport={b.transport} navigateTo={(to) => b.log.navigated.push(to)} openConcept={(concept) => b.log.scrolled.push(concept)} />;
   }
   const host = await mount(
     <QueryClientProvider client={b.client}>
@@ -140,7 +140,7 @@ describe('l’intégration, carte après carte', () => {
     expect(r.host.querySelector('[data-game-guide="onboarding.missions"]')).not.toBeNull();
     await click(by(r.host, 'data-game-guide-action'));
     await settle();
-    expect(r.log.scrolled).toEqual(['game-missions']);
+    expect(r.log.scrolled).toEqual(['missions']);
     expect(r.host.querySelector('[data-game-guide="onboarding.missions"]')).not.toBeNull();
   });
 
@@ -149,7 +149,7 @@ describe('l’intégration, carte après carte', () => {
     expect(r.host.querySelector('[data-game-guide="onboarding.first-points"]')).not.toBeNull();
     await click(by(r.host, 'data-game-guide-action'));
     await settle();
-    expect(r.log.scrolled).toEqual(['game-level']);
+    expect(r.log.scrolled).toEqual(['level']);
   });
 
   test('la dernière étape ouvre la photo de départ', async () => {

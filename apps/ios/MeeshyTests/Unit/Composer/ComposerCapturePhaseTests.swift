@@ -64,7 +64,7 @@ final class ComposerCapturePhaseTests: XCTestCase {
 
     func test_framingAspect_followsTheFrameSlot_evenBeforeThePreviewCookedIt() {
         let session = ComposerCaptureSession(stage: .armed, scenes: ComposerLookSceneCache(countLimit: 1))
-        XCTAssertEqual(session.framingAspect, 9.0 / 16.0, accuracy: 0.001, "sans cadre : le canevas 9:16")
+        XCTAssertEqual(session.framingAspect, 9.0 / 16.0, accuracy: 0.001, "sans cadre : la toile du viseur, 9:16 tant que rien n'est monté")
         session.look = ComposerPhotoLook(frame: .montage(.classic(.polaroid)))
         XCTAssertGreaterThan(abs(session.framingAspect - 9.0 / 16.0), 0.01,
                              "la case d'un polaroïd n'est pas 9:16 : un cache froid ne doit pas fausser le cadrage")

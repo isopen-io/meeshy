@@ -134,7 +134,7 @@ function ReglagesScreenBody({ progress }: { readonly progress: EngagementWithGam
 }
 
 export default function ProgressionReglagesScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage titre={gameText('game.settings.title')} teinte={GAME_BRAND} compte={() => null}>
       {(progress) => <ReglagesScreenBody progress={progress} />}

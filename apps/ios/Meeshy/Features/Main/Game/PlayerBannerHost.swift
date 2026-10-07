@@ -127,13 +127,16 @@ final class PlayerBannerStore: ObservableObject {
         opening.appWentAway(at: now())
     }
 
-    /// L'app revient : après une vraie absence, le bandeau se rouvre et relit le jeu ; sinon rien ne change.
+    /// L'app revient : après une vraie absence, le bandeau se rouvre et relit le jeu. Sinon rien ne se rouvre — et
+    /// si ses trente secondes sont passées pendant l'absence, il s'en va tout de suite : le sommeil de la minuterie
+    /// ne compte pas le temps où l'appareil dort, elle sonnerait en retard.
     func appCameBack() async {
         if opening.appCameBack(at: now()) {
             lingering = true
             openingGeneration += 1
             await revalidate(force: true)
         } else {
+            closeOpeningIfDue()
             await revalidate()
         }
     }

@@ -222,7 +222,7 @@ export function CarnetBody({ env, flameDays = null }: { readonly env: PhotoEnv; 
 }
 
 export default function ProgressionCarnetScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   /* Les jours de la Flamme du bandeau : lus dans le cache de Progression, jamais redemandés. */
   const flameDays = useQueryClient().getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY)?.game?.flame.days ?? null;
   return (

@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import MeeshyUI
 
 /// LA MISE EN PAGE DU CADRE (#9382) — conception, partie VI : emblème en haut,
 /// titre et date, Mee et Meo en bas. Une DONNÉE, en pixels de l'image finale :
@@ -41,6 +42,8 @@ nonisolated struct PhotoLayout: Equatable, Sendable {
     /// Le bandeau de parrainage (#7742), en bas de l'image ; `nil` sans lien. Quand il est là, il porte
     /// sa propre Signature : celle du bas de la carte n'est pas peinte, et `signature` n'est que la place qu'elle y tient.
     let banner: CGRect?
+    /// La place du carré QR du lien (#9554), en FIN de ligne du bandeau, au pixel entier ; `nil` sans bandeau.
+    let qr: CGRect?
 }
 
 nonisolated enum GamePhotoLayout {
@@ -64,19 +67,28 @@ nonisolated enum GamePhotoLayout {
             Proportions(emblemSize: 0.36, emblemTop: 0.07, kickerY: 0.4, titleY: 0.45, dateY: 0.5, birdSize: 0.26, signatureSize: 0.1, bannerHeight: 0)
         case (.square, false):
             Proportions(emblemSize: 0.3, emblemTop: 0.06, kickerY: 0.49, titleY: 0.58, dateY: 0.65, birdSize: 0.22, signatureSize: 0.07, bannerHeight: 0)
-        // Le bandeau prend le bas : 66 unités sur 248 de la planche en story, plus bas en carré. Mee et
-        // Meo montent au-dessus de lui ; en carré, le texte monte aussi et les tenants rapetissent.
+        // Le bandeau prend le bas : 20 % de la largeur dans les deux formats, comme sur le web (#9554) — c'est
+        // ce qui donne au carré QR ses 181 pixels. Mee et Meo montent au-dessus de lui ; en carré, le texte
+        // monte aussi et les tenants rapetissent.
         case (.story, true):
-            Proportions(emblemSize: 0.36, emblemTop: 0.07, kickerY: 0.4, titleY: 0.45, dateY: 0.5, birdSize: 0.26, signatureSize: 0.1, bannerHeight: 0.24)
+            Proportions(emblemSize: 0.36, emblemTop: 0.07, kickerY: 0.4, titleY: 0.45, dateY: 0.5, birdSize: 0.26, signatureSize: 0.1, bannerHeight: 0.2)
         case (.square, true):
-            Proportions(emblemSize: 0.3, emblemTop: 0.06, kickerY: 0.42, titleY: 0.5, dateY: 0.57, birdSize: 0.15, signatureSize: 0.07, bannerHeight: 0.176)
+            Proportions(emblemSize: 0.3, emblemTop: 0.06, kickerY: 0.42, titleY: 0.5, dateY: 0.56, birdSize: 0.15, signatureSize: 0.07, bannerHeight: 0.2)
         }
     }
 
     private static let margin: CGFloat = 0.05
 
-    /// `referral` : la carte porte le bandeau de parrainage en bas (#7742).
-    static func layout(_ format: PhotoFormat, referral: Bool = false) -> PhotoLayout {
+    /// La carte se compose-t-elle de droite à gauche ? La langue dans laquelle l'app s'affiche décide — celle
+    /// des phrases de la carte —, pas la région de l'appareil.
+    static func readsRightToLeft(languages: [String] = Bundle.main.preferredLocalizations) -> Bool {
+        guard let language = languages.first else { return false }
+        return Locale.Language(identifier: language).characterDirection == .rightToLeft
+    }
+
+    /// `referral` : la carte porte le bandeau de parrainage en bas (#7742). `rightToLeft` : le bandeau se
+    /// retourne en entier (#9554), le carré QR passe à gauche ; le reste de la carte ne bouge pas.
+    static func layout(_ format: PhotoFormat, referral: Bool = false, rightToLeft: Bool = false) -> PhotoLayout {
         let width = format.size.width
         let height = format.size.height
         let p = proportions(format, referral: referral)
@@ -88,6 +100,9 @@ nonisolated enum GamePhotoLayout {
         let banner = referral
             ? CGRect(x: edge, y: height - edge - bannerHeight, width: width - 2 * edge, height: bannerHeight)
             : nil
+        let qr = banner.map {
+            GameReferralBannerMetrics(size: $0.size, rightToLeft: rightToLeft).qr.offsetBy(dx: $0.minX, dy: $0.minY)
+        }
         let birdTop = (banner?.minY ?? height) - (banner == nil ? edge : edge / 2) - bird
         return PhotoLayout(
             width: width,
@@ -99,7 +114,8 @@ nonisolated enum GamePhotoLayout {
             mee: CGRect(x: edge, y: birdTop, width: bird, height: bird),
             meo: CGRect(x: width - edge - bird, y: birdTop, width: bird, height: bird),
             signature: CGRect(x: (width - signature) / 2, y: height - edge - signature, width: signature, height: signature),
-            banner: banner
+            banner: banner,
+            qr: qr
         )
     }
 }

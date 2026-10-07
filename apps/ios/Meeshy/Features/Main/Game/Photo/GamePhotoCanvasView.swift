@@ -33,8 +33,11 @@ struct GamePhotoCanvasView: View {
     /// Le lien de parrainage et la Flamme (#7742) : le bandeau du bas. `nil` ⇒ la carte part sans lien,
     /// avec la Signature du bas comme avant.
     var referral: ReferralCard?
+    /// Le bandeau se retourne en arabe (#9554) : le carré QR reste en fin de ligne. Le reste de la carte
+    /// se dessine toujours de gauche à droite — à l'écran comme dans l'image, qui n'hérite d'aucun sens.
+    var rightToLeft: Bool = GamePhotoLayout.readsRightToLeft()
 
-    private var layout: PhotoLayout { GamePhotoLayout.layout(format, referral: referral != nil) }
+    private var layout: PhotoLayout { GamePhotoLayout.layout(format, referral: referral != nil, rightToLeft: rightToLeft) }
 
     var body: some View {
         let l = layout
@@ -53,12 +56,13 @@ struct GamePhotoCanvasView: View {
             if let banner = l.banner, let referral {
                 GameReferralBannerView(
                     title: String(localized: "game.referral.title", defaultValue: "Rejoins-moi sur Meeshy", bundle: .main),
-                    link: referral.displayLink,
+                    link: referral.qrLink,
+                    qrLabel: String(localized: "game.photo.referral.qr_label", defaultValue: "QR code de ton lien d’invitation", bundle: .main),
                     flameForm: referral.flame?.form,
                     flameLabel: referral.flame.map {
                         String(localized: "game.referral.flame_days", defaultValue: "\(GameCopy.formatCount($0.days)) j", bundle: .main)
                     },
-                    isPlaceholder: referral.isPlaceholder
+                    rightToLeft: rightToLeft
                 )
                 .frame(width: banner.width, height: banner.height)
                 .offset(x: banner.minX, y: banner.minY)
@@ -70,6 +74,7 @@ struct GamePhotoCanvasView: View {
         }
         .frame(width: l.width, height: l.height, alignment: .topLeading)
         .clipped()
+        .environment(\.layoutDirection, .leftToRight)
     }
 
     // MARK: - Couches

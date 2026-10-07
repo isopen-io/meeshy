@@ -34,31 +34,31 @@ public final class GameService: GameServiceProviding, @unchecked Sendable {
 
     public func rerollMission(missionId: String, requestId: String) async throws -> MissionRerollResponse {
         let response: APIResponse<MissionRerollResponse> = try await api.post(
-            GameEndpoint.missionReroll(missionId: missionId), body: GameWriteRequest(requestId: requestId))
+            MeEndpoint.gameMissionReroll(missionId: missionId), body: GameWriteRequest(requestId: requestId))
         return response.data
     }
 
     public func claimChest(requestId: String) async throws -> ChestClaimResponse {
         let response: APIResponse<ChestClaimResponse> = try await api.post(
-            GameEndpoint.chestClaim, body: GameWriteRequest(requestId: requestId))
+            MeEndpoint.gameChestClaim, body: GameWriteRequest(requestId: requestId))
         return response.data
     }
 
     public func buyFlameFreeze(requestId: String) async throws -> FlameFreezeResponse {
         let response: APIResponse<FlameFreezeResponse> = try await api.post(
-            GameEndpoint.flameFreezes, body: GameWriteRequest(requestId: requestId))
+            MeEndpoint.gameFlameFreezes, body: GameWriteRequest(requestId: requestId))
         return response.data
     }
 
     public func relightFlame(requestId: String) async throws -> FlameRelightResponse {
         let response: APIResponse<FlameRelightResponse> = try await api.post(
-            GameEndpoint.flameRelight, body: GameWriteRequest(requestId: requestId))
+            MeEndpoint.gameFlameRelight, body: GameWriteRequest(requestId: requestId))
         return response.data
     }
 
     public func markGuideSeen(keys: [String], requestId: String) async throws -> GuideSeenResponse {
         let response: APIResponse<GuideSeenResponse> = try await api.post(
-            GameEndpoint.guideSeen, body: GuideSeenRequest(requestId: requestId, keys: keys))
+            MeEndpoint.gameGuideSeen, body: GuideSeenRequest(requestId: requestId, keys: keys))
         return response.data
     }
 
@@ -100,81 +100,81 @@ public protocol GameWave2ServiceProviding: Sendable {
 extension GameService: GameWave2ServiceProviding {
     public func setLeagueConsent(_ consent: Bool, pseudonym: String?, requestId: String) async throws -> LeagueConsentResponse {
         let response: APIResponse<LeagueConsentResponse> = try await api.post(
-            GameEndpoint.leagueConsent, body: LeagueConsentRequest(requestId: requestId, consent: consent, pseudonym: pseudonym))
+            MeEndpoint.gameLeagueConsent, body: LeagueConsentRequest(requestId: requestId, consent: consent, pseudonym: pseudonym))
         return response.data
     }
 
     public func setLeaguePseudonym(_ pseudonym: String, requestId: String) async throws -> LeaguePseudonymResponse {
         let response: APIResponse<LeaguePseudonymResponse> = try await api.put(
-            GameEndpoint.leaguePseudonym, body: LeaguePseudonymRequest(requestId: requestId, pseudonym: pseudonym))
+            MeEndpoint.gameLeaguePseudonym, body: LeaguePseudonymRequest(requestId: requestId, pseudonym: pseudonym))
         return response.data
     }
 
     public func fetchLeagueWeek() async throws -> LeagueWeekResponse {
-        let response: APIResponse<LeagueWeekResponse> = try await api.request(GameEndpoint.leagueWeek)
+        let response: APIResponse<LeagueWeekResponse> = try await api.request(MeEndpoint.gameLeagueWeek)
         return response.data
     }
 
     public func fetchFriendsLeague() async throws -> LeagueFriendsResponse {
-        let response: APIResponse<LeagueFriendsResponse> = try await api.request(GameEndpoint.leagueFriends)
+        let response: APIResponse<LeagueFriendsResponse> = try await api.request(MeEndpoint.gameLeagueFriends)
         return response.data
     }
 
     public func inviteToDuo(friendId: String, requestId: String) async throws -> DuoInviteResponse {
         let response: APIResponse<DuoInviteResponse> = try await api.post(
-            GameEndpoint.duoInvite, body: DuoInviteRequest(requestId: requestId, friendId: friendId))
+            MeEndpoint.gameDuoInvite, body: DuoInviteRequest(requestId: requestId, friendId: friendId))
         return response.data
     }
 
     public func acceptDuo(duoId: String, requestId: String) async throws -> DuoStatusResponse {
         let response: APIResponse<DuoStatusResponse> = try await api.post(
-            GameEndpoint.duoAccept(duoId: duoId), body: GameWriteRequest(requestId: requestId))
+            MeEndpoint.gameDuoAccept(duoId: duoId), body: GameWriteRequest(requestId: requestId))
         return response.data
     }
 
     public func abandonDuo(duoId: String, requestId: String) async throws -> DuoStatusResponse {
         let response: APIResponse<DuoStatusResponse> = try await api.post(
-            GameEndpoint.duoAbandon(duoId: duoId), body: GameWriteRequest(requestId: requestId))
+            MeEndpoint.gameDuoAbandon(duoId: duoId), body: GameWriteRequest(requestId: requestId))
         return response.data
     }
 
     public func claimSeasonStep(_ step: Int, requestId: String) async throws -> SeasonClaimResponse {
         let response: APIResponse<SeasonClaimResponse> = try await api.post(
-            GameEndpoint.seasonClaim(step: step), body: GameWriteRequest(requestId: requestId))
+            MeEndpoint.gameSeasonClaim(step: step), body: GameWriteRequest(requestId: requestId))
         return response.data
     }
 
     public func buySeasonSeal(requestId: String) async throws -> SeasonSealResponse {
         let response: APIResponse<SeasonSealResponse> = try await api.post(
-            GameEndpoint.seasonSeal, body: GameWriteRequest(requestId: requestId))
+            MeEndpoint.gameSeasonSeal, body: GameWriteRequest(requestId: requestId))
         return response.data
     }
 
     public func setShowcaseOrder(_ order: [String], requestId: String) async throws -> ShowcaseOrderResponse {
         let response: APIResponse<ShowcaseOrderResponse> = try await api.put(
-            GameEndpoint.showcaseOrder, body: ShowcaseOrderRequest(requestId: requestId, order: order))
+            MeEndpoint.gameShowcaseOrder, body: ShowcaseOrderRequest(requestId: requestId, order: order))
         return response.data
     }
 
     public func setVisibility(_ request: ShowcaseVisibilityRequest) async throws -> ShowcaseVisibilityResponse {
-        let response: APIResponse<ShowcaseVisibilityResponse> = try await api.put(GameEndpoint.showcaseVisibility, body: request)
+        let response: APIResponse<ShowcaseVisibilityResponse> = try await api.put(MeEndpoint.gameVisibility, body: request)
         return response.data
     }
 
     public func fetchUserShowcase(userId: String) async throws -> UserShowcaseResponse {
-        let response: APIResponse<UserShowcaseResponse> = try await api.request(GameEndpoint.userShowcase(userId: userId))
+        let response: APIResponse<UserShowcaseResponse> = try await api.request(UsersEndpoint.gameShowcaseOf(userId: userId))
         return response.data
     }
 
     public func passPrestige(requestId: String) async throws -> PrestigeResponse {
         let response: APIResponse<PrestigeResponse> = try await api.post(
-            GameEndpoint.prestige, body: GameWriteRequest(requestId: requestId))
+            MeEndpoint.gamePrestige, body: GameWriteRequest(requestId: requestId))
         return response.data
     }
 
     public func setPrivacy(gameHidden: Bool?, friendsLeagueOptOut: Bool?, requestId: String) async throws -> GamePrivacyResponse {
         let response: APIResponse<GamePrivacyResponse> = try await api.put(
-            GameEndpoint.privacy,
+            MeEndpoint.gamePrivacy,
             body: GamePrivacyRequest(requestId: requestId, gameHidden: gameHidden, friendsLeagueOptOut: friendsLeagueOptOut))
         return response.data
     }
@@ -193,12 +193,12 @@ public protocol GameIntegrationServiceProviding: Sendable {
 
 extension GameService: GameIntegrationServiceProviding {
     public func fetchSettings() async throws -> GameSettingsResponse {
-        let response: APIResponse<GameSettingsResponse> = try await api.request(GameEndpoint.settings)
+        let response: APIResponse<GameSettingsResponse> = try await api.request(MeEndpoint.gamePrivacy)
         return response.data
     }
 
     public func fetchUserGame(userId: String) async throws -> UserGameProfileResponse {
-        let response: APIResponse<UserGameProfileResponse> = try await api.request(GameEndpoint.userGame(userId: userId))
+        let response: APIResponse<UserGameProfileResponse> = try await api.request(UsersEndpoint.gameOf(userId: userId))
         return response.data
     }
 }

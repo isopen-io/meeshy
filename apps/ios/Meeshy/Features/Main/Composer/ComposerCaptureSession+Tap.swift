@@ -55,7 +55,7 @@ extension ComposerCaptureSession {
     /// toile, ou la case du cadre que la vue Metal peint.
     private func focusImage(in size: CGSize) -> (image: CGRect, visible: CGRect) {
         let ecran = CGRect(origin: .zero, size: size)
-        let toile = ComposerLookPainter.designCanvas
+        let toile = ComposerLookPainter.previewCanvas(aspect: canvasAspect)
         let source = camera.liveFeed.latestImage()?.extent.size ?? toile
         let cle = ComposerLookSceneKey(look: look, canvas: toile, date: lookDate, person: lookPerson)
         guard paintsWithMetal, let trou = ComposerLookSceneCache.shared.cached(cle)?.slots.first?.photo else {

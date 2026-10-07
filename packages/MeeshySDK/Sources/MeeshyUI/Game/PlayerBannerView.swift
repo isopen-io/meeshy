@@ -102,6 +102,13 @@ public struct PlayerBannerView: View {
     /// La hauteur minimale : le plus grand des deux, 56 pt et l'anneau — jamais moins qu'une cible de 44 pt.
     public static let minimumHeight: CGFloat = 56
 
+    /// La couleur du petit texte (« encore 70 ») : le ton discret sur l'aplat seul, l'ENCRE dès qu'une bannière de
+    /// profil passe dessous — une image, même translucide, lui prend le contraste que l'aplat lui garantissait.
+    public static func detailColor(palette: Palette, overBackdrop: Bool) -> Color {
+        overBackdrop ? palette.ink : palette.muted
+    }
+
+    private var hasBackdrop: Bool { !(backdrop ?? "").isEmpty }
     private var tint: Color { LevelTierPalette.color(for: model.tier) }
     private var stacked: Bool { typeSize > .xxLarge }
 
@@ -142,7 +149,7 @@ public struct PlayerBannerView: View {
 
     @ViewBuilder
     private var backdropLayer: some View {
-        if let backdrop, !backdrop.isEmpty {
+        if hasBackdrop, let backdrop {
             CachedAsyncImage(url: backdrop, targetSize: CGSize(width: 480, height: 160), showsStatusOverlays: false) {
                 Color.clear
             }
@@ -234,7 +241,7 @@ public struct PlayerBannerView: View {
                 Text(missing)
                     .font(.caption2.weight(.medium))
                     .monospacedDigit()
-                    .foregroundColor(palette.muted)
+                    .foregroundColor(Self.detailColor(palette: palette, overBackdrop: hasBackdrop))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }

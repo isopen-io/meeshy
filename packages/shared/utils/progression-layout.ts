@@ -129,6 +129,85 @@ export function progressionLayout(progress: EngagementProgress): readonly Progre
 }
 
 /**
+ * LES CONCEPTS DE « PROGRESSION » (#9563) — une ligne sur la première page, une
+ * fiche, un bloc au tableau de bord. L'ordre est écrit ICI, une fois : le web le
+ * parcourt, iOS en tient le miroir (`ProgressionConcepts.swift`).
+ */
+export const PROGRESSION_CONCEPTS = [
+  'level',
+  'points',
+  'meesh',
+  'glory',
+  'flame',
+  'missions',
+  'league',
+  'season',
+  'prestige',
+  'elans',
+  'badges',
+  'defis',
+  'succes',
+  'showcase',
+  'atlas',
+] as const;
+
+export type ProgressionConcept = (typeof PROGRESSION_CONCEPTS)[number];
+
+/**
+ * Ce que la liste LIT : la progression d'avant, et la PRÉSENCE des morceaux du
+ * bloc `game`. Leur contenu ne l'intéresse pas (`unknown`) : décider qu'une
+ * ligne existe ne demande aucune valeur, et le miroir Swift n'a alors que des
+ * « servi / pas servi » à reproduire.
+ */
+export type ProgressionConceptSource = EngagementProgress & {
+  readonly game?: {
+    readonly league?: unknown;
+    readonly season?: unknown;
+    readonly trophies?: unknown;
+    readonly atlas?: unknown;
+    readonly prestige?: unknown;
+  };
+};
+
+/**
+ * Les concepts SERVIS, dans l'ordre déclaré.
+ *
+ * | concept | présent si |
+ * |---|---|
+ * | `level`, `flame`, `elans`, `badges`, `succes` | toujours (la progression d'avant les sert) |
+ * | `meesh` | le solde est servi, ou le bloc `game` |
+ * | `defis` | la carte d'atteignabilité a au moins une section |
+ * | `points`, `glory`, `missions` | le bloc `game` est servi |
+ * | `league`, `prestige`, `showcase`, `atlas` | leur extension du bloc `game` est servie |
+ * | `season` | son extension est servie, même `null` (aucune saison ne court) |
+ *
+ * Une ligne absente vaut mieux qu'une ligne qui dit « 0 / 0 » : devant un
+ * ancien serveur, l'écran se raccourcit, il ne ment pas.
+ */
+export function progressionConcepts(source: ProgressionConceptSource): readonly ProgressionConcept[] {
+  const game = source.game;
+  const playing = game !== undefined;
+  const served: Readonly<Record<ProgressionConcept, boolean>> = {
+    level: true,
+    points: playing,
+    meesh: playing || (source.meesh !== undefined && source.meesh !== null),
+    glory: playing,
+    flame: true,
+    missions: playing,
+    league: game?.league !== undefined,
+    season: game?.season !== undefined,
+    prestige: game?.prestige !== undefined,
+    elans: true,
+    badges: true,
+    defis: (source.achievementSections ?? []).length > 0,
+    succes: true,
+    showcase: game?.trophies !== undefined,
+    atlas: game?.atlas !== undefined,
+  };
+  return PROGRESSION_CONCEPTS.filter((concept) => served[concept]);
+}
+
+/**
  * Ce que le hero du dernier succès montre : le palier gravé le PLUS RÉCEMMENT,
  * toutes provenances confondues.
  *

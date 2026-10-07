@@ -200,7 +200,7 @@ final class GamePhotoSessionTests: XCTestCase {
         await rig.sut.prepareReferral()
         await rig.sut.chooseCard()
         XCTAssertEqual(rig.composer.composed.first?.referral?.isPlaceholder, true)
-        XCTAssertEqual(rig.composer.composed.first?.referral?.displayLink, "meeshy.me/r/…")
+        XCTAssertNil(rig.composer.composed.first?.referral?.qrLink, "l'emplacement n'encode aucun lien")
         XCTAssertNil(rig.sut.shareText, "l'emplacement n'est pas un lien : il ne part pas en texte")
         XCTAssertEqual(rig.sut.shareItems(square: false).count, 1)
     }

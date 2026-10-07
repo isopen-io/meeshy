@@ -10,7 +10,8 @@ import { GlassBack } from '@/components/glass-surface';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { guideBirds } from '@/lib/game-guide/card';
 import { formatCount, gameText } from '@/lib/view/game-copy';
-import { gameRules, stepCopy } from '@/lib/view/game-guide-copy';
+import { stepCopy } from '@/lib/view/game-guide-copy';
+import { gameRules } from '@/lib/view/game-rules-copy';
 import { useOptionalRoute } from '@/lib/router';
 import { Link } from '@/routes/route-table';
 import { RulesAtlas } from '@/routes/progression-rules-atlas';
@@ -136,7 +137,7 @@ export function RulesBody({ target }: { readonly target?: number }) {
 }
 
 export default function ProgressionRulesScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'rules');
   const target = ruleTarget(useOptionalRoute()?.search.get('regle') ?? null);
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">

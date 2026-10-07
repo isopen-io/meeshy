@@ -76,6 +76,67 @@ final class GameMintHeroTests: XCTestCase {
         XCTAssertEqual(sequence.shown(live: after).meesh.balance, 10)
     }
 
+    // MARK: - La pièce que la scène montre (#9537)
+
+    private func frame(balance: Int, next: Int, canMint: Bool = true) -> GameMintFrame {
+        GameMintFrame(
+            meesh: EngagementMeeshProgress(payload: GameFixture.meesh(balance: balance, debitable: canMint ? 12_180 : 0)),
+            next: GameMintNext(number: next, edition: .silver)
+        )
+    }
+
+    func test_beforeAnyStrike_theSceneShowsTheNextCoinOnItsObverse() {
+        let scene = GameMintStrike.scene(shown: frame(balance: 9, next: 13), struck: nil, isStriking: false, play: 0, failed: false)
+        XCTAssertEqual(scene, GameMintStrike(number: 13, edition: .silver, play: 0, restsReversed: false))
+    }
+
+    func test_whileStriking_theSceneEngravesTheHeldCoin() {
+        let struck = GameMintNext(number: 13, edition: .silver)
+        let scene = GameMintStrike.scene(shown: frame(balance: 9, next: 13), struck: struck, isStriking: true, play: 1, failed: false)
+        XCTAssertEqual(scene, GameMintStrike(number: 13, edition: .silver, play: 1, restsReversed: false))
+    }
+
+    func test_onceStruck_theCoinRestsOnTheNumberItWasStruckWith_notOnTheNextOne() {
+        let struck = GameMintNext(number: 13, edition: .silver)
+        let scene = GameMintStrike.scene(shown: frame(balance: 10, next: 14), struck: struck, isStriking: false, play: 1, failed: false)
+        XCTAssertEqual(scene?.number, 13, "la pièce posée sur son revers est la n° 13 qu'on vient de frapper — la n° 14 n'existe pas encore")
+        XCTAssertEqual(scene?.restsReversed, true)
+    }
+
+    func test_theLastAffordableStrike_keepsItsStruckCoinOnScreen() {
+        let struck = GameMintNext(number: 13, edition: .silver)
+        let scene = GameMintStrike.scene(shown: frame(balance: 10, next: 14, canMint: false), struck: struck, isStriking: false, play: 1, failed: false)
+        XCTAssertEqual(scene, GameMintStrike(number: 13, edition: .silver, play: 1, restsReversed: true),
+                       "plus assez de points pour la suivante : la pièce frappée ne disparaît pas avec le bouton")
+    }
+
+    func test_aRefusedStrike_putsTheNextCoinBackOnItsObverse() {
+        let struck = GameMintNext(number: 13, edition: .silver)
+        let scene = GameMintStrike.scene(shown: frame(balance: 9, next: 13), struck: struck, isStriking: false, play: 1, failed: true)
+        XCTAssertEqual(scene, GameMintStrike(number: 13, edition: .silver, play: 1, restsReversed: false),
+                       "le serveur a refusé : rien n'a été frappé, la pièce ne montre pas de revers numéroté")
+    }
+
+    func test_withoutPointsNorStrike_thereIsNoScene() {
+        XCTAssertNil(GameMintStrike.scene(shown: frame(balance: 9, next: 13, canMint: false), struck: nil, isStriking: false, play: 0, failed: false))
+        let unknown = GameMintFrame(meesh: EngagementMeeshProgress(payload: GameFixture.meesh()), next: nil)
+        XCTAssertNil(GameMintStrike.scene(shown: unknown, struck: nil, isStriking: false, play: 0, failed: false), "un ancien serveur ne dit pas la prochaine pièce : pas de scène")
+    }
+
+    func test_theCounterSheetRemembersTheCoinItStruck() throws {
+        let text = try source("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift")
+        XCTAssertTrue(text.contains("GameMintStrike.scene(shown: shown, struck: struck"), "la scène est décidée par la fonction pure")
+        XCTAssertTrue(text.contains("struck = next"), "le toucher retient la pièce qu'il frappe")
+    }
+
+    // MARK: - Le jour de jeu est celui du compte (#9539)
+
+    func test_theDailyMissionsEndWithTheAccountDay_notTheDeviceDay() throws {
+        let text = try source("Meeshy/Features/Main/Game/GameMissionsView.swift")
+        XCTAssertTrue(text.contains("GameMissionClock.endOfDay(missions.dayKey, timezone: accountTimezone)"),
+                      "la fin du jour se lit dans le fuseau du compte, celui où la passerelle découpe le jour de jeu")
+    }
+
     // MARK: - La feuille du compteur joue la frappe
 
     func test_theCounterSheetPlaysMeeAndMeoStriking_andTheCounterReadsTheHeldImage() throws {
@@ -103,17 +164,23 @@ final class GameMintHeroTests: XCTestCase {
         XCTAssertFalse(hero.contains("GameHeroMint"), "le héro de niveau ne porte plus de « Comment frapper »")
         let parts = try source("Meeshy/Features/Main/Game/GameHeroParts.swift")
         XCTAssertFalse(parts.contains("struct GameHeroMint"), "le doublon est supprimé, pas masqué")
-        let section = try source("Meeshy/Features/Main/Game/GameSection.swift")
-        XCTAssertEqual(section.components(separatedBy: "GameMintPreviewView(").count - 1, 1, "UN héro de frappe dans la section du jeu")
+        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        XCTAssertEqual(fiche.components(separatedBy: "GameMintPreviewView(").count - 1, 1, "UN héro de frappe, dans la fiche des Meeshes (#9564)")
+        let front = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
+        XCTAssertFalse(front.contains("GameMintPreviewView("), "la première page ne porte plus la frappe")
     }
 
     // MARK: - Le détail de ligue AVANT la frappe (#9541)
 
-    func test_theLeagueDetailComesBeforeTheMintHero() throws {
-        let section = try source("Meeshy/Features/Main/Game/GameSection.swift")
-        let league = try XCTUnwrap(section.range(of: "GameLeagueDetailCard.make(")?.lowerBound)
-        let mint = try XCTUnwrap(section.range(of: "GameMintPreviewView(")?.lowerBound)
-        XCTAssertLessThan(league, mint, "le détail de ligue se place avant le bouton de frappe")
+    /// Depuis #9564 la ligue et la frappe ne partagent plus un écran : chacune vit dans la fiche de SON concept, et
+    /// l'ordre des concepts (`ProgressionConcept`) range la Ligue… après les Meeshes. Ce que #9541 voulait — lire sa
+    /// ligue sans passer par le bouton qui coûte — tient autrement : la carte de la Ligue dit son rang dès la première page.
+    func test_theLeagueDetailLivesInTheLeagueSheet_notNextToTheMint() throws {
+        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        XCTAssertTrue(fiche.contains("GameLeagueDetailCard.make(league: game?.league, onOpen: { onOpenLink(.page(.league)) })"),
+                      "le détail de ligue est monté par la fiche de la Ligue, et son toucher ouvre le classement")
+        let front = try source("Meeshy/Features/Main/Game/ProgressionFrontList.swift")
+        XCTAssertFalse(front.contains("GameLeagueDetailCard"), "la première page ne porte que des cartes de concept")
     }
 
     private func block(access: LeagueAccess, current: GameLeagueBlock.Current?) -> GameLeagueBlock {

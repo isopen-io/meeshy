@@ -19,9 +19,10 @@ import { axesByFamily } from '@meeshy/shared/utils/engagement-progress';
  * de l'interface (le catalogue `game.*` se charge avec la route).
  */
 export default function ProgressionBadgesScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
+      concept="badges"
       titre="Badges"
       teinte={BRAND}
       compte={(p) => `${p.badgesEarned} / ${p.badgesTotal}`}

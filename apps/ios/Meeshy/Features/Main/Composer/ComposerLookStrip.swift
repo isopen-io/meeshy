@@ -124,6 +124,8 @@ struct ComposerLookStrip: View {
     @State private var blink: Double = 1
     /// Retombe d'elle-même quand le système annule l'appui long sans `onEnded`.
     @GestureState private var pressing = false
+    /// La fin de la dernière tenue — sa levée ne compte pas pour un toucher.
+    @State private var holdEndedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Le sens de lecture de la langue : les LIBELLÉS le suivent, l'ordre des
     /// cases non — l'atlas Metal ne se met pas en miroir.
@@ -157,7 +159,11 @@ struct ComposerLookStrip: View {
     var body: some View {
         Group {
             if items.isEmpty {
-                chosenAlone
+                switch ComposerLookStripRule.collapsedTrigger(look: session.look, editing: context.editing) {
+                case .shutter: shutter
+                case .thumbnail: chosenAlone
+                case .hidden: Color.clear.accessibilityHidden(true)
+                }
             } else {
                 band
             }
@@ -167,6 +173,32 @@ struct ComposerLookStrip: View {
             guard !tenu else { return }
             session.releaseStaleHold()
         }
+    }
+
+    // MARK: - Repliée, sans look : le déclencheur simple (#9557)
+
+    /// Un anneau, rien de peint : la caméra est déjà tout l'écran. Il porte les
+    /// gestes de la miniature choisie, et son point rouge quand la prise tourne.
+    private var shutter: some View {
+        let cote = ComposerLookStripRule.cellSize.width + MeeshySpacing.lg
+        return ZStack {
+            Circle().strokeBorder(Color.white, lineWidth: 4)
+            RoundedRectangle(cornerRadius: recording ? MeeshyRadius.sm : cote / 2, style: .continuous)
+                .fill(recording ? MeeshyColors.error : Color.white)
+                .padding(recording ? cote * 0.3 : 7)
+            chosenOverlay.offset(y: -MeeshySpacing.xxl)
+        }
+        .frame(width: cote, height: cote)
+        .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: recording)
+        .contentShape(Circle())
+        .gesture(triggerGestures(zone: .shutter))
+        .accessibilityElement()
+        .accessibilityLabel(recording
+            ? ComposerSceneCameraCopy.shutterLabel(mode: .video, stage: .recording)
+            : ComposerSceneCameraCopy.shutterLabel(mode: .photo, stage: .armed))
+        .accessibilityAddTraits(.isButton)
+        .composerCaptureAccessibilityActions(zone: .shutter, context: context) { performAccessible($0) }
     }
 
     // MARK: - Repliée : la miniature choisie, seule
@@ -244,6 +276,12 @@ struct ComposerLookStrip: View {
                     guard let choisie = ComposerLookStripRule.chosenIndex(in: items, look: session.look) else { return }
                     lecteur.scrollTo(choisie, anchor: .center)
                 }
+                .adaptiveOnChange(of: ComposerLookStripRule.chosenIndex(in: items, look: session.look)) { _, choisie in
+                    guard let choisie else { return }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                        lecteur.scrollTo(choisie, anchor: .center)
+                    }
+                }
             }
         }
     }
@@ -312,6 +350,7 @@ struct ComposerLookStrip: View {
                 .frame(width: cellule.width + ComposerLookStripRule.spacing)
                 .environment(\.layoutDirection, readingDirection)
         }
+        .frame(width: cellule.width, alignment: .center)
         .accessibilityElement(children: .ignore)
         if chosen {
             corps
@@ -335,9 +374,12 @@ struct ComposerLookStrip: View {
 
     // MARK: - Les gestes de la miniature choisie
 
-    /// Appui long (puis glissé : cadenas à droite, zoom à la verticale), puis
-    /// toucher — l'appui long passe avant le toucher, qui part dès la levée.
-    private var chosenGestures: some Gesture {
+    /// Appui long (puis glissé : cadenas à droite, zoom à la verticale) ET
+    /// toucher, reconnus côte à côte (#9557) : derrière un `exclusively(before:)`,
+    /// le toucher ne partait jamais — relevé au simulateur.
+    private var chosenGestures: some Gesture { triggerGestures(zone: .chosenThumbnail) }
+
+    private func triggerGestures(zone: ComposerCaptureZone) -> some Gesture {
         LongPressGesture(minimumDuration: ComposerSceneQuickCapture.armedHoldDuration)
             .sequenced(before: DragGesture(minimumDistance: 0))
             .updating($pressing) { valeur, tenu, _ in
@@ -347,28 +389,41 @@ struct ComposerLookStrip: View {
             .onChanged { valeur in
                 guard case .second(true, let glisse) = valeur else { return }
                 guard session.holdStartedAt != nil else {
-                    perform(.chosenThumbnail, .longPress)
+                    perform(zone, .longPress)
                     return
                 }
-                guard let glisse, steers else { return }
+                guard let glisse, steers(zone) else { return }
                 session.holdChanged(CGPoint(x: glisse.translation.width, y: glisse.translation.height))
             }
-            .onEnded { _ in session.endHold() }
-            .exclusively(before: TapGesture().onEnded { tapChosen() })
+            .onEnded { _ in
+                holdEndedAt = Date()
+                session.endHold()
+            }
+            .simultaneously(with: TapGesture().onEnded {
+                guard session.holdStartedAt == nil, !Self.followsAHold(holdEndedAt, now: Date()) else { return }
+                tapTrigger(zone)
+            })
+    }
+
+    /// La levée d'une tenue n'est pas un toucher : celui qui la suit de trop près
+    /// est le même doigt.
+    static func followsAHold(_ endedAt: Date?, now: Date) -> Bool {
+        guard let endedAt else { return false }
+        return now.timeIntervalSince(endedAt) < 0.3
     }
 
     /// Le doigt qui tient la prise la pilote-t-il ? La table le dit.
-    private var steers: Bool {
+    private func steers(_ zone: ComposerCaptureZone) -> Bool {
         var tenue = context
         tenue.holding = session.holdStartedAt != nil
-        return ComposerCaptureGesture.action(zone: .chosenThumbnail, gesture: .drag, context: tenue) == .steerTake
+        return ComposerCaptureGesture.action(zone: zone, gesture: .drag, context: tenue) == .steerTake
     }
 
     /// **Le toucher de la miniature, lu par le seul décideur** (#9464) : le second
     /// d'un double dans la même zone prend la photo vers la galerie ; seul, il
     /// arrête une prise verrouillée.
-    private func tapChosen() {
-        let issue = ComposerCaptureGesture.tap(zone: .chosenThumbnail, context: context, now: Date(),
+    private func tapTrigger(_ zone: ComposerCaptureZone) {
+        let issue = ComposerCaptureGesture.tap(zone: zone, context: context, now: Date(),
                                                lastTap: session.lastViewfinderTap, armedAt: session.armedAt)
         session.lastViewfinderTap = issue.memory
         session.perform(issue.action, item: nil)

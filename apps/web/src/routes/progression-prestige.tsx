@@ -42,9 +42,10 @@ function PrestigeScreenBody({ progress }: { readonly progress: EngagementWithGam
 }
 
 export default function ProgressionPrestigeScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
+      concept="prestige"
       titre={gameText('game.prestige.title')}
       teinte={GAME_BRAND}
       compte={(p) => {

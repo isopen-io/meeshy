@@ -114,9 +114,7 @@ private struct GameFlameTile: View {
                     .opacity(isOut ? 0.45 : 1)
             },
             lines: {
-                headline(flame.days == 0
-                    ? String(localized: "game.flame.no_streak", defaultValue: "Pas de série", bundle: .main)
-                    : GameCopy.days(flame.days))
+                headline(GameCopy.flameDays(flame.days))
                 caption(flame.form.map {
                     String(
                         localized: "game.flame.form_line",
@@ -124,20 +122,10 @@ private struct GameFlameTile: View {
                         bundle: .main
                     )
                 } ?? String(localized: "game.flame.out_line", defaultValue: "Flamme éteinte", bundle: .main))
-                if let status = statusText {
+                if let status = GameCopy.flameStatus(flame.status) {
                     caption(status, tone: flame.status == .atRisk || isOut ? ThemeManager.shared.textPrimary : nil)
                 }
             }
         )
-    }
-
-    private var statusText: String? {
-        switch flame.status {
-        case .none: String(localized: "game.flame.status.none", defaultValue: "Un geste aujourd’hui allume ta Flamme", bundle: .main)
-        case .lit: nil
-        case .atRisk: String(localized: "game.flame.status.at_risk", defaultValue: "Fais un geste avant minuit", bundle: .main)
-        case .covered: String(localized: "game.flame.status.covered", defaultValue: "Un gel la protège", bundle: .main)
-        case .out: String(localized: "game.flame.status.out", defaultValue: "Éteinte", bundle: .main)
-        }
     }
 }

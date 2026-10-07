@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { gameRules } from '@/lib/view/game-guide-copy';
+import { gameRules } from '@/lib/view/game-rules-copy';
 
 import ProgressionRulesScreen, { RulesBody, ruleTarget } from './progression-rules';
 

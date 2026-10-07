@@ -32,7 +32,7 @@ export type BrowserWin = {
 const MAX_PIXEL_RATIO = 2;
 
 export const createBrowserEnv = ({ win, host, canvas }: { readonly win: BrowserWin; readonly host: { readonly clientWidth: number; readonly clientHeight: number }; readonly canvas: GlCanvas }): EffectEnv => ({
-  reducedMotion: prefersReducedMotion(win.matchMedia === undefined ? {} : { matchMedia: win.matchMedia }),
+  reducedMotion: prefersReducedMotion(win.matchMedia === undefined ? {} : { matchMedia: (query) => win.matchMedia?.(query) ?? { matches: false } }),
   createGl: () => {
     const gl = createGameGl(canvas);
     const ratio = Math.min(MAX_PIXEL_RATIO, win.devicePixelRatio ?? 1);

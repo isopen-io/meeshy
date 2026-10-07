@@ -4,6 +4,8 @@ import Foundation
 nonisolated enum ComposerCaptureZone: Equatable, Sendable {
     case scene
     case chosenThumbnail
+    /// Le déclencheur simple de la bande repliée, sans look (#9557).
+    case shutter
     case otherThumbnail
     case rail
 }
@@ -76,6 +78,7 @@ nonisolated enum ComposerCaptureGesture {
         switch zone {
         case .scene: return scene(gesture, context)
         case .chosenThumbnail: return chosen(gesture, context)
+        case .shutter: return shutter(gesture, context)
         case .otherThumbnail: return gesture == .tap && !lookIsLocked(context) ? .select : .none
         case .rail: return gesture == .tap && !lookIsLocked(context) ? .openFamily : .none
         }
@@ -118,6 +121,10 @@ nonisolated enum ComposerCaptureGesture {
             guard context.stage == .armed else { return [.stopTake] }
             return [action(zone: .chosenThumbnail, gesture: .doubleTap, context: context),
                     action(zone: .chosenThumbnail, gesture: .longPress, context: context)].filter { $0 != .none }
+        case .shutter:
+            guard context.stage == .armed else { return [.stopTake] }
+            return [action(zone: .shutter, gesture: .tap, context: context),
+                    action(zone: .shutter, gesture: .longPress, context: context)].filter { $0 != .none }
         case .otherThumbnail, .rail:
             return []
         }
@@ -174,6 +181,22 @@ nonisolated enum ComposerCaptureGesture {
         case .tap: return context.stage == .recording && context.locked ? .stopTake : .none
         case .doubleTap: return mayShootAlone(context) && context.allowsPhoto ? .photoToGallery : .none
         case .longPress: return mayShootAlone(context) && context.allowsVideo ? .filmToGallery : .none
+        case .pinch: return .zoom
+        case .drag: return context.holding ? .steerTake : .none
+        }
+    }
+
+    /// **Le déclencheur simple fait ce que fait la scène, d'UN toucher** (#9557) :
+    /// la photo s'ouvre en retouche, l'appui long filme un segment. Un bouton
+    /// rond qui attendrait un double toucher ne serait pas un déclencheur.
+    private static func shutter(_ gesture: ComposerCaptureGestureKind,
+                                _ context: ComposerCaptureGestureContext) -> ComposerCaptureAction {
+        switch gesture {
+        case .tap:
+            if context.stage == .recording { return context.locked ? .stopTake : .none }
+            return mayShootAlone(context) && context.allowsPhoto ? .photoToEdit : .none
+        case .doubleTap: return .none
+        case .longPress: return context.stage == .armed && context.allowsVideo ? .filmSegment : .none
         case .pinch: return .zoom
         case .drag: return context.holding ? .steerTake : .none
         }

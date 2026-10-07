@@ -41,6 +41,24 @@ const host = { clientWidth: 100, clientHeight: 80 };
 const canvasOf = (): GlCanvas => ({ width: 0, height: 0, getContext: () => null });
 
 describe('createBrowserEnv', () => {
+  /**
+   * `window.matchMedia` exige son receveur : détachée de `window`, elle lève
+   * « Illegal invocation » dans un vrai navigateur. Un double écrit en fonction
+   * fléchée ne peut pas le voir ; celui-ci refuse d'être appelé sans sa fenêtre,
+   * comme le navigateur (mesuré sur la fiche des Meeshes, #9563).
+   */
+  test('la requête média est appelée SUR la fenêtre, jamais détachée d’elle', () => {
+    const base = fakeWin().win;
+    const win: BrowserWin = {
+      ...base,
+      matchMedia(this: unknown) {
+        if (this !== win) throw new TypeError('Illegal invocation');
+        return { matches: true };
+      },
+    };
+    expect(createBrowserEnv({ win, host, canvas: canvasOf() }).reducedMotion).toBe(true);
+  });
+
   test('la réduction des animations vient de la requête média', () => {
     expect(createBrowserEnv({ win: fakeWin({ reduced: true }).win, host, canvas: canvasOf() }).reducedMotion).toBe(true);
     expect(createBrowserEnv({ win: fakeWin().win, host, canvas: canvasOf() }).reducedMotion).toBe(false);

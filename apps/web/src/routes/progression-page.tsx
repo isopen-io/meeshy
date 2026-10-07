@@ -11,6 +11,9 @@ import { Link } from '@/routes/route-table';
 import { BRAND, INK, INK_2, ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
 
 import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
+
+const BACK = 'grid size-11 shrink-0 place-items-center';
 
 /**
  * LE CADRE D'UNE PAGE DÉDIÉE — Badges, Défis, Succès (#5843).
@@ -30,8 +33,16 @@ export function ProgressionPage({
   titre,
   teinte,
   compte,
+  concept,
   children,
 }: {
+  /**
+   * Le concept dont cette page est la SOUS-PAGE (#9563) : « retour » ramène alors
+   * à sa fiche — le sous-menu d'où l'on vient — et non à la première page.
+   * Absent : la page est une fiche ou le tableau de bord, « retour » ramène à
+   * Progression.
+   */
+  concept?: ProgressionConcept;
   titre: string;
   teinte: string;
   /** Ce qui s'affiche en haut à droite — `null` quand la page n'a rien à compter. */
@@ -47,21 +58,25 @@ export function ProgressionPage({
   });
 
   const total = query.data === undefined ? null : compte(query.data);
+  const back = (
+    <GlassBack label="Retour à la progression">
+      <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
+    </GlassBack>
+  );
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <header className="glass z-10 shrink-0">
         <div className="flex items-center gap-2 px-4 py-2">
-          <Link
-            to="progression"
-            className="grid size-11 shrink-0 place-items-center"
-            style={{ color: BRAND }}
-            aria-label="Retour à la progression"
-          >
-            <GlassBack label="Retour à la progression">
-              <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
-            </GlassBack>
-          </Link>
+          {concept === undefined ? (
+            <Link to="progression" className={BACK} style={{ color: BRAND }} aria-label="Retour à la progression">
+              {back}
+            </Link>
+          ) : (
+            <Link to="progressionConcept" params={{ concept }} className={BACK} style={{ color: BRAND }} aria-label="Retour à la progression" data-page-back={concept}>
+              {back}
+            </Link>
+          )}
           <h1 className="flex-1 truncate text-title font-bold" style={{ color: INK }}>
             {titre}
           </h1>

@@ -2,8 +2,9 @@ import Foundation
 import MeeshySDK
 
 /// CE QUE LA CARTE PORTE EN PLUS DU MOMENT (#7742) — conception, partie XII.3 : en bas de la carte
-/// 9:16, un bandeau avec la Signature, « Rejoins-moi sur Meeshy », le lien de parrainage court de
-/// l'utilisateur et sa Flamme. Le partage transmet aussi le lien en TEXTE.
+/// 9:16, un bandeau avec la Signature, « Rejoins-moi sur Meeshy », la Flamme de l'utilisateur et son
+/// lien de parrainage en CARRÉ QR (#9554) — le lien ne s'écrit plus sur la carte, il se capture. Le
+/// partage transmet aussi le lien en TEXTE.
 ///
 /// Conformité (`docs/product/jeu-meeshy-conformite-2026-10-05.md` § H) :
 ///  - H-2 : l'utilisateur voit la carte telle qu'elle partira, et peut retirer sa Flamme — elle
@@ -30,10 +31,11 @@ nonisolated struct ReferralCard: Equatable, Sendable {
         }
     }
 
-    /// Le lien de parrainage COMPLET, tel qu'il part dans le texte du partage.
+    /// Le lien de parrainage COMPLET, tel qu'il part dans le texte du partage et dans le carré QR ; vide
+    /// pour un emplacement.
     let link: String
     let flame: Flame?
-    /// L'EMPLACEMENT du lien, quand l'utilisateur n'a encore aucun jeton : « meeshy.me/r/… » en pointillé, dans
+    /// L'EMPLACEMENT du carré, quand l'utilisateur n'a encore aucun jeton : un cadre VIDE en pointillé, dans
     /// l'APERÇU seulement. Le jeton ne se crée qu'au toucher de « Partager » ; ce qui sort de l'app (partage,
     /// Photos, carnet) porte le vrai lien ou RIEN — jamais un emplacement qui ressemblerait à un lien (H-8).
     let isPlaceholder: Bool
@@ -45,26 +47,19 @@ nonisolated struct ReferralCard: Equatable, Sendable {
     }
 
     private init(placeholderFlame flame: Flame?) {
-        self.link = Self.placeholderText
+        self.link = ""
         self.flame = flame
         self.isPlaceholder = true
     }
-
-    static let placeholderText = "meeshy.me/r/…"
 
     static func placeholder(flame: Flame?) -> ReferralCard {
         ReferralCard(placeholderFlame: flame)
     }
 
-    /// Le lien COURT que la carte écrit : sans schéma ni barre finale — « meeshy.me/signup/affiliate/AMANI7 ».
-    var displayLink: String {
-        if isPlaceholder { return Self.placeholderText }
-        var text = link.trimmingCharacters(in: .whitespacesAndNewlines)
-        for scheme in ["https://", "http://"] where text.lowercased().hasPrefix(scheme) {
-            text.removeFirst(scheme.count)
-        }
-        while text.hasSuffix("/") { text.removeLast() }
-        return text
+    /// Ce que le carré QR encode : le lien ENTIER, schéma compris — un appareil photo doit pouvoir l'ouvrir.
+    /// `nil` pour un emplacement : jamais le QR d'un lien qui n'existe pas.
+    var qrLink: String? {
+        isPlaceholder || link.isEmpty ? nil : link
     }
 
     func withFlame(_ flame: Flame?) -> ReferralCard {

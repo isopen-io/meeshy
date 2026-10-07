@@ -190,7 +190,7 @@ describe('suspendForGameCatalog', () => {
   test('un catalogue chargé : rien ne se jette', async () => {
     const { suspendForGameCatalog } = await import('./i18n-game-catalog');
     await loadGameCatalog('fr');
-    expect(() => suspendForGameCatalog('fr')).not.toThrow();
+    expect(() => suspendForGameCatalog('fr', 'progression')).not.toThrow();
   });
 
   test('un catalogue pas encore chargé : la promesse en cours est jetée, que Suspense rattrape', async () => {
@@ -199,12 +199,12 @@ describe('suspendForGameCatalog', () => {
     const fresh = (await import(specifier)) as typeof import('./i18n-game-catalog');
     let thrown: unknown;
     try {
-      fresh.suspendForGameCatalog('de');
+      fresh.suspendForGameCatalog('de', 'progression');
     } catch (error) {
       thrown = error;
     }
     expect(thrown).toBeInstanceOf(Promise);
     await thrown;
-    expect(() => fresh.suspendForGameCatalog('de')).not.toThrow();
+    expect(() => fresh.suspendForGameCatalog('de', 'progression')).not.toThrow();
   });
 });

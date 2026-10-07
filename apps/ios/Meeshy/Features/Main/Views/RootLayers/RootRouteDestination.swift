@@ -155,6 +155,12 @@ struct RootRouteDestination: View {
         case .gamePage(let page):
             GamePageView(page: page)
                 .navigationBarHidden(true)
+        case .progressionConcept(let concept):
+            ProgressionConceptPage(concept: concept)
+                .navigationBarHidden(true)
+        case .progressionDashboard:
+            ProgressionDashboardPage()
+                .navigationBarHidden(true)
         case .links:
             LinksHubView()
         case .affiliate:

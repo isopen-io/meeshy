@@ -1,6 +1,7 @@
 import { isImageMimeType, isVideoMimeType } from '@meeshy/shared/types/attachment';
 
-import { base64De, NATIVE_BRIDGE_MAX_BYTES } from '@/lib/media/file-delivery-host';
+import { NATIVE_BRIDGE_MAX_BYTES } from '@/lib/media/file-delivery-host';
+import { base64De, fileSinkOf, SINK_CHUNK_BYTES, throughSink } from '@/lib/media/file-sink';
 import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
 
 /**
@@ -38,9 +39,6 @@ export const GALLERY_ALBUM = 'Meeshy';
 /** Au-delà, le `data:` base64 (×4/3, puis recopié par le pont) ferait courir un OOM à la WebView. */
 export const GALLERY_BRIDGE_MAX_BYTES = NATIVE_BRIDGE_MAX_BYTES;
 
-/** Une tranche du récepteur : quelques Mo dans le pont, jamais la pièce entière. */
-export const SINK_CHUNK_BYTES = 4 * 1024 * 1024;
-
 export type GallerySaveOutcome = 'saved' | 'unavailable' | 'failed';
 
 export type GallerySaveInput = { readonly blob: Blob; readonly fileName: string; readonly mimeType: string };
@@ -59,45 +57,6 @@ export function galleryMediaEssence(mimeType: string): string | null {
 export const NULL_GALLERY_SAVER: GallerySaver = { available: false, save: async () => 'unavailable' };
 
 const MEDIA_PLUGIN = 'Media';
-const SINK_PLUGIN = 'MeeshyFileSink';
-
-type NativeMethod = (options: object) => Promise<unknown>;
-type FileSink = { readonly open: NativeMethod; readonly append: NativeMethod; readonly close: NativeMethod; readonly discard: NativeMethod };
-
-function fileSinkOf(shell: CoqueNative | undefined): FileSink | null {
-  const open = appelNatifMethode(shell, SINK_PLUGIN, 'open');
-  const append = appelNatifMethode(shell, SINK_PLUGIN, 'append');
-  const close = appelNatifMethode(shell, SINK_PLUGIN, 'close');
-  const discard = appelNatifMethode(shell, SINK_PLUGIN, 'discard');
-  if (open === null || append === null || close === null || discard === null) return null;
-  return { open, append, close, discard };
-}
-
-const fieldOf = (result: unknown, field: string): string => {
-  const value = (result as Record<string, unknown> | null)?.[field];
-  if (typeof value !== 'string' || value === '') throw new Error(`file-sink: ${field} missing`);
-  return value;
-};
-
-/** Écrit la pièce par tranches dans le récepteur, rend le chemin du fichier, puis l'efface quoi qu'il arrive à `use`. */
-async function throughSink(params: {
-  readonly sink: FileSink;
-  readonly blob: Blob;
-  readonly mimeType: string;
-  readonly chunkBytes: number;
-  readonly use: (path: string) => Promise<unknown>;
-}): Promise<void> {
-  const { sink, blob, mimeType, chunkBytes, use } = params;
-  const id = fieldOf(await sink.open({ mimeType }), 'id');
-  try {
-    for (let offset = 0; offset < blob.size; offset += chunkBytes) {
-      await sink.append({ id, data: await base64De(blob.slice(offset, offset + chunkBytes)) });
-    }
-    await use(fieldOf(await sink.close({ id }), 'path'));
-  } finally {
-    await sink.discard({ id }).catch(() => undefined);
-  }
-}
 
 type MediaAlbum = { readonly name: string; readonly identifier: string };
 

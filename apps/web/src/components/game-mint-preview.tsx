@@ -53,7 +53,7 @@ function Chips({ lines }: { readonly lines: readonly string[] }) {
   return (
     <ul data-game-mint-impact="" className="flex flex-wrap gap-1.5">
       {lines.map((line) => (
-        <li key={line} className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)', color: GAME_INK }}>
+        <li key={line} data-chip="" className="whitespace-nowrap rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)', color: GAME_INK }}>
           {line}
         </li>
       ))}

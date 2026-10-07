@@ -64,13 +64,44 @@ struct GamePersonalMissionTests {
         #expect(!GameMissionClock.Phase.missed.allowsAction)
     }
 
-    @Test("une mission du jour court jusqu'à la fin de son jour local")
-    func dailyMissionEndsWithItsDay() throws {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try #require(TimeZone(identifier: "Europe/Paris"))
-        let end = try #require(GameMissionClock.endOfDay("2026-10-06", calendar: calendar))
-        #expect(end == calendar.date(from: DateComponents(year: 2026, month: 10, day: 7)))
-        #expect(GameMissionClock.endOfDay("pas-un-jour", calendar: calendar) == nil)
+    // Le jour de jeu est celui du COMPTE (`dayKeyOf(now, User.timezone)`, repli UTC côté passerelle) : sa fin se lit
+    // dans le même fuseau et au calendrier grégorien, jamais dans ceux de l'appareil (#9539).
+
+    @Test("une mission du jour court jusqu'à minuit dans le fuseau du COMPTE, où que soit l'appareil")
+    func dailyMissionEndsWithItsAccountDay() throws {
+        let paris = try #require(GameMissionClock.endOfDay("2026-10-06", timezone: "Europe/Paris"))
+        #expect(paris == (try date("2026-10-06T22:00:00.000Z")))
+        let newYork = try #require(GameMissionClock.endOfDay("2026-10-06", timezone: "America/New_York"))
+        #expect(newYork == (try date("2026-10-07T04:00:00.000Z")))
+    }
+
+    @Test("sans fuseau au compte, ou avec un fuseau inconnu : le jour de jeu est celui d'UTC, comme la passerelle")
+    func dailyMissionFallsBackToUTC() throws {
+        let utc = try date("2026-10-07T00:00:00.000Z")
+        #expect(GameMissionClock.endOfDay("2026-10-06", timezone: nil) == utc)
+        #expect(GameMissionClock.endOfDay("2026-10-06", timezone: "") == utc)
+        #expect(GameMissionClock.endOfDay("2026-10-06", timezone: "Mars/Olympus") == utc)
+    }
+
+    @Test("un compte sans fuseau lu à 00 h 30 à Paris : la mission d'hier (UTC) court encore, elle n'est pas « Manquée »")
+    func aDayThatStillRunsOnTheServerIsNotMissedOnTheDevice() throws {
+        let end = try #require(GameMissionClock.endOfDay("2026-10-06", timezone: nil))
+        let halfPastMidnightInParis = try date("2026-10-06T22:30:00.000Z")
+        #expect(GameMissionClock.phase(start: nil, end: end, completed: false, now: halfPastMidnightInParis) == .running(remaining: 5400))
+    }
+
+    @Test("le passage à l'heure d'hiver ne décale pas la fin du jour")
+    func dailyMissionEndsAtMidnightAcrossADaylightChange() throws {
+        let end = try #require(GameMissionClock.endOfDay("2026-10-25", timezone: "Europe/Paris"))
+        #expect(end == (try date("2026-10-25T23:00:00.000Z")))
+    }
+
+    @Test("une clé qui n'est pas un jour du calendrier ne fabrique aucune fin")
+    func notADay() {
+        #expect(GameMissionClock.endOfDay("pas-un-jour", timezone: "Europe/Paris") == nil)
+        #expect(GameMissionClock.endOfDay("2026-13-40", timezone: "Europe/Paris") == nil)
+        #expect(GameMissionClock.endOfDay("2026-02-30", timezone: nil) == nil)
+        #expect(GameMissionClock.endOfDay("2026-10", timezone: nil) == nil)
     }
 
     @Test("une date illisible ne se devine pas")

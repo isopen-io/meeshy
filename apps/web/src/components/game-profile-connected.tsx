@@ -26,7 +26,7 @@ import { GameProfileOwn } from './game-profile-own';
  * donnée — jamais un spinner : le profil est déjà là.
  */
 export function GameProfileOwnConnected({ enabled }: { readonly enabled: boolean }) {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'profile');
   const prefs = useGamePrefs();
   useGameSettings(enabled);
   const query = useQuery(
@@ -71,14 +71,14 @@ function useUserGame(userId: string, enabled: boolean) {
 }
 
 export function GameProfileVisitorConnected({ userId, name, enabled }: { readonly userId: string; readonly name: string; readonly enabled: boolean }) {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'profile');
   const showcase = useShowcase(userId, enabled);
   const game = useUserGame(userId, enabled);
   return <GameProfileVisitor showcase={showcase.data} game={game.data} name={name} />;
 }
 
 export function ContactGameStripConnected({ userId, enabled }: { readonly userId: string; readonly enabled: boolean }) {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'profile');
   const showcase = useShowcase(userId, enabled);
   const game = useUserGame(userId, enabled);
   return <ContactGameStrip showcase={showcase.data} game={game.data} />;

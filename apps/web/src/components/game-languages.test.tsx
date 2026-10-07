@@ -13,7 +13,6 @@ import { RulesBody } from '@/routes/progression-rules';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { GameFlamePanel } from './game-flame-panel';
-import { GameGauges } from './game-gauges';
 import { GameGuideCard } from './game-guide-card';
 import { GameHero } from './game-hero';
 import { PlayerBanner } from './player-banner';
@@ -55,7 +54,7 @@ const inLanguage = (language: InterfaceLanguage): void => {
 const game = gameBlockFixture({ levelRecord: 20, glory: 620, balance: 4, streak: 6, freezes: 1 });
 const outFlame = gameBlockFixture({ streak: 0, broken: { streak: 6, lastActiveDay: '2026-10-03' }, balance: 2 }).flame;
 
-type Surfaces = Readonly<Record<'hero' | 'gauges' | 'missions' | 'flame' | 'mint' | 'guide' | 'moment' | 'offer' | 'rules' | 'banner', string>>;
+type Surfaces = Readonly<Record<'hero' | 'missions' | 'flame' | 'mint' | 'guide' | 'moment' | 'offer' | 'rules' | 'banner', string>>;
 
 const bannerGame = gameBlockWithExtrasFixture({ balance: 12, streak: 23 });
 
@@ -66,7 +65,6 @@ function surfaces(): Surfaces {
   if (bannerModel === null) throw new Error('un bandeau était attendu');
   return {
     hero: text(renderToStaticMarkup(<GameHero game={game} />)),
-    gauges: text(renderToStaticMarkup(<GameGauges game={game} />)),
     missions: text(
       renderToStaticMarkup(
         <GameMissions
@@ -142,8 +140,6 @@ describe('chaque surface du jeu se rend dans la langue de l’interface', () => 
     const rendered = surfaces();
     /* Le niveau a quitté les jauges pour le héros pleine largeur (#5841) : c'est là qu'un anglophone le lit. */
     expect(rendered.hero).toContain('Level');
-    expect(rendered.gauges).toContain('Treasury');
-    expect(rendered.gauges).toContain('Flame');
     expect(rendered.banner).toMatch(/^Level \d+, /);
     expect(rendered.missions).toContain('Missions of the day');
     expect(rendered.missions).toContain('Chest of the day');

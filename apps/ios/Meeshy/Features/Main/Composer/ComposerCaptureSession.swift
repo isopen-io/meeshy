@@ -61,7 +61,12 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var exposureBias = ComposerExposureRule.neutral
     /// La famille dont la bande est ouverte ; `nil` ⇒ la bande se replie sur la
     /// seule miniature choisie, qui sert de déclencheur (#9351).
-    @Published var openFamily: ComposerLookFamily?
+    @Published var openFamily: ComposerLookFamily? {
+        didSet { refreshFeed() }
+    }
+    /// Les proportions de ce que le viseur montre (#9557) : l'aperçu les mesure,
+    /// tout ce qui part les garde. Une carte 9:16 tant que rien n'est monté.
+    var canvasAspect = ComposerLookPainter.designAspect
     /// Le cadrage de la prise ; la retouche le règle (#9352).
     @Published var framing = ComposerFraming.identity
     /// On vise, ou on retouche (#9352).

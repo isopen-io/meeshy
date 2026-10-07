@@ -74,6 +74,55 @@ final class GamePhotoLayoutTests: XCTestCase {
         }
     }
 
+    // MARK: - Le carré QR du lien (#9554)
+
+    func test_theBanner_takesAFifthOfTheWidth_inBothFormats() {
+        for format in PhotoFormat.allCases {
+            XCTAssertEqual(GamePhotoLayout.layout(format, referral: true).banner?.height ?? 0, format.size.width * 0.2, accuracy: 0.001, "\(format)")
+        }
+    }
+
+    func test_theQRSquare_is181PixelsWide_atTheEndOfTheBanner_onWholePixels() {
+        for format in PhotoFormat.allCases {
+            let layout = GamePhotoLayout.layout(format, referral: true)
+            guard let banner = layout.banner, let qr = layout.qr else { return XCTFail("\(format)") }
+            XCTAssertEqual(qr.size, CGSize(width: 181, height: 181), "\(format)")
+            XCTAssertTrue(banner.contains(qr), "\(format)")
+            XCTAssertEqual(qr, qr.integral, "\(format) : un carré à cheval sur deux pixels se lit mal")
+            XCTAssertGreaterThan(qr.minX, banner.midX, "\(format) : en fin de ligne")
+            XCTAssertEqual(banner.maxX - qr.maxX, qr.minY - banner.minY, accuracy: 0.001, "\(format) : la même marge au bord et en haut")
+        }
+        XCTAssertEqual(GamePhotoLayout.layout(.story, referral: true).qr, CGRect(x: 827, y: 1668, width: 181, height: 181))
+    }
+
+    func test_rightToLeft_theQRSquareMovesToTheLeft_andNothingElseMoves() {
+        for format in PhotoFormat.allCases {
+            let ltr = GamePhotoLayout.layout(format, referral: true)
+            let rtl = GamePhotoLayout.layout(format, referral: true, rightToLeft: true)
+            guard let banner = rtl.banner, let qr = rtl.qr, let ltrQR = ltr.qr else { return XCTFail("\(format)") }
+            XCTAssertLessThan(qr.maxX, banner.midX, "\(format)")
+            XCTAssertEqual(qr.minX - banner.minX, banner.maxX - ltrQR.maxX, accuracy: 0.001, "\(format)")
+            XCTAssertEqual(qr.minY, ltrQR.minY)
+            XCTAssertEqual(rtl.banner, ltr.banner)
+            XCTAssertEqual(rtl.mee, ltr.mee)
+            XCTAssertEqual(rtl.meo, ltr.meo)
+            XCTAssertEqual(rtl.emblem, ltr.emblem)
+        }
+    }
+
+    func test_withoutABanner_thereIsNoQRSquare() {
+        for format in PhotoFormat.allCases {
+            XCTAssertNil(GamePhotoLayout.layout(format).qr)
+        }
+    }
+
+    func test_readsRightToLeft_followsTheLanguageOfTheApp() {
+        XCTAssertTrue(GamePhotoLayout.readsRightToLeft(languages: ["ar"]))
+        XCTAssertFalse(GamePhotoLayout.readsRightToLeft(languages: ["fr", "ar"]))
+        XCTAssertFalse(GamePhotoLayout.readsRightToLeft(languages: ["pt-BR"]))
+        XCTAssertFalse(GamePhotoLayout.readsRightToLeft(languages: []))
+    }
+
     func test_theBannerDoesNotMoveTheEmblem() {
         for format in PhotoFormat.allCases {
             XCTAssertEqual(GamePhotoLayout.layout(format, referral: true).emblem, GamePhotoLayout.layout(format).emblem)

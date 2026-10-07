@@ -5,7 +5,7 @@ import QuartzCore
 import SwiftUI
 
 /// **Le look en direct, à l'écran** (#9329, #9347) — un `MTKView` qui peint le
-/// canevas 9:16 par le peintre unique. Il ne prend aucun toucher, et tant
+/// canevas du viseur par le peintre unique. Il ne prend aucun toucher, et tant
 /// qu'aucune trame n'est peinte il reste transparent. Sa première image
 /// présentée est ANNONCÉE (`onFirstFrame`) : l'hôte garde l'aperçu système
 /// visible jusque-là, puis le détache (#9349).
@@ -15,6 +15,8 @@ struct ComposerLiveLookSurface: UIViewRepresentable {
     let date: Date
     let framing: ComposerFraming
     let source: any ComposerFrameSourcing
+    /// La toile peinte : aux proportions du viseur (#9557).
+    let canvas: CGSize
     var fps: Int = 30
     var surfaceScale: CGFloat = 1
     var scenes: any ComposerLookSceneProviding = ComposerLookSceneCache.shared
@@ -30,7 +32,7 @@ struct ComposerLiveLookSurface: UIViewRepresentable {
 
     func updateUIView(_ view: MTKView, context: Context) {
         context.coordinator.onFirstFrame = onFirstFrame
-        context.coordinator.update(look: look, person: person, date: date, framing: framing,
+        context.coordinator.update(look: look, person: person, date: date, framing: framing, canvas: canvas,
                                    fps: fps, surfaceScale: surfaceScale, view: view)
     }
 
@@ -46,6 +48,7 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
 
     private var look = ComposerPhotoLook()
     private var framing = ComposerFraming.identity
+    private var canvas = CGSize.zero
     private var key: ComposerLookSceneKey?
     /// La scène du look courant, posée au changement de look ou à la fin de sa
     /// cuisson — jamais relue dans le cache à chaque image.
@@ -89,13 +92,14 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
     }
 
     func update(look: ComposerPhotoLook, person: CallFramePerson, date: Date, framing: ComposerFraming,
-                fps: Int, surfaceScale: CGFloat, view: MTKView) {
-        let changed = look != self.look || framing != self.framing
+                canvas: CGSize, fps: Int, surfaceScale: CGFloat, view: MTKView) {
+        let changed = look != self.look || framing != self.framing || canvas != self.canvas
         self.look = look
         self.framing = framing
+        self.canvas = canvas
         gate.setFPS(fps)
         view.contentScaleFactor = max(1, view.traitCollection.displayScale * surfaceScale)
-        let cle = ComposerLookSceneKey(look: look, canvas: ComposerLookPainter.designCanvas, date: date, person: person)
+        let cle = ComposerLookSceneKey(look: look, canvas: canvas, date: date, person: person)
         if cle != key {
             key = cle
             scene = scenes.cached(cle)
@@ -132,9 +136,9 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
               let buffer = commandQueue.makeCommandBuffer() else { return }
         let lookPeint = look.frame != ComposerPhotoFrame.none && scene == nil ? ComposerPhotoLook(filter: look.filter) : look
         let peinte = ComposerLookPainter.paint(frame, look: lookPeint, framing: framing, scene: scene,
-                                               canvas: ComposerLookPainter.designCanvas, declared: source.declaredSpace)
+                                               canvas: canvas, declared: source.declaredSpace)
         let bounds = CGRect(origin: .zero, size: view.drawableSize)
-        let ecran = ComposerLookPainter.onScreen(peinte, canvas: ComposerLookPainter.designCanvas, drawable: view.drawableSize)
+        let ecran = ComposerLookPainter.onScreen(peinte, canvas: canvas, drawable: view.drawableSize)
         let opaque = ecran.composited(over: CIImage(color: .black).cropped(to: bounds))
         ComposerLookGPU.context.render(opaque, to: drawable.texture, commandBuffer: buffer, bounds: bounds,
                                        colorSpace: ComposerLiveLookRule.colorSpace)

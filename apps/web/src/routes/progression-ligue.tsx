@@ -199,9 +199,10 @@ function LigueScreenBody({ progress }: { readonly progress: EngagementWithGame }
 }
 
 export default function ProgressionLigueScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage());
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
     <ProgressionPage
+      concept="league"
       titre={gameText('game.league.title')}
       teinte={GAME_BRAND}
       compte={(p) => {

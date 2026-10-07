@@ -121,6 +121,9 @@ final class GameSourceGuardTests: XCTestCase {
         "game.actions.one", "game.actions.other", "game.tier.constellation", "game.rank.oracle",
         "game.guide.speaker.mee", "game.guide.speaker.meo", "game.mission.progress", "game.photo.format.story",
         "game.photo.title.prestige", "game.mint.row.badges", "game.material.bronze",
+        "game.concept.points.name", "game.concept.meesh.name", "game.concept.prestige.name", "game.concept.badges.name",
+        "game.concept.atlas.name", "game.concept.card.a11y", "game.concept.ratio", "game.concept.value.factor",
+        "game.concept.fact.zone",
     ]
 
     private func gameCatalogEntries() throws -> [String: [String: String]] {

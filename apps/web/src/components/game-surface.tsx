@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 /**
  * LA SURFACE DES PIÈCES DU JEU (#9383) — les jetons et la carte que
- * `game-gauges`, `game-missions`, `game-mint-preview` et `game-flame-panel`
+ * `game-hero`, `game-missions`, `game-mint-preview` et `game-flame-panel`
  * partagent. Les couleurs sont les JETONS de l'écran Progression (iOS,
  * `MeeshyColors`) : aucun littéral, la palette du jeu (`--game-*`) vit dans
  * `styles/game.css` pour les dessins seulement.
@@ -56,7 +56,8 @@ export function GameCard({
 export function GameChip({ children, tint }: { readonly children: ReactNode; readonly tint: string }) {
   return (
     <span
-      className="inline-flex items-center rounded-chip px-2 py-0.5 text-check font-semibold"
+      data-chip=""
+      className="inline-flex items-center whitespace-nowrap rounded-chip px-2 py-0.5 text-check font-semibold"
       style={{ backgroundColor: `color-mix(in srgb, ${tint} 16%, transparent)`, color: GAME_INK }}
     >
       {children}

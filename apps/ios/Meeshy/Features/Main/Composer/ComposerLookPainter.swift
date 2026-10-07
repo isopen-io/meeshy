@@ -49,19 +49,47 @@ nonisolated enum ComposerLookGPU {
 /// Ce qu'on voit est donc ce qui part, par construction.
 nonisolated enum ComposerLookPainter {
 
-    /// Le REPÈRE de dessin : 9:16, 1080×1920. Il dit les proportions (ajustement à
-    /// l'écran) et la toile de l'aperçu ; ce qui PART se peint à `canvas(for:)`.
+    /// Le REPÈRE de dessin : 9:16, 1080×1920 — les proportions d'une carte, et la
+    /// borne de la toile de l'aperçu ; ce qui PART se peint à `canvas(for:aspect:)`.
     static let designCanvas = CGSize(width: 1080, height: 1920)
+    static let designAspect = designCanvas.width / designCanvas.height
     /// La toile d'une miniature de la bande.
     static let thumbnailCanvas = CGSize(width: 162, height: 288)
 
-    /// **Le canevas qui part : le plus grand recadrage 9:16 de la source**, à sa
-    /// résolution native, jamais réduit (décision porteur 2026-10-04). Des
-    /// multiples PAIRS de 9 × 16 : proportion exacte, dimensions paires (encodeurs).
-    static func canvas(for source: CGSize) -> CGSize {
-        let pas = Int(min(source.width / 9, source.height / 16).rounded(.down))
-        let pair = max(2, pas - pas % 2)
-        return CGSize(width: 9 * pair, height: 16 * pair)
+    /// **Les proportions de ce que le viseur montre** (#9557) : le plein écran est
+    /// le plein écran, la toile le suit. Arrondies au millième — une carte 9:16
+    /// mesurée au demi-point près reste le 9:16 exact, et deux mesures voisines
+    /// ne cuisent pas deux scènes.
+    static func aspect(of view: CGSize) -> CGFloat {
+        guard view.width > 0, view.height > 0 else { return designAspect }
+        let mesure = ((view.width / view.height) * 1000).rounded() / 1000
+        return abs(mesure - designAspect) < 0.002 ? designAspect : mesure
+    }
+
+    /// **La toile de l'aperçu** : la plus grande aux proportions du viseur qui
+    /// tienne dans le repère — jamais plus de pixels que le 9:16 d'origine.
+    static func previewCanvas(aspect: CGFloat) -> CGSize {
+        canvas(for: designCanvas, aspect: aspect)
+    }
+
+    /// **Le canevas qui part : le plus grand recadrage de la source aux
+    /// proportions du viseur**, à sa résolution native, jamais réduit (décision
+    /// porteur 2026-10-04, proportions du 2026-10-07 — #9557). En 9:16, des
+    /// multiples PAIRS de 9 × 16 : proportion exacte ; ailleurs, des dimensions
+    /// paires au plus près (encodeurs).
+    static func canvas(for source: CGSize, aspect: CGFloat = designAspect) -> CGSize {
+        guard aspect > 0, aspect != designAspect else {
+            let pas = Int(min(source.width / 9, source.height / 16).rounded(.down))
+            let pair = max(2, pas - pas % 2)
+            return CGSize(width: 9 * pair, height: 16 * pair)
+        }
+        let hauteur = even(min(source.height, source.width / aspect))
+        return CGSize(width: min(even(source.width), even(hauteur * aspect)), height: hauteur)
+    }
+
+    private static func even(_ value: CGFloat) -> CGFloat {
+        let entier = Int(value.rounded(.down))
+        return CGFloat(max(2, entier - entier % 2))
     }
 
     private static let compositor = CallLiveFrameCompositor()
@@ -132,9 +160,17 @@ nonisolated enum ComposerLookPainter {
                                                      format: .RGBA8, colorSpace: espace)
     }
 
-    /// L'écran montre le canevas par UNE transformation d'ajustement.
+    /// L'écran montre le canevas par UNE transformation. La toile a les
+    /// proportions du viseur à un pixel pair près : elle le couvre bord à bord,
+    /// sans liseré ; une toile d'autres proportions s'y ajuste, entière.
     static func onScreen(_ painted: CIImage, canvas: CGSize, drawable: CGSize) -> CIImage {
-        painted.transformed(by: ComposerLiveLookRule.fit(scene: canvas, into: drawable))
+        guard canvas.width > 0, canvas.height > 0, drawable.width > 0, drawable.height > 0 else { return painted }
+        let ecart = abs(canvas.width / canvas.height - drawable.width / drawable.height)
+        guard ecart < 0.01 else {
+            return painted.transformed(by: ComposerLiveLookRule.fit(scene: canvas, into: drawable))
+        }
+        return painted.transformed(by: CGAffineTransform(scaleX: drawable.width / canvas.width,
+                                                         y: drawable.height / canvas.height))
     }
 
     /// La photo à sa résolution native, hors du fil principal. Sa scène est cuite à
@@ -143,9 +179,9 @@ nonisolated enum ComposerLookPainter {
     /// cadre que l'auteur voyait.
     @concurrent
     static func renderPhoto(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming,
-                            person: CallFramePerson, date: Date,
+                            aspect: CGFloat = designAspect, person: CallFramePerson, date: Date,
                             scenes: any ComposerLookSceneProviding) async -> CGImage? {
-        let toile = canvas(for: CGSize(width: image.width, height: image.height))
+        let toile = canvas(for: CGSize(width: image.width, height: image.height), aspect: aspect)
         let cle = ComposerLookSceneKey(look: look, canvas: toile, date: date, person: person)
         let scene = scenes.cached(cle) ?? Self.scene(for: cle)
         if look.frame != ComposerPhotoFrame.none, scene == nil { return nil }
