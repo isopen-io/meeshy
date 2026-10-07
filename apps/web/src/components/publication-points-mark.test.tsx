@@ -134,7 +134,7 @@ describe('le nombre roule vers sa nouvelle valeur', () => {
     };
   };
 
-  test('à la première peinture la valeur est là ; une hausse défile, la phrase dit déjà la cible', async () => {
+  test('à la première peinture la valeur est là ; une hausse puis une reprise défilent, la phrase dit déjà la cible', async () => {
     const roll = frames();
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -151,6 +151,16 @@ describe('le nombre roule vers sa nouvelle valeur', () => {
     expect(midway).toBeLessThan(20);
     act(() => roll.flush(2_000));
     expect(host.querySelector('[data-post-points-value]')?.textContent).toBe('+20');
+
+    act(() => root.render(<PostPointsMark points={12} language="fr" roll={roll} />));
+    expect(host.querySelector('.sr-only')?.textContent).toBe('Ce post t’a rapporté 12 points');
+    act(() => roll.flush(3_000));
+    act(() => roll.flush(3_200));
+    const down = Number((host.querySelector('[data-post-points-value]')?.textContent ?? '').replace('+', ''));
+    expect(down).toBeLessThan(20);
+    expect(down).toBeGreaterThan(12);
+    act(() => roll.flush(5_000));
+    expect(host.querySelector('[data-post-points-value]')?.textContent).toBe('+12');
 
     act(() => root.unmount());
     host.remove();
