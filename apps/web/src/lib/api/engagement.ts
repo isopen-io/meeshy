@@ -87,14 +87,14 @@ export async function loadEngagementProgress(params: {
   if (__FIXTURES__ && params.source === 'fixtures') {
     const { ENGAGEMENT_PROGRESS_FIXTURE } = await import('./engagement-fixture');
     const { gameBlockWithExtrasFixture } = await import('./game-fixture');
-    const game = gameBlockWithExtrasFixture();
+    /* Un gate qui mesure les débordements arme les valeurs LONGUES (`game-fixture-long.ts`, #9563). */
+    const long = await import('./game-fixture-long');
+    const armed = long.gameLongArmed();
+    const payload = armed ? long.ENGAGEMENT_LONG_FIXTURE : ENGAGEMENT_PROGRESS_FIXTURE;
+    const game = armed ? long.gameBlockLongFixture() : gameBlockWithExtrasFixture();
     return {
       ok: true,
-      data: withGame(
-        resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE),
-        game,
-        mintBadgeImpact(ENGAGEMENT_PROGRESS_FIXTURE.counters, game.mint.price),
-      ),
+      data: withGame(resolveEngagementProgress(payload), game, mintBadgeImpact(payload.counters, game.mint.price)),
     };
   }
   const result = await fetchEngagementProgress(params.transport, params.signal);
