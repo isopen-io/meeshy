@@ -328,7 +328,8 @@ nonisolated enum RiverConversationMapping {
         )
         if let joinNotice = content.joinNotice { return .join(joinNotice) }
         if let callNotice = content.callNotice { return .call(callNotice) }
-        return .plain(text(message))
+        // #9617 — un avis de capture se compose chez le lecteur, comme dans le fil.
+        return .plain(BubbleContent.captureNoticeText(for: message) ?? text(message))
     }
 
     /// R-6 — la citation mène à sa cible : le curseur du message cité,

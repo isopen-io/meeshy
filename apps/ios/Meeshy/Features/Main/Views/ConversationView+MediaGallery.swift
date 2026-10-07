@@ -40,6 +40,8 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     /// la galerie est fermée : il s'ouvre avec elle (index persisté, puis pages
     /// `view=media` en arrière-plan) et se vide à sa fermeture.
     @StateObject private var catalog: ConversationMediaCatalog
+    /// #9617 — la surface que ce plein écran présente au rapporteur de capture.
+    @State private var fullscreenCapture: FullscreenCaptureSurface?
 
     init(viewModel: ConversationViewModel,
          scrollState: Binding<ConversationScrollState>,
@@ -73,7 +75,27 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             // Et chaque page d'une pièce protégée se rend dans la couche
             // sécurisée (#9574).
             .captureShieldScope(captureScope)
+            // #9617 — une capture déclare la pièce à l'écran, pas le fil dessous.
+            .onAppear { registerFullscreenCapture(start: startAttachment) }
+            .onDisappear(perform: unregisterFullscreenCapture)
         }
+    }
+
+    private func registerFullscreenCapture(start: MessageAttachment) {
+        let viewModel = viewModel
+        let catalog = catalog
+        let surface = FullscreenCaptureSurface(startAttachmentId: start.id) { attachmentId in
+            viewModel.messages.first { $0.attachments.contains { $0.id == attachmentId } }
+                ?? catalog.snapshot.carrier(ofAttachment: attachmentId)
+        }
+        unregisterFullscreenCapture()
+        fullscreenCapture = surface
+        ContentCaptureReporter.shared.register(surface)
+    }
+
+    private func unregisterFullscreenCapture() {
+        if let fullscreenCapture { ContentCaptureReporter.shared.unregister(fullscreenCapture) }
+        fullscreenCapture = nil
     }
 
     /// **Les pièces que le plein écran peut laisser sortir** (#9573) : celles

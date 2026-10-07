@@ -165,6 +165,10 @@ final class ConversationViewingReporter: ConversationViewingReporting {
         signalAtOnce()
     }
 
+    /// Un plein écran recouvre la conversation : son fil n'est pas à l'écran
+    /// (#9617 — une capture ne déclare alors que ce que le plein écran montre).
+    var isCovered: Bool { covers > 0 }
+
     func coverEnded() {
         guard covers > 0 else { return }
         covers -= 1

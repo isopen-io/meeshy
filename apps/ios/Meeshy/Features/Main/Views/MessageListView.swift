@@ -718,6 +718,8 @@ struct MessageListView: UIViewControllerRepresentable {
         // DIRECTE en Rivière rendrait le fil une fois pour rien.
         vc.view.isHidden = !MessageListViewController.rendersThread(readingMode)
         vc.onMessagesSeen = onMessagesSeen
+        // #9617 — le fil répond « qu'est-ce qui est à l'écran ? » à une capture.
+        ContentCaptureReporter.shared.register(vc)
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
@@ -889,5 +891,6 @@ struct MessageListView: UIViewControllerRepresentable {
         // `deinit` ne peut pas s'en charger, il n'est pas isolé au MainActor.
         vc.flushSeenMessages()
         vc.stopSeenTracking()
+        ContentCaptureReporter.shared.unregister(vc)
     }
 }

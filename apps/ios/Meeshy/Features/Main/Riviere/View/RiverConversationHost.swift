@@ -119,6 +119,15 @@ struct RiverConversationHost: View {
 
     /// Le rendu mémoïsé (#3946) — voir `RiverRenderingMemo`.
     @State private var memo = RiverRenderingMemo()
+    /// #9617 — ce que la Rivière montre à l'instant d'une capture : ses
+    /// messages, et les cadres que ses bulles mesurent déjà.
+    @State private var captureSurface = MeasuredCaptureSurface()
+
+    /// Ce qui change ce qu'une capture déclarerait : les messages, et les vues
+    /// uniques texte révélées sur place.
+    private var captureSignature: [String] {
+        messages.map { $0.isViewOnceRevealed ? $0.id + "*" : $0.id }
+    }
 
     /// #8283 — la zone média d'une citation fait ce qu'elle fait en Script :
     /// le geste, la pièce et son verrou sont ceux du Fil
@@ -221,6 +230,7 @@ struct RiverConversationHost: View {
                 onConsumeViewOnce: onConsumeViewOnce,
                 onOpenQuotedMedia: openQuotedMedia,
                 onMediaTap: onMediaTap,
+                captureSurface: captureSurface,
                 navigation: navigation
             )
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -279,6 +289,12 @@ struct RiverConversationHost: View {
             guard RiverConversationMapping.isAtPresent(cursor: newCursor, geometry: geometry) else { return }
             onReachPresent?()
         }
+        .adaptiveOnChange(of: captureSignature) { _, _ in captureSurface.update(messages: messages) }
+        .onAppear {
+            captureSurface.update(messages: messages)
+            ContentCaptureReporter.shared.register(captureSurface)
+        }
+        .onDisappear { ContentCaptureReporter.shared.unregister(captureSurface) }
     }
 
 
