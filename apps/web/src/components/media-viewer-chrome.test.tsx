@@ -35,6 +35,18 @@ const photo = (id: string): Attachment =>
     createdAt: '2026-09-20T10:00:00.000Z',
   }) as unknown as Attachment;
 
+const clip = (id: string): Attachment =>
+  ({
+    ...photo(id),
+    fileName: `${id}.mp4`,
+    originalName: `${id}.mp4`,
+    mimeType: 'video/mp4',
+    fileUrl: `/uploads/${id}.mp4`,
+    width: 1920,
+    height: 1080,
+    duration: 42_000,
+  }) as unknown as Attachment;
+
 const carrier: MediaCarrier = {
   sender: { displayName: 'Nour Haddad', avatarUrl: null },
   sentAt: '2026-09-20T10:13:00.000Z',
@@ -75,8 +87,16 @@ afterEach(() => {
   container.remove();
 });
 
-async function mount(params: { readonly offers: MediaPageOffers; readonly onReply?: () => void; readonly onClose?: () => void; readonly withCarrier?: boolean; readonly carrier?: MediaCarrier }): Promise<HTMLElement> {
-  const items = [photo('a'), photo('b')];
+async function mount(params: {
+  readonly offers: MediaPageOffers;
+  readonly onReply?: () => void;
+  readonly onClose?: () => void;
+  readonly withCarrier?: boolean;
+  readonly carrier?: MediaCarrier;
+  readonly items?: readonly Attachment[];
+  readonly withoutActions?: boolean;
+}): Promise<HTMLElement> {
+  const items = params.items ?? [photo('a'), photo('b')];
   container = document.createElement('div');
   container.id = 'root';
   document.body.appendChild(container);
@@ -90,16 +110,105 @@ async function mount(params: { readonly offers: MediaPageOffers; readonly onRepl
         languages={['fr']}
         fallbackLanguage="fr"
         {...(params.withCarrier === false ? {} : { carrier: params.carrier ?? carrier })}
-        actionsAt={(index) => pageOf(items[index]!, params.offers, params.onReply)}
+        {...(params.withoutActions === true ? {} : { actionsAt: (index: number) => pageOf(items[index]!, params.offers, params.onReply) })}
       />,
     );
   });
   await act(async () => {
     await import('./viewer-media-actions');
+    await import('./media-transport');
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   return document.body.querySelector<HTMLElement>('[data-media-viewer]')!;
 }
+
+/**
+ * #9577 — LE MUET ET « ⋯ » D'UNE VIDÉO REJOIGNENT LA COLONNE D'ACTIONS, sous
+ * « Composer » ; la ligne d'informations dit « cotes · poids · durée ».
+ */
+describe('MediaViewer — une vidéo en plein écran (#9577)', () => {
+  const stubPlayback = (): (() => void) => {
+    const { play, pause } = HTMLMediaElement.prototype;
+    HTMLMediaElement.prototype.play = function stubbedPlay(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    };
+    HTMLMediaElement.prototype.pause = function stubbedPause(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('pause'));
+    };
+    return () => {
+      HTMLMediaElement.prototype.play = play;
+      HTMLMediaElement.prototype.pause = pause;
+    };
+  };
+
+  const actionsOf = (dialog: HTMLElement): readonly (string | null)[] =>
+    Array.from(dialog.querySelectorAll('[data-viewer-rail-slot] [data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
+
+  test('le muet puis « ⋯ » suivent « Composer » dans la colonne d’actions', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: { ...ALL, share: true }, items: [clip('v')] });
+      expect(actionsOf(dialog).slice(-3)).toEqual(['compose', 'mute', 'more']);
+      expect(actionsOf(dialog)[0]).toBe('react');
+    } finally {
+      restore();
+    }
+  });
+
+  test('une vidéo dont la page n’offre AUCUNE action garde son muet et son « ⋯ »', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: NO_MEDIA_OFFERS, items: [clip('v')], withoutActions: true });
+      expect(actionsOf(dialog)).toEqual(['mute', 'more']);
+    } finally {
+      restore();
+    }
+  });
+
+  test('le plein cadre fait céder le muet et « ⋯ » avec le reste du chrome : invisibles ET intouchables', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: ALL, items: [clip('v')] });
+      act(() => {
+        dialog.querySelector('.media-viewer-track-frame')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(dialog.querySelector('[data-viewer-action="mute"]')!.closest('[inert]')).not.toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test('la ligne d’informations dit « largeur × hauteur · poids · durée »', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: ALL, items: [clip('v')] });
+      const parts = Array.from(dialog.querySelectorAll('[data-viewer-meta] > span:not([aria-hidden])')).map((el) => el.textContent);
+      expect(parts).toEqual(['1920 × 1080', '4 Ko', 'Durée 0:42']);
+      expect(dialog.querySelectorAll('[data-viewer-meta] > span[aria-hidden="true"]').length).toBe(2);
+    } finally {
+      restore();
+    }
+  });
+
+  test('sans porteur, ni cotes ni poids — mais la durée reste : c’est le seul temps que la visionneuse montre', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: ALL, items: [clip('v')], withCarrier: false });
+      const parts = Array.from(dialog.querySelectorAll('[data-viewer-meta] > span:not([aria-hidden])')).map((el) => el.textContent);
+      expect(parts).toEqual(['Durée 0:42']);
+    } finally {
+      restore();
+    }
+  });
+
+  test('une photo garde « largeur × hauteur · poids », sans durée', async () => {
+    const dialog = await mount({ offers: ALL });
+    const parts = Array.from(dialog.querySelectorAll('[data-viewer-meta] > span:not([aria-hidden])')).map((el) => el.textContent);
+    expect(parts).toEqual(['800 × 600', '4 Ko']);
+    expect(dialog.querySelector('[data-viewer-video-controls]')).toBeNull();
+  });
+});
 
 describe('MediaViewer — le chrome commun des plein écrans (#8879)', () => {
   test('la croix est EN FIN de barre haute, après l’identité de l’auteur (heure comprise)', async () => {
