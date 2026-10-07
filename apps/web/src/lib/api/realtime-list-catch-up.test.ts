@@ -35,6 +35,7 @@ const rowWith = (last: Message): Conversation =>
     memberCount: 2,
     participants: [],
     createdAt: new Date('2026-10-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-10-01T00:00:00.000Z'),
     unreadCount: 0,
     lastMessage: last,
     lastMessageAt: last.createdAt,

@@ -27,7 +27,7 @@ import {
 } from './messages';
 import { messageReceiptsPeopleQueryKey } from './receipts';
 import type { Attachment, Message, Participant } from './types';
-import { keepLiveMessageOverFetch } from './realtime-thread-catch-up';
+import { keepLiveListOverFetch, keepLiveMessageOverFetch } from './realtime-thread-catch-up';
 import { purgeViewOnceIn, sealViewOnceIn } from './view-once-seal';
 
 /* Le puits de `conversation:updated` vit chez lui (#7547, budget de taille) ;
@@ -233,6 +233,8 @@ export function applyMessageNew(
      remplace jamais, et un message protégé n'entre dans la ligne (cache
      PERSISTÉ) que par son identité et ses drapeaux. */
   offerLastMessage(queryClient, raw.conversationId, message, buildTranslationRecord(raw.translations));
+  /* Une relecture de la LISTE en vol remettrait l'aperçu précédent (#9637). */
+  keepLiveListOverFetch(queryClient);
 }
 
 /** Garde de FORME pour `conversation:unread-updated` (§ 3.4 de la

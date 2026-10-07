@@ -341,6 +341,27 @@ export function auditSeauApi(source) {
 }
 
 /**
+ * LE SEAU `api` NE REND SA COPIE QUE SUR UN ÉCHEC DU RÉSEAU (#9637).
+ *
+ * `networkTimeoutSeconds` faisait servir la réponse RANGÉE à un lecteur EN
+ * LIGNE dès que la passerelle tardait : une liste relue sur un réseau lent
+ * était celle d'une lecture précédente, et TanStack l'écrivait par-dessus
+ * l'aperçu que le temps réel venait de poser — « les derniers messages reçus
+ * disparaissent ». L'affichage instantané est l'affaire du cache persisté de
+ * TanStack ; le seau sert le hors ligne. Un artefact sans seau `api` relève
+ * de `auditSeauApi`, pas de cette phase.
+ */
+export function auditDelaiDuSeauApi(source) {
+  const strategie = appelDuSeau(source, 'api')?.strategie ?? '';
+  return strategie.includes('networkTimeoutSeconds')
+    ? [
+        'le seau `api` porte `networkTimeoutSeconds` : un lecteur EN LIGNE sur un réseau lent reçoit une ' +
+          'réponse rangée, qui écrase ce que le temps réel vient de poser (#9637)',
+      ]
+    : [];
+}
+
+/**
  * LE SEAU DES MÉDIAS, ET SA MOITIÉ INDISSOCIABLE (#6973).
  *
  * Sortir les médias du seau du JSON ne change RIEN sans
@@ -829,6 +850,7 @@ async function main() {
 
   const phases = [
     ['le seau `api`', auditSeauApi(source)],
+    ['le délai du seau `api`', auditDelaiDuSeauApi(source)],
     ['le seau `medias`', auditSeauMedias(source)],
     ['le routage', auditRoutage(source)],
     ['l’identité du seau `api`', await auditIdentiteDuSeauApi(source)],

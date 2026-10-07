@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { findCachedThreadMessage, messagesQueryKey } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
 
@@ -27,17 +28,31 @@ import type { MessagesInfiniteData } from './messages-pages';
  *    muet. Le signal personnel qui NOMME un message absent du fil en cache
  *    relit ce fil : rien ne part quand le message y est déjà (le cas nominal),
  *    ni quand le fil n'a jamais été ouvert (la prochaine ouverture le charge).
+ *
+ * 3. **La LISTE avait le même trou** (#9637, retour porteur 2026-10-07 : « les
+ *    derniers messages reçus disparaissent », web et coque Android). Une
+ *    relecture de la liste partie avant le message remettait l'aperçu
+ *    précédent sur la ligne (`keepLiveListOverFetch`) ; même remède.
  */
 
-const isThreadFetching = (queryClient: QueryClient, conversationId: string): boolean =>
-  queryClient.getQueryState(messagesQueryKey(conversationId))?.fetchStatus === 'fetching';
+const isFetching = (queryClient: QueryClient, queryKey: readonly unknown[]): boolean =>
+  queryClient.getQueryState(queryKey)?.fetchStatus === 'fetching';
 
-const relaunchThread = (queryClient: QueryClient, conversationId: string): void => {
-  void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId), exact: true });
+/** Invalider ANNULE la requête en vol (`cancelRefetch`) et en relance une, qui
+ * contient ce que le temps réel vient de poser. */
+const relaunch = (queryClient: QueryClient, queryKey: readonly unknown[]): void => {
+  void queryClient.invalidateQueries({ queryKey, exact: true });
 };
 
+const relaunchThread = (queryClient: QueryClient, conversationId: string): void =>
+  relaunch(queryClient, messagesQueryKey(conversationId));
+
 export function keepLiveMessageOverFetch(queryClient: QueryClient, conversationId: string): void {
-  if (isThreadFetching(queryClient, conversationId)) relaunchThread(queryClient, conversationId);
+  if (isFetching(queryClient, messagesQueryKey(conversationId))) relaunchThread(queryClient, conversationId);
+}
+
+export function keepLiveListOverFetch(queryClient: QueryClient): void {
+  if (isFetching(queryClient, CONVERSATIONS_QUERY_KEY)) relaunch(queryClient, CONVERSATIONS_QUERY_KEY);
 }
 
 export function catchUpThreadMessage(
