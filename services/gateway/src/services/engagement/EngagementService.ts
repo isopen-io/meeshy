@@ -304,14 +304,18 @@ export class EngagementService {
    * palier `BADGE_THRESHOLDS` franchi par CET incrément précis (jamais un
    * recalcul complet) — un compteur qui passe de N à N+1 ne peut rendre
    * neuf qu'un palier dans `]N, N+1]`.
+   *
+   * Rend `true` quand le geste a été CRÉDITÉ, `false` quand une garde l'a refusé (son propre contenu, plafond
+   * du jour, garde d'abus, reçu déjà pris, quota) : les signaux de jeu d'un message (#9635) ne partent que sur
+   * un `true`, pour ne jamais faire avancer un défi que le crédit a refusé.
    */
   async recordActivity(
     userId: string,
     operationKey: EngagementOperationKey,
     options: EngagementActivityOptions = {},
-  ): Promise<void> {
+  ): Promise<boolean> {
     // Interagir avec ce qu'on a soi-même produit ne rapporte rien.
-    if (options.targetOwnerId && options.targetOwnerId === userId) return;
+    if (options.targetOwnerId && options.targetOwnerId === userId) return false;
 
     // UN SEUL élan pour ce geste, résolu avant toute écriture et partagé par le
     // compteur et le score : deux résolutions indépendantes pourraient tomber
@@ -345,7 +349,7 @@ export class EngagementService {
       operation.capScope === 'conversation-day' &&
       isDailyCapReached(conversationRow, today, operationKey, rule.cap)
     ) {
-      return;
+      return false;
     }
     // Les garde-fous de l'entre-soi (#9377), AVANT de consommer un seau de quota :
     // rien pour un message à soi, à un compte neuf ou bloqué ; ÷4 au-delà de 50
@@ -357,10 +361,10 @@ export class EngagementService {
       operationKey,
       dailyMessages: (dailyCounts['content.text_message'] ?? 0) + (dailyCounts['content.audio_message'] ?? 0),
     });
-    if (verdict === 'none') return;
+    if (verdict === 'none') return false;
     const points = verdict === 'quarter' ? quarterPoints(boosted) : boosted;
     const receipt = options.receipt === undefined ? undefined : receiptBucket(options.receipt, options.postId);
-    if (receipt !== undefined && !(await this.receipts.claim(userId, operationKey, receipt))) return;
+    if (receipt !== undefined && !(await this.receipts.claim(userId, operationKey, receipt))) return false;
     const admitted = await this.quotas.admit({
       userId,
       operationKey,
@@ -369,7 +373,7 @@ export class EngagementService {
       heavy,
       ...(options.targetId !== undefined ? { targetId: options.targetId } : {}),
     });
-    if (!admitted) return;
+    if (!admitted) return false;
 
     await this.credit(scale, userId, operationKey, points, options.actorId);
     const rememberedTargetId = heavy ? options.targetId : undefined;
@@ -399,6 +403,7 @@ export class EngagementService {
       timezone: inputs.timezone,
       record: Math.max(levelFromScore(inputs.engagementScore), inputs.levelRecord ?? 0),
     });
+    return true;
   }
 
   /**

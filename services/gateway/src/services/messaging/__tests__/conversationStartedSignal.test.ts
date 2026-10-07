@@ -11,7 +11,7 @@ import { runMessagePostSaveEffects } from '../messagePostSaveEffects';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-const run = (flippedCount: number) => {
+const run = (flippedCount: number, credited: boolean | undefined = true) => {
   const recordConversationStarted = jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
   const prisma = {
     conversation: {
@@ -25,7 +25,7 @@ const run = (flippedCount: number) => {
     prisma: prisma as never,
     translationService: null,
     engagementService: {
-      recordActivity: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      recordActivity: jest.fn<() => Promise<boolean | undefined>>().mockResolvedValue(credited),
       recordConversationActivity: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
       recordConversationStarted,
     },
@@ -49,6 +49,12 @@ describe('le premier message d’une conversation créée vide la démarre (#963
     const recordConversationStarted = run(1);
     await settle();
     expect(recordConversationStarted).toHaveBeenCalledWith({ senderUserId: 'u1', conversationId: 'c1' });
+  });
+
+  it('un premier message que le crédit refuse ne démarre rien pour le jeu', async () => {
+    const recordConversationStarted = run(1, false);
+    await settle();
+    expect(recordConversationStarted).not.toHaveBeenCalled();
   });
 
   it('une bascule perdue ne pose rien', async () => {

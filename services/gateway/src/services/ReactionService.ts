@@ -73,7 +73,7 @@ export interface AddReactionResult {
 
 /** Ce qu'une réaction posée demande à l'engagement, et rien de plus. */
 export interface ReactionEngagementCredit {
-  recordActivity(userId: string, axisKey: EngagementAxisKey, options?: EngagementActivityOptions): Promise<void>;
+  recordActivity(userId: string, axisKey: EngagementAxisKey, options?: EngagementActivityOptions): Promise<unknown>;
 }
 
 export class ReactionService {

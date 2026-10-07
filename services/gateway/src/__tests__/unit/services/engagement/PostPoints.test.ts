@@ -319,7 +319,7 @@ describe('un cumul qui ne s’écrit pas', () => {
       throw new Error('mongo down');
     };
 
-    await expect(service.recordActivity(READER, 'tool.post_reaction', onPost())).resolves.toBeUndefined();
+    await expect(service.recordActivity(READER, 'tool.post_reaction', onPost())).resolves.toBe(true);
 
     expect(credited(db, READER)).toBeGreaterThan(0);
     expect(postUpdates(emissions)).toEqual([]);
@@ -330,7 +330,7 @@ describe('une annonce qui ne part pas', () => {
   it('ne défait ni le crédit ni le cumul, et ne fait pas échouer le geste', async () => {
     const { db, service } = setup({ emitFails: true });
 
-    await expect(service.recordActivity(READER, 'tool.post_reaction', onPost())).resolves.toBeUndefined();
+    await expect(service.recordActivity(READER, 'tool.post_reaction', onPost())).resolves.toBe(true);
 
     expect(await pointsOf(db, READER, POST)).toBe(credited(db, READER));
     expect(credited(db, READER)).toBeGreaterThan(0);

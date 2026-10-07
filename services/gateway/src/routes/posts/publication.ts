@@ -121,7 +121,7 @@ export interface PostPublicationEngagementService {
     userId: string,
     operationKey: EngagementOperationKey,
     options?: EngagementActivityOptions,
-  ): Promise<void>;
+  ): Promise<unknown>;
   /** Un fait de jeu posé à la publication (#9635) — l'INTENTION « réel ». */
   recordGameSignal?(userId: string, signal: 'reel-published', options?: { readonly key?: string }): Promise<void>;
 }
@@ -351,9 +351,12 @@ function recordPublicationEngagement(params: {
   if (!operation) return;
 
   const credit = (key: EngagementOperationKey, options: EngagementActivityOptions): Promise<void> =>
-    engagementService.recordActivity(authorId, key, options).catch((err: unknown) => {
-      logError(log, `[${porte}] ${key} engagement recording failed`, err);
-    });
+    engagementService.recordActivity(authorId, key, options).then(
+      () => undefined,
+      (err: unknown) => {
+        logError(log, `[${porte}] ${key} engagement recording failed`, err);
+      },
+    );
 
   const byVisibility = operation === 'content.post' || operation === 'content.story';
   // La publication est la SOURCE de ses crédits : la retirer les reprend (#9584).

@@ -148,7 +148,8 @@ export type PostSaveEffect =
  * applique le plafond journalier par conversation et fait avancer « N (M) 🔥 ».
  */
 export interface PostSaveEngagementService {
-  recordActivity(userId: string, operationKey: EngagementOperationKey, options?: EngagementActivityOptions): Promise<void>;
+  /** `true` quand le geste a été CRÉDITÉ ; toute autre valeur (refus, double de test muet) vaut « non ». */
+  recordActivity(userId: string, operationKey: EngagementOperationKey, options?: EngagementActivityOptions): Promise<boolean | void>;
   recordConversationActivity(
     userId: string,
     axisKey: EngagementAxisKey,
@@ -344,9 +345,10 @@ export function runMessagePostSaveEffects(params: {
         where: { id: message.conversationId, firstMessageSentAt: null },
         data: { firstMessageSentAt: new Date() },
       });
-      if (flipped.count === 1 && message.senderUserId && engagementService?.recordConversationStarted) {
-        await engagementService.recordConversationStarted({ senderUserId: message.senderUserId, conversationId: message.conversationId });
-      }
+      if (flipped.count !== 1 || !message.senderUserId || !engagementService?.recordConversationStarted) return;
+      // Comme les autres signaux du jeu : seulement si le crédit de ce message a eu lieu.
+      if (!(await contentCredited)) return;
+      await engagementService.recordConversationStarted({ senderUserId: message.senderUserId, conversationId: message.conversationId });
     })
     .catch(report('firstMessageSentAt'));
 
@@ -435,25 +437,19 @@ export function runMessagePostSaveEffects(params: {
   // crédite l'axe audio, SANS crédite l'axe texte. Même garde anonyme que
   // ci-dessus : `EngagementCounter.userId` exige un `User.id`, qu'un
   // participant anonyme n'a pas.
-  if (engagementService && message.senderUserId) {
-    const senderUserId = message.senderUserId;
-    const hasAudioAttachment = message.attachmentMimeTypes.some(
-      (mimeType) => resolveAttachmentType(mimeType) === 'audio'
-    );
-    const contentAxisKey = hasAudioAttachment ? 'content.audio_message' : 'content.text_message';
-    const normalized = normalizeRepeatableText(message.content);
-    void Promise.resolve()
-      .then(async () => {
-        if (contentAxisKey === 'content.text_message' && normalized.length > 0) {
-          const repeated = await isRepeatedGlobalText({ prisma, readConversation, message, normalized });
-          if (repeated) return;
-        }
-        await engagementService.recordActivity(senderUserId, contentAxisKey, {
-          conversationId: message.conversationId,
-        });
-      })
-      .catch(report('contentEngagement'));
-  }
+  // Le crédit de CONTENU rend son issue : c'est elle, et elle seule, qui ouvre
+  // les signaux du jeu plus bas (#9635). Un message que le crédit refuse —
+  // garde d'abus, plafond du jour par conversation, texte répété dans la
+  // conversation globale, quota — ne fait avancer aucun défi.
+  const contentCredited: Promise<boolean> =
+    engagementService && message.senderUserId
+      ? creditMessageContent({ prisma, readConversation, engagementService, message, senderUserId: message.senderUserId }).catch(
+          (error: unknown) => {
+            report('contentEngagement')(error);
+            return false;
+          },
+        )
+      : Promise.resolve(false);
 
   // Axe d'engagement « sticker » (#5541, docs/product/streaks-badges-modele.md
   // § 2, § 11) — indépendant de l'axe « conversation distincte » ci-dessus, et
@@ -490,12 +486,16 @@ export function runMessagePostSaveEffects(params: {
   // Les signaux du jeu (#9375, #9377) : ce qu'un message committé apprend aux
   // missions (réponse dans une conversation distincte, autre langue, réponse
   // reçue) et les +3 points de l'auteur répondu. Un compte anonyme n'a pas de jeu.
+  //
+  // #9635 — ils ne partent qu'APRÈS le crédit de contenu, et seulement s'il a
+  // CRÉDITÉ : le même verdict d'abus, le même plafond, dans le même ordre.
   if (engagementService?.recordMessageSignals && message.senderUserId) {
     const senderUserId = message.senderUserId;
     const recordMessageSignals = engagementService.recordMessageSignals.bind(engagementService);
-    void Promise.resolve()
-      .then(() =>
-        recordMessageSignals({
+    void contentCredited
+      .then((credited) => {
+        if (!credited) return undefined;
+        return recordMessageSignals({
           senderUserId,
           conversationId: message.conversationId,
           messageId: message.id,
@@ -504,8 +504,8 @@ export function runMessagePostSaveEffects(params: {
           originalLanguage,
           content: message.content,
           storyReplyToId: message.storyReplyToId ?? null,
-        })
-      )
+        });
+      })
       .catch(report('gameSignals'));
   }
 
@@ -586,3 +586,29 @@ async function isRepeatedGlobalText(params: {
   });
   return recent.some((row) => normalizeRepeatableText(row.content) === normalized);
 }
+
+/**
+ * Axe d'engagement « contenu produit » (#5531 `content.audio_message`, #5532 `content.text_message`) — un même
+ * envoi ne crédite jamais les deux : AVEC au moins une pièce jointe dont le MIME résout en `audio` (même table que
+ * le comptage de conversation, `resolveAttachmentType`) crédite l'axe audio, SANS crédite l'axe texte. Un texte
+ * répété dans la conversation globale ne crédite rien. Rend `true` seulement quand le crédit a eu lieu (#9635).
+ */
+async function creditMessageContent(params: {
+  readonly prisma: Pick<PrismaClient, 'conversation' | 'message'>;
+  readonly readConversation: () => Promise<{ readonly type: string; readonly communityId: string | null } | null>;
+  readonly engagementService: PostSaveEngagementService;
+  readonly message: PostSaveMessage;
+  readonly senderUserId: string;
+}): Promise<boolean> {
+  const { prisma, readConversation, engagementService, message, senderUserId } = params;
+  const hasAudioAttachment = message.attachmentMimeTypes.some((mimeType) => resolveAttachmentType(mimeType) === 'audio');
+  const contentAxisKey = hasAudioAttachment ? 'content.audio_message' : 'content.text_message';
+  const normalized = normalizeRepeatableText(message.content);
+  if (contentAxisKey === 'content.text_message' && normalized.length > 0) {
+    const repeated = await isRepeatedGlobalText({ prisma, readConversation, message, normalized });
+    if (repeated) return false;
+  }
+  const credited = await engagementService.recordActivity(senderUserId, contentAxisKey, { conversationId: message.conversationId });
+  return credited === true;
+}
+

@@ -254,7 +254,7 @@ describe('la progression des missions au geste', () => {
     seedUser(db, { engagementScore: 10 * 10 * 10, levelRecord: 10 });
     jest.spyOn(db.dailyMission, 'findMany').mockRejectedValue(new Error('missions indisponibles'));
 
-    await expect(service(db).recordActivity(USER, 'content.text_message')).resolves.toBeUndefined();
+    await expect(service(db).recordActivity(USER, 'content.text_message')).resolves.toBe(true);
 
     expect(counter(db)?.points).toBe(TEXT_POINTS);
   });
