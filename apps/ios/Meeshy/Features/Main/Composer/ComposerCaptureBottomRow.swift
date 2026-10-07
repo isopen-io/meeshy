@@ -49,10 +49,11 @@ struct ComposerCaptureBottomRow: View {
         return (url, lecteur.duration)
     }
 
-    /// La phrase du geste se tait pendant la prise et la retouche — et sous un
-    /// cadre, dont le bas porte sa propre écriture (#9557).
+    /// La phrase du geste se tait pendant la prise et la retouche, sous un
+    /// cadre, dont le bas porte sa propre écriture (#9557) — et bande ouverte,
+    /// où le nom du choix prend sa place (#9566).
     private var showsHint: Bool {
-        !recording && !editing && session.look.frame == ComposerPhotoFrame.none
+        !recording && !editing && session.look.frame == ComposerPhotoFrame.none && session.openFamily == nil
     }
 
     /// La table dit si le rail ouvre une famille ; sinon il reste là, éteint.

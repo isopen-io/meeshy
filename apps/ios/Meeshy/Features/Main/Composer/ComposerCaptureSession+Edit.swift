@@ -15,6 +15,7 @@ extension ComposerCaptureSession {
     /// suivra le rendu final. Une image sans pixels n'ouvre rien.
     func beginEditing(photo image: UIImage, data: Data? = nil) {
         guard let debout = ComposerPhotoLookSource.upright(image) else { return }
+        screenFlashBurst = false
         editPhoto = debout
         editPhotoData = data
         editSource = ComposerStillSource(debout)

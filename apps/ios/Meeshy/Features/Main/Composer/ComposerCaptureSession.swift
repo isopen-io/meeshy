@@ -57,8 +57,6 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var look = ComposerPhotoLook() {
         didSet { refreshFeed() }
     }
-    /// La luminosité visée, en EV (#9351) — le curseur vertical sous le flash.
-    @Published var exposureBias = ComposerExposureRule.neutral
     /// La famille dont la bande est ouverte ; `nil` ⇒ la bande se replie sur la
     /// seule miniature choisie, qui sert de déclencheur (#9351).
     @Published var openFamily: ComposerLookFamily? {
@@ -103,6 +101,8 @@ final class ComposerCaptureSession: ObservableObject {
     /// La rampe du flash avant (0,25 s) : l'obturateur est parti, `isTakingPhoto`
     /// pas encore — une seconde demande y est refusée.
     var photoIsRamping = false
+    /// L'écran éclaire une photo, de la rampe à la fin de la prise (#9566).
+    @Published var screenFlashBurst = false
     /// La tenue attend la livraison de la prise précédente : ni haptique, ni
     /// cadenas, ni lumière tant qu'elle ne filme pas.
     var awaitsPreviousTake = false
@@ -180,8 +180,10 @@ final class ComposerCaptureSession: ObservableObject {
 
     // MARK: - Ce que la barre lit
 
-    /// Le sol blanc du flash avant est-il allumé ? (#8653)
-    var floorIsLit: Bool {
+    /// L'écran est-il le flash ? Objectif avant, flash actif (#8653). Le
+    /// montage en fait un sol blanc autour de la scène, ou un éclair à la prise
+    /// en plein écran (`ComposerCapturePlacement`, #9566).
+    var screenIsTheFlash: Bool {
         ComposerFrontFlash.lightsFloor(flash: flash, position: controls.currentPosition, stage: stage)
     }
 
@@ -280,18 +282,20 @@ final class ComposerCaptureSession: ObservableObject {
         mode = .photo
         HapticFeedback.medium()
         let flashDeLaPrise = flash
-        guard floorIsLit else {
+        guard screenIsTheFlash else {
             controls.takePhoto(flash: flashDeLaPrise)
             return
         }
         ComposerScreenFlash.shared.light(level: flashIntensity)
         photoIsRamping = true
+        screenFlashBurst = true
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.brightnessRamp * 1_000_000_000))
             photoIsRamping = false
             guard stage == .armed else { return }
             controls.takePhoto(flash: .off)
             try? await Task.sleep(nanoseconds: UInt64(ComposerFrontFlash.photoHold * 1_000_000_000))
+            screenFlashBurst = false
             guard stage == .armed else { return }
             ComposerScreenFlash.shared.restore()
         }
@@ -307,7 +311,7 @@ final class ComposerCaptureSession: ObservableObject {
         stage = .recording
         controls.setTorch(ComposerFrontFlash.torch(flash: flash, position: controls.currentPosition),
                         level: flashIntensity)
-        if floorIsLit { ComposerScreenFlash.shared.light(level: flashIntensity) }
+        if screenIsTheFlash { ComposerScreenFlash.shared.light(level: flashIntensity) }
         Task { @MainActor in
             await camera.enableAudioCaptureIfNeeded()
             let avant = camera.recordingId
@@ -586,6 +590,7 @@ final class ComposerCaptureSession: ObservableObject {
 
     /// Éteint tout ce que le flash a allumé — torche et luminosité.
     func extinguishFlash() {
+        screenFlashBurst = false
         controls.setTorch(.off, level: ComposerFlashIntensity.defaultLevel)
         ComposerScreenFlash.shared.restore()
     }

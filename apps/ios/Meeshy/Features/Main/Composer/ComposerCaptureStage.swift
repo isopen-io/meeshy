@@ -12,7 +12,7 @@ nonisolated enum ComposerCaptureStageLayer: Equatable, Sendable {
 /// spec § 2 et § 4.3).
 ///
 /// Monté, couche par couche, par `ComposerCaptureMount` — le seul montage,
-/// celui de la barre de conversation (plein écran figé) comme celui du composer
+/// celui de la barre de conversation (plein écran, sans carte) comme celui du composer
 /// story / post / réel (carte ou plein écran). La seule différence entre les
 /// deux est `offersSizeToggle` ; le format décide seulement si la photo et la
 /// vidéo sont offertes.
@@ -41,11 +41,7 @@ struct ComposerCaptureStage: View {
             ComposerCapturePreview(session: session, size: size)
         case .controls:
             controls
-                .onAppear {
-                    session.onDeliver = onDeliver
-                    session.resetExposure()
-                }
-                .onDisappear { session.resetExposure() }
+                .onAppear { session.onDeliver = onDeliver }
         }
     }
 

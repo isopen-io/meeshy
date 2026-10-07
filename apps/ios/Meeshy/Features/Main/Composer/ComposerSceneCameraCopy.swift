@@ -73,12 +73,6 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Poser dans la scène", bundle: .main)
     }
 
-    /// **La luminosité du viseur** (#9351) — le curseur vertical sous le flash.
-    static var exposureLabel: String {
-        String(localized: "composer.camera.exposure",
-               defaultValue: "Luminosité", bundle: .main)
-    }
-
     /// **Des segments attendent leur `✓`** : fermer le viseur les jetterait.
     /// La question dit ce qui se perd ; les deux choix, ce qu'ils font.
     static var discardTitle: String {

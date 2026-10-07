@@ -93,6 +93,17 @@ final class ComposerCaptureFixtureTests: XCTestCase {
         XCTAssertFalse(CameraModel().runsFixture, "les témoins ne sont jamais lancés avec -MeeshyCaptureFixture")
     }
 
+    /// La caméra de recette se retourne : le selfie éclairé par l'écran se
+    /// recette au simulateur (#9566).
+    func test_switchCamera_onTheFixture_flipsTheLens() {
+        let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
+        XCTAssertEqual(camera.currentPosition, .back)
+        var suivie: AVCaptureDevice.Position?
+        camera.switchCamera { suivie = $0 }
+        XCTAssertEqual(camera.currentPosition, .front)
+        XCTAssertEqual(suivie, .front, "la machine de capture suit l'objectif en place")
+    }
+
     func test_switchCamera_duringAFixtureTake_settlesAndKeepsFilming() async {
         let camera = CameraModel(fixture: ComposerCaptureFixtureDriver())
         camera.startRecording()

@@ -336,6 +336,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         isSwitchingCamera = true
         #if DEBUG
         if fixture != nil {
+            // La caméra de recette se retourne aussi : le selfie éclairé par
+            // l'écran se recette au simulateur (#9566).
+            currentPosition = currentPosition == .back ? .front : .back
             endSwitch()
             then(currentPosition)
             return
@@ -541,20 +544,6 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         guard ComposerCaptureFocus.aims(plan) else { return false }
         Self.apply(plan, to: device)
         return true
-    }
-
-    /// **La luminosité visée** (#9464) — bornée à ce que l'objectif sert. Le
-    /// curseur vertical du viseur (Task 15) passera par ici.
-    func setExposureBias(_ bias: Float) {
-        guard let device = activeVideoDevice else { return }
-        do {
-            try device.lockForConfiguration()
-            defer { device.unlockForConfiguration() }
-            device.setExposureTargetBias(min(device.maxExposureTargetBias, max(device.minExposureTargetBias, bias)),
-                                         completionHandler: nil)
-        } catch {
-            Logger.media.error("Exposure bias failed: \(error.localizedDescription, privacy: .public)")
-        }
     }
 
     private func resumeContinuousFocus() {

@@ -111,9 +111,30 @@ final class ComposerLookStripRuleTests: XCTestCase {
         _ = suivi.centered(on: 0, chosen: 0, selects: true)
         _ = suivi.chose(9)
         XCTAssertNil(suivi.centered(on: 2, chosen: 9, selects: true))
-        XCTAssertEqual(suivi.settled(chosen: 9, selects: true), 2, "le doigt a repris la bande : elle choisit où elle s'arrête")
-        XCTAssertNil(suivi.settled(chosen: 2, selects: true))
+        XCTAssertEqual(suivi.settled(chosen: 9, selects: true), .choose(2),
+                       "le doigt a repris la bande : elle choisit où elle s'arrête")
+        XCTAssertEqual(suivi.settled(chosen: 2, selects: true), .nothing)
         XCTAssertEqual(suivi.centered(on: 3, chosen: 2, selects: true), 3)
+    }
+
+    /// Une bande ouverte en tête qui n'a pas rejoint sa case ne choisit jamais
+    /// « Aucun » à sa place : elle la rejoint.
+    func test_follow_aBandThatNeverLeftTheHead_rejoinsItsChosenCell_insteadOfErasingTheLook() {
+        var suivi = ComposerLookStripFollow()
+        suivi.begin(chosen: 5)
+        XCTAssertNil(suivi.centered(on: 0, chosen: 5, selects: true))
+        XCTAssertEqual(suivi.settled(chosen: 5, selects: true), .rejoin(5))
+        XCTAssertNil(suivi.centered(on: 5, chosen: 5, selects: true))
+        XCTAssertEqual(suivi.settled(chosen: 5, selects: true), .nothing)
+    }
+
+    func test_follow_atRest_onTheChosenCell_orWithAFrozenLook_changesNothing() {
+        var suivi = ComposerLookStripFollow()
+        suivi.begin(chosen: 0)
+        _ = suivi.centered(on: 0, chosen: 0, selects: true)
+        XCTAssertEqual(suivi.settled(chosen: 0, selects: true), .nothing)
+        _ = suivi.centered(on: 2, chosen: 0, selects: false)
+        XCTAssertEqual(suivi.settled(chosen: 0, selects: false), .nothing, "un look figé ne change pas au repos non plus")
     }
 
     func test_paintedIndices_recording_onlyTheChosen_orNothingWhenCut() {

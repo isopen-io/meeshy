@@ -198,7 +198,7 @@ final class ComposerLookStripTests: XCTestCase {
     func test_rail_framesWearTheCallFrameSymbol_andNoGlassSurroundsTheFamilies() throws {
         XCTAssertEqual(ComposerCaptureCopy.familySymbol(.frames), "photo.artframe")
         let appel = try Self.code("Meeshy/Features/Main/Views/CallModeControls.swift")
-        XCTAssertTrue(appel.contains("symbol: \"\(ComposerCaptureCopy.familySymbol(.frames))\""),
+        XCTAssertTrue(appel.contains("symbol: \"photo.artframe\""),
                       "le même pictogramme que le cadre de l'appel vidéo")
         let bande = try Self.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
         let debut = try XCTUnwrap(bande.range(of: "struct ComposerLookRail: View {"))

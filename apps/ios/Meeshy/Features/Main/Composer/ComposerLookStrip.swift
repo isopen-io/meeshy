@@ -15,7 +15,7 @@ extension ComposerCaptureCopy {
     }
 
     static func familySymbol(_ family: ComposerLookFamily) -> String {
-        family == .filters ? "camera.filters" : "square.on.square"
+        family == .filters ? "camera.filters" : "photo.artframe"
     }
 
     static func itemName(_ item: ComposerLookStripItem) -> String {
@@ -67,7 +67,9 @@ extension View {
 // MARK: - Le rail
 
 /// **Le rail vertical, en bas à gauche** (#9351) : Filtres, Cadres. Toucher une
-/// famille ouvre sa bande ; la retoucher la replie.
+/// famille ouvre sa bande ; la retoucher la replie. Ni verre ni cadre : le
+/// pictogramme et le nom, ombrés pour rester lisibles (porteur 2026-10-07,
+/// #9566) — « Cadres » porte le pictogramme du cadre de l'appel vidéo.
 struct ComposerLookRail: View {
     let open: ComposerLookFamily?
     let onSelect: (ComposerLookFamily) -> Void
@@ -85,10 +87,9 @@ struct ComposerLookRail: View {
                             .minimumScaleFactor(0.7)
                     }
                     .foregroundStyle(open == famille ? Color.yellow : .white)
+                    .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
                     .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
-                    .padding(MeeshySpacing.xs)
-                    .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous),
-                                         interactive: true)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(ComposerCaptureCopy.familyName(famille))
@@ -102,7 +103,9 @@ struct ComposerLookRail: View {
 
 /// **La bande — et, repliée, la miniature-déclencheur** (#9351, spec § 3.1 / § 3.2).
 ///
-/// Ouverte, toutes les cases de la famille, la choisie encadrée ; repliée, la
+/// Ouverte, toutes les cases de la famille : celle du CENTRE est la choisie
+/// (#9566) — le défilement s'accroche case par case et choisit en passant —,
+/// encadrée, et son nom s'écrit seul, en grand, sous la bande. Repliée, la
 /// seule miniature choisie (la paire complète), qui continue d'afficher le
 /// direct. Les cases peintes sont les visibles ±1, au plus le budget thermique ;
 /// leurs images vivent dans UN atlas Metal (`ComposerLookStripSurface`). Chaque
@@ -118,8 +121,8 @@ struct ComposerLookStrip: View {
     /// jamais à chaque image du défilement.
     @State private var visible: ClosedRange<Int>?
     @State private var scrolling = false
-    /// Le minuteur de fin de défilement : une référence, que réarmer à chaque
-    /// image n'invalide pas la vue.
+    /// Le minuteur de fin de défilement et le suivi du centre : une référence,
+    /// que mettre à jour à chaque image n'invalide pas la vue.
     @State private var settle = ComposerLookStripScrollSettle()
     @State private var blink: Double = 1
     /// Retombe d'elle-même quand le système annule l'appui long sans `onEnded`.
@@ -127,12 +130,9 @@ struct ComposerLookStrip: View {
     /// La fin de la dernière tenue — sa levée ne compte pas pour un toucher.
     @State private var holdEndedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Le sens de lecture de la langue : les LIBELLÉS le suivent, l'ordre des
-    /// cases non — l'atlas Metal ne se met pas en miroir.
-    @Environment(\.layoutDirection) private var readingDirection
 
     private static let scrollSpace = "composer.capture.band"
-    private static let labelHeight: CGFloat = 22
+    private static let labelHeight: CGFloat = 30
 
     /// La famille ouverte GARDE ses cases pendant l'enregistrement : basculer de la
     /// bande à la miniature seule annulerait l'appui long qui vient de lancer la
@@ -144,6 +144,18 @@ struct ComposerLookStrip: View {
     }
 
     private var recording: Bool { context.stage == .recording }
+
+    /// Le défilement peut-il changer le look ? La table le dit, comme pour un
+    /// toucher : jamais pendant une prise, ni avec des segments en attente.
+    private var selects: Bool {
+        ComposerCaptureGesture.action(zone: .otherThumbnail, gesture: .tap, context: context) == .select
+    }
+
+    /// Le nom de la case choisie dans la famille ouverte — le seul écrit.
+    private var chosenItemName: String {
+        ComposerLookStripRule.chosenIndex(in: items, look: session.look)
+            .map { ComposerCaptureCopy.itemName(items[$0]) } ?? ""
+    }
 
     /// Le déclencheur porte UN nom, seul ou dans la bande ouverte.
     private var chosenLabel: String {
@@ -165,7 +177,19 @@ struct ComposerLookStrip: View {
                 case .hidden: Color.clear.accessibilityHidden(true)
                 }
             } else {
-                band
+                VStack(spacing: 0) {
+                    band.frame(height: ComposerLookStripRule.cellSize.height)
+                    Text(chosenItemName)
+                        .font(MeeshyFont.relative(ComposerLookStripRule.chosenNameSize, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .frame(height: Self.labelHeight, alignment: .bottom)
+                        .opacity(recording ? 0 : 1)
+                        .accessibilityHidden(true)
+                }
             }
         }
         .frame(height: ComposerLookStripRule.cellSize.height + Self.labelHeight)
@@ -262,24 +286,27 @@ struct ComposerLookStrip: View {
             ScrollViewReader { lecteur in
                 ScrollView(.horizontal, showsIndicators: false) {
                     bandContent
-                        .padding(.horizontal, retrait)
                         .background(GeometryReader { contenu in
                             Color.clear.adaptiveOnChange(of: contenu.frame(in: .named(Self.scrollSpace)).minX,
                                                          initial: true) { _, x in
-                                followScroll(x: x, inset: retrait, width: conteneur.size.width)
+                                followScroll(scrolled: retrait - x, width: conteneur.size.width, reader: lecteur)
                             }
                         })
+                        .modifier(ComposerLookStripLegacyInset(inset: retrait))
                 }
+                .modifier(ComposerLookStripSnapping(inset: retrait))
+                .scrollDisabled(!selects)
                 .coordinateSpace(name: Self.scrollSpace)
                 .environment(\.layoutDirection, .leftToRight)
                 .onAppear {
                     guard let choisie = ComposerLookStripRule.chosenIndex(in: items, look: session.look) else { return }
+                    beginFollowing(chosen: choisie)
                     lecteur.scrollTo(choisie, anchor: .center)
                 }
                 .adaptiveOnChange(of: ComposerLookStripRule.chosenIndex(in: items, look: session.look)) { _, choisie in
-                    guard let choisie else { return }
+                    guard let choisie, let cible = settle.follow.chose(choisie) else { return }
                     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
-                        lecteur.scrollTo(choisie, anchor: .center)
+                        lecteur.scrollTo(cible, anchor: .center)
                     }
                 }
             }
@@ -327,31 +354,23 @@ struct ComposerLookStrip: View {
                         .id(index)
                 }
             }
+            .modifier(ComposerLookStripTargets())
         }
     }
 
+    /// Une case : son contour, rien d'écrit — seul le choix se nomme, sous la bande.
     @ViewBuilder
     private func cell(item: ComposerLookStripItem, chosen: Bool) -> some View {
         let cellule = ComposerLookStripRule.cellSize
-        let corps = VStack(spacing: MeeshySpacing.xxs) {
-            RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                .strokeBorder(chosen ? Color.white : Color.white.opacity(0.25), lineWidth: chosen ? 3 : 1)
-                .frame(width: cellule.width, height: cellule.height)
-                .contentShape(Rectangle())
-                .gesture(chosen ? AnyGesture(chosenGestures.map { _ in () }) : AnyGesture(TapGesture().onEnded {
-                    perform(.otherThumbnail, .tap, item: item)
-                }))
-                .overlay { if chosen { chosenOverlay } }
-            Text(ComposerCaptureCopy.itemName(item))
-                .font(MeeshyFont.relative(10, weight: chosen ? .bold : .medium))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(width: cellule.width + ComposerLookStripRule.spacing)
-                .environment(\.layoutDirection, readingDirection)
-        }
-        .frame(width: cellule.width, alignment: .center)
-        .accessibilityElement(children: .ignore)
+        let corps = RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+            .strokeBorder(chosen ? Color.white : Color.white.opacity(0.25), lineWidth: chosen ? 3 : 1)
+            .frame(width: cellule.width, height: cellule.height)
+            .contentShape(Rectangle())
+            .gesture(chosen ? AnyGesture(chosenGestures.map { _ in () }) : AnyGesture(TapGesture().onEnded {
+                perform(.otherThumbnail, .tap, item: item)
+            }))
+            .overlay { if chosen { chosenOverlay } }
+            .accessibilityElement(children: .ignore)
         if chosen {
             corps
                 .accessibilityLabel(chosenLabel)
@@ -400,16 +419,10 @@ struct ComposerLookStrip: View {
                 session.endHold()
             }
             .simultaneously(with: TapGesture().onEnded {
-                guard session.holdStartedAt == nil, !Self.followsAHold(holdEndedAt, now: Date()) else { return }
+                guard session.holdStartedAt == nil,
+                      !ComposerCaptureTapRule.followsAHold(holdEndedAt, now: Date()) else { return }
                 tapTrigger(zone)
             })
-    }
-
-    /// La levée d'une tenue n'est pas un toucher : celui qui la suit de trop près
-    /// est le même doigt.
-    static func followsAHold(_ endedAt: Date?, now: Date) -> Bool {
-        guard let endedAt else { return false }
-        return now.timeIntervalSince(endedAt) < 0.3
     }
 
     /// Le doigt qui tient la prise la pilote-t-il ? La table le dit.
@@ -444,24 +457,111 @@ struct ComposerLookStrip: View {
 
     // MARK: - Le défilement
 
-    /// Les cases visibles suivent le défilement, case par case ; pendant qu'il
-    /// dure, les cases peintes se figent et seules les neuves se peignent.
-    private func followScroll(x: CGFloat, inset: CGFloat, width: CGFloat) {
-        let vues = ComposerLookStripRule.visibleRange(offset: -x - inset, width: width, count: items.count)
+    /// La bande s'ouvre en tête puis rejoint la case choisie : ce trajet-là
+    /// n'est pas un choix.
+    private func beginFollowing(chosen: Int?) {
+        guard !settle.follow.hasBegun else { return }
+        settle.follow.begin(chosen: chosen)
+    }
+
+    /// Les cases visibles suivent le défilement, case par case, et **celle du
+    /// centre est choisie** (#9566) ; pendant qu'il dure, les cases peintes se
+    /// figent et seules les neuves se peignent. Au repos, la bande se solde —
+    /// et, sans accroche système (iOS 16), se recentre sur sa case.
+    private func followScroll(scrolled: CGFloat, width: CGFloat, reader: ScrollViewProxy) {
+        let cases = items
+        let choisie = ComposerLookStripRule.chosenIndex(in: cases, look: session.look)
+        beginFollowing(chosen: choisie)
+        let vues = ComposerLookStripRule.visibleRange(offset: scrolled - (width - ComposerLookStripRule.cellSize.width) / 2,
+                                                      width: width, count: cases.count)
         if vues != visible { visible = vues }
+        if let centre = ComposerLookStripRule.centeredIndex(scrolled: scrolled, count: cases.count),
+           centre != settle.follow.centered,
+           let aChoisir = settle.follow.centered(on: centre, chosen: choisie, selects: selects) {
+            choose(cases[aChoisir])
+        }
         if !scrolling { scrolling = true }
         settle.task?.cancel()
         settle.task = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 150_000_000)
             guard !Task.isCancelled else { return }
             scrolling = false
+            rest(reader: reader)
+        }
+    }
+
+    private func rest(reader: ScrollViewProxy) {
+        let cases = items
+        let choisie = ComposerLookStripRule.chosenIndex(in: cases, look: session.look)
+        switch settle.follow.settled(chosen: choisie, selects: selects) {
+        case .rejoin(let cible):
+            return reader.scrollTo(cible, anchor: .center)
+        case .choose(let aChoisir):
+            if cases.indices.contains(aChoisir) { choose(cases[aChoisir]) }
+        case .nothing:
+            break
+        }
+        guard !ComposerLookStripSnapping.isNative, let centre = settle.follow.centered else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { reader.scrollTo(centre, anchor: .center) }
+    }
+
+    private func choose(_ item: ComposerLookStripItem) {
+        perform(.otherThumbnail, .tap, item: item)
+    }
+}
+
+/// Le minuteur de fin de défilement et le suivi du centre de la bande, hors de
+/// l'état observé.
+final class ComposerLookStripScrollSettle {
+    var task: Task<Void, Never>?
+    var follow = ComposerLookStripFollow()
+
+    nonisolated deinit {}
+}
+
+// MARK: - L'accroche case par case (#9566)
+
+/// iOS 17+ : l'accroche système, aussi loin que le lancer porte, sur des marges
+/// qui amènent la première et la dernière case au centre.
+struct ComposerLookStripSnapping: ViewModifier {
+    let inset: CGFloat
+
+    static var isNative: Bool {
+        if #available(iOS 17.0, *) { return true }
+        return false
+    }
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content
+                .contentMargins(.horizontal, inset, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
+        } else {
+            content
         }
     }
 }
 
-/// Le minuteur de fin de défilement de la bande, hors de l'état observé.
-final class ComposerLookStripScrollSettle {
-    var task: Task<Void, Never>?
+/// iOS 16 : pas de marges de contenu — un retrait posé sur le contenu.
+struct ComposerLookStripLegacyInset: ViewModifier {
+    let inset: CGFloat
 
-    nonisolated deinit {}
+    func body(content: Content) -> some View {
+        if ComposerLookStripSnapping.isNative {
+            content
+        } else {
+            content.padding(.horizontal, inset)
+        }
+    }
+}
+
+/// Les cases sont les cibles de l'accroche.
+struct ComposerLookStripTargets: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.scrollTargetLayout()
+        } else {
+            content
+        }
+    }
 }
