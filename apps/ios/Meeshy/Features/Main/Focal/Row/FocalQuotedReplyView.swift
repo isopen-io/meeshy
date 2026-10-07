@@ -87,6 +87,7 @@ import MeeshyUI
 ///
 /// Gardes : `FocalQuotedReplyRichTests.test_loiDesZones_*`.
 struct FocalQuotedReplyView: View, Equatable {
+    @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
     let reply: BubbleContent.Reply
     let accentHex: String
     let isDark: Bool
@@ -247,7 +248,7 @@ struct FocalQuotedReplyView: View, Equatable {
     /// #9574 — la citation d'un contenu qui disparaît se rend dans la couche
     /// sécurisée, même dans un message ordinaire.
     var body: some View {
-        quotedBody.captureShield(reference.quotedCapture(quotedMessage: nil) == .blocked)
+        quotedBody.captureShield(reference.quotedCapture(quotedMessage: nil).shieldsCapture(surfaceAnnounces: announcesCapture))
     }
 
     private var quotedBody: some View {

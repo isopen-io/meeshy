@@ -84,10 +84,15 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     private func registerFullscreenCapture(start: MessageAttachment) {
         let viewModel = viewModel
         let catalog = catalog
-        let surface = FullscreenCaptureSurface(startAttachmentId: start.id) { attachmentId in
-            viewModel.messages.first { $0.attachments.contains { $0.id == attachmentId } }
-                ?? catalog.snapshot.carrier(ofAttachment: attachmentId)
-        }
+        let surface = FullscreenCaptureSurface(
+            startAttachmentId: start.id,
+            carrier: { attachmentId in
+                viewModel.messages.first { $0.attachments.contains { $0.id == attachmentId } }
+                    ?? catalog.snapshot.carrier(ofAttachment: attachmentId)
+            },
+            // La passerelle n'annonce qu'un message LU : ce qui est en grand l'est.
+            acknowledgeRead: { viewModel.markAsRead(messageIds: [$0.id]) }
+        )
         unregisterFullscreenCapture()
         fullscreenCapture = surface
         ContentCaptureReporter.shared.register(surface)
@@ -118,7 +123,9 @@ struct ConversationMediaGalleryLayer: ViewModifier {
         let indexed = catalog.snapshot.attachments
             .filter { !windowed.contains($0.id) }
             .compactMap { catalog.snapshot.carrier(ofAttachment: $0.id) }
-        return MessageExitOffer.captureShieldScope(for: viewModel.messages + indexed)
+        // #9617 — ce plein écran est enregistré auprès du détecteur de
+        // capture (`registerFullscreenCapture`) : une flamme y est annoncée.
+        return MessageExitOffer.captureShieldScope(for: viewModel.messages + indexed, surfaceAnnounces: true)
     }
 
     private func gallery(start startAttachment: MessageAttachment) -> some View {

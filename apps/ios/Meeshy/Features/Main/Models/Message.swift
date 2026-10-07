@@ -93,12 +93,14 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
         .only(Set(messages.filter { $0.exitOffer.offers(.save) }.flatMap { $0.attachments.map(\.id) }))
     }
 
-    /// Les pièces qu'une visionneuse rend dans la couche sécurisée (#9574) :
-    /// toutes, SAUF celles d'un message dont la capture n'est pas noire — une
-    /// flamme est annoncée, pas noircie (#9617). Une pièce dont le porteur est
-    /// inconnu est protégée.
-    static func captureShieldScope(for messages: [Message]) -> CaptureShieldScope {
-        .allExcept(Set(messages.filter { $0.exitOffer.capture != .blocked }.flatMap { $0.attachments.map(\.id) }))
+    /// Les pièces qu'une visionneuse rend dans la couche sécurisée (#9574,
+    /// #9617) : toutes, SAUF celles d'un message que la règle « annoncé OU
+    /// noir » laisse en clair — une flamme seulement si la visionneuse
+    /// ANNONCE sa capture (`surfaceAnnounces`, fermé par défaut). Une pièce
+    /// dont le porteur est inconnu est protégée.
+    static func captureShieldScope(for messages: [Message], surfaceAnnounces: Bool = false) -> CaptureShieldScope {
+        .allExcept(Set(messages.filter { !$0.exitOffer.capture.shieldsCapture(surfaceAnnounces: surfaceAnnounces) }
+            .flatMap { $0.attachments.map(\.id) }))
     }
 }
 

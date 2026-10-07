@@ -48,7 +48,7 @@ extension ConversationView {
     func composerReplyBanner(_ reply: ReplyReference) -> some View {
         let quoted = viewModel.messages.first { $0.id == reply.messageId }
         return composerReplyBannerBody(reply)
-            .captureShield(reply.quotedCapture(quotedMessage: quoted) == .blocked)
+            .captureShield(reply.quotedCapture(quotedMessage: quoted).shieldsCapture())
     }
 
     private func composerReplyBannerBody(_ reply: ReplyReference) -> some View {

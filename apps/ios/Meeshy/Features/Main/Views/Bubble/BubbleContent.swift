@@ -355,10 +355,11 @@ nonisolated struct BubbleContent: Equatable {
     /// Ce que les visionneuses ouvertes depuis ce message peuvent laisser
     /// sortir (#9573) — projection de `Message.exitGate`, posée par le builder.
     var exitGate: ContentExitGate = .open
-    /// La capture d'écran de ce message est bloquée (#9574) — projection de
-    /// `Message.exitOffer.capture`, posée par le builder : son contenu se rend
-    /// dans la couche sécurisée (`captureShield`), dans les trois peaux.
-    var capturesBlocked: Bool = false
+    /// Le verdict de capture de ce message (#9574, #9617) — projection de
+    /// `Message.exitOffer.capture`, posée par le builder. La peau le lit avec
+    /// `shieldsCapture(surfaceAnnounces:)` : noir pour une vue unique, et pour
+    /// une flamme partout où la surface n'annonce pas sa capture.
+    var captureVerdict: ContentExitLaw.CaptureVerdict = .free
     /// Vue unique scellée dont le toucher ouvre un PLEIN ÉCRAN (#8009) —
     /// l'image ou la vidéo que le sceau a retirée du modèle.
     var viewOnceOpensFullscreen: Bool = false
@@ -479,7 +480,7 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.isBurning == rhs.isBurning
             && lhs.isViewOnceRevealed == rhs.isViewOnceRevealed
             && lhs.exitGate == rhs.exitGate
-            && lhs.capturesBlocked == rhs.capturesBlocked
+            && lhs.captureVerdict == rhs.captureVerdict
             && lhs.viewOnceOpensFullscreen == rhs.viewOnceOpensFullscreen
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce

@@ -259,7 +259,7 @@ struct ForwardPickerSheet: View {
 
     /// Aperçu digne d'un média : type localisé + compteur, plus jamais « [Media] ».
     /// Une flamme à durée se transfère : son aperçu se rend dans la couche sécurisée (#9574).
-    private var previewCaptureBlocked: Bool { message.exitOffer.capture == .blocked }
+    private var previewCaptureBlocked: Bool { message.exitOffer.capture.shieldsCapture() }
 
     private var previewText: String {
         if !message.content.isEmpty { return message.content }

@@ -1848,7 +1848,7 @@ final class MessageListViewController: UIViewController {
                 .environmentObject(host)
                 .environmentObject(stories)
                 .environmentObject(statuses)
-                .conversationListObject(convList)
+                .conversationListObject(convList).announcesCaptures() // #9617 — le fil déclare ce qu'il montre
                 // Révélé des heures au défilement (successeur de la pilule
                 // « jour · heure »). Observé par `FocalRevealedTime` SEULE —
                 // une `Text` et rien d'autre — donc son basculement

@@ -109,7 +109,7 @@ struct ThreadView: View {
             Text(parentMessage.content)
                 .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
-                .captureShield(parentMessage.exitOffer.capture == .blocked) // #9574
+                .captureShield(parentMessage.exitOffer.capture.shieldsCapture()) // #9574
         }
         .padding(MeeshySpacing.mdPlus)
         .background(
@@ -173,7 +173,7 @@ struct ThreadView: View {
                 Text(message.content)
                     .font(.subheadline)
                     .foregroundColor(theme.textPrimary)
-                    .captureShield(message.exitOffer.capture == .blocked) // #9574
+                    .captureShield(message.exitOffer.capture.shieldsCapture()) // #9574
             }
             .accessibilityElement(children: .combine)
 

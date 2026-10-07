@@ -61,7 +61,7 @@ extension ConversationInfoSheet {
 
     /// #9574 — l'aperçu d'un épinglé qui disparaît, dans la couche sécurisée.
     func pinnedPreviewRow(_ msg: Message) -> some View {
-        pinnedPreviewRowBody(msg).captureShield(msg.exitOffer.capture == .blocked)
+        pinnedPreviewRowBody(msg).captureShield(msg.exitOffer.capture.shieldsCapture())
     }
 
     private func pinnedPreviewRowBody(_ msg: Message) -> some View {
@@ -134,7 +134,7 @@ extension ConversationInfoSheet {
     }
 
     func fullPinnedRow(_ msg: Message) -> some View {
-        fullPinnedRowBody(msg).captureShield(msg.exitOffer.capture == .blocked) // #9574
+        fullPinnedRowBody(msg).captureShield(msg.exitOffer.capture.shieldsCapture()) // #9574
     }
 
     private func fullPinnedRowBody(_ msg: Message) -> some View {

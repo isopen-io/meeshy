@@ -242,7 +242,7 @@ struct ConversationMediaHubView: View {
             .contentExitGate(model.carrier(item.messageId)?.exitGate ?? .sealed)
             // #9574 — la vignette, la transcription ou le nom d'une pièce qui
             // disparaît, dans la couche sécurisée. Porteur inconnu ⇒ protégée.
-            .captureShield(model.carrier(item.messageId).map { $0.exitOffer.capture == .blocked } ?? true)
+            .captureShield(model.carrier(item.messageId).map { $0.exitOffer.capture.shieldsCapture() } ?? true)
     }
 
     @ViewBuilder

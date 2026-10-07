@@ -243,7 +243,7 @@ nonisolated enum RiverConversationMapping {
                         authorDisplayName: singleLine($0.authorName),
                         text: singleLine($0.previewText),
                         media: RiverQuotedMedia.resolve($0),
-                        capturesBlocked: $0.quotedCapture(quotedMessage: nil) == .blocked
+                        capturesBlocked: $0.quotedCapture(quotedMessage: nil).shieldsCapture()
                     )
                 },
                 systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),
@@ -293,7 +293,7 @@ nonisolated enum RiverConversationMapping {
                 tapAfterReveal: tapAfterReveal(of: message),
                 linkEmbed: linkEmbed(of: message, text: text),
                 contactCards: RiverContactCards(items: contactCards(of: message)),
-                capturesBlocked: message.exitOffer.capture == .blocked,
+                capturesBlocked: message.exitOffer.capture.shieldsCapture(),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),

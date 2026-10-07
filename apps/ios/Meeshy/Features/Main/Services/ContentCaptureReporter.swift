@@ -1,3 +1,4 @@
+import SwiftUI
 import UIKit
 import MeeshySDK
 import os
@@ -18,6 +19,43 @@ protocol ContentCaptureSource: AnyObject {
     /// couverte, seules ces surfaces comptent — le fil dessous n'est pas vu.
     var isCaptureCover: Bool { get }
     func visibleCaptureCandidates() -> [ContentCaptureCandidate]
+    /// La passerelle n'annonce qu'un message LU par l'acteur (`readAt`) ou
+    /// une vue unique ouverte : à l'instant d'une capture, la surface pose
+    /// l'accusé de lecture de ce qu'elle montre, avant la déclaration.
+    func acknowledgeVisibleReads()
+}
+
+extension ContentCaptureSource {
+    func acknowledgeVisibleReads() {}
+}
+
+// MARK: - Une surface ANNONCE-t-elle ? (fermé par défaut)
+
+/// **Un contenu qui disparaît est soit ANNONCÉ, soit NOIR — jamais capturé en
+/// silence.** Seules les surfaces ENREGISTRÉES auprès du rapporteur (le fil,
+/// la Rivière, le plein écran de la conversation) posent cette valeur ; sous
+/// elles, une flamme quitte la couche sécurisée parce que sa capture sera
+/// annoncée. Partout ailleurs — feuille « Plus », épinglés, fil de
+/// discussion, aperçu de transfert, réponse en cours, aperçu d'appui long,
+/// liste des conversations — la valeur par défaut tient : la flamme reste
+/// noire (`CaptureVerdict.shieldsCapture`).
+private struct AnnouncesCaptureKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var announcesCapture: Bool {
+        get { self[AnnouncesCaptureKey.self] }
+        set { self[AnnouncesCaptureKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// À poser SEULEMENT par une surface enregistrée auprès de
+    /// `ContentCaptureReporter` — garde : `CaptureShieldCoverageGuardTests`.
+    func announcesCaptures() -> some View {
+        environment(\.announcesCapture, true)
+    }
 }
 
 /// Ce qu'une rangée de message MONTRE et qui se déclare.
@@ -104,6 +142,8 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
     private let isScreenCaptured: @MainActor () -> Bool
     private let now: @MainActor () -> Date
     private let newCaptureId: @MainActor () -> String
+    /// Le temps laissé à l'accusé de lecture de précéder la déclaration.
+    private let readSettleDelay: Duration
     private let logger = Logger(subsystem: "me.meeshy.app", category: "content-capture")
 
     private var sources: [WeakSource] = []
@@ -119,13 +159,15 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.contains { $0.screen.isCaptured }
         },
         now: @escaping @MainActor () -> Date = { Date() },
-        newCaptureId: @escaping @MainActor () -> String = { ContentCaptureReport.newCaptureId() }
+        newCaptureId: @escaping @MainActor () -> String = { ContentCaptureReport.newCaptureId() },
+        readSettleDelay: Duration = .milliseconds(1500)
     ) {
         self.sender = sender
         self.isConversationCovered = isConversationCovered
         self.isScreenCaptured = isScreenCaptured
         self.now = now
         self.newCaptureId = newCaptureId
+        self.readSettleDelay = readSettleDelay
     }
 
     /// Installé UNE fois au lancement. Un enregistrement déjà en cours à
@@ -163,27 +205,28 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
     /// Ce qui est RÉELLEMENT à l'écran : sous un plein écran, ce qu'il montre ;
     /// sinon chaque surface montée.
     func visibleCandidates() -> [ContentCaptureCandidate] {
+        visibleSources().flatMap { $0.visibleCaptureCandidates() }
+    }
+
+    private func visibleSources() -> [ContentCaptureSource] {
         sources.removeAll { $0.value == nil }
         let covered = isConversationCovered()
-        return sources
-            .compactMap(\.value)
-            .filter { !covered || $0.isCaptureCover }
-            .flatMap { $0.visibleCaptureCandidates() }
+        return sources.compactMap(\.value).filter { !covered || $0.isCaptureCover }
     }
 
     func screenshotTaken() {
-        send(tracker.screenshot(visible: visibleCandidates(), captureId: newCaptureId()))
+        declare(tracker.screenshot(visible: visibleCandidates(), captureId: newCaptureId()))
     }
 
     func screenCaptureChanged(isCaptured: Bool) {
         if isCaptured {
             guard !tracker.isRecording else { return }
-            send(tracker.recordingStarted(visible: visibleCandidates(), captureId: newCaptureId(), at: now()))
+            declare(tracker.recordingStarted(visible: visibleCandidates(), captureId: newCaptureId(), at: now()))
             startRecordingBeat()
         } else {
             guard tracker.isRecording else { return }
             stopRecordingBeat()
-            send(tracker.recordingEnded(visible: visibleCandidates(), at: now()))
+            declare(tracker.recordingEnded(visible: visibleCandidates(), at: now()))
         }
     }
 
@@ -191,7 +234,7 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
     /// qu'il tourne se déclare, sous le même identifiant.
     func recordingBeat() {
         guard tracker.isRecording else { return }
-        send(tracker.note(visible: visibleCandidates(), at: now()))
+        declare(tracker.note(visible: visibleCandidates(), at: now()))
     }
 
     private func startRecordingBeat() {
@@ -209,13 +252,23 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
         recordingTimer = nil
     }
 
-    private func send(_ reports: [ContentCaptureReport]) {
+    /// Les surfaces posent d'abord l'accusé de lecture de ce qu'elles
+    /// montrent ; la déclaration part après `readSettleDelay`.
+    private func declare(_ reports: [ContentCaptureReport]) {
+        guard !reports.isEmpty else { return }
+        visibleSources().forEach { $0.acknowledgeVisibleReads() }
         let sender = sender
+        let delay = readSettleDelay
         for report in reports {
             Task { @MainActor [weak self] in
+                if delay > .zero { try? await Task.sleep(for: delay) }
                 do {
                     let noticed = try await sender.sendContentCapture(report)
                     self?.logger.info("capture declared kind=\(report.kind.rawValue, privacy: .public) noticed=\(noticed.count, privacy: .public)/\(report.messageIds.count, privacy: .public)")
+                } catch let refusal as ContentCaptureRefusal where refusal.isFinal {
+                    // Budget, conversation fermée, non-participant : pas de
+                    // boucle — le message reste annonçable plus tard.
+                    self?.logger.info("capture declaration refused code=\(refusal.code, privacy: .public)")
                 } catch {
                     self?.tracker.reportFailed(report)
                     self?.logger.warning("capture declaration dropped kind=\(report.kind.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -272,21 +325,30 @@ final class FullscreenCaptureSurface: ContentCaptureSource {
     private let startAttachmentId: String
     private let carrier: @MainActor (String) -> Message?
     private let currentAttachmentId: @MainActor () -> String?
+    private let acknowledgeRead: @MainActor (Message) -> Void
 
     init(
         startAttachmentId: String,
         carrier: @escaping @MainActor (String) -> Message?,
+        acknowledgeRead: @escaping @MainActor (Message) -> Void = { _ in },
         currentAttachmentId: @escaping @MainActor () -> String? = { ContentCaptureReporter.shared.fullscreenAttachmentId }
     ) {
         self.startAttachmentId = startAttachmentId
         self.carrier = carrier
+        self.acknowledgeRead = acknowledgeRead
         self.currentAttachmentId = currentAttachmentId
     }
 
     var isCaptureCover: Bool { true }
 
+    private var presented: Message? { carrier(currentAttachmentId() ?? startAttachmentId) }
+
     func visibleCaptureCandidates() -> [ContentCaptureCandidate] {
-        guard let message = carrier(currentAttachmentId() ?? startAttachmentId) else { return [] }
-        return ContentCaptureVisibility.candidates(forPresented: message)
+        presented.map(ContentCaptureVisibility.candidates(forPresented:)) ?? []
+    }
+
+    func acknowledgeVisibleReads() {
+        guard let message = presented, !message.isMe else { return }
+        acknowledgeRead(message)
     }
 }

@@ -432,7 +432,7 @@ struct MessageMoreSheet: View {
             // sa transcription et ses versions : celles d'un contenu qui
             // disparaît se rendent dans la couche sécurisée.
             destination(for: item)
-                .captureShield(message.exitOffer.capture == .blocked)
+                .captureShield(message.exitOffer.capture.shieldsCapture())
         }
         .padding(.horizontal, MeeshySpacing.lg)
     }

@@ -12,6 +12,13 @@ extension MessageListViewController: ContentCaptureSource {
 
     var isCaptureCover: Bool { false }
 
+    /// Ce qui est à l'écran est LU : l'accusé part tout de suite, seuil de
+    /// présence franchi ou non (`flushSeenNow`).
+    func acknowledgeVisibleReads() {
+        guard isViewLoaded, dataSource != nil, rendersThread else { return }
+        flushSeenNow()
+    }
+
     func visibleCaptureCandidates() -> [ContentCaptureCandidate] {
         guard isViewLoaded, dataSource != nil, rendersThread, view.window != nil else { return [] }
         return collectionView.indexPathsForVisibleItems.flatMap { indexPath -> [ContentCaptureCandidate] in

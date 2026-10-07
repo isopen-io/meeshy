@@ -25,6 +25,7 @@ import MeeshyUI
 /// `.onTapGesture` car ce sont des ZONES DE RANGÉE, pas des CONTRÔLES
 /// (même patron que la bulle historique, `mediaWithReplyContainer`).
 struct FocalRow: View {
+    @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
     let input: FocalRowInput
     let actions: FocalRowActions
 
@@ -318,8 +319,8 @@ struct FocalRow: View {
                     contentSections.viewOnceRetouch(isActive: content.viewOnceRetouchIsActive) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
                 }
             }
-            // #9574 — le contenu protégé, dans la couche sécurisée (Focal et Script).
-            .captureShield(content.capturesBlocked)
+            // #9574, #9617 — annoncé OU noir (Focal et Script).
+            .captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces: announcesCapture))
             .focalElectedLoupe(isFocused: input.isFocused, rowWidth: input.availableWidth)
 
             failedRetrySection

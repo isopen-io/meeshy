@@ -48,6 +48,7 @@ final class ContentCaptureReporterTests: XCTestCase {
         nonisolated deinit {}
         let isCaptureCover: Bool
         var candidates: [ContentCaptureCandidate]
+        private(set) var acknowledgements = 0
 
         init(isCaptureCover: Bool = false, candidates: [ContentCaptureCandidate]) {
             self.isCaptureCover = isCaptureCover
@@ -55,6 +56,7 @@ final class ContentCaptureReporterTests: XCTestCase {
         }
 
         func visibleCaptureCandidates() -> [ContentCaptureCandidate] { candidates }
+        func acknowledgeVisibleReads() { acknowledgements += 1 }
     }
 
     @MainActor
@@ -76,7 +78,8 @@ final class ContentCaptureReporterTests: XCTestCase {
             isConversationCovered: { covered },
             isScreenCaptured: { false },
             now: { Date(timeIntervalSince1970: 1_000) },
-            newCaptureId: { queue.next() }
+            newCaptureId: { queue.next() },
+            readSettleDelay: .zero
         )
         return (sut, sender)
     }
@@ -142,6 +145,58 @@ final class ContentCaptureReporterTests: XCTestCase {
         XCTAssertEqual(sender.reports, [
             ContentCaptureReport(conversationId: "conv-1", messageIds: [Self.flameId], kind: .screenshot, captureId: "cap_first00001"),
         ])
+    }
+
+    /// La passerelle n'annonce qu'un message LU : la surface pose l'accusé de
+    /// ce qu'elle montre avant la déclaration — sinon une flamme laissée en
+    /// clair serait capturée en silence.
+    func test_screenshot_acknowledgesTheVisibleReads_beforeDeclaring() async {
+        let (sut, sender) = makeSUT()
+        let source = StubSource(candidates: [
+            ContentCaptureCandidate(conversationId: "conv-1", messageId: Self.flameId, capture: .announced, isMine: false),
+        ])
+        sut.register(source)
+        sut.screenshotTaken()
+        XCTAssertEqual(source.acknowledgements, 1)
+        await waitForSends(sender, count: 1)
+        XCTAssertEqual(sender.reports.count, 1)
+    }
+
+    func test_aFinalRefusal_isNotRetriedDuringARecording() async {
+        let sender = RefusingSender()
+        let clock = Clock()
+        let sut = ContentCaptureReporter(
+            sender: sender, isConversationCovered: { false }, isScreenCaptured: { false },
+            now: { clock.now }, newCaptureId: { "rec_0123456789" }, readSettleDelay: .zero
+        )
+        let source = StubSource(candidates: [
+            ContentCaptureCandidate(conversationId: "conv-1", messageId: Self.flameId, capture: .announced, isMine: false),
+        ])
+        sut.register(source)
+        sut.screenCaptureChanged(isCaptured: true)
+        for _ in 0..<200 { await Task.yield() }
+        clock.now = clock.now.addingTimeInterval(60)
+        sut.recordingBeat()
+        for _ in 0..<200 { await Task.yield() }
+        XCTAssertEqual(sender.calls, 1, "RATE_LIMITED est final : pas de boucle, le message reste annonçable plus tard")
+        sut.screenCaptureChanged(isCaptured: false)
+    }
+
+    @MainActor
+    private final class Clock {
+        nonisolated deinit {}
+        var now = Date(timeIntervalSince1970: 1_000)
+    }
+
+    private final class RefusingSender: ContentCaptureSending, @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        var calls: Int { lock.withLock { count } }
+
+        func sendContentCapture(_ report: ContentCaptureReport) async throws -> [String] {
+            lock.withLock { count += 1 }
+            throw ContentCaptureRefusal(code: "RATE_LIMITED")
+        }
     }
 
     func test_screenshot_withNothingDeclarable_sendsNothing() async {
