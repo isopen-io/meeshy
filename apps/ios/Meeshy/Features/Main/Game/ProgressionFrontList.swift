@@ -63,7 +63,7 @@ struct ProgressionFrontList: View {
                 )
             }
             ProgressionConceptRow(
-                title: ConceptText.dashboardTitle, subtitle: ConceptText.dashboardSubtitle, symbol: "square.grid.2x2",
+                title: ConceptText.dashboardTitle, subtitle: ConceptText.dashboardHint, symbol: "square.grid.2x2",
                 identifier: "progression.dashboard", action: onOpenDashboard
             )
             ForEach(ProgressionConceptModel.cards(progress: progress, game: game)) { card in

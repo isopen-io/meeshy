@@ -121,10 +121,10 @@ final class ProgressionConceptGuardTests: XCTestCase {
         return table
     }
 
-    func test_everyConcept_hasItsNameItsWhyItsHowAndTheirSequel_inTheSevenLanguages() throws {
+    func test_everyConcept_hasItsNameItsWhyItsHowAndItsTwoTips_inTheSevenLanguages() throws {
         let table = try catalog()
         for concept in concepts {
-            for field in ["name", "why", "how", "more", "tip"] {
+            for field in ["name", "why", "how", "tip.1", "tip.2"] {
                 let key = "game.concept.\(concept).\(field)"
                 let entry = try XCTUnwrap(table[key], "\(key) : absente du catalogue")
                 for locale in locales {

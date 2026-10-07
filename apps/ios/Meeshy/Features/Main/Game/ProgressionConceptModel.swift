@@ -251,7 +251,7 @@ enum ProgressionConceptModel {
             items = [
                 urgent ? GameCopy.flameStatus(flame.status) : nil,
                 record,
-                ConceptText.chipFreezes(count(flame.freezes), count(flame.maxFreezes)),
+                ConceptText.chipFreezesOf(count(flame.freezes), count(flame.maxFreezes)),
                 flame.form.map { GameCopy.flameFormName($0) },
             ]
         case .missions:
@@ -277,7 +277,7 @@ enum ProgressionConceptModel {
             guard let season = game?.season else { return [] }
             items = [
                 GameText.seasonStars(count: season.stars),
-                ConceptText.chipWeek(count(season.week), count(GameSeason.weeks)),
+                ConceptText.chipWeekOf(count(season.week), count(GameSeason.weeks)),
                 season.completed ? nil : ConceptText.chipMissing(GameText.seasonStars(count: season.starsToNext)),
             ]
         case .prestige:

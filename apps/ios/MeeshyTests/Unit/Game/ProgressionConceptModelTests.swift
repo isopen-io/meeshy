@@ -87,7 +87,7 @@ final class ProgressionConceptModelTests: XCTestCase {
 
     func test_theSheetDevelopsTheCard_itNeverRephrasesIt() {
         for concept in ProgressionConcept.allCases {
-            let texts = [ConceptText.why(concept), ConceptText.how(concept), ConceptText.more(concept), ConceptText.tip(concept)]
+            let texts = [ConceptText.why(concept), ConceptText.how(concept), ConceptText.tip1(concept), ConceptText.tip2(concept)]
             XCTAssertEqual(Set(texts).count, 4, "\(concept.rawValue) : la fiche redit une phrase de la carte au lieu de la développer")
             XCTAssertFalse(texts.contains(""), "\(concept.rawValue) : une phrase vide")
         }

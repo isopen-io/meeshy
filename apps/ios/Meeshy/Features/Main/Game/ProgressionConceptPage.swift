@@ -5,9 +5,9 @@ import MeeshyUI
 /// LA FICHE D'UN CONCEPT (#9564) — le sous-menu de la première page. Un gabarit UNIQUE pour les quinze concepts :
 ///
 ///  1. le héros — l'emblème en grand, la valeur, la jauge vers l'étape suivante ;
-///  2. « C'est quoi ? » — la phrase de la carte (`why`), puis ce qui la développe (`more`) ;
+///  2. « C'est quoi ? » — les deux phrases de la carte, à quoi ça sert (`why`) et comment ça marche (`how`) ;
 ///  3. « Où j'en suis » — toutes les données du concept, en lignes libellé → valeur ;
-///  4. « Comment ça marche » — la phrase de la carte (`how`), puis le conseil (`tip`) ;
+///  4. « Comment en gagner » — les deux conseils qui développent la carte (`tip1`, `tip2`) ;
 ///  5. « À toi de jouer » — les GESTES du concept (frapper, ouvrir le coffre, changer une mission, protéger ou
 ///     rallumer la Flamme…) : ils vivent ICI, plus sur la première page ;
 ///  6. « Aller plus loin » — les sous-pages (classement de la ligue, parcours de saison, règles…).
@@ -140,19 +140,19 @@ struct ProgressionConceptContent: View {
             ForEach(offers) { offer in
                 GamePhotoOfferView(moment: offer, onStart: { photos.start($0) }, onLater: { photos.later($0) })
             }
-            section(ConceptText.sectionWhat) {
+            section(ConceptText.ficheWhat) {
                 sentence(ConceptText.why(concept), strong: true)
-                sentence(ConceptText.more(concept))
+                sentence(ConceptText.how(concept))
             }
             let facts = ProgressionConceptModel.facts(concept, progress: progress, game: game)
             if !facts.isEmpty {
-                section(ConceptText.sectionWhere) {
+                section(ConceptText.ficheWhere) {
                     ProgressionConceptFacts(facts: facts)
                 }
             }
-            section(ConceptText.sectionHow) {
-                sentence(ConceptText.how(concept), strong: true)
-                sentence(ConceptText.tip(concept))
+            section(ConceptText.ficheEarn) {
+                sentence(ConceptText.tip1(concept))
+                sentence(ConceptText.tip2(concept))
             }
             if ProgressionConceptGestures.exist(for: concept, game: game) {
                 ProgressionConceptSectionTitle(text: ConceptText.sectionAct)
@@ -163,7 +163,7 @@ struct ProgressionConceptContent: View {
             }
             let links = ProgressionConceptModel.links(concept).filter { game != nil || !$0.needsGame }
             if !links.isEmpty {
-                ProgressionConceptSectionTitle(text: ConceptText.sectionMore)
+                ProgressionConceptSectionTitle(text: ConceptText.ficheMore)
                 VStack(spacing: MeeshySpacing.sm) {
                     ForEach(links) { link in
                         ProgressionConceptRow(

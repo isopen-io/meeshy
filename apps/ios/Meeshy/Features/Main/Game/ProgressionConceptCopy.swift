@@ -4,10 +4,12 @@ import MeeshySDK
 // MARK: - Ce que disent les concepts de Progression (#9564)
 //
 // Une SEULE source de texte par concept : la carte de la première page dit « à quoi ça sert » (`why`) et « comment
-// ça marche » (`how`) ; la fiche reprend ces deux phrases et les DÉVELOPPE (`more`, `tip`) — jamais deux
-// formulations du même concept. Les clés `game.concept.<clé>.why` / `.how` sont celles du catalogue du web, phrase
-// pour phrase. Chaque accesseur est une CLÉ LITTÉRALE, que la garde du catalogue sait lire ; les sept langues vivent
-// dans `Localizable.xcstrings`. Les nombres arrivent déjà formatés (`GameCopy.formatCount`).
+// ça marche » (`how`) ; la fiche reprend ces deux phrases sous « C’est quoi ? » et les DÉVELOPPE par deux conseils
+// (`tip1`, `tip2`) — jamais deux formulations du même concept. Les clés `game.concept.<clé>.name|why|how|tip.1|tip.2`,
+// `game.fiche.*` et `game.dashboard.*` sont celles du catalogue du web
+// (`apps/web/src/lib/interface-catalogs/catalog-game-<langue>.ts`), dans les sept langues, phrase pour phrase : une
+// demande porteur n'est jamais un écart de plateforme. Chaque accesseur est une CLÉ LITTÉRALE, que la garde du
+// catalogue sait lire. Les nombres arrivent déjà formatés (`GameCopy.formatCount`).
 enum ConceptText {
 
     /// Le nom du concept, tel que la carte, la fiche et le tableau de bord le disent.
@@ -31,103 +33,91 @@ enum ConceptText {
         }
     }
 
-    /// À quoi ça sert — UNE phrase, lisible à 13 ans.
+    /// À quoi ça sert — UNE phrase, lisible à 13 ans. La carte la dit, la fiche la reprend sous « C’est quoi ? ».
     static func why(_ concept: ProgressionConcept) -> String {
         switch concept {
         case .level: String(localized: "game.concept.level.why", defaultValue: "Ton niveau montre le chemin que tu as parcouru sur Meeshy.", bundle: .main)
-        case .points: String(localized: "game.concept.points.why", defaultValue: "Les points sont ce que tu gagnes en utilisant Meeshy.", bundle: .main)
-        case .meesh: String(localized: "game.concept.meesh.why", defaultValue: "Les Meeshes sont les pièces du jeu : elles se gardent ou se dépensent.", bundle: .main)
-        case .glory: String(localized: "game.concept.glory.why", defaultValue: "La Gloire fait ton rang. Elle ne redescend jamais.", bundle: .main)
-        case .flame: String(localized: "game.concept.flame.why", defaultValue: "Ta Flamme compte les jours d’affilée où tu as fait un geste.", bundle: .main)
-        case .missions: String(localized: "game.concept.missions.why", defaultValue: "Les missions te donnent trois petits buts chaque jour.", bundle: .main)
-        case .league: String(localized: "game.concept.league.why", defaultValue: "La ligue te compare chaque semaine à des joueurs de ton niveau.", bundle: .main)
-        case .season: String(localized: "game.concept.season.why", defaultValue: "La saison est un parcours de huit semaines avec des cadeaux à chaque étape.", bundle: .main)
-        case .prestige: String(localized: "game.concept.prestige.why", defaultValue: "Le Prestige est une étoile pour celles et ceux qui ont atteint le niveau 100.", bundle: .main)
-        case .elans: String(localized: "game.concept.elans.why", defaultValue: "Un élan multiplie les points que tu gagnes.", bundle: .main)
-        case .badges: String(localized: "game.concept.badges.why", defaultValue: "Un badge récompense ce que tu fais souvent.", bundle: .main)
-        case .defis: String(localized: "game.concept.defis.why", defaultValue: "Les défis sont des buts à long terme, à ton rythme.", bundle: .main)
-        case .succes: String(localized: "game.concept.succes.why", defaultValue: "Un succès marque un grand moment de ton histoire sur Meeshy.", bundle: .main)
-        case .showcase: String(localized: "game.concept.showcase.why", defaultValue: "Ta vitrine garde tes trophées et les montre à qui tu veux.", bundle: .main)
-        case .atlas: String(localized: "game.concept.atlas.why", defaultValue: "L’Atlas collectionne les langues avec lesquelles tu as vraiment échangé.", bundle: .main)
+        case .points: String(localized: "game.concept.points.why", defaultValue: "Les points font monter ton niveau et servent à frapper des Meeshes.", bundle: .main)
+        case .meesh: String(localized: "game.concept.meesh.why", defaultValue: "La Meesh est la pièce rare de Meeshy : elle se garde ou se dépense.", bundle: .main)
+        case .glory: String(localized: "game.concept.glory.why", defaultValue: "La Gloire donne ton rang, et ton rang ne baisse jamais.", bundle: .main)
+        case .flame: String(localized: "game.concept.flame.why", defaultValue: "Ta Flamme compte tes jours d’affilée et augmente tes récompenses de mission.", bundle: .main)
+        case .missions: String(localized: "game.concept.missions.why", defaultValue: "Les missions te donnent un but chaque jour, et des points en plus.", bundle: .main)
+        case .league: String(localized: "game.concept.league.why", defaultValue: "La ligue te mesure chaque semaine à 29 autres joueurs.", bundle: .main)
+        case .season: String(localized: "game.concept.season.why", defaultValue: "La saison est un parcours de huit semaines, avec une coupe au bout.", bundle: .main)
+        case .prestige: String(localized: "game.concept.prestige.why", defaultValue: "Le Prestige récompense ceux qui atteignent le niveau 100.", bundle: .main)
+        case .elans: String(localized: "game.concept.elans.why", defaultValue: "Un élan multiplie les points de tes prochains gestes.", bundle: .main)
+        case .badges: String(localized: "game.concept.badges.why", defaultValue: "Un badge montre ce que tu fais le plus sur Meeshy.", bundle: .main)
+        case .defis: String(localized: "game.concept.defis.why", defaultValue: "Les défis sont des paliers à franchir, l’un après l’autre.", bundle: .main)
+        case .succes: String(localized: "game.concept.succes.why", defaultValue: "Un succès marque un moment rare de ton histoire sur Meeshy.", bundle: .main)
+        case .showcase: String(localized: "game.concept.showcase.why", defaultValue: "Ta vitrine expose les trophées que tu as gagnés.", bundle: .main)
+        case .atlas: String(localized: "game.concept.atlas.why", defaultValue: "L’Atlas garde un tampon pour chaque langue dans laquelle tu as échangé.", bundle: .main)
         }
     }
 
-    /// Comment ça marche — UNE phrase.
+    /// Comment ça marche — UNE phrase. La carte la dit, la fiche la reprend à la suite du pourquoi.
     static func how(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.how", defaultValue: "Chaque geste donne des points, et les points font monter le niveau.", bundle: .main)
-        case .points: String(localized: "game.concept.points.how", defaultValue: "Écrire, répondre, publier, appeler : chaque geste en rapporte.", bundle: .main)
-        case .meesh: String(localized: "game.concept.meesh.how", defaultValue: "Tu échanges des points contre une Meesh : c’est la frappe.", bundle: .main)
-        case .glory: String(localized: "game.concept.glory.how", defaultValue: "Tu en gagnes en frappant des Meeshes et en finissant des missions.", bundle: .main)
-        case .flame: String(localized: "game.concept.flame.how", defaultValue: "Un geste par jour la garde allumée. Un jour sans rien, et elle s’éteint.", bundle: .main)
-        case .missions: String(localized: "game.concept.missions.how", defaultValue: "Finis-en une pour gagner des points. Finis les trois pour ouvrir le coffre.", bundle: .main)
-        case .league: String(localized: "game.concept.league.how", defaultValue: "Les points de la semaine font le classement : les premiers montent.", bundle: .main)
-        case .season: String(localized: "game.concept.season.how", defaultValue: "Les missions et le duo donnent des étoiles, et les étoiles ouvrent les étapes.", bundle: .main)
-        case .prestige: String(localized: "game.concept.prestige.how", defaultValue: "Au niveau 100, tu repars du niveau 1 et tu gagnes une étoile et de la Gloire.", bundle: .main)
-        case .elans: String(localized: "game.concept.elans.how", defaultValue: "Fais des choses différentes les mêmes jours : messages, stories, posts, appels.", bundle: .main)
-        case .badges: String(localized: "game.concept.badges.how", defaultValue: "Chaque sorte de geste a ses paliers : atteins-en un, le badge s’allume.", bundle: .main)
-        case .defis: String(localized: "game.concept.defis.how", defaultValue: "Chaque défi a une condition : remplis-la, il est à toi pour toujours.", bundle: .main)
-        case .succes: String(localized: "game.concept.succes.how", defaultValue: "Il se débloque tout seul quand tu réunis ce qu’il demande.", bundle: .main)
-        case .showcase: String(localized: "game.concept.showcase.how", defaultValue: "Les coupes de ligue, de saison, de Prestige et de Flamme s’y posent toutes seules.", bundle: .main)
-        case .atlas: String(localized: "game.concept.atlas.how", defaultValue: "Un message envoyé et un message reçu dans une langue : tu gagnes son tampon.", bundle: .main)
+        case .level: String(localized: "game.concept.level.how", defaultValue: "Tes points remplissent l’anneau : quand il est plein, tu montes d’un niveau.", bundle: .main)
+        case .points: String(localized: "game.concept.points.how", defaultValue: "Chaque geste utile en rapporte : écrire, parler, publier, réagir, inviter.", bundle: .main)
+        case .meesh: String(localized: "game.concept.meesh.how", defaultValue: "Tu la frappes avec tes points. Plus on en frappe, plus la suivante coûte.", bundle: .main)
+        case .glory: String(localized: "game.concept.glory.how", defaultValue: "Chaque frappe, chaque record et chaque succès en ajoute.", bundle: .main)
+        case .flame: String(localized: "game.concept.flame.how", defaultValue: "Un geste par jour la fait grandir. Un gel couvre un jour manqué.", bundle: .main)
+        case .missions: String(localized: "game.concept.missions.how", defaultValue: "Trois missions par jour. Quand elles sont faites, tu ouvres le coffre.", bundle: .main)
+        case .league: String(localized: "game.concept.league.how", defaultValue: "Tes points de la semaine font ton rang. Les premiers montent de ligue.", bundle: .main)
+        case .season: String(localized: "game.concept.season.how", defaultValue: "Les missions et le duo donnent des étoiles. Les étoiles ouvrent les étapes.", bundle: .main)
+        case .prestige: String(localized: "game.concept.prestige.how", defaultValue: "Ton niveau repart à 1. Tu gagnes une étoile, un trophée et de la Gloire.", bundle: .main)
+        case .elans: String(localized: "game.concept.elans.how", defaultValue: "Fais des gestes de plusieurs familles ces jours-ci pour le déclencher.", bundle: .main)
+        case .badges: String(localized: "game.concept.badges.how", defaultValue: "Répète un geste : son badge change de matière, du cuivre au prisme.", bundle: .main)
+        case .defis: String(localized: "game.concept.defis.how", defaultValue: "Chaque palier atteint ouvre le suivant, un peu plus haut.", bundle: .main)
+        case .succes: String(localized: "game.concept.succes.how", defaultValue: "Il se décroche d’un coup, quand tu réunis ce qu’il demande.", bundle: .main)
+        case .showcase: String(localized: "game.concept.showcase.how", defaultValue: "Chaque coupe s’y range toute seule. Tu choisis l’ordre et qui la voit.", bundle: .main)
+        case .atlas: String(localized: "game.concept.atlas.how", defaultValue: "Envoie un message et reçois-en un dans une langue : le tampon se pose.", bundle: .main)
         }
     }
 
-    /// La suite du « C’est quoi ? » de la fiche : elle développe `why`, elle ne le redit pas.
-    static func more(_ concept: ProgressionConcept) -> String {
+    /// Le premier conseil de la fiche, sous « Comment en gagner ».
+    static func tip1(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.more", defaultValue: "Il y a cent niveaux, rangés en dix paliers. Chaque palier a son nom et son anneau.", bundle: .main)
-        case .points: String(localized: "game.concept.points.more", defaultValue: "Tes points font ton niveau. Tu peux aussi les changer en Meeshes.", bundle: .main)
-        case .meesh: String(localized: "game.concept.meesh.more", defaultValue: "Les Meeshes gardées remplissent ton trésor. Plus tu en as frappé, plus la suivante coûte cher.", bundle: .main)
-        case .glory: String(localized: "game.concept.glory.more", defaultValue: "Il y a onze rangs, chacun avec son blason et ses divisions.", bundle: .main)
-        case .flame: String(localized: "game.concept.flame.more", defaultValue: "Plus elle dure, plus elle grandit, et plus tes missions rapportent.", bundle: .main)
-        case .missions: String(localized: "game.concept.missions.more", defaultValue: "Elles changent chaque jour à minuit et s’ouvrent au niveau 5.", bundle: .main)
-        case .league: String(localized: "game.concept.league.more", defaultValue: "Il y a huit ligues, de Quartz à Prisme. Elle s’ouvre au niveau 10.", bundle: .main)
-        case .season: String(localized: "game.concept.season.more", defaultValue: "Tout le parcours est gratuit. Finis-le pour gagner la coupe de la saison.", bundle: .main)
-        case .prestige: String(localized: "game.concept.prestige.more", defaultValue: "Tu peux gagner cinq étoiles en tout. Rien ne t’y oblige : rester au sommet est aussi un choix.", bundle: .main)
-        case .elans: String(localized: "game.concept.elans.more", defaultValue: "Chaque sorte de geste est une famille. Plus tu en tiens en même temps, plus le multiplicateur monte.", bundle: .main)
-        case .badges: String(localized: "game.concept.badges.more", defaultValue: "Du cuivre au prisme, la matière du badge dit jusqu’où tu es allé.", bundle: .main)
-        case .defis: String(localized: "game.concept.defis.more", defaultValue: "Ils sont rangés par thème : messages, stories, posts, appels et plus encore.", bundle: .main)
-        case .succes: String(localized: "game.concept.succes.more", defaultValue: "Chaque succès dit sa condition, et sa rareté quand elle est mesurée.", bundle: .main)
-        case .showcase: String(localized: "game.concept.showcase.more", defaultValue: "Tu choisis l’ordre des trophées, et qui peut les voir.", bundle: .main)
-        case .atlas: String(localized: "game.concept.atlas.more", defaultValue: "Meeshy traduit pour toi : écris dans ta langue, on te répond dans la sienne.", bundle: .main)
+        case .level: String(localized: "game.concept.level.tip.1", defaultValue: "Fais les missions du jour : elles rapportent beaucoup de points.", bundle: .main)
+        case .points: String(localized: "game.concept.points.tip.1", defaultValue: "Publie, commente, réagis : chaque famille de gestes a son barème.", bundle: .main)
+        case .meesh: String(localized: "game.concept.meesh.tip.1", defaultValue: "Garde tes Meeshes pour faire monter ton trésor.", bundle: .main)
+        case .glory: String(localized: "game.concept.glory.tip.1", defaultValue: "Frappe une Meesh : chaque frappe ajoute de la Gloire.", bundle: .main)
+        case .flame: String(localized: "game.concept.flame.tip.1", defaultValue: "Fais au moins un geste chaque jour.", bundle: .main)
+        case .missions: String(localized: "game.concept.missions.tip.1", defaultValue: "Commence par la mission la plus facile.", bundle: .main)
+        case .league: String(localized: "game.concept.league.tip.1", defaultValue: "Joue un peu chaque jour : les points de la semaine s’additionnent.", bundle: .main)
+        case .season: String(localized: "game.concept.season.tip.1", defaultValue: "Finis tes missions du jour pour gagner des étoiles.", bundle: .main)
+        case .prestige: String(localized: "game.concept.prestige.tip.1", defaultValue: "Monte jusqu’au niveau 100.", bundle: .main)
+        case .elans: String(localized: "game.concept.elans.tip.1", defaultValue: "Varie tes gestes : écris, publie, commente, réagis.", bundle: .main)
+        case .badges: String(localized: "game.concept.badges.tip.1", defaultValue: "Choisis un geste que tu aimes et refais-le souvent.", bundle: .main)
+        case .defis: String(localized: "game.concept.defis.tip.1", defaultValue: "Regarde le prochain palier et avance vers lui.", bundle: .main)
+        case .succes: String(localized: "game.concept.succes.tip.1", defaultValue: "Explore l’application : certains succès se cachent.", bundle: .main)
+        case .showcase: String(localized: "game.concept.showcase.tip.1", defaultValue: "Finis en haut de ta ligue pour gagner une coupe.", bundle: .main)
+        case .atlas: String(localized: "game.concept.atlas.tip.1", defaultValue: "Écris à quelqu’un dans une autre langue que la tienne.", bundle: .main)
         }
     }
 
-    /// Le conseil de la fiche, sous « Comment ça marche ».
-    static func tip(_ concept: ProgressionConcept) -> String {
+    /// Le second conseil de la fiche.
+    static func tip2(_ concept: ProgressionConcept) -> String {
         switch concept {
-        case .level: String(localized: "game.concept.level.tip", defaultValue: "Frapper une Meesh coûte des points : ton niveau peut redescendre, ton record reste.", bundle: .main)
-        case .points: String(localized: "game.concept.points.tip", defaultValue: "Certains moments rapportent plus : le Vent arrière et l’Heure Prisme.", bundle: .main)
-        case .meesh: String(localized: "game.concept.meesh.tip", defaultValue: "Une Meesh sert à changer une mission, à protéger ta Flamme ou à la rallumer.", bundle: .main)
-        case .glory: String(localized: "game.concept.glory.tip", defaultValue: "Ton rang reste, même quand ton niveau redescend.", bundle: .main)
-        case .flame: String(localized: "game.concept.flame.tip", defaultValue: "Un gel la protège un jour d’absence. Éteinte, tu peux parfois la rallumer.", bundle: .main)
-        case .missions: String(localized: "game.concept.missions.tip", defaultValue: "Une mission ne te plaît pas ? Tu peux en changer une par jour contre 1 Meesh.", bundle: .main)
-        case .league: String(localized: "game.concept.league.tip", defaultValue: "Tu joues sous un pseudonyme. La ligue entre amis, elle, est toujours ouverte.", bundle: .main)
-        case .season: String(localized: "game.concept.season.tip", defaultValue: "Chaque étape ouverte se réclame d’un toucher, sur la page de la saison.", bundle: .main)
-        case .prestige: String(localized: "game.concept.prestige.tip", defaultValue: "Ton rang, ta Gloire, tes Meeshes et ta Flamme restent.", bundle: .main)
-        case .elans: String(localized: "game.concept.elans.tip", defaultValue: "L’élan retombe quand une famille reste sans geste trop longtemps.", bundle: .main)
-        case .badges: String(localized: "game.concept.badges.tip", defaultValue: "Frapper une Meesh peut éteindre un badge : refais le geste pour le rallumer.", bundle: .main)
-        case .defis: String(localized: "game.concept.defis.tip", defaultValue: "Tu ne vois que ceux que tu peux vraiment atteindre.", bundle: .main)
-        case .succes: String(localized: "game.concept.succes.tip", defaultValue: "Touche un succès pour le revoir en grand.", bundle: .main)
-        case .showcase: String(localized: "game.concept.showcase.tip", defaultValue: "Un visiteur ne voit que le mois du trophée, jamais le jour.", bundle: .main)
-        case .atlas: String(localized: "game.concept.atlas.tip", defaultValue: "Ton Atlas est privé par défaut : tu choisis qui le voit.", bundle: .main)
+        case .level: String(localized: "game.concept.level.tip.2", defaultValue: "Garde ta Flamme allumée : elle augmente tes récompenses.", bundle: .main)
+        case .points: String(localized: "game.concept.points.tip.2", defaultValue: "Déclenche un élan pour multiplier tes points.", bundle: .main)
+        case .meesh: String(localized: "game.concept.meesh.tip.2", defaultValue: "Dépense-les pour protéger ta Flamme ou changer une mission.", bundle: .main)
+        case .glory: String(localized: "game.concept.glory.tip.2", defaultValue: "Bats tes records et décroche des succès.", bundle: .main)
+        case .flame: String(localized: "game.concept.flame.tip.2", defaultValue: "Garde un gel en réserve pour les jours sans.", bundle: .main)
+        case .missions: String(localized: "game.concept.missions.tip.2", defaultValue: "Une mission ne te plaît pas ? Change-la, une fois par jour.", bundle: .main)
+        case .league: String(localized: "game.concept.league.tip.2", defaultValue: "Vise les premières places avant dimanche soir.", bundle: .main)
+        case .season: String(localized: "game.concept.season.tip.2", defaultValue: "Joue en duo avec un ami : la récompense est doublée.", bundle: .main)
+        case .prestige: String(localized: "game.concept.prestige.tip.2", defaultValue: "Passe en Prestige quand tu veux : rien ne t’y oblige.", bundle: .main)
+        case .elans: String(localized: "game.concept.elans.tip.2", defaultValue: "Reviens plusieurs jours de suite pour le garder.", bundle: .main)
+        case .badges: String(localized: "game.concept.badges.tip.2", defaultValue: "Un badge éteint se rallume : rien n’est perdu.", bundle: .main)
+        case .defis: String(localized: "game.concept.defis.tip.2", defaultValue: "Essaie des gestes nouveaux : chacun a ses défis.", bundle: .main)
+        case .succes: String(localized: "game.concept.succes.tip.2", defaultValue: "Les plus rares ajoutent le plus de Gloire.", bundle: .main)
+        case .showcase: String(localized: "game.concept.showcase.tip.2", defaultValue: "Termine une saison ou passe en Prestige.", bundle: .main)
+        case .atlas: String(localized: "game.concept.atlas.tip.2", defaultValue: "Attends sa réponse : il faut un message dans chaque sens.", bundle: .main)
         }
     }
-
-    static var dashboardTitle: String { String(localized: "game.concept.dashboard.title", defaultValue: "Tableau de bord", bundle: .main) }
-
-    static var dashboardSubtitle: String { String(localized: "game.concept.dashboard.subtitle", defaultValue: "Tout ton jeu, d’un coup d’œil", bundle: .main) }
-
-    static var sectionWhat: String { String(localized: "game.concept.section.what", defaultValue: "C’est quoi ?", bundle: .main) }
-
-    static var sectionWhere: String { String(localized: "game.concept.section.where", defaultValue: "Où j’en suis", bundle: .main) }
-
-    static var sectionHow: String { String(localized: "game.concept.section.how", defaultValue: "Comment ça marche", bundle: .main) }
 
     static var sectionAct: String { String(localized: "game.concept.section.act", defaultValue: "À toi de jouer", bundle: .main) }
-
-    static var sectionMore: String { String(localized: "game.concept.section.more", defaultValue: "Aller plus loin", bundle: .main) }
 
     static var cardHint: String { String(localized: "game.concept.card.hint", defaultValue: "Ouvre la fiche", bundle: .main) }
 
@@ -187,10 +177,6 @@ enum ConceptText {
         String(localized: "game.concept.chip.convertible", defaultValue: "\(a) à convertir", bundle: .main)
     }
 
-    static func chipNextPrice(_ a: String) -> String {
-        String(localized: "game.concept.chip.next_price", defaultValue: "Prochaine : \(a)", bundle: .main)
-    }
-
     static var chipMintReady: String { String(localized: "game.concept.chip.mint_ready", defaultValue: "Prête à frapper", bundle: .main) }
 
     static func chipMinted(_ a: String) -> String {
@@ -203,15 +189,9 @@ enum ConceptText {
 
     static var chipTopRank: String { String(localized: "game.concept.chip.top_rank", defaultValue: "Rang le plus haut", bundle: .main) }
 
-    static func chipFreezes(_ a: String, _ b: String) -> String {
-        String(localized: "game.concept.chip.freezes", defaultValue: "Gels : \(a) / \(b)", bundle: .main)
+    static func chipFreezesOf(_ a: String, _ b: String) -> String {
+        String(localized: "game.concept.chip.freezes_of", defaultValue: "Gels : \(a) / \(b)", bundle: .main)
     }
-
-    static var chipChestReady: String { String(localized: "game.concept.chip.chest.ready", defaultValue: "Coffre prêt", bundle: .main) }
-
-    static var chipChestLocked: String { String(localized: "game.concept.chip.chest.locked", defaultValue: "Coffre fermé", bundle: .main) }
-
-    static var chipChestClaimed: String { String(localized: "game.concept.chip.chest.claimed", defaultValue: "Coffre ouvert", bundle: .main) }
 
     static var chipReroll: String { String(localized: "game.concept.chip.reroll", defaultValue: "1 changement possible", bundle: .main) }
 
@@ -245,8 +225,8 @@ enum ConceptText {
 
     static var chipStanding: String { String(localized: "game.concept.chip.standing", defaultValue: "Avec ton assise", bundle: .main) }
 
-    static func chipWeek(_ a: String, _ b: String) -> String {
-        String(localized: "game.concept.chip.week", defaultValue: "Semaine \(a) sur \(b)", bundle: .main)
+    static func chipWeekOf(_ a: String, _ b: String) -> String {
+        String(localized: "game.concept.chip.week_of", defaultValue: "Semaine \(a) sur \(b)", bundle: .main)
     }
 
     static func chipGloryOnPass(_ a: String) -> String {
@@ -360,5 +340,27 @@ enum ConceptText {
     static var factAvailable: String { String(localized: "game.concept.fact.available", defaultValue: "Disponible", bundle: .main) }
 
     static var factUsed: String { String(localized: "game.concept.fact.used", defaultValue: "Déjà utilisé", bundle: .main) }
+
+    static var ficheWhat: String { String(localized: "game.fiche.what", defaultValue: "C’est quoi ?", bundle: .main) }
+
+    static var ficheWhere: String { String(localized: "game.fiche.where", defaultValue: "Où j’en suis", bundle: .main) }
+
+    static var ficheEarn: String { String(localized: "game.fiche.earn", defaultValue: "Comment en gagner", bundle: .main) }
+
+    static var ficheMore: String { String(localized: "game.fiche.more", defaultValue: "Aller plus loin", bundle: .main) }
+
+    static var dashboardTitle: String { String(localized: "game.dashboard.title", defaultValue: "Tableau de bord", bundle: .main) }
+
+    static var dashboardHint: String { String(localized: "game.dashboard.hint", defaultValue: "Toutes tes données, concept par concept.", bundle: .main) }
+
+    static func chipNextPrice(_ a: String) -> String {
+        String(localized: "game.concept.chip.next_price", defaultValue: "Prochaine : \(a)", bundle: .main)
+    }
+
+    static var chipChestLocked: String { String(localized: "game.concept.chip.chest.locked", defaultValue: "Coffre fermé", bundle: .main) }
+
+    static var chipChestReady: String { String(localized: "game.concept.chip.chest.ready", defaultValue: "Coffre prêt", bundle: .main) }
+
+    static var chipChestClaimed: String { String(localized: "game.concept.chip.chest.claimed", defaultValue: "Coffre ouvert", bundle: .main) }
 
 }
