@@ -5,6 +5,7 @@ import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout
 import {
   AtlasStamp,
   Chest,
+  ConceptMark,
   Flame,
   GameBadge,
   LeagueGem,
@@ -57,7 +58,7 @@ export function ConceptEmblem({ concept, view, size }: { readonly concept: Progr
         <LevelRing level={game.level.level} tier={game.level.tier} progress={game.level.progress} size={size} prestige={game.level.prestige} />
       );
     case 'points':
-      return <SignatureEmblem size={size} tint={GAME_BRAND} />;
+      return <ConceptMark kind="points" size={size} />;
     case 'meesh':
       return <MeeshCoin side="obverse" size={size} edition="silver" />;
     case 'glory':
@@ -76,7 +77,7 @@ export function ConceptEmblem({ concept, view, size }: { readonly concept: Progr
     case 'prestige':
       return <Trophy kind="prestige" size={size} />;
     case 'elans':
-      return <SignatureEmblem size={size} tint={GAME_WARM} />;
+      return <ConceptMark kind="elans" size={size} />;
     case 'badges':
       return <GameBadge shape="accumulation" size={size} />;
     case 'defis':
@@ -228,6 +229,11 @@ export function ProgressionRow({
 
 export function RowEmblem({ tint = GAME_BRAND }: { readonly tint?: string }) {
   return <SignatureEmblem size={36} tint={tint} />;
+}
+
+/** L'emblème de l'entrée « Tableau de bord » : un panneau d'argent, la Signature et trois barres. */
+export function DashboardEmblem({ size = 36 }: { readonly size?: number }) {
+  return <ConceptMark kind="dashboard" size={size} />;
 }
 
 /** Les données d'un concept, libellé → valeur : la fiche (« Où j'en suis ») et le tableau de bord. */

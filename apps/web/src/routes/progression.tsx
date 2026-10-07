@@ -7,7 +7,7 @@ import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/compon
 import { Glyph } from '@/components/glyph';
 import { GlassBack } from '@/components/glass-surface';
 import { MascotCoach } from '@/components/mascot';
-import { ConceptCard, ProgressionRow, RowEmblem } from '@/components/progression-concept';
+import { ConceptCard, DashboardEmblem, ProgressionRow, RowEmblem } from '@/components/progression-concept';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, type EngagementWithGame } from '@/lib/api/engagement';
@@ -85,7 +85,7 @@ export function ProgressionBody({
       <ProgressionRow
         target={{ to: 'progressionTableau' }}
         marker="tableau"
-        emblem={<RowEmblem />}
+        emblem={<DashboardEmblem />}
         name={gameText('game.dashboard.title')}
       />
       <ul data-progression-concepts="" className={ROW_GAP}>
