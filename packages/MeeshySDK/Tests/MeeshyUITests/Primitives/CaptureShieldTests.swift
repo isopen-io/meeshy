@@ -262,6 +262,15 @@ final class CaptureShieldTests: XCTestCase {
                       "aucune fenêtre PiP ne se configure pour un contenu protégé")
     }
 
+    func test_viewers_reshieldWhatTheyPresent() throws {
+        for viewer in ["Media/ImageViewerView.swift", "Media/CodeViewerView.swift", "Media/DocumentViewerView.swift"] {
+            let code = try source(viewer)
+            XCTAssertTrue(code.contains("@Environment(\\.isCaptureShielded)privatevarisCaptureShielded"), viewer)
+            XCTAssertTrue(code.contains(".contentExitGate(exitGate).captureShield(isCaptureShielded)"),
+                          "\(viewer) : une présentation quitte la toile de l'hôte — le plein écran se protège à son tour")
+        }
+    }
+
     func test_videoControls_dropPipAndAirPlayUnderAShield() throws {
         let player = try source("Media/MeeshyVideoPlayer.swift")
         XCTAssertTrue(player.contains("ProtectedPlaybackPolicy.of(isCaptureShielded:isCaptureShielded).permitted(controls)"))

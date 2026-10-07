@@ -25,6 +25,8 @@ public struct ImageViewerView: View {
     @Environment(\.colorScheme) private var colorScheme
     /// Le portillon de sortie posé par l'hôte (#9573), reposé sur ce que cette vue présente.
     @Environment(\.contentExitGate) private var exitGate
+    /// Le bouclier de capture de l'hôte (#9574), reposé sur ce que cette vue présente.
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
     @State private var showFullscreen = false
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
@@ -88,6 +90,7 @@ public struct ImageViewerView: View {
                 onSaveRequested: onSaveRequested
             )
             .contentExitGate(exitGate)
+            .captureShield(isCaptureShielded)
         }
     }
 

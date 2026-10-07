@@ -17,6 +17,8 @@ public struct CodeViewerView: View {
     @Environment(\.colorScheme) private var colorScheme
     /// Le portillon de sortie posé par l'hôte (#9573), reposé sur ce que cette vue présente.
     @Environment(\.contentExitGate) private var exitGate
+    /// Le bouclier de capture de l'hôte (#9574), reposé sur ce que cette vue présente.
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
     @State private var showFullViewer = false
     @State private var codeContent: String?
     @State private var isLoading = true
@@ -53,6 +55,7 @@ public struct CodeViewerView: View {
                 accentColor: accentColor
             )
             .contentExitGate(exitGate)
+            .captureShield(isCaptureShielded)
         }
     }
 
