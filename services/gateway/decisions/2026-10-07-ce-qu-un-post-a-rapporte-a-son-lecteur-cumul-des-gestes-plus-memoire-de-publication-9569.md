@@ -26,7 +26,7 @@ Directive porteur du 2026-10-07 : « Trouve un moyen d'indiquer discrètement le
 
 Le prix : une page qui porte des posts du lecteur coûte une lecture du cumul ET une lecture de la mémoire, en parallèle, toutes deux groupées sur la page. Une page sans post du lecteur n'en coûte qu'une.
 
-**`EngagementPostPoints` n'a aucune relation** vers `Post` ni `User`. Sans relation, aucun `include` ne peut ramener les lignes des autres lecteurs avec un post. Le prix est que rien ne les retire tout seul : `purgePostPoints` le fait au retrait (`applyPostRemovalEffects`, best-effort) et au balayage du contenu éphémère (avant toute destruction, et il gouverne la passe). Le nom suit la famille `Engagement*` du barème : `PostEngagement` désigne déjà les sessions de visionnage.
+**`EngagementPostPoints` n'a aucune relation** vers `Post` ni `User`. Sans relation, aucun `include` ne peut ramener les lignes des autres lecteurs avec un post. Le prix est que rien ne les retire tout seul : `purgePostPoints` le fait au retrait (`applyPostRemovalEffects`, best-effort) et au balayage du contenu éphémère (avant toute destruction, et il gouverne la passe), et la suppression d'un compte retire les siennes (`GAME_PURGED_MODELS`) — une ligne par post est la trace de ses gestes, de même nature que les quotas par cible déjà purgés. Le nom suit la famille `Engagement*` du barème : `PostEngagement` désigne déjà les sessions de visionnage.
 
 **Le post se déclare à part de la cible.** `EngagementActivityOptions.postId` nomme le post où le geste a eu lieu ; `targetId` continue de porter les plafonds. Aimer un commentaire a pour cible le commentaire et pour post celui qui le porte. `creditPostEngagement` l'exige au typage : un geste du fil ne peut plus créditer sans dire à quel post.
 
@@ -44,5 +44,5 @@ Le prix : une page qui porte des posts du lecteur coûte une lecture du cumul ET
 ### Ce qui n'est pas couvert
 
 - Un post d'avant #8959, ou dont la publication n'était pas un contenu lourd avant ce lot : aucune mémoire n'existe, sa publication n'est pas retrouvable.
-- Une suppression de compte ne retire pas ses lignes de cumul — pas plus que celles de `ConversationEngagement`.
+- `ConversationEngagement`, le calque par conversation, n'est pas retiré à la suppression d'un compte : c'est un suivi, pas une règle de ce lot.
 - Les humeurs (`STATUS`) ne portent pas le champ dans leurs listes, qui ne servent aucun état de lecteur ; leur fiche le porte.

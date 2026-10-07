@@ -5106,7 +5106,8 @@ model ConversationEngagement {
 /// AUCUNE relation vers `Post` ni `User`, à dessein : sans relation, aucun
 /// `include` ne peut ramener les lignes des autres lecteurs avec un post. La
 /// ligne ne survit pas pour autant à son post — `purgePostPoints` la retire au
-/// retrait comme au balayage du contenu éphémère.
+/// retrait comme au balayage du contenu éphémère — ni à son compte, dont la
+/// purge l'emporte (`GAME_PURGED_MODELS`).
 model EngagementPostPoints {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   userId      String   @db.ObjectId

@@ -38,6 +38,8 @@ const SCHEMA_PATH = join(SRC_DIR, '../../../packages/shared/prisma/schema.prisma
 const READ_LAW = 'services/engagement/viewerPostPoints.ts';
 const ONLY_WRITER = 'services/engagement/PostPointsRecorder.ts';
 const LIST_STATE = 'services/posts/viewerPostState.ts';
+/** La suppression d'un compte retire SES lignes — par `userId`, jamais une lecture. */
+const ACCOUNT_PURGE = 'services/game/GamePurge.ts';
 
 const productionSources = (): ReadonlyArray<{ readonly path: string; readonly code: string }> =>
   walk(SRC_DIR).map((path) => ({ path: relative(SRC_DIR, path), code: stripComments(readFileSync(path, 'utf8')) }));
@@ -53,14 +55,20 @@ describe('viewerPoints — qui lit la table, qui pose le champ (#9569)', () => {
     expect(productionSources().length).toBeGreaterThan(400);
   });
 
-  it('`EngagementPostPoints` n’est lue que par sa loi de lecture et écrite que par son écrivain', () => {
-    expect(filesNaming(/\bengagementPostPoints\b/)).toEqual([ONLY_WRITER, READ_LAW].sort());
+  it('`EngagementPostPoints` n’est lue que par sa loi de lecture, écrite que par son écrivain, et retirée avec un compte par sa purge', () => {
+    expect(filesNaming(/\bengagementPostPoints\b/)).toEqual([ACCOUNT_PURGE, ONLY_WRITER, READ_LAW].sort());
   });
 
-  it('seul l’écrivain écrit ou retire une ligne', () => {
-    expect(filesNaming(/\bengagementPostPoints\s*\.\s*(create|createMany|upsert|update|updateMany|delete|deleteMany)\b/)).toEqual([
-      ONLY_WRITER,
-    ]);
+  it('seule la loi de lecture LIT la table', () => {
+    expect(filesNaming(/\bengagementPostPoints\s*\.\s*(findMany|findFirst|findUnique|count|aggregate|groupBy)\b/)).toEqual([READ_LAW]);
+  });
+
+  it('seul l’écrivain crée ou modifie une ligne', () => {
+    expect(filesNaming(/\bengagementPostPoints\s*\.\s*(create|createMany|upsert|update|updateMany)\b/)).toEqual([ONLY_WRITER]);
+  });
+
+  it('une ligne ne se retire qu’avec son post ou avec son compte', () => {
+    expect(filesNaming(/\bengagementPostPoints\s*\.\s*(delete|deleteMany)\b/)).toEqual([ACCOUNT_PURGE, ONLY_WRITER].sort());
   });
 
   it('le champ `viewerPoints` n’a qu’un producteur servi et qu’un producteur d’événement', () => {
