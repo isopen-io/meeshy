@@ -3,6 +3,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { deactivatePostTrackingLinks } from './posts/deactivatePostTrackingLinks';
+import { purgePostPoints } from './engagement/PostPointsRecorder';
 import { detachReposts } from './posts/detachReposts';
 import { buildSweepableFilter, EPHEMERAL_AUTHOR_ARCHIVE_MS, SWEPT_POST_TYPES } from './posts/ephemeralPosts';
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
@@ -295,6 +296,13 @@ export class ExpiredStoriesCleanupService {
         // posts. Le `catch` de cette passe rattrape, la passe horaire suivante
         // rejoue tout.
         await deactivatePostTrackingLinks(this.prisma, allPostIds);
+
+        // Ce que ces posts ont rapporté à chacun de leurs lecteurs (#9569).
+        // Même famille que les deux retraits ci-dessus — une ligne sans
+        // relation ni cascade vers `Post`, qui survivrait à son référent — et
+        // même régime : avant toute suppression, et il REJETTE, pour que la
+        // passe suivante rejoue tant que les posts existent encore.
+        await purgePostPoints(this.prisma, allPostIds);
 
         // G7 — collect comment ids BEFORE deleting them: their media rows
         // (PostMedia.commentId, `onDelete: SetNull`) must be purged too.

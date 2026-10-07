@@ -35,12 +35,14 @@ const trackingLinkUpdateMany = jest.fn<any>();
 const notificationDeleteMany = jest.fn<any>();
 const runCommandRaw = jest.fn<any>();
 const releasePost = jest.fn<any>();
+const postPointsDeleteMany = jest.fn<any>();
 const announceNotificationsRetracted = jest.fn<any>();
 
 const prisma = {
   adminAuditLog: { create: auditCreate },
   trackingLink: { updateMany: trackingLinkUpdateMany },
   notification: { deleteMany: notificationDeleteMany },
+  engagementPostPoints: { deleteMany: postPointsDeleteMany },
   $runCommandRaw: runCommandRaw,
 } as any;
 
@@ -70,6 +72,7 @@ beforeEach(() => {
   trackingLinkUpdateMany.mockResolvedValue({ count: 0 });
   notificationDeleteMany.mockResolvedValue({ count: 0 });
   releasePost.mockResolvedValue(undefined);
+  postPointsDeleteMany.mockResolvedValue({ count: 0 });
   announceNotificationsRetracted.mockResolvedValue(undefined);
   runCommandRaw.mockResolvedValue(rawFind([]));
 });
@@ -130,6 +133,34 @@ describe('applyPostRemovalEffects — retrait des notifications du post', () => 
       }),
     });
     expect(trackingLinkUpdateMany).toHaveBeenCalled();
+    expect(releasePost).toHaveBeenCalledWith(POST_ID);
+  });
+});
+
+/**
+ * Ce que le post a rapporté à ses lecteurs (#9569). `EngagementPostPoints` n'a
+ * ni relation ni cascade vers `Post` : sans ce retrait, la ligne de cumul de
+ * chaque lecteur survivrait pour toujours à un post que plus aucune lecture ne
+ * demande.
+ */
+describe('applyPostRemovalEffects — ce que le post a rapporté à ses lecteurs', () => {
+  it('retire les lignes de cumul du post, pour TOUS ses lecteurs', async () => {
+    await applyPostRemovalEffects(prisma, removedPost, { id: AUTHOR_ID }, soundCapture, announcer);
+
+    expect(postPointsDeleteMany).toHaveBeenCalledWith({ where: { postId: { in: [POST_ID] } } });
+  });
+
+  it('n\'emporte ni la suppression ni les autres effets quand le retrait du cumul échoue', async () => {
+    postPointsDeleteMany.mockRejectedValue(new Error('mongo down'));
+
+    await expect(
+      applyPostRemovalEffects(prisma, removedPost, { id: MODERATOR_ID, reason: 'spam' }, soundCapture, announcer)
+    ).resolves.toBeUndefined();
+
+    expect(trackingLinkUpdateMany).toHaveBeenCalledWith({
+      where: { targetId: { in: [POST_ID] } },
+      data: { isActive: false },
+    });
     expect(releasePost).toHaveBeenCalledWith(POST_ID);
   });
 });
