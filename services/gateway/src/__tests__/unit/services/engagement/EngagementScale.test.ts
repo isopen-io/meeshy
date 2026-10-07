@@ -393,7 +393,7 @@ describe('l\'annonce de l\'état au crédité', () => {
         'tool.reaction',
         { conversationId: 'c-9' },
       ),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(true);
     expect(conversationUpsert).toHaveBeenCalledTimes(1);
   });
 });
