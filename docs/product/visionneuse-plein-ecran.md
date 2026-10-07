@@ -68,6 +68,7 @@ Un plein écran, c'est une **scène** toujours sombre, avec trois zones de chrom
 - Le rail porte **ce qu'on fait au contenu** : réagir, commentaires (lire le fil, avec son compteur), repartager, enregistrer dans ses favoris, partager, enregistrer sur l'appareil, créer avec ce média, son, vues, traductions. L'ordre est celui que la loi de chaque visionneuse déclare (`lib/stories/action-rail.ts`, `ReelActionRail`, `mediaPageOffers`) : le rail parcourt une liste, il n'en décide pas.
 - **Réagir.** Sur une publication (story, réel), un toucher pose ou retire le cœur, et l'état se lit par `aria-pressed` et l'encre `--ios-error`. Sur une pièce de message, un toucher ouvre la traînée d'émojis (`ViewerReactionTray`), ancrée à gauche du bouton : les messages portent des réactions multiples, les publications un seul « j'aime ». C'est la même place et le même geste d'entrée ; seule la charge diffère, parce que les deux objets diffèrent.
 - **Son.** Bouton bascule en tête du rail : le son décrit ce qui **se passe**, les autres décrivent ce qu'on peut **faire** (arbitrage #4508).
+- **Web, visionneuse de médias (amendement du 2026-10-07, #9577).** Sur une vidéo, le muet et « ⋯ » se posent en FIN de colonne, sous « Composer » : ce sont les réglages de la lecture, ils suivent ce qu'on fait au contenu. Le muet garde le contrat de la bascule (`aria-pressed`, libellé fixe). Stories et réels gardent leur son en tête.
 
 ### 2.3 La barre basse — `ViewerBottomBar`
 
@@ -78,6 +79,7 @@ Un plein écran, c'est une **scène** toujours sombre, avec trois zones de chrom
   - écran « Médias, liens et documents » : pas de capsule, cet écran ne sait pas répondre (`reply: false`).
   Le rail ne répète **pas** « Répondre » : un contrôle par effet (D-11). « Commentaires » reste dans le rail, parce que lire le fil et y écrire sont deux intentions.
 - **Sous la capsule** : ce qui parcourt le média, la barre de lecture d'une vidéo et la pellicule.
+- **Web, vidéo d'une visionneuse de médias (amendement du 2026-10-07, #9577, `apps/web/decisions.md` D-177).** Sous la capsule, de haut en bas : la **barre de progression**, qui ne porte que la piste et va d'un bord à l'autre de l'écran ; la **ligne d'informations** « largeur × hauteur · poids · durée », où la durée affiche le temps restant et décompte pendant la lecture, et la durée totale à l'arrêt ; la **pellicule**. Le **muet** et **« ⋯ »** (vitesse, image dans l'image) ne sont plus sur la ligne de la barre : ils ferment la colonne d'actions, sous « Composer » (§ 2.2). La **pause** centrale s'efface une seconde après le début de la lecture ; un toucher sur la scène la ramène et réarme la seconde, un toucher sur le bouton visible met en pause, et en pause elle reste affichée. Effacée, elle reste nommée et focalisable (§ 5).
 - **Encoche** : `var(--safe-top)` et `var(--safe-bottom)`, jamais `env()` recopié écran par écran.
 
 ### 2.4 La matière

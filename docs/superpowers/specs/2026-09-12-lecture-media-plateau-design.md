@@ -115,6 +115,23 @@ même chose :
   par le PLACEMENT (`TransportLayout.showsSkip`), pas par le retrait d'une option du
   `ControlSet` — sans quoi le prochain hôte les ferait revenir sans le savoir.
 
+**Amendement WEB du 2026-10-07 (#9577 ; spec
+`2026-10-07-contenus-ephemeres-sortie-et-lecteur-video-design.md` § 6 ;
+`apps/web/decisions.md` D-177).** Ce paragraphe ne décrit que `apps/web`
+(`media-viewer.tsx`, `viewer-video-page.tsx`, `media-transport.tsx`).
+
+- la **progression** prend toute la largeur de l'écran : la barre ne porte plus que la
+  piste. Le **muet** et **« ⋯ »** (vitesse, image dans l'image) quittent sa ligne pour
+  la colonne d'actions, sous « Composer ».
+- la **durée** quitte la barre pour la ligne d'informations, posée sous elle et au-dessus
+  de la pellicule : « largeur × hauteur · poids · durée ». Elle affiche le temps RESTANT
+  et décompte pendant la lecture, la durée totale à l'arrêt. Avant les métadonnées, elle
+  vient toujours de l'attachement.
+- le **play / pause** reste au centre, mais s'efface une seconde après le début de la
+  lecture. Un toucher sur la scène le ramène et réarme la seconde ; un toucher sur le
+  bouton visible met en pause ; en pause, il reste affiché. Effacé, il reste nommé et
+  focalisable ; sous mouvement réduit, il n'y a pas de fondu.
+
 ### 2.3 Les gestes
 
 | geste | effet |
