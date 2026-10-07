@@ -28,9 +28,10 @@ final class ProgressionConceptGuardTests: XCTestCase {
 
     // MARK: - Aucune pastille sur deux lignes
 
-    /// Chaque pastille du jeu tient sur UNE ligne et garde sa largeur : `lineLimit(1)` + `fixedSize()`. Le retour à la
-    /// ligne se fait ENTRE les pastilles, y compris en Dynamic Type agrandi.
-    func test_everyChip_holdsOnOneLine_andKeepsItsWidth() throws {
+    /// Chaque pastille du jeu tient sur UNE ligne, et RÉTRÉCIT plutôt que d'élargir la page : `lineLimit(1)` +
+    /// `minimumScaleFactor`, jamais `fixedSize()` (amendement n° 3 — une largeur forcée poussait la carte hors de
+    /// l'écran). Le retour à la ligne se fait ENTRE les pastilles, y compris en Dynamic Type agrandi.
+    func test_everyChip_holdsOnOneLine_andShrinksRatherThanWidenThePage() throws {
         let chips: [(file: String, header: String)] = [
             ("Meeshy/Features/Main/Game/GameSurface.swift", "struct GameChip: View {"),
             ("Meeshy/Features/Main/Views/ProgressionHub.swift", "struct ProgressionWrap: View {"),
@@ -39,7 +40,8 @@ final class ProgressionConceptGuardTests: XCTestCase {
         for chip in chips {
             let code = try body(of: chip.header, in: try source(chip.file))
             XCTAssertTrue(code.contains(".lineLimit(1)"), "\(chip.header) : une pastille peut passer à la ligne")
-            XCTAssertTrue(code.contains(".fixedSize()"), "\(chip.header) : une pastille peut être écrasée, donc coupée")
+            XCTAssertTrue(code.contains(".minimumScaleFactor("), "\(chip.header) : une pastille trop longue ne sait pas rétrécir")
+            XCTAssertFalse(code.contains(".fixedSize()"), "\(chip.header) : une pastille garde sa largeur de force, donc élargit la page")
         }
     }
 
@@ -49,6 +51,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
         let hosts = [
             "Meeshy/Features/Main/Game/GameMissionsView.swift",
             "Meeshy/Features/Main/Game/GameMintPreviewView.swift",
+            "Meeshy/Features/Main/Game/GameHeroView.swift",
             "Meeshy/Features/Main/Game/ProgressionConceptViews.swift",
         ]
         for host in hosts {
