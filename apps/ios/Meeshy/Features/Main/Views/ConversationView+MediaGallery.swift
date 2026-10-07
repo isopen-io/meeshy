@@ -59,12 +59,30 @@ struct ConversationMediaGalleryLayer: ViewModifier {
                                 onDismiss: handleGalleryDismiss) { startAttachment in
             // Un vocal (cité, #8230) a son propre plein écran ; la galerie ne
             // sait rendre que l'image et la vidéo.
-            if startAttachment.type == .audio {
-                audioFullscreen(start: startAttachment)
-            } else {
-                gallery(start: startAttachment)
+            Group {
+                if startAttachment.type == .audio {
+                    audioFullscreen(start: startAttachment)
+                } else {
+                    gallery(start: startAttachment)
+                }
             }
+            // Posé sur le CONTENU présenté : c'est lui qui rend les boutons
+            // d'enregistrement et de partage (#9573).
+            .contentExitGate(mediaExitGate)
         }
+    }
+
+    /// **Les pièces que le plein écran peut laisser sortir** (#9573) : celles
+    /// d'un message dont la loi de sortie offre l'enregistrement. La photo
+    /// d'une flamme, d'une vue unique ou d'un message flouté n'en est pas ;
+    /// une pièce dont le porteur est inconnu non plus. Le porteur se lit dans
+    /// la fenêtre, sinon dans l'index des médias.
+    private var mediaExitGate: ContentExitGate {
+        let windowed = Set(viewModel.messages.flatMap { $0.attachments.map(\.id) })
+        let indexed = catalog.snapshot.attachments
+            .filter { !windowed.contains($0.id) }
+            .compactMap { catalog.snapshot.carrier(ofAttachment: $0.id) }
+        return MessageExitOffer.mediaExitGate(for: viewModel.messages + indexed)
     }
 
     private func gallery(start startAttachment: MessageAttachment) -> some View {

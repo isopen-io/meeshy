@@ -611,7 +611,7 @@ private struct AudioFullscreenPage: View {
 
             Spacer()
 
-            downloadButton
+            ContentExitGated(contentId: attachment.id) { downloadButton }
         }
     }
 

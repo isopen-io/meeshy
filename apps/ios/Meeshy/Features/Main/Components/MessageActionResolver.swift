@@ -118,11 +118,12 @@ struct MessageMenuContext: Equatable {
     ///
     /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
     var showReadReceipts: Bool = true
-    /// Transférabilité du message, DÉCIDÉE au point d'usage par
-    /// `Message.isForwardable` (vue unique ⇒ le serveur refuse le transfert).
-    /// Le résolveur reçoit le verdict, jamais le drapeau brut : la règle n'a
-    /// qu'un seul site d'énonciation, et ce résolveur reste une logique pure.
-    var isForwardable: Bool = true
+    /// **Ce que le message laisse SORTIR** (#9573) — la projection de la loi de
+    /// sortie, posée au point d'usage par `Message.exitOffer`. Transférer,
+    /// copier, enregistrer, partager, « Imager » et « Composer » ne s'offrent
+    /// que si elle l'autorise ; le résolveur reçoit le verdict, jamais un
+    /// drapeau brut, et reste une logique pure.
+    var exits: MessageExitOffer = .unrestricted
     /// **Le message est une vue unique** — scellée, lue sur place ou déjà
     /// ouverte (#7579). Son appui long ne montre AUCUN contenu : ni copie, ni
     /// traduction, ni transfert, ni partage, ni réponse citée. Le menu se réduit
@@ -194,8 +195,8 @@ nonisolated enum ComposableAttachment {
     /// **La PROTECTION d'une pièce jointe, lue aux DEUX niveaux qui la
     /// déclarent.**
     ///
-    /// `Message.isForwardable` ne dit que la vue unique du MESSAGE. Le dépôt
-    /// déclare la protection une seconde fois sur la PIÈCE JOINTE, et cinq
+    /// La loi de sortie juge la DISPARITION ; le dépôt déclare une autre
+    /// protection sur la PIÈCE JOINTE, et cinq
     /// gardes de production la lisent déjà sous ce nom — `attachmentIsProtected`
     /// (`BubbleStandardLayout+Media`, `MessageListViewController`,
     /// `ConversationView+MessageRow`, `ConversationViewModel`). Le flou n'est
@@ -210,10 +211,9 @@ nonisolated enum ComposableAttachment {
     /// Rend la pièce que la graine posera, ou `nil` dès qu'une condition
     /// refuse. Chacune porte sa raison :
     ///
-    /// - `isForwardable` — clause O13, lue par le prédicat qui l'énonce déjà
-    ///   une fois plutôt que ré-encodée ici ;
-    /// - message NI flouté NI chiffré — publier au-delà de la conversation ce
-    ///   qui est masqué DANS la conversation est une divulgation ;
+    /// - le message offre la sortie `.publish` (`Message.exitOffer`, #9573) —
+    ///   ni vue unique, ni flamme, ni flou, ni chiffrement : publier au-delà de
+    ///   la conversation ce qui y disparaît ou y est masqué est une divulgation ;
     /// - EXACTEMENT une pièce composable — un lot mentirait sur ce qui part ;
     /// - AUCUNE pièce protégée dans le message, fût-ce une voisine.
     static func target(in message: Message) -> MessageAttachment? {
@@ -264,7 +264,7 @@ nonisolated enum ComposableAttachment {
         seedPlan(for: SeedSource(
             pieces: message.attachments,
             text: message.content,
-            carrierIsProtected: !message.isForwardable || message.isBlurred || message.isEncrypted
+            carrierIsProtected: !message.exitOffer.offers(.publish)
         ))
     }
 
@@ -291,18 +291,18 @@ enum MessageActionResolver {
         out.append(.select)
         let showsContent = !ctx.isBlurred
         if ctx.hasText && showsContent { out.append(.translate) }
-        if ctx.hasText && showsContent { out.append(.copy) }
-        if ctx.canImagine && showsContent {
+        if ctx.hasText && showsContent && ctx.exits.offers(.copy) { out.append(.copy) }
+        if ctx.canImagine && showsContent && ctx.exits.offers(.imagine) {
             out.append(.exportImage)
             if ctx.hasDefaultExportFormat { out.append(.exportQuick) }
         }
-        if ctx.saveableAttachmentCount == 1 && showsContent { out.append(.saveMedia) }
+        if ctx.saveableAttachmentCount == 1 && showsContent && ctx.exits.offers(.save) { out.append(.saveMedia) }
         // « Composer » suit immédiatement « Enregistrer » : ce sont les deux
         // gestes qui EMPORTENT le média hors de la conversation, et le second se
         // cherche à côté du premier. La CONDITION, elle, n'est pas ici : elle
         // vit dans `ComposableAttachment.offers`, que les trois lecteurs de ce
         // geste partagent. Le résolveur n'en tient qu'un fait.
-        if ctx.canComposeMedia && showsContent { out.append(.compose) }
+        if ctx.canComposeMedia && showsContent && ctx.exits.offers(.publish) { out.append(.compose) }
         // Le repli « jamais de menu réduit à Plus… seul » (média-seul non
         // enregistrable, localisation…) est devenu SANS OBJET : `.select`,
         // toujours ajouté ci-dessus, garantit déjà `out` non vide.
@@ -322,12 +322,12 @@ enum MessageActionResolver {
         // supprimer.
         let showsContent = !ctx.isBlurred
         var actions: [MoreItem] = [.reply]
-        if ctx.isForwardable && showsContent { actions.append(.forward) }
+        if showsContent && ctx.exits.offers(.forward) { actions.append(.forward) }
         actions.append(.thread)
         if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
-        if ctx.hasText && showsContent { actions.append(.copy) }
-        if showsContent { actions.append(.share) }
-        if ctx.canImagine && showsContent { actions.append(.imager) }
+        if ctx.hasText && showsContent && ctx.exits.offers(.copy) { actions.append(.copy) }
+        if showsContent && ctx.exits.offers(.share) { actions.append(.share) }
+        if ctx.canImagine && showsContent && ctx.exits.offers(.imagine) { actions.append(.imager) }
         actions.append(ctx.isPinned ? .unpin : .pin)
         actions.append(ctx.isStarred ? .unstar : .star)
         // **La décoration, juste après le favori du MESSAGE** — c'est le

@@ -1832,10 +1832,10 @@ final class MessageListViewController: UIViewController {
                         peutEditer: canEdit?(messageId) ?? false,
                         editer: editHandler,
                         selectionner: selectHandler,
-                        composer: message.holdsBlur ? nil : composeHandler,
-                        imager: message.holdsBlur || !MessageCardSubject.isExportable(message, now: Date()) ? nil : imagineHandler,
+                        composer: message.exitOffer.offers(.publish) ? composeHandler : nil,
+                        imager: message.exitOffer.offers(.imagine) && MessageCardSubject.isExportable(message, now: Date()) ? imagineHandler : nil,
                         repondre: swipeReplyHandler,
-                        transferer: message.holdsBlur ? nil : swipeForwardHandler,
+                        transferer: message.isForwardable ? swipeForwardHandler : nil,
                         plus: moreSheetHandler
                     )
                 ) {

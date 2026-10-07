@@ -80,6 +80,10 @@ struct RiverBubbleContent: Equatable {
     /// Vue unique scellée (#7618) ou déjà ouverte (#7579) : la bulle ne porte
     /// QUE la puce, `text` est vide par la projection, jamais masqué par la vue.
     let viewOnceChip: ViewOnceChip.State?
+    /// Le texte peut-il être COPIÉ ? Verdict de la loi de sortie
+    /// (`Message.exitOffer`, #9573), projeté par `RiverConversationMapping` :
+    /// un contenu qui disparaît, ou flouté, ne se copie pas.
+    let offersCopy: Bool
     /// Vue unique TEXTE lue sur place (#7579) : la retoucher, ou la voir sortir
     /// de l'écran, la fait passer à « déjà ouvert ».
     let isViewOnceRevealed: Bool
@@ -122,6 +126,7 @@ struct RiverBubbleContent: Equatable {
         protection: MessageProtectionDescriptor = .unprotected,
         isBurning: Bool = false,
         viewOnceChip: ViewOnceChip.State? = nil,
+        offersCopy: Bool = true,
         isViewOnceRevealed: Bool = false,
         protectedTap: ProtectedContentTap = .none,
         tapAfterReveal: ProtectedContentTap = .none,
@@ -144,6 +149,7 @@ struct RiverBubbleContent: Equatable {
         self.protection = protection
         self.isBurning = isBurning
         self.viewOnceChip = viewOnceChip
+        self.offersCopy = offersCopy
         self.isViewOnceRevealed = isViewOnceRevealed
         self.protectedTap = protectedTap
         self.tapAfterReveal = tapAfterReveal
@@ -535,7 +541,7 @@ struct RiverBubbleView: View, Equatable {
                 Label(String(localized: "action.reply", defaultValue: "Répondre", bundle: .main), systemImage: "arrowshape.turn.up.left")
             }
         }
-        if content.viewOnceChip == nil {
+        if content.viewOnceChip == nil, content.offersCopy {
             Button {
                 UIPasteboard.general.string = content.text
             } label: {

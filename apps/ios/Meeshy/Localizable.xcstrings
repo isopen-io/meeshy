@@ -240047,53 +240047,6 @@
         }
       }
     },
-    "game.page.back": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "العودة إلى التقدّم"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zurück zum Fortschritt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Back to progress"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Volver al progreso"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retour à la progression"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Torna ai progressi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voltar ao progresso"
-          }
-        }
-      }
-    },
     "game.door.rules": {
       "extractionState": "manual",
       "localizations": {
@@ -268760,6 +268713,4142 @@
           "stringUnit": {
             "state": "translated",
             "value": "Baú aberto"
+          }
+        }
+      }
+    },
+    "game.detail.obtain_label": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كيف تحصل عليه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So bekommst du es"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How to get it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cómo conseguirlo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment l’obtenir"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come ottenerlo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Como conseguir"
+          }
+        }
+      }
+    },
+    "game.detail.gives_label": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يمنحك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was es bringt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What it gives"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qué te da"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce que ça donne"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Che cosa dà"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que isso dá"
+          }
+        }
+      }
+    },
+    "game.detail.earned": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم الحصول عليه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erhalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earned"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conseguido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtenu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ottenuto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtido"
+          }
+        }
+      }
+    },
+    "game.detail.earned_on": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم الحصول عليه في %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erhalten am %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earned on %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conseguido el %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtenu le %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ottenuto il %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obtido em %@"
+          }
+        }
+      }
+    },
+    "game.detail.locked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تحصل عليه بعد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nicht erhalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not earned yet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no conseguido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas encore obtenu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non ancora ottenuto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ainda não obtido"
+          }
+        }
+      }
+    },
+    "game.detail.missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ينقص %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es fehlt: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Missing: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falta %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il manque %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manca: %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falta %@"
+          }
+        }
+      }
+    },
+    "game.detail.see_fiche": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض الصفحة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zur Seite"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See the page"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver la ficha"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir la fiche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi la scheda"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver a ficha"
+          }
+        }
+      }
+    },
+    "game.detail.open": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: عرض التفاصيل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: Details ansehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: see details"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: ver los detalles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ : voir les précisions"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: vedi i dettagli"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: ver os detalhes"
+          }
+        }
+      }
+    },
+    "game.detail.rarity": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الندرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seltenheit"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rarity"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rareza"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rareté"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rarità"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raridade"
+          }
+        }
+      }
+    },
+    "game.detail.header_group": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رتبتي وعملات Meesh"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mein Rang und meine Meeshes"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My rank and my Meeshes"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mi rango y mis Meeshes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mon rang et mes Meeshes"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il mio rango e le mie Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meu rank e minhas Meeshes"
+          }
+        }
+      }
+    },
+    "game.detail.meesh_sheet": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عملات Meesh"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Meeshes"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My Meeshes"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mis Meeshes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mes Meeshes"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le mie Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minhas Meeshes"
+          }
+        }
+      }
+    },
+    "game.detail.elan.active": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نشطة هذه الأيام"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In diesen Tagen aktiv"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Active these days"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa estos días"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Active ces jours-ci"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attiva in questi giorni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativa nestes dias"
+          }
+        }
+      }
+    },
+    "game.detail.elan.idle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير نشطة هذه الأيام"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In diesen Tagen nicht aktiv"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not active these days"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No activa estos días"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas active ces jours-ci"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non attiva in questi giorni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não ativa nestes dias"
+          }
+        }
+      }
+    },
+    "game.detail.elan.points": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ لكل إجراء"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ pro Aktion"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ per action"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ por gesto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ par geste"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ per gesto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ por gesto"
+          }
+        }
+      }
+    },
+    "game.detail.player.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لاعب من مجموعتك. لا ترى إلا اسمه المستعار ونقاط أسبوعه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Spieler deiner Gruppe. Du siehst nur sein Pseudonym und seine Wochenpunkte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A player in your group. You only see their nickname and their points this week."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es un jugador de tu grupo. Solo ves su seudónimo y sus puntos de la semana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est un joueur de ton groupe. Tu ne vois que son pseudonyme et ses points de la semaine."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È un giocatore del tuo gruppo. Vedi solo il suo pseudonimo e i suoi punti della settimana."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É um jogador do seu grupo. Você só vê o pseudônimo e os pontos da semana dele."
+          }
+        }
+      }
+    },
+    "game.detail.badge.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الوسام يُظهر كم مرة قمت بإجراء ما."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Abzeichen zeigt, wie oft du eine Aktion gemacht hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A badge shows how many times you’ve done an action."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una insignia muestra cuántas veces has hecho un gesto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un badge montre combien de fois tu as fait un geste."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un badge mostra quante volte hai fatto un gesto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um selo mostra quantas vezes você fez um gesto."
+          }
+        }
+      }
+    },
+    "game.detail.badge.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كرّر هذا الإجراء: عند كل درجة يتغيّر معدن الوسام."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mach sie wieder: Bei jeder Stufe wechselt das Abzeichen das Material."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do it again: at each tier, the badge changes material."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repite ese gesto: en cada escalón, la insignia cambia de material."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refais ce geste : à chaque palier, le badge change de matière."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rifai quel gesto: a ogni gradino, il badge cambia materiale."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repita esse gesto: a cada degrau, o selo muda de material."
+          }
+        }
+      }
+    },
+    "game.detail.succes.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإنجاز يسجّل لحظة نادرة من قصتك على Meeshy."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Erfolg hält einen seltenen Moment deiner Meeshy-Geschichte fest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An achievement marks a rare moment in your Meeshy story."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un logro marca un momento raro de tu historia en Meeshy."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un succès marque un moment rare de ton histoire sur Meeshy."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un traguardo segna un momento raro della tua storia su Meeshy."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma conquista marca um momento raro da sua história no Meeshy."
+          }
+        }
+      }
+    },
+    "game.detail.succes.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اجمع ما يطلبه: يُفتح دفعة واحدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfülle, was er verlangt: Er wird auf einmal freigeschaltet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meet what it asks for: it unlocks in one go."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reúne lo que pide: se consigue de una vez."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réunis ce qu’il demande : il se décroche d’un coup."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riunisci ciò che chiede: si sblocca in un colpo solo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reúna o que ela pede: ela se desbloqueia de uma vez."
+          }
+        }
+      }
+    },
+    "game.detail.defi.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التحدي درجة تتجاوزها في فئة من الإجراءات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Herausforderung ist eine Stufe in einer Familie von Aktionen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A challenge is a tier to clear in a family of actions."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un desafío es un escalón que superar en una familia de gestos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un défi est un palier à franchir dans une famille de gestes."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una sfida è un gradino da superare in una famiglia di gesti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um desafio é um degrau a vencer em uma família de gestos."
+          }
+        }
+      }
+    },
+    "game.detail.defi.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابلغ العدد المطلوب: تُفتح الدرجة التالية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erreiche die verlangte Zahl: Die nächste Stufe öffnet sich."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reach the number it asks for: the next tier opens."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alcanza el número pedido: se abre el escalón siguiente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atteins le nombre demandé : le palier suivant s’ouvre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raggiungi il numero richiesto: si apre il gradino successivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alcance o número pedido: o próximo degrau se abre."
+          }
+        }
+      }
+    },
+    "game.detail.trophy.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الكأس يحفظ ذكرى فوز. لا يمنح شيئًا: إنه للعرض."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Trophäe bewahrt die Erinnerung an einen Sieg. Sie bringt nichts: Man zeigt sie."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A trophy keeps the memory of a win. It earns nothing: it’s for show."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un trofeo guarda el recuerdo de una victoria. No da nada: se enseña."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un trophée garde la trace d’une victoire. Il ne rapporte rien : il se montre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un trofeo conserva il ricordo di una vittoria. Non rende nulla: si mostra."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um troféu guarda a lembrança de uma vitória. Não rende nada: é para mostrar."
+          }
+        }
+      }
+    },
+    "game.detail.trophy.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنهِ في أعلى دوريك، أكمل موسمًا، انتقل إلى التميّز أو حافظ على لهبك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lande ganz oben in deiner Liga, schließe eine Saison ab, wechsle ins Prestige oder halte deine Flamme."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish at the top of your league, complete a season, go Prestige or keep your Flame."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Termina arriba en tu liga, completa una temporada, pasa a Prestigio o mantén tu Llama."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finis en haut de ta ligue, termine une saison, passe en Prestige ou tiens ta Flamme."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arriva in cima alla tua lega, completa una stagione, passa al Prestigio o tieni viva la Fiamma."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Termine no topo da sua liga, complete uma temporada, passe ao Prestígio ou mantenha sua Chama."
+          }
+        }
+      }
+    },
+    "game.detail.stamp.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الختم يثبت أنك تبادلت الرسائل فعلًا بهذه اللغة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Stempel beweist, dass du dich in dieser Sprache wirklich ausgetauscht hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A stamp proves you really chatted in this language."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un sello demuestra que has conversado de verdad en este idioma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un tampon prouve que tu as vraiment échangé dans cette langue."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un timbro prova che hai davvero conversato in questa lingua."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um carimbo prova que você conversou de verdade neste idioma."
+          }
+        }
+      }
+    },
+    "game.detail.stamp.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أرسل رسالة بهذه اللغة، واستقبل واحدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sende eine Nachricht in dieser Sprache und erhalte eine zurück."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send a message in this language, and get one back."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envía un mensaje en este idioma y recibe otro."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoie un message dans cette langue, et reçois-en un."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invia un messaggio in questa lingua e ricevine uno."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envie uma mensagem neste idioma e receba outra."
+          }
+        }
+      }
+    },
+    "game.detail.step.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مرحلة الموسم مكافأة مجانية على المسار."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Saison-Etappe ist eine kostenlose Belohnung auf dem Weg."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A season step is a free reward along the path."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una etapa de temporada es una recompensa gratis en el recorrido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une étape de saison est une récompense gratuite sur le parcours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una tappa della stagione è una ricompensa gratuita lungo il percorso."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma etapa da temporada é uma recompensa gratuita no percurso."
+          }
+        }
+      }
+    },
+    "game.detail.step.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكسب نجومًا بالمهام والثنائي، ثم استلم المرحلة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sammle Sterne mit Missionen und dem Duo, dann hol dir die Etappe."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earn stars with missions and the duo, then claim the step."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gana estrellas con las misiones y el dúo, y luego reclama la etapa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gagne des étoiles avec les missions et le duo, puis réclame l’étape."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guadagna stelle con le missioni e la coppia, poi riscatta la tappa."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ganhe estrelas com as missões e a dupla, depois resgate a etapa."
+          }
+        }
+      }
+    },
+    "game.detail.seal.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الختم عنصر للجمع. لا يغيّر شيئًا في اللعبة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Siegel ist ein Sammelobjekt. Es ändert nichts am Spiel."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Seal is a collectible. It changes nothing in the game."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El Sello es un objeto de colección. No cambia nada del juego."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le Sceau est un objet à collectionner. Il ne change rien au jeu."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il Sigillo è un oggetto da collezione. Non cambia nulla nel gioco."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Selo é um item de coleção. Não muda nada no jogo."
+          }
+        }
+      }
+    },
+    "game.detail.seal.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خذه بعملات Meesh خلال الموسم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hol es dir während der Saison mit deinen Meeshes."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take it with your Meeshes during the season."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consíguelo con tus Meeshes durante la temporada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prends-le avec tes Meeshes pendant la saison."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prendilo con le tue Meesh durante la stagione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pegue-o com suas Meeshes durante a temporada."
+          }
+        }
+      }
+    },
+    "game.detail.gem.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الجوهرة تقول في أي دوري تلعب هذا الأسبوع."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Edelstein zeigt, in welcher Liga du diese Woche spielst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The gem tells which league you’re playing in this week."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La gema dice en qué liga juegas esta semana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La gemme dit dans quelle ligue tu joues cette semaine."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La gemma dice in quale lega giochi questa settimana."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A gema diz em que liga você joga nesta semana."
+          }
+        }
+      }
+    },
+    "game.detail.gem.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنهِ بين أوائل مجموعتك لتصعد دوريًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lande unter den Ersten deiner Gruppe, um eine Liga aufzusteigen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish among the top players of your group to move up a league."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Termina entre los primeros de tu grupo para subir de liga."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finis parmi les premiers de ton groupe pour monter d’une ligue."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arriva tra i primi del tuo gruppo per salire di lega."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Termine entre os primeiros do seu grupo para subir de liga."
+          }
+        }
+      }
+    },
+    "game.detail.star.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نجمة التميّز تبقى على حلقة مستواك إلى الأبد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Prestige-Stern bleibt für immer an deinem Level-Ring."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Prestige star lands on your level ring, forever."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una estrella de Prestigio se queda en tu anillo de nivel, para siempre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une étoile de Prestige se pose sur ton anneau de niveau, pour toujours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una stella di Prestigio resta sul tuo anello di livello, per sempre."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma estrela de Prestígio fica no seu anel de nível, para sempre."
+          }
+        }
+      }
+    },
+    "game.detail.star.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابلغ المستوى 100، ثم انتقل إلى التميّز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erreiche Level 100 und wechsle dann ins Prestige."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reach level 100, then go Prestige."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llega al nivel 100 y pasa a Prestigio."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atteins le niveau 100, puis passe en Prestige."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raggiungi il livello 100, poi passa al Prestigio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chegue ao nível 100 e passe ao Prestígio."
+          }
+        }
+      }
+    },
+    "game.detail.rank.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شعارك يُظهر رتبتك. الرتبة لا تنخفض أبدًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Wappen zeigt deinen Rang. Ein Rang sinkt nie."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your crest shows your rank. A rank never goes down."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu blasón muestra tu rango. Un rango nunca baja."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ton blason montre ton rang. Un rang ne baisse jamais."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo blasone mostra il tuo rango. Un rango non scende mai."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu brasão mostra o seu rank. Um rank nunca cai."
+          }
+        }
+      }
+    },
+    "game.detail.rank.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكسب المجد: اسكّ Meesh، حطّم أرقامك القياسية، افتح الإنجازات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sammle Ruhm: Präge Meeshes, brich deine Rekorde, schalte Erfolge frei."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earn Glory: mint Meeshes, beat your records, unlock achievements."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gana Gloria: acuña Meeshes, bate tus récords, consigue logros."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gagne de la Gloire : frappe des Meeshes, bats tes records, décroche des succès."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guadagna Gloria: conia Meesh, batti i tuoi record, sblocca traguardi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ganhe Glória: cunhe Meeshes, bata seus recordes, desbloqueie conquistas."
+          }
+        }
+      }
+    },
+    "game.detail.flame.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شكل لهبك يكبر مع سلسلة أيامك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Form deiner Flamme wächst mit deiner Serie von Tagen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The form of your Flame grows with your streak of days."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La forma de tu Llama crece con tu racha de días."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La forme de ta Flamme grandit avec ta série de jours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La forma della tua Fiamma cresce con la tua serie di giorni."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A forma da sua Chama cresce com a sua sequência de dias."
+          }
+        }
+      }
+    },
+    "game.detail.flame.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كلما كبر، زادت مكافآت مهامك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je größer sie ist, desto höher sind deine Missionsbelohnungen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bigger it is, the more your mission rewards grow."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuanto más grande es, más crecen tus recompensas de misión."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus elle est grande, plus tes récompenses de mission augmentent."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Più è grande, più crescono le ricompense delle missioni."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quanto maior ela é, mais crescem suas recompensas de missão."
+          }
+        }
+      }
+    },
+    "game.detail.freeze.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التجميد يحمي لهبك: يغطّي يومًا لم تفعل فيه شيئًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Eis schützt deine Flamme: Es deckt einen Tag ab, an dem du nichts gemacht hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A freeze protects your Flame: it covers a day when you did nothing."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una congelación protege tu Llama: cubre un día en que no hiciste nada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un gel protège ta Flamme : il couvre un jour où tu n’as rien fait."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un congelamento protegge la tua Fiamma: copre un giorno in cui non hai fatto nulla."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um congelamento protege sua Chama: ele cobre um dia em que você não fez nada."
+          }
+        }
+      }
+    },
+    "game.detail.freeze.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اشترِه بعملات Meesh، أو اعثر عليه في صندوق اليوم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kauf es mit deinen Meeshes oder finde es in der Truhe des Tages."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buy it with your Meeshes, or find it in the daily chest."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cómprala con tus Meeshes, o encuéntrala en el cofre del día."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Achète-le avec tes Meeshes, ou trouve-le dans le coffre du jour."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compralo con le tue Meesh, o trovalo nel forziere del giorno."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compre-o com suas Meeshes, ou encontre-o no baú do dia."
+          }
+        }
+      }
+    },
+    "game.detail.mission.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المهمة هدف صغير تبلغه اليوم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Mission ist ein kleines Ziel für heute."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A mission is a small goal to reach today."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una misión es una pequeña meta para hoy."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une mission est un petit but à atteindre aujourd’hui."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una missione è un piccolo obiettivo per oggi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma missão é um pequeno objetivo para hoje."
+          }
+        }
+      }
+    },
+    "game.detail.mission.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تمنح نقاطًا وتقرّبك من صندوق اليوم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sie bringt Punkte und bringt dich der Truhe des Tages näher."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It earns points and brings you closer to the daily chest."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Da puntos y te acerca al cofre del día."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elle rapporte des points et te rapproche du coffre du jour."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dà punti e ti avvicina al forziere del giorno."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ela rende pontos e deixa você mais perto do baú do dia."
+          }
+        }
+      }
+    },
+    "game.detail.chest.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صندوق اليوم يُفتح حين تُنجز مهامك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Truhe des Tages öffnet sich, wenn deine Missionen erledigt sind."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The daily chest opens when your missions are done."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cofre del día se abre cuando tus misiones están hechas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le coffre du jour s’ouvre quand tes missions sont faites."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il forziere del giorno si apre quando le tue missioni sono fatte."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O baú do dia se abre quando suas missões estão feitas."
+          }
+        }
+      }
+    },
+    "game.detail.chest.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نقاط، وأحيانًا جزء من Meesh أو تجميد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Punkte und manchmal ein Meesh-Fragment oder ein Eis."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Points, and sometimes a Meesh fragment or a freeze."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puntos, y a veces un fragmento de Meesh o una congelación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Des points, et parfois un fragment de Meesh ou un gel."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Punti e, a volte, un frammento di Meesh o un congelamento."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pontos e, às vezes, um fragmento de Meesh ou um congelamento."
+          }
+        }
+      }
+    },
+    "game.detail.coin.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "‏Meesh هي عملة Meeshy النادرة. كل عملة تحمل رقمها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Meesh ist die seltene Münze von Meeshy. Jede Münze trägt ihre Nummer."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Meesh is Meeshy’s rare coin. Each coin carries its number."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Meesh es la moneda rara de Meeshy. Cada moneda lleva su número."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Meesh est la pièce rare de Meeshy. Chaque pièce porte son numéro."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Meesh è la moneta rara di Meeshy. Ogni moneta porta il suo numero."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Meesh é a moeda rara do Meeshy. Cada moeda tem o seu número."
+          }
+        }
+      }
+    },
+    "game.detail.coin.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسكّها بنقاطك حين يصير لديك ما يكفي."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präge sie mit deinen Punkten, sobald du genug hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mint it with your points as soon as you have enough."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acúñala con tus puntos en cuanto tengas suficientes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frappe-la avec tes points dès que tu en as assez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coniala con i tuoi punti appena ne hai abbastanza."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cunhe-a com seus pontos assim que tiver o bastante."
+          }
+        }
+      }
+    },
+    "game.detail.ring.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحلقة تُظهر مستواك: تمتلئ بنقاطك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Ring zeigt dein Level: Er füllt sich mit deinen Punkten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The ring shows your level: it fills up with your points."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El anillo muestra tu nivel: se llena con tus puntos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’anneau montre ton niveau : il se remplit avec tes points."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’anello mostra il tuo livello: si riempie con i tuoi punti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O anel mostra o seu nível: ele se enche com seus pontos."
+          }
+        }
+      }
+    },
+    "game.detail.ring.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكسب نقاطًا: حين تمتلئ الحلقة، تصعد مستوى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sammle Punkte: Ist der Ring voll, steigst du ein Level auf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earn points: when the ring is full, you go up a level."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gana puntos: cuando el anillo está lleno, subes un nivel."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gagne des points : quand l’anneau est plein, tu montes d’un niveau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guadagna punti: quando l’anello è pieno, sali di un livello."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ganhe pontos: quando o anel fica cheio, você sobe um nível."
+          }
+        }
+      }
+    },
+    "game.detail.treasury.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كنزك يكبر بعملات Meesh التي تحتفظ بها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Schatz wächst mit den Meeshes, die du behältst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your treasury grows with the Meeshes you keep."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu tesoro crece con las Meeshes que guardas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ton trésor grandit avec les Meeshes que tu gardes."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo tesoro cresce con le Meesh che tieni."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu tesouro cresce com as Meeshes que você guarda."
+          }
+        }
+      }
+    },
+    "game.detail.treasury.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "احتفظ بعملات Meesh بدل إنفاقها لتبلغ المرحلة التالية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behalte deine Meeshes, statt sie auszugeben, um die nächste Stufe zu erreichen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep your Meeshes instead of spending them to reach the next tier."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarda tus Meeshes en vez de gastarlas para alcanzar el tramo siguiente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Garde tes Meeshes au lieu de les dépenser pour atteindre le palier suivant."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tieni le tue Meesh invece di spenderle per raggiungere la fascia successiva."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarde suas Meeshes em vez de gastá-las para chegar à próxima faixa."
+          }
+        }
+      }
+    },
+    "game.detail.elan.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الفئة تجمع إجراءات متشابهة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Familie fasst ähnliche Aktionen zusammen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A family groups actions that are alike."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una familia reúne gestos que se parecen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une famille regroupe des gestes qui se ressemblent."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una famiglia riunisce gesti che si somigliano."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma família reúne gestos parecidos."
+          }
+        }
+      }
+    },
+    "game.detail.elan.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل إجراء يمنح نقاطًا. عدة فئات نشطة تفعّل اندفاعًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Aktion bringt Punkte. Mehrere aktive Familien lösen einen Schwung aus."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each action earns points. Several active families trigger a boost."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada gesto da puntos. Varias familias activas activan un impulso."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque geste rapporte des points. Plusieurs familles actives déclenchent un élan."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni gesto dà punti. Più famiglie attive fanno scattare uno slancio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada gesto rende pontos. Várias famílias ativas ativam um impulso."
+          }
+        }
+      }
+    },
+    "game.detail.fact.tier": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عشرة مستويات تكوّن مرحلة. لكل مرحلة اسمها ولونها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zehn Level bilden eine Stufe. Jede Stufe hat ihren Namen und ihre Farbe."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ten levels make a tier. Each tier has its name and its colour."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diez niveles forman un tramo. Cada tramo tiene su nombre y su color."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dix niveaux font un palier. Chaque palier a son nom et sa couleur."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieci livelli fanno una fascia. Ogni fascia ha il suo nome e il suo colore."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dez níveis formam uma faixa. Cada faixa tem seu nome e sua cor."
+          }
+        }
+      }
+    },
+    "game.detail.fact.score": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه نقاطك الحالية. منها يُحسب مستواك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die Punkte, die du hast. Sie bestimmen dein Level."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the points you hold. They make your level."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son los puntos que tienes. Con ellos se calcula tu nivel."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les points que tu as en poche. Ils font ton niveau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono i punti che hai. Fanno il tuo livello."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São os pontos que você tem. Eles formam o seu nível."
+          }
+        }
+      }
+    },
+    "game.detail.fact.level_next": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه النقاط التي تنقصك لتصعد مستوى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die Punkte, die dir zum nächsten Level fehlen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the points you still need to go up a level."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son los puntos que te faltan para subir un nivel."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les points qu’il te manque pour monter d’un niveau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono i punti che ti mancano per salire di un livello."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São os pontos que faltam para você subir um nível."
+          }
+        }
+      }
+    },
+    "game.detail.fact.level_record": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا أعلى مستوى بلغته."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist das höchste Level, das du erreicht hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the highest level you’ve reached."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es el nivel más alto que has alcanzado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est le plus haut niveau que tu as atteint."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È il livello più alto che hai raggiunto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o nível mais alto que você alcançou."
+          }
+        }
+      }
+    },
+    "game.detail.fact.tailwind": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بعد السكّ، تُحسب نقاطك أكثر حتى مستواك القياسي."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach einer Prägung zählen deine Punkte mehr, bis zu deinem Rekord-Level."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After a mint, your points count for more until your record level."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tras una acuñación, tus puntos cuentan más hasta tu nivel récord."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Après une frappe, tes points comptent plus jusqu’à ton niveau record."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dopo un conio, i tuoi punti contano di più fino al tuo livello record."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Depois de uma cunhagem, seus pontos valem mais até o seu nível recorde."
+          }
+        }
+      }
+    },
+    "game.detail.fact.mint_price": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا ثمن Meesh التالية. يرتفع مع كل سكّ."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist der Preis deiner nächsten Meesh. Er steigt mit jeder Prägung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the price of your next Meesh. It rises with each mint."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es el precio de tu próxima Meesh. Sube con cada acuñación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est le prix de ta prochaine Meesh. Il monte à chaque frappe."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È il prezzo della tua prossima Meesh. Sale a ogni conio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o preço da sua próxima Meesh. Ele sobe a cada cunhagem."
+          }
+        }
+      }
+    },
+    "game.detail.fact.mint_missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه النقاط التي تنقصك لسكّ Meesh التالية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die Punkte, die dir fehlen, um deine nächste Meesh zu prägen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the points you still need to mint your next Meesh."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son los puntos que te faltan para acuñar tu próxima Meesh."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les points qu’il te manque pour frapper ta prochaine Meesh."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono i punti che ti mancano per coniare la prossima Meesh."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São os pontos que faltam para cunhar sua próxima Meesh."
+          }
+        }
+      }
+    },
+    "game.detail.fact.can_mint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لديك نقاط كافية: يمكنك سكّ Meesh من صفحتها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast genug Punkte: Du kannst auf ihrer Seite eine Meesh prägen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You have enough points: you can mint a Meesh on its page."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tienes puntos suficientes: puedes acuñar una Meesh en su ficha."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu as assez de points : tu peux frapper une Meesh dans sa fiche."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hai abbastanza punti: puoi coniare una Meesh nella sua scheda."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você tem pontos suficientes: pode cunhar uma Meesh na ficha dela."
+          }
+        }
+      }
+    },
+    "game.detail.fact.factor": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إجراءاتك القادمة تمنح هذا العدد من أضعاف النقاط."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine nächsten Aktionen bringen so viel Mal mehr Punkte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your next actions earn this many times more points."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus próximos gestos dan este número de veces más puntos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tes prochains gestes rapportent ce nombre de fois plus de points."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi prossimi gesti danno questo numero di volte più punti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus próximos gestos rendem este número de vezes mais pontos."
+          }
+        }
+      }
+    },
+    "game.detail.fact.mint_next": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل Meesh تحمل رقمها. واحدة من كل مئة ذهبية، وواحدة من كل ألف من المنشور."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Meesh trägt ihre Nummer. Jede hundertste ist aus Gold, jede tausendste aus Prisma."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each Meesh carries its number. One in a hundred is gold, one in a thousand prism."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada Meesh lleva su número. Una de cada cien es de oro, una de cada mil de prisma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque Meesh porte son numéro. Une sur cent est en or, une sur mille en prisme."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni Meesh porta il suo numero. Una su cento è d’oro, una su mille di prisma."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada Meesh tem o seu número. Uma em cem é de ouro, uma em mil de prisma."
+          }
+        }
+      }
+    },
+    "game.detail.fact.mint_glory": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل سكّ يضيف هذا المجد إلى رتبتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Prägung fügt deinem Rang diesen Ruhm hinzu."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each mint adds this Glory to your rank."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada acuñación suma esta Gloria a tu rango."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque frappe ajoute cette Gloire à ton rang."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni conio aggiunge questa Gloria al tuo rango."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada cunhagem soma esta Glória ao seu rank."
+          }
+        }
+      }
+    },
+    "game.detail.fact.minted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا عدد عملات Meesh التي سككتها منذ البداية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So viele Meeshes hast du seit dem Anfang geprägt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is how many Meeshes you’ve minted since the start."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es el número de Meeshes que has acuñado desde el principio."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est le nombre de Meeshes que tu as frappées depuis le début."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È il numero di Meesh che hai coniato dall’inizio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o número de Meeshes que você cunhou desde o início."
+          }
+        }
+      }
+    },
+    "game.detail.fact.glory": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المجد يتراكم ولا ينخفض أبدًا. وهو يمنحك رتبتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruhm summiert sich und sinkt nie. Er bestimmt deinen Rang."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glory adds up and never goes down. It gives you your rank."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Gloria se suma y nunca baja. Te da tu rango."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Gloire s’additionne et ne redescend jamais. Elle donne ton rang."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Gloria si somma e non scende mai. Ti dà il rango."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Glória se soma e nunca cai. Ela dá o seu rank."
+          }
+        }
+      }
+    },
+    "game.detail.fact.glory_missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا المجد الذي ينقصك للرتبة التالية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist der Ruhm, der dir zum nächsten Rang fehlt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the Glory you still need for the next rank."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es la Gloria que te falta para el rango siguiente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est la Gloire qu’il te manque pour le rang suivant."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È la Gloria che ti manca per il rango successivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É a Glória que falta para o próximo rank."
+          }
+        }
+      }
+    },
+    "game.detail.fact.streak": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا عدد الأيام المتتالية التي قمت فيها بإجراء واحد على الأقل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So viele Tage in Folge hast du mindestens eine Aktion gemacht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is how many days in a row you’ve done at least one action."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es el número de días seguidos en que has hecho al menos un gesto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est le nombre de jours d’affilée où tu as fait au moins un geste."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È il numero di giorni di fila in cui hai fatto almeno un gesto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o número de dias seguidos em que você fez pelo menos um gesto."
+          }
+        }
+      }
+    },
+    "game.detail.fact.streak_record": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه أطول سلسلة أيام لك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist deine längste Serie von Tagen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is your longest streak of days."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es tu racha de días más larga."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est ta plus longue série de jours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È la tua serie di giorni più lunga."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É a sua sequência de dias mais longa."
+          }
+        }
+      }
+    },
+    "game.detail.fact.flame_state": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تقول إن كان لهبك مشتعلًا أو في خطر أو محميًا أو منطفئًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Er sagt, ob deine Flamme brennt, in Gefahr, geschützt oder erloschen ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It tells whether your Flame is lit, at risk, protected or out."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dice si tu Llama está encendida, en peligro, protegida o apagada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il dit si ta Flamme est allumée, en danger, protégée ou éteinte."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dice se la tua Fiamma è accesa, in pericolo, protetta o spenta."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diz se a sua Chama está acesa, em perigo, protegida ou apagada."
+          }
+        }
+      }
+    },
+    "game.detail.fact.missions_done": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ثلاث مهام في اليوم. حين تُنجز، تفتح الصندوق."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drei Missionen pro Tag. Sind sie erledigt, öffnen sie die Truhe."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Three missions a day. Once done, they open the chest."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tres misiones al día. Una vez hechas, abren el cofre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trois missions par jour. Une fois faites, elles ouvrent le coffre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tre missioni al giorno. Una volta fatte, aprono il forziere."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Três missões por dia. Depois de feitas, elas abrem o baú."
+          }
+        }
+      }
+    },
+    "game.detail.fact.league_place": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا مركزك بين لاعبي مجموعتك، هذا الأسبوع."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist dein Platz unter den Spielern deiner Gruppe in dieser Woche."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is your place among the players of your group this week."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es tu puesto entre los jugadores de tu grupo, esta semana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est ta place parmi les joueurs de ton groupe, cette semaine."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È il tuo posto tra i giocatori del tuo gruppo, questa settimana."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É a sua posição entre os jogadores do seu grupo, nesta semana."
+          }
+        }
+      }
+    },
+    "game.detail.fact.week_points": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه النقاط المكتسبة منذ الاثنين. تبدأ من الصفر كل أسبوع."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die Punkte seit Montag. Jede Woche beginnen sie wieder bei null."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the points earned since Monday. They start again from zero every week."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son los puntos ganados desde el lunes. Vuelven a cero cada semana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les points gagnés depuis lundi. Ils repartent de zéro chaque semaine."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono i punti guadagnati da lunedì. Ripartono da zero ogni settimana."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São os pontos ganhos desde segunda-feira. Eles voltam a zero toda semana."
+          }
+        }
+      }
+    },
+    "game.detail.fact.league_zone": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الأوائل يصعدون، والأخيرون يهبطون، والباقون يبقون."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Ersten steigen auf, die Letzten steigen ab, die anderen bleiben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The top players move up, the bottom ones move down, the rest stay."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los primeros suben, los últimos bajan, los demás se quedan."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les premiers montent, les derniers descendent, les autres restent."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I primi salgono, gli ultimi scendono, gli altri restano."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os primeiros sobem, os últimos descem, os outros ficam."
+          }
+        }
+      }
+    },
+    "game.detail.fact.league_missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه النقاط التي تنقصك لتدخل منطقة الصعود."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die Punkte, die dir für die Aufstiegszone fehlen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the points you still need to enter the promotion zone."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son los puntos que te faltan para entrar en la zona de ascenso."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les points qu’il te manque pour entrer dans la zone de montée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono i punti che ti mancano per entrare nella zona di promozione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São os pontos que faltam para entrar na zona de promoção."
+          }
+        }
+      }
+    },
+    "game.detail.fact.league_closes": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أسبوع الدوري يُغلق مساء الأحد. عندها يُثبَّت الترتيب."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Ligawoche endet am Sonntagabend. Dann steht die Rangliste fest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The league week closes on Sunday evening. The ranking is then frozen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La semana de liga se cierra el domingo por la noche. La clasificación queda fija."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La semaine de ligue se ferme dimanche soir. Le classement est alors figé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La settimana di lega si chiude domenica sera. La classifica resta fissa."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A semana da liga fecha no domingo à noite. A classificação fica congelada."
+          }
+        }
+      }
+    },
+    "game.detail.fact.league_friends": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا مركزك بين أصدقائك المقبولين، هذا الأسبوع."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist dein Platz unter deinen angenommenen Freunden in dieser Woche."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is your place among your accepted friends this week."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es tu puesto entre tus amigos aceptados, esta semana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est ta place parmi tes amis acceptés, cette semaine."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È il tuo posto tra i tuoi amici accettati, questa settimana."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É a sua posição entre seus amigos aceitos, nesta semana."
+          }
+        }
+      }
+    },
+    "game.detail.fact.season": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموسم يدوم ثمانية أسابيع وله رقم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Saison dauert acht Wochen und hat eine Nummer."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A season lasts eight weeks and has a number."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una temporada dura ocho semanas y lleva un número."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une saison dure huit semaines et porte un numéro."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una stagione dura otto settimane e ha un numero."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma temporada dura oito semanas e tem um número."
+          }
+        }
+      }
+    },
+    "game.detail.fact.season_week": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الأسبوع الجاري، من أسابيع الموسم الثمانية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist die laufende Woche von den acht der Saison."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the current week, out of the season’s eight."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es la semana en curso, de las ocho de la temporada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est la semaine en cours, sur les huit de la saison."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È la settimana in corso, sulle otto della stagione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É a semana atual, das oito da temporada."
+          }
+        }
+      }
+    },
+    "game.detail.fact.season_steps": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه المراحل التي فتحتها على مسار الموسم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die Etappen, die du auf dem Saisonweg geöffnet hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the steps you’ve opened along the season path."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son las etapas que has abierto en el recorrido de la temporada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les étapes que tu as ouvertes sur le parcours de la saison."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono le tappe che hai aperto lungo il percorso della stagione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São as etapas que você abriu no percurso da temporada."
+          }
+        }
+      }
+    },
+    "game.detail.fact.season_stars": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النجوم تُكسب بالمهام والثنائي. وهي تفتح المراحل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sterne sammelst du mit Missionen und dem Duo. Sie öffnen die Etappen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stars are earned with missions and the duo. They open the steps."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las estrellas se ganan con las misiones y el dúo. Abren las etapas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les étoiles se gagnent avec les missions et le duo. Elles ouvrent les étapes."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le stelle si guadagnano con le missioni e la coppia. Aprono le tappe."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As estrelas se ganham com as missões e a dupla. Elas abrem as etapas."
+          }
+        }
+      }
+    },
+    "game.detail.fact.prestige_glory": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا المجد الذي تكسبه بالانتقال إلى التميّز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist der Ruhm, den du beim Wechsel ins Prestige bekommst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the Glory you earn by going Prestige."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es la Gloria que ganas al pasar a Prestigio."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est la Gloire que tu gagnes en passant en Prestige."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È la Gloria che guadagni passando al Prestigio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É a Glória que você ganha ao passar ao Prestígio."
+          }
+        }
+      }
+    },
+    "game.detail.fact.elan_families": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه فئات الإجراءات التي نشطت فيها في الأيام الأخيرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die Aktionsfamilien, in denen du zuletzt aktiv warst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the families of actions you’ve been active in lately."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son las familias de gestos en las que has estado activo estos días."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les familles de gestes où tu as été actif ces derniers jours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono le famiglie di gesti in cui sei stato attivo in questi giorni."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São as famílias de gestos em que você esteve ativo nestes dias."
+          }
+        }
+      }
+    },
+    "game.detail.fact.badges_earned": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا عدد الأوسمة التي حصلت عليها، من كل الموجودة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So viele Abzeichen hast du erhalten, von allen, die es gibt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is how many badges you’ve earned, out of all that exist."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es el número de insignias conseguidas, de todas las que existen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est le nombre de badges obtenus, sur tous ceux qui existent."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È il numero di badge ottenuti, su tutti quelli che esistono."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o número de selos obtidos, de todos os que existem."
+          }
+        }
+      }
+    },
+    "game.detail.fact.defis_earned": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه الدرجات التي تجاوزتها، من التي يمكنك بلوغها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die genommenen Stufen, von denen, die du erreichen kannst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the tiers you’ve cleared, out of those you can reach."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son los escalones superados, de los que puedes alcanzar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les paliers franchis, sur ceux que tu peux atteindre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono i gradini superati, su quelli che puoi raggiungere."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São os degraus vencidos, dos que você pode alcançar."
+          }
+        }
+      }
+    },
+    "game.detail.fact.succes_earned": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه الإنجازات التي فتحتها، من كل الموجودة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die freigeschalteten Erfolge, von allen, die es gibt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the achievements you’ve unlocked, out of all that exist."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son los logros conseguidos, de todos los que existen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les succès décrochés, sur tous ceux qui existent."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono i traguardi sbloccati, su tutti quelli che esistono."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São as conquistas desbloqueadas, de todas as que existem."
+          }
+        }
+      }
+    },
+    "game.detail.fact.trophies": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا عدد الكؤوس في واجهتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So viele Trophäen stehen in deiner Vitrine."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is how many trophies sit in your showcase."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es el número de trofeos guardados en tu vitrina."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est le nombre de trophées rangés dans ta vitrine."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È il numero di trofei nella tua vetrina."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o número de troféus guardados na sua vitrine."
+          }
+        }
+      }
+    },
+    "game.detail.fact.showcase_visibility": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنت تختار من يرى واجهتك: الجميع، أصدقاؤك، أو أنت فقط."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du bestimmst, wer deine Vitrine sieht: alle, deine Freunde oder nur du."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You choose who sees your showcase: everyone, your friends, or only you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tú eliges quién ve tu vitrina: todos, tus amigos o solo tú."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu choisis qui voit ta vitrine : tout le monde, tes amis, ou toi seul."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli tu chi vede la tua vetrina: tutti, i tuoi amici o solo tu."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você escolhe quem vê sua vitrine: todos, seus amigos ou só você."
+          }
+        }
+      }
+    },
+    "game.detail.fact.atlas_stamps": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه اللغات التي لك فيها ختم، من كل لغات الأطلس."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die Sprachen, in denen du einen Stempel hast, von allen im Atlas."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the languages where you have a stamp, out of all in the Atlas."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son los idiomas en los que tienes un sello, de todos los del Atlas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les langues où tu as un tampon, sur toutes celles de l’Atlas."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono le lingue in cui hai un timbro, su tutte quelle dell’Atlante."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São os idiomas em que você tem um carimbo, de todos os do Atlas."
+          }
+        }
+      }
+    },
+    "game.detail.fact.atlas_pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه اللغات التي ما زالت تنقصها رسالة، مُرسلة أو مُستقبلة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das sind die Sprachen, in denen noch eine Nachricht fehlt, gesendet oder erhalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are the languages still missing a message, sent or received."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son los idiomas en los que aún falta un mensaje, enviado o recibido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce sont les langues où il manque encore un message, envoyé ou reçu."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sono le lingue in cui manca ancora un messaggio, inviato o ricevuto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "São os idiomas em que ainda falta uma mensagem, enviada ou recebida."
           }
         }
       }
