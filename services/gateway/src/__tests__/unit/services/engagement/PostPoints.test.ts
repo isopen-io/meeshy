@@ -36,7 +36,7 @@ const postId = (n: number) => `68c0000000000000000001${String(n).padStart(2, '0'
 
 type Emission = { readonly room: string | string[]; readonly event: string; readonly payload: unknown };
 
-function setup() {
+function setup(options: { readonly emitFails?: boolean } = {}) {
   const db = fakeGameDb();
   for (const id of [READER, AUTHOR, OTHER_READER]) {
     seedUser(db, { emailVerifiedAt: new Date('2026-01-01T00:00:00Z') }, id);
@@ -44,7 +44,10 @@ function setup() {
   const emissions: Emission[] = [];
   const io = {
     to: (room: string | string[]) => ({
-      emit: (event: string, payload: unknown) => emissions.push({ room, event, payload }),
+      emit: (event: string, payload: unknown) => {
+        if (options.emitFails) throw new Error('adapter down');
+        emissions.push({ room, event, payload });
+      },
     }),
   };
   const service = new EngagementService(db.prisma, {
@@ -310,14 +313,26 @@ describe('les points d’un autre', () => {
 });
 
 describe('un cumul qui ne s’écrit pas', () => {
-  it('ne défait pas le crédit et ne fait pas échouer le geste', async () => {
-    const { db, service } = setup();
+  it('ne défait pas le crédit, ne fait pas échouer le geste, et n’annonce rien', async () => {
+    const { db, service, emissions } = setup();
     db.engagementPostPoints.upsert = async () => {
       throw new Error('mongo down');
     };
 
     await expect(service.recordActivity(READER, 'tool.post_reaction', onPost())).resolves.toBeUndefined();
 
+    expect(credited(db, READER)).toBeGreaterThan(0);
+    expect(postUpdates(emissions)).toEqual([]);
+  });
+});
+
+describe('une annonce qui ne part pas', () => {
+  it('ne défait ni le crédit ni le cumul, et ne fait pas échouer le geste', async () => {
+    const { db, service } = setup({ emitFails: true });
+
+    await expect(service.recordActivity(READER, 'tool.post_reaction', onPost())).resolves.toBeUndefined();
+
+    expect(await pointsOf(db, READER, POST)).toBe(credited(db, READER));
     expect(credited(db, READER)).toBeGreaterThan(0);
   });
 });

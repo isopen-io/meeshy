@@ -58,16 +58,22 @@ export class PostPointsRecorder {
     const { userId, postId } = credit;
     // Un crédit que le barème paie zéro ne change rien : ni ligne, ni annonce.
     if (credit.points <= 0) return;
+    const heldByPublicationMemory = creditLivesInPublicationMemory({
+      operationKey: credit.operationKey,
+      postId,
+      rememberedTargetId: credit.rememberedTargetId,
+    });
     try {
-      const heldByPublicationMemory = creditLivesInPublicationMemory({
-        operationKey: credit.operationKey,
-        postId,
-        rememberedTargetId: credit.rememberedTargetId,
-      });
       if (!heldByPublicationMemory) await this.add(userId, postId, credit.points);
+    } catch (error) {
+      // Rien n'a changé pour ce post : rien à annoncer non plus.
+      log.warn('post points not added after the credit was written', { userId, postId, error: messageOf(error) });
+      return;
+    }
+    try {
       await this.announce(userId, postId);
     } catch (error) {
-      log.warn('post points not recorded after the credit was written', { userId, postId, error: messageOf(error) });
+      log.warn('engagement:post-updated not announced', { userId, postId, error: messageOf(error) });
     }
   }
 
