@@ -19,7 +19,11 @@ extension ConversationView {
             // l'hôte pose le même état que l'appui long. Elle ne monte
             // pas le meuble, ce qui en ferait un second contrat d'envoi.
             onCompose: { composerState.pendingComposeTarget = ComposerSeedTarget(message: msgToForward) },
-            onImageDiscussion: { beginDiscussionExport(endingAt: msgToForward) },
+            // « Imager la discussion » n'est pas rendu quand la discussion
+            // qu'elle peindrait n'a rien à peindre — ou contient une réponse
+            // qui cite un contenu protégé (#9573, décision porteur 2026-10-08).
+            onImageDiscussion: MessageCardDiscussion.offers(messages: viewModel.messages, endingAt: msgToForward.id)
+                ? { beginDiscussionExport(endingAt: msgToForward) } : nil,
             onDismiss: { composerState.forwardMessage = nil }
         )
             .presentationDetents([.medium, .large])

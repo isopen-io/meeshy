@@ -361,17 +361,25 @@ struct MessageCardImagineTests {
         #expect(subject.media.map(\.media.id) == ["own", "q-img"])
     }
 
+    /// Une citation PROTÉGÉE refuse la carte entière (#9573, décision porteur du
+    /// 2026-10-08) ; une citation supprimée ou échue n'apporte aucun média, et
+    /// la réponse s'image sans lui.
     @Test func subject_aProtectedDeletedOrExpiredQuoteBringsNoMedia() {
-        let references = [
+        let protected = [
             Self.quotedPhoto(nature: .timedFlame),
             Self.quotedPhoto(nature: .afterReadFlame),
             Self.quotedPhoto(nature: .viewOnce),
             Self.quotedPhoto(nature: nil),
             Self.quotedPhoto(protected: true),
+        ]
+        for reference in protected {
+            #expect(MessageCardSubject.of(message: Self.reply("Réponse", quoting: reference), servedText: nil, translations: [:], viewer: Self.viewer, now: Self.now) == nil)
+        }
+        let gone = [
             Self.quotedPhoto(deletedAt: Self.now.addingTimeInterval(-60)),
             Self.quotedPhoto(expiresAt: Self.now.addingTimeInterval(-1)),
         ]
-        for reference in references {
+        for reference in gone {
             #expect(MessageCardSubject.of(message: Self.reply("Réponse", quoting: reference), servedText: nil, translations: [:], viewer: Self.viewer, now: Self.now)?.media.isEmpty == true)
         }
     }
@@ -388,7 +396,8 @@ struct MessageCardImagineTests {
 
         var blurred = quoted
         blurred.isBlurred = true
-        #expect(MessageCardSubject.of(message: Self.reply("Belles", quoting: Self.quotedPhoto()), servedText: nil, translations: [:], viewer: Self.viewer, quotedMessage: blurred, now: Self.now)?.media.isEmpty == true)
+        #expect(MessageCardSubject.of(message: Self.reply("Belles", quoting: Self.quotedPhoto()), servedText: nil, translations: [:], viewer: Self.viewer, quotedMessage: blurred, now: Self.now) == nil,
+                "le message cité RÉEL, flouté, refuse la carte de la réponse (#9573)")
     }
 
     @Test func subject_aCommentShowsItsServedText_andAProtectedCommentNeverLeaves() throws {

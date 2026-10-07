@@ -41,6 +41,7 @@ Ce lot passe par l'agent `auditeur-adversarial` avant fusion.
 - Menu de message, feuille « Plus », visionneuse (menu ⋯, colonne d'actions), « Imager », « Imager la discussion », publication : n'offrent que ce que la loi autorise. Un bouton interdit n'est pas rendu.
 - Feuille de transfert : source flamme à durée ⇒ une rangée de durée, celle de la source présélectionnée, seuls les paliers ≤ (15 s, 30 s, 1 min, 5 min, 1 h, 24 h ; une durée source hors palier s'affiche telle quelle en tête). La valeur part dans `ephemeralDuration`.
 - Une sélection multiple contenant un message non transférable : l'action Transférer est absente.
+- Citer un contenu protégé reste permis, et la contagion de protection des réponses s'applique ; mais « Imager » n'est pas rendu sur un message qui CITE un contenu protégé (flamme, flamme après lecture, vue unique, flou, ou citation dont la nature ne se lit pas), et « Imager la discussion » ne l'est pas pour une discussion qui contient un tel message. La carte se refuse entière plutôt que de partir sans sa citation. Les autres sorties de la réponse suivent sa propre nature (décision porteur du 2026-10-08, #9573).
 
 ## 4. Anti-capture (#9574)
 

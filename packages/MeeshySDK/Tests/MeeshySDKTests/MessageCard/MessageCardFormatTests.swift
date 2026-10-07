@@ -152,17 +152,21 @@ struct MessageCardFormatTests {
         #expect(MessageCardSubject.isExportable(Self.message(), now: Self.now))
     }
 
-    /// La citation garde le verdict du message CITÉ (#9573) : un message
-    /// ordinaire qui cite une flamme, une flamme après lecture ou une vue unique
-    /// part en image SANS sa citation ; une nature non déclarée ferme.
-    @Test func subject_aQuoteThatDisappears_orWhoseNatureIsUnknown_isNeverPainted() {
+    /// Un message qui CITE un contenu protégé ne s'image pas (#9573, décision
+    /// porteur du 2026-10-08) : flamme, flamme après lecture, vue unique, média
+    /// cité flouté, ou nature non déclarée — la carte ENTIÈRE se refuse, plutôt
+    /// que de peindre la réponse sans ce qu'elle cite.
+    @Test func subject_aReplyQuotingProtectedContent_neverLeavesAsAnImage() {
         for nature in [ContentExitLaw.Nature.timedFlame, .afterReadFlame, .viewOnce] {
-            let subject = Self.subject(Self.message(replyTo: Self.quote(nature: nature)))
-            #expect(subject != nil, "le message citant, lui, reste exportable")
-            #expect(subject?.quoted == nil, "\(nature.rawValue)")
+            #expect(Self.subject(Self.message(replyTo: Self.quote(nature: nature))) == nil, "\(nature.rawValue)")
+            #expect(!MessageCardSubject.isExportable(Self.message(replyTo: Self.quote(nature: nature)), now: Self.now))
+            #expect(Self.message(replyTo: Self.quote(nature: nature)).quotesProtectedContent)
         }
-        #expect(Self.subject(Self.message(replyTo: Self.quote(nature: nil)))?.quoted == nil, "citation illisible ⇒ fermé")
+        #expect(Self.subject(Self.message(replyTo: Self.quote(nature: nil))) == nil, "citation illisible ⇒ fermé")
+        let blurredMedia = ReplyReference(messageId: "m-quoted", authorName: "Amina", previewText: "🌫️ 🖼️", attachmentIsProtected: true)
+        #expect(Self.subject(Self.message(replyTo: blurredMedia)) == nil, "un média cité protégé ⇒ fermé")
         #expect(Self.subject(Self.message(replyTo: Self.quote(nature: .ordinary)))?.quoted != nil)
+        #expect(!Self.message(replyTo: Self.quote(nature: .ordinary)).quotesProtectedContent)
     }
 
     /// Le message cité RÉEL, quand il est en mémoire, fait foi sur la citation.
@@ -173,26 +177,34 @@ struct MessageCardFormatTests {
         }
         var flame = MeeshyMessage(id: "m-quoted", conversationId: "c-1", senderId: "u-amina", content: "On se retrouve où ce soir ?")
         flame.effects = MessageEffects(flags: .ephemeral, ephemeralDuration: 30)
-        #expect(card(reference: Self.quote(nature: .ordinary), quoted: flame)?.quoted == nil,
+        #expect(card(reference: Self.quote(nature: .ordinary), quoted: flame) == nil,
                 "une citation qui se dit ordinaire ne fait pas sortir une flamme")
         var blurred = MeeshyMessage(id: "m-quoted", conversationId: "c-1", senderId: "u-amina", content: "Secret")
         blurred.isBlurred = true
-        #expect(card(reference: Self.quote(nature: .ordinary), quoted: blurred)?.quoted == nil)
+        #expect(card(reference: Self.quote(nature: .ordinary), quoted: blurred) == nil)
         let ordinary = MeeshyMessage(id: "m-quoted", conversationId: "c-1", senderId: "u-amina", content: "On se retrouve où ce soir ?")
         #expect(card(reference: Self.quote(nature: nil), quoted: ordinary)?.quoted != nil,
                 "le message réel, ordinaire, rouvre une citation que le fil n'avait pas déclarée")
         let other = MeeshyMessage(id: "autre", conversationId: "c-1", senderId: "u-amina", content: "x")
-        #expect(card(reference: Self.quote(nature: nil), quoted: other)?.quoted == nil,
+        #expect(card(reference: Self.quote(nature: nil), quoted: other) == nil,
                 "un autre message que le cité ne prouve rien")
     }
 
+    /// Une flamme citée qui a EXPIRÉ reste une flamme citée ; la citation d'un
+    /// message SUPPRIMÉ ou d'une story ne porte rien de protégé — la réponse
+    /// s'image, sans citation.
     @Test func subject_aDeletedOrExpiredQuoteShowsNothing() {
         var expired = ReplyReference(messageId: "m-quoted", authorName: "Amina", previewText: "Secret")
         expired.quotedExpiresAt = Self.now.addingTimeInterval(-1)
-        #expect(Self.subject(Self.message(replyTo: expired))?.quoted == nil)
+        #expect(Self.subject(Self.message(replyTo: expired)) == nil)
+        let sealedFlame = Self.quote(nature: .timedFlame).tombstoned(at: Self.now, expired: true)
+        #expect(Self.subject(Self.message(replyTo: sealedFlame)) == nil)
         let deleted = ReplyReference(messageId: "m-quoted", authorName: "Amina", previewText: "Secret").tombstoned(at: Self.now)
+        #expect(Self.subject(Self.message(replyTo: deleted)) != nil)
         #expect(Self.subject(Self.message(replyTo: deleted))?.quoted == nil)
-        #expect(Self.subject(Self.message(replyTo: ReplyReference(messageId: "s", authorName: "Story", previewText: "x", isStoryReply: true)))?.quoted == nil)
+        let story = ReplyReference(messageId: "s", authorName: "Story", previewText: "x", isStoryReply: true)
+        #expect(Self.subject(Self.message(replyTo: story)) != nil)
+        #expect(Self.subject(Self.message(replyTo: story))?.quoted == nil)
         #expect(Self.subject(Self.message(replyTo: nil))?.quoted == nil)
     }
 
