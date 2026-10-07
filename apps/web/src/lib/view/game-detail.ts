@@ -3,6 +3,7 @@ import type { GameAtlasBlock, GameChest, GameFlame, GameGlory, GameLeagueBlock, 
 import type { AchievementEntry } from '@meeshy/shared/utils/achievement-view';
 import { engagementAchievementCondition, engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 import type { EngagementAchievementProgress, EngagementAxisProgress } from '@meeshy/shared/utils/engagement-progress';
+import { badgeGuideOfProgress } from '@meeshy/shared/utils/game/badge-guide';
 import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
 import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
@@ -19,6 +20,7 @@ import { medalOfAxis } from '@/lib/game/medal';
 import { rarityPercent, visibleRarity, type AchievementRarityMap, type RarityEntry } from '@/lib/game/rarity';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { badgeGuideView, type BadgeGuideView } from '@/lib/view/badge-guide-view';
 import {
   boundedPercent,
   daysLabel,
@@ -93,7 +95,11 @@ export type ElementDetail = {
   readonly name: string;
   readonly state: DetailState;
   readonly what: string;
+  /** Le titre de « ce que c'est » quand l'élément en a un plus juste (un badge : « Ce qui compte »). */
+  readonly whatLabel?: string;
   readonly how: { readonly label: 'obtain' | 'gives'; readonly text: string } | null;
+  /** Ce qu'un badge dit de lui-même (#9639) : étoiles, échelle des sept paliers, raison de sa matière. */
+  readonly badge?: BadgeGuideView;
   /** Les lignes en plus : un prix, une récompense, une échéance. */
   readonly facts: readonly Pick<ConceptFact, 'label' | 'value'>[];
   readonly rarity: { readonly name: string; readonly share: string } | null;
@@ -142,21 +148,28 @@ const rarityOf = (entry: RarityEntry | undefined): ElementDetail['rarity'] => {
   return { name: rarityName(rarity, language), share: gameText('game.rarity.share', { percent: rarityPercent(entry, language) }) };
 };
 
-/** UN BADGE : la médaille d'un axe. Sa matière dit la hauteur atteinte ; à zéro, il manque de quoi l'allumer. */
+/**
+ * UN BADGE : la médaille d'un axe (#9639). « Ce qui compte » est la phrase de
+ * SON axe, jamais celle de la famille ; « comment l'obtenir » dit ce qu'il manque
+ * pour la prochaine étoile ; la matière dit pourquoi elle est là, et l'échelle
+ * des sept paliers montre les atteints (datés) et ceux à venir (leur seuil).
+ */
 export function badgeDetail(axis: EngagementAxisProgress): ElementDetail {
   const medal = medalOfAxis(axis);
+  const view = badgeGuideView(badgeGuideOfProgress(axis));
   const name = engagementAxisLabel(currentInterfaceLanguage(), axis.axisKey);
   const lastReached = [...axis.tiers].reverse().find((tier) => tier.reached);
-  const next = medal.nextThreshold;
-  return ofFamily('badge', axis.axisKey, 'badges', {
+  const detail = ofFamily('badge', axis.axisKey, 'badges', {
     emblem: { kind: 'medal', axis },
     name,
     state: medal.material === null ? locked(medal.missing === null ? null : formatCount(medal.missing), axis.progress) : earned(isoDate(lastReached?.reachedAt ?? null)),
+    how: { label: 'obtain', text: view.next },
     facts: present([
       medal.material === null ? null : row(gameText('game.fact.material'), materialName(medal.material)),
-      next === null ? null : row(gameText('game.fact.next_tier'), fraction(medal.value, next)),
+      row(gameText('game.badge.stars_label'), fraction(view.stars.lit, view.stars.max)),
     ]),
   });
+  return { ...detail, what: view.counts, whatLabel: gameText('game.badge.counts_label'), badge: view };
 }
 
 /**

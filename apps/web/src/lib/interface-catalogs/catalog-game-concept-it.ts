@@ -227,6 +227,18 @@ const it = {
   'game.detail.fact.showcase_visibility': 'Scegli tu chi vede la tua vetrina: tutti, i tuoi amici o solo tu.',
   'game.detail.fact.atlas_stamps': 'Sono le lingue in cui hai un timbro, su tutte quelle dell’Atlante.',
   'game.detail.fact.atlas_pending': 'Sono le lingue in cui manca ancora un messaggio, inviato o ricevuto.',
+  'game.badge.counts_label': 'Cosa conta',
+  'game.badge.stars_label': 'Stelle',
+  'game.badge.reason.none': 'Ancora nessuna stella: il tuo primo gesto accende il rame.',
+  'game.badge.reason.crossed': '{material}, perché hai superato la soglia di {threshold}: sei a {count}.',
+  'game.badge.reason.served': '{material}, ottenuto superando la soglia di {threshold}.',
+  'game.badge.next': 'Ancora {missing} per la prossima stella: {material}, a {threshold}.',
+  'game.badge.complete': 'Tutte e sette le stelle sono accese: questo badge è Prisma.',
+  'game.badge.ladder_title': 'I sette livelli',
+  'game.badge.rung.upcoming': 'A {threshold}',
+  'game.badge.rung.next': 'Prossima stella · ancora {missing}',
+  'game.badge.upcoming_title': 'In arrivo',
+  'game.badge.guide_link': 'Capire i badge',
 } as const satisfies GameConceptCatalog;
 
 export default it;

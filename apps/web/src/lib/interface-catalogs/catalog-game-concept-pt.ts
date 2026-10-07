@@ -227,6 +227,18 @@ const pt = {
   'game.detail.fact.showcase_visibility': 'Você escolhe quem vê sua vitrine: todos, seus amigos ou só você.',
   'game.detail.fact.atlas_stamps': 'São os idiomas em que você tem um carimbo, de todos os do Atlas.',
   'game.detail.fact.atlas_pending': 'São os idiomas em que ainda falta uma mensagem, enviada ou recebida.',
+  'game.badge.counts_label': 'O que conta',
+  'game.badge.stars_label': 'Estrelas',
+  'game.badge.reason.none': 'Nenhuma estrela por enquanto: seu primeiro gesto acende o cobre.',
+  'game.badge.reason.crossed': '{material}, porque você passou do limite de {threshold}: você está em {count}.',
+  'game.badge.reason.served': '{material}, conquistado ao passar do limite de {threshold}.',
+  'game.badge.next': 'Faltam {missing} para a próxima estrela: {material}, em {threshold}.',
+  'game.badge.complete': 'As sete estrelas estão acesas: este emblema está no Prisma.',
+  'game.badge.ladder_title': 'Os sete níveis',
+  'game.badge.rung.upcoming': 'Em {threshold}',
+  'game.badge.rung.next': 'Próxima estrela · faltam {missing}',
+  'game.badge.upcoming_title': 'A seguir',
+  'game.badge.guide_link': 'Entender os emblemas',
 } as const satisfies GameConceptCatalog;
 
 export default pt;

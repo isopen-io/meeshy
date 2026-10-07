@@ -13,6 +13,8 @@ import { gameRules } from '@/lib/view/game-rules-copy';
 import { useOptionalRoute } from '@/lib/router';
 import { ProgressionShell } from '@/routes/progression-shell';
 import { RulesAtlas } from '@/routes/progression-rules-atlas';
+import { RulesBadges } from '@/routes/progression-rules-badges';
+import { BADGES_SECTION_ID, isBadgesSection } from '@/lib/game/badge-guide-link';
 
 /**
  * « COMMENT ÇA MARCHE » (#9379) — le carnet des règles. Le texte que Mee et Meo
@@ -69,11 +71,17 @@ const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMe
  * l'ombre ; le défilement est instantané quand l'utilisateur limite les
  * animations.
  */
-export function RulesBody({ target }: { readonly target?: number }) {
+export function RulesBody({ target, badges = false }: { readonly target?: number; readonly badges?: boolean }) {
   useEffect(() => {
     if (target === undefined) return;
     document.getElementById(`regle-${target}`)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
   }, [target]);
+
+  /* « Comprendre les badges » (#9639) : la fiche d'un badge et la page des badges ouvrent le carnet ICI. */
+  useEffect(() => {
+    if (!badges) return;
+    document.getElementById(BADGES_SECTION_ID)?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
+  }, [badges]);
 
   return (
     <div className="flex flex-col gap-5 px-4 py-3">
@@ -118,6 +126,8 @@ export function RulesBody({ target }: { readonly target?: number }) {
         </ol>
       </section>
 
+      <RulesBadges />
+
       <RulesAtlas />
 
       <section aria-labelledby="etapes-titre" className="flex flex-col gap-2">
@@ -136,10 +146,11 @@ export function RulesBody({ target }: { readonly target?: number }) {
 
 export default function ProgressionRulesScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'rules');
-  const target = ruleTarget(useOptionalRoute()?.search.get('regle') ?? null);
+  const search = useOptionalRoute()?.search;
+  const target = ruleTarget(search?.get('regle') ?? null);
   return (
     <ProgressionShell title={gameText('game.rules.page_title')}>
-      <RulesBody {...(target === undefined ? {} : { target })} />
+      <RulesBody {...(target === undefined ? {} : { target })} badges={isBadgesSection(search?.get('section') ?? null)} />
     </ProgressionShell>
   );
 }

@@ -35,6 +35,7 @@ export type ProgressionGlyph =
   | 'user'
   | 'globe'
   | 'usersThree'
+  | 'usersFour'
   | 'smiley'
   | 'magicWand'
   | 'linkSimple'
@@ -67,7 +68,7 @@ export const AXIS_GLYPHS: Record<EngagementAxisKey, ProgressionGlyph> = {
   'conversation.private': 'user',
   'conversation.public': 'globe',
   'conversation.community': 'usersThree',
-  'conversation.group_created': 'usersThree',
+  'conversation.group_created': 'usersFour',
   'tool.sticker': 'smiley',
   'tool.in_app_edit': 'magicWand',
   'tool.direct_publish': 'paperPlaneTilt',

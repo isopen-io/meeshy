@@ -60,6 +60,13 @@ const en = {
   'game.rules.atlas.share_mythic': 'under 0.2% of accounts',
   'game.rules.atlas.rarity_glory': '+{glory} Glory',
   'game.rules.atlas.myth': 'The 100 most glorious Legends',
+  'game.rules.badges.title': 'Badges',
+  'game.rules.badges.intro': 'Each badge counts ONE specific move: a voice message, a story, a new friendship… There are twenty, grouped into five families.',
+  'game.rules.badges.ladder': 'Each badge climbs seven tiers. Every time you pass a mark, it changes material and lights one more star.',
+  'game.rules.badges.ribbon': 'From Gold on, the medal wears a ribbon; at Prism, its enamel turns iridescent.',
+  'game.rules.badges.imprint': 'Minting a Meesh can put a badge out: it becomes an imprint showing what is missing to light it again.',
+  'game.rules.badges.families': 'The twenty badges, by family',
+  'game.rules.badges.sheet': 'Tap a badge: its card says what counts for it, its material and why, and what is missing for the next star.',
 } as const satisfies GameRulesCatalog;
 
 export default en;

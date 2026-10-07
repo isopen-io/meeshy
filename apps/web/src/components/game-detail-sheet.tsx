@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
 import { AtlasStamp, Chest, ConceptMark, Flame, GameBadge, LeagueGem, LevelRing, MeeshCoin, RankBlason, Trophy } from '@/components/game';
+import { BadgeLadder, BadgeStars } from '@/components/game/badge-ladder';
 import { GameMedal } from '@/components/game/medal';
 import { SealMark } from '@/components/game/seal-mark';
 import { ProgressBar } from '@/components/progress-bar';
@@ -10,6 +11,7 @@ import { ConceptEmblem, ConceptFacts } from '@/components/progression-concept';
 import { Sheet } from '@/components/sheet';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { medalOfAxis } from '@/lib/game/medal';
+import { BADGES_GUIDE_LINK } from '@/lib/game/badge-guide-link';
 import { detailStore, useOpenDetail } from '@/lib/view/detail-store';
 import { gameText } from '@/lib/view/game-copy';
 import type { DetailEmblem, DetailState, ElementDetail } from '@/lib/view/game-detail';
@@ -148,14 +150,35 @@ export function GameDetailSheet({
           <Emblem emblem={detail.emblem} view={view} />
         </span>
         <State detail={detail} />
-        <Explained marker="what" label={gameText('game.fiche.what')} text={detail.what} />
+        {detail.badge === undefined ? null : (
+          <>
+            <BadgeStars stars={detail.badge.stars} />
+            <p data-badge-reason="" className="text-body text-center" style={{ color: GAME_INK }}>
+              {detail.badge.reason}
+            </p>
+          </>
+        )}
+        <Explained marker="what" label={detail.whatLabel ?? gameText('game.fiche.what')} text={detail.what} />
         {detail.how === null ? null : (
           <Explained marker="how" label={gameText(detail.how.label === 'obtain' ? 'game.detail.obtain_label' : 'game.detail.gives_label')} text={detail.how.text} />
         )}
+        {detail.badge === undefined ? null : <BadgeLadder view={detail.badge} />}
         {detail.facts.length === 0 ? null : (
           <div className="w-full">
             <ConceptFacts facts={detail.facts} />
           </div>
+        )}
+        {detail.badge === undefined ? null : (
+          <Link
+            to={BADGES_GUIDE_LINK.to}
+            search={BADGES_GUIDE_LINK.search}
+            data-badge-guide-link=""
+            onClick={onClose}
+            className={`${PRESS} flex w-full items-center justify-center rounded-chip px-4 text-body font-semibold`}
+            style={{ minHeight: 44, color: GAME_BRAND }}
+          >
+            {gameText('game.badge.guide_link')}
+          </Link>
         )}
         {concept === null || concept === fiche ? null : (
           <Link

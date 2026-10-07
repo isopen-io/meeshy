@@ -60,6 +60,13 @@ const es = {
   'game.rules.atlas.share_mythic': 'menos del 0,2 % de las cuentas',
   'game.rules.atlas.rarity_glory': '+{glory} de Gloria',
   'game.rules.atlas.myth': 'Las 100 Leyendas más gloriosas',
+  'game.rules.badges.title': 'Las insignias',
+  'game.rules.badges.intro': 'Cada insignia cuenta UN gesto concreto: un mensaje de voz, una historia, una amistad nueva… Hay veinte, agrupadas en cinco familias.',
+  'game.rules.badges.ladder': 'Cada insignia sube siete niveles. Cada vez que superas un umbral, cambia de material y enciende una estrella más.',
+  'game.rules.badges.ribbon': 'Desde el Oro, la medalla lleva una cinta; en Prisma, su esmalte se vuelve iridiscente.',
+  'game.rules.badges.imprint': 'Acuñar una Meesh puede apagar una insignia: se vuelve una huella que dice lo que falta para volver a encenderla.',
+  'game.rules.badges.families': 'Las veinte insignias, por familia',
+  'game.rules.badges.sheet': 'Toca una insignia: su ficha dice lo que cuenta para ella, su material y por qué, y lo que falta para la próxima estrella.',
 } as const satisfies GameRulesCatalog;
 
 export default es;

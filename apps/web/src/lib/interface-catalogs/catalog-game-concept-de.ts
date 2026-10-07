@@ -227,6 +227,18 @@ const de = {
   'game.detail.fact.showcase_visibility': 'Du bestimmst, wer deine Vitrine sieht: alle, deine Freunde oder nur du.',
   'game.detail.fact.atlas_stamps': 'Das sind die Sprachen, in denen du einen Stempel hast, von allen im Atlas.',
   'game.detail.fact.atlas_pending': 'Das sind die Sprachen, in denen noch eine Nachricht fehlt, gesendet oder erhalten.',
+  'game.badge.counts_label': 'Was zählt',
+  'game.badge.stars_label': 'Sterne',
+  'game.badge.reason.none': 'Noch kein Stern: Deine erste Geste lässt das Kupfer leuchten.',
+  'game.badge.reason.crossed': '{material}, weil du die Schwelle von {threshold} überschritten hast: Du stehst bei {count}.',
+  'game.badge.reason.served': '{material}, verdient beim Überschreiten der Schwelle von {threshold}.',
+  'game.badge.next': 'Noch {missing} bis zum nächsten Stern: {material}, bei {threshold}.',
+  'game.badge.complete': 'Alle sieben Sterne leuchten: Dieses Abzeichen ist Prisma.',
+  'game.badge.ladder_title': 'Die sieben Stufen',
+  'game.badge.rung.upcoming': 'Bei {threshold}',
+  'game.badge.rung.next': 'Nächster Stern · noch {missing}',
+  'game.badge.upcoming_title': 'Als Nächstes',
+  'game.badge.guide_link': 'Abzeichen verstehen',
 } as const satisfies GameConceptCatalog;
 
 export default de;

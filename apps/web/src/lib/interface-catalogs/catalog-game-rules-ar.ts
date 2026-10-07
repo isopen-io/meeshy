@@ -60,6 +60,13 @@ const ar = {
   'game.rules.atlas.share_mythic': 'أقل من ⁦0٫2 %⁩ من الحسابات',
   'game.rules.atlas.rarity_glory': '⁦+{glory}⁩ مجد',
   'game.rules.atlas.myth': 'أمجد 100 أسطورة',
+  'game.rules.badges.title': 'الشارات',
+  'game.rules.badges.intro': 'كل شارة تحتسب خطوة واحدة محددة: رسالة صوتية، قصة، صداقة جديدة… هناك عشرون شارة، مرتبة في خمس عائلات.',
+  'game.rules.badges.ladder': 'كل شارة ترتقي سبعة مستويات. عند كل عتبة تتجاوزها، تتغير مادتها وتُضاء نجمة أخرى.',
+  'game.rules.badges.ribbon': 'ابتداءً من الذهب، تحمل الميدالية شريطًا؛ وفي المنشور، يتلألأ مينائها.',
+  'game.rules.badges.imprint': 'سكّ Meesh قد يُطفئ شارة: تصبح أثرًا يقول ما ينقص لإعادة إضاءتها.',
+  'game.rules.badges.families': 'الشارات العشرون، حسب العائلة',
+  'game.rules.badges.sheet': 'المس شارة: بطاقتها تقول ما يُحتسب لها، ومادتها ولماذا، وما ينقص للنجمة التالية.',
 } as const satisfies GameRulesCatalog;
 
 export default ar;

@@ -227,6 +227,18 @@ const ar = {
   'game.detail.fact.showcase_visibility': 'أنت تختار من يرى واجهتك: الجميع، أصدقاؤك، أو أنت فقط.',
   'game.detail.fact.atlas_stamps': 'هذه اللغات التي لك فيها ختم، من كل لغات الأطلس.',
   'game.detail.fact.atlas_pending': 'هذه اللغات التي ما زالت تنقصها رسالة، مُرسلة أو مُستقبلة.',
+  'game.badge.counts_label': 'ما الذي يُحتسب',
+  'game.badge.stars_label': 'النجوم',
+  'game.badge.reason.none': 'لا نجمة بعد: أول خطوة منك تُضيء النحاس.',
+  'game.badge.reason.crossed': '{material}، لأنك تجاوزت عتبة {threshold}: وصلت إلى {count}.',
+  'game.badge.reason.served': '{material}، نلته حين تجاوزت عتبة {threshold}.',
+  'game.badge.next': 'يتبقى {missing} للنجمة التالية: {material}، عند {threshold}.',
+  'game.badge.complete': 'النجوم السبع مضاءة: هذه الشارة في المنشور.',
+  'game.badge.ladder_title': 'المستويات السبعة',
+  'game.badge.rung.upcoming': 'عند {threshold}',
+  'game.badge.rung.next': 'النجمة التالية · يتبقى {missing}',
+  'game.badge.upcoming_title': 'القادم',
+  'game.badge.guide_link': 'فهم الشارات',
 } as const satisfies GameConceptCatalog;
 
 export default ar;

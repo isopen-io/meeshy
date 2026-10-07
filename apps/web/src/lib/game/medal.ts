@@ -23,7 +23,34 @@ export const MEDAL_TIER_MAX = GAME_BADGE_MATERIALS.length;
 /** Le palier d'Or, premier à porter un ruban. */
 const RIBBON_FROM_TIER = 4;
 
-export const MEDAL_PICTOGRAMS = ['text', 'voice', 'story', 'post', 'reel', 'comment', 'conversation', 'tool', 'social'] as const;
+/**
+ * UN PICTOGRAMME PAR AXE (#9639) — vingt glyphes, jamais celui de la famille :
+ * liens, partages, invités et amitiés ne se confondent plus, ni les quatre
+ * conversations, ni les cinq outils. Miroir SDK : `GameMedalGlyph`
+ * (`packages/MeeshySDK/Sources/MeeshyUI/Game/GameMedalView.swift`, `webName`).
+ */
+export const MEDAL_PICTOGRAMS = [
+  'voice',
+  'text',
+  'post',
+  'story',
+  'reel',
+  'voice-comment',
+  'comment',
+  'private',
+  'public',
+  'community',
+  'group',
+  'sticker',
+  'edit',
+  'direct-publish',
+  'reaction',
+  'attachment',
+  'link',
+  'share',
+  'invite',
+  'friendship',
+] as const;
 export type MedalPictogram = (typeof MEDAL_PICTOGRAMS)[number];
 
 const PICTOGRAM_BY_AXIS: Readonly<Record<EngagementAxisKey, MedalPictogram>> = {
@@ -32,21 +59,21 @@ const PICTOGRAM_BY_AXIS: Readonly<Record<EngagementAxisKey, MedalPictogram>> = {
   'content.post': 'post',
   'content.story': 'story',
   'content.reel': 'reel',
-  'comment.audio': 'comment',
+  'comment.audio': 'voice-comment',
   'comment.text': 'comment',
-  'conversation.private': 'conversation',
-  'conversation.public': 'conversation',
-  'conversation.community': 'conversation',
-  'conversation.group_created': 'conversation',
-  'tool.sticker': 'tool',
-  'tool.in_app_edit': 'tool',
-  'tool.direct_publish': 'tool',
-  'tool.reaction': 'tool',
-  'tool.attachment': 'tool',
-  'social.tracked_link': 'social',
-  'social.share': 'social',
-  'social.invite_joined': 'social',
-  'social.friendship': 'social',
+  'conversation.private': 'private',
+  'conversation.public': 'public',
+  'conversation.community': 'community',
+  'conversation.group_created': 'group',
+  'tool.sticker': 'sticker',
+  'tool.in_app_edit': 'edit',
+  'tool.direct_publish': 'direct-publish',
+  'tool.reaction': 'reaction',
+  'tool.attachment': 'attachment',
+  'social.tracked_link': 'link',
+  'social.share': 'share',
+  'social.invite_joined': 'invite',
+  'social.friendship': 'friendship',
 };
 
 export const pictogramOf = (axis: EngagementAxisKey): MedalPictogram => PICTOGRAM_BY_AXIS[axis];

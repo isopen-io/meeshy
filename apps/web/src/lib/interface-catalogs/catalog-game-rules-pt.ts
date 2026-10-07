@@ -60,6 +60,13 @@ const pt = {
   'game.rules.atlas.share_mythic': 'menos de 0,2 % das contas',
   'game.rules.atlas.rarity_glory': '+{glory} de Glória',
   'game.rules.atlas.myth': 'As 100 Lendas mais gloriosas',
+  'game.rules.badges.title': 'Os emblemas',
+  'game.rules.badges.intro': 'Cada emblema conta UM gesto preciso: uma mensagem de voz, uma story, uma nova amizade… São vinte, agrupados em cinco famílias.',
+  'game.rules.badges.ladder': 'Cada emblema sobe sete níveis. A cada limite superado, ele muda de material e acende mais uma estrela.',
+  'game.rules.badges.ribbon': 'A partir do Ouro, a medalha ganha uma fita; no Prisma, seu esmalte fica iridescente.',
+  'game.rules.badges.imprint': 'Cunhar uma Meesh pode apagar um emblema: ele vira uma marca que diz o que falta para reacendê-lo.',
+  'game.rules.badges.families': 'Os vinte emblemas, por família',
+  'game.rules.badges.sheet': 'Toque em um emblema: a ficha diz o que conta para ele, seu material e por quê, e o que falta para a próxima estrela.',
 } as const satisfies GameRulesCatalog;
 
 export default pt;

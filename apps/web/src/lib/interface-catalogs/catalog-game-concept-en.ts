@@ -227,6 +227,18 @@ const en = {
   'game.detail.fact.showcase_visibility': 'You choose who sees your showcase: everyone, your friends, or only you.',
   'game.detail.fact.atlas_stamps': 'These are the languages where you have a stamp, out of all in the Atlas.',
   'game.detail.fact.atlas_pending': 'These are the languages still missing a message, sent or received.',
+  'game.badge.counts_label': 'What counts',
+  'game.badge.stars_label': 'Stars',
+  'game.badge.reason.none': 'No star yet: your first move lights up copper.',
+  'game.badge.reason.crossed': '{material}, because you passed the {threshold} mark: you are at {count}.',
+  'game.badge.reason.served': '{material}, earned when you passed the {threshold} mark.',
+  'game.badge.next': '{missing} more for the next star: {material}, at {threshold}.',
+  'game.badge.complete': 'All seven stars are lit: this badge is Prism.',
+  'game.badge.ladder_title': 'The seven tiers',
+  'game.badge.rung.upcoming': 'At {threshold}',
+  'game.badge.rung.next': 'Next star · {missing} to go',
+  'game.badge.upcoming_title': 'Coming up',
+  'game.badge.guide_link': 'Understand badges',
 } as const satisfies GameConceptCatalog;
 
 export default en;

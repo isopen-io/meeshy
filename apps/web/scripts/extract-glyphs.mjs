@@ -214,6 +214,9 @@ const PROGRESSION = [
   'chat-circle-text',
   'globe',
   'users-three',
+  // « Groupes créés » (#9639) : un logo par type — les communautés gardent
+  // `users-three`, un groupe qu'on crée prend ses quatre personnes.
+  'users-four',
   'magic-wand',
   'paper-plane-tilt',
   // La famille SOCIALE (#5766) : lien créé, contenu partagé, invité venu,

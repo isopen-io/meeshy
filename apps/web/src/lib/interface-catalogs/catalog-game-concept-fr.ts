@@ -225,6 +225,18 @@ const fr = {
   'game.detail.fact.showcase_visibility': 'Tu choisis qui voit ta vitrine : tout le monde, tes amis, ou toi seul.',
   'game.detail.fact.atlas_stamps': 'Ce sont les langues où tu as un tampon, sur toutes celles de l’Atlas.',
   'game.detail.fact.atlas_pending': 'Ce sont les langues où il manque encore un message, envoyé ou reçu.',
+  'game.badge.counts_label': 'Ce qui compte',
+  'game.badge.stars_label': 'Étoiles',
+  'game.badge.reason.none': 'Aucune étoile pour l’instant : le premier geste allume le cuivre.',
+  'game.badge.reason.crossed': '{material}, parce que tu as franchi le seuil de {threshold} : tu en es à {count}.',
+  'game.badge.reason.served': '{material}, gagné quand tu as franchi le seuil de {threshold}.',
+  'game.badge.next': 'Encore {missing} pour la prochaine étoile : {material}, au seuil de {threshold}.',
+  'game.badge.complete': 'Les sept étoiles sont allumées : ce badge est au Prisme.',
+  'game.badge.ladder_title': 'Les sept paliers',
+  'game.badge.rung.upcoming': 'À {threshold}',
+  'game.badge.rung.next': 'Prochaine étoile · encore {missing}',
+  'game.badge.upcoming_title': 'À venir',
+  'game.badge.guide_link': 'Comprendre les badges',
 } as const;
 
 export default fr;

@@ -39,14 +39,14 @@ const { x: CX, y: CY } = MEDAL_CENTER;
 const INK = 'var(--game-glint)';
 const MUTED = 'var(--ios-ink-2)';
 
-const starPath = (r: number): string =>
-  Array.from({ length: 10 }, (_, k) => {
-    const a = (k * Math.PI) / 5 - Math.PI / 2;
-    const rr = k % 2 === 1 ? r * 0.45 : r;
-    return `${k === 0 ? 'M' : 'L'}${(rr * Math.cos(a)).toFixed(1)} ${(rr * Math.sin(a)).toFixed(1)}`;
-  }).join('') + 'Z';
+/** Un disque plein, en chemin : les mêmes points que `dot` côté SDK. */
+const disc = (x: number, y: number, r: number, color: string) => <circle cx={x} cy={y} r={r} fill={color} />;
 
-/** Les pictogrammes, au trait, centrés sur l'origine : jamais une bulle de conversation. */
+/**
+ * Les pictogrammes, au trait, centrés sur l'origine : UN PAR AXE (#9639), jamais
+ * une bulle de conversation. Les tracés sont ceux de `GameMedalView.drawGlyph`
+ * (SDK) — un glyphe retouché ici se retouche là.
+ */
 function Pictogram({ kind, color }: { readonly kind: MedalPictogram; readonly color: string }) {
   const line = { fill: 'none', stroke: color, strokeWidth: 2.4, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
   switch (kind) {
@@ -79,23 +79,81 @@ function Pictogram({ kind, color }: { readonly kind: MedalPictogram; readonly co
       );
     case 'reel':
       return <path d="M-5 -8 L9 0 L-5 8 Z" fill={color} />;
+    case 'voice-comment':
+      return <path d="M-8 -3v6M-4 -7v14M0 -10v20M4 -6v12M8 -2v4" {...line} />;
     case 'comment':
       return <path d="M-9 -6h6v6l-3 6h-3l2-6h-2zM2 -6h6v6l-3 6h-3l2-6h-2z" fill={color} />;
-    case 'conversation':
+    case 'private':
       return (
         <>
-          <circle cx="-6" cy="0" r="4" fill={color} />
-          <circle cx="7" cy="0" r="4" fill={color} />
+          {disc(-6, 0, 4, color)}
+          {disc(7, 0, 4, color)}
           <path d="M-2 0h5" stroke={color} strokeWidth="2.6" />
         </>
       );
-    case 'tool':
-      return <path d={starPath(10)} fill={color} />;
-    case 'social':
+    case 'public':
+      return <path d="M-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M0 -9a4 9 0 0 0 0 18a4 9 0 0 0 0 -18M-9 0h18" {...line} strokeWidth={2} />;
+    case 'community':
+      return (
+        <>
+          <path d="M0 -7L-7 5L7 5Z" {...line} strokeWidth={2} />
+          {disc(0, -7, 3.2, color)}
+          {disc(-7, 5, 3.2, color)}
+          {disc(7, 5, 3.2, color)}
+        </>
+      );
+    case 'group':
+      return (
+        <>
+          {disc(-6, -3, 3.5, color)}
+          {disc(3, -3, 3.5, color)}
+          <path d="M7 4v8M3 8h8" {...line} />
+        </>
+      );
+    case 'sticker':
+      return (
+        <>
+          <path d="M-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" {...line} strokeWidth={2.2} />
+          {disc(-3.2, -2.5, 1.4, color)}
+          {disc(3.2, -2.5, 1.4, color)}
+          <path d="M-4.5 2.5a5 5 0 0 0 9 0" {...line} strokeWidth={2.2} />
+        </>
+      );
+    case 'edit':
+      return (
+        <>
+          <path d="M-8 8L3 -3" {...line} strokeWidth={2.6} />
+          <path d="M6 -12L7.4 -7.4L12 -6L7.4 -4.6L6 0L4.6 -4.6L0 -6L4.6 -7.4Z" fill={color} />
+        </>
+      );
+    case 'direct-publish':
+      return <path d="M-10 -1L10 -9L3 9L0 2Z" fill={color} />;
+    case 'reaction':
+      return <path d="M0 9C-13 0 -9 -11 0 -4C9 -11 13 0 0 9Z" fill={color} />;
+    case 'attachment':
+      return <path d="M4 -5v10a4 4 0 0 1 -8 0v-12a2.5 2.5 0 0 1 5 0v11" {...line} strokeWidth={2.2} />;
+    case 'link':
       return (
         <>
           <rect x="-11" y="-4" width="12" height="8" rx="4" {...line} />
           <rect x="-1" y="-4" width="12" height="8" rx="4" {...line} />
+        </>
+      );
+    case 'share':
+      return <path d="M0 -11v12M-5 -6l5 -5l5 5M-8 -1v9h16v-9" {...line} />;
+    case 'invite':
+      return (
+        <>
+          {disc(-3, -5, 4, color)}
+          <path d="M-11 10a8 7 0 0 1 16 0M8 -4v8M4 0h8" {...line} />
+        </>
+      );
+    case 'friendship':
+      return (
+        <>
+          {disc(-5, -5, 3.5, color)}
+          {disc(5, -5, 3.5, color)}
+          <path d="M-11 9a6 5 0 0 1 12 0M-1 9a6 5 0 0 1 12 0" {...line} />
         </>
       );
   }

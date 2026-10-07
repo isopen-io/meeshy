@@ -58,6 +58,13 @@ const fr = {
   'game.rules.atlas.share_mythic': 'moins de 0,2 % des comptes',
   'game.rules.atlas.rarity_glory': '+{glory} de Gloire',
   'game.rules.atlas.myth': 'Les 100 Légendes les plus glorieuses',
+  'game.rules.badges.title': 'Les badges',
+  'game.rules.badges.intro': 'Chaque badge compte UN geste précis : un message vocal, une story, une amitié nouée… Il y en a vingt, rangés en cinq familles.',
+  'game.rules.badges.ladder': 'Chaque badge monte sur sept paliers. À chaque seuil franchi, il change de matière et allume une étoile de plus.',
+  'game.rules.badges.ribbon': 'Dès l’Or, la médaille porte un ruban ; au Prisme, son émail s’irise.',
+  'game.rules.badges.imprint': 'Frapper une Meesh peut éteindre un badge : il devient une empreinte qui dit ce qu’il manque pour le rallumer.',
+  'game.rules.badges.families': 'Les vingt badges, par famille',
+  'game.rules.badges.sheet': 'Touche un badge : sa fiche dit ce qui compte pour lui, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile.',
 } as const;
 
 export default fr;

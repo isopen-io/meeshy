@@ -60,6 +60,13 @@ const it = {
   'game.rules.atlas.share_mythic': 'meno dello 0,2 % degli account',
   'game.rules.atlas.rarity_glory': '+{glory} di Gloria',
   'game.rules.atlas.myth': 'Le 100 Leggende più gloriose',
+  'game.rules.badges.title': 'I badge',
+  'game.rules.badges.intro': 'Ogni badge conta UN gesto preciso: un messaggio vocale, una storia, una nuova amicizia… Sono venti, raggruppati in cinque famiglie.',
+  'game.rules.badges.ladder': 'Ogni badge sale su sette livelli. A ogni soglia superata cambia materiale e accende una stella in più.',
+  'game.rules.badges.ribbon': 'Dall’Oro in poi la medaglia porta un nastro; al Prisma il suo smalto diventa iridescente.',
+  'game.rules.badges.imprint': 'Coniare una Meesh può spegnere un badge: diventa un’impronta che dice cosa manca per riaccenderlo.',
+  'game.rules.badges.families': 'I venti badge, per famiglia',
+  'game.rules.badges.sheet': 'Tocca un badge: la sua scheda dice cosa conta per lui, il suo materiale e perché, e cosa manca per la prossima stella.',
 } as const satisfies GameRulesCatalog;
 
 export default it;

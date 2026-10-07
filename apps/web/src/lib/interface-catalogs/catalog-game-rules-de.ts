@@ -60,6 +60,13 @@ const de = {
   'game.rules.atlas.share_mythic': 'unter 0,2 % der Konten',
   'game.rules.atlas.rarity_glory': '+{glory} Ruhm',
   'game.rules.atlas.myth': 'Die 100 ruhmreichsten Legenden',
+  'game.rules.badges.title': 'Die Abzeichen',
+  'game.rules.badges.intro': 'Jedes Abzeichen zählt EINE bestimmte Geste: eine Sprachnachricht, eine Story, eine neue Freundschaft… Es gibt zwanzig, in fünf Familien geordnet.',
+  'game.rules.badges.ladder': 'Jedes Abzeichen steigt über sieben Stufen. Bei jeder überschrittenen Schwelle wechselt es das Material und lässt einen Stern mehr leuchten.',
+  'game.rules.badges.ribbon': 'Ab Gold trägt die Medaille ein Band; bei Prisma schillert ihr Email.',
+  'game.rules.badges.imprint': 'Das Prägen einer Meesh kann ein Abzeichen erlöschen lassen: Es wird zu einem Abdruck, der zeigt, was zum Wiederentzünden fehlt.',
+  'game.rules.badges.families': 'Die zwanzig Abzeichen nach Familie',
+  'game.rules.badges.sheet': 'Tippe auf ein Abzeichen: Seine Karte sagt, was dafür zählt, sein Material und warum, und was bis zum nächsten Stern fehlt.',
 } as const satisfies GameRulesCatalog;
 
 export default de;
