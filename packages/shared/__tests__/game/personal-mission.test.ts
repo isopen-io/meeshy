@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { MISSION_TEMPLATES } from '../../utils/game/missions.js';
+import { MISSION_TEMPLATES, isRetiredMissionTemplate } from '../../utils/game/missions.js';
 import {
   PERSONAL_ACTIVITIES,
   PERSONAL_MISSION_SLOT,
@@ -106,13 +106,21 @@ describe('la mission personnelle', () => {
     expect(picks.filter((key) => key === 'send-voice').length).toBeGreaterThan(14);
   });
 
-  it('ne propose une mission de langue qu’à un compte qui en parle plusieurs', () => {
-    const solo = Array.from({ length: 60 }, (_, i) => drawPersonalMission(input({ userId: `s${i}`, level: 20 }))!.mission.prism);
-    expect(solo.some(Boolean)).toBe(false);
-    const polyglot = Array.from({ length: 60 }, (_, i) =>
-      drawPersonalMission(input({ userId: `p${i}`, level: 20, multilingual: true }))!.mission.prism,
-    );
-    expect(polyglot.some(Boolean)).toBe(true);
+  it('ne propose plus de mission de langue, même à un compte qui en parle plusieurs (#9634)', () => {
+    for (const multilingual of [false, true]) {
+      const prism = Array.from({ length: 60 }, (_, i) =>
+        drawPersonalMission(input({ userId: `p${i}`, level: [6, 20, 45][i % 3]!, multilingual }))!.mission.prism,
+      );
+      expect(prism.some(Boolean)).toBe(false);
+    }
+  });
+
+  it('ne tire que des gabarits tracés, et chaque palier en garde au moins deux (#9634)', () => {
+    for (const level of [6, 20, 45]) {
+      const keys = new Set(Array.from({ length: 120 }, (_, i) => drawPersonalMission(input({ userId: `t${i}`, level }))!.mission.templateKey));
+      expect({ level, enough: keys.size >= 2 }).toEqual({ level, enough: true });
+      for (const key of keys) expect({ key, retired: isRetiredMissionTemplate(key) }).toEqual({ key, retired: false });
+    }
   });
 
   it('ne reprend jamais le signal d’une mission du jour', () => {

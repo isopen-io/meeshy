@@ -6,13 +6,15 @@ import Foundation
 // moyenne, difficile), la difficile devenant mission d'Or à partir du niveau 50
 // ou de 50 Meeshes gardées.
 //
-// ## Ce qu'un SIGNAL peut être
+// ## Ce qu'un GABARIT peut demander (#9634)
 //
-// Seulement un fait que la passerelle OBSERVE À L'ÉCRITURE : un axe d'engagement
-// incrémenté, une réponse dans une conversation distincte, un message dans une
-// autre langue que la langue système de l'expéditeur, une réponse reçue d'un
-// auteur distinct. Le client ne mesure rien : il tire les mêmes gabarits que le
-// serveur pour montrer le coffre, mais l'avancement vient toujours du serveur.
+// Seulement un GESTE de l'utilisateur que la passerelle CRÉDITE sur un axe
+// d'engagement, et dont le libellé dit exactement le geste compté. Les faits de
+// tiers, la langue déclarée par le client et les gestes plus étroits que leur
+// libellé ont quitté le catalogue. La mission d'Or est la difficile PORTÉE à
+// l'Or : mêmes gestes, même objectif, points et Gloire de l'Or. Le client ne
+// mesure rien : il tire les mêmes gabarits que le serveur pour montrer le
+// coffre, mais l'avancement vient toujours du serveur.
 //
 // ## Le tirage
 //
@@ -57,9 +59,13 @@ public struct MissionSignal: RawRepresentable, Codable, Sendable, Hashable {
         MissionSignal("axis:\(key.rawValue)")
     }
 
+    /// Les deux faits hors axe ne nourrissent plus que le DUO de la semaine (#9634).
     public static let replyDistinctConversations = MissionSignal("reply-distinct-conversations")
     public static let foreignLanguageMessage = MissionSignal("foreign-language-message")
-    public static let repliesReceivedDistinctAuthors = MissionSignal("replies-received-distinct-authors")
+
+    /// Tout ce que la passerelle observe : chaque axe d'engagement, puis les deux faits hors axe.
+    public static let observed: [MissionSignal] =
+        EngagementAxisKey.allCases.map { axis($0) } + [replyDistinctConversations, foreignLanguageMessage]
 }
 
 public struct MissionTemplate: Sendable, Equatable {
@@ -163,31 +169,37 @@ public enum GameMissions {
                                basePoints: basePoints, prism: prism)
     }
 
-    /// Le catalogue — dix-neuf gabarits, du plus doux à l'Or.
+    /// Le catalogue — neuf gabarits tracés, du plus doux au difficile (#9634).
     public static let templates: [MissionTemplate] = [
         template("react-messages", .easy, .axis(.reaction), 5),
         template("send-voice", .easy, .axis(.audioMessage), 1),
         template("send-texts", .easy, .axis(.textMessage), 5),
-        template("use-stickers", .easy, .axis(.sticker), 2),
         template("send-attachments", .easy, .axis(.attachment), 2),
 
-        template("reply-conversations", .medium, .replyDistinctConversations, 3),
         template("comment-text", .medium, .axis(.textComment), 3),
         template("publish-story", .medium, .axis(.story), 1),
         template("publish-post", .medium, .axis(.post), 1),
-        template("share-link", .medium, .axis(.share), 1),
-        template("prism-foreign-messages", .medium, .foreignLanguageMessage, 2, prism: true),
 
-        template("prism-foreign-exchange", .hard, .foreignLanguageMessage, 5, prism: true),
-        template("reply-conversations-wide", .hard, .replyDistinctConversations, 6),
         template("publish-posts", .hard, .axis(.post), 2),
-        template("voice-comments", .hard, .axis(.audioComment), 2),
-        template("publish-reel", .hard, .axis(.reel), 1),
-        template("long-chat", .hard, .axis(.textMessage), 20),
-
-        template("gold-replies-received", .gold, .repliesReceivedDistinctAuthors, 4),
-        template("gold-reply-conversations", .gold, .replyDistinctConversations, 8),
+        // La difficile de `send-texts` : même geste, deux fois son objectif.
+        template("long-chat", .hard, .axis(.textMessage), 10),
     ]
+
+    /// Les gabarits retirés par l'audit du 2026-10-07 : une mission achevée sur l'un d'eux garde sa phrase.
+    public static let retiredTemplateKeys: Set<String> = [
+        "share-link", "prism-foreign-messages", "prism-foreign-exchange", "gold-replies-received", "use-stickers",
+        "voice-comments", "publish-reel", "reply-conversations", "reply-conversations-wide", "gold-reply-conversations",
+    ]
+
+    private static let goldTemplates: [MissionTemplate] = templates
+        .filter { $0.difficulty == .hard }
+        .map { MissionTemplate(key: $0.key, difficulty: .gold, signal: $0.signal, baseTarget: $0.baseTarget,
+                               basePoints: 250, prism: $0.prism) }
+
+    /// Les gabarits d'une difficulté ; ceux de l'Or sont les difficiles portés à l'Or.
+    public static func catalog(for difficulty: MissionDifficulty) -> [MissionTemplate] {
+        difficulty == .gold ? goldTemplates : templates.filter { $0.difficulty == difficulty }
+    }
 
     private static func clampLevel(_ level: Int) -> Int {
         min(GameLevels.maxLevel, max(GameLevels.minLevel, level))
@@ -225,7 +237,7 @@ public enum GameMissions {
 
     private static func pool(_ difficulty: MissionDifficulty, excluding excluded: Set<MissionSignal>,
                              prismOnly: Bool) -> [MissionTemplate] {
-        let candidates = templates.filter { $0.difficulty == difficulty && !excluded.contains($0.signal) }
+        let candidates = catalog(for: difficulty).filter { !excluded.contains($0.signal) }
         let prism = candidates.filter(\.prism)
         return prismOnly && !prism.isEmpty ? prism : candidates
     }

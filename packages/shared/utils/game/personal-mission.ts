@@ -7,8 +7,8 @@
  *
  * - **ses usages réels** : un gabarit se tire d'autant plus volontiers que le compte fait déjà ce geste
  *   (les compteurs d'engagement, fournis par l'appelant) ;
- * - **ses langues** : une mission de langue (le Prisme) n'est proposée qu'à un compte qui en parle
- *   plusieurs ;
+ * - **ses langues** : une mission de langue (le Prisme) ne serait proposée qu'à un compte qui en parle
+ *   plusieurs — le catalogue n'en porte plus aucune depuis #9634 ;
  * - **son niveau** : facile sous le 10, moyenne sous le 30, difficile ensuite — jamais d'Or ;
  * - **ses heures habituelles** : la plage se tire PARMI les heures où il écrit d'ordinaire.
  *
@@ -43,22 +43,20 @@ const MIN_HABIT_SAMPLES = 8;
 export const PERSONAL_ACTIVITIES = ['react', 'voice', 'chat', 'stickers', 'attachments', 'reply', 'comment', 'story', 'post', 'prism'] as const;
 export type PersonalActivity = (typeof PERSONAL_ACTIVITIES)[number];
 
-/** Les gabarits qu'une mission personnelle peut prendre, et l'activité que la notification nomme. */
+/**
+ * Les gabarits qu'une mission personnelle peut prendre, et l'activité que la notification nomme — les gabarits
+ * tracés du catalogue (#9634). Les activités `stickers`, `reply` et `prism` gardent leur phrase : une mission
+ * achevée ou annoncée avant le retrait de son gabarit doit toujours se dire.
+ */
 const PERSONAL_POOL: readonly { readonly key: string; readonly tier: 'easy' | 'medium' | 'hard'; readonly activity: PersonalActivity }[] = [
   { key: 'react-messages', tier: 'easy', activity: 'react' },
   { key: 'send-voice', tier: 'easy', activity: 'voice' },
   { key: 'send-texts', tier: 'easy', activity: 'chat' },
-  { key: 'use-stickers', tier: 'easy', activity: 'stickers' },
   { key: 'send-attachments', tier: 'easy', activity: 'attachments' },
-  { key: 'reply-conversations', tier: 'medium', activity: 'reply' },
   { key: 'comment-text', tier: 'medium', activity: 'comment' },
   { key: 'publish-story', tier: 'medium', activity: 'story' },
   { key: 'publish-post', tier: 'medium', activity: 'post' },
-  { key: 'prism-foreign-messages', tier: 'medium', activity: 'prism' },
-  { key: 'prism-foreign-exchange', tier: 'hard', activity: 'prism' },
-  { key: 'reply-conversations-wide', tier: 'hard', activity: 'reply' },
   { key: 'publish-posts', tier: 'hard', activity: 'post' },
-  { key: 'voice-comments', tier: 'hard', activity: 'comment' },
   { key: 'long-chat', tier: 'hard', activity: 'chat' },
 ];
 
@@ -77,7 +75,7 @@ export type PersonalMissionInput = {
   readonly nowMinute: number;
   /** Vingt-quatre compteurs d'activité par heure locale ; `null` quand le compte n'a pas d'historique lisible. */
   readonly activeHours: readonly number[] | null;
-  /** Ce que le compte fait déjà : un compte par signal (`axis:…`, `reply-distinct-conversations`). */
+  /** Ce que le compte fait déjà : un compte par signal d'axe (`axis:…`). */
   readonly usage: Readonly<Partial<Record<string, number>>>;
   /** Le compte parle au moins deux langues dans le jeu : les missions du Prisme lui sont ouvertes. */
   readonly multilingual: boolean;

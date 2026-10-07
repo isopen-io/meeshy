@@ -3,15 +3,24 @@
  * la difficile devenant mission d'Or à partir du niveau 50 ou de 50 Meeshes
  * gardées. `docs/product/jeu-meeshy-conception.html` § II.5.
  *
- * ## Ce qu'un SIGNAL peut être
+ * ## Ce qu'un GABARIT peut demander (#9634)
  *
- * Seulement un fait que la passerelle OBSERVE À L'ÉCRITURE : un axe
- * d'engagement incrémenté (`ENGAGEMENT_AXES`), une réponse dans une
- * conversation distincte, un message dans une autre langue que la langue
- * système de l'expéditeur, une réponse reçue d'un auteur distinct. « Lire N
- * messages traduits » ou « une story qui reçoit N réactions » sont des faits
- * de LECTURE ou de tiers : aucune écriture de l'utilisateur ne les porte, ils
- * restent hors du catalogue.
+ * Seulement un GESTE de l'utilisateur que la passerelle CRÉDITE sur un axe
+ * d'engagement (`ENGAGEMENT_AXES`), et dont le libellé dit exactement le geste
+ * compté. L'audit du 2026-10-07 a retiré du catalogue ce qui avançait mal ou
+ * jamais : un fait de TIERS (les réponses reçues), une langue déclarée par le
+ * client (le Prisme), un geste plus étroit que son libellé (répondre = citer,
+ * sticker = `metadata.sticker`, réel = qualification du média, commentaire
+ * vocal = premier média), un partage que le web ne crédite pas.
+ * `RETIRED_MISSION_TEMPLATE_KEYS` les nomme : une mission du jour déjà tirée
+ * sur l'un d'eux est remplacée au prochain chargement
+ * (`replaceRetiredMissions`), une mission achevée garde le sien.
+ *
+ * ## La mission d'Or
+ *
+ * Elle n'a plus de gabarits à elle : c'est la difficile PORTÉE à l'Or
+ * (`missionTemplatesFor('gold')`) — mêmes gestes, même objectif, points et
+ * Gloire de l'Or.
  *
  * ## Le tirage
  *
@@ -19,7 +28,8 @@
  * (`day-prng.ts`). Le jour, le fuseau et la graine sont des PARAMÈTRES. Le
  * nombre de tirages consommés est fixe (un par emplacement, plus un pour
  * l'emplacement Prisme), de sorte que les entrées identiques rendent des
- * sorties identiques sur tous les clients.
+ * sorties identiques sur tous les clients. Sans gabarit Prisme au catalogue,
+ * le jour Prisme retombe sur le catalogue entier (`poolOf`).
  *
  * Objectif et récompense sont calculés en ENTIERS exacts : le flottant
  * `1 + 0,3 × bande` se trompe d'un ulp là où `⌈⌉` ne pardonne pas.
@@ -36,11 +46,11 @@ export type MissionDifficulty = (typeof MISSION_DIFFICULTIES)[number];
 
 export type AxisMissionSignal = `axis:${EngagementAxisKey}`;
 
-export type MissionSignal =
-  | AxisMissionSignal
-  | 'reply-distinct-conversations'
-  | 'foreign-language-message'
-  | 'replies-received-distinct-authors';
+/**
+ * Les deux faits hors axe ne nourrissent plus que le DUO de la semaine
+ * (`duo.ts`) : aucun gabarit du jour ne les attend depuis #9634.
+ */
+export type MissionSignal = AxisMissionSignal | 'reply-distinct-conversations' | 'foreign-language-message';
 
 export const axisSignal = (axis: EngagementAxisKey): AxisMissionSignal => `axis:${axis}`;
 
@@ -48,7 +58,6 @@ export const MISSION_SIGNALS: readonly MissionSignal[] = [
   ...ENGAGEMENT_AXES.map(axisSignal),
   'reply-distinct-conversations',
   'foreign-language-message',
-  'replies-received-distinct-authors',
 ];
 
 export type MissionTemplate = {
@@ -61,6 +70,8 @@ export type MissionTemplate = {
   readonly prism: boolean;
 };
 
+const MISSION_BASE_POINTS: Readonly<Record<MissionDifficulty, number>> = { easy: 30, medium: 60, hard: 120, gold: 250 };
+
 const template = (
   key: string,
   difficulty: MissionDifficulty,
@@ -72,7 +83,7 @@ const template = (
   difficulty,
   signal,
   baseTarget,
-  basePoints: { easy: 30, medium: 60, hard: 120, gold: 250 }[difficulty],
+  basePoints: MISSION_BASE_POINTS[difficulty],
   prism,
 });
 
@@ -80,26 +91,42 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
   template('react-messages', 'easy', axisSignal('tool.reaction'), 5),
   template('send-voice', 'easy', axisSignal('content.audio_message'), 1),
   template('send-texts', 'easy', axisSignal('content.text_message'), 5),
-  template('use-stickers', 'easy', axisSignal('tool.sticker'), 2),
   template('send-attachments', 'easy', axisSignal('tool.attachment'), 2),
 
-  template('reply-conversations', 'medium', 'reply-distinct-conversations', 3),
   template('comment-text', 'medium', axisSignal('comment.text'), 3),
   template('publish-story', 'medium', axisSignal('content.story'), 1),
   template('publish-post', 'medium', axisSignal('content.post'), 1),
-  template('share-link', 'medium', axisSignal('social.share'), 1),
-  template('prism-foreign-messages', 'medium', 'foreign-language-message', 2, true),
 
-  template('prism-foreign-exchange', 'hard', 'foreign-language-message', 5, true),
-  template('reply-conversations-wide', 'hard', 'reply-distinct-conversations', 6),
   template('publish-posts', 'hard', axisSignal('content.post'), 2),
-  template('voice-comments', 'hard', axisSignal('comment.audio'), 2),
-  template('publish-reel', 'hard', axisSignal('content.reel'), 1),
-  template('long-chat', 'hard', axisSignal('content.text_message'), 20),
-
-  template('gold-replies-received', 'gold', 'replies-received-distinct-authors', 4),
-  template('gold-reply-conversations', 'gold', 'reply-distinct-conversations', 8),
+  // La difficile de `send-texts` : même geste, deux fois son objectif (20 n'a jamais été atteint en production).
+  template('long-chat', 'hard', axisSignal('content.text_message'), 10),
 ];
+
+/** Les gabarits retirés par l'audit du 2026-10-07 (#9634) : jamais tirés, remplacés s'ils l'ont été aujourd'hui. */
+export const RETIRED_MISSION_TEMPLATE_KEYS = [
+  'share-link',
+  'prism-foreign-messages',
+  'prism-foreign-exchange',
+  'gold-replies-received',
+  'use-stickers',
+  'voice-comments',
+  'publish-reel',
+  'reply-conversations',
+  'reply-conversations-wide',
+  'gold-reply-conversations',
+] as const;
+
+export const isRetiredMissionTemplate = (key: string): boolean => (RETIRED_MISSION_TEMPLATE_KEYS as readonly string[]).includes(key);
+
+const GOLD_TEMPLATES: readonly MissionTemplate[] = MISSION_TEMPLATES.filter((t) => t.difficulty === 'hard').map((t) => ({
+  ...t,
+  difficulty: 'gold',
+  basePoints: MISSION_BASE_POINTS.gold,
+}));
+
+/** Les gabarits d'une difficulté ; ceux de l'Or sont les difficiles portés à l'Or. */
+export const missionTemplatesFor = (difficulty: MissionDifficulty): readonly MissionTemplate[] =>
+  difficulty === 'gold' ? GOLD_TEMPLATES : MISSION_TEMPLATES.filter((t) => t.difficulty === difficulty);
 
 /** Les missions du jour s'ouvrent au niveau 5. */
 export const MISSIONS_MIN_LEVEL = 5;
@@ -206,7 +233,7 @@ const poolOf = (
   excluded: ReadonlySet<MissionSignal>,
   prismOnly: boolean,
 ): readonly MissionTemplate[] => {
-  const pool = MISSION_TEMPLATES.filter((t) => t.difficulty === difficulty && !excluded.has(t.signal));
+  const pool = missionTemplatesFor(difficulty).filter((t) => !excluded.has(t.signal));
   const prism = pool.filter((t) => t.prism);
   return prismOnly && prism.length > 0 ? prism : pool;
 };
@@ -275,4 +302,41 @@ export function rerollDailyMission(params: {
   });
   const picked = pool[pickIndex(rng, pool.length)];
   return picked === undefined ? null : toDrawn(picked, level, params.flameDays);
+}
+
+/** Une mission du jour telle qu'elle est posée en base : tirée, et peut-être déjà achevée. */
+export type DayMission = DrawnMission & { readonly completed: boolean };
+
+export type MissionReplacement = { readonly index: number; readonly mission: DrawnMission };
+
+/**
+ * Les missions du jour tirées sur un gabarit RETIRÉ (#9634), et pas encore achevées : chacune reçoit un
+ * gabarit tracé de MÊME difficulté, au signal libre ce jour-là — à défaut, n'importe quel gabarit de sa
+ * difficulté, plutôt qu'une mission que plus rien ne fait avancer. Dans l'ordre des positions, chaque
+ * remplacement écarte le signal du précédent. Déterministe (`retired:<position>`).
+ */
+export function replaceRetiredMissions(params: {
+  readonly userId: string;
+  readonly dayKey: string;
+  readonly level: number;
+  readonly flameDays: number;
+  readonly missions: readonly DayMission[];
+}): readonly MissionReplacement[] {
+  const level = clampLevel(params.level);
+  const initial: { readonly signals: readonly MissionSignal[]; readonly replaced: readonly MissionReplacement[] } = {
+    signals: params.missions.map((m) => m.signal),
+    replaced: [],
+  };
+  return params.missions.reduce((acc, current, index) => {
+    if (current.completed || !isRetiredMissionTemplate(current.templateKey)) return acc;
+    const open = poolOf(current.difficulty, new Set(acc.signals.filter((_, i) => i !== index)), false);
+    const pool = open.length > 0 ? open : missionTemplatesFor(current.difficulty);
+    const picked = pool[pickIndex(seededRng({ userId: params.userId, dayKey: params.dayKey, salt: `retired:${index}` }), pool.length)];
+    if (picked === undefined) return acc;
+    const mission = toDrawn(picked, level, params.flameDays);
+    return {
+      signals: acc.signals.map((signal, i) => (i === index ? mission.signal : signal)),
+      replaced: [...acc.replaced, { index, mission }],
+    };
+  }, initial).replaced;
 }

@@ -97,21 +97,12 @@ describe('MessageGameSignals — les signaux de mission', () => {
     expect(signalsOf(onSignal, 'foreign-language-message')).toHaveLength(0);
   });
 
-  it('l’auteur répondu reçoit le signal « réponse d’un auteur distinct », clé = le répondant', async () => {
+  it('l’auteur répondu ne reçoit plus aucun signal de mission : la mission d’Or des réponses reçues est retirée (#9634)', async () => {
     const { signals, onSignal } = setup();
 
     await signals.record(reply());
 
-    expect(onSignal).toHaveBeenCalledWith(OTHER, 'replies-received-distinct-authors', expect.objectContaining({ key: USER }));
-  });
-
-  it('un compte de moins de 24 h ne fait avancer la mission de personne', async () => {
-    const { db, signals, onSignal } = setup();
-    db.user.rows[0]!.createdAt = new Date('2026-10-05T10:00:00Z');
-
-    await signals.record(reply());
-
-    expect(signalsOf(onSignal, 'replies-received-distinct-authors')).toHaveLength(0);
+    expect(onSignal.mock.calls.filter((call) => call[0] === OTHER)).toHaveLength(0);
   });
 });
 

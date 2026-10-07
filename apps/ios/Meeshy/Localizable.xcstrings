@@ -229102,43 +229102,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تفاعل مع %@ رسالة"
+            "value": "تفاعل مع %@ رسالة في محادثة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf %@ Nachricht reagieren"
+            "value": "Auf %@ Nachricht in einer Unterhaltung reagieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "React to %@ message"
+            "value": "React to %@ message in a conversation"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reaccionar a %@ mensaje"
+            "value": "Reaccionar a %@ mensaje en una conversación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réagir à %@ message"
+            "value": "Réagir à %@ message dans une conversation"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reagire a %@ messaggio"
+            "value": "Reagire a %@ messaggio in una conversazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reagir a %@ mensagem"
+            "value": "Reagir a %@ mensagem em uma conversa"
           }
         }
       }
@@ -229149,43 +229149,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تفاعل مع %@ رسائل"
+            "value": "تفاعل مع %@ رسائل في محادثاتك"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf %@ Nachrichten reagieren"
+            "value": "Auf %@ Nachrichten in deinen Unterhaltungen reagieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "React to %@ messages"
+            "value": "React to %@ messages in your conversations"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reaccionar a %@ mensajes"
+            "value": "Reaccionar a %@ mensajes en tus conversaciones"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réagir à %@ messages"
+            "value": "Réagir à %@ messages dans tes conversations"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reagire a %@ messaggi"
+            "value": "Reagire a %@ messaggi nelle tue conversazioni"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reagir a %@ mensagens"
+            "value": "Reagir a %@ mensagens nas suas conversas"
           }
         }
       }

@@ -12,10 +12,14 @@ import {
   MISSION_REROLL_PRICE,
   MISSION_DIFFICULTIES,
   MISSION_TEMPLATES,
+  RETIRED_MISSION_TEMPLATE_KEYS,
   drawDailyMissions,
+  isRetiredMissionTemplate,
+  missionTemplatesFor,
   missionBand,
   missionObjective,
   missionReward,
+  replaceRetiredMissions,
   rerollDailyMission,
   resolveGameDayKey,
   type DrawnMission,
@@ -27,38 +31,89 @@ import { addDays } from '../../utils/game/day-prng.js';
 const draw = (over: Partial<Parameters<typeof drawDailyMissions>[0]> = {}) =>
   drawDailyMissions({ userId: 'user-1', dayKey: '2026-10-05', level: 20, flameDays: 5, treasury: 0, ...over });
 
-const OBSERVABLE_NON_AXIS: readonly MissionSignal[] = [
-  'reply-distinct-conversations',
-  'foreign-language-message',
-  'replies-received-distinct-authors',
-];
+const TRACED = [
+  'react-messages',
+  'send-voice',
+  'send-texts',
+  'send-attachments',
+  'comment-text',
+  'publish-story',
+  'publish-post',
+  'publish-posts',
+  'long-chat',
+] as const;
 
-describe('le catalogue', () => {
+describe('le catalogue (#9634) : seulement des gestes que le serveur compte', () => {
   it('a des clés uniques et stables', () => {
     const keys = MISSION_TEMPLATES.map((t) => t.key);
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('ne porte que des signaux observables à l\'écriture', () => {
+  it('garde exactement les neuf gabarits tracés', () => {
+    expect(MISSION_TEMPLATES.map((t) => t.key).sort()).toEqual([...TRACED].sort());
+  });
+
+  it('ne contient aucun gabarit retiré', () => {
+    expect(RETIRED_MISSION_TEMPLATE_KEYS.slice().sort()).toEqual(
+      [
+        'share-link',
+        'prism-foreign-messages',
+        'prism-foreign-exchange',
+        'gold-replies-received',
+        'use-stickers',
+        'voice-comments',
+        'publish-reel',
+        'reply-conversations',
+        'reply-conversations-wide',
+        'gold-reply-conversations',
+      ].sort(),
+    );
+    for (const difficulty of MISSION_DIFFICULTIES) {
+      for (const { key } of missionTemplatesFor(difficulty)) expect({ key, retired: isRetiredMissionTemplate(key) }).toEqual({ key, retired: false });
+    }
+    expect(isRetiredMissionTemplate('send-texts')).toBe(false);
+    expect(isRetiredMissionTemplate('gold-reply-conversations')).toBe(true);
+  });
+
+  it('ne porte que des axes d\'engagement : un geste de l\'utilisateur, jamais un fait de tiers ni une langue', () => {
     for (const template of MISSION_TEMPLATES) {
-      const isAxis = ENGAGEMENT_AXES.some((axis) => template.signal === `axis:${axis}`);
-      const isOtherFact = OBSERVABLE_NON_AXIS.includes(template.signal);
-      expect(isAxis || isOtherFact, template.key).toBe(true);
+      expect({ key: template.key, axis: ENGAGEMENT_AXES.some((axis) => template.signal === `axis:${axis}`) }).toEqual({ key: template.key, axis: true });
+      expect(template.prism).toBe(false);
     }
   });
 
-  it('couvre les quatre difficultés avec les points de base de la conception', () => {
-    const baseOf = (difficulty: string) =>
-      new Set(MISSION_TEMPLATES.filter((t) => t.difficulty === difficulty).map((t) => t.basePoints));
+  it('long-chat est la difficile de send-texts : même geste, deux fois son objectif', () => {
+    const texts = MISSION_TEMPLATES.find((t) => t.key === 'send-texts')!;
+    const long = MISSION_TEMPLATES.find((t) => t.key === 'long-chat')!;
+    expect(long.signal).toBe(texts.signal);
+    expect(long.baseTarget).toBe(texts.baseTarget * 2);
+  });
+
+  it('chaque difficulté a ses points de base ; l\'Or est la difficile portée à l\'Or', () => {
+    const baseOf = (difficulty: (typeof MISSION_DIFFICULTIES)[number]) => new Set(missionTemplatesFor(difficulty).map((t) => t.basePoints));
     expect(MISSION_DIFFICULTIES).toEqual(['easy', 'medium', 'hard', 'gold']);
     expect([...baseOf('easy')]).toEqual([30]);
     expect([...baseOf('medium')]).toEqual([60]);
     expect([...baseOf('hard')]).toEqual([120]);
     expect([...baseOf('gold')]).toEqual([250]);
+    expect(missionTemplatesFor('gold').map((t) => [t.key, t.signal, t.baseTarget, t.difficulty])).toEqual(
+      missionTemplatesFor('hard').map((t) => [t.key, t.signal, t.baseTarget, 'gold']),
+    );
   });
 
-  it('a au moins deux gabarits Prisme moyens ou difficiles', () => {
-    expect(MISSION_TEMPLATES.filter((t) => t.prism && (t.difficulty === 'medium' || t.difficulty === 'hard')).length).toBeGreaterThanOrEqual(2);
+  it('chaque emplacement garde au moins deux gabarits tirables, une fois écartés les signaux déjà tirés', () => {
+    const signalsOf = (difficulty: (typeof MISSION_DIFFICULTIES)[number]) => missionTemplatesFor(difficulty).map((t) => t.signal);
+    for (const top of ['hard', 'gold'] as const) {
+      expect(missionTemplatesFor(top).length).toBeGreaterThanOrEqual(2);
+      for (const topSignal of signalsOf(top)) {
+        const medium = missionTemplatesFor('medium').filter((t) => t.signal !== topSignal);
+        expect({ top, topSignal, medium: medium.length >= 2 }).toEqual({ top, topSignal, medium: true });
+        for (const mediumSignal of medium.map((t) => t.signal)) {
+          const easy = missionTemplatesFor('easy').filter((t) => t.signal !== topSignal && t.signal !== mediumSignal);
+          expect({ top, topSignal, mediumSignal, easy: easy.length >= 2 }).toEqual({ top, topSignal, mediumSignal, easy: true });
+        }
+      }
+    }
   });
 });
 
@@ -124,19 +179,31 @@ describe('le tirage du jour', () => {
     }
   });
 
-  it('propose un gabarit Prisme au moins un jour sur trois', () => {
+  it('un jour Prisme, sans gabarit Prisme au catalogue, retombe sur le catalogue entier : trois missions, aucune de langue', () => {
+    let prismDays = 0;
     for (let u = 0; u < 40; u++) {
-      const level = u % 2 === 0 ? 20 : 60;
-      const hasPrism = (offset: number) =>
-        draw({ userId: `user-${u}`, dayKey: addDays('2026-09-01', offset), level }).missions.some((m) => m.prism);
-      for (let start = 0; start < 28; start++) {
-        expect([0, 1, 2].some((k) => hasPrism(start + k)), `user-${u} jour ${start}`).toBe(true);
+      for (let d = 0; d < 9; d++) {
+        const level = [6, 20, 45, 60][(u + d) % 4]!;
+        const day = draw({ userId: `user-${u}`, dayKey: addDays('2026-09-01', d), level });
+        if (day.prismDay) prismDays += 1;
+        expect(day.missions).toHaveLength(3);
+        expect(day.missions.some((m) => m.prism)).toBe(false);
+      }
+    }
+    expect(prismDays).toBeGreaterThan(0);
+  });
+
+  it('tire toujours trois missions, à tous les niveaux et dans les deux régimes du haut', () => {
+    for (let level = 1; level <= 100; level += 1) {
+      for (const treasury of [0, 50]) {
+        const day = draw({ userId: `lvl-${level}`, dayKey: addDays('2026-09-01', level % 7), level, treasury });
+        expect({ level, treasury, count: day.missions.length }).toEqual({ level, treasury, count: 3 });
       }
     }
   });
 
   it('exclut les signaux impossibles pour le compte', () => {
-    const unavailable: readonly MissionSignal[] = ['foreign-language-message', 'axis:tool.reaction'];
+    const unavailable: readonly MissionSignal[] = ['axis:content.post', 'axis:tool.reaction'];
     for (let d = 0; d < 20; d++) {
       const signals = draw({ dayKey: addDays('2026-09-01', d), unavailableSignals: unavailable }).missions.map((m) => m.signal);
       for (const s of unavailable) expect(signals).not.toContain(s);
@@ -144,8 +211,8 @@ describe('le tirage du jour', () => {
   });
 
   it('calcule l\'objectif et la récompense de chaque mission pour le compte', () => {
-    for (const m of draw({ level: 34, flameDays: 23 }).missions) {
-      const template = MISSION_TEMPLATES.find((t) => t.key === m.templateKey);
+    for (const m of [...draw({ level: 34, flameDays: 23 }).missions, ...draw({ level: 34, flameDays: 23, treasury: 60 }).missions]) {
+      const template = missionTemplatesFor(m.difficulty).find((t) => t.key === m.templateKey);
       expect(template).toBeDefined();
       expect(m.target).toBe(missionObjective({ baseTarget: template!.baseTarget, level: 34 }));
       expect(m.reward).toBe(missionReward({ basePoints: template!.basePoints, level: 34, flameDays: 23 }));
@@ -178,20 +245,30 @@ describe('changer une mission', () => {
       rerollCount,
     });
 
+  const rerolled = (index: number) => reroll(index);
+
   it('garde la même difficulté et change le gabarit', () => {
-    for (let index = 0; index < 3; index++) {
-      const next = reroll(index) as DrawnMission;
+    for (let index = 0; index < 2; index++) {
+      const next = rerolled(index) as DrawnMission;
       expect(next.difficulty).toBe(today.missions[index]!.difficulty);
       expect(next.templateKey).not.toBe(today.missions[index]!.templateKey);
     }
   });
 
-  it('ne duplique aucun signal déjà tiré ce jour-là', () => {
+  it('ne duplique aucun signal déjà tiré ce jour-là — et rend null quand la difficulté n\'a plus d\'autre gabarit libre', () => {
     for (let index = 0; index < 3; index++) {
-      const next = reroll(index) as DrawnMission;
+      const next = rerolled(index);
       const others = today.missions.filter((_, i) => i !== index).map((m) => m.signal);
-      expect(others).not.toContain(next.signal);
-      expect(next.signal).not.toBe(today.missions[index]!.signal);
+      const free = missionTemplatesFor(today.missions[index]!.difficulty).filter(
+        (t) => t.key !== today.missions[index]!.templateKey && !today.missions.some((m) => m.signal === t.signal),
+      );
+      if (free.length === 0) {
+        expect(next).toBeNull();
+        continue;
+      }
+      expect(next).not.toBeNull();
+      expect(others).not.toContain(next!.signal);
+      expect(next!.signal).not.toBe(today.missions[index]!.signal);
     }
   });
 
@@ -201,6 +278,68 @@ describe('changer une mission', () => {
 
   it('rend null pour une position qui n\'existe pas', () => {
     expect(reroll(7)).toBeNull();
+  });
+});
+
+describe('remplacer une mission du jour tirée sur un gabarit retiré (#9634)', () => {
+  const retired = (over: Partial<DrawnMission>): DrawnMission => ({
+    difficulty: 'medium',
+    templateKey: 'share-link',
+    signal: 'axis:social.share',
+    prism: false,
+    target: 1,
+    reward: 60,
+    glory: 0,
+    ...over,
+  });
+  const kept = (key: string): DrawnMission => {
+    const t = MISSION_TEMPLATES.find((template) => template.key === key)!;
+    return { difficulty: t.difficulty, templateKey: t.key, signal: t.signal, prism: false, target: t.baseTarget, reward: t.basePoints, glory: 0 };
+  };
+  const replace = (missions: readonly (DrawnMission & { readonly completed?: boolean })[], over: Partial<{ userId: string; level: number }> = {}) =>
+    replaceRetiredMissions({
+      userId: over.userId ?? 'user-1',
+      dayKey: '2026-10-07',
+      level: over.level ?? 30,
+      flameDays: 5,
+      missions: missions.map((m) => ({ ...m, completed: m.completed ?? false })),
+    });
+
+  it('remplace par un gabarit tracé de même difficulté, au signal libre ce jour-là', () => {
+    const day = [kept('send-texts'), retired({}), retired({ difficulty: 'hard', templateKey: 'prism-foreign-exchange', signal: 'foreign-language-message', prism: true })];
+    const replacements = replace(day);
+    expect(replacements.map((r) => r.index)).toEqual([1, 2]);
+    const signals = new Set([day[0]!.signal, ...replacements.map((r) => r.mission.signal)]);
+    expect(signals.size).toBe(3);
+    for (const { index, mission } of replacements) {
+      expect(mission.difficulty).toBe(day[index]!.difficulty);
+      expect(isRetiredMissionTemplate(mission.templateKey)).toBe(false);
+      expect(mission.prism).toBe(false);
+      expect(mission.target).toBe(missionObjective({ baseTarget: MISSION_TEMPLATES.find((t) => t.key === mission.templateKey)!.baseTarget, level: 30 }));
+    }
+  });
+
+  it('une mission d\'Or retirée reste d\'Or : points et Gloire de l\'Or', () => {
+    const [replacement] = replace([kept('send-voice'), kept('comment-text'), retired({ difficulty: 'gold', templateKey: 'gold-reply-conversations', signal: 'reply-distinct-conversations', reward: 300, glory: 40 })], { level: 60 });
+    expect(replacement!.index).toBe(2);
+    expect(replacement!.mission.difficulty).toBe('gold');
+    expect(replacement!.mission.glory).toBe(40);
+    expect(replacement!.mission.reward).toBe(missionReward({ basePoints: 250, level: 60, flameDays: 5 }));
+  });
+
+  it('ne touche ni une mission achevée, ni une mission tracée', () => {
+    expect(replace([kept('send-texts'), { ...retired({}), completed: true }, kept('publish-posts')])).toEqual([]);
+  });
+
+  it('quand tous les gabarits libres sont pris, garde la difficulté plutôt que de laisser la mission morte', () => {
+    const [replacement] = replace([kept('send-texts'), kept('publish-post'), retired({ difficulty: 'hard', templateKey: 'voice-comments', signal: 'axis:comment.audio' })]);
+    expect(replacement!.mission.difficulty).toBe('hard');
+    expect(['publish-posts', 'long-chat']).toContain(replacement!.mission.templateKey);
+  });
+
+  it('est déterministe', () => {
+    const day = [kept('send-texts'), retired({}), kept('publish-posts')];
+    expect(replace(day)).toEqual(replace(day));
   });
 });
 

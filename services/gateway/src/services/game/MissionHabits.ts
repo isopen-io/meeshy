@@ -42,15 +42,14 @@ export async function activeHoursOf(params: {
   return messages.length === 0 ? null : activeHoursHistogram(messages.map((m) => minuteOfDayInTimezone(m.createdAt, timezone)));
 }
 
-/** Un compte par signal de mission : un axe d'engagement vaut `axis:<clé>`, la réponse vaut l'écriture de texte. */
+/** Un compte par signal de mission : un axe d'engagement vaut `axis:<clé>` (tous les gabarits sont des axes, #9634). */
 export async function usageOf(prisma: PrismaClient, userId: string): Promise<Record<string, number>> {
   const counters = await prisma.engagementCounter.findMany({
     where: { userId },
     select: { axisKey: true, count: true },
     take: MISSION_HABIT_COUNTER_LIMIT,
   });
-  const usage: Record<string, number> = Object.fromEntries(counters.map((c) => [`axis:${c.axisKey}`, c.count]));
-  return { ...usage, 'reply-distinct-conversations': usage['axis:content.text_message'] ?? 0 };
+  return Object.fromEntries(counters.map((c) => [`axis:${c.axisKey}`, c.count]));
 }
 
 type LanguageFields = {

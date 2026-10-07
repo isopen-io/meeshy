@@ -34,6 +34,7 @@ import {
   MISSION_REROLL_PER_DAY,
   MISSION_REROLL_PRICE,
   drawDailyMissions,
+  replaceRetiredMissions,
   rerollDailyMission,
   resolveGameDayKey,
   type DrawnMission,
@@ -151,6 +152,52 @@ const drawnOf = (row: DailyMission): DrawnMission => ({
   glory: row.glory,
 });
 
+/**
+ * Les missions tirées sur un gabarit RETIRÉ (#9634) et pas encore achevées reçoivent un gabarit tracé de même
+ * emplacement et même difficulté (la loi : `replaceRetiredMissions`). La ligne garde son identité, son
+ * emplacement, `rerolledAt` et sa plage ; ni `GameDay` (coffre, changements du jour) ni une mission achevée ne
+ * bougent. L'écriture est conditionnelle sur le gabarit LU et sur « pas encore faite » : deux chargements
+ * concurrents n'en écrivent qu'un, et une mission achevée entre-temps garde le sien.
+ */
+export async function replaceRetiredMissionRows(
+  prisma: Pick<PrismaClient, 'dailyMission'>,
+  params: {
+    readonly userId: string;
+    readonly dayKey: string;
+    readonly level: number;
+    readonly flameDays: number;
+    readonly rows: readonly DailyMission[];
+  },
+): Promise<DailyMission[]> {
+  const replacements = replaceRetiredMissions({
+    userId: params.userId,
+    dayKey: params.dayKey,
+    level: params.level,
+    flameDays: params.flameDays,
+    missions: params.rows.map((row) => ({ ...drawnOf(row), completed: row.completedAt !== null })),
+  });
+  if (replacements.length === 0) return [...params.rows];
+  for (const { index, mission } of replacements) {
+    const row = params.rows[index]!;
+    await prisma.dailyMission.updateMany({
+      where: { id: row.id, templateKey: row.templateKey, ...NOT_COMPLETED },
+      data: {
+        templateKey: mission.templateKey,
+        difficulty: mission.difficulty,
+        signal: mission.signal,
+        prism: mission.prism,
+        target: mission.target,
+        reward: mission.reward,
+        glory: mission.glory,
+        progress: 0,
+        seen: [],
+      },
+    });
+  }
+  const fresh = await prisma.dailyMission.findMany({ where: { id: { in: params.rows.map((row) => row.id) } } });
+  return params.rows.map((row) => fresh.find((candidate) => candidate.id === row.id) ?? row);
+}
+
 type RecentMission = Pick<DailyMission, 'dayKey' | 'createdAt'>;
 
 /**
@@ -208,20 +255,27 @@ export class MissionService {
     const record = Math.max(level, user?.levelRecord ?? 0);
     const unlocked = record >= MISSIONS_MIN_LEVEL;
 
-    const existing = recent.filter((row) => row.dayKey === dayKey && isDailySlot(row)).sort((a, b) => a.slot - b.slot);
+    const facts = flameFactsOf(user ?? {}, now);
+    const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: dayKey, streak: facts.streak, freezes: facts.freezes });
+    const flameDays = status === 'out' ? 0 : facts.streak;
+    const existing = await replaceRetiredMissionRows(this.prisma, {
+      userId,
+      dayKey,
+      level,
+      flameDays,
+      rows: recent.filter((row) => row.dayKey === dayKey && isDailySlot(row)).sort((a, b) => a.slot - b.slot),
+    });
     // Un tirage INTERROMPU (une écriture tombée entre deux emplacements) se
     // COMPLÈTE : les emplacements posés font foi, seuls les manquants s'écrivent.
     if (existing.length >= DAILY_MISSION_SLOTS || !unlocked) return { dayKey, unlocked, rows: existing };
     const taken = new Set(existing.map((row) => row.slot));
 
-    const facts = flameFactsOf(user ?? {}, now);
-    const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: dayKey, streak: facts.streak, freezes: facts.freezes });
     const treasury = (await meeshTotalsFromLedger(this.prisma, userId)).balance;
     const draw = drawDailyMissions({
       userId,
       dayKey,
       level,
-      flameDays: status === 'out' ? 0 : facts.streak,
+      flameDays,
       treasury,
     });
 

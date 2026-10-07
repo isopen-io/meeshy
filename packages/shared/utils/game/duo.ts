@@ -15,7 +15,7 @@
  */
 
 import { seededRng, pickIndex } from './day-prng.js';
-import { MISSION_TEMPLATES, axisSignal, missionObjective, missionReward, type MissionSignal } from './missions.js';
+import { MISSION_SIGNALS, axisSignal, missionObjective, missionReward, type MissionSignal } from './missions.js';
 
 export const DUO_MIN_LEVEL = 20;
 /** Les points de base d'une mission en duo : une semaine, soit l'équivalent de deux difficiles. */
@@ -54,8 +54,11 @@ export type DuoMission = {
 
 const pairSeed = (a: string, b: string): string => [a, b].sort().join('&');
 
-/** Chaque gabarit de duo reste un signal que la passerelle observe déjà. */
-const KNOWN_SIGNALS = new Set(MISSION_TEMPLATES.map((t) => t.signal));
+/**
+ * Chaque gabarit de duo reste un signal que la passerelle observe déjà — la liste des signaux, pas celle des
+ * gabarits du jour : retirer une mission du jour (#9634) ne change pas le duo d'une semaine en cours.
+ */
+const KNOWN_SIGNALS: ReadonlySet<MissionSignal> = new Set(MISSION_SIGNALS);
 const catalog: readonly DuoTemplate[] = DUO_TEMPLATES.filter((t) => KNOWN_SIGNALS.has(t.signal));
 
 /** La mission de la semaine du duo, `null` quand aucun gabarit ne convient aux deux. */

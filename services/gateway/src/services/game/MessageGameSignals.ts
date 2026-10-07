@@ -5,10 +5,12 @@
  *  - « réponse dans une conversation distincte » — le message répond à un autre
  *    compte ; la clé est la conversation (une fois par conversation et par jour) ;
  *  - « message dans une autre langue » — la langue détectée diffère de la
- *    langue système de l'expéditeur (variantes régionales confondues) : c'est le
- *    fait du Prisme que les missions linguistiques attendent ;
- *  - « réponse reçue d'un auteur distinct » — signal de l'AUTEUR répondu, clé = le
- *    répondant ;
+ *    langue système de l'expéditeur (variantes régionales confondues) ;
+ *
+ *    ces deux faits ne nourrissent plus que le DUO de la semaine : aucune mission
+ *    du jour ne les attend depuis #9634 (citer n'est pas « répondre », et la
+ *    langue vient de la détection du client). « Réponse reçue d'un auteur
+ *    distinct », qui n'alimentait que la mission d'Or retirée, n'est plus émis ;
  *  - l'ATLAS des langues (#9388) : la langue du message est ENVOYÉE pour l'expéditeur,
  *    REÇUE pour ses destinataires — voir `AtlasService` ;
  *  - **+3 points à l'auteur répondu**, une fois par message d'origine, si la
@@ -173,11 +175,7 @@ export class MessageGameSignals {
       originalCreatedAt: original.createdAt,
       now,
     });
-    if (!verdict.eligible) return;
-
-    await this.deps.missions.onSignal(authorId, 'replies-received-distinct-authors', { now, key: input.senderUserId });
-
-    if (!verdict.withinWindow) return;
+    if (!verdict.eligible || !verdict.withinWindow) return;
     // UNE fois par message d'origine : le seau tranche, jamais une relecture.
     if (!(await this.quotas.claim(authorId, QUOTA_OPERATION, `message:${input.replyToId}`, 1))) return;
     // Puis le plafond du JOUR de l'auteur : un seau de message déjà pris ne

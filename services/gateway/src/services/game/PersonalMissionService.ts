@@ -17,13 +17,13 @@
 import type { DailyMission, PrismaClient } from '@meeshy/shared/prisma/client';
 import { flameStatus } from '@meeshy/shared/utils/game/flame';
 import { levelFromScore } from '@meeshy/shared/utils/game/levels';
-import type { MissionSignal } from '@meeshy/shared/utils/game/missions';
+import { isRetiredMissionTemplate, type MissionSignal } from '@meeshy/shared/utils/game/missions';
 import { PERSONAL_MISSION_SLOT, drawPersonalMission, personalWindowStillFits } from '@meeshy/shared/utils/game/personal-mission';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
 import type { GameNotificationEvent, GameNotifyResult } from './GameNotifier';
 import { activeHoursOf, isMultilingual, usageOf } from './MissionHabits';
-import type { MissionDay, MissionService } from './MissionService';
+import { replaceRetiredMissionRows, type MissionDay, type MissionService } from './MissionService';
 import { dayKeyOf, instantOfLocal, minuteOfDayInTimezone } from './gameClock';
 
 const log = enhancedLogger.child({ module: 'PersonalMissionService' });
@@ -63,27 +63,33 @@ export class PersonalMissionService {
   }
 
   /**
-   * La mission personnelle de la journée de jeu — tirée si elle manque. `null` : missions pas encore ouvertes
-   * (niveau 5), compte inconnu, ou plus de plage qui tienne aujourd'hui. `day` : la journée que l'appelant
-   * vient de lire (évite de la relire).
+   * La mission personnelle de la journée de jeu — tirée si elle manque, remplacée si elle a été tirée sur un
+   * gabarit RETIRÉ et n'est pas achevée (#9634 : même difficulté, plage et annonce intactes). `null` : missions
+   * pas encore ouvertes (niveau 5), compte inconnu, ou plus de plage qui tienne aujourd'hui. `day` : la journée
+   * que l'appelant vient de lire (évite de la relire).
    */
   async ensure(userId: string, now: Date = new Date(), day?: MissionDay): Promise<DailyMission | null> {
     const today = day ?? (await this.deps.missions.ensureToday(userId, now));
     if (!today.unlocked) return null;
     const existing = await this.personalRow(userId, today.dayKey);
-    if (existing) return existing;
+    if (existing && (existing.completedAt !== null || !isRetiredMissionTemplate(existing.templateKey))) return existing;
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_SELECT });
-    if (!user) return null;
+    if (!user) return existing;
+    const level = levelFromScore(user.engagementScore ?? 0);
+    const facts = flameFactsOf(user, now);
+    const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: today.dayKey, streak: facts.streak, freezes: facts.freezes });
+    const flameDays = status === 'out' ? 0 : facts.streak;
+    if (existing) {
+      const rows = await replaceRetiredMissionRows(this.prisma, { userId, dayKey: today.dayKey, level, flameDays, rows: [...today.rows, existing] });
+      return rows[rows.length - 1] ?? existing;
+    }
     // La plage se pose sur le jour CIVIL et la mission n'avance que dans SA journée de jeu : quand les deux
     // diffèrent (une journée ouverte tard continue après minuit), la plage tomberait hors de sa journée —
     // annoncée, jamais réalisable. Et sans plage qui tienne encore, aucune habitude n'est lue.
     const civilDay = dayKeyOf(now, user.timezone);
     const nowMinute = minuteOfDayInTimezone(now, user.timezone);
     if (civilDay !== today.dayKey || !personalWindowStillFits(nowMinute)) return null;
-    const level = levelFromScore(user.engagementScore ?? 0);
-    const facts = flameFactsOf(user, now);
-    const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: today.dayKey, streak: facts.streak, freezes: facts.freezes });
 
     const [activeHours, usage] = await Promise.all([
       activeHoursOf({ prisma: this.prisma, userId, timezone: user.timezone, now }),
@@ -93,7 +99,7 @@ export class PersonalMissionService {
       userId,
       dayKey: today.dayKey,
       level,
-      flameDays: status === 'out' ? 0 : facts.streak,
+      flameDays,
       nowMinute,
       activeHours,
       usage,
