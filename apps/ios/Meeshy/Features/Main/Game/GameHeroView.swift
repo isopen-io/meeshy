@@ -163,7 +163,12 @@ struct GameHeroView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 bar
                 if level.record > level.level {
-                    GameChip(text: recordText, tint: MeeshyColors.warning)
+                    // DEUX pastilles, jamais une longue (#9564) : « Record : niveau 100 · Vent arrière ×1,25 » tenait
+                    // sur deux lignes, puis — une fois interdite de passer à la ligne — poussait le héro hors de l'écran.
+                    FlowLayout(spacing: MeeshySpacing.xs) {
+                        GameChip(text: recordText, tint: MeeshyColors.warning)
+                        if let tailwindText { GameChip(text: tailwindText, tint: MeeshyColors.warning) }
+                    }
                 }
             }
         }
@@ -198,14 +203,17 @@ struct GameHeroView: View {
     }
 
     private var recordText: String {
-        let record = String(
+        String(
             localized: "game.level.record",
             defaultValue: "Record : niveau \(GameCopy.formatCount(level.record))",
             bundle: .main
         )
-        guard game.boosts.tailwind > 1 else { return record }
-        let factor = game.boosts.tailwind.formatted(.number.precision(.fractionLength(0...2)))
-        return record + String(localized: "game.level.tailwind", defaultValue: " · Vent arrière ×\(factor)", bundle: .main)
+    }
+
+    /// Le Vent arrière, quand il souffle : il a sa propre pastille.
+    private var tailwindText: String? {
+        guard game.boosts.tailwind > 1 else { return nil }
+        return ConceptText.chipTailwind(GameCopy.factor(game.boosts.tailwind))
     }
 
     // MARK: - Le blason et la division

@@ -372,7 +372,7 @@ struct ProgressionWrap: View {
                 Text(item)
                     .font(.caption)
                     .lineLimit(1)
-                    .fixedSize()
+                    .minimumScaleFactor(GameChip.minimumScale)
                     .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.16)))

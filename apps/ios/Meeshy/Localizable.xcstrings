@@ -231446,53 +231446,6 @@
         }
       }
     },
-    "game.level.tailwind": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " · رياح مواتية ×%@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " · Rückenwind ×%@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " · Tailwind ×%@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " · Viento de cola ×%@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " · Vent arrière ×%@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " · Vento in poppa ×%@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " · Vento a favor ×%@"
-          }
-        }
-      }
-    },
     "game.rank.glory": {
       "extractionState": "manual",
       "localizations": {

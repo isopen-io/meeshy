@@ -26,13 +26,22 @@ struct FlowLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let result = FlowResult(in: bounds.width, subviews: subviews, spacing: spacing)
         for (index, subview) in subviews.enumerated() {
-            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x, y: bounds.minY + result.positions[index].y), proposal: .unspecified)
+            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x, y: bounds.minY + result.positions[index].y), proposal: result.proposals[index])
         }
+    }
+
+    /// Ce qu'on propose à un élément : sa taille idéale tant qu'elle tient dans la rangée ; sinon la LARGEUR DE LA
+    /// RANGÉE, et rien de plus (#9564). Sans cette borne, un élément plus long que sa rangée (une pastille en
+    /// allemand, une valeur servie longue, un texte agrandi) sortait du cadre et élargissait la page : c'est à lui
+    /// de rétrécir ou de se couper, jamais à l'écran de glisser de côté.
+    static func proposal(ideal: CGSize, rowWidth: CGFloat) -> ProposedViewSize {
+        rowWidth > 0 && ideal.width > rowWidth ? ProposedViewSize(width: rowWidth, height: nil) : .unspecified
     }
 
     struct FlowResult {
         var size: CGSize = .zero
         var positions: [CGPoint] = []
+        var proposals: [ProposedViewSize] = []
 
         init(in width: CGFloat, subviews: Subviews, spacing: CGFloat) {
             var x: CGFloat = 0
@@ -40,7 +49,11 @@ struct FlowLayout: Layout {
             var lineHeight: CGFloat = 0
 
             for subview in subviews {
-                let size = subview.sizeThatFits(.unspecified)
+                let ideal = subview.sizeThatFits(.unspecified)
+                let proposal = FlowLayout.proposal(ideal: ideal, rowWidth: width)
+                proposals.append(proposal)
+                var size = proposal == .unspecified ? ideal : subview.sizeThatFits(proposal)
+                if width > 0 { size.width = min(size.width, width) }
                 if x + size.width > width && x > 0 {
                     x = 0
                     y += lineHeight + spacing

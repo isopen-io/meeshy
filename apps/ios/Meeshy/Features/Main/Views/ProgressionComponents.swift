@@ -325,6 +325,9 @@ struct ProgressionSkeleton: View {
 struct ProgressionGeneratedAchievements: View {
     let sections: [AchievementSectionView]
 
+    /// Autant de colonnes que la largeur en porte, 132 pt au moins chacune : deux à 320 pt, trois sur un grand écran.
+    private static let columns = [GridItem(.adaptive(minimum: 132), spacing: MeeshySpacing.sm, alignment: .topLeading)]
+
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -344,11 +347,12 @@ struct ProgressionGeneratedAchievements: View {
                                 .foregroundColor(theme.textMuted)
                         }
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: MeeshySpacing.sm) {
-                                ForEach(vue.entries) { entry in
-                                    ProgressionAchievementChip(entry: entry)
-                                }
+                        // Une GRILLE qui passe à la ligne, plus un carrousel (#9564, amendement n° 3) : aucune rangée
+                        // de Progression ne défile de côté — un carrousel sous le pouce dispute le geste de retour
+                        // depuis le bord, et cache des paliers hors de l'écran.
+                        LazyVGrid(columns: Self.columns, alignment: .leading, spacing: MeeshySpacing.sm) {
+                            ForEach(vue.entries) { entry in
+                                ProgressionAchievementChip(entry: entry)
                             }
                         }
                     }
@@ -382,7 +386,7 @@ private struct ProgressionAchievementChip: View {
                     .foregroundColor(theme.textMuted)
             }
         }
-        .frame(width: 132, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.vertical, MeeshySpacing.sm)
         .background(
