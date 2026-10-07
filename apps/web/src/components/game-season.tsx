@@ -3,11 +3,13 @@ import { SEASON_SEAL_EVERY, SEASON_STARS_PER_STEP, SEASON_STEPS, seasonStepRewar
 
 import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
 import { seasonThemeName } from '@/lib/view/game-copy-v2';
+import { sealDetail, stepDetail } from '@/lib/view/game-detail';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GameCard } from './game-surface';
 import { SealMark } from './game/seal-mark';
+import { GameTouch, PRESS, touchProps } from './game-touch';
 
 /**
  * LA SAISON (#9386, conception II.7) — huit semaines, un thème (une langue),
@@ -60,11 +62,12 @@ function Step({ season, step, online, busy, onClaim }: { readonly season: GameSe
         type="button"
         data-game-season-step={step}
         data-game-season-state={state}
-        disabled={state !== 'ready' || !online || busy}
+        /* Prête, l'étape se RÉCLAME (le geste d'avant) ; réclamée ou à venir, elle se touche et dit ses précisions (#9563). */
+        disabled={state === 'ready' && (!online || busy)}
         aria-busy={busy}
-        onClick={() => onClaim(step)}
+        {...(state === 'ready' ? { onClick: () => onClaim(step) } : touchProps(stepDetail(season, step)))}
         aria-label={`${gameText('game.season.step', { step: formatCount(step) })}, ${stateLabel(state)}, ${rewardLabel(step)}`}
-        className="flex flex-col items-center justify-center rounded-chip"
+        className={`${PRESS} flex flex-col items-center justify-center rounded-chip`}
         style={{
           minHeight: 44,
           minWidth: 44,
@@ -189,11 +192,13 @@ export function GameSeason(props: GameSeasonProps) {
         </p>
         <ul className="flex flex-wrap gap-2" aria-label={gameText('game.season.seal.cosmetic')}>
           {sealSteps.map((step) => (
-            <li key={step} className="flex flex-col items-center gap-0.5">
-              <SealMark owned={season.sealOwned} reached={step <= season.steps} size={36} />
-              <span className="text-check tabular-nums" style={{ color: GAME_INK_2 }}>
-                {step}
-              </span>
+            <li key={step}>
+              <GameTouch detail={sealDetail(season)} className="flex flex-col items-center justify-center gap-0.5 rounded-chip" style={{ minHeight: 44, minWidth: 44 }}>
+                <SealMark owned={season.sealOwned} reached={step <= season.steps} size={36} />
+                <span className="text-check tabular-nums" style={{ color: GAME_INK_2 }}>
+                  {step}
+                </span>
+              </GameTouch>
             </li>
           ))}
         </ul>

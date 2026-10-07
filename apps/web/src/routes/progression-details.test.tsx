@@ -42,9 +42,16 @@ import { conceptView } from '@/lib/view/progression-concepts';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { GameAtlas } from '@/components/game-atlas';
+import { LeagueStandings } from '@/components/game-league';
+import { GamePrestige } from '@/components/game-prestige';
+import { GameSeason } from '@/components/game-season';
+import { GameShowcase } from '@/components/game-showcase';
+
 import { ConceptFiche } from './progression-concept';
 import type { GameActions } from './progression-game-actions';
 import { ProgressionHeaderGroup } from './progression-header-group';
+import { AchievementsSection, AxisRow, GeneratedAchievements } from './progression-parts';
 import { TableauBody } from './progression-tableau';
 import { ProgressionBody } from './progression';
 
@@ -126,7 +133,7 @@ const samples = (): Readonly<Record<GameDetailFamily, ElementDetail>> => {
     coin: must(coinDetail(playing), 'pièce'),
     ring: ringDetail(game.level),
     treasury: treasuryDetail(game.treasury),
-    elan: elanDetail('content', playing),
+    elan: elanDetail('content', playing.elan),
   };
 };
 
@@ -195,7 +202,8 @@ describe('chaque élément d’une fiche est un bouton qui ouvre la modale de SO
     test(`${concept} : l’emblème du héros, chaque pastille et chaque ligne de donnée s’ouvrent`, async () => {
       const host = await mounter.mount(tree(playing, <ConceptFiche concept={concept} progress={playing} host={{ actions: idle, online: true }} now={NOW} />, concept));
       const view = conceptView(concept, playing, NOW);
-      const touches = [...host.querySelectorAll<HTMLButtonElement>('[data-fiche-section="hero"] button[data-detail], [data-fiche-section="where"] button[data-detail]')];
+      const touches = [...host.querySelectorAll<HTMLButtonElement>('[data-concept-fiche] button[data-detail]')];
+      expect(host.querySelector('[data-fiche-section="hero"] button[data-detail]')).not.toBeNull();
       expect(touches.length).toBeGreaterThanOrEqual(view.facts.length);
       for (const button of touches) {
         expect(button.className).toContain('game-press');
@@ -221,6 +229,94 @@ describe('chaque élément d’une fiche est un bouton qui ouvre la modale de SO
     const board = await mounter.mount(tree(playing, <TableauBody progress={playing} now={NOW} />));
     await mounter.click(board.querySelector<HTMLButtonElement>('[data-dashboard-block="flame"] button[data-detail]'));
     expect(dialogOf()?.querySelector('a[data-detail-fiche]')?.getAttribute('href')).toBe('/me/progression/concept/flame');
+  });
+});
+
+/** Touche chaque élément d'un rendu et vérifie que la modale qui s'ouvre porte SON nom ; rend le nombre d'éléments touchés. */
+const sweep = async (host: HTMLElement): Promise<number> => {
+  const touches = [...host.querySelectorAll<HTMLButtonElement>('button[data-detail]')];
+  for (const button of touches) {
+    expect(button.className).toContain('game-press');
+    await mounter.click(button);
+    const dialog = dialogOf();
+    expect({ id: button.dataset.detail, title: dialog?.querySelector('h2')?.textContent }).toEqual({ id: button.dataset.detail, title: button.dataset.detailName });
+    await mounter.click(dialog?.querySelector<HTMLButtonElement>('button[data-sheet-close]') ?? null);
+  }
+  return touches.length;
+};
+
+describe('les sous-pages : chaque élément se touche et ouvre SES précisions', () => {
+  const game = must(playing.game, 'game');
+  const noop = (): void => undefined;
+
+  test('badges : une ligne par axe, chacune un bouton', async () => {
+    const host = await mounter.mount(tree(playing, <ul>{playing.axes.map((axis) => <AxisRow key={axis.axisKey} axis={axis} />)}</ul>));
+    expect(await sweep(host)).toBe(playing.axes.length);
+    expect(host.querySelector<HTMLButtonElement>('button[data-detail]')?.dataset.detail).toMatch(/^badge:/);
+  });
+
+  test('succès : chaque succès, décroché ou non', async () => {
+    const host = await mounter.mount(tree(playing, <AchievementsSection progress={playing} rarities={game.achievementRarities} />));
+    expect(await sweep(host)).toBe(playing.achievements.length);
+  });
+
+  test('défis : chaque palier', async () => {
+    const sections = playing.achievementSections ?? [];
+    const host = await mounter.mount(tree(playing, <GeneratedAchievements sections={sections} />));
+    expect(await sweep(host)).toBe(sections.reduce((sum, section) => sum + section.entries.length, 0));
+  });
+
+  test('vitrine : chaque trophée', async () => {
+    const trophies = must(game.trophies, 'trophées');
+    const host = await mounter.mount(
+      tree(playing, <GameShowcase trophies={trophies} visibility="friends" online savingOrder={false} savingVisibility={false} errors={{}} onOrder={noop} onVisibility={noop} />),
+    );
+    expect(await sweep(host)).toBe(trophies.items.length);
+  });
+
+  test('Atlas : chaque tampon posé et chaque échange à moitié fait', async () => {
+    const atlas = must(game.atlas, 'atlas');
+    const host = await mounter.mount(tree(playing, <GameAtlas atlas={atlas} visibility="me" online savingVisibility={false} onVisibility={noop} />));
+    expect(await sweep(host)).toBe(atlas.stamps.length + atlas.pending.length);
+  });
+
+  test('saison : chaque étape réclamée ou à venir, et chaque sceau ; une étape prête garde son geste', async () => {
+    const season = must(game.season, 'saison');
+    const claimed: number[] = [];
+    const host = await mounter.mount(
+      tree(playing, <GameSeason season={season} held={4} online claimingStep={null} buyingSeal={false} errors={{}} onClaim={(step) => claimed.push(step)} onBuySeal={noop} />),
+    );
+    const ready = [...host.querySelectorAll<HTMLButtonElement>('[data-game-season-state="ready"]')];
+    const others = host.querySelectorAll('[data-game-season-step][data-detail]').length;
+    expect(ready.length).toBeGreaterThan(0);
+    expect(others + ready.length).toBe(host.querySelectorAll('[data-game-season-step]').length);
+    expect(ready.every((button) => !button.hasAttribute('data-detail'))).toBe(true);
+    await mounter.click(must(ready[0], 'étape prête'));
+    expect(claimed).toHaveLength(1);
+    expect(dialogOf()).toBeNull();
+    expect(await sweep(host)).toBeGreaterThan(others);
+  });
+
+  test('ligue : la ligne d’un joueur ouvre ce que la page dit déjà, rien de plus', async () => {
+    const entries = [
+      { rank: 1, displayName: 'Colibri-4821', weekPoints: 520, zone: 'promotion', cup: 'gold', isMe: false },
+      { rank: 2, displayName: 'Toi', weekPoints: 410, zone: 'safe', cup: null, isMe: true },
+    ] as const;
+    const host = await mounter.mount(tree(playing, <LeagueStandings entries={entries} league="jade" />));
+    expect(await sweep(host)).toBe(2);
+    await mounter.click(host.querySelector<HTMLButtonElement>('button[data-detail]'));
+    const text = dialogOf()?.textContent ?? '';
+    expect(text).toContain('Colibri-4821');
+    expect(text).not.toMatch(/en ligne|vu il y a|actif/i);
+    expect(dialogOf()?.querySelector('a[data-detail-fiche]')).toBeNull();
+  });
+
+  test('Prestige : les étoiles', async () => {
+    const host = await mounter.mount(
+      tree(playing, <GamePrestige level={game.level} prestige={must(game.prestige, 'prestige')} online pending={false} onPass={noop} createEnv={() => ({ reducedMotion: true }) as never} />),
+    );
+    expect(await sweep(host)).toBeGreaterThanOrEqual(1);
+    expect(host.querySelector<HTMLButtonElement>('button[data-detail]')?.dataset.detail).toMatch(/^star:/);
   });
 });
 

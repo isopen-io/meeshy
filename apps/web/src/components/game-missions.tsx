@@ -9,8 +9,10 @@ import { timerLabel } from '@/lib/view/game-copy-v2';
 import { Chest, useChoreography } from '@/components/game';
 import { ProgressBar } from '@/components/progress-bar';
 import { difficultyName, formatCount, gameText, missionTitle, pointsLabel } from '@/lib/view/game-copy';
+import { chestDetail, missionDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard, GameChip } from './game-surface';
+import { GameTouch } from './game-touch';
 
 /**
  * LES MISSIONS DU JOUR ET LE COFFRE (#9383) — trois missions, leur avancement,
@@ -87,6 +89,8 @@ function MissionRow({
       className="flex flex-col gap-1.5 rounded-card px-3 py-3"
       style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 10%, transparent)', opacity: pending ? 0.6 : timer?.phase === 'missed' ? 0.7 : 1 }}
     >
+      {/* La mission se touche : ses pastilles, son titre et sa jauge ouvrent SES précisions (#9563). Le bouton « Changer » reste à part. */}
+      <GameTouch detail={missionDetail(mission)} className="flex w-full flex-col gap-1.5 rounded-chip" style={{ minHeight: 44 }}>
       <div className="flex flex-wrap items-center gap-1.5">
         <GameChip tint={mission.difficulty === 'gold' ? GAME_WARM : GAME_BRAND}>{difficultyName(mission.difficulty)}</GameChip>
         {mission.prism ? <GameChip tint={GAME_BRAND}>{gameText('game.mission.prism')}</GameChip> : null}
@@ -100,6 +104,7 @@ function MissionRow({
         {title}
       </p>
       <ProgressBar progress={mission.progress / mission.target} tint={done ? GAME_GOOD : GAME_BRAND} label={title} />
+      </GameTouch>
       {timer?.phase !== 'active' || timer.remainingMs === null ? null : (
         <p data-game-mission-timer="" className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
           {gameText('game.mission.personal.active', { remaining: timerLabel(timer.remainingMs) })}
@@ -251,7 +256,9 @@ function ChestCard({ chest, opening, online, onClaim, error }: { readonly chest:
     <div data-game-chest-state={state} className="flex flex-col items-center gap-2 rounded-card px-3 py-3" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 8%, transparent)' }}>
       <div ref={ref} className="flex flex-col items-center gap-2">
         {chest.reward === null ? null : <Rewards reward={chest.reward} />}
-        <Chest state={open ? 'open' : 'closed'} size={90} />
+        <GameTouch detail={chestDetail(chest)} named className="grid place-items-center rounded-card">
+          <Chest state={open ? 'open' : 'closed'} size={90} />
+        </GameTouch>
       </div>
       <h3 className="text-body font-bold" style={{ color: GAME_INK }}>
         {gameText('game.chest.title')}

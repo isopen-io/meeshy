@@ -108,12 +108,16 @@ describe('comment gagner — dérivé du barème', () => {
     expect(text(markup)).toContain('+20');
   });
 
-  test('un toucher ouvre le carnet des règles, à la ligne qui parle des gains', () => {
-    expect(page.match(/href="\/me\/progression\/regles\?regle=1"/g)).toHaveLength(5);
+  /* Les puces menaient au carnet des règles ; depuis #9563 (amendement n° 2) chaque famille se touche et ouvre SES précisions. */
+  test('un toucher ouvre les précisions de la famille : cinq boutons, un par famille', () => {
+    const opened = [...page.matchAll(/<button[^>]*data-detail="elan:([a-z]+)"/g)].map((m) => m[1]);
+    expect(opened).toHaveLength(5);
+    expect(new Set(opened).size).toBe(5);
+    expect(page).not.toContain('regles?regle=1');
   });
 
   test('chaque puce se lit en entier et mesure 44 points', () => {
-    expect(page).toMatch(/aria-label="Contenu : 9 points par geste\. Voir les règles\."/);
+    expect(text(page)).toContain('Contenu +9');
     expect(page).toMatch(/data-game-earn-chip="content"[^>]*min-height:44px/);
   });
 });

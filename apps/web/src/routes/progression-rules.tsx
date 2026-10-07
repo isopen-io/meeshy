@@ -4,16 +4,14 @@ import { ONBOARDING_STEPS } from '@meeshy/shared/utils/game/guide';
 
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { Glyph } from '@/components/glyph';
 import { GameBird } from '@/components/game';
-import { GlassBack } from '@/components/glass-surface';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { guideBirds } from '@/lib/game-guide/card';
 import { formatCount, gameText } from '@/lib/view/game-copy';
 import { stepCopy } from '@/lib/view/game-guide-copy';
 import { gameRules } from '@/lib/view/game-rules-copy';
 import { useOptionalRoute } from '@/lib/router';
-import { Link } from '@/routes/route-table';
+import { ProgressionShell } from '@/routes/progression-shell';
 import { RulesAtlas } from '@/routes/progression-rules-atlas';
 
 /**
@@ -140,22 +138,8 @@ export default function ProgressionRulesScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'rules');
   const target = ruleTarget(useOptionalRoute()?.search.get('regle') ?? null);
   return (
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <header className="glass z-10 shrink-0">
-        <div className="flex items-center gap-2 px-4 py-2">
-          <Link to="progression" className="grid size-11 shrink-0 place-items-center" style={{ color: GAME_BRAND }} aria-label={gameText('game.page.back')}>
-            <GlassBack label={gameText('game.page.back')}>
-              <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
-            </GlassBack>
-          </Link>
-          <h1 className="flex-1 truncate text-title font-bold" style={{ color: GAME_INK }}>
-            {gameText('game.rules.page_title')}
-          </h1>
-        </div>
-      </header>
-      <main id="contenu" className="flex-1 overflow-y-auto overflow-x-clip overscroll-x-none break-words pb-safe">
-        <RulesBody {...(target === undefined ? {} : { target })} />
-      </main>
-    </div>
+    <ProgressionShell title={gameText('game.rules.page_title')} back={{ to: 'progression', label: gameText('game.page.back') }}>
+      <RulesBody {...(target === undefined ? {} : { target })} />
+    </ProgressionShell>
   );
 }

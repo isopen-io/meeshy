@@ -9,6 +9,7 @@ import { GameLeagueSummary } from '@/components/game-league-summary';
 import { GameMintPreview } from '@/components/game-mint-preview';
 import { GameMissions } from '@/components/game-missions';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
+import { GameTouch } from '@/components/game-touch';
 import { ConceptChips, ConceptEmblem, ConceptFacts, ProgressionRow, RowEmblem } from '@/components/progression-concept';
 import { ProgressBar } from '@/components/progress-bar';
 import type { EngagementWithGame } from '@/lib/api/engagement';
@@ -18,6 +19,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { gameText } from '@/lib/view/game-copy';
+import { detailOfRef } from '@/lib/view/game-detail';
 import { conceptView, isProgressionConcept, shownConcepts, shownProgress, type ConceptView } from '@/lib/view/progression-concepts';
 import { useMinute } from '@/lib/view/use-minute';
 import { useGameActions, type GameActions } from '@/routes/progression-game-actions';
@@ -61,7 +63,12 @@ function FicheSection({ id, title, children }: { readonly id: string; readonly t
   );
 }
 
+/**
+ * LE HÉROS : l'emblème en grand, la valeur, les pastilles, la jauge. L'emblème
+ * et chaque pastille se touchent : ils ouvrent les précisions de LEUR élément.
+ */
 function Hero({ concept, view }: { readonly concept: ConceptView; readonly view: EngagementWithGame }) {
+  const primary = detailOfRef(concept.primary, concept.key, concept.name, concept.value, view);
   return (
     <section
       data-fiche-section="hero"
@@ -69,15 +76,15 @@ function Hero({ concept, view }: { readonly concept: ConceptView; readonly view:
       className="flex flex-col items-center gap-3 rounded-card px-4 py-5 text-center"
       style={{ backgroundColor: GAME_CARD }}
     >
-      <span aria-hidden="true" className="grid place-items-center" style={{ minHeight: 88 }}>
-        <ConceptEmblem concept={concept.key} view={view} size={88} />
-      </span>
+      <GameTouch detail={primary} named className="grid place-items-center rounded-card" style={{ minHeight: 88, minWidth: 88 }}>
+        <span aria-hidden="true" className="grid place-items-center">
+          <ConceptEmblem concept={concept.key} view={view} size={88} />
+        </span>
+      </GameTouch>
       <p className="text-large-title font-bold" style={{ color: GAME_INK }}>
         {concept.value}
       </p>
-      <span className="flex justify-center">
-        <ConceptChips chips={concept.chips} />
-      </span>
+      <ConceptChips chips={concept.chips} open={(chip) => detailOfRef(chip.ref, concept.key, chip.text, concept.value, view)} />
       {concept.gauge === null ? null : <ProgressBar progress={concept.gauge} tint={GAME_BRAND} label={`${concept.name} — ${concept.value}`} />}
     </section>
   );
@@ -100,7 +107,8 @@ function detailOf(concept: ProgressionConcept, view: EngagementWithGame, host: F
   const { actions, online } = host;
   switch (concept) {
     case 'level':
-      return game === undefined ? <LevelHero progress={view} mintCost={view.meesh?.mintCost ?? null} /> : <GameHero game={game} guideLine={null} />;
+      /* Avec le jeu, le héros du niveau EST le héros de la fiche (voir `ConceptFiche`) : l'anneau ne se montre qu'une fois. */
+      return game === undefined ? <LevelHero progress={view} mintCost={view.meesh?.mintCost ?? null} /> : null;
     case 'meesh':
       if (game !== undefined) {
         return (
@@ -194,7 +202,14 @@ export function ConceptFiche({
   const detail = detailOf(concept, view, host, clock);
   return (
     <article data-concept-fiche={concept} className="flex flex-col gap-4">
-      <Hero concept={shown} view={view} />
+      {concept === 'level' && view.game !== undefined ? (
+        /* LE NIVEAU a déjà son héros, celui du jeu : l'anneau, le palier, le rang, « comment gagner ». Un héros générique au-dessus montrait l'anneau deux fois. */
+        <div data-fiche-section="hero">
+          <GameHero game={view.game} guideLine={null} elan={view.elan} />
+        </div>
+      ) : (
+        <Hero concept={shown} view={view} />
+      )}
       <FicheSection id="what" title={gameText('game.fiche.what')}>
         <Explained label={gameText('game.concept.why_label')} text={shown.why} />
         <Explained label={gameText('game.concept.how_label')} text={shown.how} />
@@ -205,7 +220,7 @@ export function ConceptFiche({
             {shown.value}
           </p>
         ) : (
-          <ConceptFacts facts={shown.facts} />
+          <ConceptFacts facts={shown.facts} open={(fact) => detailOfRef(fact.ref, concept, fact.label, fact.value, view)} />
         )}
       </FicheSection>
       <FicheSection id="earn" title={gameText('game.fiche.earn')}>
@@ -245,7 +260,12 @@ export default function ProgressionConceptScreen() {
   const { concept: asked } = useParams<'/me/progression/concept/$concept'>();
   const concept = isProgressionConcept(asked) ? asked : null;
   return (
-    <ProgressionPage titre={concept === null ? gameText('game.progression.title') : gameText(`game.concept.${concept}.name`)} teinte={GAME_BRAND} compte={() => null}>
+    <ProgressionPage
+      titre={concept === null ? gameText('game.progression.title') : gameText(`game.concept.${concept}.name`)}
+      teinte={GAME_BRAND}
+      compte={() => null}
+      {...(concept === null ? {} : { fiche: concept })}
+    >
       {(progress) =>
         concept === null ? (
           <p data-fiche-unknown="" className="rounded-card px-4 py-4 text-caption" style={{ backgroundColor: GAME_CARD, color: GAME_INK_2 }}>

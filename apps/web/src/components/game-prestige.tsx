@@ -6,10 +6,12 @@ import type { EffectEnv } from '@/lib/game/gl/effect-runner';
 import type { PlayOptions } from '@/lib/game/play';
 import { formatCount, gameText } from '@/lib/view/game-copy';
 import { trophyView } from '@/lib/view/game-copy-v2';
+import { starDetail } from '@/lib/view/game-detail';
 
 import { GameBird } from './game/game-bird';
 import { PrestigeScene } from './game/prestige-scene';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GameCard } from './game-surface';
+import { GameTouch } from './game-touch';
 
 /**
  * LE PRESTIGE (#9389, conception II.2 et II.9) — la vie après le niveau 100 :
@@ -70,9 +72,14 @@ export function GamePrestige({ level, prestige, online, pending, error, onPass, 
         <div className="flex justify-center py-1">
           <PrestigeScene level={level.level} tier={level.tier} progress={level.progress} stars={prestige.stars} plate={plate} size={88} playKey={playKey} {...sceneProps} />
         </div>
-        <p className="text-center text-body font-semibold" style={{ color: GAME_INK }}>
+        {/* Les étoiles se touchent : la prochaine à poser (ou la dernière, toutes posées) dit ses précisions (#9563). */}
+        <GameTouch
+          detail={starDetail(prestige, Math.min(prestige.max, prestige.stars + (maxed ? 0 : 1)))}
+          className="self-center rounded-chip px-3 text-center text-body font-semibold"
+          style={{ minHeight: 44, color: GAME_INK }}
+        >
           {gameText('game.prestige.stars', { stars: formatCount(prestige.stars), max: formatCount(prestige.max) })}
-        </p>
+        </GameTouch>
         {passed === null ? null : (
           <p role="status" className="text-center text-body font-bold" style={{ color: GAME_GOOD }}>
             {gameText('game.prestige.done', { number: formatCount(passed) })}

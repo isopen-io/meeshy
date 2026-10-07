@@ -14,6 +14,7 @@
 
 import { GameMedal } from '@/components/game/medal';
 import { GameRarityLine } from '@/components/game-rarity';
+import { GameTouch } from '@/components/game-touch';
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
@@ -21,6 +22,7 @@ import { milestoneGlyph } from '@/components/milestone-glyph';
 import { medalOfAxis } from '@/lib/game/medal';
 import { rarityRim, visibleRarity, type AchievementRarityMap } from '@/lib/game/rarity';
 import { gameText } from '@/lib/view/game-copy';
+import { badgeDetail, defiDetail, succesDetail } from '@/lib/view/game-detail';
 import {
   ACHIEVEMENT_COPY,
   ACHIEVEMENT_SECTION_TITLES,
@@ -148,7 +150,8 @@ export function AxisRow({ axis, medalLabel }: { axis: EngagementAxisProgress; me
   const label = AXIS_LABELS[axis.axisKey];
   const medal = medalOfAxis(axis);
   return (
-    <li className="flex items-center gap-3 py-2.5">
+    <li>
+      <GameTouch detail={badgeDetail(axis)} className="flex w-full items-center gap-3 py-2.5" style={{ minHeight: 44 }}>
       <span className="grid w-12 shrink-0 place-items-center">
         <GameMedal
           size={44}
@@ -177,6 +180,7 @@ export function AxisRow({ axis, medalLabel }: { axis: EngagementAxisProgress; me
           </span>
         </div>
       </div>
+      </GameTouch>
     </li>
   );
 }
@@ -216,6 +220,7 @@ export function AchievementsSection({
                 className="flex items-center gap-3 py-2.5"
                 style={shown === null ? undefined : { ...rarityRim(shown), paddingInlineStart: 10 }}
               >
+                <GameTouch detail={succesDetail(achievement, rarities)} className="flex min-w-0 flex-1 items-center gap-3" style={{ minHeight: 44 }}>
                 <span
                   className="grid size-9 shrink-0 place-items-center rounded-field"
                   style={{
@@ -236,6 +241,7 @@ export function AchievementsSection({
                   </span>
                   <GameRarityLine entry={entry} />
                 </div>
+                </GameTouch>
                 {achievement.unlocked && onPhoto !== undefined ? (
                   <button
                     type="button"
@@ -306,10 +312,12 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
             aria-label={`${ACHIEVEMENT_SECTION_TITLES[vue.section]} — ${vue.unlockedCount} sur ${vue.attainableCount}`}
           >
             {vue.entries.map((entry) => (
-              <li
-                key={entry.key}
-                className="flex min-w-0 flex-col gap-1 rounded-card px-3 py-2"
+              <li key={entry.key} className="flex min-w-0">
+              <GameTouch
+                detail={defiDetail(entry)}
+                className="flex min-w-0 flex-1 flex-col gap-1 rounded-card px-3 py-2"
                 style={{
+                  minHeight: 44,
                   backgroundColor: entry.unlocked
                     ? 'color-mix(in srgb, var(--color-ok) 14%, transparent)'
                     : 'color-mix(in srgb, var(--color-ios-ink) 6%, transparent)',
@@ -329,6 +337,7 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
                     Obtenu
                   </span>
                 ) : null}
+              </GameTouch>
               </li>
             ))}
           </ul>

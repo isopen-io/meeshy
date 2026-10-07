@@ -6,6 +6,7 @@ import { useGamePrefs } from '@/lib/game/preferences';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { gameText } from '@/lib/view/game-copy';
+import { detailOfRef } from '@/lib/view/game-detail';
 import { conceptView, shownConcepts, shownProgress } from '@/lib/view/progression-concepts';
 import { useMinute } from '@/lib/view/use-minute';
 import { ProgressionPage } from '@/routes/progression-page';
@@ -14,7 +15,9 @@ import { ProgressionPage } from '@/routes/progression-page';
  * LE TABLEAU DE BORD (#9563) — toutes les données, regroupées par concept, dans
  * l'ordre de la première page. Un bloc compact par concept : sa tête (emblème,
  * nom, valeur) ouvre la fiche, ses données sont celles de « Où j'en suis ».
- * LECTURE SEULE : aucun geste ici, ils vivent dans les fiches.
+ * LECTURE SEULE : aucun geste ici, ils vivent dans les fiches. Chaque ligne de
+ * donnée se touche, en revanche : elle ouvre les précisions de SA donnée, avec
+ * « Voir la fiche » (#9563, amendement n° 2).
  *
  * Cache-first : la même requête que la première page, déjà en cache — aucun
  * squelette à l'ouverture.
@@ -43,7 +46,7 @@ export function TableauBody({ progress, now }: { readonly progress: EngagementWi
               value={concept.value}
             />
             <div className="px-4 pb-2">
-              <ConceptFacts facts={concept.facts} />
+              <ConceptFacts facts={concept.facts} open={(fact) => detailOfRef(fact.ref, key, fact.label, fact.value, view)} />
             </div>
           </section>
         );

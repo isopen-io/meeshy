@@ -5,8 +5,10 @@ import { MintStrike } from '@/components/game-mint-strike';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { convertiblePointsLabel, editionName, formatCount, gameText, levelsLabel, pointsLabel } from '@/lib/view/game-copy';
+import { factDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
+import { GameTouch } from './game-touch';
 
 /**
  * LE HÉROS DE FRAPPE (#9537) — LA section de frappe de Progression, et la seule
@@ -73,14 +75,19 @@ export function GameMintPreview(props: GameMintPreviewProps) {
     <GameCard id="game-mint" labelledBy="game-mint-title" tint={GAME_WARM}>
       <div className="flex items-center gap-3">
         <MintStrike size={64} strikeKey={strikeKey} next={{ number: mint.number, edition: mint.edition }} confirmed={celebration} />
-        <div className="min-w-0">
+        {/* Le prix se touche : pourquoi il monte (#9563). */}
+        <GameTouch
+          detail={factDetail('meesh', 'mint_price', gameText('game.mint.row.price'), pointsLabel(mint.price))}
+          className="flex min-w-0 flex-col justify-center rounded-chip"
+          style={{ minHeight: 44 }}
+        >
           <h2 id="game-mint-title" className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
             {gameText('game.mint.next_title', { number: formatCount(mint.number) })}
           </h2>
-          <p data-game-mint-price="" className="text-title font-bold" style={{ color: GAME_INK }}>
+          <span data-game-mint-price="" className="text-title font-bold" style={{ color: GAME_INK }}>
             {pointsLabel(mint.price)}
-          </p>
-        </div>
+          </span>
+        </GameTouch>
       </div>
 
       {celebration === null ? null : (

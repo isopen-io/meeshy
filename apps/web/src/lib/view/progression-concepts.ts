@@ -2,8 +2,10 @@ import { LEAGUE_MIN_LEVEL } from '@meeshy/shared/utils/game/league';
 import { MISSIONS_MIN_LEVEL } from '@meeshy/shared/utils/game/missions';
 import { SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
 import { progressionConcepts, type ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
+import type { EngagementAxisFamily } from '@meeshy/shared/types/engagement';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
+import type { GameDetailFact, GameDetailFamily } from '@/lib/game/detail-families';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import {
@@ -38,7 +40,25 @@ import { leagueName, remainingLabel, visibilityLabel, zoneLabel } from '@/lib/vi
  * carte ET le « C'est quoi ? » de la fiche — jamais deux formulations.
  */
 
-export type ConceptFact = { readonly label: string; readonly value: string };
+/**
+ * CE QU'UNE DONNÉE OUVRE QUAND ON LA TOUCHE (#9563, amendement n° 2). Une donnée
+ * qui EST un élément du jeu (les gels, la forme de la Flamme, le rang…) ouvre les
+ * précisions de CET élément ; les autres ont leur phrase (`game.detail.fact.*`) ;
+ * quelques-unes reprennent une phrase déjà au catalogue (`note`), jamais
+ * reformulée. `lib/view/game-detail.ts` en fait les précisions de la modale.
+ */
+export type DetailElementFamily = Extract<GameDetailFamily, 'ring' | 'coin' | 'treasury' | 'rank' | 'flame' | 'freeze' | 'chest' | 'gem' | 'star' | 'seal'>;
+
+export type DetailRef =
+  | { readonly kind: 'fact'; readonly fact: GameDetailFact }
+  | { readonly kind: 'element'; readonly family: DetailElementFamily }
+  | { readonly kind: 'elan'; readonly family: EngagementAxisFamily }
+  | { readonly kind: 'note'; readonly text: string };
+
+export type ConceptFact = { readonly label: string; readonly value: string; readonly ref: DetailRef };
+
+/** Une donnée importante de la carte, courte, et ce qu'elle ouvre. */
+export type ConceptChipView = { readonly text: string; readonly ref: DetailRef };
 
 /** Les sous-pages d'un concept (« Aller plus loin ») : le sous-menu du sous-menu. */
 export type ConceptRoute =
@@ -60,9 +80,11 @@ export type ConceptView = {
   /** La valeur de la tête de carte : une seule ligne, jamais coupée. */
   readonly value: string;
   /** Les données importantes de la carte : une à trois, courtes. */
-  readonly chips: readonly string[];
+  readonly chips: readonly ConceptChipView[];
   /** La fraction vers l'étape suivante, quand il y en a une. */
   readonly gauge: number | null;
+  /** Ce que la valeur ouvre quand on touche l'emblème du héros de la fiche. */
+  readonly primary: DetailRef;
   readonly why: string;
   readonly how: string;
   readonly tips: readonly string[];
@@ -71,7 +93,7 @@ export type ConceptView = {
   readonly more: readonly ConceptMore[];
 };
 
-type Body = Pick<ConceptView, 'value' | 'chips' | 'gauge' | 'facts'>;
+type Body = Pick<ConceptView, 'value' | 'chips' | 'gauge' | 'facts' | 'primary'>;
 
 const MAX_CHIPS = 3;
 
@@ -88,7 +110,14 @@ const factor = (value: number): string => `×${formatCount(value)}`;
 
 const present = <T,>(items: readonly (T | null)[]): readonly T[] => items.filter((item): item is T => item !== null);
 
-const fact = (label: string, value: string): ConceptFact => ({ label, value });
+const about = (name: GameDetailFact): DetailRef => ({ kind: 'fact', fact: name });
+const element = (family: DetailElementFamily): DetailRef => ({ kind: 'element', family });
+const note = (text: string): DetailRef => ({ kind: 'note', text });
+
+const fact = (label: string, value: string, ref: DetailRef): ConceptFact => ({ label, value, ref });
+const chip = (text: string, ref: DetailRef): ConceptChipView => ({ text, ref });
+
+const EMPTY: Body = { value: '', chips: [], gauge: null, facts: [], primary: about('score') };
 
 function level(view: EngagementWithGame): Body {
   const game = view.game;
@@ -97,11 +126,12 @@ function level(view: EngagementWithGame): Body {
     const missing = nextThreshold === null ? null : nextThreshold - value;
     return {
       value: levelValue(current),
-      chips: present([pointsLabel(value), missing === null ? null : stillMissing(missing)]),
+      chips: present([chip(pointsLabel(value), about('score')), missing === null ? null : chip(stillMissing(missing), about('level_next'))]),
       gauge: missing === null ? null : progress,
+      primary: about('score'),
       facts: present([
-        fact(gameText('game.concept.points.name'), pointsLabel(value)),
-        missing === null ? null : fact(gameText('game.fact.to_next'), pointsLabel(missing)),
+        fact(gameText('game.concept.points.name'), pointsLabel(value), about('score')),
+        missing === null ? null : fact(gameText('game.fact.to_next'), pointsLabel(missing), about('level_next')),
       ]),
     };
   }
@@ -111,40 +141,42 @@ function level(view: EngagementWithGame): Body {
   return {
     value: levelValue(served.level),
     chips: present([
-      levelTierName(served.tier),
-      atTop ? gameText('game.banner.top') : stillMissing(served.pointsToNext),
-      record === null ? null : gameText('game.concept.chip.record', { value: record }),
+      chip(levelTierName(served.tier), about('tier')),
+      atTop ? chip(gameText('game.banner.top'), element('ring')) : chip(stillMissing(served.pointsToNext), about('level_next')),
+      record === null ? null : chip(gameText('game.concept.chip.record', { value: record }), about('level_record')),
     ]),
     gauge: atTop ? null : served.progress,
+    primary: element('ring'),
     facts: present([
-      fact(gameText('game.fact.tier'), levelTierName(served.tier)),
-      fact(gameText('game.concept.points.name'), pointsLabel(served.score)),
-      atTop ? null : fact(gameText('game.fact.to_next'), pointsLabel(served.pointsToNext)),
-      record === null ? null : fact(gameText('game.fact.record'), record),
-      boosts.tailwind > 1 ? fact(gameText('game.mint.row.tailwind'), factor(boosts.tailwind)) : null,
-      served.prestige > 0 ? fact(gameText('game.concept.prestige.name'), formatCount(served.prestige)) : null,
+      fact(gameText('game.fact.tier'), levelTierName(served.tier), about('tier')),
+      fact(gameText('game.concept.points.name'), pointsLabel(served.score), about('score')),
+      atTop ? null : fact(gameText('game.fact.to_next'), pointsLabel(served.pointsToNext), about('level_next')),
+      record === null ? null : fact(gameText('game.fact.record'), record, about('level_record')),
+      boosts.tailwind > 1 ? fact(gameText('game.mint.row.tailwind'), factor(boosts.tailwind), about('tailwind')) : null,
+      served.prestige > 0 ? fact(gameText('game.concept.prestige.name'), formatCount(served.prestige), element('star')) : null,
     ]),
   };
 }
 
 function points(view: EngagementWithGame): Body {
   const game = view.game;
-  if (game === undefined) return { value: pointsLabel(view.level.value), chips: [], gauge: null, facts: [] };
+  if (game === undefined) return { ...EMPTY, value: pointsLabel(view.level.value) };
   const { level: served, mint, boosts } = game;
   const elan = view.elan;
   const multiplier = elan?.isAccelerated === true ? elan.factor : boosts.tailwind > 1 ? boosts.tailwind : null;
   return {
     value: pointsLabel(served.score),
     chips: present([
-      mint.canMint ? gameText('game.concept.chip.can_mint') : stillMissing(mint.missingPoints),
-      multiplier === null ? null : gameText('game.concept.chip.factor', { factor: formatCount(multiplier) }),
+      mint.canMint ? chip(gameText('game.concept.chip.can_mint'), about('can_mint')) : chip(stillMissing(mint.missingPoints), about('mint_missing')),
+      multiplier === null ? null : chip(gameText('game.concept.chip.factor', { factor: formatCount(multiplier) }), about('factor')),
     ]),
     gauge: mint.canMint ? 1 : ratio(mint.price - mint.missingPoints, mint.price),
+    primary: about('score'),
     facts: present([
-      fact(gameText('game.fact.balance'), pointsLabel(served.score)),
-      fact(gameText('game.fact.next_meesh'), pointsLabel(mint.price)),
-      mint.canMint ? null : fact(gameText('game.fact.missing'), pointsLabel(mint.missingPoints)),
-      multiplier === null ? null : fact(gameText('game.fact.factor'), factor(multiplier)),
+      fact(gameText('game.fact.balance'), pointsLabel(served.score), about('score')),
+      fact(gameText('game.fact.next_meesh'), pointsLabel(mint.price), about('mint_price')),
+      mint.canMint ? null : fact(gameText('game.fact.missing'), pointsLabel(mint.missingPoints), about('mint_missing')),
+      multiplier === null ? null : fact(gameText('game.fact.factor'), factor(multiplier), about('factor')),
     ]),
   };
 }
@@ -152,18 +184,21 @@ function points(view: EngagementWithGame): Body {
 function meesh(view: EngagementWithGame): Body {
   const game = view.game;
   const wallet = view.meesh;
-  const minted = wallet === undefined ? null : fact(gameText('game.fact.minted'), formatCount(wallet.mintedLifetime));
+  const minted = wallet === undefined ? null : fact(gameText('game.fact.minted'), formatCount(wallet.mintedLifetime), about('minted'));
   if (game === undefined) {
-    if (wallet === undefined) return { value: meeshCount(0), chips: [], gauge: null, facts: [] };
-    const state = wallet.canMint ? gameText('game.concept.chip.can_mint') : stillMissing(wallet.missingPoints);
+    if (wallet === undefined) return { ...EMPTY, value: meeshCount(0), primary: about('minted') };
+    const state = wallet.canMint
+      ? chip(gameText('game.concept.chip.can_mint'), about('can_mint'))
+      : chip(stillMissing(wallet.missingPoints), about('mint_missing'));
     return {
       value: meeshCount(wallet.balance),
-      chips: [gameText('game.concept.chip.next_price', { price: pointsLabel(wallet.mintCost) }), state],
+      chips: [chip(gameText('game.concept.chip.next_price', { price: pointsLabel(wallet.mintCost) }), about('mint_price')), state],
       gauge: wallet.progress,
+      primary: about('minted'),
       facts: present([
-        fact(gameText('game.fact.balance'), meeshCount(wallet.balance)),
-        fact(gameText('game.mint.row.price'), pointsLabel(wallet.mintCost)),
-        wallet.canMint ? null : fact(gameText('game.fact.missing'), pointsLabel(wallet.missingPoints)),
+        fact(gameText('game.fact.balance'), meeshCount(wallet.balance), about('minted')),
+        fact(gameText('game.mint.row.price'), pointsLabel(wallet.mintCost), about('mint_price')),
+        wallet.canMint ? null : fact(gameText('game.fact.missing'), pointsLabel(wallet.missingPoints), about('mint_missing')),
         minted,
       ]),
     };
@@ -177,22 +212,24 @@ function meesh(view: EngagementWithGame): Body {
   return {
     value: meeshCount(balance),
     chips: present([
-      gameText('game.concept.chip.next_price', { price: pointsLabel(mint.price) }),
-      mint.canMint ? gameText('game.concept.chip.can_mint') : stillMissing(mint.missingPoints),
-      treasury.tier === null ? null : treasuryName(treasury.tier),
+      chip(gameText('game.concept.chip.next_price', { price: pointsLabel(mint.price) }), about('mint_price')),
+      mint.canMint ? chip(gameText('game.concept.chip.can_mint'), about('can_mint')) : chip(stillMissing(mint.missingPoints), about('mint_missing')),
+      treasury.tier === null ? null : chip(treasuryName(treasury.tier), element('treasury')),
     ]),
     gauge: null,
+    primary: element('coin'),
     facts: present([
-      fact(gameText('game.fact.balance'), meeshCount(balance)),
-      treasury.tier === null ? null : fact(gameText('game.gauge.treasury'), treasuryName(treasury.tier)),
-      nextTier === null ? null : fact(gameText('game.fact.next_tier'), nextTier),
+      fact(gameText('game.fact.balance'), meeshCount(balance), element('coin')),
+      treasury.tier === null ? null : fact(gameText('game.gauge.treasury'), treasuryName(treasury.tier), element('treasury')),
+      nextTier === null ? null : fact(gameText('game.fact.next_tier'), nextTier, element('treasury')),
       fact(
         gameText('game.fact.next_meesh'),
         `${gameText('game.mint.number_label', { number: formatCount(mint.number) })} · ${editionName(mint.edition)}`,
+        about('mint_next'),
       ),
-      fact(gameText('game.mint.row.price'), pointsLabel(mint.price)),
-      mint.canMint ? null : fact(gameText('game.fact.missing'), pointsLabel(mint.missingPoints)),
-      fact(gameText('game.mint.row.glory'), gameText('game.fmt.signed', { value: formatCount(mint.gloryGained) })),
+      fact(gameText('game.mint.row.price'), pointsLabel(mint.price), about('mint_price')),
+      mint.canMint ? null : fact(gameText('game.fact.missing'), pointsLabel(mint.missingPoints), about('mint_missing')),
+      fact(gameText('game.mint.row.glory'), gameText('game.fmt.signed', { value: formatCount(mint.gloryGained) }), about('mint_glory')),
       minted,
     ]),
   };
@@ -200,28 +237,29 @@ function meesh(view: EngagementWithGame): Body {
 
 function glory(view: EngagementWithGame): Body {
   const served = view.game?.glory;
-  if (served === undefined) return { value: '', chips: [], gauge: null, facts: [] };
+  if (served === undefined) return EMPTY;
   const next = served.next === null ? null : rankLabel(served.next.rank, served.next.division);
   const rank = rankLabel(served.rank, served.division);
   return {
     value: rank,
     chips: [
-      gameText('game.rank.glory', { glory: formatCount(served.glory) }),
-      next === null ? gameText('game.rank.top') : gameText('game.concept.chip.next', { name: next }),
+      chip(gameText('game.rank.glory', { glory: formatCount(served.glory) }), about('glory')),
+      chip(next === null ? gameText('game.rank.top') : gameText('game.concept.chip.next', { name: next }), element('rank')),
     ],
     gauge: next === null ? null : served.progress,
+    primary: element('rank'),
     facts: present([
-      fact(gameText('game.mint.row.glory'), formatCount(served.glory)),
-      fact(gameText('game.gauge.rank'), rank),
-      next === null ? null : fact(gameText('game.fact.next_rank'), next),
-      served.gloryMissing === null ? null : fact(gameText('game.fact.missing'), formatCount(served.gloryMissing)),
+      fact(gameText('game.mint.row.glory'), formatCount(served.glory), about('glory')),
+      fact(gameText('game.gauge.rank'), rank, element('rank')),
+      next === null ? null : fact(gameText('game.fact.next_rank'), next, element('rank')),
+      served.gloryMissing === null ? null : fact(gameText('game.fact.missing'), formatCount(served.gloryMissing), about('glory_missing')),
     ]),
   };
 }
 
 type FlameStatus = NonNullable<EngagementWithGame['game']>['flame']['status'];
 
-const flameState = (status: FlameStatus): string => {
+export const flameStateLabel = (status: FlameStatus): string => {
   switch (status) {
     case 'none':
       return gameText('game.flame.status.none');
@@ -240,47 +278,57 @@ const streakValue = (days: number): string => (days === 0 ? gameText('game.flame
 
 function flame(view: EngagementWithGame): Body {
   const served = view.game?.flame;
-  const record = gameText('game.concept.chip.record', { value: daysLabel(view.streak.longestDays) });
-  const recordFact = fact(gameText('game.fact.record'), daysLabel(view.streak.longestDays));
+  const record = chip(gameText('game.concept.chip.record', { value: daysLabel(view.streak.longestDays) }), about('streak_record'));
+  const recordFact = fact(gameText('game.fact.record'), daysLabel(view.streak.longestDays), about('streak_record'));
   if (served === undefined) {
     const days = view.streak.currentDays;
-    return { value: streakValue(days), chips: [record], gauge: null, facts: [fact(gameText('game.fact.streak'), streakValue(days)), recordFact] };
+    return {
+      value: streakValue(days),
+      chips: [record],
+      gauge: null,
+      primary: about('streak'),
+      facts: [fact(gameText('game.fact.streak'), streakValue(days), about('streak')), recordFact],
+    };
   }
   const freezes = fraction(served.freezes, served.maxFreezes);
   return {
     value: streakValue(served.days),
     chips: present([
-      served.form === null ? null : flameFormName(served.form),
-      gameText('game.concept.chip.freezes', { count: freezes }),
+      served.form === null ? null : chip(flameFormName(served.form), element('flame')),
+      chip(gameText('game.concept.chip.freezes', { count: freezes }), element('freeze')),
       view.streak.longestDays > 0 ? record : null,
     ]),
     gauge: null,
+    primary: element('flame'),
     facts: present([
-      fact(gameText('game.fact.streak'), streakValue(served.days)),
+      fact(gameText('game.fact.streak'), streakValue(served.days), about('streak')),
       served.form === null
         ? null
         : fact(
             gameText('game.fact.form'),
             gameText('game.flame.form_line', { form: flameFormName(served.form), bonus: formatCount(Math.min(100, Math.max(0, served.bonusPercent))) }),
+            element('flame'),
           ),
-      fact(gameText('game.fact.freezes'), freezes),
+      fact(gameText('game.fact.freezes'), freezes, element('freeze')),
       view.streak.longestDays > 0 ? recordFact : null,
-      fact(gameText('game.fact.state'), flameState(served.status)),
+      fact(gameText('game.fact.state'), flameStateLabel(served.status), about('flame_state')),
     ]),
   };
 }
 
 function missions(view: EngagementWithGame): Body {
   const game = view.game;
-  if (game === undefined) return { value: '', chips: [], gauge: null, facts: [] };
+  if (game === undefined) return EMPTY;
   const { missions: served, chest } = game;
   const chestState = gameText(`game.concept.chip.chest.${chest.status}`);
-  const chestFact = fact(gameText('game.chest.title'), chestState);
+  const chestFact = fact(gameText('game.chest.title'), chestState, element('chest'));
   if (!served.unlocked) {
+    const locked = gameText('game.missions.locked', { level: formatCount(game.level.level) });
     return {
       value: levelValue(MISSIONS_MIN_LEVEL),
-      chips: [gameText('game.door.league.locked', { level: formatCount(MISSIONS_MIN_LEVEL) })],
+      chips: [chip(gameText('game.door.league.locked', { level: formatCount(MISSIONS_MIN_LEVEL) }), note(locked))],
       gauge: null,
+      primary: element('chest'),
       facts: [chestFact],
     };
   }
@@ -288,44 +336,62 @@ function missions(view: EngagementWithGame): Body {
   const total = served.items.length;
   return {
     value: fraction(done, total),
-    chips: present([chestState, served.prismDay ? gameText('game.mission.prism') : null]),
+    chips: present([
+      chip(chestState, element('chest')),
+      served.prismDay ? chip(gameText('game.mission.prism'), note(gameText('game.missions.prism_day'))) : null,
+    ]),
     gauge: ratio(done, total),
-    facts: [fact(gameText('game.fact.done'), fraction(done, total)), chestFact],
+    primary: element('chest'),
+    facts: [fact(gameText('game.fact.done'), fraction(done, total), about('missions_done')), chestFact],
   };
 }
 
 function league(view: EngagementWithGame, now: Date): Body {
-  const served = view.game?.league;
-  if (served === undefined) return { value: '', chips: [], gauge: null, facts: [] };
+  const game = view.game;
+  const served = game?.league;
+  if (game === undefined || served === undefined) return EMPTY;
   const friends = gameText('game.league.rank_line', { rank: formatCount(served.friends.rank), size: formatCount(served.friends.size) });
-  const friendsFact = fact(gameText('game.league.friends.title'), friends);
+  const friendsFact = fact(gameText('game.league.friends.title'), friends, about('league_friends'));
   if (served.access === 'locked') {
+    const locked = gameText('game.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL), current: formatCount(game.level.level) });
     return {
       value: levelValue(LEAGUE_MIN_LEVEL),
-      chips: [gameText('game.door.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL) })],
+      chips: [chip(gameText('game.door.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL) }), note(locked))],
       gauge: null,
+      primary: element('gem'),
       facts: [friendsFact],
     };
   }
   const current = served.current;
   if (served.access !== 'open' || current === null) {
-    return { value: gameText('game.concept.league.unplaced'), chips: [gameText('game.league.friends.title')], gauge: null, facts: [friendsFact] };
+    return {
+      value: gameText('game.concept.league.unplaced'),
+      chips: [chip(gameText('game.league.friends.title'), about('league_friends'))],
+      gauge: null,
+      primary: element('gem'),
+      facts: [friendsFact],
+    };
   }
   const place = gameText('game.league.rank_line', { rank: formatCount(current.rank), size: formatCount(current.groupSize) });
   const remaining = remainingLabel(served.closes, now);
   return {
     value: gameText('game.concept.league.value', { league: leagueName(current.league), rank: formatCount(current.rank) }),
-    chips: [place, pointsLabel(current.weekPoints), gameText('game.league.closes', { remaining })],
+    chips: [
+      chip(place, about('league_place')),
+      chip(pointsLabel(current.weekPoints), about('week_points')),
+      chip(gameText('game.league.closes', { remaining }), about('league_closes')),
+    ],
     gauge: null,
+    primary: element('gem'),
     facts: present([
-      fact(gameText('game.league.title'), leagueName(current.league)),
-      fact(gameText('game.fact.group'), place),
-      fact(gameText('game.fact.week_points'), pointsLabel(current.weekPoints)),
-      fact(gameText('game.fact.state'), zoneLabel(current.zone)),
+      fact(gameText('game.league.title'), leagueName(current.league), element('gem')),
+      fact(gameText('game.fact.group'), place, about('league_place')),
+      fact(gameText('game.fact.week_points'), pointsLabel(current.weekPoints), about('week_points')),
+      fact(gameText('game.fact.state'), zoneLabel(current.zone), about('league_zone')),
       current.pointsToPromotion === null || current.pointsToPromotion === 0
         ? null
-        : fact(gameText('game.fact.missing'), pointsLabel(current.pointsToPromotion)),
-      fact(gameText('game.fact.closes'), remaining),
+        : fact(gameText('game.fact.missing'), pointsLabel(current.pointsToPromotion), about('league_missing')),
+      fact(gameText('game.fact.closes'), remaining, about('league_closes')),
       friendsFact,
     ]),
   };
@@ -334,27 +400,29 @@ function league(view: EngagementWithGame, now: Date): Body {
 function season(view: EngagementWithGame): Body {
   const served = view.game?.season;
   if (served === undefined || served === null) {
-    return { value: gameText('game.concept.season.none'), chips: [gameText('game.season.path')], gauge: null, facts: [] };
+    const none = note(gameText('game.season.none'));
+    return { value: gameText('game.concept.season.none'), chips: [chip(gameText('game.season.path'), none)], gauge: null, facts: [], primary: none };
   }
   const steps = fraction(served.steps, served.stepsTotal);
   const stars = translateGamePlural(currentInterfaceLanguage(), 'game.season.stars', served.stars);
   const week = formatCount(served.week);
   return {
     value: steps,
-    chips: [gameText('game.concept.chip.week', { week }), stars],
+    chips: [chip(gameText('game.concept.chip.week', { week }), about('season_week')), chip(stars, about('season_stars'))],
     gauge: ratio(served.steps, served.stepsTotal),
+    primary: element('seal'),
     facts: [
-      fact(gameText('game.concept.season.name'), formatCount(served.number)),
-      fact(gameText('game.fact.week'), week),
-      fact(gameText('game.fact.steps'), steps),
-      fact(gameText('game.fact.stars'), formatCount(served.stars)),
+      fact(gameText('game.concept.season.name'), formatCount(served.number), about('season')),
+      fact(gameText('game.fact.week'), week, about('season_week')),
+      fact(gameText('game.fact.steps'), steps, about('season_steps')),
+      fact(gameText('game.fact.stars'), formatCount(served.stars), about('season_stars')),
     ],
   };
 }
 
 function prestige(view: EngagementWithGame): Body {
   const served = view.game?.prestige;
-  if (served === undefined) return { value: '', chips: [], gauge: null, facts: [] };
+  if (served === undefined) return EMPTY;
   const stars = fraction(served.stars, served.max);
   const door = served.canPrestige
     ? gameText('game.door.prestige.ready')
@@ -363,11 +431,12 @@ function prestige(view: EngagementWithGame): Body {
       : gameText('game.door.prestige.locked');
   return {
     value: translateGamePlural(currentInterfaceLanguage(), 'game.season.stars', served.stars),
-    chips: [stars, door],
+    chips: [chip(stars, element('star')), chip(door, element('star'))],
     gauge: ratio(served.stars, served.max),
+    primary: element('star'),
     facts: [
-      fact(gameText('game.fact.stars'), stars),
-      fact(gameText('game.mint.row.glory'), gameText('game.fmt.signed', { value: formatCount(served.gloryOnPass) })),
+      fact(gameText('game.fact.stars'), stars, element('star')),
+      fact(gameText('game.mint.row.glory'), gameText('game.fmt.signed', { value: formatCount(served.gloryOnPass) }), about('prestige_glory')),
     ],
   };
 }
@@ -378,65 +447,79 @@ function elans(view: EngagementWithGame): Body {
   const count = elan?.activeFamilyCount ?? 0;
   const active = translateGamePlural(currentInterfaceLanguage(), 'game.concept.elans.families', count);
   const accelerated = elan?.isAccelerated === true;
-  const names = families.map((family) => familyName(family));
+  const names = families.map((family) => chip(familyName(family), { kind: 'elan', family }));
   return {
     value: accelerated ? factor(elan.factor) : active,
     chips: accelerated
-      ? [gameText('game.concept.chip.factor', { factor: formatCount(elan.factor) }), ...(names.length === 0 ? [active] : names)]
+      ? [
+          chip(gameText('game.concept.chip.factor', { factor: formatCount(elan.factor) }), about('factor')),
+          ...(names.length === 0 ? [chip(active, about('elan_families'))] : names),
+        ]
       : names.length === 0
-        ? [gameText('game.concept.chip.no_elan')]
+        ? [chip(gameText('game.concept.chip.no_elan'), about('elan_families'))]
         : names,
     gauge: null,
-    facts: present([
-      fact(gameText('game.fact.factor'), factor(accelerated ? elan.factor : 1)),
-      fact(gameText('game.fact.families'), names.length === 0 ? formatCount(count) : names.join(' · ')),
-    ]),
+    primary: about('factor'),
+    facts: [
+      fact(gameText('game.fact.factor'), factor(accelerated ? elan.factor : 1), about('factor')),
+      fact(gameText('game.fact.families'), names.length === 0 ? formatCount(count) : names.map((name) => name.text).join(' · '), about('elan_families')),
+    ],
   };
 }
 
-const counted = (done: number, total: number): Body => ({
+const counted = (done: number, total: number, ref: DetailRef): Body => ({
   value: fraction(done, total),
-  chips: [gameText('game.concept.chip.left', { count: formatCount(Math.max(0, total - done)) })],
+  chips: [chip(gameText('game.concept.chip.left', { count: formatCount(Math.max(0, total - done)) }), ref)],
   gauge: ratio(done, total),
-  facts: [fact(gameText('game.fact.earned'), fraction(done, total))],
+  primary: ref,
+  facts: [fact(gameText('game.fact.earned'), fraction(done, total), ref)],
 });
 
-const badges = (view: EngagementWithGame): Body => counted(view.badgesEarned, view.badgesTotal);
+const badges = (view: EngagementWithGame): Body => counted(view.badgesEarned, view.badgesTotal, about('badges_earned'));
 
 function defis(view: EngagementWithGame): Body {
   const sections = view.achievementSections ?? [];
   return counted(
     sections.reduce((sum, section) => sum + section.unlockedCount, 0),
     sections.reduce((sum, section) => sum + section.attainableCount, 0),
+    about('defis_earned'),
   );
 }
 
 const succes = (view: EngagementWithGame): Body =>
-  counted(view.achievements.filter((achievement) => achievement.unlocked).length, view.achievements.length);
+  counted(view.achievements.filter((achievement) => achievement.unlocked).length, view.achievements.length, about('succes_earned'));
 
 function showcase(view: EngagementWithGame): Body {
   const game = view.game;
   const trophies = game?.trophies;
-  if (game === undefined || trophies === undefined) return { value: '', chips: [], gauge: null, facts: [] };
+  if (game === undefined || trophies === undefined) return EMPTY;
   const count = trophies.items.length;
   const who = visibilityLabel(game.visibility?.showcase ?? SHOWCASE_DEFAULT_VISIBILITY);
   return {
     value: count === 0 ? gameText('game.door.showcase.empty') : translateGamePlural(currentInterfaceLanguage(), 'game.door.showcase.count', count),
-    chips: [gameText('game.concept.chip.seen_by', { who })],
+    chips: [chip(gameText('game.concept.chip.seen_by', { who }), about('showcase_visibility'))],
     gauge: null,
-    facts: [fact(gameText('game.fact.trophies'), formatCount(count)), fact(gameText('game.fact.visibility'), who)],
+    primary: about('trophies'),
+    facts: [
+      fact(gameText('game.fact.trophies'), formatCount(count), about('trophies')),
+      fact(gameText('game.fact.visibility'), who, about('showcase_visibility')),
+    ],
   };
 }
 
 function atlas(view: EngagementWithGame): Body {
   const served = view.game?.atlas;
-  if (served === undefined) return { value: '', chips: [], gauge: null, facts: [] };
+  if (served === undefined) return EMPTY;
   const stamps = fraction(served.stamped, served.total);
   return {
     value: stamps,
-    chips: [gameText('game.concept.chip.left', { count: formatCount(Math.max(0, served.total - served.stamped)) })],
+    chips: [chip(gameText('game.concept.chip.left', { count: formatCount(Math.max(0, served.total - served.stamped)) }), about('atlas_stamps'))],
     gauge: ratio(served.stamped, served.total),
-    facts: [fact(gameText('game.fact.stamps'), stamps), fact(gameText('game.fact.pending'), formatCount(served.pending.length))],
+    primary: about('atlas_stamps'),
+    facts: [
+      fact(gameText('game.fact.stamps'), stamps, about('atlas_stamps')),
+      fact(gameText('game.fact.pending'), formatCount(served.pending.length), about('atlas_pending')),
+    ],
   };
 }
 
@@ -488,6 +571,7 @@ export function conceptView(concept: ProgressionConcept, view: EngagementWithGam
     value: body.value,
     chips: body.chips.slice(0, MAX_CHIPS),
     gauge: body.gauge,
+    primary: body.primary,
     why: gameText(`game.concept.${concept}.why`),
     how: gameText(`game.concept.${concept}.how`),
     tips: [gameText(`game.concept.${concept}.tip.1`), gameText(`game.concept.${concept}.tip.2`)],

@@ -57,7 +57,8 @@ describe('aucun conteneur ne défile de côté', () => {
     const scrollers = PROGRESSION_SOURCES.flatMap((file) =>
       [...read(file).matchAll(/className="([^"]*\boverflow-y-auto\b[^"]*)"/g)].map((match) => ({ file, classes: match[1] ?? '' })),
     );
-    expect(scrollers.length).toBeGreaterThanOrEqual(4);
+    expect(scrollers.length).toBeGreaterThanOrEqual(3);
+    expect(scrollers.map((scroller) => scroller.file)).toContain('routes/progression-shell.tsx');
     for (const { file, classes } of scrollers) {
       expect({ file, clip: classes.includes('overflow-x-clip'), overscroll: classes.includes('overscroll-x-none') }).toEqual({ file, clip: true, overscroll: true });
     }
@@ -72,7 +73,7 @@ describe('aucun conteneur ne défile de côté', () => {
     const pages = PROGRESSION_SOURCES.flatMap((file) =>
       [...read(file).matchAll(/<main id="contenu" className="([^"]*)"/g)].map((match) => ({ file, classes: match[1] ?? '' })),
     );
-    expect(pages.length).toBeGreaterThanOrEqual(4);
+    expect(pages.map((page) => page.file)).toEqual(['routes/progression-shell.tsx']);
     for (const { file, classes } of pages) expect({ file, wraps: classes.includes('break-words') }).toEqual({ file, wraps: true });
   });
 });

@@ -21,10 +21,12 @@ import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { ProgressBar } from '@/components/progress-bar';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { gameText } from '@/lib/view/game-copy';
-import type { ConceptFact, ConceptView } from '@/lib/view/progression-concepts';
+import type { ElementDetail } from '@/lib/view/game-detail';
+import type { ConceptChipView, ConceptView } from '@/lib/view/progression-concepts';
 import { Link } from '@/routes/route-table';
 
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from './game-surface';
+import { GameTouch, PRESS } from './game-touch';
 
 /**
  * LES PIÈCES D'UN CONCEPT DE « PROGRESSION » (#9563) — l'emblème, la chip, la
@@ -112,13 +114,25 @@ export function ConceptChip({ children, tint = 'var(--color-ios-ink-3)' }: { rea
   );
 }
 
-export function ConceptChips({ chips }: { readonly chips: readonly string[] }) {
+/**
+ * Les pastilles d'un concept. Sur la première page elles se LISENT (la carte
+ * entière est un lien vers la fiche) ; sur la fiche, `open` en fait des boutons :
+ * chacune ouvre les précisions de SA donnée. Le bouton porte la cible de 44 pt,
+ * la pastille garde sa taille.
+ */
+export function ConceptChips({ chips, open }: { readonly chips: readonly ConceptChipView[]; readonly open?: (chip: ConceptChipView) => ElementDetail | null }) {
   if (chips.length === 0) return null;
   return (
-    <span data-chips="" className="flex min-w-0 max-w-full flex-wrap gap-1.5">
-      {chips.map((chip) => (
-        <ConceptChip key={chip}>{chip}</ConceptChip>
-      ))}
+    <span data-chips="" className={`flex min-w-0 max-w-full flex-wrap ${open === undefined ? 'gap-1.5' : 'justify-center gap-x-1.5'}`}>
+      {chips.map((chip) =>
+        open === undefined ? (
+          <ConceptChip key={chip.text}>{chip.text}</ConceptChip>
+        ) : (
+          <GameTouch key={chip.text} detail={open(chip)} className="inline-flex min-w-0 max-w-full items-center" style={{ minHeight: 44 }}>
+            <ConceptChip>{chip.text}</ConceptChip>
+          </GameTouch>
+        ),
+      )}
     </span>
   );
 }
@@ -176,7 +190,7 @@ export function ConceptCard({ concept, view }: { readonly concept: ConceptView; 
       to="progressionConcept"
       params={{ concept: concept.key }}
       data-concept-card={concept.key}
-      className="flex flex-col gap-2 rounded-card px-4 py-3"
+      className={`${PRESS} flex flex-col gap-2 rounded-card px-4 py-3`}
       style={{ minHeight: 44, backgroundColor: GAME_CARD }}
     >
       <Head emblem={<ConceptEmblem concept={concept.key} view={view} size={36} />} name={concept.name} value={concept.value} />
@@ -213,7 +227,7 @@ export function ProgressionRow({
   readonly value?: string;
   readonly marker: string;
 }) {
-  const className = 'flex flex-col rounded-card px-4 py-3';
+  const className = `${PRESS} flex flex-col rounded-card px-4 py-3`;
   const style = { minHeight: 44, backgroundColor: GAME_CARD } as const;
   const head = <Head emblem={emblem} name={name} {...(value === undefined ? {} : { value })} />;
   return target.to === 'progressionConcept' ? (
@@ -236,25 +250,40 @@ export function DashboardEmblem({ size = 36 }: { readonly size?: number }) {
   return <ConceptMark kind="dashboard" size={size} />;
 }
 
-/** Les données d'un concept, libellé → valeur : la fiche (« Où j'en suis ») et le tableau de bord. */
-export function ConceptFacts({ facts }: { readonly facts: readonly ConceptFact[] }) {
+type FactRow = { readonly label: string; readonly value: string };
+
+/**
+ * Les données d'un concept, libellé → valeur : la fiche (« Où j'en suis »), le
+ * tableau de bord et la modale. Avec `open`, chaque ligne est un bouton qui
+ * ouvre les précisions de SA donnée (cible de 44 pt, la ligne entière) ; sans
+ * lui (dans la modale elle-même), elle se lit.
+ */
+export function ConceptFacts<Fact extends FactRow>({ facts, open }: { readonly facts: readonly Fact[]; readonly open?: (fact: Fact) => ElementDetail | null }) {
   if (facts.length === 0) return null;
+  const line = 'flex w-full items-baseline justify-between gap-3 py-2';
+  const cells = (fact: FactRow) => (
+    <>
+      <span className="min-w-0 text-caption" style={{ color: GAME_INK_2 }}>
+        {fact.label}
+      </span>
+      <span className="min-w-0 text-end text-caption font-semibold" style={{ color: GAME_INK }}>
+        {fact.value}
+      </span>
+    </>
+  );
   return (
-    <dl data-concept-facts="" className="flex flex-col">
+    <ul data-concept-facts="" className="flex flex-col">
       {facts.map((fact) => (
-        <div
-          key={fact.label}
-          className="flex items-baseline justify-between gap-3 border-b py-2 last:border-b-0"
-          style={{ borderColor: 'color-mix(in srgb, var(--color-ios-ink) 8%, transparent)' }}
-        >
-          <dt className="text-caption" style={{ color: GAME_INK_2 }}>
-            {fact.label}
-          </dt>
-          <dd className="text-end text-caption font-semibold" style={{ color: GAME_INK }}>
-            {fact.value}
-          </dd>
-        </div>
+        <li key={fact.label} className="border-b last:border-b-0" style={{ borderColor: 'color-mix(in srgb, var(--color-ios-ink) 8%, transparent)' }}>
+          {open === undefined ? (
+            <span className={line}>{cells(fact)}</span>
+          ) : (
+            <GameTouch detail={open(fact)} className={`${line} items-center`} style={{ minHeight: 44 }}>
+              {cells(fact)}
+            </GameTouch>
+          )}
+        </li>
       ))}
-    </dl>
+    </ul>
   );
 }

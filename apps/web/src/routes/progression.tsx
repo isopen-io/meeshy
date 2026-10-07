@@ -1,11 +1,11 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { GameBird } from '@/components/game';
 import { GameHiddenCard } from '@/components/game-hidden-card';
-import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
-import { Glyph } from '@/components/glyph';
-import { GlassBack } from '@/components/glass-surface';
+import { GameDetailHost } from '@/components/game-detail-sheet';
+import { GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
+import { PRESS } from '@/components/game-touch';
 import { MascotCoach } from '@/components/mascot';
 import { ConceptCard, DashboardEmblem, ProgressionRow, RowEmblem } from '@/components/progression-concept';
 import { unwrap } from '@/lib/api/client';
@@ -22,8 +22,11 @@ import { useOptionalRoute } from '@/lib/router';
 import { gameText } from '@/lib/view/game-copy';
 import { conceptView, shownConcepts, shownProgress } from '@/lib/view/progression-concepts';
 import { useMinute } from '@/lib/view/use-minute';
+import { useGameActions } from '@/routes/progression-game-actions';
+import { ProgressionHeaderGroup } from '@/routes/progression-header-group';
 import { GameLead } from '@/routes/progression-lead';
 import { ProgressionError, ProgressionSkeleton } from '@/routes/progression-parts';
+import { OfflineNotice, ProgressionShell } from '@/routes/progression-shell';
 import { Link, href, navigate } from '@/routes/route-table';
 
 import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
@@ -48,8 +51,11 @@ export { ElansHero, LastAchievementHero, LevelHero, MeeshDetail } from '@/routes
  * l'app iOS parcourent aussi. Ce qu'une carte dit vient de `conceptView`
  * (`lib/view/progression-concepts.ts`), écrit une fois pour les trois écrans.
  *
- * AUCUN GESTE ICI : ni frappe, ni coffre, ni gel. Une première page qui agit
- * redevient l'écran qu'on vient de quitter.
+ * AUCUN GESTE DANS LA PAGE : ni frappe, ni coffre, ni gel. Une première page qui
+ * agit redevient l'écran qu'on vient de quitter. L'en-tête, lui, garde ce que le
+ * porteur y avait posé (#5839, #6480) : le blason du rang et le compteur de
+ * Meeshes (`progression-header-group.tsx`), sur la coquille partagée dont
+ * l'en-tête se réduit quand la page défile dessous (`progression-shell.tsx`).
  */
 
 const ROW_GAP = 'flex flex-col gap-2';
@@ -64,7 +70,10 @@ export function ProgressionBody({
   guide,
   mascotEvent = null,
   now,
+  entering = false,
 }: {
+  /** Première ouverture de la visite : les cartes entrent en scène, l'une après l'autre. */
+  readonly entering?: boolean;
   readonly progress: EngagementWithGame;
   readonly guide?: ReactNode;
   /** Ce qui vient de se passer (#8907) — la mascotte le célèbre avant de revenir à l'état. */
@@ -89,8 +98,8 @@ export function ProgressionBody({
         name={gameText('game.dashboard.title')}
       />
       <ul data-progression-concepts="" className={ROW_GAP}>
-        {shownConcepts(progress, hidden).map((concept) => (
-          <li key={concept}>
+        {shownConcepts(progress, hidden).map((concept, index) => (
+          <li key={concept} {...(entering ? { 'data-game-enter': '', style: { '--game-enter-index': Math.min(index, 8) } as CSSProperties } : {})}>
             <ConceptCard concept={conceptView(concept, view, clock)} view={view} />
           </li>
         ))}
@@ -106,7 +115,7 @@ export function ProgressionBody({
   );
 }
 
-const MEE_LINE = 'flex w-full items-center gap-3 rounded-card px-4 py-2 text-start';
+const MEE_LINE = `${PRESS} flex w-full items-center gap-3 rounded-card px-4 py-2 text-start`;
 
 /**
  * LA LIGNE DE MEE — le guide du moment, en UNE ligne courte. La carte complète
@@ -164,11 +173,28 @@ function useSectionRedirect(): void {
   }, [concept]);
 }
 
+/**
+ * L'ENTRÉE EN SCÈNE, UNE SEULE FOIS — les cartes de la première page montent
+ * l'une après l'autre à la première ouverture de la visite, jamais au retour
+ * depuis une fiche : un sommaire qu'on rejoue à chaque retour arrière fait
+ * attendre celui qui sait déjà où il va.
+ */
+let hubHasEntered = false;
+
+function useFirstEntrance(): boolean {
+  const first = useRef(!hubHasEntered);
+  useEffect(() => {
+    hubHasEntered = true;
+  }, []);
+  return first.current;
+}
+
 export default function ProgressionScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   const online = useOnline();
   useGameSettings(true);
   useSectionRedirect();
+  const entering = useFirstEntrance();
 
   /**
    * LA MASCOTTE CÉLÈBRE CE QUI CHANGE (#8907) — jamais l'état de la première
@@ -177,6 +203,18 @@ export default function ProgressionScreen() {
    */
   const [mascotEvent, setMascotEvent] = useState<MascotEvent | null>(null);
   const seenProgressRef = useRef<EngagementProgress | null>(null);
+
+  /**
+   * LA FRAPPE DE L'EN-TÊTE (#5839, #9563) — le compteur de Meeshes rouvre la
+   * feuille d'avant la refonte, avec sa frappe. L'identifiant d'idempotence est
+   * généré UNE fois par intention de frappe (`progression-game-actions.ts`) :
+   * un retry n'est jamais une seconde frappe.
+   */
+  const actions = useGameActions({
+    onMinted: (result) => {
+      if (result.status === 'minted' && result.balance !== undefined) setMascotEvent({ kind: 'meesh-minted', balance: result.balance });
+    },
+  });
 
   const query = useQuery({
     queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY,
@@ -191,39 +229,22 @@ export default function ProgressionScreen() {
   }, [query.data]);
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <header className="glass z-10 shrink-0">
-        <div className="flex items-center gap-2 px-4 py-2">
-          <Link to="list" className="grid size-11 shrink-0 place-items-center" style={{ color: GAME_BRAND }} aria-label="Retour">
-            <GlassBack>
-              <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
-            </GlassBack>
-          </Link>
-          <h1 className="flex-1 truncate text-title font-bold" style={{ color: GAME_INK }}>
-            {gameText('game.progression.title')}
-          </h1>
-        </div>
-        {online ? null : (
-          <p
-            role="status"
-            className="flex items-center justify-center gap-1.5 px-4 py-1 text-check font-semibold"
-            style={{ backgroundColor: 'color-mix(in srgb, var(--color-warn) 22%, transparent)', color: GAME_INK }}
-          >
-            <Glyph name="warningCircle" size={11} />
-            Hors ligne — progression telle qu’à la dernière ouverture
-          </p>
-        )}
-      </header>
-
-      <main id="contenu" className="flex-1 overflow-y-auto overflow-x-clip overscroll-x-none break-words pb-safe">
-        {query.data !== undefined ? (
-          <ProgressionBody progress={query.data} mascotEvent={mascotEvent} guide={<ProgressionGuide view={query.data} />} />
-        ) : query.isError ? (
-          <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />
-        ) : (
-          <ProgressionSkeleton />
-        )}
-      </main>
-    </div>
+    <ProgressionShell
+      title={gameText('game.progression.title')}
+      back={{ to: 'list', label: 'Retour' }}
+      trailing={query.data === undefined ? null : <ProgressionHeaderGroup progress={query.data} actions={actions} />}
+      notice={online ? null : <OfflineNotice>Hors ligne — progression telle qu’à la dernière ouverture</OfflineNotice>}
+    >
+      {query.data !== undefined ? (
+        <>
+          <ProgressionBody progress={query.data} mascotEvent={mascotEvent} guide={<ProgressionGuide view={query.data} />} entering={entering} />
+          <GameDetailHost progress={query.data} />
+        </>
+      ) : query.isError ? (
+        <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />
+      ) : (
+        <ProgressionSkeleton />
+      )}
+    </ProgressionShell>
   );
 }

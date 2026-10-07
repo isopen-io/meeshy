@@ -279,8 +279,13 @@ describe('le tableau de bord : un bloc par concept, lecture seule', () => {
     });
   }
 
-  test('aucun geste', () => {
-    expect(page().querySelectorAll('button')).toHaveLength(0);
+  test('aucun geste : chaque bouton est une ligne de donnée qui ouvre ses précisions, rien d’autre', () => {
+    const buttons = [...page().querySelectorAll('button')];
+    expect(buttons.length).toBeGreaterThan(15);
+    for (const button of buttons) expect({ text: button.textContent, opens: button.hasAttribute('data-detail') }).toEqual({ text: button.textContent, opens: true });
+    for (const gesture of ['#game-mint', '#game-missions', '#game-flame-panel', '[data-game-mint-action]', '[data-meesh-mint]']) {
+      expect({ gesture, found: page().querySelector(gesture) !== null }).toEqual({ gesture, found: false });
+    }
   });
 });
 
