@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { contentExitLaw, contentExitLawOfSource, type ContentExitLaw, type ContentExitProjection } from '@meeshy/shared/utils/content-exit-law';
 
-import { EXIT_ACTIONS, contentExitOf, exitOffers, mediaLeaves, type ExitAction, type ExitMessage } from './content-exit';
+import { EXIT_ACTIONS, contentExitOf, exitOffers, mediaLeaves, quotedExitOf, type ExitAction, type ExitMessage } from './content-exit';
 
 /**
  * LE DIFFÉRENTIEL (#9573) — le web ne doit JAMAIS offrir ce que la loi
@@ -81,6 +81,10 @@ describe('différentiel — le web n’offre jamais ce que la loi refuse', () =>
       const exit = contentExitOf({ ...message, attachments: piece === null ? [] : [piece] }, NOW);
       const overreach = EXIT_ACTIONS.filter((action) => exitOffers(exit, action) && refusedBy(action));
       expect(overreach).toEqual([]);
+      expect(exit.leaves && !exit.readable).toBe(false);
+      expect(exit.nature).toBe(laws[0]?.nature ?? 'ordinary');
+      const sealed = quotedExitOf({ ...message, effectFlags: undefined as unknown as number, attachments: piece === null ? [] : [piece] }, NOW);
+      expect([sealed.readable, sealed.leaves, sealed.forward.allowed, sealed.nature === 'ordinary']).toEqual([false, false, false, false]);
       const allowed = laws[0]?.forward;
       if (exit.forward.allowed && allowed?.allowed === true) expect(exit.forward.maxDurationSeconds).toBe(allowed.maxDurationSeconds);
     });

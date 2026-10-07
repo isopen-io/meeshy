@@ -46,7 +46,10 @@ export default function ThreadMediaViewer({
   onClose,
   onReplyToMedia,
   kind = 'visual',
+  openedIsQuote = false,
 }: {
+  /** `opened` est une CITATION, pas un message du fil : sa nature doit être déclarée pour que sa pièce sorte (#9573). */
+  readonly openedIsQuote?: boolean;
   /** Les vocaux de la conversation (#8333) plutôt que ses images et vidéos — même plateau, page audio. */
   readonly kind?: 'visual' | 'audio';
   readonly opened: Message;
@@ -115,14 +118,16 @@ export default function ThreadMediaViewer({
       actionsAt={(at) => {
         const entry = entries[at];
         if (entry === undefined) return null;
-        const offers = mediaPageOffers({ attachment: entry.attachment, message: entry.message, capabilities });
+        const now = Date.now();
+        const quoted = openedIsQuote && entry.message.id === opened.id;
+        const offers = mediaPageOffers({ attachment: entry.attachment, message: entry.message, capabilities, now, quoted });
         return {
           attachment: entry.attachment,
           messageId: entry.message.id,
           conversationId: entry.message.conversationId,
           offers,
           ...(offers.share
-            ? { share: attachmentSendRequest({ attachment: entry.attachment, message: entry.message, mine: isMineOf(entry.message, viewerId) }) }
+            ? { share: attachmentSendRequest({ attachment: entry.attachment, message: entry.message, mine: isMineOf(entry.message, viewerId), now, quoted }) }
             : {}),
           onReply: () => {
             onClose();

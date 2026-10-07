@@ -49,6 +49,7 @@ export default function QuoteMediaViewer({
     return (
       <ThreadMediaViewer
         opened={quote}
+        openedIsQuote
         openedVisual={[attachment]}
         startIndex={0}
         viewerId={thread.viewerId}
@@ -60,13 +61,14 @@ export default function QuoteMediaViewer({
     );
   }
   const page = (): MediaViewerPage => {
-    const offers = mediaPageOffers({ attachment, message: quote, capabilities: SHARE_ONLY });
+    const now = Date.now();
+    const offers = mediaPageOffers({ attachment, message: quote, capabilities: SHARE_ONLY, now, quoted: true });
     return {
       attachment,
       messageId: quote.id,
       conversationId: quote.conversationId,
       offers,
-      ...(offers.share ? { share: attachmentSendRequest({ attachment, message: quote, mine: false }) } : {}),
+      ...(offers.share ? { share: attachmentSendRequest({ attachment, message: quote, mine: false, now, quoted: true }) } : {}),
     };
   };
   return (

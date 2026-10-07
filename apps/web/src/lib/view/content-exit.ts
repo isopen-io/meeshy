@@ -36,6 +36,13 @@ export type ExitForward =
 
 export type ContentExit = {
   readonly nature: ContentExitNature;
+  /**
+   * Le contenu est LISIBLE tel quel dans le fil — ni voilé, ni à vue unique,
+   * ni supprimé, ni échu. `false` sur tout verdict fermé : une surface qui
+   * s'en sert pour dire « protégé » ne peut pas lire un état ouvert à côté
+   * d'un verdict qui ne l'est pas (`leaves` implique `readable`).
+   */
+  readonly readable: boolean;
   readonly forward: ExitForward;
   /** Le contenu peut quitter Meeshy autrement que par un transfert. */
   readonly leaves: boolean;
@@ -43,7 +50,10 @@ export type ContentExit = {
 
 export type ExitPiece = ContentExitAttachment & { readonly isEncrypted?: boolean | null };
 
-export type ExitMessage = Parameters<typeof protectionOf>[0] & {
+type ProtectionSubject = Parameters<typeof protectionOf>[0];
+
+export type ExitMessage = Omit<ProtectionSubject, 'viewOnceCount'> & {
+  readonly viewOnceCount?: number;
   readonly isEncrypted?: boolean;
   readonly attachments?: ReadonlyArray<ExitPiece | null | undefined> | null;
 };
@@ -52,16 +62,17 @@ const UNAVAILABLE: ExitForward = { allowed: false, reason: 'unavailable' };
 
 export function contentExitOf(message: ExitMessage, now: number): ContentExit {
   const law = contentExitLaw(message);
-  const kind = protectionOf(message, now);
+  const kind = protectionOf({ ...message, viewOnceCount: message.viewOnceCount ?? 0 }, now);
   const gone = kind === 'deleted' || kind === 'expired';
   return {
     nature: law.nature,
+    readable: kind === 'standard',
     forward: law.forward.allowed && gone ? UNAVAILABLE : law.forward,
     leaves: law.exportable && kind === 'standard',
   };
 }
 
-const SEALED: ContentExit = { nature: 'after-read-flame', forward: { allowed: false, reason: 'after-read' }, leaves: false };
+const SEALED: ContentExit = { nature: 'after-read-flame', readable: false, forward: { allowed: false, reason: 'after-read' }, leaves: false };
 
 /**
  * LE VERDICT D'UNE CITATION — FERMÉ quand sa nature n'est pas déclarée.
@@ -110,3 +121,6 @@ export function mediaLeaves(params: {
   const exit = params.source === 'quote' ? quotedExitOf(whole, now) : contentExitOf(whole, now);
   return exit.leaves && !masked(message) && pieceIsOpen(piece);
 }
+
+/** Un média qu'aucun message ne porte (image de commentaire, média de publication) — la loi lue sur la pièce seule. */
+export const loosePieceLeaves = (piece: ExitPiece): boolean => contentExitLaw({ attachments: [piece] }).exportable && pieceIsOpen(piece);

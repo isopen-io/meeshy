@@ -186,3 +186,110 @@ describe('une porte qui rejoue le geste ne contourne pas la loi', () => {
     ]);
   });
 });
+
+/**
+ * LE GESTIONNAIRE, PAS LE BOUTON (#9573) — masquer une entrée ne ferme rien si
+ * son gestionnaire reste ouvert (glissé, raccourci, autre surface, état
+ * périmé). Chaque geste de SORTIE du hook, appelé EN DIRECT sur chaque nature
+ * non ordinaire : rien dans le presse-papiers, aucun atelier, aucune feuille
+ * d'envoi, aucune sélection armée par un transfert interdit.
+ */
+describe('chaque gestionnaire de sortie, appelé en direct, consulte la loi', () => {
+  const written: string[] = [];
+  let realClipboard: PropertyDescriptor | undefined;
+  let realExec: typeof document.execCommand;
+
+  beforeAll(() => {
+    realClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    realExec = document.execCommand;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (text: string) => void written.push(text) },
+    });
+    document.execCommand = () => {
+      written.push('execCommand');
+      return true;
+    };
+  });
+
+  afterAll(() => {
+    if (realClipboard === undefined) Reflect.deleteProperty(navigator, 'clipboard');
+    else Object.defineProperty(navigator, 'clipboard', realClipboard);
+    document.execCommand = realExec;
+  });
+
+  afterEach(() => {
+    written.length = 0;
+  });
+
+  const flush = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))));
+  const pieceOnce = (id: string): Message => of(id, { attachments: [{ isViewOnce: true, isBlurred: false, mimeType: 'image/jpeg' }] as unknown as Message['attachments'] });
+  const undeclared = (id: string): Message => of(id, { expiresAt: new Date(Date.now() + 60_000) });
+
+  const SEALED: readonly (readonly [string, (id: string) => Message, boolean])[] = [
+    ['flamme à durée', timedFlame, true],
+    ['flamme après lecture', afterRead, false],
+    ['vue unique', viewOnce, false],
+    ['pièce à vue unique', pieceOnce, false],
+    ['éphémère sans durée lisible', undeclared, false],
+  ];
+
+  test('témoin de contrôle : un message ordinaire, lui, se copie et s’image', async () => {
+    const { api } = mount([ordinary('m1')]);
+    act(() => api().onMenuAction('m1', 'copy'));
+    await flush();
+    expect(written).toEqual(['texte m1']);
+    act(() => api().onMenuAction('m1', 'export'));
+    expect(api().exportFor).not.toBe(null);
+  });
+
+  SEALED.forEach(([label, make, forwardable]) => {
+    test(`${label} : Copier, Imager, Export rapide, Imager la discussion — aucun effet`, async () => {
+      const { api } = mount([make('x1')]);
+      (['copy', 'export', 'exportQuick', 'exportDiscussion'] as const).forEach((id) => act(() => api().onMenuAction('x1', id)));
+      await flush();
+      expect(written).toEqual([]);
+      expect(api().exportFor).toBe(null);
+      expect(sendSheetStore.getState().request).toBe(null);
+    });
+
+    test(`${label} : traduire puis copier ne copie pas la traduction`, async () => {
+      const { api } = mount([make('x1')]);
+      act(() => api().onPickLanguage('x1', 'en'));
+      act(() => api().onMenuAction('x1', 'copy'));
+      await flush();
+      expect(written).toEqual([]);
+    });
+
+    test(`${label} : « Copier » de la barre de sélection ne copie rien d’elle`, async () => {
+      const messages = [ordinary('m1'), make('x1')];
+      const { api } = mount(messages);
+      select(api, ['m1', 'x1']);
+      act(() => api().onCopySelection(placedOf(messages)));
+      await flush();
+      expect(written).toEqual(['texte m1']);
+    });
+
+    test(`${label} : l’étiquette du menu ne cite pas son texte`, () => {
+      const { api } = mount([make('x1')]);
+      const element = document.createElement('div');
+      element.dataset.row = 'x1';
+      const event = { nativeEvent: new Event('contextmenu'), preventDefault: () => {}, currentTarget: element };
+      act(() => api().longPress.onContextMenu(event as never));
+      expect(api().menuData).toBeDefined();
+      expect(api().menuData?.subjectLabel ?? '').not.toContain('texte x1');
+    });
+
+    if (!forwardable) {
+      test(`${label} : « Transférer » n’arme aucune sélection et la barre n’ouvre aucune feuille`, () => {
+        const messages = [ordinary('m1'), make('x1')];
+        const { api } = mount(messages);
+        act(() => api().onMenuAction('x1', 'forward'));
+        expect(api().selection).toBe(null);
+        select(api, ['m1', 'x1']);
+        act(() => api().onForwardSelection(placedOf(messages)));
+        expect(sendSheetStore.getState().request).toBe(null);
+      });
+    }
+  });
+});

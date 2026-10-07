@@ -140,7 +140,7 @@ export function messageMenuContextOf(
   const composable = exitOffers(exit, 'compose') ? open.findIndex((form) => form === 'image' || form === 'video') : -1;
   return {
     hasText: message.content.trim().length > 0,
-    isProtected: protectionOf(message, input.now) !== 'standard',
+    isProtected: !exit.readable,
     languageCount: 1 + translationsOf(message).length,
     canForward: exitOffers(exit, 'forward'),
     leaves: exitOffers(exit, 'copy'),

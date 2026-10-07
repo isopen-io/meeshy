@@ -89,7 +89,7 @@ describe('discussionCardSubjectOf — la discussion jusqu’au message choisi', 
     const subject = subjectOf(
       [
         line('m1', 1, { attachments: [photo('p1'), photo('p2')] }),
-        line('m2', 2, { attachments: [{ ...photo('p-once'), isViewOnce: true }, photo('p3')] }),
+        line('m2', 2, { attachments: [{ ...photo('p-blur'), isBlurred: true }, photo('p3')] }),
         line('m3', 3, { content: '', attachments: [photo('p4'), photo('p5')] }),
       ],
       'm3',

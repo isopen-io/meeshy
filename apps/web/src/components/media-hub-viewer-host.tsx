@@ -102,13 +102,14 @@ export function MediaHubViewerHost({
           const attachment = viewer.items[index];
           const message = messages[index];
           if (attachment === undefined || message === undefined) return null;
-          const offers = mediaPageOffers({ attachment, message, capabilities });
+          const now = Date.now();
+          const offers = mediaPageOffers({ attachment, message, capabilities, now });
           return {
             attachment,
             messageId: message.id,
             conversationId: message.conversationId,
             offers,
-            ...(offers.share ? { share: attachmentSendRequest({ attachment, message, mine: isMineOf(message, viewerId) }) } : {}),
+            ...(offers.share ? { share: attachmentSendRequest({ attachment, message, mine: isMineOf(message, viewerId), now }) } : {}),
           };
         }}
         {...(deps === undefined ? {} : { deps })}

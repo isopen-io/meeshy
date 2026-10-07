@@ -121,6 +121,15 @@ describe('une citation dont la nature n’est pas déclarée ne sort pas', () =>
     expect(EXIT_ACTIONS.filter((action) => exitOffers(exit, action))).toEqual([]);
   });
 
+  test('le verdict fermé l’est sur TOUS ses champs : rien n’y dit « non protégé »', () => {
+    const exit = quotedExitOf(message(), NOW);
+    expect(exit.readable).toBe(false);
+    expect(exit.leaves).toBe(false);
+    expect(exit.forward.allowed).toBe(false);
+    expect(exit.nature).not.toBe('ordinary');
+    expect('kind' in exit).toBe(false);
+  });
+
   test('avec `effectFlags` servi, la loi juge la citation comme un message', () => {
     expect(quotedExitOf(message({ effectFlags: 0 }), NOW)).toEqual(contentExitOf(message({ effectFlags: 0 }), NOW));
     expect(quotedExitOf(message({ effectFlags: EPHEMERAL, ephemeralDuration: 60 }), NOW).leaves).toBe(false);
