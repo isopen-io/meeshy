@@ -25,6 +25,8 @@ import { UnreadBadge } from './unread-badge';
 import { ConversationStreakMark } from './conversation-streak-mark';
 import { RowActions } from './row-actions';
 
+import '@/styles/lens-row-meta.css';
+
 /**
  * LA LIGNE DE LA LENTILLE — plate, et c'est tout le sujet.
  *
@@ -128,7 +130,8 @@ export type LensRowProps = {
   /**
    * « N (M) 🔥 » (#8906) — l'état d'engagement EFFECTIF de la conversation pour
    * le lecteur (servi + direct, `effectiveEngagementOf`), distribué par
-   * l'écran. Rendu dans le supplément de la rangée ÉLUE seulement.
+   * l'écran. Rendu à côté de l'heure, hors de la rangée ÉLUE, et comme elle
+   * seulement au défilement (#9570).
    */
   engagement?: ConversationEngagementSnapshot | undefined;
   /** Langue de CADRAGE des libellés — l'interface par défaut ; injectable pour les témoins. */
@@ -540,12 +543,22 @@ function LensRowImpl({
               (`shortRelativeTime`), vivante à la minute (`minuteClock`), et
               fondue avec le reste du CHROME sous sourdine (`chromeFade`).
             */}
-            {status.magnified ? null : <ConversationStreakMark snapshot={engagement} now={now} />}
-            {at === undefined ? null : (
-              <span style={{ opacity: chromeFade }}>
-                <LensTime at={at} />
-              </span>
-            )}
+            {/*
+              LA FEUILLE QUI S'EFFACE AU REPOS (#9570) — la marque de points
+              puis l'heure ne paraissent que pendant le défilement (et une fois
+              à l'ouverture), par `data-row-meta` posé sur le défileur hors
+              React (`lib/view/lens-meta-reveal.ts`, `styles/lens-row-meta.css`).
+              Opacité seule : la place reste réservée, le lecteur d'écran lit
+              toujours les deux.
+            */}
+            <span className="lens-row-meta inline-flex shrink-0 items-center gap-2">
+              {status.magnified ? null : <ConversationStreakMark snapshot={engagement} now={now} />}
+              {at === undefined ? null : (
+                <span style={{ opacity: chromeFade }}>
+                  <LensTime at={at} />
+                </span>
+              )}
+            </span>
           </span>
         </Link>
         {/* « REJOINDRE » (H4) — frère du lien, jamais dedans : voir `LensJoinCallButton`. */}
