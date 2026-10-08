@@ -67,6 +67,22 @@ describe('uploadPostMedia — création (§1.5, tus-handler.ts:298-354)', () => 
     expect(recorded[1]!.url).toBe('https://gate.staging.meeshy.me/api/v1/uploads/up-1');
   });
 
+  for (const [name, declared, expected] of [
+    ['note.wav', 'audio/x-wav', 'audio/wav'],
+    ['chanson.mp3', '', 'audio/mpeg'],
+  ] as const) test(`#9693 — ${name} (« ${declared} ») part sous le type de ce qu’il est, ${expected}`, async () => {
+    const recorded: Recorded[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      recorded.push({ method: init?.method ?? 'GET', url: String(input), headers: headersOf(init) });
+      if (init?.method === 'POST') return new Response(null, { status: 201, headers: { Location: '/api/v1/uploads/up-1' } });
+      return new Response(finalBody('pm-1'), { status: 200, headers: { 'Upload-Offset': '4' } });
+    }) as typeof fetch;
+
+    await uploadPostMedia(baseParams({ fetchImpl, file: file(name, declared, [1, 2, 3, 4]) }));
+
+    expect(decodeMetadata(recorded[0]!.headers['Upload-Metadata']!).filetype).toBe(expected);
+  });
+
   test('un nom de fichier UTF-8 (accent, arabe) traverse tel quel — jamais une exception de btoa', async () => {
     const recorded: Recorded[] = [];
     const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {

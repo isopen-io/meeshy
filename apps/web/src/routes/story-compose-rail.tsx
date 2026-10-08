@@ -71,7 +71,7 @@ export function StudioLeadingRail({
           door="sound"
           label={translate(lang, 'story.studio.sound.add')}
           glyph="microphone"
-          accept="audio/*"
+          accept="audio/*,video/mp4"
           onSelect={(file) => onPlace('sound', file)}
           disabled={locked}
         />

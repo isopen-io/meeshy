@@ -539,6 +539,12 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
   '.m4a': 'audio/mp4',
+  // #9693 — sans type média, ces fichiers partaient en octet-stream et SANS
+  // réponse 206 : Safari et la WebView Android refusent alors de les lire.
+  '.aac': 'audio/aac',
+  '.oga': 'audio/ogg',
+  '.opus': 'audio/ogg',
+  '.m4v': 'video/mp4',
 };
 
 /**

@@ -33,8 +33,11 @@ jest.mock('fs', () => ({
   },
 }));
 
+const probedStreams: { value: { video: boolean; audio: boolean } | null } = { value: null };
 const mockMetadataManager = {
-  extractMetadata: jest.fn(async () => ({ duration: 3 })),
+  extractMetadata: jest.fn(async (..._args: unknown[]) => ({ duration: 3 })),
+  probeMediaStreams: jest.fn(async () => probedStreams.value),
+  generateVideoThumbnail: jest.fn(async () => null),
   generateThumbnail: jest.fn(async () => null),
   generateImageVariants: jest.fn(async () => []),
 };
@@ -81,6 +84,7 @@ function webVoiceNote() {
 
 describe('UploadProcessor — un vocal web se normalise en M4A (#8039)', () => {
   beforeEach(() => {
+    probedStreams.value = null;
     ffmpegOutcome.exitCode = 0;
     spawnCalls.length = 0;
     writtenPaths.length = 0;
@@ -132,5 +136,54 @@ describe('UploadProcessor — un vocal web se normalise en M4A (#8039)', () => {
     expect(encrypted.mimeType).toBe('audio/mp4');
     expect(encrypted.fileBuffer.toString()).toBe('normalized-m4a');
     expect(create.mock.calls[0][0].data.mimeType).toBe('audio/mp4');
+  });
+});
+
+const MP4_BYTES = Buffer.concat([Buffer.from([0x00, 0x00, 0x00, 0x20]), Buffer.from('ftypisom\x00\x00\x02\x00isomiso2', 'latin1'), Buffer.alloc(32)]);
+
+function mp4File(filename: string) {
+  return { buffer: MP4_BYTES, filename, mimeType: 'video/mp4', size: MP4_BYTES.length };
+}
+
+describe('UploadProcessor — un MP4 sans image est un son (#9693)', () => {
+  beforeEach(() => {
+    ffmpegOutcome.exitCode = 0;
+    spawnCalls.length = 0;
+    writtenPaths.length = 0;
+    jest.clearAllMocks();
+  });
+
+  it('persiste un MP4 audio seul comme audio/mp4, normalisé en .m4a, sans vignette vidéo', async () => {
+    probedStreams.value = { video: false, audio: true };
+    const { processor, create } = makeProcessor();
+
+    const result = await processor.uploadFile(mp4File('podcast.mp4'), 'user-1');
+
+    const persisted = create.mock.calls[0][0].data;
+    expect(persisted.mimeType).toBe('audio/mp4');
+    expect(String(persisted.filePath)).toMatch(/\.m4a$/);
+    expect(result.mimeType).toBe('audio/mp4');
+    expect(mockMetadataManager.extractMetadata.mock.calls[0][1]).toBe('audio');
+    expect(mockMetadataManager.generateVideoThumbnail).not.toHaveBeenCalled();
+  });
+
+  it('garde une vraie vidéo en video/mp4', async () => {
+    probedStreams.value = { video: true, audio: true };
+    const { processor, create } = makeProcessor();
+
+    await processor.uploadFile(mp4File('clip.mp4'), 'user-1');
+
+    const persisted = create.mock.calls[0][0].data;
+    expect(persisted.mimeType).toBe('video/mp4');
+    expect(String(persisted.filePath)).toMatch(/\.mp4$/);
+  });
+
+  it('garde video/mp4 quand la sonde ne répond pas', async () => {
+    probedStreams.value = null;
+    const { processor, create } = makeProcessor();
+
+    await processor.uploadFile(mp4File('clip.mp4'), 'user-1');
+
+    expect(create.mock.calls[0][0].data.mimeType).toBe('video/mp4');
   });
 });

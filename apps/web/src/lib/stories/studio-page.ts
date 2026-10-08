@@ -303,9 +303,20 @@ export function pageWithSoundPlane(page: StudioPage, plane: StudioPlane): Studio
 /** La porte décide du rôle ; `accept` n'est qu'un CONSEIL au sélecteur natif
  * — ce prédicat est la garde. Un MIME vide (inconnu du navigateur) passe : la
  * passerelle juge les octets (`tus-handler.ts:384-400`). */
+/** Un `.mp4` n'a qu'un type système, `video/mp4`, qu'il porte une image ou
+ * non : la porte SONORE le prend pour un son (#9693). */
+const SOUND_CONTAINER_NAMED_VIDEO = 'video/mp4';
+
+/** Le fichier posé à la porte SONORE part comme un son : un `.mp4` y est
+ * déclaré `audio/mp4` — mêmes octets, que `<audio>` lit et que la passerelle
+ * vérifie par leur boîte `ftyp` (#9693). */
+export function studioSoundFileOf(file: File): File {
+  return file.type === SOUND_CONTAINER_NAMED_VIDEO ? new File([file], file.name, { type: 'audio/mp4', lastModified: file.lastModified }) : file;
+}
+
 export function studioDoorAccepts(door: StudioDoor, mimeType: string): boolean {
   if (mimeType === '') return true;
-  if (door === 'sound') return mimeType.startsWith('audio/');
+  if (door === 'sound') return mimeType.startsWith('audio/') || mimeType === SOUND_CONTAINER_NAMED_VIDEO;
   return mimeType.startsWith('image/') || mimeType.startsWith('video/');
 }
 

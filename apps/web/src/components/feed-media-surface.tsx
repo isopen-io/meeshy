@@ -7,6 +7,7 @@ import type { FeedCardMedia } from '@/lib/feed/card-model';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { coordinateNativeMedia } from '@/lib/view/native-media-coordination';
 
 /**
  * LA SURFACE D'UN MÉDIA — image (ThumbHash peint AVANT toute requête, puis
@@ -78,15 +79,22 @@ export function FeedMediaSurface({ media, playable = false }: { readonly media: 
   if (playable && media.kind === 'audio') {
     const language = currentInterfaceLanguage();
     return (
-      <div className="absolute inset-0 grid place-items-center" style={{ backgroundColor: 'var(--color-ios-card)' }}>
-        {/* `preload="none"` — une page de fil peut porter plusieurs sons ;
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-4" style={{ backgroundColor: 'var(--color-ios-card)' }}>
+        <GlyphSvg glyph={FEED_GLYPHS.waveform} size={72} style={{ color: 'var(--color-on-media-3)' }} />
+        {/* LE SON SE LIT (#9693) — il était monté `sr-only`, sans contrôle ni
+            geste : un glyphe d'onde au-dessus d'un lecteur muet. Le lecteur
+            natif, comme celui d'un son de commentaire (`comment-media.tsx`),
+            entre au coordinateur : un seul média joue à la fois.
+            `preload="none"` — une page de fil peut porter plusieurs sons ;
             aucun n'ouvre de connexion avant que le lecteur ne le demande. */}
-        <audio key={media.src} src={media.src} preload="none" className="sr-only" />
-        <GlyphSvg
-          glyph={FEED_GLYPHS.waveform}
-          size={72}
-          style={{ color: 'var(--color-on-media-3)' }}
-          title={translate(language, 'feed.post.media.audio')}
+        <audio
+          key={media.src}
+          ref={coordinateNativeMedia}
+          src={media.src}
+          controls
+          preload="none"
+          aria-label={translate(language, 'feed.post.media.audio')}
+          className="w-full max-w-xs"
         />
       </div>
     );
