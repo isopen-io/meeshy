@@ -160,10 +160,18 @@ describe('un objectif à la mesure de chacun (#9635)', () => {
 });
 
 describe('hautement récompensé (#9635)', () => {
+  // Un signal qui n'est pas un axe compte quand même les points du geste qu'il observe (#9667) :
+  // commenter le post d'un autre, d'un inconnu, publier un réel.
+  const GESTURE_OF_SIGNAL: Readonly<Record<string, string>> = {
+    'comment-others-post': 'comment.text',
+    'comment-stranger-public-post': 'comment.text',
+    'reel-published': 'content.reel',
+  };
+  // Au plus riche de ses variantes (type de conversation, visibilité) : un défi paie plus que le geste le mieux payé.
   const gesturePoints = (signal: string): number => {
-    const operation = signal.startsWith('axis:') ? signal.slice(5) : '';
-    const rule = (DEFAULT_ENGAGEMENT_SCALE.operations as Record<string, { points: number } | undefined>)[operation];
-    return rule?.points ?? 0;
+    const operation = signal.startsWith('axis:') ? signal.slice(5) : (GESTURE_OF_SIGNAL[signal] ?? '');
+    const rule = (DEFAULT_ENGAGEMENT_SCALE.operations as Record<string, { points: number; variantPoints: Readonly<Record<string, number>> } | undefined>)[operation];
+    return rule === undefined ? 0 : Math.max(rule.points, ...Object.values(rule.variantPoints));
   };
 
   it('chaque mission paie nettement plus que la somme des points de ses gestes', () => {

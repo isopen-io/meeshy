@@ -51,9 +51,9 @@ describe('les défauts du barème', () => {
     expect(ops['content.text_message'].variantPoints).toEqual({ direct: 2, group: 4, public: 6, global: 8, other: 4 });
     expect(ops['content.audio_message']).toMatchObject({ points: 5, cap: 500 });
     expect(ops['tool.reaction']).toMatchObject({ points: 2, cap: 30 });
-    expect(ops['content.reel']).toMatchObject({ points: 199, cap: 10 });
-    expect(ops['content.post'].variantPoints).toEqual({ public: 99, community: 69, friends: 49, other: 0 });
-    expect(ops['content.story'].variantPoints).toEqual({ public: 79, community: 39, friends: 19, other: 0 });
+    expect(ops['content.reel']).toMatchObject({ points: 300, cap: 10 });
+    expect(ops['content.post'].variantPoints).toEqual({ public: 150, community: 100, friends: 70, other: 0 });
+    expect(ops['content.story'].variantPoints).toEqual({ public: 30, community: 20, friends: 10, other: 0 });
     expect(ops['tool.location'].variantPoints).toEqual({ live: 2, static: 1 });
     expect(ops['profile.two_factor']).toMatchObject({ points: 15, multiplied: false });
   });
@@ -195,8 +195,8 @@ describe('pointsForOperation', () => {
   });
 
   it('crédite les points de la variante', () => {
-    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 1, 'public')).toBe(99);
-    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 2, 'friends')).toBe(98);
+    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 1, 'public')).toBe(150);
+    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 2, 'friends')).toBe(140);
     expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 5, 'other')).toBe(0);
     expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'tool.location', 1, 'live')).toBe(2);
   });

@@ -68,21 +68,21 @@ const TEXT_HABIT = { operation: 'content.text_message', ratio: 0.2 } as const;
 
 export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
   // Faire vivre la plateforme
-  { key: 'send-texts', difficulty: 'easy', goal: 'animate', signal: 'axis:content.text_message', baseTarget: 5, minTarget: 1, maxTarget: 15, unitPoints: 12, habit: { operation: 'content.text_message' } },
+  { key: 'send-texts', difficulty: 'easy', goal: 'animate', signal: 'axis:content.text_message', baseTarget: 5, minTarget: 1, maxTarget: 15, unitPoints: 15, habit: { operation: 'content.text_message' } },
   { key: 'send-attachments', difficulty: 'easy', goal: 'animate', signal: 'axis:tool.attachment', baseTarget: 2, minTarget: 1, maxTarget: 6, unitPoints: 16, habit: { operation: 'tool.attachment' } },
   { key: 'react-messages', difficulty: 'easy', goal: 'animate', signal: 'axis:tool.reaction', baseTarget: 5, minTarget: 1, maxTarget: 15, unitPoints: 8, habit: { operation: 'tool.reaction' }, requires: ['contacts'] },
   { key: 'react-posts', difficulty: 'easy', goal: 'animate', signal: 'axis:tool.post_reaction', baseTarget: 5, minTarget: 1, maxTarget: 15, unitPoints: 6, habit: { operation: 'tool.post_reaction' } },
   { key: 'use-stickers', difficulty: 'easy', goal: 'animate', signal: 'axis:tool.sticker', baseTarget: 2, minTarget: 1, maxTarget: 6, unitPoints: 6, habit: { operation: 'tool.sticker' } },
-  { key: 'comment-text', difficulty: 'medium', goal: 'animate', signal: 'comment-others-post', baseTarget: 3, minTarget: 1, maxTarget: 6, unitPoints: 12, habit: { operation: 'comment.text' } },
+  { key: 'comment-text', difficulty: 'medium', goal: 'animate', signal: 'comment-others-post', baseTarget: 3, minTarget: 1, maxTarget: 6, unitPoints: 70, habit: { operation: 'comment.text' } },
   { key: 'publish-story', difficulty: 'medium', goal: 'animate', signal: 'axis:content.story', baseTarget: 1, minTarget: 1, maxTarget: 2, unitPoints: 40, habit: { operation: 'content.story' } },
-  { key: 'publish-post', difficulty: 'medium', goal: 'animate', signal: 'axis:content.post', baseTarget: 1, minTarget: 1, maxTarget: 1, unitPoints: 40 },
+  { key: 'publish-post', difficulty: 'medium', goal: 'animate', signal: 'axis:content.post', baseTarget: 1, minTarget: 1, maxTarget: 1, unitPoints: 220 },
   { key: 'reply-story', difficulty: 'medium', goal: 'animate', signal: 'story-reply', baseTarget: 1, minTarget: 1, maxTarget: 3, unitPoints: 15, requires: ['contacts'] },
   { key: 'reply-conversations', difficulty: 'medium', goal: 'animate', signal: 'reply-distinct-conversations', baseTarget: 3, minTarget: 1, maxTarget: 4, unitPoints: 15, habit: TEXT_HABIT, requires: ['contacts'] },
   { key: 'join-community', difficulty: 'medium', goal: 'animate', signal: 'axis:social.community_joined', baseTarget: 1, minTarget: 1, maxTarget: 1, unitPoints: 15 },
   { key: 'long-chat', difficulty: 'hard', goal: 'animate', signal: 'axis:content.text_message', baseTarget: 10, minTarget: 3, maxTarget: 40, unitPoints: 12, habit: { operation: 'content.text_message' } },
-  { key: 'publish-posts', difficulty: 'hard', goal: 'animate', signal: 'axis:content.post', baseTarget: 2, minTarget: 2, maxTarget: 3, unitPoints: 40, habit: { operation: 'content.post' } },
-  { key: 'publish-reel', difficulty: 'hard', goal: 'animate', signal: 'reel-published', baseTarget: 1, minTarget: 1, maxTarget: 1, unitPoints: 250 },
-  { key: 'voice-comments', difficulty: 'hard', goal: 'animate', signal: 'axis:comment.audio', baseTarget: 2, minTarget: 1, maxTarget: 3, unitPoints: 20, habit: { operation: 'comment.audio' } },
+  { key: 'publish-posts', difficulty: 'hard', goal: 'animate', signal: 'axis:content.post', baseTarget: 2, minTarget: 2, maxTarget: 3, unitPoints: 250, habit: { operation: 'content.post' } },
+  { key: 'publish-reel', difficulty: 'hard', goal: 'animate', signal: 'reel-published', baseTarget: 1, minTarget: 1, maxTarget: 1, unitPoints: 440 },
+  { key: 'voice-comments', difficulty: 'hard', goal: 'animate', signal: 'axis:comment.audio', baseTarget: 2, minTarget: 1, maxTarget: 3, unitPoints: 30, habit: { operation: 'comment.audio' } },
   { key: 'reply-conversations-wide', difficulty: 'hard', goal: 'animate', signal: 'reply-distinct-conversations', baseTarget: 6, minTarget: 2, maxTarget: 8, unitPoints: 15, habit: TEXT_HABIT, requires: ['active-conversations'] },
   { key: 'gold-reply-conversations', difficulty: 'gold', goal: 'animate', signal: 'reply-distinct-conversations', baseTarget: 8, minTarget: 3, maxTarget: 12, unitPoints: 15, habit: TEXT_HABIT, requires: ['active-conversations'] },
   { key: 'gold-replies-received', difficulty: 'gold', goal: 'animate', signal: 'replies-received-distinct-authors', baseTarget: 4, minTarget: 2, maxTarget: 6, unitPoints: 25, requires: ['active-conversations'] },
@@ -92,7 +92,7 @@ export const MISSION_TEMPLATES: readonly MissionTemplate[] = [
   { key: 'write-someone-new', difficulty: 'medium', goal: 'courage', signal: 'axis:conversation.private', baseTarget: 1, minTarget: 1, maxTarget: 3, unitPoints: 20 },
   { key: 'start-conversation', difficulty: 'medium', goal: 'courage', signal: 'conversation-started', baseTarget: 1, minTarget: 1, maxTarget: 2, unitPoints: 25 },
   { key: 'community-hello', difficulty: 'medium', goal: 'courage', signal: 'axis:conversation.community', baseTarget: 1, minTarget: 1, maxTarget: 2, unitPoints: 20, requires: ['communities'] },
-  { key: 'comment-stranger-post', difficulty: 'medium', goal: 'courage', signal: 'comment-stranger-public-post', baseTarget: 1, minTarget: 1, maxTarget: 3, unitPoints: 20 },
+  { key: 'comment-stranger-post', difficulty: 'medium', goal: 'courage', signal: 'comment-stranger-public-post', baseTarget: 1, minTarget: 1, maxTarget: 3, unitPoints: 55 },
 
   // Apprendre les langues
   { key: 'prism-foreign-messages', difficulty: 'medium', goal: 'languages', signal: 'foreign-language-message', baseTarget: 2, minTarget: 1, maxTarget: 6, unitPoints: 15, prism: true, requires: ['multilingual'] },

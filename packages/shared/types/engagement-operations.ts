@@ -15,7 +15,7 @@
  * l'administration.
  */
 
-import { ENGAGEMENT_AXES, type EngagementAxisFamily, type EngagementAxisKey } from './engagement.js';
+import { ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES, type EngagementAxisFamily, type EngagementAxisKey } from './engagement.js';
 
 export const ENGAGEMENT_OPERATION_DOMAINS = [
   'messaging',
@@ -212,14 +212,17 @@ export const ENGAGEMENT_OPERATION_CATALOG: Readonly<Record<EngagementOperationKe
   'social.community_created': repeat('communities', 'social', 5, 'day', 1),
   'social.community_joined': perTarget('communities', 'social', 2),
 
-  'content.post': byVisibility('content', 50, { public: 99, community: 69, friends: 49, other: 0 }),
-  'content.story': byVisibility('content', 20, { public: 79, community: 39, friends: 19, other: 0 }),
-  'content.reel': repeat('publishing', 'content', 199, 'day', 10),
-  'content.status': repeat('publishing', 'content', 2, 'day', 3),
+  // Réel > Post > Commentaire > Story > Humeur, à toute visibilité (#9667,
+  // décision du porteur du 2026-10-08).
+  'content.post': byVisibility('content', 50, { public: 150, community: 100, friends: 70, other: 0 }),
+  'content.story': byVisibility('content', 20, { public: 30, community: 20, friends: 10, other: 0 }),
+  'content.reel': repeat('publishing', 'content', 300, 'day', 10),
+  'content.status': repeat('publishing', 'content', 5, 'day', 3),
   'tool.in_app_edit': repeat('publishing', 'tool', 1, 'none', null),
   'tool.direct_publish': repeat('publishing', 'tool', 1, 'none', null),
-  'comment.text': repeat('publishing', 'comment', 3, 'none', null),
-  'comment.audio': repeat('publishing', 'comment', 3, 'none', null),
+  // Bornés par les limites quotidiennes de gestes (`DEFAULT_PATH_CAPS`), pas par un plafond propre.
+  'comment.text': repeat('publishing', 'comment', 40, 'none', null),
+  'comment.audio': repeat('publishing', 'comment', 40, 'none', null),
 
   // Ni plafond ni portée propres (#9584) : la limite quotidienne de gestes
   // (`DEFAULT_PATH_CAPS`) borne la réaction ET ses points — un second plafond
@@ -268,6 +271,27 @@ export const ENGAGEMENT_OPERATION_CATALOG: Readonly<Record<EngagementOperationKe
     defaults: { points: 0, multiplied: false, cap: null },
   },
 };
+
+/** Le plus qu'UNE action de l'opération rapporte par défaut, toutes variantes confondues. */
+const topDefaultPoints = (definition: EngagementOperationDefinition): number =>
+  Math.max(definition.defaults.points, ...Object.values(definition.defaults.variantPoints ?? {}));
+
+/**
+ * « COMMENT GAGNER » (#9667) : ce qu'un geste de chaque famille rapporte AU
+ * PLUS, avant multiplicateurs — dérivé du catalogue, jamais recopié. Miroir
+ * Swift : `EngagementCatalog.familyTopPoints`.
+ */
+export const ENGAGEMENT_FAMILY_TOP_POINTS: Readonly<Record<EngagementAxisFamily, number>> = Object.fromEntries(
+  ENGAGEMENT_AXIS_FAMILIES.map((family) => [
+    family,
+    Math.max(
+      0,
+      ...Object.values(ENGAGEMENT_OPERATION_CATALOG)
+        .filter((definition) => definition.family === family)
+        .map(topDefaultPoints),
+    ),
+  ]),
+) as Record<EngagementAxisFamily, number>;
 
 export function engagementOperation(key: EngagementOperationKey): EngagementOperationDefinition {
   return ENGAGEMENT_OPERATION_CATALOG[key];
