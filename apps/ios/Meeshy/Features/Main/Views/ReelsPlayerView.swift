@@ -169,7 +169,7 @@ struct ReelsPlayerView: View {
         .sheet(item: $shareableLink) { link in
             // Same `meeshy.me/l/<token>` URL the feed shares — the gateway already
             // recorded the (deduplicated) share + minted the caller's TrackingLink.
-            ShareSheet(activityItems: [link.url])
+            ShareSheet(activityItems: link.activityItems)
         }
         .mediaSaveFlow(mediaSaveCoordinator)
         .postEditCover(item: $editingReel) { reel in
@@ -261,8 +261,8 @@ struct ReelsPlayerView: View {
             defer { Task { @MainActor in shareInFlightIds.remove(reel.id) } }
             if let shortUrl = await viewModel.shareLink(for: reel),
                let url = URL(string: shortUrl) {
-                shareableLink = ShareableLink(url: url)
-            } else if let raw = ShareableLink.fallback(forPostId: reel.id) {
+                shareableLink = ShareableLink(url: url, fileSource: .post(reel))
+            } else if let raw = ShareableLink.fallback(forPostId: reel.id, fileSource: .post(reel)) {
                 shareableLink = raw
             }
         }

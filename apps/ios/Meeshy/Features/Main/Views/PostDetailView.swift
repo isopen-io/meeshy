@@ -198,7 +198,7 @@ struct PostDetailView: View {
                     String(localized: "feed.post.detail.copy_link.success", defaultValue: "Lien copié", bundle: .main)
                 )
             case .presentShareSheet:
-                shareableLink = ShareableLink(url: resolvedUrl)
+                shareableLink = ShareableLink(url: resolvedUrl, fileSource: .post(post))
                 HapticFeedback.light()
             }
         }
@@ -999,7 +999,7 @@ struct PostDetailView: View {
             // Same `meeshy.me/l/<token>` URL that "Copier le lien" copies —
             // the gateway already recorded the share + minted the
             // TrackingLink owned by the current user.
-            ShareSheet(activityItems: [link.url])
+            ShareSheet(activityItems: link.activityItems)
         }
         .postEditCover(post: displayPost, isPresented: $isEditing) {
             if let post = displayPost {

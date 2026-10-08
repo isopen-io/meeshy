@@ -129,12 +129,7 @@ final class StoryPhotoSaveService: ObservableObject {
     /// qu'un job tourne pour la même story est ignoré (le menu reste
     /// atteignable via le long-press pendant l'export).
     func save(story: StoryItem) {
-        let available = StoryExportLanguageResolver.availableLanguages(story: story)
-        let language = StoryExportLanguageResolver.defaultLanguage(
-            available: available,
-            preferred: preferredLanguages()
-        )
-        let languages: [String] = language.map { [$0] } ?? []
+        let languages = exportLanguages(of: story)
         bakeThenSave(jobKey: story.id,
                      slide: story.toRenderableSlide(preferredLanguages: languages),
                      languages: languages,
@@ -187,6 +182,45 @@ final class StoryPhotoSaveService: ObservableObject {
                      stickerMedia: post.media,
                      resolvesIdentity: false,
                      appendsBrandOutro: false)
+    }
+
+    /// **Le MP4 de la scène d'un post, rendu À LA DEMANDE pour la feuille de partage**
+    /// (#9682) — le même rendu que `save(post:)`, sans anneau ni Photos : c'est
+    /// l'activité choisie (Enregistrer la vidéo, Fichiers, AirDrop) qui l'emporte.
+    /// L'appelant possède le fichier temporaire et le jette après usage.
+    func renderSceneFile(of post: FeedPost) async -> URL? {
+        let languages = preferredLanguages()
+        return await bakeFile(slide: Self.renderableSlide(of: post, preferredLanguages: languages),
+                              languages: languages, stickerMedia: post.media, appendsBrandOutro: false)
+    }
+
+    /// Le MP4 d'une story pour la feuille de partage (#9682) — le rendu de
+    /// `save(story:)`, carte de fin comprise, sans l'attente de l'interlude.
+    func renderStoryFile(of story: StoryItem) async -> URL? {
+        let languages = exportLanguages(of: story)
+        return await bakeFile(slide: story.toRenderableSlide(preferredLanguages: languages),
+                              languages: languages, stickerMedia: story.media, appendsBrandOutro: true)
+    }
+
+    private func bakeFile(slide: StorySlide, languages: [String], stickerMedia: [FeedMedia],
+                          appendsBrandOutro: Bool) async -> URL? {
+        await exporter.prepareExport(
+            slide: slide,
+            languages: languages,
+            watermark: MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username),
+            intro: nil,
+            inputs: StoryExportInputs(stickerImageSources: StoryExporter.stickerImageSources(
+                for: slide.effects.stickerObjects, media: stickerMedia)),
+            appendsBrandOutro: appendsBrandOutro,
+            onProgress: nil,
+            onPhaseChange: nil
+        )
+    }
+
+    private func exportLanguages(of story: StoryItem) -> [String] {
+        let available = StoryExportLanguageResolver.availableLanguages(story: story)
+        let language = StoryExportLanguageResolver.defaultLanguage(available: available, preferred: preferredLanguages())
+        return language.map { [$0] } ?? []
     }
 
     static func renderableSlide(of post: FeedPost, preferredLanguages: [String]) -> StorySlide {

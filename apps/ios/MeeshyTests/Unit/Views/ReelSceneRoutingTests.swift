@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import MeeshySDK
 @testable import Meeshy
 
@@ -138,6 +139,48 @@ final class ReelSceneRoutingTests: XCTestCase {
                        "/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a",
                        "le son de fond du réel part dans le MP4")
         XCTAssertEqual(photos.savedVideoURLs.count, 1)
+    }
+
+    // MARK: - Partager emporte aussi le fichier, rendu à la demande (#9682)
+
+    func test_shareFile_onlyFileActivitiesPayTheRender() {
+        XCTAssertTrue(ShareFileActivity.wantsFile(UIActivity.ActivityType.saveToCameraRoll.rawValue))
+        XCTAssertTrue(ShareFileActivity.wantsFile(UIActivity.ActivityType.airDrop.rawValue))
+        XCTAssertTrue(ShareFileActivity.wantsFile("com.apple.DocumentManagerUICore.SaveToFiles"))
+        XCTAssertFalse(ShareFileActivity.wantsFile(UIActivity.ActivityType.message.rawValue))
+        XCTAssertFalse(ShareFileActivity.wantsFile(UIActivity.ActivityType.copyToPasteboard.rawValue))
+        XCTAssertFalse(ShareFileActivity.wantsFile(nil))
+    }
+
+    func test_shareItems_aComposedReel_carriesTheLinkThenATypedVideoSource() throws {
+        let url = try XCTUnwrap(URL(string: "https://meeshy.me/l/abc"))
+        let items = ShareableLink(url: url, fileSource: .post(Self.composedReel())).activityItems
+
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items.first as? URL, url, "le lien part toujours, en premier")
+        let provider = try XCTUnwrap(items.last as? LazyShareFileProvider)
+        XCTAssertEqual((provider.placeholderItem as? URL)?.pathExtension, "mp4",
+                       "le placeholder typé vidéo fait paraître « Enregistrer la vidéo » et « Fichiers »")
+    }
+
+    func test_shareItems_nothingToCarry_staysTheLinkAlone() throws {
+        let url = try XCTUnwrap(URL(string: "https://meeshy.me/l/abc"))
+        XCTAssertEqual(ShareableLink(url: url).activityItems.count, 1)
+        XCTAssertEqual(ShareableLink(url: url, fileSource: .post(Self.textOnly(type: "POST"))).activityItems.count, 1)
+    }
+
+    /// Paresseux : rien n'est rendu à la construction, ni pour une activité de LIEN.
+    func test_shareFileProvider_rendersNothingUntilAFileActivityIsChosen() {
+        let provider = LazyShareFileProvider(placeholderName: "Meeshy-x.mp4", typeIdentifier: "public.mpeg-4") {
+            XCTFail("aucun rendu tant qu'aucune activité de fichier n'est choisie")
+            return nil
+        }
+        let sheet = UIActivityViewController(activityItems: [provider], applicationActivities: nil)
+
+        XCTAssertNil(provider.activityViewController(sheet, itemForActivityType: .message))
+        XCTAssertNil(provider.activityViewController(sheet, itemForActivityType: .copyToPasteboard))
+        XCTAssertEqual(provider.activityViewController(sheet, dataTypeIdentifierForActivityType: .saveToCameraRoll),
+                       "public.mpeg-4")
     }
 
     // MARK: - Fixtures

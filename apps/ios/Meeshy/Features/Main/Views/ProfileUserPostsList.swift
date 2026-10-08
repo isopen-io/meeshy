@@ -269,7 +269,7 @@ struct ProfileUserPostsList: View {
         // batching que `ImpressionBatcher` existe pour faire.
         .onDisappear { Task { await viewModel.flushImpressions() } }
         .sheet(item: $shareableLink) { link in
-            ShareSheet(activityItems: [link.url])
+            ShareSheet(activityItems: link.activityItems)
                 .presentationDetents([.medium, .large])
         }
         .sheet(item: $commentingPost) { post in
@@ -444,7 +444,7 @@ struct ProfileUserPostsList: View {
         // otherwise) so the user is never stuck with nothing to share.
         let resolved = result?.shortUrl ?? "\(ShareableLink.webBaseURL)/feeds/post/\(postId)"
         guard let url = URL(string: resolved) else { return }
-        shareableLink = ShareableLink(url: url)
+        shareableLink = ShareableLink(url: url, fileSource: viewModel.posts.first(where: { $0.id == postId }).map(ShareFileSource.post))
     }
 
     // MARK: - End of content

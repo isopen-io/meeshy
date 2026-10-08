@@ -5,30 +5,6 @@ import MeeshySDK
 import MeeshyUI
 
 
-// MARK: - ShareableLink
-
-/// Identifiable wrapper around the freshly-minted post/story share URL so
-/// SwiftUI's `.sheet(item:)` can drive presentation directly. `URL` doesn't
-/// conform to `Identifiable`; wrapping is the lightest fix without leaking
-/// state booleans across the view tree.
-struct ShareableLink: Identifiable {
-    let id = UUID()
-    let url: URL
-
-    /// Public web origin posts/stories live on. Hardcoded to the production
-    /// host because an external share must always resolve from a third-party
-    /// network — a staging URL would dead-end for the recipient.
-    static let webBaseURL = "https://meeshy.me"
-
-    /// Raw post detail URL used as a graceful fallback when the gateway can't
-    /// mint a TrackingLink (offline, rate-limited, etc.). The recipient still
-    /// lands on the post; only the attribution analytics are skipped.
-    /// Mirrors the `originalUrl` the gateway uses when minting the link.
-    static func fallback(forPostId postId: String) -> ShareableLink? {
-        URL(string: "\(webBaseURL)/feeds/post/\(postId)").map { ShareableLink(url: $0) }
-    }
-}
-
 // MARK: - Feed View
 struct FeedView: View {
     /// **La dernière dépendance qui manquait au MEUBLE** (2026-09-06).
@@ -460,8 +436,8 @@ struct FeedView: View {
                 // call failed, because the raw-URL fallback below almost
                 // always succeeds and the old "undo" branch never ran.
                 postShareDelta[postId, default: 0] += 1
-                shareableLink = ShareableLink(url: url)
-            } else if let raw = ShareableLink.fallback(forPostId: postId) {
+                shareableLink = ShareableLink(url: url, fileSource: viewModel.posts.first(where: { $0.id == postId }).map(ShareFileSource.post))
+            } else if let raw = ShareableLink.fallback(forPostId: postId, fileSource: viewModel.posts.first(where: { $0.id == postId }).map(ShareFileSource.post)) {
                 // `sharePost` already surfaced an error toast; the gateway
                 // never recorded this share, so no counter bump — the user
                 // can still forward the raw (untracked) post link.
@@ -1301,7 +1277,7 @@ struct FeedView: View {
                 // System share sheet — paste/AirDrop/Messages/etc. all receive the
                 // `meeshy.me/l/<token>` URL so every external touchpoint funnels
                 // through the user's TrackingLink for attribution.
-                ShareSheet(activityItems: [link.url])
+                ShareSheet(activityItems: link.activityItems)
             }
             .sheet(item: $reelCommentsPost) { post in
                 // Même feuille de commentaires que les cartes post (`FeedPostCard`) —

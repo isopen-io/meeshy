@@ -55,7 +55,8 @@ struct StoryHeaderView: View {
     /// system share sheet picks it up. Falls back to the raw URL when the
     /// mint fails so the user always has something to share.
     @MainActor
-    private func mintAndShareStory(_ storyId: String) async {
+    private func mintAndShareStory(_ story: StoryItem) async {
+        let storyId = story.id
         let fallback = makeStoryExternalShareURL(storyId)
         do {
             let result = try await PostService.shared.share(
@@ -64,7 +65,7 @@ struct StoryHeaderView: View {
                 generateLink: true
             )
             if let shortUrl = result.shortUrl, let url = URL(string: shortUrl) {
-                shareableStoryLink = ShareableLink(url: url)
+                shareableStoryLink = ShareableLink(url: url, fileSource: .story(story))
                 HapticFeedback.light()
                 return
             }
@@ -72,7 +73,7 @@ struct StoryHeaderView: View {
             // intentional fall-through: try raw URL fallback
         }
         if let fallback {
-            shareableStoryLink = ShareableLink(url: fallback)
+            shareableStoryLink = ShareableLink(url: fallback, fileSource: .story(story))
             HapticFeedback.light()
         } else {
             FeedbackToastManager.shared.showError(
@@ -378,7 +379,7 @@ struct StoryHeaderView: View {
                         // shares a trackable `meeshy.me/l/<token>` URL.
                         if story.isPublic {
                             Button {
-                                Task { await mintAndShareStory(story.id) }
+                                Task { await mintAndShareStory(story) }
                             } label: {
                                 Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
                             }
@@ -506,7 +507,7 @@ struct StoryHeaderView: View {
                         // quatre où le gate `isPublic` dit encore quelque chose.
                         if story.isPublic {
                             Button {
-                                Task { await mintAndShareStory(story.id) }
+                                Task { await mintAndShareStory(story) }
                             } label: {
                                 Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
                             }
@@ -566,7 +567,7 @@ struct StoryHeaderView: View {
         .sheet(item: $shareableStoryLink) { link in
             // Trackable `meeshy.me/l/<token>` URL minted in
             // `mintAndShareStory` — the author owns the analytics.
-            ShareSheet(activityItems: [link.url])
+            ShareSheet(activityItems: link.activityItems)
         }
     }
 
