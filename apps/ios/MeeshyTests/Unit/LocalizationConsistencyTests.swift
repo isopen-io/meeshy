@@ -186,6 +186,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",  // 12
+        // #9612 — ce que la ligne dit d'une session, et l'avis d'une session
+        // fermée par le serveur : épinglés dès leur création.
+        "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsPresentation.swift",
+        "apps/ios/Meeshy/Features/Auth/SessionClosedNoticeView.swift",
         "apps/ios/Meeshy/Features/Main/Views/ConversationListQuickActions.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Components/MediaKindLabel.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift",  // 10

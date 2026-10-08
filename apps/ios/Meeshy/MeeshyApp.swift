@@ -155,6 +155,13 @@ struct MeeshyApp: App {
                                     PendingLinkNotice(isVisible: deepLinkRouter.pendingDeepLink?.opensAfterSignIn == true)
                                 }
                                 .animation(.easeOut(duration: 0.25), value: deepLinkRouter.pendingDeepLink)
+                                // #9612 — la fermeture prononcée par le serveur s'explique AVANT la reconnexion.
+                                .sheet(item: Binding(
+                                    get: { authManager.sessionRevocationNotice },
+                                    set: { if $0 == nil { authManager.acknowledgeSessionRevocationNotice() } }
+                                )) { notice in
+                                    SessionClosedNoticeView(notice: notice) { authManager.acknowledgeSessionRevocationNotice() }
+                                }
                         }
                     }
                     .opacity(launchSplash.phase == .covering ? 0 : 1)

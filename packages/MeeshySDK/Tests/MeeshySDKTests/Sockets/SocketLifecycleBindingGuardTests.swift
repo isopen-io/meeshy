@@ -68,7 +68,7 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
         let block = try XCTUnwrap(listenerBlock(for: "auth:session-revoked", in: source))
 
         XCTAssertTrue(
-            block.contains("AuthManager.shared.handleSessionRevoked()"),
+            block.contains("AuthManager.shared.handleSessionRevoked(reason: reason)"),
             "La révocation doit aller droit à la ré-authentification"
         )
     }

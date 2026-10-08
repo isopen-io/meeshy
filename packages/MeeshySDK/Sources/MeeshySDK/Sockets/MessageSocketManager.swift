@@ -1983,7 +1983,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket = manager?.defaultSocket
         setupEventHandlers()
-        socket?.connect()
+        socket?.connect(withPayload: ClientInfoProvider.socketAuthPayload())
         return .armed
     }
 
@@ -3107,12 +3107,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // `handleUnauthorized()` comme la ligne au-dessus : son
         // `refreshSession(force:)` obtiendrait un JWT neuf — `/auth/refresh` ne
         // verifie pas que la session existe encore — et re-armerait pour 24 h
-        // la session qu'on vient de revoquer. La charge (`code`/`message`/
-        // `reason`) n'est pas decodee : aucune surface iOS ne l'affiche.
-        socket.on("auth:session-revoked") { _, _ in
+        // la session qu'on vient de revoquer. Le `reason` sert l'avis d'avant la reconnexion (#9612).
+        socket.on("auth:session-revoked") { data, _ in
+            let reason = SessionRevocationReason.fromSocketPayload(data)
             Logger.socket.warning("MessageSocket: session revoked — forcing re-authentication")
             Task { @MainActor in
-                AuthManager.shared.handleSessionRevoked()
+                AuthManager.shared.handleSessionRevoked(reason: reason)
             }
         }
 

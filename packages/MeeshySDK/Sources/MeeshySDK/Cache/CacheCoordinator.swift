@@ -54,6 +54,8 @@ public actor CacheCoordinator {
     public let friends: GRDBCacheStore<String, FriendRequestUser>
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
     public let blockedUsers: GRDBCacheStore<String, BlockedUser>
+    /// #9612 — Sécurité > Sessions s'ouvre sur la dernière liste connue. Chiffré : adresses et villes.
+    public let sessions: GRDBCacheStore<String, UserSession>
     public let userSearch: GRDBCacheStore<String, UserSearchResult>
     /// Répertoire — carnet d'adresses synchronisé. Chiffré : ce sont les
     /// contacts de l'utilisateur, la donnée la plus personnelle du cache.
@@ -348,6 +350,7 @@ public actor CacheCoordinator {
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
         self.blockedUsers = GRDBCacheStore(policy: .participants, db: db, namespace: "blocked", encrypted: true)
+        self.sessions = GRDBCacheStore(policy: .participants, db: db, namespace: "sessions", encrypted: true)
         self.userSearch = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "usearch")
         self.phonebook = GRDBCacheStore(policy: .participants, db: db, namespace: "phonebook", encrypted: true)
         self.affiliates = GRDBCacheStore(policy: .participants, db: db, namespace: "affiliates")
@@ -740,7 +743,7 @@ public actor CacheCoordinator {
         [
             conversations, messages, conversationMedia, notifications, feed, stories, participants, profiles,
             comments, statuses, communities, stats, engagementProgress, drafts,
-            callTranscripts, callNetworkJournals, friends, friendRequests, blockedUsers, userSearch,
+            callTranscripts, callNetworkJournals, friends, friendRequests, blockedUsers, sessions, userSearch,
             phonebook, affiliates, callHistory, timeline,
             affiliateTokens, shareLinks, trackingLinks, communityLinks,
             categories, userTags, userPreferences, conversationPreferences

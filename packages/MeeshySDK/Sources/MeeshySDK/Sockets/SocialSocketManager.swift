@@ -545,7 +545,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         socket = manager?.defaultSocket
         setupEventHandlers()
-        socket?.connect()
+        socket?.connect(withPayload: ClientInfoProvider.socketAuthPayload())
         return .armed
     }
 
