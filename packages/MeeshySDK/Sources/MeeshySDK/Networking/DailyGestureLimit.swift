@@ -40,12 +40,7 @@ public struct DailyGestureLimit: Error, Sendable, Equatable {
     /// `2026-10-07T22:00:00.000Z` (avec ou sans millisecondes).
     public static func parseInstant(_ value: String?) -> Date? {
         guard let value, !value.isEmpty else { return nil }
-        let precise = ISO8601DateFormatter()
-        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = precise.date(from: value) { return date }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: value)
+        return WireDate.date(from: value)
     }
 
     private struct Envelope: Decodable {
