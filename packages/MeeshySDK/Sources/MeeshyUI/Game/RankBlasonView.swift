@@ -293,6 +293,21 @@ public struct RankBlasonView: View {
         }
     }
 
+    // MARK: Géométrie partagée
+
+    /// Une étoile à cinq branches : dix sommets, un sur deux rentré à 45 % (les étoiles de Prestige de l'anneau).
+    static func star(center: CGPoint, radius: CGFloat) -> Path {
+        var path = Path()
+        for step in 0..<10 {
+            let angle = CGFloat(step) * .pi / 5 - .pi / 2
+            let r = step % 2 == 1 ? radius * 0.45 : radius
+            let point = CGPoint(x: center.x + r * cos(angle), y: center.y + r * sin(angle))
+            if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
+    }
+
     // MARK: Couronnes et auréoles des tenants
 
     /// Légende couronne ses tenants, Mythe les auréole. Les figures sont des
