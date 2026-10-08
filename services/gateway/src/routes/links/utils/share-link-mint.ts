@@ -14,6 +14,7 @@ import { FOUNDING_MEMBER_PERMISSIONS } from '../../../services/participantRights
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import type { CreateLinkInput } from '../types';
 import { EngagementService } from '../../../services/engagement/EngagementService';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../../utils/recipient-language';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
 
 const engagementLogger = enhancedLogger.child({ module: 'ShareLinkMint' });
@@ -96,6 +97,12 @@ type NewParticipantSeed = {
   readonly type: 'user';
   readonly displayName: string;
   readonly role: 'creator' | 'member';
+  /**
+   * La langue du compte, descendue de son prisme (#9711). Omise, la ligne
+   * prenait le défaut `"en"` du schéma — pour un francophone comme pour un
+   * autre — et tout lecteur de `Participant.language` lisait faux.
+   */
+  readonly language: string;
   /**
    * La forme PARTAGÉE, pas une recopie locale (#6080) : le littéral déclaré ici
    * énumérait sept droits et omettait `canViewHistory`, si bien qu'écrire la
@@ -235,10 +242,13 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
 
     const creatorInfo = await prisma.user.findUnique({
       where: { id: userId },
-      select: { displayName: true, username: true }
+      select: { displayName: true, username: true, ...RECIPIENT_LANG_SELECT }
     });
     const participantsToCreate: NewParticipantSeed[] = [
-      { userId, type: 'user', displayName: creatorInfo?.displayName || creatorInfo?.username || 'User', role: 'creator', permissions: defaultPerms }
+      {
+        userId, type: 'user', displayName: creatorInfo?.displayName || creatorInfo?.username || 'User', role: 'creator',
+        language: recipientLanguage(creatorInfo, 'fr'), permissions: defaultPerms
+      }
     ];
 
     if (input.newConversation.memberIds && input.newConversation.memberIds.length > 0) {
@@ -247,16 +257,17 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
 
       const memberUsers = await prisma.user.findMany({
         where: { id: { in: uniqueMemberIds } },
-        select: { id: true, displayName: true, username: true }
+        select: { id: true, displayName: true, username: true, ...RECIPIENT_LANG_SELECT }
       });
       const memberMap = new Map(memberUsers.map((u) => [u.id, u]));
+      const languageByMemberId = new Map(memberUsers.map((u) => [u.id, recipientLanguage(u, 'fr')]));
       for (const memberId of uniqueMemberIds) {
         const memberUser = memberMap.get(memberId);
         if (memberUser) {
           participantsToCreate.push({
             userId: memberId, type: 'user',
             displayName: memberUser.displayName || memberUser.username || 'User',
-            role: 'member', permissions: defaultPerms
+            role: 'member', language: languageByMemberId.get(memberId) ?? 'fr', permissions: defaultPerms
           });
         }
       }
@@ -288,7 +299,7 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
     const conversationIdentifier = generateConversationIdentifier(input.name || 'Shared Conversation');
     const legacyCreatorInfo = await prisma.user.findUnique({
       where: { id: userId },
-      select: { displayName: true, username: true }
+      select: { displayName: true, username: true, ...RECIPIENT_LANG_SELECT }
     });
     const conversation = await prisma.conversation.create({
       data: {
@@ -301,6 +312,7 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
             userId, type: 'user',
             displayName: legacyCreatorInfo?.displayName || legacyCreatorInfo?.username || 'User',
             role: 'creator',
+            language: recipientLanguage(legacyCreatorInfo, 'fr'),
             // #6080 — même table que la branche `newConversation` ci-dessus :
             // deux littéraux pour le même geste auraient redivergé au premier
             // droit ajouté.

@@ -52,11 +52,16 @@ const PARTIE = {
 function prismaDouble() {
   return {
     user: {
-      findUnique: jest.fn<any>(async (args: any) =>
-        args?.where?.id === MOI
-          ? { id: MOI, blockedUserIds: [], displayName: 'Moi', username: 'moi', deactivatedAt: null }
-          : { id: AUTRE, blockedUserIds: [], displayName: 'Alice', username: 'alice', deactivatedAt: null }
-      ),
+      // Rend ce que le `select` DEMANDE (#9711) — sinon une requête qui ne
+      // ramène pas les colonnes du Prisme passerait au vert.
+      findUnique: jest.fn<any>(async (args: any) => {
+        const ligne: Record<string, unknown> = args?.where?.id === MOI
+          ? { id: MOI, blockedUserIds: [], displayName: 'Moi', username: 'moi', deactivatedAt: null, systemLanguage: 'de', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null }
+          : { id: AUTRE, blockedUserIds: [], displayName: 'Alice', username: 'alice', deactivatedAt: null, systemLanguage: '', regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: null };
+        return args?.select
+          ? Object.fromEntries(Object.keys(args.select).filter((k) => args.select[k]).map((k) => [k, ligne[k]]))
+          : ligne;
+      }),
     },
     friendRequest: {
       findFirst: jest.fn<any>(async () => null),
@@ -103,7 +108,7 @@ async function accepter() {
   expect(res.statusCode).toBe(200);
   expect(prisma.conversation.create).toHaveBeenCalledTimes(1);
   const data = (prisma.conversation.create.mock.calls[0] as any[])[0].data;
-  return data.participants.create as Array<{ userId: string; permissions: Record<string, boolean> }>;
+  return data.participants.create as Array<{ userId: string; language?: string; permissions: Record<string, boolean> }>;
 }
 
 describe("#6080 — la conversation directe d'une amitié acceptée naît OUVERTE", () => {
@@ -143,5 +148,15 @@ describe("#6080 — la conversation directe d'une amitié acceptée naît OUVERT
     const [premier] = await accepter();
 
     expect(premier.permissions.canViewHistory).toBe(true);
+  });
+});
+
+describe("#9711 — la conversation directe d'une amitié pose la langue de CHAQUE ami", () => {
+  it('chacun la sienne, descendue de son prisme — jamais le défaut `"en"` du schéma', async () => {
+    const lignes = await accepter();
+    const langueDe = (id: string) => lignes.find((l) => l.userId === id)?.language;
+
+    expect(langueDe(MOI)).toBe('de');
+    expect(langueDe(AUTRE)).toBe('es');
   });
 });
