@@ -267,10 +267,3 @@ export function parseCanvasDocument(storyEffects: unknown): CanvasDocument | nul
     ...(storyEffects.sound !== undefined ? { sound: storyEffects.sound } : {}),
   };
 }
-
-/** LE fond sonore d'une scène — l'objet `audio` déclaré `isBackground`. Site UNIQUE
- * du prédicat : la piste jouée (`electBackgroundTrack`) et son annonce
- * (`announceBackgroundSound`, #9678) le lisent ici. */
-export function backgroundAudioObject(scene: CanvasScene | undefined): CanvasObject | undefined {
-  return scene?.objects.find((o) => o.kind === 'audio' && o.payload.isBackground === true);
-}

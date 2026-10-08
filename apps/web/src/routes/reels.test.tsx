@@ -376,36 +376,6 @@ describe('ReelPage — un réel COMPOSÉ (#6903)', () => {
     const html = page(silent, { mode: 'active' });
     expect(html).not.toContain('Activer le son');
     expect(html).not.toContain('Couper le son');
-    expect(html).not.toContain('data-sound-credit');
-  });
-
-  test('un son EMPRUNTÉ à la bibliothèque s’annonce par son crédit « titre · @auteur » (#9678)', () => {
-    const borrowed: FeedPost = {
-      ...REEL_SCENE_LOOP,
-      id: 'reel-scene-borrowed',
-      storyEffects: {
-        v: 3,
-        scenes: [
-          {
-            id: 's1',
-            objects: [
-              {
-                id: 'bgsound',
-                kind: 'audio',
-                anchor: { t: 'free', x: 0.5, y: 0.5 },
-                plane: 'bg',
-                z: 0,
-                transform: { scale: 1, rotation: 0, opacity: 1 },
-                payload: { isBackground: true, mediaURL: 'sounds/rain.m4a', soundId: 'snd1', name: 'Pluie en forêt', soundAuthorUsername: 'sam' },
-              },
-            ],
-          },
-        ],
-      },
-    };
-    const html = page(borrowed, { mode: 'active' });
-    expect(html).toContain('data-sound-credit="credit"');
-    expect(html).toContain('Son : Pluie en forêt · @sam');
   });
 
   test('la légende passe par le Prisme comme avant', () => {

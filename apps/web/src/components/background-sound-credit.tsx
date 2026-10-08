@@ -7,7 +7,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
 import { GlyphSvg } from './glyph';
-import { LENS_PREVIEW_GLYPHS } from './glyphs-lens-preview';
+import { FEED_GLYPHS } from './glyphs-feed';
 
 type Measure = (nodes: { readonly box: HTMLElement; readonly content: HTMLElement }) => {
   readonly contentWidth: number;
@@ -65,7 +65,7 @@ export const BackgroundSoundCredit = memo(function BackgroundSoundCredit({
         className={`inline-flex shrink-0 items-center gap-1 ${className}`}
         style={{ color: tint }}
       >
-        <GlyphSvg glyph={LENS_PREVIEW_GLYPHS.musicNote} size={12} />
+        <GlyphSvg glyph={FEED_GLYPHS.musicNote} size={12} />
         <svg data-sound-wave="" aria-hidden="true" width="22" height="10" viewBox="0 0 22 10" fill="none">
           <path d="M1 5 Q3.5 0 6 5 T11 5 T16 5 T21 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
@@ -181,3 +181,8 @@ function samePlan(a: MarqueePlan, b: MarqueePlan): boolean {
   if (a.kind === 'static' || b.kind === 'static') return true;
   return a.shiftPx === b.shiftPx && a.durationS === b.durationS;
 }
+
+/** Chargé À LA DEMANDE par ses hôtes (`lazy`) : importé statiquement par trois
+ * écrans, ce module devenait un nom de plus dans la table de préchargement de
+ * l'entrée, donc un poids sur la première peinture de tout le monde. */
+export default BackgroundSoundCredit;

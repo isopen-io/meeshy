@@ -1,6 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
-import { BackgroundSoundCredit } from './background-sound-credit';
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
@@ -436,8 +435,10 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
                   appartient au contenu de la page, `ReelPageView` d'iOS ; la
                   barre haute fixe ne porte que la sortie). */}
               <div className="flex min-w-0">
+                {/* LE CRÉDIT DU SON (#9678, `ReelPageView+Info.swift`) — sa propre ligne sous le nom. */}
                 <ViewerIdentity
                   nameProbe={{ 'data-reel-author': '' }}
+                  soundDocument={model.scene?.document}
                   identity={{
                     name: model.author.name,
                     initials: model.author.initials,
@@ -448,8 +449,6 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
                   }}
                 />
               </div>
-              {/* LE CRÉDIT DU SON (#9678, `ReelPageView+Info.swift`) — sa propre ligne sous l'identité. */}
-              <BackgroundSoundCredit document={model.scene?.document} language={language} surface="media" />
               {model.text !== undefined ? (
                 <p
                   data-reel-caption

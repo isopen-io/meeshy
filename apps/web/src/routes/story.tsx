@@ -3,7 +3,6 @@ import { useStore } from 'zustand/react';
 import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
 import type { SceneScrubPainter } from '@/components/scene-scrub-bar';
-import { BackgroundSoundCredit } from '@/components/background-sound-credit';
 import { Glyph } from '@/components/glyph';
 import { PrismPastille } from '@/components/message-blocks';
 import { PublicationLanguageBarLazy } from '@/components/publication-language-bar-lazy';
@@ -803,7 +802,7 @@ export default function StoryScreen() {
             onOptionsOpenChange={setOptionsOpen}
             /* LE CRÉDIT DU SON (#9678, vue `2f`) — lu sur la scène QUI JOUE : celle
                de la source pour une story repartagée sans effets propres. */
-            sound={sceneDocument && <BackgroundSoundCredit document={sceneDocument} language={interfaceLanguage} surface="media" />}
+            soundDocument={sceneDocument}
             /* LA PASTILLE DU PRISME (D-99, #7114) — entre l'heure et la croix,
                comme le fil et les commentaires. */
             prism={

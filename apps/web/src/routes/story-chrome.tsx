@@ -7,6 +7,7 @@ import { GLYPHS } from '@/components/glyphs';
 import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from '@/components/viewer-chrome';
 import { ViewerCaption } from '@/components/viewer-caption';
 import { ViewerMenu } from '@/components/viewer-chrome-menu';
+import type { CanvasDocument } from '@/lib/canvas/document';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -49,7 +50,7 @@ export function StoryTopBar({
   onSave,
   onOptionsOpenChange,
   prism,
-  sound,
+  soundDocument,
 }: {
   /** `data-story-author` est la PRISE de mesure du gate de la Lentille : une comparaison d'identifiants, jamais de libellés. */
   readonly authorId: string;
@@ -64,8 +65,8 @@ export function StoryTopBar({
   readonly onOptionsOpenChange?: ((open: boolean) => void) | undefined;
   /** La pastille du Prisme (D-99, #7114) — entre l'heure et le menu, comme le fil et les commentaires ; absente quand rien n'est traduit. */
   readonly prism?: ReactNode;
-  /** Le crédit du son de fond (#9678, vue `2f`) — sa propre ligne, sous le nom. */
-  readonly sound?: ReactNode;
+  /** La scène qui joue : son crédit de son (#9678, vue `2f`) a sa propre ligne, sous le nom. */
+  readonly soundDocument?: CanvasDocument | null;
 }) {
   return (
     <ViewerTopBar
@@ -74,7 +75,7 @@ export function StoryTopBar({
       hidden={hidden}
       above={progress}
       identity={identity}
-      identityMeta={sound}
+      soundDocument={soundDocument}
       exit={{ kind: 'close', label: 'Fermer', onExit: onClose }}
       trailing={
         <>

@@ -545,7 +545,7 @@ emit({
  * `sparkle` (#9570) : le tres petit glyphe de POINTS qui precede « +99 » dans
  * la ligne de metadonnees d'une carte -- ce que le post a rapporte au lecteur.
  */
-const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash', 'arrow-bend-up-left', 'map-pin', 'sparkle'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash', 'arrow-bend-up-left', 'map-pin', 'sparkle', 'music-note'];
 
 emit({
   ids: FEED,

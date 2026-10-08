@@ -1,4 +1,4 @@
-import { backgroundAudioObject, type CanvasDocument, type CanvasObject } from '@/lib/canvas/document';
+import type { CanvasDocument, CanvasObject, CanvasScene } from '@/lib/canvas/document';
 
 /**
  * L'ANNONCE DU SON DE FOND (#9678) — miroir de `BackgroundSoundBadge.announcement(for:)`
@@ -15,7 +15,7 @@ import { backgroundAudioObject, type CanvasDocument, type CanvasObject } from '@
  * Le document (`CanvasV3.sound`) prime pour la provenance, comme
  * `backgroundSound(of:)` ; les métadonnées viennent de l'objet de fond.
  *
- * Module léger (le document seul) : le fil le charge avec chaque carte.
+ * Chargé à la demande avec le crédit (`background-sound-credit.tsx`).
  */
 export type BackgroundSoundAnnouncement =
   | { readonly kind: 'none' }
@@ -39,6 +39,14 @@ function creditText(object: CanvasObject | undefined): string {
   const tag = author === undefined || author === '' ? undefined : `@${author}`;
   const parts = [title, tag].filter((part): part is string => part !== undefined);
   return parts.length === 0 ? GENERIC_CREDIT : parts.join(' · ');
+}
+
+/** Le fond sonore d'une scène — MÊME prédicat que `electBackgroundTrack`
+ * (`background-sound.ts`), que ce module n'importe pas : il tirerait le porteur
+ * et la résolution d'adresse dans le chunk du crédit, et un nom de plus dans la
+ * table de l'entrée (mesuré, #9678). */
+function backgroundAudioObject(scene: CanvasScene): CanvasObject | undefined {
+  return scene.objects.find((o) => o.kind === 'audio' && o.payload.isBackground === true);
 }
 
 type Provenance = 'original' | 'library' | null;
