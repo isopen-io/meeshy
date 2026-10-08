@@ -136,43 +136,48 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
 
     public var body: some View {
         FloatingButtonsSafeAreaReader { geometry in
-            let layout = geometry.layout(feedStorage: leftPositionRaw, menuStorage: rightPositionRaw)
-
-            ZStack {
-                FreeFloatingButton(
-                    center: layout.feed,
-                    buttonSize: FloatingButtonGeometry.buttonSize,
-                    onDrop: { point in
-                        leftPositionRaw = geometry.placement(droppedAt: point, avoiding: layout.menu).storageValue
-                    },
-                    onTap: onLeftTap,
-                    onLongPress: onLeftLongPress,
-                    a11yLabel: leftA11yLabel,
-                    a11yHint: leftA11yHint,
-                    a11yValue: leftA11yValue,
-                    a11yActionName: leftA11yActionName
-                ) {
-                    leftContent
-                }
-
-                FreeFloatingButton(
-                    center: layout.menu,
-                    buttonSize: FloatingButtonGeometry.buttonSize,
-                    onDrop: { point in
-                        rightPositionRaw = geometry.placement(droppedAt: point, avoiding: layout.feed).storageValue
-                    },
-                    onTap: onRightTap,
-                    onLongPress: onRightLongPress,
-                    a11yLabel: rightA11yLabel,
-                    a11yHint: rightA11yHint,
-                    a11yValue: rightA11yValue,
-                    a11yActionName: rightA11yActionName
-                ) {
-                    rightContent
-                }
+            if geometry.isMeasured {
+                buttons(in: geometry)
             }
-            .preference(key: FloatingButtonGeometryKey.self, value: geometry)
         }
+    }
+
+    private func buttons(in geometry: FloatingButtonGeometry) -> some View {
+        let layout = geometry.layout(feedStorage: leftPositionRaw, menuStorage: rightPositionRaw)
+        return ZStack {
+            FreeFloatingButton(
+                center: layout.feed,
+                buttonSize: FloatingButtonGeometry.buttonSize,
+                onDrop: { point in
+                    leftPositionRaw = geometry.placement(droppedAt: point, avoiding: layout.menu).storageValue
+                },
+                onTap: onLeftTap,
+                onLongPress: onLeftLongPress,
+                a11yLabel: leftA11yLabel,
+                a11yHint: leftA11yHint,
+                a11yValue: leftA11yValue,
+                a11yActionName: leftA11yActionName
+            ) {
+                leftContent
+            }
+
+            FreeFloatingButton(
+                center: layout.menu,
+                buttonSize: FloatingButtonGeometry.buttonSize,
+                onDrop: { point in
+                    rightPositionRaw = geometry.placement(droppedAt: point, avoiding: layout.feed).storageValue
+                },
+                onTap: onRightTap,
+                onLongPress: onRightLongPress,
+                a11yLabel: rightA11yLabel,
+                a11yHint: rightA11yHint,
+                a11yValue: rightA11yValue,
+                a11yActionName: rightA11yActionName
+            ) {
+                rightContent
+            }
+        }
+        .preference(key: FloatingButtonGeometryKey.self, value: geometry)
     }
 }
 

@@ -1488,7 +1488,7 @@ struct RootView: View {
             }
         )
         .onPreferenceChange(FloatingButtonGeometryKey.self) { measured in
-            if let measured { floatingGeometry = measured }
+            if let measured, measured.isMeasured { floatingGeometry = measured }
         }
         .zIndex(100)
     }

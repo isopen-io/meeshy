@@ -10,26 +10,28 @@ public nonisolated enum FloatingButtonSide: String, Equatable, Sendable {
     public var opposite: FloatingButtonSide { self == .leading ? .trailing : .leading }
 }
 
-/// La place CHOISIE d'un bouton flottant : un bord, et une hauteur exprimée en
-/// fraction de la plage verticale FIXE de l'écran (0 = tout en haut, sous
-/// l'îlot ; 1 = tout en bas, au-dessus de l'indicateur d'accueil).
+/// La place CHOISIE d'un bouton flottant : un bord, et la hauteur de son
+/// centre en fraction de la hauteur de l'ÉCRAN (0 = bord haut, 1 = bord bas).
 ///
-/// La plage ne dépend que de l'écran et de sa zone sûre — jamais d'une barre
-/// qui apparaît ou disparaît —, donc un bouton posé ne bouge plus tout seul.
+/// La fraction se rapporte à l'écran, jamais à la plage permise : la plage
+/// dépend de la zone sûre MESURÉE, qui peut valoir autre chose au premier
+/// passage de mise en page qu'au suivant. Écrite et relue sur l'écran, une
+/// position revient au point près après une relance ; la plage ne sert qu'à
+/// la borner à l'affichage.
 public nonisolated struct FloatingButtonPlacement: Equatable, Sendable {
     public let side: FloatingButtonSide
-    public let height: CGFloat
+    public let screenFraction: CGFloat
 
-    public init(side: FloatingButtonSide, height: CGFloat) {
+    public init(side: FloatingButtonSide, screenFraction: CGFloat) {
         self.side = side
-        self.height = min(max(height, 0), 1)
+        self.screenFraction = min(max(screenFraction, 0), 1)
     }
 
-    /// La forme persistée : `v2,L,0.4200`. Trois champs, pour qu'une ancienne
-    /// version de l'app (qui attend `x,y`) retombe sur sa position par défaut
-    /// au lieu de mal lire la valeur.
+    /// La forme persistée : `v3,L,0.512345`. Trois champs, pour qu'une
+    /// ancienne version de l'app (qui attend `x,y`) retombe sur sa position par
+    /// défaut au lieu de mal lire la valeur.
     public var storageValue: String {
-        "v2,\(side.rawValue),\(String(format: "%.4f", Double(height)))"
+        "v3,\(side.rawValue),\(String(format: "%.6f", Double(screenFraction)))"
     }
 }
 
@@ -37,6 +39,9 @@ public nonisolated struct FloatingButtonPlacement: Equatable, Sendable {
 public nonisolated enum FloatingButtonStoredPosition: Equatable, Sendable {
     /// La forme actuelle.
     case placement(FloatingButtonPlacement)
+    /// La forme des premiers builds de #9679 (`v2,L,0.4200`) : une fraction de
+    /// la PLAGE permise, relue sur la plage courante.
+    case rangeFraction(side: FloatingButtonSide, fraction: CGFloat)
     /// La forme d'avant #9679 : `x,y` normalisés sur une plage qui réservait
     /// 246 pt en haut et 110 pt en bas (`FloatingButtonSafeZone`), mesurée
     /// avec une zone sûre NULLE. C'est aussi la forme des positions par défaut.
@@ -44,10 +49,14 @@ public nonisolated enum FloatingButtonStoredPosition: Equatable, Sendable {
 
     public static func parse(_ raw: String) -> FloatingButtonStoredPosition? {
         let parts = raw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        if parts.count == 3, parts[0] == "v2",
+        if parts.count == 3,
            let side = FloatingButtonSide(rawValue: parts[1]),
-           let height = Double(parts[2]), height.isFinite {
-            return .placement(FloatingButtonPlacement(side: side, height: CGFloat(height)))
+           let value = Double(parts[2]), value.isFinite {
+            switch parts[0] {
+            case "v3": return .placement(FloatingButtonPlacement(side: side, screenFraction: CGFloat(value)))
+            case "v2": return .rangeFraction(side: side, fraction: CGFloat(min(max(value, 0), 1)))
+            default: return nil
+            }
         }
         guard parts.count == 2,
               let x = Double(parts[0]), let y = Double(parts[1]),
@@ -93,6 +102,10 @@ public nonisolated struct FloatingButtonGeometry: Equatable, Sendable {
         self.safeArea = safeArea
     }
 
+    /// Faux tant que la mise en page n'a pas encore donné l'écran : rien ne se
+    /// pose ni ne se persiste sur une géométrie vide.
+    public var isMeasured: Bool { screenSize.width > 0 && screenSize.height > 0 }
+
     private var half: CGFloat { Self.buttonSize / 2 }
     private static let tolerance: CGFloat = 0.5
 
@@ -114,16 +127,15 @@ public nonisolated struct FloatingButtonGeometry: Equatable, Sendable {
     }
 
     public func center(for placement: FloatingButtonPlacement) -> CGPoint {
-        CGPoint(x: x(for: placement.side), y: minY + (maxY - minY) * placement.height)
+        CGPoint(x: x(for: placement.side), y: clampY(placement.screenFraction * screenSize.height))
     }
 
     /// La place que désigne un point : le bord le plus proche, la hauteur
-    /// bornée à la plage.
+    /// bornée à la plage, exprimée sur l'écran.
     public func placement(at point: CGPoint) -> FloatingButtonPlacement {
         let side: FloatingButtonSide = point.x < screenSize.width / 2 ? .leading : .trailing
-        let range = maxY - minY
-        let height = range > 0 ? (point.y - minY) / range : 0
-        return FloatingButtonPlacement(side: side, height: height)
+        let fraction = screenSize.height > 0 ? clampY(point.y) / screenSize.height : 0
+        return FloatingButtonPlacement(side: side, screenFraction: fraction)
     }
 
     // MARK: Lecture d'une valeur persistée
@@ -135,11 +147,13 @@ public nonisolated struct FloatingButtonGeometry: Equatable, Sendable {
         switch FloatingButtonStoredPosition.parse(raw) ?? FloatingButtonStoredPosition.parse(fallback) {
         case .placement(let placement):
             return center(for: placement)
+        case .rangeFraction(let side, let fraction):
+            return CGPoint(x: x(for: side), y: minY + (maxY - minY) * fraction)
         case .legacy(let x, let y):
             let side: FloatingButtonSide = x < 0.5 ? .leading : .trailing
             return CGPoint(x: self.x(for: side), y: clampY(legacyCenterY(normalized: y)))
         case nil:
-            return center(for: FloatingButtonPlacement(side: .leading, height: 0))
+            return CGPoint(x: x(for: .leading), y: minY)
         }
     }
 

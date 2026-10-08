@@ -29,8 +29,8 @@ final class FloatingButtonPlacementTests: XCTestCase {
     // MARK: - La plage verticale
 
     func test_range_reachesJustUnderTheIslandAndJustAboveTheHomeIndicator() {
-        let top = pro.center(for: FloatingButtonPlacement(side: .leading, height: 0))
-        let bottom = pro.center(for: FloatingButtonPlacement(side: .trailing, height: 1))
+        let top = pro.center(for: FloatingButtonPlacement(side: .leading, screenFraction: 0))
+        let bottom = pro.center(for: FloatingButtonPlacement(side: .trailing, screenFraction: 1))
 
         XCTAssertGreaterThanOrEqual(top.y - half, pro.safeArea.top, "le disque mord l'îlot")
         XCTAssertLessThan(top.y, 120, "le haut de l'écran reste inaccessible (avant : 272)")
@@ -40,8 +40,8 @@ final class FloatingButtonPlacementTests: XCTestCase {
 
     func test_bothSidesAreReachable_atEveryHeight() {
         for height in stride(from: CGFloat(0), through: 1, by: 0.25) {
-            let left = pro.center(for: FloatingButtonPlacement(side: .leading, height: height))
-            let right = pro.center(for: FloatingButtonPlacement(side: .trailing, height: height))
+            let left = pro.center(for: FloatingButtonPlacement(side: .leading, screenFraction: height))
+            let right = pro.center(for: FloatingButtonPlacement(side: .trailing, screenFraction: height))
             XCTAssertEqual(left.y, right.y, accuracy: 0.001)
             XCTAssertEqual(left.x, FloatingButtonGeometry.edgePadding + half, accuracy: 0.001)
             XCTAssertEqual(right.x, 402 - FloatingButtonGeometry.edgePadding - half, accuracy: 0.001)
@@ -51,8 +51,8 @@ final class FloatingButtonPlacementTests: XCTestCase {
     func test_placementAt_snapsToTheNearestEdge_andClampsTheHeight() {
         XCTAssertEqual(pro.placement(at: CGPoint(x: 150, y: 400)).side, .leading)
         XCTAssertEqual(pro.placement(at: CGPoint(x: 260, y: 400)).side, .trailing)
-        XCTAssertEqual(pro.placement(at: CGPoint(x: 10, y: -500)).height, 0)
-        XCTAssertEqual(pro.placement(at: CGPoint(x: 10, y: 5000)).height, 1)
+        XCTAssertEqual(pro.center(for: pro.placement(at: CGPoint(x: 10, y: -500))).y, pro.minY, accuracy: 0.001)
+        XCTAssertEqual(pro.center(for: pro.placement(at: CGPoint(x: 10, y: 5000))).y, pro.maxY, accuracy: 0.001)
     }
 
     func test_aDroppedButton_staysExactlyWhereTheFingerLeftIt() {
@@ -66,19 +66,56 @@ final class FloatingButtonPlacementTests: XCTestCase {
 
     // MARK: - La forme persistée
 
+    /// Recette 2026-10-08 : le Flux posé à 450 pt revenait à 482 pt après une
+    /// relance. La fraction était écrite sur la plage d'une zone sûre et relue
+    /// sur celle d'une autre (mesure transitoire). Écrite sur l'ÉCRAN, elle
+    /// revient au point près, quelle que soit la zone sûre de l'un ou l'autre
+    /// passage.
+    func test_relaunch_bringsTheButtonBackToTheSamePoint_whateverTheSafeAreaMeasured() {
+        let transient = FloatingButtonGeometry(screenSize: pro.screenSize, safeArea: EdgeInsets())
+        let partial = FloatingButtonGeometry(
+            screenSize: pro.screenSize,
+            safeArea: EdgeInsets(top: 126, leading: 0, bottom: 34, trailing: 0)
+        )
+        for writer in [pro, transient, partial] {
+            let stored = writer.placement(at: CGPoint(x: 30, y: 450)).storageValue
+            for reader in [pro, transient, partial, pro] {
+                let center = reader.center(forStorage: stored, default: FloatingButtonGeometry.defaultFeedStorage)
+                XCTAssertEqual(center.y, 450, accuracy: 0.01, "écrit sous \(writer.safeArea.top), relu sous \(reader.safeArea.top)")
+            }
+        }
+    }
+
+    func test_aDropUnderTheSameSafeArea_roundTripsExactly() {
+        for y in stride(from: pro.minY, through: pro.maxY, by: 37) {
+            let stored = pro.placement(at: CGPoint(x: 380, y: y)).storageValue
+            XCTAssertEqual(pro.center(forStorage: stored, default: FloatingButtonGeometry.defaultMenuStorage).y, y, accuracy: 0.01)
+        }
+    }
+
+    func test_nothingIsPlaced_beforeTheScreenIsMeasured() {
+        XCTAssertFalse(FloatingButtonGeometry(screenSize: .zero, safeArea: EdgeInsets()).isMeasured)
+        XCTAssertTrue(pro.isMeasured)
+    }
+
+    func test_storageOfTheFirstBuilds_isStillReadOnTheRange() {
+        XCTAssertEqual(pro.center(forStorage: "v2,L,0.0000", default: FloatingButtonGeometry.defaultFeedStorage).y, pro.minY, accuracy: 0.001)
+        XCTAssertEqual(pro.center(forStorage: "v2,R,1.0000", default: FloatingButtonGeometry.defaultMenuStorage).y, pro.maxY, accuracy: 0.001)
+    }
+
     func test_storage_roundTrips() {
-        let placement = FloatingButtonPlacement(side: .trailing, height: 0.4231)
+        let placement = FloatingButtonPlacement(side: .trailing, screenFraction: 0.4231)
         XCTAssertEqual(FloatingButtonStoredPosition.parse(placement.storageValue), .placement(placement))
     }
 
     func test_storage_isUnreadableAsTheOldPair_soAnOlderAppFallsBackToItsDefault() {
-        let raw = FloatingButtonPlacement(side: .leading, height: 0.5).storageValue
+        let raw = FloatingButtonPlacement(side: .leading, screenFraction: 0.5).storageValue
         XCTAssertNotEqual(raw.split(separator: ",").count, 2)
     }
 
     func test_malformedStorage_fallsBackToTheDefault() {
         let fallback = pro.center(forStorage: FloatingButtonGeometry.defaultMenuStorage, default: FloatingButtonGeometry.defaultMenuStorage)
-        for raw in ["", "garbage", "v2,X,0.5", "v2,L,nan", "1.0"] {
+        for raw in ["", "garbage", "v3,X,0.5", "v9,L,0.5", "v3,L,nan", "1.0"] {
             XCTAssertEqual(pro.center(forStorage: raw, default: FloatingButtonGeometry.defaultMenuStorage), fallback, raw)
         }
     }
@@ -113,27 +150,27 @@ final class FloatingButtonPlacementTests: XCTestCase {
     // MARK: - Les deux boutons ne se recouvrent pas
 
     func test_layout_menuOnTopOfFeed_isShiftedJustBelow() {
-        let stored = FloatingButtonPlacement(side: .leading, height: 0.5).storageValue
+        let stored = FloatingButtonPlacement(side: .leading, screenFraction: 0.5).storageValue
         let layout = pro.layout(feedStorage: stored, menuStorage: stored)
         XCTAssertEqual(layout.menu.x, layout.feed.x, accuracy: 0.001)
         XCTAssertEqual(layout.menu.y - layout.feed.y, FloatingButtonGeometry.minimumSeparation, accuracy: 0.5)
     }
 
     func test_layout_atTheBottom_theMenuGoesAboveInstead() {
-        let stored = FloatingButtonPlacement(side: .trailing, height: 1).storageValue
+        let stored = FloatingButtonPlacement(side: .trailing, screenFraction: 1).storageValue
         let layout = pro.layout(feedStorage: stored, menuStorage: stored)
         XCTAssertEqual(layout.feed.y - layout.menu.y, FloatingButtonGeometry.minimumSeparation, accuracy: 0.5)
     }
 
     func test_layout_oppositeSides_neverMove() {
-        let feed = FloatingButtonPlacement(side: .leading, height: 0.3).storageValue
-        let menu = FloatingButtonPlacement(side: .trailing, height: 0.3).storageValue
+        let feed = FloatingButtonPlacement(side: .leading, screenFraction: 0.3).storageValue
+        let menu = FloatingButtonPlacement(side: .trailing, screenFraction: 0.3).storageValue
         let layout = pro.layout(feedStorage: feed, menuStorage: menu)
-        XCTAssertEqual(layout.menu, pro.center(for: FloatingButtonPlacement(side: .trailing, height: 0.3)))
+        XCTAssertEqual(layout.menu, pro.center(for: FloatingButtonPlacement(side: .trailing, screenFraction: 0.3)))
     }
 
     func test_drop_slightlyAboveTheOther_landsJustAboveIt() {
-        let other = pro.center(for: FloatingButtonPlacement(side: .leading, height: 0.5))
+        let other = pro.center(for: FloatingButtonPlacement(side: .leading, screenFraction: 0.5))
         let placement = pro.placement(droppedAt: CGPoint(x: 40, y: other.y - 10), avoiding: other)
         let center = pro.center(for: placement)
         XCTAssertEqual(placement.side, .leading)
@@ -141,7 +178,7 @@ final class FloatingButtonPlacementTests: XCTestCase {
     }
 
     func test_drop_farFromTheOther_isUntouched() {
-        let other = pro.center(for: FloatingButtonPlacement(side: .leading, height: 0.9))
+        let other = pro.center(for: FloatingButtonPlacement(side: .leading, screenFraction: 0.9))
         let placement = pro.placement(droppedAt: CGPoint(x: 40, y: 200), avoiding: other)
         XCTAssertEqual(pro.center(for: placement).y, 200, accuracy: 0.5)
     }
@@ -151,18 +188,18 @@ final class FloatingButtonPlacementTests: XCTestCase {
     private let ladder: CGFloat = 6 * (46 + 12)
 
     func test_menu_opensDownward_fromTheTop() {
-        let top = pro.center(for: FloatingButtonPlacement(side: .trailing, height: 0))
+        let top = pro.center(for: FloatingButtonPlacement(side: .trailing, screenFraction: 0))
         XCTAssertTrue(pro.menuOpensDownward(from: top, ladderExtent: ladder))
     }
 
     func test_menu_opensUpward_fromTheBottom() {
-        let bottom = pro.center(for: FloatingButtonPlacement(side: .trailing, height: 1))
+        let bottom = pro.center(for: FloatingButtonPlacement(side: .trailing, screenFraction: 1))
         XCTAssertFalse(pro.menuOpensDownward(from: bottom, ladderExtent: ladder))
     }
 
     func test_menu_whenItFitsNeitherWay_opensTowardTheLargerSide() {
-        let nearBottom = se.center(for: FloatingButtonPlacement(side: .trailing, height: 0.6))
-        let nearTop = se.center(for: FloatingButtonPlacement(side: .trailing, height: 0.4))
+        let nearBottom = se.center(for: FloatingButtonPlacement(side: .trailing, screenFraction: 0.6))
+        let nearTop = se.center(for: FloatingButtonPlacement(side: .trailing, screenFraction: 0.4))
         let huge: CGFloat = 1000
         XCTAssertFalse(se.menuOpensDownward(from: nearBottom, ladderExtent: huge))
         XCTAssertTrue(se.menuOpensDownward(from: nearTop, ladderExtent: huge))
