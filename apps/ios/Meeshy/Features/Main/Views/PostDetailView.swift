@@ -291,9 +291,7 @@ struct PostDetailView: View {
                 method: like ? "POST" : "DELETE"
             )
             return true
-        } catch {
-            return false
-        }
+        } catch { DailyGestureLimitNotice.surface(error); return false }
     }
 
     // MARK: - Bookmark / Repost / Share (post detail)
@@ -1329,9 +1327,7 @@ struct PostDetailView: View {
                     authorReachLine(post)
 
                     HStack(spacing: MeeshySpacing.xs) {
-                        Text(post.timestamp, style: .relative)
-                            .font(.caption)
-                            .foregroundColor(theme.textMuted)
+                        PostDateWithPoints(postId: post.id, seed: post.viewerPoints, color: theme.textMuted) { Text(post.timestamp, style: .relative) }
 
                         let flags = buildAvailableFlags()
                         if !flags.isEmpty || post.translations?.isEmpty == false {

@@ -148,8 +148,42 @@ final class ConversationHeaderFlameTests: XCTestCase {
         XCTAssertEqual(pill?.text, "4 · 120")
     }
 
-    func test_engagementPill_withoutARunningStreak_isAbsent() {
-        XCTAssertNil(ConversationEngagementPill(snapshot: engagement(streak: 0), accentColor: "FF0000"))
+    func test_engagementPill_withoutARunningStreak_showsTheTotalAlone_withoutFlame() {
+        let pill = ConversationEngagementPill(snapshot: engagement(streak: 0), accentColor: "FF0000")
+        XCTAssertEqual(pill?.streakDays, 0)
+        XCTAssertEqual(pill?.text, "120")
+        XCTAssertNil(ConversationEngagementPill(snapshot: engagement(total: 0, streak: 0), accentColor: "FF0000"))
+    }
+
+    // MARK: - L'heure et les points de la liste au défilement (#9571)
+
+    func test_rowMeta_isHiddenAtRest_revealedByScroll() {
+        let reveal = LentilleRowMetaReveal()
+        XCTAssertFalse(reveal.isRevealed)
+        reveal.noteScroll()
+        XCTAssertTrue(reveal.isRevealed)
+        reveal.hide()
+        XCTAssertFalse(reveal.isRevealed)
+    }
+
+    func test_rowMeta_opening_revealsOnce_onTheFirstRowOnly() {
+        let reveal = LentilleRowMetaReveal()
+        reveal.noteRowShown()
+        XCTAssertFalse(reveal.isRevealed, "sans ouverture armée, une rangée posée ne révèle rien")
+        reveal.armOpening()
+        reveal.noteRowShown()
+        XCTAssertTrue(reveal.isRevealed)
+        reveal.hide()
+        reveal.noteRowShown()
+        XCTAssertFalse(reveal.isRevealed, "une seule fois par ouverture")
+    }
+
+    func test_rowMeta_fadesOnlyTheTimeAndPoints_andVoiceOverStillSaysThem() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift")
+        XCTAssertTrue(source.contains("LentilleRowMetaFade(alwaysVisible: magnification != nil)"))
+        let shown = ConversationEngagementSnapshot(conversationId: "c", totalPoints: 120, todayPoints: 0, streakDays: 0, day: "2026-10-07")
+        XCTAssertEqual(LentilleConversationRow.spokenPoints(shown), ConversationEngagementPill.totalAccessibilityText(120))
+        XCTAssertNil(LentilleConversationRow.spokenPoints(nil))
     }
 
     func test_totals_areAbbreviated_inTheReadersLocale() {

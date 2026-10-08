@@ -188,12 +188,12 @@ final class ConversationEngagementStoreTests: XCTestCase {
 
     // MARK: - Libellé VoiceOver
 
-    func test_accessibilityText_withoutStreak_omitsTheStreak() {
+    func test_accessibilityText_withoutStreak_saysTheTotalAlone() {
         let text = ConversationEngagementPill.accessibilityText(for: snapshot(total: 42, today: 5, streak: 0))
 
+        XCTAssertEqual(text, ConversationEngagementPill.totalAccessibilityText(42))
         XCTAssertTrue(text.contains("42"))
-        XCTAssertTrue(text.contains("5"))
-        XCTAssertFalse(text.contains("3"))
+        XCTAssertFalse(text.contains("5"))
     }
 
     // MARK: - La série dans la liste (#9025)
@@ -204,8 +204,11 @@ final class ConversationEngagementStoreTests: XCTestCase {
         XCTAssertEqual(mark?.totalText, "120")
     }
 
-    func test_streakMark_noStreak_isNil() {
-        XCTAssertNil(ConversationStreakMark(snapshot: snapshot(streak: 0)))
+    func test_streakMark_noStreak_showsTheTotalAlone_withoutFlame() {
+        let mark = ConversationStreakMark(snapshot: snapshot(total: 120, streak: 0))
+        XCTAssertEqual(mark?.streakDays, 0)
+        XCTAssertEqual(mark?.totalText, "120")
+        XCTAssertNil(ConversationStreakMark(snapshot: snapshot(total: 0, streak: 0)))
         XCTAssertNil(ConversationStreakMark(snapshot: nil))
     }
 
@@ -215,9 +218,71 @@ final class ConversationEngagementStoreTests: XCTestCase {
         XCTAssertTrue(text.contains("120"))
     }
 
-    func test_streakMark_brokenStreak_displayedForToday_isNil() {
+    func test_streakMark_brokenStreak_displayedForToday_fallsBackToTheTotal() {
         let h = makeSUT()
-        let shown = h.sut.displayed(for: "conv-a", seed: snapshot(streak: 4, day: "2026-09-28"), at: noon(30, in: h.calendar))
-        XCTAssertNil(ConversationStreakMark(snapshot: shown))
+        let shown = h.sut.displayed(for: "conv-a", seed: snapshot(total: 42, streak: 4, day: "2026-09-28"), at: noon(30, in: h.calendar))
+        let mark = ConversationStreakMark(snapshot: shown)
+        XCTAssertEqual(mark?.streakDays, 0)
+        XCTAssertEqual(mark?.totalText, "42")
+    }
+
+    // MARK: - Ce qu'un post a rapporté (#9571)
+
+    private func makePointsStore() -> (sut: PostViewerPointsStore,
+                                       announcements: PassthroughSubject<PostEngagementSnapshot, Never>,
+                                       authentication: CurrentValueSubject<Bool, Never>) {
+        let announcements = PassthroughSubject<PostEngagementSnapshot, Never>()
+        let authentication = CurrentValueSubject<Bool, Never>(true)
+        let sut = PostViewerPointsStore(announcements: announcements.eraseToAnyPublisher(),
+                                        authentication: authentication.eraseToAnyPublisher())
+        return (sut, announcements, authentication)
+    }
+
+    func test_postPoints_readThenAnnouncement_rollsToTheAnnouncedValue() {
+        let h = makePointsStore()
+        XCTAssertEqual(h.sut.displayed(postId: "p1", seed: 99), 99)
+        h.sut.noteRead(postId: "p1", viewerPoints: 99)
+        h.sut.noteAnnouncement(PostEngagementSnapshot(postId: "p1", viewerPoints: 102, at: 2_000))
+        XCTAssertEqual(h.sut.displayed(postId: "p1", seed: 99), 102, "la même lecture re-semée ne défait pas l'annonce")
+    }
+
+    func test_postPoints_olderAnnouncement_isIgnored_andALowerNewerOneApplies() {
+        let h = makePointsStore()
+        h.sut.noteAnnouncement(PostEngagementSnapshot(postId: "p1", viewerPoints: 102, at: 2_000))
+        h.sut.noteAnnouncement(PostEngagementSnapshot(postId: "p1", viewerPoints: 99, at: 1_000))
+        XCTAssertEqual(h.sut.displayed(postId: "p1", seed: nil), 102)
+        h.sut.noteAnnouncement(PostEngagementSnapshot(postId: "p1", viewerPoints: 90, at: 3_000))
+        XCTAssertEqual(h.sut.displayed(postId: "p1", seed: nil), 90)
+    }
+
+    func test_postPoints_aNewRead_applies_andAnAbsentFieldKeepsWhatIsKnown() {
+        let h = makePointsStore()
+        h.sut.noteAnnouncement(PostEngagementSnapshot(postId: "p1", viewerPoints: 102, at: 2_000))
+        XCTAssertEqual(h.sut.displayed(postId: "p1", seed: 110), 110)
+        h.sut.noteRead(postId: "p1", viewerPoints: nil)
+        XCTAssertEqual(h.sut.displayed(postId: "p1", seed: nil), 102)
+    }
+
+    func test_postPoints_logout_forgetsEverything() {
+        let h = makePointsStore()
+        h.sut.noteAnnouncement(PostEngagementSnapshot(postId: "p1", viewerPoints: 102, at: 2_000))
+        h.sut.reset()
+        XCTAssertNil(h.sut.displayed(postId: "p1", seed: nil))
+    }
+
+    // MARK: - La limite quotidienne de gestes (#9571)
+
+    func test_dailyLimitNotice_saysTheResetTime_inTheDeviceTimeZone() throws {
+        let resetAt = try XCTUnwrap(DailyGestureLimit.parseInstant("2026-10-07T22:00:00.000Z"))
+        let limit = DailyGestureLimit(gesture: .comment, resetAt: resetAt, limit: 50)
+        let paris = try XCTUnwrap(TimeZone(identifier: "Europe/Paris"))
+        let time = DailyGestureLimitNotice.resetTime(resetAt, locale: Locale(identifier: "fr_FR"), timeZone: paris)
+        XCTAssertEqual(time, "00:00")
+        XCTAssertTrue(DailyGestureLimitNotice.text(for: limit, locale: Locale(identifier: "fr_FR"), timeZone: paris).contains(time))
+    }
+
+    func test_dailyLimitNotice_onlySurfacesADailyLimit() {
+        XCTAssertNil(DailyGestureLimit.from(URLError(.notConnectedToInternet)))
+        XCTAssertNotNil(DailyGestureLimit.from(DailyGestureLimit(gesture: .reaction, resetAt: nil, limit: nil)))
     }
 }

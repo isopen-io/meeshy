@@ -342,10 +342,12 @@ public actor OutboxFlusher {
     /// Sans lui dans cette liste, la ligne brûlait ses cinq tentatives pour
     /// finir au même endroit, une minute de ⏳ plus tard.
     private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 410, 413, 422]
-    private static func isPermanentServerRejection(_ error: Error) -> Bool {
+    static func isPermanentServerRejection(_ error: Error) -> Bool {
         // 403 is surfaced as a distinct `.forbidden` case by APIClient (resource
         // access loss, not a session problem) — a permanent reject all the same.
         if case MeeshyError.forbidden = error { return true }
+        // Limite QUOTIDIENNE de gestes (#9571) : terminale jusqu'à `resetAt`.
+        if DailyGestureLimit.from(error) != nil { return true }
         if case let MeeshyError.server(statusCode, _) = error {
             return permanentRejectionStatusCodes.contains(statusCode)
         }
@@ -553,6 +555,9 @@ public actor OutboxFlusher {
                 // pending-audio/.m4a) would otherwise leak forever. Best-
                 // effort delete before emitting the exhausted outcome.
                 cleanupLocalFiles(for: current)
+                if let limit = DailyGestureLimit.from(error) {
+                    DailyGestureLimitLedger.shared.record(limit, clientMutationId: current.clientMessageId)
+                }
                 onOutcome?(.exhausted(cmid: current.clientMessageId))
                 OfflineQueue.shared.emitRetryExhausted(OfflineRetryExhausted(
                     kind: current.kind,

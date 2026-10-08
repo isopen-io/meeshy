@@ -95,3 +95,34 @@ public struct ConversationEngagementSnapshot: Codable, Hashable, Sendable {
 private extension Character {
     var isASCIIDigit: Bool { isASCII && isNumber }
 }
+
+// MARK: - Ce que la marque et la pastille MONTRENT (#9570, #9571)
+
+/// Miroir de `engagementPillModel` (`apps/web/src/lib/view/engagement-pill.ts`) :
+/// TROIS formes. Une série court ⇒ « 🔥 4 · 1,2 k » ; aucune série ⇒ le cumul
+/// SEUL, sans flamme, à l'encre tertiaire ; cumul nul ou aucun instantané ⇒
+/// rien. L'instantané reçu est déjà relu au jour du lecteur (`forDay`).
+public enum ConversationPointsForm: Equatable, Sendable {
+    case streak(days: Int, total: Int)
+    case total(Int)
+
+    public static func of(_ snapshot: ConversationEngagementSnapshot?) -> ConversationPointsForm? {
+        guard let snapshot, snapshot.totalPoints > 0 else { return nil }
+        guard snapshot.streakDays > 0 else { return .total(snapshot.totalPoints) }
+        return .streak(days: snapshot.streakDays, total: snapshot.totalPoints)
+    }
+
+    public var totalPoints: Int {
+        switch self {
+        case .streak(_, let total): total
+        case .total(let total): total
+        }
+    }
+
+    public var streakDays: Int {
+        switch self {
+        case .streak(let days, _): days
+        case .total: 0
+        }
+    }
+}

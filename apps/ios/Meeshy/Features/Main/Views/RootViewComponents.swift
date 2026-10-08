@@ -217,7 +217,7 @@ struct ThemedFeedOverlay: View {
                 method: like ? "POST" : "DELETE"
             )
             return true
-        } catch { return false }
+        } catch { DailyGestureLimitNotice.surface(error); return false }
     }
 
     /// Hydrates `postBookmarkedIds` from the shared "bookmarks" cache so the

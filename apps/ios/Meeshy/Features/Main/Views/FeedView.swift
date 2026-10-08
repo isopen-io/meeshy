@@ -208,6 +208,9 @@ struct FeedView: View {
                         )
                     }
                 }
+            } catch where DailyGestureLimit.from(error) != nil { // #9571 : terminale, ni REST ni file
+                rollbackPostHeart(postId: postId, wasLiked: wasLiked)
+                DailyGestureLimitNotice.surface(error)
             } catch {
                 // REST fallback when the socket fails (noSocket, timeout,
                 // gateway hiccup). Mirrors the SocialSocketManager call but
@@ -245,16 +248,20 @@ struct FeedView: View {
                         // The outbox itself refused the row (pool not
                         // configured, encoding failure) — only now is rolling
                         // back the optimistic UI honest.
-                        if wasLiked {
-                            postLikedIds.insert(postId)
-                            postLikeDelta[postId, default: 0] += 1
-                        } else {
-                            postLikedIds.remove(postId)
-                            postLikeDelta[postId, default: 0] -= 1
-                        }
+                        rollbackPostHeart(postId: postId, wasLiked: wasLiked)
                     }
                 }
             }
+        }
+    }
+
+    private func rollbackPostHeart(postId: String, wasLiked: Bool) {
+        if wasLiked {
+            postLikedIds.insert(postId)
+            postLikeDelta[postId, default: 0] += 1
+        } else {
+            postLikedIds.remove(postId)
+            postLikeDelta[postId, default: 0] -= 1
         }
     }
 
@@ -269,15 +276,9 @@ struct FeedView: View {
             let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
             for await event in stream {
                 if case .exhausted = event {
-                    if wasLiked {
-                        postLikedIds.insert(postId)
-                        postLikeDelta[postId, default: 0] += 1
-                    } else {
-                        postLikedIds.remove(postId)
-                        postLikeDelta[postId, default: 0] -= 1
-                    }
-                    FeedbackToastManager.shared.showError(
-                        String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main)
+                    rollbackPostHeart(postId: postId, wasLiked: wasLiked)
+                    FeedbackToastManager.shared.showError(DailyGestureLimitNotice.exhaustedText(clientMutationId: cmid)
+                        ?? String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main)
                     )
                 }
             }
@@ -298,9 +299,7 @@ struct FeedView: View {
                 method: like ? "POST" : "DELETE"
             )
             return true
-        } catch {
-            return false
-        }
+        } catch { return false }
     }
 
     // MARK: - Bookmark / Repost / Share toggles (optimistic, ViewModel-backed)

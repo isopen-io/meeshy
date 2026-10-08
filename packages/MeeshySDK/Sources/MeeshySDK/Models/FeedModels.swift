@@ -678,6 +678,10 @@ public struct FeedPost: Identifiable, Sendable {
     /// consumed by the post body renderer (`/l/<token>` rewrite) and the
     /// embedded-video façade destination. Backward-compatible by construction.
     public var trackedLinkMap: [String: String] = [:]
+    /// Les points que ce post a rapportés au lecteur (`APIPost.viewerPoints`),
+    /// `nil` quand le serveur ne l'a pas servi. Persisté par le cache : un
+    /// rendu cache-first montre déjà la marque « · ✦+N » (#9571).
+    public var viewerPoints: Int? = nil
 
     /// Story canvas payload (`StoryEffects`) when this post is a story. `nil`
     /// for normal posts. Mirrors `RepostContent.storyEffects`. Carried on the
@@ -809,7 +813,7 @@ extension FeedPost: Codable {
         case repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
         case storyEffects, audioUrl, location, mentions
-        case visibility, visibilityUserIds, trackedLinkMap
+        case visibility, visibilityUserIds, trackedLinkMap, viewerPoints
     }
 
     public init(from decoder: Decoder) throws {
@@ -863,6 +867,7 @@ extension FeedPost: Codable {
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
         trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
+        viewerPoints = try? c.decodeIfPresent(Int.self, forKey: .viewerPoints)
         let stableId = authorId.isEmpty ? author : authorId
         authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
     }
@@ -905,6 +910,7 @@ extension FeedPost: Codable {
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(mentions, forKey: .mentions)
         if !trackedLinkMap.isEmpty { try c.encode(trackedLinkMap, forKey: .trackedLinkMap) }
+        try c.encodeIfPresent(viewerPoints, forKey: .viewerPoints)
     }
 }
 

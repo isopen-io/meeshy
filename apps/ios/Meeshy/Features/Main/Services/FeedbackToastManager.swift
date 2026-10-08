@@ -132,3 +132,59 @@ final class FeedbackToastManager: ObservableObject {
         }
     }
 }
+
+// MARK: - La limite quotidienne de gestes (#9571)
+
+/// Le message d'un refus `DAILY_COMMENT_LIMIT` / `DAILY_REACTION_LIMIT` : clair,
+/// dans la langue de l'app, avec l'heure de remise à zéro dans le fuseau de
+/// l'appareil (`resetAt`). Le texte servi par la passerelle n'est qu'un repli
+/// français : il n'est jamais montré.
+enum DailyGestureLimitNotice {
+
+    static func text(for limit: DailyGestureLimit, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        guard let resetAt = limit.resetAt else {
+            switch limit.gesture {
+            case .comment:
+                return String(localized: "post.daily_limit.comment.untimed",
+                              defaultValue: "Vous avez atteint votre limite de commentaires pour aujourd'hui.", bundle: .main)
+            case .reaction:
+                return String(localized: "post.daily_limit.reaction.untimed",
+                              defaultValue: "Vous avez atteint votre limite de réactions pour aujourd'hui.", bundle: .main)
+            }
+        }
+        let time = resetTime(resetAt, locale: locale, timeZone: timeZone)
+        switch limit.gesture {
+        case .comment:
+            return String(localized: "post.daily_limit.comment",
+                          defaultValue: "Vous avez atteint votre limite de commentaires pour aujourd'hui. Vous pourrez recommenter à \(time).",
+                          bundle: .main)
+        case .reaction:
+            return String(localized: "post.daily_limit.reaction",
+                          defaultValue: "Vous avez atteint votre limite de réactions pour aujourd'hui. Vous pourrez réagir de nouveau à \(time).",
+                          bundle: .main)
+        }
+    }
+
+    /// L'heure de remise à zéro, courte, dans le fuseau et la langue de l'appareil.
+    static func resetTime(_ date: Date, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    /// Le message d'une mutation que la file a abandonnée sur une limite du jour.
+    static func exhaustedText(clientMutationId: String) -> String? {
+        DailyGestureLimitLedger.shared.take(clientMutationId: clientMutationId).map { text(for: $0) }
+    }
+
+    /// Montre le message quand `error` est une limite du jour ; `true` si c'en était une.
+    @discardableResult
+    static func surface(_ error: Error, toasts: FeedbackToastManager = .shared) -> Bool {
+        guard let limit = DailyGestureLimit.from(error) else { return false }
+        toasts.showError(text(for: limit))
+        return true
+    }
+}

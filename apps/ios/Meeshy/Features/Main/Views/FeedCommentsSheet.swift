@@ -343,8 +343,8 @@ struct CommentsSheetView: View {
             for await event in stream {
                 if case .exhausted = event {
                     rollbackOptimisticComment(tempId: tempId, parentId: parentId)
-                    FeedbackToastManager.shared.showError(
-                        String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main)
+                    FeedbackToastManager.shared.showError(DailyGestureLimitNotice.exhaustedText(clientMutationId: cmid)
+                        ?? String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main)
                     )
                 }
             }
