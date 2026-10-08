@@ -22,7 +22,7 @@ import { GameTouch } from './game-touch';
  *                         filigrane), le palier et le record, le blason et sa
  *                         division ;
  *   2. comment je gagne — UNE puce par famille du barème, triée par poids
- *                         (`earnRules`, dérivée de `ENGAGEMENT_AXIS_WEIGHTS` :
+ *                         (`earnRules`, dérivée de `ENGAGEMENT_FAMILY_TOP_POINTS` :
  *                         régler un poids change le héros sans toucher une
  *                         chaîne) ; un toucher ouvre le carnet des règles à la
  *                         ligne des gains.

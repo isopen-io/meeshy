@@ -186,7 +186,7 @@ const fr = {
   'game.detail.elan.how': 'Chaque geste rapporte des points. Plusieurs familles actives déclenchent un élan.',
   'game.detail.elan.active': 'Active ces jours-ci',
   'game.detail.elan.idle': 'Pas active ces jours-ci',
-  'game.detail.elan.points': '{points} par geste',
+  'game.detail.elan.points': 'jusqu’à {points} par geste',
   'game.detail.player.what': 'C’est un joueur de ton groupe. Tu ne vois que son pseudonyme et ses points de la semaine.',
   'game.detail.fact.tier': 'Dix niveaux font un palier. Chaque palier a son nom et sa couleur.',
   'game.detail.fact.score': 'Ce sont les points que tu as en poche. Ils font ton niveau.',

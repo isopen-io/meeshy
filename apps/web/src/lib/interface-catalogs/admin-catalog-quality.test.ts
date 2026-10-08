@@ -114,6 +114,7 @@ describe('aucune valeur n’est une phrase anglaise ou française recopiée', ()
  */
 const SAME_AS_ENGLISH: Readonly<Record<Language, ReadonlySet<string>>> = {
   es: new Set([
+    'admin.scale.variant.global',
     'admin.password.level.simple',
     'admin.list.no',
     'admin.value.no',
@@ -154,6 +155,7 @@ const SAME_AS_ENGLISH: Readonly<Record<Language, ReadonlySet<string>>> = {
     'admin.agentPanel.trigger.manual',
   ]),
   pt: new Set([
+    'admin.scale.variant.global',
     'admin.stats.reels',
     'admin.stats.stories',
     'admin.convSettings.banner',

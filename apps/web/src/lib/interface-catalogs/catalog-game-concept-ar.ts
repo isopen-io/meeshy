@@ -188,7 +188,7 @@ const ar = {
   'game.detail.elan.how': 'كل إجراء يمنح نقاطًا. عدة فئات نشطة تفعّل اندفاعًا.',
   'game.detail.elan.active': 'نشطة هذه الأيام',
   'game.detail.elan.idle': 'غير نشطة هذه الأيام',
-  'game.detail.elan.points': '{points} لكل إجراء',
+  'game.detail.elan.points': 'حتى {points} لكل إجراء',
   'game.detail.player.what': 'لاعب من مجموعتك. لا ترى إلا اسمه المستعار ونقاط أسبوعه.',
   'game.detail.fact.tier': 'عشرة مستويات تكوّن مرحلة. لكل مرحلة اسمها ولونها.',
   'game.detail.fact.score': 'هذه نقاطك الحالية. منها يُحسب مستواك.',

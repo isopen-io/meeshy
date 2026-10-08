@@ -188,7 +188,7 @@ const en = {
   'game.detail.elan.how': 'Each action earns points. Several active families trigger a boost.',
   'game.detail.elan.active': 'Active these days',
   'game.detail.elan.idle': 'Not active these days',
-  'game.detail.elan.points': '{points} per action',
+  'game.detail.elan.points': 'up to {points} per action',
   'game.detail.player.what': 'A player in your group. You only see their nickname and their points this week.',
   'game.detail.fact.tier': 'Ten levels make a tier. Each tier has its name and its colour.',
   'game.detail.fact.score': 'These are the points you hold. They make your level.',

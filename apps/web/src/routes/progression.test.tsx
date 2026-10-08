@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES, ENGAGEMENT_AXIS_WEIGHTS } from '@meeshy/shared/types/engagement';
+import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import { ENGAGEMENT_FAMILY_TOP_POINTS } from '@meeshy/shared/types/engagement-operations';
 import { axesByFamily, resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
@@ -130,14 +131,13 @@ describe('le hub — un utilisateur à mi-chemin', () => {
   });
 
   /**
-   * Le barème est DÉRIVÉ de `ENGAGEMENT_AXIS_WEIGHTS`. Ce témoin le vérifie en
-   * cherchant les poids RÉELS : s'il les recopiait, il passerait au vert sur
-   * une énumération figée, c'est-à-dire sur le défaut qu'il doit attraper.
+   * Le barème est DÉRIVÉ du catalogue des opérations (`ENGAGEMENT_FAMILY_TOP_POINTS`,
+   * #9667) : ce qu'un geste de chaque famille rapporte AU PLUS. Ce témoin cherche
+   * les valeurs RÉELLES : les recopier passerait au vert sur une énumération figée.
    */
-  test('le hero du niveau ÉNUMÈRE comment gagner, avec les poids du catalogue', () => {
+  test('le hero du niveau ÉNUMÈRE comment gagner, avec les points du catalogue', () => {
     expect(html).toContain('Comment gagner des points');
-    const poids = [...new Set(Object.values(ENGAGEMENT_AXIS_WEIGHTS))];
-    for (const p of poids) expect(html).toContain(`+${p}`);
+    for (const p of Object.values(ENGAGEMENT_FAMILY_TOP_POINTS)) expect(html).toContain(`jusqu’à\u00a0+${p}`);
   });
 
   test('le hero du niveau dit le prix d\'une Meesh, servi par le serveur', () => {

@@ -188,7 +188,7 @@ const de = {
   'game.detail.elan.how': 'Jede Aktion bringt Punkte. Mehrere aktive Familien lösen einen Schwung aus.',
   'game.detail.elan.active': 'In diesen Tagen aktiv',
   'game.detail.elan.idle': 'In diesen Tagen nicht aktiv',
-  'game.detail.elan.points': '{points} pro Aktion',
+  'game.detail.elan.points': 'bis zu {points} pro Aktion',
   'game.detail.player.what': 'Ein Spieler deiner Gruppe. Du siehst nur sein Pseudonym und seine Wochenpunkte.',
   'game.detail.fact.tier': 'Zehn Level bilden eine Stufe. Jede Stufe hat ihren Namen und ihre Farbe.',
   'game.detail.fact.score': 'Das sind die Punkte, die du hast. Sie bestimmen dein Level.',

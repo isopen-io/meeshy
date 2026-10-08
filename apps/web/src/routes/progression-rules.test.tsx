@@ -25,6 +25,11 @@ describe('les huit règles', () => {
     for (const rule of gameRules('fr')) expect(text).toContain(rule.body);
   });
 
+  test('la première règle dit que les limites comptent les gestes, jamais les points (porteur, 2026-10-08)', () => {
+    expect(gameRules('fr')[0]?.body).toContain('Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte.');
+    expect(text).toContain('Les limites comptent tes gestes, jamais tes points');
+  });
+
   test('c’est une liste numérotée : le lecteur d’écran annonce « 3 sur 8 »', () => {
     expect(body).toContain('<ol');
     expect(body.match(/<li/g)?.length).toBeGreaterThanOrEqual(8);

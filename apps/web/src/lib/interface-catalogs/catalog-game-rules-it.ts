@@ -3,7 +3,7 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const it = {
   'game.rules.1.title': 'Ogni gesto conta',
-  'game.rules.1.body': 'Scrivere, parlare, pubblicare, reagire, invitare: ogni azione utile fa guadagnare punti.',
+  'game.rules.1.body': 'Scrivere, parlare, pubblicare, reagire, invitare: ogni azione utile fa guadagnare punti. I limiti contano i tuoi gesti, mai i tuoi punti: bonus, Fiamma ed eventi aumentano ciò che ogni gesto fa guadagnare.',
   'game.rules.2.title': 'I punti fanno il livello',
   'game.rules.2.body': '100 livelli in 10 fasce. Ogni livello richiede un po’ più del precedente.',
   'game.rules.3.title': 'Si coniano Meesh',

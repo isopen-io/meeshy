@@ -188,7 +188,7 @@ const pt = {
   'game.detail.elan.how': 'Cada gesto rende pontos. Várias famílias ativas ativam um impulso.',
   'game.detail.elan.active': 'Ativa nestes dias',
   'game.detail.elan.idle': 'Não ativa nestes dias',
-  'game.detail.elan.points': '{points} por gesto',
+  'game.detail.elan.points': 'até {points} por gesto',
   'game.detail.player.what': 'É um jogador do seu grupo. Você só vê o pseudônimo e os pontos da semana dele.',
   'game.detail.fact.tier': 'Dez níveis formam uma faixa. Cada faixa tem seu nome e sua cor.',
   'game.detail.fact.score': 'São os pontos que você tem. Eles formam o seu nível.',

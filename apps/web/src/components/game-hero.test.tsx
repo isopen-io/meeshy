@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { ENGAGEMENT_AXIS_WEIGHTS } from '@meeshy/shared/types/engagement';
+import { ENGAGEMENT_FAMILY_TOP_POINTS } from '@meeshy/shared/types/engagement-operations';
 import type { GameBlock } from '@meeshy/shared/types/game';
 import { gloryLadder } from '@meeshy/shared/utils/game/glory';
 
@@ -113,23 +113,22 @@ describe('comment gagner — dérivé du barème', () => {
   test('une puce par famille, de la plus généreuse à la plus modeste', () => {
     const chips = [...page.matchAll(/data-game-earn-chip="([a-z]+)"/g)].map((m) => m[1]);
     expect(chips).toEqual(earnRules().map((rule) => rule.family));
-    expect(chips).toEqual(['content', 'social', 'conversation', 'comment', 'tool']);
+    expect(chips).toEqual(['content', 'comment', 'social', 'conversation', 'tool']);
   });
 
   test('chaque puce dit son nom et ses points, tirés du barème', () => {
     const body = text(page);
     for (const rule of earnRules()) expect(body).toContain(`+${rule.points}`);
-    expect(body).toContain('Contenu');
-    expect(body).toContain('+9');
-    expect(ENGAGEMENT_AXIS_WEIGHTS['content.post']).toBe(9);
+    expect(body).toContain('Contenu jusqu’à +300');
+    expect(ENGAGEMENT_FAMILY_TOP_POINTS.content).toBe(300);
   });
 
   test('régler un poids change ce que le héros énumère, sans toucher une chaîne', () => {
-    const rules = earnRules({ ...ENGAGEMENT_AXIS_WEIGHTS, 'comment.text': 20 });
+    const rules = earnRules({ ...ENGAGEMENT_FAMILY_TOP_POINTS, comment: 500 });
     const markup = html({}, { rules });
     const chips = [...markup.matchAll(/data-game-earn-chip="([a-z]+)"/g)].map((m) => m[1]);
     expect(chips[0]).toBe('comment');
-    expect(text(markup)).toContain('+20');
+    expect(text(markup)).toContain('+500');
   });
 
   /* Les puces menaient au carnet des règles ; depuis #9563 (amendement n° 2) chaque famille se touche et ouvre SES précisions. */
@@ -141,7 +140,7 @@ describe('comment gagner — dérivé du barème', () => {
   });
 
   test('chaque puce se lit en entier et mesure 44 points', () => {
-    expect(text(page)).toContain('Contenu +9');
+    expect(text(page)).toContain('Contenu jusqu’à +300');
     expect(page).toMatch(/data-game-earn-chip="content"[^>]*min-height:44px/);
   });
 });
