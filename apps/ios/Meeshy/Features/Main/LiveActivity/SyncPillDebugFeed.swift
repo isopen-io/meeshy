@@ -19,7 +19,15 @@ import MeeshySDK
 /// ```
 ///
 /// En Release, `items` et `isOffline` rendent leur source telle quelle.
-enum SyncPillDebugFeed {
+///
+/// **`nonisolated`, et ce n'est pas décoratif** : la file émet hors du fil
+/// principal (observation GRDB), et `items`/`isOffline` composent AVANT le
+/// `receive(on: .main)` de leurs consommateurs. Sous l'isolation MainActor par
+/// défaut de la cible, une fermeture `map` écrite ici était inférée
+/// `@MainActor` — Swift 6 y pose une vérification d'exécuteur, et l'app
+/// trappait au lancement (CI 37828648127, « signal trap while preparing to run
+/// tests »).
+nonisolated enum SyncPillDebugFeed {
     static func items(_ base: AnyPublisher<[OutboxUIItem], Never>) -> AnyPublisher<[OutboxUIItem], Never> {
         #if DEBUG
         return base.combineLatest(fakeItems).map { $0 + $1 }.eraseToAnyPublisher()
@@ -43,10 +51,11 @@ enum SyncPillDebugFeed {
         var darwinName: String { "me.meeshy.debug.syncpill.\(rawValue)" }
     }
 
-    private static let fakeItems = CurrentValueSubject<[OutboxUIItem], Never>([])
-    private static let forcedOffline = CurrentValueSubject<Bool, Never>(false)
-    private static var isArmed = false
+    private nonisolated(unsafe) static let fakeItems = CurrentValueSubject<[OutboxUIItem], Never>([])
+    private nonisolated(unsafe) static let forcedOffline = CurrentValueSubject<Bool, Never>(false)
+    @MainActor private static var isArmed = false
 
+    @MainActor
     static func arm() {
         guard !isArmed else { return }
         isArmed = true
@@ -70,6 +79,7 @@ enum SyncPillDebugFeed {
         }
     }
 
+    @MainActor
     static func play(_ scenario: Scenario) {
         switch scenario {
         case .sending:
