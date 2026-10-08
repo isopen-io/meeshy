@@ -85,12 +85,12 @@ enum GameRulesAtlas {
         (TreasuryTierKey.allCases.firstIndex(of: tier) ?? 0) + 1
     }
 
-    /// Les onze blasons : dix rangs en trois divisions, puis Mythe.
+    /// Les onze blasons : dix rangs en cinq divisions (V → I), puis Mythe (#9636).
     static let ranks: [GloryRank] = GloryRank.allCases
 
-    /// La division sous laquelle le blason se montre : la plus basse (III) — Mythe n'en a pas.
-    static func division(of rank: GloryRank) -> GloryDivision? {
-        rank == .mythe ? nil : .iii
+    /// La division sous laquelle le blason se montre : la plus basse (V, une encoche) — Mythe n'en a pas.
+    static func division(of rank: GloryRank) -> GloryDivision5? {
+        rank == .mythe ? nil : .v
     }
 
     /// Les cinq formes de la Flamme.
@@ -241,8 +241,8 @@ enum GameAtlasCopy {
         }
     }
 
-    /// Mythe est un rang à part : les cent Légendes les plus glorieuses.
+    /// Mythe est un rang à part : cent places, aux cent premiers qui atteignent 1 000 000 de Gloire (#9636).
     static var mythRank: String {
-        String(localized: "game.atlas.ranks.myth", defaultValue: "Les 100 Légendes les plus glorieuses", bundle: .main)
+        String(localized: "game.atlas.ranks.myth", defaultValue: "Les 100 premiers à atteindre 1 000 000 de Gloire", bundle: .main)
     }
 }

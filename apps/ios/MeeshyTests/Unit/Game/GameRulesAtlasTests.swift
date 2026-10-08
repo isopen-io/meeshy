@@ -48,7 +48,7 @@ final class GameRulesAtlasTests: XCTestCase {
     func test_elevenBlasons_andMythHasNoDivision() {
         XCTAssertEqual(GameRulesAtlas.ranks.count, 11)
         XCTAssertNil(GameRulesAtlas.division(of: .mythe))
-        XCTAssertEqual(GameRulesAtlas.division(of: .voix), .iii)
+        XCTAssertEqual(GameRulesAtlas.division(of: .voix), .v)
     }
 
     func test_fiveFlames_eightLeagues() {

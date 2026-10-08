@@ -30,8 +30,8 @@ struct GameElementEmblemView: View {
             ProgressionConceptEmblem(concept: concept, game: nil, size: size)
         case .tier(let tier):
             TierEmblemView(tier: tier, knockout: theme.backgroundPrimary)
-        case .rank(let rank, let division):
-            RankBlasonView(rank: rank, division: division, title: GameCopy.rankName(rank))
+        case .rank(let rank, let division, let mythic):
+            RankBlasonView(rank: rank, division5: division, mythic: mythic, title: GameCopy.rankName(rank))
         case .coin(let edition):
             MeeshCoinView(face: .obverse, edition: edition)
         case .flame(let form):

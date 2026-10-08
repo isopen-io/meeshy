@@ -301,4 +301,22 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertTrue(rendu.identifiers.contains("game.element." + detail.id), "l'élément n'est pas un bouton de précisions : \(rendu.identifiers)")
         XCTAssertTrue(opened.isEmpty, "rien ne s'ouvre sans toucher")
     }
+
+    // MARK: - Le rang (#9636)
+
+    func test_rank_readsTheFiveDivisions_andTheServedMythSeat() {
+        let voixV = GameBlock.Glory(glory: 6000, rank: .voix, division: .iii, division5: .v,
+                                    next: GloryStep(rank: .voix, division: .iii, division5: .iv, minGlory: 7800),
+                                    gloryMissing: 1800, progress: 0)
+        let detail = GameElementDetails.rank(voixV)
+        XCTAssertEqual(detail.name, "\(GameCopy.rankName(.voix)) V")
+        XCTAssertEqual(detail.emblem, .rank(.voix, .v, nil))
+        XCTAssertEqual(detail.key, "voix.5")
+
+        let seat = MythicSeatRef(number: 42, edition: 57)
+        let myth = GameElementDetails.rank(GameBlock.Glory(glory: 1_000_000, rank: .mythe, division: nil, next: nil,
+                                                           gloryMissing: nil, progress: 1, mythic: seat))
+        XCTAssertEqual(myth.name, GameCopy.mythicSeatLabel(seat: 42))
+        XCTAssertEqual(myth.emblem, .rank(.mythe, nil, seat))
+    }
 }

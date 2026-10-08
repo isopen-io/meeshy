@@ -125,7 +125,8 @@ enum GameDetailFactKey: String, CaseIterable, Equatable {
 enum GameElementEmblem: Equatable {
     case concept(ProgressionConcept)
     case tier(LevelTierKey)
-    case rank(GloryRank, GloryDivision?)
+    /// Le rang, sa division V–I (`nil` pour Mythe) et la place servie du Mythe (#9636).
+    case rank(GloryRank, GloryDivision5?, MythicSeatRef?)
     case coin(MeeshEdition)
     case flame(FlameFormKey?)
     case chest(open: Bool)
@@ -462,12 +463,12 @@ enum GameElementDetails {
     static func rank(_ glory: GameBlock.Glory) -> GameElementDetail {
         let missing: String = glory.gloryMissing.map { " · " + ConceptText.chipMissing(count($0)) } ?? ""
         let next: ProgressionConceptFact? = glory.next.map {
-            fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division: $0.division) + missing)
+            fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division5: $0.shownDivision) + missing)
         }
         return GameElementDetail(
-            kind: .rank, key: glory.rank.rawValue + (glory.division.map { ".\($0.rawValue)" } ?? ""),
-            emblem: .rank(glory.rank, glory.division),
-            name: GameCopy.rankLabel(glory.rank, division: glory.division),
+            kind: .rank, key: glory.rank.rawValue + (glory.shownDivision.map { ".\($0.rawValue)" } ?? ""),
+            emblem: .rank(glory.rank, glory.shownDivision, glory.mythicSeat),
+            name: GameCopy.rankLabel(glory),
             status: .value(String(localized: "game.rank.glory", defaultValue: "Gloire \(count(glory.glory))", bundle: .main),
                            progress: glory.next == nil ? nil : glory.progress),
             facts: [next].compactMap { $0 },

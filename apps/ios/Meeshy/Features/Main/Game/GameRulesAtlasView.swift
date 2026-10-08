@@ -157,7 +157,7 @@ struct GameRulesAtlasView: View {
                 rank.minGlory.map { String(localized: "game.rank.glory", defaultValue: "Gloire \(GameCopy.formatCount($0))", bundle: .main) }
                     ?? GameAtlasCopy.mythRank
             ) {
-                RankBlasonView(rank: rank, division: GameRulesAtlas.division(of: rank), title: GameCopy.rankName(rank), figures: .standard)
+                RankBlasonView(rank: rank, division5: GameRulesAtlas.division(of: rank), title: GameCopy.rankName(rank), figures: .standard)
                     .frame(width: 84, height: 77)
             }
         }
