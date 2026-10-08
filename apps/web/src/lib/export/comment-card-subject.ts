@@ -1,8 +1,7 @@
 import type { FeedMedia } from '@/lib/api/feed-pages';
 import type { PostComment } from '@/lib/api/publication-comments';
-import { electAudio } from '@/lib/view/media';
 
-import { authoredBy, cardMediaOf, maskedByEffects, mediaAuthorOf, type MessageCardMediaItem, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
+import { authoredBy, maskedByEffects, mediaAuthorOf, servedCardMediaOf, type CardAudioPrism, type MessageCardMediaItem, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
 
 /**
  * **UN COMMENTAIRE S'IMAGE COMME UN MESSAGE** (#8693) — même carte, même
@@ -17,32 +16,11 @@ import { authoredBy, cardMediaOf, maskedByEffects, mediaAuthorOf, type MessageCa
  */
 
 /**
- * LES MÉDIAS D'UN COMMENTAIRE SUR SA CARTE (#9687) — un VOCAL part dans la
- * piste du texte SERVI : `electAudio` élit la transcription PUIS reçoit sa
- * langue pour élire la piste, d'UNE seule descente (CLAUDE.md § Prisme,
- * cycle 128). `prism: null` — la rangée montre l'original : son vocal original.
+ * LES MÉDIAS D'UN COMMENTAIRE SUR SA CARTE (#9687) — la même élection que la
+ * carte d'un message (`servedCardMediaOf`). `prism: null` — la rangée montre
+ * l'original : son vocal original.
  */
-export function commentCardMediaOf(
-  media: readonly FeedMedia[] | null | undefined,
-  prism: { readonly readerLanguages: readonly string[]; readonly fallbackLanguage: string } | null,
-): readonly MessageCardMediaItem[] {
-  return cardMediaOf(media).map((item) => {
-    const piece = media?.find((candidate) => candidate.id === item.id);
-    if (prism === null || piece === undefined || item.card.kind !== 'audio') return item;
-    const { track } = electAudio({
-      attachment: {
-        fileUrl: piece.fileUrl,
-        originalName: '',
-        ...(piece.transcription == null ? {} : { transcription: piece.transcription }),
-        ...(piece.translations == null ? {} : { translations: piece.translations }),
-        ...(piece.alt == null ? {} : { alt: piece.alt }),
-      },
-      readerLanguages: prism.readerLanguages,
-      fallbackLanguage: prism.fallbackLanguage,
-    });
-    return track.translated ? { ...item, url: track.url, card: { ...item.card, durationMs: track.durationMs ?? item.card.durationMs } } : item;
-  });
-}
+export const commentCardMediaOf = (media: readonly FeedMedia[] | null | undefined, prism: CardAudioPrism): readonly MessageCardMediaItem[] => servedCardMediaOf(media, prism);
 
 type ServedComment = { readonly comment: PostComment; readonly servedText: string };
 

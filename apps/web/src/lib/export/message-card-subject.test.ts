@@ -256,3 +256,42 @@ describe('la langue d’export — choisie après le format', () => {
     expect(hidden).toBeNull();
   });
 });
+
+describe('un vocal part dans la piste de son texte servi (#9687, famille audio du Prisme, parité iOS)', () => {
+  const voice = (id: string): Attachment => ({
+    ...attachmentDefaults,
+    id,
+    messageId: 'm-reply',
+    fileName: 'voz.m4a',
+    originalName: 'voz.m4a',
+    mimeType: 'audio/mp4',
+    fileSize: 1000,
+    fileUrl: `/voz-${id}.m4a`,
+    uploadedBy: VIEWER.id,
+    createdAt: '2026-09-28T11:01:00.000Z',
+    duration: 9000,
+    transcription: { text: 'Hola a todos', language: 'es' } as NonNullable<Attachment['transcription']>,
+    translations: { en: { type: 'audio', transcription: 'Hello everyone', url: `/voice-en-${id}.m4a`, durationMs: 8000 } } as unknown as NonNullable<Attachment['translations']>,
+  });
+  const subjectIn = (target: Message, readerLanguages: readonly string[], language?: string) =>
+    messageCardSubjectOf({ message: target, servedText: undefined, viewer: VIEWER, readerLanguages, interfaceLanguage: 'fr', now: NOW, ...(language === undefined ? {} : { language }) });
+  const audio = (target: Message, readerLanguages: readonly string[], language?: string) =>
+    subjectIn(target, readerLanguages, language)?.media.filter((item) => item.card.kind === 'audio').map((item) => ({ url: item.url, durationMs: item.card.kind === 'audio' ? item.card.durationMs : null }));
+
+  test('vocal JOINT, prisme [fr, en] sans piste française : la piste anglaise au rang 2, sa durée avec elle', () => {
+    expect(audio(standalone({ content: '', originalLanguage: 'es', attachments: [voice('a-1')] }), ['fr', 'en'])).toEqual([{ url: '/voice-en-a-1.m4a', durationMs: 8000 }]);
+  });
+
+  test('vocal CITÉ : la même élection, au même rang', () => {
+    const target = reply({ replyTo: quoted({ content: '', originalLanguage: 'es', translations: [], attachments: [voice('q-1')] }) });
+    expect(audio(target, ['fr', 'en'])).toEqual([{ url: '/voice-en-q-1.m4a', durationMs: 8000 }]);
+  });
+
+  test('aucune langue du prisme n’a de piste : l’original', () => {
+    expect(audio(standalone({ content: '', originalLanguage: 'es', attachments: [voice('a-1')] }), ['fr', 'de'])).toEqual([{ url: '/voz-a-1.m4a', durationMs: 9000 }]);
+  });
+
+  test('la langue d’EXPORT choisie prend la tête : l’espagnol original', () => {
+    expect(audio(standalone({ content: '', originalLanguage: 'es', attachments: [voice('a-1')] }), ['fr', 'en'], 'es')).toEqual([{ url: '/voz-a-1.m4a', durationMs: 9000 }]);
+  });
+});

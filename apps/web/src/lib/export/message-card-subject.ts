@@ -5,6 +5,7 @@ import { served } from '@/lib/api/prism';
 import type { Attachment, Message } from '@/lib/api/types';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { messageExitOffers, pieceIsOpen } from '@/lib/view/content-exit';
+import { electAudio } from '@/lib/view/media';
 import { kindOf, waveformOf } from '@/lib/view/message';
 import { quotedPreviewOf } from '@/lib/view/quoted-preview';
 
@@ -139,6 +140,44 @@ export function cardMediaOf(attachments: readonly CardMediaFields[] | null | und
   });
 }
 
+/** Ce qu'il faut d'une pièce pour élire la piste d'un VOCAL — sa transcription et ses pistes traduites. */
+export type CardAudioFields = {
+  readonly transcription?: Attachment['transcription'] | null;
+  readonly translations?: Attachment['translations'] | null;
+  readonly alt?: string | null;
+  readonly originalName?: string | null;
+};
+
+/** Le prisme qui élit la piste d'un vocal — `null` : la piste originale. */
+export type CardAudioPrism = { readonly readerLanguages: readonly string[]; readonly fallbackLanguage: string } | null;
+
+/**
+ * LES MÉDIAS PEIGNABLES, UN VOCAL DANS LA PISTE DE SON TEXTE SERVI (#9687,
+ * parité iOS `MessageCardSubject.paintableMedia(audioLanguages:)`) —
+ * `electAudio` élit la transcription PUIS reçoit sa langue pour élire la
+ * piste : une seule descente (CLAUDE.md § Prisme, cycle 128). Fichier et durée
+ * de la piste servie voyagent ensemble ; sans piste dans la langue servie,
+ * l'original.
+ */
+export function servedCardMediaOf(pieces: readonly (CardMediaFields & CardAudioFields)[] | null | undefined, prism: CardAudioPrism): readonly MessageCardMediaItem[] {
+  return cardMediaOf(pieces).map((item) => {
+    const piece = pieces?.find((candidate) => candidate.id === item.id);
+    if (prism === null || piece === undefined || item.card.kind !== 'audio') return item;
+    const { track } = electAudio({
+      attachment: {
+        fileUrl: piece.fileUrl,
+        originalName: piece.originalName ?? '',
+        ...(piece.transcription == null ? {} : { transcription: piece.transcription }),
+        ...(piece.translations == null ? {} : { translations: piece.translations }),
+        ...(piece.alt == null ? {} : { alt: piece.alt }),
+      },
+      readerLanguages: prism.readerLanguages,
+      fallbackLanguage: prism.fallbackLanguage,
+    });
+    return track.translated ? { ...item, url: track.url, card: { ...item.card, durationMs: track.durationMs ?? item.card.durationMs } } : item;
+  });
+}
+
 export function messageCardSubjectOf(params: {
   readonly message: Message;
   /** Le texte SERVI du message (`servedOf` du menu). */
@@ -159,7 +198,7 @@ export function messageCardSubjectOf(params: {
       : served({ preferredLanguages: [language], originalLanguage: message.originalLanguage, translations: message.translations, original: message.content }).text;
   const text = chosen.trim();
   const readerLanguages = language === null ? params.readerLanguages : [language, ...params.readerLanguages];
-  const media = cardMediaOf(message.attachments);
+  const media = servedCardMediaOf(message.attachments, { readerLanguages, fallbackLanguage: message.originalLanguage ?? '' });
   if (text === '' && media.length === 0) return null;
 
   const replyTo = message.replyTo;
@@ -175,7 +214,7 @@ export function messageCardSubjectOf(params: {
       quotedAt = replyTo.createdAt === undefined ? null : new Date(replyTo.createdAt);
     }
     const quotedAuthor: CardMediaAuthor = { name: cardAuthorOf(replyTo, viewer), handle: cardHandleOf(replyTo, viewer), quoted: true };
-    quotedMedia = quotedLeaves ? authoredBy(cardMediaOf(replyTo.attachments), quotedAuthor) : [];
+    quotedMedia = quotedLeaves ? authoredBy(servedCardMediaOf(replyTo.attachments, { readerLanguages, fallbackLanguage: replyTo.originalLanguage ?? '' }), quotedAuthor) : [];
   }
   const ownIds = new Set(media.map((item) => item.id));
   return {
