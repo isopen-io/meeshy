@@ -171,9 +171,15 @@ enum GameSpendRows {
         heldFact: GameDetailFactKey = .spendHeld,
         missingFact: GameDetailFactKey = .spendMissing
     ) -> [GameFactChipItem] {
+        let missing: String
+        if let formatMissing {
+            missing = formatMissing(spend.missing)
+        } else {
+            missing = format(spend.missing)
+        }
         let last = spend.affordable
             ? GameFactChipItem(label: ConceptText.factAfter, value: format(spend.after), detail: .spendAfter)
-            : GameFactChipItem(label: ConceptText.factMissing, value: (formatMissing ?? format)(spend.missing), detail: missingFact, short: true)
+            : GameFactChipItem(label: ConceptText.factMissing, value: missing, detail: missingFact, short: true)
         return [
             GameFactChipItem(label: ConceptText.factBalance, value: format(spend.held), detail: heldFact),
             GameFactChipItem(label: ConceptText.factCost, value: format(spend.cost), detail: .spendCost),
