@@ -22,6 +22,10 @@ extension ComposerCaptureCopy {
         String(localized: "composer.capture.saveToPhotos", defaultValue: "Enregistrer dans Photos", bundle: .main)
     }
 
+    static var saveToPhotosFailed: String {
+        String(localized: "camera.save.failed", defaultValue: "Impossible d'enregistrer dans Photos", bundle: .main)
+    }
+
     static var savingToPhotos: String {
         String(localized: "composer.capture.savingToPhotos", defaultValue: "Enregistrement dans Photos…", bundle: .main)
     }
@@ -52,11 +56,14 @@ extension ComposerCaptureSession {
             .store(in: &takeSubscriptions)
     }
 
-    /// Armer ou fermer le viseur oublie toute intention en attente.
+    /// Armer ou fermer le viseur oublie les demandes qui n'ont pas encore pris —
+    /// jamais une prise DÉJÀ partie vers Photos (#9684 : aucune prise ne se perd).
+    /// Un enregistrement a son jeton, et une fin sans fichier efface le sien ; une
+    /// photo en vol garde son intention jusqu'à son arrivée.
     func resetIntents() {
         filmIntent = .edit
-        photoInFlightIntent = .edit
-        filmIntents = [:]
+        if !camera.isTakingPhoto { photoInFlightIntent = .edit }
+        filmIntents = filmIntents.filter { $0.value == .gallery }
     }
 
     /// **Le geste décidé par la table, exécuté.** Mise au point, zoom, rangement et
@@ -160,10 +167,12 @@ extension ComposerCaptureSession {
 
     /// La photo de la scène s'ouvre en ÉDITION (#9352) : rien ne part vers l'hôte
     /// avant « Terminé ». Celle de la miniature choisie part en galerie.
+    /// Une photo demandée en galerie y part même si le viseur s'est fermé entre-temps.
     func photoArrived() {
-        guard stage != .off, let image = camera.capturedPhoto else { return }
+        guard let image = camera.capturedPhoto else { return }
         let intent = photoInFlightIntent
         photoInFlightIntent = .edit
+        guard stage != .off || intent == .gallery else { return }
         switch intent {
         case .gallery:
             saveRenderedPhoto(image, data: camera.capturedPhotoData)
@@ -172,14 +181,15 @@ extension ComposerCaptureSession {
         }
     }
 
-    /// Une vidéo arrivée APRÈS la fermeture ne devient rien : son fichier
-    /// temporaire part (après le brut, si le réglage l'enregistre). Le jeton est celui que l'éditeur
+    /// Une vidéo arrivée APRÈS la fermeture ne devient pas un segment : son fichier
+    /// temporaire part (après le brut, si le réglage l'enregistre) — sauf si elle
+    /// était demandée en galerie, où elle part quand même (#9684). Le jeton est celui que l'éditeur
     /// PUBLIE : `@Published` émet avant d'écrire, `camera.capturedVideoId` serait
     /// encore l'ancien.
     func videoArrived(_ id: String) {
         guard let url = camera.capturedVideoURL else { return }
         let intent = filmIntents.removeValue(forKey: id) ?? .edit
-        guard stage != .off else {
+        guard stage != .off || intent == .gallery else {
             discardTake(url, context: "prise arrivée après la fermeture du viseur")
             return
         }
@@ -203,11 +213,11 @@ extension ComposerCaptureSession {
         let precedent = galleryChain
         let proportions = canvasAspect
         beginGallerySave()
-        galleryChain = Task { @MainActor in
-            defer { endGallerySave() }
+        galleryChain = Task { @MainActor [weak self] in
+            defer { self?.endGallerySave() }
             await precedent?.value
             guard await brut?.value ?? true,
-                  let octets = await Self.renderedPhotoBytes(data, fallback: repli, look: regard,
+                  let octets = await ComposerCaptureSession.renderedPhotoBytes(data, fallback: repli, look: regard,
                                                              aspect: proportions, person: auteur,
                                                              date: date, scenes: cache),
                   await galerie.saveImage(octets) else { return }
@@ -258,10 +268,10 @@ extension ComposerCaptureSession {
         let precedent = galleryChain
         let proportions = canvasAspect
         beginGallerySave()
-        galleryChain = Task { @MainActor in
+        galleryChain = Task { @MainActor [weak self] in
             defer {
-                FileManager.default.removeItemLogging(at: url, context: "brut déjà en galerie", logger: .media)
-                endGallerySave()
+                FileManager.default.removeItemLogging(at: url, context: "prise lue par la galerie", logger: .media)
+                self?.endGallerySave()
             }
             await precedent?.value
             guard await brut?.value ?? true else { return }
@@ -269,7 +279,7 @@ extension ComposerCaptureSession {
                                                                  person: auteur, date: date,
                                                                  declaredSpaceName: espace)
             guard let rendue else { return }
-            let enregistree = await Self.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
+            let enregistree = await ComposerCaptureSession.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
             if rendue != url {
                 FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré en galerie",
                                                       logger: .media)

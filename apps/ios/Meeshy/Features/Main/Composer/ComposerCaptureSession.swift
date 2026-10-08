@@ -93,6 +93,10 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var isRenderingLook = false
     /// La flèche ⬇︎ de la retouche (#9684) : la prise ne s'enregistre qu'une fois.
     @Published var takeSaveState = ComposerTakeSaveState.idle
+    /// L'écriture de la flèche en cours : détenue ici, jamais par la vue, elle
+    /// survit à ✕ et à la fermeture du viseur (#9684). `nil` : rendu impossible,
+    /// `false` : Photos a refusé (et l'a dit), `true` : enregistrée.
+    var takeWrite: Task<Bool?, Never>?
     /// Ce que la capture écrit dans Photos — lu à chaque décision, jamais figé.
     let savePolicy: @MainActor () -> CaptureSavePolicy
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent

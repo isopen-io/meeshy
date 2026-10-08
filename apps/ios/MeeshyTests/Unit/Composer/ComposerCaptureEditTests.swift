@@ -582,6 +582,46 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(galerie.saveVideoCount, 1, "l'original n'étant pas en galerie, la prise s'y écrit")
     }
 
+    /// #9684 : ✕ pendant l'écriture de la flèche ne la perd pas — elle va au
+    /// bout, se dit par un bandeau, et le fichier ne part qu'après elle.
+    func test_saveTakeToPhotos_video_thenCancel_finishesTheWrite_andSaysIt() async throws {
+        FeedbackToastManager.shared.clearAll()
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard },
+                                             loopPlayerFactory: { _ in lecteur })
+        let url = try Self.writtenClip()
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        await session.beginEditing(video: url)
+        session.saveTakeToPhotos()
+        session.cancelEditing()
+        XCTAssertEqual(session.phase, .capturing, "la croix quitte la retouche aussitôt")
+        await ComposerCaptureTakesTests.waitUntil { galerie.saveVideoCount == 1 && session.takeWrite == nil }
+        XCTAssertEqual(galerie.saveVideoCount, 1, "l'écriture lancée va jusqu'au bout")
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.savedToPhotos,
+                       "la flèche n'est plus là : un bandeau le dit")
+        await ComposerCaptureTakesTests.waitUntil { !FileManager.default.fileExists(atPath: url.path) }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path), "le fichier part après l'écriture")
+    }
+
+    func test_saveTakeToPhotos_renderFails_afterCancel_saysIt() async throws {
+        FeedbackToastManager.shared.clearAll()
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard },
+                                             loopPlayerFactory: { _ in lecteur })
+        let url = try Self.writtenClip()
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        await session.beginEditing(video: url)
+        session.look = ComposerPhotoLook(filter: .cool)
+        session.saveTakeToPhotos()
+        session.cancelEditing()
+        await ComposerCaptureTakesTests.waitUntil(timeout: 30) { session.takeWrite == nil }
+        XCTAssertEqual(galerie.saveVideoCount, 0)
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.saveToPhotosFailed,
+                       "jamais un échec silencieux")
+    }
+
     /// La caméra n'écrit plus le brut sans que le réglage le demande : chacune de
     /// ses trois écritures (photo, vidéo, repli du dernier segment) le consulte.
     func test_cameraModel_writesTheOriginalOnlyWhenThePolicySaysSo() throws {

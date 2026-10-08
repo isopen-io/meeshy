@@ -64,12 +64,23 @@ extension ComposerCaptureSession {
     }
 
     /// La retouche abandonnée — par la croix ou par le viseur qui se ferme —
-    /// emporte le fichier de sa vidéo assemblée : personne ne le lira plus.
+    /// emporte le fichier de sa vidéo assemblée : personne ne le lira plus. Une
+    /// écriture de la flèche en cours le lit encore : il part après elle, et
+    /// elle va jusqu'au bout (#9684 — aucune prise ne se perd).
     func abandonEditing() {
         let abandonnee = phase
+        let ecriture = takeWrite
         leaveEditing()
         guard case .editing(.video(let url)) = abandonnee else { return }
-        discardTake(url, context: "vidéo abandonnée en retouche")
+        guard let ecriture else { return discardTake(url, context: "vidéo abandonnée en retouche") }
+        Task { @MainActor [weak self] in
+            _ = await ecriture.value
+            guard let self else {
+                return FileManager.default.removeItemLogging(at: url, context: "vidéo abandonnée après son enregistrement",
+                                                             logger: .media)
+            }
+            self.discardTake(url, context: "vidéo abandonnée après son enregistrement")
+        }
     }
 
     // MARK: - ✓ Terminé
@@ -220,7 +231,7 @@ extension ComposerCaptureSession {
         let galerie = gallery
         let proportions = canvasAspect
         let politique = savePolicy()
-        let ecriture: @MainActor () async -> Bool
+        let ecriture: @MainActor () async -> Bool?
         switch phase {
         case .capturing:
             return
@@ -231,7 +242,7 @@ extension ComposerCaptureSession {
                 guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
                                                                         aspect: proportions, person: auteur,
                                                                         date: date, scenes: cache),
-                      let octets = await ComposerPhotoEncoding.encode(rendu, like: prise) else { return false }
+                      let octets = await ComposerPhotoEncoding.encode(rendu, like: prise) else { return nil }
                 return await galerie.saveImage(octets)
             }
         case .editing(.video(let url)):
@@ -242,7 +253,7 @@ extension ComposerCaptureSession {
                                                                           timeRange: plage, aspect: proportions,
                                                                           person: auteur, date: date,
                                                                           declaredSpaceName: espace)
-                else { return false }
+                else { return nil }
                 let enregistree = await Self.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
                 if rendue != url {
                     FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré par la flèche",
@@ -252,14 +263,31 @@ extension ComposerCaptureSession {
             }
         }
         takeSaveState = .saving
-        Task { @MainActor in
-            let enregistree = await ecriture()
-            guard isStillEditing(source) else { return }
-            takeSaveState = enregistree ? .saved : .idle
-            guard enregistree else { return HapticFeedback.error() }
-            HapticFeedback.success()
-            UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.savedToPhotos)
+        let tache = Task { @MainActor in await ecriture() }
+        takeWrite = tache
+        Task { @MainActor [weak self] in
+            let verdict = await tache.value
+            self?.takeWriteEnded(tache, verdict: verdict, source: source)
         }
+    }
+
+    /// **Le verdict se dit toujours** : sur la flèche si la retouche est encore là,
+    /// par un bandeau sinon — jamais un échec silencieux. Un refus de Photos s'est
+    /// déjà dit (`reportPhotoLibraryRefusal`) ; un rendu impossible se dit ici.
+    private func takeWriteEnded(_ tache: Task<Bool?, Never>, verdict: Bool?, source: any ComposerFrameSourcing) {
+        if takeWrite == tache { takeWrite = nil }
+        let enregistree = verdict == true
+        if isStillEditing(source) { takeSaveState = enregistree ? .saved : .idle }
+        guard enregistree else {
+            HapticFeedback.error()
+            if verdict == nil { FeedbackToastManager.shared.showError(ComposerCaptureCopy.saveToPhotosFailed) }
+            return
+        }
+        HapticFeedback.success()
+        guard isStillEditing(source) else {
+            return FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
+        }
+        UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.savedToPhotos)
     }
 
     // MARK: - Le recadrage (#9567)
