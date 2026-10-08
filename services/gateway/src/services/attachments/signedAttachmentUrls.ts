@@ -121,3 +121,28 @@ export function signReaderAttachmentsIn<T extends SignableAttachment>(
 ): readonly T[] | null | undefined {
   return attachments ? attachments.map((attachment) => signReaderAttachmentUrls(attachment, context)) : attachments;
 }
+
+/**
+ * L'aperçu `forwardedFrom` d'une copie transférée montre une pièce de la
+ * SOURCE, dont le lecteur de la copie n'est pas forcément membre : aucune
+ * adresse signée ne peut lui être faite (la route le refuserait), et
+ * l'adresse nue d'une pièce qui se lit par lecteur ne doit plus sortir (#9646).
+ * Une telle pièce QUITTE donc l'aperçu — la copie porte ses propres pièces,
+ * elles, signées pour son lecteur. Une pièce ordinaire reste, telle quelle.
+ */
+export const FORWARD_SOURCE_PROTECTION_SELECT = { isViewOnce: true, isBlurred: true, effectFlags: true, ephemeralDuration: true, expiresAt: true } as const;
+export const FORWARD_PIECE_PROTECTION_SELECT = { isViewOnce: true, isBlurred: true, effectFlags: true } as const;
+
+export function forwardPreviewAttachments<T extends SignableAttachment>(
+  source: ReaderBoundMessage,
+  attachments: readonly T[] | null | undefined
+): readonly T[] {
+  return (attachments ?? []).filter((attachment) => !attachmentIsReaderBound(source, attachment));
+}
+
+/** L'aperçu servi : les pièces admises, sous la forme de `attachmentForwardPreviewSelect` seule. */
+export function forwardPreviewOf<A extends SignableAttachment & { readonly id: string; readonly mimeType: string; readonly thumbnailUrl: string | null; readonly fileUrl: string }>(
+  source: ReaderBoundMessage & { readonly attachments: readonly A[] }
+): ReadonlyArray<Pick<A, 'id' | 'mimeType' | 'thumbnailUrl' | 'fileUrl'>> {
+  return forwardPreviewAttachments(source, source.attachments).map(({ id, mimeType, thumbnailUrl, fileUrl }) => ({ id, mimeType, thumbnailUrl, fileUrl }));
+}

@@ -12,7 +12,7 @@ import { describe, it, expect } from '@jest/globals';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { checkReaderFileToken, readSigningKeys, readerFileUrlSigner } from '../readerFileSignature';
-import { signReaderAttachmentUrls, type ReaderBoundMessage } from '../signedAttachmentUrls';
+import { forwardPreviewAttachments, signReaderAttachmentUrls, type ReaderBoundMessage } from '../signedAttachmentUrls';
 
 const KEYS = readSigningKeys({ ATTACHMENT_URL_SIGNING_KEY: Buffer.alloc(32, 3).toString('base64') });
 const NOW = new Date('2026-10-08T10:00:00.000Z');
@@ -133,5 +133,19 @@ describe('signReaderAttachmentUrls', () => {
   ])('ne réécrit jamais %s', (_label, fileUrl) => {
     const out = signed(piece({ fileUrl }), { ...ORDINARY, isViewOnce: true });
     expect(out.fileUrl).toBe(fileUrl);
+  });
+});
+
+describe('forwardPreviewAttachments', () => {
+  it("retire de l'aperçu de transfert la pièce d'une source qui disparaît, garde celle d'une source ordinaire", () => {
+    const flame = { ...ORDINARY, effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 30, expiresAt: NOW };
+    expect(forwardPreviewAttachments(flame, [piece()])).toEqual([]);
+    expect(forwardPreviewAttachments(ORDINARY, [piece()])).toEqual([piece()]);
+    expect(forwardPreviewAttachments(ORDINARY, [piece({ isViewOnce: true })])).toEqual([]);
+  });
+
+  it("retire aussi quand la protection de la source n'a pas été lue", () => {
+    const { ephemeralDuration: _omitted, ...partial } = ORDINARY;
+    expect(forwardPreviewAttachments(partial as ReaderBoundMessage, [piece()])).toEqual([]);
   });
 });

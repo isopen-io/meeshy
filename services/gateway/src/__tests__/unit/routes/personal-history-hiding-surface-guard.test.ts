@@ -363,6 +363,19 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       'expiré, vue unique consommée) pour décider si ses octets partent encore ; ' +
       "aucun contenu servi, et la route ne connaît pas le lecteur dont l'historique serait masqué.",
   },
+  /**
+   * #9646 — relit la protection (cinq colonnes) des messages porteurs de pièces
+   * DÉJÀ choisies et filtrées par l'appelant (galerie, détail — plancher et
+   * masquage appliqués là), pour signer les adresses de celles qui
+   * disparaissent. Elle ne choisit aucun message et n'en sert aucun contenu.
+   */
+  'attachments/signServedAttachments.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Relit seulement la protection des porteurs de pièces que l'appelant a déjà choisies sous son " +
+      'plancher et son masquage, pour en signer les adresses ; aucun message choisi, aucun contenu servi.',
+  },
   'achievements/GlobalAchievements.ts': {
     kind: 'exempt',
     reads: 3,

@@ -27,7 +27,7 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/locat
 import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
-import { signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
+import { FORWARD_PIECE_PROTECTION_SELECT, FORWARD_SOURCE_PROTECTION_SELECT, forwardPreviewOf, signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
 import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
 import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
 import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
@@ -862,7 +862,8 @@ export async function enrichForwardedMessagesForList(
                 sender: {
                   select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
                 },
-                attachments: { select: attachmentForwardPreviewSelect, take: 1 }
+                ...FORWARD_SOURCE_PROTECTION_SELECT, // #9646 — `forwardPreviewOf`
+                attachments: { select: { ...attachmentForwardPreviewSelect, ...FORWARD_PIECE_PROTECTION_SELECT }, take: 1 }
               }
             })
         );
@@ -944,7 +945,7 @@ export async function enrichForwardedMessagesForList(
                   displayName: resolveParticipantDisplayName(originalSender),
                   avatar: resolveParticipantAvatar(originalSender),
                 } : null,
-                attachments: original.attachments,
+                attachments: forwardPreviewOf(original),
                 ...(forwardedPlace ? { location: forwardedPlace } : {}),
                 ...(forwardedSticker ? { sticker: forwardedSticker } : {}),
               };
