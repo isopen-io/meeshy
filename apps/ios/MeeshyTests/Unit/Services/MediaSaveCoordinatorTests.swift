@@ -20,14 +20,30 @@ private final class MockPhotoLibrarySaver: PhotoLibrarySaving, @unchecked Sendab
     var shouldThrow: Error?
     private(set) var savedImageData: [Data] = []
     private(set) var savedVideoURLs: [URL] = []
+    /// Les écritures PAR OCTETS seules (#9685) — le coordinateur ne doit plus en faire.
+    private(set) var imageDataWrites = 0
+    private(set) var imageFileWrites: [(url: URL, moveFile: Bool)] = []
+    private(set) var videoMoveFlags: [Bool] = []
 
     func saveImage(_ data: Data) async throws {
         if let error = shouldThrow { throw error }
+        imageDataWrites += 1
         savedImageData.append(data)
     }
 
     func saveVideo(at url: URL) async throws {
+        try await saveVideo(at: url, moveFile: false)
+    }
+
+    func saveImageFile(at url: URL, moveFile: Bool) async throws {
         if let error = shouldThrow { throw error }
+        imageFileWrites.append((url, moveFile))
+        savedImageData.append(try Data(contentsOf: url))
+    }
+
+    func saveVideo(at url: URL, moveFile: Bool) async throws {
+        if let error = shouldThrow { throw error }
+        videoMoveFlags.append(moveFile)
         savedVideoURLs.append(url)
     }
 }
@@ -190,6 +206,22 @@ final class MediaSaveCoordinatorTests: XCTestCase {
         XCTAssertTrue(photos.savedVideoURLs.isEmpty)
         XCTAssertEqual(sut.lastOutcome, .saved(.photoLibrary))
         XCTAssertNil(sut.pendingRequest)
+    }
+
+    /// #9685 — l'image part PAR FICHIER (Photos lit le fichier), jamais relue en
+    /// octets ni décodée ; le fichier du CACHE n'est jamais déplacé.
+    func test_pick_photoLibrary_image_writesByFile_neverByBytes_andNeverMovesTheCacheFile() async throws {
+        let (sut, resolver, photos, _) = makeSUT()
+        let source = try makeTempSourceFile(named: "p.jpg", contents: Data("jpeg-bytes".utf8))
+        resolver.result = .success(source)
+        sut.requestSave(makeRequest(kind: .image))
+
+        await sut.pick(.photoLibrary)
+
+        XCTAssertEqual(photos.imageDataWrites, 0, "Aucune écriture par octets : le fichier part par référence")
+        XCTAssertEqual(photos.imageFileWrites.map(\.url), [source])
+        XCTAssertEqual(photos.imageFileWrites.map(\.moveFile), [false], "Le fichier résolu appartient au cache : jamais déplacé")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
     }
 
     /// Régression : le `confirmationDialog` SwiftUI vide `pendingRequest`
@@ -508,6 +540,22 @@ final class MediaSaveCoordinatorTests: XCTestCase {
 
             XCTAssertEqual(branding.stampedOrigins, [origin],
                            "L'origine déclarée par le point d'entrée doit arriver intacte au prédicat de la marque")
+        }
+    }
+
+    /// #9685 — la copie MARQUÉE nous appartient : Photos la déplace au lieu de la copier.
+    func test_pick_photoLibrary_stampedCopy_isMovedIntoPhotos() async throws {
+        for (kind, name) in [(AttachmentKind.image, "photo.jpg"), (.video, "clip.mp4")] {
+            let branding = StubMediaSaveBranding()
+            branding.stampedURL = try makeStampedFile(named: name)
+            let (sut, resolver, photos, _) = makeSUT(branding: branding)
+            resolver.result = .success(try makeTempSourceFile(named: name))
+            sut.requestSave(makeRequest(kind: kind, url: "https://x/\(name)", suggestedName: name))
+
+            await sut.pick(.photoLibrary)
+
+            let moves = kind == .image ? photos.imageFileWrites.map(\.moveFile) : photos.videoMoveFlags
+            XCTAssertEqual(moves, [true], "\(kind) : la copie marquée est déplacée, pas recopiée")
         }
     }
 
