@@ -288,18 +288,19 @@ struct GameBadgeSwatch: View {
 /// Les étoiles allumées sur sept — dites à VoiceOver en toutes lettres.
 struct GameBadgeStarsView: View {
     let model: GameBadgeGuideModel
-    @ScaledMetric(relativeTo: .title3) private var star: CGFloat = 20
 
     var body: some View {
-        HStack(spacing: MeeshySpacing.xxs) {
+        HStack(spacing: 2) {
             ForEach(0..<model.starsMax, id: \.self) { index in
                 Image(systemName: "star.fill")
-                    .font(.system(size: star, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(MeeshyColors.brandPrimary.opacity(index < model.stars ? 1 : 0.25))
             }
             Text(ConceptText.ratio(GameCopy.formatCount(model.stars), GameCopy.formatCount(model.starsMax)))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .foregroundColor(ThemeManager.shared.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(GameChip.minimumScale)
                 .padding(.leading, MeeshySpacing.xxs)
         }
         .accessibilityElement(children: .ignore)
