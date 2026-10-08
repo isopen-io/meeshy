@@ -119,6 +119,14 @@ export async function meeshTotalsFromLedger(
   return { balance: somme._sum.delta ?? 0, mintedLifetime: frappes };
 }
 
+/** Une frappe qui ferait passer le score sous zéro (#9675) : annulée en bloc, rendue comme insuffisante. */
+class ScoreWouldGoNegative extends Error {
+  constructor() {
+    super('mint would take the score below zero');
+    this.name = 'ScoreWouldGoNegative';
+  }
+}
+
 export class MeeshService {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -272,6 +280,9 @@ export class MeeshService {
           },
           select: { engagementScore: true },
         });
+        // Le score ne descend JAMAIS sous zéro (#9675) : des compteurs qui couvrent le prix quand le score
+        // ne le couvre pas trahissent un écart entre les deux sources ; la frappe s'annule en bloc.
+        if ((compte.engagementScore ?? 0) < 0) throw new ScoreWouldGoNegative();
 
         // La Gloire dans la MÊME transaction : une frappe qui débite sans la
         // graver est impossible, et inversement.
@@ -313,6 +324,7 @@ export class MeeshService {
         receipt: { number, edition, price, gloryGained: GLORY_POINTS.mint, levelBefore, levelAfter },
       };
     } catch (err) {
+      if (err instanceof ScoreWouldGoNegative) return { status: 'insufficient', plan };
       // P2002 sur `(userId, requestId)` : deux frappes concurrentes portant le
       // même identifiant — l'index unique a fait son office, la première a
       // gagné. On rend son résultat plutôt qu'une erreur.
