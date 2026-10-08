@@ -190,7 +190,7 @@ const de = {
   'game.detail.elan.idle': 'In diesen Tagen nicht aktiv',
   'game.detail.elan.points': 'bis zu {points} pro Aktion',
   'game.detail.player.what': 'Ein Spieler deiner Gruppe. Du siehst nur sein Pseudonym und seine Wochenpunkte.',
-  'game.detail.fact.tier': 'Zehn Level bilden eine Stufe. Jede Stufe hat ihren Namen und ihre Farbe.',
+  'game.detail.fact.tier': 'Bis Level 100 bilden zehn Level eine Stufe; darüber hundert Level, und Singularität beginnt bei 1000. Jede Stufe hat ihren Namen und ihre Farbe.',
   'game.detail.fact.score': 'Das sind die Punkte, die du hast. Sie bestimmen dein Level.',
   'game.detail.fact.level_next': 'Das sind die Punkte, die dir zum nächsten Level fehlen.',
   'game.detail.fact.level_record': 'Das ist das höchste Level, das du erreicht hast.',

@@ -190,7 +190,7 @@ const en = {
   'game.detail.elan.idle': 'Not active these days',
   'game.detail.elan.points': 'up to {points} per action',
   'game.detail.player.what': 'A player in your group. You only see their nickname and their points this week.',
-  'game.detail.fact.tier': 'Ten levels make a tier. Each tier has its name and its colour.',
+  'game.detail.fact.tier': 'Up to level 100, ten levels make a tier; beyond, a hundred levels, and Singularity starts at 1000. Each tier has its name and its colour.',
   'game.detail.fact.score': 'These are the points you hold. They make your level.',
   'game.detail.fact.level_next': 'These are the points you still need to go up a level.',
   'game.detail.fact.level_record': 'This is the highest level you’ve reached.',

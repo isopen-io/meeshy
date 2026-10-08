@@ -43,7 +43,7 @@ describe('la proposition au niveau 100', () => {
 
   test('Mee et Meo expliquent : ce qui repart, ce qu’on gagne', () => {
     const t = text(html);
-    expect(t).toContain('Tu es au niveau 100 : le sommet');
+    expect(t).toContain('tu peux passer en Prestige, ou continuer à monter');
     expect(t).toContain('Ton niveau repart à 1');
     expect(t).toContain(`${formatCount(GLORY_POINTS.prestige, 'fr').replace(/\s/g, ' ')} de Gloire`);
     expect(html).toContain('data-game-bird="meeGuide"');
@@ -91,7 +91,7 @@ describe('la proposition au niveau 100', () => {
     expect(host.textContent).toContain('Prestige 2 !');
   });
 
-  test('« Rester au sommet » referme la confirmation sans rien envoyer', async () => {
+  test('« Garder mon niveau » referme la confirmation sans rien envoyer', async () => {
     let passes = 0;
     const host = await mount(<GamePrestige {...props(undefined, 1, { onPass: () => (passes += 1) })} />);
     await click(host.querySelector('[data-game-prestige-go]'));
