@@ -19,6 +19,7 @@ import {
   sessionExportItemSchema,
 } from './export-security';
 import { recipientLanguage } from '../../utils/recipient-language';
+import { withoutExpiredConnectionTraces } from '../../services/retention/retention-bounds';
 import { exportGame } from './export-game';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
@@ -435,7 +436,8 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             },
           });
 
-          exportData.profile = user;
+          // Les adresses de plus de 12 mois ne se servent plus, purge armée ou non.
+          exportData.profile = user ? withoutExpiredConnectionTraces(user, new Date()) : user;
         }
 
         // Calculée UNE fois, réutilisée par `messages` et `reactions` : une

@@ -49,7 +49,7 @@ describe('exportSessions', () => {
     await exportSessions(prisma as never, USER_ID, PAGE, 'fr');
     const { select, where, take } = prisma.userSession.findMany.mock.calls[0][0] as { select: Record<string, boolean>; where: unknown; take: number };
 
-    expect(where).toEqual({ userId: USER_ID });
+    expect(where).toMatchObject({ userId: USER_ID, NOT: expect.any(Array) });
     expect(take).toBe(500);
     for (const field of ['id', 'createdAt', 'lastActivityAt', 'expiresAt', 'invalidatedAt', 'invalidatedReason',
       'deviceType', 'deviceVendor', 'deviceModel', 'deviceName', 'osName', 'osVersion', 'browserName', 'browserVersion',
@@ -101,7 +101,7 @@ describe('exportSecurityEvents', () => {
     await exportSecurityEvents(prisma as never, USER_ID, { limit: 50, offset: 10 });
     const call = prisma.securityEvent.findMany.mock.calls[0][0] as { select: Record<string, boolean>; where: unknown; take: number; skip: number };
 
-    expect(call.where).toEqual({ userId: USER_ID });
+    expect(call.where).toMatchObject({ userId: USER_ID, createdAt: { gte: expect.any(Date) } });
     expect(call.take).toBe(50);
     expect(call.skip).toBe(10);
     expect(call.select).toEqual({

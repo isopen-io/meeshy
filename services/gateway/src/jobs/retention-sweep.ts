@@ -13,9 +13,9 @@
  *    + 90 jours) : la décision du 2026-10-08 disait 12, la revue
  *    « evidence-destruction » a montré qu'à égalité il disparaissait avec ce
  *    qu'il prouve. À confirmer par le porteur ;
- *  - `registrationIp` / `registrationLocation` passent à `null` 12 mois après
- *    l'inscription, `lastLoginIp` / `lastLoginLocation` 12 mois après la
- *    dernière connexion (`lastLoginAt`). Un compte antérieur à `lastLoginAt`
+ *  - adresse, lieu et agent d'inscription (`registrationIp` / `Location` /
+ *    `Device`) passent à `null` 12 mois après l'inscription, ceux de dernière
+ *    connexion (`lastLogin*`) 12 mois après la dernière connexion (`lastLoginAt`). Un compte antérieur à `lastLoginAt`
  *    perd sa trace quand aucune session ne s'est ouverte depuis 12 mois.
  *
  * L'INTERRUPTEUR. En production, la PREMIÈRE exécution supprime des données
@@ -40,16 +40,16 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import {
+  RETENTION,
+  daysBefore,
+  expiredSessionRetentionWhere,
+  monthsBefore,
+} from '../services/retention/retention-bounds';
 
 const logger = enhancedLogger.child({ module: 'RetentionSweep' });
 
-export const RETENTION = {
-  closedSessionDays: 90,
-  securityEventMonths: 12,
-  purgedAccountSecurityEventDays: 90,
-  adminAuditLogMonths: 15,
-  connectionTraceMonths: 12,
-} as const;
+export { RETENTION } from '../services/retention/retention-bounds';
 
 /** Une page de comptes purgés ou anciens. */
 const BATCH = 500;
@@ -109,7 +109,10 @@ async function accountsUnderProcedure(prisma: RetentionStore, now: Date): Promis
       select: { userId: true },
     }),
     prisma.report.findMany({
-      where: { reportedType: 'user', resolvedAt: null },
+      // Le STATUT, jamais `resolvedAt` : aucun chemin de résolution ne l'écrit,
+      // et tout compte jamais signalé restait gelé à vie (revue
+      // « privacy-retention-bypass »).
+      where: { reportedType: 'user', status: { in: ['pending', 'under_review'] } },
       select: { reportedEntityId: true },
     }),
     prisma.user.findMany({ where: { lockedUntil: { gt: now } }, select: { id: true } }),
@@ -131,14 +134,6 @@ const NOTHING_SWEPT = (apply: boolean): RetentionReport => ({
   loginTraces: null,
 });
 
-const daysBefore = (now: Date, days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-
-const monthsBefore = (now: Date, months: number) => {
-  const cutoff = new Date(now);
-  cutoff.setUTCMonth(cutoff.getUTCMonth() - months);
-  return cutoff;
-};
-
 async function step(name: string, run: () => Promise<number>): Promise<number | null> {
   try {
     return await run();
@@ -148,16 +143,12 @@ async function step(name: string, run: () => Promise<number>): Promise<number | 
   }
 }
 
-/** Une session close avant que `invalidatedAt` ne soit écrit : sa date de fin est sa dernière activité. */
-const CLOSED_WITHOUT_DATE = { OR: [{ invalidatedAt: null }, { invalidatedAt: { isSet: false } }] };
-
 export async function sweepRetention(
   prisma: RetentionStore,
   options: { readonly now?: Date; readonly apply: boolean },
 ): Promise<RetentionReport> {
   const now = options.now ?? new Date();
   const { apply } = options;
-  const sessionCutoff = daysBefore(now, RETENTION.closedSessionDays);
   const eventCutoff = monthsBefore(now, RETENTION.securityEventMonths);
   const purgeCutoff = daysBefore(now, RETENTION.purgedAccountSecurityEventDays);
   const auditCutoff = monthsBefore(now, RETENTION.adminAuditLogMonths);
@@ -174,14 +165,7 @@ export async function sweepRetention(
   const spareAccount = held.length > 0 ? { NOT: [{ id: { in: [...held] } }] } : {};
   const spareAudit = held.length > 0 ? { NOT: [{ userId: { in: [...held] } }, { adminId: { in: [...held] } }] } : {};
 
-  const closedSessionsWhere = {
-    ...spareOwner,
-    isValid: false,
-    OR: [
-      { invalidatedAt: { lt: sessionCutoff } },
-      { AND: [CLOSED_WITHOUT_DATE, { lastActivityAt: { lt: sessionCutoff } }] },
-    ],
-  };
+  const closedSessionsWhere = { ...spareOwner, ...expiredSessionRetentionWhere(now) };
   const closedSessions = await step('closed sessions', async () =>
     apply
       ? (await prisma.userSession.deleteMany({ where: closedSessionsWhere })).count
@@ -230,18 +214,18 @@ export async function sweepRetention(
   const registrationWhere = {
     ...spareAccount,
     createdAt: { lt: traceCutoff },
-    OR: [{ registrationIp: { not: null } }, { registrationLocation: { not: null } }],
+    OR: [{ registrationIp: { not: null } }, { registrationLocation: { not: null } }, { registrationDevice: { not: null } }],
   };
   const registrationTraces = await step('registration address', async () =>
     apply
-      ? (await prisma.user.updateMany({ where: registrationWhere, data: { registrationIp: null, registrationLocation: null } })).count
+      ? (await prisma.user.updateMany({ where: registrationWhere, data: { registrationIp: null, registrationLocation: null, registrationDevice: null } })).count
       : prisma.user.count({ where: registrationWhere }));
 
-  const loginTraceFields = { OR: [{ lastLoginIp: { not: null } }, { lastLoginLocation: { not: null } }] };
+  const loginTraceFields = { OR: [{ lastLoginIp: { not: null } }, { lastLoginLocation: { not: null } }, { lastLoginDevice: { not: null } }] };
   const loginTraces = await step('last login address', async () => {
     const datedWhere = { lastLoginAt: { lt: traceCutoff }, ...loginTraceFields, ...spareAccount };
     const dated = apply
-      ? (await prisma.user.updateMany({ where: datedWhere, data: { lastLoginIp: null, lastLoginLocation: null } })).count
+      ? (await prisma.user.updateMany({ where: datedWhere, data: { lastLoginIp: null, lastLoginLocation: null, lastLoginDevice: null } })).count
       : await prisma.user.count({ where: datedWhere });
     const legacy = await eachPage(
       (after) => prisma.user.findMany({
@@ -261,7 +245,7 @@ export async function sweepRetention(
         if (!apply) return users.length;
         const erased = await prisma.user.updateMany({
           where: { id: { in: users.map((user) => user.id) }, lastLoginAt: { isSet: false }, ...spareAccount },
-          data: { lastLoginIp: null, lastLoginLocation: null },
+          data: { lastLoginIp: null, lastLoginLocation: null, lastLoginDevice: null },
         });
         return erased.count;
       },

@@ -19,6 +19,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sessionClosureReasonText } from '@meeshy/shared/utils/client-session';
 import type { ExportPage, ExportSection } from './export-sections';
 import { forAccountHolder } from '../../services/auth/security-event-view';
+import { retainedSecurityEventWhere, retainedSessionWhere } from '../../services/retention/retention-bounds';
 
 const SESSION_EXPORT_SELECT = {
   id: true,
@@ -121,8 +122,9 @@ const toSection = <T>(items: readonly T[], total: number, page: ExportPage): Exp
   hasMore: page.offset + items.length < total,
 });
 
-export async function exportSessions(prisma: ExportStore, userId: string, page: ExportPage, language: string) {
-  const where = { userId };
+export async function exportSessions(prisma: ExportStore, userId: string, page: ExportPage, language: string, now: Date = new Date()) {
+  // La borne de la purge, armée ou non (revue « privacy-retention-bypass »).
+  const where = { userId, ...retainedSessionWhere(now) };
   const [rows, total] = await Promise.all([
     prisma.userSession.findMany({
       where,
@@ -140,8 +142,8 @@ export async function exportSessions(prisma: ExportStore, userId: string, page: 
   return toSection(items, total, page);
 }
 
-export async function exportSecurityEvents(prisma: ExportStore, userId: string, page: ExportPage) {
-  const where = { userId };
+export async function exportSecurityEvents(prisma: ExportStore, userId: string, page: ExportPage, now: Date = new Date()) {
+  const where = { userId, ...retainedSecurityEventWhere(now) };
   const [rows, total] = await Promise.all([
     prisma.securityEvent.findMany({
       where,

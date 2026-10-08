@@ -16,6 +16,7 @@ import { validatePagination } from '../../utils/pagination';
 import { sendError, sendInternalError, sendPaginatedSuccess } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { SECURITY_EVENT_EXPORT_SELECT, securityEventExportItemSchema } from './export-security';
+import { retainedSecurityEventWhere } from '../../services/retention/retention-bounds';
 
 const logger = enhancedLogger.child({ module: 'MeSecurityEvents' });
 
@@ -59,7 +60,8 @@ export async function securityEventsRoutes(fastify: FastifyInstance) {
       const userId = authContext.registeredUser.id;
       const query = request.query as { offset?: string; limit?: string };
       const { offset, limit } = validatePagination(query.offset ?? '0', query.limit, { defaultLimit: 20, maxLimit: 100 });
-      const where = { userId };
+      // La borne de la purge, armée ou non : rien de plus de 12 mois.
+      const where = { userId, ...retainedSecurityEventWhere(new Date()) };
       const [rows, total] = await Promise.all([
         fastify.prisma.securityEvent.findMany({
           where,

@@ -115,15 +115,18 @@ describe('sweepRetention — armée', () => {
 
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({
       where: {
-        isValid: false,
         OR: [
-          { invalidatedAt: { lt: daysBefore(90) } },
+          { isValid: false, invalidatedAt: { lt: daysBefore(90) } },
           {
+            isValid: false,
             AND: [
               { OR: [{ invalidatedAt: null }, { invalidatedAt: { isSet: false } }] },
               { lastActivityAt: { lt: daysBefore(90) } },
             ],
           },
+          // Revue « privacy-retention-bypass » — une session échue depuis plus
+          // de 90 jours est close, même si rien n'a jamais écrit sa clôture.
+          { expiresAt: { lt: daysBefore(90) } },
         ],
       },
     });
@@ -170,9 +173,9 @@ describe('sweepRetention — armée', () => {
     expect(prisma.user.updateMany).toHaveBeenCalledWith({
       where: {
         createdAt: { lt: monthsBefore(12) },
-        OR: [{ registrationIp: { not: null } }, { registrationLocation: { not: null } }],
+        OR: [{ registrationIp: { not: null } }, { registrationLocation: { not: null } }, { registrationDevice: { not: null } }],
       },
-      data: { registrationIp: null, registrationLocation: null },
+      data: { registrationIp: null, registrationLocation: null, registrationDevice: null },
     });
   });
 
@@ -184,9 +187,9 @@ describe('sweepRetention — armée', () => {
     expect(prisma.user.updateMany).toHaveBeenCalledWith({
       where: {
         lastLoginAt: { lt: monthsBefore(12) },
-        OR: [{ lastLoginIp: { not: null } }, { lastLoginLocation: { not: null } }],
+        OR: [{ lastLoginIp: { not: null } }, { lastLoginLocation: { not: null } }, { lastLoginDevice: { not: null } }],
       },
-      data: { lastLoginIp: null, lastLoginLocation: null },
+      data: { lastLoginIp: null, lastLoginLocation: null, lastLoginDevice: null },
     });
   });
 
@@ -200,12 +203,12 @@ describe('sweepRetention — armée', () => {
         lastLoginAt: { isSet: false },
         createdAt: { lt: monthsBefore(12) },
         sessions: { none: { createdAt: { gte: monthsBefore(12) } } },
-        OR: [{ lastLoginIp: { not: null } }, { lastLoginLocation: { not: null } }],
+        OR: [{ lastLoginIp: { not: null } }, { lastLoginLocation: { not: null } }, { lastLoginDevice: { not: null } }],
       },
     }));
     expect(prisma.user.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['u-ancien'] }, lastLoginAt: { isSet: false } },
-      data: { lastLoginIp: null, lastLoginLocation: null },
+      data: { lastLoginIp: null, lastLoginLocation: null, lastLoginDevice: null },
     });
   });
 
@@ -303,11 +306,26 @@ describe('audit L2-5 — la passe va jusqu’au bout, par curseur, pas sur les m
 });
 
 describe('revue « privacy-retention-logic » — rien de vivant ne part', () => {
-  it('une session n’est effacée que close (`isValid: false`), quelle que soit sa date', async () => {
+  it('une session n’est effacée que close (`isValid: false`) ou échue depuis plus de 90 jours — jamais une session vivante', async () => {
     const prisma = fakePrisma();
     await sweepRetention(prisma as never, { now: NOW, apply: true });
-    const where = (prisma.userSession.deleteMany.mock.calls[0][0] as { where: { isValid: boolean } }).where;
-    expect(where.isValid).toBe(false);
+    const where = (prisma.userSession.deleteMany.mock.calls[0][0] as { where: { OR: Array<Record<string, any>> } }).where;
+    for (const branch of where.OR) {
+      const closed = branch.isValid === false;
+      const longExpired = branch.expiresAt?.lt instanceof Date && branch.expiresAt.lt.getTime() < NOW.getTime();
+      expect(closed || longExpired).toBe(true);
+    }
+  });
+
+  it('aucun état ne survit d’une passe à l’autre : une passe dont les procédures ne se lisent pas n’efface rien, même après une passe réussie', async () => {
+    const prisma = fakePrisma({ bannedUserIds: [] });
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+    const before = writes(prisma).length;
+    prisma.ban.findMany.mockRejectedValueOnce(new Error('mongo down'));
+
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+
+    expect(writes(prisma).length).toBe(before);
   });
 
   it('les événements d’un compte ne partent par la règle du compte purgé que s’il est désactivé, supprimé depuis plus de 90 jours ET purgé par une demande aboutie', async () => {
@@ -345,7 +363,9 @@ describe('revue « evidence-destruction » — une trace visée par une procédu
       where: { liftedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: NOW } }] },
     }));
     expect(prisma.report.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { reportedType: 'user', resolvedAt: null },
+      // Revue « privacy-retention-bypass » : `resolvedAt` n'est écrit par aucun
+      // chemin de résolution — tout compte jamais signalé restait gelé à vie.
+      where: { reportedType: 'user', status: { in: ['pending', 'under_review'] } },
     }));
     expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { lockedUntil: { gt: NOW } } }));
   });

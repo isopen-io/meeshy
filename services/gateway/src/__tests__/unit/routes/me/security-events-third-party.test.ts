@@ -77,7 +77,7 @@ describe('GET /me/security-events', () => {
 
     expect(res.statusCode).toBe(200);
     const call = prisma.securityEvent.findMany.mock.calls[0][0] as { where: unknown; select: Record<string, boolean>; take: number };
-    expect(call.where).toEqual({ userId: USER_ID });
+    expect(call.where).toMatchObject({ userId: USER_ID, createdAt: { gte: expect.any(Date) } });
     expect(call.select).not.toHaveProperty('metadata');
     expect(call.select).not.toHaveProperty('deviceFingerprint');
     const body = res.json();

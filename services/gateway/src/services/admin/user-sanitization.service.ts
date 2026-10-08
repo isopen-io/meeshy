@@ -9,6 +9,7 @@ import {
   UserRoleEnum
 } from '@meeshy/shared/types';
 import { permissionsService } from './permissions.service';
+import { withoutExpiredConnectionTraces } from '../retention/retention-bounds';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 
 export type SanitizeUserOptions = {
@@ -143,12 +144,18 @@ export class UserSanitizationService {
         // Le NOMBRE de codes restants, jamais leurs empreintes (#8876) : une
         // empreinte de code à usage unique n'a aucune raison d'atteindre un navigateur.
         twoFactorBackupCodesRemaining: user.twoFactorBackupCodes?.length ?? 0,
-        lastLoginIp: user.lastLoginIp,
-        lastLoginLocation: user.lastLoginLocation,
-        lastLoginDevice: user.lastLoginDevice,
-        registrationIp: user.registrationIp,
-        registrationLocation: user.registrationLocation,
-        registrationDevice: user.registrationDevice,
+        // La borne de la purge, armée ou non (revue « privacy-retention-bypass ») :
+        // une adresse de plus de 12 mois ne se sert plus.
+        ...withoutExpiredConnectionTraces({
+          createdAt: user.createdAt,
+          lastLoginAt: user.lastLoginAt ?? null,
+          lastLoginIp: user.lastLoginIp,
+          lastLoginLocation: user.lastLoginLocation,
+          lastLoginDevice: user.lastLoginDevice,
+          registrationIp: user.registrationIp,
+          registrationLocation: user.registrationLocation,
+          registrationDevice: user.registrationDevice,
+        }, new Date()),
         registrationCountry: user.registrationCountry,
         deletedAt: user.deletedAt,
         deletedBy: user.deletedBy,

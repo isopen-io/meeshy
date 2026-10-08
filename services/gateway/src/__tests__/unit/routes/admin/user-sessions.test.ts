@@ -168,7 +168,7 @@ describe('GET /admin/users/:userId/sessions', () => {
     expect(body.pagination).toEqual({ total: 1, offset: 0, limit: 20, hasMore: false });
 
     const call = mockPrisma.userSession.findMany.mock.calls[0][0];
-    expect(call.where).toEqual({ userId: 'user123' });
+    expect(call.where).toMatchObject({ userId: 'user123', NOT: expect.any(Array) });
     expect(call.orderBy).toEqual({ lastActivityAt: 'desc' });
     // Ni le jeton, ni son renouvellement, ni l'empreinte d'appareil ne sortent.
     expect(call.select.sessionToken).toBeUndefined();
@@ -355,10 +355,10 @@ describe('GET /admin/users/:userId/security-events', () => {
     expect(call.orderBy).toEqual({ createdAt: 'desc' });
   });
 
-  it('sans filtre, ne contraint que userId', async () => {
+  it('sans filtre, ne contraint que userId et la borne de conservation (12 mois)', async () => {
     await app.inject({ method: 'GET', url: '/admin/users/user123/security-events' });
     const call = mockPrisma.securityEvent.findMany.mock.calls[0][0];
-    expect(call.where).toEqual({ userId: 'user123' });
+    expect(call.where).toEqual({ userId: 'user123', createdAt: { gte: expect.any(Date) } });
   });
 
   it('403 sans canViewSensitiveData (AUDIT)', async () => {

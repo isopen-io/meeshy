@@ -51,6 +51,7 @@ import {
   type TeamClosureMailer,
 } from '../../services/auth/team-session-closure';
 import { getCacheStore } from '../../services/CacheStore';
+import { RETENTION, monthsBefore, retainedSessionWhere } from '../../services/retention/retention-bounds';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { forAdministration } from '../../services/auth/security-event-view';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
@@ -163,7 +164,9 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
-      const where = { userId };
+      // La borne de la purge, armée ou non (revue « privacy-retention-bypass ») :
+      // une session close ou échue depuis plus de 90 jours ne se sert plus.
+      const where = { userId, ...retainedSessionWhere(new Date()) };
       const [sessions, total] = await Promise.all([
         fastify.prisma.userSession.findMany({
           where,
@@ -344,12 +347,14 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
       const where: Record<string, unknown> = { userId };
       if (eventType) where.eventType = eventType;
       if (severity) where.severity = severity;
-      if (createdAfter || createdBefore) {
-        where.createdAt = {
-          ...(createdAfter ? { gte: new Date(createdAfter) } : {}),
-          ...(createdBefore ? { lte: new Date(createdBefore) } : {})
-        };
-      }
+      // Jamais au-delà de la borne de conservation (12 mois), purge armée ou non.
+      const retainedFrom = monthsBefore(new Date(), RETENTION.securityEventMonths);
+      const asked = createdAfter ? new Date(createdAfter) : null;
+      const from = asked !== null && asked.getTime() > retainedFrom.getTime() ? asked : retainedFrom;
+      where.createdAt = {
+        gte: from,
+        ...(createdBefore ? { lte: new Date(createdBefore) } : {})
+      };
 
       const [events, total] = await Promise.all([
         fastify.prisma.securityEvent.findMany({
