@@ -12,12 +12,14 @@ import {
   loadAdminUserReportsReceived,
   loadAdminUserSessions,
   revokeAdminUserSession,
+  revokeAllAdminUserSessions,
   sessionStateOf,
+  withAllSessionsClosed,
   withoutSession,
 } from './admin-user-dossier';
 import { estClefSouveraine } from './souverain';
 
-const transport = (reponse: { readonly data: unknown; readonly pagination?: unknown }, vu: string[] = []) =>
+const transport = (reponse: { readonly data: unknown; readonly pagination?: unknown; readonly meta?: unknown }, vu: string[] = []) =>
   ({
     request: async (requete: { path: string }) => {
       vu.push(requete.path);
@@ -172,8 +174,15 @@ describe('les sessions', () => {
         {
           id: 's1',
           device: 'Chrome 140 · Android 15',
+          deviceName: '',
           ipAddress: '10.0.0.1',
           place: 'Lyon, FR',
+          appVersion: '',
+          appBuild: '',
+          platform: '',
+          loginMethod: '',
+          timezone: '',
+          userAgent: '',
           isValid: true,
           isTrusted: false,
           createdAt: null,
@@ -185,7 +194,75 @@ describe('les sessions', () => {
       ],
       total: 30,
       hasMore: true,
+      geolocation: null,
     });
+  });
+
+  test('TOUT ce que la passerelle retient est lu (#9613) : version, build, plateforme, nom, moyen, fuseau, agent', async () => {
+    const resultat = await loadAdminUserSessions({
+      source: 'gateway',
+      transport: transport({
+        data: [
+          {
+            id: 's1',
+            deviceName: 'Pixel 7',
+            appVersion: '2.13.0',
+            appBuild: '1874',
+            platform: 'android-shell',
+            loginMethod: 'magic_link',
+            timezone: 'Africa/Dakar',
+            userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7)',
+            isValid: true,
+          },
+        ],
+      }),
+      userId: 'u1',
+      offset: 0,
+    });
+    const row = resultat.ok ? resultat.data.rows[0] : undefined;
+    expect(row?.deviceName).toBe('Pixel 7');
+    expect(row?.appVersion).toBe('2.13.0');
+    expect(row?.appBuild).toBe('1874');
+    expect(row?.platform).toBe('android-shell');
+    expect(row?.loginMethod).toBe('magic_link');
+    expect(row?.timezone).toBe('Africa/Dakar');
+    expect(row?.userAgent).toContain('Pixel 7');
+  });
+
+  test('l’attribution DB-IP servie en `meta.geolocation` accompagne la page ; une adresse non https n’est pas un lien', async () => {
+    const geolocation = { provider: 'DB-IP', text: 'IP Geolocation by DB-IP', url: 'https://db-ip.com', license: 'CC-BY-4.0', approximate: true };
+    const servie = await loadAdminUserSessions({ source: 'gateway', transport: transport({ data: [], meta: { geolocation } }), userId: 'u1', offset: 0 });
+    expect(servie.ok && servie.data.geolocation).toEqual({ text: 'IP Geolocation by DB-IP', url: 'https://db-ip.com', approximate: true });
+    const hostile = await loadAdminUserSessions({ source: 'gateway', transport: transport({ data: [], meta: { geolocation: { text: 'x', url: 'http://x' } } }), userId: 'u1', offset: 0 });
+    expect(hostile.ok && hostile.data.geolocation).toBeNull();
+  });
+});
+
+describe('tout fermer (#9613)', () => {
+  test('DELETE sur les sessions du membre, et le nombre réellement fermé', async () => {
+    const calls: { path: string; method: string; body?: unknown }[] = [];
+    const recording = {
+      request: async (requete: { path: string; method: string; body?: unknown }) => {
+        calls.push(requete);
+        return { ok: true as const, data: { revokedCount: 3 } };
+      },
+    } as unknown as HttpTransport;
+    const resultat = await revokeAllAdminUserSessions({ source: 'gateway', transport: recording, userId: 'u 1' });
+    expect(calls).toEqual([{ method: 'DELETE', path: '/api/v1/admin/users/u%201/sessions' }]);
+    expect(resultat).toEqual({ ok: true, data: { revokedCount: 3 } });
+  });
+
+  test('l’effet immédiat ferme chaque session ouverte de la page, au motif de l’administration', () => {
+    const page = { rows: [{ id: 's1', isValid: true, invalidatedAt: null, invalidatedReason: null }, { id: 's2', isValid: false, invalidatedAt: '2026-01-01T00:00:00Z', invalidatedReason: 'logout' }], total: 2, hasMore: false };
+    expect(withAllSessionsClosed(page, '2026-10-08T12:00:00.000Z')).toEqual({
+      rows: [
+        { id: 's1', isValid: false, invalidatedAt: '2026-10-08T12:00:00.000Z', invalidatedReason: 'admin_revoke' },
+        { id: 's2', isValid: false, invalidatedAt: '2026-01-01T00:00:00Z', invalidatedReason: 'logout' },
+      ],
+      total: 2,
+      hasMore: false,
+    });
+    expect(withAllSessionsClosed('autre chose', 'x')).toBe('autre chose');
   });
 });
 

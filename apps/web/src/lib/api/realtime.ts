@@ -57,6 +57,23 @@ let fixturesConnecting = false;
 /** Le pont d'appel de la connexion courante (#6382) — refait à chaque connexion. */
 let unbridgeCalls: (() => void) | null = null;
 
+/**
+ * UNE SESSION RÉVOQUÉE DIT POURQUOI (#9613) — le motif est NOTÉ avant que la
+ * session ne finisse, pour que l'écran de connexion l'explique
+ * (`lib/session-end.ts`). Sans motif (jeton expiré), la session finit aussitôt ;
+ * un module qui ne se charge pas ne la retient jamais ouverte.
+ */
+function endWithReason(reason?: string): void {
+  if (reason === undefined) {
+    endRevokedSession(sessionStore);
+    return;
+  }
+  void import('@/lib/session-end')
+    .then(({ sessionEnd }) => sessionEnd.note(reason))
+    .catch(() => undefined)
+    .finally(() => endRevokedSession(sessionStore));
+}
+
 function bridgeCalls(next: RealtimeConnection | null): void {
   unbridgeCalls?.();
   if (next === null) {
@@ -144,7 +161,7 @@ function syncConnection(): void {
       conversationStore,
       outbox: outboxStore,
       viewerId: currentViewerId,
-      onClearSession: () => endRevokedSession(sessionStore),
+      onClearSession: endWithReason,
     },
   );
   bridgeCalls(connection);

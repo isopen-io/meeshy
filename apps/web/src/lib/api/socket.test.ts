@@ -782,6 +782,16 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     expect(cleared).toBe(2);
   });
 
+  test('le MOTIF d’une révocation accompagne la fin de session — l’écran de connexion l’explique (#9613)', () => {
+    const reasons: unknown[] = [];
+    const { deps, socket } = buildDeps({ onClearSession: (reason) => reasons.push(reason) });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.AUTH_SESSION_REVOKED, { code: 'session_revoked', message: 'révoqué', reason: 'admin_revoke' });
+    socket.fire(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, { code: 'token_expired', message: 'expiré' });
+    expect(reasons).toEqual(['admin_revoke', undefined]);
+  });
+
   test('reconnexion : l’évènement `online` relance `connect()` si le socket est déconnecté', () => {
     const listeners: Record<string, () => void> = {};
     const windowTarget = {

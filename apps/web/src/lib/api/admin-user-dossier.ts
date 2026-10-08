@@ -50,7 +50,7 @@ const garder = <T>(valeur: T | null): valeur is T => valeur !== null;
 async function lire<T>(
   deps: AdminDeps & { readonly signal?: AbortSignal },
   path: string,
-  decode: (resultat: { readonly data: unknown; readonly pagination?: unknown }) => T,
+  decode: (resultat: { readonly data: unknown; readonly pagination?: unknown; readonly meta?: Readonly<Record<string, unknown>> }) => T,
 ): Promise<ApiResult<T>> {
   const result = await deps.transport.request<unknown>({
     method: 'GET',
@@ -254,8 +254,18 @@ export function loadAdminUserVoice(params: AdminDeps & { readonly userId: string
 export type AdminSession = {
   readonly id: string;
   readonly device: string;
+  /** Le nom lisible DÉCLARÉ par le client (« Pixel 7 ») — la chaîne vide quand il manque. */
+  readonly deviceName: string;
   readonly ipAddress: string;
   readonly place: string;
+  /** Ce que le client déclare et ce que le serveur pose (#9610) — des CODES pour la plateforme et le moyen, à interpréter. */
+  readonly appVersion: string;
+  readonly appBuild: string;
+  readonly platform: string;
+  readonly loginMethod: string;
+  readonly timezone: string;
+  /** L'agent BRUT, montré en détail : l'appareil composé en est la lecture. */
+  readonly userAgent: string;
   readonly isValid: boolean;
   readonly isTrusted: boolean;
   readonly createdAt: string | null;
@@ -279,8 +289,15 @@ function decodeSession(brut: unknown): AdminSession | null {
   return {
     id: ligne.id,
     device: appareil.join(' · ') || asText(ligne.deviceType) || '—',
+    deviceName: asText(ligne.deviceName),
     ipAddress: asText(ligne.ipAddress),
     place: [asText(ligne.city), asText(ligne.country)].filter((v) => v !== '').join(', ') || asText(ligne.location),
+    appVersion: asText(ligne.appVersion),
+    appBuild: asText(ligne.appBuild),
+    platform: asText(ligne.platform),
+    loginMethod: asText(ligne.loginMethod),
+    timezone: asText(ligne.timezone),
+    userAgent: asText(ligne.userAgent),
     isValid: ligne.isValid === true,
     isTrusted: ligne.isTrusted === true,
     createdAt: dateOuNull(ligne.createdAt),
@@ -311,6 +328,35 @@ export async function revokeAdminUserSession(params: AdminDeps & { readonly user
       path: adminEndpoints.usersByUserIdSessionsBySessionId(params.userId, params.sessionId),
     }),
   );
+}
+
+/**
+ * TOUT FERMER (#9613) — `DELETE /admin/users/:userId/sessions` : toutes les
+ * sessions du membre en base, toutes ses sockets, `REVOKE_SESSION` journalisé
+ * (`scope: 'all'`), le membre informé au nom de « l'équipe Meeshy ». La route
+ * ne lit AUCUN corps : aucun motif ne s'y écrit. Rend le nombre réellement
+ * fermé.
+ */
+export async function revokeAllAdminUserSessions(
+  params: AdminDeps & { readonly userId: string },
+): Promise<ApiResult<{ readonly revokedCount: number }>> {
+  const result = await params.transport.request<unknown>({ method: 'DELETE', path: adminEndpoints.usersByUserIdSessions(params.userId) });
+  if (!result.ok) return result;
+  return { ok: true, data: { revokedCount: asCount(asRecord(result.data)?.revokedCount) } };
+}
+
+/** L'effet IMMÉDIAT de « tout fermer » : chaque session ouverte de la page se dit fermée par l'administration. */
+export function withAllSessionsClosed(before: unknown, nowIso: string): unknown {
+  const current = asRecord(before);
+  const rows = current?.rows;
+  if (current === null || !Array.isArray(rows)) return before;
+  return {
+    ...current,
+    rows: rows.map((row) => {
+      const ligne = asRecord(row);
+      return ligne === null || ligne.isValid !== true ? row : { ...ligne, isValid: false, invalidatedAt: nowIso, invalidatedReason: 'admin_revoke' };
+    }),
+  };
 }
 
 /**
@@ -358,10 +404,26 @@ function decodeSecurityEvent(brut: unknown): AdminSecurityEvent | null {
 export const adminUserSessionsQueryKey = (userId: string, offset: number) => [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'sessions', offset] as const;
 export const adminUserSecurityQueryKey = (userId: string, offset: number) => [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'security', offset] as const;
 
-export function loadAdminUserSessions(params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal }) {
+/** L'attribution que la licence de la base de lieux exige (DB-IP, CC-BY 4.0), telle que SERVIE en `meta.geolocation`. */
+export type AdminGeolocation = { readonly text: string; readonly url: string; readonly approximate: boolean };
+
+export type AdminSessionsPage = AdminDossierPage<AdminSession> & { readonly geolocation: AdminGeolocation | null };
+
+/** Une adresse qui n'est pas `https:` n'est pas un lien ; absente, rien n'est attribué à sa place. */
+function decodeGeolocation(brut: unknown): AdminGeolocation | null {
+  const servie = asRecord(brut);
+  const text = asText(servie?.text);
+  const url = asText(servie?.url);
+  if (text === '' || !url.startsWith('https://')) return null;
+  return { text, url, approximate: servie?.approximate !== false };
+}
+
+export function loadAdminUserSessions(
+  params: AdminDeps & { readonly userId: string; readonly offset: number; readonly signal?: AbortSignal },
+): Promise<ApiResult<AdminSessionsPage>> {
   return lire(params, `${adminEndpoints.usersByUserIdSessions(params.userId)}?${pagine(params.offset)}`, (r) => {
     const servie = pageServie(r);
-    return page(servie.lignes.map(decodeSession).filter(garder), servie.meta, params.offset);
+    return { ...page(servie.lignes.map(decodeSession).filter(garder), servie.meta, params.offset), geolocation: decodeGeolocation(r.meta?.geolocation) };
   });
 }
 

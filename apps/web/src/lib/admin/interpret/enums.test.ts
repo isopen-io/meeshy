@@ -33,8 +33,8 @@ const families = Object.keys(ENUM_FAMILIES) as AdminEnumFamily[];
 const codesOf = (family: AdminEnumFamily): readonly string[] => Object.keys(ENUM_FAMILIES[family]);
 
 describe('chaque code de chaque famille est nommé dans les quatre langues de l’administration', () => {
-  test('la table couvre les vingt-neuf tables de la spécification (qualité d’appel et de traduction se partagent la leur), plus le motif d’un verrou et la fin d’une session (lot Personnes)', () => {
-    expect(families).toHaveLength(31);
+  test('la table couvre les vingt-neuf tables de la spécification (qualité d’appel et de traduction se partagent la leur), plus le motif d’un verrou et la fin d’une session (lot Personnes), plus la plateforme et le moyen de connexion d’une session (#9613)', () => {
+    expect(families).toHaveLength(33);
   });
 
   for (const family of families) {

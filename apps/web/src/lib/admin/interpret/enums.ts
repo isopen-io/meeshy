@@ -100,7 +100,12 @@ export const ENUM_FAMILIES = {
     security_breach: D,
     security_concern: W,
     session_limit_exceeded: N,
+    logout_all_devices: N,
   },
+  /** La plateforme qu'une session a DÉCLARÉE (`UserSession.platform`, contrat `client-session.ts`, #9610). */
+  sessionPlatform: { ios: N, web: N, pwa: N, 'android-shell': N },
+  /** Le moyen par lequel une session s'est ouverte, posé par le SERVEUR (`UserSession.loginMethod`, #9610). */
+  loginMethod: { password: N, two_factor: N, magic_link: N, registration: N, email_verification: N, oauth: N, anonymous: N },
 } as const satisfies Readonly<Record<string, Table>>;
 
 export type AdminEnumFamily = keyof typeof ENUM_FAMILIES;
@@ -196,6 +201,8 @@ export const interpretPresence = interpreter('presence');
 export const interpretLockReason = interpreter('lockReason');
 /** `password reset` est écrit avec une ESPACE par `UserManagementService` : le code se lit espaces ou tirets bas confondus. */
 export const interpretSessionEnd: Interpreter = (code, language) => interpretEnum('sessionEnd', code?.trim().replace(/\s+/g, '_'), language);
+export const interpretSessionPlatform: Interpreter = (code, language) => interpretEnum('sessionPlatform', code?.trim(), language);
+export const interpretLoginMethod: Interpreter = (code, language) => interpretEnum('loginMethod', code?.trim(), language);
 
 /** Par POSITION (0 à 3) : la passerelle sert les tranches d'activité dans un ordre fixe, avec des libellés français que l'on ignore. */
 export const interpretActivityBucket = (index: number, language: AdminLanguage): Interpreted =>

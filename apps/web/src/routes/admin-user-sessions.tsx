@@ -6,7 +6,7 @@ import { AdminBadge } from '@/components/admin/badges';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { AdminMomentText, AdminNotProvided } from '@/components/admin/meta';
 import type { AdminColumn } from '@/components/admin/responsive-rows';
-import { interpretSessionEnd } from '@/lib/admin/interpret/enums';
+import { interpretLoginMethod, interpretSessionEnd, interpretSessionPlatform } from '@/lib/admin/interpret/enums';
 import { adminDate, adminMomentOf } from '@/lib/admin/interpret/time';
 import { useAdminAction } from '@/lib/admin/use-admin-action';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
@@ -15,7 +15,9 @@ import {
   adminUserSessionsQueryKey,
   loadAdminUserSessions,
   revokeAdminUserSession,
+  revokeAllAdminUserSessions,
   sessionStateOf,
+  withAllSessionsClosed,
   withoutSession,
   type AdminSession,
 } from '@/lib/api/admin-user-dossier';
@@ -41,6 +43,17 @@ import { DossierList, servi } from './admin-user-dossier-list';
  * est consigné) et par `useAdminAction` : la ligne s'en va tout de suite, revient si la passerelle refuse
  * (refus dit en mots, annoncé), puis la liste et les chiffres de la fiche sont relus. Hors ligne, le
  * bouton est désactivé : rien ne part.
+ *
+ * **TOUT est montré** (décision porteur du 2026-10-08, #9613) : le nom d'appareil déclaré, l'agent brut,
+ * la version et le build de Meeshy, la plateforme, le moyen de connexion, l'adresse, le lieu (dit
+ * approximatif, tiré de l'adresse par une base locale), le fuseau, l'ouverture, la dernière activité,
+ * l'état et le motif de clôture. L'attribution DB-IP (CC-BY 4.0) servie en `meta.geolocation` suit la
+ * liste ; absente (serveur antérieur), elle n'est pas inventée.
+ *
+ * **« Tout fermer »** (`DELETE /admin/users/:userId/sessions`) : confirmation qui dit que le membre en
+ * sera informé au nom de « l'équipe Meeshy », chaque session ouverte de la page se dit fermée aussitôt,
+ * se rouvre sur un refus. La route ne lit aucun corps : aucun motif ne s'y écrit, la feuille n'en
+ * demande donc pas.
  */
 const sessionsKeyPrefix = (userId: string) => [ADMIN_SOUVERAIN_PREFIXE, 'user', userId, 'sessions'] as const;
 
@@ -60,11 +73,13 @@ export function AdminUserSessionsList({
   const reach = useAdminReach();
   const online = useOnline();
   const action = useAdminAction<{ readonly acknowledged: true }>({ language, onAnnounce });
+  const closeAll = useAdminAction<{ readonly revokedCount: number }>({ language, onAnnounce });
   const [offset, setOffset] = useState(0);
   const [target, setTarget] = useState<AdminSession | null>(null);
+  const [closingAll, setClosingAll] = useState(false);
   /* `run` ne rend la main qu'APRÈS la relecture : tant qu'elle dure, le geste est « en cours » pour l'écran. */
   const [settling, setSettling] = useState(false);
-  const running = action.state.phase === 'running' || settling;
+  const running = action.state.phase === 'running' || closeAll.state.phase === 'running' || settling;
   const canRevoke = reach.hasAdminRank;
 
   const sessions = useQuery({
@@ -94,15 +109,72 @@ export function AdminUserSessionsList({
     setTarget(null);
   };
 
+  const revokeAll = async () => {
+    const done = await closeAll.run({
+      call: () => revokeAllAdminUserSessions({ ...deps, userId }),
+      success: 'admin.security.revokeAll.done',
+      optimistic: { key: adminUserSessionsQueryKey(userId, offset), apply: (before) => withAllSessionsClosed(before, now.toISOString()) },
+      invalidate: [sessionsKeyPrefix(userId), adminUserStatsQueryKey(userId)],
+    });
+    if (done !== null) setClosingAll(false);
+  };
+
+  const geolocation = sessions.data?.geolocation ?? null;
+  const approximate = geolocation?.approximate ?? false;
+  const anyOpen = (sessions.data?.rows ?? []).some((session) => sessionStateOf(session, now) === 'valid');
+
   const columns: readonly AdminColumn<AdminSession>[] = [
     {
       id: 'device',
       header: translateAdmin(language, 'admin.security.device'),
       primary: true,
-      cell: (session) => <span className="min-w-0 break-words text-start text-caption font-medium">{session.device}</span>,
+      cell: (session) => <SessionDevice session={session} />,
     },
-    { id: 'place', header: translateAdmin(language, 'admin.security.place'), cell: (session) => (session.place === '' ? <AdminNotProvided language={language} /> : session.place) },
-    { id: 'ip', header: translateAdmin(language, 'admin.security.ip'), cell: (session) => (session.ipAddress === '' ? <AdminNotProvided language={language} /> : session.ipAddress) },
+    {
+      id: 'version',
+      header: translateAdmin(language, 'admin.security.version'),
+      cell: (session) =>
+        session.appVersion === '' && session.platform === '' ? (
+          <AdminNotProvided language={language} />
+        ) : (
+          <span className="grid justify-items-start gap-1 text-start text-caption">
+            {session.appVersion === '' ? null : <span dir="ltr">{session.appBuild === '' ? session.appVersion : `${session.appVersion} (${session.appBuild})`}</span>}
+            {session.platform === '' ? null : <span style={{ color: 'var(--color-ios-ink-2)' }}>{interpretSessionPlatform(session.platform, language).label}</span>}
+          </span>
+        ),
+    },
+    {
+      id: 'method',
+      header: translateAdmin(language, 'admin.security.method'),
+      cell: (session) => (session.loginMethod === '' ? <AdminNotProvided language={language} /> : interpretLoginMethod(session.loginMethod, language).label),
+    },
+    {
+      id: 'place',
+      header: translateAdmin(language, 'admin.security.place'),
+      cell: (session) =>
+        session.place === '' ? (
+          <AdminNotProvided language={language} />
+        ) : approximate ? (
+          translateAdmin(language, 'admin.security.placeApproximate', { place: session.place })
+        ) : (
+          session.place
+        ),
+    },
+    {
+      id: 'ip',
+      header: translateAdmin(language, 'admin.security.ip'),
+      cell: (session) => (session.ipAddress === '' ? <AdminNotProvided language={language} /> : <span dir="ltr">{session.ipAddress}</span>),
+    },
+    {
+      id: 'timezone',
+      header: translateAdmin(language, 'admin.meta.timezone'),
+      cell: (session) => (session.timezone === '' ? <AdminNotProvided language={language} /> : <span dir="ltr">{session.timezone}</span>),
+    },
+    {
+      id: 'opened',
+      header: translateAdmin(language, 'admin.security.opened'),
+      cell: (session) => (session.createdAt === null ? <AdminNotProvided language={language} /> : adminDate(session.createdAt, language)),
+    },
     {
       id: 'status',
       header: translateAdmin(language, 'admin.col.status'),
@@ -149,6 +221,28 @@ export function AdminUserSessionsList({
 
   return (
     <>
+      {canRevoke && anyOpen ? (
+        <button
+          type="button"
+          data-admin-action="revoke-all-sessions"
+          disabled={!online || running}
+          onClick={() => {
+            closeAll.reset();
+            setClosingAll(true);
+          }}
+          className="mb-3 inline-flex items-center gap-2 rounded-chip px-3 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
+          style={{
+            minHeight: 44,
+            backgroundColor: 'var(--color-ios-surface)',
+            color: 'var(--color-danger)',
+            border: '1px solid var(--color-edge)',
+            outlineColor: 'var(--color-ios-brand)',
+          }}
+        >
+          <AdminGlyph name="prohibit" size={16} />
+          {translateAdmin(language, 'admin.security.revokeAll')}
+        </button>
+      ) : null}
       <DossierList
         language={language}
         query={sessions}
@@ -159,6 +253,29 @@ export function AdminUserSessionsList({
         rowAttributes={(session) => ({ 'data-admin-session': session.id })}
         caption={translateAdmin(language, 'admin.security.sessions')}
       />
+      {geolocation === null ? null : (
+        <p data-admin-geolocation className="pt-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          <a href={geolocation.url} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: 'inherit' }}>
+            {geolocation.text}
+          </a>
+        </p>
+      )}
+      {closingAll ? (
+        <AdminConfirmSheet
+          language={language}
+          title={translateAdmin(language, 'admin.security.revokeAll.title')}
+          body={translateAdmin(language, 'admin.security.revokeAll.body')}
+          confirmLabel={translateAdmin(language, 'admin.security.revokeAll')}
+          tone="danger"
+          busy={running}
+          error={closeAll.state.phase === 'error' ? closeAll.state.message : null}
+          onConfirm={() => void revokeAll()}
+          onCancel={() => {
+            closeAll.reset();
+            setClosingAll(false);
+          }}
+        />
+      ) : null}
       {target === null ? null : (
         <AdminConfirmSheet
           language={language}
@@ -173,6 +290,21 @@ export function AdminUserSessionsList({
         />
       )}
     </>
+  );
+}
+
+/** L'appareil : le nom déclaré d'abord, la lecture de l'agent dessous, l'agent brut en détail. */
+function SessionDevice({ session }: { readonly session: AdminSession }) {
+  return (
+    <span className="grid min-w-0 justify-items-start gap-1 text-start text-caption">
+      <span className="min-w-0 break-words font-medium">{session.deviceName === '' ? session.device : session.deviceName}</span>
+      {session.deviceName === '' ? null : <span className="min-w-0 break-words">{session.device}</span>}
+      {session.userAgent === '' ? null : (
+        <span dir="ltr" className="min-w-0 break-words" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {session.userAgent}
+        </span>
+      )}
+    </span>
   );
 }
 

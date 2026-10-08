@@ -197,7 +197,7 @@ export type RealtimeDeps = {
   /** Le MÊME geste qu'un 401 HTTP (`api/client.ts` § `onUnauthorized`) —
    * `auth:token-expired`/`auth:session-revoked` en sont l'équivalent socket
    * (§ 1.1/3.1 de la spécification : pas de rafraîchissement ce lot, D-26). */
-  readonly onClearSession: () => void;
+  readonly onClearSession: (reason?: AuthSessionRevokedEventData['reason']) => void;
   /** Horloge INJECTABLE (motif `perform-send.ts`) — jamais `Date.now()` lu
    * directement, pour que le témoin d'expiration soit déterministe. */
   readonly now?: () => number;
@@ -857,7 +857,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   /** Le MÊME geste qu'un 401 HTTP (§ doc-comment de `RealtimeDeps`) — les
    * DEUX motifs ferment la session, aucun ne tente de rafraîchir (D-26). */
   const onTokenExpired = (_payload: AuthTokenExpiredEventData): void => deps.onClearSession();
-  const onSessionRevoked = (_payload: AuthSessionRevokedEventData): void => deps.onClearSession();
+  /* Le MOTIF voyage (#9613) : l'écran de connexion dit pourquoi la session s'est fermée. */
+  const onSessionRevoked = (payload: AuthSessionRevokedEventData): void => deps.onClearSession(payload?.reason);
 
   /**
    * LE REJEU DE LA COUPURE (revue-correction #5793) — la passerelle émet

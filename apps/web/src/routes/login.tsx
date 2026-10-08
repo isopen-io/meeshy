@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { AuthBrandFooter, AuthSubmitButton, AuthTitle } from '@/components/auth-chrome';
@@ -130,6 +130,12 @@ const INDIGO_LINK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--
  * prouver deux `<input>`. La PORTE est une donnée ; l'adresse qui la choisit
  * est une autre question, et `loginMethodFromSearch` la tient, seule et pure.
  */
+/**
+ * POURQUOI LA SESSION PRÉCÉDENTE S'EST FERMÉE (#9613) — chargée à la demande :
+ * la connexion d'un lecteur qui n'a rien à apprendre n'en paie que l'appel.
+ */
+const SessionEndNotice = lazy(() => import('@/components/session-end-notice'));
+
 export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?: MagicLinkPanelDeps } = {}) {
   const [search] = useSearch();
   return (
@@ -282,6 +288,12 @@ export function LoginDoors({
           quelque chose au lieu de répéter le champ. `MagicLinkPanel` n'a
           plus de prop `heading` : plus personne ne le taisait. */}
       {method === 'password' || requires2FA ? <AuthTitle gradient="login" /> : null}
+
+      {requires2FA ? null : (
+        <Suspense fallback={null}>
+          <SessionEndNotice language={language} />
+        </Suspense>
+      )}
 
       {!online ? (
         <p className="w-full rounded-field px-4 py-2 text-center text-caption" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}>
