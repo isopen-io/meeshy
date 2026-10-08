@@ -228,7 +228,7 @@ describe('DELETE /admin/users/:userId/sessions/:sessionId', () => {
     // La requête d'appartenance filtre sur LES DEUX colonnes — sinon l'id de
     // session d'un AUTRE compte serait révocable via ce chemin.
     const call = mockPrisma.userSession.findFirst.mock.calls[0][0];
-    expect(call.where).toEqual({ id: 'sess-other', userId: 'user123' });
+    expect(call.where).toEqual({ id: 'sess-other', userId: 'user123', isValid: true });
   });
 
   it('révoque la session, coupe le SEUL socket qui la porte, et journalise REVOKE_SESSION', async () => {

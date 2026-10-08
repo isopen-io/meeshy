@@ -293,15 +293,18 @@ export async function invalidateSession(
 ): Promise<boolean> {
   const db = getPrisma();
   try {
-    await db.userSession.update({
-      where: { id: sessionId },
+    // Une session DÉJÀ close ne se réécrit pas (audit A2-5) : son motif
+    // d'origine resterait écrasé, et un `invalidatedAt` relancé prolongerait sa
+    // conservation. `false` : rien n'a été fermé.
+    const { count } = await db.userSession.updateMany({
+      where: { id: sessionId, isValid: true },
       data: {
         isValid: false,
         invalidatedAt: new Date(),
         invalidatedReason: reason,
       },
     });
-    return true;
+    return count > 0;
   } catch {
     return false;
   }

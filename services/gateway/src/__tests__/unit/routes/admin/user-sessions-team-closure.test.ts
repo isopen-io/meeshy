@@ -324,3 +324,21 @@ describe('audit A2-3 — la route d’administration ne sert pas la trace d’un
     expect(res.json().data[4]).toMatchObject({ ipAddress: '203.0.113.4', metadata: { source: 'web' } });
   });
 });
+
+describe('audit A2-5 — refermer une session déjà close ne fait RIEN', () => {
+  it('une session close n’est ni réécrite, ni annoncée, ni signalée par e-mail', async () => {
+    const { findFirstIn } = await import('../../../helpers/mongo-where');
+    const closed = { id: 'sess-1', userId: 'user123', isValid: false, invalidatedAt: new Date('2026-09-01'), invalidatedReason: 'logout' };
+    mockPrisma.userSession.findFirst.mockImplementation(findFirstIn([closed]) as never);
+    const app = buildApp();
+
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123/sessions/sess-1' });
+    await settle();
+    await app.close();
+
+    expect(res.statusCode).toBe(404);
+    expect(mockSessionService.invalidateSession).not.toHaveBeenCalled();
+    expect(mockPrisma.securityEvent.create).not.toHaveBeenCalled();
+    expect(mockEmail.sendSecurityAlertEmail).not.toHaveBeenCalled();
+  });
+});

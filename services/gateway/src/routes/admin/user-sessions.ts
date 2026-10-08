@@ -218,12 +218,14 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
       // La cible appartient bien à CE compte — `requireHierarchy` ne compare
       // que le rang du VIEWER à celui du userId de la route, jamais l'id de
       // session à son propriétaire.
+      // Une session DÉJÀ close ne se referme pas (audit A2-5) : ni motif
+      // réécrit, ni conservation prolongée, ni membre averti pour rien.
       const session = await fastify.prisma.userSession.findFirst({
-        where: { id: sessionId, userId },
+        where: { id: sessionId, userId, isValid: true },
         select: { id: true }
       });
       if (!session) {
-        return sendNotFound(reply, 'Session non trouvée');
+        return sendNotFound(reply, 'Session non trouvée ou déjà fermée');
       }
 
       const revoked = await invalidateSession(sessionId, 'admin_revoke');
