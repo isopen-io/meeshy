@@ -1098,6 +1098,7 @@ const pt = {
   'attachment.protected.open.hint': 'toque para ver em tela cheia',
   'media.reactions.badge.a11y': 'Reações',
   'media.reactions.badge.mine.a11y': 'incluindo a sua',
+  'message.join.noAccount': 'sem conta',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Vídeo',
   'attachment.kind.audio': 'Áudio',

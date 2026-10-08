@@ -23,9 +23,9 @@ import {
   type LinkRefusal,
 } from '@/lib/api/link-join';
 import { appQueryClient } from '@/lib/api/query-client';
-import { sessionStore, type GuestIdentity } from '@/lib/api/session';
+import { heldAccountOf, sessionStore, type GuestIdentity } from '@/lib/api/session';
 import { translateInvite, type InviteCatalogKey } from '@/lib/i18n-invite-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { ANONYMOUS_MODE, joinChoicesOf } from '@/lib/links/invitation-view';
 import { copyLinkText, LINK_ANNOUNCE_MS, type CopyOutcome } from '@/lib/links/link-copy';
 import { shareLinkUrl, webOriginOf } from '@/lib/links/web-origin';
@@ -106,6 +106,10 @@ export type ChatJoinDeps = {
    * Sous un compte, l'identité est TENUE à côté de lui (#8816) — jamais à sa
    * place. */
   readonly adoptGuest: (sessionToken: string, guest: GuestIdentity) => void;
+  /** La langue choisie en rejoignant devient la langue d'INTERFACE d'un
+   * invité sans compte (#9710) — un choix explicite, persisté comme celui des
+   * Réglages, que l'invité peut changer ensuite. */
+  readonly adoptInterfaceLanguage: (language: string) => void;
   readonly go: (url: string, replace: boolean) => void;
   /** Ce qui suit une jonction réussie : la liste doit compter la conversation
    * rejointe, que le cache persisté ignore encore. */
@@ -136,6 +140,12 @@ const DEFAULT_DEPS: ChatJoinDeps = {
   },
   joinGuest: (link, body) => joinLinkAsGuest(apiDeps, { link, body }),
   adoptGuest: (sessionToken, guest) => sessionStore.getState().adoptAnonymous({ sessionToken, guest }),
+  adoptInterfaceLanguage: (code) => {
+    const language = interfaceLanguageOf(code);
+    /* Un catalogue qui ne se charge pas laisse l'interface telle qu'elle est :
+       le fil s'ouvre quand même, dans la langue d'avant. */
+    if (language !== null) setInterfaceLanguage(language).catch(() => undefined);
+  },
   go: navigate,
   joined: () => {
     void appQueryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
@@ -334,7 +344,12 @@ export function ChatJoin({
       conversationId: result.data.conversationId,
       link,
       mayWrite: result.data.mayWrite,
+      language: validated.body.language,
     });
+    /* LA LANGUE CHOISIE EST CELLE DE L'INVITÉ (#9710) : elle vient de passer au
+       rang 1 de son Prisme avec son identité ; elle devient aussi la langue de
+       son interface. Un COMPTE qui rejoint en anonyme garde la sienne (#8816). */
+    if (heldAccountOf(session) === null) deps.adoptInterfaceLanguage(validated.body.language);
     deps.go(href('thread', { conversation: result.data.conversationId }), true);
     deps.joined();
   }

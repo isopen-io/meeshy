@@ -91,6 +91,15 @@ export type GuestIdentity = {
   readonly conversationId: string;
   readonly link: string;
   readonly mayWrite: boolean;
+  /**
+   * LA LANGUE CHOISIE EN REJOIGNANT (#9710) — celle que la jonction a
+   * déclarée (`GuestJoinBody.language`). C'est le rang 1 du Prisme de
+   * l'invité (`resolveReaderLanguages`), donc la langue de composition par
+   * défaut : sans elle, l'invité retombait sur le lecteur provisoire (`'fr'`)
+   * et sa réponse partait étiquetée française. Optionnelle : une session
+   * persistée d'avant ce lot ne la porte pas, et reste valide.
+   */
+  readonly language?: string;
 };
 
 export type AuthenticatedSession = {
@@ -287,8 +296,9 @@ function pickSessionUser(user: SessionUser): SessionUser {
   };
 }
 
-/** La MÊME discipline pour l'invité (règle 1) : un objet NEUF, cinq champs, et
- * rien de ce que la charge de jonction transporte à côté. */
+/** La MÊME discipline pour l'invité (règle 1) : un objet NEUF, cinq champs —
+ * six avec la langue choisie quand elle est connue — et rien de ce que la
+ * charge de jonction transporte à côté. */
 function pickGuest(guest: GuestIdentity): GuestIdentity {
   return {
     participantId: guest.participantId,
@@ -296,6 +306,7 @@ function pickGuest(guest: GuestIdentity): GuestIdentity {
     conversationId: guest.conversationId,
     link: guest.link,
     mayWrite: guest.mayWrite,
+    ...(guest.language === undefined ? {} : { language: guest.language }),
   };
 }
 
@@ -326,6 +337,7 @@ function isGuestIdentity(value: unknown): value is GuestIdentity {
   if (typeof g.conversationId !== 'string' || g.conversationId === '') return false;
   if (typeof g.link !== 'string' || g.link === '') return false;
   if (typeof g.mayWrite !== 'boolean') return false;
+  if (g.language !== undefined && typeof g.language !== 'string') return false;
   return g.participantId === null || typeof g.participantId === 'string';
 }
 

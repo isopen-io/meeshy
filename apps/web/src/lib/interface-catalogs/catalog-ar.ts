@@ -1091,6 +1091,7 @@ const ar = {
   'attachment.protected.open.hint': 'المس للعرض بملء الشاشة',
   'media.reactions.badge.a11y': 'التفاعلات',
   'media.reactions.badge.mine.a11y': 'بما في ذلك تفاعلك',
+  'message.join.noAccount': 'بدون حساب',
   'attachment.kind.image': 'صورة',
   'attachment.kind.video': 'فيديو',
   'attachment.kind.audio': 'مقطع صوتي',

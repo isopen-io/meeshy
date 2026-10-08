@@ -143,6 +143,22 @@ test('témoin à deux locales — J-8', () => {
   expect(en).toMatch(/Monday/);
 });
 
+/**
+ * #9710 — recette du 2026-10-08 : un fil lu en anglais (noms de jours anglais)
+ * s'ouvrait sur « Aujourd'hui ». Les trois mots relatifs suivent la MÊME
+ * locale que le nom du jour — celle du lecteur — jamais un français par défaut.
+ */
+test('les mots relatifs parlent la locale du lecteur : anglais, portugais régional, et une langue hors du produit', () => {
+  expect(dayLabel('2026-03-10T09:00:00Z', opts({ locale: 'en' }))).toBe('Today');
+  expect(dayLabel('2026-03-09T09:00:00Z', opts({ locale: 'en' }))).toBe('Yesterday');
+  expect(dayLabel('2026-03-08T09:00:00Z', opts({ locale: 'en' }))).toBe('Day before yesterday');
+  expect(dayLabel('2026-03-10T09:00:00Z', opts({ locale: 'pt-BR' }))).toBe('Hoje');
+  expect(dayLabel('2026-03-09T09:00:00Z', opts({ locale: 'ar' }))).toBe('أمس');
+  const japanese = dayLabel('2026-03-10T09:00:00Z', opts({ locale: 'ja' }));
+  expect(japanese).not.toBe("Aujourd'hui");
+  expect(japanese).toBe(new Intl.RelativeTimeFormat('ja', { numeric: 'auto' }).format(0, 'day'));
+});
+
 test('labels injectables => un catalogue peut remplacer « Aujourd’hui »', () => {
   expect(
     dayLabel('2026-03-10T09:00:00Z', opts({ labels: { today: 'Today', yesterday: 'Hier', dayBeforeYesterday: 'Avant-hier' } })),
