@@ -15,6 +15,13 @@
 #
 # Ces sauvegardes sont sur le disque de la production : elles protègent d'une erreur
 # ou d'une corruption, pas de la perte du serveur (copie hors site : #9232).
+#
+# Le VERDICT de chaque exécution, réussie ou non, est publié dans un dossier À PART
+# (#9668) : STATUS_DIR/etat.json, en 644 dans un dossier 755. C'est le SEUL dossier
+# monté (en lecture seule) dans la passerelle, qui l'affiche à l'administration et
+# alerte chaque jour à 5 h ; elle ne voit jamais les sauvegardes. Il ne porte ni
+# chemin d'hôte ni secret : horodatages, statut, raison d'un échec, et le contenu
+# de la dernière sauvegarde réussie, qui survit aux échecs suivants.
 set -euo pipefail
 umask 077
 
@@ -26,40 +33,121 @@ DB_NAME="${DB_NAME:-meeshy}"
 VOLUMES="${VOLUMES:-meeshy_gateway_uploads meeshy_gateway_sounds meeshy_frontend_uploads meeshy_redis_data}"
 MIN_FREE_GB="${MIN_FREE_GB:-40}"
 LOCK_FILE="${LOCK_FILE:-/run/meeshy-nightly-backup.lock}"
+STATUS_DIR="${STATUS_DIR:-/opt/meeshy/backups/nightly-status}"
 
 log() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*"; }
+
+# Publie le verdict : STATUS_DIR/etat.json, écrit d'un coup (fichier temporaire puis
+# renommage). Un échec garde la dernière réussite de l'ancien verdict : la passerelle
+# doit pouvoir dire « dernière sauvegarde réussie il y a 30 h » le jour où tout échoue.
+# $1 = ok | failed, $2 = raison d'un échec. Les chiffres d'un succès arrivent par
+# l'environnement (VERIFICATION, ARCHIVE_BYTES, DURATION_SECONDS, VOLUME_SIZES).
+write_status() {
+  install -d -m 755 "$STATUS_DIR" && chmod 755 "$STATUS_DIR" || return 1
+  STATUS="$1" REASON="${2:-}" python3 - "$STATUS_DIR/etat.json" <<'EOF'
+import json, os, re, sys, tempfile
+from datetime import datetime, timezone
+
+target = sys.argv[1]
+now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+status = os.environ["STATUS"]
+
+def previous():
+    try:
+        with open(target) as f:
+            old = json.load(f)
+        at, last = old.get("lastSuccessAt"), old.get("lastSuccess")
+        if isinstance(at, str) and (last is None or isinstance(last, dict)):
+            return at, last
+    except Exception:
+        pass
+    return None, None
+
+if status == "ok":
+    verification = dict(re.findall(r"(\w+)=([\d/]+)", os.environ.get("VERIFICATION", "")))
+    volumes = []
+    for pair in os.environ.get("VOLUME_SIZES", "").split():
+        name, _, size = pair.partition("=")
+        volumes.append({"name": name, "bytes": int(size)})
+    last_at = now
+    last = {
+        "documents": int(verification.get("documents", 0)),
+        "collections": int(verification.get("collections", 0)),
+        "mismatches": int(verification.get("ecarts", 0)),
+        "indexes": int(verification.get("index", "0/0").split("/")[-1]),
+        "archiveBytes": int(os.environ.get("ARCHIVE_BYTES", "0")),
+        "durationSeconds": int(os.environ.get("DURATION_SECONDS", "0")),
+        "volumes": volumes,
+    }
+    reason = None
+else:
+    last_at, last = previous()
+    reason = " ".join(os.environ.get("REASON", "").split())[:300] or None
+
+verdict = {"generatedAt": now, "status": status, "reason": reason, "lastSuccessAt": last_at, "lastSuccess": last}
+fd, tmp = tempfile.mkstemp(prefix=".etat-", dir=os.path.dirname(target))
+with os.fdopen(fd, "w") as f:
+    json.dump(verdict, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+os.chmod(tmp, 0o644)
+os.replace(tmp, target)
+EOF
+}
+
+FAILED_PUBLISHED=0
 fail() {
   log "ÉCHEC : $*"
+  write_status failed "$*" || log "verdict non publié dans $STATUS_DIR"
+  FAILED_PUBLISHED=1
   {
     printf 'ÉCHEC %s %s\n' "$(date -u +%FT%TZ)" "$*"
     tail -n 40 "${WORK:-/dev/null}"/base/*.log "${WORK:-/dev/null}"/base/verification.txt 2>/dev/null || true
-  } | tee "$BACKUP_ROOT/DERNIER-ETAT"
+  } | tee "$BACKUP_ROOT/DERNIER-ETAT" || true
   exit 1
 }
 
-[[ "$KEEP" =~ ^[1-9][0-9]*$ ]] || { echo "KEEP doit être un entier ≥ 1" >&2; exit 2; }
-
 exec 9>"$LOCK_FILE"
+# Une exécution concurrente ne publie rien : celle qui tient le verrou publiera.
 flock -n 9 || { echo "une sauvegarde est déjà en cours" >&2; exit 1; }
 
-install -d -m 700 "$BACKUP_ROOT"
 STAMP="$(date -u +%Y%m%dT%H%MZ)"
 WORK="$BACKUP_ROOT/.en-cours-$STAMP"
 DEST="$BACKUP_ROOT/$STAMP"
 RESTORE_CT="meeshy-backup-restore-check-$STAMP"
+FAILED_LINE=""
 
 cleanup() {
   docker rm -f "$RESTORE_CT" >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
-trap cleanup EXIT
+# Toute sortie en erreur publie un verdict, y compris celle qu'aucun `|| fail` ne
+# nomme (set -e) et l'arrêt par systemd : la passerelle ne doit jamais lire un vert
+# périmé. Seul le numéro de ligne est publié, jamais la commande, qui peut porter
+# un argument sensible.
+on_exit() {
+  local rc=$?
+  cleanup
+  if (( rc != 0 && FAILED_PUBLISHED == 0 )); then
+    write_status failed "arrêt inattendu (code $rc${FAILED_LINE:+, ligne $FAILED_LINE})" || true
+    printf 'ÉCHEC %s arrêt inattendu (code %s)\n' "$(date -u +%FT%TZ)" "$rc" > "$BACKUP_ROOT/DERNIER-ETAT" 2>/dev/null || true
+  fi
+}
+trap 'FAILED_LINE=$LINENO' ERR
+trap on_exit EXIT
+trap 'exit 143' TERM INT
+
+[[ "$KEEP" =~ ^[1-9][0-9]*$ ]] || fail "KEEP doit être un entier ≥ 1"
+install -d -m 700 "$BACKUP_ROOT"
 
 free_gb="$(df --output=avail -BG "$BACKUP_ROOT" | tail -1 | tr -dc '0-9')"
 (( free_gb >= MIN_FREE_GB )) || fail "espace libre ${free_gb} Go < ${MIN_FREE_GB} Go"
 
 complete_backups() {
-  find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -regextype posix-extended \
-    -regex '.*/[0-9]{8}T[0-9]{4}Z' -exec test -f '{}/COMPLET' \; -print | sort
+  local backup
+  for backup in "$BACKUP_ROOT"/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9]Z; do
+    [[ -d "$backup" && -f "$backup/COMPLET" ]] && printf '%s\n' "$backup"
+  done
+  return 0
 }
 previous="$(complete_backups | tail -1)"
 
@@ -142,7 +230,14 @@ done
 
 mv "$WORK" "$DEST"
 touch "$DEST/COMPLET"
-trap - EXIT
+
+volume_sizes=""
+for volume in $VOLUMES; do volume_sizes+="$volume=$(( $(du -sk "$DEST/volumes/$volume" | cut -f1) * 1024 )) "; done
+VERIFICATION="$(head -1 "$DEST/base/verification.txt")" \
+ARCHIVE_BYTES="$(wc -c < "$DEST/base/$DB_NAME.archive.gz" | tr -d ' ')" \
+DURATION_SECONDS="$(( $(date +%s) - T0 ))" \
+VOLUME_SIZES="$volume_sizes" \
+  write_status ok || log "verdict non publié dans $STATUS_DIR"
 
 mapfile -t complete < <(complete_backups)
 excess=$(( ${#complete[@]} - KEEP ))
