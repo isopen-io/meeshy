@@ -64,6 +64,10 @@ struct ReelMetaRow: View {
                 }
             }
         }
+        // Une ombre pour la rangée, pas une par horodatage, drapeau et
+        // soulignement (#9702) : au-dessus d'une vidéo qui joue, chaque passe
+        // se recompose à chaque image. Les feuilles ne se chevauchent pas.
+        .compositingGroup()
         .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
     }
 }

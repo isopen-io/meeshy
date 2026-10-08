@@ -427,6 +427,11 @@ struct ReelFeedCard: View, Equatable {
                         .foregroundColor(.white)
                     authorMetaLine
                 }
+                // Une ombre pour le BLOC, pas une par texte et par icône (#9702) :
+                // posée sur un conteneur, `.shadow` se répète sur chaque feuille,
+                // et chaque passe se recompose au-dessus de la vidéo qui joue.
+                // Les feuilles ne se chevauchent pas : le rendu est le même.
+                .compositingGroup()
                 .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
         }
