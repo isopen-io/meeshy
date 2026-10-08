@@ -17,14 +17,15 @@ import { ADMIN_MONITORING_HEALTH_KEY, loadAdminMonitoring, type AdminCircuitBrea
 import { ApiError, unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
+import { BackupsSection } from './admin-monitoring-backups';
 import { MonitoringSection, RefreshButton, ServiceCard } from './admin-monitoring-parts';
 
 /**
  * **LA SANTÉ DE LA PLATEFORME** (#8876, #6734) — une lecture (`GET /admin/monitoring`),
  * relue toutes les trente secondes TANT QUE l'écran est visible, et à la demande.
  *
- * Six blocs : passerelle, données (base, Redis), temps réel, traduction, coupe-circuits,
- * présence. Ce que la passerelle ne sait pas n'est pas dessiné en zéros : un traducteur
+ * Sept blocs : passerelle, données (base, Redis), sauvegardes (#9668), temps réel,
+ * traduction, coupe-circuits, présence. Ce que la passerelle ne sait pas n'est pas dessiné en zéros : un traducteur
  * injoignable se DIT, la présence sans service vivant n'a pas de bloc (« inconnu » n'est
  * pas « zéro »). Un état porte toujours son mot — un coupe-circuit ouvert est « Coupé »,
  * en danger, avec ce que cela change.
@@ -140,6 +141,8 @@ function HealthBody({ language, monitoring, now }: { readonly language: AdminLan
           />
         </div>
       </MonitoringSection>
+
+      {monitoring.backups === null ? null : <BackupsSection language={language} backups={monitoring.backups} now={now} />}
 
       <MonitoringSection id="realtime" title={t('admin.monitoring.realtime.title')}>
         <AdminStatGrid columns={3}>

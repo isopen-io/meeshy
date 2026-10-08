@@ -69,6 +69,33 @@ export type AdminPresenceStats = {
   readonly throttleRate: number;
 };
 
+export type AdminBackupVolume = { readonly name: string; readonly bytes: number };
+
+export type AdminBackupContents = {
+  readonly documents: number;
+  readonly collections: number;
+  readonly mismatches: number;
+  readonly indexes: number;
+  readonly archiveBytes: number;
+  readonly durationSeconds: number;
+  readonly volumes: readonly AdminBackupVolume[];
+};
+
+/**
+ * La sauvegarde nocturne de la production (#9668), lue d'`etat.json` par la
+ * passerelle. `stale` : la dernière réussite a plus de 26 h, ou aucune n'a réussi.
+ */
+export type AdminBackups = {
+  readonly status: 'ok' | 'failed';
+  readonly checkedAt: string | null;
+  readonly reason: string | null;
+  readonly lastSuccessAt: string | null;
+  readonly ageSeconds: number | null;
+  readonly stale: boolean;
+  readonly nextRunAt: string | null;
+  readonly lastSuccess: AdminBackupContents | null;
+};
+
 export type AdminMonitoring = {
   readonly generatedAt: string | null;
   readonly gateway: {
@@ -87,6 +114,8 @@ export type AdminMonitoring = {
   readonly translator: AdminTranslatorStats | null;
   readonly circuitBreakers: readonly AdminCircuitBreaker[];
   readonly presenceUpdates: AdminPresenceStats | null;
+  /** `null` : la passerelle n'a lu aucun verdict (fichier absent, ou serveur antérieur à #9668). */
+  readonly backups: AdminBackups | null;
 };
 
 const textOrNull = (value: unknown): string | null => (typeof value === 'string' && value.trim() !== '' ? value : null);
@@ -124,6 +153,41 @@ function decodePresence(raw: unknown): AdminPresenceStats | null {
     totalRequests: asCount(presence.totalRequests),
     throttledRequests: asCount(presence.throttledRequests),
     throttleRate: asCount(presence.throttleRate),
+  };
+}
+
+function decodeBackupContents(raw: unknown): AdminBackupContents | null {
+  const contents = asRecord(raw);
+  if (contents === null) return null;
+  const volumes = Array.isArray(contents.volumes) ? contents.volumes : [];
+  return {
+    documents: asCount(contents.documents),
+    collections: asCount(contents.collections),
+    mismatches: asCount(contents.mismatches),
+    indexes: asCount(contents.indexes),
+    archiveBytes: asCount(contents.archiveBytes),
+    durationSeconds: asCount(contents.durationSeconds),
+    volumes: volumes.flatMap((volume) => {
+      const entry = asRecord(volume);
+      const name = textOrNull(entry?.name);
+      return name === null ? [] : [{ name, bytes: asCount(entry?.bytes) }];
+    }),
+  };
+}
+
+function decodeBackups(raw: unknown): AdminBackups | null {
+  const backups = asRecord(raw);
+  const status = backups?.status;
+  if (backups === null || (status !== 'ok' && status !== 'failed')) return null;
+  return {
+    status,
+    checkedAt: textOrNull(backups.checkedAt),
+    reason: textOrNull(backups.reason),
+    lastSuccessAt: textOrNull(backups.lastSuccessAt),
+    ageSeconds: numberOrNull(backups.ageSeconds),
+    stale: backups.stale === true,
+    nextRunAt: textOrNull(backups.nextRunAt),
+    lastSuccess: decodeBackupContents(backups.lastSuccess),
   };
 }
 
@@ -167,6 +231,7 @@ export function decodeAdminMonitoring(raw: unknown): AdminMonitoring | null {
     translator: decodeTranslator(payload.translator),
     circuitBreakers: breakers.flatMap((breaker) => decodeBreaker(breaker) ?? []),
     presenceUpdates: decodePresence(payload.presenceUpdates),
+    backups: decodeBackups(payload.backups),
   };
 }
 

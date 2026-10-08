@@ -222,6 +222,23 @@ const f = {
   'admin.monitoring.routes.blind.saturation': 'Breakdown limited under saturation',
   'admin.monitoring.routes.blind.saturation.explain': 'Beyond a ceiling, new platform and version breakdowns are refused; totals of the watched routes stay exact.',
   'admin.monitoring.routes.blind.other': 'Other limit reported',
+
+  'admin.monitoring.backups.title': 'Backups',
+  'admin.monitoring.backups.hint': 'Production is backed up every night at midnight, Paris time. A check at 5 a.m. alerts the administrators when something is wrong.',
+  'admin.monitoring.backups.state.ok': 'Succeeded',
+  'admin.monitoring.backups.state.failed': 'Failed',
+  'admin.monitoring.backups.state.stale': 'Too old',
+  'admin.monitoring.backups.reason': 'Reason: {reason}',
+  'admin.monitoring.backups.last': 'Last successful backup',
+  'admin.monitoring.backups.never': 'None',
+  'admin.monitoring.backups.next': 'Next backup',
+  'admin.monitoring.backups.documents': 'Verified documents',
+  'admin.monitoring.backups.documents.caption': '{collections} collections · {indexes} indexes · {mismatches} mismatch(es) in the test restore',
+  'admin.monitoring.backups.archive': 'Database archive',
+  'admin.monitoring.backups.archive.caption': 'Full backup in {duration}',
+  'admin.monitoring.backups.volumes': 'Media and data',
+  'admin.monitoring.health.issue.backupFailed': 'The last production backup failed.',
+  'admin.monitoring.health.issue.backupStale': 'No production backup has succeeded for more than 26 hours.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

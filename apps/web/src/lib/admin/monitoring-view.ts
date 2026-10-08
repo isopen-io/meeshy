@@ -1,5 +1,5 @@
 import type { AdminGlyphName } from '@/components/glyphs-admin';
-import type { AdminMonitoring, AdminWatchedRoute, AdminRouteUsageEntry } from '@/lib/api/admin-monitoring';
+import type { AdminBackups, AdminMonitoring, AdminWatchedRoute, AdminRouteUsageEntry } from '@/lib/api/admin-monitoring';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { interpretCircuitState } from './interpret/enums';
@@ -16,7 +16,7 @@ import type { AdminTone, Interpreted } from './interpret/types';
  * le code ne vit que dans `raw`.
  */
 export type HealthIssue = {
-  readonly id: 'database' | 'redis' | 'translator' | 'breakersOpen' | 'breakersHalfOpen';
+  readonly id: 'database' | 'redis' | 'backups' | 'translator' | 'breakersOpen' | 'breakersHalfOpen';
   readonly tone: AdminTone;
   readonly text: string;
 };
@@ -28,6 +28,13 @@ const issue = (id: HealthIssue['id'], tone: AdminTone, text: string): HealthIssu
 /** Le traducteur est injoignable : absent de la charge, ou servi avec `reachable: false`. */
 export const translatorUnreachable = (monitoring: AdminMonitoring): boolean => monitoring.translator === null || monitoring.translator.reachable === false;
 
+/** La sauvegarde : en échec (danger), vieillie de plus de 26 h (avertissement), sinon rien. Inconnue, elle ne fabrique aucune alerte. */
+function backupIssue(backups: AdminBackups | null, language: AdminLanguage): readonly HealthIssue[] {
+  if (backups === null) return [];
+  if (backups.status === 'failed') return [issue('backups', 'danger', translateAdmin(language, 'admin.monitoring.health.issue.backupFailed'))];
+  return backups.stale ? [issue('backups', 'warning', translateAdmin(language, 'admin.monitoring.health.issue.backupStale'))] : [];
+}
+
 /** Ce qui ne va pas, dans l'ordre où un administrateur le traite : les données d'abord, les services ensuite. Vide = tout va bien. */
 export function healthIssuesOf(monitoring: AdminMonitoring, language: AdminLanguage): readonly HealthIssue[] {
   const stateCount = (state: string): number => monitoring.circuitBreakers.filter((breaker) => breaker.state.toUpperCase() === state).length;
@@ -37,6 +44,7 @@ export function healthIssuesOf(monitoring: AdminMonitoring, language: AdminLangu
   return [
     ...(isDown(monitoring.database.status) ? [issue('database', 'danger', translateAdmin(language, 'admin.monitoring.health.issue.database'))] : []),
     ...(isDown(monitoring.redis.status) ? [issue('redis', 'danger', translateAdmin(language, 'admin.monitoring.health.issue.redis'))] : []),
+    ...backupIssue(monitoring.backups, language),
     ...(translatorUnreachable(monitoring) ? [issue('translator', 'warning', translateAdmin(language, 'admin.monitoring.health.issue.translator'))] : []),
     ...(open === 0
       ? []
@@ -45,6 +53,33 @@ export function healthIssuesOf(monitoring: AdminMonitoring, language: AdminLangu
       ? []
       : [issue('breakersHalfOpen', 'warning', translateAdmin(language, 'admin.monitoring.health.issue.breakersHalfOpen', { count: formatCount(halfOpen, language) }))]),
   ];
+}
+
+/**
+ * **LE VERDICT DE LA SAUVEGARDE** (#9668) — un échec est en danger, sa raison
+ * servie dans l'explication ; une réussite de plus de 26 h est « trop ancienne »,
+ * même quand le dernier verdict est un succès (la sauvegarde ne s'est pas lancée).
+ */
+export function backupStateOf(backups: AdminBackups, language: AdminLanguage): Interpreted {
+  if (backups.status === 'failed') {
+    return {
+      label: translateAdmin(language, 'admin.monitoring.backups.state.failed'),
+      tone: 'danger',
+      explain: backups.reason === null ? null : translateAdmin(language, 'admin.monitoring.backups.reason', { reason: backups.reason }),
+      glyph: 'warning',
+      raw: 'failed',
+    };
+  }
+  if (backups.stale) {
+    return {
+      label: translateAdmin(language, 'admin.monitoring.backups.state.stale'),
+      tone: 'warning',
+      explain: translateAdmin(language, 'admin.monitoring.health.issue.backupStale'),
+      glyph: 'warning',
+      raw: 'stale',
+    };
+  }
+  return { label: translateAdmin(language, 'admin.monitoring.backups.state.ok'), tone: 'success', explain: null, glyph: 'checkCircle', raw: 'ok' };
 }
 
 /** Un coupe-circuit ouvert est en DANGER avec son mot (« Coupé ») ; l'explication dit ce que cela change. */
