@@ -77,6 +77,25 @@ public actor MediaSessionCoordinator {
     private var observersInstalled = false
     nonisolated(unsafe) private var observerTokens: [any NSObjectProtocol] = []
 
+    /// **Le bail de lecture** (#9702) : `true` quand la DERNIÈRE opération de ce
+    /// coordinateur sur la session a été une activation `.playback` réussie, et
+    /// que rien ne l'a révoquée depuis. Chaque balayage de réel appelait
+    /// `setActive(true)` — un aller-retour BLOQUANT au serveur audio, sur le
+    /// fil principal — pour une session déjà active dans la bonne catégorie.
+    ///
+    /// Tout ce qui peut désactiver ou reconfigurer la session par ce
+    /// coordinateur le révoque (désactivation, enregistrement, rôle refcompté,
+    /// arrière-plan, bascule d'appel), et les signaux système aussi
+    /// (interruption, réinitialisation des services média). Un composant qui
+    /// change la CATÉGORIE ailleurs est rattrapé par `playbackConfigurationDiffers`,
+    /// qui reste lu à chaque appel.
+    private nonisolated let _playbackLeaseLock = OSAllocatedUnfairLock(initialState: false)
+    nonisolated var playbackLeaseHeld: Bool {
+        get { _playbackLeaseLock.withLock { $0 } }
+        set { _playbackLeaseLock.withLock { $0 = newValue } }
+    }
+    private nonisolated let _leaseObserversLock = OSAllocatedUnfairLock(initialState: false)
+
     /// Backing lock for `emit(_:)`. `PassthroughSubject.send(_:)` is not
     /// documented thread-safe for concurrent callers — `emit(_:)` is invoked
     /// both synchronously from the MainActor (`setCallActive`) and from this
@@ -134,6 +153,9 @@ public actor MediaSessionCoordinator {
             current = active
             return old
         }
+        // L'appel prend ou rend la session (RTCAudioSession) : ce que ce
+        // coordinateur y avait activé ne tient plus.
+        playbackLeaseHeld = false
         // On the true→false edge, broadcast an explicit resume signal. The system
         // interruption-ended notification is NOT reliably posted for in-process
         // WebRTC/RTCAudioSession call teardown, so SDK media that gated itself off
@@ -164,6 +186,7 @@ public actor MediaSessionCoordinator {
         mode: AVAudioSession.Mode = .default,
         options: AVAudioSession.CategoryOptions
     ) {
+        installLeaseObserversIfNeeded()
         guard Self.shouldManageSession(callActive: callActive) else { return }
         let session = AVAudioSession.sharedInstance()
         // Independent do/catch per call — a setCategory failure must not skip the
@@ -171,10 +194,17 @@ public actor MediaSessionCoordinator {
         // `setCategory` is a synchronous round-trip to the audio server, paid on
         // the main thread by every video play and story open: skipped when the
         // session already carries exactly this configuration.
-        if Self.playbackConfigurationDiffers(
+        let configurationDiffers = Self.playbackConfigurationDiffers(
             currentCategory: session.category, currentMode: session.mode,
             currentOptions: session.categoryOptions, mode: mode, options: options
-        ) {
+        )
+        // `setActive(true)` aussi est un aller-retour bloquant : sauté quand ce
+        // coordinateur tient déjà le bail d'une session `.playback` identique
+        // (chaque balayage de réel le payait — #9702).
+        guard Self.shouldActivatePlayback(
+            configurationDiffers: configurationDiffers, leaseHeld: playbackLeaseHeld
+        ) else { return }
+        if configurationDiffers {
             do {
                 try session.setCategory(.playback, mode: mode, options: options)
             } catch {
@@ -183,7 +213,9 @@ public actor MediaSessionCoordinator {
         }
         do {
             try session.setActive(true)
+            playbackLeaseHeld = true
         } catch {
+            playbackLeaseHeld = false
             logger.error("activatePlaybackSync: setActive failed — \(error.localizedDescription, privacy: .public)")
         }
     }
@@ -198,6 +230,7 @@ public actor MediaSessionCoordinator {
         options: AVAudioSession.CategoryOptions = [.defaultToSpeaker, .allowBluetoothA2DP]
     ) -> Bool {
         guard Self.shouldManageSession(callActive: callActive) else { return false }
+        playbackLeaseHeld = false
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.playAndRecord, mode: .default, options: options)
@@ -211,6 +244,7 @@ public actor MediaSessionCoordinator {
     /// Désactive SYNCHRONEMENT la session (call-aware : ne coupe rien pendant un appel,
     /// la session appartient alors à l'appel).
     public nonisolated func deactivatePlaybackSync() {
+        playbackLeaseHeld = false
         guard Self.shouldManageSession(callActive: callActive) else { return }
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -240,12 +274,45 @@ public actor MediaSessionCoordinator {
         currentCategory != .playback || currentMode != mode || currentOptions != options
     }
 
+    /// Pure, testable decision behind the `setActive(true)` of
+    /// `activatePlaybackSync` (#9702): skipped only when the session already
+    /// carries this exact configuration AND this coordinator's last act on it
+    /// was a successful `.playback` activation that nothing has revoked since.
+    nonisolated static func shouldActivatePlayback(configurationDiffers: Bool, leaseHeld: Bool) -> Bool {
+        configurationDiffers || !leaseHeld
+    }
+
+    /// Les signaux SYSTÈME qui retirent la session à l'app sans passer par ce
+    /// coordinateur — interruption (appel cellulaire, Siri, alarme) et
+    /// réinitialisation des services média — révoquent le bail. Installés une
+    /// fois, au premier `activatePlaybackSync`, sans saut sur l'acteur.
+    private nonisolated func installLeaseObserversIfNeeded() {
+        let firstCall = _leaseObserversLock.withLock { installed -> Bool in
+            guard !installed else { return false }
+            installed = true
+            return true
+        }
+        guard firstCall else { return }
+        let lease = _playbackLeaseLock
+        let center = NotificationCenter.default
+        let revoking: [Notification.Name] = [
+            AVAudioSession.interruptionNotification,
+            AVAudioSession.mediaServicesWereResetNotification,
+        ]
+        for name in revoking {
+            _ = center.addObserver(forName: name, object: nil, queue: nil) { _ in
+                lease.withLock { $0 = false }
+            }
+        }
+    }
+
     /// Active AVAudioSession pour le rôle demandé.
     public func request(
         role: AudioRole,
         playbackOptions: AVAudioSession.CategoryOptions = [.duckOthers]
     ) async throws {
         installSystemObserversIfNeeded()
+        playbackLeaseHeld = false
         // Never reconfigure the shared session while a VoIP call owns it (would
         // mute the mic). The refcount still tracks holders so balancing across
         // the call boundary stays coherent.
@@ -274,6 +341,7 @@ public actor MediaSessionCoordinator {
         guard activationCount > 0 else { return }
         activationCount -= 1
         if activationCount == 0, Self.shouldManageSession(callActive: callActive) {
+            playbackLeaseHeld = false
             do {
                 try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             } catch {
@@ -292,6 +360,7 @@ public actor MediaSessionCoordinator {
     /// live VoIP call the moment the user locks the screen. Mirror the
     /// `callActive` guard every other method in this class already applies.
     public func deactivateForBackground() async {
+        playbackLeaseHeld = false
         guard Self.shouldManageSession(callActive: callActive) else { return }
         activationCount = 0
         #if DEBUG

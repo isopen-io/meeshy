@@ -242,6 +242,24 @@ final class MediaAutoDownloadDecisionTests: XCTestCase {
         )
     }
 
+    /// #9702 — le pager de réels ferme l'auto-démarrage hors de sa fenêtre de
+    /// préchargement : sous iOS 16, son `TabView` monte TOUTES les pages, et
+    /// chacune téléchargeait son réel entier. Fermé, rien ne part — ni forcé,
+    /// ni par la politique réseau.
+    func test_video_mayAutoStartFalse_neverStarts_evenForcedOnWifi() {
+        let prefs = MediaDownloadPreferences(video: .always)
+        XCTAssertFalse(
+            VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: true, mayAutoStart: false, condition: .wifi, prefs: prefs
+            )
+        )
+        XCTAssertFalse(
+            VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: false, mayAutoStart: false, condition: .wifi, prefs: prefs
+            )
+        )
+    }
+
     func test_video_autoDownloadFalse_respectsPolicy_wifiOnly_onWifi() {
         let prefs = MediaDownloadPreferences(video: .wifiOnly)
         XCTAssertTrue(
