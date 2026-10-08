@@ -5,8 +5,9 @@
  * un avis juridique signé) :
  *  - une session CLOSE s'efface 90 jours après sa clôture (`invalidatedAt`) ;
  *  - un `SecurityEvent` s'efface après 12 mois ; d'un compte PURGÉ, 90 jours
- *    après la purge (`AccountDeletionRequest.gracePeriodEndsAt`, la date à
- *    laquelle la purge s'exécute) — la plus courte des deux durées l'emporte ;
+ *    après la purge (`User.deletedAt`, posé à l'instant de la purge ; le
+ *    compte doit être désactivé et porter une demande de suppression aboutie)
+ *    — la plus courte des deux durées l'emporte ;
  *  - une ligne d'`AdminAuditLog` s'efface après 12 mois ;
  *  - `registrationIp` / `registrationLocation` passent à `null` 12 mois après
  *    l'inscription, `lastLoginIp` / `lastLoginLocation` 12 mois après la
@@ -85,7 +86,7 @@ export type RetentionReport = {
   readonly loginTraces: number | null;
 };
 
-type RetentionStore = Pick<PrismaClient, 'userSession' | 'securityEvent' | 'adminAuditLog' | 'accountDeletionRequest' | 'user'>;
+type RetentionStore = Pick<PrismaClient, 'userSession' | 'securityEvent' | 'adminAuditLog' | 'user'>;
 
 const daysBefore = (now: Date, days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
@@ -137,16 +138,29 @@ export async function sweepRetention(
       ? (await prisma.securityEvent.deleteMany({ where: eventsWhere })).count
       : prisma.securityEvent.count({ where: eventsWhere }));
 
+  // Un compte PURGÉ, et lui seul : désactivé, supprimé (`deletedAt`, posé à
+  // l'instant de la purge par les deux chemins — passe horaire et « supprimer
+  // maintenant ») depuis plus de 90 jours, ET porteur d'une demande de
+  // suppression aboutie. Un compte réactivé, ou supprimé par un autre chemin,
+  // garde ses événements jusqu'aux 12 mois. `securityEvents: { some: {} }` fait
+  // sortir de la sélection un compte déjà traité : au-delà du plafond d'une
+  // passe, la suivante reprend sur les comptes restants — rien n'échappe.
   const purgedAccountSecurityEvents = await step('security events of purged accounts', () =>
     eachPage(
-      (after) => prisma.accountDeletionRequest.findMany({
-        where: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] }, gracePeriodEndsAt: { lt: purgeCutoff }, ...after },
-        select: { id: true, userId: true },
+      (after) => prisma.user.findMany({
+        where: {
+          deletedAt: { lt: purgeCutoff },
+          isActive: false,
+          accountDeletionRequests: { some: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] } } },
+          securityEvents: { some: {} },
+          ...after,
+        },
+        select: { id: true },
         orderBy: { id: 'asc' },
         take: BATCH,
       }),
-      async (requests) => {
-        const where = { userId: { in: [...new Set(requests.map((request) => request.userId))] } };
+      async (users) => {
+        const where = { userId: { in: users.map((user) => user.id) } };
         return apply ? (await prisma.securityEvent.deleteMany({ where })).count : prisma.securityEvent.count({ where });
       },
     ));

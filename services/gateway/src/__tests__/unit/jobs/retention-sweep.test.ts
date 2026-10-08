@@ -37,13 +37,13 @@ const fakePrisma = (overrides: { purgedUserIds?: string[]; legacyLoginUserIds?: 
     userSession: { count: counted(3), deleteMany: removed(3) },
     securityEvent: { count: counted(5), deleteMany: removed(5) },
     adminAuditLog: { count: counted(7), deleteMany: removed(7) },
-    accountDeletionRequest: {
-      findMany: jest.fn(async (_args: unknown) => (overrides.purgedUserIds ?? []).map((userId) => ({ userId }))),
-    },
     user: {
       count: counted(2),
       updateMany: removed(2),
-      findMany: jest.fn(async (_args: unknown) => (overrides.legacyLoginUserIds ?? []).map((id) => ({ id }))),
+      // Deux lectures distinctes : les comptes PURGÉS (filtre `deletedAt`) et
+      // les comptes ANTÉRIEURS à `lastLoginAt` (filtre `lastLoginAt`).
+      findMany: jest.fn(async (args: any) =>
+        (args?.where?.deletedAt ? overrides.purgedUserIds ?? [] : overrides.legacyLoginUserIds ?? []).map((id) => ({ id }))),
     },
   };
 };
@@ -131,8 +131,13 @@ describe('sweepRetention — armée', () => {
 
     await sweepRetention(prisma as never, { now: NOW, apply: true });
 
-    expect(prisma.accountDeletionRequest.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] }, gracePeriodEndsAt: { lt: daysBefore(90) } },
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        deletedAt: { lt: daysBefore(90) },
+        isActive: false,
+        accountDeletionRequests: { some: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] } } },
+        securityEvents: { some: {} },
+      },
     }));
     expect(prisma.securityEvent.deleteMany).toHaveBeenCalledWith({ where: { userId: { in: ['u-purge-1', 'u-purge-2'] } } });
   });
@@ -215,36 +220,63 @@ describe('audit L2-5 — la passe va jusqu’au bout, par curseur, pas sur les m
       return all.filter((id) => after === undefined || id > after).slice(0, args.take).map(toRow);
     });
 
-  it('efface les événements de TOUS les comptes purgés, au-delà de 500', async () => {
-    const purged = ids('u', 1200);
+  /**
+   * Comptes purgés simulés : chacun garde des événements tant qu'aucun
+   * `deleteMany` ne les a effacés — le filtre `securityEvents: { some: {} }`
+   * les fait disparaître de la sélection une fois traités.
+   */
+  const purgedWorld = (n: number) => {
+    const all = ids('u', n);
+    const withEvents = new Set(all);
     const prisma = fakePrisma();
-    (prisma.accountDeletionRequest as any).findMany = paged(purged.map((u) => `r-${u}`), (id) => ({ id, userId: id.slice(2) }));
+    prisma.user.findMany = jest.fn(async (args: any) => {
+      if (!args?.where?.deletedAt) return [];
+      expect(args.orderBy).toEqual({ id: 'asc' });
+      const after: string | undefined = args.where?.id?.gt;
+      return all.filter((id) => withEvents.has(id) && (after === undefined || id > after)).slice(0, args.take).map((id) => ({ id }));
+    }) as never;
+    prisma.securityEvent.deleteMany = jest.fn(async (args: any) => {
+      const target: string[] = args?.where?.userId?.in ?? [];
+      target.forEach((id) => withEvents.delete(id));
+      return { count: target.length };
+    }) as never;
+    return { all, withEvents, prisma };
+  };
+
+  it('efface les événements de TOUS les comptes purgés, au-delà de 500', async () => {
+    const { withEvents, prisma } = purgedWorld(1200);
 
     await sweepRetention(prisma as never, { now: NOW, apply: true });
 
-    const erased = prisma.securityEvent.deleteMany.mock.calls
-      .map(([args]) => (args as { where: { userId?: { in: string[] } } }).where.userId?.in ?? [])
-      .flat();
-    expect(new Set(erased)).toEqual(new Set(purged));
+    expect(withEvents.size).toBe(0);
   });
 
-  it('le décompte à blanc couvre aussi tous les comptes', async () => {
-    const purged = ids('u', 1200);
-    const prisma = fakePrisma();
-    (prisma.accountDeletionRequest as any).findMany = paged(purged.map((u) => `r-${u}`), (id) => ({ id, userId: id.slice(2) }));
+  it('au-delà du plafond d’une passe, la passe suivante reprend où l’autre s’est arrêtée — rien n’échappe indéfiniment', async () => {
+    const { withEvents, prisma } = purgedWorld(25_000);
+
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+    expect(withEvents.size).toBe(5_000);
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+    expect(withEvents.size).toBe(0);
+  });
+
+  it('le décompte à blanc couvre aussi tous les comptes, et n’efface rien', async () => {
+    const { all, withEvents, prisma } = purgedWorld(1200);
 
     await sweepRetention(prisma as never, { now: NOW, apply: false });
 
     const counted = prisma.securityEvent.count.mock.calls
       .map(([args]) => (args as { where: { userId?: { in: string[] } } }).where.userId?.in ?? [])
       .flat();
-    expect(new Set(counted)).toEqual(new Set(purged));
+    expect(new Set(counted)).toEqual(new Set(all));
+    expect(withEvents.size).toBe(1200);
   });
 
   it('les comptes anciens sans date de connexion sont tous traités, à blanc comme armée', async () => {
     const legacy = ids('l', 1100);
     const prisma = fakePrisma();
-    prisma.user.findMany = paged(legacy, (id) => ({ id })) as never;
+    const legacyPage = paged(legacy, (id) => ({ id }));
+    prisma.user.findMany = jest.fn(async (args: any) => (args?.where?.deletedAt ? [] : legacyPage(args))) as never;
 
     const report = await sweepRetention(prisma as never, { now: NOW, apply: false });
     expect(report.loginTraces).toBe(2 + 1100);
@@ -256,3 +288,35 @@ describe('audit L2-5 — la passe va jusqu’au bout, par curseur, pas sur les m
     expect(new Set(erased)).toEqual(new Set(legacy));
   });
 });
+
+describe('revue « privacy-retention-logic » — rien de vivant ne part', () => {
+  it('une session n’est effacée que close (`isValid: false`), quelle que soit sa date', async () => {
+    const prisma = fakePrisma();
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+    const where = (prisma.userSession.deleteMany.mock.calls[0][0] as { where: { isValid: boolean } }).where;
+    expect(where.isValid).toBe(false);
+  });
+
+  it('les événements d’un compte ne partent par la règle du compte purgé que s’il est désactivé, supprimé depuis plus de 90 jours ET purgé par une demande aboutie', async () => {
+    const prisma = fakePrisma({ purgedUserIds: ['u-1'] });
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+    const where = (prisma.user.findMany.mock.calls.find(([args]: any) => args?.where?.deletedAt)?.[0] as { where: Record<string, unknown> }).where;
+    expect(where).toMatchObject({
+      isActive: false,
+      deletedAt: { lt: daysBefore(90) },
+      accountDeletionRequests: { some: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] } } },
+    });
+  });
+
+  it('toute durée se compte vers le PASSÉ : chaque seuil est antérieur à maintenant', async () => {
+    const prisma = fakePrisma();
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+    const cutoffs = [
+      ...prisma.securityEvent.deleteMany.mock.calls.map(([a]: any) => a?.where?.createdAt?.lt),
+      ...prisma.adminAuditLog.deleteMany.mock.calls.map(([a]: any) => a?.where?.createdAt?.lt),
+    ].filter(Boolean) as Date[];
+    expect(cutoffs.length).toBeGreaterThan(0);
+    cutoffs.forEach((cutoff) => expect(cutoff.getTime()).toBeLessThan(NOW.getTime()));
+  });
+});
+
