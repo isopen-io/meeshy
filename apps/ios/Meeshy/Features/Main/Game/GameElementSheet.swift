@@ -149,13 +149,7 @@ struct GameElementSheet: View {
                     .accessibilityIdentifier("game.badge.reason")
             }
 
-            section(detail.whatTitle, detail.what)
-            if let how = detail.how {
-                section(detail.howTitle, how)
-            }
-            if let badge = detail.badge {
-                GameBadgeLadderView(model: badge)
-            }
+            explanation
 
             if !detail.facts.isEmpty {
                 ProgressionCard(tint: tint) {
@@ -170,20 +164,39 @@ struct GameElementSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if detail.badge != nil, let onOpenBadgesGuide {
-                GameBadgeGuideLink(action: onOpenBadgesGuide)
-            }
-            if let onOpenConcept {
-                ProgressionConceptRow(
-                    title: GameDetailText.seeFiche, subtitle: ConceptText.name(detail.concept), symbol: "arrow.forward.circle",
-                    identifier: "game.detail.sheet", action: { onOpenConcept(detail.concept) }
-                )
-            }
+            links
             GameQuietButton(title: GameDetailText.close, identifier: "game.detail.close") { dismiss() }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.bottom, MeeshySpacing.lg)
+    }
+
+    /// Ce que c'est (pour un badge : ce qui compte pour SON axe), comment l'obtenir, et l'échelle d'un badge.
+    private var explanation: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            section(detail.whatTitle, detail.what)
+            if let how = detail.how {
+                section(detail.howTitle, how)
+            }
+            if let badge = detail.badge {
+                GameBadgeLadderView(model: badge)
+            }
+        }
+    }
+
+    /// « Comprendre les badges » sur la fiche d'un badge, puis « Voir la fiche » hors de la fiche du concept.
+    @ViewBuilder
+    private var links: some View {
+        if detail.badge != nil, let onOpenBadgesGuide {
+            GameBadgeGuideLink(action: onOpenBadgesGuide)
+        }
+        if let onOpenConcept {
+            ProgressionConceptRow(
+                title: GameDetailText.seeFiche, subtitle: ConceptText.name(detail.concept), symbol: "arrow.forward.circle",
+                identifier: "game.detail.sheet", action: { onOpenConcept(detail.concept) }
+            )
+        }
     }
 
     // MARK: - L'état
