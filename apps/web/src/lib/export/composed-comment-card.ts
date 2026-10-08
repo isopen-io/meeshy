@@ -13,6 +13,7 @@ import {
 import type { FeedAuthor, FeedPost } from '@/lib/api/feed-pages';
 import type { PostComment } from '@/lib/api/publication-comments';
 import { resolveFeedText } from '@/lib/feed/text';
+import { readableTextOf } from '@/lib/links/link-reading';
 
 import { commentCardMediaOf } from './comment-card-subject';
 import type { MessageCardMediaItem, MessageCardSubject } from './message-card-subject';
@@ -23,7 +24,8 @@ import type { MessageCardMediaItem, MessageCardSubject } from './message-card-su
  * Les RÈGLES (modes, gardes, bornes, ordre) vivent dans
  * `@meeshy/shared/utils/comment-card-composition` ; ici, ce que seul le
  * web sait : le texte SERVI de chaque commentaire et du post (le Prisme des
- * commentaires, `resolveFeedText`), celui que la rangée visée AFFICHE (sa puce
+ * commentaires, `resolveFeedText`) puis LU (`readableTextOf` : la syntaxe d'un lien ne
+ * se peint jamais, jumelle de `MessageTextRenderer.plainText` iOS), celui que la rangée visée AFFICHE (sa puce
  * de langue), les médias PEIGNABLES, un vocal dans la piste de son texte servi (`commentCardMediaOf`), et la projection sur la
  * carte d'« Imagine » (`MessageCardSubject`), dont le moteur ne change pas.
  */
@@ -77,7 +79,7 @@ function entryOf(comment: PostComment, text: string, readerLanguages: readonly s
 
 export function postCommentCardSourceOf(input: PostCommentCardInput): PostCommentSource {
   const served = (content: string | null | undefined, originalLanguage: string | null | undefined, translations: unknown): string =>
-    resolveFeedText({ preferredLanguages: input.readerLanguages, originalLanguage, translations, content: content ?? '' }).text;
+    readableTextOf(resolveFeedText({ preferredLanguages: input.readerLanguages, originalLanguage, translations, content: content ?? '' }).text);
   const post = input.post;
   return {
     post:
@@ -91,7 +93,7 @@ export function postCommentCardSourceOf(input: PostCommentCardInput): PostCommen
             text: served(post.content, post.originalLanguage, post.translations),
             media: entriesOf(post.media, null),
           },
-    target: entryOf(input.target, input.targetText, input.targetShowsOriginal === true ? null : input.readerLanguages),
+    target: entryOf(input.target, readableTextOf(input.targetText), input.targetShowsOriginal === true ? null : input.readerLanguages),
     thread: input.thread.map((comment) => entryOf(comment, served(comment.content, comment.originalLanguage, comment.translations), input.readerLanguages)),
     viewer: input.viewer,
   };

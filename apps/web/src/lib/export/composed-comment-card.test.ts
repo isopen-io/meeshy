@@ -192,3 +192,17 @@ describe('le son d’un vocal part dans la piste du texte servi (#9687, famille 
   });
 });
 
+
+describe('la carte peint le texte LU, jamais la syntaxe des liens (#9687, jumelle de bdae65102a)', () => {
+  const raw = 'puis [notre page](https://meeshy.me/about) et enfin [[https://meeshy.me/brut]]';
+  const plain = 'puis notre page et enfin https://meeshy.me/brut';
+
+  test('le post en tête, le commentaire visé et ses voisins du fil', () => {
+    const linked = comment('r0', { parentId: 'root', createdAt: '2026-10-08T10:01:30.000Z', content: raw });
+    const source = postCommentCardSourceOf({ post: post({ content: raw, translations: undefined }), target: reply, targetText: raw, thread: [root, linked, reply], readerLanguages: ['fr'], viewer });
+    const withPost = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: true }, labels);
+    expect(withPost?.quoted?.text).toBe(plain);
+    expect(withPost?.reply.text).toBe(`ROOT : texte root\nR0 : ${plain}\nR1 : ${plain}`);
+    expect(source.thread.find((entry) => entry.id === 'r0')?.text).toBe(plain);
+  });
+});
