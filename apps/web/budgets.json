@@ -133,7 +133,7 @@
       }
     },
     "story_studio": {
-      "pattern": "^assets/(publication-compose|story-compose)-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/(publication-compose|story-compose)-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 35,
         "status": "REMESURE PAR LA RETOUCHE DES PIECES DANS LA SCENE (#9136) -- 33,8 Ko gzip -9 pour les deux chunks, mesure sur un export PROPRE de l arbre (`git archive` de 8196b5dcda, sans `.env.local`, parite CI : le job Quality (bun) lit les memes 177,61 / 5,01 / 33,8), `bun run build` puis `node scripts/measure-weight.mjs`, le 2026-10-02 ; attribution par build de chaque commit depuis 8d8337271f (#9168) : 32,84 Ko a 8d8337271f, 33,15 apres d36c44f160 (les pieces du message ouvertes en scenes), 33,8 apres 5efd512ce7 (couper et taire une video, recadrer une image dans la scene, « Termine » les rend retouchees). Plafond porte a ceil(33,8) + 1 = 35. PRECEDENT : CIBLE -- REMESUREE PAR #8715/#8794 (31,38 Ko gzip -9, le 2026-09-30, `bun run build` puis `node scripts/measure-weight.mjs` : la colonne droite de la scene -- effets du fond ou options de l objet touche, historique en bas --, le (+) de scene en barre haute, le menu d appui long du fond, la repetition des transitions et la bascule post -> reel ; le carrousel d effets, ses miniatures et le menu restent des chunks a la demande), PLAFOND PORTE A ceil(31,38) + 1 = 33. PRECEDENT : CIBLE -- REMESUREE PAR #8654 (26,43 Ko gzip -9, le 2026-09-29 : la loi du chrome qui cede a l outil ouvert, l indication grise et les gestes de la capture rapide ; la camera elle-meme est un chunk a la demande), PLAFOND PORTE A ceil(26,43) + 1 = 28. PRECEDENT : CIBLE -- REMESUREE PAR #8603, PLAFOND PORTE A 26. PRECEDENT : CIBLE -- REMESUREE PAR #8517/#8518, PLAFOND PORTE A 25. PRECEDENT : CIBLE -- REMESUREE PAR LE LOT 7 (#8474, PR #8497), PLAFOND PORTE A 24. PRECEDENT : CIBLE -- REMESUREE PAR #8415/#8416, PLAFOND PORTE A 23",
@@ -158,7 +158,7 @@
       }
     },
     "reels": {
-      "pattern": "^assets/reels-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/reels-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 16,
         "status": "ARBITRE PAR LE PORTEUR le 2026-09-26 -- plafond 16 Ko",
@@ -166,7 +166,7 @@
       }
     },
     "call_engine": {
-      "pattern": "^assets/engine-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/engine-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 16,
@@ -175,7 +175,7 @@
       }
     },
     "call_quality": {
-      "pattern": "^assets/call-quality-loop-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-quality-loop-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -184,7 +184,7 @@
       }
     },
     "call_video_effects": {
-      "pattern": "^assets/video-effects-pipeline-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/video-effects-pipeline-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 4,
@@ -202,7 +202,7 @@
       }
     },
     "call_video_effects_fallback": {
-      "pattern": "^assets/video-effects-browser-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/video-effects-browser-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 7,
@@ -211,7 +211,7 @@
       }
     },
     "call_video_segmentation": {
-      "pattern": "^assets/video-effects-segmentation-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/video-effects-segmentation-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 91,
@@ -220,7 +220,7 @@
       }
     },
     "call_video_effects_rules": {
-      "pattern": "^assets/(video-effects|self-zoom)-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/(video-effects|self-zoom)-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 2,
         "status": "REMESUREE PAR #8441",
@@ -228,7 +228,7 @@
       }
     },
     "call_captions": {
-      "pattern": "^assets/call-captions-runtime-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-captions-runtime-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -237,7 +237,7 @@
       }
     },
     "call_recording_layer": {
-      "pattern": "^assets/call-recording-layer-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-recording-layer-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -246,7 +246,7 @@
       }
     },
     "call_recording_runtime": {
-      "pattern": "^assets/call-recording-runtime-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-recording-runtime-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -255,7 +255,7 @@
       }
     },
     "call_captions_law": {
-      "pattern": "^assets/call-captions-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-captions-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 2,
         "status": "CIBLE -- MESUREE PAR #8048, NON ARBITREE",
@@ -263,7 +263,7 @@
       }
     },
     "call_captions_panel": {
-      "pattern": "^assets/call-captions-panel-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-captions-panel-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -272,7 +272,7 @@
       }
     },
     "call_effects_mode": {
-      "pattern": "^assets/call-effects-mode-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-effects-mode-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 6,
@@ -281,7 +281,7 @@
       }
     },
     "call_transcript_panel": {
-      "pattern": "^assets/call-transcript-panel-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-transcript-panel-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -290,7 +290,7 @@
       }
     },
     "call_journal_panel": {
-      "pattern": "^assets/call-journal-panel-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-journal-panel-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -299,7 +299,7 @@
       }
     },
     "call_network_journal_panel": {
-      "pattern": "^assets/call-network-journal-panel-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-network-journal-panel-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -308,7 +308,7 @@
       }
     },
     "call_overlay": {
-      "pattern": "^assets/call-overlay-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-overlay-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 20,
@@ -317,7 +317,7 @@
       }
     },
     "call_action_rows": {
-      "pattern": "^assets/call-control-actions-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-control-actions-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 4,
@@ -326,7 +326,7 @@
       }
     },
     "call_self_camera": {
-      "pattern": "^assets/call-self-camera-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-self-camera-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -335,7 +335,7 @@
       }
     },
     "call_preview": {
-      "pattern": "^assets/call-preview-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-preview-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 2,
@@ -344,7 +344,7 @@
       }
     },
     "call_back_prompt": {
-      "pattern": "^assets/call-back-prompt-layer-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-back-prompt-layer-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 2,
@@ -353,7 +353,7 @@
       }
     },
     "call_control_panels": {
-      "pattern": "^assets/call-control-panels-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-control-panels-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -362,7 +362,7 @@
       }
     },
     "call_people_sheet": {
-      "pattern": "^assets/call-people-sheet-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-people-sheet-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -371,7 +371,7 @@
       }
     },
     "call_panel_frame": {
-      "pattern": "^assets/call-panel-frame-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-panel-frame-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 2,
         "status": "CIBLE -- MESUREE PAR #8550, NON ARBITREE",
@@ -379,7 +379,7 @@
       }
     },
     "call_mode_carousel": {
-      "pattern": "^assets/call-mode-carousel-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-mode-carousel-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 7,
         "status": "REMESUREE PAR #8743",
@@ -387,7 +387,7 @@
       }
     },
     "call_montage_mode": {
-      "pattern": "^assets/call-montage-mode-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-montage-mode-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 6,
@@ -396,7 +396,7 @@
       }
     },
     "call_frame_studio": {
-      "pattern": "^assets/frame-studio-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/frame-studio-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 33,
@@ -405,7 +405,7 @@
       }
     },
     "call_montage_render": {
-      "pattern": "^assets/call-montage-render-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-montage-render-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 7,
         "status": "CIBLE -- MESUREE PAR #8743, NON ARBITREE",
@@ -413,7 +413,7 @@
       }
     },
     "call_capture_save": {
-      "pattern": "^assets/call-capture-save-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-capture-save-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 2,
         "status": "CIBLE -- MESUREE PAR #8743, NON ARBITREE",
@@ -421,7 +421,7 @@
       }
     },
     "story_fonts_module": {
-      "pattern": "^assets/story-fonts-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/story-fonts-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 2,
         "status": "CIBLE -- MESUREE PAR #8743, NON ARBITREE",
@@ -429,7 +429,7 @@
       }
     },
     "call_face_tracker": {
-      "pattern": "^assets/face-tracker-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/face-tracker-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #8551/#8552, NON ARBITREE",
@@ -437,7 +437,7 @@
       }
     },
     "call_moderation_menu": {
-      "pattern": "^assets/call-moderation-menu-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-moderation-menu-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -446,7 +446,7 @@
       }
     },
     "call_control_feedback": {
-      "pattern": "^assets/call-control-overlays-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-control-overlays-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -455,7 +455,7 @@
       }
     },
     "call_feedback": {
-      "pattern": "^assets/call-feedback-layer-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/call-feedback-layer-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 4,
@@ -464,7 +464,7 @@
       }
     },
     "reel_images": {
-      "pattern": "^assets/reel-images-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/reel-images-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 2,
@@ -473,7 +473,7 @@
       }
     },
     "publication_comments_sheet": {
-      "pattern": "^assets/publication-comments-sheet-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/publication-comments-sheet-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 2,
@@ -482,7 +482,7 @@
       }
     },
     "comments_sheet_host": {
-      "pattern": "^assets/use-comments-sheet-host-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/use-comments-sheet-host-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE EN REVUE-CORRECTION DE #6484, NON ARBITREE",
@@ -490,7 +490,7 @@
       }
     },
     "publication_viewers_sheet": {
-      "pattern": "^assets/publication-viewers-sheet-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/publication-viewers-sheet-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -499,7 +499,7 @@
       }
     },
     "stories_mine": {
-      "pattern": "^assets/stories-mine-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/stories-mine-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 4,
@@ -508,7 +508,7 @@
       }
     },
     "publication_viewers": {
-      "pattern": "^assets/publication-viewers-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/publication-viewers-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 2,
         "status": "CIBLE -- MESUREE EN REVUE-CORRECTION DE #7116, NON ARBITREE",
@@ -516,7 +516,7 @@
       }
     },
     "publication_views_realtime": {
-      "pattern": "^assets/publication-views-realtime-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/publication-views-realtime-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 2,
@@ -525,7 +525,7 @@
       }
     },
     "story_export": {
-      "pattern": "^assets/(download-file|deliver-file)-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/(download-file|deliver-file)-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -543,7 +543,7 @@
       }
     },
     "post_gestures": {
-      "pattern": "^assets/use-post-gesture-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/use-post-gesture-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 6,
         "status": "CIBLE -- REMESUREE PAR #6898, NON ARBITREE",
@@ -551,7 +551,7 @@
       }
     },
     "notifications": {
-      "pattern": "^assets/notifications-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/notifications-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 12,
         "status": "CIBLE -- MESUREE PAR #6288, NON ARBITREE",
@@ -559,7 +559,7 @@
       }
     },
     "profile": {
-      "pattern": "^assets/profile-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/profile-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 12,
         "status": "CIBLE -- MESUREE PAR #6289, NON ARBITREE",
@@ -567,7 +567,7 @@
       }
     },
     "settings": {
-      "pattern": "^assets/settings-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/settings-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 11,
         "status": "CIBLE -- MESUREE PAR #5563, NON ARBITREE",
@@ -575,7 +575,7 @@
       }
     },
     "settings_security": {
-      "pattern": "^assets/settings-security-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/settings-security-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 6,
@@ -593,7 +593,7 @@
       }
     },
     "client_session": {
-      "pattern": "^assets/client-session-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/client-session-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #9611, NON ARBITREE",
@@ -679,7 +679,7 @@
       }
     },
     "communities": {
-      "pattern": "^assets/communities-(parts-)?[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/communities-(parts-)?[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 10,
         "status": "CIBLE -- MESUREE PAR #6364, NON ARBITREE",
@@ -687,7 +687,7 @@
       }
     },
     "community_detail": {
-      "pattern": "^assets/community-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/community-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #6364, NON ARBITREE",
@@ -695,7 +695,7 @@
       }
     },
     "community_create": {
-      "pattern": "^assets/community-new-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/community-new-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #6364, NON ARBITREE",
@@ -703,7 +703,7 @@
       }
     },
     "calls": {
-      "pattern": "^assets/calls-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/calls-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 6,
         "status": "CIBLE -- MESUREE PAR #6362, NON ARBITREE",
@@ -711,7 +711,7 @@
       }
     },
     "discover": {
-      "pattern": "^assets/discover-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/discover-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 11,
         "status": "CIBLE -- MESUREE PAR #6363, NON ARBITREE",
@@ -719,7 +719,7 @@
       }
     },
     "links": {
-      "pattern": "^assets/links-(parts-)?[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/links-(parts-)?[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 11,
         "status": "CIBLE -- MESUREE PAR #6361, NON ARBITREE",
@@ -727,7 +727,7 @@
       }
     },
     "share_links": {
-      "pattern": "^assets/share-links-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/share-links-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #6361, NON ARBITREE",
@@ -735,7 +735,7 @@
       }
     },
     "share_link_detail": {
-      "pattern": "^assets/share-link-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/share-link-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 10,
         "status": "CIBLE -- MESUREE PAR #7797, NON ARBITREE",
@@ -743,7 +743,7 @@
       }
     },
     "share_link_create": {
-      "pattern": "^assets/share-link-new-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/share-link-new-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 5,
         "status": "CIBLE -- MESUREE PAR #6361, NON ARBITREE",
@@ -751,7 +751,7 @@
       }
     },
     "link_gestures": {
-      "pattern": "^assets/(link-actions|use-link-sharing)-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/(link-actions|use-link-sharing)-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #6361, NON ARBITREE",
@@ -759,7 +759,7 @@
       }
     },
     "friend_requests": {
-      "pattern": "^assets/friend-requests-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/friend-requests-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #6363, NON ARBITREE",
@@ -767,7 +767,7 @@
       }
     },
     "user_profile": {
-      "pattern": "^assets/user-profile-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/user-profile-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 9,
         "status": "CIBLE -- REMESUREE PAR #7124 (l'onglet Conversations du profil public), NON ARBITREE",
@@ -775,7 +775,7 @@
       }
     },
     "publication_menu_panel": {
-      "pattern": "^assets/publication-menu-panel-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/publication-menu-panel-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #7533, NON ARBITREE",
@@ -783,7 +783,7 @@
       }
     },
     "publication_edit_sheet": {
-      "pattern": "^assets/publication-edit-sheet-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/publication-edit-sheet-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 3,
@@ -801,7 +801,7 @@
       }
     },
     "onboarding": {
-      "pattern": "^assets/onboarding-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/onboarding-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 12,
         "status": "CIBLE -- MESUREE PAR #7729, NON ARBITREE",
@@ -809,7 +809,7 @@
       }
     },
     "chat_join": {
-      "pattern": "^assets/chat-join-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/chat-join-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
         "value": 11,
         "status": "CIBLE -- MESUREE PAR #7796, NON ARBITREE",
@@ -844,7 +844,7 @@
       }
     },
     "notification_toast": {
-      "pattern": "^assets/notification-toast-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/notification-toast-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 4,
@@ -907,7 +907,7 @@
       }
     },
     "conversation_media_hub": {
-      "pattern": "^assets/conversation-media-hub-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/conversation-media-hub-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 4,
