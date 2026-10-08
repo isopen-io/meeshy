@@ -67,6 +67,7 @@ type MessageRow = {
   ephemeralDuration: number | null;
   expiresAt: Date | null;
   content: string;
+  messageType?: string;
   attachments: { isViewOnce: boolean | null; isBlurred: boolean | null; effectFlags: number | null }[];
 };
 
@@ -351,6 +352,13 @@ describe('recordContentCapture — ce qui s’annonce (#9617)', () => {
 });
 
 describe('recordContentCapture — ce qui ne s’annonce pas, sans dire pourquoi', () => {
+  it('ignore un message système — un avis de capture, qui porte une échéance, ne s’annonce pas capturé (audit #9629, 5)', async () => {
+    const notice = message({ id: TIMED, messageType: 'system', senderId: WITNESS, expiresAt: new Date('2026-10-14T12:00:00Z') } as Partial<MessageRow> & { id: string });
+    const h = harness({ messages: [notice], entries: [entry(TIMED)] });
+    expect(await h.capture([TIMED])).toEqual({ kind: 'recorded', noticedMessageIds: [] });
+    expect(h.created).toHaveLength(0);
+  });
+
   it('ignore un message ordinaire, le sien, et celui d’une autre conversation', async () => {
     const h = harness();
     expect(await h.capture([PLAIN, OWN, FOREIGN])).toEqual({ kind: 'recorded', noticedMessageIds: [] });

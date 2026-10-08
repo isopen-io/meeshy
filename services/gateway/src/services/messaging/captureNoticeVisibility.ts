@@ -41,12 +41,14 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import {
   HISTORY_FLOOR_PARTICIPANT_SELECT,
+  loadHistoryFloor,
   loadHistoryFloorsForOrFail,
   type HistoryFloorJoin,
   type HistoryReader,
 } from '../historyFloor';
 import {
   NO_PERSONAL_HIDING,
+  readPersonalHistoryHiding,
   readPersonalHistoryHidingByUser,
   type PersonalHistoryHiding,
 } from '../personalHistoryFilter';
@@ -154,6 +156,13 @@ type NoticeSourceRow = {
   readonly messageType?: string | null;
   readonly metadata?: unknown;
 };
+
+/**
+ * La ligne qu'une lecture par identifiant passe à la loi : `messageType` et
+ * `metadata` REQUIS — une route qui ne les charge pas ne compile pas, au lieu
+ * de laisser passer l'avis en le prenant pour un message ordinaire.
+ */
+export type NoticeIdentityRow = NoticeSourceRow & { readonly messageType: string | null; readonly metadata: unknown };
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -371,6 +380,64 @@ export async function unservedCaptureNoticeIdsAmong(
       .map((notice) => notice.id),
   );
 }
+
+/**
+ * Une lecture PAR IDENTIFIANT (le message seul, ses traductions, son détail de
+ * lecture, ses réactions, son fil, ses mentions) : l'avis est-il RETENU pour ce
+ * lecteur ? Un message qui n'est pas un avis ne coûte aucune lecture — `row`
+ * est celle que la route vient de charger, `messageType` et `metadata`
+ * compris. Pour un avis : sa ligne de participation, son plancher, son
+ * masquage, le message nommé, le drapeau d'annonce. Toute lecture qui échoue
+ * RETIENT l'avis (#9629, audit du 2026-10-08).
+ */
+export async function captureNoticeWithheldFrom(
+  prisma: PrismaClient,
+  params: { readonly row: NoticeIdentityRow; readonly reader: HistoryReader | null },
+): Promise<boolean> {
+  const notice = captureNoticeOf(params.row);
+  if (!notice) return false;
+  const { reader } = params;
+  try {
+    const participant = reader
+      ? await prisma.participant.findFirst({
+          where: reader.kind === 'anonymous'
+            ? { id: reader.participantId, conversationId: notice.conversationId, isActive: true, ...unsetOrNull('bannedAt') }
+            : { userId: reader.userId, conversationId: notice.conversationId, isActive: true, ...unsetOrNull('bannedAt') },
+          select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
+        })
+      : null;
+    if (!participant) return true;
+    const [floor, hiding, captured, announcement] = await Promise.all([
+      loadHistoryFloor(prisma, participant),
+      readPersonalHistoryHiding(prisma, { userId: reader?.kind === 'user' ? reader.userId : null, conversationId: notice.conversationId }),
+      loadCapturedMessages(prisma, [notice]),
+      isAnnouncementChannel(prisma, notice.conversationId),
+    ]);
+    return !captureNoticeServedTo({
+      notice,
+      captured: capturedOf(captured, notice),
+      viewer: { participantId: participant.id, conversationRole: participant.role ?? null, floor, hiding },
+      isAnnouncementChannel: announcement,
+    });
+  } catch (error) {
+    logger.warn('capture notice unreadable by id — withheld', {
+      messageId: notice.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return true;
+  }
+}
+
+/**
+ * Un avis de capture n'est pas un CONTENU : on n'y réagit pas, on ne l'épingle,
+ * ne le cite, ne le transfère ni ne le met en favori — pour personne. Chacun de
+ * ces gestes le ferait voyager hors de son audience (une réaction et une
+ * épingle se diffusent à la room, une citation se recopie dans la réponse, un
+ * transfert dans une autre conversation, un favori dans une liste
+ * transversale). Pur : `row` porte `messageType` et `metadata`.
+ */
+export const refusesContentGesture = (row: { readonly messageType: string | null; readonly metadata: unknown }): boolean =>
+  captureNoticeOf({ id: '', conversationId: '', senderId: '', ...row }) !== null;
 
 /**
  * Ce que le compteur écarte, par participant, parmi des CANDIDATS

@@ -24,6 +24,7 @@ import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedS
 import { loadQuotedEphemeralReaders, type EphemeralReaderResolution } from './ephemeralReaderDeadlines';
 import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
 import { readerParticipantIdOf } from './readerParticipant';
+import { captureNoticeWithheldFrom } from '../../services/messaging/captureNoticeVisibility';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -321,6 +322,9 @@ export function registerThreadsRoutes(
       );
 
       if (!parent) {
+        return sendNotFound(reply, 'Message not found');
+      }
+      if (await captureNoticeWithheldFrom(prisma, { row: parent, reader: historyReaderFromAuthContext(authContext) })) {
         return sendNotFound(reply, 'Message not found');
       }
 

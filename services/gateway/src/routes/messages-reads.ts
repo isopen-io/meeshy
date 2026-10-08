@@ -38,6 +38,7 @@ import { callerParticipantWhere } from './conversations/utils/access-control';
 import { readDeviceServedTo } from '../utils/read-device-visibility';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 import { servePostReplyCitations } from '../services/messaging/servedPostReply';
+import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility';
 
 /**
  * L'expéditeur tel que `GET /messages/:messageId` le CHARGE — un `Participant`,
@@ -292,6 +293,10 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       if (historyFloor && message.createdAt < historyFloor) {
         return sendNotFound(reply, 'Message non trouvé');
       }
+      // #9629 — un avis de capture ne se lit par son identifiant que dans son audience.
+      if (await captureNoticeWithheldFrom(prisma, { row: message, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
+        return sendNotFound(reply, 'Message non trouvé');
+      }
 
       // Le résumé se CALCULE — les colonnes dénormalisées de la ligne Message
       // n'ont aucun écrivain et valaient donc toujours `{0, 0, null, null}`.
@@ -458,11 +463,16 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           translations: true,
           conversationId: true,
           senderId: true,
-          isViewOnce: true
+          isViewOnce: true,
+          messageType: true,
+          metadata: true
         }
       });
 
       if (!message) {
+        return sendNotFound(reply, 'Message non trouvé');
+      }
+      if (await captureNoticeWithheldFrom(prisma, { row: message, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
         return sendNotFound(reply, 'Message non trouvé');
       }
 
@@ -555,6 +565,9 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       });
 
       if (!message || !message.conversation.participants.length) {
+        return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
+      }
+      if (await captureNoticeWithheldFrom(prisma, { row: message, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
         return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
       }
 

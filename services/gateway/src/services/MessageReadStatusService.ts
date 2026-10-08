@@ -35,6 +35,7 @@ import {
 // voir le doc-comment du module.
 import { computeUnreadCounts, unreadFloorFor } from './unreadCountsCore';
 import { readUnreadCount } from './unreadCountOfParticipant';
+import { withoutCaptureNotices } from './messaging/captureNoticeVisibility';
 import {
   freezeMessageStatus,
   type FreezeMessageStatusParams,
@@ -2219,8 +2220,9 @@ export class MessageReadStatusService {
     conversationId: string
   ): Promise<{ totalMembers: number; deliveredCount: number; readCount: number; messageId?: string }> {
     try {
+      // #9629 — le résumé part à TOUTE la conversation : il ne nomme jamais un avis de capture.
       const latestMessage = await this.prisma.message.findFirst({
-        where: { conversationId, deletedAt: null },
+        where: withoutCaptureNotices({ conversationId, deletedAt: null }),
         orderBy: { createdAt: 'desc' },
         select: { id: true, createdAt: true, senderId: true }
       });

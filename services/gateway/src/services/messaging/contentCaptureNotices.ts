@@ -21,6 +21,7 @@
  * | budget de déclarations par acteur et conversation | `SOCKET_RATE_LIMITS.MESSAGE_CAPTURE` | `rate-limited` |
  * | le message est de CETTE conversation | `where` | ignoré |
  * | ce n'est pas le sien — capturer son propre contenu n'annonce rien | `senderId` | ignoré |
+ * | ce n'est pas un message système — un avis n'est pas un contenu | `messageType` | ignoré |
  * | la loi de sortie dit `announced` (flamme) ou `blocked` (vue unique), source prouvée | `contentExitLawOfSource` + `captureNoticeOutcomeOf` | ignoré |
  * | l'acteur a le droit de le lire | `readerMayReadMessage`, masquage illisible ⇒ refus | ignoré |
  * | il l'a VU, récemment | {@link wasOnActorScreen} | ignoré |
@@ -153,6 +154,7 @@ const CAPTURED_MESSAGE_SELECT = {
   createdAt: true,
   deletedAt: true,
   senderId: true,
+  messageType: true,
   isViewOnce: true,
   isBlurred: true,
   effectFlags: true,
@@ -161,7 +163,7 @@ const CAPTURED_MESSAGE_SELECT = {
   attachments: { select: { isViewOnce: true, isBlurred: true, effectFlags: true } },
 } as const;
 
-type CapturedMessage = ReadableMessageRow & ContentExitProjection & { readonly senderId: string };
+type CapturedMessage = ReadableMessageRow & ContentExitProjection & { readonly senderId: string; readonly messageType?: string | null };
 
 export type ScreenEntry = {
   readonly readAt: Date | null;
@@ -288,6 +290,9 @@ async function judge(
 ): Promise<CapturedNature | null> {
   const { actor, message, now } = params;
   if (message.senderId === actor.notice.participantId) return null;
+  // Un message système n'est pas un contenu : un avis de capture, qui porte une
+  // échéance, se lirait sinon comme une flamme — et s'annoncerait capturé.
+  if (message.messageType === 'system') return null;
   const nature = announceableNature(message);
   if (!nature) return null;
 

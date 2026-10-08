@@ -11,6 +11,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { readerMayReadMessage } from '../messageReadAccess';
 import { starredMessageVerdict } from './starredMessageVerdict';
+import { refusesContentGesture } from '../captureNoticeVisibility';
 
 /** Ce que la pose rend — la route en dérive le statut, jamais l'inverse. */
 export type StarOutcome =
@@ -29,6 +30,7 @@ const STAR_ADMISSION_MESSAGE_SELECT = {
   id: true,
   conversationId: true,
   messageType: true,
+  metadata: true,
   createdAt: true,
   deletedAt: true,
   expiresAt: true,
@@ -74,6 +76,9 @@ export class MessageStarWriter {
     const verdict = starredMessageVerdict(message, now);
     if (verdict === 'gone') return NOT_FOUND;
     if (verdict === 'view-once') return NOT_STARRABLE;
+    // #9629 — un avis de capture n'est pas un contenu : il ne rejoint pas une
+    // liste transversale de favoris, qui lui survivrait.
+    if (refusesContentGesture(message)) return NOT_STARRABLE;
 
     const star = await this.placeStar(userId, message.id, message.conversationId);
     return { kind: 'starred', messageId: message.id, conversationId: star.conversationId, starredAt: star.createdAt };

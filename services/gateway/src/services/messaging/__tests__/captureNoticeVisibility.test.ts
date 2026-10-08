@@ -25,6 +25,7 @@ import {
   isCaptureNoticeCandidate,
   uncountedCaptureNotices,
   unservedCaptureNoticeIds,
+  unservedCaptureNoticeIdsAmong,
   withoutCaptureNotices,
   type CaptureNotice,
   type CapturedMessage,
@@ -252,6 +253,10 @@ type World = {
   links?: { id: string; allowViewHistory: boolean; expiresAt: Date | null }[];
   failMessages?: boolean;
   failHiding?: boolean;
+  /** `floor` : la lecture des droits d'historique des liens ; `expiry` : celle de leur échéance. */
+  failLinks?: 'floor' | 'expiry';
+  failAnnouncement?: boolean;
+  conversations?: { id: string; isAnnouncementChannel: boolean | null }[];
 };
 
 const isLiveNoticeWhere = (where: Record<string, unknown>): boolean => JSON.stringify(where).includes('"messageSource":"system"');
@@ -277,10 +282,18 @@ function fakePrisma(world: World = {}) {
       findMany: async () => participants,
     },
     conversation: {
-      findUnique: async () => ({ isAnnouncementChannel: world.announcement ?? false }),
+      findUnique: async () => {
+        if (world.failAnnouncement) throw new Error('mongo down');
+        return { isAnnouncementChannel: world.announcement ?? false };
+      },
+      findMany: async () => world.conversations ?? [{ id: CONV, isAnnouncementChannel: world.announcement ?? false }],
     },
     conversationShareLink: {
-      findMany: async ({ where }: { where: { id: { in: string[] } } }) => (world.links ?? []).filter((l) => where.id.in.includes(l.id)),
+      findMany: async ({ where, select }: { where: { id: { in: string[] } }; select: Record<string, unknown> }) => {
+        if (world.failLinks === 'floor' && 'allowViewHistory' in select) throw new Error('mongo down');
+        if (world.failLinks === 'expiry' && 'expiresAt' in select) throw new Error('mongo down');
+        return (world.links ?? []).filter((l) => where.id.in.includes(l.id));
+      },
     },
     userConversationPreferences: {
       findMany: async () => {
@@ -399,3 +412,51 @@ describe('captureNoticeAudience — à qui la diffusion porte l’avis (#9629 b)
     expect(ids(audience)).toEqual([CAPTURER, AUTHOR].sort());
   });
 });
+
+describe('échec fermé — chaque lecture qui ne conclut pas retire ceux dont elle décidait (audit #9629)', () => {
+  const capturedRow = captured();
+  const guestWithLink = participant(GUEST, { userId: null, user: null, shareLinkId: 'l-open', joinedAt: new Date('2026-01-01T00:00:00Z') });
+  const links = [{ id: 'l-open', allowViewHistory: true, expiresAt: null }];
+  const audienceOf = async (world: World) =>
+    (await captureNoticeAudience(fakePrisma(world), { conversationId: CONV, noticeSenderId: CAPTURER, captured: capturedRow, now: NOW }))
+      .map((r) => r.id)
+      .sort();
+
+  it('un lien lisible et ouvert porte l’avis — la base des trois témoins suivants', async () => {
+    expect(await audienceOf({ participants: [participant(CAPTURER), participant(AUTHOR), guestWithLink], links })).toEqual([CAPTURER, AUTHOR, GUEST].sort());
+  });
+
+  it('plancher illisible (droits du lien) : l’invité est retiré', async () => {
+    expect(await audienceOf({ participants: [participant(CAPTURER), participant(AUTHOR), guestWithLink], links, failLinks: 'floor' })).toEqual([CAPTURER, AUTHOR].sort());
+  });
+
+  it('échéance du lien illisible : l’invité est retiré', async () => {
+    expect(await audienceOf({ participants: [participant(CAPTURER), participant(AUTHOR), guestWithLink], links, failLinks: 'expiry' })).toEqual([CAPTURER, AUTHOR].sort());
+  });
+
+  it('drapeau d’annonce illisible : la conversation se juge comme un canal d’annonces', async () => {
+    expect(await audienceOf({ participants: [participant(CAPTURER), participant(AUTHOR), participant(READER)], failAnnouncement: true })).toEqual([CAPTURER, AUTHOR].sort());
+  });
+
+  describe('/sync — unservedCaptureNoticeIdsAmong', () => {
+    const member = viewer();
+
+    it('sert l’avis à un lecteur qui lit le message capturé — la base des témoins suivants', async () => {
+      const unserved = await unservedCaptureNoticeIdsAmong(fakePrisma(), { ids: [NOTICE], viewerOf: () => member });
+      expect([...unserved]).toEqual([]);
+    });
+
+    it('sans lecteur dans la conversation de l’avis : l’avis ne se sert pas', async () => {
+      const unserved = await unservedCaptureNoticeIdsAmong(fakePrisma(), { ids: [NOTICE], viewerOf: () => null });
+      expect([...unserved]).toEqual([NOTICE]);
+    });
+
+    it('drapeau d’annonce nul ou conversation introuvable : jugée comme un canal d’annonces', async () => {
+      for (const conversations of [[{ id: CONV, isAnnouncementChannel: null }], []]) {
+        const unserved = await unservedCaptureNoticeIdsAmong(fakePrisma({ conversations }), { ids: [NOTICE], viewerOf: () => member });
+        expect([...unserved]).toEqual([NOTICE]);
+      }
+    });
+  });
+});
+
