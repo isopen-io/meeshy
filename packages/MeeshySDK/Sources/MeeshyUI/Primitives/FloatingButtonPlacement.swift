@@ -246,6 +246,22 @@ public nonisolated struct FloatingButtonGeometry: Equatable, Sendable {
         return CGPoint(x: x(for: side), y: center.y)
     }
 
+    // MARK: Écriture — le SEUL chemin
+
+    /// Course en deçà de laquelle un geste est un TOUCHER, pas un glisser.
+    public static let dragThreshold: CGFloat = 12
+
+    /// La valeur à persister à la FIN d'un glisser parti de `start` (centre
+    /// global affiché), ou `nil` : rien à écrire. Un toucher — même avec le
+    /// tremblement du doigt — n'écrit rien. C'est le seul producteur d'une
+    /// position persistée : la mise en page, l'anti-chevauchement et l'ancre
+    /// des réels LISENT, ils n'écrivent jamais.
+    public func storage(afterDragFrom start: CGPoint, translation: CGSize, avoiding other: CGPoint) -> String? {
+        guard hypot(translation.width, translation.height) >= Self.dragThreshold else { return nil }
+        let dropped = CGPoint(x: start.x + translation.width, y: start.y + translation.height)
+        return placement(droppedAt: dropped, avoiding: other).storageValue
+    }
+
     // MARK: Menu
 
     /// L'échelle s'ouvre vers le bas si elle y tient, sinon vers le haut si

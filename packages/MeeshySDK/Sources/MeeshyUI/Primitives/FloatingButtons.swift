@@ -148,8 +148,9 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
             FreeFloatingButton(
                 center: geometry.local(layout.feed),
                 buttonSize: FloatingButtonGeometry.buttonSize,
-                onDrop: { point in
-                    leftPositionRaw = geometry.placement(droppedAt: geometry.global(point), avoiding: layout.menu).storageValue
+                onDragEnded: { translation in
+                    guard let stored = geometry.storage(afterDragFrom: layout.feed, translation: translation, avoiding: layout.menu) else { return }
+                    leftPositionRaw = stored
                 },
                 onTap: onLeftTap,
                 onLongPress: onLeftLongPress,
@@ -164,8 +165,9 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
             FreeFloatingButton(
                 center: geometry.local(layout.menu),
                 buttonSize: FloatingButtonGeometry.buttonSize,
-                onDrop: { point in
-                    rightPositionRaw = geometry.placement(droppedAt: geometry.global(point), avoiding: layout.feed).storageValue
+                onDragEnded: { translation in
+                    guard let stored = geometry.storage(afterDragFrom: layout.menu, translation: translation, avoiding: layout.feed) else { return }
+                    rightPositionRaw = stored
                 },
                 onTap: onRightTap,
                 onLongPress: onRightLongPress,
@@ -184,12 +186,13 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
 // MARK: - Free Floating Button
 
 /// Un disque flottant posé en `center` (repère du conteneur qui le dessine). Il suit
-/// le doigt image par image pendant le glisser ; à la levée, `onDrop` reçoit le
-/// point lâché et la géométrie l'aimante au bord le plus proche.
+/// le doigt image par image pendant le glisser ; à la levée, `onDragEnded`
+/// reçoit la course, et la géométrie décide s'il y a quelque chose à écrire
+/// (`FloatingButtonGeometry.storage(afterDragFrom:…)`).
 public struct FreeFloatingButton<Content: View>: View {
     public let center: CGPoint
     public let buttonSize: CGFloat
-    public let onDrop: (CGPoint) -> Void
+    public let onDragEnded: (CGSize) -> Void
     public let onTap: () -> Void
     public var onLongPress: (() -> Void)? = nil
     public var a11yLabel: String? = nil
@@ -204,7 +207,7 @@ public struct FreeFloatingButton<Content: View>: View {
     public init(
         center: CGPoint,
         buttonSize: CGFloat,
-        onDrop: @escaping (CGPoint) -> Void,
+        onDragEnded: @escaping (CGSize) -> Void,
         onTap: @escaping () -> Void,
         onLongPress: (() -> Void)? = nil,
         a11yLabel: String? = nil,
@@ -215,7 +218,7 @@ public struct FreeFloatingButton<Content: View>: View {
     ) {
         self.center = center
         self.buttonSize = buttonSize
-        self.onDrop = onDrop
+        self.onDragEnded = onDragEnded
         self.onTap = onTap
         self.onLongPress = onLongPress
         self.a11yLabel = a11yLabel
@@ -262,18 +265,14 @@ public struct FreeFloatingButton<Content: View>: View {
     }
 
     private var dragGesture: some Gesture {
-        DragGesture()
+        DragGesture(minimumDistance: FloatingButtonGeometry.dragThreshold)
             .onChanged { value in
                 isDragging = true
                 dragOffset = value.translation
             }
             .onEnded { value in
-                let dropped = CGPoint(
-                    x: center.x + value.translation.width,
-                    y: center.y + value.translation.height
-                )
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                    onDrop(dropped)
+                    onDragEnded(value.translation)
                     dragOffset = .zero
                     isDragging = false
                 }

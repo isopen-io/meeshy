@@ -81,6 +81,33 @@ final class FeedButtonAnchorTests: XCTestCase {
                        "L'échelle du menu suit ses boutons au-dessus du chrome.")
     }
 
+    /// Recette 2026-10-08 : posé à 500 pt, le Flux s'est retrouvé à 206 pt sans
+    /// glisser volontaire. Rien dans l'app n'a le droit d'écrire ces deux
+    /// clés : seul le conteneur du SDK, à la fin d'un glisser, les reçoit (par
+    /// le binding `$feedButtonPosition` / `$menuButtonPosition`).
+    func test_noAppCode_writesTheFloatingButtonPositions() throws {
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil))
+        var offenders: [String] = []
+        var declarations = 0
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            for line in code.components(separatedBy: "\n") {
+                if line.range(of: #"(feedButtonPosition|menuButtonPosition)\s*=[^=]"#, options: .regularExpression) != nil {
+                    offenders.append("\(url.lastPathComponent): \(line)")
+                }
+                if line.contains("\"feedButtonPosition\"") || line.contains("\"menuButtonPosition\"") {
+                    declarations += 1
+                }
+            }
+        }
+        XCTAssertEqual(offenders, [], "seule la fin d'un glisser (dans le SDK) écrit une position")
+        XCTAssertEqual(declarations, 2, "les deux clés ne sont nommées que par leurs @AppStorage")
+    }
+
     // MARK: - #9363 — les bulles ne recouvrent plus le « + » de la story
 
     /// Un appareil pris en charge, avec son encoche RÉELLE : le conteneur, lui,
