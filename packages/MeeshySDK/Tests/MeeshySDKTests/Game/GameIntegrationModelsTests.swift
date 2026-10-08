@@ -66,7 +66,7 @@ struct GameIntegrationModelsTests {
     @Test("un palier inconnu fait tomber le niveau SEUL, le trésor reste lu")
     func anUnknownTierDropsTheStandingOnly() throws {
         let profile = try decode(UserGameProfileResponse.self, """
-        {"visible":true,"standing":{"level":42,"tier":"nebuleuse","prestige":0,"flame":null,"rank":"voix","division":3},"treasury":{"tier":"bourse"}}
+        {"visible":true,"standing":{"level":42,"tier":"hypernova","prestige":0,"flame":null,"rank":"voix","division":3},"treasury":{"tier":"bourse"}}
         """)
         #expect(profile.standing == nil)
         #expect(profile.treasury?.tier == .bourse)

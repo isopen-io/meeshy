@@ -34,9 +34,12 @@ public struct GameMintPreview: Codable, Sendable, Equatable {
     public let levelsLost: Int
     /// `0` quand la frappe n'est pas possible.
     public let gloryGained: Int
+    /// Les niveaux ouverts par le rang (#9688) — `nil` devant un serveur antérieur ; les trois champs
+    /// voisins gardent l'ancienne loi (bornés à 100) sur le fil.
+    public let ladder: GameMintLadder?
 
     public init(number: Int, price: Int, edition: MeeshEdition, canMint: Bool, missingPoints: Int,
-                levelBefore: Int, levelAfter: Int, levelsLost: Int, gloryGained: Int) {
+                levelBefore: Int, levelAfter: Int, levelsLost: Int, gloryGained: Int, ladder: GameMintLadder? = nil) {
         self.number = number
         self.price = price
         self.edition = edition
@@ -46,6 +49,25 @@ public struct GameMintPreview: Codable, Sendable, Equatable {
         self.levelAfter = levelAfter
         self.levelsLost = levelsLost
         self.gloryGained = gloryGained
+        self.ladder = ladder
+    }
+
+    /// Les niveaux que l'écran montre : la lecture ouverte par le rang, ou ceux d'hier devant un serveur antérieur.
+    public var shownLevels: GameMintLadder {
+        ladder ?? GameMintLadder(levelBefore: levelBefore, levelAfter: levelAfter, levelsLost: levelsLost)
+    }
+}
+
+/// Les niveaux de la frappe, ouverts par le rang (#9688).
+public struct GameMintLadder: Codable, Sendable, Equatable {
+    public let levelBefore: Int
+    public let levelAfter: Int
+    public let levelsLost: Int
+
+    public init(levelBefore: Int, levelAfter: Int, levelsLost: Int) {
+        self.levelBefore = levelBefore
+        self.levelAfter = levelAfter
+        self.levelsLost = levelsLost
     }
 }
 
@@ -78,14 +100,14 @@ public enum GameMint {
 
     /// Ce que la frappe coûterait et rapporterait, avant confirmation. Pur : le
     /// serveur le rejoue à l'écriture, les clients le montrent avant.
-    public static func preview(score: Int, mintedLifetime: Int, debitablePoints: Int) -> GameMintPreview {
+    public static func preview(score: Int, mintedLifetime: Int, debitablePoints: Int, levelCap: Int?) -> GameMintPreview {
         let held = max(0, score)
         let debitable = max(0, debitablePoints)
         let number = min(max(0, mintedLifetime), Int.max - 1) + 1
         let cost = price(forNumber: number)
         let canMint = debitable >= cost
-        let levelBefore = GameLevels.level(forScore: held)
-        let levelAfter = canMint ? GameLevels.level(forScore: max(0, held - cost)) : levelBefore
+        let levelBefore = GameLevels.level(forScore: held, cap: levelCap)
+        let levelAfter = canMint ? GameLevels.level(forScore: max(0, held - cost), cap: levelCap) : levelBefore
         return GameMintPreview(
             number: number,
             price: cost,

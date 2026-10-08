@@ -286,8 +286,11 @@ public enum GameMissions {
             + templates.filter { $0.difficulty == .hard }.map { $0.promoted(to: .gold) }
     }
 
+    /// Le niveau au-delà duquel les missions ne grandissent plus : les niveaux s'ouvrent au-delà de 100 (#9688), l'effort d'une mission du jour non.
+    public static let scaleMaxLevel = 100
+
     private static func clampLevel(_ level: Int) -> Int {
-        min(GameLevels.maxLevel, max(GameLevels.minLevel, level))
+        min(scaleMaxLevel, max(GameLevels.minLevel, level))
     }
 
     /// bande = ⌊niveau ÷ 10⌋.

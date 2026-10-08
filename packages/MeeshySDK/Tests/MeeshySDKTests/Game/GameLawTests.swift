@@ -11,28 +11,65 @@ struct GameLawTests {
 
     @Test("le niveau 1 dure jusqu'à 39 points, et sa barre part de zéro")
     func levelOneSpansUpToThirtyNine() {
-        let p = GameLevels.progress(forScore: 39)
+        let p = GameLevels.progress(forScore: 39, cap: GameLevels.capBase)
         #expect(p.level == 1)
         #expect(p.floorScore == 0)
         #expect(p.nextThreshold == 40)
         #expect(p.pointsToNext == 1)
-        #expect(GameLevels.progress(forScore: 40).level == 2)
+        #expect(GameLevels.progress(forScore: 40, cap: GameLevels.capBase).level == 2)
     }
 
-    @Test("le niveau 100 est le dernier : plus de seuil, barre pleine")
-    func levelHundredIsFull() {
-        let p = GameLevels.progress(forScore: 400_000)
-        #expect(p.level == 100)
+    @Test("le niveau 100 n'est plus un sommet : la courbe continue (#9688)")
+    func levelHundredIsNoLongerTheTop() {
+        let p = GameLevels.progress(forScore: 400_000, cap: GameLevels.capBase)
+        #expect(p.level == 200)
+        #expect(!p.isMax)
+        #expect(p.tier == .pulsar)
+        #expect(GameLevels.legacyProgress(forScore: 400_000).level == 100)
+        #expect(GameLevels.legacyProgress(forScore: 400_000).isMax)
+        #expect(GameLevels.legacyProgress(forScore: 400_000).tier == .galaxie)
+    }
+
+    @Test("sous Ambassadeur, 499 au plus : 500 attend le rang")
+    func capBelowAmbassador() {
+        let p = GameLevels.progress(forScore: GameLevels.threshold(of: 500), cap: GameGlory.levelCap(forGlory: 129_999))
+        #expect(p.level == 499)
         #expect(p.isMax)
         #expect(p.nextThreshold == nil)
-        #expect(p.progress == 1)
-        #expect(p.tier == .galaxie)
+        #expect(p.cap == 499)
+        #expect(GameLevels.level(forScore: GameLevels.threshold(of: 500), cap: GameGlory.levelCap(forGlory: 130_000)) == 500)
+    }
+
+    @Test("Ambassadeur ouvre 1000, Oracle lève toute limite : 1001 attend Oracle")
+    func capAmbassadorAndOracle() {
+        let score = GameLevels.threshold(of: 1001)
+        #expect(GameLevels.level(forScore: score, cap: GameGlory.levelCap(forRank: .ambassadeur)) == 1000)
+        #expect(GameLevels.level(forScore: score, cap: GameGlory.levelCap(forRank: .orateur)) == 1000)
+        #expect(GameLevels.level(forScore: score, cap: GameGlory.levelCap(forRank: .oracle)) == 1001)
+        #expect(GameGlory.levelCap(forRank: .legende) == nil)
+        #expect(GameGlory.levelCap(forRank: .mythe) == nil)
+        #expect(GameLevels.tier(of: 1001) == .singularite)
+    }
+
+    @Test("une Gloire illisible ne lève pas le plafond (fail-closed)")
+    func unreadableGloryKeepsTheCap() {
+        #expect(GameGlory.levelCap(forGlory: -5) == 499)
+        #expect(GameLevels.level(forScore: GameLevels.threshold(of: 640), cap: 0) == 1)
+    }
+
+    @Test("la Gloire de premier passage : 100 jusqu'à 100, puis 1 000 par dizaine")
+    func firstPassageGloryBeyondHundred() {
+        #expect(GameGlory.gloryForNewLevels(level: 1000, previousRecord: 100) == 90_000)
+        #expect(GameGlory.gloryForNewLevels(level: 120, previousRecord: 98) == 2200)
+        #expect(GameGlory.gloryForNewLevels(level: 1010, previousRecord: 1000) == 1000)
+        #expect(GameGlory.gloryForLevel(110) == 1000)
+        #expect(GameGlory.gloryForLevel(111) == 0)
     }
 
     @Test("un score négatif lit le niveau 1")
     func negativeScoreReadsLevelOne() {
-        #expect(GameLevels.progress(forScore: -50).level == 1)
-        #expect(GameLevels.progress(forScore: -50).score == 0)
+        #expect(GameLevels.progress(forScore: -50, cap: GameLevels.capBase).level == 1)
+        #expect(GameLevels.progress(forScore: -50, cap: GameLevels.capBase).score == 0)
     }
 
     @Test("les dix paliers de nom suivent les dizaines de niveaux")
@@ -42,12 +79,17 @@ struct GameLawTests {
         #expect(GameLevels.tier(of: 89) == .constellation)
         #expect(GameLevels.tier(of: 90) == .galaxie)
         #expect(GameLevels.tier(of: 100) == .galaxie)
+        #expect(GameLevels.tier(of: 101) == .nebuleuse)
+        #expect(GameLevels.tier(of: 999) == .infini)
+        #expect(GameLevels.tier(of: 1000) == .singularite)
+        #expect(LevelTierKey.allCases.allSatisfy { GameLevels.tier(of: GameLevels.tierStart(of: $0)) == $0 })
     }
 
-    @Test("le palier a un rang de 1 à 10 et s'écrit en chiffres romains de I à X")
+    @Test("le palier a un rang de 1 à 20 et s'écrit en chiffres romains de I à XX")
     func tierOrdinalAndRoman() {
-        #expect(LevelTierKey.allCases.map(\.ordinal) == Array(1...10))
-        #expect(LevelTierKey.allCases.map(\.romanNumeral) == ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"])
+        #expect(LevelTierKey.allCases.map(\.ordinal) == Array(1...20))
+        #expect(LevelTierKey.allCases.map(\.romanNumeral) == ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
+                                                              "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"])
         #expect(LevelTierKey.eclat.ordinal == 4)
         #expect(GameLevels.tier(of: 34).romanNumeral == "IV")
         #expect(GameLevels.tier(of: 100).romanNumeral == "X")
@@ -67,6 +109,7 @@ struct GameLawTests {
         #expect(GameLevels.canPrestige(level: 100, prestige: 4))
         #expect(!GameLevels.canPrestige(level: 100, prestige: 5))
         #expect(!GameLevels.canPrestige(level: 99, prestige: 0))
+        #expect(GameLevels.canPrestige(level: 640, prestige: 0))
     }
 
     // MARK: Frappe
@@ -89,9 +132,10 @@ struct GameLawTests {
         #expect(GameMint.price(forNumber: 7_000) == 4884)
         #expect(GameMint.price(forNumber: 200_000) == 4884)
         #expect(GameMint.price(forNumber: Int.max) == 4884)
-        #expect(GameMint.preview(score: 0, mintedLifetime: Int.max, debitablePoints: 0).price == 4884)
-        #expect(GameLevels.level(forScore: Int.max) == 100)
-        #expect(GameLevels.progress(forScore: Int.max).isMax)
+        #expect(GameMint.preview(score: 0, mintedLifetime: Int.max, debitablePoints: 0, levelCap: GameLevels.capBase).price == 4884)
+        #expect(GameLevels.level(forScore: Int.max, cap: GameLevels.capBase) == 499)
+        #expect(GameLevels.progress(forScore: Int.max, cap: GameLevels.capBase).isMax)
+        #expect(GameLevels.level(forScore: Int.max, cap: nil) == 1_000_000)
         #expect(GameFlame.bonusPercent(forDays: Int.max) == 50)
         #expect(GameMissions.reward(basePoints: 30, level: 1, flameDays: Int.max)
             == GameMissions.reward(basePoints: 30, level: 1, flameDays: 25))
@@ -107,7 +151,7 @@ struct GameLawTests {
 
     @Test("sans assez de points débitables, la frappe est refusée et le niveau ne bouge pas")
     func previewWithoutEnoughPoints() {
-        let preview = GameMint.preview(score: 2000, mintedLifetime: 0, debitablePoints: 1000)
+        let preview = GameMint.preview(score: 2000, mintedLifetime: 0, debitablePoints: 1000, levelCap: GameLevels.capBase)
         #expect(!preview.canMint)
         #expect(preview.missingPoints == 221)
         #expect(preview.levelAfter == preview.levelBefore)
@@ -117,7 +161,7 @@ struct GameLawTests {
 
     @Test("une frappe possible coûte des niveaux et rapporte 1 000 de Gloire")
     func previewWithEnoughPoints() {
-        let preview = GameMint.preview(score: 12_180, mintedLifetime: 12, debitablePoints: 12_180)
+        let preview = GameMint.preview(score: 12_180, mintedLifetime: 12, debitablePoints: 12_180, levelCap: GameLevels.capBase)
         #expect(preview.canMint)
         #expect(preview.number == 13)
         #expect(preview.price == 1294)
