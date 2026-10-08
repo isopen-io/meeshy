@@ -18,7 +18,7 @@ import {
   securityEventExportItemSchema,
   sessionExportItemSchema,
 } from './export-security';
-import { recipientLanguage } from '../../utils/recipient-language';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { withoutExpiredConnectionTraces } from '../../services/retention/retention-bounds';
 import { exportGame } from './export-game';
 
@@ -585,7 +585,13 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('sessions')) {
-          const language = recipientLanguage(authContext.registeredUser, 'en');
+          // Le cadrage lit les quatre rangs du Prisme sur SA projection, pas sur
+          // celle du middleware d'authentification qu'aucun balayage ne garde (#4642).
+          const reader = await fastify.prisma.user.findUnique({
+            where: { id: userId },
+            select: RECIPIENT_LANG_SELECT,
+          });
+          const language = recipientLanguage(reader, 'en');
           const section = await exportSessions(fastify.prisma, userId, page, language);
           exportData.sessions = section.items;
           exportData.sessionsCount = section.total;
