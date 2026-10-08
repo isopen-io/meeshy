@@ -37,8 +37,39 @@ export const RETENTION = {
   connectionTraceMonths: 12,
 } as const;
 
-/** Les comptes purgés et anciens comptes traités par passe — la passe suivante reprend. */
+/** Une page de comptes purgés ou anciens. */
 const BATCH = 500;
+
+/**
+ * Pages par passe et par étape (audit L2-5) : la passe parcourt par CURSEUR
+ * jusqu'à épuisement, bornée à 40 pages (20 000 lignes) — au-delà, la passe du
+ * lendemain reprend. Sans curseur, `take: 500` rendait chaque jour les MÊMES
+ * 500 premiers comptes, et l'arriéré au-delà n'était jamais atteint.
+ */
+const MAX_PAGES = 40;
+
+type Paged = { readonly id: string };
+
+/**
+ * Le curseur est un FILTRE `id > dernier` et non le `cursor` + `skip: 1` de
+ * Prisma : une ligne que la page vient d'effacer ne répond plus au filtre, et
+ * `skip: 1` sauterait alors la PREMIÈRE ligne encore à traiter.
+ */
+async function eachPage<T extends Paged>(
+  fetch: (after: { readonly id?: { gt: string } }) => Promise<readonly T[]>,
+  handle: (page: readonly T[]) => Promise<number>,
+): Promise<number> {
+  let total = 0;
+  let cursor: string | null = null;
+  for (let pages = 0; pages < MAX_PAGES; pages += 1) {
+    const page = await fetch(cursor === null ? {} : { id: { gt: cursor } });
+    if (page.length === 0) break;
+    total += await handle(page);
+    if (page.length < BATCH) break;
+    cursor = page[page.length - 1].id;
+  }
+  return total;
+}
 
 export function retentionPurgeArmed(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
   return env.RETENTION_PURGE_ENABLED === 'true';
@@ -106,17 +137,19 @@ export async function sweepRetention(
       ? (await prisma.securityEvent.deleteMany({ where: eventsWhere })).count
       : prisma.securityEvent.count({ where: eventsWhere }));
 
-  const purgedAccountSecurityEvents = await step('security events of purged accounts', async () => {
-    const purged = await prisma.accountDeletionRequest.findMany({
-      where: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] }, gracePeriodEndsAt: { lt: purgeCutoff } },
-      select: { userId: true },
-      take: BATCH,
-    });
-    const userIds = [...new Set(purged.map((request) => request.userId))];
-    if (userIds.length === 0) return 0;
-    const where = { userId: { in: userIds } };
-    return apply ? (await prisma.securityEvent.deleteMany({ where })).count : prisma.securityEvent.count({ where });
-  });
+  const purgedAccountSecurityEvents = await step('security events of purged accounts', () =>
+    eachPage(
+      (after) => prisma.accountDeletionRequest.findMany({
+        where: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] }, gracePeriodEndsAt: { lt: purgeCutoff }, ...after },
+        select: { id: true, userId: true },
+        orderBy: { id: 'asc' },
+        take: BATCH,
+      }),
+      async (requests) => {
+        const where = { userId: { in: [...new Set(requests.map((request) => request.userId))] } };
+        return apply ? (await prisma.securityEvent.deleteMany({ where })).count : prisma.securityEvent.count({ where });
+      },
+    ));
 
   const auditWhere = { createdAt: { lt: auditCutoff } };
   const adminAuditLogs = await step('admin audit log', async () =>
@@ -139,22 +172,29 @@ export async function sweepRetention(
     const dated = apply
       ? (await prisma.user.updateMany({ where: datedWhere, data: { lastLoginIp: null, lastLoginLocation: null } })).count
       : await prisma.user.count({ where: datedWhere });
-    const legacy = await prisma.user.findMany({
-      where: {
-        lastLoginAt: { isSet: false },
-        createdAt: { lt: traceCutoff },
-        sessions: { none: { createdAt: { gte: traceCutoff } } },
-        ...loginTraceFields,
+    const legacy = await eachPage(
+      (after) => prisma.user.findMany({
+        where: {
+          lastLoginAt: { isSet: false },
+          createdAt: { lt: traceCutoff },
+          sessions: { none: { createdAt: { gte: traceCutoff } } },
+          ...loginTraceFields,
+          ...after,
+        },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: BATCH,
+      }),
+      async (users) => {
+        if (!apply) return users.length;
+        const erased = await prisma.user.updateMany({
+          where: { id: { in: users.map((user) => user.id) }, lastLoginAt: { isSet: false } },
+          data: { lastLoginIp: null, lastLoginLocation: null },
+        });
+        return erased.count;
       },
-      select: { id: true },
-      take: BATCH,
-    });
-    if (legacy.length === 0 || !apply) return dated + legacy.length;
-    const erased = await prisma.user.updateMany({
-      where: { id: { in: legacy.map((user) => user.id) }, lastLoginAt: { isSet: false } },
-      data: { lastLoginIp: null, lastLoginLocation: null },
-    });
-    return dated + erased.count;
+    );
+    return dated + legacy;
   });
 
   return {

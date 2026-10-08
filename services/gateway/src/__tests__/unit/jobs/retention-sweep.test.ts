@@ -203,3 +203,56 @@ describe('sweepRetention — armée', () => {
     expect(prisma.adminAuditLog.deleteMany).toHaveBeenCalled();
   });
 });
+
+describe('audit L2-5 — la passe va jusqu’au bout, par curseur, pas sur les mêmes 500', () => {
+  const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${String(i).padStart(5, '0')}`);
+
+  /** Un `findMany` qui respecte `orderBy id`, le filtre `id > dernier` et `take`. */
+  const paged = (all: readonly string[], toRow: (id: string) => Record<string, string>) =>
+    jest.fn(async (args: any) => {
+      expect(args.orderBy).toEqual({ id: 'asc' });
+      const after: string | undefined = args.where?.id?.gt;
+      return all.filter((id) => after === undefined || id > after).slice(0, args.take).map(toRow);
+    });
+
+  it('efface les événements de TOUS les comptes purgés, au-delà de 500', async () => {
+    const purged = ids('u', 1200);
+    const prisma = fakePrisma();
+    (prisma.accountDeletionRequest as any).findMany = paged(purged.map((u) => `r-${u}`), (id) => ({ id, userId: id.slice(2) }));
+
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+
+    const erased = prisma.securityEvent.deleteMany.mock.calls
+      .map(([args]) => (args as { where: { userId?: { in: string[] } } }).where.userId?.in ?? [])
+      .flat();
+    expect(new Set(erased)).toEqual(new Set(purged));
+  });
+
+  it('le décompte à blanc couvre aussi tous les comptes', async () => {
+    const purged = ids('u', 1200);
+    const prisma = fakePrisma();
+    (prisma.accountDeletionRequest as any).findMany = paged(purged.map((u) => `r-${u}`), (id) => ({ id, userId: id.slice(2) }));
+
+    await sweepRetention(prisma as never, { now: NOW, apply: false });
+
+    const counted = prisma.securityEvent.count.mock.calls
+      .map(([args]) => (args as { where: { userId?: { in: string[] } } }).where.userId?.in ?? [])
+      .flat();
+    expect(new Set(counted)).toEqual(new Set(purged));
+  });
+
+  it('les comptes anciens sans date de connexion sont tous traités, à blanc comme armée', async () => {
+    const legacy = ids('l', 1100);
+    const prisma = fakePrisma();
+    prisma.user.findMany = paged(legacy, (id) => ({ id })) as never;
+
+    const report = await sweepRetention(prisma as never, { now: NOW, apply: false });
+    expect(report.loginTraces).toBe(2 + 1100);
+
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+    const erased = prisma.user.updateMany.mock.calls
+      .map(([args]) => (args as { where: { id?: { in: string[] } } }).where.id?.in ?? [])
+      .flat();
+    expect(new Set(erased)).toEqual(new Set(legacy));
+  });
+});
