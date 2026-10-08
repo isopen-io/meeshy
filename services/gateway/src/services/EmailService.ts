@@ -30,6 +30,7 @@ import {
 } from './email/account-identity-block';
 import { composePasswordResetEmail, type PasswordResetEmailData } from './email/password-reset-email';
 import { composeLoginCodeEmail, codeExpiryText, type LoginCodeEmailData } from './email/login-code-email';
+import { composeBackupAlertEmail, type BackupAlertEmailData } from './email/backup-alert-email';
 import { isStagingEnvironment, markForEnvironment } from './email/staging-marker';
 import { sendViaBrevo, sendViaMailgun, sendViaSendGrid, type EmailSender } from './email/providers';
 import { emailBaseStyles } from './email/base-styles';
@@ -443,6 +444,16 @@ export class EmailService {
       footerText: this.getFooterContentText(data.language),
     });
     return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'login_code', trackingLang: data.language });
+  }
+
+  async sendBackupAlertEmail(data: BackupAlertEmailData): Promise<EmailResult> {
+    const { subject, html, text } = composeBackupAlertEmail(data, {
+      styles: this.getBaseStyles(),
+      footerHtml: this.getFooterContentHtml(data.language),
+      footerText: this.getFooterContentText(data.language),
+      monitoringUrl: `${this.frontendUrl}/admin/monitoring`,
+    });
+    return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'backup_alert', trackingLang: data.language });
   }
 
   async sendPasswordResetEmail(data: PasswordResetEmailData): Promise<EmailResult> {

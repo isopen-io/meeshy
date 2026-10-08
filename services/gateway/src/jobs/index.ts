@@ -15,6 +15,7 @@ import { retentionPurgeArmed, sweepRetention } from './retention-sweep';
 import { GameLeagueJob } from './game-league';
 import { GameNightlyJob } from './game-nightly';
 import { GameMissionWindowJob } from './game-mission-window';
+import { BackupStatusCheckJob } from './backup-status-check';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -38,6 +39,8 @@ export class BackgroundJobsManager {
   private gameLeagueJob: GameLeagueJob;
   private gameNightlyJob: GameNightlyJob;
   private gameMissionWindowJob: GameMissionWindowJob;
+  /** Le contrôle de la sauvegarde nocturne, chaque jour à 5 h heure de Paris (#9668). */
+  private backupStatusCheckJob: BackupStatusCheckJob;
   /**
    * Le balayage des sessions expirées n'a pas de classe à lui : c'est UNE
    * requête, sans état ni dépendance. Une classe n'ajouterait qu'un emballage
@@ -76,6 +79,7 @@ export class BackgroundJobsManager {
     this.gameLeagueJob = new GameLeagueJob(prisma);
     this.gameNightlyJob = new GameNightlyJob(prisma);
     this.gameMissionWindowJob = new GameMissionWindowJob(prisma);
+    this.backupStatusCheckJob = new BackupStatusCheckJob({ prisma, emailService });
   }
 
   /**
@@ -98,6 +102,7 @@ export class BackgroundJobsManager {
     this.gameLeagueJob.start();
     this.gameNightlyJob.start();
     this.gameMissionWindowJob.start();
+    this.backupStatusCheckJob.start();
 
     // Toutes les six heures : une session dont l'échéance est passée cesse de
     // se déclarer valide. Sans ce balayage, `isValid` ment à tout ce qui le lit
@@ -193,6 +198,7 @@ export class BackgroundJobsManager {
     this.gameLeagueJob.stop();
     this.gameNightlyJob.stop();
     this.gameMissionWindowJob.stop();
+    this.backupStatusCheckJob.stop();
 
     if (this.sessionSweepInterval) {
       clearInterval(this.sessionSweepInterval);
@@ -242,6 +248,7 @@ export class BackgroundJobsManager {
       banExpirySweep: this.banExpirySweepJob,
       gameLeague: this.gameLeagueJob,
       gameNightly: this.gameNightlyJob,
+      backupStatusCheck: this.backupStatusCheckJob,
     };
   }
 

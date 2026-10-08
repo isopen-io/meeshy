@@ -278,6 +278,21 @@ describe('BackgroundJobsManager', () => {
     });
   });
 
+  it('arme le contrôle de la sauvegarde nocturne quand BACKUP_STATUS_ALERTS_ENABLED=true, et le désarme à l’arrêt (#9668)', () => {
+    const previous = process.env.BACKUP_STATUS_ALERTS_ENABLED;
+    process.env.BACKUP_STATUS_ALERTS_ENABLED = 'true';
+    try {
+      const mgr = new BackgroundJobsManager(makePrisma(), makeEmailService());
+      mgr.startAll();
+      expect(mgr.getJobs().backupStatusCheck.isArmed()).toBe(true);
+      mgr.stopAll();
+      expect(mgr.getJobs().backupStatusCheck.isArmed()).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.BACKUP_STATUS_ALERTS_ENABLED;
+      else process.env.BACKUP_STATUS_ALERTS_ENABLED = previous;
+    }
+  });
+
   // ─── custom deliveryQueue parameter ──────────────────────────────────────
 
   it('accepts an optional deliveryQueue parameter', () => {
