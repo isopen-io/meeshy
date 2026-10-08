@@ -139,7 +139,10 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
     Params: { userId: string };
     Querystring: { offset?: string; limit?: string };
   }>('/admin/users/:userId/sessions', {
-    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission('canViewSensitiveData')]
+    // Audit L2-7 — lire l'adresse et la ville d'un membre exige de le
+    // SURCLASSER (ou d'être soi), comme le fermer : un ADMIN ne lit pas celles
+    // d'un BIGBOSS.
+    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission('canViewSensitiveData'), requireHierarchy({ param: 'userId' })]
   }, async (request, reply) => {
     try {
       const { userId } = request.params;
@@ -314,7 +317,10 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
       createdBefore?: string;
     };
   }>('/admin/users/:userId/security-events', {
-    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission('canViewSensitiveData')]
+    // Audit L2-7 — lire l'adresse et la ville d'un membre exige de le
+    // SURCLASSER (ou d'être soi), comme le fermer : un ADMIN ne lit pas celles
+    // d'un BIGBOSS.
+    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission('canViewSensitiveData'), requireHierarchy({ param: 'userId' })]
   }, async (request, reply) => {
     try {
       const { userId } = request.params;

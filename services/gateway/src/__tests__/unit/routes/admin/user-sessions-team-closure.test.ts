@@ -235,3 +235,25 @@ describe('DELETE /admin/users/:userId/sessions/:sessionId — le membre est info
     expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledWith(expect.objectContaining({ alertType: 'sessions_closed_by_team' }));
   });
 });
+
+describe('audit L2-7 — lire les sessions d’un membre exige de le surclasser (ou d’être soi)', () => {
+  it.each(['sessions', 'security-events'])('GET …/%s : 403 quand la hiérarchie ne surclasse pas la cible, et rien n’est lu', async (surface) => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: `/admin/users/user123/${surface}` });
+    await app.close();
+
+    expect(res.statusCode).toBe(403);
+    expect(mockPrisma.userSession.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.securityEvent.findMany).not.toHaveBeenCalled();
+  });
+
+  it('un administrateur lit ses PROPRES sessions sans hiérarchie', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/admin/users/admin123/sessions' });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+  });
+});

@@ -150,10 +150,10 @@ describe('GET /admin/users/:userId/sessions', () => {
   afterAll(() => app.close());
   beforeEach(resetMocks);
 
-  it("404 quand l'utilisateur n'existe pas", async () => {
+  it("403 quand l'utilisateur n'existe pas (requireHierarchy fail-CLOSED, audit L2-7)", async () => {
     mockPrisma.user.findUnique.mockResolvedValue(null);
     const res = await app.inject({ method: 'GET', url: '/admin/users/ghost/sessions' });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(403);
   });
 
   it('rend la page de sessions, toutes valides ou révoquées, triée par activité récente', async () => {
@@ -327,10 +327,10 @@ describe('GET /admin/users/:userId/security-events', () => {
   afterAll(() => app.close());
   beforeEach(resetMocks);
 
-  it("404 quand l'utilisateur n'existe pas", async () => {
+  it("403 quand l'utilisateur n'existe pas (requireHierarchy fail-CLOSED, audit L2-7)", async () => {
     mockPrisma.user.findUnique.mockResolvedValue(null);
     const res = await app.inject({ method: 'GET', url: '/admin/users/ghost/security-events' });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(403);
   });
 
   it('rend la page filtrée par eventType/severity/période', async () => {
