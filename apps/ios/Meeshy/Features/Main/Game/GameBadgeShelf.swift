@@ -377,7 +377,7 @@ struct GameBadgeUpcomingView: View {
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(GameBadgeGuideText.upcomingTitle + " : " + model.upcoming.map(\.accessibilityLabel).joined(separator: " ; "))
+                .accessibilityLabel(([GameBadgeGuideText.upcomingTitle] + model.upcoming.map(\.accessibilityLabel)).joined(separator: ". "))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
