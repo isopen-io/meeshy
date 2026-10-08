@@ -93,21 +93,25 @@ final class SyncPillPlacementTests: XCTestCase {
         )
     }
 
-    func test_onAnIslandIPhone_withAZeroReportedInset_thePillClearsTheIsland() throws {
-        let top = try XCTUnwrap(SyncPillPlacement.topOffset(
+    func test_onAnIslandIPhone_withAZeroReportedInset_thePillClearsTheIsland() {
+        let top = SyncPillPlacement.topOffset(
             container: iPhone17Pro, safeRegion: iPhone17ProSafe, reportedTop: 0, isPad: false
-        ))
+        )
         XCTAssertGreaterThanOrEqual(top, 48, "le bas de l'îlot de l'iPhone 17 Pro est à y = 48")
         XCTAssertLessThanOrEqual(top + SyncPillMetrics.height, 62 + SyncPillPlacement.maximumIntrusionIntoSafeArea)
     }
 
-    /// Mesure transitoire : un iPhone en portrait n'a JAMAIS un encart haut nul.
-    /// Plutôt que de se montrer sous l'îlot, la pastille attend la passe
-    /// suivante.
-    func test_aTransientZeroMeasure_onAPortraitIPhone_holdsThePillBack() {
-        XCTAssertNil(SyncPillPlacement.topOffset(
+    /// Mesure ratée (transitoire, ou hôte qui a consommé la zone sûre) : un
+    /// iPhone en portrait n'a JAMAIS un encart haut nul. La pastille ne se pose
+    /// ni sous l'îlot (y = 1, recette du 2026-10-08) ni nulle part (une version
+    /// qui attendait la passe suivante ne s'affichait plus) : elle reste
+    /// visible, sous le plus haut des îlots.
+    func test_aZeroMeasure_onAPortraitIPhone_stillShowsThePillBelowTheIsland() {
+        let top = SyncPillPlacement.topOffset(
             container: iPhone17Pro, safeRegion: iPhone17Pro, reportedTop: 0, isPad: false
-        ))
+        )
+        XCTAssertGreaterThanOrEqual(top, 48, "sous l'îlot, jamais dessous")
+        XCTAssertLessThan(top, 80, "et toujours dans le haut de l'écran")
     }
 
     func test_landscapeIPhone_withoutStatusBar_stillShowsThePill() {

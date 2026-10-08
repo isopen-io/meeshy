@@ -72,20 +72,27 @@ nonisolated enum SyncPillPlacement {
         return max(reportedTop, safeRegion.minY - container.minY, 0)
     }
 
-    /// **Où poser la pastille dans son conteneur — ou `nil` tant que la zone
-    /// sûre n'est pas encore mesurée.**
+    /// Encart supposé quand la mesure rend 0 sur un iPhone en portrait : le
+    /// plus haut des îlots (iPhone 16/17 Pro). Sur une encoche, la pastille se
+    /// pose alors quelques points plus bas, VISIBLE ; l'inverse — supposer
+    /// l'encart le plus bas — la remettrait sous l'îlot.
+    static let unmeasuredPortraitInset: CGFloat = 62
+
+    /// **Où poser la pastille dans son conteneur.**
     ///
     /// Un iPhone en PORTRAIT a toujours un encart haut (20 pt au moins, sous la
     /// barre d'état) : en lire 0 sur un conteneur qui touche le haut de l'écran
-    /// est une mesure transitoire (première passe de mise en page), pas un
-    /// appareil. Se poser à y = 1 la mettrait sous l'îlot : on attend la
-    /// passe suivante plutôt que de se montrer au mauvais endroit.
-    static func topOffset(container: CGRect, safeRegion: CGRect, reportedTop: CGFloat, isPad: Bool) -> CGFloat? {
-        let safeAreaTop = screenSafeAreaTop(container: container, safeRegion: safeRegion, reportedTop: reportedTop)
+    /// est une mesure ratée — transitoire (première passe de mise en page) ou
+    /// hôte qui a consommé la zone sûre. La pastille ne se pose alors ni sous
+    /// l'îlot (y = 1, recette du 2026-10-08) ni nulle part (une version qui
+    /// attendait la passe suivante ne s'affichait plus du tout) : elle prend
+    /// `unmeasuredPortraitInset`.
+    static func topOffset(container: CGRect, safeRegion: CGRect, reportedTop: CGFloat, isPad: Bool) -> CGFloat {
+        let measured = screenSafeAreaTop(container: container, safeRegion: safeRegion, reportedTop: reportedTop)
         let isPortrait = container.height > container.width
         let touchesTop = container.minY <= 0.5
-        if !isPad, isPortrait, touchesTop, safeAreaTop <= 0 { return nil }
-        return topOffset(safeAreaTop: safeAreaTop, isPad: isPad)
+        let unmeasured = !isPad && isPortrait && touchesTop && measured <= 0
+        return topOffset(safeAreaTop: unmeasured ? unmeasuredPortraitInset : measured, isPad: isPad)
     }
 
     /// Distance entre le bord HAUT DE L'ÉCRAN (de l'hôte, zone sûre comprise)
@@ -114,16 +121,14 @@ private struct SyncPillBandMount: ViewModifier {
             let safeRegion = safe.frame(in: .global)
             let reportedTop = safe.safeAreaInsets.top
             GeometryReader { full in
-                if let top = SyncPillPlacement.topOffset(
-                    container: full.frame(in: .global),
-                    safeRegion: safeRegion,
-                    reportedTop: reportedTop,
-                    isPad: UIDevice.current.userInterfaceIdiom == .pad
-                ) {
-                    content
-                        .padding(.top, top)
-                        .frame(maxWidth: .infinity, alignment: .top)
-                }
+                content
+                    .padding(.top, SyncPillPlacement.topOffset(
+                        container: full.frame(in: .global),
+                        safeRegion: safeRegion,
+                        reportedTop: reportedTop,
+                        isPad: UIDevice.current.userInterfaceIdiom == .pad
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .top)
             }
             .ignoresSafeArea(.container, edges: .top)
         }
