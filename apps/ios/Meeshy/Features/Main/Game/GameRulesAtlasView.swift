@@ -34,6 +34,7 @@ struct GameRulesAtlasView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             speaker(family)
             grid(family)
+            if family == .tiers { levelRules }
         }
         .padding(MeeshySpacing.md)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous).fill(theme.backgroundSecondary))
@@ -118,6 +119,19 @@ struct GameRulesAtlasView: View {
                 .frame(width: 64, height: 64)
             }
         }
+    }
+
+    /// Jusqu'où chaque rang ouvre les niveaux, le Prestige facultatif, la Gloire du premier passage (#9688).
+    private var levelRules: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            ForEach(GameAtlasCopy.levelRules, id: \.self) { rule in
+                Text(rule)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityIdentifier("game.rules.atlas.tiers.rules")
     }
 
     // MARK: - La Meesh : avers, revers, éditions

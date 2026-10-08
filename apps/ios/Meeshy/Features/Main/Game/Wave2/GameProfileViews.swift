@@ -48,13 +48,13 @@ struct GameProfileOwnCard: View {
     private func header(_ game: GameBlock) -> some View {
         HStack(alignment: .center, spacing: MeeshySpacing.lg) {
             LevelRingView(
-                level: game.level.level, progress: game.level.progress, tier: game.level.tier, prestige: game.level.prestige,
+                level: game.level.shown.level, progress: game.level.shown.progress, tier: game.level.shown.tier, prestige: game.level.prestige,
                 trackColor: theme.textMuted.opacity(MeeshyOpacity.light), inkColor: theme.textPrimary,
-                accessibilityLabel: GameCopy.levelRingAccessibility(level: game.level.level, tier: game.level.tier)
+                accessibilityLabel: GameCopy.levelRingAccessibility(level: game.level.shown.level, tier: game.level.shown.tier)
             )
             .frame(width: 80, height: game.level.prestige > 0 ? 94 : 80)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(GameText.profileLevel(level: GameCopy.formatCount(game.level.level), tier: GameCopy.tierName(game.level.tier)))
+                Text(GameText.profileLevel(level: GameCopy.formatCount(game.level.shown.level), tier: GameCopy.tierName(game.level.shown.tier)))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                     .foregroundColor(theme.textPrimary)
                 Text(GameCopy.rankLabel(game.glory))
@@ -65,7 +65,7 @@ struct GameProfileOwnCard: View {
                     .foregroundColor(theme.textMuted)
             }
             Spacer(minLength: 0)
-            RankBlasonView(rank: game.glory.rank, division5: game.glory.shownDivision, level: game.level.level,
+            RankBlasonView(rank: game.glory.rank, division5: game.glory.shownDivision, level: game.level.shown.level,
                            mythic: game.glory.mythicSeat, title: GameCopy.rankName(game.glory.rank), figures: nil)
                 .frame(width: 64, height: 60)
         }

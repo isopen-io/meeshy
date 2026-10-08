@@ -2,6 +2,8 @@ import XCTest
 import SwiftUI
 @testable import Meeshy
 import MeeshySDK
+import MeeshyUI
+import UIKit
 
 /// **Ce que l'utilisateur VOIT, pas ce que le code déclare** (#9383, #9564) — la première page de Progression ne
 /// porte que des CARTES de concept ; les gestes du jeu sont RENDUS dans la fiche de leur concept, chaque fiche a UN
@@ -257,5 +259,31 @@ final class GameProgressionRenderTests: XCTestCase {
         }
         XCTAssertEqual(try sourceCount(of: "push(.progressionDashboard"), 0, "une page du jeu pousse encore le tableau de bord")
         XCTAssertFalse(FileManager.default.fileExists(atPath: ios.appendingPathComponent("Meeshy/Features/Main/Game/ProgressionDashboardPage.swift").path))
+    }
+
+    // MARK: - Les niveaux à 3, 4 et 5 chiffres tiennent (#9688)
+
+    private func width(_ digits: String, size: CGFloat) -> CGFloat {
+        (digits as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: size, weight: .heavy)]).width
+    }
+
+    /// Le niveau 100 tenait dans la pointe de l'écu à 15 pt : un niveau à 4 ou 5 chiffres n'y prend pas plus de place.
+    func test_theCrestEngraving_shrinksWithTheDigits_soThatLevel1000FitsWhereLevel100Did() {
+        let room = width("100", size: GameRankCrest.levelEngraving.size)
+        for level in [1_000, 9_999, 12_345] {
+            let size = CGFloat(GameRankCrest.levelEngravingSize(forLevel: level))
+            XCTAssertLessThanOrEqual(width(String(level), size: size), room + 0.5, "niveau \(level) déborde de la pointe")
+        }
+        XCTAssertEqual(GameRankCrest.levelEngravingSize(forLevel: 42), GameRankCrest.levelEngraving.size)
+        XCTAssertGreaterThan(GameRankCrest.levelEngravingSize(forLevel: 499), GameRankCrest.levelEngravingSize(forLevel: 1_000))
+    }
+
+    /// Dans l'anneau, le chiffre tient dans les 30 pt du disque, de 1 à 5 chiffres.
+    func test_theRingNumber_shrinksWithTheDigits_andFitsTheDisc() {
+        for level in [7, 99, 499, 1_000, 12_345] {
+            let size = LevelRingView.levelTypeSize(forLevel: level)
+            XCTAssertLessThanOrEqual(width(String(level), size: size), 30, "niveau \(level) déborde du disque")
+        }
+        XCTAssertGreaterThan(LevelRingView.levelTypeSize(forLevel: 999), LevelRingView.levelTypeSize(forLevel: 1_000))
     }
 }

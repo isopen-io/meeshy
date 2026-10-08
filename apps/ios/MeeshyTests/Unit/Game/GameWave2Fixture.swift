@@ -61,9 +61,8 @@ enum GameWave2Fixture {
     /// Un bloc de niveau 100 prêt pour le Prestige.
     static func atLevel100(prestige stars: Int = 0) -> GameBlock {
         let base = GameFixture.game(score: GameLevels.threshold(of: 100))
-        let level = GameBlock.Level(
-            level: 100, tier: .galaxie, score: base.level.score, floorScore: base.level.floorScore, nextThreshold: nil,
-            pointsToNext: 0, progress: 1, record: 100, prestige: stars, canPrestige: GameLevels.canPrestige(level: 100, prestige: stars)
+        let level = GameLevelWire.level(
+            score: base.level.score, levelCap: GameGlory.levelCap(forRank: base.glory.rank), levelRecord: 100, prestige: stars
         )
         return base.replacing(
             level: level,

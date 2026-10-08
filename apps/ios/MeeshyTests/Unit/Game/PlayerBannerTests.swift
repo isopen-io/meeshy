@@ -125,12 +125,27 @@ final class PlayerBannerTests: XCTestCase {
         XCTAssertTrue(label.contains(GameCopy.formatCount(banner.score)), "les points gagnés se disent : \(label)")
     }
 
-    func test_atTheTop_theSentenceSaysSo_insteadOfAPercentage() {
-        let base = GameWave2Fixture.atLevel100()
-        let banner = GamePlayerBanner(game: base)
+    func test_atLevel100_theBannerKeepsClimbing_towardLevel101() {
+        let banner = GamePlayerBanner(game: GameWave2Fixture.atLevel100())
+        XCTAssertEqual(banner.level, 100)
+        XCTAssertEqual(banner.nextLevel, 101, "le niveau 100 n'est plus un sommet (#9688)")
+        XCTAssertNil(banner.levelCap)
+    }
+
+    func test_atTheRankCap_theSentenceNamesTheRankThatOpensIt_insteadOfAPercentage() {
+        let banner = GamePlayerBanner(game: GameFixture.game(score: GameLevels.threshold(of: 640)))
+        XCTAssertEqual(banner.level, 499)
+        XCTAssertNil(banner.nextLevel)
+        XCTAssertEqual(banner.levelCap, 499)
+        XCTAssertTrue(PlayerBannerCopy.accessibilityLabel(for: banner).contains(GameCopy.levelTopShort(cap: 499)))
+        XCTAssertNil(PlayerBannerCopy.texts(for: banner).missing, "au plafond, plus rien ne manque")
+    }
+
+    func test_againstAnOlderServer_theBannerReadsTheLegacyFields() {
+        let banner = GamePlayerBanner(game: GameFixture.game(score: GameLevels.threshold(of: 640), servesLadder: false))
+        XCTAssertEqual(banner.level, 100)
         XCTAssertNil(banner.nextLevel)
         XCTAssertTrue(PlayerBannerCopy.accessibilityLabel(for: banner).contains(GameText.bannerTop))
-        XCTAssertNil(PlayerBannerCopy.texts(for: banner).missing, "au sommet, plus rien ne manque")
     }
 
     func test_theShortTexts_carryTheFormattedFigures_andOnlyForWhatExists() {

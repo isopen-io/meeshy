@@ -14,7 +14,7 @@ enum GameBlockFixture {
 
     /// Le même bloc, mais une clé de palier que ce client ne connaît pas encore.
     static var withUnknownTier: Data {
-        Data(json.replacingOccurrences(of: "\"tier\":\"eclat\"", with: "\"tier\":\"nebuleuse\"").utf8)
+        Data(json.replacingOccurrences(of: "\"tier\":\"eclat\"", with: "\"tier\":\"hypernova\"").utf8)
     }
 
     /// Le même bloc, amputé de sa Flamme : un bloc partiel.

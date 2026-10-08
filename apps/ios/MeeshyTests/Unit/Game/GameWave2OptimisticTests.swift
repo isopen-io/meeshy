@@ -154,6 +154,18 @@ final class GameWave2OptimisticTests: XCTestCase {
         XCTAssertTrue(next.game.trophies?.items.contains { $0.key == "trophy.prestige.1" } ?? false)
     }
 
+    /// Le passage recompose le niveau comme la passerelle (#9688) : la lecture ouverte repart à 1 elle aussi, et
+    /// l'aperçu de frappe porte sa propre lecture ouverte.
+    func test_afterPrestige_restartsTheOpenedLevelInTheLadderToo() {
+        let state = GameWave2Fixture.state(GameWave2Fixture.atLevel100())
+        XCTAssertEqual(state.game.level.shown.level, 100)
+        let next = GameWave2Optimistic.afterPrestige(state)
+        XCTAssertEqual(next.game.level.ladder?.level, 1)
+        XCTAssertEqual(next.game.level.ladder?.record, 1)
+        XCTAssertEqual(next.game.level.ladder?.cap, GameGlory.levelCap(forRank: next.game.glory.rank))
+        XCTAssertNotNil(next.game.mint.ladder)
+    }
+
     func test_afterPrestige_keepsWhatThePassageDoesNotTouch() {
         let state = GameWave2Fixture.state(GameWave2Fixture.atLevel100())
         let next = GameWave2Optimistic.afterPrestige(state)

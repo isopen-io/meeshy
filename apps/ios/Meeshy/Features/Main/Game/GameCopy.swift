@@ -86,6 +86,16 @@ enum GameCopy {
         case .etoile: String(localized: "game.tier.etoile", defaultValue: "Étoile", bundle: .main)
         case .constellation: String(localized: "game.tier.constellation", defaultValue: "Constellation", bundle: .main)
         case .galaxie: String(localized: "game.tier.galaxie", defaultValue: "Galaxie", bundle: .main)
+        case .nebuleuse: String(localized: "game.tier.nebuleuse", defaultValue: "Nébuleuse", bundle: .main)
+        case .pulsar: String(localized: "game.tier.pulsar", defaultValue: "Pulsar", bundle: .main)
+        case .quasar: String(localized: "game.tier.quasar", defaultValue: "Quasar", bundle: .main)
+        case .supernova: String(localized: "game.tier.supernova", defaultValue: "Supernova", bundle: .main)
+        case .magnetar: String(localized: "game.tier.magnetar", defaultValue: "Magnétar", bundle: .main)
+        case .amas: String(localized: "game.tier.amas", defaultValue: "Amas", bundle: .main)
+        case .superamas: String(localized: "game.tier.superamas", defaultValue: "Superamas", bundle: .main)
+        case .cosmos: String(localized: "game.tier.cosmos", defaultValue: "Cosmos", bundle: .main)
+        case .infini: String(localized: "game.tier.infini", defaultValue: "Infini", bundle: .main)
+        case .singularite: String(localized: "game.tier.singularite", defaultValue: "Singularité", bundle: .main)
         }
     }
 
@@ -103,7 +113,49 @@ enum GameCopy {
         case .etoile: String(localized: "game.tier.ordinal.8", defaultValue: "huitième", bundle: .main)
         case .constellation: String(localized: "game.tier.ordinal.9", defaultValue: "neuvième", bundle: .main)
         case .galaxie: String(localized: "game.tier.ordinal.10", defaultValue: "dixième", bundle: .main)
+        case .nebuleuse: String(localized: "game.tier.ordinal.11", defaultValue: "onzième", bundle: .main)
+        case .pulsar: String(localized: "game.tier.ordinal.12", defaultValue: "douzième", bundle: .main)
+        case .quasar: String(localized: "game.tier.ordinal.13", defaultValue: "treizième", bundle: .main)
+        case .supernova: String(localized: "game.tier.ordinal.14", defaultValue: "quatorzième", bundle: .main)
+        case .magnetar: String(localized: "game.tier.ordinal.15", defaultValue: "quinzième", bundle: .main)
+        case .amas: String(localized: "game.tier.ordinal.16", defaultValue: "seizième", bundle: .main)
+        case .superamas: String(localized: "game.tier.ordinal.17", defaultValue: "dix-septième", bundle: .main)
+        case .cosmos: String(localized: "game.tier.ordinal.18", defaultValue: "dix-huitième", bundle: .main)
+        case .infini: String(localized: "game.tier.ordinal.19", defaultValue: "dix-neuvième", bundle: .main)
+        case .singularite: String(localized: "game.tier.ordinal.20", defaultValue: "vingtième", bundle: .main)
         }
+    }
+
+    // MARK: - Le plafond du niveau (#9688)
+
+    /// Le rang qui OUVRE les niveaux au-delà de ce plafond — dérivé de la loi (`GameGlory.levelCap(forRank:)`) :
+    /// le premier rang dont le plafond dépasse celui-ci. Ambassadeur au-delà de 499, Oracle au-delà de 1000 ;
+    /// `nil` sans plafond (sans limite, ou un serveur antérieur qui ne le dit pas).
+    static func rankOpening(beyond cap: Int?) -> GloryRank? {
+        guard let cap else { return nil }
+        return GloryRank.ladder.first { rank in GameGlory.levelCap(forRank: rank).map { $0 > cap } ?? true }
+    }
+
+    /// La phrase d'un niveau qui ne monte plus : au plafond de son rang, elle nomme le rang qui ouvre la suite ;
+    /// sans plafond connu (serveur antérieur, qui s'arrêtait à 100), il est au sommet.
+    static func levelTop(cap: Int?) -> String {
+        guard let cap, let rank = rankOpening(beyond: cap) else {
+            return String(localized: "game.level.top", defaultValue: "Tu es au sommet.", bundle: .main)
+        }
+        let level = formatCount(cap)
+        let name = rankName(rank)
+        return String(
+            localized: "game.level.cap.reached",
+            defaultValue: "Niveau \(level) : le plus haut que ton rang ouvre. Le rang \(name) ouvre la suite.",
+            bundle: .main
+        )
+    }
+
+    /// La version courte, pour une puce ou le fait « Prochain niveau » : « s’ouvre au rang Ambassadeur », ou « au sommet ».
+    static func levelTopShort(cap: Int?) -> String {
+        guard let rank = rankOpening(beyond: cap) else { return GameText.bannerTop }
+        let name = rankName(rank)
+        return String(localized: "game.level.cap.short", defaultValue: "s’ouvre au rang \(name)", bundle: .main)
     }
 
     /// Ce que VoiceOver lit sur l'anneau de niveau : « Niveau 34, palier Éclat, quatrième palier ».

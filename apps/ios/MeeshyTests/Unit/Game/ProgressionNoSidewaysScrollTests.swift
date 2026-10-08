@@ -52,6 +52,22 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
             .replacing(wave2: summit().wave2)
     }
 
+    /// Au plafond du rang (#9688) : niveau 499, la phrase dit quel rang ouvre la suite.
+    private static func capped() -> GameBlock {
+        GameFixture.game(score: GameLevels.threshold(of: 700), glory: 100_000, minted: 99_999, held: 9_999, flameDays: 365)
+            .replacing(wave2: summit().wave2)
+    }
+
+    /// Un niveau à quatre chiffres, ouvert par le rang Oracle (#9688).
+    private static func fourDigits() -> GameBlock {
+        GameFixture.game(score: GameLevels.threshold(of: 1_234) + 5, glory: 400_000, minted: 99_999, held: 9_999, flameDays: 365)
+            .replacing(wave2: summit().wave2)
+    }
+
+    private static var longCases: [(String, GameBlock)] {
+        [("au sommet", summit()), ("redescendu", redescended()), ("au plafond du rang", capped()), ("quatre chiffres", fourDigits())]
+    }
+
     private static let richMeesh = GameFixture.meesh(balance: 9_999, minted: 99_999, debitable: 9_999_999)
 
     private func loadedViewModel(_ game: GameBlock) async -> ProgressionViewModel {
@@ -89,7 +105,7 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
     // MARK: - La largeur réclamée, avec des valeurs longues
 
     func test_theFrontPage_claimsNoMoreThanTheScreen() async {
-        for (label, game) in [("au sommet", Self.summit()), ("redescendu", Self.redescended())] {
+        for (label, game) in Self.longCases {
             let vm = await loadedViewModel(game)
             guard let progress = vm.progress else { return XCTFail("pas de progression chargée") }
             let list = ProgressionFrontList(
@@ -102,7 +118,7 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
     }
 
     func test_everySheet_claimsNoMoreThanTheScreen() async {
-        for (label, game) in [("au sommet", Self.summit()), ("redescendu", Self.redescended())] {
+        for (label, game) in Self.longCases {
             let vm = await loadedViewModel(game)
             guard let progress = vm.progress else { return XCTFail("pas de progression chargée") }
             for concept in ProgressionConcepts.served(for: progress, game: game) {

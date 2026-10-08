@@ -108,6 +108,18 @@ public enum GameRankCrest {
     /// Le niveau gravé dans la pointe de l'écu : centre de la ligne de base et corps.
     public static let levelEngraving = (x: 100.0, y: 109.0, size: 15.0)
 
+    /// Le corps de la gravure selon le nombre de chiffres (#9688 : les niveaux s'ouvrent au-delà de 100) — la pointe
+    /// de l'écu se resserre, un niveau à 3, 4 ou 5 chiffres y tient sans déborder : 15 jusqu'à 2 chiffres, puis 12,
+    /// 9,5 et 8.
+    public static func levelEngravingSize(forLevel level: Int) -> Double {
+        switch String(max(0, level)).count {
+        case ...2: levelEngraving.size
+        case 3: 12
+        case 4: 9.5
+        default: 8
+        }
+    }
+
     public static let notchLayout = (cx: 100.0, y1: 124.0, y2: 131.0, gap: 9.0, width: 4.0, slots: 5)
 
     /// Où la Signature unique se pose en halo : son centre et l'échelle de son carré de 1 024.

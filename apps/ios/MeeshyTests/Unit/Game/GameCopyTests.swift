@@ -74,6 +74,36 @@ final class GameCopyTests: XCTestCase {
         XCTAssertEqual(Set(LevelTierKey.allCases.map(GameCopy.tierName)).count, LevelTierKey.allCases.count)
     }
 
+    // MARK: - Le plafond du niveau (#9688)
+
+    func test_rankOpening_namesTheRankThatLiftsEachCap_derivedFromTheLaw() {
+        XCTAssertEqual(GameCopy.rankOpening(beyond: GameLevels.capBase), .ambassadeur)
+        XCTAssertEqual(GameCopy.rankOpening(beyond: GameLevels.capAmbassador), .oracle)
+        XCTAssertNil(GameCopy.rankOpening(beyond: nil), "sans limite : aucun rang à attendre")
+    }
+
+    func test_levelTop_atACap_saysTheCapAndTheRankThatOpensIt_insteadOfTheTop() {
+        let base = GameCopy.levelTop(cap: GameLevels.capBase)
+        assertNotRaw(base, "plafond 499")
+        XCTAssertTrue(base.contains(GameCopy.formatCount(499)), base)
+        XCTAssertTrue(base.contains(GameCopy.rankName(.ambassadeur)), base)
+        let ambassador = GameCopy.levelTop(cap: GameLevels.capAmbassador)
+        XCTAssertTrue(ambassador.contains(GameCopy.formatCount(1000)), ambassador)
+        XCTAssertTrue(ambassador.contains(GameCopy.rankName(.oracle)), ambassador)
+        XCTAssertNotEqual(base, GameCopy.levelTop(cap: nil), "au plafond du rang, on n'est pas « au sommet »")
+        XCTAssertTrue(GameCopy.levelTopShort(cap: GameLevels.capBase).contains(GameCopy.rankName(.ambassadeur)))
+        XCTAssertEqual(GameCopy.levelTopShort(cap: nil), GameText.bannerTop, "un serveur antérieur s'arrêtait à 100 : au sommet")
+    }
+
+    func test_theTierOrdinals_reachTheTwentiethTier() {
+        XCTAssertEqual(LevelTierKey.allCases.count, 20)
+        assertNotRaw(GameCopy.tierOrdinal(.singularite), "vingtième palier")
+        assertNotRaw(GameCopy.tierName(.singularite), "Singularité")
+        let text = GameCopy.levelRingAccessibility(level: 1_234, tier: .singularite)
+        XCTAssertTrue(text.contains(GameCopy.formatCount(1_234)), text)
+        XCTAssertTrue(text.contains(GameCopy.tierName(.singularite)), text)
+    }
+
     func test_rankLabel_addsTheRomanDivision_exceptForMyth() {
         XCTAssertEqual(GameCopy.rankLabel(.voix, division: .ii), "\(GameCopy.rankName(.voix)) II")
         XCTAssertEqual(GameCopy.rankLabel(.mythe, division: nil), GameCopy.rankName(.mythe))
@@ -187,7 +217,8 @@ final class GameCopyTests: XCTestCase {
         let events: [GuideEvent] = [
             .firstLevel(level: 2, pointsToNext: 50),
             .newTier(tier: .lueur, nextTierLevel: 20),
-            .newTier(tier: .galaxie, nextTierLevel: nil),
+            .newTier(tier: .galaxie, nextTierLevel: 101),
+            .newTier(tier: .singularite, nextTierLevel: nil),
             .missionsUnlocked,
             .firstMintPossible(price: 1221, levelsLost: 2, gloryGain: 100),
             .firstMintPossible(price: 1221, levelsLost: 0, gloryGain: 100),

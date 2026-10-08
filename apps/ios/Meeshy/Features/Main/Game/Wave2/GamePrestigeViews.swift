@@ -47,7 +47,7 @@ struct GamePrestigeScreen: View {
     private func summary(_ prestige: GamePrestigeBlock) -> some View {
         GameCard(tint: MeeshyColors.brandPrimary, title: GameText.prestigeTitle) {
             GamePrestigeScene(
-                level: game.level.level, tier: game.level.tier, progress: game.level.progress, stars: prestige.stars,
+                level: game.level.shown.level, tier: game.level.shown.tier, progress: game.level.shown.progress, stars: prestige.stars,
                 plate: GameTrophyPresentation.of(key: GameTrophies.key(of: .prestige(number: max(1, prestige.stars))))?.plate ?? "",
                 playKey: playKey, reduceMotion: reduceMotion
             )
@@ -68,7 +68,7 @@ struct GamePrestigeScreen: View {
             if prestige.stars >= prestige.max {
                 GameNote(text: GameText.prestigeMax)
             } else if !prestige.canPrestige && passed == nil {
-                GameNote(text: GameText.prestigeLocked(level: GameCopy.formatCount(game.level.level)))
+                GameNote(text: GameText.prestigeLocked(level: GameCopy.formatCount(game.level.shown.level)))
             }
         }
         .accessibilityIdentifier("game.prestige")

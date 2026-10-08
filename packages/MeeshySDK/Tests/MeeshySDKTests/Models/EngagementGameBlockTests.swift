@@ -35,7 +35,7 @@ struct EngagementGameBlockTests {
 
     @Test("un bloc incompris ne coûte pas la progression : game est nil, le reste se lit")
     func misunderstoodBlockKeepsTheRest() throws {
-        let broken = GameBlockFixture.json.replacingOccurrences(of: "\"tier\":\"eclat\"", with: "\"tier\":\"nebuleuse\"")
+        let broken = GameBlockFixture.json.replacingOccurrences(of: "\"tier\":\"eclat\"", with: "\"tier\":\"hypernova\"")
         let decoded = try JSONDecoder().decode(APIEngagementProgress.self, from: Self.payload(game: broken))
         #expect(decoded.game == nil)
         #expect(decoded.level.engagementScore == 36)

@@ -196,7 +196,10 @@ public enum GameGlory {
     /// Ce que chaque fait ponctuel rapporte en Gloire — les missions ont leur table, `missionGlory`.
     public struct Points: Sendable {
         public let mint = 1000
+        /// Chaque niveau franchi pour la première fois, jusqu'au 100.
         public let firstLevel = 100
+        /// Au-delà de 100, chaque dizaine franchie pour la première fois : 110, 120 … 1000, et plus (#9688).
+        public let levelDecade = 1000
         public let leagueUp = 300
         public let leagueCup = 1000
         public let season = 5000
@@ -240,8 +243,35 @@ public enum GameGlory {
         }
     }
 
+    /// La Gloire du PREMIER passage d'un niveau (#9688) : 100 jusqu'au 100, puis 1 000 par dizaine.
+    public static func gloryForLevel(_ level: Int) -> Int {
+        if level <= GameLevels.minLevel { return 0 }
+        if level <= GameLevels.legacyMaxLevel { return points.firstLevel }
+        return level % 10 == 0 ? points.levelDecade : 0
+    }
+
+    /// La somme des premiers passages, en forme close.
     public static func gloryForNewLevels(level: Int, previousRecord: Int?) -> Int {
-        GameLevels.newLevelsReached(level: level, previousRecord: previousRecord).count * points.firstLevel
+        let reached = GameLevels.newLevelsReached(level: level, previousRecord: previousRecord)
+        guard reached.count > 0 else { return 0 }
+        let lowTo = min(reached.to, GameLevels.legacyMaxLevel)
+        let lowLevels = max(0, lowTo - reached.from + 1)
+        let highFrom = max(reached.from, GameLevels.legacyMaxLevel + 1)
+        let decades = reached.to < highFrom ? 0 : reached.to / 10 - (highFrom - 1) / 10
+        return lowLevels * points.firstLevel + decades * points.levelDecade
+    }
+
+    /// LE RANG OUVRE LES NIVEAUX (#9688) : 499 sous Ambassadeur, 1000 pour Ambassadeur et Orateur,
+    /// sans limite (`nil`) à partir d'Oracle — Légende et Mythe compris.
+    public static func levelCap(forRank rank: GloryRank) -> Int? {
+        guard let index = GloryRank.ladder.firstIndex(of: rank) else { return nil }
+        if index >= GloryRank.ladder.firstIndex(of: .oracle) ?? 0 { return nil }
+        return index >= GloryRank.ladder.firstIndex(of: .ambassadeur) ?? 0 ? GameLevels.capAmbassador : GameLevels.capBase
+    }
+
+    /// Le plafond que cette Gloire cumulée ouvre — une Gloire négative se lit 0 (fail-closed : 499).
+    public static func levelCap(forGlory glory: Int) -> Int? {
+        levelCap(forRank: standing(glory: glory, mythic: false).rank)
     }
 
     /// Records de Flamme (jours de série) et leur Gloire — ×10 avec la nouvelle échelle des rangs (#9636).

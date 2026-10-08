@@ -319,4 +319,34 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertEqual(myth.name, GameCopy.mythicSeatLabel(seat: 42))
         XCTAssertEqual(myth.emblem, .rank(.mythe, nil, seat))
     }
+
+    // MARK: - Le niveau ouvert par le rang (#9688)
+
+    func test_levelRing_beyond100_readsTheLadder_notYesterdaysFields() {
+        let game = GameFixture.game(score: GameLevels.threshold(of: 345) + 12)
+        let detail = GameElementDetails.levelRing(game.level)
+        XCTAssertEqual(game.level.level, GameLevels.legacyMaxLevel)
+        XCTAssertEqual(detail.key, "345")
+        XCTAssertEqual(detail.emblem, .tier(.quasar))
+        XCTAssertTrue(detail.name.contains(GameCopy.formatCount(345)), detail.name)
+    }
+
+    func test_levelRing_atTheRankCap_saysWhichRankOpensTheNextLevels() {
+        let game = GameFixture.game(score: GameLevels.threshold(of: 700), glory: 100_000)
+        XCTAssertTrue(game.level.shown.isMax)
+        let detail = GameElementDetails.levelRing(game.level)
+        XCTAssertEqual(detail.key, "499")
+        let next = detail.facts.first { $0.label == ConceptText.factNextLevel }
+        XCTAssertEqual(next?.value, GameCopy.levelTopShort(cap: GameLevels.capBase))
+        XCTAssertNotEqual(next?.value, GameText.bannerTop, "au plafond du rang, on n'est pas « au sommet »")
+    }
+
+    func test_levelRing_beforeAServerThatSendsTheLadder_readsYesterdaysFields() {
+        let game = GameFixture.game(score: GameLevels.threshold(of: 100) + 3, servesLadder: false)
+        XCTAssertNil(game.level.ladder)
+        let detail = GameElementDetails.levelRing(game.level)
+        XCTAssertEqual(detail.key, "100")
+        let next = detail.facts.first { $0.label == ConceptText.factNextLevel }
+        XCTAssertEqual(next?.value, GameText.bannerTop)
+    }
 }

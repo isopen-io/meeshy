@@ -62,16 +62,18 @@ public struct GamePlayerBanner: Equatable, Sendable {
     public let progress: Double
     public let prestige: Int
     public let score: Int
-    /// `nil` au sommet (niveau 100) : plus rien ne manque.
+    /// `nil` au plafond que le rang ouvre (ou, devant un ancien serveur, au niveau 100) : plus rien ne manque.
     public let nextLevel: Int?
     public let pointsToNext: Int?
+    /// Le plafond où le niveau s'est arrêté (499 ou 1000) — `nil` quand rien ne bloque (#9688).
+    public let levelCap: Int?
     public let meeshes: Int?
     public let rank: Rank?
     public let league: League?
     public let flame: Flame?
 
     public init(level: Int, tier: LevelTierKey, progress: Double, prestige: Int = 0, score: Int, nextLevel: Int?, pointsToNext: Int?,
-                meeshes: Int? = nil, rank: Rank? = nil, league: League? = nil, flame: Flame? = nil) {
+                levelCap: Int? = nil, meeshes: Int? = nil, rank: Rank? = nil, league: League? = nil, flame: Flame? = nil) {
         self.level = level
         self.tier = tier
         self.progress = Self.bounded(progress)
@@ -79,6 +81,7 @@ public struct GamePlayerBanner: Equatable, Sendable {
         self.score = score
         self.nextLevel = nextLevel
         self.pointsToNext = pointsToNext
+        self.levelCap = levelCap
         self.meeshes = meeshes
         self.rank = rank
         self.league = league
@@ -89,15 +92,17 @@ public struct GamePlayerBanner: Equatable, Sendable {
     private static let burning: Set<FlameStatus> = [.lit, .atRisk, .covered]
 
     public init(game: GameBlock) {
-        let level = game.level
+        // Le niveau MONTRÉ : celui que le rang ouvre (#9688), ou les champs d'hier devant un ancien serveur.
+        let level = game.level.shown
         let atTop = level.nextThreshold == nil
         self.level = level.level
         self.tier = level.tier
         self.progress = atTop ? 1 : Self.bounded(level.progress)
-        self.prestige = level.prestige
-        self.score = level.score
+        self.prestige = game.level.prestige
+        self.score = game.level.score
         self.nextLevel = atTop ? nil : level.level + 1
         self.pointsToNext = atTop ? nil : level.pointsToNext
+        self.levelCap = level.isMax ? level.cap : nil
         self.meeshes = game.treasury.held > 0 ? game.treasury.held : nil
         self.rank = game.glory.glory > 0 ? Rank(rank: game.glory.rank, division: game.glory.shownDivision, mythic: game.glory.mythicSeat) : nil
         if let league = game.league, league.access == .open, let current = league.current {

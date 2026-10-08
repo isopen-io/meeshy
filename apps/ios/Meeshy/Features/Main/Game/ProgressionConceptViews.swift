@@ -29,7 +29,7 @@ struct ProgressionConceptEmblem: View {
     private var drawing: some View {
         switch concept {
         case .level:
-            if let tier = game?.level.tier {
+            if let tier = game?.level.shown.tier {
                 TierEmblemView(tier: tier, knockout: theme.backgroundPrimary)
             } else {
                 signature(.flat, MeeshyColors.brandPrimary)
@@ -40,7 +40,7 @@ struct ProgressionConceptEmblem: View {
             MeeshCoinView(face: .obverse, edition: game?.mint.edition ?? .silver, figures: nil)
         case .glory:
             if let glory = game?.glory {
-                RankBlasonView(rank: glory.rank, division5: glory.shownDivision, level: game?.level.level, mythic: glory.mythicSeat)
+                RankBlasonView(rank: glory.rank, division5: glory.shownDivision, level: game?.level.shown.level, mythic: glory.mythicSeat)
             } else {
                 signature(.engraved, MeeshyColors.brandPrimary)
             }

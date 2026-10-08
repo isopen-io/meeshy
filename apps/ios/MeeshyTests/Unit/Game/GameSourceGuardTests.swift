@@ -124,6 +124,8 @@ final class GameSourceGuardTests: XCTestCase {
         "game.concept.points.name", "game.concept.meesh.name", "game.concept.prestige.name", "game.concept.badges.name",
         "game.concept.atlas.name", "game.concept.card.a11y", "game.concept.ratio", "game.concept.value.factor",
         "game.concept.fact.zone",
+        // Les paliers ouverts au-delà de 100 (#9688) : des noms d'astronomie que l'anglais écrit comme le français.
+        "game.tier.pulsar", "game.tier.quasar", "game.tier.supernova", "game.tier.cosmos",
     ]
 
     private func gameCatalogEntries() throws -> [String: [String: String]] {

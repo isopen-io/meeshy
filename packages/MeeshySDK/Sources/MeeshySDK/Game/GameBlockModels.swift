@@ -27,9 +27,13 @@ public struct GameBlock: Codable, Sendable, Equatable {
         public let record: Int
         public let prestige: Int
         public let canPrestige: Bool
+        /// La lecture ouverte par le rang (#9688) — `nil` devant un serveur antérieur. Les champs voisins
+        /// gardent l'ANCIENNE loi sur le fil (niveau borné à 100, dix paliers) pour les clients publiés.
+        public let ladder: Ladder?
 
         public init(level: Int, tier: LevelTierKey, score: Int, floorScore: Int, nextThreshold: Int?,
-                    pointsToNext: Int, progress: Double, record: Int, prestige: Int, canPrestige: Bool) {
+                    pointsToNext: Int, progress: Double, record: Int, prestige: Int, canPrestige: Bool,
+                    ladder: Ladder? = nil) {
             self.level = level
             self.tier = tier
             self.score = score
@@ -40,6 +44,42 @@ public struct GameBlock: Codable, Sendable, Equatable {
             self.record = record
             self.prestige = prestige
             self.canPrestige = canPrestige
+            self.ladder = ladder
+        }
+
+        /// Le niveau ouvert par le rang : la vérité que le serveur à jour sert à côté des champs d'hier.
+        public struct Ladder: Codable, Sendable, Equatable {
+            public let level: Int
+            public let tier: LevelTierKey
+            public let floorScore: Int
+            public let nextThreshold: Int?
+            public let pointsToNext: Int
+            public let progress: Double
+            public let record: Int
+            /// Le plafond que le rang ouvre : 499, 1000, ou `nil` (sans limite, à partir d'Oracle).
+            public let cap: Int?
+            /// Le niveau est au plafond : il monte dès que le rang l'ouvre.
+            public let isMax: Bool
+
+            public init(level: Int, tier: LevelTierKey, floorScore: Int, nextThreshold: Int?, pointsToNext: Int,
+                        progress: Double, record: Int, cap: Int?, isMax: Bool) {
+                self.level = level
+                self.tier = tier
+                self.floorScore = floorScore
+                self.nextThreshold = nextThreshold
+                self.pointsToNext = pointsToNext
+                self.progress = progress
+                self.record = record
+                self.cap = cap
+                self.isMax = isMax
+            }
+        }
+
+        /// Ce que l'écran montre : la lecture ouverte par le rang, ou les champs d'hier devant un serveur antérieur.
+        public var shown: Ladder {
+            ladder ?? Ladder(level: level, tier: tier, floorScore: floorScore, nextThreshold: nextThreshold,
+                             pointsToNext: pointsToNext, progress: progress, record: record, cap: nil,
+                             isMax: nextThreshold == nil)
         }
     }
 

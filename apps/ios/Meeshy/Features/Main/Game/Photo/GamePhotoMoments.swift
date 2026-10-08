@@ -136,8 +136,9 @@ enum GamePhotoMoments {
         )
     }
 
+    /// Le premier niveau du palier, par la loi (`GameLevels.tierStart`) : 10 … 90, puis 101, 200 … 900, et 1000 (#9688).
     private static func tierLevel(_ tier: LevelTierKey) -> Int {
-        (LevelTierKey.allCases.firstIndex(of: tier) ?? 0) * 10
+        GameLevels.tierStart(of: tier)
     }
 
     /// Le moment que propose une carte du guide, dans l'état courant du jeu ; `nil` si elle ne se photographie pas.
@@ -146,7 +147,7 @@ enum GamePhotoMoments {
         case .newRank:
             return rank(game.glory.rank, division: game.glory.shownDivision, mythic: game.glory.mythicSeat)
         case .newTier:
-            return tier(game.level.tier, level: tierLevel(game.level.tier))
+            return tier(game.level.shown.tier, level: tierLevel(game.level.shown.tier))
         case .firstMint:
             // `mint.number` est la PROCHAINE pièce : celle qui vient d'être frappée porte le numéro d'avant.
             let number = max(1, game.mint.number - 1)
@@ -180,10 +181,10 @@ enum GamePhotoMoments {
         // Le Prestige a sa propre carte (le trophée numéroté) : la carte « niveau 100 » de la vague 1 ne la double pas.
         let wave2 = ofTransitionV2(from: before, to: after)
         let prestigeCard = wave2.contains { if case .prestige = $0.emblem { true } else { false } }
-        let tierBefore = LevelTierKey.allCases.firstIndex(of: before.level.tier) ?? 0
-        let tierAfter = LevelTierKey.allCases.firstIndex(of: after.level.tier) ?? 0
+        let tierBefore = LevelTierKey.allCases.firstIndex(of: before.level.shown.tier) ?? 0
+        let tierAfter = LevelTierKey.allCases.firstIndex(of: after.level.shown.tier) ?? 0
         if tierAfter > tierBefore {
-            moments.append(tier(after.level.tier, level: tierLevel(after.level.tier)))
+            moments.append(tier(after.level.shown.tier, level: tierLevel(after.level.shown.tier)))
         }
         if after.level.prestige > before.level.prestige && !prestigeCard {
             moments.append(levelHundred(prestige: after.level.prestige))

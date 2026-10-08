@@ -37,7 +37,7 @@ struct GameMissionsView: View {
             if !missions.unlocked {
                 GameNote(text: String(
                     localized: "game.missions.locked",
-                    defaultValue: "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau \(GameCopy.formatCount(game.level.level)).",
+                    defaultValue: "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau \(GameCopy.formatCount(game.level.shown.level)).",
                     bundle: .main
                 ))
             } else {

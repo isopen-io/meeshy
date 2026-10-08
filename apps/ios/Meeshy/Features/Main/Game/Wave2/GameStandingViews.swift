@@ -28,7 +28,7 @@ extension GameStandingContent {
     var accessibilityLabel: String {
         var parts: [String] = []
         if let standing {
-            parts.append(GameCopy.levelRingAccessibility(level: standing.level, tier: standing.tier))
+            parts.append(GameCopy.levelRingAccessibility(level: standing.shownLevel, tier: standing.shownTier))
             parts.append(GameCopy.rankLabel(standing))
             if let flame = standing.flame { parts.append(GameText.visitorFlame(form: GameCopy.flameFormName(flame))) }
         }
@@ -51,7 +51,7 @@ struct GameStandingView: View {
             if let standing = content.standing {
                 ring(standing)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(GameText.profileLevel(level: GameCopy.formatCount(standing.level), tier: GameCopy.tierName(standing.tier)))
+                    Text(GameText.profileLevel(level: GameCopy.formatCount(standing.shownLevel), tier: GameCopy.tierName(standing.shownTier)))
                         .font(MeeshyFont.relative(compact ? MeeshyFont.smallSize : MeeshyFont.bodySize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                     Text(GameCopy.rankLabel(standing))
@@ -70,7 +70,7 @@ struct GameStandingView: View {
                         .frame(width: compact ? 18 : 22, height: compact ? 18 : 22)
                         .accessibilityHidden(true)
                 }
-                RankBlasonView(rank: standing.rank, division5: standing.shownDivision, level: standing.level,
+                RankBlasonView(rank: standing.rank, division5: standing.shownDivision, level: standing.shownLevel,
                                mythic: standing.mythic, title: nil, figures: nil)
                     .frame(width: compact ? 36 : 56, height: compact ? 34 : 52)
                     .accessibilityHidden(true)
@@ -90,7 +90,7 @@ struct GameStandingView: View {
     /// vide ferait croire qu'il commence. Il porte la couleur de son palier, son emblème et son chiffre romain.
     private func ring(_ standing: GameStanding) -> some View {
         LevelRingView(
-            level: standing.level, progress: 1, tier: standing.tier, prestige: standing.prestige,
+            level: standing.shownLevel, progress: 1, tier: standing.shownTier, prestige: standing.prestige,
             trackColor: theme.textMuted.opacity(MeeshyOpacity.light), inkColor: theme.textPrimary,
             accessibilityLabel: nil
         )
