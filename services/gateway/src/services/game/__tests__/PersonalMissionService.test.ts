@@ -17,7 +17,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
 }));
 
-const LEVEL_20 = 10 * 20 * 20;
+const LEVEL_20 = 100 * 20 * 20;
 const MORNING = new Date('2026-10-06T06:00:00Z');
 const DAY = '2026-10-06';
 

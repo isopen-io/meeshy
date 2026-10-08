@@ -21,7 +21,7 @@ enum GameFixture {
     }
 
     static func game(
-        score: Int = 12_180,
+        score: Int = 121_800,
         levelRecord: Int? = nil,
         glory: Int = 1_730,
         mythic: Bool = false,
@@ -75,7 +75,7 @@ enum GameFixture {
     }
 
     /// Le solde, lu à l'endroit où l'écran le lit en second.
-    static func meesh(balance: Int = 9, minted: Int = 12, debitable: Int = 12_180, cost: Int? = nil) -> APIEngagementProgress.Meesh {
+    static func meesh(balance: Int = 9, minted: Int = 12, debitable: Int = 121_800, cost: Int? = nil) -> APIEngagementProgress.Meesh {
         let price = cost ?? GameMint.price(forNumber: minted + 1)
         return APIEngagementProgress.Meesh(
             balance: balance, mintedLifetime: minted, debitablePoints: debitable, floorPoints: 0,

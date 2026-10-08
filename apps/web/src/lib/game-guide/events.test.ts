@@ -5,7 +5,7 @@ import { gloryLadder } from '@meeshy/shared/utils/game/glory';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { gameBlockFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockFixture } from '@/lib/api/game-fixture';
 
 import { standingGuideEvents, transitionGuideEvents } from './events';
 
@@ -38,38 +38,38 @@ const none = new Set<string>();
 
 describe('l’état, à l’ouverture', () => {
   test('un compte neuf n’a rien à se faire dire', () => {
-    const fresh = gameBlockFixture({ score: 0, debitablePoints: 0, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, lastActiveDay: null, freezes: 0, missions: [] });
+    const fresh = gameBlockFixture({ score: 0, levelRecord: null, debitablePoints: 0, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, lastActiveDay: null, freezes: 0, missions: [] });
     expect(standingGuideEvents(fresh, none)).toEqual([]);
   });
 
   test('premier niveau : le niveau 2 et ce qu’il manque', () => {
-    const game = gameBlockFixture({ score: 45, debitablePoints: 45, glory: 0, balance: 0, mintedLifetime: 0, missions: [] });
+    const game = gameBlockFixture({ score: 450, levelRecord: null, debitablePoints: 450, glory: 0, balance: 0, mintedLifetime: 0, missions: [] });
     expect(standingGuideEvents(game, none)).toContainEqual({ kind: 'first-level', level: 2, pointsToNext: game.level.pointsToNext });
   });
 
   test('un palier : le nom et le niveau du suivant', () => {
-    const game = gameBlockFixture({ score: 10 * 11 * 11, debitablePoints: 0, mintedLifetime: 0, glory: 0, balance: 0 });
+    const game = gameBlockFixture({ score: 100 * 11 * 11, debitablePoints: 0, mintedLifetime: 1, glory: 0, balance: 0 });
     expect(standingGuideEvents(game, none)).toContainEqual({ kind: 'new-tier', tier: 'lueur', nextTierLevel: 20 });
   });
 
   test('Galaxie n’est plus le dernier palier : Nébuleuse s’ouvre au niveau 101 (#9688)', () => {
-    const game = gameBlockFixture({ score: 10 * 95 * 95 });
+    const game = gameBlockFixture({ ...ALL_LEVEL_STEPS, score: 100 * 95 * 95 });
     expect(standingGuideEvents(game, none)).toContainEqual({ kind: 'new-tier', tier: 'galaxie', nextTierLevel: 101 });
   });
 
   test('le palier se lit sur la vérité servie (ladder), au-delà de 100', () => {
-    const game = gameBlockFixture({ score: 10 * 250 * 250 });
+    const game = gameBlockFixture({ ...ALL_LEVEL_STEPS, score: 100 * 250 * 250 });
     expect(standingGuideEvents(game, none)).toContainEqual({ kind: 'new-tier', tier: 'pulsar', nextTierLevel: 300 });
   });
 
   test('Singularité n’a pas de suivant', () => {
-    const game = gameBlockFixture({ score: 10 * 1200 * 1200, glory: 400_000 });
+    const game = gameBlockFixture({ ...ALL_LEVEL_STEPS, score: 100 * 1200 * 1200, glory: 400_000 });
     expect(standingGuideEvents(game, none)).toContainEqual({ kind: 'new-tier', tier: 'singularite', nextTierLevel: null });
   });
 
   test('les missions débloquées', () => {
     expect(kinds(standingGuideEvents(gameBlockFixture(), none))).toContain('missions-unlocked');
-    expect(kinds(standingGuideEvents(gameBlockFixture({ score: 100, missions: [] }), none))).not.toContain('missions-unlocked');
+    expect(kinds(standingGuideEvents(gameBlockFixture({ score: 1000, levelRecord: null, missions: [] }), none))).not.toContain('missions-unlocked');
   });
 
   test('première frappe possible : seulement avant la toute première', () => {
@@ -101,11 +101,11 @@ describe('l’état, à l’ouverture', () => {
   });
 
   test('le niveau 100', () => {
-    expect(standingGuideEvents(gameBlockFixture({ score: 10 * 100 * 100 }), none)).toContainEqual({ kind: 'level-100', canPrestige: true });
+    expect(standingGuideEvents(gameBlockFixture({ ...ALL_LEVEL_STEPS, score: 100 * 100 * 100, levelRecord: 100 }), none)).toContainEqual({ kind: 'level-100', canPrestige: true });
   });
 
   test('une clé déjà vue ne revient pas : la découverte se dit une fois', () => {
-    const game = gameBlockFixture({ score: 10 * 11 * 11, mintedLifetime: 0 });
+    const game = gameBlockFixture({ score: 100 * 11 * 11, mintedLifetime: 0 });
     const seen = new Set(['first-level', 'new-tier', 'missions-unlocked', 'first-mint-possible', 'treasury-tier', 'new-rank']);
     expect(standingGuideEvents(game, seen)).toEqual([]);
   });
@@ -138,12 +138,12 @@ describe('les transitions, pendant que l’écran est ouvert', () => {
   });
 
   test('un palier franchi', () => {
-    const events = transitionGuideEvents(view({ score: 10 * 9 * 9 + 5 }), view({ score: 10 * 10 * 10 }));
+    const events = transitionGuideEvents(view({ score: 100 * 9 * 9 + 5, levelRecord: 9 }), view({ score: 100 * 10 * 10, levelRecord: 9 }));
     expect(kinds(events)).toContain('new-tier');
   });
 
   test('un niveau qui BAISSE ne fête rien', () => {
-    expect(kinds(transitionGuideEvents(view({ score: 10 * 10 * 10 }), view({ score: 10 * 9 * 9 })))).not.toContain('new-tier');
+    expect(kinds(transitionGuideEvents(view({ score: 100 * 10 * 10 }), view({ score: 100 * 9 * 9 })))).not.toContain('new-tier');
   });
 
   test('un rang gagné, une division gagnée', () => {
@@ -196,8 +196,8 @@ describe('les transitions, pendant que l’écran est ouvert', () => {
   });
 
   test('les missions qui s’ouvrent, le niveau 100', () => {
-    expect(kinds(transitionGuideEvents(view({ score: 100, missions: [] }), view({ score: 10 * 5 * 5, missions: [] })))).toContain('missions-unlocked');
-    expect(kinds(transitionGuideEvents(view({ score: 10 * 99 * 99 }), view({ score: 10 * 100 * 100 })))).toContain('level-100');
+    expect(kinds(transitionGuideEvents(view({ score: 1000, levelRecord: null, missions: [] }), view({ score: 100 * 5 * 5, levelRecord: null, missions: [] })))).toContain('missions-unlocked');
+    expect(kinds(transitionGuideEvents(view({ ...ALL_LEVEL_STEPS, score: 100 * 99 * 99, levelRecord: 99 }), view({ ...ALL_LEVEL_STEPS, score: 100 * 100 * 100, levelRecord: 100 })))).toContain('level-100');
   });
 
   test('un ancien serveur (aucun bloc) : rien', () => {

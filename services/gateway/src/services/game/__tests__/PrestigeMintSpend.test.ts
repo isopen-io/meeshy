@@ -21,7 +21,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
 }));
 
-const LEVEL_100 = 10 * 100 * 100;
+const LEVEL_100 = 100 * 100 * 100;
 const FIRST_PRICE = meeshPrice(1);
 
 const account = (score: number) => {

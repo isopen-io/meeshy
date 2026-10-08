@@ -77,7 +77,7 @@ export class PersonalMissionService {
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_SELECT });
     if (!user) return existing;
-    const level = levelForUnlocks(user.engagementScore ?? 0);
+    const level = levelForUnlocks({ score: user.engagementScore ?? 0, levelRecord: user.levelRecord ?? null });
     const facts = flameFactsOf(user, now);
     const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: today.dayKey, streak: facts.streak, freezes: facts.freezes });
     const flameDays = status === 'out' ? 0 : facts.streak;

@@ -81,7 +81,7 @@ final class GameGuideSessionTests: XCTestCase {
 
     func test_observe_afterTheOnboarding_showsOneMomentOnly() {
         let (sut, _, _) = makeSUT()
-        let game = GameFixture.game(score: 12_180, guideSeen: allOnboardingKeys())
+        let game = GameFixture.game(score: 121_800, guideSeen: allOnboardingKeys())
         sut.observe(game: game, settled: true)
         XCTAssertNotNil(sut.card)
         XCTAssertNil(sut.card?.step)
@@ -91,16 +91,16 @@ final class GameGuideSessionTests: XCTestCase {
         let (sut, _, _) = makeSUT()
         var seen = allOnboardingKeys()
         seen.append(contentsOf: ["first-level", "new-tier", "missions-unlocked", "new-rank", "treasury-tier"])
-        sut.observe(game: GameFixture.game(score: 12_180, guideSeen: seen), settled: true)
+        sut.observe(game: GameFixture.game(score: 121_800, guideSeen: seen), settled: true)
         XCTAssertNil(sut.card, "des découvertes vues ne se redisent pas à l'ouverture")
     }
 
     func test_observe_aTransitionReplacesTheCardAfterTheOnboarding() {
         let (sut, _, _) = makeSUT()
         let seen = allOnboardingKeys()
-        sut.observe(game: GameFixture.game(score: 12_180, glory: 1_900, guideSeen: seen + ["first-level", "new-tier", "missions-unlocked", "treasury-tier"]), settled: true)
+        sut.observe(game: GameFixture.game(score: 121_800, glory: 1_900, guideSeen: seen + ["first-level", "new-tier", "missions-unlocked", "treasury-tier"]), settled: true)
         XCTAssertNil(sut.card)
-        sut.observe(game: GameFixture.game(score: 12_180, glory: 2_000, guideSeen: seen), settled: true)
+        sut.observe(game: GameFixture.game(score: 121_800, glory: 2_000, guideSeen: seen), settled: true)
         XCTAssertEqual(sut.card?.key, "new-rank")
         XCTAssertEqual(sut.card?.presentation, .full)
     }
@@ -115,9 +115,9 @@ final class GameGuideSessionTests: XCTestCase {
     func test_observe_aRefusedGesture_whoseStateWasRestored_leavesNoCard() {
         let (sut, _, _) = makeSUT()
         let seen = allOnboardingKeys()
-        let calm = GameFixture.game(score: 12_180, glory: 1_900, guideSeen: seen + ["first-level", "new-tier", "missions-unlocked", "treasury-tier"])
+        let calm = GameFixture.game(score: 121_800, glory: 1_900, guideSeen: seen + ["first-level", "new-tier", "missions-unlocked", "treasury-tier"])
         sut.observe(game: calm, settled: true)
-        sut.observe(game: GameFixture.game(score: 12_180, glory: 2_000, guideSeen: seen), settled: false)
+        sut.observe(game: GameFixture.game(score: 121_800, glory: 2_000, guideSeen: seen), settled: false)
         sut.observe(game: calm, settled: true)
         XCTAssertNil(sut.card)
     }
@@ -126,7 +126,7 @@ final class GameGuideSessionTests: XCTestCase {
         let visits = FakeVisits(day: "2026-09-27")
         let (sut, _, _) = makeSUT(visits: visits, today: "2026-10-05")
         let seen = allOnboardingKeys() + ["first-level", "new-tier", "missions-unlocked", "new-rank", "treasury-tier"]
-        sut.observe(game: GameFixture.game(score: 12_180, guideSeen: seen), settled: true)
+        sut.observe(game: GameFixture.game(score: 121_800, guideSeen: seen), settled: true)
         XCTAssertEqual(sut.card?.key, "return-after-absence")
         XCTAssertEqual(visits.day, "2026-10-05")
     }

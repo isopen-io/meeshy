@@ -43,11 +43,14 @@ extension GameBlock.Level {
 /// `nonisolated` : une loi pure, que les fixtures de test (non isolées) rejouent aussi.
 nonisolated enum GameLevelWire {
 
-    /// Le niveau lu sur un score en poche, sous le plafond que le rang ouvre (`GameGlory.levelCap(forRank:)`).
+    /// Le niveau lu sur un score en poche, sous le plafond que le rang ouvre (`GameGlory.levelCap(forRank:)`)
+    /// et le palier des étapes (#9706, `steps` — `nil` devant un serveur d'avant les étapes : rien ne retient).
     /// `levelRecord` : le record OUVERT d'avant (`level.shown.record`) — il ne redescend jamais.
-    static func level(score: Int, levelCap: Int?, levelRecord: Int?, prestige: Int) -> GameBlock.Level {
-        let progress = GameLevels.progress(forScore: score, cap: levelCap)
-        let legacy = GameLevels.legacyProgress(forScore: score)
+    static func level(score: Int, levelCap: Int?, levelRecord: Int?, prestige: Int,
+                      steps: GameLevelStepFacts? = nil) -> GameBlock.Level {
+        let gate = GameLevelSteps.gate(steps)
+        let progress = GameLevels.progress(forScore: score, cap: levelCap, gate: gate)
+        let legacy = GameLevels.legacyProgress(forScore: score, gate: gate)
         let record = GameLevels.record(level: progress.level, previousRecord: levelRecord)
         return GameBlock.Level(
             level: legacy.level,
@@ -69,7 +72,10 @@ nonisolated enum GameLevelWire {
                 progress: progress.progress,
                 record: record,
                 cap: progress.cap,
-                isMax: progress.isMax
+                isMax: progress.isMax,
+                held: progress.held,
+                step: GameLevelSteps.next(after: progress.level, facts: steps),
+                steps: steps?.counts
             )
         )
     }
@@ -87,10 +93,18 @@ nonisolated enum GameLevelWire {
             missingPoints: preview.missingPoints,
             levelBefore: before,
             levelAfter: after,
-            levelsLost: before - after,
+            levelsLost: max(0, before - after),
             gloryGained: preview.gloryGained,
             ladder: GameMintLadder(levelBefore: preview.levelBefore, levelAfter: preview.levelAfter, levelsLost: preview.levelsLost)
         )
+    }
+}
+
+extension GameBlock {
+    /// Les faits des étapes que le serveur a servis (#9706) — les compteurs de `ladder.steps`, la Gloire et le
+    /// rang du bloc ; `nil` devant un serveur d'avant les étapes.
+    nonisolated var levelStepFacts: GameLevelStepFacts? {
+        level.ladder?.steps.map { GameLevelStepFacts(counts: $0, glory: glory.glory, rank: glory.rank) }
     }
 }
 

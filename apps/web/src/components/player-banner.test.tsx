@@ -35,7 +35,7 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-const NEWCOMER: Partial<GameBlockFacts> = { score: 100, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, freezes: 0, lastActiveDay: null, debitablePoints: 100 };
+const NEWCOMER: Partial<GameBlockFacts> = { score: 1000, levelRecord: null, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, freezes: 0, lastActiveDay: null, debitablePoints: 1000 };
 const ZERO: Partial<GameBlockFacts> = { ...NEWCOMER, score: 0, debitablePoints: 0 };
 const modelOf = (game: ReturnType<typeof gameBlockFixture>): PlayerBannerModel => {
   const model = playerBannerModel(game);

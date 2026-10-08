@@ -47,7 +47,7 @@ describe('Vent arrière — +25 % tant que le niveau est sous le niveau record',
 
   it('au niveau record, aucun bonus', async () => {
     const db = fakeGameDb();
-    seedUser(db, { engagementScore: 10 * 15 * 15, levelRecord: 15 });
+    seedUser(db, { engagementScore: 100 * 15 * 15, levelRecord: 15 });
 
     await service(db).recordActivity(USER, 'content.text_message');
 
@@ -66,7 +66,7 @@ describe('Vent arrière — +25 % tant que le niveau est sous le niveau record',
 
 describe('le frein de l’entre-soi sur les messages', () => {
   const pair = (db: FakeGameDb, dayCount: number) => {
-    seedUser(db, { engagementScore: 500, levelRecord: 7 });
+    seedUser(db, { engagementScore: 100 * 7 * 7, levelRecord: 7 });
     seedUser(db, {}, OTHER);
     db.participant.rows.push(
       { id: 'p1', conversationId: CONV, userId: USER, isActive: true },
@@ -202,7 +202,7 @@ describe('la série : un gel couvre le jour manqué, sinon la Flamme s’éteint
 describe('la Gloire du premier passage d’un niveau', () => {
   it('un geste qui fait franchir le niveau 2 grave 100 de Gloire et monte le record (#9636)', async () => {
     const db = fakeGameDb();
-    seedUser(db, { engagementScore: 40 - 1, levelRecord: 1 });
+    seedUser(db, { engagementScore: 400 - 1, levelRecord: 1 });
 
     await service(db).recordActivity(USER, 'content.text_message');
 
@@ -212,7 +212,7 @@ describe('la Gloire du premier passage d’un niveau', () => {
 
   it('un geste qui ne franchit aucun niveau ne grave rien', async () => {
     const db = fakeGameDb();
-    seedUser(db, { engagementScore: 500, levelRecord: 7 });
+    seedUser(db, { engagementScore: 100 * 7 * 7, levelRecord: 7 });
 
     await service(db).recordActivity(USER, 'content.text_message');
 
@@ -221,7 +221,7 @@ describe('la Gloire du premier passage d’un niveau', () => {
 
   it('le tout premier contenu grave, lui, la Gloire de son succès (100, commun faute d’instantané — #9636)', async () => {
     const db = fakeGameDb();
-    seedUser(db, { engagementScore: 500, levelRecord: 7 });
+    seedUser(db, { engagementScore: 100 * 7 * 7, levelRecord: 7 });
 
     await service(db).recordActivity(USER, 'content.text_message');
 
@@ -234,7 +234,7 @@ describe('la Gloire du premier passage d’un niveau', () => {
 describe('la progression des missions au geste', () => {
   it('un geste crédité sur l’axe d’une mission la fait avancer, et la paie à l’objectif', async () => {
     const db = fakeGameDb();
-    seedUser(db, { engagementScore: 10 * 10 * 10, levelRecord: 10 });
+    seedUser(db, { engagementScore: 100 * 10 * 10, levelRecord: 10 });
     db.dailyMission.rows.push({
       id: 'm1', userId: USER, dayKey: dayKeyOf(today()), slot: 0, templateKey: 'send-texts', difficulty: 'easy',
       signal: 'axis:content.text_message', prism: false, target: 1, progress: 0, reward: 60, glory: 0, seen: [],
@@ -251,7 +251,7 @@ describe('la progression des missions au geste', () => {
 
   it('un échec de mission ne casse jamais le crédit du geste', async () => {
     const db = fakeGameDb();
-    seedUser(db, { engagementScore: 10 * 10 * 10, levelRecord: 10 });
+    seedUser(db, { engagementScore: 100 * 10 * 10, levelRecord: 10 });
     jest.spyOn(db.dailyMission, 'findMany').mockRejectedValue(new Error('missions indisponibles'));
 
     await expect(service(db).recordActivity(USER, 'content.text_message')).resolves.toBe(true);

@@ -359,7 +359,7 @@ export class EngagementService {
       operationKey,
       dayKey: civilDayKey(today),
       timezone: inputs.timezone,
-      record: Math.max(levelForUnlocks(inputs.engagementScore), inputs.levelRecord ?? 0),
+      record: Math.max(levelForUnlocks({ score: inputs.engagementScore, levelRecord: inputs.levelRecord ?? null }), inputs.levelRecord ?? 0),
     });
     return true;
   }

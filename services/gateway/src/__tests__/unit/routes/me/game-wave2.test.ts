@@ -327,7 +327,10 @@ describe('la vitrine, la visibilité, le Prestige', () => {
     const app = await buildApp(db);
     expect((await call(app, 'POST', GAME_ROUTES.prestige, { requestId: 'prest-0001' })).json()).toMatchObject({ code: 'PRESTIGE_LEVEL_TOO_LOW' });
 
-    db.user.rows[0]!.engagementScore = 100_000;
+    // Un million de points ET le record du niveau 100, gravé ses dix étapes faites (#9706).
+    db.user.rows[0]!.engagementScore = 1_000_000;
+    expect((await call(app, 'POST', GAME_ROUTES.prestige, { requestId: 'prest-0003' })).json()).toMatchObject({ code: 'PRESTIGE_LEVEL_TOO_LOW' });
+    db.user.rows[0]!.levelRecord = 100;
     const res = await call(app, 'POST', GAME_ROUTES.prestige, { requestId: 'prest-0002' });
     expect(prestigeResponseSchema.parse(res.json().data)).toMatchObject({ status: 'passed', prestige: 1, gloryGained: 10_000 });
     await app.close();

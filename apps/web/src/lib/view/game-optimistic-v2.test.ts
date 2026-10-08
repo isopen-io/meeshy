@@ -6,7 +6,7 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { levelThreshold } from '@meeshy/shared/utils/game/levels';
 
-import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 
 import {
   afterAbandon,
@@ -149,7 +149,7 @@ describe('la vitrine et la visibilité', () => {
 });
 
 describe('le Prestige', () => {
-  const atTop = (): EngagementWithGame => ({ ...base, game: gameBlockWithExtrasFixture({ score: levelThreshold(100) + 40, prestige: 1 }) });
+  const atTop = (): EngagementWithGame => ({ ...base, game: gameBlockWithExtrasFixture({ ...ALL_LEVEL_STEPS, score: levelThreshold(100) + 40, prestige: 1, levelRecord: 100 }) });
 
   test('le niveau et le score repartent, l’étoile se pose, la Gloire monte, le trophée entre dans la vitrine', () => {
     const before = atTop();

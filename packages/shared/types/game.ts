@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { LEGACY_LEVEL_MAX, LEGACY_LEVEL_TIER_KEYS, LEVEL_TIER_KEYS } from '../utils/game/levels.js';
 import { GLORY_RANKS, type GloryRankOrMythic } from '../utils/game/glory.js';
 import { TREASURY_TIERS } from '../utils/game/treasury.js';
+import { LEVEL_STEP_KINDS } from '../utils/game/level-steps.js';
 import { FLAME_FORMS } from '../utils/game/flame.js';
 import { MISSION_DIFFICULTIES } from '../utils/game/missions.js';
 import { PERSONAL_MISSION_STATES } from '../utils/game/personal-mission.js';
@@ -53,6 +54,18 @@ const level = z.number().int().min(1);
 const treasuryKeys = enumOf(TREASURY_TIERS.map((t) => t.key));
 const formKeys = enumOf(FLAME_FORMS.map((f) => f.key));
 
+/** Une étape des niveaux (#9706) : ce qu'elle demande, où en est le compte, et si elle est faite. */
+export const gameLevelStepSchema = z.object({
+  level,
+  kind: z.enum(LEVEL_STEP_KINDS),
+  /** Meeshes, missions, jours de Flamme — ou, pour un rang, la Gloire où il commence. */
+  target: nonNegativeInt,
+  current: nonNegativeInt,
+  met: z.boolean(),
+  /** Le rang demandé, `null` hors des étapes de rang. */
+  rank: enumOf(GLORY_RANKS.map((r) => r.key)).nullable(),
+});
+
 /**
  * LA LECTURE DES NIVEAUX OUVERTS PAR LE RANG (#9688) — la vérité que lisent les clients à jour.
  * Les champs voisins de `gameLevelSchema` restent sous l'ANCIENNE loi (niveau borné à 100, dix
@@ -71,6 +84,12 @@ export const gameLevelLadderSchema = z.object({
   cap: level.nullable(),
   /** Le niveau est au plafond : il monte dès que le rang l'ouvre, sans rien regagner. */
   isMax: z.boolean(),
+  /** Les points sont là, une étape manque : le niveau attend au palier précédent (#9706). Absent devant un serveur antérieur. */
+  held: z.boolean().optional(),
+  /** La prochaine étape au-dessus du niveau, faite ou à faire — `null` au-delà de 100 (#9706). */
+  step: gameLevelStepSchema.nullable().optional(),
+  /** Les compteurs que jugent les étapes, pour que l'optimiste rejoue la loi (#9706). */
+  steps: z.object({ minted: nonNegativeInt, missionsDone: nonNegativeInt, flameRecord: nonNegativeInt }).nullable().optional(),
 });
 
 export const gameLevelSchema = z.object({
@@ -224,6 +243,7 @@ export const gameBlockSchema = z.object({
 
 export type GameLevel = z.infer<typeof gameLevelSchema>;
 export type GameLevelLadder = z.infer<typeof gameLevelLadderSchema>;
+export type GameLevelStep = z.infer<typeof gameLevelStepSchema>;
 export type GameGlory = z.infer<typeof gameGlorySchema>;
 export type GameTreasury = z.infer<typeof gameTreasurySchema>;
 export type GameMintPreview = z.infer<typeof mintPreviewSchema>;

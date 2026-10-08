@@ -46,9 +46,9 @@ struct GamePlayerBannerTests {
         let banner = GamePlayerBanner(game: try block())
         #expect(banner.level == 34)
         #expect(banner.tier == .eclat)
-        #expect(banner.score == 12180)
+        #expect(banner.score == 121800)
         #expect(banner.nextLevel == 35)
-        #expect(banner.pointsToNext == 70)
+        #expect(banner.pointsToNext == 700)
         #expect(banner.percent == 89)
     }
 

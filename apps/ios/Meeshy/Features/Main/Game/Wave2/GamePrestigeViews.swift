@@ -85,7 +85,8 @@ struct GamePrestigeScreen: View {
     /// Avant → après, lu sur la loi (`GamePrestige.transition`) ; vide quand la loi le refuse — le serveur reste juge.
     static func passValues(game: GameBlock) -> [GameFactChipItem] {
         guard let prestige = game.prestige,
-              case let .allowed(pass) = GamePrestige.transition(score: game.level.score, prestige: prestige.stars) else { return [] }
+              case let .allowed(pass) = GamePrestige.transition(score: game.level.score, prestige: prestige.stars,
+                                                               levelRecord: game.level.shown.record) else { return [] }
         let shown = game.level.shown
         func arrow(_ before: String, _ after: String) -> String { "\(before) → \(after)" }
         return [

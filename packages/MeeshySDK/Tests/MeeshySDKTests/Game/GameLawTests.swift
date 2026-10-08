@@ -9,25 +9,27 @@ struct GameLawTests {
 
     // MARK: Niveaux
 
-    @Test("le niveau 1 dure jusqu'à 39 points, et sa barre part de zéro")
-    func levelOneSpansUpToThirtyNine() {
-        let p = GameLevels.progress(forScore: 39, cap: GameLevels.capBase)
+    @Test("le niveau 1 dure jusqu'à 399 points, et sa barre part de zéro (100 × N², #9706)")
+    func levelOneSpansUpToThreeHundredNinetyNine() {
+        let p = GameLevels.progress(forScore: 399, cap: GameLevels.capBase)
         #expect(p.level == 1)
         #expect(p.floorScore == 0)
-        #expect(p.nextThreshold == 40)
+        #expect(p.nextThreshold == 400)
         #expect(p.pointsToNext == 1)
-        #expect(GameLevels.progress(forScore: 40, cap: GameLevels.capBase).level == 2)
+        #expect(GameLevels.progress(forScore: 400, cap: GameLevels.capBase).level == 2)
+        #expect(GameLevels.threshold(of: 100) == 1_000_000)
+        #expect(GameLevels.level(forScore: 93_730, cap: GameLevels.capBase) == 30)
     }
 
     @Test("le niveau 100 n'est plus un sommet : la courbe continue (#9688)")
     func levelHundredIsNoLongerTheTop() {
-        let p = GameLevels.progress(forScore: 400_000, cap: GameLevels.capBase)
+        let p = GameLevels.progress(forScore: 4_000_000, cap: GameLevels.capBase)
         #expect(p.level == 200)
         #expect(!p.isMax)
         #expect(p.tier == .pulsar)
-        #expect(GameLevels.legacyProgress(forScore: 400_000).level == 100)
-        #expect(GameLevels.legacyProgress(forScore: 400_000).isMax)
-        #expect(GameLevels.legacyProgress(forScore: 400_000).tier == .galaxie)
+        #expect(GameLevels.legacyProgress(forScore: 4_000_000).level == 100)
+        #expect(GameLevels.legacyProgress(forScore: 4_000_000).isMax)
+        #expect(GameLevels.legacyProgress(forScore: 4_000_000).tier == .galaxie)
     }
 
     @Test("sous Ambassadeur, 499 au plus : 500 attend le rang")

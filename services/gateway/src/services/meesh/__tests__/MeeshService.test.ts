@@ -118,6 +118,8 @@ function fausseBase(params: {
       }),
       updateMany: async () => ({ count: 0 }),
     },
+    // Les missions du jour accomplies, que jugent les étapes des niveaux (#9706) : aucune ici.
+    dailyMission: { count: async () => 0 },
     gloryLedger: {
       create: async (args: { data: LigneRegistre }) => {
         gloire.push({ ...args.data });

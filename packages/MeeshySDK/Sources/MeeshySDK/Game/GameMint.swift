@@ -29,8 +29,9 @@ public struct GameMintPreview: Codable, Sendable, Equatable {
     public let canMint: Bool
     public let missingPoints: Int
     public let levelBefore: Int
-    /// Égal à `levelBefore` quand la frappe n'est pas possible.
+    /// Égal à `levelBefore` quand la frappe n'est pas possible. Peut MONTER : la frappe fait une étape (#9706).
     public let levelAfter: Int
+    /// Jamais négatif : une frappe qui fait monter ne perd rien.
     public let levelsLost: Int
     /// `0` quand la frappe n'est pas possible.
     public let gloryGained: Int
@@ -98,16 +99,40 @@ public enum GameMint {
         return .silver
     }
 
+    /// Les faits des étapes APRÈS la frappe (#9706) : une Meesh de plus, et sa Gloire — qui peut faire
+    /// passer un rang. Le Mythe, servi par le serveur, reste le Mythe.
+    private static func stepsAfterMint(_ steps: GameLevelStepFacts) -> GameLevelStepFacts {
+        let glory = max(0, steps.glory) + GameGlory.points.mint
+        return GameLevelStepFacts(
+            minted: max(0, steps.minted) + 1,
+            missionsDone: steps.missionsDone,
+            flameRecord: steps.flameRecord,
+            glory: glory,
+            rank: steps.rank == .mythe ? .mythe : GameGlory.standing(glory: glory, mythic: false).rank
+        )
+    }
+
     /// Ce que la frappe coûterait et rapporterait, avant confirmation. Pur : le
     /// serveur le rejoue à l'écriture, les clients le montrent avant.
-    public static func preview(score: Int, mintedLifetime: Int, debitablePoints: Int, levelCap: Int?) -> GameMintPreview {
+    ///
+    /// Avec les étapes (#9706, `steps` — son `minted` est relu sur `mintedLifetime`), la frappe peut FAIRE une
+    /// étape : le niveau d'après se lit sous le plafond d'après, et peut monter. `nil` : sans étapes.
+    public static func preview(score: Int, mintedLifetime: Int, debitablePoints: Int, levelCap: Int?,
+                               steps: GameLevelStepFacts? = nil) -> GameMintPreview {
         let held = max(0, score)
         let debitable = max(0, debitablePoints)
         let number = min(max(0, mintedLifetime), Int.max - 1) + 1
         let cost = price(forNumber: number)
         let canMint = debitable >= cost
-        let levelBefore = GameLevels.level(forScore: held, cap: levelCap)
-        let levelAfter = canMint ? GameLevels.level(forScore: max(0, held - cost), cap: levelCap) : levelBefore
+        let before = steps.map {
+            GameLevelStepFacts(minted: max(0, mintedLifetime), missionsDone: $0.missionsDone, flameRecord: $0.flameRecord,
+                               glory: $0.glory, rank: $0.rank)
+        }
+        let after = before.map(stepsAfterMint)
+        let capBefore = GameLevels.tighter(levelCap, GameLevelSteps.gate(before))
+        let capAfter = after.map { GameLevelSteps.cap(rank: $0.rank, steps: $0) } ?? capBefore
+        let levelBefore = GameLevels.level(forScore: held, cap: capBefore)
+        let levelAfter = canMint ? GameLevels.level(forScore: max(0, held - cost), cap: capAfter) : levelBefore
         return GameMintPreview(
             number: number,
             price: cost,
@@ -116,7 +141,7 @@ public enum GameMint {
             missingPoints: canMint ? 0 : cost - debitable,
             levelBefore: levelBefore,
             levelAfter: levelAfter,
-            levelsLost: levelBefore - levelAfter,
+            levelsLost: max(0, levelBefore - levelAfter),
             gloryGained: canMint ? GameGlory.points.mint : 0
         )
     }

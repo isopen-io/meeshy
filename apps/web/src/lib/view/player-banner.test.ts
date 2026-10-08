@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { GameBlockFacts } from '@meeshy/shared/utils/game/game-block';
 
-import { gameBlockFixture, gameBlockWithExtrasFixture, gameExtrasFactsFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture, gameExtrasFactsFixture } from '@/lib/api/game-fixture';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
@@ -17,16 +17,17 @@ beforeAll(async () => {
   await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadGameCatalog(language)));
 });
 
-/** Un joueur qui n'a que ses premiers points : niveau 3 (le niveau 1 tient jusqu'à ~50 points). */
+/** Un joueur qui n'a que ses premiers points : niveau 3 (le niveau 1 tient jusqu'à 399 points, #9706). */
 const NEWCOMER: Partial<GameBlockFacts> = {
-  score: 100,
+  score: 1000,
+  levelRecord: null,
   glory: 0,
   balance: 0,
   mintedLifetime: 0,
   streak: 0,
   freezes: 0,
   lastActiveDay: null,
-  debitablePoints: 100,
+  debitablePoints: 1000,
 };
 
 /** Tout à zéro : niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune Flamme. */
@@ -110,7 +111,7 @@ describe('seulement ce qui a du sens (#9536)', () => {
   });
 
   test('au plafond du rang, plus de niveau suivant ni de points manquants, et le rang qui l’ouvre (#9688)', () => {
-    const top = shown({ ...NEWCOMER, score: 50_000_000, debitablePoints: 50_000_000 });
+    const top = shown({ ...NEWCOMER, ...ALL_LEVEL_STEPS, score: 50_000_000, debitablePoints: 50_000_000, levelRecord: 499 });
     expect(top.level?.level).toBe(499);
     expect({ nextLevel: top.level?.nextLevel, pointsToNext: top.level?.pointsToNext, opener: top.level?.opener }).toEqual({ nextLevel: null, pointsToNext: null, opener: 'ambassadeur' });
     expect(playerBannerLabel(top, 'fr')).toContain('Ambassadeur ouvre la suite');

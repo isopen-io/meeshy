@@ -52,20 +52,20 @@ describe('l\'édition', () => {
 
 describe('l\'aperçu d\'une frappe', () => {
   it('dit le prix, le numéro, l\'édition et les niveaux perdus', () => {
-    const preview = previewMint({ score: 12_180, mintedLifetime: 12, debitablePoints: 12_180, levelCap: LEVEL_CAP_BASE });
+    const preview = previewMint({ score: 12_180, mintedLifetime: 12, debitablePoints: 12_180, levelCap: LEVEL_CAP_BASE, steps: null });
     expect(preview.number).toBe(13);
     expect(preview.price).toBe(1294);
     expect(preview.edition).toBe('silver');
     expect(preview.canMint).toBe(true);
-    expect(preview.levelBefore).toBe(34);
-    expect(preview.levelAfter).toBe(32);
-    expect(preview.levelsLost).toBe(2);
+    expect(preview.levelBefore).toBe(11);
+    expect(preview.levelAfter).toBe(10);
+    expect(preview.levelsLost).toBe(1);
     expect(preview.gloryGained).toBe(1000);
     expect(preview.missingPoints).toBe(0);
   });
 
   it('refuse sans débiter quand les points débitables manquent', () => {
-    const preview = previewMint({ score: 2000, mintedLifetime: 0, debitablePoints: 1000, levelCap: LEVEL_CAP_BASE });
+    const preview = previewMint({ score: 2000, mintedLifetime: 0, debitablePoints: 1000, levelCap: LEVEL_CAP_BASE, steps: null });
     expect(preview.canMint).toBe(false);
     expect(preview.missingPoints).toBe(221);
     expect(preview.levelAfter).toBe(preview.levelBefore);
@@ -74,27 +74,27 @@ describe('l\'aperçu d\'une frappe', () => {
   });
 
   it('coûte un seul niveau au niveau 100', () => {
-    const preview = previewMint({ score: 100_000, mintedLifetime: 0, debitablePoints: 100_000, levelCap: LEVEL_CAP_BASE });
+    const preview = previewMint({ score: 1_000_000, mintedLifetime: 0, debitablePoints: 1_000_000, levelCap: LEVEL_CAP_BASE, steps: null });
     expect(preview.levelBefore).toBe(100);
     expect(preview.levelsLost).toBe(1);
   });
 
   it('lit les niveaux sous le plafond du rang : un compte bloqué à 499 ne perd que ce qu\'il lit (#9688)', () => {
     const score = levelThreshold(640);
-    const capped = previewMint({ score, mintedLifetime: 40, debitablePoints: score, levelCap: LEVEL_CAP_BASE });
+    const capped = previewMint({ score, mintedLifetime: 40, debitablePoints: score, levelCap: LEVEL_CAP_BASE, steps: null });
     expect(capped.levelBefore).toBe(499);
     expect(capped.levelAfter).toBe(499);
     expect(capped.levelsLost).toBe(0);
-    const open = previewMint({ score, mintedLifetime: 40, debitablePoints: score, levelCap: LEVEL_CAP_AMBASSADOR });
+    const open = previewMint({ score, mintedLifetime: 40, debitablePoints: score, levelCap: LEVEL_CAP_AMBASSADOR, steps: null });
     expect(open.levelBefore).toBe(640);
     expect(open.levelAfter).toBe(639);
     expect(open.levelsLost).toBe(1);
   });
 
-  it('coûte cinq niveaux au niveau 15', () => {
-    const preview = previewMint({ score: 2250, mintedLifetime: 0, debitablePoints: 2250, levelCap: LEVEL_CAP_BASE });
-    expect(preview.levelBefore).toBe(15);
-    expect(preview.levelsLost).toBe(5);
+  it('coûte deux niveaux au niveau 5', () => {
+    const preview = previewMint({ score: 2500, mintedLifetime: 0, debitablePoints: 2500, levelCap: LEVEL_CAP_BASE, steps: null });
+    expect(preview.levelBefore).toBe(5);
+    expect(preview.levelsLost).toBe(2);
   });
 });
 

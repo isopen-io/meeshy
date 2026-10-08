@@ -1,5 +1,6 @@
 /**
- * LE PRESTIGE (#9389) — une boucle neuve, offerte à partir du niveau 100.
+ * LE PRESTIGE (#9389) — une boucle neuve, offerte à partir du niveau 100 (un million de points et
+ * ses dix étapes depuis #9706).
  * `docs/product/jeu-meeshy-conception.html` § II.2.
  *
  * Au niveau 100, on peut passer en Prestige — ou continuer à monter, le
@@ -32,10 +33,18 @@ export type PrestigeTransition =
     }
   | { readonly allowed: false; readonly reason: 'level-too-low' | 'at-maximum' };
 
-export function prestigeTransition(params: { readonly score: number; readonly prestige: number }): PrestigeTransition {
+/**
+ * Le niveau 100 demande un million de points ET ses dix étapes (#9706) : le record prouve les étapes
+ * (`levelForUnlocks`), le score en poche prouve les points.
+ */
+export function prestigeTransition(params: {
+  readonly score: number;
+  readonly prestige: number;
+  readonly levelRecord: number | null;
+}): PrestigeTransition {
   const stars = Number.isFinite(params.prestige) ? Math.max(0, Math.trunc(params.prestige)) : 0;
   if (stars >= GAME_PRESTIGE_MAX) return { allowed: false, reason: 'at-maximum' };
-  if (levelForUnlocks(params.score) < GAME_PRESTIGE_LEVEL) return { allowed: false, reason: 'level-too-low' };
+  if (levelForUnlocks({ score: params.score, levelRecord: params.levelRecord }) < GAME_PRESTIGE_LEVEL) return { allowed: false, reason: 'level-too-low' };
   const prestigeAfter = stars + 1;
   return {
     allowed: true,

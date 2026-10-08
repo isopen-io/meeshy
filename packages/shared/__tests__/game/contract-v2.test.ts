@@ -79,6 +79,8 @@ const baseFacts = (over: Partial<GameBlockFacts> = {}): GameBlockFacts => ({
   glory: 2000,
   mythic: false,
   mintedLifetime: 12,
+  missionsDone: 3,
+  flameRecord: 23,
   debitablePoints: 12_180,
   balance: 14,
   streak: 12,
@@ -139,7 +141,7 @@ describe('l\'extension du bloc game', () => {
     expect(parsed?.league).toBeUndefined();
     expect(parsed?.atlas).toBeUndefined();
     expect(parsed?.season?.number).toBe(1);
-    expect(parsed?.level.level).toBe(34);
+    expect(parsed?.level.level).toBe(11);
   });
 
   it('reste refusé quand un champ de la vague 1 manque : jamais à moitié lu', () => {
@@ -225,11 +227,12 @@ describe('le duo, la saison, les trophées, l\'Atlas et le Prestige dans le bloc
   });
 
   it('range la vitrine, résume l\'Atlas et dit si le Prestige s\'offre', () => {
-    const extras = buildGameBlockExtras(extrasFacts({ score: levelThreshold(100) }));
+    const extras = buildGameBlockExtras(extrasFacts({ score: levelThreshold(100), levelRecord: 100 }));
     expect(extras.atlas).toMatchObject({ stamped: 1, stamps: [{ language: 'ja', stampedOn: '2026-10-13' }], pending: [] });
     expect(extras.prestige).toEqual({ stars: 0, max: 5, canPrestige: true, gloryOnPass: 10_000 });
     expect(buildGameBlockExtras(extrasFacts()).prestige.canPrestige).toBe(false);
-    expect(buildGameBlockExtras(extrasFacts({ score: levelThreshold(100), prestige: 5 })).prestige.canPrestige).toBe(false);
+    expect(buildGameBlockExtras(extrasFacts({ score: levelThreshold(100), levelRecord: 100, prestige: 5 })).prestige.canPrestige).toBe(false);
+    expect(buildGameBlockExtras(extrasFacts({ score: levelThreshold(100), levelRecord: 99 })).prestige.canPrestige).toBe(false);
     expect(extras.visibility).toEqual({ showcase: 'friends', rank: 'friends', treasury: 'friends', atlas: 'me' });
   });
 });

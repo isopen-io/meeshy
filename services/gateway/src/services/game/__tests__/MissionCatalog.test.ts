@@ -176,7 +176,7 @@ describe('chaque défi du jour se fait et paie tout ce qu’il annonce (#9635)',
   });
 });
 
-const LEVEL_20 = 10 * 20 * 20;
+const LEVEL_20 = 100 * 20 * 20;
 const MORNING = new Date('2026-10-06T06:00:00Z');
 const MORNING_DAY = '2026-10-06';
 const STARTS = new Date('2026-10-06T16:00:00Z');

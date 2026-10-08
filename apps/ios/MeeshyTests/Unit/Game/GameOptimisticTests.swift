@@ -10,13 +10,13 @@ final class GameOptimisticTests: XCTestCase {
     // MARK: - Frappe
 
     func test_afterMint_dropsTheLevelByTheLawAndRaisesTheTreasuryByOne() {
-        let state = GameFixture.state(GameFixture.game(score: 12_180, held: 9), meesh: GameFixture.meesh(balance: 9, minted: 12))
+        let state = GameFixture.state(GameFixture.game(score: 121_800, held: 9), meesh: GameFixture.meesh(balance: 9, minted: 12))
         let price = state.game.mint.price
 
         let next = GameOptimistic.afterMint(state)
 
-        XCTAssertEqual(next.game.level.score, 12_180 - price)
-        XCTAssertEqual(next.game.level.shown.level, GameLevels.level(forScore: 12_180 - price, cap: GameLevels.capBase))
+        XCTAssertEqual(next.game.level.score, 121_800 - price)
+        XCTAssertEqual(next.game.level.shown.level, GameLevels.level(forScore: 121_800 - price, cap: GameLevels.capBase))
         XCTAssertLessThan(next.game.level.shown.level, state.game.level.shown.level)
         XCTAssertEqual(next.game.treasury.held, 10)
         XCTAssertEqual(next.meesh?.balance, 10)
@@ -160,14 +160,14 @@ final class GameOptimisticTests: XCTestCase {
     }
 
     func test_withChestReward_laysTheServedContentAndCreditsTheScore() {
-        let state = GameFixture.state(GameFixture.game(score: 12_180, chestStatus: .ready))
+        let state = GameFixture.state(GameFixture.game(score: 121_800, chestStatus: .ready))
         let reward = DailyChest(points: 90, fragment: true, freeze: false)
 
-        let next = GameOptimistic.withChestReward(state, reward: reward, score: 12_270)
+        let next = GameOptimistic.withChestReward(state, reward: reward, score: 121_890)
 
         XCTAssertEqual(next.game.chest.reward, reward)
         XCTAssertEqual(next.game.chest.status, .claimed)
-        XCTAssertEqual(next.game.level.score, 12_270)
+        XCTAssertEqual(next.game.level.score, 121_890)
     }
 
     // MARK: - Rallumage

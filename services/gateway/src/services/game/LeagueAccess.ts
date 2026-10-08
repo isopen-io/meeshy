@@ -49,7 +49,7 @@ type LeagueFactsRow = {
 
 export function leagueFactsOf(row: LeagueFactsRow | null | undefined, now: Date = new Date()): LeagueFacts {
   return {
-    levelRecord: Math.max(levelForUnlocks(row?.engagementScore ?? 0), row?.levelRecord ?? 0),
+    levelRecord: Math.max(levelForUnlocks({ score: row?.engagementScore ?? 0, levelRecord: row?.levelRecord ?? null }), row?.levelRecord ?? 0),
     adultVerified: adultVerifiedOf(row ?? {}, now),
     consented: row?.publicLeagueConsentAt != null,
     timezone: row?.timezone ?? null,

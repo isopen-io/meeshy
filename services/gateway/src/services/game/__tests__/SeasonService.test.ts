@@ -157,14 +157,16 @@ describe('SeasonService.claim', () => {
     const result = await service.claim({ userId: USER, step: 40, now: IN_SEASON });
 
     expect(result).toMatchObject({ status: 'claimed', completed: true, gloryGained: 5000, reward: { kind: 'season-cup' } });
-    expect(db.gloryLedger.rows).toHaveLength(1);
-    expect(db.gloryLedger.rows[0]).toMatchObject({ reason: 'season', requestId: 'season:1', delta: 5000 });
+    // Les 5 000 de Gloire font passer Écho : le niveau qu'ouvre ce rang se grave à côté (#9706), jamais la saison deux fois.
+    const seasonLines = () => db.gloryLedger.rows.filter((r) => r.reason === 'season');
+    expect(seasonLines()).toHaveLength(1);
+    expect(seasonLines()[0]).toMatchObject({ reason: 'season', requestId: 'season:1', delta: 5000 });
     expect(db.gameTrophy.rows.map((t) => t.key)).toEqual(['trophy.season-cup.1']);
     expect(db.gameSeason.rows[0]!.settledAt).not.toBeNull();
 
     const again = await service.claim({ userId: USER, step: 40, now: IN_SEASON });
     expect(again.gloryGained).toBe(0);
-    expect(db.gloryLedger.rows).toHaveLength(1);
+    expect(seasonLines()).toHaveLength(1);
   });
 
   it('une saison terminée ne se réclame plus : la suivante repart de zéro', async () => {

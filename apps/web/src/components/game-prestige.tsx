@@ -55,7 +55,7 @@ const arrow = (before: string, after: string): string => `${before} → ${after}
 
 /** Ce que le passage change, valeur par valeur ; vide quand la loi le refuse (le serveur reste juge). */
 function passValues(level: GamePrestigeProps['level'], score: number, prestige: GamePrestigeBlock): readonly GameFactChip[] {
-  const pass = prestigeTransition({ score, prestige: prestige.stars });
+  const pass = prestigeTransition({ score, prestige: prestige.stars, levelRecord: level.record });
   if (!pass.allowed) return [];
   return [
     { fact: 'score', label: gameText('game.fact.balance'), value: arrow(pointsLabel(score), pointsLabel(pass.scoreAfter)) },

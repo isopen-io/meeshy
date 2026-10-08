@@ -22,7 +22,7 @@ const NOW = new Date('2026-10-14T12:00:00Z'); // mercredi, semaine du 2026-10-12
 const WEEK = '2026-10-12';
 const ADULT = new Date('1990-01-01T00:00:00Z');
 const MINOR = new Date('2012-01-01T00:00:00Z');
-const LEVEL_20 = 4000;
+const LEVEL_20 = 40_000;
 
 let draw = 0;
 const service = (db: FakeGameDb) =>

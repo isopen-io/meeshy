@@ -19,18 +19,21 @@
  * alors sa place du Mythe (#9636, `MythicSeatService`) — un appoint, qui ne
  * fait jamais échouer le crédit déjà gravé.
  *
- * Elle peut aussi faire franchir Ambassadeur ou Oracle, qui OUVRENT des niveaux
- * (#9688) : le compte monte alors aussitôt jusqu'où son score le porte, et la
- * Gloire du premier passage de ces niveaux se grave — sans rien regagner.
+ * Elle peut aussi faire passer un rang, qui OUVRE des niveaux — Ambassadeur et
+ * Oracle (#9688), Écho, Voix, Conteur et Passeur, étapes des dizaines (#9706) :
+ * le compte monte alors aussitôt jusqu'où son score le porte, et la Gloire du
+ * premier passage de ces niveaux se grave — sans rien regagner (`level:<n>`).
  */
 
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
-import { FLAME_RECORD_GLORY, gloryForLevel, levelCapForGlory } from '@meeshy/shared/utils/game/glory';
-import { levelFromScore, newLevelsReached, recordLevel } from '@meeshy/shared/utils/game/levels';
+import { FLAME_RECORD_GLORY, gloryForLevel, gloryStanding } from '@meeshy/shared/utils/game/glory';
+import { levelCapWithSteps } from '@meeshy/shared/utils/game/level-steps';
+import { levelFromScore, newLevelsReached, recordLevel, type LevelCap } from '@meeshy/shared/utils/game/levels';
 import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
 import { achievementGloryAtEarning } from '@meeshy/shared/utils/game/rarity';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MythicSeatService } from './MythicSeatService';
+import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from './LevelStepFacts';
 
 const log = enhancedLogger.child({ module: 'GloryService' });
 
@@ -119,23 +122,55 @@ export class GloryService {
   }
 
   /**
-   * Le rang vient-il d'ouvrir des niveaux (#9688) ? Si la Gloire gravée a fait changer le plafond, le
+   * Le rang vient-il d'ouvrir des niveaux (#9688, #9706) ? Si la Gloire gravée a fait passer un rang, le
    * compte monte jusqu'où son score le porte. Un appoint, comme la place du Mythe : jamais une raison
    * de faire échouer le crédit déjà gravé — le prochain geste rattrape.
    */
   private async openLevelsIfRankRose(userId: string, delta: number): Promise<void> {
     try {
       const total = await this.total(userId);
-      if (levelCapForGlory(total - delta) === levelCapForGlory(total)) return;
-      const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { engagementScore: true, levelRecord: true } });
-      if (account === null) return;
-      await this.creditLevelProgress({ userId, score: account.engagementScore ?? 0, previousRecord: account.levelRecord ?? null });
+      if (gloryStanding({ glory: total - delta }).rank === gloryStanding({ glory: total }).rank) return;
+      await this.openLevels(userId);
     } catch (error) {
       log.warn('level opening after a rank rise failed, the next gesture will catch up', {
         userId,
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  /**
+   * Une ÉTAPE vient peut-être d'être faite (#9706) — une Meesh frappée, une mission du jour accomplie, un
+   * record de Flamme : le niveau qui attendait monte d'un coup jusqu'où le score le porte. Sans rien à
+   * ouvrir, rien ne s'écrit. Jamais une raison de faire échouer le geste qui l'a appelée.
+   */
+  async openLevels(userId: string): Promise<number> {
+    try {
+      const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { engagementScore: true, levelRecord: true } });
+      if (account === null) return 0;
+      return await this.creditLevelProgress({ userId, score: account.engagementScore ?? 0, previousRecord: account.levelRecord ?? null });
+    } catch (error) {
+      log.warn('level opening after a step failed, the next gesture will catch up', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Le plafond du niveau SERVI (#9688, #9706) : le rang lu sur la Gloire, et les dix étapes — Meeshes
+   * frappées et record de Flamme sur la ligne du compte, missions du jour comptées. Trois lectures
+   * indexées, en parallèle.
+   */
+  private async servedLevelCap(userId: string): Promise<LevelCap> {
+    const [row, missionsDone, glory] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: LEVEL_STEP_USER_SELECT }),
+      countMissionsDone(this.prisma, userId),
+      this.total(userId),
+    ]);
+    const steps = levelStepFactsOf({ row, missionsDone, glory });
+    return levelCapWithSteps({ rank: steps.rank, steps });
   }
 
   /** La place du Mythe si cette Gloire l'ouvre — jamais une raison de faire échouer le crédit. */
@@ -155,7 +190,8 @@ export class GloryService {
    *
    * Le niveau se lit sous le plafond que le rang ouvre (#9688) : 499 sous
    * Ambassadeur, 1000 pour Ambassadeur et Orateur, sans limite à partir
-   * d'Oracle. Une ligne par niveau qui paie (`level:<n>`, `gloryForLevel` :
+   * d'Oracle — et sous le palier des étapes (#9706) : sans l'étape d'une
+   * dizaine, il attend juste en dessous. Une ligne par niveau qui paie (`level:<n>`, `gloryForLevel` :
    * chacun jusqu'à 100, puis chaque dizaine) : le registre dit lui-même quels
    * niveaux ont payé, et une montée concurrente ou rejouée ne paie pas deux
    * fois. Le record ne fait que monter (`levelRecord < nouveau`, ou absent) :
@@ -169,7 +205,7 @@ export class GloryService {
     readonly score: number;
     readonly previousRecord: number | null;
   }): Promise<number> {
-    const level = levelFromScore(params.score, levelCapForGlory(await this.total(params.userId)));
+    const level = levelFromScore(params.score, await this.servedLevelCap(params.userId));
     const reached = newLevelsReached({ level, previousRecord: params.previousRecord });
     if (reached.count === 0) return 0;
 

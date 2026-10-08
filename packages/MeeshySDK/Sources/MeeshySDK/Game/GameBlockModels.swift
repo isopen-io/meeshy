@@ -60,9 +60,17 @@ public struct GameBlock: Codable, Sendable, Equatable {
             public let cap: Int?
             /// Le niveau est au plafond : il monte dès que le rang l'ouvre.
             public let isMax: Bool
+            /// Les points sont là, une étape manque : le niveau attend au palier précédent (#9706).
+            public let held: Bool
+            /// La prochaine étape au-dessus du niveau, faite ou à faire — `nil` au-delà de 100 ou devant un
+            /// serveur d'avant les étapes (#9706).
+            public let step: GameLevelStep?
+            /// Les compteurs que jugent les étapes, pour que l'optimiste rejoue la loi (#9706).
+            public let steps: GameLevelStepCounts?
 
             public init(level: Int, tier: LevelTierKey, floorScore: Int, nextThreshold: Int?, pointsToNext: Int,
-                        progress: Double, record: Int, cap: Int?, isMax: Bool) {
+                        progress: Double, record: Int, cap: Int?, isMax: Bool, held: Bool = false,
+                        step: GameLevelStep? = nil, steps: GameLevelStepCounts? = nil) {
                 self.level = level
                 self.tier = tier
                 self.floorScore = floorScore
@@ -72,6 +80,31 @@ public struct GameBlock: Codable, Sendable, Equatable {
                 self.record = record
                 self.cap = cap
                 self.isMax = isMax
+                self.held = held
+                self.step = step
+                self.steps = steps
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case level, tier, floorScore, nextThreshold, pointsToNext, progress, record, cap, isMax, held, step, steps
+            }
+
+            /// Les trois champs des étapes (#9706) sont OPTIONNELS et tolérés : illisibles (une sorte d'étape
+            /// ajoutée avant la mise à jour de l'app), ils se taisent sans faire tomber le bloc du jeu.
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                level = try container.decode(Int.self, forKey: .level)
+                tier = try container.decode(LevelTierKey.self, forKey: .tier)
+                floorScore = try container.decode(Int.self, forKey: .floorScore)
+                nextThreshold = try container.decodeIfPresent(Int.self, forKey: .nextThreshold)
+                pointsToNext = try container.decode(Int.self, forKey: .pointsToNext)
+                progress = try container.decode(Double.self, forKey: .progress)
+                record = try container.decode(Int.self, forKey: .record)
+                cap = try container.decodeIfPresent(Int.self, forKey: .cap)
+                isMax = try container.decode(Bool.self, forKey: .isMax)
+                held = ((try? container.decodeIfPresent(Bool.self, forKey: .held)) ?? nil) ?? false
+                step = (try? container.decodeIfPresent(GameLevelStep.self, forKey: .step)) ?? nil
+                steps = (try? container.decodeIfPresent(GameLevelStepCounts.self, forKey: .steps)) ?? nil
             }
         }
 

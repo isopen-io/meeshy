@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { levelThreshold } from '@meeshy/shared/utils/game/levels';
 
-import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -28,7 +28,7 @@ const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s
 const quiet = { reducedMotion: true, haptics: false, schedule: () => () => undefined } as const;
 
 const props = (score = levelThreshold(100) + 40, prestige = 1, patch: Partial<GamePrestigeProps> = {}): GamePrestigeProps => {
-  const game = gameBlockWithExtrasFixture({ score, prestige });
+  const game = gameBlockWithExtrasFixture({ ...ALL_LEVEL_STEPS, score, prestige, levelRecord: 100 });
   if (game.prestige === undefined) throw new Error('la fixture porte le Prestige');
   return { level: game.level, score: game.level.score, prestige: game.prestige, online: true, pending: false, onPass: () => undefined, playOptions: quiet, ...patch };
 };

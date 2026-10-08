@@ -23,6 +23,7 @@ import {
   flameStatus,
 } from './flame.js';
 import { gloryStanding, levelCapForRank, type MythicSeatRef } from './glory.js';
+import type { LevelStepFacts } from './level-steps.js';
 import { previewMint } from './mint.js';
 import { levelOnTheWire, mintOnTheWire } from './level-wire.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
@@ -59,6 +60,10 @@ export type GameBlockFacts = {
   readonly mythic: boolean;
   readonly mythicSeat?: MythicSeatRef | null;
   readonly mintedLifetime: number;
+  /** Missions du jour accomplies à vie, comptées jusqu'à `LEVEL_STEP_MISSIONS_COUNTED` (#9706). */
+  readonly missionsDone: number;
+  /** La plus longue Flamme, en jours — le record que jugent les étapes 40 et 90 (#9706). */
+  readonly flameRecord: number;
   readonly debitablePoints: number;
   /** Meeshes gardées (le trésor). */
   readonly balance: number;
@@ -102,7 +107,14 @@ export type GameBlockFacts = {
 export function buildGameBlock(facts: GameBlockFacts): GameBlock {
   const standing = gloryStanding({ glory: facts.glory, mythic: facts.mythic, mythicSeat: facts.mythicSeat ?? null });
   const levelCap = levelCapForRank(standing.rank);
-  const level = levelOnTheWire({ score: facts.score, levelCap, levelRecord: facts.levelRecord, prestige: facts.prestige });
+  const steps: LevelStepFacts = {
+    minted: facts.mintedLifetime,
+    missionsDone: facts.missionsDone,
+    flameRecord: facts.flameRecord,
+    glory: standing.glory,
+    rank: standing.rank,
+  };
+  const level = levelOnTheWire({ score: facts.score, levelCap, levelRecord: facts.levelRecord, prestige: facts.prestige, steps });
   const record = level.ladder?.record ?? level.record;
   const treasury = treasuryTier(facts.balance);
 
@@ -145,6 +157,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
         mintedLifetime: facts.mintedLifetime,
         debitablePoints: facts.debitablePoints,
         levelCap,
+        steps,
       }),
     ),
     missions: {

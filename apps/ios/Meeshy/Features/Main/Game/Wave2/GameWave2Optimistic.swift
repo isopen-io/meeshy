@@ -225,14 +225,18 @@ enum GameWave2Optimistic {
     static func afterPrestige(_ state: GameState, now: Date = Date()) -> GameState {
         let game = state.game
         guard let prestige = game.prestige, prestige.canPrestige,
-              case .allowed(let passage) = GamePrestige.transition(score: game.level.score, prestige: game.level.prestige)
+              case .allowed(let passage) = GamePrestige.transition(score: game.level.score, prestige: game.level.prestige,
+                                                                   levelRecord: game.level.shown.record)
         else { return state }
 
         let glory = game.glory.atGlory(game.glory.glory + passage.gloryGained)
         // Le plafond se relit sur le rang d'APRÈS le passage : la Gloire du Prestige peut l'ouvrir (#9688).
         let levelCap = GameGlory.levelCap(forRank: glory.rank)
+        let steps = game.levelStepFacts.map {
+            GameLevelStepFacts(counts: $0.counts, glory: glory.glory, rank: glory.rank)
+        }
         let level = GameLevelWire.level(score: passage.scoreAfter, levelCap: levelCap,
-                                         levelRecord: passage.levelRecordAfter, prestige: passage.prestigeAfter)
+                                         levelRecord: passage.levelRecordAfter, prestige: passage.prestigeAfter, steps: steps)
         let trophies = game.trophies.map { block -> GameTrophiesBlock in
             let stamp = ISO8601DateFormatter().string(from: now)
             return GameTrophiesBlock(
@@ -250,7 +254,8 @@ enum GameWave2Optimistic {
             level: level,
             glory: glory,
             mint: GameLevelWire.mint(
-                GameMint.preview(score: passage.scoreAfter, mintedLifetime: game.mint.number, debitablePoints: 0, levelCap: levelCap)
+                GameMint.preview(score: passage.scoreAfter, mintedLifetime: game.mint.number, debitablePoints: 0, levelCap: levelCap,
+                                 steps: steps)
             ),
             boosts: game.boosts.replacing(tailwind: GameBoosts.tailwind(level: passage.levelAfter, levelRecord: passage.levelRecordAfter)),
             wave2: wave2

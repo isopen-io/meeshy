@@ -64,10 +64,16 @@ enum GameOptimistic {
         let glory = game.glory.atGlory(game.glory.glory + game.mint.gloryGained)
         // Les niveaux s'ouvrent selon le rang (#9688) : le plafond se relit sur le rang d'APRÈS la frappe.
         let levelCap = GameGlory.levelCap(forRank: glory.rank)
+        // La frappe compte pour les étapes (#9706) : une Meesh de plus, la Gloire d'après.
+        let steps = game.levelStepFacts.map {
+            GameLevelStepFacts(minted: game.mint.number, missionsDone: $0.missionsDone, flameRecord: $0.flameRecord,
+                               glory: glory.glory, rank: glory.rank)
+        }
         let level = GameLevelWire.level(score: score, levelCap: levelCap, levelRecord: game.level.shown.record,
-                                         prestige: game.level.prestige)
+                                         prestige: game.level.prestige, steps: steps)
         let preview = GameLevelWire.mint(
-            GameMint.preview(score: score, mintedLifetime: game.mint.number, debitablePoints: debitable, levelCap: levelCap)
+            GameMint.preview(score: score, mintedLifetime: game.mint.number, debitablePoints: debitable, levelCap: levelCap,
+                             steps: steps)
         )
         let minted = game.replacing(
             level: level,
@@ -141,7 +147,8 @@ enum GameOptimistic {
     static func withChestReward(_ state: GameState, reward: DailyChest, score: Int) -> GameState {
         let game = state.game
         let level = GameLevelWire.level(score: score, levelCap: GameGlory.levelCap(forRank: game.glory.rank),
-                                         levelRecord: game.level.shown.record, prestige: game.level.prestige)
+                                         levelRecord: game.level.shown.record, prestige: game.level.prestige,
+                                         steps: game.levelStepFacts)
         return GameState(
             game: game.replacing(
                 level: level,

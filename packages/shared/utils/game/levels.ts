@@ -1,10 +1,25 @@
 /**
- * LES NIVEAUX du Jeu Meeshy (#9373, ouverts par le rang depuis #9688) — seuil(N) = 10 × N².
+ * LES NIVEAUX du Jeu Meeshy (#9373, ouverts par le rang depuis #9688) — seuil(N) = 100 × N² (#9706).
  *
  * `docs/product/jeu-meeshy-conception.html` § II.2. Le niveau se lit sur le
  * score EN POCHE (`User.engagementScore`), celui que la frappe d'une Meesh
  * débite : il peut donc redescendre. Le niveau RECORD, lui, ne redescend
  * jamais ; il règle le Vent arrière et la Gloire du premier passage.
+ *
+ * ## Un million de points pour le niveau 100, une étape tous les dix niveaux (#9706, porteur 2026-10-08)
+ *
+ * La courbe vaut 100 × N² : le niveau 10 demande 10 000 points, le 50 en
+ * demande 250 000, le 100 un million. Et de 10 à 100, chaque dizaine demande
+ * une ÉTAPE simple (`level-steps.ts`) : sans elle, le niveau attend au palier
+ * précédent, puis monte d'un coup dès qu'elle est faite. Le niveau servi est
+ * donc le plus petit de trois : celui des points, le plafond du rang, et le
+ * palier des étapes (`levelProgress(score, cap, gate)`).
+ *
+ * Les étapes ne se défont jamais (une Meesh frappée le reste, une mission faite
+ * aussi, le record de Flamme et le rang ne redescendent pas) : le palier qu'elles
+ * ouvrent ne se referme pas. D'où la lecture SANS relire les étapes
+ * (`levelForUnlocks`) : un record gravé au-delà d'une dizaine prouve que son
+ * étape est faite, et sous le record, le niveau ne passe pas la dizaine suivante.
  *
  * ## La courbe ne s'arrête plus à 100 (#9688, porteur 2026-10-08)
  *
@@ -84,8 +99,13 @@ export const LEVEL_TIER_KEYS = [
 export type LevelTierKey = (typeof LEVEL_TIER_KEYS)[number];
 export type LegacyLevelTierKey = (typeof LEGACY_LEVEL_TIER_KEYS)[number];
 
-/** Score minimal du niveau N : 10 × N². */
-export const levelThreshold = (level: number): number => 10 * level * level;
+/** Score minimal du niveau N : 100 × N² (#9706) — un million pour le niveau 100. */
+export const levelThreshold = (level: number): number => 100 * level * level;
+
+/** Une étape tous les dix niveaux (#9706)… */
+export const LEVEL_STEP_INTERVAL = 10;
+/** …jusqu'au niveau 100 : au-delà, seuls les plafonds du rang (#9688). */
+export const LEVEL_STEP_LAST = 100;
 
 const sanitizeScore = (score: number): number => (Number.isFinite(score) ? Math.max(0, Math.trunc(score)) : 0);
 
@@ -98,10 +118,34 @@ const sanitizeCap = (cap: LevelCap): LevelCap => {
   return typeof cap === 'number' && Number.isFinite(cap) ? Math.max(GAME_LEVEL_MIN, Math.trunc(cap)) : LEVEL_CAP_BASE;
 };
 
+/** FAIL-CLOSED aussi : un palier d'étapes illisible retient au plus bas, sous la première étape (9). */
+const sanitizeGate = (gate: LevelCap): LevelCap => {
+  if (gate === null) return null;
+  return typeof gate === 'number' && Number.isFinite(gate) ? Math.max(GAME_LEVEL_MIN, Math.trunc(gate)) : LEVEL_STEP_INTERVAL - 1;
+};
+
+/** Le plus serré de deux plafonds — `null` ne borne rien. */
+export const tighterLevelCap = (a: LevelCap, b: LevelCap): LevelCap => {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.min(a, b);
+};
+
+/**
+ * Le plus haut niveau qu'on lit sans relire les étapes, depuis le record (#9706) : la dizaine qui suit le
+ * record, moins un — `null` au-delà de la dernière étape. Le record ne franchit une dizaine qu'étape faite ;
+ * une étape faite ne se défait pas.
+ */
+export const levelStepCeiling = (levelRecord: number | null): LevelCap => {
+  const record = levelRecord !== null && Number.isFinite(levelRecord) ? Math.max(GAME_LEVEL_MIN, Math.trunc(levelRecord)) : GAME_LEVEL_MIN;
+  if (record >= LEVEL_STEP_LAST) return null;
+  return (Math.floor(record / LEVEL_STEP_INTERVAL) + 1) * LEVEL_STEP_INTERVAL - 1;
+};
+
 /** Le niveau que porte ce score, borné par le plafond (`null` : sans limite). */
 export function levelFromScore(score: number, cap: LevelCap): number {
   const s = sanitizeScore(score);
-  const guess = Math.floor(Math.sqrt(s / 10));
+  const guess = Math.floor(Math.sqrt(s / 100));
   const exact = [guess - 1, guess, guess + 1]
     .filter((candidate) => candidate >= 0 && levelThreshold(candidate) <= s)
     .reduce((best, candidate) => Math.max(best, candidate), 0);
@@ -110,12 +154,14 @@ export function levelFromScore(score: number, cap: LevelCap): number {
 }
 
 /**
- * Le niveau lu SANS plafond de rang, pour une décision qui ne le compare qu'à un seuil de 100 au plus :
- * l'ouverture des missions, de la ligue, du duo et du Prestige, l'effort des missions (borné à 100), le
- * Vent arrière (le record ne dépasse jamais le plafond du moment). Tout plafond de rang vaut au moins 499 :
- * la décision est celle qu'aurait rendue le plafond du compte, sans lire sa Gloire.
+ * Le niveau lu sur le score et le RECORD seuls, pour une décision qui ne le compare qu'à un seuil de 100 au
+ * plus : l'ouverture des missions, de la ligue, du duo et du Prestige, l'effort des missions, le Vent arrière.
+ * Tout plafond de rang vaut au moins 499 : il ne change rien sous 100. Les étapes, si (#9706) : le niveau ne
+ * passe pas la dizaine qui suit le record (`levelStepCeiling`) — c'est le record, gravé étape faite, qui en
+ * porte la preuve, sans relire les Meeshes, les missions, la Flamme ni la Gloire.
  */
-export const levelForUnlocks = (score: number): number => levelFromScore(score, NO_LEVEL_CAP);
+export const levelForUnlocks = (params: { readonly score: number; readonly levelRecord: number | null }): number =>
+  levelFromScore(params.score, levelStepCeiling(params.levelRecord));
 
 const SINGULARITY_LEVEL = 1000;
 const LEGACY_TIER_COUNT = LEGACY_LEVEL_TIER_KEYS.length;
@@ -165,15 +211,26 @@ export type LevelProgress = {
   readonly isMax: boolean;
   /** Le plafond appliqué — `null` : sans limite. */
   readonly cap: LevelCap;
+  /**
+   * Les points sont là, une ÉTAPE manque (#9706) : le niveau attend au palier précédent, la barre est
+   * pleine sans plus rien à gagner, et il monte d'un coup dès que l'étape est faite.
+   */
+  readonly held: boolean;
 };
 
-/** Où se tient ce score sur la courbe, sous ce plafond (`null` : sans limite). */
-export function levelProgress(score: number, cap: LevelCap): LevelProgress {
+/**
+ * Où se tient ce score sur la courbe, sous le plafond du rang (`cap`) et le palier des étapes (`gate`, #9706) —
+ * `null` : sans limite. Au plafond du rang, la barre est pleine et sans suite (`isMax`) ; retenu par une
+ * étape, elle est pleine et la suite reste dite (`held`, `pointsToNext` à 0).
+ */
+export function levelProgress(score: number, cap: LevelCap, gate: LevelCap = NO_LEVEL_CAP): LevelProgress {
   const s = sanitizeScore(score);
   const bound = sanitizeCap(cap);
-  const level = levelFromScore(s, bound);
+  const hold = sanitizeGate(gate);
+  const level = levelFromScore(s, tighterLevelCap(bound, hold));
   const floorScore = level === GAME_LEVEL_MIN ? 0 : levelThreshold(level);
   const isMax = bound !== null && level >= bound;
+  const held = !isMax && hold !== null && level >= hold && levelFromScore(s, bound) > level;
   const nextThreshold = isMax ? null : levelThreshold(level + 1);
   return {
     level,
@@ -181,10 +238,11 @@ export function levelProgress(score: number, cap: LevelCap): LevelProgress {
     score: s,
     floorScore,
     nextThreshold,
-    pointsToNext: nextThreshold === null ? 0 : nextThreshold - s,
-    progress: nextThreshold === null ? 1 : (s - floorScore) / (nextThreshold - floorScore),
+    pointsToNext: nextThreshold === null ? 0 : Math.max(0, nextThreshold - s),
+    progress: nextThreshold === null ? 1 : Math.min(1, (s - floorScore) / (nextThreshold - floorScore)),
     isMax,
     cap: bound,
+    held,
   };
 }
 
@@ -192,9 +250,11 @@ export function levelProgress(score: number, cap: LevelCap): LevelProgress {
  * La lecture de l'ANCIENNE loi — celle que portent les champs d'hier du fil :
  * le niveau borné à 100 (plein, sans suite, au-delà), le palier parmi les dix
  * premiers. Tout plafond de rang vaut au moins 499 : il ne change rien sous 100.
+ * Le palier des étapes, si (#9706) : un ancien client lit le même niveau que
+ * les autres, jamais celui des seuls points.
  */
-export const legacyLevelProgress = (score: number): LevelProgress & { readonly tier: LegacyLevelTierKey } => {
-  const p = levelProgress(score, LEGACY_LEVEL_MAX);
+export const legacyLevelProgress = (score: number, gate: LevelCap = NO_LEVEL_CAP): LevelProgress & { readonly tier: LegacyLevelTierKey } => {
+  const p = levelProgress(score, LEGACY_LEVEL_MAX, gate);
   return { ...p, tier: legacyLevelTierKey(p.level) };
 };
 

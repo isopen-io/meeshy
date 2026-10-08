@@ -152,7 +152,7 @@ export type GameVectorInputV2 =
   | { readonly law: 'trophy-month'; readonly awardedAt: string }
   | { readonly law: 'atlas'; readonly events: readonly (AtlasEvent & { readonly dayKey: string })[] }
   | { readonly law: 'atlas-language'; readonly code: string | null }
-  | { readonly law: 'prestige'; readonly score: number; readonly prestige: number }
+  | { readonly law: 'prestige'; readonly score: number; readonly prestige: number; readonly levelRecord: number | null }
   | { readonly law: 'rarity'; readonly holders: number; readonly population: number }
   | { readonly law: 'rarity-display'; readonly holders: number; readonly population: number }
   | { readonly law: 'mythic-seats'; readonly taken: readonly number[]; readonly seated: readonly string[]; readonly arrivals: readonly MythicArrival[] }
@@ -664,14 +664,19 @@ export function buildGameVectorsV2() {
     vector(`langue de l'Atlas « ${code} »`, { law: 'atlas-language', code }),
   );
 
-  const prestiges = [
-    [100_000, 0],
-    [99_999, 0],
-    [0, 0],
-    [105_000, 4],
-    [100_000, 5],
-    [10, 7],
-  ].map(([score, prestige]) => vector(`Prestige, score ${score}, étoiles ${prestige}`, { law: 'prestige', score: score!, prestige: prestige! }));
+  const prestiges = (
+    [
+      [1_000_000, 0, 100],
+      [999_999, 0, 100],
+      [1_000_000, 0, 99],
+      [0, 0, null],
+      [1_050_000, 4, 100],
+      [1_000_000, 5, 100],
+      [10, 7, null],
+    ] as const
+  ).map(([score, prestige, levelRecord]) =>
+    vector(`Prestige, score ${score}, étoiles ${prestige}, record ${levelRecord}`, { law: 'prestige', score, prestige, levelRecord }),
+  );
 
   const rarities = [
     [90_000, 100_000],

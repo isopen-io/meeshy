@@ -5,7 +5,7 @@ import { ENGAGEMENT_FAMILY_TOP_POINTS } from '@meeshy/shared/types/engagement-op
 import type { GameBlock } from '@meeshy/shared/types/game';
 import { gloryLadder } from '@meeshy/shared/utils/game/glory';
 
-import { gameBlockFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockFixture } from '@/lib/api/game-fixture';
 import { earnRules } from '@/lib/game/earn-rules';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -99,24 +99,24 @@ describe('où j’en suis', () => {
   });
 
   test('le niveau 100 n’est plus un sommet : la marche continue (#9688)', () => {
-    expect(text(html({ score: 10 * 100 * 100 }))).not.toContain('Tu es au sommet');
-    expect(text(html({ score: 10 * 100 * 100 }))).toContain('101');
+    expect(text(html({ ...ALL_LEVEL_STEPS, score: 100 * 100 * 100, levelRecord: 100 }))).not.toContain('Tu es au sommet');
+    expect(text(html({ ...ALL_LEVEL_STEPS, score: 100 * 100 * 100, levelRecord: 100 }))).toContain('101');
   });
 
   test('au plafond du rang : le niveau 499 dit que le rang Ambassadeur ouvre la suite', () => {
-    const page = text(html({ score: 10 * 640 * 640, debitablePoints: 10 * 640 * 640 }));
+    const page = text(html({ ...ALL_LEVEL_STEPS, score: 100 * 640 * 640, debitablePoints: 100 * 640 * 640, levelRecord: 499 }));
     expect(page).toContain('Niveau 499');
     expect(page).toContain('Plafond atteint : le rang Ambassadeur ouvre la suite.');
   });
 
   test('au plafond d’Ambassadeur : le niveau 1000 attend Oracle', () => {
-    const page = text(html({ score: 10 * 1001 * 1001, debitablePoints: 0, glory: 130_000 }));
+    const page = text(html({ ...ALL_LEVEL_STEPS, score: 100 * 1001 * 1001, debitablePoints: 0, glory: 130_000, levelRecord: 1000 }));
     expect(page).toMatch(/Niveau 1\s?000 · Singularité/);
     expect(page).toContain('le rang Oracle ouvre la suite');
   });
 
   test('Galaxie se teinte au prisme, pas d’un jeton absent', () => {
-    expect(html({ score: 10 * 95 * 95 })).toContain('var(--game-prism-3)');
+    expect(html({ ...ALL_LEVEL_STEPS, score: 100 * 95 * 95 })).toContain('var(--game-prism-3)');
   });
 });
 

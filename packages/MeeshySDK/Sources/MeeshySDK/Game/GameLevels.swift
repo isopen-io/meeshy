@@ -2,7 +2,9 @@ import Foundation
 
 // MARK: - Les niveaux du Jeu Meeshy (#9373, ouverts par le rang #9688)
 //
-// MIROIR de `packages/shared/utils/game/levels.ts` — seuil(N) = 10 × N².
+// MIROIR de `packages/shared/utils/game/levels.ts` — seuil(N) = 100 × N² (#9706) : un million pour le
+// niveau 100, et une ÉTAPE tous les dix niveaux de 10 à 100 (`GameLevelSteps`) — sans elle, le niveau
+// attend au palier précédent. Le niveau servi est le plus petit de trois : les points, le rang, les étapes.
 // La courbe ne s'arrête plus à 100 : le RANG de Gloire ouvre les niveaux
 // (`GameGlory.levelCap(forRank:)`) — 499 au plus sous Ambassadeur, 1000 pour
 // Ambassadeur et Orateur, sans limite (`nil`) à partir d'Oracle. Le niveau 100
@@ -79,9 +81,11 @@ public struct GameLevelProgress: Sendable, Equatable {
     public let isMax: Bool
     /// Le plafond appliqué — `nil` : sans limite.
     public let cap: Int?
+    /// Les points sont là, une ÉTAPE manque (#9706) : le niveau attend, la barre est pleine.
+    public let held: Bool
 
     public init(level: Int, tier: LevelTierKey, score: Int, floorScore: Int, nextThreshold: Int?,
-                pointsToNext: Int, progress: Double, isMax: Bool, cap: Int? = nil) {
+                pointsToNext: Int, progress: Double, isMax: Bool, cap: Int? = nil, held: Bool = false) {
         self.level = level
         self.tier = tier
         self.score = score
@@ -91,6 +95,7 @@ public struct GameLevelProgress: Sendable, Equatable {
         self.progress = progress
         self.isMax = isMax
         self.cap = cap
+        self.held = held
     }
 }
 
@@ -120,14 +125,34 @@ public enum GameLevels {
     /// Le Prestige remet le niveau à 1 et ajoute une étoile ; cinq au plus.
     public static let maxPrestige = 5
 
-    /// Le score se borne à ce seuil avant tout calcul : `10 × N²` déborderait sur un score démesuré reçu du réseau.
-    private static let scoreCeiling = 10 * 1_000_000 * 1_000_000
+    /// Une étape tous les dix niveaux (#9706)…
+    public static let stepInterval = 10
+    /// …jusqu'au niveau 100 : au-delà, seuls les plafonds du rang (#9688).
+    public static let stepLast = 100
+
+    /// Le score se borne à ce seuil avant tout calcul : `100 × N²` déborderait sur un score démesuré reçu du réseau.
+    private static let scoreCeiling = 100 * 1_000_000 * 1_000_000
     private static let singularityLevel = 1000
     private static let legacyTierCount = 10
 
-    /// Score minimal du niveau N : 10 × N².
+    /// Score minimal du niveau N : 100 × N² (#9706).
     public static func threshold(of level: Int) -> Int {
-        10 * level * level
+        100 * level * level
+    }
+
+    /// Le plus serré de deux plafonds — `nil` ne borne rien.
+    public static func tighter(_ a: Int?, _ b: Int?) -> Int? {
+        guard let a else { return b }
+        guard let b else { return a }
+        return min(a, b)
+    }
+
+    /// Le plus haut niveau lu sans relire les étapes, depuis le record (#9706) : la dizaine qui suit le
+    /// record, moins un — `nil` au-delà de la dernière étape. Le record ne franchit une dizaine qu'étape faite.
+    public static func stepCeiling(record: Int?) -> Int? {
+        let current = max(minLevel, record ?? minLevel)
+        if current >= stepLast { return nil }
+        return (current / stepInterval + 1) * stepInterval - 1
     }
 
     /// FAIL-CLOSED : seul `nil` vaut « sans limite » ; un plafond sous 1 se relit 1.
@@ -138,7 +163,7 @@ public enum GameLevels {
     /// Le niveau que porte ce score, borné par le plafond (`nil` : sans limite) ; un score négatif vaut 0.
     public static func level(forScore score: Int, cap: Int?) -> Int {
         let s = min(max(0, score), scoreCeiling)
-        let guess = Int((Double(s) / 10).squareRoot().rounded(.down))
+        let guess = Int((Double(s) / 100).squareRoot().rounded(.down))
         let exact = [guess - 1, guess, guess + 1]
             .filter { $0 >= 0 && threshold(of: $0) <= s }
             .max() ?? 0
@@ -146,10 +171,11 @@ public enum GameLevels {
         return max(minLevel, bounded)
     }
 
-    /// Le niveau lu SANS plafond, pour une décision qui ne le compare qu'à un seuil de 100 au plus
-    /// (Prestige, missions, ligue, duo) : tout plafond de rang vaut au moins 499, la décision est la même.
-    public static func levelForUnlocks(score: Int) -> Int {
-        level(forScore: score, cap: nil)
+    /// Le niveau lu sur le score et le RECORD seuls, pour une décision qui ne le compare qu'à un seuil de
+    /// 100 au plus (Prestige, missions, ligue, duo) : tout plafond de rang vaut au moins 499 ; les étapes, si
+    /// (#9706) — le niveau ne passe pas la dizaine qui suit le record, gravé étape faite.
+    public static func levelForUnlocks(score: Int, levelRecord: Int?) -> Int {
+        level(forScore: score, cap: stepCeiling(record: levelRecord))
     }
 
     /// L'indice du palier (0 à 19) : 1–9 → 0 … 90–100 → 9, puis 101–199 → 10 … 900–999 → 18, 1000+ → 19.
@@ -184,12 +210,17 @@ public enum GameLevels {
         tier(of: legacyLevel(level))
     }
 
-    public static func progress(forScore score: Int, cap: Int?) -> GameLevelProgress {
+    /// Où se tient ce score sous le plafond du rang (`cap`) et le palier des étapes (`gate`, #9706). Au
+    /// plafond du rang, la barre est pleine et sans suite (`isMax`) ; retenu par une étape, elle est pleine et
+    /// la suite reste dite (`held`, `pointsToNext` à 0).
+    public static func progress(forScore score: Int, cap: Int?, gate: Int? = nil) -> GameLevelProgress {
         let s = min(max(0, score), scoreCeiling)
         let bound = sanitized(cap: cap)
-        let current = level(forScore: s, cap: bound)
+        let hold = sanitized(cap: gate)
+        let current = level(forScore: s, cap: tighter(bound, hold))
         let floorScore = current == minLevel ? 0 : threshold(of: current)
         let isMax = bound.map { current >= $0 } ?? false
+        let held = !isMax && (hold.map { current >= $0 } ?? false) && level(forScore: s, cap: bound) > current
         let nextThreshold = isMax ? nil : threshold(of: current + 1)
         return GameLevelProgress(
             level: current,
@@ -197,16 +228,18 @@ public enum GameLevels {
             score: s,
             floorScore: floorScore,
             nextThreshold: nextThreshold,
-            pointsToNext: nextThreshold.map { $0 - s } ?? 0,
-            progress: nextThreshold.map { Double(s - floorScore) / Double($0 - floorScore) } ?? 1,
+            pointsToNext: nextThreshold.map { max(0, $0 - s) } ?? 0,
+            progress: nextThreshold.map { min(1, Double(s - floorScore) / Double($0 - floorScore)) } ?? 1,
             isMax: isMax,
-            cap: bound
+            cap: bound,
+            held: held
         )
     }
 
-    /// La lecture de l'ANCIENNE loi — celle des champs d'hier du fil : bornée à 100, l'un des dix premiers paliers.
-    public static func legacyProgress(forScore score: Int) -> GameLevelProgress {
-        progress(forScore: score, cap: legacyMaxLevel)
+    /// La lecture de l'ANCIENNE loi — celle des champs d'hier du fil : bornée à 100, l'un des dix premiers
+    /// paliers, et retenue par les étapes (#9706) : un ancien client lit le niveau servi.
+    public static func legacyProgress(forScore score: Int, gate: Int? = nil) -> GameLevelProgress {
+        progress(forScore: score, cap: legacyMaxLevel, gate: gate)
     }
 
     /// Le plus haut niveau atteint — `previousRecord` vaut `nil` pour un compte

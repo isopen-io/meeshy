@@ -5,7 +5,7 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -100,7 +100,7 @@ describe('la page Atlas', () => {
 });
 
 describe('la page Prestige', () => {
-  const atTop = (): EngagementWithGame => progress(gameBlockWithExtrasFixture({ score: levelThreshold(100) + 40 }));
+  const atTop = (): EngagementWithGame => progress(gameBlockWithExtrasFixture({ ...ALL_LEVEL_STEPS, score: levelThreshold(100) + 40, levelRecord: 100 }));
 
   test('confirmer appelle le geste de passage', async () => {
     let passes = 0;

@@ -62,7 +62,7 @@ export class PrestigeService {
   }
 
   private async account(userId: string) {
-    return this.prisma.user.findUnique({ where: { id: userId }, select: { engagementScore: true, prestige: true } });
+    return this.prisma.user.findUnique({ where: { id: userId }, select: { engagementScore: true, prestige: true, levelRecord: true } });
   }
 
   async pass(params: { readonly userId: string; readonly requestId: string; readonly now?: Date }): Promise<PrestigeResponse> {
@@ -79,7 +79,7 @@ export class PrestigeService {
     for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt += 1) {
       const account = await this.account(userId);
       const stars = account?.prestige ?? 0;
-      const verdict = prestigeTransition({ score: account?.engagementScore ?? 0, prestige: stars });
+      const verdict = prestigeTransition({ score: account?.engagementScore ?? 0, prestige: stars, levelRecord: account?.levelRecord ?? null });
       if (verdict.allowed === false) {
         throw new GameRefusal(verdict.reason === 'at-maximum' ? 'PRESTIGE_AT_MAXIMUM' : 'PRESTIGE_LEVEL_TOO_LOW');
       }

@@ -30,13 +30,13 @@ import {
   type EngagementAxisKey,
 } from '@meeshy/shared/types/engagement';
 import { computeMeeshMintPlan, type MeeshMintPlan } from '@meeshy/shared/utils/meesh';
-import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
-import { legacyLevel, levelFromScore } from '@meeshy/shared/utils/game/levels';
-import { levelCapForGlory } from '@meeshy/shared/utils/game/glory';
-import { meeshEdition, meeshPrice, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
+import { GLORY_POINTS, levelCapForRank } from '@meeshy/shared/utils/game/glory';
+import { legacyLevel } from '@meeshy/shared/utils/game/levels';
+import { meeshEdition, meeshPrice, previewMint, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withRetry } from '../MessageMediaConsumptionService';
 import { GloryService, gloryTotalFromLedger } from '../game/GloryService';
+import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from '../game/LevelStepFacts';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
 
@@ -209,7 +209,7 @@ export class MeeshService {
     // atteints se grave pendant que le score les porte encore.
     const compteAvant = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { engagementScore: true, levelRecord: true },
+      select: { engagementScore: true, levelRecord: true, ...LEVEL_STEP_USER_SELECT },
     });
     const scoreAvant = compteAvant?.engagementScore ?? 0;
     await new GloryService(this.prisma).creditLevelProgress({
@@ -218,11 +218,18 @@ export class MeeshService {
       previousRecord: compteAvant?.levelRecord ?? null,
     });
     // Le niveau d'APRÈS est celui que `previewMint` montrait : le score moins le
-    // prix, lu au même instant que le record.
-    // Le niveau s'ouvre selon le rang (#9688) : lu sous le plafond que la Gloire gravée ouvre.
-    const levelCap = levelCapForGlory(await gloryTotalFromLedger(this.prisma, userId));
-    const levelBefore = levelFromScore(scoreAvant, levelCap);
-    const levelAfter = levelFromScore(Math.max(0, scoreAvant - price), levelCap);
+    // prix, lu au même instant que le record. Le niveau s'ouvre selon le rang
+    // (#9688) et les étapes (#9706) : la frappe en fait une (une Meesh, cinq
+    // Meeshes, ou un rang par sa Gloire), le niveau d'après peut donc MONTER.
+    const [missionsDone, gloryAvant] = await Promise.all([countMissionsDone(this.prisma, userId), gloryTotalFromLedger(this.prisma, userId)]);
+    const steps = levelStepFactsOf({ row: { ...compteAvant, meeshMintedLifetime: avant.mintedLifetime }, missionsDone, glory: gloryAvant });
+    const { levelBefore, levelAfter } = previewMint({
+      score: scoreAvant,
+      mintedLifetime: avant.mintedLifetime,
+      debitablePoints: plan.debitablePoints,
+      levelCap: levelCapForRank(steps.rank),
+      steps,
+    });
     const edition = meeshEdition(number);
 
     try {
@@ -326,6 +333,9 @@ export class MeeshService {
 
         return apres;
       });
+
+      // La frappe a pu faire une étape des niveaux (#9706) : le niveau qui attendait monte d'un coup.
+      await new GloryService(this.prisma).openLevels(userId);
 
       log.info('Meesh frappée', {
         userId,

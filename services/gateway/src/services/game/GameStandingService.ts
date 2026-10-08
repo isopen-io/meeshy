@@ -30,7 +30,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameStanding, UserGameProfileResponse } from '@meeshy/shared/types/game';
 import { flameForm, flameStatus } from '@meeshy/shared/utils/game/flame';
 import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
-import { GAME_PRESTIGE_MAX, legacyLevel, legacyLevelTierKey, levelFromScore, levelTierKey } from '@meeshy/shared/utils/game/levels';
+import { GAME_PRESTIGE_MAX, legacyLevel, legacyLevelTierKey, levelFromScore, levelStepCeiling, levelTierKey, tighterLevelCap } from '@meeshy/shared/utils/game/levels';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import type { PresenceViewer } from '../PresenceVisibilityService';
@@ -45,7 +45,7 @@ const CLOSED: UserGameProfileResponse = { visible: false, standing: null, treasu
 const isIntimate = (kind: Awaited<ReturnType<GameProfileService['viewerKind']>>): boolean =>
   kind === 'self' || kind === 'friend' || kind === 'admin';
 
-const STANDING_USER_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, prestige: true } as const;
+const STANDING_USER_SELECT = { ...FLAME_USER_SELECT, engagementScore: true, levelRecord: true, prestige: true } as const;
 
 export class GameStandingService {
   private readonly profile: GameProfileService;
@@ -87,7 +87,7 @@ export class GameStandingService {
    */
   private async standing(
     userId: string,
-    user: { readonly engagementScore?: number | null; readonly prestige?: number | null } & Parameters<typeof flameFactsOf>[0],
+    user: { readonly engagementScore?: number | null; readonly levelRecord?: number | null; readonly prestige?: number | null } & Parameters<typeof flameFactsOf>[0],
     now: Date,
     reader: { readonly intimate: boolean; readonly trophies: boolean },
   ): Promise<GameStanding> {
@@ -98,8 +98,9 @@ export class GameStandingService {
     ]);
     const score = Math.max(0, Math.trunc(user.engagementScore ?? 0));
     const rank = gloryStanding({ glory, mythicSeat });
-    // Le niveau s'ouvre selon le rang (#9688) ; les champs d'hier gardent l'ancienne loi pour les clients publiés.
-    const level = levelFromScore(score, levelCapForRank(rank.rank));
+    // Le niveau s'ouvre selon le rang (#9688) et les étapes (#9706), lues sur le RECORD du membre — gravé étape
+    // faite, sans relire ses Meeshes ni ses missions ; les champs d'hier gardent l'ancienne loi pour les clients publiés.
+    const level = levelFromScore(score, tighterLevelCap(levelCapForRank(rank.rank), levelStepCeiling(user.levelRecord ?? null)));
     return {
       level: legacyLevel(level),
       tier: legacyLevelTierKey(level),

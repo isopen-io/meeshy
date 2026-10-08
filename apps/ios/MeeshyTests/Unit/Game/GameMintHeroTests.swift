@@ -80,7 +80,7 @@ final class GameMintHeroTests: XCTestCase {
 
     private func frame(balance: Int, next: Int, canMint: Bool = true) -> GameMintFrame {
         GameMintFrame(
-            meesh: EngagementMeeshProgress(payload: GameFixture.meesh(balance: balance, debitable: canMint ? 12_180 : 0)),
+            meesh: EngagementMeeshProgress(payload: GameFixture.meesh(balance: balance, debitable: canMint ? 121_800 : 0)),
             next: GameMintNext(number: next, edition: .silver)
         )
     }

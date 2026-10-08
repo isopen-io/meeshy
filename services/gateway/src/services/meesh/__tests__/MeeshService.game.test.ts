@@ -67,17 +67,19 @@ describe('MeeshService.mint — le prix monte avec les Meeshes déjà frappées'
 describe('MeeshService.mint — la Gloire part dans la même transaction', () => {
   it('+1 000 de Gloire (#9636), numéro et édition dans la ligne, niveau avant et après dans le reçu', async () => {
     const db = fakeGameDb();
-    richAccount(db, { score: 10 * 20 * 20, levelRecord: 20 });
+    richAccount(db, { score: 100 * 20 * 20, levelRecord: 9 });
 
     const issue = await new MeeshService(db.prisma).mint(USER, 'frappe-recu-01');
 
+    // La première Meesh fait l'étape du niveau 10 (#9706) : retenu à 9, le niveau MONTE d'un coup à 19.
     expect(issue).toMatchObject({
       status: 'minted',
-      receipt: { number: 1, edition: 'silver', price: 1221, gloryGained: 1000, levelBefore: 20, levelAfter: 16 },
+      receipt: { number: 1, edition: 'silver', price: 1221, gloryGained: 1000, levelBefore: 9, levelAfter: 19 },
     });
-    expect(db.gloryLedger.rows).toHaveLength(1);
-    expect(db.gloryLedger.rows[0]).toMatchObject({ delta: 1000, reason: 'mint' });
-    expect(db.gloryLedger.rows[0]?.meta).toMatchObject({ number: 1, edition: 'silver', price: 1221, levelBefore: 20, levelAfter: 16 });
+    expect(db.gloryLedger.rows.filter((r) => r.reason === 'mint')).toHaveLength(1);
+    expect(db.gloryLedger.rows.find((r) => r.reason === 'mint')).toMatchObject({ delta: 1000 });
+    expect(db.gloryLedger.rows.find((r) => r.reason === 'mint')?.meta).toMatchObject({ number: 1, edition: 'silver', price: 1221, levelBefore: 9, levelAfter: 19 });
+    expect(db.user.rows[0]?.levelRecord).toBe(19);
   });
 
   it('la 100e pièce est une édition or', async () => {
@@ -126,15 +128,16 @@ describe('MeeshService.mint — la Gloire part dans la même transaction', () =>
 });
 
 describe('MeeshService.mint — le record de niveau est posé AVANT le débit', () => {
-  it('un compte sans record grave le record et la Gloire des niveaux franchis, puis frappe', async () => {
+  it('un compte sans record grave le record et la Gloire des niveaux franchis, puis frappe — et la frappe ouvre le niveau 10', async () => {
     const db = fakeGameDb();
-    richAccount(db, { score: 10 * 15 * 15, levelRecord: null });
+    richAccount(db, { score: 100 * 15 * 15, levelRecord: null });
 
     await new MeeshService(db.prisma).mint(USER, 'frappe-record-1');
 
-    expect(db.user.rows[0]?.levelRecord).toBe(15);
+    // Avant la frappe, l'étape du 10 manque : le record s'arrête à 9. La frappe la fait, le reste (21 279) lit 14.
+    expect(db.user.rows[0]?.levelRecord).toBe(14);
     const levels = db.gloryLedger.rows.filter((r) => r.reason === 'level');
-    expect(levels).toHaveLength(14);
+    expect(levels).toHaveLength(13);
     expect(db.gloryLedger.rows.filter((r) => r.reason === 'mint')).toHaveLength(1);
   });
 });

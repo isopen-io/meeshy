@@ -140,7 +140,7 @@ describe('GET /users/:userId/game', () => {
     const data = userGameProfileResponseSchema.parse(res.json().data);
     expect(data).toEqual({
       visible: true,
-      standing: { level: 34, tier: 'eclat', ladder: { level: 34, tier: 'eclat' }, prestige: 2, flame: 'brasier', rank: 'conteur', division: 3, division5: 5, mythic: null, points: 12_180, trophyCount: 0 },
+      standing: { level: 11, tier: 'lueur', ladder: { level: 11, tier: 'lueur' }, prestige: 2, flame: 'brasier', rank: 'conteur', division: 3, division5: 5, mythic: null, points: 12_180, trophyCount: 0 },
       treasury: { tier: 'coffret' },
     });
     const raw = JSON.stringify(res.json());
@@ -160,7 +160,7 @@ describe('GET /users/:userId/game', () => {
 
     const data = userGameProfileResponseSchema.parse(res.json().data);
     expect(data.visible).toBe(true);
-    expect(data.standing).toEqual({ level: 34, tier: 'eclat', ladder: { level: 34, tier: 'eclat' }, prestige: 2, flame: null, rank: 'conteur', division: 3, division5: 5, mythic: null });
+    expect(data.standing).toEqual({ level: 11, tier: 'lueur', ladder: { level: 11, tier: 'lueur' }, prestige: 2, flame: null, rank: 'conteur', division: 3, division5: 5, mythic: null });
     const raw = JSON.stringify(res.json());
     for (const forbidden of ['points', 'trophyCount', '12180', 'brasier']) expect(raw).not.toContain(forbidden);
   });

@@ -261,13 +261,13 @@ final class PlayerBannerTests: XCTestCase {
 
     func test_theCacheIsPaintedFirst_thenTheNetworkCorrectsIt() async {
         let source = FakeSource()
-        source.cachedBlock = GameFixture.game(score: 12_180)
+        source.cachedBlock = GameFixture.game(score: 121_800)
         source.fetchedBlock = GameFixture.game(score: 14_000)
         let sut = store(source)
         XCTAssertNil(sut.banner, "avant toute lecture : rien, jamais un squelette")
 
         await sut.readCache()
-        XCTAssertEqual(sut.banner?.score, 12_180, "le cache, même périmé, se peint tout de suite")
+        XCTAssertEqual(sut.banner?.score, 121_800, "le cache, même périmé, se peint tout de suite")
         XCTAssertEqual(source.fetchCalls, 0)
 
         await sut.revalidate()
@@ -282,11 +282,11 @@ final class PlayerBannerTests: XCTestCase {
 
     func test_aFailedRevalidation_keepsWhatIsShown() async {
         let source = FakeSource()
-        source.cachedBlock = GameFixture.game(score: 12_180)
+        source.cachedBlock = GameFixture.game(score: 121_800)
         let sut = store(source)
         await sut.readCache()
         await sut.revalidate(force: true)
-        XCTAssertEqual(sut.banner?.score, 12_180, "une coupure ne retire rien")
+        XCTAssertEqual(sut.banner?.score, 121_800, "une coupure ne retire rien")
     }
 
     func test_revalidationIsThrottled_exceptWhenForced() async {

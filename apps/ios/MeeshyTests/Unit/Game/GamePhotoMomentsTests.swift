@@ -39,7 +39,7 @@ final class GamePhotoMomentsTests: XCTestCase {
 
     func test_transition_theFirstMint_proposesThePhoto() {
         let moments = GamePhotoMoments.ofTransition(
-            from: GameFixture.game(score: 12_180, minted: 0), to: GameFixture.game(score: 10_959, minted: 1)
+            from: GameFixture.game(score: 121_800, minted: 0), to: GameFixture.game(score: 10_959, minted: 1)
         )
         XCTAssertTrue(ids(moments).contains("meesh:1"))
     }

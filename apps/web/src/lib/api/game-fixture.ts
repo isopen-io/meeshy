@@ -29,15 +29,24 @@ export const GAME_FIXTURE_TODAY = '2026-10-05';
 /** Un lundi de la quatrième semaine de la saison 1 : la ligue, le duo et la saison sont ouverts. */
 export const GAME_EXTRAS_TODAY = '2026-11-02';
 
+/**
+ * Les dix étapes des niveaux faites (#9706) — cinq Meeshes, dix missions, une Flamme de 30 jours, le rang
+ * Passeur — pour un témoin qui monte au-delà de 29 sans parler des étapes.
+ */
+export const ALL_LEVEL_STEPS = { mintedLifetime: 5, missionsDone: 10, flameRecord: 30, glory: 35_000 } as const;
+
 export const gameFactsFixture = (patch: Partial<GameBlockFacts> = {}): GameBlockFacts => ({
   userId: 'user-demo',
   today: GAME_FIXTURE_TODAY,
-  score: 1244,
-  levelRecord: null,
+  // Niveau 11 sur la courbe 100 × N² (#9706), étapes du 10 et du 20 faites, record gravé.
+  score: 12_440,
+  levelRecord: 11,
   prestige: 0,
   glory: 620,
   mythic: false,
   mintedLifetime: 3,
+  missionsDone: 1,
+  flameRecord: 4,
   debitablePoints: 1244,
   balance: 4,
   streak: 6,
@@ -77,8 +86,8 @@ export const gameExtrasFactsFixture = (patch: Partial<GameBlockExtrasFacts> = {}
   userId: 'user-demo',
   today: GAME_EXTRAS_TODAY,
   minuteOfDay: 14 * 60,
-  score: 1244,
-  levelRecord: null,
+  score: 12_440,
+  levelRecord: 11,
   prestige: 0,
   flameDays: 6,
   balance: 4,

@@ -48,7 +48,7 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
 
     /// Redescendu après des frappes : le record (niveau 100) et le Vent arrière ont chacun leur pastille.
     private static func redescended() -> GameBlock {
-        GameFixture.game(score: 12_180, levelRecord: 100, glory: 9_999_999, minted: 99_999, held: 9_999, flameDays: 365, freezes: 2)
+        GameFixture.game(score: 121_800, levelRecord: 100, glory: 9_999_999, minted: 99_999, held: 9_999, flameDays: 365, freezes: 2)
             .replacing(wave2: summit().wave2)
     }
 

@@ -16,7 +16,7 @@ final class GameGuideEventsTests: XCTestCase {
     }
 
     func test_standing_aDiscoveryIsToldOnlyWhileItsKeyIsUnseen() {
-        let game = GameFixture.game(score: 12_180)
+        let game = GameFixture.game(score: 121_800)
         let fresh = GameGuideEvents.standing(game: game, seen: [], daysAway: nil)
         let told = GameGuideEvents.standing(game: game, seen: Set(GuideMomentKey.allCases.map(\.rawValue)), daysAway: nil)
         XCTAssertTrue(keys(fresh).contains(.firstLevel))
@@ -57,8 +57,8 @@ final class GameGuideEventsTests: XCTestCase {
     }
 
     func test_transitions_theFirstMint_namesTheLevelsBeforeAndAfterAndTheRecordThatEndsTheTailwind() {
-        let before = GameFixture.game(score: 12_180, minted: 0)
-        let after = GameFixture.game(score: 10_886, levelRecord: 34, minted: 1)
+        let before = GameFixture.game(score: 121_800, minted: 0)
+        let after = GameFixture.game(score: 108_860, levelRecord: 34, minted: 1)
         let events = GameGuideEvents.transitions(from: before, to: after)
         XCTAssertTrue(events.contains(.firstMint(levelBefore: 34, levelAfter: after.level.level, tailwindUntilLevel: 34)))
     }
@@ -76,21 +76,21 @@ final class GameGuideEventsTests: XCTestCase {
     }
 
     func test_transitions_theDropOfTheLevelAfterAMint_isNotACelebration() {
-        let before = GameFixture.game(score: 12_180, minted: 12)
-        let after = GameFixture.game(score: 10_886, levelRecord: 34, minted: 13)
+        let before = GameFixture.game(score: 121_800, minted: 12)
+        let after = GameFixture.game(score: 108_860, levelRecord: 34, minted: 13)
         XCTAssertFalse(keys(GameGuideEvents.transitions(from: before, to: after)).contains(.newTier))
     }
 
     func test_transitions_aMint_announcesTheBadgeThatWentOut_withTheDistanceToRelightIt() {
-        let before = GameFixture.game(score: 12_180, minted: 12)
-        let after = GameFixture.game(score: 10_886, levelRecord: 34, minted: 13)
+        let before = GameFixture.game(score: 121_800, minted: 12)
+        let after = GameFixture.game(score: 108_860, levelRecord: 34, minted: 13)
         let events = GameGuideEvents.transitions(from: before, to: after, badgeImpactBefore: MintBadgeImpact(lost: 2, regain: 11))
         XCTAssertTrue(events.contains(.badgeExtinguished(missingActions: 11)))
     }
 
     func test_transitions_aMintThatExtinguishesNothing_saysNothingAboutBadges() {
-        let before = GameFixture.game(score: 12_180, minted: 12)
-        let after = GameFixture.game(score: 10_886, levelRecord: 34, minted: 13)
+        let before = GameFixture.game(score: 121_800, minted: 12)
+        let after = GameFixture.game(score: 108_860, levelRecord: 34, minted: 13)
         XCTAssertFalse(keys(GameGuideEvents.transitions(from: before, to: after, badgeImpactBefore: MintBadgeImpact(lost: 0, regain: 0))).contains(.badgeExtinguished))
         XCTAssertFalse(keys(GameGuideEvents.transitions(from: before, to: after, badgeImpactBefore: nil)).contains(.badgeExtinguished),
                        "inconnu ne s'annonce pas")

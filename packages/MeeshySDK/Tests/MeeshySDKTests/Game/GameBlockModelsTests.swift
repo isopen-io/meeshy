@@ -41,7 +41,7 @@ struct GameBlockModelsTests {
     func servedBlockAgreesWithTheLaw() throws {
         let block = try #require(GameBlock.parse(GameBlockFixture.data))
 
-        #expect(block.mint == GameMint.preview(score: 12_180, mintedLifetime: 12, debitablePoints: 12_180,
+        #expect(block.mint == GameMint.preview(score: 121_800, mintedLifetime: 12, debitablePoints: 121_800,
                                                levelCap: GameGlory.levelCap(forRank: block.glory.rank)))
         #expect(GameLevels.progress(forScore: block.level.score, cap: GameGlory.levelCap(forRank: block.glory.rank)).level == block.level.level)
         #expect(block.level.ladder == nil)

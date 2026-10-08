@@ -252,7 +252,7 @@ export class MissionService {
     const user = await this.userRow(userId);
     const recent = await this.recentMissions(userId);
     const dayKey = resolveGameDayKey({ candidate: dayKeyOf(now, user?.timezone), latest: latestOpenedDay(recent), now });
-    const level = levelForUnlocks(user?.engagementScore ?? 0);
+    const level = levelForUnlocks({ score: user?.engagementScore ?? 0, levelRecord: user?.levelRecord ?? null });
     const record = Math.max(level, user?.levelRecord ?? 0);
     const unlocked = record >= MISSIONS_MIN_LEVEL;
 
@@ -457,7 +457,7 @@ export class MissionService {
       // La mission personnelle (#9539) est la SIENNE : tirée sur ses usages et sa plage, elle ne se change pas.
       if (row.slot === PERSONAL_MISSION_SLOT) throw new GameRefusal('MISSION_REROLL_UNAVAILABLE');
       const account = await db.user.findUnique({ where: { id: userId }, select: USER_GAME_SELECT });
-      const record = Math.max(levelForUnlocks(account?.engagementScore ?? 0), account?.levelRecord ?? 0);
+      const record = Math.max(levelForUnlocks({ score: account?.engagementScore ?? 0, levelRecord: account?.levelRecord ?? null }), account?.levelRecord ?? 0);
       if (record < MISSIONS_MIN_LEVEL) throw new GameRefusal('MISSIONS_LOCKED');
       if (row.completedAt !== null) throw new GameRefusal('MISSION_REROLL_UNAVAILABLE');
       const day = await db.gameDay.findUnique({ where: { userId_dayKey: { userId, dayKey } }, select: { rerollCount: true } });
@@ -484,7 +484,7 @@ export class MissionService {
           profile,
           userId,
           dayKey,
-          level: levelForUnlocks(account?.engagementScore ?? 0),
+          level: levelForUnlocks({ score: account?.engagementScore ?? 0, levelRecord: account?.levelRecord ?? null }),
           flameDays: status === 'out' ? 0 : facts.streak,
           missions: all.map(drawnOf),
           index: row.slot,

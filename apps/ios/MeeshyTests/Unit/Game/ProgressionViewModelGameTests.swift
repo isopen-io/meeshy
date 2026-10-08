@@ -38,7 +38,7 @@ final class ProgressionViewModelGameTests: XCTestCase {
     // MARK: - La lecture
 
     func test_load_exposesTheGameBlockServedWithThePayload() async {
-        let served = GameFixture.game(score: 12_180)
+        let served = GameFixture.game(score: 121_800)
         let (sut, _, _) = makeSUT(snapshot: GameFixture.snapshot(served))
 
         await sut.load(forceNetwork: true)
@@ -292,7 +292,7 @@ final class ProgressionViewModelGameTests: XCTestCase {
         let served = APIEngagementProgress(
             counters: [.init(axisKey: "content.text_message", count: 60, points: 1_500)],
             milestones: [], streak: .init(currentStreakDays: 1, longestStreakDays: 1),
-            level: .init(engagementScore: 12_180), meesh: GameFixture.meesh(), game: GameFixture.game()
+            level: .init(engagementScore: 121_800), meesh: GameFixture.meesh(), game: GameFixture.game()
         )
         let (sut, _, _) = makeSUT(snapshot: served)
         await sut.load(forceNetwork: true)

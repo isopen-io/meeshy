@@ -449,7 +449,8 @@ extension GameLawVectorEvaluator {
     }
 
     private static func prestige(_ input: GameJSON) -> GameJSON {
-        switch GamePrestige.transition(score: int(input, "score"), prestige: int(input, "prestige")) {
+        switch GamePrestige.transition(score: int(input, "score"), prestige: int(input, "prestige"),
+                                       levelRecord: optionalInt(input, "levelRecord")) {
         case .allowed(let passage):
             return object([
                 "allowed": .bool(true), "prestigeAfter": .int(passage.prestigeAfter), "scoreAfter": .int(passage.scoreAfter),

@@ -176,7 +176,7 @@ describe('le coffre', () => {
 
 describe('avant le niveau 5', () => {
   test('les missions se disent verrouillées, avec la marche à franchir', () => {
-    const page = text(renderToStaticMarkup(<GameMissions {...props({ score: 100, missions: [] })} />));
+    const page = text(renderToStaticMarkup(<GameMissions {...props({ score: 100, levelRecord: null, missions: [] })} />));
     expect(page).toContain('Les missions s’ouvrent au niveau 5');
     expect(page).toContain('Requis 5');
     expect(page).toMatch(/Il manque \d+ niveaux?/);
