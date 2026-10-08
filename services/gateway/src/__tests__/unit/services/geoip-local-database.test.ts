@@ -293,3 +293,29 @@ describe('l’état de la base est visible, jamais une dégradation silencieuse'
     expect(database.status?.()).toBe('unreadable');
   });
 });
+
+describe('audit L2-8 — une base illisible n’est pas relue entière à chaque contrôle', () => {
+  it('relit seulement quand la date ou la taille du fichier change', async () => {
+    let file = { mtimeMs: 1, size: 100 };
+    let now = 0;
+    const readFile = jest.fn(async (_path: string) => Buffer.from('pas une base'));
+    const database = createGeoIpDatabase({
+      path: '/x.mmdb', recheckEveryMs: 60_000, now: () => now,
+      fs: { stat: async () => file, readFile },
+      open: () => { throw new Error('Cannot locate metadata'); },
+    });
+
+    await database.source();
+    now += 60_000;
+    await database.source();
+    now += 60_000;
+    await database.source();
+    expect(readFile).toHaveBeenCalledTimes(1);
+
+    file = { mtimeMs: 1, size: 200 };
+    now += 60_000;
+    await database.source();
+    expect(readFile).toHaveBeenCalledTimes(2);
+    expect(database.status?.()).toBe('unreadable');
+  });
+});

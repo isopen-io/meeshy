@@ -54,7 +54,7 @@ export interface GeoIpDatabase {
 }
 
 export type GeoIpFileSystem = {
-  stat(path: string): Promise<{ readonly mtimeMs: number }>;
+  stat(path: string): Promise<{ readonly mtimeMs: number; readonly size?: number }>;
   readFile(path: string): Promise<Buffer>;
 };
 
@@ -66,13 +66,18 @@ export type GeoIpDatabaseOptions = {
   readonly recheckEveryMs: number;
 };
 
-type Loaded = { readonly source: GeoIpRecordSource | null; readonly mtimeMs: number | null };
+type Loaded = { readonly source: GeoIpRecordSource | null; readonly signature: string | null };
+
+/** Ce qui dit qu'un fichier a changé : sa date ET sa taille (audit L2-8). */
+const signatureOf = (stats: { readonly mtimeMs: number; readonly size?: number }) => `${stats.mtimeMs}:${stats.size ?? ''}`;
 
 const isMissingFile = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'ENOENT';
 
 export function createGeoIpDatabase(options: GeoIpDatabaseOptions): GeoIpDatabase {
-  let loaded: Loaded = { source: null, mtimeMs: null };
+  let loaded: Loaded = { source: null, signature: null };
+  /** Le dernier fichier qui n'a pas pu s'ouvrir : il n'est pas relu tant qu'il ne change pas. */
+  let unreadableSignature: string | null = null;
   let checkedAt: number | null = null;
   let absenceReported = false;
   let state: GeoIpDatabaseStatus = 'unchecked';
@@ -81,10 +86,21 @@ export function createGeoIpDatabase(options: GeoIpDatabaseOptions): GeoIpDatabas
   const refresh = async (): Promise<GeoIpRecordSource | null> => {
     checkedAt = options.now();
     try {
-      const { mtimeMs } = await options.fs.stat(options.path);
-      if (loaded.mtimeMs === mtimeMs) return loaded.source;
-      const source = options.open(await options.fs.readFile(options.path));
-      loaded = { source, mtimeMs };
+      const signature = signatureOf(await options.fs.stat(options.path));
+      if (loaded.signature === signature || unreadableSignature === signature) return loaded.source;
+      const buffer = await options.fs.readFile(options.path);
+      const source = (() => {
+        try {
+          return options.open(buffer);
+        } catch (error) {
+          // Le CONTENU est illisible (pas une lecture qui a échoué) : ce fichier
+          // ne sera pas relu tant que sa date ou sa taille ne change pas.
+          unreadableSignature = signature;
+          throw error;
+        }
+      })();
+      unreadableSignature = null;
+      loaded = { source, signature };
       absenceReported = false;
       state = 'loaded';
       logger.info('GeoIP database loaded', { path: options.path });
@@ -95,7 +111,8 @@ export function createGeoIpDatabase(options: GeoIpDatabaseOptions): GeoIpDatabas
           logger.warn('GeoIP database absent — country and city stay unknown', { path: options.path });
           absenceReported = true;
         }
-        loaded = { source: null, mtimeMs: null };
+        loaded = { source: null, signature: null };
+        unreadableSignature = null;
         state = 'missing';
         return null;
       }
