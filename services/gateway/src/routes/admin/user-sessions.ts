@@ -51,7 +51,7 @@ import {
   type TeamClosureMailer,
 } from '../../services/auth/team-session-closure';
 import { getCacheStore } from '../../services/CacheStore';
-import { RETENTION, monthsBefore, retainedSessionWhere } from '../../services/retention/retention-bounds';
+import { RETENTION, monthsBefore, purgedAccountEventsExpired, retainedSessionWhere } from '../../services/retention/retention-bounds';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { forAdministration } from '../../services/auth/security-event-view';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
@@ -133,8 +133,8 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
     });
   };
 
-  const claimEmailSlot = (userId: string) =>
-    getCacheStore().setnx(`team-session-closure-email:${userId}`, '1', TEAM_CLOSURE_EMAIL_WINDOW_SECONDS);
+  const claimEmailSlot = (userId: string, alertType: string) =>
+    getCacheStore().setnx(`team-session-closure-email:${userId}:${alertType}`, '1', TEAM_CLOSURE_EMAIL_WINDOW_SECONDS);
 
   const informMember = (userId: string, scope: 'one' | 'all', sessionIds: readonly string[], revokedCount: number) => {
     void informMemberOfTeamClosure({ prisma: fastify.prisma, emailService, claimEmailSlot }, { userId, scope, sessionIds, revokedCount })
@@ -341,9 +341,24 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
       const { offset = '0', limit, eventType, severity, createdAfter, createdBefore } = request.query;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
 
-      const userExists = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+      const userExists = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, deletedAt: true, isActive: true },
+      });
       if (!userExists) {
         return sendNotFound(reply, 'Utilisateur non trouvé');
+      }
+
+      // « Compte purgé + 90 jours » (audit n°2) : la borne de LECTURE est celle
+      // de la passe, armée ou non.
+      const completedDeletion = userExists.isActive === false && userExists.deletedAt
+        ? (await fastify.prisma.accountDeletionRequest.count({
+            where: { userId, status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] } },
+          })) > 0
+        : false;
+      if (purgedAccountEventsExpired(userExists, completedDeletion, new Date())) {
+        await auditRead(request, userId, { surface: 'security-events', offset: offsetNum, purgedAccount: true });
+        return sendPaginatedSuccess(reply, [], { total: 0, offset: offsetNum, limit: limitNum, hasMore: false });
       }
 
       const where: Record<string, unknown> = { userId };

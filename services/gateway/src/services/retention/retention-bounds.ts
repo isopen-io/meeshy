@@ -81,6 +81,25 @@ export function retainedSecurityEventWhere(now: Date): Prisma.SecurityEventWhere
   return { createdAt: { gte: monthsBefore(now, RETENTION.securityEventMonths) } };
 }
 
+/**
+ * Le compte a-t-il été PURGÉ depuis plus de 90 jours ? Alors ses événements de
+ * sécurité ne se servent plus, purge armée ou non (audit n°2) — même règle que
+ * la passe : désactivé, `deletedAt` passé de 90 jours, et une demande de
+ * suppression aboutie (`hasCompletedDeletion`, lue par l'appelant).
+ */
+export function purgedAccountEventsExpired(
+  account: { readonly deletedAt?: Date | null; readonly isActive?: boolean | null },
+  hasCompletedDeletion: boolean,
+  now: Date,
+): boolean {
+  return (
+    hasCompletedDeletion &&
+    account.isActive === false &&
+    account.deletedAt instanceof Date &&
+    account.deletedAt.getTime() < daysBefore(now, RETENTION.purgedAccountSecurityEventDays).getTime()
+  );
+}
+
 type ConnectionTraces = {
   readonly createdAt?: Date | null;
   readonly lastLoginAt?: Date | null;

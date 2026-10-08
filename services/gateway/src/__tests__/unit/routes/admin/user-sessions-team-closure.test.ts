@@ -67,6 +67,7 @@ const mockPrisma = {
   user: { findUnique: jest.fn() },
   userSession: { findMany: jest.fn(), count: jest.fn(), findFirst: jest.fn() },
   securityEvent: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
+  accountDeletionRequest: { count: jest.fn(async () => 0) },
 };
 
 function buildApp(sockets: Array<{ emit: jest.Mock; disconnect: jest.Mock; data?: Record<string, unknown> }> = []): FastifyInstance {
@@ -259,8 +260,8 @@ describe('DELETE /admin/users/:userId/sessions/:sessionId — le membre est info
     expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledWith(expect.objectContaining({ alertType: 'sessions_closed_by_team' }));
   });
 
-  it('audit L2-6 — pas plus d’un e-mail par membre sur une fenêtre courte, l’événement de sécurité, lui, chaque fois', async () => {
-    mockPrisma.userSession.count.mockResolvedValue(2);
+  it('audit L2-6 — pas plus d’un e-mail par membre et par nature sur une fenêtre courte, l’événement de sécurité, lui, chaque fois', async () => {
+    mockPrisma.userSession.count.mockImplementation(async () => (mockSessionService.invalidateAllSessions.mock.calls.length > 0 ? 0 : 2));
     const app = buildApp();
     await app.inject({ method: 'DELETE', url: '/admin/users/user123/sessions/sess-1' });
     await settle();
@@ -270,7 +271,13 @@ describe('DELETE /admin/users/:userId/sessions/:sessionId — le membre est info
     await settle();
     await app.close();
 
-    expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
+    // Audit n°2 — « une session » puis « toutes » dans l'heure : la seconde
+    // nouvelle est PLUS grave, elle part ; la répétition de la première, non.
+    expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(2);
+    expect(mockEmail.sendSecurityAlertEmail.mock.calls.map(([d]: any) => d.alertType)).toEqual([
+      'session_closed_by_team',
+      'sessions_closed_by_team',
+    ]);
     expect(mockPrisma.securityEvent.create).toHaveBeenCalledTimes(3);
   });
 });
@@ -340,5 +347,35 @@ describe('audit A2-5 — refermer une session déjà close ne fait RIEN', () => 
     expect(mockSessionService.invalidateSession).not.toHaveBeenCalled();
     expect(mockPrisma.securityEvent.create).not.toHaveBeenCalled();
     expect(mockEmail.sendSecurityAlertEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('audit n°2 — la lecture applique aussi « compte purgé + 90 jours »', () => {
+  const purgedLongAgo = { id: 'user123', role: 'USER', deletedAt: new Date(Date.now() - 120 * 86_400_000), isActive: false };
+
+  it('les événements d’un compte purgé depuis plus de 90 jours ne se servent plus', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(purgedLongAgo);
+    mockPrisma.accountDeletionRequest.count.mockResolvedValue(1);
+    mockPrisma.securityEvent.findMany.mockResolvedValue([{ id: 'e1', eventType: 'PASSWORD_RESET_SUCCESS', createdAt: new Date() }]);
+    mockPrisma.securityEvent.count.mockResolvedValue(1);
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/security-events' });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual([]);
+    expect(res.json().pagination.total).toBe(0);
+  });
+
+  it('un compte supprimé sans demande aboutie (pas une purge) garde ses événements lisibles', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(purgedLongAgo);
+    mockPrisma.accountDeletionRequest.count.mockResolvedValue(0);
+    mockPrisma.securityEvent.findMany.mockResolvedValue([{ id: 'e1', eventType: 'PASSWORD_RESET_SUCCESS', createdAt: new Date() }]);
+    mockPrisma.securityEvent.count.mockResolvedValue(1);
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/security-events' });
+    await app.close();
+
+    expect(res.json().data).toHaveLength(1);
   });
 });

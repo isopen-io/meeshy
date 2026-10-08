@@ -42,8 +42,13 @@ export const TEAM_SINGLE_CLOSURE_ALERT_TYPE = 'session_closed_by_team';
 /** La fenêtre de dédoublonnage des e-mails de fermeture, par membre. */
 export const TEAM_CLOSURE_EMAIL_WINDOW_SECONDS = 60 * 60;
 
-/** Réserve le créneau d'e-mail d'un membre ; `false` : un e-mail est déjà parti dans la fenêtre. */
-export type ClosureEmailSlot = (userId: string) => Promise<boolean>;
+/**
+ * Réserve le créneau d'e-mail d'un membre POUR UNE NATURE d'e-mail ; `false` :
+ * un e-mail de cette nature est déjà parti dans la fenêtre. « Une de vos
+ * sessions » puis « toutes vos sessions » dans l'heure : la seconde nouvelle
+ * est plus grave, elle part (audit n°2).
+ */
+export type ClosureEmailSlot = (userId: string, alertType: string) => Promise<boolean>;
 
 type ClosureStore = Pick<PrismaClient, 'securityEvent' | 'userSession' | 'user'>;
 
@@ -83,7 +88,8 @@ export async function informMemberOfTeamClosure(
     const live = await prisma.userSession.count({
       where: { userId, isValid: true, expiresAt: { gt: new Date() } },
     });
-    if (!(await claimEmailSlot(userId))) return;
+    const alertType = live > 0 ? TEAM_SINGLE_CLOSURE_ALERT_TYPE : TEAM_CLOSURE_ALERT_TYPE;
+    if (!(await claimEmailSlot(userId, alertType))) return;
 
     const member = await prisma.user.findUnique({
       where: { id: userId },
@@ -94,7 +100,7 @@ export async function informMemberOfTeamClosure(
     await emailService.sendSecurityAlertEmail({
       to: member.email,
       name: member.displayName || member.firstName || member.username,
-      alertType: live > 0 ? TEAM_SINGLE_CLOSURE_ALERT_TYPE : TEAM_CLOSURE_ALERT_TYPE,
+      alertType,
       details: '',
       language: recipientLanguage(member, 'fr'),
     });
