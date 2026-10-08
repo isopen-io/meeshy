@@ -2679,7 +2679,7 @@
             "signal": "comment-others-post",
             "prism": false,
             "target": 5,
-            "reward": 615,
+            "reward": 1473,
             "glory": 100
           },
           {
@@ -2688,7 +2688,7 @@
             "signal": "reel-published",
             "prism": false,
             "target": 1,
-            "reward": 858,
+            "reward": 2860,
             "glory": 250
           }
         ]
@@ -2724,7 +2724,7 @@
             "signal": "comment-others-post",
             "prism": false,
             "target": 6,
-            "reward": 1278,
+            "reward": 3117,
             "glory": 100
           },
           {
@@ -2769,7 +2769,7 @@
             "signal": "comment-stranger-public-post",
             "prism": false,
             "target": 2,
-            "reward": 272,
+            "reward": 615,
             "glory": 100
           },
           {
@@ -2868,7 +2868,7 @@
             "signal": "axis:comment.audio",
             "prism": false,
             "target": 3,
-            "reward": 358,
+            "reward": 872,
             "glory": 250
           }
         ]
@@ -2913,7 +2913,7 @@
             "signal": "reel-published",
             "prism": false,
             "target": 1,
-            "reward": 1942,
+            "reward": 5519,
             "glory": 500
           }
         ]
@@ -2958,7 +2958,7 @@
             "signal": "axis:content.post",
             "prism": false,
             "target": 3,
-            "reward": 1301,
+            "reward": 4304,
             "glory": 250
           }
         ]
@@ -2994,7 +2994,7 @@
             "signal": "comment-stranger-public-post",
             "prism": false,
             "target": 2,
-            "reward": 319,
+            "reward": 722,
             "glory": 100
           },
           {
@@ -3093,7 +3093,7 @@
             "signal": "axis:content.post",
             "prism": false,
             "target": 3,
-            "reward": 2734,
+            "reward": 8099,
             "glory": 500
           }
         ]
@@ -3228,7 +3228,7 @@
             "signal": "axis:content.post",
             "prism": false,
             "target": 3,
-            "reward": 1301,
+            "reward": 4304,
             "glory": 250
           }
         ]
@@ -3402,7 +3402,7 @@
             "signal": "comment-others-post",
             "prism": false,
             "target": 5,
-            "reward": 615,
+            "reward": 1473,
             "glory": 100
           },
           {
@@ -3411,7 +3411,7 @@
             "signal": "reel-published",
             "prism": false,
             "target": 1,
-            "reward": 858,
+            "reward": 2860,
             "glory": 250
           }
         ]
@@ -3481,7 +3481,7 @@
           "signal": "axis:content.post",
           "prism": false,
           "target": 3,
-          "reward": 1451,
+          "reward": 4801,
           "glory": 250
         }
       }

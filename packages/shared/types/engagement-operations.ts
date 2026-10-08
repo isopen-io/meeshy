@@ -155,17 +155,23 @@ const perAccount = (domain: EngagementOperationDomain, points: number): Def => (
   defaults: { points, multiplied: false, cap: null },
 });
 
+/**
+ * Un contenu qui vaut selon QUI PEUT LE VOIR (#9667). Sans variante, il vaut la
+ * plus basse des audiences ouvertes (amis), jamais la plus haute ; une audience
+ * restreinte (`other`) ne vaut rien. Le plafond compte des ACTES.
+ */
 const byVisibility = (
   family: EngagementAxisFamily,
-  cap: number,
+  capScope: EngagementCapScope,
+  cap: number | null,
   variantPoints: Readonly<Record<VisibilityVariant, number>>,
 ): Def => ({
   domain: 'publishing',
   frequency: 'repeatable',
-  capScope: 'day',
+  capScope,
   family,
   variants: VISIBILITY_VARIANTS,
-  defaults: { points: variantPoints.other, multiplied: true, cap, variantPoints },
+  defaults: { points: variantPoints.friends, multiplied: true, cap, variantPoints },
 });
 
 const byConversationType = (cap: number, variantPoints: Readonly<Record<ConversationTypeVariant, number>>): Def => ({
@@ -212,17 +218,18 @@ export const ENGAGEMENT_OPERATION_CATALOG: Readonly<Record<EngagementOperationKe
   'social.community_created': repeat('communities', 'social', 5, 'day', 1),
   'social.community_joined': perTarget('communities', 'social', 2),
 
-  // Réel > Post > Commentaire > Story > Humeur, à toute visibilité (#9667,
-  // décision du porteur du 2026-10-08).
-  'content.post': byVisibility('content', 50, { public: 150, community: 100, friends: 70, other: 0 }),
-  'content.story': byVisibility('content', 20, { public: 30, community: 20, friends: 10, other: 0 }),
-  'content.reel': repeat('publishing', 'content', 300, 'day', 10),
-  'content.status': repeat('publishing', 'content', 5, 'day', 3),
+  // La grille des publications, par visibilité public / communauté / amis
+  // (#9667, décision du porteur du 2026-10-08) ; les plafonds comptent des actes.
+  'content.post': byVisibility('content', 'day', 50, { public: 500, community: 200, friends: 100, other: 0 }),
+  'content.story': byVisibility('content', 'day', 20, { public: 300, community: 200, friends: 100, other: 0 }),
+  'content.reel': byVisibility('content', 'day', 10, { public: 1000, community: 500, friends: 250, other: 0 }),
+  'content.status': byVisibility('content', 'day', 3, { public: 50, community: 25, friends: 10, other: 0 }),
   'tool.in_app_edit': repeat('publishing', 'tool', 1, 'none', null),
   'tool.direct_publish': repeat('publishing', 'tool', 1, 'none', null),
-  // Bornés par les limites quotidiennes de gestes (`DEFAULT_PATH_CAPS`), pas par un plafond propre.
-  'comment.text': repeat('publishing', 'comment', 40, 'none', null),
-  'comment.audio': repeat('publishing', 'comment', 40, 'none', null),
+  // Selon la visibilité du CONTENU COMMENTÉ (celle de la publication qui porte le fil) ;
+  // bornés par les limites quotidiennes de gestes (`DEFAULT_PATH_CAPS`), pas par un plafond propre.
+  'comment.text': byVisibility('comment', 'none', null, { public: 100, community: 50, friends: 10, other: 0 }),
+  'comment.audio': byVisibility('comment', 'none', null, { public: 100, community: 50, friends: 10, other: 0 }),
 
   // Ni plafond ni portée propres (#9584) : la limite quotidienne de gestes
   // (`DEFAULT_PATH_CAPS`) borne la réaction ET ses points — un second plafond
@@ -309,16 +316,23 @@ export function conversationTypeVariant(type: string | null | undefined): Conver
   return CONVERSATION_TYPE_VARIANTS.find((variant) => variant !== 'other' && variant === normalized) ?? 'other';
 }
 
-/** Visibilité d'une publication, telle que la base l'écrit, en variante de points. */
+/**
+ * Visibilité d'une publication, telle que la base l'écrit, en variante de points.
+ * Une audience restreinte (`EXCEPT`, `ONLY`, brouillon `PRIVATE`) ⇒ `other` ; une
+ * visibilité inconnue ⇒ `friends`, la plus basse des audiences ouvertes, jamais
+ * la plus haute (#9667).
+ */
 export function visibilityVariant(visibility: string | null | undefined): VisibilityVariant {
   switch ((visibility ?? '').toUpperCase()) {
     case 'PUBLIC':
       return 'public';
     case 'COMMUNITY':
       return 'community';
-    case 'FRIENDS':
-      return 'friends';
-    default:
+    case 'EXCEPT':
+    case 'ONLY':
+    case 'PRIVATE':
       return 'other';
+    default:
+      return 'friends';
   }
 }

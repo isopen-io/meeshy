@@ -99,8 +99,8 @@ public enum EngagementCatalog {
     /// catalogue des opérations ; la garde `engagement-family-top-points` compare les cinq
     /// nombres. Les limites quotidiennes comptent des GESTES, jamais ces points.
     public static let familyTopPoints: [EngagementAxisFamily: Int] = [
-        .content: 300,
-        .comment: 40,
+        .content: 1000,
+        .comment: 100,
         .social: 7,
         .conversation: 5,
         .tool: 4,

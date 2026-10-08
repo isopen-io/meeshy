@@ -22,8 +22,8 @@ const topSwift = (): Record<string, number> => {
 };
 
 describe('le plus qu’un geste rapporte, par famille', () => {
-  it('se dérive du catalogue : un réel (300), un commentaire (40), se lier (7), une conversation (5), une pièce jointe (4)', () => {
-    expect(ENGAGEMENT_FAMILY_TOP_POINTS).toEqual({ content: 300, comment: 40, social: 7, conversation: 5, tool: 4 });
+  it('se dérive du catalogue : un réel public (1000), un commentaire sous un contenu public (100), se lier (7), une conversation (5), une pièce jointe (4)', () => {
+    expect(ENGAGEMENT_FAMILY_TOP_POINTS).toEqual({ content: 1000, comment: 100, social: 7, conversation: 5, tool: 4 });
   });
 
   it('le miroir Swift porte les mêmes cinq nombres', () => {
