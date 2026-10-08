@@ -89,7 +89,7 @@ struct ReelAudioWaveformBars: Shape {
         return baseHeight + amplitude * abs(sin(phase + CGFloat(index) * 0.5))
     }
 
-    nonisolated func path(in rect: CGRect) -> Path {
+    func path(in rect: CGRect) -> Path {
         let count = Self.barCount
         let totalWidth = CGFloat(count) * Self.barWidth + CGFloat(count - 1) * Self.barSpacing
         let originX = rect.midX - totalWidth / 2
