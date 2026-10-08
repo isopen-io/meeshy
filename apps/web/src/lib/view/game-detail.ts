@@ -7,6 +7,7 @@ import { badgeGuideOfProgress } from '@meeshy/shared/utils/game/badge-guide';
 import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
 import type { GloryDivision5, GloryRankOrMythic, MythicSeatRef } from '@meeshy/shared/utils/game/glory';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
+import { levelStepsOf, type LevelStep, type LevelStepKind } from '@meeshy/shared/utils/game/level-steps';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { seasonStepReward } from '@meeshy/shared/utils/game/season';
@@ -45,6 +46,7 @@ import {
 } from '@/lib/view/game-copy';
 import { awardedDate, dayLabel, languageName, leagueName, rarityName, trophyView, zoneLabel } from '@/lib/view/game-copy-v2';
 import { generatedAchievementLabel } from '@/lib/view/progression';
+import { levelStepLine, levelStepWhat } from '@/lib/view/level-step-copy';
 import { conceptView, flameStateLabel, type ConceptFact, type DetailRef } from '@/lib/view/progression-concepts';
 
 /**
@@ -431,6 +433,31 @@ export function ringDetail(served: GameLevel): ElementDetail {
     ]),
   });
 }
+
+/** La fiche où se fait chaque sorte d'étape (#9706) : « Voir la fiche » mène au geste. */
+const LEVEL_STEP_CONCEPT: Readonly<Record<LevelStepKind, ProgressionConcept>> = { mint: 'meesh', missions: 'missions', flame: 'flame', rank: 'glory' };
+
+const stepProgress = (step: LevelStep): string =>
+  step.met ? gameText('game.level.step.done') : fraction(Math.min(step.current, step.target), step.target);
+
+/**
+ * L'ÉTAPE des niveaux (#9706) — la prochaine au-dessus du niveau, faite ou à faire ; la fiche qu'elle ouvre
+ * est celle du geste qui la fait. Les dix étapes en lignes, quand le serveur sert leurs compteurs.
+ */
+export function levelStepDetail(game: Pick<GameBlockForStep, 'level' | 'glory'>, step: LevelStep): ElementDetail {
+  const counts = game.level.ladder?.steps ?? null;
+  const all = counts === null ? [] : levelStepsOf({ ...counts, glory: game.glory.glory, rank: game.glory.rank });
+  return ofFamily('levelstep', String(step.level), LEVEL_STEP_CONCEPT[step.kind], {
+    emblem: { kind: 'concept', concept: LEVEL_STEP_CONCEPT[step.kind] },
+    name: levelStepLine(step),
+    state: step.met
+      ? earned(null)
+      : locked(fraction(Math.min(step.current, step.target), step.target), step.target <= 0 ? null : Math.min(1, step.current / step.target)),
+    facts: all.map((entry) => row(gameText('game.banner.level', { level: formatCount(entry.level) }), `${levelStepWhat(entry)} · ${stepProgress(entry)}`)),
+  });
+}
+
+type GameBlockForStep = { readonly level: GameLevel; readonly glory: GameGlory };
 
 /** LE PALIER du trésor. */
 export function treasuryDetail(treasury: GameTreasury): ElementDetail {

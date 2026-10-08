@@ -5,7 +5,7 @@ const en = {
   'game.rules.1.title': 'Every action pays',
   'game.rules.1.body': 'Writing, talking, publishing, reacting, inviting: every useful action earns points. A post earns according to who can see it: public, community or friends. Limits count your actions, never your points: bonuses, the Flame and events raise what each action earns.',
   'game.rules.2.title': 'Points make the level',
-  'game.rules.2.body': 'Up to 499 below Ambassador, 1000 from Ambassador, no limit from Oracle. Prestige at level 100, optional. Beyond 100: 1,000 Glory every ten levels.',
+  'game.rules.2.body': 'A million points for level 100, and one step every ten levels: without it, the level waits. Up to 499 below Ambassador, 1000 from Ambassador, no limit from Oracle. Prestige at level 100, optional. Beyond 100: 1,000 Glory every ten levels.',
   'game.rules.3.title': 'We mint Meeshes',
   'game.rules.3.body': 'From 1,221 points, you mint a Meesh by hand. The price rises with the number of Meeshes already minted.',
   'game.rules.4.title': 'Minting brings you down',

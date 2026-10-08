@@ -26,6 +26,7 @@ import {
   flameDetail,
   freezeDetail,
   gemDetail,
+  levelStepDetail,
   missionDetail,
   playerDetail,
   rankDetail,
@@ -135,6 +136,7 @@ const samples = (): Readonly<Record<GameDetailFamily, ElementDetail>> => {
     ring: ringDetail(game.level),
     treasury: treasuryDetail(game.treasury),
     elan: elanDetail('content', playing.elan),
+    levelstep: levelStepDetail(game, must(game.level.ladder?.step, 'étape des niveaux')),
   };
 };
 

@@ -3,11 +3,13 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 import { ENGAGEMENT_AXIS_FAMILIES } from '@meeshy/shared/types/engagement';
 import { FLAME_FORMS } from '@meeshy/shared/utils/game/flame';
 import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
+import { LEVEL_STEPS, levelStepsOf } from '@meeshy/shared/utils/game/level-steps';
 import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
 import { MISSION_DIFFICULTIES, MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
+import { levelHeldLine, levelStepLine, levelStepWhat } from '@/lib/view/level-step-copy';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
 import {
@@ -256,5 +258,37 @@ describe('un pourcentage servi se borne à l’affichage', () => {
   test('un pourcentage hors de 0 à 100 est ramené dans la plage, jamais refusé', () => {
     expect(boundedPercent(-4)).toBe(0);
     expect(boundedPercent(250)).toBe(100);
+  });
+});
+
+describe('les étapes des niveaux se disent dans les sept langues (#9706)', () => {
+  const steps = levelStepsOf({ minted: 0, missionsDone: 0, flameRecord: 0, glory: 0, rank: 'murmure' });
+
+  test('chaque étape a sa phrase, sans clé brute ni espace réservé, dans chaque langue', () => {
+    expect(steps).toHaveLength(LEVEL_STEPS.length);
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      for (const step of steps) {
+        for (const line of [levelStepWhat(step, language), levelStepLine(step, language), levelHeldLine(step, language)]) {
+          expect(line).not.toContain('game.level');
+          expect(line).not.toMatch(/[{}]/);
+        }
+      }
+    }
+  });
+
+  test('en français : le compte, la Flamme et le rang se disent', () => {
+    expect(steps.map((step) => levelStepWhat(step, 'fr'))).toEqual([
+      'frapper ta première Meesh',
+      'accomplir une mission du jour',
+      'atteindre le rang Écho',
+      'tenir une Flamme de 7 jours',
+      'accomplir 10 missions du jour',
+      'atteindre le rang Voix',
+      'frapper 5 Meeshes',
+      'atteindre le rang Conteur',
+      'tenir une Flamme de 30 jours',
+      'atteindre le rang Passeur',
+    ]);
+    expect(levelHeldLine(steps[0]!, 'fr')).toBe('Tes points ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
   });
 });

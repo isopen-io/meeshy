@@ -9,7 +9,7 @@
  * (`lib/view/game-detail.ts`) et leurs témoins lisent la MÊME liste.
  */
 
-/** Une famille d'élément : badge, succès, défi, trophée, tampon, étape et sceau de saison, gemme de ligue, étoile de Prestige, blason de rang, forme de Flamme, gel, mission, coffre, pièce Meesh, anneau de niveau, palier du trésor, famille d'élan. */
+/** Une famille d'élément : badge, succès, défi, trophée, tampon, étape et sceau de saison, gemme de ligue, étoile de Prestige, blason de rang, forme de Flamme, gel, mission, coffre, pièce Meesh, anneau de niveau, palier du trésor, famille d'élan, étape des niveaux (#9706). */
 export const GAME_DETAIL_FAMILIES = [
   'badge',
   'succes',
@@ -29,6 +29,7 @@ export const GAME_DETAIL_FAMILIES = [
   'ring',
   'treasury',
   'elan',
+  'levelstep',
 ] as const;
 
 export type GameDetailFamily = (typeof GAME_DETAIL_FAMILIES)[number];
@@ -56,6 +57,7 @@ export const GAME_DETAIL_HOW: Readonly<Record<GameDetailFamily, 'obtain' | 'give
   ring: 'obtain',
   treasury: 'obtain',
   elan: 'gives',
+  levelstep: 'obtain',
 };
 
 /** Les données (pastilles et lignes des fiches et du tableau de bord) qui ont leur phrase. */

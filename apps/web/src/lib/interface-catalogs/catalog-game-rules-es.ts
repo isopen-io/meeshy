@@ -5,7 +5,7 @@ const es = {
   'game.rules.1.title': 'Cada gesto cuenta',
   'game.rules.1.body': 'Escribir, hablar, publicar, reaccionar, invitar: cada acción útil da puntos. Una publicación da puntos según quién puede verla: público, comunidad o amigos. Los límites cuentan tus gestos, nunca tus puntos: los bonus, la Llama y los eventos aumentan lo que da cada gesto.',
   'game.rules.2.title': 'Los puntos hacen el nivel',
-  'game.rules.2.body': 'Hasta 499 bajo Embajador, 1000 desde Embajador, sin límite desde Oráculo. Prestigio en el nivel 100, opcional. Más allá de 100: 1000 de Gloria por decena.',
+  'game.rules.2.body': 'Un millón de puntos para el nivel 100 y un paso por decena: sin él, el nivel espera. Hasta 499 bajo Embajador, 1000 desde Embajador, sin límite desde Oráculo. Prestigio en el nivel 100, opcional. Más allá de 100: 1000 de Gloria por decena.',
   'game.rules.3.title': 'Se acuñan Meeshes',
   'game.rules.3.body': 'A partir de 1.221 puntos, se acuña una Meesh a mano. El precio sube con el número de Meeshes ya acuñadas.',
   'game.rules.4.title': 'Acuñar hace bajar',

@@ -5,7 +5,7 @@ const pt = {
   'game.rules.1.title': 'Cada ação rende',
   'game.rules.1.body': 'Escrever, falar, publicar, reagir, convidar: cada ação útil rende pontos. Uma publicação rende conforme quem pode vê-la: público, comunidade ou amigos. Os limites contam seus gestos, nunca seus pontos: bônus, Chama e eventos aumentam o que cada gesto rende.',
   'game.rules.2.title': 'Os pontos fazem o nível',
-  'game.rules.2.body': 'Até 499 abaixo de Embaixador, 1000 a partir de Embaixador, sem limite a partir de Oráculo. Prestígio no nível 100, opcional. Além de 100: 1000 de Glória por dezena.',
+  'game.rules.2.body': 'Um milhão de pontos para o nível 100 e uma etapa por dezena: sem ela, o nível espera. Até 499 abaixo de Embaixador, 1000 a partir de Embaixador, sem limite a partir de Oráculo. Prestígio no nível 100, opcional. Além de 100: 1000 de Glória por dezena.',
   'game.rules.3.title': 'Cunham-se Meeshes',
   'game.rules.3.body': 'A partir de 1.221 pontos, cunha-se uma Meesh à mão. O preço sobe com o número de Meeshes já cunhadas.',
   'game.rules.4.title': 'Cunhar faz descer',

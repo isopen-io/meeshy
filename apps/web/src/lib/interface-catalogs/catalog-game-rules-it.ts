@@ -5,7 +5,7 @@ const it = {
   'game.rules.1.title': 'Ogni gesto conta',
   'game.rules.1.body': 'Scrivere, parlare, pubblicare, reagire, invitare: ogni azione utile fa guadagnare punti. Un contenuto rende in base a chi può vederlo: pubblico, community o amici. I limiti contano i tuoi gesti, mai i tuoi punti: bonus, Fiamma ed eventi aumentano ciò che ogni gesto fa guadagnare.',
   'game.rules.2.title': 'I punti fanno il livello',
-  'game.rules.2.body': 'Fino a 499 sotto Ambasciatore, 1000 da Ambasciatore, senza limite da Oracolo. Prestigio al livello 100, facoltativo. Oltre 100: 1000 di Gloria ogni dieci livelli.',
+  'game.rules.2.body': 'Un milione di punti per il livello 100 e un passo ogni dieci livelli: senza, il livello aspetta. Fino a 499 sotto Ambasciatore, 1000 da Ambasciatore, senza limite da Oracolo. Prestigio al livello 100, facoltativo. Oltre 100: 1000 di Gloria ogni dieci livelli.',
   'game.rules.3.title': 'Si coniano Meesh',
   'game.rules.3.body': 'A partire da 1.221 punti si conia una Meesh a mano. Il prezzo sale con il numero di Meesh già coniate.',
   'game.rules.4.title': 'Coniare fa scendere',

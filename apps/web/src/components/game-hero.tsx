@@ -9,8 +9,9 @@ import { levelReading, shownLevelOf } from '@/lib/game/ladder';
 import { enamelToken } from '@/lib/game/medal';
 import { tierTint } from '@/lib/game/tier-emblem';
 import { familyName, formatCount, gameText, levelTierName, levelTopLine, pointsLabel, rankName, standingLabel, shownRank } from '@/lib/view/game-copy';
+import { levelHeldLine, levelStepLine } from '@/lib/view/level-step-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
-import { elanDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
+import { elanDetail, levelStepDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
 
 import { GAME_CARD, GAME_INK, GAME_INK_2, GameChip } from './game-surface';
 import { GameTouch } from './game-touch';
@@ -79,6 +80,28 @@ function MeeCorner({ line }: { readonly line: string }) {
   );
 }
 
+/**
+ * L'ÉTAPE du prochain palier (#9706) — faite ou à faire ; elle se touche et ouvre ses précisions, dont la
+ * fiche du geste qui la fait. Rien au-delà de 100, ni devant un serveur d'avant les étapes.
+ */
+function LevelStepChip({ game }: { readonly game: GameBlock }) {
+  const step = game.level.ladder?.step ?? null;
+  if (step === null) return null;
+  return (
+    <GameTouch
+      detail={levelStepDetail(game, step)}
+      marker={{ 'data-game-level-step': step.met ? 'done' : 'todo' }}
+      className="flex max-w-full items-center gap-1.5 self-start rounded-card text-caption font-semibold"
+      style={{ minHeight: 44, color: GAME_INK }}
+    >
+      <span aria-hidden="true" style={{ color: step.met ? 'var(--color-success)' : GAME_INK_2 }}>
+        {step.met ? '✓' : '○'}
+      </span>
+      <span className="min-w-0">{levelStepLine(step)}</span>
+    </GameTouch>
+  );
+}
+
 function WhereIAm({ game }: { readonly game: GameBlock }) {
   const { glory, boosts } = game;
   const level = shownLevelOf(game.level);
@@ -101,6 +124,8 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
   }, [shown.rank, shown.division, blason.play]);
 
   const atTop = level.nextThreshold === null;
+  const step = game.level.ladder?.step ?? null;
+  const held = game.level.ladder?.held === true && step !== null;
   return (
     <div className="flex flex-wrap items-center gap-4">
       <GameTouch detail={ringDetail(game.level)} named className="shrink-0 rounded-full">
@@ -121,9 +146,14 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
         <h2 id="game-hero-title" className="text-title font-bold" style={{ color: GAME_INK }}>
           {gameText('game.level.title', { level: formatCount(level.level), tier: levelTierName(level.tier) })}
         </h2>
-        <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {atTop ? levelTopLine(level) : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) })}
+        <p className="text-caption" style={{ color: GAME_INK_2 }} {...(held ? { 'data-game-level-held': '' } : {})}>
+          {held && step !== null
+            ? levelHeldLine(step)
+            : atTop
+              ? levelTopLine(level)
+              : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) })}
         </p>
+        <LevelStepChip game={game} />
         {level.record > level.level ? (
           <span className="mt-1 self-start">
             <GameChip tint="var(--color-warn)">

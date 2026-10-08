@@ -3,7 +3,7 @@ const fr = {
   'game.rules.1.title': 'Chaque geste rapporte',
   'game.rules.1.body': 'Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Une publication rapporte selon qui peut la voir : public, communauté ou amis. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte.',
   'game.rules.2.title': 'Les points font le niveau',
-  'game.rules.2.body': 'Jusqu’à 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle. Prestige au niveau 100, facultatif. Au-delà de 100 : 1 000 de Gloire par dizaine.',
+  'game.rules.2.body': 'Un million de points pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Jusqu’à 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle. Prestige au niveau 100, facultatif. Au-delà de 100 : 1 000 de Gloire par dizaine.',
   'game.rules.3.title': 'On frappe des Meeshes',
   'game.rules.3.body': 'À partir de 1 221 points, on frappe une Meesh à la main. Le prix monte avec le nombre de Meeshes déjà frappées.',
   'game.rules.4.title': 'Frapper fait redescendre',

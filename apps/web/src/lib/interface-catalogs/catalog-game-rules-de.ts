@@ -5,7 +5,7 @@ const de = {
   'game.rules.1.title': 'Jede Aktion zählt',
   'game.rules.1.body': 'Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jede nützliche Aktion bringt Punkte. Ein Beitrag bringt Punkte je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Limits zählen deine Aktionen, nie deine Punkte: Boni, Flamme und Events erhöhen, was jede Aktion bringt.',
   'game.rules.2.title': 'Punkte machen das Level',
-  'game.rules.2.body': 'Bis 499 unter Botschafter, 1000 ab Botschafter, ohne Grenze ab Orakel. Prestige ab Level 100, freiwillig. Über 100: 1.000 Ruhm alle zehn Level.',
+  'game.rules.2.body': 'Eine Million Punkte für Level 100 und ein Schritt je zehn Level: ohne ihn wartet das Level. Bis 499 unter Botschafter, 1000 ab Botschafter, ohne Grenze ab Orakel. Prestige ab Level 100, freiwillig. Über 100: 1.000 Ruhm alle zehn Level.',
   'game.rules.3.title': 'Man prägt Meeshes',
   'game.rules.3.body': 'Ab 1.221 Punkten prägst du eine Meesh von Hand. Der Preis steigt mit der Zahl der bereits geprägten Meeshes.',
   'game.rules.4.title': 'Prägen lässt dich absteigen',

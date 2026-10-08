@@ -120,6 +120,39 @@ describe('où j’en suis', () => {
   });
 });
 
+describe('les étapes des niveaux (#9706)', () => {
+  test('la prochaine étape se dit sous la marche, à faire, et se touche', () => {
+    const page = html({ missionsDone: 0 });
+    expect(page).toContain('data-game-level-step="todo"');
+    expect(text(page)).toContain('Étape du niveau 20 : accomplir une mission du jour');
+    expect(page).toContain('data-detail="levelstep:20"');
+  });
+
+  test('une étape déjà faite se coche', () => {
+    const page = html({ missionsDone: 1 });
+    expect(page).toContain('data-game-level-step="done"');
+    expect(text(html({ score: 100 * 25 * 25, levelRecord: 25 }))).toContain('Étape du niveau 30 : atteindre le rang Écho');
+  });
+
+  test('les points sont là, l’étape manque : le niveau attend, et la ligne dit pourquoi au lieu de « encore 0 point »', () => {
+    const page = html({ score: 100 * 15 * 15, mintedLifetime: 0, levelRecord: 9 });
+    expect(page).toContain('data-game-level-held=""');
+    expect(text(page)).toContain('Tes points ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
+    expect(text(page)).not.toContain('Encore 0');
+  });
+
+  test('au-delà de 100, plus d’étape', () => {
+    const page = html({ ...ALL_LEVEL_STEPS, score: 100 * 120 * 120, levelRecord: 120 });
+    expect(page).not.toContain('data-game-level-step');
+  });
+
+  test('un serveur d’avant les étapes (sans ladder.step) : rien ne s’affiche de plus', () => {
+    const game = gameBlockFixture();
+    const old = { ...game, level: { ...game.level, ladder: game.level.ladder === undefined ? undefined : { ...game.level.ladder, step: undefined, held: undefined, steps: undefined } } } as GameBlock;
+    expect(renderToStaticMarkup(<GameHero game={old} />)).not.toContain('data-game-level-step');
+  });
+});
+
 describe('comment gagner — dérivé du barème', () => {
   const page = html();
 
