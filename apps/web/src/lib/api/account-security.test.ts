@@ -12,16 +12,19 @@ import {
   revokeOtherSessions,
   revokeSession,
   securityFailureOf,
+  SESSIONS_QUERY_KEY,
 } from './account-security';
+import { estClefNonPersistable } from './souverain';
+import { API_RESPONSE_CACHE_PATTERN } from '../net/api-runtime-cache';
 
 /**
  * LE PORT DE LA SÉCURITÉ DU COMPTE (#6720) — ce que ces témoins gardent, dans
  * l'ordre de gravité :
  *
- *  1. **l'adresse IP et la géolocalisation ne sortent JAMAIS du fil** — le
- *     cache de requêtes est persisté dans le `localStorage`, et ce dépôt n'a
- *     aucun mécanisme d'exemption : ce qui est décodé est écrit sur le disque
- *     du lecteur ;
+ *  1. **tout ce que la passerelle sait d'une session est montré** (décision
+ *     porteur du 2026-10-08, qui remplace la projection sans adresse) — et
+ *     **rien n'en touche le disque** : la clé descend du préfixe que la
+ *     déshydratation exclut ;
  *  2. une protection absente de la charge n'est pas annoncée (fail-closed) ;
  *  3. une fermeture déjà faite n'alarme pas.
  */
@@ -60,40 +63,71 @@ const servedSession = () => ({
   isTrusted: true,
 });
 
-describe('decodeSession — ce qui reste sur le fil', () => {
-  /**
-   * LE TÉMOIN LE PLUS IMPORTANT DE CE FICHIER. Le cache est persisté
-   * (`query-client.ts § persist`) : tout ce que ce décodeur laisse passer est
-   * écrit DURABLEMENT dans le `localStorage` du lecteur. `session.ts` refuse
-   * déjà de persister `lastLoginIp`/`lastLoginLocation` pour la session
-   * courante — les servir ici pour TOUTES les sessions annulerait cette règle.
-   */
-  test('l’adresse IP, le pays, la ville et le lieu sont JETÉS', () => {
-    const decoded = decodeSession(servedSession());
-    const porte = JSON.stringify(decoded);
-    for (const secret of [IP, VILLE, 'SN']) {
-      expect({ secret, porte: porte.includes(secret) }).toEqual({ secret, porte: false });
-    }
+describe('decodeSession — tout ce que la passerelle sait, rien sur le disque', () => {
+  test('l’adresse IP, le pays, la ville, le lieu et le fuseau sont MONTRÉS (décision porteur 2026-10-08)', () => {
+    const decoded = decodeSession({ ...servedSession(), timezone: 'Africa/Dakar' });
+    expect(decoded?.ipAddress).toBe(IP);
+    expect(decoded?.country).toBe('SN');
+    expect(decoded?.city).toBe(VILLE);
+    expect(decoded?.location).toBe(`${VILLE}, SN`);
+    expect(decoded?.timezone).toBe('Africa/Dakar');
+  });
+
+  test('… et la clé de leur cache n’est JAMAIS persistée (ni localStorage, ni seau du service worker)', () => {
+    expect(estClefNonPersistable(SESSIONS_QUERY_KEY)).toBe(true);
+    expect(API_RESPONSE_CACHE_PATTERN.test('https://gate.meeshy.me/api/v1/auth/sessions')).toBe(false);
+    expect(API_RESPONSE_CACHE_PATTERN.test('https://gate.meeshy.me/api/v1/auth/sessions?x=1')).toBe(false);
+    expect(API_RESPONSE_CACHE_PATTERN.test('https://gate.meeshy.me/api/v1/auth/me')).toBe(true);
+  });
+
+  test('la version, le build, la plateforme, le nom d’appareil et le moyen de connexion passent', () => {
+    const decoded = decodeSession({
+      ...servedSession(),
+      appVersion: '2.13.0',
+      appBuild: '1874',
+      platform: 'android-shell',
+      deviceName: 'Pixel 7',
+      loginMethod: 'magic_link',
+    });
+    expect(decoded?.appVersion).toBe('2.13.0');
+    expect(decoded?.appBuild).toBe('1874');
+    expect(decoded?.platform).toBe('android-shell');
+    expect(decoded?.deviceName).toBe('Pixel 7');
+    expect(decoded?.loginMethod).toBe('magic_link');
+    expect(decoded?.browserVersion).toBe('141');
+  });
+
+  test('une plateforme ou un moyen hors contrat ne s’invente pas', () => {
+    const decoded = decodeSession({ ...servedSession(), platform: 'windows-phone', loginMethod: 'telepathie' });
+    expect(decoded?.platform).toBeNull();
+    expect(decoded?.loginMethod).toBeNull();
   });
 
   test('les clés rendues sont EXACTEMENT celles déclarées — aucune ne se glisse', () => {
-    expect(Object.keys(decodeSession(servedSession()) ?? {}).sort()).toEqual([
+    expect(Object.keys(decodeSession({ ...servedSession(), sessionToken: 'secret', refreshToken: 'r' }) ?? {}).sort()).toEqual([
+      'appBuild',
+      'appVersion',
       'browserName',
+      'browserVersion',
+      'city',
+      'country',
       'createdAt',
       'deviceModel',
+      'deviceName',
       'deviceType',
       'deviceVendor',
-      /* `id` EST rendu, et doit l'être : c'est ce que vise la fermeture d'une
-         session. Son absence de cette liste était une faute du témoin, pas du
-         décodeur — un témoin d'inventaire se trompe en OUBLIANT, jamais en
-         inventant. */
       'id',
+      'ipAddress',
       'isCurrent',
       'isMobile',
       'isTrusted',
       'lastActivityAt',
+      'location',
+      'loginMethod',
       'osName',
       'osVersion',
+      'platform',
+      'timezone',
     ]);
   });
 
@@ -133,13 +167,23 @@ describe('loadActiveSessions — GET /api/v1/auth/sessions', () => {
     });
     const result = await loadActiveSessions({ source: 'gateway', transport });
     expect(requests.map((r) => [r.method, r.path])).toEqual([['GET', '/api/v1/auth/sessions']]);
-    expect(result.ok && result.data).toHaveLength(1);
+    expect(result.ok && result.data.sessions).toHaveLength(1);
+  });
+
+  test('l’attribution servie (DB-IP, CC-BY) accompagne la liste ; absente, elle n’est pas inventée', async () => {
+    const geolocation = { provider: 'DB-IP', text: 'IP Geolocation by DB-IP', url: 'https://db-ip.com', license: 'CC-BY-4.0', approximate: true };
+    const served = await loadActiveSessions({ source: 'gateway', transport: fakeTransport({ ok: true, data: { sessions: [], geolocation } }).transport });
+    expect(served.ok && served.data.geolocation).toEqual({ text: 'IP Geolocation by DB-IP', url: 'https://db-ip.com', approximate: true });
+    const old = await loadActiveSessions({ source: 'gateway', transport: fakeTransport({ ok: true, data: { sessions: [] } }).transport });
+    expect(old.ok && old.data.geolocation).toBeNull();
+    const hostile = await loadActiveSessions({ source: 'gateway', transport: fakeTransport({ ok: true, data: { sessions: [], geolocation: { text: 'x', url: 'javascript:alert(1)' } } }).transport });
+    expect(hostile.ok && hostile.data.geolocation).toBeNull();
   });
 
   test('une charge sans `sessions` rend une liste vide, jamais une exception', async () => {
     const { transport } = fakeTransport({ ok: true, data: { totalCount: 0 } });
     const result = await loadActiveSessions({ source: 'gateway', transport });
-    expect(result.ok && result.data).toEqual([]);
+    expect(result.ok && result.data).toEqual({ sessions: [], geolocation: null });
   });
 
   test('un refus traverse tel quel', async () => {

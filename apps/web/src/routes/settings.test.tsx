@@ -122,13 +122,14 @@ describe('le compte — seule la suppression reste offerte', () => {
     expect(host.textContent).not.toContain('Indisponible sur cet environnement');
   });
 
-  /* Le legacy est décommissionné (#6702) : la sécurité, que la v2 ne porte pas
-     encore, n'a plus aucune adresse où mener. Elle est MASQUÉE — ni lien, ni
-     rangée inerte (loi 4). */
-  test('la sécurité, non portée, n’est pas offerte', () => {
+  /* Le legacy est décommissionné (#6702) : la sécurité a été MASQUÉE jusqu'à
+     son portage (loi 4) ; elle revient au volet des sessions (#6720). */
+  test('la sécurité revient (#6720) : elle ouvre le volet des sessions des réglages, jamais une adresse legacy', () => {
     const host = dom(<AccountSection language="fr" />);
-    expect(host.textContent).not.toContain('Sécurité');
-    expect(host.querySelectorAll('a')).toHaveLength(1);
+    const row = host.querySelector<HTMLAnchorElement>('[data-settings-security]');
+    expect(row?.textContent).toContain('Sécurité');
+    expect(row?.getAttribute('href')).toBe('/settings?volet=securite');
+    expect(host.querySelectorAll('a')).toHaveLength(2);
   });
 });
 
@@ -447,7 +448,7 @@ describe('les réglages ne mènent plus au legacy', () => {
    */
   test('aucune rangée masquée n’est rendue, même inerte', () => {
     const rowLabels = [...everySection().querySelectorAll('a .text-body, button .text-body')].map((el) => (el.textContent ?? '').trim());
-    for (const label of ['Sécurité', "Plus d'options", 'Médias', 'Messages']) {
+    for (const label of ["Plus d'options", 'Médias', 'Messages']) {
       expect({ label, present: rowLabels.includes(label) }).toEqual({ label, present: false });
     }
     expect(rowLabels).toContain('Exporter mes données');

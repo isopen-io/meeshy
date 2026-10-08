@@ -2,8 +2,11 @@ import * as z from 'zod/mini';
 import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
 import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
+import { CLIENT_PLATFORMS, SESSION_LOGIN_METHODS, type ClientPlatform, type SessionLoginMethod } from '@meeshy/shared/utils/client-session';
+
 import type { DataSource } from './config';
 import type { ApiFailure, ApiResult, HttpTransport } from './http';
+import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /**
  * **LE PORT DE LA SÉCURITÉ DU COMPTE** (#6720) — les sessions ouvertes, les
@@ -22,26 +25,30 @@ import type { ApiFailure, ApiResult, HttpTransport } from './http';
  *  - `GET /auth/2fa/status` (`routes/two-factor.ts:60`) — l'état du second
  *    facteur, sans jamais toucher à son activation.
  *
- * ## CE QUI N'ENTRE PAS DANS LA MÉMOIRE DU CLIENT
+ * ## TOUT EST MONTRÉ, RIEN NE TOUCHE LE DISQUE
  *
- * La charge des sessions porte `ipAddress`, `country`, `city` et `location`.
- * **Le décodeur les JETTE**, et ce n'est pas de la prudence décorative : le
- * cache de requêtes est PERSISTÉ dans le `localStorage`
- * (`query-client.ts § persist` : `shouldDehydrateQuery` accepte TOUTE requête
- * réussie, sans exception possible). Les laisser passer écrirait durablement,
- * sur la machine du lecteur, l'adresse IP et la géolocalisation de chacune de
- * ses connexions — exactement ce que `session.ts` refuse de persister pour la
- * session courante (sa règle 1, doctrine du cycle 125 : « une protection se
- * mesure sur tout ce que la charge TRANSPORTE »).
+ * Décision du porteur du 2026-10-08 (#6720, #9609) : l'écran Sécurité >
+ * Sessions montre TOUT ce que la passerelle sait d'une session — version et
+ * build de Meeshy, plateforme, appareil, système, navigateur, adresse IP, pays,
+ * ville (approximative, tirée de l'adresse par une base LOCALE), fuseau,
+ * ouverture, dernière activité, moyen de connexion. Elle REMPLACE la décision
+ * antérieure de ce port, qui jetait l'adresse et le lieu au décodage.
  *
- * C'est le même remède que `friend-requests.ts` applique à la présence
- * d'autrui : on PROJETTE au décodage, on n'exempte pas la requête — il n'existe
- * aucun mécanisme d'exemption dans ce dépôt.
+ * Ce qui reste vrai de l'ancienne raison : le cache de requêtes est PERSISTÉ
+ * dans le `localStorage` (`query-client.ts`), et le service worker range les
+ * réponses `/api/**` dans son seau `api`. Montrer n'oblige pas à GARDER :
  *
- * **Ce qu'on garde suffit à RECONNAÎTRE un appareil** : son type, sa marque, son
- * modèle, son système, son navigateur, la date de sa première et de sa dernière
- * activité. C'est la question à laquelle cet écran répond — « est-ce moi ? » —
- * et elle ne demande pas de savoir d'où.
+ *  - la clé descend d'`ADMIN_SOUVERAIN_PREFIXE`, que la déshydratation exclut
+ *    (`souverain.ts`, dont c'est le titre : « ce qui ne doit pas toucher le
+ *    disque ») — cache-first EN MÉMOIRE, d'un écran à l'autre, jamais sur le
+ *    disque ; la préfixer coûte zéro octet au socle, là où étendre le prédicat
+ *    en coûterait à la première peinture ;
+ *  - `GET /auth/sessions` est hors du seau du service worker
+ *    (`net/api-runtime-cache.ts`).
+ *
+ * L'attribution « IP Geolocation by DB-IP » (CC-BY 4.0) voyage avec la liste
+ * (`data.geolocation`) et n'est montrée que SERVIE : un serveur antérieur
+ * situait par un autre fournisseur, et l'attribuer à DB-IP mentirait.
  *
  * ## AUCUNE BRANCHE `fixtures`
  *
@@ -54,26 +61,50 @@ import type { ApiFailure, ApiResult, HttpTransport } from './http';
 
 export type AccountSecurityDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
-export const SESSIONS_QUERY_KEY = ['me', 'sessions'] as const;
+export const SESSIONS_QUERY_KEY = [ADMIN_SOUVERAIN_PREFIXE, 'me', 'sessions'] as const;
 export const DEVICES_QUERY_KEY = ['me', 'devices'] as const;
 export const TWO_FACTOR_QUERY_KEY = ['me', 'two-factor'] as const;
 
-/** Une session ouverte — SANS rien qui dise OÙ elle l'est. */
+/** Une session ouverte, telle que la passerelle la connaît (#9609, #9610). */
 export type ActiveSession = {
   readonly id: string;
   readonly deviceType: string | null;
   readonly deviceVendor: string | null;
   readonly deviceModel: string | null;
+  /** Le nom lisible que le client a déclaré (« iPhone 15 Pro », « Pixel 7 »). */
+  readonly deviceName: string | null;
   readonly osName: string | null;
   readonly osVersion: string | null;
   readonly browserName: string | null;
+  readonly browserVersion: string | null;
   readonly isMobile: boolean;
+  readonly appVersion: string | null;
+  readonly appBuild: string | null;
+  /** Hors contrat ⇒ `null` : une plateforme ne s'invente pas. */
+  readonly platform: ClientPlatform | null;
+  /** Posé par le SERVEUR à l'ouverture, jamais déclaré par le client. */
+  readonly loginMethod: SessionLoginMethod | null;
+  readonly ipAddress: string | null;
+  /** Code de pays tel que servi (ISO 3166-1, « SN ») — l'écran le nomme. */
+  readonly country: string | null;
+  readonly city: string | null;
+  readonly location: string | null;
+  readonly timezone: string | null;
   readonly createdAt: string | null;
   readonly lastActivityAt: string | null;
-  /** Marquée par la passerelle depuis l'en-tête `x-session-token`. C'est elle
-   * qu'on ne doit PAS proposer de fermer sans le dire. */
+  /** Marquée par la passerelle depuis le `sid` du jeton. C'est elle qu'on ne
+   * propose PAS de fermer. */
   readonly isCurrent: boolean;
   readonly isTrusted: boolean;
+};
+
+/** L'attribution que la licence de la base de lieux exige, telle que SERVIE. */
+export type GeolocationAttribution = { readonly text: string; readonly url: string; readonly approximate: boolean };
+
+export type ActiveSessions = {
+  readonly sessions: readonly ActiveSession[];
+  /** `null` : le serveur n'en sert pas — rien n'est attribué à sa place. */
+  readonly geolocation: GeolocationAttribution | null;
 };
 
 export const DEVICE_KINDS = ['apns', 'fcm', 'voip'] as const;
@@ -110,20 +141,30 @@ const textOrNull = (value: string | null | undefined): string | null => {
 };
 
 /**
- * LA PROJECTION DES SESSIONS. Le schéma ne DÉCLARE pas `ipAddress`, `country`,
- * `city` ni `location` : `zod/mini` ignore ce qu'il ne déclare pas, et l'objet
- * rendu est construit champ par champ — deux gardes pour la même règle, parce
- * qu'une seule se contourne au premier `...wire` ajouté par distraction.
+ * LA LECTURE DES SESSIONS — l'objet rendu est construit champ par champ :
+ * jamais un `...wire`, qui recopierait en silence ce que la passerelle
+ * ajoutera (un jeton, une empreinte).
  */
 const WireSession = z.object({
   id: z.string().check(z.minLength(1)),
   deviceType: optionalText,
   deviceVendor: optionalText,
   deviceModel: optionalText,
+  deviceName: optionalText,
   osName: optionalText,
   osVersion: optionalText,
   browserName: optionalText,
+  browserVersion: optionalText,
   isMobile: optionalFlag,
+  appVersion: optionalText,
+  appBuild: optionalText,
+  platform: optionalText,
+  loginMethod: optionalText,
+  ipAddress: optionalText,
+  country: optionalText,
+  city: optionalText,
+  location: optionalText,
+  timezone: optionalText,
   createdAt: optionalText,
   lastActivityAt: optionalText,
   isCurrentSession: optionalFlag,
@@ -139,15 +180,35 @@ export function decodeSession(raw: unknown): ActiveSession | null {
     deviceType: textOrNull(wire.deviceType),
     deviceVendor: textOrNull(wire.deviceVendor),
     deviceModel: textOrNull(wire.deviceModel),
+    deviceName: textOrNull(wire.deviceName),
     osName: textOrNull(wire.osName),
     osVersion: textOrNull(wire.osVersion),
     browserName: textOrNull(wire.browserName),
+    browserVersion: textOrNull(wire.browserVersion),
     isMobile: wire.isMobile === true,
+    appVersion: textOrNull(wire.appVersion),
+    appBuild: textOrNull(wire.appBuild),
+    platform: CLIENT_PLATFORMS.find((platform) => platform === wire.platform) ?? null,
+    loginMethod: SESSION_LOGIN_METHODS.find((method) => method === wire.loginMethod) ?? null,
+    ipAddress: textOrNull(wire.ipAddress),
+    country: textOrNull(wire.country),
+    city: textOrNull(wire.city),
+    location: textOrNull(wire.location),
+    timezone: textOrNull(wire.timezone),
     createdAt: textOrNull(wire.createdAt),
     lastActivityAt: textOrNull(wire.lastActivityAt),
     isCurrent: wire.isCurrentSession === true,
     isTrusted: wire.isTrusted === true,
   };
+}
+
+const WireAttribution = z.object({ text: z.string().check(z.minLength(1)), url: z.string(), approximate: optionalFlag });
+
+/** L'attribution servie ; une adresse qui n'est pas `https:` n'est pas un lien. */
+export function decodeGeolocation(raw: unknown): GeolocationAttribution | null {
+  const parsed = WireAttribution.safeParse(raw);
+  if (!parsed.success || !parsed.data.url.startsWith('https://')) return null;
+  return { text: parsed.data.text, url: parsed.data.url, approximate: parsed.data.approximate !== false };
 }
 
 const WireDevice = z.object({
@@ -213,10 +274,10 @@ const withSignal = (signal: AbortSignal | undefined) => (signal === undefined ? 
 
 const NOT_SERVED: ApiFailure = { ok: false, status: 501, error: 'La sécurité du compte n’a pas de démonstration' };
 
-/** `{ sessions, totalCount }` — la liste est DANS `data`, pas à côté. */
+/** `{ sessions, totalCount, geolocation }` — la liste est DANS `data`, pas à côté. */
 export async function loadActiveSessions(
   params: AccountSecurityDeps & { readonly signal?: AbortSignal },
-): Promise<ApiResult<readonly ActiveSession[]>> {
+): Promise<ApiResult<ActiveSessions>> {
   if (__FIXTURES__ && params.source === 'fixtures') return NOT_SERVED;
   const result = await params.transport.request<unknown>({
     method: 'GET',
@@ -224,9 +285,8 @@ export async function loadActiveSessions(
     ...withSignal(params.signal),
   });
   if (!result.ok) return result;
-  const charge = result.data;
-  const brut = charge !== null && typeof charge === 'object' ? (charge as { sessions?: unknown }).sessions : undefined;
-  return { ok: true, data: rowsOf(brut, decodeSession) };
+  const charge = result.data !== null && typeof result.data === 'object' ? (result.data as { sessions?: unknown; geolocation?: unknown }) : {};
+  return { ok: true, data: { sessions: rowsOf(charge.sessions, decodeSession), geolocation: decodeGeolocation(charge.geolocation) } };
 }
 
 export async function revokeSession(deps: AccountSecurityDeps, sessionId: string): Promise<ApiResult<unknown>> {

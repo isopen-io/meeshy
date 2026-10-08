@@ -52,6 +52,10 @@ import { Link } from '@/routes/route-table';
 
 export const SETTINGS_HEADER_HEIGHT = 64;
 
+/** Le volet Sécurité des réglages (#6720) — `/settings?volet=securite`. */
+export const SECURITY_PANEL_PARAM = 'volet';
+export const SECURITY_PANEL = 'securite';
+
 /**
  * **LE COULOIR DES DISQUES FLOTTANTS** — la loi de `floating-corridor.ts`, portée
  * comme la cloche et le Flux (`FEED_TOP_RESERVE`) : au repos, la carte de profil,
@@ -145,8 +149,10 @@ export function ProfileCard({ language, user }: { readonly language: InterfaceLa
   );
 }
 
-/* La SÉCURITÉ n'a plus d'adresse depuis le décommissionnement du legacy
-   (#6702) : MASQUÉE jusqu'à son portage.
+/* La SÉCURITÉ revient (#6720) — `?volet=securite` sur les réglages eux-mêmes,
+   miroir de `SecurityView` poussé depuis `SettingsView` : l'écran des sessions
+   se charge à la demande, et aucune route neuve n'entre dans la table du socle
+   (première peinture). Elle ne vise plus aucune adresse legacy.
 
    La SUPPRESSION DE COMPTE mène à sa page de la v2 (`/account/deletion`,
    #6715) — même onglet, même origine, sans légende. Elle y ouvre la demande
@@ -157,6 +163,13 @@ export function ProfileCard({ language, user }: { readonly language: InterfaceLa
 export function AccountSection({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <GroupedSection id="settings-account" title={upper(language, 'settings.section.account')} icon={SECTION_ICON({ set: 'ecran', name: 'userCircle' })}>
+      <Link to="settings" search={{ [SECURITY_PANEL_PARAM]: SECURITY_PANEL }} data-settings-security className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon>
+          <IconOf icon={{ set: 'ecran', name: 'shieldCheck' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.security.title')} />
+        <Chevron />
+      </Link>
       <Link to="accountDeletion" data-settings-account-deletion className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-error)">
           <IconOf icon={{ set: 'ecran', name: 'userMinus' }} size={15} />
