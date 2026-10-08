@@ -20,8 +20,6 @@ struct ReelAudioBackdrop: View, Equatable {
         lhs.accentHex == rhs.accentHex && lhs.isActive == rhs.isActive
     }
 
-    private let bars = 28
-
     var body: some View {
         let accent = Color(hex: accentHex)
         ZStack {
@@ -29,14 +27,9 @@ struct ReelAudioBackdrop: View, Equatable {
                 colors: [accent.opacity(0.85), accent.opacity(0.45), accent.opacity(0.85)],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
-            HStack(spacing: 4) {
-                ForEach(0..<bars, id: \.self) { i in
-                    Capsule()
-                        .fill(Color.white.opacity(0.85))
-                        .frame(width: 3, height: barHeight(i))
-                }
-            }
-            .frame(maxHeight: 120)
+            ReelAudioWaveformBars(phase: phase, isActive: isActive)
+                .fill(Color.white.opacity(0.85))
+                .frame(maxHeight: 120)
             Image(systemName: "waveform")
                 // doctrine 86i — glyphe décoratif borné, centré derrière le contenu du réel
                 .font(.system(size: 44, weight: .semibold))
@@ -57,19 +50,57 @@ struct ReelAudioBackdrop: View, Equatable {
         .accessibilityDecorative()
     }
 
-    private func barHeight(_ i: Int) -> CGFloat {
-        let base: CGFloat = 18
-        guard isActive else { return base }
-        let amp: CGFloat = 46
-        return base + amp * abs(sin(phase + CGFloat(i) * 0.5))
-    }
-
     private func startAnimating() {
         // Reduce Motion (système ou override in-app) : on fige la waveform sur son
         // profil statique (phase 0 → silhouette variée) plutôt qu'une boucle infinie.
         guard !reduceMotion else { return }
-        withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+        // `|sin|` est de période π : une boucle LINÉAIRE de 0 à π, sans
+        // aller-retour, reboucle sans couture — la vague défile.
+        withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
             phase = .pi
         }
+    }
+}
+
+/// Les barres de la waveform en UNE forme dont `phase` est animable (#9702).
+///
+/// Les hauteurs étaient calculées dans le corps de la vue : SwiftUI n'en
+/// interpolait que le départ et l'arrivée, et `|sin(x + π)| == |sin(x)|` — les
+/// barres ne bougeaient pas, pendant que la boucle `repeatForever` tournait.
+/// Ici la phase passe par `animatableData` : chaque frame trace la courbe,
+/// en un seul chemin que le GPU remplit.
+struct ReelAudioWaveformBars: Shape {
+    var phase: CGFloat
+    let isActive: Bool
+
+    nonisolated static let barCount = 28
+    nonisolated static let barWidth: CGFloat = 3
+    nonisolated static let barSpacing: CGFloat = 4
+    nonisolated static let baseHeight: CGFloat = 18
+    nonisolated static let amplitude: CGFloat = 46
+
+    var animatableData: CGFloat {
+        get { phase }
+        set { phase = newValue }
+    }
+
+    nonisolated static func barHeight(index: Int, phase: CGFloat, isActive: Bool) -> CGFloat {
+        guard isActive else { return baseHeight }
+        return baseHeight + amplitude * abs(sin(phase + CGFloat(index) * 0.5))
+    }
+
+    nonisolated func path(in rect: CGRect) -> Path {
+        let count = Self.barCount
+        let totalWidth = CGFloat(count) * Self.barWidth + CGFloat(count - 1) * Self.barSpacing
+        let originX = rect.midX - totalWidth / 2
+        let corner = CGSize(width: Self.barWidth / 2, height: Self.barWidth / 2)
+        var path = Path()
+        for index in 0..<count {
+            let height = Self.barHeight(index: index, phase: phase, isActive: isActive)
+            let x = originX + CGFloat(index) * (Self.barWidth + Self.barSpacing)
+            let bar = CGRect(x: x, y: rect.midY - height / 2, width: Self.barWidth, height: height)
+            path.addRoundedRect(in: bar, cornerSize: corner)
+        }
+        return path
     }
 }
