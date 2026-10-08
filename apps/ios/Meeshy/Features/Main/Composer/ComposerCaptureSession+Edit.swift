@@ -102,29 +102,19 @@ extension ComposerCaptureSession {
     /// Un cadre qui ne se peint pas laisse la retouche ouverte plutôt que de
     /// remettre une photo sans lui.
     private func finishPhoto() {
-        guard let photo = editPhoto, let source = editSource else { return }
-        let regard = look
-        let cadrage = framing
-        let auteur = lookPerson
-        let date = lookDate
-        let cache = scenes
+        guard let peindre = photoRender(), let source = editSource else { return }
         let galerie = gallery
-        let prise = editPhotoData
-        let proportions = canvasAspect
         let enregistre = savePolicy().savesRenderOnFinish(alreadySaved: takeSaveState != .idle)
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
-            let peinte = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
-                                                               aspect: proportions, person: auteur, date: date, scenes: cache)
+            let peinte = await peindre()
             guard isStillEditing(source) else { return }
-            guard let rendu = peinte else {
+            guard let (rendu, octets) = peinte else {
                 isRenderingLook = false
                 HapticFeedback.error()
                 return
             }
-            let octets = await ComposerPhotoEncoding.encode(rendu, like: prise)
-            guard isStillEditing(source) else { return }
             if let octets, enregistre { _ = await galerie.saveImage(octets) }
             guard isStillEditing(source) else { return }
             deliverEdited(.photo(UIImage(cgImage: rendu), data: octets))
@@ -142,22 +132,14 @@ extension ComposerCaptureSession {
     /// le dossier temporaire.
     private func finishVideo(_ url: URL) {
         guard let source = editSource else { return }
-        let regard = look
-        let cadrage = framing
-        let auteur = lookPerson
-        let date = lookDate
+        let exporter = videoRender(url)
         let galerie = gallery
-        let espace = loopPlayer?.declaredSpace?.name as String?
-        let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
-        let proportions = canvasAspect
         let politique = savePolicy()
         let enregistre = politique.savesRenderOnFinish(alreadySaved: takeSaveState != .idle)
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
-            let rendue = await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, timeRange: plage,
-                                                                aspect: proportions, person: auteur, date: date,
-                                                                declaredSpaceName: espace)
+            let rendue = await exporter()
             guard let rendue else {
                 guard isStillEditing(source) else { return }
                 isRenderingLook = false
@@ -177,6 +159,43 @@ extension ComposerCaptureSession {
             }
             if neuve != nil { discardTake(url, context: "brut remplacé par son rendu") }
             deliverEdited(.video(rendue))
+        }
+    }
+
+    /// Le rendu de la photo retouchée, figé sur ce que l'écran montre — effet,
+    /// cadre, cadrage, proportions du viseur — et encodé avec l'EXIF de la prise.
+    /// « Terminé » et la flèche ⬇︎ peignent par lui : une seule recette.
+    private func photoRender() -> (@MainActor () async -> (CGImage, Data?)?)? {
+        guard let photo = editPhoto else { return nil }
+        let regard = look
+        let cadrage = framing
+        let auteur = lookPerson
+        let date = lookDate
+        let cache = scenes
+        let prise = editPhotoData
+        let proportions = canvasAspect
+        return { @MainActor in
+            guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
+                                                                    aspect: proportions, person: auteur,
+                                                                    date: date, scenes: cache) else { return nil }
+            return (rendu, await ComposerPhotoEncoding.encode(rendu, like: prise))
+        }
+    }
+
+    /// Le rendu de la vidéo retouchée — look, cadrage, découpe, lus dans l'espace
+    /// où la boucle la lisait. « Terminé » et la flèche ⬇︎ exportent par lui.
+    private func videoRender(_ url: URL) -> @MainActor () async -> URL? {
+        let regard = look
+        let cadrage = framing
+        let auteur = lookPerson
+        let date = lookDate
+        let espace = loopPlayer?.declaredSpace?.name as String?
+        let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
+        let proportions = canvasAspect
+        return { @MainActor in
+            await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, timeRange: plage,
+                                                   aspect: proportions, person: auteur, date: date,
+                                                   declaredSpaceName: espace)
         }
     }
 
@@ -223,37 +242,22 @@ extension ComposerCaptureSession {
     /// retouche ; un refus de Photos se dit et laisse la flèche disponible.
     func saveTakeToPhotos() {
         guard phase.isEditing, !isRenderingLook, takeSaveState.offersSave, let source = editSource else { return }
-        let regard = look
-        let cadrage = framing
-        let auteur = lookPerson
-        let date = lookDate
-        let cache = scenes
         let galerie = gallery
-        let proportions = canvasAspect
         let politique = savePolicy()
         let ecriture: @MainActor () async -> Bool?
         switch phase {
         case .capturing:
             return
         case .editing(.photo):
-            guard let photo = editPhoto else { return }
-            let prise = editPhotoData
+            guard let peindre = photoRender() else { return }
             ecriture = {
-                guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
-                                                                        aspect: proportions, person: auteur,
-                                                                        date: date, scenes: cache),
-                      let octets = await ComposerPhotoEncoding.encode(rendu, like: prise) else { return nil }
+                guard let (_, octets) = await peindre(), let octets else { return nil }
                 return await galerie.saveImage(octets)
             }
         case .editing(.video(let url)):
-            let espace = loopPlayer?.declaredSpace?.name as String?
-            let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
+            let exporter = videoRender(url)
             ecriture = {
-                guard let rendue = await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage,
-                                                                          timeRange: plage, aspect: proportions,
-                                                                          person: auteur, date: date,
-                                                                          declaredSpaceName: espace)
-                else { return nil }
+                guard let rendue = await exporter() else { return nil }
                 let enregistree = await Self.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
                 if rendue != url {
                     FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré par la flèche",
