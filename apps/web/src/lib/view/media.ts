@@ -1,4 +1,4 @@
-import { prismFor, resolveAudioTrack, servedTranscript, type Served, type ServedTrack } from '@/lib/api/prism';
+import { electServedAudio, prismFor, servedTranscript, type Served, type ServedTrack } from '@/lib/api/prism';
 import type { Attachment } from '@/lib/api/types';
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 
@@ -145,15 +145,8 @@ export type ElectedAudio = {
  * (CLAUDE.md § Prisme, cycle 128).
  */
 export function electAudio(params: ElectionInput): ElectedAudio {
-  const { attachment, fallbackLanguage } = params;
-  const described = electDescription(params);
-  const track = resolveAudioTrack({
-    servedLanguage: described.language,
-    originalLanguage: attachment.transcription?.language ?? fallbackLanguage,
-    originalUrl: attachment.fileUrl,
-    translations: attachment.translations,
-  });
-  return { described, track };
+  const { attachment, readerLanguages, displayLanguage, fallbackLanguage } = params;
+  return electServedAudio({ preferredLanguages: prismFor({ readerLanguages, displayLanguage }), attachment, fallbackLanguage });
 }
 
 /** La piste seule, sans ses métadonnées de service (`translated` retiré : la convention `null` le remplace). */

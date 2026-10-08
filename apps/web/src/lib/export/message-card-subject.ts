@@ -1,11 +1,10 @@
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
 
-import { served } from '@/lib/api/prism';
+import { electServedAudio, served } from '@/lib/api/prism';
 import type { Attachment, Message } from '@/lib/api/types';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { messageExitOffers, pieceIsOpen } from '@/lib/view/content-exit';
-import { electAudio } from '@/lib/view/media';
 import { kindOf, waveformOf } from '@/lib/view/message';
 import { quotedPreviewOf } from '@/lib/view/quoted-preview';
 
@@ -154,7 +153,7 @@ export type CardAudioPrism = { readonly readerLanguages: readonly string[]; read
 /**
  * LES MÉDIAS PEIGNABLES, UN VOCAL DANS LA PISTE DE SON TEXTE SERVI (#9687,
  * parité iOS `MessageCardSubject.paintableMedia(audioLanguages:)`) —
- * `electAudio` élit la transcription PUIS reçoit sa langue pour élire la
+ * `electServedAudio` (`api/prism.ts`) élit la transcription PUIS reçoit sa langue pour élire la
  * piste : une seule descente (CLAUDE.md § Prisme, cycle 128). Fichier et durée
  * de la piste servie voyagent ensemble ; sans piste dans la langue servie,
  * l'original.
@@ -163,7 +162,8 @@ export function servedCardMediaOf(pieces: readonly (CardMediaFields & CardAudioF
   return cardMediaOf(pieces).map((item) => {
     const piece = pieces?.find((candidate) => candidate.id === item.id);
     if (prism === null || piece === undefined || item.card.kind !== 'audio') return item;
-    const { track } = electAudio({
+    const { track } = electServedAudio({
+      preferredLanguages: prism.readerLanguages,
       attachment: {
         fileUrl: piece.fileUrl,
         originalName: piece.originalName ?? '',
@@ -171,7 +171,6 @@ export function servedCardMediaOf(pieces: readonly (CardMediaFields & CardAudioF
         ...(piece.translations == null ? {} : { translations: piece.translations }),
         ...(piece.alt == null ? {} : { alt: piece.alt }),
       },
-      readerLanguages: prism.readerLanguages,
       fallbackLanguage: prism.fallbackLanguage,
     });
     return track.translated ? { ...item, url: track.url, card: { ...item.card, durationMs: track.durationMs ?? item.card.durationMs } } : item;
