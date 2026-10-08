@@ -36,6 +36,8 @@ import { createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
 import { registerRouteUsageHook } from './plugins/route-usage.plugin';
+import { registerRequestTimingHooks } from './plugins/request-timing.plugin';
+import { redactReaderFileUrl } from './utils/redact-reader-file-url';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
@@ -421,7 +423,7 @@ class MeeshyServer {
         logger.warn('Schema validation refused request', {
           module: 'ErrorHandler',
           func: 'setErrorHandler',
-          path: request.url,
+          path: redactReaderFileUrl(request.url),
           method: request.method,
           fields: schemaRefusal.details.map(({ field }) => field)
         });
@@ -437,7 +439,7 @@ class MeeshyServer {
           stack: error.stack,
           name: error.name
         } : error,
-        path: request.url,
+        path: redactReaderFileUrl(request.url),
         method: request.method
       });
       // TypeScript may treat catch variables as 'unknown' (useUnknownInCatchVariables).
@@ -689,28 +691,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     });
     logger.info('✅ Client identification hook registered');
 
-    // Request timing — log slow requests (>2s) as warnings
-    this.server.addHook('onRequest', (request, _reply, done) => {
-      request.__startTime = performance.now();
-      done();
-    });
-    this.server.addHook('onResponse', (request, reply, done) => {
-      const start = request.__startTime;
-      if (start) {
-        const durationMs = Math.round(performance.now() - start);
-        const level = durationMs > 5000 ? 'warn' : durationMs > 2000 ? 'info' : 'debug';
-        if (level !== 'debug') {
-          logger[level](`⏱️ ${request.method} ${request.url} → ${reply.statusCode} (${durationMs}ms)`, {
-            module: 'RequestTiming',
-            durationMs,
-            method: request.method,
-            url: request.url,
-            statusCode: reply.statusCode
-          });
-        }
-      }
-      done();
-    });
+    // Request timing — log slow requests (>2s); the address is redacted when
+    // it is a reader-signed file address (#9600, audit L1-B).
+    registerRequestTimingHooks(this.server, { logger });
     logger.info('✅ Request timing hook registered');
 
     // Compteur d'acces par route et par version cliente (#4275). Quatre issues

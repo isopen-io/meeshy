@@ -357,6 +357,17 @@ services:
       - "traefik.http.routers.gateway.entrypoints=websecure"
       - "traefik.http.routers.gateway.tls.certresolver=letsencrypt"
       - "traefik.http.routers.gateway.middlewares=rate-limit@file,compress@file"
+      - "traefik.http.routers.gateway.service=gateway"
+      # #9600 — l'adresse signée d'un fichier protégé porte dans son CHEMIN un
+      # jeton qui suffit à lire les octets : son routeur propre (plus spécifique,
+      # donc prioritaire) ne l'écrit pas au journal d'accès. Traefik ne sait pas
+      # masquer un seul segment de chemin.
+      - "traefik.http.routers.gateway-signed-files.rule=Host(`gate.${DOMAIN:-localhost}`) && PathPrefix(`/api/v1/attachments/signed/`)"
+      - "traefik.http.routers.gateway-signed-files.entrypoints=websecure"
+      - "traefik.http.routers.gateway-signed-files.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.gateway-signed-files.middlewares=rate-limit@file,compress@file"
+      - "traefik.http.routers.gateway-signed-files.service=gateway"
+      - "traefik.http.routers.gateway-signed-files.observability.accessLogs=false"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # Static Files Service - Nginx pour servir les fichiers uploadés sur static.${DOMAIN}

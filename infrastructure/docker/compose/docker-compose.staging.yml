@@ -333,6 +333,16 @@ services:
       - "traefik.http.routers.gateway-staging.middlewares=rate-limit@file,compress@file"
       - "traefik.http.routers.gateway-staging.entrypoints=websecure"
       - "traefik.http.routers.gateway-staging.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.gateway-staging.service=gateway-staging"
+      # #9600 — l'adresse signée d'un fichier protégé porte dans son CHEMIN un
+      # jeton qui suffit à lire les octets : son routeur propre (plus spécifique,
+      # donc prioritaire) ne l'écrit pas au journal d'accès du Traefik partagé.
+      - "traefik.http.routers.gateway-staging-signed-files.rule=Host(`gate.staging.${DOMAIN:-meeshy.me}`) && PathPrefix(`/api/v1/attachments/signed/`)"
+      - "traefik.http.routers.gateway-staging-signed-files.middlewares=rate-limit@file,compress@file"
+      - "traefik.http.routers.gateway-staging-signed-files.entrypoints=websecure"
+      - "traefik.http.routers.gateway-staging-signed-files.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.gateway-staging-signed-files.service=gateway-staging"
+      - "traefik.http.routers.gateway-staging-signed-files.observability.accessLogs=false"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
 
   # ===========================================================================
