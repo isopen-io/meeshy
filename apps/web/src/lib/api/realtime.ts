@@ -170,6 +170,10 @@ function syncConnection(): void {
 /* Les magasins en mémoire d'une identité (outbox, overrides de rangée,
    frappe) se vident dès qu'elle change (#8674, `identity-scoped-stores.ts`). */
 watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore });
+/* LE CLIENT SE DÉCLARE (#9611) — appris après la première peinture, publié
+   pour le flux de connexion (`auth.ts`) ; la socket le relit elle-même. */
+void import('@/lib/net/client-session').then(({ publishClientDeclaration }) => publishClientDeclaration()).catch(() => undefined);
+
 sessionStore.subscribe(syncConnection);
 // La session peut déjà être authentifiée au moment où ce module se charge
 // (restauration `localStorage`, `main.tsx` § « LA SESSION EST TENUE » —

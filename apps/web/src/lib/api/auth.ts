@@ -200,24 +200,34 @@ export type AuthDeps = {
 
 /**
  * LE CLIENT SE DÉCLARE EN OUVRANT UNE SESSION (#9611) — chaque requête de ce
- * flux porte les en-têtes `X-Meeshy-*` (`lib/net/client-session.ts`), que la
- * passerelle ne lit qu'à `createSession`. Un en-tête nommé par l'appelant
- * l'emporte ; une déclaration indisponible (chunk refusé, hôte muet) laisse
- * partir la requête sans elle — se connecter ne dépend jamais d'elle.
+ * flux porte les en-têtes `X-Meeshy-*`, que la passerelle ne lit qu'à
+ * `createSession`. Un en-tête nommé par l'appelant l'emporte ; une
+ * déclaration absente laisse partir la requête sans elle — se connecter ne
+ * dépend jamais d'elle.
  */
-export function declaringClient(
-  transport: AuthTransport,
-  declaration: () => Promise<Readonly<Record<string, string>>>,
-): AuthTransport {
+export function declaringClient(transport: AuthTransport, declaration: () => Readonly<Record<string, string>>): AuthTransport {
   return {
-    request: async <T>(req: HttpRequest) => {
-      const declared = await declaration().catch(() => ({}));
-      return transport.request<T>({ ...req, headers: { ...declared, ...req.headers } });
-    },
+    request: <T>(req: HttpRequest) => transport.request<T>({ ...req, headers: { ...declaration(), ...req.headers } }),
   };
 }
 
-const clientDeclaration = () => import('@/lib/net/client-session').then(({ learnedClientHeaders }) => learnedClientHeaders());
+/**
+ * OÙ LA DÉCLARATION EST LUE — publiée sur `globalThis` par
+ * `lib/net/client-session.ts` (`publishClientDeclaration`, appelé par
+ * `api/realtime.ts` après la première peinture). Ni import statique ni
+ * `import()` d'ici : le premier ajouterait le module à chaque route qui
+ * importe ce flux, le second y ajouterait l'aide de préchargement — octets
+ * tous deux portés par la table de l'entrée (première peinture mesurée,
+ * 2026-10-08). Le nom est épinglé des deux côtés par
+ * `auth-client-declaration.test.ts`.
+ */
+export const CLIENT_DECLARATION_GLOBAL = '__meeshyClientDeclaration';
+
+export function publishedClientDeclaration(host: object = globalThis): Readonly<Record<string, string>> {
+  const value: unknown = (host as Record<string, unknown>)[CLIENT_DECLARATION_GLOBAL];
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+}
 
 /**
  * LA BRANCHE PARTAGÉE d'une réponse « connexion réussie » (`LoginResponseData`)
@@ -500,7 +510,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
  * PARTAGÉ (`client.ts`) et le magasin PARTAGÉ (`session.ts`) — jamais une
  * seconde instance de l'un ou de l'autre.
  */
-export const auth = createAuthClient({ transport: declaringClient(httpTransport, clientDeclaration), store: sessionStore });
+export const auth = createAuthClient({ transport: declaringClient(httpTransport, publishedClientDeclaration), store: sessionStore });
 export const {
   login,
   register,

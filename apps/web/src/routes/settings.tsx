@@ -24,7 +24,6 @@ import {
 } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { useDevicePushRow } from '@/lib/push/use-device-push';
-import { useSearch } from '@/lib/router';
 import { currentThemePreference, setThemePreference, type ThemePreference } from '@/lib/scheme';
 import { href, navigate } from '@/routes/route-table';
 import { AccountSwitcherSheet, SwitchAccountButton } from '@/routes/settings-accounts';
@@ -114,9 +113,18 @@ function useGalleryToggle(): GalleryToggle | undefined {
   };
 }
 
+/**
+ * Le volet demandé, lu sur l'adresse à chaque rendu — le routeur rend l'écran
+ * à nouveau à chaque changement de requête (`router.tsx`, `<Screen key>` hors
+ * mémo). Lu ici plutôt que par `useSearch` : l'import du routeur ajoutait son
+ * chunk à la liste que l'entrée précharge pour cet écran (première peinture,
+ * mesurée le 2026-10-08).
+ */
+const securityPanelOpen = (): boolean =>
+  typeof location === 'object' && new URLSearchParams(location.search).get(SECURITY_PANEL_PARAM) === SECURITY_PANEL;
+
 export default function SettingsScreen() {
-  const [search] = useSearch();
-  if (search.get(SECURITY_PANEL_PARAM) === SECURITY_PANEL) {
+  if (securityPanelOpen()) {
     return (
       <Suspense fallback={null}>
         <SettingsSecurity />

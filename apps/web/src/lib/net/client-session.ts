@@ -32,12 +32,12 @@ import {
  * le serveur jetterait (fuseau hors forme, texte trop long) n'est pas déclaré.
  *
  * **HORS DE LA PREMIÈRE PEINTURE, ET HORS DE SA TABLE DE PRÉCHARGEMENT.** Ce
- * module n'est atteint que par `import()` depuis deux chunks déjà paresseux —
- * le flux de connexion (`api/auth.ts`, seul porteur des requêtes qui ouvrent
- * une session : la passerelle ne lit ces en-têtes qu'à `createSession`) et la
- * poignée de main (`socket-io-factory.ts`, qui tient la session à jour à
- * chaque connexion). Le transport du socle n'en sait rien et ne pèse pas un
- * octet de plus.
+ * module n'est atteint que par `import()` depuis le chunk du temps réel, déjà
+ * paresseux : `api/realtime.ts` publie la déclaration pour le flux de
+ * connexion (`api/auth.ts`, seul porteur des requêtes qui ouvrent une
+ * session : la passerelle ne lit ces en-têtes qu'à `createSession`), et la
+ * poignée de main (`socket-io-factory.ts`) la relit à chaque connexion. Le
+ * transport du socle et le flux de connexion n'en importent rien.
  */
 
 export type ClientHints = { readonly platform: string; readonly platformVersion: string; readonly model: string };
@@ -180,6 +180,17 @@ export function learnThisClient(): Promise<ClientSessionInfo> {
 /** Les en-têtes de la déclaration, pour les requêtes qui OUVRENT une session (`api/auth.ts`). */
 export async function learnedClientHeaders(): Promise<Readonly<Record<string, string>>> {
   return clientSessionHeaders(await learnThisClient());
+}
+
+/**
+ * Publie les en-têtes appris là où le flux de connexion les lit
+ * (`api/auth.ts`, `publishedClientDeclaration`) — sans que ce flux importe ce
+ * module. Le nom est celui d'`auth.ts` (`CLIENT_DECLARATION_GLOBAL`), épinglé
+ * par `auth-client-declaration.test.ts`.
+ */
+export async function publishClientDeclaration(host: object = globalThis): Promise<void> {
+  const headers = await learnedClientHeaders();
+  Object.assign(host, { __meeshyClientDeclaration: headers });
 }
 
 /** Le relevé de la poignée de main socket (`socket-io-factory.ts`). */
