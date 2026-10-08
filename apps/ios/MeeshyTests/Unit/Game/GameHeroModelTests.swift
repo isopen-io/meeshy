@@ -11,7 +11,7 @@ final class GameHeroModelTests: XCTestCase {
     func test_theEarnList_hasOneItemPerFamily_sortedByDescendingWeight() {
         let items = GameHero.earnItems()
         XCTAssertEqual(items.map(\.family), [.content, .comment, .social, .conversation, .tool])
-        XCTAssertEqual(items.map(\.weight), [300, 40, 7, 5, 4])
+        XCTAssertEqual(items.map(\.weight), [1000, 100, 7, 5, 4])
     }
 
     func test_theEarnList_isTheCatalogScale_notACopy() {
