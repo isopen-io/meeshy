@@ -195,7 +195,7 @@ function geoValue(key, value, ctx, seed) {
   if (typeof value === 'string') return key !== null && PASCAL_KEYS.has(key.toLowerCase()) && admissibleEnum(key, value, ctx) ? value : null;
   if (Array.isArray(value)) return value.map((v, i) => geoValue(null, v, ctx, [...seed, i]));
   if (value === null || value === undefined || typeof value !== 'object' || value instanceof Date) return value;
-  return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, geoValue(k, v, ctx, [...seed, k])]));
+  return Object.fromEntries(Object.entries(value).map(([k, v], i) => [scrubKeyName(k, ctx, seed, i), geoValue(k, v, ctx, [...seed, k])]));
 }
 
 function birthValue(value, ctx, seed) {
@@ -288,7 +288,7 @@ function geoViolations(value, ctx, path, key = null) {
   if (typeof value === 'string') return key !== null && PASCAL_KEYS.has(key.toLowerCase()) && admissibleEnum(key, value, ctx) ? [] : [{ path, rule: 'lieu en clair' }];
   if (Array.isArray(value)) return value.flatMap((v, i) => geoViolations(v, ctx, `${path}[${i}]`));
   if (typeof value !== 'object' || value instanceof Date) return [];
-  return Object.entries(value).flatMap(([k, v]) => geoViolations(v, ctx, `${path}.${k}`, k));
+  return Object.entries(value).flatMap(([k, v]) => [...(keyKept(k, ctx) ? [] : [{ path: `${path}.${k}`, rule: 'clé porteuse d’un identifiant personnel' }]), ...geoViolations(v, ctx, `${path}.${k}`, k)]);
 }
 
 function entryViolations(k, v, ctx, policy, here) {

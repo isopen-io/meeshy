@@ -92,7 +92,7 @@ describe('monde fermé des collections', () => {
     const { db } = await freshDb();
     await db.collection('User_backup_20260901').insertOne({ email: 'jeanne.essai@real-mail.test' });
     const dir = workdir();
-    await assert.rejects(run(db, [...write(dir), '--drop-collection', 'User']), /User/);
+    await assert.rejects(run(db, [...write(dir), '--drop-collection', 'User_backup_20260901', '--drop-collection', 'User']), /ne retire jamais une collection inventoriée : User$/);
     const dry = await run(db, ['--dry-run', '--drop-collection', 'User_backup_20260901']);
     assert.equal(dry.code, 0);
     assert.match(dry.text, /User_backup_20260901/);
@@ -110,6 +110,13 @@ describe('monde fermé des collections', () => {
     await db.collection('MessageTranslation').insertOne({ translatedContent: 'Bonjour Jeanne' });
     const { violations } = await verifyDatabase(db, ctx);
     assert.ok(violations.some((v) => v.collection === 'MessageTranslation'), 'collection inconnue non signalée');
+
+    const withoutUsers = mongo.client.db(`anon_cli_sans_compte_${process.pid}`);
+    await withoutUsers.dropDatabase();
+    await withoutUsers.collection('Conversation').insertOne({ identifier: 'mshy_0123456789abcdef', type: 'group', title: 'Phare.' });
+    const noAccount = await verifyDatabase(withoutUsers, ctx);
+    assert.ok(noAccount.reread > 0);
+    assert.ok(noAccount.violations.some((v) => v.collection === 'User' && /aucun compte/.test(v.rule)), 'une base sans compte passe le contrôle');
 
     const empty = mongo.client.db(`anon_cli_vide_${process.pid}`);
     await empty.dropDatabase();

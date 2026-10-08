@@ -21,7 +21,9 @@ const serialize = (value) => JSON.stringify(value, (_, v) => (v?.type === 'Buffe
 
 const LEAKS = [
   ['coordonnées écrites en chaîne', { location: { lat: '45.764043', lng: '4.835659' } }, ['45.764043', '4.835659']],
+  ['coordonnées écrites en chaîne hors d’une clé de lieu', { lat: '45.764043', longitude: '4.835659' }, ['45.764043', '4.835659']],
   ['coordonnées sous une autre clé', { location: [4.835659, 45.764043], center: { x: 4.83, y: 45.76 } }, ['4.835659', '45.764043', '4.83', '45.76']],
+  ['clé porteuse d’identité sous une clé de lieu', { location: { 'Jeanne Essai': [4.835659, 45.764043], 'jeanne.essai@real-mail.test': 1 } }, ['Jeanne', 'real-mail', '4.835659']],
   ['téléphone écrit en nombre', { phone: 33612345678, contactPhone: 33612345678 }, ['33612345678']],
   ['IPv6 sous une clé autorisée', { sourceId: '2a01:e0a:1f2:3::5' }, ['2a01:e0a']],
   ['IPv6 libre', { candidate: '2a01:e0a:1f2:3::5' }, ['2a01:e0a']],
