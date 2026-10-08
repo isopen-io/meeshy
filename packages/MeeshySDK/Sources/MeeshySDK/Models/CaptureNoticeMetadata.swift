@@ -127,18 +127,12 @@ public struct CaptureNoticeMetadata: Codable, Sendable, Equatable {
         try c.encode(nature, forKey: .nature)
         try c.encode(outcome, forKey: .outcome)
         try c.encode(captureKind, forKey: .captureKind)
-        try c.encode(Self.isoFormatter(fractional: true).string(from: sentAt), forKey: .sentAt)
+        try c.encode(WireDate.string(from: sentAt), forKey: .sentAt)
     }
 
     /// L'instant ISO 8601, secondes fractionnaires ou non — indépendant de la
     /// stratégie de date du décodeur appelant (REST, socket ou GRDB).
     static func instant(_ raw: String) -> Date? {
-        isoFormatter(fractional: true).date(from: raw) ?? isoFormatter(fractional: false).date(from: raw)
-    }
-
-    private static func isoFormatter(fractional: Bool) -> ISO8601DateFormatter {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = fractional ? [.withInternetDateTime, .withFractionalSeconds] : [.withInternetDateTime]
-        return formatter
+        WireDate.date(from: raw)
     }
 }
