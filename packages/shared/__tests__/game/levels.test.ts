@@ -1,21 +1,28 @@
 /**
- * La courbe des 100 niveaux du Jeu Meeshy (#9373) : seuil(N) = 10 × N².
- * Ce qui se vérifie : la lecture du niveau sur le score, la progression dans
- * le niveau, les dix paliers, le record, l'éligibilité au Prestige — et que
+ * La courbe des niveaux du Jeu Meeshy (#9373, ouverte par le rang #9688) :
+ * seuil(N) = 10 × N². Ce qui se vérifie : la lecture du niveau sur le score
+ * sous son plafond, la progression dans le niveau, les vingt paliers, la
+ * projection de l'ancienne loi, le record, l'éligibilité au Prestige — et que
  * les six anciens seuils restent servis tels quels aux anciens clients.
  */
 
 import { describe, it, expect } from 'vitest';
 import {
-  GAME_LEVEL_MAX,
   GAME_PRESTIGE_MAX,
+  LEGACY_LEVEL_TIER_KEYS,
+  LEVEL_CAP_AMBASSADOR,
+  LEVEL_CAP_BASE,
   LEVEL_TIER_KEYS,
+  NO_LEVEL_CAP,
   canPrestige,
+  legacyLevelProgress,
+  legacyLevelTierKey,
   levelFromScore,
   levelProgress,
   levelThreshold,
   levelTierIndex,
   levelTierKey,
+  levelTierStart,
   newLevelsReached,
   recordLevel,
 } from '../../utils/game/levels.js';
@@ -30,23 +37,49 @@ describe('seuil et niveau', () => {
     expect(levelThreshold(100)).toBe(100_000);
   });
 
-  it('lit le niveau sur le score, de 1 à 100', () => {
-    expect(levelFromScore(0)).toBe(1);
-    expect(levelFromScore(9)).toBe(1);
-    expect(levelFromScore(10)).toBe(1);
-    expect(levelFromScore(39)).toBe(1);
-    expect(levelFromScore(40)).toBe(2);
-    expect(levelFromScore(999)).toBe(9);
-    expect(levelFromScore(1000)).toBe(10);
-    expect(levelFromScore(99_999)).toBe(99);
-    expect(levelFromScore(100_000)).toBe(100);
-    expect(levelFromScore(5_000_000)).toBe(GAME_LEVEL_MAX);
+  it('continue au-delà de 100 : 999 vaut 9 980 010, 1000 vaut 10 000 000', () => {
+    expect(levelThreshold(999)).toBe(9_980_010);
+    expect(levelThreshold(1000)).toBe(10_000_000);
+    expect(levelThreshold(2000)).toBe(40_000_000);
+    expect(levelThreshold(3000)).toBe(90_000_000);
+  });
+
+  it('lit le niveau sur le score, de 1 à 100, comme hier', () => {
+    expect(levelFromScore(0, LEVEL_CAP_BASE)).toBe(1);
+    expect(levelFromScore(9, LEVEL_CAP_BASE)).toBe(1);
+    expect(levelFromScore(10, LEVEL_CAP_BASE)).toBe(1);
+    expect(levelFromScore(39, LEVEL_CAP_BASE)).toBe(1);
+    expect(levelFromScore(40, LEVEL_CAP_BASE)).toBe(2);
+    expect(levelFromScore(999, LEVEL_CAP_BASE)).toBe(9);
+    expect(levelFromScore(1000, LEVEL_CAP_BASE)).toBe(10);
+    expect(levelFromScore(99_999, LEVEL_CAP_BASE)).toBe(99);
+    expect(levelFromScore(100_000, LEVEL_CAP_BASE)).toBe(100);
+  });
+
+  it('ne s\'arrête plus à 100', () => {
+    expect(levelFromScore(100_000 + 2009, LEVEL_CAP_BASE)).toBe(100);
+    expect(levelFromScore(102_010, LEVEL_CAP_BASE)).toBe(101);
+    expect(levelFromScore(5_000_000, LEVEL_CAP_BASE)).toBe(499);
+  });
+
+  it('borne à 499 sous Ambassadeur : 499 se lit, 500 attend le rang', () => {
+    expect(levelFromScore(levelThreshold(499), LEVEL_CAP_BASE)).toBe(499);
+    expect(levelFromScore(levelThreshold(500), LEVEL_CAP_BASE)).toBe(499);
+    expect(levelFromScore(levelThreshold(500), LEVEL_CAP_AMBASSADOR)).toBe(500);
+  });
+
+  it('borne à 1000 pour Ambassadeur : 1001 attend Oracle, qui n\'a plus de limite', () => {
+    expect(levelFromScore(levelThreshold(1000), LEVEL_CAP_AMBASSADOR)).toBe(1000);
+    expect(levelFromScore(levelThreshold(1001), LEVEL_CAP_AMBASSADOR)).toBe(1000);
+    expect(levelFromScore(levelThreshold(1001), NO_LEVEL_CAP)).toBe(1001);
+    expect(levelFromScore(levelThreshold(3000), NO_LEVEL_CAP)).toBe(3000);
+    expect(levelFromScore(levelThreshold(3000) - 1, NO_LEVEL_CAP)).toBe(2999);
   });
 
   it('traite un score illisible comme zéro', () => {
-    expect(levelFromScore(Number.NaN)).toBe(1);
-    expect(levelFromScore(-50)).toBe(1);
-    expect(levelFromScore(Number.POSITIVE_INFINITY)).toBe(1);
+    expect(levelFromScore(Number.NaN, NO_LEVEL_CAP)).toBe(1);
+    expect(levelFromScore(-50, NO_LEVEL_CAP)).toBe(1);
+    expect(levelFromScore(Number.POSITIVE_INFINITY, NO_LEVEL_CAP)).toBe(1);
   });
 
   it('garde les six anciens seuils tels quels pour les anciens clients', () => {
@@ -56,7 +89,7 @@ describe('seuil et niveau', () => {
 
 describe('progression dans le niveau', () => {
   it('place le score entre le seuil du niveau et celui du suivant', () => {
-    const p = levelProgress(12_180);
+    const p = levelProgress(12_180, LEVEL_CAP_BASE);
     expect(p.level).toBe(34);
     expect(p.floorScore).toBe(11_560);
     expect(p.nextThreshold).toBe(12_250);
@@ -66,7 +99,7 @@ describe('progression dans le niveau', () => {
   });
 
   it('démarre le niveau 1 à zéro, puisque personne n\'est en dessous', () => {
-    const p = levelProgress(0);
+    const p = levelProgress(0, LEVEL_CAP_BASE);
     expect(p.level).toBe(1);
     expect(p.floorScore).toBe(0);
     expect(p.nextThreshold).toBe(40);
@@ -74,23 +107,97 @@ describe('progression dans le niveau', () => {
   });
 
   it('est à zéro pile sur un seuil', () => {
-    expect(levelProgress(1000).progress).toBe(0);
-    expect(levelProgress(1000).pointsToNext).toBe(210);
+    expect(levelProgress(1000, LEVEL_CAP_BASE).progress).toBe(0);
+    expect(levelProgress(1000, LEVEL_CAP_BASE).pointsToNext).toBe(210);
   });
 
-  it('est plein, sans suite, au niveau 100', () => {
-    const p = levelProgress(100_000);
+  it('continue après le niveau 100 : le niveau 100 n\'est plus un sommet', () => {
+    const p = levelProgress(100_000, LEVEL_CAP_BASE);
     expect(p.level).toBe(100);
+    expect(p.nextThreshold).toBe(102_010);
+    expect(p.pointsToNext).toBe(2010);
+    expect(p.progress).toBe(0);
+    expect(p.isMax).toBe(false);
+  });
+
+  it('est plein, sans suite, au plafond du rang — et le dit', () => {
+    const p = levelProgress(5_000_000, LEVEL_CAP_BASE);
+    expect(p.level).toBe(499);
     expect(p.nextThreshold).toBeNull();
     expect(p.pointsToNext).toBe(0);
     expect(p.progress).toBe(1);
     expect(p.isMax).toBe(true);
+    expect(p.cap).toBe(499);
+  });
+
+  it('n\'est jamais plein sans plafond', () => {
+    const p = levelProgress(levelThreshold(1001), NO_LEVEL_CAP);
+    expect(p.level).toBe(1001);
+    expect(p.isMax).toBe(false);
+    expect(p.nextThreshold).toBe(levelThreshold(1002));
+    expect(p.cap).toBeNull();
   });
 });
 
-describe('les dix paliers', () => {
-  it('porte dix clés stables', () => {
-    expect(LEVEL_TIER_KEYS).toEqual([
+describe('la projection de l\'ancienne loi (champs d\'hier du fil)', () => {
+  it('borne le niveau à 100, plein et sans suite, palier Galaxie', () => {
+    const p = legacyLevelProgress(levelThreshold(640));
+    expect(p.level).toBe(100);
+    expect(p.tier).toBe('galaxie');
+    expect(p.nextThreshold).toBeNull();
+    expect(p.progress).toBe(1);
+    expect(p.isMax).toBe(true);
+    expect(legacyLevelTierKey(1000)).toBe('galaxie');
+  });
+
+  it('ne change rien sous le niveau 100', () => {
+    expect(legacyLevelProgress(12_180)).toEqual({ ...levelProgress(12_180, LEVEL_CAP_BASE), cap: 100 });
+  });
+});
+
+describe('les vingt paliers', () => {
+  it('garde les dix clés d\'hier, puis neuf paliers de cent niveaux et Singularité', () => {
+    expect(LEVEL_TIER_KEYS.slice(0, 10)).toEqual(LEGACY_LEVEL_TIER_KEYS);
+    expect(LEVEL_TIER_KEYS.slice(10)).toEqual([
+      'nebuleuse',
+      'pulsar',
+      'quasar',
+      'supernova',
+      'magnetar',
+      'amas',
+      'superamas',
+      'cosmos',
+      'infini',
+      'singularite',
+    ]);
+  });
+
+  it('range 101–199, 200–299 … 900–999, puis 1000 et au-delà', () => {
+    expect(levelTierKey(101)).toBe('nebuleuse');
+    expect(levelTierKey(199)).toBe('nebuleuse');
+    expect(levelTierKey(200)).toBe('pulsar');
+    expect(levelTierKey(499)).toBe('supernova');
+    expect(levelTierKey(500)).toBe('magnetar');
+    expect(levelTierKey(900)).toBe('infini');
+    expect(levelTierKey(999)).toBe('infini');
+    expect(levelTierKey(1000)).toBe('singularite');
+    expect(levelTierKey(25_000)).toBe('singularite');
+    expect(levelTierIndex(1000)).toBe(19);
+  });
+
+  it('dit où commence chaque palier', () => {
+    expect(levelTierStart('etincelle')).toBe(1);
+    expect(levelTierStart('lueur')).toBe(10);
+    expect(levelTierStart('galaxie')).toBe(90);
+    expect(levelTierStart('nebuleuse')).toBe(101);
+    expect(levelTierStart('pulsar')).toBe(200);
+    expect(levelTierStart('infini')).toBe(900);
+    expect(levelTierStart('singularite')).toBe(1000);
+    for (const tier of LEVEL_TIER_KEYS) expect(levelTierKey(levelTierStart(tier))).toBe(tier);
+  });
+
+  it('porte dix clés d\'hier stables', () => {
+    expect(LEGACY_LEVEL_TIER_KEYS).toEqual([
       'etincelle',
       'lueur',
       'lumiere',
@@ -132,9 +239,10 @@ describe('niveau record et passages inédits', () => {
 });
 
 describe('Prestige', () => {
-  it('n\'est offert qu\'au niveau 100', () => {
+  it('est offert à partir du niveau 100, et le reste au-delà : il est facultatif', () => {
     expect(canPrestige({ level: 99, prestige: 0 })).toBe(false);
     expect(canPrestige({ level: 100, prestige: 0 })).toBe(true);
+    expect(canPrestige({ level: 640, prestige: 0 })).toBe(true);
   });
 
   it('s\'arrête à cinq étoiles', () => {

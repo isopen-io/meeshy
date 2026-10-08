@@ -22,14 +22,14 @@ import {
   flameForm,
   flameStatus,
 } from './flame.js';
-import { gloryStanding, type MythicSeatRef } from './glory.js';
-import { canPrestige, levelProgress, recordLevel } from './levels.js';
-import { previewMint } from './mint.js';
+import { gloryStanding, levelCapForRank, type MythicSeatRef } from './glory.js';
+import { canPrestige, legacyLevel, legacyLevelProgress, levelProgress, recordLevel } from './levels.js';
+import { previewMint, type MintPreview } from './mint.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
 import { personalMissionState } from './personal-mission.js';
 import { treasuryTier } from './treasury.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
-import type { GameBlock, GameMission } from '../../types/game.js';
+import type { GameBlock, GameMintPreview, GameMission } from '../../types/game.js';
 
 /** Une mission telle que la passerelle la persiste. */
 export type GameMissionRecord = GameMission;
@@ -99,10 +99,28 @@ export type GameBlockFacts = {
   readonly extras?: GameBlockExtrasFacts;
 };
 
+/**
+ * La frappe sur le fil (#9688) : les champs d'hier sous l'ancienne loi (bornés à 100, que les clients
+ * publiés décodent strictement), la lecture ouverte par le rang dans `ladder`.
+ */
+const wireMint = (preview: MintPreview): GameMintPreview => {
+  const legacyBefore = legacyLevel(preview.levelBefore);
+  const legacyAfter = legacyLevel(preview.levelAfter);
+  return {
+    ...preview,
+    levelBefore: legacyBefore,
+    levelAfter: legacyAfter,
+    levelsLost: legacyBefore - legacyAfter,
+    ladder: { levelBefore: preview.levelBefore, levelAfter: preview.levelAfter, levelsLost: preview.levelsLost },
+  };
+};
+
 export function buildGameBlock(facts: GameBlockFacts): GameBlock {
-  const progress = levelProgress(facts.score);
-  const record = recordLevel({ level: progress.level, previousRecord: facts.levelRecord });
   const standing = gloryStanding({ glory: facts.glory, mythic: facts.mythic, mythicSeat: facts.mythicSeat ?? null });
+  const levelCap = levelCapForRank(standing.rank);
+  const progress = levelProgress(facts.score, levelCap);
+  const legacy = legacyLevelProgress(facts.score);
+  const record = recordLevel({ level: progress.level, previousRecord: facts.levelRecord });
   const treasury = treasuryTier(facts.balance);
 
   const flameToday = facts.flameToday ?? facts.today;
@@ -127,16 +145,27 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
 
   return {
     level: {
-      level: progress.level,
-      tier: progress.tier,
-      score: progress.score,
-      floorScore: progress.floorScore,
-      nextThreshold: progress.nextThreshold,
-      pointsToNext: progress.pointsToNext,
-      progress: progress.progress,
-      record,
+      level: legacy.level,
+      tier: legacy.tier,
+      score: legacy.score,
+      floorScore: legacy.floorScore,
+      nextThreshold: legacy.nextThreshold,
+      pointsToNext: legacy.pointsToNext,
+      progress: legacy.progress,
+      record: legacyLevel(record),
       prestige: facts.prestige,
       canPrestige: canPrestige({ level: progress.level, prestige: facts.prestige }),
+      ladder: {
+        level: progress.level,
+        tier: progress.tier,
+        floorScore: progress.floorScore,
+        nextThreshold: progress.nextThreshold,
+        pointsToNext: progress.pointsToNext,
+        progress: progress.progress,
+        record,
+        cap: progress.cap,
+        isMax: progress.isMax,
+      },
     },
     glory: {
       glory: standing.glory,
@@ -149,11 +178,14 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       mythic: standing.mythic,
     },
     treasury: { held: treasury.held, tier: treasury.tier, next: treasury.next },
-    mint: previewMint({
-      score: facts.score,
-      mintedLifetime: facts.mintedLifetime,
-      debitablePoints: facts.debitablePoints,
-    }),
+    mint: wireMint(
+      previewMint({
+        score: facts.score,
+        mintedLifetime: facts.mintedLifetime,
+        debitablePoints: facts.debitablePoints,
+        levelCap,
+      }),
+    ),
     missions: {
       dayKey: facts.today,
       prismDay: isPrismDay({ userId: facts.userId, dayKey: facts.today }),

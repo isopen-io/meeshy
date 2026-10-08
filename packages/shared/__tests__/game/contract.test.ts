@@ -25,6 +25,7 @@ import {
   type GameBlock,
 } from '../../types/game.js';
 import { buildGameBlock, type GameMissionRecord } from '../../utils/game/game-block.js';
+import { levelThreshold } from '../../utils/game/levels.js';
 import { drawDailyMissions } from '../../utils/game/missions.js';
 import { isEngagementProgressPayload } from '../../types/engagement.js';
 
@@ -72,6 +73,45 @@ describe('le bloc game', () => {
     expect(b.glory).toMatchObject({ glory: 2000, rank: 'echo', division: 3, division5: 5, mythic: null });
     expect(b.treasury).toMatchObject({ held: 9, tier: 'bourse' });
     expect(b.mint).toMatchObject({ number: 13, price: 1294, edition: 'silver', canMint: true, levelsLost: 2 });
+  });
+
+  it('sert la lecture ouverte par le rang dans ladder, sous les mêmes valeurs qu\'hier quand le niveau est sous 100 (#9688)', () => {
+    const b = block();
+    expect(b.level.ladder).toEqual({
+      level: 34,
+      tier: 'eclat',
+      floorScore: b.level.floorScore,
+      nextThreshold: b.level.nextThreshold,
+      pointsToNext: b.level.pointsToNext,
+      progress: b.level.progress,
+      record: 36,
+      cap: 499,
+      isMax: false,
+    });
+  });
+
+  it('garde les champs d\'hier bornés à 100 et Galaxie pour les clients publiés, la vérité dans ladder (#9688)', () => {
+    const score = levelThreshold(640);
+    const capped = block({ score, debitablePoints: score, levelRecord: 120, glory: 2000 });
+    expect(capped.level).toMatchObject({ level: 100, tier: 'galaxie', record: 100, nextThreshold: null, progress: 1, canPrestige: true });
+    expect(capped.level.ladder).toMatchObject({ level: 499, tier: 'supernova', record: 499, cap: 499, isMax: true, nextThreshold: null });
+    expect(capped.mint).toMatchObject({ levelBefore: 100, levelAfter: 100, levelsLost: 0, ladder: { levelBefore: 499, levelAfter: 499, levelsLost: 0 } });
+    expect(gameBlockSchema.safeParse(capped).success).toBe(true);
+
+    const ambassador = block({ score, debitablePoints: score, levelRecord: 499, glory: 130_000 });
+    expect(ambassador.level).toMatchObject({ level: 100, tier: 'galaxie', record: 100 });
+    expect(ambassador.level.ladder).toMatchObject({ level: 640, tier: 'amas', record: 640, cap: 1000, isMax: false });
+    expect(ambassador.mint.ladder).toEqual({ levelBefore: 640, levelAfter: 639, levelsLost: 1 });
+
+    const oracle = block({ score: levelThreshold(1001), debitablePoints: 0, levelRecord: 1000, glory: 380_000 });
+    expect(oracle.level.ladder).toMatchObject({ level: 1001, tier: 'singularite', cap: null, isMax: false });
+    expect(gameBlockSchema.safeParse(oracle).success).toBe(true);
+  });
+
+  it('refuse un niveau d\'hier au-delà de 100 : le contrat des clients publiés ne bouge pas (#9688)', () => {
+    const b = block();
+    expect(gameBlockSchema.safeParse({ ...b, level: { ...b.level, level: 101 } }).success).toBe(false);
+    expect(gameBlockSchema.safeParse({ ...b, level: { ...b.level, tier: 'nebuleuse' } }).success).toBe(false);
   });
 
   it('garde la division héritée (1–3) que les clients publiés décodent, et sert la division à cinq crans à côté (#9636)', () => {

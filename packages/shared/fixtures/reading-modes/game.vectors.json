@@ -1,7 +1,7 @@
 {
   "$format": {
     "input": "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic-seats, mythic-crossing, mythic-signature, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
-    "expected": "La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax} ; mint-price → {price, edition} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber, mythicEdition} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.",
+    "expected": "La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax, cap (null : sans limite), legacyLevel, legacyTier} — le plafond se lit sur la Gloire (`glory`) ; mint-price → {price, edition} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber, mythicEdition, levelCap (499, 1000 ou null)} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.",
     "provenance": "Contrat cross-plateforme de la loi du Jeu Meeshy (#9373, vague 2 #9384 à #9392 : les cas de la vague 2 viennent APRÈS ceux de la vague 1, jamais mêlés). TS le produit (__tests__/game/game-vectors-law.ts) et le rejoue (__tests__/vectors/game.vectors.test.ts) ; iOS le rejoue (GameLawVectorTests). Sur divergence, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui. Régénérer : UPDATE_GAME_VECTORS=1 npx vitest run __tests__/vectors/game.vectors.test.ts."
   },
   "vectors": [
@@ -9,7 +9,8 @@
       "_label": "niveau pour un score de 0",
       "input": {
         "law": "level",
-        "score": 0
+        "score": 0,
+        "glory": 0
       },
       "expected": {
         "level": 1,
@@ -18,14 +19,18 @@
         "nextThreshold": 40,
         "pointsToNext": 40,
         "progress": 0,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 1,
+        "legacyTier": "etincelle"
       }
     },
     {
       "_label": "niveau pour un score de 9",
       "input": {
         "law": "level",
-        "score": 9
+        "score": 9,
+        "glory": 0
       },
       "expected": {
         "level": 1,
@@ -34,14 +39,18 @@
         "nextThreshold": 40,
         "pointsToNext": 31,
         "progress": 0.225,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 1,
+        "legacyTier": "etincelle"
       }
     },
     {
       "_label": "niveau pour un score de 10",
       "input": {
         "law": "level",
-        "score": 10
+        "score": 10,
+        "glory": 0
       },
       "expected": {
         "level": 1,
@@ -50,14 +59,18 @@
         "nextThreshold": 40,
         "pointsToNext": 30,
         "progress": 0.25,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 1,
+        "legacyTier": "etincelle"
       }
     },
     {
       "_label": "niveau pour un score de 39",
       "input": {
         "law": "level",
-        "score": 39
+        "score": 39,
+        "glory": 0
       },
       "expected": {
         "level": 1,
@@ -66,14 +79,18 @@
         "nextThreshold": 40,
         "pointsToNext": 1,
         "progress": 0.975,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 1,
+        "legacyTier": "etincelle"
       }
     },
     {
       "_label": "niveau pour un score de 40",
       "input": {
         "law": "level",
-        "score": 40
+        "score": 40,
+        "glory": 0
       },
       "expected": {
         "level": 2,
@@ -82,14 +99,18 @@
         "nextThreshold": 90,
         "pointsToNext": 50,
         "progress": 0,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 2,
+        "legacyTier": "etincelle"
       }
     },
     {
       "_label": "niveau pour un score de 89",
       "input": {
         "law": "level",
-        "score": 89
+        "score": 89,
+        "glory": 0
       },
       "expected": {
         "level": 2,
@@ -98,14 +119,18 @@
         "nextThreshold": 90,
         "pointsToNext": 1,
         "progress": 0.98,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 2,
+        "legacyTier": "etincelle"
       }
     },
     {
       "_label": "niveau pour un score de 90",
       "input": {
         "law": "level",
-        "score": 90
+        "score": 90,
+        "glory": 0
       },
       "expected": {
         "level": 3,
@@ -114,14 +139,18 @@
         "nextThreshold": 160,
         "pointsToNext": 70,
         "progress": 0,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 3,
+        "legacyTier": "etincelle"
       }
     },
     {
       "_label": "niveau pour un score de 249",
       "input": {
         "law": "level",
-        "score": 249
+        "score": 249,
+        "glory": 0
       },
       "expected": {
         "level": 4,
@@ -130,14 +159,18 @@
         "nextThreshold": 250,
         "pointsToNext": 1,
         "progress": 0.988889,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 4,
+        "legacyTier": "etincelle"
       }
     },
     {
       "_label": "niveau pour un score de 250",
       "input": {
         "law": "level",
-        "score": 250
+        "score": 250,
+        "glory": 0
       },
       "expected": {
         "level": 5,
@@ -146,14 +179,18 @@
         "nextThreshold": 360,
         "pointsToNext": 110,
         "progress": 0,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 5,
+        "legacyTier": "etincelle"
       }
     },
     {
       "_label": "niveau pour un score de 999",
       "input": {
         "law": "level",
-        "score": 999
+        "score": 999,
+        "glory": 0
       },
       "expected": {
         "level": 9,
@@ -162,14 +199,18 @@
         "nextThreshold": 1000,
         "pointsToNext": 1,
         "progress": 0.994737,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 9,
+        "legacyTier": "etincelle"
       }
     },
     {
       "_label": "niveau pour un score de 1000",
       "input": {
         "law": "level",
-        "score": 1000
+        "score": 1000,
+        "glory": 0
       },
       "expected": {
         "level": 10,
@@ -178,14 +219,18 @@
         "nextThreshold": 1210,
         "pointsToNext": 210,
         "progress": 0,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 10,
+        "legacyTier": "lueur"
       }
     },
     {
       "_label": "niveau pour un score de 12180",
       "input": {
         "law": "level",
-        "score": 12180
+        "score": 12180,
+        "glory": 0
       },
       "expected": {
         "level": 34,
@@ -194,14 +239,18 @@
         "nextThreshold": 12250,
         "pointsToNext": 70,
         "progress": 0.898551,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 34,
+        "legacyTier": "eclat"
       }
     },
     {
       "_label": "niveau pour un score de 24999",
       "input": {
         "law": "level",
-        "score": 24999
+        "score": 24999,
+        "glory": 0
       },
       "expected": {
         "level": 49,
@@ -210,14 +259,18 @@
         "nextThreshold": 25000,
         "pointsToNext": 1,
         "progress": 0.99899,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 49,
+        "legacyTier": "rayon"
       }
     },
     {
       "_label": "niveau pour un score de 25000",
       "input": {
         "law": "level",
-        "score": 25000
+        "score": 25000,
+        "glory": 0
       },
       "expected": {
         "level": 50,
@@ -226,14 +279,18 @@
         "nextThreshold": 26010,
         "pointsToNext": 1010,
         "progress": 0,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 50,
+        "legacyTier": "aurore"
       }
     },
     {
       "_label": "niveau pour un score de 56250",
       "input": {
         "law": "level",
-        "score": 56250
+        "score": 56250,
+        "glory": 0
       },
       "expected": {
         "level": 75,
@@ -242,14 +299,18 @@
         "nextThreshold": 57760,
         "pointsToNext": 1510,
         "progress": 0,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 75,
+        "legacyTier": "etoile"
       }
     },
     {
       "_label": "niveau pour un score de 99999",
       "input": {
         "law": "level",
-        "score": 99999
+        "score": 99999,
+        "glory": 0
       },
       "expected": {
         "level": 99,
@@ -258,39 +319,250 @@
         "nextThreshold": 100000,
         "pointsToNext": 1,
         "progress": 0.999497,
-        "isMax": false
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 99,
+        "legacyTier": "galaxie"
       }
     },
     {
       "_label": "niveau pour un score de 100000",
       "input": {
         "law": "level",
-        "score": 100000
+        "score": 100000,
+        "glory": 0
       },
       "expected": {
         "level": 100,
         "tier": "galaxie",
         "floorScore": 100000,
-        "nextThreshold": null,
-        "pointsToNext": 0,
-        "progress": 1,
-        "isMax": true
+        "nextThreshold": 102010,
+        "pointsToNext": 2010,
+        "progress": 0,
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
       }
     },
     {
       "_label": "niveau pour un score de 400000",
       "input": {
         "law": "level",
-        "score": 400000
+        "score": 400000,
+        "glory": 0
       },
       "expected": {
-        "level": 100,
-        "tier": "galaxie",
-        "floorScore": 100000,
+        "level": 200,
+        "tier": "pulsar",
+        "floorScore": 400000,
+        "nextThreshold": 404010,
+        "pointsToNext": 4010,
+        "progress": 0,
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
+      }
+    },
+    {
+      "_label": "niveau ouvert par le rang : score 102010, 0 de Gloire",
+      "input": {
+        "law": "level",
+        "score": 102010,
+        "glory": 0
+      },
+      "expected": {
+        "level": 101,
+        "tier": "nebuleuse",
+        "floorScore": 102010,
+        "nextThreshold": 104040,
+        "pointsToNext": 2030,
+        "progress": 0,
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
+      }
+    },
+    {
+      "_label": "niveau ouvert par le rang : score 399999, 0 de Gloire",
+      "input": {
+        "law": "level",
+        "score": 399999,
+        "glory": 0
+      },
+      "expected": {
+        "level": 199,
+        "tier": "nebuleuse",
+        "floorScore": 396010,
+        "nextThreshold": 400000,
+        "pointsToNext": 1,
+        "progress": 0.999749,
+        "isMax": false,
+        "cap": 499,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
+      }
+    },
+    {
+      "_label": "niveau ouvert par le rang : score 2490010, 129999 de Gloire",
+      "input": {
+        "law": "level",
+        "score": 2490010,
+        "glory": 129999
+      },
+      "expected": {
+        "level": 499,
+        "tier": "supernova",
+        "floorScore": 2490010,
         "nextThreshold": null,
         "pointsToNext": 0,
         "progress": 1,
-        "isMax": true
+        "isMax": true,
+        "cap": 499,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
+      }
+    },
+    {
+      "_label": "niveau ouvert par le rang : score 2500000, 129999 de Gloire",
+      "input": {
+        "law": "level",
+        "score": 2500000,
+        "glory": 129999
+      },
+      "expected": {
+        "level": 499,
+        "tier": "supernova",
+        "floorScore": 2490010,
+        "nextThreshold": null,
+        "pointsToNext": 0,
+        "progress": 1,
+        "isMax": true,
+        "cap": 499,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
+      }
+    },
+    {
+      "_label": "niveau ouvert par le rang : score 2500000, 130000 de Gloire",
+      "input": {
+        "law": "level",
+        "score": 2500000,
+        "glory": 130000
+      },
+      "expected": {
+        "level": 500,
+        "tier": "magnetar",
+        "floorScore": 2500000,
+        "nextThreshold": 2510010,
+        "pointsToNext": 10010,
+        "progress": 0,
+        "isMax": false,
+        "cap": 1000,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
+      }
+    },
+    {
+      "_label": "niveau ouvert par le rang : score 10000000, 379999 de Gloire",
+      "input": {
+        "law": "level",
+        "score": 10000000,
+        "glory": 379999
+      },
+      "expected": {
+        "level": 1000,
+        "tier": "singularite",
+        "floorScore": 10000000,
+        "nextThreshold": null,
+        "pointsToNext": 0,
+        "progress": 1,
+        "isMax": true,
+        "cap": 1000,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
+      }
+    },
+    {
+      "_label": "niveau ouvert par le rang : score 10020010, 379999 de Gloire",
+      "input": {
+        "law": "level",
+        "score": 10020010,
+        "glory": 379999
+      },
+      "expected": {
+        "level": 1000,
+        "tier": "singularite",
+        "floorScore": 10000000,
+        "nextThreshold": null,
+        "pointsToNext": 0,
+        "progress": 1,
+        "isMax": true,
+        "cap": 1000,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
+      }
+    },
+    {
+      "_label": "niveau ouvert par le rang : score 10020010, 380000 de Gloire",
+      "input": {
+        "law": "level",
+        "score": 10020010,
+        "glory": 380000
+      },
+      "expected": {
+        "level": 1001,
+        "tier": "singularite",
+        "floorScore": 10020010,
+        "nextThreshold": 10040040,
+        "pointsToNext": 20030,
+        "progress": 0,
+        "isMax": false,
+        "cap": null,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
+      }
+    },
+    {
+      "_label": "niveau ouvert par le rang : score 40001234, 600000 de Gloire",
+      "input": {
+        "law": "level",
+        "score": 40001234,
+        "glory": 600000
+      },
+      "expected": {
+        "level": 2000,
+        "tier": "singularite",
+        "floorScore": 40000000,
+        "nextThreshold": 40040010,
+        "pointsToNext": 38776,
+        "progress": 0.030842,
+        "isMax": false,
+        "cap": null,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
+      }
+    },
+    {
+      "_label": "niveau ouvert par le rang : score 90000000, 1000000 de Gloire",
+      "input": {
+        "law": "level",
+        "score": 90000000,
+        "glory": 1000000
+      },
+      "expected": {
+        "level": 3000,
+        "tier": "singularite",
+        "floorScore": 90000000,
+        "nextThreshold": 90060010,
+        "pointsToNext": 60010,
+        "progress": 0,
+        "isMax": false,
+        "cap": null,
+        "legacyLevel": 100,
+        "legacyTier": "galaxie"
       }
     },
     {
@@ -371,6 +643,38 @@
         "newLevelsTo": 0,
         "newLevelsCount": 0,
         "canPrestige": false
+      }
+    },
+    {
+      "_label": "record niveau 640, ancien 499",
+      "input": {
+        "law": "level-record",
+        "level": 640,
+        "previousRecord": 499,
+        "prestige": 0
+      },
+      "expected": {
+        "record": 640,
+        "newLevelsFrom": 500,
+        "newLevelsTo": 640,
+        "newLevelsCount": 141,
+        "canPrestige": true
+      }
+    },
+    {
+      "_label": "record niveau 1000, ancien 1000",
+      "input": {
+        "law": "level-record",
+        "level": 1000,
+        "previousRecord": 1000,
+        "prestige": 2
+      },
+      "expected": {
+        "record": 1000,
+        "newLevelsFrom": 0,
+        "newLevelsTo": 0,
+        "newLevelsCount": 0,
+        "canPrestige": true
       }
     },
     {
@@ -561,12 +865,13 @@
       }
     },
     {
-      "_label": "aperçu de frappe : score 12180, 12 frappées",
+      "_label": "aperçu de frappe : score 12180, 12 frappées, 0 de Gloire",
       "input": {
         "law": "mint-preview",
         "score": 12180,
         "mintedLifetime": 12,
-        "debitablePoints": 12180
+        "debitablePoints": 12180,
+        "glory": 0
       },
       "expected": {
         "number": 13,
@@ -581,12 +886,13 @@
       }
     },
     {
-      "_label": "aperçu de frappe : score 2250, 0 frappées",
+      "_label": "aperçu de frappe : score 2250, 0 frappées, 0 de Gloire",
       "input": {
         "law": "mint-preview",
         "score": 2250,
         "mintedLifetime": 0,
-        "debitablePoints": 2250
+        "debitablePoints": 2250,
+        "glory": 0
       },
       "expected": {
         "number": 1,
@@ -601,12 +907,13 @@
       }
     },
     {
-      "_label": "aperçu de frappe : score 100000, 99 frappées",
+      "_label": "aperçu de frappe : score 100000, 99 frappées, 0 de Gloire",
       "input": {
         "law": "mint-preview",
         "score": 100000,
         "mintedLifetime": 99,
-        "debitablePoints": 100000
+        "debitablePoints": 100000,
+        "glory": 0
       },
       "expected": {
         "number": 100,
@@ -621,12 +928,13 @@
       }
     },
     {
-      "_label": "aperçu de frappe : score 2000, 0 frappées",
+      "_label": "aperçu de frappe : score 2000, 0 frappées, 0 de Gloire",
       "input": {
         "law": "mint-preview",
         "score": 2000,
         "mintedLifetime": 0,
-        "debitablePoints": 1000
+        "debitablePoints": 1000,
+        "glory": 0
       },
       "expected": {
         "number": 1,
@@ -641,12 +949,13 @@
       }
     },
     {
-      "_label": "aperçu de frappe : score 9000, 999 frappées",
+      "_label": "aperçu de frappe : score 9000, 999 frappées, 0 de Gloire",
       "input": {
         "law": "mint-preview",
         "score": 9000,
         "mintedLifetime": 999,
-        "debitablePoints": 9000
+        "debitablePoints": 9000,
+        "glory": 0
       },
       "expected": {
         "number": 1000,
@@ -661,12 +970,13 @@
       }
     },
     {
-      "_label": "aperçu de frappe : score 1300, 0 frappées",
+      "_label": "aperçu de frappe : score 1300, 0 frappées, 0 de Gloire",
       "input": {
         "law": "mint-preview",
         "score": 1300,
         "mintedLifetime": 0,
-        "debitablePoints": 1300
+        "debitablePoints": 1300,
+        "glory": 0
       },
       "expected": {
         "number": 1,
@@ -677,6 +987,69 @@
         "levelBefore": 11,
         "levelAfter": 2,
         "levelsLost": 9,
+        "gloryGained": 1000
+      }
+    },
+    {
+      "_label": "aperçu de frappe : score 4096000, 40 frappées, 0 de Gloire",
+      "input": {
+        "law": "mint-preview",
+        "score": 4096000,
+        "mintedLifetime": 40,
+        "debitablePoints": 4096000,
+        "glory": 0
+      },
+      "expected": {
+        "number": 41,
+        "price": 1541,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 499,
+        "levelAfter": 499,
+        "levelsLost": 0,
+        "gloryGained": 1000
+      }
+    },
+    {
+      "_label": "aperçu de frappe : score 4096000, 40 frappées, 200000 de Gloire",
+      "input": {
+        "law": "mint-preview",
+        "score": 4096000,
+        "mintedLifetime": 40,
+        "debitablePoints": 4096000,
+        "glory": 200000
+      },
+      "expected": {
+        "number": 41,
+        "price": 1541,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 640,
+        "levelAfter": 639,
+        "levelsLost": 1,
+        "gloryGained": 1000
+      }
+    },
+    {
+      "_label": "aperçu de frappe : score 10020510, 300 frappées, 400000 de Gloire",
+      "input": {
+        "law": "mint-preview",
+        "score": 10020510,
+        "mintedLifetime": 300,
+        "debitablePoints": 10020510,
+        "glory": 400000
+      },
+      "expected": {
+        "number": 301,
+        "price": 4884,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 1001,
+        "levelAfter": 1000,
+        "levelsLost": 1,
         "gloryGained": 1000
       }
     },
@@ -699,7 +1072,8 @@
         "gloryMissing": 400,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -721,7 +1095,8 @@
         "gloryMissing": 1,
         "progress": 0.9975,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -743,7 +1118,8 @@
         "gloryMissing": 400,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -765,7 +1141,8 @@
         "gloryMissing": 1,
         "progress": 0.9975,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -787,7 +1164,8 @@
         "gloryMissing": 800,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -809,7 +1187,8 @@
         "gloryMissing": 1,
         "progress": 0.99875,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -831,7 +1210,8 @@
         "gloryMissing": 800,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -853,7 +1233,8 @@
         "gloryMissing": 800,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -875,7 +1256,8 @@
         "gloryMissing": 800,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -897,7 +1279,8 @@
         "gloryMissing": 1,
         "progress": 0.99875,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -919,7 +1302,8 @@
         "gloryMissing": 800,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -941,7 +1325,8 @@
         "gloryMissing": 1,
         "progress": 0.99875,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -963,7 +1348,8 @@
         "gloryMissing": 1800,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -985,7 +1371,8 @@
         "gloryMissing": 1,
         "progress": 0.999444,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -1007,7 +1394,8 @@
         "gloryMissing": 4000,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -1029,7 +1417,8 @@
         "gloryMissing": 1,
         "progress": 0.99975,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -1051,7 +1440,8 @@
         "gloryMissing": 7000,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -1073,7 +1463,8 @@
         "gloryMissing": 1,
         "progress": 0.999857,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -1095,7 +1486,8 @@
         "gloryMissing": 12000,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -1117,7 +1509,8 @@
         "gloryMissing": 1,
         "progress": 0.999917,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 499
       }
     },
     {
@@ -1139,7 +1532,8 @@
         "gloryMissing": 20000,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 1000
       }
     },
     {
@@ -1161,7 +1555,8 @@
         "gloryMissing": 1,
         "progress": 0.99995,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 1000
       }
     },
     {
@@ -1183,7 +1578,8 @@
         "gloryMissing": 30000,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 1000
       }
     },
     {
@@ -1205,7 +1601,8 @@
         "gloryMissing": 1,
         "progress": 0.999967,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": 1000
       }
     },
     {
@@ -1227,7 +1624,8 @@
         "gloryMissing": 44000,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1249,7 +1647,8 @@
         "gloryMissing": 1,
         "progress": 0.999977,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1271,7 +1670,8 @@
         "gloryMissing": 80000,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1293,7 +1693,8 @@
         "gloryMissing": 80000,
         "progress": 0,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1315,7 +1716,8 @@
         "gloryMissing": 1,
         "progress": 0.999988,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1337,7 +1739,8 @@
         "gloryMissing": null,
         "progress": 1,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1359,7 +1762,8 @@
         "gloryMissing": null,
         "progress": 1,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1381,7 +1785,8 @@
         "gloryMissing": null,
         "progress": 1,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1403,7 +1808,8 @@
         "gloryMissing": null,
         "progress": 1,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1429,7 +1835,8 @@
         "gloryMissing": null,
         "progress": 1,
         "mythicNumber": 1,
-        "mythicEdition": 1
+        "mythicEdition": 1,
+        "levelCap": null
       }
     },
     {
@@ -1455,7 +1862,8 @@
         "gloryMissing": null,
         "progress": 1,
         "mythicNumber": 100,
-        "mythicEdition": 137
+        "mythicEdition": 137,
+        "levelCap": null
       }
     },
     {
@@ -1477,7 +1885,8 @@
         "gloryMissing": null,
         "progress": 1,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1503,7 +1912,8 @@
         "gloryMissing": null,
         "progress": 1,
         "mythicNumber": null,
-        "mythicEdition": null
+        "mythicEdition": null,
+        "levelCap": null
       }
     },
     {
@@ -1583,6 +1993,54 @@
       "expected": {
         "achievement": 4000,
         "newLevels": 200,
+        "flameRecords": 0
+      }
+    },
+    {
+      "_label": "gains de Gloire (common, niveau 120, série 0)",
+      "input": {
+        "law": "glory-gain",
+        "rarity": "common",
+        "level": 120,
+        "previousRecord": 98,
+        "previousLongest": 0,
+        "longest": 0
+      },
+      "expected": {
+        "achievement": 100,
+        "newLevels": 2200,
+        "flameRecords": 0
+      }
+    },
+    {
+      "_label": "gains de Gloire (common, niveau 1000, série 0)",
+      "input": {
+        "law": "glory-gain",
+        "rarity": "common",
+        "level": 1000,
+        "previousRecord": 100,
+        "previousLongest": 0,
+        "longest": 0
+      },
+      "expected": {
+        "achievement": 100,
+        "newLevels": 90000,
+        "flameRecords": 0
+      }
+    },
+    {
+      "_label": "gains de Gloire (common, niveau 1500, série 0)",
+      "input": {
+        "law": "glory-gain",
+        "rarity": "common",
+        "level": 1500,
+        "previousRecord": 999,
+        "previousLongest": 0,
+        "longest": 0
+      },
+      "expected": {
+        "achievement": 100,
+        "newLevels": 51000,
         "flameRecords": 0
       }
     },

@@ -18,7 +18,7 @@
 
 import { z } from 'zod';
 
-import { LEVEL_TIER_KEYS } from '../utils/game/levels.js';
+import { LEGACY_LEVEL_MAX, LEGACY_LEVEL_TIER_KEYS, LEVEL_TIER_KEYS } from '../utils/game/levels.js';
 import { GLORY_RANKS, type GloryRankOrMythic } from '../utils/game/glory.js';
 import { TREASURY_TIERS } from '../utils/game/treasury.js';
 import { FLAME_FORMS } from '../utils/game/flame.js';
@@ -46,21 +46,49 @@ export { requestIdSchema };
 
 const rankKeys = enumOf<GloryRankOrMythic>([...GLORY_RANKS.map((r) => r.key), 'mythe']);
 const tierKeys = enumOf(LEVEL_TIER_KEYS);
+const legacyTierKeys = enumOf(LEGACY_LEVEL_TIER_KEYS);
+/** Un niveau des champs d'HIER : borné à 100, la seule forme que les clients publiés décodent (#9688). */
+const legacyLevel = z.number().int().min(1).max(LEGACY_LEVEL_MAX);
+const level = z.number().int().min(1);
 const treasuryKeys = enumOf(TREASURY_TIERS.map((t) => t.key));
 const formKeys = enumOf(FLAME_FORMS.map((f) => f.key));
 
-export const gameLevelSchema = z.object({
-  level: z.number().int().min(1).max(100),
+/**
+ * LA LECTURE DES NIVEAUX OUVERTS PAR LE RANG (#9688) — la vérité que lisent les clients à jour.
+ * Les champs voisins de `gameLevelSchema` restent sous l'ANCIENNE loi (niveau borné à 100, dix
+ * paliers) pour les clients publiés, qui les décodent strictement.
+ */
+export const gameLevelLadderSchema = z.object({
+  level,
   tier: tierKeys,
+  floorScore: nonNegativeInt,
+  /** `null` au plafond que le rang ouvre. */
+  nextThreshold: nonNegativeInt.nullable(),
+  pointsToNext: nonNegativeInt,
+  progress: fraction,
+  record: level,
+  /** Le plafond que le rang ouvre : 499 sous Ambassadeur, 1000 pour Ambassadeur et Orateur, `null` à partir d'Oracle. */
+  cap: level.nullable(),
+  /** Le niveau est au plafond : il monte dès que le rang l'ouvre, sans rien regagner. */
+  isMax: z.boolean(),
+});
+
+export const gameLevelSchema = z.object({
+  /** Ancienne loi : borné à 100 — la vraie valeur est `ladder.level`. */
+  level: legacyLevel,
+  /** Ancienne loi : l'un des dix premiers paliers — le vrai palier est `ladder.tier`. */
+  tier: legacyTierKeys,
   score: nonNegativeInt,
   floorScore: nonNegativeInt,
   nextThreshold: nonNegativeInt.nullable(),
   pointsToNext: nonNegativeInt,
   progress: fraction,
-  /** Le plus haut niveau atteint — il règle le Vent arrière. */
-  record: z.number().int().min(1).max(100),
+  /** Le plus haut niveau atteint — il règle le Vent arrière. Ancienne loi : borné à 100. */
+  record: legacyLevel,
   prestige: z.number().int().min(0).max(5),
   canPrestige: z.boolean(),
+  /** La lecture à jour (#9688) — absente devant un serveur antérieur. */
+  ladder: gameLevelLadderSchema.optional(),
 });
 
 const gloryStepSchema = z.object({
@@ -98,10 +126,13 @@ export const mintPreviewSchema = z.object({
   edition: z.enum(['silver', 'gold', 'prism']),
   canMint: z.boolean(),
   missingPoints: nonNegativeInt,
-  levelBefore: z.number().int().min(1).max(100),
-  levelAfter: z.number().int().min(1).max(100),
+  /** Ancienne loi : borné à 100 — la vraie valeur est dans `ladder`. */
+  levelBefore: legacyLevel,
+  levelAfter: legacyLevel,
   levelsLost: nonNegativeInt,
   gloryGained: nonNegativeInt,
+  /** Les niveaux ouverts par le rang (#9688) — absents devant un serveur antérieur. */
+  ladder: z.object({ levelBefore: level, levelAfter: level, levelsLost: nonNegativeInt }).optional(),
 });
 
 export const gameMissionSchema = z.object({
@@ -192,6 +223,7 @@ export const gameBlockSchema = z.object({
 });
 
 export type GameLevel = z.infer<typeof gameLevelSchema>;
+export type GameLevelLadder = z.infer<typeof gameLevelLadderSchema>;
 export type GameGlory = z.infer<typeof gameGlorySchema>;
 export type GameTreasury = z.infer<typeof gameTreasurySchema>;
 export type GameMintPreview = z.infer<typeof mintPreviewSchema>;
@@ -258,8 +290,10 @@ export const meeshMintResponseSchema = z.object({
   edition: z.enum(['silver', 'gold', 'prism']).optional(),
   price: z.number().int().min(1).optional(),
   gloryGained: nonNegativeInt.optional(),
-  levelBefore: z.number().int().min(1).max(100).optional(),
-  levelAfter: z.number().int().min(1).max(100).optional(),
+  levelBefore: legacyLevel.optional(),
+  levelAfter: legacyLevel.optional(),
+  /** Les niveaux ouverts par le rang (#9688) : les deux champs voisins restent bornés à 100. */
+  ladder: z.object({ levelBefore: level, levelAfter: level }).optional(),
 });
 
 export type MissionRerollRequest = z.infer<typeof missionRerollRequestSchema>;

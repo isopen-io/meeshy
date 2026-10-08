@@ -15,18 +15,21 @@ import {
   gloryForAchievement,
   gloryForFlameRecords,
   gloryForMission,
+  gloryForLevel,
   gloryForNewLevels,
   gloryLadder,
   gloryStanding,
   isMythicNumber,
   legacyGloryDivision,
+  levelCapForGlory,
+  levelCapForRank,
 } from '../../utils/game/glory.js';
 
 const at = (glory: number) => gloryStanding({ glory });
 
 describe('le barème des sources (#9636)', () => {
   it('suit la décision du porteur', () => {
-    expect(GLORY_POINTS).toEqual({ mint: 1000, firstLevel: 100, leagueUp: 300, leagueCup: 1000, season: 5000, prestige: 10_000 });
+    expect(GLORY_POINTS).toEqual({ mint: 1000, firstLevel: 100, levelDecade: 1000, leagueUp: 300, leagueCup: 1000, season: 5000, prestige: 10_000 });
   });
 
   it('paie les missions par difficulté : 40 / 100 / 250 / 500', () => {
@@ -48,6 +51,44 @@ describe('le barème des sources (#9636)', () => {
   it('paie 100 par niveau franchi pour la première fois', () => {
     expect(gloryForNewLevels({ level: 34, previousRecord: 30 })).toBe(400);
     expect(gloryForNewLevels({ level: 30, previousRecord: 36 })).toBe(0);
+  });
+
+  it('paie 1 000 tous les dix niveaux au-delà de 100, rien entre deux dizaines (#9688)', () => {
+    expect(gloryForLevel(1)).toBe(0);
+    expect(gloryForLevel(2)).toBe(100);
+    expect(gloryForLevel(100)).toBe(100);
+    expect(gloryForLevel(101)).toBe(0);
+    expect(gloryForLevel(109)).toBe(0);
+    expect(gloryForLevel(110)).toBe(1000);
+    expect(gloryForLevel(1000)).toBe(1000);
+    expect(gloryForLevel(1010)).toBe(1000);
+    expect(gloryForLevel(1011)).toBe(0);
+  });
+
+  it('paie 90 000 de 101 à 1000, et continue au-delà pour Oracle', () => {
+    expect(gloryForNewLevels({ level: 1000, previousRecord: 100 })).toBe(90_000);
+    expect(gloryForNewLevels({ level: 1000, previousRecord: null })).toBe(99 * 100 + 90_000);
+    expect(gloryForNewLevels({ level: 120, previousRecord: 98 })).toBe(200 + 2000);
+    expect(gloryForNewLevels({ level: 119, previousRecord: 110 })).toBe(0);
+    expect(gloryForNewLevels({ level: 1010, previousRecord: 1000 })).toBe(1000);
+    expect(gloryForNewLevels({ level: 2000, previousRecord: 1000 })).toBe(100_000);
+  });
+
+  it('la forme close rend la somme des premiers passages, niveau par niveau', () => {
+    const cases = [
+      [2, null],
+      [100, 1],
+      [101, 99],
+      [499, 37],
+      [500, 499],
+      [1001, 990],
+      [1234, 567],
+    ] as const;
+    for (const [level, previousRecord] of cases) {
+      const from = (previousRecord ?? 1) + 1;
+      const expected = Array.from({ length: Math.max(0, level - from + 1) }, (_, i) => gloryForLevel(from + i)).reduce((a, b) => a + b, 0);
+      expect(gloryForNewLevels({ level, previousRecord })).toBe(expected);
+    }
   });
 
   it('paie chaque record de Flamme franchi, une fois', () => {
@@ -192,5 +233,29 @@ describe('le Mythe vient du serveur', () => {
     expect(isMythicNumber(1)).toBe(true);
     expect(isMythicNumber(100)).toBe(true);
     expect(isMythicNumber(101)).toBe(false);
+  });
+});
+
+describe('le rang ouvre les niveaux (#9688)', () => {
+  it('borne à 499 sous Ambassadeur', () => {
+    expect(levelCapForRank('murmure')).toBe(499);
+    expect(levelCapForRank('polyglotte')).toBe(499);
+    expect(levelCapForGlory(0)).toBe(499);
+    expect(levelCapForGlory(129_999)).toBe(499);
+  });
+
+  it('ouvre 1000 à Ambassadeur et Orateur', () => {
+    expect(levelCapForRank('ambassadeur')).toBe(1000);
+    expect(levelCapForRank('orateur')).toBe(1000);
+    expect(levelCapForGlory(130_000)).toBe(1000);
+    expect(levelCapForGlory(379_999)).toBe(1000);
+  });
+
+  it('lève toute limite à partir d\'Oracle, Légende et Mythe compris', () => {
+    expect(levelCapForRank('oracle')).toBeNull();
+    expect(levelCapForRank('legende')).toBeNull();
+    expect(levelCapForRank('mythe')).toBeNull();
+    expect(levelCapForGlory(380_000)).toBeNull();
+    expect(levelCapForGlory(5_000_000)).toBeNull();
   });
 });

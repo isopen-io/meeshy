@@ -11,7 +11,7 @@
 
 import { MEESH_MINT_COST } from '../meesh.js';
 import { GLORY_POINTS } from './glory.js';
-import { levelFromScore } from './levels.js';
+import { levelFromScore, type LevelCap } from './levels.js';
 
 export const MEESH_PRICE_STEP_EVERY = 10;
 export const MEESH_PRICE_GROWTH = 1.06;
@@ -60,14 +60,16 @@ export function previewMint(params: {
   readonly score: number;
   readonly mintedLifetime: number;
   readonly debitablePoints: number;
+  /** Le plafond de niveau que le rang ouvre (#9688) — `null` : sans limite. */
+  readonly levelCap: LevelCap;
 }): MintPreview {
   const score = sanitizeCount(params.score);
   const number = sanitizeCount(params.mintedLifetime) + 1;
   const price = meeshPrice(number);
   const debitable = sanitizeCount(params.debitablePoints);
   const canMint = debitable >= price;
-  const levelBefore = levelFromScore(score);
-  const levelAfter = canMint ? levelFromScore(Math.max(0, score - price)) : levelBefore;
+  const levelBefore = levelFromScore(score, params.levelCap);
+  const levelAfter = canMint ? levelFromScore(Math.max(0, score - price), params.levelCap) : levelBefore;
   return {
     number,
     price,

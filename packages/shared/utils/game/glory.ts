@@ -25,12 +25,15 @@
  * division à cinq crans dans un champ NEUF, `division5`.
  */
 
-import { newLevelsReached } from './levels.js';
+import { GAME_LEVEL_MIN, LEGACY_LEVEL_MAX, LEVEL_CAP_AMBASSADOR, LEVEL_CAP_BASE, newLevelsReached, type LevelCap } from './levels.js';
 
 /** La Gloire de chaque source ponctuelle — les missions ont leur table, `MISSION_GLORY`. */
 export const GLORY_POINTS = {
   mint: 1000,
+  /** Chaque niveau franchi pour la première fois, jusqu'au 100. */
   firstLevel: 100,
+  /** Au-delà de 100, chaque dizaine franchie pour la première fois : 110, 120 … 1000, et plus (#9688). */
+  levelDecade: 1000,
   leagueUp: 300,
   leagueCup: 1000,
   season: 5000,
@@ -60,8 +63,30 @@ const ACHIEVEMENT_GLORY: Readonly<Record<AchievementRarity, number>> = {
 
 export const gloryForAchievement = (rarity: AchievementRarity): number => ACHIEVEMENT_GLORY[rarity];
 
-export const gloryForNewLevels = (params: { readonly level: number; readonly previousRecord: number | null }): number =>
-  newLevelsReached(params).count * GLORY_POINTS.firstLevel;
+/**
+ * La Gloire du PREMIER passage d'un niveau (#9688) : 100 pour chacun jusqu'au
+ * 100, puis 1 000 tous les dix niveaux (110, 120 … 1000, et au-delà), rien
+ * entre deux dizaines. Le niveau 1 est acquis d'office : il ne paie rien.
+ */
+export const gloryForLevel = (level: number): number => {
+  const n = Number.isFinite(level) ? Math.trunc(level) : 0;
+  if (n <= GAME_LEVEL_MIN) return 0;
+  if (n <= LEGACY_LEVEL_MAX) return GLORY_POINTS.firstLevel;
+  return n % 10 === 0 ? GLORY_POINTS.levelDecade : 0;
+};
+
+const decadesUpTo = (level: number): number => Math.floor(Math.max(0, level) / 10);
+
+/** La Gloire des niveaux franchis pour la première fois — la somme de `gloryForLevel`, en forme close. */
+export const gloryForNewLevels = (params: { readonly level: number; readonly previousRecord: number | null }): number => {
+  const reached = newLevelsReached(params);
+  if (reached.count === 0) return 0;
+  const lowTo = Math.min(reached.to, LEGACY_LEVEL_MAX);
+  const lowLevels = Math.max(0, lowTo - reached.from + 1);
+  const highFrom = Math.max(reached.from, LEGACY_LEVEL_MAX + 1);
+  const decades = reached.to < highFrom ? 0 : decadesUpTo(reached.to) - decadesUpTo(highFrom - 1);
+  return lowLevels * GLORY_POINTS.firstLevel + decades * GLORY_POINTS.levelDecade;
+};
 
 /** Records de Flamme (jours de série) et leur Gloire — ×10 avec la nouvelle échelle des rangs (porteur, 2026-10-08, #9636). */
 export const FLAME_RECORD_GLORY = [
@@ -211,3 +236,22 @@ export function gloryStanding(params: {
     mythic: null,
   };
 }
+
+const AMBASSADOR_INDEX = GLORY_RANKS.findIndex((rank) => rank.key === 'ambassadeur');
+const ORACLE_INDEX = GLORY_RANKS.findIndex((rank) => rank.key === 'oracle');
+
+/**
+ * LE RANG OUVRE LES NIVEAUX (#9688, porteur 2026-10-08) : 499 au plus sous
+ * Ambassadeur, 1000 pour Ambassadeur et Orateur, sans limite (`null`) à partir
+ * d'Oracle — Légende et Mythe compris. Le rang ne redescend jamais : un plafond
+ * levé ne se referme pas.
+ */
+export const levelCapForRank = (rank: GloryRankOrMythic): LevelCap => {
+  if (rank === 'mythe') return null;
+  const index = GLORY_RANKS.findIndex((step) => step.key === rank);
+  if (index >= ORACLE_INDEX) return null;
+  return index >= AMBASSADOR_INDEX ? LEVEL_CAP_AMBASSADOR : LEVEL_CAP_BASE;
+};
+
+/** Le plafond de niveau que cette Gloire cumulée ouvre (le Mythe, servi par le serveur, passe par `levelCapForRank`). */
+export const levelCapForGlory = (glory: number): LevelCap => levelCapForRank(gloryStanding({ glory }).rank);
