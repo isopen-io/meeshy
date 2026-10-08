@@ -304,9 +304,7 @@ struct ReelsPlayerView: View {
                 },
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) },
-                isWithinPreloadWindow: activeIndex.map {
-                    ReelPreloadWindow.tier(offset: index - $0, in: preloadWindow) != .idle
-                } ?? false
+                isWithinPreloadWindow: isWithinPreloadWindow(index, activeIndex: activeIndex)
             )
             .onAppear {
                 Task { await viewModel.loadMoreIfNeeded(currentReel: reel) }
@@ -324,6 +322,12 @@ struct ReelsPlayerView: View {
             if preloadWindow != window { preloadWindow = window }
             await preloader.prepare(reels: reels, activeIndex: activeIndex, window: window)
         }
+    }
+
+    /// Une page hors de la fenêtre de préchargement ne télécharge pas d'elle-même (#9702).
+    private func isWithinPreloadWindow(_ index: Int, activeIndex: Int?) -> Bool {
+        guard let activeIndex else { return false }
+        return ReelPreloadWindow.tier(offset: index - activeIndex, in: preloadWindow) != .idle
     }
 
     // MARK: Author navigation

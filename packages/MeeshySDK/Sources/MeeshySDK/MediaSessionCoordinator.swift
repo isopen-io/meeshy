@@ -3,6 +3,7 @@ import AVFoundation
 import Combine
 import Foundation
 import os
+import UIKit
 
 private let logger = Logger(subsystem: "com.meeshy.sdk", category: "audio-session")
 
@@ -283,8 +284,8 @@ public actor MediaSessionCoordinator {
     }
 
     /// Les signaux SYSTÈME qui retirent la session à l'app sans passer par ce
-    /// coordinateur — interruption (appel cellulaire, Siri, alarme) et
-    /// réinitialisation des services média — révoquent le bail. Installés une
+    /// coordinateur — interruption (appel cellulaire, Siri, alarme),
+    /// réinitialisation des services média, arrière-plan — révoquent le bail. Installés une
     /// fois, au premier `activatePlaybackSync`, sans saut sur l'acteur.
     private nonisolated func installLeaseObserversIfNeeded() {
         let firstCall = _leaseObserversLock.withLock { installed -> Bool in
@@ -295,9 +296,13 @@ public actor MediaSessionCoordinator {
         guard firstCall else { return }
         let lease = _playbackLeaseLock
         let center = NotificationCenter.default
+        // Le passage en arrière-plan aussi : une app suspendue perd sa session
+        // sans interruption notifiée (iOS 14.5+), et le premier balayage au
+        // retour doit la réactiver.
         let revoking: [Notification.Name] = [
             AVAudioSession.interruptionNotification,
             AVAudioSession.mediaServicesWereResetNotification,
+            UIApplication.didEnterBackgroundNotification,
         ]
         for name in revoking {
             _ = center.addObserver(forName: name, object: nil, queue: nil) { _ in
