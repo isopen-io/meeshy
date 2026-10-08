@@ -119,6 +119,12 @@ enum GameDetailFactKey: String, CaseIterable, Equatable {
     case showcaseVisibility = "showcase_visibility"
     case atlasStamps = "atlas_stamps"
     case atlasPending = "atlas_pending"
+    case spendHeld = "spend_held"
+    case spendCost = "spend_cost"
+    case spendAfter = "spend_after"
+    case spendMissing = "spend_missing"
+    case levelNow = "level_now"
+    case levelRequired = "level_required"
 }
 
 /// L'emblème d'un élément — une DONNÉE, que la feuille dessine en grand avec les briques du jeu.

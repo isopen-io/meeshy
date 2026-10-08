@@ -1,11 +1,12 @@
 import type { GameFlame } from '@meeshy/shared/types/game';
 import { FLAME_BONUS_PERCENT_MAX, FLAME_BONUS_PERCENT_PER_DAY } from '@meeshy/shared/utils/game/flame';
+import { spendPreview } from '@meeshy/shared/utils/game/spend';
 
 import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
 import { freezeDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
-import { GameTouch } from './game-touch';
+import { GameSpendLine, GameTouch } from './game-touch';
 
 /**
  * LA FLAMME : GELS ET RALLUMAGE (#9383) — ce qu'on fait de ses Meeshes pour la
@@ -16,6 +17,8 @@ import { GameTouch } from './game-touch';
  *
  * Un bouton qui ne peut pas servir se TAIT en disant pourquoi (réserve pleine,
  * pas assez de Meeshes, hors ligne) ; il ne reste pas grisé sans explication.
+ * Avant chaque achat, la ligne de dépense (#9705) dit les Meeshes en poche, le
+ * prix et ce qui restera — ou combien il en manque.
  * Une Flamme trop longtemps éteinte ne propose rien : elle annonce qu'une
  * nouvelle commence au prochain geste.
  */
@@ -59,9 +62,10 @@ function Alert({ message }: { readonly message: string | undefined }) {
 export function GameFlamePanel(props: GameFlamePanelProps) {
   const { flame, held, online, buyingFreeze, relighting, onBuyFreeze, onRelight, errors } = props;
   const full = flame.freezes >= flame.maxFreezes;
-  const cannotPayFreeze = held < flame.freezePrice;
+  const freeze = spendPreview({ held, cost: flame.freezePrice });
   const out = flame.status === 'out';
-  const cannotPayRelight = held < flame.relightPrice;
+  const relight = spendPreview({ held, cost: flame.relightPrice });
+  const cannotPayRelight = !relight.affordable;
 
   return (
     <GameCard id="game-flame-panel" labelledBy="game-flame-panel-title">
@@ -82,14 +86,10 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
         </p>
       ) : (
         <>
-          <ActionButton marker="data-game-freeze-buy" busy={buyingFreeze} disabled={!online || cannotPayFreeze} onClick={onBuyFreeze}>
+          <GameSpendLine concept="flame" held={held} cost={flame.freezePrice} format={meeshCount} />
+          <ActionButton marker="data-game-freeze-buy" busy={buyingFreeze} disabled={!online || !freeze.affordable} onClick={onBuyFreeze}>
             {gameText('game.flame_panel.freeze_buy', { price: meeshCount(flame.freezePrice) })}
           </ActionButton>
-          {cannotPayFreeze ? (
-            <p className="text-caption" style={{ color: GAME_INK_2 }}>
-              {gameText('game.flame_panel.freeze_missing', { missing: meeshCount(flame.freezePrice) })}
-            </p>
-          ) : null}
         </>
       )}
       <Alert message={errors?.freeze} />
@@ -99,21 +99,20 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.flame_panel.relight_intro')}
           </p>
+          <GameSpendLine concept="flame" held={held} cost={flame.relightPrice} format={meeshCount} />
           <ActionButton marker="data-game-relight" busy={relighting} disabled={!online || cannotPayRelight} onClick={onRelight}>
             {gameText('game.flame_panel.relight', { price: meeshCount(flame.relightPrice) })}
           </ActionButton>
-          {cannotPayRelight ? (
-            <p className="text-caption" style={{ color: GAME_INK_2 }}>
-              {gameText('game.flame_panel.relight_missing', { missing: meeshCount(flame.relightPrice) })}
-            </p>
-          ) : null}
           <Alert message={errors?.relight} />
         </>
       ) : null}
       {out && !flame.canRelight && cannotPayRelight ? (
-        <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {gameText('game.flame_panel.relight_missing_window', { missing: meeshCount(flame.relightPrice) })}
-        </p>
+        <>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.flame_panel.relight_missing_window', { missing: meeshCount(flame.relightPrice) })}
+          </p>
+          <GameSpendLine concept="flame" held={held} cost={flame.relightPrice} format={meeshCount} />
+        </>
       ) : null}
       {out && !flame.canRelight && !cannotPayRelight ? (
         <p className="text-caption" style={{ color: GAME_BRAND }}>

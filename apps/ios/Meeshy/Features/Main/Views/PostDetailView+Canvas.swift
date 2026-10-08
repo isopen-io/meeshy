@@ -85,8 +85,10 @@ extension PostDetailView {
         PostSceneSoundHeader(
             trace: BackgroundSoundBadge.backgroundTrace(of: playedEffects),
             announcement: BackgroundSoundBadge.announcement(for: playedEffects),
+            isMuted: isCanvasMuted,
             isPaused: isCanvasPaused,
             accentHex: accentColor,
+            onToggleMute: { isCanvasMuted.toggle() },
             onTogglePlayback: { isCanvasPaused.toggle() }
         )
         .padding(.horizontal, MeeshySpacing.lg)

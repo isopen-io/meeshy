@@ -30,6 +30,11 @@ struct GameDuoCard: View {
     private var content: some View {
         if !duo.unlocked {
             GameNote(text: GameText.duoLocked(level: GameCopy.formatCount(GameDuo.minLevel), current: GameCopy.formatCount(levelRecord)))
+            GameFactChipRow(
+                concept: .league,
+                items: GameSpendRows.requirement(GameSpend.requirement(current: levelRecord, required: GameDuo.minLevel), record: true),
+                identifier: "game.duo.requirement"
+            )
         } else {
             switch duo.status {
             case .invited: invited

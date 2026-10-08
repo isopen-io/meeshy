@@ -90,6 +90,7 @@ function surfaces(): Surfaces {
       renderToStaticMarkup(
         <GameMintPreview
           mint={game.mint}
+          held={game.level.score}
           badgesLost={2}
           online
           minting={false}

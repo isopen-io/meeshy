@@ -53,7 +53,16 @@ enum MediaOrigin: String, Sendable, Equatable, CaseIterable {
 /// Séparé du coordinateur pour que celui-ci reste testable sans AVFoundation
 /// ni photothèque — même patron que `MediaSaveSourceResolving`.
 protocol MediaSaveBranding: Sendable {
-    func stamp(_ file: URL, kind: AttachmentKind, origin: MediaOrigin) async -> BrandedMedia
+    /// - Parameter author: l'auteur de l'œuvre, que la marque nomme ; `nil` =
+    ///   l'œuvre de l'utilisateur connecté (son pseudo), `""` = auteur inconnu
+    ///   (aucun pseudo — jamais celui du spectateur).
+    func stamp(_ file: URL, kind: AttachmentKind, origin: MediaOrigin, author: String?) async -> BrandedMedia
+}
+
+extension MediaSaveBranding {
+    func stamp(_ file: URL, kind: AttachmentKind, origin: MediaOrigin) async -> BrandedMedia {
+        await stamp(file, kind: kind, origin: origin, author: nil)
+    }
 }
 
 // MARK: - Règle produit
@@ -131,16 +140,28 @@ struct MeeshyMediaSaveBranding: MediaSaveBranding {
         return kind == .image || kind == .video || kind == .audio
     }
 
-    func stamp(_ file: URL, kind: AttachmentKind, origin: MediaOrigin) async -> BrandedMedia {
+    /// **Le pseudo que la marque grave : celui de l'AUTEUR** (recette #9681) —
+    /// le spectateur n'est nommé que lorsqu'il est lui-même l'auteur (`author == nil`).
+    static func handle(author: String?, viewer: String?) -> String? {
+        guard let author else { return viewer }
+        return author.isEmpty ? nil : author
+    }
+
+    func stamp(_ file: URL, kind: AttachmentKind, origin: MediaOrigin, author: String?) async -> BrandedMedia {
         guard Self.stamps(origin: origin, kind: kind) else { return .original(file) }
+        let handle: String?
+        if let author {
+            handle = Self.handle(author: author, viewer: nil)
+        } else {
+            handle = await username()
+        }
         do {
             switch kind {
             case .image:
                 let stamped = try await MeeshyImageWatermark.stampedCopy(
-                    of: file, username: await username())
+                    of: file, username: handle)
                 return BrandedMedia(url: stamped, isStamped: true)
             case .video:
-                let handle = await username()
                 guard let watermark = await MainActor.run(
                     body: { MeeshyExportWatermark.make(username: handle) })
                 else { return .original(file) }

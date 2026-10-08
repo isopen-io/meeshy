@@ -839,7 +839,7 @@ silence — rien ne peut les comparer, puisque le contrat ne dit rien.
 
 | mesure | valeur | tenue par |
 |---|---|---|
-| champs des cinq modèles d'objet | **123** (`Mirror`, 2026-10-05 — 121 au 2026-09-04, puis `filter` #8474 et `adjustments` #9175) | `SceneObjectFieldCensusTests` |
+| champs des cinq modèles d'objet | **124** (`Mirror`, 2026-10-08 — 121 au 2026-09-04, puis `filter` #8474, `adjustments` #9175 et `soundCreatedAt` #9677) | `SceneObjectFieldCensusTests` |
 | champs qu'exerce le blob v1 PARTAGÉ, seul juge de la parité Swift ⇄ passerelle | **≈ la moitié** † | — |
 | champs jamais exercés — donc jamais comparés | **≈ la moitié** † | — |
 | clés que le pont Swift émettait et que la passerelle ne recomposait pas | **14** — corrigées le 2026-09-02 par #4905 | commit |

@@ -32,9 +32,12 @@ struct ReelsRevealContainer<Content: View>: View {
 
     var body: some View {
         GeometryReader { geo in
+            let frame = geo.frame(in: .global)
             let center = FeedButtonAnchor.unitPoint(
                 fromRaw: feedButtonPositionRaw,
-                geometry: floatingGeometry ?? FloatingButtonGeometry(screenSize: geo.size, safeArea: geo.safeAreaInsets)
+                geometry: floatingGeometry
+                    ?? FloatingButtonGeometry.measured(container: frame, safeRegion: frame, reported: geo.safeAreaInsets),
+                in: frame
             )
 
             content(geo.safeAreaInsets)

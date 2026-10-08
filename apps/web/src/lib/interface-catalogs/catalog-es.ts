@@ -1094,6 +1094,7 @@ const es = {
   'attachment.protected.open.hint': 'toca para verlo a pantalla completa',
   'media.reactions.badge.a11y': 'Reacciones',
   'media.reactions.badge.mine.a11y': 'incluida la suya',
+  'message.join.noAccount': 'sin cuenta',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Vídeo',
   'attachment.kind.audio': 'Audio',

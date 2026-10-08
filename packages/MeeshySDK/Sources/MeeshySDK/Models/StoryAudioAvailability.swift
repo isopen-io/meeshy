@@ -47,6 +47,23 @@ public enum StoryAudioAvailability {
         return false
     }
 
+    /// **Le baffle du lecteur a-t-il encore un son à couper ?** (#9677,
+    /// directive porteur 2026-10-08) Quand le son de FOND s'annonce, c'est la
+    /// note du crédit qui le coupe ; le baffle ne reste que pour ce que cette
+    /// note ne dit pas — une note vocale, une piste qui n'est PAS le fond, la
+    /// piste propre d'une vidéo. Sans fond annoncé, la règle est inchangée.
+    public static func needsSoundButton(effects: StoryEffects?,
+                                        videoAudioTracks: [String: Bool],
+                                        backgroundSoundIsAnnounced: Bool) -> Bool {
+        guard backgroundSoundIsAnnounced else {
+            return hasAudibleSound(effects: effects, videoAudioTracks: videoAudioTracks)
+        }
+        guard var rest = effects else { return false }
+        rest.backgroundAudioId = nil
+        rest.audioPlayerObjects = rest.audioPlayerObjects?.filter { $0.isBackground != true }
+        return hasAudibleSound(effects: rest, videoAudioTracks: videoAudioTracks)
+    }
+
     /// Video media objects whose audio-track presence must be probed before the
     /// sound button can be decided. Videos the author already muted
     /// (`volume == 0`) are excluded — they are silent regardless of their track.

@@ -31836,100 +31836,6 @@
         }
       }
     },
-    "a11y.feed.post.sound.mute": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "كتم صوت الخلفية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hintergrundton stummschalten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mute background sound"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Silenciar el sonido de fondo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couper le son du fond"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disattiva audio di sottofondo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Silenciar som de fundo"
-          }
-        }
-      }
-    },
-    "a11y.feed.post.sound.unmute": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إلغاء كتم صوت الخلفية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hintergrundton aktivieren"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unmute background sound"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reactivar el sonido de fondo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réactiver le son du fond"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Riattiva audio di sottofondo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reativar som de fundo"
-          }
-        }
-      }
-    },
     "a11y.feed.post.translation": {
       "extractionState": "manual",
       "localizations": {
@@ -128470,53 +128376,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Som original"
-          }
-        }
-      }
-    },
-    "media.sound.used": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الصوت المستخدَم"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verwendeter Ton"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sound used"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sonido utilizado"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Son utilisé"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Audio utilizzato"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Som utilizado"
           }
         }
       }
@@ -236804,53 +236663,6 @@
         }
       }
     },
-    "game.flame_panel.freeze_missing": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحتاج إلى %@ لتجميد."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Für ein Eis brauchst du %@."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You need %@ for a freeze."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Necesitas %@ para una congelación."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il te faut %@ pour un gel."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Per un congelamento ti serve %@."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Você precisa de %@ para um congelamento."
-          }
-        }
-      }
-    },
     "game.flame_panel.relight_intro": {
       "extractionState": "manual",
       "localizations": {
@@ -236941,53 +236753,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reacender a Chama · %@"
-          }
-        }
-      }
-    },
-    "game.flame_panel.relight_missing": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحتاج إلى %@ لإعادة إشعاله."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zum Neuentzünden brauchst du %@."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You need %@ to relight it."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Necesitas %@ para volver a encenderla."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il te faut %@ pour la rallumer."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Per riaccenderla ti serve %@."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Você precisa de %@ para reacendê-la."
           }
         }
       }
@@ -244089,53 +243854,6 @@
         }
       }
     },
-    "game.mint.missing": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بقي %@ قبل Meesh التالية: تكلّف %@."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch %@ bis zur nächsten Meesh: Sie kostet %@."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ more before the next Meesh: it costs %@."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faltan %@ para la próxima Meesh: cuesta %@."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Encore %@ avant la prochaine Meesh : elle coûte %@."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ancora %@ prima della prossima Meesh: costa %@."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais %@ antes da próxima Meesh: ela custa %@."
-          }
-        }
-      }
-    },
     "game.mint.next_title": {
       "extractionState": "manual",
       "localizations": {
@@ -244941,43 +244659,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "غيّر · 1 Meesh"
+            "value": "غيّر · %@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tauschen · 1 Meesh"
+            "value": "Tauschen · %@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Change · 1 Meesh"
+            "value": "Change · %@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cambiar · 1 Meesh"
+            "value": "Cambiar · %@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changer · 1 Meesh"
+            "value": "Changer · %@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cambia · 1 Meesh"
+            "value": "Cambia · %@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trocar · 1 Meesh"
+            "value": "Trocar · %@"
           }
         }
       }
@@ -244988,43 +244706,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "غيّر المهمة «%@» مقابل 1 Meesh"
+            "value": "غيّر المهمة «%1$@» مقابل %2$@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Mission „%@“ für 1 Meesh tauschen"
+            "value": "Die Mission „%1$@“ für %2$@ tauschen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Change the mission “%@” for 1 Meesh"
+            "value": "Change the mission “%1$@” for %2$@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cambiar la misión «%@» por 1 Meesh"
+            "value": "Cambiar la misión «%1$@» por %2$@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changer la mission « %@ » contre 1 Meesh"
+            "value": "Changer la mission « %1$@ » contre %2$@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cambia la missione «%@» con 1 Meesh"
+            "value": "Cambia la missione «%1$@» con %2$@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trocar a missão “%@” por 1 Meesh"
+            "value": "Trocar a missão “%1$@” por %2$@"
           }
         }
       }
@@ -260351,53 +260069,6 @@
         }
       }
     },
-    "game2.season.seal.missing": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ينقصك بعض Meesh للحصول على الختم."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dir fehlen Meeshes für das Siegel."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You need more Meeshes for the Seal."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Te faltan Meeshes para el Sello."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il te manque des Meeshes pour le Sceau."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ti mancano delle Meesh per il Sigillo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faltam Meeshes para o Selo."
-          }
-        }
-      }
-    },
     "game2.season.seal.owned": {
       "extractionState": "manual",
       "localizations": {
@@ -269183,6 +268854,194 @@
           "stringUnit": {
             "state": "translated",
             "value": "Faltam para você"
+          }
+        }
+      }
+    },
+    "game.concept.fact.balance": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "في حوزتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Besitz"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In hand"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En mano"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En poche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In tasca"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Em mãos"
+          }
+        }
+      }
+    },
+    "game.concept.fact.cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التكلفة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kostet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Costs"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuesta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coûte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Costa"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custa"
+          }
+        }
+      }
+    },
+    "game.concept.fact.after": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المتبقي بعدها"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danach"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left after"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quedará"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restera"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resterà"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restará"
+          }
+        }
+      }
+    },
+    "game.concept.fact.required": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المطلوب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Benötigt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Required"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requerido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requis"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Richiesto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Necessário"
           }
         }
       }
@@ -278677,6 +278536,288 @@
           "stringUnit": {
             "state": "translated",
             "value": "São os idiomas em que ainda falta uma mensagem, enviada ou recebida."
+          }
+        }
+      }
+    },
+    "game.detail.fact.spend_held": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا ما لديك قبل هذه الخطوة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So viel hast du vor diesem Schritt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is what you have before this move."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es lo que tienes antes de este gesto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est ce que tu as avant ce geste."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È ciò che hai prima di questo gesto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o que você tem antes deste gesto."
+          }
+        }
+      }
+    },
+    "game.detail.fact.spend_cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا ما تكلّفك هذه الخطوة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So viel kostet dich dieser Schritt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is what this move takes from you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es lo que te cuesta este gesto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est ce que ce geste te prend."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È ciò che ti costa questo gesto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o que este gesto te custa."
+          }
+        }
+      }
+    },
+    "game.detail.fact.spend_after": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا ما سيتبقى لك بعد هذه الخطوة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So viel bleibt dir nach diesem Schritt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is what you’ll have left after this move."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es lo que te quedará después de este gesto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est ce qu’il te restera après ce geste."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È ciò che ti resterà dopo questo gesto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o que vai te restar depois deste gesto."
+          }
+        }
+      }
+    },
+    "game.detail.fact.spend_missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا ما ينقصك لهذه الخطوة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So viel fehlt dir für diesen Schritt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is what you still need for this move."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es lo que te falta para este gesto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est ce qu’il te manque pour faire ce geste."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È ciò che ti manca per questo gesto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o que falta para este gesto."
+          }
+        }
+      }
+    },
+    "game.detail.fact.level_now": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا مستواك الآن."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist dein aktuelles Level."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is your level right now."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es tu nivel en este momento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est ton niveau en ce moment."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È il tuo livello in questo momento."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o seu nível neste momento."
+          }
+        }
+      }
+    },
+    "game.detail.fact.level_required": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا هو المستوى الذي يجب بلوغه لفتحه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Level brauchst du, um es freizuschalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is the level you need to reach to open it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es el nivel que debes alcanzar para abrirlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C’est le niveau qu’il faut atteindre pour l’ouvrir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È il livello da raggiungere per aprirlo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É o nível que você precisa alcançar para abrir."
           }
         }
       }

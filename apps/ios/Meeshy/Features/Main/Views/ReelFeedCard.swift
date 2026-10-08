@@ -365,6 +365,16 @@ struct ReelFeedCard: View, Equatable {
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
             authorRow
+            // Le son de fond, sur SA ligne sous l'auteur (#9677) — la même
+            // annonce que la carte de post et le lecteur de réels. Un réel
+            // republié joue (et annonce) le son de l'original.
+            BackgroundSoundBadge(
+                announcement: BackgroundSoundBadge.announcement(
+                    for: post.storyEffects ?? repostedReel?.storyEffects),
+                accentHex: BackgroundSoundBadge.overMediaAccentHex
+            )
+            .equatable()
+            .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             if !displayCaption.isEmpty {
                 // Fond TOUJOURS sombre (vidéo + scrim noir) : on épingle les
                 // variantes `isDark: true` au lieu de suivre le thème de l'app —

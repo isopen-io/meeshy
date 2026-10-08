@@ -60,28 +60,31 @@ struct ShareableLink: Identifiable {
         URL(string: "\(webBaseURL)/feeds/post/\(postId)").map { ShareableLink(url: $0, fileSource: fileSource) }
     }
 
-    /// Le LIEN d'abord, toujours ; puis, s'il y a quelque chose à emporter, la
-    /// source de fichier paresseuse — qui fait paraître « Enregistrer la vidéo »
-    /// et « Enregistrer dans Fichiers » sans rien rendre tant qu'on ne les choisit pas.
+    /// UN seul élément quand il y a un fichier à emporter : la source paresseuse,
+    /// qui rend le FICHIER aux activités de fichier et le LIEN à toutes les autres
+    /// (recette #9682 : un lien http À CÔTÉ du fichier — « 1 Link and 1 Document » —
+    /// faisait disparaître « Enregistrer dans Fichiers », qui ne sait enregistrer
+    /// que des fichiers). Sans fichier, le lien seul.
     var activityItems: [Any] {
-        [url] + (fileSource?.makeProvider().map { [$0] } ?? [])
+        guard let provider = fileSource?.makeProvider(link: url) else { return [url] }
+        return [provider]
     }
 }
 
 /// **Ce qu'une feuille de partage peut emporter en FICHIER** (#9682).
 enum ShareFileSource {
     case post(FeedPost)
-    case story(StoryItem)
+    case story(StoryItem, authorUsername: String?)
 
     /// `nil` quand rien ne s'emporte : la règle de « Sauvegarder » (`PostSaveRoute`)
     /// décide pour un post — une publication est ouverte à la sortie, comme ses
     /// hôtes le déclarent (`MediaSaveCoordinator(exitGate: .open)`).
-    func makeProvider() -> LazyShareFileProvider? {
+    func makeProvider(link: URL) -> LazyShareFileProvider? {
         switch self {
-        case .story(let story):
+        case .story(let story, let authorUsername):
             return ShareFilePlaceholder.video(named: "Meeshy-\(story.id).mp4").map { placeholder in
-                LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier) {
-                    await StoryPhotoSaveService.shared.renderStoryFile(of: story)
+                LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier, link: link) {
+                    await StoryPhotoSaveService.shared.renderStoryFile(of: story, authorUsername: authorUsername)
                 }
             }
         case .post(let post):
@@ -90,17 +93,17 @@ enum ShareFileSource {
                 return nil
             case .renderScene:
                 return ShareFilePlaceholder.video(named: "Meeshy-\(post.id).mp4").map { placeholder in
-                    LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier) {
+                    LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier, link: link) {
                         await StoryPhotoSaveService.shared.renderSceneFile(of: post)
                     }
                 }
             case .rawFile(let media):
-                return Self.rawFileProvider(media)
+                return Self.rawFileProvider(media, link: link)
             }
         }
     }
 
-    private static func rawFileProvider(_ media: PostSaveMedia) -> LazyShareFileProvider? {
+    private static func rawFileProvider(_ media: PostSaveMedia, link: URL) -> LazyShareFileProvider? {
         guard media.kind == .image || media.kind == .video else { return nil }
         let request = media.request
         let name = MediaSaveCoordinator.exportFileName(for: request)
@@ -108,9 +111,10 @@ enum ShareFileSource {
         let type = UTType(filenameExtension: (name as NSString).pathExtension) ?? fallbackType
         let placeholder = media.kind == .video ? ShareFilePlaceholder.video(named: name) : ShareFilePlaceholder.image(named: name)
         guard let placeholder else { return nil }
-        return LazyShareFileProvider(placeholder: placeholder, typeIdentifier: type.identifier) {
+        return LazyShareFileProvider(placeholder: placeholder, typeIdentifier: type.identifier, link: link) {
             guard let local = try? await AttachmentMediaSaveResolver().resolveLocalFile(for: request) else { return nil }
-            let branded = await MeeshyMediaSaveBranding().stamp(local, kind: request.kind, origin: request.origin)
+            let branded = await MeeshyMediaSaveBranding().stamp(local, kind: request.kind, origin: request.origin,
+                                                                author: request.authorUsername)
             defer { if branded.isStamped { MediaSaveCoordinator.discardStagingDirectory(of: branded.url) } }
             return try? MediaSaveCoordinator.stageForExport(branded.url, request: request)
         }
@@ -144,12 +148,18 @@ nonisolated enum ShareFileActivity {
 /// avec la source.
 nonisolated final class LazyShareFileProvider: UIActivityItemProvider, @unchecked Sendable {
     private let typeIdentifier: String
+    /// Ce que reçoivent les activités qui ne prennent pas de fichier (Messages,
+    /// copier, Mail…) : le lien. `UIActivityItemSource.activityViewController(_:itemForActivityType:)`
+    /// est documenté pour rendre un objet DIFFÉRENT selon l'activité choisie.
+    private let link: URL?
     private let produce: @MainActor @Sendable () async -> URL?
     private let lock = NSLock()
     private var produced: URL?
 
-    init(placeholder: URL, typeIdentifier: String, produce: @escaping @MainActor @Sendable () async -> URL?) {
+    init(placeholder: URL, typeIdentifier: String, link: URL? = nil,
+         produce: @escaping @MainActor @Sendable () async -> URL?) {
         self.typeIdentifier = typeIdentifier
+        self.link = link
         self.produce = produce
         super.init(placeholderItem: placeholder)
     }
@@ -166,7 +176,7 @@ nonisolated final class LazyShareFileProvider: UIActivityItemProvider, @unchecke
     }
 
     override var item: Any {
-        guard ShareFileActivity.wantsFile(activityType?.rawValue), !Thread.isMainThread else { return "" }
+        guard ShareFileActivity.wantsFile(activityType?.rawValue), !Thread.isMainThread else { return link ?? "" }
         let done = DispatchSemaphore(value: 0)
         let produce = self.produce
         Task { @concurrent [weak self] in
@@ -181,7 +191,7 @@ nonisolated final class LazyShareFileProvider: UIActivityItemProvider, @unchecke
 
     override func activityViewController(_ activityViewController: UIActivityViewController,
                                          itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
-        guard ShareFileActivity.wantsFile(activityType?.rawValue) else { return nil }
+        guard ShareFileActivity.wantsFile(activityType?.rawValue) else { return link }
         return super.activityViewController(activityViewController, itemForActivityType: activityType)
     }
 

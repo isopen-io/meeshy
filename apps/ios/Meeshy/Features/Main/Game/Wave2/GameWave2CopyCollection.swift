@@ -75,8 +75,6 @@ extension GameText {
 
     static var seasonSealOwned: String { String(localized: "game2.season.seal.owned", defaultValue: "Tu as le Sceau de cette saison.", bundle: .main) }
 
-    static var seasonSealMissing: String { String(localized: "game2.season.seal.missing", defaultValue: "Il te manque des Meeshes pour le Sceau.", bundle: .main) }
-
     static var seasonSealCosmetic: String { String(localized: "game2.season.seal.cosmetic", defaultValue: "Objet du Sceau", bundle: .main) }
 
     static func trophyLeagueCup(cup: String, league: String, date: String) -> String {

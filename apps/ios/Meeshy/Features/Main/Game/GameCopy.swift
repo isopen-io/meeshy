@@ -65,6 +65,11 @@ enum GameCopy {
             : String(localized: "game.actions.other", defaultValue: "\(number) actions", bundle: .main)
     }
 
+    /// « Changer · 1 Meesh » — le prix vient de la loi (`GameMissions.rerollPrice`), jamais du texte (#9705).
+    static var rerollLabel: String {
+        String(localized: "game.mission.reroll", defaultValue: "Changer · \(meeshes(GameMissions.rerollPrice))", bundle: .main)
+    }
+
     static func levels(_ count: Int) -> String {
         let number = formatCount(count)
         return isSingular(count)
@@ -142,11 +147,11 @@ enum GameCopy {
         guard let cap, let rank = rankOpening(beyond: cap) else {
             return String(localized: "game.level.top", defaultValue: "Tu es au sommet.", bundle: .main)
         }
-        let level = formatCount(cap)
+        let capText = formatCount(cap)
         let name = rankName(rank)
         return String(
             localized: "game.level.cap.reached",
-            defaultValue: "Niveau \(level) : le plus haut que ton rang ouvre. Le rang \(name) ouvre la suite.",
+            defaultValue: "Niveau \(capText) : le plus haut que ton rang ouvre. Le rang \(name) ouvre la suite.",
             bundle: .main
         )
     }

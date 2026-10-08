@@ -263,11 +263,13 @@ struct GameBricksRenderTests {
         #expect(Set(GloryRank.allCases.map(\.material)).count == 7)
     }
 
-    @Test("chaque palier de niveau a sa couleur, Étincelle rouge et Constellation violette")
+    @Test("chaque palier de niveau a sa couleur, des dix d'hier aux dix d'au-delà de 100 (#9688)")
     func tierColors() {
         let colors = LevelTierKey.allCases.map { LevelTierPalette.color(for: $0) }
-        #expect(colors.count == 10)
+        #expect(colors.count == 20)
         #expect(LevelTierPalette.color(for: .etincelle) != LevelTierPalette.color(for: .lueur))
+        #expect(LevelTierPalette.color(for: .nebuleuse) != LevelTierPalette.color(for: .pulsar))
+        #expect(LevelTierPalette.color(for: .singularite) == LevelTierPalette.color(for: .galaxie))
     }
 
     @Test("les huit gemmes de ligue se distinguent, chacune peint une gemme et jamais son cadre")

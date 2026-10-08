@@ -938,12 +938,7 @@ struct StoryActionSidebarView: View {
     /// comportement — la divergence entre les deux était la cause du mute
     /// inatteignable au lecteur d'écran.
     private func toggleGlobalMute() {
-        HapticFeedback.light()
-        isGlobalMutedBinding.toggle()
-        NotificationCenter.default.post(
-            name: isGlobalMutedBinding ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
-            object: nil
-        )
+        StoryGlobalMute.toggle($isGlobalMutedBinding)
     }
 
 }

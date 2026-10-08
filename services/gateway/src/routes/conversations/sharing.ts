@@ -796,6 +796,7 @@ export function registerSharingRoutes(
           displayName: true,
           firstName: true,
           lastName: true,
+          ...RECIPIENT_LANG_SELECT,
           deactivatedAt: true
         }
       });
@@ -843,6 +844,9 @@ export function registerSharingRoutes(
         type: 'user',
         displayName: userToInvite.displayName || userToInvite.username,
         role: 'member',
+        // #9711 — la langue de l'INVITÉ, descendue de son prisme, jamais le
+        // défaut `"en"` du schéma.
+        language: recipientLanguage(userToInvite, 'fr'),
         permissions: { ...NEW_MEMBER_PERMISSIONS }
       };
 

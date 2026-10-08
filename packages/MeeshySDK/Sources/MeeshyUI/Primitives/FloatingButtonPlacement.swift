@@ -94,12 +94,58 @@ public nonisolated struct FloatingButtonGeometry: Equatable, Sendable {
     public static let defaultFeedStorage = "0.0,0.0"
     public static let defaultMenuStorage = "1.0,0.0"
 
+    /// L'écran, en coordonnées GLOBALES (origine au coin haut de l'écran).
     public let screenSize: CGSize
+    /// La zone sûre de l'écran, en coordonnées globales.
     public let safeArea: EdgeInsets
+    /// L'origine globale du conteneur qui dessine : toute la géométrie est
+    /// globale, seul le dessin se fait dans le repère local (`local(_:)`).
+    public let origin: CGPoint
 
-    public init(screenSize: CGSize, safeArea: EdgeInsets) {
+    public init(screenSize: CGSize, safeArea: EdgeInsets, origin: CGPoint = .zero) {
         self.screenSize = screenSize
         self.safeArea = safeArea
+        self.origin = origin
+    }
+
+    /// La géométrie de l'ÉCRAN depuis deux cadres globaux : celui du conteneur
+    /// qui ignore la zone sûre, celui du même conteneur qui la respecte.
+    ///
+    /// Le conteneur des boutons peut ne pas commencer en haut de l'écran : la
+    /// bannière du joueur (#9494) le pousse vers le bas, de sa hauteur, et cette
+    /// hauteur change quand elle se replie. Mesurée dans le repère du conteneur,
+    /// une position écrite bannière repliée revenait 69 à 80 pt plus bas
+    /// bannière dépliée (recette 2026-10-08). L'écran, lui, ne bouge pas : il va
+    /// du haut de la fenêtre (y = 0) au bas du conteneur, qui touche le bas de
+    /// l'écran. Quand le conteneur ne touche pas le haut, l'encoche n'y est pas
+    /// mesurable : on la majore (`FloatingButtonSafeZone.maxTopInset`), et le
+    /// bouton peut se poser par-dessus la bannière — la plage ne dépend pas
+    /// de son état.
+    public static func measured(container: CGRect, safeRegion: CGRect, reported: EdgeInsets) -> FloatingButtonGeometry {
+        let touchesTop = container.minY <= 0.5
+        let top = touchesTop
+            ? max(reported.top, safeRegion.minY - container.minY, 0)
+            : FloatingButtonSafeZone.maxTopInset
+        return FloatingButtonGeometry(
+            screenSize: CGSize(width: max(container.maxX, 0), height: max(container.maxY, 0)),
+            safeArea: EdgeInsets(
+                top: top,
+                leading: container.minX + max(reported.leading, safeRegion.minX - container.minX, 0),
+                bottom: max(reported.bottom, container.maxY - safeRegion.maxY, 0),
+                trailing: max(reported.trailing, container.maxX - safeRegion.maxX, 0)
+            ),
+            origin: container.origin
+        )
+    }
+
+    /// Un point global, dans le repère du conteneur qui dessine.
+    public func local(_ point: CGPoint) -> CGPoint {
+        CGPoint(x: point.x - origin.x, y: point.y - origin.y)
+    }
+
+    /// Un point du repère du conteneur, en coordonnées globales.
+    public func global(_ point: CGPoint) -> CGPoint {
+        CGPoint(x: point.x + origin.x, y: point.y + origin.y)
     }
 
     /// Faux tant que la mise en page n'a pas encore donné l'écran : rien ne se
@@ -200,6 +246,22 @@ public nonisolated struct FloatingButtonGeometry: Equatable, Sendable {
         return CGPoint(x: x(for: side), y: center.y)
     }
 
+    // MARK: Écriture — le SEUL chemin
+
+    /// Course en deçà de laquelle un geste est un TOUCHER, pas un glisser.
+    public static let dragThreshold: CGFloat = 12
+
+    /// La valeur à persister à la FIN d'un glisser parti de `start` (centre
+    /// global affiché), ou `nil` : rien à écrire. Un toucher — même avec le
+    /// tremblement du doigt — n'écrit rien. C'est le seul producteur d'une
+    /// position persistée : la mise en page, l'anti-chevauchement et l'ancre
+    /// des réels LISENT, ils n'écrivent jamais.
+    public func storage(afterDragFrom start: CGPoint, translation: CGSize, avoiding other: CGPoint) -> String? {
+        guard hypot(translation.width, translation.height) >= Self.dragThreshold else { return nil }
+        let dropped = CGPoint(x: start.x + translation.width, y: start.y + translation.height)
+        return placement(droppedAt: dropped, avoiding: other).storageValue
+    }
+
     // MARK: Menu
 
     /// L'échelle s'ouvre vers le bas si elle y tient, sinon vers le haut si
@@ -244,15 +306,10 @@ public struct FloatingButtonsSafeAreaReader<Content: View>: View {
             let safeFrame = safe.frame(in: .global)
             let reported = safe.safeAreaInsets
             GeometryReader { full in
-                let fullFrame = full.frame(in: .global)
-                content(FloatingButtonGeometry(
-                    screenSize: full.size,
-                    safeArea: EdgeInsets(
-                        top: max(reported.top, safeFrame.minY - fullFrame.minY, 0),
-                        leading: max(reported.leading, safeFrame.minX - fullFrame.minX, 0),
-                        bottom: max(reported.bottom, fullFrame.maxY - safeFrame.maxY, 0),
-                        trailing: max(reported.trailing, fullFrame.maxX - safeFrame.maxX, 0)
-                    )
+                content(FloatingButtonGeometry.measured(
+                    container: full.frame(in: .global),
+                    safeRegion: safeFrame,
+                    reported: reported
                 ))
             }
             .ignoresSafeArea()

@@ -34,14 +34,78 @@ final class FeedButtonAnchorTests: XCTestCase {
 
     func test_unitPoint_isScreenPointFraction() {
         let p = FeedButtonAnchor.screenPoint(fromRaw: "v2,R,0.5000", geometry: geometry)
-        let u = FeedButtonAnchor.unitPoint(fromRaw: "v2,R,0.5000", geometry: geometry)
+        let u = FeedButtonAnchor.unitPoint(
+            fromRaw: "v2,R,0.5000", geometry: geometry, in: CGRect(x: 0, y: 0, width: 390, height: 844)
+        )
         XCTAssertEqual(u.x, p.x / 390, accuracy: 0.0001)
         XCTAssertEqual(u.y, p.y / 844, accuracy: 0.0001)
     }
 
+    /// La vue des réels peut, comme le conteneur des boutons, commencer sous la
+    /// bannière du joueur : le disque naît quand même au centre du bouton.
+    func test_unitPoint_inAFramePushedDownByTheBanner_staysOnTheButton() {
+        let frame = CGRect(x: 0, y: 80, width: 390, height: 764)
+        let p = FeedButtonAnchor.screenPoint(fromRaw: "v3,L,0.500000", geometry: geometry)
+        let u = FeedButtonAnchor.unitPoint(fromRaw: "v3,L,0.500000", geometry: geometry, in: frame)
+        XCTAssertEqual(frame.minY + u.y * frame.height, p.y, accuracy: 0.001)
+    }
+
     func test_unitPoint_zeroSize_returnsTopLeading() {
-        let empty = FloatingButtonGeometry(screenSize: .zero, safeArea: EdgeInsets())
-        XCTAssertEqual(FeedButtonAnchor.unitPoint(fromRaw: "v2,R,0.5000", geometry: empty), .topLeading)
+        XCTAssertEqual(FeedButtonAnchor.unitPoint(fromRaw: "v2,R,0.5000", geometry: geometry, in: .zero), .topLeading)
+    }
+
+    // MARK: - #9679 — les boutons passent au-dessus du chrome
+
+    /// Recette 2026-10-08 : le Flux posé à 96 pt passait SOUS la bannière du
+    /// joueur — invisible, insaisissable, et perdu après relance puisque la
+    /// position persiste. L'ordre des calques est un ordre de CÂBLAGE (un
+    /// `.overlay` ne recouvre que ce qui est chaîné avant lui) : la garde lit la
+    /// source, aucun test unitaire ne monte la racine connectée.
+    func test_floatingButtons_areLayeredAboveTheWholeChrome() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
+        let body = try XCTUnwrap(source.range(of: "var body: some View {")?.lowerBound)
+        let firstLayer = try XCTUnwrap(source.range(of: ".modifier(RootStatusBubbleLayer(", range: body..<source.endIndex)?.lowerBound)
+        let chrome = try XCTUnwrap(source.range(of: ".modifier(RootChromeLayer(", range: body..<source.endIndex)?.lowerBound)
+        let overlay = try XCTUnwrap(source.range(of: ".overlay { floatingChrome }", range: body..<source.endIndex)?.lowerBound,
+                                    "les boutons flottants doivent être posés en overlay de la racine")
+        let next = try XCTUnwrap(source.range(of: ".modifier(RootIntentRoutingLayer(", range: body..<source.endIndex)?.lowerBound)
+
+        XCTAssertGreaterThan(overlay, chrome,
+                             "Chaînés AVANT `RootChromeLayer`, les boutons passent sous la bannière du joueur, la pastille et le mini-lecteur.")
+        XCTAssertLessThan(overlay, next)
+
+        let content = String(source[body..<firstLayer])
+        XCTAssertFalse(content.contains("draggableFloatingButtons"),
+                       "Les boutons ne vivent plus dans la pile du contenu, que la bannière du joueur recouvre.")
+        XCTAssertFalse(content.contains("menuLadder"),
+                       "L'échelle du menu suit ses boutons au-dessus du chrome.")
+    }
+
+    /// Recette 2026-10-08 : posé à 500 pt, le Flux s'est retrouvé à 206 pt sans
+    /// glisser volontaire. Rien dans l'app n'a le droit d'écrire ces deux
+    /// clés : seul le conteneur du SDK, à la fin d'un glisser, les reçoit (par
+    /// le binding `$feedButtonPosition` / `$menuButtonPosition`).
+    func test_noAppCode_writesTheFloatingButtonPositions() throws {
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil))
+        var offenders: [String] = []
+        var declarations = 0
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            for line in code.components(separatedBy: "\n") {
+                if line.range(of: #"(feedButtonPosition|menuButtonPosition)\s*=[^=]"#, options: .regularExpression) != nil {
+                    offenders.append("\(url.lastPathComponent): \(line)")
+                }
+                if line.contains("\"feedButtonPosition\"") || line.contains("\"menuButtonPosition\"") {
+                    declarations += 1
+                }
+            }
+        }
+        XCTAssertEqual(offenders, [], "seule la fin d'un glisser (dans le SDK) écrit une position")
+        XCTAssertEqual(declarations, 2, "les deux clés ne sont nommées que par leurs @AppStorage")
     }
 
     // MARK: - #9363 — les bulles ne recouvrent plus le « + » de la story

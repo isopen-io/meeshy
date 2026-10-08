@@ -75,8 +75,8 @@ final class SyncPillViewModel: ObservableObject {
         networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared
     ) {
         Publishers.CombineLatest(
-            offlineQueue.pendingUIItemsPublisher,
-            networkMonitor.isOfflinePublisher
+            SyncPillDebugFeed.items(offlineQueue.pendingUIItemsPublisher),
+            SyncPillDebugFeed.isOffline(networkMonitor.isOfflinePublisher)
         )
         .receive(on: DispatchQueue.main)
         .sink { [weak self] items, isOffline in

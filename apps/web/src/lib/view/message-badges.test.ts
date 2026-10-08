@@ -217,7 +217,11 @@ describe('isSystemMessage / systemRowOf', () => {
     expect(row).toEqual({ kind: 'join', displayName: 'Bruno Bêta', handle: null, isAnonymous: false });
   });
 
-  test('avis d’arrivée : le nom DONNÉ prime, le pseudo descend en handle', () => {
+  /* #9710 — le pseudo d'un participant SANS COMPTE (`ano_…`) est un
+     identifiant technique : la pastille « sans compte » dit déjà qui il est,
+     et « joined the conversation@ano_Emma » l'exposait au fil. Décidé par
+     `isAnonymous`, jamais par le préfixe — un compte peut s'appeler `ano_bob`. */
+  test('avis d’arrivée sans compte : le nom DONNÉ prime, et le pseudo technique ne s’affiche pas', () => {
     const row = systemRowOf(
       message({
         messageType: 'system',
@@ -234,7 +238,26 @@ describe('isSystemMessage / systemRowOf', () => {
         },
       }),
     );
-    expect(row).toEqual({ kind: 'join', displayName: 'Camille', handle: '@ano_7f3', isAnonymous: true });
+    expect(row).toEqual({ kind: 'join', displayName: 'Camille', handle: null, isAnonymous: true });
+  });
+
+  test('avis d’arrivée d’un COMPTE : le pseudo descend en handle, même s’il commence par ano_', () => {
+    const row = systemRowOf(
+      message({
+        messageType: 'system',
+        messageSource: 'system',
+        content: 'repli',
+        metadata: {
+          kind: 'member-joined',
+          participantId: 'p-bob',
+          displayName: 'Bob Martin',
+          username: 'ano_bob',
+          isAnonymous: false,
+          viaShareLink: true,
+        },
+      }),
+    );
+    expect(row).toEqual({ kind: 'join', displayName: 'Bob Martin', handle: '@ano_bob', isAnonymous: false });
   });
 
   test('système sans metadata ⇒ {kind:"notice", text: content}', () => {

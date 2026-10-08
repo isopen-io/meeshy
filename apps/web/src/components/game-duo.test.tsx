@@ -77,6 +77,9 @@ describe('les autres états', () => {
   test('verrouillé : le niveau 20 des DEUX et le niveau record de la personne', () => {
     const t = text(renderToStaticMarkup(<GameDuo {...props({ duo: duo({ unlocked: false, ...NONE }), levelRecord: 12 })} />));
     expect(t).toContain('s’ouvre au niveau 20, pour vous deux');
+    expect(t).toContain('Record 12');
+    expect(t).toContain('Requis 20');
+    expect(t).toContain('Il manque 8 niveaux');
     expect(t).toContain('Tu es au niveau 12');
   });
 

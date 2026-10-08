@@ -6,6 +6,7 @@ import { DUO_MIN_LEVEL } from '@meeshy/shared/utils/game/duo';
 import { formatCount, gameText, missionTitle, pointsLabel } from '@/lib/view/game-copy';
 
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GameCard } from './game-surface';
+import { GameRequirementLine } from './game-touch';
 
 /**
  * LA MISSION EN DUO (#9385, conception II.7) — à deux, avec un ami accepté :
@@ -122,9 +123,12 @@ export function GameDuo(props: GameDuoProps) {
   const body = ((): React.ReactNode => {
     if (!duo.unlocked) {
       return (
-        <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {gameText('game.duo.locked', { level: formatCount(DUO_MIN_LEVEL), current: formatCount(levelRecord) })}
-        </p>
+        <>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.duo.locked', { level: formatCount(DUO_MIN_LEVEL), current: formatCount(levelRecord) })}
+          </p>
+          <GameRequirementLine concept="league" current={levelRecord} required={DUO_MIN_LEVEL} record />
+        </>
       );
     }
     if (duo.status === 'invited') {

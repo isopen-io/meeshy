@@ -9,7 +9,7 @@ import { convertiblePointsLabel, editionName, formatCount, gameText, levelsLabel
 import { factDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
-import { GameTouch } from './game-touch';
+import { GameSpendLine, GameTouch } from './game-touch';
 
 /**
  * LE HÉROS DE FRAPPE (#9537) — LA section de frappe de Progression, et la seule
@@ -28,6 +28,11 @@ import { GameTouch } from './game-touch';
  * frappée, argent » (le dessin est décoratif). `badgesLost` est ABSENT quand
  * le serveur ne sert pas de quoi le calculer : « inconnu » ne se dit pas
  * « aucun ».
+ *
+ * AVANT le geste, la ligne de dépense (#9705) dit les points en poche, le prix
+ * et ce qui restera — ou, frappe impossible, les points CONVERTIBLES qui
+ * manquent : la frappe se retranche du score, mais seuls les convertibles la
+ * paient, et le verdict reste celui du serveur (`mint.canMint`).
  */
 
 export type MintCelebration = {
@@ -39,6 +44,8 @@ export type MintCelebration = {
 
 export type GameMintPreviewProps = {
   readonly mint: MintPreview;
+  /** Les points en poche (le score) : la frappe s'en retranche. */
+  readonly held: number;
   readonly badgesLost?: number | undefined;
   readonly online: boolean;
   readonly minting: boolean;
@@ -65,7 +72,7 @@ function Chips({ lines }: { readonly lines: readonly string[] }) {
 }
 
 export function GameMintPreview(props: GameMintPreviewProps) {
-  const { mint, badgesLost, online, minting, error, celebration, strikeKey = 0, onMint } = props;
+  const { mint, held, badgesLost, online, minting, error, celebration, strikeKey = 0, onMint } = props;
   const impact = [
     mintLevels(mint).levelsLost > 0 ? gameText('game.hero.mint_cost', { levels: levelsLabel(mintLevels(mint).levelsLost) }) : null,
     gameText('game.hero.mint_glory', { glory: formatCount(mint.gloryGained) }),
@@ -97,6 +104,8 @@ export function GameMintPreview(props: GameMintPreviewProps) {
         </p>
       )}
 
+      <GameSpendLine concept="meesh" held={held} cost={mint.price} spendable={mint.canMint ? mint.price : mint.price - mint.missingPoints} format={pointsLabel} formatMissing={convertiblePointsLabel} heldFact="score" missingFact="mint_missing" />
+
       {mint.canMint ? (
         <>
           <Chips lines={impact} />
@@ -117,11 +126,7 @@ export function GameMintPreview(props: GameMintPreviewProps) {
             </p>
           )}
         </>
-      ) : (
-        <p data-game-mint-missing="" className="text-body font-bold" style={{ color: GAME_INK }}>
-          {gameText('game.hero.mint_missing', { missing: convertiblePointsLabel(mint.missingPoints) })}
-        </p>
-      )}
+      ) : null}
 
       {error === undefined || minting ? null : (
         <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>

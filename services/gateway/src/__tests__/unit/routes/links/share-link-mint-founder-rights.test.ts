@@ -31,6 +31,19 @@ const MOI = '507f1f77bcf86cd799439011';
 const AUTRE = '507f1f77bcf86cd799439022';
 const CONV_ID = '507f1f77bcf86cd799439033';
 
+/**
+ * Les comptes rendent ce que le `select` DEMANDE, rien de plus : un double qui
+ * rendrait les colonnes du Prisme sans qu'on les demande laisserait passer au
+ * vert un site dont la requête ne les ramène pas (#9711).
+ */
+const COMPTES: Record<string, Record<string, unknown>> = {
+  [MOI]: { id: MOI, displayName: 'Moi', username: 'moi', systemLanguage: 'de', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+  [AUTRE]: { id: AUTRE, displayName: 'Alice', username: 'alice', systemLanguage: '', regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: null },
+};
+
+const projeter = (ligne: Record<string, unknown>, select?: Record<string, unknown>) =>
+  select ? Object.fromEntries(Object.keys(select).filter((k) => select[k]).map((k) => [k, ligne[k]])) : ligne;
+
 function prismaDouble() {
   return {
     conversation: {
@@ -41,12 +54,15 @@ function prismaDouble() {
     },
     participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
     user: {
-      findUnique: jest.fn<any>(async (args: any) =>
-        args?.where?.id === MOI
-          ? { displayName: 'Moi', username: 'moi' }
-          : { id: AUTRE, displayName: 'Alice', username: 'alice' }
+      findUnique: jest.fn<any>(async (args: any) => {
+        const ligne = COMPTES[args?.where?.id];
+        return ligne ? projeter(ligne, args?.select) : null;
+      }),
+      findMany: jest.fn<any>(async (args: any) =>
+        ((args?.where?.id?.in ?? []) as string[])
+          .filter((id) => COMPTES[id] !== undefined)
+          .map((id) => projeter(COMPTES[id], args?.select))
       ),
-      findMany: jest.fn<any>().mockResolvedValue([{ id: AUTRE, displayName: 'Alice', username: 'alice' }]),
     },
   };
 }
@@ -81,7 +97,7 @@ async function frapper(input: Record<string, unknown>) {
   expect(minted).not.toBeNull();
   expect(prisma.conversation.create).toHaveBeenCalledTimes(1);
   const data = (prisma.conversation.create.mock.calls[0] as any[])[0].data;
-  return data.participants.create as Array<{ userId: string; role: string; permissions: Record<string, boolean> }>;
+  return data.participants.create as Array<{ userId: string; role: string; language?: string; permissions: Record<string, boolean> }>;
 }
 
 const brancheNeuve = () =>
@@ -123,5 +139,22 @@ describe("#6080 — les deux branches de création d'un lien écrivent la table 
 
     expect(createur.permissions.canSendVideos).toBe(true);
     expect(createur.permissions.canSendAudios).toBe(true);
+  });
+});
+
+describe('#9711 — les fondateurs d’une conversation ouverte par lien portent LEUR langue, jamais le défaut `"en"` du schéma', () => {
+  it('branche `newConversation` : le créateur au rang 1, le membre initial au rang 2 de son prisme', async () => {
+    const [createur, membre] = await brancheNeuve();
+
+    expect(createur.userId).toBe(MOI);
+    expect(createur.language).toBe('de');
+    expect(membre.userId).toBe(AUTRE);
+    expect(membre.language).toBe('es');
+  });
+
+  it('repli LEGACY : le créateur seul, même descente', async () => {
+    const [createur] = await brancheLegacy();
+
+    expect(createur.language).toBe('de');
   });
 });

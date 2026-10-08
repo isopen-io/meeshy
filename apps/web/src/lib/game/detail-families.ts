@@ -97,6 +97,12 @@ export const GAME_DETAIL_FACTS = [
   'showcase_visibility',
   'atlas_stamps',
   'atlas_pending',
+  'spend_held',
+  'spend_cost',
+  'spend_after',
+  'spend_missing',
+  'level_now',
+  'level_required',
 ] as const;
 
 export type GameDetailFact = (typeof GAME_DETAIL_FACTS)[number];

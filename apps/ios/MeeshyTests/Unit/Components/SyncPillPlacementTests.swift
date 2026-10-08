@@ -77,4 +77,57 @@ final class SyncPillPlacementTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(top(0), 0)
         XCTAssertLessThanOrEqual(top(20), 20 + 8)
     }
+
+    // MARK: - Mesure de l'encart dans le repère de l'ÉCRAN (recette 2026-10-08)
+
+    private let iPhone17Pro = CGRect(x: 0, y: 0, width: 402, height: 874)
+    private let iPhone17ProSafe = CGRect(x: 0, y: 62, width: 402, height: 778)
+
+    /// Le défaut constaté : un lecteur qui ignore la zone sûre rapporte 0, et
+    /// la pastille se posait à y = 1, sous l'îlot (y = 11…48). L'écart des deux
+    /// cadres rend l'encart réel.
+    func test_screenSafeAreaTop_readsTheFrameGap_whenTheReportedInsetIsZero() {
+        XCTAssertEqual(
+            SyncPillPlacement.screenSafeAreaTop(container: iPhone17Pro, safeRegion: iPhone17ProSafe, reportedTop: 0),
+            62
+        )
+    }
+
+    func test_onAnIslandIPhone_withAZeroReportedInset_thePillClearsTheIsland() {
+        let top = SyncPillPlacement.topOffset(
+            container: iPhone17Pro, safeRegion: iPhone17ProSafe, reportedTop: 0, isPad: false
+        )
+        XCTAssertGreaterThanOrEqual(top, 48, "le bas de l'îlot de l'iPhone 17 Pro est à y = 48")
+        XCTAssertLessThanOrEqual(top + SyncPillMetrics.height, 62 + SyncPillPlacement.maximumIntrusionIntoSafeArea)
+    }
+
+    /// Mesure ratée (transitoire, ou hôte qui a consommé la zone sûre) : un
+    /// iPhone en portrait n'a JAMAIS un encart haut nul. La pastille ne se pose
+    /// ni sous l'îlot (y = 1, recette du 2026-10-08) ni nulle part (une version
+    /// qui attendait la passe suivante ne s'affichait plus) : elle reste
+    /// visible, sous le plus haut des îlots.
+    func test_aZeroMeasure_onAPortraitIPhone_stillShowsThePillBelowTheIsland() {
+        let top = SyncPillPlacement.topOffset(
+            container: iPhone17Pro, safeRegion: iPhone17Pro, reportedTop: 0, isPad: false
+        )
+        XCTAssertGreaterThanOrEqual(top, 48, "sous l'îlot, jamais dessous")
+        XCTAssertLessThan(top, 80, "et toujours dans le haut de l'écran")
+    }
+
+    func test_landscapeIPhone_withoutStatusBar_stillShowsThePill() {
+        let landscape = CGRect(x: 0, y: 0, width: 874, height: 402)
+        XCTAssertEqual(SyncPillPlacement.topOffset(
+            container: landscape, safeRegion: landscape, reportedTop: 0, isPad: false
+        ), 1)
+    }
+
+    /// Conteneur poussé vers le bas (bannière du joueur) : aucun capteur
+    /// au-dessus de lui, la pastille se pose en haut du conteneur.
+    func test_aContainerPushedDown_hasNoSensorAboveIt() {
+        let pushed = CGRect(x: 0, y: 96, width: 402, height: 778)
+        XCTAssertEqual(SyncPillPlacement.screenSafeAreaTop(container: pushed, safeRegion: pushed, reportedTop: 0), 0)
+        XCTAssertEqual(SyncPillPlacement.topOffset(
+            container: pushed, safeRegion: pushed, reportedTop: 0, isPad: false
+        ), 1)
+    }
 }

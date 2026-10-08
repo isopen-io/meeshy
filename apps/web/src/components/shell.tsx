@@ -11,6 +11,7 @@ import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog'
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
+import { skipLinkLabel } from '@/lib/skip-link';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
@@ -206,7 +207,7 @@ export default function Shell({ children }: { children: ReactNode }) {
         href="#contenu"
         className="skip-link"
       >
-        Aller au contenu
+        {skipLinkLabel(currentInterfaceLanguage())}
       </a>
       {/* `fallback={null}` : une pastille qui n'est pas encore là ne doit rien
           peindre — surtout pas un squelette, qui annoncerait un état qu'on ne

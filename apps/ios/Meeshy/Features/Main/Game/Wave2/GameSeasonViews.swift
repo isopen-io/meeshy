@@ -219,14 +219,15 @@ private struct GameSeasonSeal: View {
             if season.sealOwned {
                 GameNote(text: GameText.seasonSealOwned, tone: MeeshyColors.success)
             } else {
-                let cannotPay = held < season.sealPrice
+                // Avant l'achat : les Meeshes en poche, le prix et ce qui restera — ou combien il en manque (#9705).
+                let spend = GameSpend.preview(held: held, cost: season.sealPrice)
+                GameFactChipRow(concept: .season, items: GameSpendRows.spend(spend, format: GameCopy.meeshes), identifier: "game.season.seal.spend")
                 GameActionButton(
                     title: GameText.seasonSealBuy(price: GameCopy.meeshes(season.sealPrice)), busy: model.pending.seal,
-                    disabled: !model.isOnline || cannotPay, tint: MeeshyColors.warning, identifier: "game.season.seal.buy"
+                    disabled: !model.isOnline || !spend.affordable, tint: MeeshyColors.warning, identifier: "game.season.seal.buy"
                 ) {
                     Task { await model.buySeal() }
                 }
-                if cannotPay { GameNote(text: GameText.seasonSealMissing) }
             }
             GameErrorLine(message: model.errors.seal, identifier: "game.season.seal.error")
         }

@@ -30,7 +30,7 @@ const quiet = { reducedMotion: true, haptics: false, schedule: () => () => undef
 const props = (score = levelThreshold(100) + 40, prestige = 1, patch: Partial<GamePrestigeProps> = {}): GamePrestigeProps => {
   const game = gameBlockWithExtrasFixture({ score, prestige });
   if (game.prestige === undefined) throw new Error('la fixture porte le Prestige');
-  return { level: game.level, prestige: game.prestige, online: true, pending: false, onPass: () => undefined, playOptions: quiet, ...patch };
+  return { level: game.level, score: game.level.score, prestige: game.prestige, online: true, pending: false, onPass: () => undefined, playOptions: quiet, ...patch };
 };
 
 /**
@@ -74,6 +74,17 @@ describe('la proposition au niveau 100', () => {
     expect(t).toContain('Ce qui repart');
     expect(t).toContain('Ce qui reste');
     expect(t).toContain('ligue (niveau 10) et ton duo (niveau 20) se referment');
+  });
+
+  test('la confirmation donne les VALEURS avant → après : points en poche, niveau, record, étoiles, Gloire (#9705)', async () => {
+    const host = await mount(<GamePrestige {...props()} />);
+    await click(host.querySelector('[data-game-prestige-go]'));
+    const plain = (value: string): string => value.replace(/\s/g, ' ');
+    const rows = plain(text(host.querySelector('[data-game-prestige-values]')?.innerHTML ?? ''));
+    expect(rows).toContain(plain(`En poche ${formatCount(props().score, 'fr')} points → 0 point`));
+    expect(rows).toContain('Niveau 100 → 1');
+    expect(rows).toContain('Étoiles 1 → 2');
+    expect(rows).toContain(plain(`Gloire +${formatCount(GLORY_POINTS.prestige, 'fr')}`));
   });
 
   test('la confirmation dit que le consentement à la ligue publique reste enregistré', async () => {
@@ -121,6 +132,8 @@ describe('les états fermés', () => {
   test('sous le niveau 100 : on dit où l’on en est, aucune offre', () => {
     const html = renderToStaticMarkup(<GamePrestige {...props(5_000, 0)} />);
     expect(text(html)).toContain('s’ouvre au niveau 100');
+    expect(text(html)).toContain('Requis 100');
+    expect(text(html)).toMatch(/Il manque \d+ niveaux/);
     expect(html).not.toContain('data-game-prestige-go');
   });
 

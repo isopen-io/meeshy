@@ -55,6 +55,46 @@ nonisolated enum SyncPillPlacement {
         return safeAreaTop >= sensorHousingMinimumInset ? .underSensorHousing : .belowStatusBar
     }
 
+    /// **L'encart haut de l'ÉCRAN, depuis deux cadres globaux** — celui du
+    /// conteneur qui ignore la zone sûre, celui du même conteneur qui la
+    /// respecte (motif `FloatingButtonGeometry.measured`, #9679).
+    ///
+    /// La première version lisait `safeAreaInsets` sur un `GeometryReader`
+    /// portant `.ignoresSafeArea()` : il rend une zone sûre NULLE, et la
+    /// pastille se posait à y = 1, entièrement SOUS l'îlot (recette 2026-10-08,
+    /// iPhone 17 Pro). L'écart des deux cadres n'a pas ce défaut.
+    ///
+    /// Un conteneur qui ne touche pas le haut de l'écran (poussé par une
+    /// bannière) n'a pas de capteur au-dessus de lui : encart nul, et la
+    /// pastille se pose en haut du conteneur.
+    static func screenSafeAreaTop(container: CGRect, safeRegion: CGRect, reportedTop: CGFloat) -> CGFloat {
+        guard container.minY <= 0.5 else { return 0 }
+        return max(reportedTop, safeRegion.minY - container.minY, 0)
+    }
+
+    /// Encart supposé quand la mesure rend 0 sur un iPhone en portrait : le
+    /// plus haut des îlots (iPhone 16/17 Pro). Sur une encoche, la pastille se
+    /// pose alors quelques points plus bas, VISIBLE ; l'inverse — supposer
+    /// l'encart le plus bas — la remettrait sous l'îlot.
+    static let unmeasuredPortraitInset: CGFloat = 62
+
+    /// **Où poser la pastille dans son conteneur.**
+    ///
+    /// Un iPhone en PORTRAIT a toujours un encart haut (20 pt au moins, sous la
+    /// barre d'état) : en lire 0 sur un conteneur qui touche le haut de l'écran
+    /// est une mesure ratée — transitoire (première passe de mise en page) ou
+    /// hôte qui a consommé la zone sûre. La pastille ne se pose alors ni sous
+    /// l'îlot (y = 1, recette du 2026-10-08) ni nulle part (une version qui
+    /// attendait la passe suivante ne s'affichait plus du tout) : elle prend
+    /// `unmeasuredPortraitInset`.
+    static func topOffset(container: CGRect, safeRegion: CGRect, reportedTop: CGFloat, isPad: Bool) -> CGFloat {
+        let measured = screenSafeAreaTop(container: container, safeRegion: safeRegion, reportedTop: reportedTop)
+        let isPortrait = container.height > container.width
+        let touchesTop = container.minY <= 0.5
+        let unmeasured = !isPad && isPortrait && touchesTop && measured <= 0
+        return topOffset(safeAreaTop: unmeasured ? unmeasuredPortraitInset : measured, isPad: isPad)
+    }
+
     /// Distance entre le bord HAUT DE L'ÉCRAN (de l'hôte, zone sûre comprise)
     /// et le haut de la pastille.
     static func topOffset(safeAreaTop: CGFloat, isPad: Bool) -> CGFloat {
@@ -70,20 +110,28 @@ nonisolated enum SyncPillPlacement {
 }
 
 /// Le SEUL point de montage de la position de la pastille (#9680) : il lit
-/// l'encart haut par la géométrie de l'hôte — jamais par la fenêtre clé, dont
-/// la lecture depuis l'intérieur fige SwiftUI (cycle AttributeGraph) — et pose
-/// la pastille dans la bande de la barre d'état.
+/// l'encart haut de l'ÉCRAN par l'écart de deux cadres (un lecteur qui
+/// respecte la zone sûre, un lecteur intérieur qui l'ignore) — jamais par la
+/// fenêtre clé, dont la lecture depuis l'intérieur fige SwiftUI (cycle
+/// AttributeGraph), ni par les `safeAreaInsets` d'un lecteur qui ignore la
+/// zone sûre, qui valent 0.
 private struct SyncPillBandMount: ViewModifier {
     func body(content: Content) -> some View {
-        GeometryReader { proxy in
-            content
-                .padding(.top, SyncPillPlacement.topOffset(
-                    safeAreaTop: proxy.safeAreaInsets.top,
-                    isPad: UIDevice.current.userInterfaceIdiom == .pad
-                ))
-                .frame(maxWidth: .infinity, alignment: .top)
+        GeometryReader { safe in
+            let safeRegion = safe.frame(in: .global)
+            let reportedTop = safe.safeAreaInsets.top
+            GeometryReader { full in
+                content
+                    .padding(.top, SyncPillPlacement.topOffset(
+                        container: full.frame(in: .global),
+                        safeRegion: safeRegion,
+                        reportedTop: reportedTop,
+                        isPad: UIDevice.current.userInterfaceIdiom == .pad
+                    ))
+                    .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .ignoresSafeArea(.container, edges: .top)
         }
-        .ignoresSafeArea(.container, edges: .top)
     }
 }
 

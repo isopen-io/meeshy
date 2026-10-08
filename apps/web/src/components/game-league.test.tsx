@@ -124,6 +124,9 @@ describe('les trois autres accès', () => {
   test('verrouillée : le niveau d’ouverture et le niveau RECORD de la personne', () => {
     const html = text(renderToStaticMarkup(<GameLeague {...props({ league: league({ access: 'locked', current: null }), levelRecord: 7 })} />));
     expect(html).toContain('s’ouvre au niveau 10');
+    expect(html).toContain('Record 7');
+    expect(html).toContain('Requis 10');
+    expect(html).toContain('Il manque 3 niveaux');
     expect(html).toContain('Tu es au niveau 7');
   });
 

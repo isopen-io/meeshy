@@ -137,6 +137,9 @@ struct RootView: View {
     /// La géométrie mesurée par le conteneur des boutons : l'échelle du menu et
     /// l'ancre des réels lisent la même.
     @State private var floatingGeometry: FloatingButtonGeometry?
+    /// L'onboarding recouvre le chrome ; les boutons flottants, posés au-dessus
+    /// du chrome, s'effacent tant qu'il est là.
+    @ObservedObject private var onboardingPresence = OnboardingPresenceSignal.shared
 
     // Scroll visibility state (passed from ConversationListView)
     @State private var isScrollingDown = false
@@ -269,27 +272,8 @@ struct RootView: View {
                 .onAppear { openReels() }
             }
 
-            // 4. Draggable Floating buttons (hidden while a reel is open so they
-            // don't float over the immersive player)
-            if !router.isDeepRoute && reelsPresenter.launch == nil {
-                draggableFloatingButtons
-            }
-
-            // 5. Menu dismiss overlay
-            if showMenu {
-                Color.clear
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
-                    }
-                    .zIndex(99)
-            }
-
-            // 6. Menu ladder
-            if !router.isDeepRoute && reelsPresenter.launch == nil {
-                menuLadder
-            }
+            // 4-6. Les boutons flottants et leur menu vivent AU-DESSUS du chrome
+            // (`floatingChrome`, posé après `RootChromeLayer`) — plus ici.
 
             // 7. Offline state — surfaced as a discreet inline chip inside
             // `ConnectionBanner` (the safe-area inset at the top of every
@@ -362,6 +346,13 @@ struct RootView: View {
             showFeed: showFeed,
             showMenu: showMenu
         ))
+        // Les boutons flottants passent AU-DESSUS de tout le chrome (#9679) :
+        // la bannière du joueur, la pastille de synchronisation, le mini-lecteur
+        // et la bannière d'appel. Montés dans la pile du contenu, ils passaient
+        // SOUS la bannière : posé à 96 pt, le Flux devenait invisible et
+        // insaisissable, et le restait après relance. Seul l'onboarding, qui doit
+        // recouvrir le chrome, les masque.
+        .overlay { floatingChrome }
         .modifier(RootIntentRoutingLayer(
             router: router,
             storyViewModel: storyViewModel,
@@ -1364,6 +1355,29 @@ struct RootView: View {
         }
     }
 
+    // MARK: - Floating chrome (boutons + menu), au-dessus du chrome global
+
+    @ViewBuilder
+    private var floatingChrome: some View {
+        if !router.isDeepRoute && reelsPresenter.launch == nil && !onboardingPresence.isPresented {
+            ZStack {
+                draggableFloatingButtons
+
+                if showMenu {
+                    Color.clear
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
+                        }
+                        .zIndex(99)
+                }
+
+                menuLadder
+            }
+        }
+    }
+
     // MARK: - Draggable Floating Buttons (Free Position)
     private var draggableFloatingButtons: some View {
         FreeFloatingButtonsContainer(
@@ -1496,13 +1510,16 @@ struct RootView: View {
     // MARK: - Menu Ladder (positioned relative to menu button)
     private var menuLadder: some View {
         GeometryReader { proxy in
-            let geometry = floatingGeometry ?? FloatingButtonGeometry(screenSize: proxy.size, safeArea: proxy.safeAreaInsets)
-            let menuCenter = geometry.layout(feedStorage: feedButtonPosition, menuStorage: menuButtonPosition).menu
+            let frame = proxy.frame(in: .global)
+            let geometry = floatingGeometry
+                ?? FloatingButtonGeometry.measured(container: frame, safeRegion: frame, reported: proxy.safeAreaInsets)
+            let globalCenter = geometry.layout(feedStorage: feedButtonPosition, menuStorage: menuButtonPosition).menu
+            let menuCenter = CGPoint(x: globalCenter.x - frame.minX, y: globalCenter.y - frame.minY)
             let halfButton = FloatingButtonGeometry.buttonSize / 2
             let menuItemSize: CGFloat = 46
             let menuSpacing: CGFloat = MeeshySpacing.md
             let ladderExtent = CGFloat(RootMenuLadderEntry.allCases.count) * (menuItemSize + menuSpacing)
-            let expandDown = geometry.menuOpensDownward(from: menuCenter, ladderExtent: ladderExtent)
+            let expandDown = geometry.menuOpensDownward(from: globalCenter, ladderExtent: ladderExtent)
             let menuX = menuCenter.x
             let menuStartY = expandDown
                 ? menuCenter.y + halfButton + menuSpacing + menuItemSize / 2
@@ -1578,11 +1595,13 @@ enum FeedButtonAnchor {
         geometry.center(forStorage: raw, default: FloatingButtonGeometry.defaultFeedStorage)
     }
 
-    static func unitPoint(fromRaw raw: String, geometry: FloatingButtonGeometry) -> UnitPoint {
-        let size = geometry.screenSize
-        guard size.width > 0, size.height > 0 else { return .topLeading }
+    /// Le centre du bouton (global) en fraction du cadre GLOBAL `frame` de la
+    /// vue qui révèle les réels — qui peut, comme le conteneur des boutons, ne
+    /// pas commencer en haut de l'écran (bannière du joueur).
+    static func unitPoint(fromRaw raw: String, geometry: FloatingButtonGeometry, in frame: CGRect) -> UnitPoint {
+        guard frame.width > 0, frame.height > 0 else { return .topLeading }
         let p = screenPoint(fromRaw: raw, geometry: geometry)
-        return UnitPoint(x: p.x / size.width, y: p.y / size.height)
+        return UnitPoint(x: (p.x - frame.minX) / frame.width, y: (p.y - frame.minY) / frame.height)
     }
 }
 

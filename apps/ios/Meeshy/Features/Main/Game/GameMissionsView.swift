@@ -11,6 +11,10 @@ import MeeshyUI
 /// chances est une loterie, pas un jeu. Ouvert, ses récompenses se posent AU-DESSUS
 /// de lui (`ChestStage`, 1,4 s, une tape par récompense).
 ///
+/// Avant chaque geste, ce qu'il dépense ou exige se dit (#9705) : le prix d'un
+/// changement contre les Meeshes en poche, les missions faites que le coffre
+/// attend, le niveau qui ouvre les missions.
+///
 /// Rien n'est inventé côté client : les missions, leur objectif et leur
 /// récompense viennent du bloc `game`, et le contenu du coffre n'existe qu'une fois
 /// la passerelle l'a tiré. Pendant l'ouverture, le coffre est déjà ouvert (retour
@@ -25,12 +29,22 @@ struct GameMissionsView: View {
     let onClaim: () -> Void
     var haptics: GameHapticsProviding = GameHaptics.shared
 
-    private static let rerollPrice = 1
-
     private var theme: ThemeManager { ThemeManager.shared }
     private var missions: GameBlock.Missions { game.missions }
     /// Le fuseau où la passerelle découpe le jour de jeu : celui du COMPTE, jamais celui de l'appareil (#9539).
     private var accountTimezone: String? { AuthManager.shared.currentUser?.timezone }
+
+    /// Le prix d'un changement contre les Meeshes en poche, lu sur la loi.
+    var rerollSpend: SpendPreview { GameSpend.preview(held: game.treasury.held, cost: GameMissions.rerollPrice) }
+
+    /// La rangée du changement : posée tant qu'une mission du jour reste à faire dans le jour, même quand le serveur
+    /// retire le changement faute de Meesh (`rerollAvailable`) — pour dire combien il en manque.
+    func rerollShown(now: Date = Date()) -> Bool {
+        let end = GameMissionClock.endOfDay(missions.dayKey, timezone: accountTimezone)
+        let dayOpen = end.map { now < $0 } ?? true
+        let pending = missions.items.contains { !$0.isCompleted }
+        return dayOpen && pending && (missions.rerollAvailable || !rerollSpend.affordable)
+    }
 
     var body: some View {
         GameCard(anchor: .missions, title: String(localized: "game.missions.title", defaultValue: "Missions du jour", bundle: .main)) {
@@ -40,6 +54,11 @@ struct GameMissionsView: View {
                     defaultValue: "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau \(GameCopy.formatCount(game.level.shown.level)).",
                     bundle: .main
                 ))
+                GameFactChipRow(
+                    concept: .missions,
+                    items: GameSpendRows.requirement(GameSpend.requirement(current: game.level.shown.level, required: GameMissions.minLevel)),
+                    identifier: "game.missions.requirement"
+                )
             } else {
                 if missions.prismDay {
                     GameNote(text: String(
@@ -63,7 +82,7 @@ struct GameMissionsView: View {
                         canReroll: missions.rerollAvailable,
                         pending: pendingRerollId == mission.id,
                         online: online,
-                        held: game.treasury.held,
+                        affordable: rerollSpend.affordable,
                         onReroll: onReroll
                     )
                 }
@@ -75,9 +94,19 @@ struct GameMissionsView: View {
                         canReroll: false,
                         pending: false,
                         online: online,
-                        held: game.treasury.held,
+                        affordable: rerollSpend.affordable,
                         onReroll: onReroll
                     )
+                }
+                if rerollShown() {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                        GameNote(text: GameCopy.rerollLabel)
+                        GameFactChipRow(
+                            concept: .missions,
+                            items: GameSpendRows.spend(rerollSpend, format: GameCopy.meeshes),
+                            identifier: "game.missions.reroll.spend"
+                        )
+                    }
                 }
                 GameErrorLine(message: errors.reroll, identifier: "game.missions.reroll.error")
                 if !online {
@@ -115,7 +144,8 @@ private struct GameMissionRow: View {
     let canReroll: Bool
     let pending: Bool
     let online: Bool
-    let held: Int
+    /// Les Meeshes en poche couvrent le prix d'un changement (`GameMissions.rerollPrice`).
+    let affordable: Bool
     let onReroll: (String) -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -221,7 +251,7 @@ private struct GameMissionRow: View {
             HapticFeedback.light()
             onReroll(mission.id)
         } label: {
-            Text(String(localized: "game.mission.reroll", defaultValue: "Changer · 1 Meesh", bundle: .main))
+            Text(GameCopy.rerollLabel)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(MeeshyColors.brandPrimary)
                 .padding(.horizontal, MeeshySpacing.md)
@@ -229,11 +259,11 @@ private struct GameMissionRow: View {
                 .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.12)))
         }
         .buttonStyle(.plain)
-        .disabled(!online || pending || held < 1)
-        .opacity(!online || pending || held < 1 ? 0.5 : 1)
+        .disabled(!online || pending || !affordable)
+        .opacity(!online || pending || !affordable ? 0.5 : 1)
         .accessibilityLabel(String(
             localized: "game.mission.reroll.a11y",
-            defaultValue: "Changer la mission « \(title) » contre 1 Meesh",
+            defaultValue: "Changer la mission « \(title) » contre \(GameCopy.meeshes(GameMissions.rerollPrice))",
             bundle: .main
         ))
         .accessibilityIdentifier("game.mission.reroll")
@@ -271,6 +301,16 @@ private struct GameChestCard: View {
 
     private enum Phase { case locked, ready, opening, claimed }
 
+    /// Les missions du jour faites, sur celles du jour : ce que le coffre attend.
+    private var doneItem: GameFactChipItem {
+        let done = missions.items.filter(\.isCompleted).count
+        return GameFactChipItem(
+            label: ConceptText.factDone,
+            value: "\(GameCopy.formatCount(done)) / \(GameCopy.formatCount(missions.items.count))",
+            detail: .missionsDone
+        )
+    }
+
     private var phase: Phase {
         if opening || chest.status == .claimed { return chest.reward == nil ? .opening : .claimed }
         return chest.status == .ready ? .ready : .locked
@@ -293,6 +333,7 @@ private struct GameChestCard: View {
             switch phase {
             case .locked:
                 GameNote(text: String(localized: "game.chest.locked", defaultValue: "Termine les missions du jour pour l’ouvrir.", bundle: .main))
+                GameFactChipRow(concept: .missions, items: [doneItem], identifier: "game.chest.requirement")
             case .opening:
                 GameNote(text: String(localized: "game.chest.opening", defaultValue: "Ouverture en cours…", bundle: .main))
             case .ready:

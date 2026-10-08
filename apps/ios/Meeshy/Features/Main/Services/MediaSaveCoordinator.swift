@@ -27,18 +27,23 @@ struct MediaSaveRequest: Identifiable, Equatable {
     /// Attachment id serveur — pour le report best-effort « downloaded »
     /// (panneau « Qui a vu ») au moment du câblage des points d'entrée.
     let attachmentId: String?
+    /// L'auteur d'une œuvre COMPOSÉE, que la marque nomme (« "" » = inconnu :
+    /// aucun nom). `nil` = l'œuvre de l'utilisateur connecté lui-même.
+    let authorUsername: String?
 
     init(kind: AttachmentKind,
          origin: MediaOrigin,
          remoteURLString: String,
          suggestedFileName: String? = nil,
-         attachmentId: String? = nil) {
+         attachmentId: String? = nil,
+         authorUsername: String? = nil) {
         self.id = UUID()
         self.kind = kind
         self.origin = origin
         self.remoteURLString = remoteURLString
         self.suggestedFileName = suggestedFileName
         self.attachmentId = attachmentId
+        self.authorUsername = authorUsername
     }
 
     var destinations: [MediaSaveDestination] {
@@ -221,7 +226,8 @@ final class MediaSaveCoordinator: ObservableObject {
             // copie fidèle de l'original. Un marquage impossible, comme un média
             // transmis, retombe sur ce fichier d'origine — et `isStamped`
             // interdit alors de le supprimer.
-            let branded = await branding.stamp(localFile, kind: request.kind, origin: request.origin)
+            let branded = await branding.stamp(localFile, kind: request.kind, origin: request.origin,
+                                               author: request.authorUsername)
             defer { if branded.isStamped { Self.discardStagingDirectory(of: branded.url) } }
             switch destination {
             case .photoLibrary:

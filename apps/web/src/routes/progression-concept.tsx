@@ -122,6 +122,7 @@ function pieceOf(concept: ProgressionConcept, view: EngagementWithGame, host: Fi
         return (
           <GameMintPreview
             mint={game.mint}
+            held={game.level.score}
             badgesLost={view.mintBadgeLoss}
             online={online}
             minting={actions.pending.mint}

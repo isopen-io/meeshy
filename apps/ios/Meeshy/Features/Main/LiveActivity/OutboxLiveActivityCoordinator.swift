@@ -32,9 +32,15 @@ final class OutboxLiveActivityCoordinator {
     ) {
         #if canImport(ActivityKit)
         guard cancellable == nil else { return }
+        #if DEBUG
+        SyncPillDebugFeed.arm()
+        #endif
         guard #available(iOS 16.1, *) else { return }
         endOrphans()
-        cancellable = Publishers.CombineLatest(queue.pendingUIItemsPublisher, network.isOfflinePublisher)
+        cancellable = Publishers.CombineLatest(
+            SyncPillDebugFeed.items(queue.pendingUIItemsPublisher),
+            SyncPillDebugFeed.isOffline(network.isOfflinePublisher)
+        )
             .receive(on: DispatchQueue.main)
             .sink { [weak self] items, isOffline in
                 self?.apply(items: items, isOffline: isOffline)

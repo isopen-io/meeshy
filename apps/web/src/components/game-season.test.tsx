@@ -137,10 +137,19 @@ describe('le Sceau', () => {
     expect(host.querySelector('[data-game-seal-buy]')?.textContent).toContain('10 Meeshes');
   });
 
-  test('pas assez de Meeshes : le bouton se tait en disant pourquoi', async () => {
+  test('pas assez de Meeshes : le bouton se tait en disant combien il manque', async () => {
     const host = await mount(<GameSeason {...props({ held: 3 })} />);
     expect(host.querySelector<HTMLButtonElement>('[data-game-seal-buy]')?.disabled).toBe(true);
-    expect(host.textContent).toContain('Il te manque des Meeshes pour le Sceau');
+    const page = text(host.innerHTML);
+    expect(page).toContain('En poche 3 Meeshes');
+    expect(page).toContain('Coûte 10 Meeshes');
+    expect(page).toContain('Il manque 7 Meeshes');
+  });
+
+  test('avant l’achat : les Meeshes en poche, le prix et ce qui restera (#9705)', () => {
+    const page = text(renderToStaticMarkup(<GameSeason {...props({ held: 12 })} />));
+    expect(page).toContain('En poche 12 Meeshes');
+    expect(page).toContain('Restera 2 Meeshes');
   });
 
   test('déjà possédé : on le dit, plus d’achat', () => {

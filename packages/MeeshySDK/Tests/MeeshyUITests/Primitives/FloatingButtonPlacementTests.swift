@@ -86,6 +86,50 @@ final class FloatingButtonPlacementTests: XCTestCase {
         }
     }
 
+    // MARK: - La bannière du joueur pousse le conteneur (recette 2026-10-08)
+
+    /// Bannière REPLIÉE : le conteneur touche le haut de l'écran.
+    private let collapsed = FloatingButtonGeometry.measured(
+        container: CGRect(x: 0, y: 0, width: 402, height: 874),
+        safeRegion: CGRect(x: 0, y: 62, width: 402, height: 778),
+        reported: EdgeInsets()
+    )
+    /// Bannière DÉPLIÉE : elle pousse le conteneur de 80 pt vers le bas.
+    private let expanded = FloatingButtonGeometry.measured(
+        container: CGRect(x: 0, y: 80, width: 402, height: 794),
+        safeRegion: CGRect(x: 0, y: 80, width: 402, height: 760),
+        reported: EdgeInsets(top: 0, leading: 0, bottom: 34, trailing: 0)
+    )
+
+    func test_theBanner_neverChangesTheScreenGeometry() {
+        XCTAssertEqual(collapsed.screenSize, expanded.screenSize)
+        XCTAssertEqual(collapsed.minY, expanded.minY, accuracy: 0.001)
+        XCTAssertEqual(collapsed.maxY, expanded.maxY, accuracy: 0.001)
+    }
+
+    /// Le doigt lâche le bouton à 400 pt de l'ÉCRAN : le conteneur le reçoit
+    /// dans SON repère, la géométrie le remet en global.
+    private func drop(atScreenY y: CGFloat, in geometry: FloatingButtonGeometry) -> String {
+        let local = geometry.local(CGPoint(x: 30, y: y))
+        return geometry.placement(at: geometry.global(local)).storageValue
+    }
+
+    private func screenY(of stored: String, in geometry: FloatingButtonGeometry) -> CGFloat {
+        let local = geometry.local(geometry.center(forStorage: stored, default: FloatingButtonGeometry.defaultFeedStorage))
+        return local.y + geometry.origin.y
+    }
+
+    func test_writtenWithTheBannerCollapsed_readWithItExpanded_staysAt400() {
+        let stored = drop(atScreenY: 400, in: collapsed)
+        XCTAssertEqual(screenY(of: stored, in: expanded), 400, accuracy: 0.01)
+        XCTAssertEqual(expanded.local(expanded.center(forStorage: stored, default: "")).y, 320, accuracy: 0.01)
+    }
+
+    func test_writtenWithTheBannerExpanded_readWithItCollapsed_staysAt400() {
+        let stored = drop(atScreenY: 400, in: expanded)
+        XCTAssertEqual(screenY(of: stored, in: collapsed), 400, accuracy: 0.01)
+    }
+
     func test_aDropUnderTheSameSafeArea_roundTripsExactly() {
         for y in stride(from: pro.minY, through: pro.maxY, by: 37) {
             let stored = pro.placement(at: CGPoint(x: 380, y: y)).storageValue
@@ -181,6 +225,43 @@ final class FloatingButtonPlacementTests: XCTestCase {
         let other = pro.center(for: FloatingButtonPlacement(side: .leading, screenFraction: 0.9))
         let placement = pro.placement(droppedAt: CGPoint(x: 40, y: 200), avoiding: other)
         XCTAssertEqual(pro.center(for: placement).y, 200, accuracy: 0.5)
+    }
+
+    // MARK: - Seule la fin d'un VRAI glisser écrit (recette 2026-10-08)
+
+    private var feedAt500: CGPoint { CGPoint(x: 46, y: 500) }
+    private var menuFar: CGPoint { pro.center(for: FloatingButtonPlacement(side: .trailing, screenFraction: 1)) }
+
+    func test_aTap_writesNothing() {
+        XCTAssertNil(pro.storage(afterDragFrom: feedAt500, translation: .zero, avoiding: menuFar))
+    }
+
+    func test_aTapWithFingerJitter_writesNothing() {
+        for jitter in [CGSize(width: 3, height: 4), CGSize(width: -8, height: 8), CGSize(width: 0, height: -11.9)] {
+            XCTAssertNil(pro.storage(afterDragFrom: feedAt500, translation: jitter, avoiding: menuFar), "\(jitter)")
+        }
+    }
+
+    func test_aRealDrag_writesWhereTheFingerLeftIt() throws {
+        let stored = try XCTUnwrap(pro.storage(afterDragFrom: feedAt500, translation: CGSize(width: 5, height: -294), avoiding: menuFar))
+        let center = pro.center(forStorage: stored, default: FloatingButtonGeometry.defaultFeedStorage)
+        XCTAssertEqual(center.y, 206, accuracy: 0.5)
+    }
+
+    /// Le seul site qui écrit une position est la fin d'un glisser, et il passe
+    /// par `storage(afterDragFrom:…)` : ni la mise en page, ni
+    /// l'anti-chevauchement, ni un changement de taille ou de scène n'écrivent.
+    func test_theOnlyWritersOfAPersistedPosition_areTheTwoDragEnds() throws {
+        let url = ComposerSourceGuard.packageRoot.appendingPathComponent("Sources/MeeshyUI/Primitives/FloatingButtons.swift")
+        let code = ComposerSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let writes = code.components(separatedBy: "\n").filter {
+            $0.range(of: #"PositionRaw\s*=[^=]"#, options: .regularExpression) != nil
+        }
+        XCTAssertEqual(writes.count, 2, "\(writes)")
+        let guarded = code.components(separatedBy: "geometry.storage(afterDragFrom:").count - 1
+        XCTAssertEqual(guarded, 2, "chaque écriture passe par le seuil du glisser")
+        XCTAssertTrue(code.contains("DragGesture(minimumDistance: FloatingButtonGeometry.dragThreshold)"))
+        XCTAssertFalse(code.contains(".onChange(of") || code.contains("OnChange(of"), "aucune écriture sur un changement de taille ou de scène")
     }
 
     // MARK: - Le sens d'ouverture du menu

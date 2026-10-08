@@ -125,23 +125,10 @@ export const ECRITURES_OPAQUES: Readonly<Record<string, string>> = {
  *
  * Hors périmètre de #4662, qui corrige les sites qui écrivent MAL et non ceux
  * qui n'écrivent PAS. Gelées pour qu'aucune sixième ne rejoigne la liste sans
- * qu'on le voie.
+ * qu'on le voie. #9711 en a retiré les trois portes d'un INSCRIT (invitation,
+ * lien, salon global) : il n'y reste que des lignes sans lecteur réel.
  */
 export const CREATIONS_SANS_LANGUE: Readonly<Record<string, string>> = {
-  'routes/conversations/sharing.ts': [
-    '`POST /conversations/:id/invite` — un inscrit ajouté par un tiers. Son',
-    'prisme est lisible (la ligne `User` existe) : le site est mûr pour la',
-    "descente, mais l'ouvrir ici déborderait le périmètre de #4662.",
-  ].join(' '),
-  'routes/conversations/link-admission.ts': [
-    '`joinAsRegistered` — un inscrit qui rejoint par lien. `performLinkJoin` ne',
-    "lui remet PAS son `profile`, si bien que la langue calculée par l'appelant",
-    "ne l'atteint jamais : la ligne prend `\"en\"`.",
-  ].join(' '),
-  'services/conversations/ensureGlobalConversationMembership.ts': [
-    "l'entrée au salon global, cinquième porte d'entrée du dépôt. Le prisme du",
-    'compte est lisible et la descente y serait la même que partout ailleurs.',
-  ].join(' '),
   'services/InitService.ts': [
     'le SEED de développement — des comptes fabriqués, jamais un lecteur réel.',
   ].join(' '),
