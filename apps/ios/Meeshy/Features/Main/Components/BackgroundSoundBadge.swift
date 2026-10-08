@@ -13,9 +13,16 @@ import MeeshyUI
 ///   ORIGINALE (B3.4) — même convention visuelle que l'ancien header du
 ///   reader (`note PUIS onde`, verrouillée avant E1 par
 ///   `StoryHeaderMetaGuardTests`, portée ici désormais).
-/// - `.credit` ⇒ marquee crédit « titre · @pseudo · M:SS » — métadonnées
-///   toutes `nil` (cache froid) ⇒ crédit générique « ♫ — », JAMAIS un repli
-///   vers la note+onde : mentirait sur la provenance.
+/// - `.credit` ⇒ « ♫ titre · @pseudo » qui DÉFILE quand il dépasse (#9677) ;
+///   sans titre « ♫ @pseudo · date du son » ; métadonnées toutes `nil` (cache
+///   froid) ⇒ « ♫ — », JAMAIS un repli vers la note+onde : mentirait sur la
+///   provenance.
+///
+/// **Une ligne, largeur FLEXIBLE** (#9677) : la boîte est dimensionnée par le
+/// texte lui-même (masqué) — elle prend sa largeur quand il tient et cède
+/// jusqu'au plus étroit quand la place manque, le crédit défilant alors dans
+/// ce qui reste. Priorité de mise en page BASSE : le nom et le @pseudo voisins
+/// gardent leur ligne, le crédit ne les écrase jamais, ni ne se replie.
 ///
 /// `accentHex` : accent déterministe de la SURFACE porteuse — pour la carte
 /// de post, `post.authorColor` (revue totale C8, `FeedPostCard.swift:93`),
@@ -30,6 +37,15 @@ import MeeshyUI
 struct BackgroundSoundBadge: View, Equatable {
     let announcement: BackgroundAudioAnnouncement
     let accentHex: String
+
+    /// Le crédit suit la taille de texte choisie, plafonnée : en très grande
+    /// police, ce sont les hôtes qui le passent SOUS le nom.
+    @ScaledMetric(relativeTo: .caption2) private var creditFontSize: CGFloat = 11
+
+    init(announcement: BackgroundAudioAnnouncement, accentHex: String) {
+        self.announcement = announcement
+        self.accentHex = accentHex
+    }
 
     /// Accent pour une surface posée sur un MÉDIA arbitraire (photo/vidéo/
     /// gradient de story) — jamais garanti AA contre une couleur dérivée du
@@ -77,39 +93,57 @@ struct BackgroundSoundBadge: View, Equatable {
                 StoryHeaderAudioWaveform()
                     .opacity(MeeshyOpacity.intense)
             }
-        case .credit(let title, let username, let duration):
-            AudioChipMarquee(
-                text: Self.creditText(title: title, username: username, duration: duration),
-                height: 14,
-                fontSize: 11,
-                tint: Color(hex: Self.servedTintHex(for: announcement, accentHex: accentHex) ?? accentHex)
-            )
-            .frame(width: 124)
+        case .credit(let title, let username, _, let releasedAt):
+            let text = Self.creditText(title: title, username: username, releasedAt: releasedAt)
+            let tint = Color(hex: Self.servedTintHex(for: announcement, accentHex: accentHex) ?? accentHex)
+            // La taille SUIT Dynamic Type (`@ScaledMetric`) ; elle s'écrit en
+            // points parce que le texte masqué doit avoir EXACTEMENT la police
+            // du défilant qu'il dimensionne.
+            let fontSize = min(creditFontSize, 18)
+            let creditFont = Font.system(size: fontSize, weight: .semibold)
+            let height = ceil(fontSize * 1.3)
+            HStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "music.note")
+                    .font(creditFont)
+                    .foregroundColor(tint)
+                Text(text)
+                    .font(creditFont)
+                    .lineLimit(1)
+                    .frame(height: height)
+                    .hidden()
+                    .overlay(
+                        AudioChipMarquee(text: text, height: height, fontSize: fontSize, tint: tint)
+                    )
+            }
             .opacity(MeeshyOpacity.intense)
+            .layoutPriority(-1)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Self.creditAccessibilityLabel(text))
         }
     }
 
-    /// Texte du crédit — carte STATIQUE : contrairement à la chip du reader
-    /// (`AudioForegroundChip`/`AudioChipRemainingTimeText`), aucune des
-    /// trois surfaces n'a de playhead de lecture continue à observer ici, le
-    /// compte à rebours vivant n'a donc pas de sens pour ce badge. Réutilise
-    /// les formateurs PURS du résolveur SDK
-    /// (`AudioChipDisplay.formatRemaining`/`minuteDigits`) plutôt que d'en
-    /// réinventer un — seul l'ASSEMBLAGE (titre · @pseudo · M:SS) est propre
-    /// à cette carte. Toutes métadonnées `nil` (cache froid) ⇒ crédit
-    /// générique « ♫ — », jamais un repli vers `.original`.
-    static func creditText(title: String?, username: String?, duration: TimeInterval?) -> String {
-        let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let author = username?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .drop(while: { $0 == "@" })
-        let authorTag = (author?.isEmpty == false) ? "@\(author!)" : nil
-        let durationText = duration.map {
-            AudioChipDisplay.formatRemaining($0, minuteDigits: AudioChipDisplay.minuteDigits(forTotal: $0))
-        }
-        let parts = [cleanTitle?.isEmpty == false ? cleanTitle : nil, authorTag, durationText]
-            .compactMap { $0 }
-        return parts.isEmpty ? "♫ —" : parts.joined(separator: " · ")
+    /// VoiceOver lit la nature de la piste, puis son crédit — et la seule
+    /// nature quand le crédit est inconnu (« — » ne se prononce pas).
+    static func creditAccessibilityLabel(_ text: String) -> String {
+        let track = String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main)
+        return text == unknownCreditText ? track : "\(track) · \(text)"
+    }
+
+    /// Ce qui suit la note quand rien du son n'est connu : « ♫ — ».
+    static let unknownCreditText = "—"
+
+    /// Texte du crédit, APRÈS la note (#9677) — la forme UNIQUE du SDK
+    /// (`AudioChipDisplay.creditLine`), partagée avec la puce du lecteur :
+    /// « titre · @pseudo », sinon « @pseudo · date du son », sinon « — ».
+    /// Plus de durée : la jumelle web (#9678) ne la dit pas, et un crédit
+    /// d'œuvre n'est pas un compteur.
+    static func creditText(title: String?,
+                           username: String?,
+                           releasedAt: Date?,
+                           locale: Locale = .current,
+                           timeZone: TimeZone = .current) -> String {
+        AudioChipDisplay.creditLine(title: title, username: username, releasedAt: releasedAt,
+                                    locale: locale, timeZone: timeZone) ?? unknownCreditText
     }
 }
 
@@ -181,8 +215,18 @@ extension BackgroundSoundBadge {
             sound: backgroundSound(of: storyEffects),
             libraryTitle: backgroundEntry?.name,
             libraryUsername: backgroundEntry?.soundAuthorUsername,
-            libraryDuration: backgroundEntry?.duration.map(TimeInterval.init)
+            libraryDuration: backgroundEntry?.duration.map(TimeInterval.init),
+            libraryReleasedAt: backgroundEntry?.soundReleaseDate
         )
+    }
+
+    /// **L'annonce d'un POST** (#9677) : celle des effets qu'il JOUE — les
+    /// siens, ou ceux de la story qu'il republie quand l'enveloppe est vide
+    /// (`FeedPost.playedStoryEffects`, le repli que le lecteur et le détail
+    /// appliquent déjà). Sans lui, la carte d'une story republiée se taisait
+    /// pendant que son embed jouait le son de la source.
+    static func announcement(for post: FeedPost) -> BackgroundAudioAnnouncement {
+        announcement(for: post.playedStoryEffects)
     }
 
     /// B3.6 — Lot E, Task E2 : le bouton 🔇 existe SI ET SEULEMENT SI une
@@ -304,5 +348,54 @@ extension BackgroundSoundBadge {
     /// seulement commode.
     static func canvasHasContent(_ item: StoryItem) -> Bool {
         item.storyEffects != nil || !item.media.isEmpty
+    }
+}
+
+// MARK: - Le crédit À CÔTÉ du nom, ou SOUS lui (#9677)
+
+/// **Une ligne qui porte le crédit du son à côté de ce qui la précède** — le
+/// @pseudo et les compteurs d'un réel. Le crédit y prend la place qui reste
+/// (priorité basse) et défile dedans ; en taille de texte d'ACCESSIBILITÉ, où
+/// cette place tombe à rien, il passe sous la ligne au lieu de l'écraser ou de
+/// se replier.
+struct SoundCreditLine<Leading: View, Trailing: View>: View {
+    let spacing: CGFloat
+    let badge: BackgroundSoundBadge
+    let leading: Leading
+    let trailing: Trailing
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    init(spacing: CGFloat,
+         badge: BackgroundSoundBadge,
+         @ViewBuilder leading: () -> Leading,
+         @ViewBuilder trailing: () -> Trailing) {
+        self.spacing = spacing
+        self.badge = badge
+        self.leading = leading()
+        self.trailing = trailing()
+    }
+
+    /// La règle, interrogeable sans vue.
+    nonisolated static func placesCreditBelow(_ size: DynamicTypeSize) -> Bool {
+        size.isAccessibilitySize
+    }
+
+    var body: some View {
+        if Self.placesCreditBelow(dynamicTypeSize) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: spacing) {
+                    leading
+                    trailing
+                }
+                badge.equatable()
+            }
+        } else {
+            HStack(spacing: spacing) {
+                leading
+                badge.equatable().layoutPriority(-1)
+                trailing
+            }
+        }
     }
 }

@@ -129,7 +129,8 @@ public final class StoryAudioChipPainter {
                     sound: AudioChipDisplay.borrowedSound(soundId: audio.soundId),
                     libraryTitle: audio.name,
                     libraryUsername: audio.soundAuthorUsername,
-                    libraryDuration: nil)),
+                    libraryDuration: nil,
+                    libraryReleasedAt: audio.soundReleaseDate)),
                 muted: audio.isMuted,
                 elapsed: max(0, seconds - Double(audio.startTime ?? 0)))
         }

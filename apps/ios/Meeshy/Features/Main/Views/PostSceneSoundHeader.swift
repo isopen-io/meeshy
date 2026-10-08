@@ -23,22 +23,14 @@ import MeeshyUI
 /// > gardé — et l'utilisateur n'apprenait ni le titre, ni l'auteur, ni la durée
 /// > de ce qu'il entendait.
 ///
-/// ## Ce qu'elle montre, et pourquoi c'est la MÊME rangée
+/// ## Ce qu'elle montre : l'annonce des AUTRES surfaces de lecture (#9677)
 ///
-/// `ComposerSoundTraceRow` — note · onde · crédit · durée — est le vocabulaire
-/// des traces sonores du dépôt (#5011 : « deux traces, deux coques, un seul
-/// vocabulaire »). Cette vue en est la TROISIÈME coque, la première du côté
-/// LECTURE. En écrire une quatrième forme ici aurait donné deux façons de dire
-/// le même son, et la divergence se serait vue au premier libellé ajouté.
-///
-/// Son préfixe `Composer` cesse d'être vrai le jour où une surface de lecture
-/// la monte ; le renommage est un suivi de #5602, tenu à part parce qu'il
-/// touche quatre gardes de source d'un territoire aujourd'hui rouge (#5599).
-///
-/// Le SPECTRE que le porteur demande est celui de la rangée : le relevé
-/// (`waveformSamples`) quand on l'a, **une sinusoïde sinon** — un son emprunté
-/// et un brouillon restauré arrivent avec un tableau vide, et une bande plate
-/// s'y lirait comme un silence.
+/// Le crédit que la carte, le réel et le lecteur de story montent —
+/// `BackgroundSoundBadge` : la note et la sinusoïde pour un son ORIGINAL,
+/// « ♫ titre · @auteur » qui DÉFILE pour un son de la bibliothèque. La rangée
+/// du composer qu'elle montait avant tronquait le crédit sans le faire défiler,
+/// et peignait une sinusoïde de REPLI sous un son emprunté — la même image que
+/// l'original, donc une provenance dite deux fois différemment selon l'écran.
 ///
 /// ## Pourquoi elle est un BOUTON, et pas une étiquette
 ///
@@ -60,6 +52,10 @@ struct PostSceneSoundHeader: View {
     /// (`BackgroundSoundBadge.backgroundTrace(of:)`), jamais une seconde
     /// condition recopiée qui pourrait diverger.
     let trace: StoryAudioPlayerObject?
+    /// Ce que la ligne DIT de cette piste — la même annonce que le badge des
+    /// autres surfaces (`BackgroundSoundBadge.announcement(for:)`), résolue par
+    /// l'appelant sur les effets que la scène JOUE.
+    let announcement: BackgroundAudioAnnouncement
     /// La lecture est-elle ARRÊTÉE par le viewer ? Elle vit chez l'hôte : c'est
     /// lui qui la sert aux trois chemins de rendu, et une commande qui n'en
     /// atteindrait qu'un laisserait jouer le canvas d'à côté.
@@ -86,17 +82,11 @@ struct PostSceneSoundHeader: View {
                 onTogglePlayback()
             }) {
                 HStack(spacing: MeeshySpacing.sm) {
-                    ComposerSoundTraceRow(
-                        sound: trace,
-                        tint: tint,
-                        // La ligne occupe toute la largeur du couloir : l'onde
-                        // ET le crédit y tiennent, aucun ne chasse l'autre.
-                        // C'est la troisième voie de #5011, et la raison qui
-                        // retire l'onde d'un son emprunté dans une CAPSULE
-                        // (manque de place, #4669) ne s'applique pas ici.
-                        showsWaveformEvenWhenBorrowed: true,
-                        creditMaxWidth: nil
+                    BackgroundSoundBadge(
+                        announcement: announcement,
+                        accentHex: accentHex.isEmpty ? MeeshyColors.indigo400Hex : accentHex
                     )
+                    .equatable()
                     Spacer(minLength: 4)
                     Image(systemName: isPaused ? "play.fill" : "pause.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))

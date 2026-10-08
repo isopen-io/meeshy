@@ -1096,17 +1096,14 @@ public extension StoryItem {
     /// ici en profondeur pour ne jamais dépendre de cette garantie côté
     /// composer (post-revue 2026-07-13).
     init(feedPost: FeedPost) {
-        let storySource: RepostContent? = {
-            guard let repost = feedPost.repost,
-                  (repost.type ?? "").uppercased() == "STORY" else { return nil }
-            return repost
-        }()
-        let hasOwnContent = !feedPost.media.isEmpty || feedPost.storyEffects != nil
+        let storySource = feedPost.republishedStory
+        let hasOwnContent = StoryEffects.republicationHasOwnContent(own: feedPost.storyEffects,
+                                                                    ownMediaIsEmpty: feedPost.media.isEmpty)
         self.init(
             id: feedPost.id,
             content: feedPost.content,
             media: hasOwnContent ? feedPost.media : (storySource?.media ?? []),
-            storyEffects: hasOwnContent ? feedPost.storyEffects : storySource?.storyEffects,
+            storyEffects: feedPost.playedStoryEffects,
             createdAt: feedPost.timestamp,
             expiresAt: nil,
             repostOfId: storySource?.id,

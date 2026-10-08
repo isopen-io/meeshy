@@ -298,7 +298,7 @@ struct FeedPostCard: View {
     /// (B3.6, Task E2) partage cette valeur avec le badge, jamais une
     /// seconde condition d'existence qui pourrait diverger.
     var backgroundSoundAnnouncement: BackgroundAudioAnnouncement {
-        BackgroundSoundBadge.announcement(for: post.storyEffects)
+        BackgroundSoundBadge.announcement(for: post)
     }
 
     /// Document canvas v3 PROPRE au post (Task E3) — distinct du canvas d'un

@@ -20,9 +20,26 @@ import MeeshyUI
 extension ReelPageView {
 
     var authorMetaLine: some View {
-        HStack(spacing: MeeshySpacing.xs) {
+        // Annonce du fond (B3.3-5), résolveur unique partagé avec la carte de
+        // post et le viewer story (E1) — BackgroundSoundBadge rend EmptyView
+        // sans piste (B3.5). Résolue UNE fois : le bouton muet (B3.6, Task E2)
+        // partage la MÊME valeur. C'est le SEUL crédit du réel (#9677) : la
+        // pastille statique qui le doublait au-dessus de la rangée est partie.
+        // Posé sur le média ⇒ l'accent sur média, jamais celui du réel.
+        let announcement = BackgroundSoundBadge.announcement(for: reel.storyEffects)
+        return SoundCreditLine(
+            spacing: MeeshySpacing.xs,
+            badge: BackgroundSoundBadge(announcement: announcement,
+                                        accentHex: BackgroundSoundBadge.overMediaAccentHex)
+        ) {
             if let username = reel.authorUsername, !username.isEmpty {
-                Text("@\(username)").font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(MeeshyColors.mediaChromeTertiary)
+                // Le @pseudo garde sa ligne : il ne se replie jamais, et c'est
+                // le crédit — priorité basse — qui cède la place.
+                Text("@\(username)")
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
             }
             if isAuthor {
                 if reel.authorUsername?.isEmpty == false { metaDot }
@@ -32,29 +49,12 @@ extension ReelPageView {
                 statInline(icon: "eye.fill", count: reel.viewCount,
                            a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
             }
-
-            // Annonce du fond (B3.3-5), résolveur unique partagé avec la
-            // carte de post et le viewer story (E1) — BackgroundSoundBadge
-            // rend EmptyView sans piste (B3.5). Résolue UNE fois : le bouton
-            // muet (B3.6, Task E2) juste après partage la MÊME valeur — un
-            // seul prédicat, jamais une seconde résolution qui pourrait
-            // diverger.
-            let announcement = BackgroundSoundBadge.announcement(for: reel.storyEffects)
-            BackgroundSoundBadge(announcement: announcement, accentHex: accentColor)
-                .equatable()
-
+        } trailing: {
             // Muet LOCAL du fond storyEffects — distinct de l'audio NATIF du
-            // réel (toujours actif, `drive()` réaffirme `manager.isMuted =
-            // false`, non touché ici). Gate renforcée (correctif revue DoD,
-            // BLOQUANT #1) : le bouton ne se monte QUE si un lecteur LOCAL
-            // existe réellement pour le piloter (`borrowedSoundTrack`,
-            // chargé dans `audioPlayer` par `startBorrowedSoundIfNeeded()`)
-            // — l'annonce seule peut être vraie sans qu'aucun moteur pilotable
-            // ne joue localement (ex. audio incrusté dans une vidéo). Le tap
-            // pilote RÉELLEMENT `audioPlayer` (pause/reprise, position
-            // conservée) — l'icône et le libellé a11y suivent
-            // `audioPlayer.isPlaying`, jamais un état local séparé qui
-            // pourrait diverger du son réellement audible.
+            // réel (toujours actif). Le bouton ne se monte QUE si un lecteur
+            // LOCAL existe réellement pour le piloter (`borrowedSoundTrack`,
+            // chargé dans `audioPlayer` par `startBorrowedSoundIfNeeded()`) ;
+            // l'icône et le libellé a11y suivent `audioPlayer.isPlaying`.
             //
             // Réel COMPOSÉ (#6745) : le son de fond est joué par le PLAYER de
             // la scène, et c'est son muet que le bouton pilote.

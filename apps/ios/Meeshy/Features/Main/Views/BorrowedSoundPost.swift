@@ -32,7 +32,8 @@ enum BorrowedSoundPost {
                 name: sound.hasAuthoredTitle ? sound.title : nil,
                 mediaURL: sound.fileUrl,
                 soundId: sound.id,
-                soundAuthorUsername: sound.uploader?.username
+                soundAuthorUsername: sound.uploader?.username,
+                soundCreatedAt: StoryAudioPlayerObject.soundCreatedAtStamp(sound.createdAt)
             ),
         ]
         return effects

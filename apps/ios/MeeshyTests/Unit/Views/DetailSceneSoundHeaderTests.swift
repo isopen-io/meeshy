@@ -108,7 +108,7 @@ final class DetailSceneSoundHeaderTests: XCTestCase {
     /// Pas de piste ⇒ RIEN. La scène reprend toute la hauteur, et aucun
     /// contrôle ne paraît pour un son qui n'existe pas.
     func test_header_rendersNothing_withoutATrack() throws {
-        let vue = PostSceneSoundHeader(trace: nil, isPaused: false,
+        let vue = PostSceneSoundHeader(trace: nil, announcement: .none, isPaused: false,
                                        accentHex: "#7C3AED", onTogglePlayback: {})
         XCTAssertNil(vue.trace)
     }
@@ -117,7 +117,7 @@ final class DetailSceneSoundHeaderTests: XCTestCase {
     /// image muette pour le lecteur d'écran : sans cette composition, VoiceOver
     /// n'apprendrait ni le titre ni la durée que l'écran affiche.
     func test_accessibilityLabel_carriesCreditAndDuration() throws {
-        let vue = PostSceneSoundHeader(trace: trace(), isPaused: false,
+        let vue = PostSceneSoundHeader(trace: trace(), announcement: .original, isPaused: false,
                                        accentHex: "#7C3AED", onTogglePlayback: {})
         let libelle = try XCTUnwrap(vue.trace.map { vue.accessibilityLabel(for: $0) })
         XCTAssertTrue(libelle.contains("Miroir"), libelle)
@@ -129,7 +129,7 @@ final class DetailSceneSoundHeaderTests: XCTestCase {
     /// inerte que `MuteButtonExistenceGuardTests` a déjà rejeté deux fois.
     func test_touching_togglesTheViewerCommand() {
         var arrete = false
-        let vue = PostSceneSoundHeader(trace: trace(), isPaused: arrete,
+        let vue = PostSceneSoundHeader(trace: trace(), announcement: .original, isPaused: arrete,
                                        accentHex: "#7C3AED",
                                        onTogglePlayback: { arrete.toggle() })
         vue.onTogglePlayback()
@@ -138,19 +138,46 @@ final class DetailSceneSoundHeaderTests: XCTestCase {
         XCTAssertFalse(arrete)
     }
 
-    // MARK: - Le spectre : relevé, ou sinusoïde
+    // MARK: - Le crédit, pas une sinusoïde de repli (#9677)
 
-    /// Un son emprunté et un brouillon restauré arrivent avec un relevé VIDE.
-    /// La rangée dessine alors une sinusoïde : une bande plate s'y lirait comme
-    /// un SILENCE, ce que le son n'est pas.
-    func test_theTraceRowKeepsItsWaveform_evenForABorrowedSound() {
+    /// Un son EMPRUNTÉ s'annonce au détail comme partout : par son crédit qui
+    /// défile — jamais par la sinusoïde de l'original, qui mentirait sur sa
+    /// provenance. La rangée du composer, montée ici avant, en peignait une de
+    /// REPLI faute de relevé.
+    func test_aBorrowedSound_isAnnouncedByItsCredit_notAWaveform() {
         let empruntee = trace(soundId: "6a97198de19ad1985081d6a6")
-        XCTAssertFalse(StoryAudioIdentity.showsWaveform(for: empruntee),
-                       "Prémisse : dans une CAPSULE, un son emprunté cède son onde au crédit (#4669).")
-        let rangee = ComposerSoundTraceRow(sound: empruntee,
-                                           showsWaveformEvenWhenBorrowed: true,
-                                           creditMaxWidth: nil)
-        XCTAssertTrue(rangee.showsWaveformEvenWhenBorrowed,
-                      "En tête de scène la ligne a toute la largeur : l'onde ET le crédit y tiennent.")
+        let annonce = BackgroundSoundBadge.announcement(for: effects(with: empruntee))
+        guard case .credit(let titre, let auteur, _, _) = annonce else {
+            return XCTFail("Un son de la bibliothèque doit s'annoncer par son crédit — reçu \(annonce)")
+        }
+        XCTAssertEqual(titre, "Miroir")
+        XCTAssertEqual(auteur, "jcnm")
+    }
+
+    func test_anOriginalSound_keepsTheWaveform() {
+        let propre = trace(soundId: nil)
+        XCTAssertEqual(BackgroundSoundBadge.announcement(for: effects(with: propre)), .original)
+    }
+
+    /// La ligne du détail MONTE le badge des autres surfaces, et ne garde plus
+    /// la rangée du composer avec sa sinusoïde de repli.
+    func test_theDetailHeader_mountsTheSharedBadge() throws {
+        let src = MyStoriesSourceCorpus.strippingComments(
+            try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/PostSceneSoundHeader.swift"))
+        XCTAssertTrue(src.contains("BackgroundSoundBadge("),
+                      "le détail doit dire le son comme la carte, le réel et la story")
+        XCTAssertFalse(src.contains("showsWaveformEvenWhenBorrowed"),
+                       "plus de sinusoïde de repli sous un son emprunté")
+        XCTAssertFalse(src.contains("ComposerSoundTraceRow("),
+                       "la rangée du composer tronquait sans défiler")
+    }
+
+    /// Le détail d'une story republiée DIT le son que son embed joue — celui de
+    /// la source, sur la même ligne que le chemin natif.
+    func test_theRepostEmbed_carriesTheSoundOfTheStoryItPlays() throws {
+        let src = MyStoriesSourceCorpus.strippingComments(
+            try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/PostDetailView+RepostEmbed.swift"))
+        XCTAssertTrue(src.contains("sceneSoundHeader(repost.storyEffects)"),
+                      "l'embed d'une story republiée doit porter la trace du son qu'il joue")
     }
 }

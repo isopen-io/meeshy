@@ -713,6 +713,7 @@ public extension CanvasV3 {
         if let username = nonEmpty(audio.soundAuthorUsername) {
             payload["soundAuthorUsername"] = .string(username)
         }
+        if let createdAt = nonEmpty(audio.soundCreatedAt) { payload["soundCreatedAt"] = .string(createdAt) }
         if let name = nonEmpty(audio.name) { payload["name"] = .string(name) }
         if audio.volume != 1 { payload["volume"] = .number(exactDouble(audio.volume)) }
         if let memento = audio.mutedVolumeMemento {
@@ -1161,7 +1162,8 @@ public extension StoryEffects {
             keyframes: object.timing?.keyframes.map { $0.map(StoryKeyframe.init(rendering:)) },
             mediaURL: object.payload.string("mediaURL"),
             soundId: object.payload.string("soundId"),
-            soundAuthorUsername: object.payload.string("soundAuthorUsername"))
+            soundAuthorUsername: object.payload.string("soundAuthorUsername"),
+            soundCreatedAt: object.payload.string("soundCreatedAt"))
         audio.zIndex = object.z
         audio.scale = object.transform.scale == 1 ? nil : object.transform.scale
         audio.rotation = object.transform.rotation == 0 ? nil : object.transform.rotation

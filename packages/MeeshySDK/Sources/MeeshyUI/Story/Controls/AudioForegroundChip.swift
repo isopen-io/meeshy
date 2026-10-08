@@ -269,7 +269,8 @@ public struct AudioForegroundChip: View {
                 sound: AudioChipDisplay.borrowedSound(soundId: audioObject.soundId),
                 libraryTitle: audioObject.name,
                 libraryUsername: audioObject.soundAuthorUsername,
-                libraryDuration: nil
+                libraryDuration: nil,
+                libraryReleasedAt: audioObject.soundReleaseDate
             )) {
             case .marquee(let text):
                 AudioChipMarquee(text: text,

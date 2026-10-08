@@ -642,16 +642,6 @@ struct ReelPageView: View {
                     .padding(.bottom, MeeshySpacing.smPlus)
                 }
 
-                // Crédit du son EMPRUNTÉ (réel « son de bibliothèque seul ») —
-                // même doctrine que le header de story : le crédit est dû dès
-                // que `soundId` existe (AudioChipDisplay), affiché en pill
-                // discrète au-dessus de la rangée auteur.
-                if let track = borrowedSoundTrack, isActive {
-                    borrowedSoundBadge(track)
-                        .padding(.horizontal, MeeshySpacing.lg)
-                        .padding(.bottom, MeeshySpacing.smPlus)
-                }
-
                 HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
                     infoOverlay
                     Spacer(minLength: MeeshySpacing.sm)
@@ -820,35 +810,6 @@ struct ReelPageView: View {
         } else {
             audioPlayer.play(urlString: url)
         }
-    }
-
-    /// Pill de crédit d'un son emprunté : « titre · @auteur » (ou le libellé
-    /// « Son original » localisé quand l'auteur n'a pas nommé son son).
-    private func borrowedSoundBadge(_ track: StoryAudioPlayerObject) -> some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: "music.note")
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .accessibilityHidden(true)
-            Text(borrowedSoundLabel(track))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .lineLimit(1)
-        }
-        .foregroundColor(MeeshyColors.mediaChromeForeground)
-        .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, MeeshySpacing.xsPlus)
-        .background(Capsule().fill(.ultraThinMaterial))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel(String(localized: "media.sound.used", defaultValue: "Son utilisé"))
-        .accessibilityValue(borrowedSoundLabel(track))
-    }
-
-    private func borrowedSoundLabel(_ track: StoryAudioPlayerObject) -> String {
-        let authored = track.name.flatMap { $0.isEmpty ? nil : $0 }
-        let title = authored ?? String(localized: "media.sound.original", defaultValue: "Son original")
-        if let author = track.soundAuthorUsername, !author.isEmpty {
-            return "\(title) · @\(author)"
-        }
-        return title
     }
 
     /// Analogue de la branche `audioMedia` pour un réel « son emprunté seul » :
