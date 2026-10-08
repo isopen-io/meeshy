@@ -14,7 +14,7 @@
  */
 
 import { atlasSummary, type AtlasState } from './atlas.js';
-import { canPrestige, GAME_PRESTIGE_MAX, levelFromScore, NO_LEVEL_CAP } from './levels.js';
+import { canPrestige, GAME_PRESTIGE_MAX, levelForUnlocks } from './levels.js';
 import { DUO_MIN_LEVEL, duoProgress, duoReward, type DuoMission, type DuoStatus } from './duo.js';
 import { GLORY_POINTS } from './glory.js';
 import {
@@ -116,13 +116,7 @@ export type GameBlockExtras = {
   readonly achievementRarities?: GameAchievementRarities;
 };
 
-/**
- * Le niveau lu SANS plafond de rang (#9688) : ce bloc ne le compare qu'à des seuils de 100 au plus (ligue, duo,
- * Prestige, effort des missions borné à 100) et tout plafond vaut au moins 499 — la décision est la même.
- */
-const uncappedLevel = (score: number): number => levelFromScore(score, NO_LEVEL_CAP);
-
-const recordOf = (levelRecord: number | null, score: number): number => Math.max(levelRecord ?? 1, uncappedLevel(score));
+const recordOf = (levelRecord: number | null, score: number): number => Math.max(levelRecord ?? 1, levelForUnlocks(score));
 
 function leagueBlock(facts: GameBlockExtrasFacts, record: number): GameLeagueBlock {
   const moment = { dayKey: facts.today, minuteOfDay: facts.minuteOfDay };
@@ -195,7 +189,7 @@ function duoBlock(facts: GameBlockExtrasFacts, record: number): GameDuoBlock {
     reward:
       progress === null
         ? null
-        : duoReward({ level: uncappedLevel(facts.score), flameDays: facts.flameDays, mineDone: progress.mineDone, partnerDone: progress.partnerDone }),
+        : duoReward({ level: levelForUnlocks(facts.score), flameDays: facts.flameDays, mineDone: progress.mineDone, partnerDone: progress.partnerDone }),
   };
 }
 
@@ -245,7 +239,7 @@ export function buildGameBlockExtras(facts: GameBlockExtrasFacts): GameBlockExtr
     prestige: {
       stars: Math.min(GAME_PRESTIGE_MAX, Math.max(0, Math.trunc(facts.prestige))),
       max: GAME_PRESTIGE_MAX,
-      canPrestige: canPrestige({ level: uncappedLevel(facts.score), prestige: facts.prestige }),
+      canPrestige: canPrestige({ level: levelForUnlocks(facts.score), prestige: facts.prestige }),
       gloryOnPass: GLORY_POINTS.prestige,
     },
     visibility: { ...facts.visibility },

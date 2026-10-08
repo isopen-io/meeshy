@@ -76,6 +76,16 @@ describe('seuil et niveau', () => {
     expect(levelFromScore(levelThreshold(3000) - 1, NO_LEVEL_CAP)).toBe(2999);
   });
 
+  it('ferme un plafond illisible sur 499 : seul null explicite lève la limite (fail-closed)', () => {
+    const score = levelThreshold(640);
+    expect(levelFromScore(score, Number.NaN)).toBe(499);
+    expect(levelFromScore(score, Number.POSITIVE_INFINITY)).toBe(499);
+    expect(levelFromScore(score, undefined as unknown as null)).toBe(499);
+    expect(levelFromScore(score, '1000' as unknown as number)).toBe(499);
+    expect(levelProgress(score, Number.NaN)).toMatchObject({ level: 499, cap: 499, isMax: true });
+    expect(levelFromScore(score, NO_LEVEL_CAP)).toBe(640);
+  });
+
   it('traite un score illisible comme zéro', () => {
     expect(levelFromScore(Number.NaN, NO_LEVEL_CAP)).toBe(1);
     expect(levelFromScore(-50, NO_LEVEL_CAP)).toBe(1);

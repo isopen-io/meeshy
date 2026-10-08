@@ -9,7 +9,7 @@
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { duoReward } from '@meeshy/shared/utils/game/duo';
-import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { DUO_INVITES_PER_WEEK, DuoService, roundedPartnerProgress } from '../DuoService';
 import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from './fakeGameDb';
 
@@ -204,7 +204,7 @@ describe('DuoService.onSignal', () => {
     expect(ctx.db.gameDuo.rows[0]!.status).toBe('active');
     await advance(ctx.service, OTHER, signal, target);
 
-    const doubled = duoReward({ level: levelFromScore(SCORE), flameDays: 0, mineDone: true, partnerDone: true });
+    const doubled = duoReward({ level: levelForUnlocks(SCORE), flameDays: 0, mineDone: true, partnerDone: true });
     expect(doubled.doubled).toBe(true);
     expect(ctx.db.gameDuo.rows[0]!.status).toBe('completed');
     expect(ctx.creditPoints.mock.calls.map((c) => [c[0], c[1]]).sort()).toEqual([[OTHER, doubled.points], [USER, doubled.points]].sort());
@@ -232,7 +232,7 @@ describe('DuoService.expireOld', () => {
 
     expect(await ctx.service.expireOld(AFTER)).toBe(1);
 
-    const solo = duoReward({ level: levelFromScore(SCORE), flameDays: 0, mineDone: true, partnerDone: false });
+    const solo = duoReward({ level: levelForUnlocks(SCORE), flameDays: 0, mineDone: true, partnerDone: false });
     expect(ctx.creditPoints.mock.calls).toEqual([[USER, solo.points, 'content.text_message']]);
     expect(ctx.db.gameDuo.rows[0]!.status).toBe('expired');
     expect(ctx.db.gameDuoSlot.rows).toHaveLength(0);

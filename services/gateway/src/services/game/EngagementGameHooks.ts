@@ -12,7 +12,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
-import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { DUO_TEMPLATES } from '@meeshy/shared/utils/game/duo';
 import { MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -42,7 +42,7 @@ export { quarterPoints };
 
 /** Le Vent arrière : ×1,25 tant que le niveau est sous le niveau record. Entier. */
 export function applyTailwind(points: number, account: { readonly engagementScore: number; readonly levelRecord: number | null }): number {
-  const factor = tailwindFactor({ level: levelFromScore(account.engagementScore), levelRecord: account.levelRecord ?? 0 });
+  const factor = tailwindFactor({ level: levelForUnlocks(account.engagementScore), levelRecord: account.levelRecord ?? 0 });
   return factor > 1 ? Math.round(points * factor) : points;
 }
 
@@ -128,9 +128,13 @@ export class EngagementGameHooks {
     await this.isolated('achievement glory', () => this.glory.creditAchievement(userId, milestoneKey).then(() => undefined));
   }
 
-  /** Le score vient de changer : la Gloire du premier passage de chaque niveau. */
+  /**
+   * Le score vient de changer : la Gloire du premier passage de chaque niveau. Le tri se fait sans
+   * plafond de rang (#9688) : la lecture brute majore la lecture plafonnée, donc un score qui ne la
+   * porte pas au-dessus du record n'a rien ouvert — `creditLevelProgress` applique ensuite le plafond.
+   */
   async onScore(userId: string, score: number, levelRecord: number | null): Promise<void> {
-    if (levelFromScore(score) <= (levelRecord ?? 1)) return;
+    if (levelForUnlocks(score) <= (levelRecord ?? 1)) return;
     await this.isolated('level glory', () => this.glory.creditLevelProgress({ userId, score, previousRecord: levelRecord }).then(() => undefined));
   }
 

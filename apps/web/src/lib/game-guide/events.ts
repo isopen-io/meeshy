@@ -2,6 +2,7 @@ import type { GameBlock } from '@meeshy/shared/types/game';
 import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
 import type { GuideEvent } from '@meeshy/shared/utils/game/guide';
 import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
+import { levelReading, mintLevels, nextTierLevel } from '@/lib/game/ladder';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
@@ -32,7 +33,7 @@ import { servedDivision } from '@/lib/view/game-copy';
 const RANK_KEYS: readonly string[] = [...GLORY_RANKS.map((rank) => rank.key), 'mythe'];
 const ABSENCE_DAYS = 7;
 
-const tierIndex = (game: GameBlock): number => LEVEL_TIER_KEYS.indexOf(game.level.tier);
+const tierIndex = (game: GameBlock): number => LEVEL_TIER_KEYS.indexOf(levelReading(game.level).tier);
 const treasuryIndex = (game: GameBlock): number => TREASURY_TIERS.findIndex((tier) => tier.key === game.treasury.tier);
 
 /** Un ordre total des (rang, division V..I) : une division gagnée est une marche, un rang aussi (#9636). */
@@ -41,10 +42,6 @@ const standing = (game: GameBlock): number => {
   return RANK_KEYS.indexOf(game.glory.rank) * 6 + (division === null ? 5 : 5 - division);
 };
 
-const nextTierLevel = (game: GameBlock): number | null => {
-  const next = tierIndex(game) + 1;
-  return next >= LEVEL_TIER_KEYS.length ? null : next * 10;
-};
 
 const rankEvent = (game: GameBlock): GuideEvent => ({
   kind: 'new-rank',
@@ -69,15 +66,15 @@ export function standingGuideEvents(
   options: { readonly daysAway?: number | null } = {},
 ): GuideEvent[] {
   const discoveries: GuideEvent[] = [
-    ...(game.level.level >= 2 ? [{ kind: 'first-level', level: game.level.level, pointsToNext: game.level.pointsToNext } as const] : []),
-    ...(tierIndex(game) >= 1 ? [{ kind: 'new-tier', tier: game.level.tier, nextTierLevel: nextTierLevel(game) } as const] : []),
+    ...(levelReading(game.level).level >= 2 ? [{ kind: 'first-level', level: levelReading(game.level).level, pointsToNext: levelReading(game.level).pointsToNext } as const] : []),
+    ...(tierIndex(game) >= 1 ? [{ kind: 'new-tier', tier: levelReading(game.level).tier, nextTierLevel: nextTierLevel(levelReading(game.level).tier) } as const] : []),
     ...(game.missions.unlocked ? [{ kind: 'missions-unlocked' } as const] : []),
     ...(game.mint.canMint && game.mint.number === 1
-      ? [{ kind: 'first-mint-possible', price: game.mint.price, levelsLost: game.mint.levelsLost, gloryGain: game.mint.gloryGained } as const]
+      ? [{ kind: 'first-mint-possible', price: game.mint.price, levelsLost: mintLevels(game.mint).levelsLost, gloryGain: game.mint.gloryGained } as const]
       : []),
     ...(game.glory.rank !== 'murmure' ? [rankEvent(game)] : []),
     ...(game.treasury.tier !== null ? [{ kind: 'treasury-tier', tier: game.treasury.tier, nextTierMissing: game.treasury.next?.missing ?? null } as const] : []),
-    ...(game.level.level === 100 ? [{ kind: 'level-100', canPrestige: game.level.canPrestige } as const] : []),
+    ...(levelReading(game.level).level >= 100 ? [{ kind: 'level-100', canPrestige: game.level.canPrestige } as const] : []),
   ];
 
   const urgencies: GuideEvent[] = [
@@ -98,13 +95,13 @@ export function transitionGuideEvents(previous: EngagementWithGame, next: Engage
 
   const minted = after.mint.number > before.mint.number;
   const events: (GuideEvent | null)[] = [
-    before.level.level < 2 && after.level.level >= 2
-      ? { kind: 'first-level', level: after.level.level, pointsToNext: after.level.pointsToNext }
+    levelReading(before.level).level < 2 && levelReading(after.level).level >= 2
+      ? { kind: 'first-level', level: levelReading(after.level).level, pointsToNext: levelReading(after.level).pointsToNext }
       : null,
-    tierIndex(after) > tierIndex(before) ? { kind: 'new-tier', tier: after.level.tier, nextTierLevel: nextTierLevel(after) } : null,
+    tierIndex(after) > tierIndex(before) ? { kind: 'new-tier', tier: levelReading(after.level).tier, nextTierLevel: nextTierLevel(levelReading(after.level).tier) } : null,
     !before.missions.unlocked && after.missions.unlocked ? { kind: 'missions-unlocked' } : null,
     before.mint.number === 1 && after.mint.number === 2
-      ? { kind: 'first-mint', levelBefore: before.level.level, levelAfter: after.level.level, tailwindUntilLevel: after.level.record }
+      ? { kind: 'first-mint', levelBefore: levelReading(before.level).level, levelAfter: levelReading(after.level).level, tailwindUntilLevel: levelReading(after.level).record }
       : null,
     after.mint.price > before.mint.price ? { kind: 'price-rises', nextPrice: after.mint.price } : null,
     minted && (previous.mintBadgeLoss ?? 0) > 0 && previous.mintBadgeRegain !== undefined
@@ -115,7 +112,7 @@ export function transitionGuideEvents(previous: EngagementWithGame, next: Engage
       ? { kind: 'treasury-tier', tier: after.treasury.tier, nextTierMissing: after.treasury.next?.missing ?? null }
       : null,
     before.flame.status !== 'out' && after.flame.status === 'out' ? flameOutEvent(after) : null,
-    before.level.level < 100 && after.level.level === 100 ? { kind: 'level-100', canPrestige: after.level.canPrestige } : null,
+    levelReading(before.level).level < 100 && levelReading(after.level).level >= 100 ? { kind: 'level-100', canPrestige: after.level.canPrestige } : null,
   ];
   return events.filter((event): event is GuideEvent => event !== null);
 }

@@ -89,8 +89,14 @@ export const levelThreshold = (level: number): number => 10 * level * level;
 
 const sanitizeScore = (score: number): number => (Number.isFinite(score) ? Math.max(0, Math.trunc(score)) : 0);
 
-const sanitizeCap = (cap: LevelCap): LevelCap =>
-  cap === null ? null : Number.isFinite(cap) ? Math.max(GAME_LEVEL_MIN, Math.trunc(cap)) : null;
+/**
+ * FAIL-CLOSED : seul un `null` EXPLICITE vaut « sans limite ». Un plafond illisible — NaN, infini, absent,
+ * pas un nombre — retombe sur le plus bas (499) : une Gloire illisible n'ouvre jamais les niveaux.
+ */
+const sanitizeCap = (cap: LevelCap): LevelCap => {
+  if (cap === null) return null;
+  return typeof cap === 'number' && Number.isFinite(cap) ? Math.max(GAME_LEVEL_MIN, Math.trunc(cap)) : LEVEL_CAP_BASE;
+};
 
 /** Le niveau que porte ce score, borné par le plafond (`null` : sans limite). */
 export function levelFromScore(score: number, cap: LevelCap): number {
@@ -102,6 +108,14 @@ export function levelFromScore(score: number, cap: LevelCap): number {
   const bound = sanitizeCap(cap);
   return Math.max(GAME_LEVEL_MIN, bound === null ? exact : Math.min(bound, exact));
 }
+
+/**
+ * Le niveau lu SANS plafond de rang, pour une décision qui ne le compare qu'à un seuil de 100 au plus :
+ * l'ouverture des missions, de la ligue, du duo et du Prestige, l'effort des missions (borné à 100), le
+ * Vent arrière (le record ne dépasse jamais le plafond du moment). Tout plafond de rang vaut au moins 499 :
+ * la décision est celle qu'aurait rendue le plafond du compte, sans lire sa Gloire.
+ */
+export const levelForUnlocks = (score: number): number => levelFromScore(score, NO_LEVEL_CAP);
 
 const SINGULARITY_LEVEL = 1000;
 const LEGACY_TIER_COUNT = LEGACY_LEVEL_TIER_KEYS.length;

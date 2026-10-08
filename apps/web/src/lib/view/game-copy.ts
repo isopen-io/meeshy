@@ -84,6 +84,16 @@ const TIER_ORDINALS = [
   'game.tier.ordinal.8',
   'game.tier.ordinal.9',
   'game.tier.ordinal.10',
+  'game.tier.ordinal.11',
+  'game.tier.ordinal.12',
+  'game.tier.ordinal.13',
+  'game.tier.ordinal.14',
+  'game.tier.ordinal.15',
+  'game.tier.ordinal.16',
+  'game.tier.ordinal.17',
+  'game.tier.ordinal.18',
+  'game.tier.ordinal.19',
+  'game.tier.ordinal.20',
 ] as const;
 
 /** Ce que lit un lecteur d'écran sur l'anneau de niveau : « Niveau 34, palier Éclat, quatrième palier » (#9481). */

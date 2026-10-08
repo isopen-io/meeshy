@@ -109,6 +109,21 @@ describe('ce que les amis voient de plus : points et trophées (#9541)', () => {
     expect(result.standing?.points).toBe(SCORE);
   });
 
+  it('le niveau s\'ouvre selon le rang : les champs d\'hier gardent 100 et Galaxie, la vérité dans ladder (#9688)', async () => {
+    const { db, service } = setup({}, { engagementScore: 10 * 640 * 640 });
+    befriend(db);
+    expect((await standing(service, stranger)).standing).toMatchObject({ level: 100, tier: 'galaxie', ladder: { level: 499, tier: 'supernova' } });
+
+    db.gloryLedger.rows.push({ id: 'g3', userId: MEMBER, delta: 127_000, reason: 'mission', requestId: 'mission:a' });
+    expect((await standing(service, stranger)).standing).toMatchObject({ level: 100, tier: 'galaxie', ladder: { level: 640, tier: 'amas' } });
+  });
+
+  it('sous 100, ladder rend les mêmes valeurs que les champs d\'hier (#9688)', async () => {
+    const { db, service } = setup();
+    befriend(db);
+    expect((await standing(service, stranger)).standing).toMatchObject({ level: 20, tier: 'lumiere', ladder: { level: 20, tier: 'lumiere' } });
+  });
+
   it('Mythe se lit au rang, avec le numéro de sa place, pour un ami (#9636)', async () => {
     const { db, service } = setup();
     db.gloryLedger.rows.push({ id: 'g2', userId: MEMBER, delta: 1_000_000, reason: 'level', requestId: 'level:99' });

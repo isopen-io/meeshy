@@ -58,7 +58,7 @@ import { EngagementQuotas, dayBucket } from './EngagementQuotas';
 import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/EngagementGameHooks';
 import { writeStreak } from '../game/FlameService';
 import type { MessageSignalInput } from '../game/MessageGameSignals';
-import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { withRetry } from '../MessageMediaConsumptionService';
 
 import type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
@@ -359,7 +359,7 @@ export class EngagementService {
       operationKey,
       dayKey: civilDayKey(today),
       timezone: inputs.timezone,
-      record: Math.max(levelFromScore(inputs.engagementScore), inputs.levelRecord ?? 0),
+      record: Math.max(levelForUnlocks(inputs.engagementScore), inputs.levelRecord ?? 0),
     });
     return true;
   }

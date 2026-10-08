@@ -16,7 +16,7 @@
  * niveaux de la nouvelle boucle.
  */
 
-import { GAME_LEVEL_MIN, GAME_PRESTIGE_LEVEL, GAME_PRESTIGE_MAX, NO_LEVEL_CAP, levelFromScore } from './levels.js';
+import { GAME_LEVEL_MIN, GAME_PRESTIGE_LEVEL, GAME_PRESTIGE_MAX, levelForUnlocks } from './levels.js';
 import { GLORY_POINTS } from './glory.js';
 import { prestigeTrophy, trophyKey } from './trophies.js';
 
@@ -35,8 +35,7 @@ export type PrestigeTransition =
 export function prestigeTransition(params: { readonly score: number; readonly prestige: number }): PrestigeTransition {
   const stars = Number.isFinite(params.prestige) ? Math.max(0, Math.trunc(params.prestige)) : 0;
   if (stars >= GAME_PRESTIGE_MAX) return { allowed: false, reason: 'at-maximum' };
-  // Tout plafond de rang vaut au moins 499 : la lecture sans plafond tranche le seuil 100 à l'identique.
-  if (levelFromScore(params.score, NO_LEVEL_CAP) < GAME_PRESTIGE_LEVEL) return { allowed: false, reason: 'level-too-low' };
+  if (levelForUnlocks(params.score) < GAME_PRESTIGE_LEVEL) return { allowed: false, reason: 'level-too-low' };
   const prestigeAfter = stars + 1;
   return {
     allowed: true,

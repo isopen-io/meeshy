@@ -13,6 +13,7 @@ import { meeshMintResponseSchema } from '@meeshy/shared/types/game';
 const mint = jest.fn<any>();
 
 jest.mock('../../../../services/meesh/MeeshService', () => ({
+  ...jest.requireActual<typeof import('../../../../services/meesh/MeeshService')>('../../../../services/meesh/MeeshService'),
   MeeshService: jest.fn().mockImplementation(() => ({ mint })),
 }));
 jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
@@ -60,7 +61,25 @@ describe('POST /me/meesh/mint', () => {
       gloryGained: 100,
       levelBefore: 20,
       levelAfter: 16,
+      ladder: { levelBefore: 20, levelAfter: 16 },
     });
+    expect(meeshMintResponseSchema.safeParse(data).success).toBe(true);
+    await app.close();
+  });
+
+  it('au-delà de 100, les champs d’hier restent bornés à 100 et la vérité part dans ladder (#9688)', async () => {
+    mint.mockResolvedValueOnce({
+      status: 'minted',
+      balance: 41,
+      mintedLifetime: 41,
+      plan: {},
+      receipt: { number: 41, edition: 'silver', price: 1541, gloryGained: 1000, levelBefore: 640, levelAfter: 639 },
+    });
+    const app = await buildApp();
+
+    const { data } = (await post(app)).json();
+
+    expect(data).toMatchObject({ levelBefore: 100, levelAfter: 100, ladder: { levelBefore: 640, levelAfter: 639 } });
     expect(meeshMintResponseSchema.safeParse(data).success).toBe(true);
     await app.close();
   });

@@ -231,10 +231,10 @@ describe('l’anneau de niveau se dit en toutes lettres (#9481)', () => {
     }
   });
 
-  test('les dix rangs ordinaux sont distincts dans une langue', () => {
+  test('les vingt rangs ordinaux sont distincts dans une langue', () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       const labels = LEVEL_TIER_KEYS.map((tier) => levelRingLabel(1, tier, language));
-      expect(new Set(labels).size).toBe(10);
+      expect(new Set(labels).size).toBe(20);
     }
   });
 });

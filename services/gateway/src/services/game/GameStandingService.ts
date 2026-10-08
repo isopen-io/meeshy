@@ -1,7 +1,7 @@
 /**
  * LE JEU D'UN AUTRE MEMBRE (#9481) — ce qu'un lecteur apprend du niveau, du rang et
  * du trésor d'un compte, selon SON réglage. La LOI vient de `@meeshy/shared`
- * (`levelFromScore`, `gloryStanding`, `treasuryTier`, `flameForm`) ; la décision de
+ * (`levelFromScore`, `levelCapForRank`, `gloryStanding`, `treasuryTier`, `flameForm`) ; la décision de
  * voir, de `GameProfileService.facetsVisibleTo` — une porte, dans l'ordre : le blocage,
  * soi / ADMIN / ami accepté, le réglage du membre plafonné par « caché de la
  * recherche » et « Jeu masqué ».
@@ -29,8 +29,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameStanding, UserGameProfileResponse } from '@meeshy/shared/types/game';
 import { flameForm, flameStatus } from '@meeshy/shared/utils/game/flame';
-import { gloryStanding } from '@meeshy/shared/utils/game/glory';
-import { GAME_PRESTIGE_MAX, levelFromScore, levelTierKey } from '@meeshy/shared/utils/game/levels';
+import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
+import { GAME_PRESTIGE_MAX, legacyLevel, legacyLevelTierKey, levelFromScore, levelTierKey } from '@meeshy/shared/utils/game/levels';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import type { PresenceViewer } from '../PresenceVisibilityService';
@@ -97,11 +97,13 @@ export class GameStandingService {
       reader.intimate && reader.trophies ? this.prisma.gameTrophy.count({ where: { userId } }) : Promise.resolve(null),
     ]);
     const score = Math.max(0, Math.trunc(user.engagementScore ?? 0));
-    const level = levelFromScore(score);
     const rank = gloryStanding({ glory, mythicSeat });
+    // Le niveau s'ouvre selon le rang (#9688) ; les champs d'hier gardent l'ancienne loi pour les clients publiés.
+    const level = levelFromScore(score, levelCapForRank(rank.rank));
     return {
-      level,
-      tier: levelTierKey(level),
+      level: legacyLevel(level),
+      tier: legacyLevelTierKey(level),
+      ladder: { level, tier: levelTierKey(level) },
       prestige: Math.min(GAME_PRESTIGE_MAX, Math.max(0, Math.trunc(user.prestige ?? 0))),
       flame: reader.intimate ? shownFlame(user, now) : null,
       rank: rank.rank,

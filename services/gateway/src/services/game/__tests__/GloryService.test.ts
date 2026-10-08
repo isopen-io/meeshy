@@ -92,6 +92,85 @@ describe('GloryService.creditLevelProgress — la Gloire du premier passage', ()
   });
 });
 
+describe('GloryService.creditLevelProgress — les niveaux s\'ouvrent selon le rang (#9688)', () => {
+  const thresholdOf = (level: number) => 10 * level * level;
+  const seedGlory = (db: ReturnType<typeof fakeGameDb>, delta: number) =>
+    db.gloryLedger.rows.push({ id: `g-${db.gloryLedger.rows.length}`, userId: USER, delta, reason: 'mission', requestId: `seed:${delta}` });
+
+  it('sous Ambassadeur, le score lit 499 au plus : 100 par niveau jusqu\'à 100, puis 1 000 par dizaine', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { levelRecord: 98, engagementScore: thresholdOf(640) });
+    const service = new GloryService(db.prisma);
+
+    const gained = await service.creditLevelProgress({ userId: USER, score: thresholdOf(640), previousRecord: 98 });
+
+    expect(gained).toBe(2 * 100 + 39 * 1000);
+    expect(db.user.rows[0]?.levelRecord).toBe(499);
+    const keys = db.gloryLedger.rows.map((r) => r.requestId);
+    expect(keys).toContain('level:110');
+    expect(keys).toContain('level:490');
+    expect(keys).not.toContain('level:101');
+    expect(keys).not.toContain('level:500');
+  });
+
+  it('Ambassadeur ouvre jusqu\'à 1000 : 1001 attend Oracle', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { levelRecord: 990, engagementScore: thresholdOf(1001) });
+    seedGlory(db, 130_000);
+
+    const gained = await new GloryService(db.prisma).creditLevelProgress({ userId: USER, score: thresholdOf(1001), previousRecord: 990 });
+
+    expect(gained).toBe(1000);
+    expect(db.user.rows[0]?.levelRecord).toBe(1000);
+  });
+
+  it('Oracle n\'a plus de limite : la dizaine 1010 paie encore', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { levelRecord: 1000, engagementScore: thresholdOf(1010) });
+    seedGlory(db, 380_000);
+
+    const gained = await new GloryService(db.prisma).creditLevelProgress({ userId: USER, score: thresholdOf(1010), previousRecord: 1000 });
+
+    expect(gained).toBe(1000);
+    expect(db.user.rows[0]?.levelRecord).toBe(1010);
+  });
+
+  it('franchir Ambassadeur ouvre aussitôt les niveaux que le score porte déjà, sans rien regagner', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { levelRecord: 499, engagementScore: thresholdOf(640) });
+    seedGlory(db, 129_000);
+    const service = new GloryService(db.prisma);
+
+    await service.credit({ userId: USER, delta: 1000, reason: 'mission', requestId: 'mission:x' });
+
+    expect(db.user.rows[0]?.levelRecord).toBe(640);
+    expect(db.gloryLedger.rows.map((r) => r.requestId)).toEqual(expect.arrayContaining(['level:500', 'level:640']));
+    expect(await service.total(USER)).toBe(130_000 + 15 * 1000);
+  });
+
+  it('une Gloire qui ne change pas le plafond n\'ouvre rien', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { levelRecord: 499, engagementScore: thresholdOf(640) });
+    const service = new GloryService(db.prisma);
+
+    await service.credit({ userId: USER, delta: 1000, reason: 'mission', requestId: 'mission:y' });
+
+    expect(db.user.rows[0]?.levelRecord).toBe(499);
+    expect(await service.total(USER)).toBe(1000);
+  });
+
+  it('une Gloire illisible ne lève pas le plafond (fail-closed)', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { levelRecord: 499, engagementScore: thresholdOf(640) });
+    seedGlory(db, Number.NaN);
+
+    const gained = await new GloryService(db.prisma).creditLevelProgress({ userId: USER, score: thresholdOf(640), previousRecord: 499 });
+
+    expect(gained).toBe(0);
+    expect(db.user.rows[0]?.levelRecord).toBe(499);
+  });
+});
+
 describe('GloryService.creditFlameRecords', () => {
   it('une ligne par record de Flamme franchi', async () => {
     const db = fakeGameDb();

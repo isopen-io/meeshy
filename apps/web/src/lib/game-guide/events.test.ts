@@ -52,9 +52,19 @@ describe('l’état, à l’ouverture', () => {
     expect(standingGuideEvents(game, none)).toContainEqual({ kind: 'new-tier', tier: 'lueur', nextTierLevel: 20 });
   });
 
-  test('le dernier palier n’a pas de suivant', () => {
+  test('Galaxie n’est plus le dernier palier : Nébuleuse s’ouvre au niveau 101 (#9688)', () => {
     const game = gameBlockFixture({ score: 10 * 95 * 95 });
-    expect(standingGuideEvents(game, none)).toContainEqual({ kind: 'new-tier', tier: 'galaxie', nextTierLevel: null });
+    expect(standingGuideEvents(game, none)).toContainEqual({ kind: 'new-tier', tier: 'galaxie', nextTierLevel: 101 });
+  });
+
+  test('le palier se lit sur la vérité servie (ladder), au-delà de 100', () => {
+    const game = gameBlockFixture({ score: 10 * 250 * 250 });
+    expect(standingGuideEvents(game, none)).toContainEqual({ kind: 'new-tier', tier: 'pulsar', nextTierLevel: 300 });
+  });
+
+  test('Singularité n’a pas de suivant', () => {
+    const game = gameBlockFixture({ score: 10 * 1200 * 1200, glory: 400_000 });
+    expect(standingGuideEvents(game, none)).toContainEqual({ kind: 'new-tier', tier: 'singularite', nextTierLevel: null });
   });
 
   test('les missions débloquées', () => {

@@ -64,6 +64,9 @@ const starPath = (x: number, y: number, r: number): string =>
     return `${k === 0 ? 'M' : 'L'}${(x + rr * Math.cos(a)).toFixed(1)} ${(y + rr * Math.sin(a)).toFixed(1)}`;
   }).join('') + 'Z';
 
+/** Le chiffre du niveau tient dans le disque, de 1 à 4 chiffres et au-delà (#9688 : les niveaux s'ouvrent au-delà de 100). */
+const levelFontSize = (digits: number): number => (digits >= 5 ? 7.5 : digits === 4 ? 9 : digits === 3 ? 11 : 14);
+
 const fraction = (value: number): number => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0);
 
 export function LevelRing({ level, tier, progress, size, record, showTier = false, prestige = 0, label }: Props) {
@@ -134,7 +137,7 @@ export function LevelRing({ level, tier, progress, size, record, showTier = fals
         textAnchor="middle"
         fontFamily="var(--font-native)"
         fontWeight="800"
-        fontSize={digits >= 3 ? 11 : 14}
+        fontSize={levelFontSize(digits)}
         fill="var(--ios-ink)"
       >
         {level}

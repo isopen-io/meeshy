@@ -107,6 +107,16 @@
   --game-tier-comete: var(--ios-info);
   --game-tier-etoile: var(--ios-indigo-400);
   --game-tier-constellation: var(--ios-purple-500);
+  /* Au-delà du niveau 100 (#9688) : neuf paliers de cent niveaux, les teintes du ciel profond ; Singularité est le prisme. */
+  --game-tier-nebuleuse: #f472b6;
+  --game-tier-pulsar: #38bdf8;
+  --game-tier-quasar: #818cf8;
+  --game-tier-supernova: #fbbf24;
+  --game-tier-magnetar: #e879f9;
+  --game-tier-amas: #2dd4bf;
+  --game-tier-superamas: #60a5fa;
+  --game-tier-cosmos: #c084fc;
+  --game-tier-infini: #f0abfc;
 }
 
 /* Les parties que la chorégraphie vise gardent leur origine : un trait de la

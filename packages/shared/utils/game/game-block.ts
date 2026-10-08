@@ -23,13 +23,13 @@ import {
   flameStatus,
 } from './flame.js';
 import { gloryStanding, levelCapForRank, type MythicSeatRef } from './glory.js';
-import { canPrestige, legacyLevel, legacyLevelProgress, levelProgress, recordLevel } from './levels.js';
-import { previewMint, type MintPreview } from './mint.js';
+import { previewMint } from './mint.js';
+import { levelOnTheWire, mintOnTheWire } from './level-wire.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
 import { personalMissionState } from './personal-mission.js';
 import { treasuryTier } from './treasury.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
-import type { GameBlock, GameMintPreview, GameMission } from '../../types/game.js';
+import type { GameBlock, GameMission } from '../../types/game.js';
 
 /** Une mission telle que la passerelle la persiste. */
 export type GameMissionRecord = GameMission;
@@ -99,28 +99,11 @@ export type GameBlockFacts = {
   readonly extras?: GameBlockExtrasFacts;
 };
 
-/**
- * La frappe sur le fil (#9688) : les champs d'hier sous l'ancienne loi (bornés à 100, que les clients
- * publiés décodent strictement), la lecture ouverte par le rang dans `ladder`.
- */
-const wireMint = (preview: MintPreview): GameMintPreview => {
-  const legacyBefore = legacyLevel(preview.levelBefore);
-  const legacyAfter = legacyLevel(preview.levelAfter);
-  return {
-    ...preview,
-    levelBefore: legacyBefore,
-    levelAfter: legacyAfter,
-    levelsLost: legacyBefore - legacyAfter,
-    ladder: { levelBefore: preview.levelBefore, levelAfter: preview.levelAfter, levelsLost: preview.levelsLost },
-  };
-};
-
 export function buildGameBlock(facts: GameBlockFacts): GameBlock {
   const standing = gloryStanding({ glory: facts.glory, mythic: facts.mythic, mythicSeat: facts.mythicSeat ?? null });
   const levelCap = levelCapForRank(standing.rank);
-  const progress = levelProgress(facts.score, levelCap);
-  const legacy = legacyLevelProgress(facts.score);
-  const record = recordLevel({ level: progress.level, previousRecord: facts.levelRecord });
+  const level = levelOnTheWire({ score: facts.score, levelCap, levelRecord: facts.levelRecord, prestige: facts.prestige });
+  const record = level.ladder?.record ?? level.record;
   const treasury = treasuryTier(facts.balance);
 
   const flameToday = facts.flameToday ?? facts.today;
@@ -144,29 +127,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
   const chestStatus = facts.chestClaimed ? 'claimed' : allDone ? 'ready' : 'locked';
 
   return {
-    level: {
-      level: legacy.level,
-      tier: legacy.tier,
-      score: legacy.score,
-      floorScore: legacy.floorScore,
-      nextThreshold: legacy.nextThreshold,
-      pointsToNext: legacy.pointsToNext,
-      progress: legacy.progress,
-      record: legacyLevel(record),
-      prestige: facts.prestige,
-      canPrestige: canPrestige({ level: progress.level, prestige: facts.prestige }),
-      ladder: {
-        level: progress.level,
-        tier: progress.tier,
-        floorScore: progress.floorScore,
-        nextThreshold: progress.nextThreshold,
-        pointsToNext: progress.pointsToNext,
-        progress: progress.progress,
-        record,
-        cap: progress.cap,
-        isMax: progress.isMax,
-      },
-    },
+    level,
     glory: {
       glory: standing.glory,
       rank: standing.rank,
@@ -178,7 +139,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       mythic: standing.mythic,
     },
     treasury: { held: treasury.held, tier: treasury.tier, next: treasury.next },
-    mint: wireMint(
+    mint: mintOnTheWire(
       previewMint({
         score: facts.score,
         mintedLifetime: facts.mintedLifetime,
@@ -229,7 +190,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       canRelight: relight.allowed,
     },
     boosts: {
-      tailwind: tailwindFactor({ level: progress.level, levelRecord: record }),
+      tailwind: tailwindFactor({ level: level.ladder?.level ?? level.level, levelRecord: record }),
       prismHour: { ...prismHourWindow({ userId: facts.userId, dayKey: facts.today }), multiplier: PRISM_HOUR_MULTIPLIER },
     },
     guideSeen: [...facts.guideSeen],

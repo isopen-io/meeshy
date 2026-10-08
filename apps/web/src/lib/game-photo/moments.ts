@@ -6,7 +6,8 @@ import type { AchievementRarity, GloryDivision5, GloryRankOrMythic, MythicSeatRe
 import type { GuideMomentKey } from '@meeshy/shared/utils/game/guide';
 import { photoMomentId, photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
-import { LEVEL_TIER_KEYS, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
+import { LEVEL_TIER_KEYS, levelTierStart, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
+import { levelReading } from '@/lib/game/ladder';
 import { meeshEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { TREASURY_TIERS, type TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 
@@ -176,7 +177,7 @@ export const flameMoment = (days: number): PhotoMoment => {
   return moment(`flame:${threshold}`, { kind: 'flame', form: flameForm(threshold) ?? 'braise', days: threshold });
 };
 
-const tierLevel = (tier: LevelTierKey): number => LEVEL_TIER_KEYS.indexOf(tier) * 10;
+const tierLevel = (tier: LevelTierKey): number => levelTierStart(tier);
 
 /** Le moment que propose une carte du guide, dans l'état courant du jeu ; `null` si elle ne se photographie pas. */
 export function photoMomentFromCard(key: GuideMomentKey, game: GameBlock): PhotoMoment | null {
@@ -184,7 +185,7 @@ export function photoMomentFromCard(key: GuideMomentKey, game: GameBlock): Photo
     case 'new-rank':
       return rankMoment(shownRank(game.glory));
     case 'new-tier':
-      return tierMoment({ tier: game.level.tier, level: tierLevel(game.level.tier) });
+      return tierMoment({ tier: levelReading(game.level).tier, level: tierLevel(levelReading(game.level).tier) });
     case 'first-mint': {
       /* `mint.number` est la PROCHAINE pièce : celle qui vient d'être frappée porte le numéro d'avant. */
       const number = Math.max(1, game.mint.number - 1);
@@ -225,8 +226,8 @@ export function photoMomentsOfTransition(previous: EngagementWithGame, next: Eng
 
   const moments: (PhotoMoment | null)[] = [
     rankUp && after.glory.glory > before.glory.glory ? rankMoment(shownAfter) : null,
-    LEVEL_TIER_KEYS.indexOf(after.level.tier) > LEVEL_TIER_KEYS.indexOf(before.level.tier)
-      ? tierMoment({ tier: after.level.tier, level: tierLevel(after.level.tier) })
+    LEVEL_TIER_KEYS.indexOf(levelReading(after.level).tier) > LEVEL_TIER_KEYS.indexOf(levelReading(before.level).tier)
+      ? tierMoment({ tier: levelReading(after.level).tier, level: tierLevel(levelReading(after.level).tier) })
       : null,
     after.level.prestige > before.level.prestige && !prestigeCard ? levelHundredMoment(after.level.prestige) : null,
     after.mint.number > before.mint.number && (minted === 1 || minted % 10 === 0)

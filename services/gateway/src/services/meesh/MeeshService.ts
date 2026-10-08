@@ -31,11 +31,12 @@ import {
 } from '@meeshy/shared/types/engagement';
 import { computeMeeshMintPlan, type MeeshMintPlan } from '@meeshy/shared/utils/meesh';
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
-import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { legacyLevel, levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { levelCapForGlory } from '@meeshy/shared/utils/game/glory';
 import { meeshEdition, meeshPrice, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withRetry } from '../MessageMediaConsumptionService';
-import { GloryService } from '../game/GloryService';
+import { GloryService, gloryTotalFromLedger } from '../game/GloryService';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
 
@@ -89,6 +90,20 @@ export function receiptFromMeta(meta: unknown): MintReceipt | null {
     gloryGained: m.gloryGained as number,
     levelBefore: m.levelBefore as number,
     levelAfter: m.levelAfter as number,
+  };
+}
+
+/**
+ * Le reçu tel qu'il part sur le fil (#9688) : `levelBefore` / `levelAfter` gardent l'ancienne loi (bornés à
+ * 100, la seule forme que les clients publiés décodent) ; les niveaux ouverts par le rang voyagent dans
+ * `ladder`. Le registre, lui, garde la vérité.
+ */
+export function receiptOnTheWire(receipt: MintReceipt) {
+  return {
+    ...receipt,
+    levelBefore: legacyLevel(receipt.levelBefore),
+    levelAfter: legacyLevel(receipt.levelAfter),
+    ladder: { levelBefore: receipt.levelBefore, levelAfter: receipt.levelAfter },
   };
 }
 
@@ -204,8 +219,10 @@ export class MeeshService {
     });
     // Le niveau d'APRÈS est celui que `previewMint` montrait : le score moins le
     // prix, lu au même instant que le record.
-    const levelBefore = levelFromScore(scoreAvant);
-    const levelAfter = levelFromScore(Math.max(0, scoreAvant - price));
+    // Le niveau s'ouvre selon le rang (#9688) : lu sous le plafond que la Gloire gravée ouvre.
+    const levelCap = levelCapForGlory(await gloryTotalFromLedger(this.prisma, userId));
+    const levelBefore = levelFromScore(scoreAvant, levelCap);
+    const levelAfter = levelFromScore(Math.max(0, scoreAvant - price), levelCap);
     const edition = meeshEdition(number);
 
     try {

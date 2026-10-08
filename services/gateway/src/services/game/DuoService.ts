@@ -36,7 +36,7 @@ import {
   type DuoMission,
   type DuoStatus,
 } from '@meeshy/shared/utils/game/duo';
-import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { leagueWeekOfMoment } from '@meeshy/shared/utils/game/league';
 import type { GameBlockExtrasFacts } from '@meeshy/shared/utils/game/game-block-extras';
 import { isBlockedBetween } from '../../utils/blocking';
@@ -85,7 +85,7 @@ type DuoRow = {
 const ACCOUNT_SELECT = { ...FLAME_USER_SELECT, isActive: true, deletedAt: true, engagementScore: true, levelRecord: true, displayName: true, firstName: true, lastName: true, username: true } as const;
 
 const recordOf = (row: { engagementScore?: number | null; levelRecord?: number | null } | null): number =>
-  Math.max(levelFromScore(row?.engagementScore ?? 0), row?.levelRecord ?? 0);
+  Math.max(levelForUnlocks(row?.engagementScore ?? 0), row?.levelRecord ?? 0);
 
 const NOT_PAID = (field: 'inviterPaidAt' | 'inviteePaidAt') => ({ OR: [{ [field]: null }, { [field]: { isSet: false } }] });
 
@@ -189,8 +189,8 @@ export class DuoService {
       userA: inviterId,
       userB: friendId,
       weekKey,
-      levelA: levelFromScore(inviter?.engagementScore ?? 0),
-      levelB: levelFromScore(invitee?.engagementScore ?? 0),
+      levelA: levelForUnlocks(inviter?.engagementScore ?? 0),
+      levelB: levelForUnlocks(invitee?.engagementScore ?? 0),
       unavailableSignals: [],
     });
 
@@ -384,7 +384,7 @@ export class DuoService {
     try {
       const account = await this.account(userId);
       const flame = flameFactsOf(account ?? {}, now);
-      const reward = duoReward({ level: levelFromScore(account?.engagementScore ?? 0), flameDays: flame.streak, mineDone: true, partnerDone });
+      const reward = duoReward({ level: levelForUnlocks(account?.engagementScore ?? 0), flameDays: flame.streak, mineDone: true, partnerDone });
       if (reward.points > 0) await this.deps.creditPoints(userId, reward.points, GAME_BONUS_AXIS);
     } catch (error) {
       await this.prisma.gameDuo.updateMany({ where: { id: duo.id, [field]: now }, data: { [field]: null } });

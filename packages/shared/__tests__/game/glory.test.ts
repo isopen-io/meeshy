@@ -237,6 +237,11 @@ describe('le Mythe vient du serveur', () => {
 });
 
 describe('le rang ouvre les niveaux (#9688)', () => {
+  it('une Gloire illisible ne lève pas le plafond', () => {
+    expect(levelCapForGlory(Number.NaN)).toBe(499);
+    expect(levelCapForGlory(-5)).toBe(499);
+  });
+
   it('borne à 499 sous Ambassadeur', () => {
     expect(levelCapForRank('murmure')).toBe(499);
     expect(levelCapForRank('polyglotte')).toBe(499);

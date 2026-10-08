@@ -2,6 +2,7 @@ import { useId } from 'react';
 
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 
+import { isSpectralTier } from '@/lib/game/ladder';
 import { paintUrl, safeUid } from '@/lib/game/materials';
 import { EMBLEM_BOX, TIER_EMBLEMS, type EmblemShape } from '@/lib/game/tier-emblem';
 
@@ -21,7 +22,7 @@ import { SignatureGlyph } from './signature';
  */
 
 /** La couleur du palier : son jeton, ou le prisme (`uid` nomme les `<defs>` de l'hôte). */
-export const tierColor = (uid: string, tier: LevelTierKey): string => (tier === 'galaxie' ? paintUrl(uid, 'prism') : `var(--game-tier-${tier})`);
+export const tierColor = (uid: string, tier: LevelTierKey): string => (isSpectralTier(tier) ? paintUrl(uid, 'prism') : `var(--game-tier-${tier})`);
 
 const SIGNATURE_SIZE = 30;
 const KNOCKOUT = 'var(--ios-surface-card)';
