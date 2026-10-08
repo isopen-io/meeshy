@@ -146,6 +146,14 @@ on:
       - 'packages/MeeshySDK/**'
       - '.github/workflows/ios.yml'
   workflow_dispatch:
+    # Suites ciblées (noms de classes MeeshyTests séparés par des virgules) :
+    # la suite complète dépasse la limite du job, et un lot doit pouvoir
+    # prouver SES témoins. Vide = la suite complète, comme avant.
+    inputs:
+      only_testing:
+        description: 'Suites MeeshyTests à exécuter seules (ex. ReelSceneRoutingTests,MediaSaveCoordinatorTests) — vide = tout'
+        required: false
+        default: ''
 
 # A hung xctest must never sit for GitHub's 6h default. A new push on the same
 # ref cancels stale in-progress runs so we never accumulate multi-hour zombies.
@@ -679,8 +687,20 @@ jobs:
       # created fails on the destination, not on the code.
       - name: Run iOS tests (without building)
         if: env.COMPILE_ONLY != 'true'
+        env:
+          ONLY_TESTING: ${{ inputs.only_testing }}
         run: |
           rm -rf TestResults.xcresult
+          SELECTION=(-only-testing:MeeshyTests)
+          if [ -n "$ONLY_TESTING" ]; then
+            SELECTION=()
+            IFS=',' read -ra SUITES <<< "$ONLY_TESTING"
+            for suite in "${SUITES[@]}"; do
+              suite="${suite//[[:space:]]/}"
+              [[ "$suite" =~ ^[A-Za-z0-9_]+$ ]] || { echo "::error::suite invalide : $suite"; exit 1; }
+              SELECTION+=("-only-testing:MeeshyTests/$suite")
+            done
+          fi
           # The 3 XCTMetric benchmark suites (MessageListPerformanceTests,
           # BubbleSimpleMessagePerfTests, SearchPerformanceTests) are
           # intentionally gated OUT of the regular run — see their file
@@ -716,7 +736,7 @@ jobs:
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }},arch=arm64" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
-            -only-testing:MeeshyTests \
+            "${SELECTION[@]}" \
             -skip-testing:MeeshyTests/MessageListPerformanceTests \
             -skip-testing:MeeshyTests/BubbleSimpleMessagePerfTests \
             -skip-testing:MeeshyTests/SearchPerformanceTests \
