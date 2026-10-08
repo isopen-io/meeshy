@@ -122,16 +122,12 @@ public final class StoryBackgroundLayer: CALayer {
     nonisolated(unsafe) var avPlayer: AVPlayer?
     nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
     nonisolated(unsafe) var avPlayerLooper: AVPlayerLooper?
-    nonisolated(unsafe) var backgroundLoopObserver: NSObjectProtocol?
 
-    // Même pattern que `StoryMediaLayer.deinit` : sans ce retrait, une layer
-    // vidéo-loop libérée sans reconfigure laissait un observer zombie
-    // enregistré dans NotificationCenter pour toujours.
-    nonisolated deinit {
-        if let token = backgroundLoopObserver {
-            NotificationCenter.default.removeObserver(token)
-        }
-    }
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free au démontage hors d'une tâche. Garde :
+    // MeeshyUIDeinitSourceGuardTests. (L'observateur de boucle qu'elle retirait
+    // n'existe plus, #9702 : la boucle est l'affaire de l'`AVPlayerLooper`.)
+    nonisolated deinit {}
 
     /// `true` quand `configure(kind:)` a stampé `contentLayer.contents` avec
     /// une image FINALE (warm L1 cache hit OU bytes téléchargés via HTTP),
@@ -591,10 +587,6 @@ extension StoryBackgroundLayer {
         letterboxSourceImage = nil
         avPlayerLayer?.removeFromSuperlayer()
         avPlayer?.pause()
-        if let observer = backgroundLoopObserver {
-            NotificationCenter.default.removeObserver(observer)
-            backgroundLoopObserver = nil
-        }
         avPlayer = nil
         avPlayerLayer = nil
         avPlayerLooper = nil
