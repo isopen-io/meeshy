@@ -968,6 +968,9 @@ export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 export {
   requireEmailVerification,
   requirePublishingGrace,
+  requireShareLinkGrace,
+  UNVERIFIED_ACTIVE_SHARE_LINK_CAP,
   EMAIL_VERIFICATION_GATED_ROUTES,
   PUBLISHING_GRACE_GATED_ROUTES,
+  SHARE_LINK_GRACE_GATED_ROUTES,
 } from './verification-gates';

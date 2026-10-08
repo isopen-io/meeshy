@@ -23,6 +23,13 @@ import {
   shareLinkSchema
 } from './types';
 import { revokeShareLinkGuests } from '../../socketio/revokeShareLinkGuests';
+import {
+  assertShareLinkMayReopen,
+  mayReopenShareLink,
+  ShareLinkGraceRefusedError,
+  withShareLinkTurn,
+} from '../../services/auth/share-link-grace';
+import { sendShareLinkGraceRefusal } from '../../middleware/verification-gates';
 
 /**
  * Le verdict d'autorisation d'un geste de gestion sur un lien — trois issues,
@@ -138,10 +145,28 @@ export async function applyShareLinkUpdate(
     });
   }
 
-  return fastify.prisma.conversationShareLink.update({
+  const write = () => fastify.prisma.conversationShareLink.update({
     where: { id: linkRowId },
     data,
     include: SHARE_LINK_MANAGEMENT_INCLUDE,
+  });
+  if (!mayReopenShareLink(data)) return write();
+
+  // #9713 — rouvrir un lien (le réactiver, repousser une échéance passée) le
+  // fait ENTRER dans le compte des liens actifs de son créateur : la loi de la
+  // création s'y applique, sous le même tour, relue sous ce tour.
+  const owner = await fastify.prisma.conversationShareLink.findUnique({
+    where: { id: linkRowId },
+    select: { createdBy: true },
+  });
+  if (!owner) return write();
+  return withShareLinkTurn(owner.createdBy, async () => {
+    const row = await fastify.prisma.conversationShareLink.findUnique({
+      where: { id: linkRowId },
+      select: { isActive: true, expiresAt: true, createdBy: true },
+    });
+    if (row) await assertShareLinkMayReopen({ prisma: fastify.prisma, row, data, now: new Date() });
+    return write();
   });
 }
 
@@ -280,6 +305,9 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'Données invalides');
+      }
+      if (error instanceof ShareLinkGraceRefusedError) {
+        return sendShareLinkGraceRefusal(reply, error.verdict, 'reopen');
       }
       logError(fastify.log, 'Update link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

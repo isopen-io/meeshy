@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { UnifiedAuthRequest, requireEmailVerification } from '../../middleware/auth';
+import { UnifiedAuthRequest, requireShareLinkGrace } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
   errorResponseSchema
@@ -187,8 +187,8 @@ export function registerSharingRoutes(
     // (auth, rang) pour que l'annonce parte même sur un refus — l'appelant
     // qui échoue est celui qui a le plus besoin de savoir migrer.
     onRequest: [depreciee({ depuis: '2026-08-29', successeur: apiPath('/links') })],
-    // #6437 — même porte que POST /links, dont cet alias délègue à la même mine.
-    preValidation: [requiredAuth, requireEmailVerification]
+    // #9713 — même porte que POST /links, dont cet alias délègue à la même mine.
+    preValidation: [requiredAuth, requireShareLinkGrace]
   }, async (request, reply) => {
     try {
       const { id } = request.params;
