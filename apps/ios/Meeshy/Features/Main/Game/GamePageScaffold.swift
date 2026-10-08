@@ -30,6 +30,8 @@ struct GamePageScaffold<Trailing: View, Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresented
     @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// « Comprendre les badges », posé par la page qui tient le routeur (#9640) : la feuille d'un badge l'offre.
+    @Environment(\.gameOpenBadgesGuide) private var openBadgesGuide
     /// Référence stable, jamais observée par la page : seul l'en-tête se re-rend à la cadence du défilement.
     @State private var relay = ScrollOffsetRelay()
     /// L'élément dont la page présente les précisions — UNE feuille par page, pour tous ses éléments.
@@ -87,7 +89,7 @@ struct GamePageScaffold<Trailing: View, Content: View>: View {
         // La porte des précisions : tout élément de la page (contenu ET en-tête) la trouve dans l'environnement.
         .environment(\.gameOpenDetail, openDetail)
         // Une `sheet`, jamais un `fullScreenCover` : il laisserait l'écran recouvert aveugle.
-        .gameElementSheet($detail, onOpenConcept: onOpenConcept)
+        .gameElementSheet($detail, onOpenConcept: onOpenConcept, onOpenBadgesGuide: openBadgesGuide)
         .modifier(GamePageEdgePop(enabled: enablesEdgePop))
         .modifier(GamePageIdentifier(identifier: identifier))
     }

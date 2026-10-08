@@ -417,6 +417,8 @@ struct ProgressionSectionPage: View {
     /// rend instantané : aucun spinner ne s'ajoute (Cache-First).
     @StateObject private var viewModel = ProgressionViewModel()
 
+    /// Lu au seul toucher de « Comprendre les badges » (#9640), jamais dans le corps.
+    @EnvironmentObject private var router: Router
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var progress: EngagementProgress? { viewModel.progress }
@@ -488,6 +490,8 @@ struct ProgressionSectionPage: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         )
+        // « Comprendre les badges » (#9640) : le lien de la page et la feuille d'un badge mènent à la section badges du carnet.
+        .environment(\.gameOpenBadgesGuide, { router.openGame(at: GameNavigationMap.badgesGuide) })
         .task { await viewModel.load() }
         .fullScreenCover(item: $reveal) { palier in
             AchievementRevealView(
@@ -504,6 +508,7 @@ struct ProgressionSectionPage: View {
     private func contenu(_ progress: EngagementProgress) -> some View {
         switch section {
         case .badges:
+            GameBadgeGuideLink { router.openGame(at: GameNavigationMap.badgesGuide) }
             ForEach(progress.axesByFamily) { group in
                 VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                     Text(ProgressionCopy.title(for: group.family))
@@ -519,6 +524,9 @@ struct ProgressionSectionPage: View {
                                 ProgressionAxisRow(axis: axis)
                                     // Le badge de l'axe SE TOUCHE (#9564) : sa ligne rebondit et ouvre ses précisions.
                                     .gameElement(GameElementDetails.badge(for: axis, progress: progress))
+                                // La SUITE du badge (#9640) : ses paliers à venir, leur matière et leur seuil.
+                                GameBadgeUpcomingView(model: GameBadgeGuideModel.make(BadgeGuideResolver.resolve(axis)))
+                                    .padding(.bottom, MeeshySpacing.xs)
                             }
                         }
                     }

@@ -89,6 +89,8 @@ struct ProgressionConceptPage: View {
                 }
             }
         }
+        // « Comprendre les badges » (#9640) : l'étagère et la feuille d'un badge mènent à la section badges du carnet.
+        .environment(\.gameOpenBadgesGuide, { router.openGame(at: GameNavigationMap.badgesGuide) })
         .task { await viewModel.load() }
         .fullScreenCover(item: $reveal) { palier in
             // `.consultation` : on arrive ici DEPUIS la fiche, la célébration n'a pas à y « mener ».
@@ -404,7 +406,7 @@ struct ProgressionConceptGestures: View {
         case .elans:
             ProgressionElansHero(progress: progress, isDark: isDark)
         case .badges:
-            GameBadgeShelfView(items: GameBadges.items(for: progress), progress: progress)
+            GameBadgeShelfView(progress: progress)
         case .succes:
             ProgressionLastAchievementHero(progress: progress, isDark: isDark, onReveal: onReveal)
         case .glory, .season, .prestige, .defis, .showcase, .atlas:

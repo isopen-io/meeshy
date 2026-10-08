@@ -77,6 +77,11 @@ enum GameNavigationMap {
         }
     }
 
+    /// « Comprendre les badges » (#9640) : LA section badges du carnet des règles — une seule adresse, que la fiche
+    /// d'un badge, l'étagère et la page des badges ouvrent toutes. Le carnet est une porte de la première page : son
+    /// retour y ramène, quelle que soit la page d'où l'on vient (`Router.openGame(at:)` pose la chaîne).
+    static let badgesGuide: Route = .progressionRules(rule: nil, section: .badges)
+
     /// Ce qu'un lien « Aller plus loin » d'une fiche ouvre : sa sous-page.
     static func route(for link: ProgressionConceptLink) -> Route {
         switch link {

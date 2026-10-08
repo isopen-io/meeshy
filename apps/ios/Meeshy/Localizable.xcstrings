@@ -143127,6 +143127,53 @@
         }
       }
     },
+    "progression.axis.comment.audio.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل تعليق صوتي تتركه تحت منشور."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Sprachkommentar unter einem Beitrag."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every voice comment left under a post."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada comentario de voz dejado bajo una publicación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque commentaire vocal laissé sous une publication."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni commento vocale lasciato sotto una pubblicazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada comentário de voz deixado em uma publicação."
+          }
+        }
+      }
+    },
     "progression.axis.comment.text": {
       "extractionState": "manual",
       "localizations": {
@@ -143170,6 +143217,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Comentários escritos"
+          }
+        }
+      }
+    },
+    "progression.axis.comment.text.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل تعليق مكتوب تتركه تحت منشور."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder schriftliche Kommentar unter einem Beitrag."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every written comment left under a post."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada comentario escrito dejado bajo una publicación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque commentaire écrit laissé sous une publication."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni commento scritto lasciato sotto una pubblicazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada comentário escrito deixado em uma publicação."
           }
         }
       }
@@ -143221,6 +143315,53 @@
         }
       }
     },
+    "progression.axis.content.audio_message.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل رسالة صوتية ترسلها في محادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Sprachnachricht, die du in einer Unterhaltung sendest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every voice message sent in a conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada mensaje de voz enviado en una conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque message vocal envoyé dans une conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni messaggio vocale inviato in una conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada mensagem de voz enviada em uma conversa."
+          }
+        }
+      }
+    },
     "progression.axis.content.post": {
       "extractionState": "manual",
       "localizations": {
@@ -143264,6 +143405,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Publicações"
+          }
+        }
+      }
+    },
+    "progression.axis.content.post.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل منشور يُنشر في الخلاصة، وليس مسودة أبدًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Beitrag, der im Feed erscheint – nie ein Entwurf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every post published to the feed, never a draft."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada publicación puesta en el feed, nunca un borrador."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque publication mise en ligne dans le fil, jamais un brouillon."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni pubblicazione messa nel feed, mai una bozza."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada publicação colocada no feed, nunca um rascunho."
           }
         }
       }
@@ -143315,6 +143503,53 @@
         }
       }
     },
+    "progression.axis.content.reel.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل ريل تنشره."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Reel, das du veröffentlichst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every reel you publish."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada reel que publicas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque réel publié."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni reel che pubblichi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada reel que você publica."
+          }
+        }
+      }
+    },
     "progression.axis.content.story": {
       "extractionState": "manual",
       "localizations": {
@@ -143358,6 +143593,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stories"
+          }
+        }
+      }
+    },
+    "progression.axis.content.story.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل قصة تنشرها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Story, die du veröffentlichst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every story you publish."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada historia que publicas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque story publiée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni storia che pubblichi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada story que você publica."
           }
         }
       }
@@ -143409,6 +143691,53 @@
         }
       }
     },
+    "progression.axis.content.text_message.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل رسالة مكتوبة ترسلها في محادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede geschriebene Nachricht, die du in einer Unterhaltung sendest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every written message sent in a conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada mensaje escrito enviado en una conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque message écrit envoyé dans une conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni messaggio scritto inviato in una conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada mensagem escrita enviada em uma conversa."
+          }
+        }
+      }
+    },
     "progression.axis.conversation.community": {
       "extractionState": "manual",
       "localizations": {
@@ -143452,6 +143781,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conversas de comunidade"
+          }
+        }
+      }
+    },
+    "progression.axis.conversation.community.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل محادثة مجتمع جديدة تشارك فيها بالكلام."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede neue Community-Unterhaltung, in der du dich zu Wort meldest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every distinct community conversation where you speak up."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada conversación de comunidad distinta en la que tomas la palabra."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque conversation de communauté distincte où tu prends la parole."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni conversazione di community distinta in cui prendi la parola."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada conversa de comunidade distinta em que você toma a palavra."
           }
         }
       }
@@ -143503,6 +143879,53 @@
         }
       }
     },
+    "progression.axis.conversation.group_created.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل مجموعة تنشئها، مرة واحدة لكل مجموعة أعضاء."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Gruppe, die du erstellst – einmal pro Mitgliederkreis."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every group you create, once per set of members."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada grupo que creas, una sola vez por conjunto de miembros."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque groupe que tu crées, une seule fois par ensemble de membres."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni gruppo che crei, una sola volta per insieme di membri."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada grupo que você cria, uma única vez por conjunto de membros."
+          }
+        }
+      }
+    },
     "progression.axis.conversation.private": {
       "extractionState": "manual",
       "localizations": {
@@ -143546,6 +143969,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conversas privadas"
+          }
+        }
+      }
+    },
+    "progression.axis.conversation.private.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل محادثة خاصة جديدة تكتب فيها لأول مرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede neue private Unterhaltung, in der du zum ersten Mal schreibst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every distinct private conversation where you write for the first time."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada conversación privada distinta en la que escribes por primera vez."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque conversation privée distincte où tu écris pour la première fois."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni conversazione privata distinta in cui scrivi per la prima volta."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada conversa privada distinta em que você escreve pela primeira vez."
           }
         }
       }
@@ -143597,6 +144067,53 @@
         }
       }
     },
+    "progression.axis.conversation.public.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل محادثة عامة جديدة تشارك فيها بالكلام."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede neue öffentliche Unterhaltung, in der du dich zu Wort meldest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every distinct public conversation where you speak up."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada conversación pública distinta en la que tomas la palabra."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque conversation publique distincte où tu prends la parole."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni conversazione pubblica distinta in cui prendi la parola."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada conversa pública distinta em que você toma a palavra."
+          }
+        }
+      }
+    },
     "progression.axis.social.friendship": {
       "extractionState": "manual",
       "localizations": {
@@ -143640,6 +144157,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Amizades criadas"
+          }
+        }
+      }
+    },
+    "progression.axis.social.friendship.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل صداقة مقبولة، من جهتك أو من جهته."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede angenommene Freundschaft, von dir oder von der anderen Seite."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every friendship accepted, on your side or theirs."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada amistad aceptada, por tu parte o por la suya."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque amitié acceptée, de ton côté ou du sien."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni amicizia accettata, da parte tua o sua."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada amizade aceita, do seu lado ou do outro."
           }
         }
       }
@@ -143691,6 +144255,53 @@
         }
       }
     },
+    "progression.axis.social.invite_joined.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل شخص ينضم إلى Meeshy بفضل دعوتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Person, die über deine Einladung zu Meeshy kommt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every person who joins Meeshy through your invitation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada persona que se une a Meeshy gracias a tu invitación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque personne qui rejoint Meeshy grâce à ton invitation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni persona che entra in Meeshy grazie al tuo invito."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada pessoa que entra no Meeshy pelo seu convite."
+          }
+        }
+      }
+    },
     "progression.axis.social.share": {
       "extractionState": "manual",
       "localizations": {
@@ -143734,6 +144345,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conteúdo compartilhado"
+          }
+        }
+      }
+    },
+    "progression.axis.social.share.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل منشور تشاركه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Beitrag, den du teilst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every post you share."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada publicación que compartes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque publication que tu partages."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni pubblicazione che condividi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada publicação que você compartilha."
           }
         }
       }
@@ -143785,6 +144443,53 @@
         }
       }
     },
+    "progression.axis.social.tracked_link.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل رابط متتبَّع تنشئه لتفتح بابًا إلى Meeshy."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder verfolgte Link, den du erstellst, um eine Tür zu Meeshy zu öffnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every tracked link you create to open a door to Meeshy."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada enlace de seguimiento que creas para abrir una puerta a Meeshy."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque lien suivi que tu crées pour ouvrir une porte vers Meeshy."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni link tracciato che crei per aprire una porta verso Meeshy."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada link rastreado que você cria para abrir uma porta para o Meeshy."
+          }
+        }
+      }
+    },
     "progression.axis.tool.direct_publish": {
       "extractionState": "manual",
       "localizations": {
@@ -143828,6 +144533,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Publicações diretas"
+          }
+        }
+      }
+    },
+    "progression.axis.tool.direct_publish.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل منشور أو قصة أو ريل يُنشر مباشرة دون تعديل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Beitrag, jede Story, jedes Reel, direkt ohne Bearbeitung veröffentlicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every post, story or reel published directly, without editing."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada publicación, historia o reel publicado directamente, sin edición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque publication, story ou réel mis en ligne directement, sans montage."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni pubblicazione, storia o reel pubblicato direttamente, senza montaggio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada publicação, story ou reel publicado diretamente, sem edição."
           }
         }
       }
@@ -143879,6 +144631,53 @@
         }
       }
     },
+    "progression.axis.tool.reaction.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل تفاعل تضعه على رسالة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Reaktion auf eine Nachricht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every reaction left on a message."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada reacción puesta en un mensaje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque réaction posée sur un message."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni reazione lasciata su un messaggio."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada reação deixada em uma mensagem."
+          }
+        }
+      }
+    },
     "progression.axis.tool.attachment": {
       "extractionState": "manual",
       "localizations": {
@@ -143922,6 +144721,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Anexos"
+          }
+        }
+      }
+    },
+    "progression.axis.tool.attachment.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل مرفق ترسله في محادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Anhang, den du in einer Unterhaltung sendest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every attachment sent in a conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada archivo adjunto enviado en una conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque pièce jointe envoyée dans une conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni allegato inviato in una conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada anexo enviado em uma conversa."
           }
         }
       }
@@ -143973,6 +144819,53 @@
         }
       }
     },
+    "progression.axis.tool.in_app_edit.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل وسائط تعدّلها داخل التطبيق قبل نشرها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Medium, das du vor dem Veröffentlichen in der App bearbeitest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every piece of media edited in the app before it is published."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada contenido editado en la app antes de publicarse."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque média monté dans l’app avant d’être publié."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni contenuto montato nell’app prima di essere pubblicato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada mídia editada no app antes de ser publicada."
+          }
+        }
+      }
+    },
     "progression.axis.tool.sticker": {
       "extractionState": "manual",
       "localizations": {
@@ -144016,6 +144909,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Stickers colocados"
+          }
+        }
+      }
+    },
+    "progression.axis.tool.sticker.counts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل ملصق تضعه في رسالة مُرسَلة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Sticker in einer gesendeten Nachricht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every sticker slipped into a sent message."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada sticker colocado en un mensaje enviado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque sticker glissé dans un message envoyé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni sticker inserito in un messaggio inviato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada sticker colocado em uma mensagem enviada."
           }
         }
       }
@@ -228622,6 +229562,1181 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apagado, mais %@ para reacendê-lo"
+          }
+        }
+      }
+    },
+    "game.badge.counts_label": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما الذي يُحتسب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was zählt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What counts"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce qui compte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa conta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que conta"
+          }
+        }
+      }
+    },
+    "game.badge.stars_label": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النجوم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sterne"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stars"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estrellas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Étoiles"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stelle"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estrelas"
+          }
+        }
+      }
+    },
+    "game.badge.reason.none": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا نجمة بعد: أول خطوة منك تُضيء النحاس."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch kein Stern: Deine erste Geste lässt das Kupfer leuchten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No star yet: your first move lights up copper."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguna estrella por ahora: tu primer gesto enciende el cobre."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune étoile pour l’instant : le premier geste allume le cuivre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ancora nessuna stella: il tuo primo gesto accende il rame."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma estrela por enquanto: seu primeiro gesto acende o cobre."
+          }
+        }
+      }
+    },
+    "game.badge.reason.crossed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@، لأنك تجاوزت عتبة %@: وصلت إلى %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, weil du die Schwelle von %@ überschritten hast: Du stehst bei %@."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, because you passed the %@ mark: you are at %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, porque superaste el umbral de %@: llevas %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, parce que tu as franchi le seuil de %@ : tu en es à %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, perché hai superato la soglia di %@: sei a %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, porque você passou do limite de %@: você está em %@."
+          }
+        }
+      }
+    },
+    "game.badge.reason.served": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@، نلته حين تجاوزت عتبة %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, verdient beim Überschreiten der Schwelle von %@."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, earned when you passed the %@ mark."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, ganado al superar el umbral de %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, gagné quand tu as franchi le seuil de %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, ottenuto superando la soglia di %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, conquistado ao passar do limite de %@."
+          }
+        }
+      }
+    },
+    "game.badge.next": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتبقى %@ للنجمة التالية: %@، عند %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch %@ bis zum nächsten Stern: %@, bei %@."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ more for the next star: %@, at %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faltan %@ para la próxima estrella: %@, en %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encore %@ pour la prochaine étoile : %@, au seuil de %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ancora %@ per la prossima stella: %@, a %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faltam %@ para a próxima estrela: %@, em %@."
+          }
+        }
+      }
+    },
+    "game.badge.complete": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النجوم السبع مضاءة: هذه الشارة في المنشور."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle sieben Sterne leuchten: Dieses Abzeichen ist Prisma."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All seven stars are lit: this badge is Prism."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las siete estrellas están encendidas: esta insignia está en Prisma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les sept étoiles sont allumées : ce badge est au Prisme."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutte e sette le stelle sono accese: questo badge è Prisma."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As sete estrelas estão acesas: este emblema está no Prisma."
+          }
+        }
+      }
+    },
+    "game.badge.ladder_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المستويات السبعة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die sieben Stufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The seven tiers"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los siete niveles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les sept paliers"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I sette livelli"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os sete níveis"
+          }
+        }
+      }
+    },
+    "game.badge.rung.upcoming": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عند %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bei %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Em %@"
+          }
+        }
+      }
+    },
+    "game.badge.rung.next": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النجمة التالية · يتبقى %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächster Stern · noch %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next star · %@ to go"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próxima estrella · faltan %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prochaine étoile · encore %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prossima stella · ancora %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próxima estrela · faltam %@"
+          }
+        }
+      }
+    },
+    "game.badge.upcoming_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "القادم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als Nächstes"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coming up"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que viene"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À venir"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In arrivo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A seguir"
+          }
+        }
+      }
+    },
+    "game.badge.guide_link": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فهم الشارات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abzeichen verstehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Understand badges"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entender las insignias"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprendre les badges"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capire i badge"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entender os emblemas"
+          }
+        }
+      }
+    },
+    "game.rules.badges.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الشارات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Abzeichen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Badges"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las insignias"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les badges"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I badge"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os emblemas"
+          }
+        }
+      }
+    },
+    "game.rules.badges.intro": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل شارة تحتسب خطوة واحدة محددة: رسالة صوتية، قصة، صداقة جديدة… هناك عشرون شارة، مرتبة في خمس عائلات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Abzeichen zählt EINE bestimmte Geste: eine Sprachnachricht, eine Story, eine neue Freundschaft… Es gibt zwanzig, in fünf Familien geordnet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each badge counts ONE specific move: a voice message, a story, a new friendship… There are twenty, grouped into five families."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada insignia cuenta UN gesto concreto: un mensaje de voz, una historia, una amistad nueva… Hay veinte, agrupadas en cinco familias."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque badge compte UN geste précis : un message vocal, une story, une amitié nouée… Il y en a vingt, rangés en cinq familles."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni badge conta UN gesto preciso: un messaggio vocale, una storia, una nuova amicizia… Sono venti, raggruppati in cinque famiglie."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada emblema conta UM gesto preciso: uma mensagem de voz, uma story, uma nova amizade… São vinte, agrupados em cinco famílias."
+          }
+        }
+      }
+    },
+    "game.rules.badges.ladder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل شارة ترتقي سبعة مستويات. عند كل عتبة تتجاوزها، تتغير مادتها وتُضاء نجمة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Abzeichen steigt über sieben Stufen. Bei jeder überschrittenen Schwelle wechselt es das Material und lässt einen Stern mehr leuchten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each badge climbs seven tiers. Every time you pass a mark, it changes material and lights one more star."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada insignia sube siete niveles. Cada vez que superas un umbral, cambia de material y enciende una estrella más."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque badge monte sur sept paliers. À chaque seuil franchi, il change de matière et allume une étoile de plus."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ogni badge sale su sette livelli. A ogni soglia superata cambia materiale e accende una stella in più."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada emblema sobe sete níveis. A cada limite superado, ele muda de material e acende mais uma estrela."
+          }
+        }
+      }
+    },
+    "game.rules.badges.ribbon": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابتداءً من الذهب، تحمل الميدالية شريطًا؛ وفي المنشور، يتلألأ مينائها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ab Gold trägt die Medaille ein Band; bei Prisma schillert ihr Email."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From Gold on, the medal wears a ribbon; at Prism, its enamel turns iridescent."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desde el Oro, la medalla lleva una cinta; en Prisma, su esmalte se vuelve iridiscente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dès l’Or, la médaille porte un ruban ; au Prisme, son émail s’irise."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dall’Oro in poi la medaglia porta un nastro; al Prisma il suo smalto diventa iridescente."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A partir do Ouro, a medalha ganha uma fita; no Prisma, seu esmalte fica iridescente."
+          }
+        }
+      }
+    },
+    "game.rules.badges.imprint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سكّ Meesh قد يُطفئ شارة: تصبح أثرًا يقول ما ينقص لإعادة إضاءتها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Prägen einer Meesh kann ein Abzeichen erlöschen lassen: Es wird zu einem Abdruck, der zeigt, was zum Wiederentzünden fehlt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minting a Meesh can put a badge out: it becomes an imprint showing what is missing to light it again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acuñar una Meesh puede apagar una insignia: se vuelve una huella que dice lo que falta para volver a encenderla."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frapper une Meesh peut éteindre un badge : il devient une empreinte qui dit ce qu’il manque pour le rallumer."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coniare una Meesh può spegnere un badge: diventa un’impronta che dice cosa manca per riaccenderlo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cunhar uma Meesh pode apagar um emblema: ele vira uma marca que diz o que falta para reacendê-lo."
+          }
+        }
+      }
+    },
+    "game.rules.badges.families": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الشارات العشرون، حسب العائلة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die zwanzig Abzeichen nach Familie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The twenty badges, by family"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las veinte insignias, por familia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les vingt badges, par famille"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I venti badge, per famiglia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os vinte emblemas, por família"
+          }
+        }
+      }
+    },
+    "game.rules.badges.sheet": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المس شارة: بطاقتها تقول ما يُحتسب لها، ومادتها ولماذا، وما ينقص للنجمة التالية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippe auf ein Abzeichen: Seine Karte sagt, was dafür zählt, sein Material und warum, und was bis zum nächsten Stern fehlt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap a badge: its card says what counts for it, its material and why, and what is missing for the next star."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca una insignia: su ficha dice lo que cuenta para ella, su material y por qué, y lo que falta para la próxima estrella."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touche un badge : sa fiche dit ce qui compte pour lui, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca un badge: la sua scheda dice cosa conta per lui, il suo materiale e perché, e cosa manca per la prossima stella."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque em um emblema: a ficha diz o que conta para ele, seu material e por quê, e o que falta para a próxima estrela."
+          }
+        }
+      }
+    },
+    "game.badge.material_label": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المعدن"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Material"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Material"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Material"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matière"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Materiale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Material"
+          }
+        }
+      }
+    },
+    "game.badge.a11y.stars": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النجوم: %@ من %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sterne: %@ von %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stars: %@ of %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estrellas: %@ de %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Étoiles : %@ sur %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stelle: %@ su %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estrelas: %@ de %@"
+          }
+        }
+      }
+    },
+    "game.badge.rung.a11y.reached": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@، عتبة %@، تم بلوغها"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, Schwelle %@, erreicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, %@ mark, reached"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, umbral de %@, alcanzado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, seuil de %@, atteint"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, soglia di %@, raggiunto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, limite de %@, alcançado"
+          }
+        }
+      }
+    },
+    "game.badge.rung.a11y.reached_on": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@، عتبة %@، تم بلوغها في %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, Schwelle %@, erreicht am %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, %@ mark, reached on %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, umbral de %@, alcanzado el %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, seuil de %@, atteint le %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, soglia di %@, raggiunto il %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, limite de %@, alcançado em %@"
+          }
+        }
+      }
+    },
+    "game.badge.rung.a11y.next": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@، عتبة %@، النجمة التالية: يتبقى %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, Schwelle %@, nächster Stern: noch %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, %@ mark, next star: %@ to go"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, umbral de %@, próxima estrella: faltan %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, seuil de %@, prochaine étoile : encore %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, soglia di %@, prossima stella: ancora %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, limite de %@, próxima estrela: faltam %@"
+          }
+        }
+      }
+    },
+    "game.badge.rung.a11y.upcoming": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@، عتبة %@، قادمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, Schwelle %@, folgt noch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, %@ mark, coming up"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, umbral de %@, por llegar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, seuil de %@, à venir"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, soglia di %@, in arrivo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, limite de %@, a seguir"
           }
         }
       }

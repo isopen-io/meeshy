@@ -133,7 +133,8 @@ enum GameElementEmblem: Equatable {
     case trophy(GameMaterial)
     case stamp(code: String, stamped: Bool)
     case badge(family: GameMedalFamily, glyph: GameMedalGlyph, material: GameMaterial, lit: Bool, progress: Double)
-    case medal(material: GameMaterial, lit: Bool)
+    /// Un succès (médaillon à réunir) ou un défi (losange du record) : la FORME dit le type.
+    case medal(shape: GameBadgeView.Shape, material: GameMaterial, lit: Bool)
     case symbol(String)
 }
 
@@ -162,12 +163,16 @@ struct GameElementDetail: Identifiable, Equatable {
     let concept: ProgressionConcept
     /// La donnée dont une ligne parle, quand elle a sa phrase au catalogue.
     var factKey: GameDetailFactKey?
+    /// Ce qu'un BADGE dit de lui-même (#9640) : ce qui compte pour son axe, sa matière et pourquoi, ses étoiles, ses
+    /// sept paliers, la prochaine étoile. `nil` pour tout autre élément.
+    var badge: GameBadgeGuideModel?
 
     var id: String { kind.rawValue + ":" + key }
 
     /// « C'est quoi » — la phrase de la famille ; pour une donnée, SA phrase, ou à défaut celle de son concept ;
     /// pour une ligne du classement, ce qu'on voit d'un autre joueur.
     var what: String {
+        if let badge { return badge.counts }
         switch kind {
         case .fact: factKey.map { GameDetailText.fact($0) } ?? ConceptText.why(concept)
         case .player: GameDetailText.playerWhat
@@ -175,9 +180,12 @@ struct GameElementDetail: Identifiable, Equatable {
         }
     }
 
-    /// « Comment l'obtenir » ou « ce que ça donne » — la seconde phrase de la famille. Une donnée et une ligne de
-    /// classement n'en ont qu'une : `nil`.
-    var how: String? { GameDetailText.how(kind) }
+    /// « Comment l'obtenir » ou « ce que ça donne » — la seconde phrase de la famille ; pour un badge, ce qu'il manque
+    /// pour la prochaine étoile. Une donnée et une ligne de classement n'en ont qu'une : `nil`.
+    var how: String? { badge?.next ?? GameDetailText.how(kind) }
+
+    /// Le titre de la première phrase : « C'est quoi », ou — pour un badge — « Ce qui compte ».
+    var whatTitle: String { badge == nil ? ConceptText.ficheWhat : GameBadgeGuideText.countsLabel }
 
     /// Le titre de la seconde phrase : « Comment l'obtenir » ou « Ce que ça donne ».
     var howTitle: String { kind.how == .gives ? GameDetailText.givesLabel : GameDetailText.obtainLabel }
@@ -231,6 +239,14 @@ enum GameElementDetails {
 
     // MARK: Badge / médaille
 
+    /// Ce que la fiche d'un badge porte en propre (#9640) : son guide, sa matière et ses étoiles en lignes.
+    private static func badgeFacts(_ guide: GameBadgeGuideModel) -> [ProgressionConceptFact] {
+        [
+            guide.material.map { fact(GameBadgeGuideText.materialLabel, GameCopy.materialName($0)) },
+            fact(GameBadgeGuideText.starsLabel, ConceptText.ratio(count(guide.stars), count(guide.starsMax))),
+        ].compactMap { $0 }
+    }
+
     /// Le badge d'un AXE : son plus haut palier atteint, ou — s'il n'en a encore aucun — le premier à décrocher,
     /// verrouillé, avec ce qu'il manque et sa jauge.
     static func badge(for axis: EngagementAxisProgress, progress: EngagementProgress) -> GameElementDetail {
@@ -239,40 +255,37 @@ enum GameElementDetails {
         }
         let target = axis.scale.nextThreshold ?? axis.scale.tiers.first?.threshold ?? 0
         let material = GameBadges.material(forThreshold: target)
+        let guide = GameBadgeGuideModel.make(BadgeGuideResolver.resolve(axis))
         return GameElementDetail(
             kind: .badge, key: axis.axis.rawValue + ":next",
             emblem: .badge(family: GameMedalFamily(axis.family), glyph: GameMedalGlyph(axis: axis.axis), material: material,
                            lit: false, progress: axis.scale.progress),
-            name: ProgressionCopy.title(for: axis.axis) + " · " + GameCopy.materialName(material),
+            name: ProgressionCopy.title(for: axis.axis),
             status: .locked(missing: axis.scale.remainingToNext.map { missing(count($0)) }, progress: axis.scale.progress),
-            facts: [
-                fact(ConceptText.factTier, count(target)),
-                fact(ConceptText.factDone, count(axis.scale.value)),
-            ],
-            concept: .badges
+            facts: badgeFacts(guide),
+            concept: .badges,
+            badge: guide
         )
     }
 
-    /// Un badge : l'axe, la matière de son palier, et — éteint — ce qu'il manque pour le rallumer.
+    /// Un badge : l'axe, la matière de son palier, et — éteint — ce qu'il manque pour le rallumer. Son guide est lu
+    /// dans la progression servie (paliers datés) ; sans elle, dans le seul compteur.
     static func badge(_ item: GameBadgeItem, progress: EngagementProgress? = nil) -> GameElementDetail {
-        let reachedAt = progress?.axes.first { $0.axis == item.axis }?
-            .scale.tiers.first { $0.threshold == item.threshold }?.reachedAt
-        let next: ProgressionConceptFact? = item.nextThreshold.map {
-            fact(ConceptText.factNextStep, GameCopy.materialName(GameBadges.material(forThreshold: $0)) + " · " + count($0))
-        }
+        let axis = progress?.axes.first { $0.axis == item.axis }
+        let reachedAt = axis?.scale.tiers.first { $0.threshold == item.threshold }?.reachedAt
+        let guide = GameBadgeGuideModel.make(
+            axis.map { BadgeGuideResolver.resolve($0) } ?? BadgeGuideResolver.resolve(axis: item.axis, count: item.value, served: [])
+        )
         return GameElementDetail(
             kind: .badge, key: item.id,
             emblem: .badge(family: item.family, glyph: item.glyph, material: item.material, lit: item.lit, progress: item.progress),
-            name: ProgressionCopy.title(for: item.axis) + " · " + GameCopy.materialName(item.material),
+            name: ProgressionCopy.title(for: item.axis),
             status: item.lit
                 ? obtained(on: EngagementProgressResolver.reachedDate(reachedAt))
                 : .locked(missing: missing(count(item.missing)), progress: item.progress),
-            facts: [
-                fact(ConceptText.factTier, count(item.threshold)),
-                fact(ConceptText.factDone, count(item.value)),
-                next,
-            ].compactMap { $0 },
-            concept: .badges
+            facts: badgeFacts(guide),
+            concept: .badges,
+            badge: guide
         )
     }
 
@@ -283,7 +296,7 @@ enum GameElementDetails {
     static func achievement(_ achievement: EngagementAchievementProgress, rarity: GameRarityEntry? = nil) -> GameElementDetail {
         GameElementDetail(
             kind: .achievement, key: achievement.key.rawValue,
-            emblem: .medal(material: .gold, lit: achievement.unlocked),
+            emblem: .medal(shape: .collection(filled: achievement.unlocked ? 1 : 0, total: 1), material: .gold, lit: achievement.unlocked),
             name: ProgressionCopy.title(for: achievement.key),
             status: achievement.unlocked
                 ? obtained(on: EngagementProgressResolver.reachedDate(achievement.reachedAt))
@@ -300,7 +313,7 @@ enum GameElementDetails {
         guard let name = AchievementCopy.label(entry.family, tier: entry.tier) else { return nil }
         return GameElementDetail(
             kind: .challenge, key: entry.key,
-            emblem: .medal(material: .silver, lit: entry.unlocked),
+            emblem: .medal(shape: .record, material: .silver, lit: entry.unlocked),
             name: name,
             status: entry.unlocked ? obtained(on: entry.reachedAt) : .locked(missing: nil, progress: nil),
             facts: [fact(ConceptText.name(.defis), AchievementCopy.sectionTitle(entry.section))],

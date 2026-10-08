@@ -204,8 +204,8 @@ struct iPadPanelDestination: View {
         case .progressionSection(let section):
             ProgressionSectionPage(section: section)
                 .navigationBarHidden(true)
-        case .progressionRules(let rule):
-            GameRulesPage(focusedRule: rule)
+        case .progressionRules(let rule, let section):
+            GameRulesPage(focusedRule: rule, focusedSection: section)
                 .navigationBarHidden(true)
         case .progressionNotebook:
             GameNotebookPage()
