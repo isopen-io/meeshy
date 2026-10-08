@@ -5,7 +5,7 @@ import Foundation
 // MIROIR de `packages/shared/utils/game/prestige.ts` — la vie après le niveau 100.
 // Au niveau 100, on peut passer en Prestige : le niveau retombe à 1 (le score en
 // poche repart de zéro), une étoile se pose sur l'anneau (cinq au plus), le
-// joueur gagne +1 000 de Gloire et un trophée de Prestige numéroté.
+// joueur gagne `GameGlory.points.prestige` de Gloire et un trophée de Prestige numéroté.
 //
 // **Ce que le passage ne touche PAS** : le trésor (les Meeshes gardées), la
 // Gloire acquise et le rang, les badges, la Flamme.

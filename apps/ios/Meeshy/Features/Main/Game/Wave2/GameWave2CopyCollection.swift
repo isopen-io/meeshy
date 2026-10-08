@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 // MARK: - Ce que la vague 2 du jeu dit — collection (suite de `GameText`, voir `GameWave2CopyCommon.swift`)
 
@@ -54,7 +55,11 @@ extension GameText {
         String(localized: "game2.season.claim", defaultValue: "Réclamer l’étape \(step)", bundle: .main)
     }
 
-    static var seasonCompleted: String { String(localized: "game2.season.completed", defaultValue: "Parcours terminé : une coupe, un badge daté et 500 de Gloire.", bundle: .main) }
+    /// La Gloire dite est celle que la passerelle verse (`GameGlory.points.season`), jamais un nombre recopié (#9674).
+    static var seasonCompleted: String { seasonCompleted(glory: GameCopy.formatCount(GameGlory.points.season)) }
+    static func seasonCompleted(glory: String) -> String {
+        String(localized: "game2.season.completed", defaultValue: "Parcours terminé : une coupe, un badge daté et \(glory) de Gloire.", bundle: .main)
+    }
 
     static var seasonNone: String { String(localized: "game2.season.none", defaultValue: "Aucune saison n’est ouverte pour l’instant. La prochaine commence bientôt.", bundle: .main) }
 

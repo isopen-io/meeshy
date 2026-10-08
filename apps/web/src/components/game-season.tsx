@@ -1,6 +1,7 @@
 import type { GameSeasonBlock } from '@meeshy/shared/types/game';
 import { SEASON_SEAL_EVERY, SEASON_STARS_PER_STEP, SEASON_STEPS, seasonStepReward } from '@meeshy/shared/utils/game/season';
 
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
 import { seasonThemeName } from '@/lib/view/game-copy-v2';
 import { sealDetail, stepDetail } from '@/lib/view/game-detail';
@@ -137,7 +138,7 @@ export function GameSeason(props: GameSeasonProps) {
         </div>
         {season.completed ? (
           <p className="text-caption font-semibold" style={{ color: GAME_GOOD }}>
-            {gameText('game.season.completed')}
+            {gameText('game.season.completed', { glory: formatCount(GLORY_POINTS.season) })}
           </p>
         ) : (
           <p className="text-caption" style={{ color: GAME_INK_2 }}>

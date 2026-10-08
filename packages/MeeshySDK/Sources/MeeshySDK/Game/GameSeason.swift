@@ -100,7 +100,7 @@ public enum SeasonClaim: Sendable, Equatable {
 
 public struct SeasonSettlement: Sendable, Equatable {
     public let completed: Bool
-    /// +500 au parcours terminé.
+    /// `GameGlory.points.season` (5 000) au parcours terminé.
     public let glory: Int
     public let cup: Bool
     /// Le badge daté : `season.<n>`, `nil` sans parcours terminé.

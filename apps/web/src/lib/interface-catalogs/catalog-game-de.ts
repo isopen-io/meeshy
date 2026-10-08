@@ -508,7 +508,7 @@ const de = {
   'game.season.reward.freeze': 'Ein Flammen-Frost',
   'game.season.reward.season-cup': 'Der Saisonpokal',
   'game.season.claim': 'Etappe {step} abholen',
-  'game.season.completed': 'Weg abgeschlossen: ein Pokal, ein datiertes Abzeichen und 500 Ruhm.',
+  'game.season.completed': 'Weg abgeschlossen: ein Pokal, ein datiertes Abzeichen und {glory} Ruhm.',
   'game.season.none': 'Gerade ist keine Saison offen. Die nächste beginnt bald.',
   'game.season.seal.title': 'Siegel-Reihe',
   'game.season.seal.body': 'Das Siegel ist rein dekorativ: alle {every} Etappen ein Sammelobjekt, ohne Einfluss auf das Spiel.',

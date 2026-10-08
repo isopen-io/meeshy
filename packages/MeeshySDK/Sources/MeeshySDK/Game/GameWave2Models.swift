@@ -608,7 +608,7 @@ public struct SeasonClaimResponse: Decodable, Sendable, Equatable {
     public let reward: GameSeasonBlock.Reward
     /// Le cosmétique de la rangée Sceau, quand elle est possédée et que l'étape en porte un.
     public let seal: Seal?
-    /// `true` quand cette étape termine le parcours (coupe, badge daté, +500 de Gloire).
+    /// `true` quand cette étape termine le parcours (coupe, badge daté, `GameGlory.points.season` de Gloire).
     public let completed: Bool
     public let gloryGained: Int
     /// Le score en poche après le crédit.

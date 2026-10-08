@@ -258524,43 +258524,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اكتمل المسار: كأس وشارة مؤرخة و500 مجد."
+            "value": "اكتمل المسار: كأس وشارة مؤرخة و%@ مجد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Weg abgeschlossen: ein Pokal, ein datiertes Abzeichen und 500 Ruhm."
+            "value": "Weg abgeschlossen: ein Pokal, ein datiertes Abzeichen und %@ Ruhm."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Path completed: a cup, a dated badge and 500 Glory."
+            "value": "Path completed: a cup, a dated badge and %@ Glory."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recorrido completado: una copa, una insignia fechada y 500 de Gloria."
+            "value": "Recorrido completado: una copa, una insignia fechada y %@ de Gloria."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Parcours terminé : une coupe, un badge daté et 500 de Gloire."
+            "value": "Parcours terminé : une coupe, un badge daté et %@ de Gloire."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Percorso completato: una coppa, un badge datato e 500 di Gloria."
+            "value": "Percorso completato: una coppa, un badge datato e %@ di Gloria."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Percurso concluído: uma taça, uma insígnia datada e 500 de Glória."
+            "value": "Percurso concluído: uma taça, uma insígnia datada e %@ de Glória."
           }
         }
       }

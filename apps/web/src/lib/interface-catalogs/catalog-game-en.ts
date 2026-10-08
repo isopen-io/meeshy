@@ -508,7 +508,7 @@ const en = {
   'game.season.reward.freeze': 'A Flame freeze',
   'game.season.reward.season-cup': 'The season cup',
   'game.season.claim': 'Claim step {step}',
-  'game.season.completed': 'Path completed: a cup, a dated badge and 500 Glory.',
+  'game.season.completed': 'Path completed: a cup, a dated badge and {glory} Glory.',
   'game.season.none': 'No season is open right now. The next one starts soon.',
   'game.season.seal.title': 'Seal row',
   'game.season.seal.body': 'The Seal is purely cosmetic: a collectible every {every} steps, with no effect on the game.',

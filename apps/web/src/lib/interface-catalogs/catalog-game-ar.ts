@@ -516,7 +516,7 @@ const ar = {
   'game.season.reward.freeze': 'تجميد للشعلة',
   'game.season.reward.season-cup': 'كأس الموسم',
   'game.season.claim': 'استلام المرحلة ⁦{step}⁩',
-  'game.season.completed': 'اكتمل المسار: كأس وشارة مؤرخة و500 مجد.',
+  'game.season.completed': 'اكتمل المسار: كأس وشارة مؤرخة و{glory} مجد.',
   'game.season.none': 'لا يوجد موسم مفتوح الآن. يبدأ الموسم القادم قريبًا.',
   'game.season.seal.title': 'صف الختم',
   'game.season.seal.body': 'الختم للزينة فقط: عنصر للجمع كل ⁦{every}⁩ مراحل، دون أي تأثير على اللعبة.',

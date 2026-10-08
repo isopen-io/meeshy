@@ -14,6 +14,14 @@ final class GameCopyTests: XCTestCase {
         XCTAssertFalse(text.hasPrefix("onboarding."), "\(label) rend une clé brute : \(text)", file: file, line: line)
     }
 
+    // MARK: - La Gloire dite est celle que la passerelle verse (#9674)
+
+    func test_seasonCompleted_saysTheSeasonGloryTheGatewayPays_neverACopiedNumber() {
+        let said = GameText.seasonCompleted
+        XCTAssertTrue(said.contains(GameCopy.formatCount(GameGlory.points.season)), said)
+        XCTAssertFalse(said.contains(" 500 "), said)
+    }
+
     // MARK: - L'accord
 
     func test_zeroIsSingularInFrenchAndPortuguese_notInEnglish() {

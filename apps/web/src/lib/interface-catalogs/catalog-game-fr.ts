@@ -522,7 +522,7 @@ const fr = {
   'game.season.reward.freeze': 'Un gel de Flamme',
   'game.season.reward.season-cup': 'La coupe de saison',
   'game.season.claim': 'Réclamer l’étape {step}',
-  'game.season.completed': 'Parcours terminé : une coupe, un badge daté et 500 de Gloire.',
+  'game.season.completed': 'Parcours terminé : une coupe, un badge daté et {glory} de Gloire.',
   'game.season.none': 'Aucune saison n’est ouverte pour l’instant. La prochaine commence bientôt.',
   'game.season.seal.title': 'Rangée Sceau',
   'game.season.seal.body': 'Le Sceau est purement décoratif : un objet à collectionner toutes les {every} étapes, qui ne change rien au jeu.',

@@ -273,7 +273,7 @@ export const seasonClaimResponseSchema = z.object({
   reward: seasonRewardSchema,
   /** Le cosmétique de la rangée Sceau, quand elle est possédée et que l'étape en porte un. */
   seal: z.object({ cosmeticKey: z.string().min(1) }).nullable(),
-  /** `true` quand cette étape termine le parcours (coupe, badge daté, +500 de Gloire). */
+  /** `true` quand cette étape termine le parcours (coupe, badge daté, `GLORY_POINTS.season` de Gloire). */
   completed: z.boolean(),
   gloryGained: nonNegativeInt,
   /** Le score en poche après le crédit. */

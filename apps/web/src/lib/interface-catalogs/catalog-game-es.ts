@@ -508,7 +508,7 @@ const es = {
   'game.season.reward.freeze': 'Un hielo de Llama',
   'game.season.reward.season-cup': 'La copa de temporada',
   'game.season.claim': 'Reclamar la etapa {step}',
-  'game.season.completed': 'Recorrido completado: una copa, una insignia fechada y 500 de Gloria.',
+  'game.season.completed': 'Recorrido completado: una copa, una insignia fechada y {glory} de Gloria.',
   'game.season.none': 'No hay ninguna temporada abierta por ahora. La próxima empieza pronto.',
   'game.season.seal.title': 'Fila Sello',
   'game.season.seal.body': 'El Sello es puramente decorativo: un objeto de colección cada {every} etapas, que no cambia nada del juego.',

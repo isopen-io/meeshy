@@ -4,7 +4,7 @@
  *
  * Au niveau 100, on peut passer en Prestige : le niveau retombe à 1 (le score
  * en poche repart de zéro), une étoile se pose sur l'anneau (cinq au plus), le
- * joueur gagne +1 000 de Gloire et un trophée de Prestige numéroté.
+ * joueur gagne `GLORY_POINTS.prestige` de Gloire et un trophée de Prestige numéroté.
  *
  * **Ce que le passage ne touche PAS** : le trésor (les Meeshes gardées), la
  * Gloire acquise et le rang, les badges, la Flamme. C'est pourquoi le résultat

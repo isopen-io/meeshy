@@ -508,7 +508,7 @@ const pt = {
   'game.season.reward.freeze': 'Um gelo de Chama',
   'game.season.reward.season-cup': 'A taça da temporada',
   'game.season.claim': 'Resgatar a etapa {step}',
-  'game.season.completed': 'Percurso concluído: uma taça, uma insígnia datada e 500 de Glória.',
+  'game.season.completed': 'Percurso concluído: uma taça, uma insígnia datada e {glory} de Glória.',
   'game.season.none': 'Nenhuma temporada está aberta agora. A próxima começa em breve.',
   'game.season.seal.title': 'Fileira Selo',
   'game.season.seal.body': 'O Selo é puramente decorativo: um item de coleção a cada {every} etapas, sem efeito no jogo.',

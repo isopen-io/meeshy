@@ -2,6 +2,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { GameSeasonBlock } from '@meeshy/shared/types/game';
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
+import { formatCount } from '@/lib/view/game-copy';
 
 import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { createActMounter } from '@/test-support/act-mount';
@@ -151,7 +153,10 @@ describe('le Sceau', () => {
 describe('les autres états', () => {
   test('parcours terminé : la coupe, le badge daté et la Gloire', () => {
     const done = season({ steps: 40, stars: 160, completed: true, starsToNext: 0, progress: 1, claimedSteps: Array.from({ length: 40 }, (_, i) => i + 1), nextReward: null });
-    expect(text(renderToStaticMarkup(<GameSeason {...props({ season: done })} />))).toContain('une coupe, un badge daté et 500 de Gloire');
+    // #9674 — la Gloire dite est celle que le serveur verse (`GLORY_POINTS.season`), jamais un nombre recopié.
+    expect(text(renderToStaticMarkup(<GameSeason {...props({ season: done })} />)).replace(/\s/g, ' ')).toContain(
+      `une coupe, un badge daté et ${formatCount(GLORY_POINTS.season, 'fr').replace(/\s/g, ' ')} de Gloire`,
+    );
   });
 
   test('aucune saison ouverte : on dit que la prochaine arrive', () => {
