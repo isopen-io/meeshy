@@ -15,7 +15,7 @@ import Foundation
 /// `RecentMediaPick` reste la forme des hôtes qui n'ont pas de zone liée
 /// (commentaires) et de l'éditeur, qui travaille sur une image décodée.
 nonisolated struct RecentMediaAsset {
-    enum Payload {
+    nonisolated enum Payload {
         case imageData(Data)
         case video(URL)
     }
@@ -95,7 +95,7 @@ nonisolated enum RecentMediaAttachmentLink {
 /// apparue : `PHCachingImageManager` prépare ce qui va défiler, et relâche ce
 /// qui en est sorti.
 nonisolated enum RecentMediaCachingWindow {
-    struct Delta: Equatable {
+    nonisolated struct Delta: Equatable {
         let start: [String]
         let stop: [String]
     }
