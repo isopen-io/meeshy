@@ -15,7 +15,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { matchesMongoWhere, type MongoDocument } from '../../../__tests__/helpers/mongo-where';
 import { applyMessageRemovalEffects } from '../messageRemovalEffects';
 import { CAPTURE_NOTICE_RETENTION_MS } from '../captureNoticeVisibility';
-import { backfillCaptureNoticeDeadlines, expireCaptureNoticesNaming } from '../captureNoticeRetention';
+import { CAPTURE_NOTICE_BACKFILL_BATCH, backfillCaptureNoticeDeadlines, boundCaptureNoticesNaming } from '../captureNoticeRetention';
 
 const CONV = '507f1f77bcf86cd799439011';
 const CAPTURED = '507f1f77bcf86cd799439031';
@@ -58,11 +58,11 @@ function table(rows: MongoDocument[]) {
   return { prisma: prisma as unknown as PrismaClient, updates };
 }
 
-describe('expireCaptureNoticesNaming — la cascade', () => {
-  it('ramène à maintenant l’échéance des seuls avis qui nomment le message supprimé', async () => {
+describe('boundCaptureNoticesNaming — la cascade', () => {
+  it('un retrait voulu ramène à maintenant l’échéance des seuls avis qui nomment le message supprimé', async () => {
     const { prisma, updates } = table([notice('n-1', CAPTURED), notice('n-2', OTHER), notice('n-3', CAPTURED, { deletedAt: NOW })]);
-    expect(await expireCaptureNoticesNaming(prisma, { conversationId: CONV, capturedMessageId: CAPTURED, now: NOW })).toBe(1);
-    expect(updates).toEqual([{ where: { id: { in: ['n-1'] } }, data: { expiresAt: NOW } }]);
+    expect(await boundCaptureNoticesNaming(prisma, { conversationId: CONV, capturedMessageId: CAPTURED, now: NOW, cause: 'deleted' })).toBe(1);
+    expect(updates).toEqual([{ where: { id: { in: ['n-1'] }, expiresAt: { gt: NOW } }, data: { expiresAt: NOW } }]);
   });
 });
 
@@ -72,13 +72,15 @@ describe('applyMessageRemovalEffects — un retrait voulu emporte les avis, une 
   it('supprimé pour tous (le défaut des trois transports de suppression) : l’avis meurt au passage suivant du balayage', async () => {
     const { prisma, updates } = table([notice('n-1', CAPTURED)]);
     await applyMessageRemovalEffects(prisma, removed, undefined);
-    expect(updates.filter((u) => 'expiresAt' in u.data).map((u) => u.where)).toEqual([{ id: { in: ['n-1'] } }]);
+    expect(updates.filter((u) => 'expiresAt' in u.data).map((u) => (u.where.id as { in: string[] }).in)).toEqual([['n-1']]);
   });
 
-  it('échu (le balayage) : l’avis vit encore ses 24 h', async () => {
+  it('échu (le balayage) : l’avis vit encore, 24 h au plus', async () => {
     const { prisma, updates } = table([notice('n-1', CAPTURED)]);
-    await applyMessageRemovalEffects(prisma, removed, undefined, 'expired');
-    expect(updates.filter((u) => 'expiresAt' in u.data)).toEqual([]);
+    const before = Date.now();
+    await applyMessageRemovalEffects(prisma, removed, undefined, { cause: 'expired' });
+    const [bound] = updates.filter((u) => 'expiresAt' in u.data);
+    expect((bound.data.expiresAt as Date).getTime()).toBeGreaterThanOrEqual(before + CAPTURE_NOTICE_RETENTION_MS);
   });
 });
 
@@ -102,6 +104,34 @@ describe('backfillCaptureNoticeDeadlines — les avis écrits avant leur échéa
     expect(updates).toEqual([
       { where: { id: 'n-old' }, data: { expiresAt: new Date(capturedExpiresAt.getTime() + CAPTURE_NOTICE_RETENTION_MS) } },
     ]);
+  });
+
+  it('avance par curseur jusqu’à épuisement — mille autres messages système ne cachent pas l’avis qui les suit (#8)', async () => {
+    const joins = Array.from({ length: CAPTURE_NOTICE_BACKFILL_BATCH }, (_, i) => {
+      const row: MongoDocument = { ...notice(`a-${String(i).padStart(5, '0')}`, CAPTURED), metadata: { kind: 'member-joined' } };
+      delete row.expiresAt;
+      return row;
+    });
+    const late = notice('z-late', CAPTURED);
+    delete late.expiresAt;
+    const rows = [...joins, late];
+    const updates: MongoDocument[] = [];
+    const prisma = {
+      message: {
+        findMany: async ({ where, take, orderBy }: { where: MongoDocument; take?: number; orderBy?: unknown }) => {
+          const { id: cursor, ...rest } = where as { id?: { gt: string } };
+          const hits = rows.filter((row) => matchesMongoWhere(row, rest) && (!cursor || String(row.id) > cursor.gt));
+          if (orderBy) hits.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+          return hits.slice(0, take ?? hits.length);
+        },
+        update: async ({ where }: { where: MongoDocument }) => {
+          updates.push(where);
+          return {};
+        },
+      },
+    } as unknown as PrismaClient;
+    expect(await backfillCaptureNoticeDeadlines(prisma)).toBe(1);
+    expect(updates).toEqual([{ id: 'z-late' }]);
   });
 
   it('ne rejette jamais', async () => {

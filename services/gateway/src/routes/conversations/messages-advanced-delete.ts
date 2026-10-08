@@ -123,7 +123,7 @@ export function registerDeleteMessageRoute(
       // global supprimait donc depuis Android et depuis le composer web, et
       // recevait 403 ici : c'est-à-dire depuis iOS et depuis la vue web, les
       // deux clients qui passent par cette route.
-      const { admitted: canDelete } = await admitMessageDelete({
+      const { admitted: canDelete, actorParticipantId } = await admitMessageDelete({
         prisma,
         deleterUserId: userId,
         message: {
@@ -207,6 +207,7 @@ export function registerDeleteMessageRoute(
         attachmentMimeTypes: (existingMessage.attachments ?? []).map((att) => att.mimeType ?? ''),
         content: existingMessage.content,
         metadata: existingMessage.metadata,
+        removedByParticipantId: actorParticipantId ?? null,
       });
 
       // Invalider et recalculer les stats

@@ -455,7 +455,7 @@ export class ExpiredMessagesCleanupService {
           metadata: message.metadata,
         },
         announcer,
-        'expired',
+        { cause: 'expired' },
       );
     } catch (err) {
       // `applyMessageRemovalEffects` est déjà best-effort effet par effet ; ce

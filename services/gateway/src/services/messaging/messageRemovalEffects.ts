@@ -16,7 +16,7 @@ export type {
   RetractedNotificationAnnouncer,
 } from './retractMessageNotifications';
 import { withoutCaptureNotices } from './captureNoticeVisibility';
-import { expireCaptureNoticesNaming } from './captureNoticeRetention';
+import { boundCaptureNoticesNaming } from './captureNoticeRetention';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -70,6 +70,11 @@ export interface RemovedMessageRecord {
   content?: string | null;
   /** `Json?` partagé ; seul `trackingLinks` est lu ici. */
   metadata?: unknown;
+  /**
+   * `Participant.id` de celui qui SUPPRIME, quand ce n'est pas l'auteur : ses
+   * propres avis de capture du message gardent leurs 24 h (#9629).
+   */
+  removedByParticipantId?: string | null;
 }
 
 /**
@@ -258,14 +263,15 @@ export async function recomputeConversationLastMessageAt(
 /**
  * `cause` : `deleted` (le défaut — un retrait voulu, par l'auteur, un
  * modérateur, une suppression de compte) emporte les avis de capture qui
- * nomment le message (#9629) ; `expired` (le balayage des éphémères) les
- * laisse vivre leurs vingt-quatre heures de plus.
+ * nomment le message, sauf ceux de celui qui supprime ; `expired` (le balayage
+ * des éphémères) les borne à vingt-quatre heures (#9629,
+ * `boundCaptureNoticesNaming`).
  */
 export async function applyMessageRemovalEffects(
   prisma: PrismaClient,
   message: RemovedMessageRecord,
   announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
-  cause: 'deleted' | 'expired' = 'deleted'
+  options: { readonly cause?: 'deleted' | 'expired' } = {}
 ): Promise<void> {
   // Le décompte des compteurs de conversation. Il vivait recopié dans UNE
   // seule des quatre routes de suppression — celle qu'empruntent iOS et la vue
@@ -313,12 +319,13 @@ export async function applyMessageRemovalEffects(
       err,
     });
   }
-  if (cause === 'expired') return;
   try {
-    await expireCaptureNoticesNaming(prisma, {
+    await boundCaptureNoticesNaming(prisma, {
       conversationId: message.conversationId,
       capturedMessageId: message.id,
       now: new Date(),
+      cause: options.cause ?? 'deleted',
+      removedByParticipantId: message.removedByParticipantId ?? null,
     });
   } catch (err) {
     log.warn('message removal: capture notices not expired', { messageId: message.id, err });
