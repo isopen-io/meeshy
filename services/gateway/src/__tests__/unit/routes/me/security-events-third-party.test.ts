@@ -15,7 +15,6 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify from 'fastify';
-import { THIRD_PARTY_ACTOR_EVENT_TYPES, withoutThirdPartyTrace } from '../../../../services/auth/security-event-view';
 import { exportSecurityEvents } from '../../../../routes/me/export-security';
 import { securityEventsRoutes } from '../../../../routes/me/security-events';
 
@@ -33,30 +32,14 @@ const event = (eventType: string) => ({
   createdAt: new Date('2026-10-01T00:00:00.000Z'),
 });
 
-describe('withoutThirdPartyTrace', () => {
-  it('nomme les trois événements dont l’acteur n’est pas le titulaire', () => {
-    expect([...THIRD_PARTY_ACTOR_EVENT_TYPES].sort()).toEqual([
-      'PHONE_TRANSFERRED_OUT',
-      'PHONE_TRANSFER_INITIATED',
-      'PHONE_TRANSFER_REGISTRATION_INITIATED',
-    ]);
-  });
-
-  it.each([...THIRD_PARTY_ACTOR_EVENT_TYPES])('%s : ni adresse, ni agent, ni lieu', (type) => {
-    expect(withoutThirdPartyTrace(event(type))).toMatchObject({ eventType: type, ipAddress: null, userAgent: null, geoLocation: null });
-  });
-
-  it('un événement du titulaire garde sa trace', () => {
-    expect(withoutThirdPartyTrace(event('MAGIC_LINK_LOGIN_SUCCESS'))).toMatchObject({ ipAddress: '198.51.100.9', geoLocation: 'Lyon, France' });
-  });
-});
+const THIRD_PARTY = ['PHONE_TRANSFER_INITIATED', 'PHONE_TRANSFER_REGISTRATION_INITIATED', 'PHONE_TRANSFERRED_OUT'];
 
 describe('export RGPD', () => {
-  it('ne livre pas l’adresse du demandeur d’un transfert de numéro', async () => {
+  it.each(THIRD_PARTY)('%s : ne livre pas l’adresse du demandeur d’un transfert de numéro', async (type) => {
     const prisma = {
       userSession: { findMany: jest.fn(), count: jest.fn() },
       securityEvent: {
-        findMany: jest.fn(async (_a: unknown) => [event('PHONE_TRANSFER_INITIATED'), event('PASSWORD_RESET_SUCCESS')]),
+        findMany: jest.fn(async (_a: unknown) => [event(type), event('PASSWORD_RESET_SUCCESS')]),
         count: jest.fn(async (_a: unknown) => 2),
       },
     };

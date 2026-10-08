@@ -52,7 +52,7 @@ import {
 } from '../../services/auth/team-session-closure';
 import { getCacheStore } from '../../services/CacheStore';
 import { disconnectSession } from '../../socketio/disconnectSession';
-import { withoutThirdPartyTrace } from '../../services/auth/security-event-view';
+import { forAdministration } from '../../services/auth/security-event-view';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 import { requireUserViewAccess } from '../../middleware/admin-user-auth.middleware';
 import { requirePermission, requireHierarchy } from '../../middleware/authorize';
@@ -371,7 +371,7 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
 
       // Audit L2-2 — l'adresse et le lieu d'un TIERS (le demandeur d'un
       // transfert de numéro) ne sortent pas, même vers l'administration.
-      return sendPaginatedSuccess(reply, events.map(withoutThirdPartyTrace), {
+      return sendPaginatedSuccess(reply, events.map(forAdministration), {
         total,
         offset: offsetNum,
         limit: limitNum,

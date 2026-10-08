@@ -6,12 +6,12 @@
  *
  * Mêmes colonnes que l'export RGPD (`export-security.ts`) : jamais `metadata`
  * (forme libre, écrite par chaque producteur pour son propre usage) ni
- * `deviceFingerprint` ; jamais la trace d'un TIERS (`withoutThirdPartyTrace`).
+ * `deviceFingerprint` ; jamais la trace d'un TIERS (`forAccountHolder`).
  */
 import type { FastifyInstance } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
-import { withoutThirdPartyTrace } from '../../services/auth/security-event-view';
+import { forAccountHolder } from '../../services/auth/security-event-view';
 import { validatePagination } from '../../utils/pagination';
 import { sendError, sendInternalError, sendPaginatedSuccess } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -70,7 +70,7 @@ export async function securityEventsRoutes(fastify: FastifyInstance) {
         }),
         fastify.prisma.securityEvent.count({ where }),
       ]);
-      return sendPaginatedSuccess(reply, rows.map(withoutThirdPartyTrace), {
+      return sendPaginatedSuccess(reply, rows.map(forAccountHolder), {
         total,
         offset,
         limit,

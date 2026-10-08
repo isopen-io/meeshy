@@ -18,7 +18,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sessionClosureReasonText } from '@meeshy/shared/utils/client-session';
 import type { ExportPage, ExportSection } from './export-sections';
-import { withoutThirdPartyTrace } from '../../services/auth/security-event-view';
+import { forAccountHolder } from '../../services/auth/security-event-view';
 
 const SESSION_EXPORT_SELECT = {
   id: true,
@@ -153,5 +153,5 @@ export async function exportSecurityEvents(prisma: ExportStore, userId: string, 
     prisma.securityEvent.count({ where }),
   ]);
   // Audit L2-2 — jamais l'adresse ni le lieu d'un TIERS (transfert de numéro).
-  return toSection(rows.map(withoutThirdPartyTrace), total, page);
+  return toSection(rows.map(forAccountHolder), total, page);
 }
