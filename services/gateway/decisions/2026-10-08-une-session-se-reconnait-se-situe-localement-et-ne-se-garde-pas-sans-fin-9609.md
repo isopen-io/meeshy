@@ -73,3 +73,20 @@ Constaté, non changé : désactiver un compte coupe ses sockets (`deactivatedUs
 4. Production, sur feu vert du porteur et après sauvegarde vérifiée : la même migration d'index ; `RETENTION_PURGE_ENABLED=true` ; la migration d'effacement des coordonnées.
 
 Témoins : `__tests__/unit/services/geoip-local-database.test.ts`, `…/services/session-client-info.test.ts`, `socketio/handlers/__tests__/AuthHandler.client-info.test.ts`, `…/routes/auth/magic-link-refresh-legacy-token.test.ts` (rafraîchissement et liste servie), `…/jobs/retention-sweep.test.ts`, `…/routes/me/export-security.test.ts`, `…/routes/admin/user-sessions-team-closure.test.ts`, `socketio/__tests__/disconnectSession.test.ts`, `…/migrations/session-coordinates-erase-migration.test.ts`, `packages/shared/__tests__/client-session.test.ts`.
+
+### Reprise après l'audit adversarial et les revues (2026-10-08, même jour)
+
+Ce paragraphe AMENDE les sections précédentes là où elles divergent.
+
+- **Fuseau (L2-1)** : un fuseau déclaré n'entre que si `Intl.DateTimeFormat` le connaît (`isValidTimeZone`) ; `mergeClientHeaders` lit le relevé NETTOYÉ, jamais l'en-tête brut ; la notification et l'e-mail « nouvelle connexion » se datent par `formatInTimeZone` (`utils/time-zone-format.ts`), qui ne lève jamais (repli UTC). Un `Foo/Bar` forgé taisait l'alerte.
+- **Textes client (L2-8)** : contrôles C0/C1 ET bidirectionnels (U+200E/F, U+202A–U+202E, U+2066–U+2069) retirés de tout champ déclaré, dès l'ouverture. Une base GeoIP illisible n'est relue que si sa date ou sa taille change.
+- **Trace d'acteur des événements de sécurité (L2-2, registre)** : `services/auth/security-event-view.ts` classe les 42 types produits (`holder`, `unproven`, `third_party`, `system`). FERMÉ par défaut : le titulaire (export, `GET /me/security-events`) ne voit adresse, agent, lieu et empreinte que pour `holder` ; l'administration voit aussi `unproven` et `system`, jamais `third_party` ni un type non classé. Témoin : balayage des producteurs du code.
+- **Le membre lit ses événements (L2-4)** : `GET /me/security-events`. **E-mail à CHAQUE fermeture par l'administration** (« une de vos sessions » / « toutes vos sessions »), au plus un par membre et par heure (`SET NX EX 3600`), aucun quand rien n'était ouvert (L2-6).
+- **Lecture d'administration (L2-7)** : `GET …/sessions` et `…/security-events` exigent `requireHierarchy` (surclasser la cible, ou être soi).
+- **Conservation** :
+  - compte purgé : la date est `User.deletedAt` (posée à l'instant de la purge), le compte doit être désactivé ET porter une demande aboutie ; un compte traité sort de la sélection, si bien que rien n'échappe au plafond de 40 pages par passe (pagination `id > dernier`, jamais `cursor` + `skip`) ;
+  - une session ÉCHUE depuis plus de 90 jours se purge même sans `invalidatedAt` ; `registrationDevice` et `lastLoginDevice` suivent l'adresse et le lieu ;
+  - **procédures** : un compte banni (`Ban` en cours), signalé (`Report` `pending`/`under_review` le visant — `resolvedAt` n'est écrit par aucun chemin) ou verrouillé garde sessions, événements, lignes d'audit (le visant ou écrites par lui) et adresses ; si ces procédures ne se lisent pas, la passe n'efface RIEN. Aucun indicateur de rétention légale au schéma : #9650 (`décision-produit`) ;
+  - **`AdminAuditLog` : 15 mois** — le journal survit à toute donnée qu'il décrit. Écart à la décision du porteur (12 mois), à confirmer dans #9650 ;
+  - l'interrupteur se relit à CHAQUE passe, valeur exacte `true` seulement ; aucun état ne survit d'une passe à l'autre.
+- **Lecteurs bornés** (`services/retention/retention-bounds.ts`, module unique des durées) : liste et événements d'administration, export, `GET /me/security-events` et fiche d'administration n'affichent plus ce que la purge effacerait — qu'elle soit armée ou non. Une donnée gardée pour une procédure reste en base mais ne se sert plus par l'interface (#9650).
