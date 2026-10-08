@@ -54,6 +54,33 @@ final class FeedButtonAnchorTests: XCTestCase {
         XCTAssertEqual(FeedButtonAnchor.unitPoint(fromRaw: "v2,R,0.5000", geometry: geometry, in: .zero), .topLeading)
     }
 
+    // MARK: - #9679 — les boutons passent au-dessus du chrome
+
+    /// Recette 2026-10-08 : le Flux posé à 96 pt passait SOUS la bannière du
+    /// joueur — invisible, insaisissable, et perdu après relance puisque la
+    /// position persiste. L'ordre des calques est un ordre de CÂBLAGE (un
+    /// `.overlay` ne recouvre que ce qui est chaîné avant lui) : la garde lit la
+    /// source, aucun test unitaire ne monte la racine connectée.
+    func test_floatingButtons_areLayeredAboveTheWholeChrome() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
+        let body = try XCTUnwrap(source.range(of: "var body: some View {")?.lowerBound)
+        let firstLayer = try XCTUnwrap(source.range(of: ".modifier(RootStatusBubbleLayer(", range: body..<source.endIndex)?.lowerBound)
+        let chrome = try XCTUnwrap(source.range(of: ".modifier(RootChromeLayer(", range: body..<source.endIndex)?.lowerBound)
+        let overlay = try XCTUnwrap(source.range(of: ".overlay { floatingChrome }", range: body..<source.endIndex)?.lowerBound,
+                                    "les boutons flottants doivent être posés en overlay de la racine")
+        let next = try XCTUnwrap(source.range(of: ".modifier(RootIntentRoutingLayer(", range: body..<source.endIndex)?.lowerBound)
+
+        XCTAssertGreaterThan(overlay, chrome,
+                             "Chaînés AVANT `RootChromeLayer`, les boutons passent sous la bannière du joueur, la pastille et le mini-lecteur.")
+        XCTAssertLessThan(overlay, next)
+
+        let content = String(source[body..<firstLayer])
+        XCTAssertFalse(content.contains("draggableFloatingButtons"),
+                       "Les boutons ne vivent plus dans la pile du contenu, que la bannière du joueur recouvre.")
+        XCTAssertFalse(content.contains("menuLadder"),
+                       "L'échelle du menu suit ses boutons au-dessus du chrome.")
+    }
+
     // MARK: - #9363 — les bulles ne recouvrent plus le « + » de la story
 
     /// Un appareil pris en charge, avec son encoche RÉELLE : le conteneur, lui,
