@@ -64,10 +64,21 @@ final class LiquidRevealShapeTests: XCTestCase {
 
     func test_animatableData_roundTripsProgress() {
         var shape = LiquidRevealShape(center: .center, progress: 0.42, baseRadius: 26, amplitude: 10, frequency: 8, phase: 1.5)
-        XCTAssertEqual(shape.animatableData, 0.42, accuracy: 0.0001)
+        XCTAssertEqual(shape.animatableData.first, 0.42, accuracy: 0.0001)
 
-        shape.animatableData = 0.77
+        shape.animatableData.first = 0.77
         XCTAssertEqual(shape.progress, 0.77, accuracy: 0.0001)
+    }
+
+    /// #9702 — `phase` n'était pas déclarée animable : la vague « qui coule »
+    /// (repeatForever sur la phase) sautait à sa valeur finale et ne bougeait
+    /// jamais. Un `Animatable` déclare TOUTES les valeurs qu'il interpole.
+    func test_animatableData_carriesThePhase() {
+        var shape = LiquidRevealShape(center: .center, progress: 0.5, baseRadius: 26, amplitude: 10, frequency: 8, phase: 1.5)
+        XCTAssertEqual(shape.animatableData.second, 1.5, accuracy: 0.0001)
+
+        shape.animatableData.second = 3.0
+        XCTAssertEqual(shape.phase, 3.0, accuracy: 0.0001)
     }
 
     // MARK: - amplitude wavy : un bord ondulé étend le boundingRect au-delà du cercle nu

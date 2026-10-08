@@ -94,14 +94,16 @@ describe('activeIndexOf — le réel visible', () => {
   });
 });
 
-describe('pageModeOf — un seul réel joue, ses voisins restent montés, les autres sont libérés', () => {
-  test('la fenêtre est d’un réel de part et d’autre', () => {
-    expect(REEL_WINDOW_RADIUS).toBe(1);
+describe('pageModeOf — un seul réel joue, N±2 restent montés, les autres sont libérés (#9702)', () => {
+  test('la fenêtre montée est de deux réels de part et d’autre', () => {
+    expect(REEL_WINDOW_RADIUS).toBe(2);
     expect(pageModeOf(3, 3)).toBe('active');
     expect(pageModeOf(2, 3)).toBe('near');
     expect(pageModeOf(4, 3)).toBe('near');
-    expect(pageModeOf(1, 3)).toBe('far');
-    expect(pageModeOf(5, 3)).toBe('far');
+    expect(pageModeOf(1, 3)).toBe('warm');
+    expect(pageModeOf(5, 3)).toBe('warm');
+    expect(pageModeOf(0, 3)).toBe('far');
+    expect(pageModeOf(6, 3)).toBe('far');
   });
 });
 

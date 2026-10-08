@@ -735,6 +735,8 @@ public final class StoryCanvasUIView: UIView {
     // willMove/didMove ne couvrent pas ce chemin). Le link cible un
     // `WeakDisplayLinkTarget`, donc le deinit est atteignable.
     nonisolated(unsafe) var displayLink: CADisplayLink?
+    /// Temps réel écoulé entre deux ticks + cadence du contrôle de dérive (#9702).
+    var playheadTickClock = PlayheadTickClock()
 
     /// Runs while in `.edit` and the view is in a window — preferred 120 Hz on
     /// ProMotion devices for buttery gesture transforms (active rendering happens

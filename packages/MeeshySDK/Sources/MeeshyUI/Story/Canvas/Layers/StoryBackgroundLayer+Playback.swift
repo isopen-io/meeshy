@@ -107,23 +107,11 @@ extension StoryBackgroundLayer {
             alignToTimelineThenPlay()
         }
 
-        // Background loop observer — ensures the video repeats until the slide
-        // duration is reached (Section 5 of the review). Background videos are
-        // authoritative for slide duration only when NOT looping; when looping,
-        // they must fill the user-defined duration.
-        if looping {
-            if let observer = backgroundLoopObserver {
-                NotificationCenter.default.removeObserver(observer)
-            }
-            backgroundLoopObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: item,
-                queue: .main
-            ) { [weak player = avPlayer] _ in
-                player?.seek(to: .zero)
-                player?.play()
-            }
-        }
+        // La boucle d'un fond bouclé est l'affaire de l'`AVPlayerLooper` seul
+        // (#9702) : il joue des COPIES de `item`, jamais `item` lui-même. Un
+        // observateur de fin posé sur ce gabarit ne tirait donc jamais — et
+        // s'il avait tiré, son `seek(.zero)` + `play()` aurait ouvert le trou
+        // que le looper existe pour éviter.
 
         // Les réglages du fond (#9496) : posés sur l'item dès l'attache, comme
         // à chaque changement de curseur.
@@ -172,6 +160,24 @@ extension StoryBackgroundLayer {
             }
         }
         player.play()
+    }
+
+    /// Recale un fond NON bouclé qui a dérivé de la timeline au-delà du seuil
+    /// PENDANT la lecture (#9702) — le calage n'avait lieu qu'au démarrage et
+    /// à la reprise. Appelé par le canvas toutes les ~0,5 s. Un fond bouclé
+    /// n'a pas de phase timeline (cf. `alignToTimelineThenPlay`).
+    @MainActor
+    func correctTimelineDriftIfNeeded() {
+        guard isPlaybackActive, avPlayerLooper == nil,
+              let player = avPlayer,
+              player.timeControlStatus == .playing,
+              let target = VideoDriftCorrection.driftCorrection(
+                  expected: max(0, slidePlayheadSeconds),
+                  actual: player.currentTime().seconds,
+                  threshold: Self.timelineSeekDriftThreshold) else { return }
+        player.seek(to: target,
+                    toleranceBefore: VideoDriftCorrection.seekTolerance,
+                    toleranceAfter: VideoDriftCorrection.seekTolerance)
     }
 
     /// Scrub de preview timeline : pause puis cale le player de fond sur le

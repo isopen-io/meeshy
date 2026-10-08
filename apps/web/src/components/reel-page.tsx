@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
@@ -21,6 +21,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { reelStageOf } from '@/lib/reels/scene';
 import type { ReelPageMode } from '@/lib/reels/thread';
+import { useFrameProgress } from '@/lib/view/frame-progress';
 import { useReelPlayback } from '@/lib/view/use-reel-playback';
 
 /** Chargé À LA DEMANDE (#6903, motif D-54) : un réel de MÉDIAS (vidéo, audio,
@@ -38,10 +39,13 @@ const ReelImages = lazy(() => import('./reel-images'));
  * l'auteur et la légende (Prisme, `resolveFeedCardModel`) en bas à gauche, le
  * rail d'actions à droite.
  *
- * - **Le mode décide du lecteur** (`pageModeOf`, `lib/reels/thread.ts`) : le
- *   réel visible monte et JOUE son `<video>`, ses deux voisins le montent en
- *   attente (le balayage suivant n'attend pas le réseau), les autres ne portent
- *   que leur affiche — aucun élément de lecture hors de la fenêtre.
+ * - **Le mode décide du lecteur** (`pageModeOf`, `lib/reels/thread.ts`,
+ *   #9702) : le réel visible monte et JOUE son `<video>` ; ses voisins N±1 le
+ *   montent en `preload="auto"` — leur première image est décodée par le
+ *   navigateur avant le balayage, qui n'attend donc pas le réseau ; N±2 le
+ *   montent en attente de métadonnées (un retour en arrière ne recrée rien) ;
+ *   les autres ne portent que leur affiche, leurs octets de tête étant amorcés
+ *   à part tant qu'ils restent dans la fenêtre (`lib/reels/media-primer.ts`).
  * - **La vidéo n'est pas recadrée** : `.resizeAspect` côté iOS
  *   (`ReelsPlayerView+Video.swift`), `object-contain` ici.
  * - **Le rail n'offre que ce qui a un effet** (loi 4), dans l'ordre d'iOS
@@ -89,21 +93,22 @@ export type ReelPageProps = {
 function ReelPlayable({
   media,
   tag,
-  active,
+  mode,
   soundOn,
   accent,
   language,
 }: {
   readonly media: FeedCardMedia;
   readonly tag: 'video' | 'audio';
-  readonly active: boolean;
+  readonly mode: Exclude<ReelPageMode, 'far'>;
   readonly soundOn: boolean;
   readonly accent: string;
   readonly language: InterfaceLanguage;
 }) {
-  const { status, progress, toggle, bind } = useReelPlayback({ mediaId: media.id, active, soundOn });
+  const active = mode === 'active';
+  const { status, toggle, bind } = useReelPlayback({ mediaId: media.id, active, soundOn });
   const poster = media.thumbnailSrc ?? media.placeholder;
-  const preload = active ? 'auto' : 'metadata';
+  const preload = mode === 'warm' ? 'metadata' : 'auto';
   /* L'ATTENTE SE DIT (#9277) : l'élément lié est aussi écouté pour son buffer. */
   const [element, setElement] = useState<HTMLMediaElement | null>(null);
   const [stalled, setStalled] = useState(false);
@@ -115,6 +120,8 @@ function ReelPlayable({
     [bind],
   );
   useEffect(() => (element === null ? undefined : watchMediaStall(element, setStalled)), [element]);
+  const bar = useRef<HTMLSpanElement | null>(null);
+  useFrameProgress({ media: element, playing: status === 'playing', bar });
 
   return (
     <>
@@ -156,7 +163,10 @@ function ReelPlayable({
       </button>
       <PlaybackStallIndicator stalled={stalled && active && status !== 'paused'} language={language} />
       {/* La progression est ÉCRITE, jamais animée : une transition sur la
-          transformation amortirait le suivi de la lecture.
+          transformation amortirait le suivi de la lecture. Elle s'écrit À
+          CHAQUE IMAGE sur l'horloge du média (`useFrameProgress`, #9702), plus
+          sur `timeupdate` (≈ 4 Hz, une seconde par saut sur un réel d'une
+          minute) : `scaleX(0)` n'est que sa valeur de départ.
 
           `z-10` (revue-correction #6903) — LE VOILE BAS EST PEINT APRÈS CETTE
           BARRE, et il l'effaçait : mesuré au pixel sur la capture,
@@ -168,9 +178,10 @@ function ReelPlayable({
           où il sert la lisibilité du blanc ; la barre passe au-dessus. */}
       <span
         aria-hidden="true"
+        ref={bar}
         data-reel-progress
         className="pointer-events-none absolute inset-x-0 bottom-0 z-10 block h-[3px] origin-left"
-        style={{ backgroundColor: 'var(--color-on-media-2)', transform: `scaleX(${progress})` }}
+        style={{ backgroundColor: 'var(--color-on-media-2)', transform: 'scaleX(0)' }}
       />
       {status === 'error' ? (
         /* L'ÉTAT D'UN MÉDIA QUI NE SE LIT PAS est CELUI des trois autres surfaces
@@ -214,9 +225,9 @@ function ReelStage({
   // un réel composé la joue même si `media` porte aussi une vidéo.
   if (stage.kind === 'scene') {
     const poster = scenePosterOf(stage.scene);
-    // `far` ne charge JAMAIS le chunk du moteur — la même discipline que
-    // vidéo/audio ci-dessous.
-    if (mode === 'far') return <ReelPoster src={poster} />;
+    // `far` et `warm` ne chargent JAMAIS le chunk du moteur — la scène est
+    // un lecteur complet, réservé au réel visible et à ses voisins immédiats.
+    if (mode === 'far' || mode === 'warm') return <ReelPoster src={poster} />;
     return (
       <Suspense fallback={<ReelPoster src={poster} />}>
         <ReelSceneStage
@@ -238,13 +249,13 @@ function ReelStage({
     return mode === 'far' ? (
       <ReelPoster src={stage.media.thumbnailSrc ?? stage.media.placeholder} />
     ) : (
-      <ReelPlayable media={stage.media} tag={stage.kind} active={mode === 'active'} soundOn={soundOn} accent={accent} language={language} />
+      <ReelPlayable media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} />
     );
   }
   if (stage.kind === 'images') {
     const first = stage.images[0];
     const poster = <ReelPoster src={first?.thumbnailSrc ?? first?.src} />;
-    return mode === 'far' ? (
+    return mode === 'far' || mode === 'warm' ? (
       poster
     ) : (
       <Suspense fallback={poster}>
@@ -399,7 +410,10 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
       tabIndex={-1}
       aria-label={translate(language, 'reels.item', { author: model.author.name, index: String(index + 1), count: String(count) })}
       className="relative w-full snap-start snap-always overflow-hidden bg-media-backdrop outline-none"
-      style={{ height: '100%' }}
+      /* `contain` (#9702) : chaque page est un îlot de mise en page et de
+         peinture — un rail qui bascule ou une légende qui s'étire ne relaie
+         jamais le pager ni ses voisins pendant le balayage. */
+      style={{ height: '100%', contain: 'layout paint' }}
     >
       <ReelStage
         model={model}

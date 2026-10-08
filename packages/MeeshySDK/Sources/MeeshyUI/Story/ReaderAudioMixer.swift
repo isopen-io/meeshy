@@ -633,7 +633,8 @@ public final class ReaderAudioMixer {
         // Swift 6 @Sendable closure annotation without an actor hop.
         let timer = Timer.scheduledTimer(withTimeInterval: delaySeconds, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.runVolumeRamp(entry: entry, from: start, to: end, duration: duration)
+                self?.runVolumeRamp(entry: entry, from: start, to: end,
+                                    duration: duration, startHost: hostTrigger)
             }
         }
         if var stored = entries[entry.audioId] {
@@ -642,30 +643,27 @@ public final class ReaderAudioMixer {
         }
     }
 
-    private func runVolumeRamp(entry: Entry, from start: Float, to end: Float, duration: TimeInterval) {
+    /// Le volume suit le temps RÉEL écoulé depuis `startHost` (l'instant prévu
+    /// du fondu), pas le nombre de réveils : un réveil tardif n'étire plus la
+    /// rampe, un déclenchement tardif ne la décale plus (#9702).
+    private func runVolumeRamp(entry: Entry, from start: Float, to end: Float,
+                               duration: TimeInterval, startHost: UInt64) {
         guard duration > 0 else {
             entry.node.volume = (isMuted || entry.isUserMuted) ? 0 : end
             return
         }
-        // Async ramp instead of Timer because Swift 6 won't let us capture
-        // the Timer parameter inside the closure across the @Sendable
-        // boundary. Task.sleep on @MainActor is equally smooth at 30 fps and
-        // cooperates with structured cancellation if the mixer tears down.
         let audioId = entry.audioId
-        let stepInterval: TimeInterval = 1.0 / 30.0
-        let steps = max(1, Int(duration / stepInterval))
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            for i in 1...steps {
-                try? await Task.sleep(nanoseconds: UInt64(stepInterval * 1_000_000_000))
-                if Task.isCancelled { return }
+            while !Task.isCancelled {
                 guard let live = self.entries[audioId] else { return }
-                let progress = Float(i) / Float(steps)
-                let v = start + (end - start) * progress
-                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : v
-            }
-            if let live = self.entries[audioId] {
-                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : end
+                let elapsed = ReaderAudioMixer.delaySeconds(forHostTime: mach_absolute_time(),
+                                                            relativeTo: startHost)
+                let volume = ReaderVolumeRamp.volume(from: start, to: end,
+                                                     duration: duration, elapsed: elapsed)
+                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : volume
+                if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { return }
+                try? await Task.sleep(nanoseconds: UInt64(ReaderVolumeRamp.stepInterval * 1_000_000_000))
             }
         }
         if var stored = entries[entry.audioId] {

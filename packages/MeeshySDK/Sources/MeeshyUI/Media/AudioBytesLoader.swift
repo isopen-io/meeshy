@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 
 /// **Les octets d'un fichier audio se lisent HORS du fil principal** (#7010).
 ///
@@ -24,4 +25,28 @@ enum AudioBytesLoader {
             try? Data(contentsOf: url)
         }.value
     }
+
+    /// Décode ET prépare le lecteur hors du fil principal (#9702) : le
+    /// conteneur se parse et `prepareToPlay()` alloue ses tampons pendant que
+    /// l'écran reste vivant. `enableRate` est posé AVANT la préparation, seul
+    /// ordre que `AVAudioPlayer` honore.
+    nonisolated static func preparedPlayer(from data: Data) async -> Result<PreparedAudioPlayer, any Error> {
+        await Task.detached(priority: .userInitiated) { () -> Result<PreparedAudioPlayer, any Error> in
+            do {
+                let player = try AVAudioPlayer(data: data)
+                player.enableRate = true
+                player.prepareToPlay()
+                return .success(PreparedAudioPlayer(player: player))
+            } catch {
+                return .failure(error)
+            }
+        }.value
+    }
+}
+
+/// Un `AVAudioPlayer` préparé hors du fil principal, remis à l'acteur qui le
+/// jouera. `@unchecked Sendable` : la tâche qui l'a préparé ne le touche plus
+/// une fois remis — un seul propriétaire à la fois.
+nonisolated struct PreparedAudioPlayer: @unchecked Sendable {
+    let player: AVAudioPlayer
 }
