@@ -260,6 +260,31 @@ struct ReelPreloadWindowTests {
         #expect(plan.map(\.tier) == [.decode, .decode, .mount, .mount, .prime, .prime, .prime])
     }
 
+    @Test("l'horloge des visites : le temps passé sur le réel quitté, et le sens du geste")
+    func visitClockRecordsDwellAndDirection() {
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        var clock = Law.VisitClock()
+        clock.enter(index: 4, at: start)
+        clock.enter(index: 5, at: start.addingTimeInterval(2.5))
+        clock.enter(index: 4, at: start.addingTimeInterval(3.1))
+        #expect(clock.visits == [
+            Law.Visit(dwellMs: 2_500, direction: .forward),
+            Law.Visit(dwellMs: 600, direction: .backward),
+        ])
+    }
+
+    @Test("l'horloge ignore un réel ré-annoncé et une traversée d'un trait")
+    func visitClockIgnoresRepeatsAndTraversals() {
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        var clock = Law.VisitClock()
+        clock.enter(index: 0, at: start)
+        clock.enter(index: 0, at: start.addingTimeInterval(1))
+        clock.enter(index: 1, at: start.addingTimeInterval(1.05))
+        #expect(clock.visits == [Law.Visit(dwellMs: 1_050, direction: .forward)])
+        clock.enter(index: 2, at: start.addingTimeInterval(1.10))
+        #expect(clock.visits.count == 1, "50 ms sur un réel : traversé, pas regardé")
+    }
+
     @Test("le plan s'arrête aux bords du fil")
     func planStopsAtTheEdges() {
         let plan = Law.plan(count: 3, activeIndex: 0, window: Law.Window(ahead: 10, behind: 10))

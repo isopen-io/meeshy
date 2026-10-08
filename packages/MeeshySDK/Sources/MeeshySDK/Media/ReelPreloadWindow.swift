@@ -129,6 +129,29 @@ public enum ReelPreloadWindow {
         public let tier: Tier
     }
 
+    /// **L'horloge des visites** — la moitié « hook » de la jumelle web
+    /// (`use-reel-preload.ts`) : à chaque réel affiché, le temps passé sur le
+    /// précédent et le sens du geste deviennent une `Visit`, filtrée et bornée
+    /// par `recording(_:into:)`.
+    public struct VisitClock: Sendable {
+        public private(set) var visits: [Visit] = []
+        private var currentIndex: Int?
+        private var since: Date?
+
+        public init() {}
+
+        public mutating func enter(index: Int, at now: Date) {
+            guard index != currentIndex else { return }
+            if let currentIndex, let since {
+                let dwellMs = max(0, Int((now.timeIntervalSince(since) * 1_000).rounded()))
+                let direction: VisitDirection = index > currentIndex ? .forward : .backward
+                visits = ReelPreloadWindow.recording(Visit(dwellMs: dwellMs, direction: direction), into: visits)
+            }
+            currentIndex = index
+            since = now
+        }
+    }
+
     // MARK: - La fenêtre
 
     public static func window(for context: Context) -> Window {
