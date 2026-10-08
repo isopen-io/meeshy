@@ -59,8 +59,10 @@ const productionSources = () =>
     .filter((file) => file.endsWith('.ts') && !file.includes('__tests__') && !file.endsWith('.test.ts'))
     .map((file) => ({ file: relative(SRC_DIR, file), source: withoutComments(readFileSync(file, 'utf8')) }));
 
-const LIST_NEGATION = /NOT:\s*\{\s*(\w+)\s*:\s*\{\s*(?:has|hasSome|hasEvery|equals|isEmpty)\b/g;
-const SCALAR_NEGATION = /NOT:\s*\{\s*(\w+)\b/g;
+// La forme TABLEAU (`NOT: [{ champ: … }]`) est une négation comme l'autre :
+// l'audit adversarial n°2 du lot sessions l'a trouvée hors de la garde (#9642).
+const LIST_NEGATION = /NOT:\s*\[?\s*\{\s*(\w+)\s*:\s*\{\s*(?:has|hasSome|hasEvery|equals|isEmpty)\b/g;
+const SCALAR_NEGATION = /NOT:\s*\[?\s*\{\s*(\w+)\b/g;
 
 describe('aucune négation n’écarte en silence un document sans le champ (#8309)', () => {
   it('le balayage voit bien des négations — sinon une mesure vide passerait au vert', () => {
