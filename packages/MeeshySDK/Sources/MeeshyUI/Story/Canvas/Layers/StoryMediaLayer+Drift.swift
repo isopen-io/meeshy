@@ -25,6 +25,8 @@ extension StoryMediaLayer {
             expected: expected,
             actual: player.currentTime().seconds,
             threshold: Self.timelineSeekDriftThreshold) else { return }
-        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+        player.seek(to: target,
+                    toleranceBefore: VideoDriftCorrection.seekTolerance,
+                    toleranceAfter: VideoDriftCorrection.seekTolerance)
     }
 }

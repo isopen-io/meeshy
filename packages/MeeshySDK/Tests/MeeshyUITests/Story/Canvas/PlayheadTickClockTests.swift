@@ -72,6 +72,17 @@ final class PlayheadTickClockTests: XCTestCase {
         XCTAssertEqual(target?.seconds ?? -1, 4, accuracy: 0.002)
     }
 
+    /// Un recalage EN LECTURE vise vite plutôt qu'à l'image près : un seek
+    /// précis qui décode plus de 0,5 s serait annulé par le contrôle suivant,
+    /// et ainsi de suite. Sa tolérance reste sous le seuil, sans quoi le point
+    /// d'arrivée pourrait lui-même redéclencher un recalage.
+    func test_driftSeekTolerance_isNonZeroAndBelowEveryThreshold() {
+        let tolerance = VideoDriftCorrection.seekTolerance.seconds
+        XCTAssertGreaterThan(tolerance, 0)
+        XCTAssertLessThan(tolerance, StoryMediaLayer.timelineSeekDriftThreshold / 2)
+        XCTAssertLessThan(tolerance, StoryBackgroundLayer.timelineSeekDriftThreshold / 2)
+    }
+
     func test_driftCorrection_nonFiniteInputs_neverSeek() {
         XCTAssertNil(VideoDriftCorrection.driftCorrection(expected: .nan, actual: 1, threshold: 0.3))
         XCTAssertNil(VideoDriftCorrection.driftCorrection(expected: 1, actual: .infinity, threshold: 0.3))

@@ -9,6 +9,14 @@ import CoreMedia
 /// — en deçà, un seek coûterait plus (hoquet) qu'il ne rattraperait.
 nonisolated enum VideoDriftCorrection {
 
+    /// Tolérance d'un recalage EN LECTURE : de part et d'autre de la cible,
+    /// pour qu'AVFoundation atterrisse sur une image proche sans décoder
+    /// depuis l'image-clé à l'image près. Un seek précis qui décode plus de
+    /// 0,5 s serait annulé par le contrôle suivant — une rafale de recalages.
+    /// Elle reste sous la moitié du seuil : le point d'arrivée ne redéclenche
+    /// jamais un recalage.
+    static let seekTolerance = CMTime(seconds: 0.1, preferredTimescale: 600)
+
     /// Cible du recalage, ou `nil` si la vidéo est assez proche de la timeline.
     static func driftCorrection(expected: Double, actual: Double, threshold: Double) -> CMTime? {
         guard expected.isFinite, actual.isFinite, threshold.isFinite else { return nil }

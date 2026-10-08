@@ -175,7 +175,9 @@ extension StoryBackgroundLayer {
                   expected: max(0, slidePlayheadSeconds),
                   actual: player.currentTime().seconds,
                   threshold: Self.timelineSeekDriftThreshold) else { return }
-        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+        player.seek(to: target,
+                    toleranceBefore: VideoDriftCorrection.seekTolerance,
+                    toleranceAfter: VideoDriftCorrection.seekTolerance)
     }
 
     /// Scrub de preview timeline : pause puis cale le player de fond sur le
