@@ -173,7 +173,7 @@ struct GameElementDetail: Identifiable, Equatable {
     /// pour une ligne du classement, ce qu'on voit d'un autre joueur.
     var what: String {
         if let badge { return badge.counts }
-        switch kind {
+        return switch kind {
         case .fact: factKey.map { GameDetailText.fact($0) } ?? ConceptText.why(concept)
         case .player: GameDetailText.playerWhat
         default: GameDetailText.what(kind) ?? ConceptText.why(concept)
