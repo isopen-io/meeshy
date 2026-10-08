@@ -408,6 +408,11 @@ export class EmailService {
     return emailBaseStyles();
   }
 
+  /** L'habillage commun des e-mails composés hors de ce fichier : styles et pied de page localisé. */
+  private emailShell(language: string): { styles: string; footerHtml: string; footerText: string } {
+    return { styles: this.getBaseStyles(), footerHtml: this.getFooterContentHtml(language), footerText: this.getFooterContentText(language) };
+  }
+
   async sendEmailVerification(data: EmailVerificationData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
     const expiry = data.expiryMinutes !== undefined
@@ -438,21 +443,13 @@ export class EmailService {
 
   /** Code de CONNEXION + lien, pour un compte déjà vérifié (#8033). */
   async sendLoginCodeEmail(data: LoginCodeEmailData): Promise<EmailResult> {
-    const { subject, html, text } = composeLoginCodeEmail(data, {
-      styles: this.getBaseStyles(),
-      footerHtml: this.getFooterContentHtml(data.language),
-      footerText: this.getFooterContentText(data.language),
-    });
+    const { subject, html, text } = composeLoginCodeEmail(data, this.emailShell(data.language));
     return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'login_code', trackingLang: data.language });
   }
 
   async sendBackupAlertEmail(data: BackupAlertEmailData): Promise<EmailResult> {
-    const { subject, html, text } = composeBackupAlertEmail(data, {
-      styles: this.getBaseStyles(),
-      footerHtml: this.getFooterContentHtml(data.language),
-      footerText: this.getFooterContentText(data.language),
-      monitoringUrl: `${this.frontendUrl}/admin/monitoring`,
-    });
+    const monitoringUrl = `${this.frontendUrl}/admin/monitoring`;
+    const { subject, html, text } = composeBackupAlertEmail(data, { ...this.emailShell(data.language), monitoringUrl });
     return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'backup_alert', trackingLang: data.language });
   }
 
