@@ -17,6 +17,7 @@ import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
 import { watchIdentityScopedStores } from './identity-scoped-stores';
 import { sendAttachmentReaction } from './attachment-reaction-socket';
 import { setTypingEmitter } from './typing-emit';
+import { keepRealtimeConnection } from './realtime-identity';
 import { sessionStore } from './session';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
 import { typingStore } from './typing-store';
@@ -31,11 +32,12 @@ import { resolveViewer } from './viewer';
  * grossissent.
  *
  * UNE connexion par IDENTITÉ (motif `query-client.ts` § « purge sur
- * changement d'identité ») : `authenticated` OUVRE la connexion, `anonymous`
- * la FERME — jamais un socket par écran. `connectedToken` est la clé
- * d'identité : un `establish()` qui pose un jeton DIFFÉRENT (changement de
- * compte sur le même navigateur, D-6) reconstruit la connexion plutôt que de
- * la réutiliser à tort.
+ * changement d'identité ») : `authenticated` ET `guest` OUVRENT la connexion
+ * (`realtimeIdentityOf`, #9724), `anonymous` la FERME — jamais un socket par
+ * écran. `liveConnection` tient la clé d'identité : un `establish()` qui pose un
+ * jeton DIFFÉRENT (changement de compte sur le même navigateur, D-6), ou la
+ * bascule compte ↔ invité (#8816), reconstruit la connexion plutôt que de la
+ * réutiliser à tort.
  *
  * LE BOUCHON DE FIXTURES N'EST PLUS UNE DÉPENDANCE STATIQUE DE CE MODULE
  * (revue-correction #6171, défaut 1) — `createFixturesSocketClient` et sa
@@ -50,7 +52,6 @@ import { resolveViewer } from './viewer';
  * `gateway` déployé.
  */
 let connection: RealtimeConnection | null = null;
-let connectedToken: string | null = null;
 /** Garde la course : un second `syncConnection()` pendant que le `import()`
  * du bouchon résout ne doit pas ouvrir une SECONDE connexion de fixtures. */
 let fixturesConnecting = false;
@@ -105,6 +106,25 @@ function currentViewerId(): string {
   return resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '';
 }
 
+/** La connexion de la passerelle réelle, une par identité (`keepRealtimeConnection`). */
+const liveConnection = keepRealtimeConnection<RealtimeConnection>({
+  open: (auth) =>
+    createRealtimeConnection(auth, {
+      base: apiConfig.base,
+      socketFactory: createSocketIOClient,
+      queryClient: appQueryClient,
+      typing: typingStore,
+      conversationStore,
+      outbox: outboxStore,
+      viewerId: currentViewerId,
+      onClearSession: endWithReason,
+    }),
+  onChange: (next) => {
+    connection = next;
+    bridgeCalls(next);
+  },
+});
+
 function syncConnection(): void {
   /**
    * FIXTURES ⇒ TOUJOURS CONNECTÉ, même doctrine que la garde de route
@@ -140,31 +160,7 @@ function syncConnection(): void {
     return;
   }
 
-  const session = sessionStore.getState().session;
-  if (session.status !== 'authenticated') {
-    bridgeCalls(null);
-    connection?.destroy();
-    connection = null;
-    connectedToken = null;
-    return;
-  }
-  if (connection !== null && connectedToken === session.token) return;
-  connection?.destroy();
-  connectedToken = session.token;
-  connection = createRealtimeConnection(
-    { token: session.token, sessionToken: session.sessionToken },
-    {
-      base: apiConfig.base,
-      socketFactory: createSocketIOClient,
-      queryClient: appQueryClient,
-      typing: typingStore,
-      conversationStore,
-      outbox: outboxStore,
-      viewerId: currentViewerId,
-      onClearSession: endWithReason,
-    },
-  );
-  bridgeCalls(connection);
+  liveConnection.sync(sessionStore.getState().session);
 }
 
 /* Les magasins en mémoire d'une identité (outbox, overrides de rangée,

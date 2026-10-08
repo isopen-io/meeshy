@@ -11,7 +11,7 @@ import type { PostRoomActionData } from '@meeshy/shared/types/socketio-events/so
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import { noteGalleryReception } from '@/lib/gallery/auto-save-runtime';
-import type { SocketClient, SocketFactory } from '@/lib/net/socket';
+import type { SocketAuth, SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
 import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
 import { decodeNotification } from '@/lib/notifications/record';
@@ -173,10 +173,7 @@ function isAttachmentStatusEvent(payload: unknown): payload is AttachmentStatusE
   return typeof (payload as Record<string, unknown>).attachmentId === 'string';
 }
 
-export type RealtimeSessionInfo = {
-  readonly token: string;
-  readonly sessionToken: string;
-};
+export type RealtimeSessionInfo = SocketAuth;
 
 export type RealtimeDeps = {
   readonly base: string;
@@ -242,7 +239,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
 
   const socket = deps.socketFactory({
     base: deps.base,
-    auth: { token: session.token, sessionToken: session.sessionToken },
+    auth: session,
   });
 
   /**

@@ -4540,7 +4540,7 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 
 **Gateway inchangé.** L'identité de la porte est dérivée de la CRÉANCE (`deriveLinkAdmissionIdentity`) : sans Bearer, invité ; un Bearer présenté et refusé ne retombe jamais en invité (#6741). Aucun lien serveur n'est ajouté entre les deux identités.
 
-**Hors périmètre.** Pendant la lecture anonyme, le socket temps réel du compte est fermé (le fil d'un invité web n'a pas de socket, comme avant) et rouvert au retour ; un envoi du compte en échec est abandonné à la bascule (D-154). Kotlin natif : rien (gel).
+**Hors périmètre.** Pendant la lecture anonyme, le socket temps réel du compte est fermé et rouvert au retour (le fil de l'invité ouvre le SIEN depuis D-181) ; un envoi du compte en échec est abandonné à la bascule (D-154). Kotlin natif : rien (gel).
 
 ## D-156 — Tirer la bannière vers le bas ouvre l'APERÇU de la conversation : le fil lui-même, dans une feuille, sous son en-tête complet en verre, sans chevron (2026-09-30, #8821)
 
@@ -5001,3 +5001,15 @@ Tant que la coque n'a pas dit ce qu'elle détecte (`getState`, qui rend les éco
 - L'entrée de la première peinture varie de ±20 octets d'un build à l'autre selon les hachés des chunks qu'elle nomme : ce qui s'attribue se lit dans les listes de dépendances de l'entrée (`__vite__mapDeps`), pas dans son total. Mesuré le 2026-10-08 sur deux copies de `07d293cbac` (`git archive`) : sans le lot 90,00 Ko ; avec sa première forme 90,01 (trois dépendances de plus : l'aide de préchargement pour `forgot-password` et `magic-link-validate`, le routeur pour `settings`) ; avec la forme retenue 89,98, aucune dépendance de plus.
 
 **Conséquences.** Témoins : `lib/net/client-session.test.ts`, `lib/api/auth-client-declaration.test.ts`, `lib/net/socket-io-factory.test.ts`, `lib/api/account-security.test.ts`, `lib/view/sessions.test.ts`, `lib/i18n-sessions-catalog.test.ts`, `routes/settings-security.test.tsx`, `routes/settings.test.tsx`, `lib/session-end.test.ts`, `components/session-end-notice.test.tsx`, `lib/api/socket.test.ts`, `lib/api/admin-user-dossier.test.ts`, `routes/admin-user-dossier.test.tsx`, `lib/admin/interpret/enums.test.ts`. Budgets : `settings_security`, `interface_catalogs_sessions`, `client_session` ouverts ; `interface_catalogs_admin` porté à 198. Miroir Kotlin natif : rien reçu (gel du 2026-09-16), dette consignée.
+
+## D-181 — L'invité d'un lien a sa socket : ce que la passerelle lui pousse après son arrivée l'atteint sans recharger (2026-10-08, #9724)
+
+**Contexte.** Recette #9707 : l'invitée rejoint en anglais, le rattrapage d'arrivée (#9709) traduit le message antérieur quelques secondes plus tard, et son fil reste en français jusqu'au rechargement. Mesuré sur staging (WebKit iPhone, `page.on('websocket')` + requêtes) : AUCUNE requête `socket.io` en 48 s. `realtime.ts § syncConnection` n'ouvrait la connexion que pour `authenticated` ; un invité (`guest`) n'en avait pas. La passerelle, elle, livre : une socket anonyme ouverte à la main reçoit `message:translation` en direct, et 12 s plus tard par la file hors ligne (`message:pending-delivered`).
+
+**Décision.** `realtimeIdentityOf(session)` (`lib/api/realtime-identity.ts`) dit qui parle sur la socket : le compte (jeton + jeton de session), l'invité (son SEUL `sessionToken` — sans jeton, la passerelle l'authentifie en anonyme, le fait entrer dans la room de sa conversation et draine sa file), ou personne. La clé de connexion change avec l'identité : la bascule compte ↔ invité (#8816) reconstruit la socket, et rien du compte ne voyage sur celle de l'invité. Ce que l'invité reçoit reste jugé par la passerelle (`translationReaders`, plancher d'historique, bannis, liens échus).
+
+La règle « une connexion par identité » vit dans `keepRealtimeConnection` (même fichier), que `realtime.ts` amorce : même identité ⇒ même socket, identité changée ⇒ l'ancienne détruite avant l'ouverture de la suivante, aucune ⇒ fermée.
+
+**Compromis ouvert (#9725).** Un compte qui lit en anonyme ferme sa socket au moment où celle de son invité s'ouvre et s'annonce « dans la conversation » : un ami membre du fil peut corréler les deux. iOS fait de même (`connectAnonymous`) ; la décision est au porteur.
+
+**Témoins.** `realtime-identity.test.ts` : la poignée de main de l'invité sans jeton, rien du compte tenu, les bascules compte ↔ invité, et la chaîne socket → cache du fil → texte servi par le Prisme de l'invité. Rétablir la garde `authenticated` dans `keepRealtimeConnection` rougit quatre témoins.

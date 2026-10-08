@@ -33,8 +33,8 @@ import type { SocketAuth, SocketClient, SocketFactory } from './socket';
 export function handshakeAuth(
   auth: SocketAuth,
   declared: Readonly<Record<string, string>>,
-): { readonly token: string; readonly sessionToken: string; readonly client?: Readonly<Record<string, string>> } {
-  const base = { token: auth.token, sessionToken: auth.sessionToken };
+): { readonly token?: string; readonly sessionToken: string; readonly client?: Readonly<Record<string, string>> } {
+  const base = auth.token === undefined ? { sessionToken: auth.sessionToken } : { token: auth.token, sessionToken: auth.sessionToken };
   return Object.keys(declared).length === 0 ? base : { ...base, client: declared };
 }
 

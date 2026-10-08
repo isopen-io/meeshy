@@ -151,7 +151,7 @@ function buildDeps(overrides: Partial<RealtimeDeps> = {}): {
 
 describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () => {
   test('la poignée de main présente le jeton ET le jeton de session au FACTORY, et se connecte', () => {
-    let seenAuth: { readonly token: string; readonly sessionToken: string } | null = null;
+    let seenAuth: { readonly token?: string; readonly sessionToken: string } | null = null;
     const socket = fakeSocket();
     const socketFactory: SocketFactory = ({ auth }) => {
       seenAuth = auth;
