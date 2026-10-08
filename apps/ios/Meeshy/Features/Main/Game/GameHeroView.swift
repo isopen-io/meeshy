@@ -166,6 +166,10 @@ struct GameHeroView: View {
                     .foregroundColor(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
                 bar
+                // La prochaine étape des niveaux (#9706) : rien au-delà de 100, ni devant un serveur d'avant les étapes.
+                if let step = level.step {
+                    GameLevelStepRow(step: step, facts: game.levelStepFacts)
+                }
                 if level.record > level.level {
                     // DEUX pastilles, jamais une longue (#9564) : « Record : niveau 100 · Vent arrière ×1,25 » tenait
                     // sur deux lignes, puis — une fois interdite de passer à la ligne — poussait le héro hors de l'écran.
@@ -196,8 +200,10 @@ struct GameHeroView: View {
         }
     }
 
+    /// Retenu par une étape (#9706), la ligne dit POURQUOI le niveau attend, au lieu de « encore 0 point ».
     private var toNextText: String {
-        level.nextThreshold == nil
+        if level.held, let step = level.step { return GameCopy.levelHeld(step) }
+        return level.nextThreshold == nil
             ? GameCopy.levelTop(cap: level.cap)
             : String(
                 localized: "game.level.to_next",

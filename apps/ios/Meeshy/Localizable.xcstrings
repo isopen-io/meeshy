@@ -243061,43 +243061,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عشرون مرحلة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله."
+            "value": "مليون نقطة للمستوى 100، وخطوة كل عشرة مستويات: من دونها ينتظر المستوى. عشرون مرحلة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zwanzig Stufen. Die Level steigen bis 499; der Rang Botschafter öffnet sie bis 1.000, der Rang Orakel ohne Grenze. Jedes Level verlangt etwas mehr als das vorherige."
+            "value": "Eine Million Punkte für Level 100 und ein Schritt je zehn Level: ohne ihn wartet das Level. Zwanzig Stufen. Die Level steigen bis 499; der Rang Botschafter öffnet sie bis 1.000, der Rang Orakel ohne Grenze. Jedes Level verlangt etwas mehr als das vorherige."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Twenty tiers. Levels climb up to 499; the Ambassador rank opens them up to 1,000, and the Oracle rank opens them without limit. Each level asks for a little more than the one before."
+            "value": "A million points for level 100, and one step every ten levels: without it, the level waits. Twenty tiers. Levels climb up to 499; the Ambassador rank opens them up to 1,000, and the Oracle rank opens them without limit. Each level asks for a little more than the one before."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Veinte tramos. Los niveles suben hasta 499; el rango Embajador los abre hasta 1000, y el rango Oráculo, sin límite. Cada nivel pide un poco más que el anterior."
+            "value": "Un millón de puntos para el nivel 100 y un paso por decena: sin él, el nivel espera. Veinte tramos. Los niveles suben hasta 499; el rango Embajador los abre hasta 1000, y el rango Oráculo, sin límite. Cada nivel pide un poco más que el anterior."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent."
+            "value": "Un million de points pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Venti fasce. I livelli salgono fino a 499; il rango Ambasciatore li apre fino a 1000, il rango Oracolo senza limite. Ogni livello richiede un po’ più del precedente."
+            "value": "Un milione di punti per il livello 100 e un passo ogni dieci livelli: senza, il livello aspetta. Venti fasce. I livelli salgono fino a 499; il rango Ambasciatore li apre fino a 1000, il rango Oracolo senza limite. Ogni livello richiede un po’ più del precedente."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vinte faixas. Os níveis vão até 499; a patente Embaixador os abre até 1.000, e a patente Oráculo, sem limite. Cada nível pede um pouco mais do que o anterior."
+            "value": "Um milhão de pontos para o nível 100 e uma etapa por dezena: sem ela, o nível espera. Vinte faixas. Os níveis vão até 499; a patente Embaixador os abre até 1.000, e a patente Oráculo, sem limite. Cada nível pede um pouco mais do que o anterior."
           }
         }
       }
@@ -280510,6 +280510,523 @@
           "stringUnit": {
             "state": "translated",
             "value": "Além de 5 links ativos, valide seu endereço para criar outros. Seu link será criado assim que o código for validado."
+          }
+        }
+      }
+    },
+    "game.detail.levelstep.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من 10 إلى 100، تطلب كل عشرة مستويات خطوة بسيطة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von 10 bis 100 verlangt jede Zehnerstufe einen einfachen Schritt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From 10 to 100, every ten levels ask for one simple step."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De 10 a 100, cada decena de niveles pide un paso sencillo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De 10 à 100, chaque dizaine de niveaux demande une étape simple."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Da 10 a 100, ogni decina di livelli chiede un passo semplice."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De 10 a 100, cada dezena de níveis pede uma etapa simples."
+          }
+        }
+      }
+    },
+    "game.detail.levelstep.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنجز الخطوة: إن كانت نقاطك كافية، يرتفع المستوى دفعة واحدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mach den Schritt: Sind deine Punkte schon da, steigst du sofort auf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take the step: if your points are already there, you level up at once."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Da el paso: si tus puntos ya están, el nivel sube de golpe."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fais l’étape : si tes points y sont déjà, le niveau monte d’un coup."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fai il passo: se i tuoi punti ci sono già, il livello sale di colpo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faça a etapa: se seus pontos já estão lá, o nível sobe de uma vez."
+          }
+        }
+      }
+    },
+    "game.level.step.line": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خطوة المستوى %@: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schritt für Level %@: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level %@ step: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paso del nivel %@: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Étape du niveau %@ : %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passo del livello %@: %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Etapa do nível %@: %@"
+          }
+        }
+      }
+    },
+    "game.level.step.done": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "منجزة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "erledigt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "done"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hecho"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "faite"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fatto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "feita"
+          }
+        }
+      }
+    },
+    "game.level.step.mint_one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سكّ أول Meesh لك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "deine erste Meesh prägen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mint your first Meesh"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "acuñar tu primera Meesh"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "frapper ta première Meesh"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "coniare la tua prima Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cunhar sua primeira Meesh"
+          }
+        }
+      }
+    },
+    "game.level.step.mint_many": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سكّ %@ من Meeshes"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Meeshes prägen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mint %@ Meeshes"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "acuñar %@ Meeshes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "frapper %@ Meeshes"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "coniare %@ Meeshes"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cunhar %@ Meeshes"
+          }
+        }
+      }
+    },
+    "game.level.step.missions_one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إنجاز مهمة يومية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eine Tagesmission abschließen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "complete a daily mission"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "completar una misión del día"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "accomplir une mission du jour"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "completare una missione del giorno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "concluir uma missão do dia"
+          }
+        }
+      }
+    },
+    "game.level.step.missions_many": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إنجاز %@ مهام يومية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Tagesmissionen abschließen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "complete %@ daily missions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "completar %@ misiones del día"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "accomplir %@ missions du jour"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "completare %@ missioni del giorno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "concluir %@ missões do dia"
+          }
+        }
+      }
+    },
+    "game.level.step.flame": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحفاظ على لهب لمدة %@ يومًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eine Flamme von %@ Tagen halten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keep a %@-day Flame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mantener una Llama de %@ días"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tenir une Flamme de %@ jours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tenere una Fiamma di %@ giorni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "manter uma Chama de %@ dias"
+          }
+        }
+      }
+    },
+    "game.level.step.rank": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بلوغ رتبة %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "den Rang %@ erreichen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "reach the %@ rank"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alcanzar el rango %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "atteindre le rang %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "raggiungere il grado %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alcançar o posto %@"
+          }
+        }
+      }
+    },
+    "game.level.held": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نقاطك تفتح الطريق بالفعل: %@ لبلوغ المستوى %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Punkte öffnen schon den Weg: %@, um Level %@ zu erreichen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your points already open the way: %@ to reach level %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus puntos ya abren el camino: %@ para pasar al nivel %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tes points ouvrent déjà la suite : %@ pour passer le niveau %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi punti aprono già la strada: %@ per passare al livello %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus pontos já abrem o caminho: %@ para passar ao nível %@."
           }
         }
       }

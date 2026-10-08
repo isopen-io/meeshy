@@ -283,7 +283,7 @@ enum GameGuideCopy {
                  body: String(localized: "game.rules.1.body", defaultValue: "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Une publication rapporte selon qui peut la voir : public, communauté ou amis. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte.", bundle: .main)),
             Rule(index: 2,
                  title: String(localized: "game.rules.2.title", defaultValue: "Les points font le niveau", bundle: .main),
-                 body: String(localized: "game.rules.2.body", defaultValue: "Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.", bundle: .main)),
+                 body: String(localized: "game.rules.2.body", defaultValue: "Un million de points pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.", bundle: .main)),
             Rule(index: 3,
                  title: String(localized: "game.rules.3.title", defaultValue: "On frappe des Meeshes", bundle: .main),
                  body: String(localized: "game.rules.3.body", defaultValue: "À partir de 1 221 points, on frappe une Meesh à la main. Le prix monte avec le nombre de Meeshes déjà frappées.", bundle: .main)),

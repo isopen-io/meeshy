@@ -5,7 +5,7 @@ import MeeshySDK
 //
 // MIROIR des clés `game.detail.*` du catalogue du web
 // (`apps/web/src/lib/interface-catalogs/catalog-game-concept-<langue>.ts`, #9563) : la MÊME phrase, dans les sept
-// langues, sur les deux plateformes. Dix-huit familles d'élément ont deux phrases (`game.detail.<famille>.what` et
+// langues, sur les deux plateformes. Dix-neuf familles d'élément ont deux phrases (`game.detail.<famille>.what` et
 // `.how`), trente-sept données en ont une (`game.detail.fact.<donnée>`). Chaque accesseur est une CLÉ LITTÉRALE, que
 // la garde du catalogue sait lire ; aucun texte n'est écrit de ce côté. Les noms déjà au catalogue (rangs, paliers,
 // formes, ligues) sont réutilisés par le modèle, jamais reformulés ici.
@@ -89,6 +89,7 @@ enum GameDetailText {
         case .levelRing: String(localized: "game.detail.ring.what", defaultValue: "L’anneau montre ton niveau : il se remplit avec tes points.", bundle: .main)
         case .treasuryTier: String(localized: "game.detail.treasury.what", defaultValue: "Ton trésor grandit avec les Meeshes que tu gardes.", bundle: .main)
         case .elanFamily: String(localized: "game.detail.elan.what", defaultValue: "Une famille regroupe des gestes qui se ressemblent.", bundle: .main)
+        case .levelStep: String(localized: "game.detail.levelstep.what", defaultValue: "De 10 à 100, chaque dizaine de niveaux demande une étape simple.", bundle: .main)
         case .fact, .player: nil
         }
     }
@@ -116,6 +117,7 @@ enum GameDetailText {
         case .levelRing: String(localized: "game.detail.ring.how", defaultValue: "Gagne des points : quand l’anneau est plein, tu montes d’un niveau.", bundle: .main)
         case .treasuryTier: String(localized: "game.detail.treasury.how", defaultValue: "Garde tes Meeshes au lieu de les dépenser pour atteindre le palier suivant.", bundle: .main)
         case .elanFamily: String(localized: "game.detail.elan.how", defaultValue: "Chaque geste rapporte des points. Plusieurs familles actives déclenchent un élan.", bundle: .main)
+        case .levelStep: String(localized: "game.detail.levelstep.how", defaultValue: "Fais l’étape : si tes points y sont déjà, le niveau monte d’un coup.", bundle: .main)
         case .fact, .player: nil
         }
     }

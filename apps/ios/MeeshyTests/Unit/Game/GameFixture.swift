@@ -37,13 +37,16 @@ enum GameFixture {
         chestStatus: GameBlock.Chest.Status = .locked,
         chestReward: DailyChest? = nil,
         guideSeen: [String] = [],
-        servesLadder: Bool = true
+        servesLadder: Bool = true,
+        steps: GameLevelStepCounts? = nil
     ) -> GameBlock {
         let standing = GameGlory.standing(glory: glory, mythic: mythic)
         // Le niveau et la frappe tels que la passerelle les sert (#9688) : champs d'hier sous l'ancienne loi, la
         // lecture ouverte par le rang dans `ladder` — ou, `servesLadder: false`, tels qu'un serveur antérieur.
         let levelCap = GameGlory.levelCap(forRank: standing.rank)
-        let served = GameLevelWire.level(score: score, levelCap: levelCap, levelRecord: levelRecord, prestige: 0)
+        // Les étapes des niveaux (#9706), jugées avec la Gloire et le rang du témoin ; `nil` : un serveur d'avant les étapes.
+        let stepFacts = steps.map { GameLevelStepFacts(counts: $0, glory: standing.glory, rank: standing.rank) }
+        let served = GameLevelWire.level(score: score, levelCap: levelCap, levelRecord: levelRecord, prestige: 0, steps: stepFacts)
         let level = servesLadder ? served : served.replacing(ladder: .some(nil))
         let shown = level.shown
         let wireMint = GameLevelWire.mint(

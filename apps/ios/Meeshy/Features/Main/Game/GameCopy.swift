@@ -172,6 +172,72 @@ enum GameCopy {
         )
     }
 
+    // MARK: - Les étapes des niveaux (#9706)
+    //
+    // MIROIR des clés `game.level.step.*` et `game.level.held` du web (`catalog-game-concept-<langue>.ts`) : la MÊME
+    // phrase dans les sept langues. Ce qu'une étape demande se dit à l'infinitif, en minuscule : il entre dans une
+    // phrase (« Étape du niveau 10 : frapper ta première Meesh »).
+
+    /// Ce que l'étape demande — le nom du rang vient des noms de rang, jamais reformulé.
+    static func levelStepGoal(_ step: GameLevelStep) -> String {
+        let count = formatCount(step.target)
+        switch step.kind {
+        case .mint:
+            return step.target == 1
+                ? String(localized: "game.level.step.mint_one", defaultValue: "frapper ta première Meesh", bundle: .main)
+                : String(localized: "game.level.step.mint_many", defaultValue: "frapper \(count) Meeshes", bundle: .main)
+        case .missions:
+            return step.target == 1
+                ? String(localized: "game.level.step.missions_one", defaultValue: "accomplir une mission du jour", bundle: .main)
+                : String(localized: "game.level.step.missions_many", defaultValue: "accomplir \(count) missions du jour", bundle: .main)
+        case .flame:
+            return String(localized: "game.level.step.flame", defaultValue: "tenir une Flamme de \(count) jours", bundle: .main)
+        case .rank:
+            let ruled: GloryRank? = GameLevelSteps.rules.first(where: { $0.level == step.level })?.rank
+            let rank = rankName(step.rank ?? ruled ?? .echo)
+            return String(localized: "game.level.step.rank", defaultValue: "atteindre le rang \(rank)", bundle: .main)
+        }
+    }
+
+    /// « Étape du niveau 10 : frapper ta première Meesh ».
+    static func levelStepLine(_ step: GameLevelStep) -> String {
+        let level = formatCount(step.level)
+        let what = levelStepGoal(step)
+        return String(localized: "game.level.step.line", defaultValue: "Étape du niveau \(level) : \(what)", bundle: .main)
+    }
+
+    static var levelStepDone: String {
+        String(localized: "game.level.step.done", defaultValue: "faite", bundle: .main)
+    }
+
+    /// Où en est l'étape : « 0 / 1 » ; pour un rang, la Gloire « Gloire 1 200 / 2 000 ».
+    static func levelStepProgress(_ step: GameLevelStep) -> String {
+        let ratio = ConceptText.ratio(formatCount(min(step.current, step.target)), formatCount(step.target))
+        guard step.kind == .rank else { return ratio }
+        return String(localized: "game.rank.glory", defaultValue: "Gloire \(ratio)", bundle: .main)
+    }
+
+    /// L'état de l'étape en une ligne : « faite », ou où elle en est.
+    static func levelStepState(_ step: GameLevelStep) -> String {
+        step.met ? levelStepDone : levelStepProgress(step)
+    }
+
+    /// Ce que VoiceOver dit de l'étape : la ligne, puis son état.
+    static func levelStepAccessibility(_ step: GameLevelStep) -> String {
+        levelStepLine(step) + ", " + levelStepState(step)
+    }
+
+    /// Pourquoi le niveau attend : les points sont là, l'étape manque.
+    static func levelHeld(_ step: GameLevelStep) -> String {
+        let what = levelStepGoal(step)
+        let level = formatCount(step.level)
+        return String(
+            localized: "game.level.held",
+            defaultValue: "Tes points ouvrent déjà la suite : \(what) pour passer le niveau \(level).",
+            bundle: .main
+        )
+    }
+
     static func materialName(_ material: GameMaterial) -> String {
         switch material {
         case .copper: String(localized: "game.material.copper", defaultValue: "Cuivre", bundle: .main)

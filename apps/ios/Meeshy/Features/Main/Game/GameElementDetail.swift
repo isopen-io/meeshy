@@ -36,10 +36,12 @@ enum GameElementKind: String, CaseIterable, Equatable {
     case levelRing = "ring"
     case treasuryTier = "treasury"
     case elanFamily = "elan"
+    /// Une étape des niveaux (#9706) : de 10 à 100, chaque dizaine en demande une.
+    case levelStep = "levelstep"
     case fact
     case player
 
-    /// Les dix-huit familles du catalogue (tout sauf la donnée et la ligne de classement).
+    /// Les dix-neuf familles du catalogue (tout sauf la donnée et la ligne de classement).
     static let families: [GameElementKind] = allCases.filter { $0 != .fact && $0 != .player }
 
     /// Ce que la seconde phrase d'une famille dit (miroir de `GAME_DETAIL_HOW`) : comment on OBTIENT l'élément,
@@ -53,11 +55,12 @@ enum GameElementKind: String, CaseIterable, Equatable {
         switch self {
         case .flameForm, .mission, .chest, .elanFamily: .gives
         case .badge, .achievement, .challenge, .trophy, .stamp, .seasonStep, .seal, .leagueGem, .prestigeStar, .rank,
-             .freeze, .coin, .levelRing, .treasuryTier, .fact, .player: .obtain
+             .freeze, .coin, .levelRing, .treasuryTier, .levelStep, .fact, .player: .obtain
         }
     }
 
-    /// Le concept dont l'élément relève : c'est sa fiche que « Voir la fiche » ouvre.
+    /// Le concept dont l'élément relève : c'est sa fiche que « Voir la fiche » ouvre. Celui d'une étape des niveaux
+    /// dépend de ce qu'elle demande (`LevelStepKind.concept`) : la famille seule ne le dit pas.
     var concept: ProgressionConcept? {
         switch self {
         case .badge: .badges
@@ -74,7 +77,7 @@ enum GameElementKind: String, CaseIterable, Equatable {
         case .coin, .treasuryTier: .meesh
         case .levelRing: .level
         case .elanFamily: .elans
-        case .fact: nil
+        case .levelStep, .fact: nil
         }
     }
 }
@@ -607,6 +610,26 @@ enum GameElementDetails {
         )
     }
 
+    // MARK: Étape des niveaux (#9706)
+
+    /// Une étape des niveaux : faite, ou à faire avec ce qu'il manque et sa jauge. Quand les faits sont servis, les dix
+    /// étapes en lignes, chacune faite ou à faire. « Voir la fiche » mène au GESTE qui la fait (`LevelStepKind.concept`).
+    static func levelStep(_ step: GameLevelStep, facts: GameLevelStepFacts? = nil) -> GameElementDetail {
+        let all = facts.map { GameLevelSteps.all($0) } ?? []
+        return GameElementDetail(
+            kind: .levelStep, key: "\(step.level)",
+            emblem: .concept(step.kind.concept),
+            name: GameCopy.levelStepLine(step),
+            status: step.met
+                ? .obtained(since: nil)
+                : .locked(missing: GameCopy.levelStepProgress(step), progress: share(step.current, step.target)),
+            facts: all.map {
+                fact(GameText.bannerLevel(level: count($0.level)), GameCopy.levelStepGoal($0) + " · " + GameCopy.levelStepState($0))
+            },
+            concept: step.kind.concept
+        )
+    }
+
     // MARK: Élans
 
     /// Une famille d'élan : active dans la fenêtre servie, ou au repos — et ce qu'un geste de la famille rapporte.
@@ -659,6 +682,18 @@ enum GameElementDetails {
         case .league: return game.league.flatMap { leagueGem($0) } ?? fallback
         case .prestige: return game.prestige.map { prestigeStar(min($0.stars + 1, $0.max), in: $0) } ?? fallback
         case .points, .season, .elans, .badges, .defis, .succes, .showcase, .atlas: return fallback
+        }
+    }
+}
+
+extension LevelStepKind {
+    /// La fiche du GESTE qui fait l'étape : la frappe, les missions du jour, la Flamme, la Gloire et son rang.
+    var concept: ProgressionConcept {
+        switch self {
+        case .mint: .meesh
+        case .missions: .missions
+        case .flame: .flame
+        case .rank: .glory
         }
     }
 }
