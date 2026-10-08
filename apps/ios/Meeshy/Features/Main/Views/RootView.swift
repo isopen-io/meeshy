@@ -131,9 +131,12 @@ struct RootView: View {
     /// (preview sheet + underlying navigation).
     @State private var suppressToastTap = false
 
-    // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
-    @AppStorage("feedButtonPosition") private var feedButtonPosition: String = "0.0,0.0"  // Top-left default
-    @AppStorage("menuButtonPosition") private var menuButtonPosition: String = "1.0,0.0" // Top-right default
+    // Positions des boutons flottants (#9679) — lues par `FloatingButtonGeometry`.
+    @AppStorage("feedButtonPosition") private var feedButtonPosition: String = FloatingButtonGeometry.defaultFeedStorage
+    @AppStorage("menuButtonPosition") private var menuButtonPosition: String = FloatingButtonGeometry.defaultMenuStorage
+    /// La géométrie mesurée par le conteneur des boutons : l'échelle du menu et
+    /// l'ancre des réels lisent la même.
+    @State private var floatingGeometry: FloatingButtonGeometry?
 
     // Scroll visibility state (passed from ConversationListView)
     @State private var isScrollingDown = false
@@ -152,17 +155,6 @@ struct RootView: View {
     /// démarrage), une porte qui ne se referme pas. `iPadRootView` porte le
     /// jumeau : l'iPad a sa racine PROPRE et n'hérite rien d'ici.
     @StateObject private var upgradeGate = UpgradeGateController()
-
-    // Helper to get ButtonPosition for menu ladder alignment
-    private var menuButtonPos: ButtonPosition {
-        let parts = menuButtonPosition.split(separator: ",")
-        guard parts.count == 2,
-              let x = Double(parts[0]),
-              let y = Double(parts[1]) else {
-            return .topRight
-        }
-        return ButtonPosition(x: CGFloat(x), y: CGFloat(y))
-    }
 
     var body: some View {
         ZStack {
@@ -227,7 +219,7 @@ struct RootView: View {
                     revealProgress: reelsRevealProgress,
                     applyMask: reelsRevealMasked,
                     feedButtonPositionRaw: feedButtonPosition,
-                    isSearchBarVisible: !isScrollingDown,
+                    floatingGeometry: floatingGeometry,
                     reduceMotion: reduceMotionEnabled,
                     content: { safeArea in
                         if let failure = launch.failure, let postId = launch.startId {
@@ -1433,7 +1425,6 @@ struct RootView: View {
                 }
                 router.push(.profile)
             },
-            isSearchBarVisible: !isScrollingDown,
             // L'appui long lance les Réels : un geste que rien ne signale à l'écran
             // doit au moins être annoncé à VoiceOver, sinon il n'existe pas pour qui
             // ne peut pas le découvrir par tâtonnement.
@@ -1496,41 +1487,26 @@ struct RootView: View {
                 }
             }
         )
+        .onPreferenceChange(FloatingButtonGeometryKey.self) { measured in
+            if let measured { floatingGeometry = measured }
+        }
         .zIndex(100)
     }
 
     // MARK: - Menu Ladder (positioned relative to menu button)
     private var menuLadder: some View {
-        GeometryReader { geometry in
-            let safeArea = geometry.safeAreaInsets
-            let size = geometry.size
-            let pos = menuButtonPos
-
-            // Calculate button position on screen
-            let minEdgePadding: CGFloat = MeeshySpacing.xl
-            let topSafeZone: CGFloat = FloatingButtonSafeZone.top
-            let bottomSafeZone: CGFloat = isScrollingDown ? 50 : 110
-            let buttonSize: CGFloat = 52
-            let halfButton = buttonSize / 2
-
-            let minX = safeArea.leading + minEdgePadding + halfButton
-            let maxX = size.width - safeArea.trailing - minEdgePadding - halfButton
-            let minY = safeArea.top + topSafeZone + halfButton
-            let maxY = size.height - safeArea.bottom - bottomSafeZone - halfButton
-
-            let buttonX = minX + (maxX - minX) * pos.x
-            let buttonY = minY + (maxY - minY) * pos.y
-
-            // Menu items configuration
+        GeometryReader { proxy in
+            let geometry = floatingGeometry ?? FloatingButtonGeometry(screenSize: proxy.size, safeArea: proxy.safeAreaInsets)
+            let menuCenter = geometry.layout(feedStorage: feedButtonPosition, menuStorage: menuButtonPosition).menu
+            let halfButton = FloatingButtonGeometry.buttonSize / 2
             let menuItemSize: CGFloat = 46
             let menuSpacing: CGFloat = MeeshySpacing.md
-
-            // Determine if menu should expand up or down
-            let expandDown = pos.y < 0.5
-
-            // Calculate menu position
-            let menuX = pos.isLeft ? buttonX : buttonX
-            let menuStartY = expandDown ? buttonY + halfButton + menuSpacing + menuItemSize / 2 : buttonY - halfButton - menuSpacing - menuItemSize / 2
+            let ladderExtent = CGFloat(RootMenuLadderEntry.allCases.count) * (menuItemSize + menuSpacing)
+            let expandDown = geometry.menuOpensDownward(from: menuCenter, ladderExtent: ladderExtent)
+            let menuX = menuCenter.x
+            let menuStartY = expandDown
+                ? menuCenter.y + halfButton + menuSpacing + menuItemSize / 2
+                : menuCenter.y - halfButton - menuSpacing - menuItemSize / 2
 
             // Contenu de l'échelle : `RootMenuLadderEntry` (descripteurs purs).
             ForEach(Array(RootMenuLadderEntry.allCases.enumerated()), id: \.offset) { index, entry in
@@ -1608,11 +1584,10 @@ private struct ReelsRevealContainer<Content: View>: View {
     /// renders (a persistent mask over an AVPlayer layer freezes it on the poster).
     /// RootView flips it off once the disc reaches full screen.
     let applyMask: Bool
-    /// Raw "x,y" (0-1 normalized) feed button position as persisted by RootView.
+    /// The feed button position as persisted by RootView.
     let feedButtonPositionRaw: String
-    /// Mirrors the floating-button container's search-bar flag — it selects the
-    /// bottom safe-zone used to place the button (and thus the reveal focus).
-    let isSearchBarVisible: Bool
+    /// The geometry the floating buttons were laid out with (#9679).
+    let floatingGeometry: FloatingButtonGeometry?
     let reduceMotion: Bool
     /// Receives the REAL safe-area insets (read before `.ignoresSafeArea()`) so
     /// the reels chrome (back button, scrub bar) can clear the Dynamic Island /
@@ -1626,9 +1601,7 @@ private struct ReelsRevealContainer<Content: View>: View {
         GeometryReader { geo in
             let center = FeedButtonAnchor.unitPoint(
                 fromRaw: feedButtonPositionRaw,
-                screenSize: geo.size,
-                safeArea: geo.safeAreaInsets,
-                isSearchBarVisible: isSearchBarVisible
+                geometry: floatingGeometry ?? FloatingButtonGeometry(screenSize: geo.size, safeArea: geo.safeAreaInsets)
             )
 
             content(geo.safeAreaInsets)
@@ -1687,62 +1660,19 @@ private struct ReelsRevealMaskModifier: ViewModifier {
 
 // MARK: - Feed Button Anchor (pure mapping)
 
-/// Pure mapping from the persisted feed-button position ("x,y", 0-1 normalized)
-/// to a `UnitPoint` (0-1 fraction of the full screen rect) for the reveal focus.
-///
-/// Mirrors `FreeFloatingButton.screenPosition(for:)` EXACTLY (same constants:
-/// buttonSize 52, minEdgePadding 20, topSafeZone `FloatingButtonSafeZone.top`,
-/// bottomSafeZone 110/50) so
-/// the disc is born at the button's true center, not a naive linear corner map.
-/// Kept as a standalone helper so the math is unit-testable without SwiftUI.
+/// Le centre du bouton Flux, d'où naît le disque des réels : lu dans
+/// `FloatingButtonGeometry.layout`, la source que le conteneur des boutons
+/// emploie pour le poser (#9679) — le disque naît au centre EXACT du bouton.
 enum FeedButtonAnchor {
-    static let buttonSize: CGFloat = 52
-    static let minEdgePadding: CGFloat = 20
-    static let topSafeZone: CGFloat = FloatingButtonSafeZone.top
-    static let bottomSafeZoneWithSearch: CGFloat = 110
-    static let bottomSafeZoneNoSearch: CGFloat = 50
-
-    /// Returns the button center as a screen point in the given geometry.
-    static func screenPoint(
-        fromRaw raw: String,
-        screenSize: CGSize,
-        safeArea: EdgeInsets,
-        isSearchBarVisible: Bool
-    ) -> CGPoint {
-        let pos = parse(raw)
-        let half = buttonSize / 2
-        let bottomSafeZone = isSearchBarVisible ? bottomSafeZoneWithSearch : bottomSafeZoneNoSearch
-        let minX = safeArea.leading + minEdgePadding + half
-        let maxX = screenSize.width - safeArea.trailing - minEdgePadding - half
-        let minY = safeArea.top + topSafeZone + half
-        let maxY = screenSize.height - safeArea.bottom - bottomSafeZone - half
-        let x = minX + (maxX - minX) * pos.x
-        let y = minY + (maxY - minY) * pos.y
-        return CGPoint(x: x, y: y)
+    static func screenPoint(fromRaw raw: String, geometry: FloatingButtonGeometry) -> CGPoint {
+        geometry.center(forStorage: raw, default: FloatingButtonGeometry.defaultFeedStorage)
     }
 
-    /// Returns the button center as a `UnitPoint` (0-1 fraction of the full rect).
-    static func unitPoint(
-        fromRaw raw: String,
-        screenSize: CGSize,
-        safeArea: EdgeInsets,
-        isSearchBarVisible: Bool
-    ) -> UnitPoint {
-        guard screenSize.width > 0, screenSize.height > 0 else { return .topLeading }
-        let p = screenPoint(fromRaw: raw, screenSize: screenSize, safeArea: safeArea, isSearchBarVisible: isSearchBarVisible)
-        return UnitPoint(x: p.x / screenSize.width, y: p.y / screenSize.height)
-    }
-
-    /// Parses "x,y" (0-1) → clamped CGPoint. Defaults to top-left (0,0) — the
-    /// same default RootView persists for the feed button.
-    static func parse(_ raw: String) -> CGPoint {
-        let parts = raw.split(separator: ",")
-        guard parts.count == 2,
-              let x = Double(parts[0]),
-              let y = Double(parts[1]) else {
-            return CGPoint(x: 0, y: 0)
-        }
-        return CGPoint(x: min(max(x, 0), 1), y: min(max(y, 0), 1))
+    static func unitPoint(fromRaw raw: String, geometry: FloatingButtonGeometry) -> UnitPoint {
+        let size = geometry.screenSize
+        guard size.width > 0, size.height > 0 else { return .topLeading }
+        let p = screenPoint(fromRaw: raw, geometry: geometry)
+        return UnitPoint(x: p.x / size.width, y: p.y / size.height)
     }
 }
 

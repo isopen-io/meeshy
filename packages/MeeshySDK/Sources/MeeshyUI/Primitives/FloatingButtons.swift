@@ -18,57 +18,34 @@ public struct ButtonPosition: Equatable, Sendable {
     public var isTop: Bool { y < 0.5 }
 }
 
-// MARK: - Zone sûre du haut, pour les boutons flottants
+// MARK: - Bandes réservées d'avant #9679
 
-/// Hauteur que les boutons flottants ne doivent JAMAIS mordre, en haut.
+/// Les bandes que les boutons flottants ne pouvaient pas mordre avant #9679 :
+/// 246 pt en haut (encoche majorée + en-tête étendu + bande de stories, la zone
+/// sûre lue étant NULLE sous `.ignoresSafeArea()`) et 110 pt en bas.
 ///
-/// **Pourquoi elle ne vaut pas simplement la marge sous l'encoche.**
-/// `FreeFloatingButtonsContainer` calcule ses bornes avec
-/// `minY = safeArea.top + topSafeZone + halfButton`, où `safeArea` vient du
-/// `GeometryReader` de son `body`. Mais ce `GeometryReader` porte un
-/// `.ignoresSafeArea()` : il s'étend alors à l'écran ENTIER et ses
-/// `safeAreaInsets` retombent à ZÉRO. La formule est juste ; son entrée est
-/// nulle en production. `topSafeZone` doit donc dégager l'en-tête ENTIER
-/// mesuré depuis le bord PHYSIQUE de l'écran — encoche comprise — et non la
-/// seule hauteur de barre.
-///
-/// **Le défaut qu'elle corrige** (mesuré à `idb ui describe-all`, iPhone 16 Pro
-/// 402x874 pt, position par défaut `"0.0,0.0"`, AUCUNE position persistée donc
-/// bien la valeur du code) : à 50 pt, le centre tombait à `y = 76`, le disque
-/// commençait à `y = 50` — dans la Dynamic Island — et recouvrait « Créer une
-/// story » sur 40.8 x 28.7 pt, soit 60 % de sa surface. À droite, le bouton
-/// Menu recouvrait « Nouvelle conversation » sur 40.0 x 22.7 pt. Deux cibles
-/// tactiles superposées, livrées par défaut à tout nouvel utilisateur.
-///
-/// Elle vit ICI, en une seule copie, parce que le `50` qu'elle remplace était
-/// écrit à TROIS endroits (`FloatingButtons`, `RootView.menuLadder`,
-/// `RootView.FeedButtonAnchor`) qui doivent rester d'accord au point près :
-/// `FeedButtonAnchor` se documente lui-même comme miroir EXACT du calcul du
-/// conteneur, et l'échelle de menu se positionne relativement au bouton.
+/// Elles ne bornent plus rien : la plage est désormais la zone sûre réelle
+/// (`FloatingButtonGeometry`). Elles servent à RELIRE une position persistée
+/// sous l'ancienne forme `x,y` — dont les positions par défaut — à l'endroit
+/// exact où l'ancienne géométrie la posait : le Flux et le Menu par défaut
+/// restent sous la bande de stories (#9363), et une position choisie avant la
+/// mise à jour ne saute pas ailleurs.
 public enum FloatingButtonSafeZone {
-    /// La plus haute encoche du parc pris en charge (Dynamic Island). Le
-    /// conteneur ne peut pas la lire — voir ci-dessus — donc on la majore :
-    /// sur un appareil à encoche plus courte le disque descend de quelques
-    /// points de plus, ce qui ne gêne rien et reste déplaçable au doigt.
+    /// La plus haute encoche du parc pris en charge (Dynamic Island).
     nonisolated public static var maxTopInset: CGFloat { 62 }
 
     /// La bande de stories posée SOUS l'en-tête étendu, au repos (#9363) —
-    /// réservée, pas lue : le SDK ne connaît pas les écrans. C'est la plus
-    /// haute des bandes de l'app (le tray du flux, 120 pt) ; l'app vérifie
-    /// qu'aucune ne la dépasse (`FeedButtonAnchorTests`).
-    ///
-    /// **Le défaut qu'elle corrige** (iPhone 17 Pro 402 pt, iOS 26.1, position
-    /// par défaut) : D2 croyait la trail DANS l'en-tête ; elle vit dessous. Le
-    /// disque Flux (19,125 53×53) recouvrait ENTIÈREMENT « Ajouter une story »
-    /// de l'avatar — 16,142 18×18 dans la liste, 15,132 34×34 dans le flux — et
-    /// le toucher sur le « + » basculait liste ↔ flux.
+    /// la plus haute des bandes de l'app (le tray du flux, 120 pt) ; l'app
+    /// vérifie qu'aucune ne la dépasse (`FeedButtonAnchorTests`).
     nonisolated public static var storyBand: CGFloat { 120 }
 
-    /// Encoche + barre de titre étendue + bande de stories : la dégager
-    /// dégage aussi le « + » de l'avatar et les anneaux.
+    /// Encoche + barre de titre étendue + bande de stories.
     nonisolated public static var top: CGFloat {
         maxTopInset + CollapsibleHeaderMetrics.expandedHeight + storyBand
     }
+
+    /// La bande du bas, barre de recherche visible (l'état au repos).
+    nonisolated public static var legacyBottom: CGFloat { 110 }
 }
 
 // MARK: - Legacy ButtonCorner (for compatibility)
@@ -97,6 +74,11 @@ public enum ButtonCorner: String, CaseIterable {
 }
 
 // MARK: - Free Position Floating Buttons Container
+
+/// Les deux boutons flottants, posables à n'importe quelle hauteur, contre le
+/// bord gauche ou droit (#9679). Toute la géométrie vient de
+/// `FloatingButtonGeometry` ; le conteneur la remonte par
+/// `FloatingButtonGeometryKey` pour l'échelle du menu et l'ancre des réels.
 public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View>: View {
     @Binding public var leftPositionRaw: String
     @Binding public var rightPositionRaw: String
@@ -107,7 +89,6 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public let onRightTap: () -> Void
     public var onLeftLongPress: (() -> Void)? = nil
     public var onRightLongPress: (() -> Void)? = nil
-    public var isSearchBarVisible: Bool = true
     public var leftA11yLabel: String
     public var leftA11yHint: String? = nil
     public var leftA11yValue: String? = nil
@@ -116,12 +97,6 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public var rightA11yHint: String? = nil
     public var rightA11yValue: String? = nil
     public var rightA11yActionName: String? = nil
-
-    private let buttonSize: CGFloat = 52
-    private let minEdgePadding: CGFloat = 20
-    private let topSafeZone: CGFloat = FloatingButtonSafeZone.top
-    private let bottomSafeZoneWithSearch: CGFloat = 110
-    private let bottomSafeZoneNoSearch: CGFloat = 50
 
     public init(
         leftPosition: Binding<String>,
@@ -132,7 +107,6 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
         onRightLongPress: (() -> Void)? = nil,
-        isSearchBarVisible: Bool = true,
         leftA11yHint: String? = nil,
         leftA11yValue: String? = nil,
         leftA11yActionName: String? = nil,
@@ -148,7 +122,6 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         self.onRightTap = onRightTap
         self.onLeftLongPress = onLeftLongPress
         self.onRightLongPress = onRightLongPress
-        self.isSearchBarVisible = isSearchBarVisible
         self.leftA11yLabel = leftA11yLabel
         self.leftA11yHint = leftA11yHint
         self.leftA11yValue = leftA11yValue
@@ -161,38 +134,17 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         self.rightContent = rightContent()
     }
 
-    private var currentBottomSafeZone: CGFloat {
-        isSearchBarVisible ? bottomSafeZoneWithSearch : bottomSafeZoneNoSearch
-    }
-
-    private func parsePosition(_ raw: String, default defaultPos: ButtonPosition) -> ButtonPosition {
-        let parts = raw.split(separator: ",")
-        guard parts.count == 2,
-              let x = Double(parts[0]),
-              let y = Double(parts[1]) else {
-            return defaultPos
-        }
-        return ButtonPosition(x: CGFloat(x), y: CGFloat(y))
-    }
-
     public var body: some View {
-        GeometryReader { geometry in
-            let safeArea = geometry.safeAreaInsets
-            let size = geometry.size
+        FloatingButtonsSafeAreaReader { geometry in
+            let layout = geometry.layout(feedStorage: leftPositionRaw, menuStorage: rightPositionRaw)
 
             ZStack {
                 FreeFloatingButton(
-                    position: Binding(
-                        get: { parsePosition(leftPositionRaw, default: .topLeft) },
-                        set: { leftPositionRaw = "\($0.x),\($0.y)" }
-                    ),
-                    screenSize: size,
-                    safeArea: safeArea,
-                    buttonSize: buttonSize,
-                    minEdgePadding: minEdgePadding,
-                    topSafeZone: topSafeZone,
-                    bottomSafeZone: currentBottomSafeZone,
-                    snapToEdges: true,
+                    center: layout.feed,
+                    buttonSize: FloatingButtonGeometry.buttonSize,
+                    onDrop: { point in
+                        leftPositionRaw = geometry.placement(droppedAt: point, avoiding: layout.menu).storageValue
+                    },
                     onTap: onLeftTap,
                     onLongPress: onLeftLongPress,
                     a11yLabel: leftA11yLabel,
@@ -204,17 +156,11 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                 }
 
                 FreeFloatingButton(
-                    position: Binding(
-                        get: { parsePosition(rightPositionRaw, default: .topRight) },
-                        set: { rightPositionRaw = "\($0.x),\($0.y)" }
-                    ),
-                    screenSize: size,
-                    safeArea: safeArea,
-                    buttonSize: buttonSize,
-                    minEdgePadding: minEdgePadding,
-                    topSafeZone: topSafeZone,
-                    bottomSafeZone: currentBottomSafeZone,
-                    snapToEdges: true,
+                    center: layout.menu,
+                    buttonSize: FloatingButtonGeometry.buttonSize,
+                    onDrop: { point in
+                        rightPositionRaw = geometry.placement(droppedAt: point, avoiding: layout.feed).storageValue
+                    },
                     onTap: onRightTap,
                     onLongPress: onRightLongPress,
                     a11yLabel: rightA11yLabel,
@@ -225,22 +171,20 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                     rightContent
                 }
             }
+            .preference(key: FloatingButtonGeometryKey.self, value: geometry)
         }
-        .ignoresSafeArea()
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearchBarVisible)
     }
 }
 
 // MARK: - Free Floating Button
+
+/// Un disque flottant posé en `center` (coordonnées de l'écran entier). Il suit
+/// le doigt image par image pendant le glisser ; à la levée, `onDrop` reçoit le
+/// point lâché et la géométrie l'aimante au bord le plus proche.
 public struct FreeFloatingButton<Content: View>: View {
-    @Binding public var position: ButtonPosition
-    public let screenSize: CGSize
-    public let safeArea: EdgeInsets
+    public let center: CGPoint
     public let buttonSize: CGFloat
-    public let minEdgePadding: CGFloat
-    public let topSafeZone: CGFloat
-    public let bottomSafeZone: CGFloat
-    public let snapToEdges: Bool
+    public let onDrop: (CGPoint) -> Void
     public let onTap: () -> Void
     public var onLongPress: (() -> Void)? = nil
     public var a11yLabel: String? = nil
@@ -253,14 +197,9 @@ public struct FreeFloatingButton<Content: View>: View {
     @State private var isDragging = false
 
     public init(
-        position: Binding<ButtonPosition>,
-        screenSize: CGSize,
-        safeArea: EdgeInsets,
+        center: CGPoint,
         buttonSize: CGFloat,
-        minEdgePadding: CGFloat,
-        topSafeZone: CGFloat,
-        bottomSafeZone: CGFloat,
-        snapToEdges: Bool = true,
+        onDrop: @escaping (CGPoint) -> Void,
         onTap: @escaping () -> Void,
         onLongPress: (() -> Void)? = nil,
         a11yLabel: String? = nil,
@@ -269,14 +208,9 @@ public struct FreeFloatingButton<Content: View>: View {
         a11yActionName: String? = nil,
         @ViewBuilder content: () -> Content
     ) {
-        self._position = position
-        self.screenSize = screenSize
-        self.safeArea = safeArea
+        self.center = center
         self.buttonSize = buttonSize
-        self.minEdgePadding = minEdgePadding
-        self.topSafeZone = topSafeZone
-        self.bottomSafeZone = bottomSafeZone
-        self.snapToEdges = snapToEdges
+        self.onDrop = onDrop
         self.onTap = onTap
         self.onLongPress = onLongPress
         self.a11yLabel = a11yLabel
@@ -286,43 +220,7 @@ public struct FreeFloatingButton<Content: View>: View {
         self.content = content()
     }
 
-    private var bounds: (minX: CGFloat, maxX: CGFloat, minY: CGFloat, maxY: CGFloat) {
-        let halfButton = buttonSize / 2
-        let minX = safeArea.leading + minEdgePadding + halfButton
-        let maxX = screenSize.width - safeArea.trailing - minEdgePadding - halfButton
-        let minY = safeArea.top + topSafeZone + halfButton
-        let maxY = screenSize.height - safeArea.bottom - bottomSafeZone - halfButton
-        return (minX, maxX, minY, maxY)
-    }
-
-    private func screenPosition(for pos: ButtonPosition) -> CGPoint {
-        let b = bounds
-        let x = b.minX + (b.maxX - b.minX) * pos.x
-        let y = b.minY + (b.maxY - b.minY) * pos.y
-        return CGPoint(x: x, y: y)
-    }
-
-    private func normalizedPosition(from point: CGPoint) -> ButtonPosition {
-        let b = bounds
-        let rangeX = b.maxX - b.minX
-        let rangeY = b.maxY - b.minY
-
-        var x = rangeX > 0 ? (point.x - b.minX) / rangeX : 0.5
-        var y = rangeY > 0 ? (point.y - b.minY) / rangeY : 0.5
-
-        x = max(0, min(1, x))
-        y = max(0, min(1, y))
-
-        if snapToEdges {
-            x = x < 0.5 ? 0 : 1
-        }
-
-        return ButtonPosition(x: x, y: y)
-    }
-
     public var body: some View {
-        let pos = screenPosition(for: position)
-
         content
             .frame(width: buttonSize, height: buttonSize)
             .background(
@@ -342,12 +240,12 @@ public struct FreeFloatingButton<Content: View>: View {
                     )
             )
             .scaleEffect(isDragging ? 1.15 : 1.0)
-            .position(x: pos.x + dragOffset.width, y: pos.y + dragOffset.height)
-            .gesture(dragGesture(from: pos))
+            .position(x: center.x + dragOffset.width, y: center.y + dragOffset.height)
+            .gesture(dragGesture)
             .simultaneousGesture(tapGesture)
             .simultaneousGesture(longPressGesture)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: position)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: center)
             .floatingButtonAccessibility(
                 label: a11yLabel,
                 hint: a11yHint,
@@ -358,25 +256,22 @@ public struct FreeFloatingButton<Content: View>: View {
             )
     }
 
-    private func dragGesture(from startPos: CGPoint) -> some Gesture {
+    private var dragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
                 isDragging = true
                 dragOffset = value.translation
             }
             .onEnded { value in
-                let endPoint = CGPoint(
-                    x: startPos.x + value.translation.width,
-                    y: startPos.y + value.translation.height
+                let dropped = CGPoint(
+                    x: center.x + value.translation.width,
+                    y: center.y + value.translation.height
                 )
-                let newPosition = normalizedPosition(from: endPoint)
-
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                    position = newPosition
+                    onDrop(dropped)
                     dragOffset = .zero
                     isDragging = false
                 }
-
                 HapticFeedback.light()
             }
     }
