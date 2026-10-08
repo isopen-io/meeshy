@@ -62,7 +62,8 @@ public struct RankBlasonView: View {
     private static let chiefPath = GameSVGPath.make("M14 10 h72 v15 h-72z")
     private static let ribbonPath = GameSVGPath.make("M52 140 h96 l-7 8 7 8 h-96 l7 -8z")
     private static let accent = MeeshyColors.indigo600
-    private static let edge = Color(hex: "1E1B4B")
+    /// Le liseré des pièces (`--game-edge` du web : indigo 950).
+    private static let edge = MeeshyColors.indigo950
 
     private var index: Int { rank.index }
     private var hasTenants: Bool { index >= 6 }
