@@ -190,7 +190,7 @@ const es = {
   'game.detail.elan.idle': 'No activa estos días',
   'game.detail.elan.points': 'hasta {points} por gesto',
   'game.detail.player.what': 'Es un jugador de tu grupo. Solo ves su seudónimo y sus puntos de la semana.',
-  'game.detail.fact.tier': 'Hasta el nivel 100, diez niveles forman un tramo; después, cien niveles, y Singularidad empieza en 1000. Cada tramo tiene su nombre y su color.',
+  'game.detail.fact.tier': 'Diez niveles forman un tramo hasta 100, luego cien. Singularidad desde 1000. Cada tramo tiene su color.',
   'game.detail.fact.score': 'Son los puntos que tienes. Con ellos se calcula tu nivel.',
   'game.detail.fact.level_next': 'Son los puntos que te faltan para subir un nivel.',
   'game.detail.fact.level_record': 'Es el nivel más alto que has alcanzado.',

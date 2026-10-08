@@ -188,7 +188,7 @@ const fr = {
   'game.detail.elan.idle': 'Pas active ces jours-ci',
   'game.detail.elan.points': 'jusqu’à {points} par geste',
   'game.detail.player.what': 'C’est un joueur de ton groupe. Tu ne vois que son pseudonyme et ses points de la semaine.',
-  'game.detail.fact.tier': 'Jusqu’au niveau 100, dix niveaux font un palier ; au-delà, cent niveaux, et Singularité commence à 1000. Chaque palier a son nom et sa couleur.',
+  'game.detail.fact.tier': 'Dix niveaux font un palier jusqu’à 100, puis cent. Singularité dès 1000. Chaque palier a sa couleur.',
   'game.detail.fact.score': 'Ce sont les points que tu as en poche. Ils font ton niveau.',
   'game.detail.fact.level_next': 'Ce sont les points qu’il te manque pour monter d’un niveau.',
   'game.detail.fact.level_record': 'C’est le plus haut niveau que tu as atteint.',

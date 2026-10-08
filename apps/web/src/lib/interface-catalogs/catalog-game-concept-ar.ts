@@ -190,7 +190,7 @@ const ar = {
   'game.detail.elan.idle': 'غير نشطة هذه الأيام',
   'game.detail.elan.points': 'حتى {points} لكل إجراء',
   'game.detail.player.what': 'لاعب من مجموعتك. لا ترى إلا اسمه المستعار ونقاط أسبوعه.',
-  'game.detail.fact.tier': 'حتى المستوى 100، تكوّن عشرة مستويات مرحلة؛ وبعده مئة مستوى، ويبدأ التفرد عند 1000. لكل مرحلة اسمها ولونها.',
+  'game.detail.fact.tier': 'عشرة مستويات تكوّن مرحلة حتى 100، ثم مئة. التفرد من 1000. لكل مرحلة لونها.',
   'game.detail.fact.score': 'هذه نقاطك الحالية. منها يُحسب مستواك.',
   'game.detail.fact.level_next': 'هذه النقاط التي تنقصك لتصعد مستوى.',
   'game.detail.fact.level_record': 'هذا أعلى مستوى بلغته.',
