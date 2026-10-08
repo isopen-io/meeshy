@@ -82,18 +82,26 @@ export const SECURITY_EVENT_ACTORS: Readonly<Record<string, SecurityEventActor>>
 
 type ActorTrace = {
   readonly eventType: string;
+  readonly metadata?: unknown;
   readonly ipAddress?: string | null;
   readonly userAgent?: string | null;
   readonly geoLocation?: string | null;
   readonly deviceFingerprint?: string | null;
 };
 
+/**
+ * La trace d'acteur ne vit pas que dans les colonnes : les producteurs la
+ * recopient dans `metadata` (`requestedBy`, `ipAddress`, `pendingUsername`,
+ * `claimantUserId` — audit A2-3). Un événement masqué perd donc AUSSI ses
+ * métadonnées, forme libre qu'aucun lecteur ne sait trier clé par clé.
+ */
 const masked = <T extends ActorTrace>(event: T): T => ({
   ...event,
   ipAddress: null,
   userAgent: null,
   geoLocation: null,
   ...('deviceFingerprint' in event ? { deviceFingerprint: null } : {}),
+  ...('metadata' in event ? { metadata: null } : {}),
 });
 
 /** Le titulaire voit la trace d'un acte que lui seul a pu accomplir — rien d'autre. */

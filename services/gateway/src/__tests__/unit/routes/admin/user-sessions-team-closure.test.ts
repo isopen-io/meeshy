@@ -296,3 +296,31 @@ describe('audit L2-7 — lire les sessions d’un membre exige de le surclasser 
     expect(res.statusCode).toBe(200);
   });
 });
+
+describe('audit A2-3 — la route d’administration ne sert pas la trace d’un TIERS, métadonnées comprises', () => {
+  const tiers = '198.51.100.9';
+  const rows = [
+    { id: 'e1', eventType: 'PHONE_TRANSFER_INITIATED', ipAddress: tiers, userAgent: 'x', geoLocation: 'Lyon', deviceFingerprint: null,
+      metadata: { requestedBy: '64b0000000000000000000ff', ipAddress: tiers }, createdAt: new Date() },
+    { id: 'e2', eventType: 'PHONE_TRANSFER_REGISTRATION_INITIATED', ipAddress: tiers, metadata: { pendingUsername: 'voleur', ipAddress: tiers }, createdAt: new Date() },
+    { id: 'e3', eventType: 'EMAIL_RELEASED_BY_CLAIM', ipAddress: tiers, metadata: { claimantUserId: '64b0000000000000000000fe' }, createdAt: new Date() },
+    { id: 'e4', eventType: 'UN_TYPE_JAMAIS_VU', ipAddress: tiers, metadata: { qui: 'inconnu' }, createdAt: new Date() },
+    { id: 'e5', eventType: 'PASSWORD_RESET_REQUEST', ipAddress: '203.0.113.4', metadata: { source: 'web' }, createdAt: new Date() },
+  ];
+
+  it('ni la colonne, ni metadata : rien du tiers ne sort ; un événement non prouvé garde sa trace', async () => {
+    mockPrisma.securityEvent.findMany.mockResolvedValue(rows);
+    mockPrisma.securityEvent.count.mockResolvedValue(rows.length);
+    const app = buildApp();
+    const res = await app.inject({ method: 'GET', url: '/admin/users/user123/security-events' });
+    await app.close();
+
+    const body = JSON.stringify(res.json().data);
+    expect(body).not.toContain(tiers);
+    expect(body).not.toContain('64b0000000000000000000ff');
+    expect(body).not.toContain('voleur');
+    expect(body).not.toContain('64b0000000000000000000fe');
+    expect(body).not.toContain('inconnu');
+    expect(res.json().data[4]).toMatchObject({ ipAddress: '203.0.113.4', metadata: { source: 'web' } });
+  });
+});
