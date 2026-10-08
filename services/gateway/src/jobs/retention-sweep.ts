@@ -73,16 +73,20 @@ type Paged = { readonly id: string };
 async function eachPage<T extends Paged>(
   fetch: (after: { readonly id?: { gt: string } }) => Promise<readonly T[]>,
   handle: (page: readonly T[]) => Promise<number>,
+  onTruncated: () => void,
 ): Promise<number> {
   let total = 0;
   let cursor: string | null = null;
   for (let pages = 0; pages < MAX_PAGES; pages += 1) {
     const page = await fetch(cursor === null ? {} : { id: { gt: cursor } });
-    if (page.length === 0) break;
+    if (page.length === 0) return total;
     total += await handle(page);
-    if (page.length < BATCH) break;
+    if (page.length < BATCH) return total;
     cursor = page[page.length - 1].id;
   }
+  // Le plafond est atteint sur une page PLEINE : il reste peut-être des lignes.
+  // Le compte rendu le dit, au lieu de passer pour complet (audit n°2).
+  onTruncated();
   return total;
 }
 
@@ -92,6 +96,8 @@ export function retentionPurgeArmed(env: Readonly<Record<string, string | undefi
 
 export type RetentionReport = {
   readonly applied: boolean;
+  /** Une étape a atteint son plafond de pages : le compte est un minimum, la passe suivante reprend. */
+  readonly truncated: boolean;
   readonly closedSessions: number | null;
   readonly securityEvents: number | null;
   readonly purgedAccountSecurityEvents: number | null;
@@ -134,6 +140,7 @@ async function accountsUnderProcedure(prisma: RetentionStore, now: Date): Promis
 
 const NOTHING_SWEPT = (apply: boolean): RetentionReport => ({
   applied: apply,
+  truncated: false,
   closedSessions: null,
   securityEvents: null,
   purgedAccountSecurityEvents: null,
@@ -161,6 +168,10 @@ export async function sweepRetention(
   const purgeCutoff = daysBefore(now, RETENTION.purgedAccountSecurityEventDays);
   const auditCutoff = monthsBefore(now, RETENTION.adminAuditLogMonths);
   const traceCutoff = monthsBefore(now, RETENTION.connectionTraceMonths);
+  let truncated = false;
+  const markTruncated = () => {
+    truncated = true;
+  };
 
   let held: readonly string[];
   try {
@@ -224,6 +235,7 @@ export async function sweepRetention(
         const where = { userId: { in: users.map((user) => user.id) } };
         return apply ? (await prisma.securityEvent.deleteMany({ where })).count : prisma.securityEvent.count({ where });
       },
+      markTruncated,
     ));
 
   const auditWhere = { AND: [{ createdAt: { lt: auditCutoff } }, ...spareAudit] };
@@ -276,12 +288,14 @@ export async function sweepRetention(
         });
         return erased.count;
       },
+      markTruncated,
     );
     return dated + legacy;
   });
 
   return {
     applied: apply,
+    truncated,
     closedSessions,
     securityEvents,
     purgedAccountSecurityEvents,

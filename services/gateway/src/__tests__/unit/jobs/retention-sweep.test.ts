@@ -112,6 +112,7 @@ describe('sweepRetention — désarmée', () => {
     expect(writes(prisma)).toEqual([]);
     expect(report).toEqual({
       applied: false,
+      truncated: false,
       closedSessions: 3,
       securityEvents: 5,
       purgedAccountSecurityEvents: 5,
@@ -277,3 +278,27 @@ describe('revue « evidence-destruction » — une trace visée par une procédu
   });
 });
 
+
+describe('audit n°2 — une passe tronquée le DIT', () => {
+  const many = (n: number) => Array.from({ length: n }, (_, i) => `u${String(i).padStart(5, '0')}`);
+  const world = (n: number) => {
+    const all = many(n);
+    const prisma = fakePrisma();
+    prisma.user.findMany = jest.fn(async (args: any) => {
+      if (!clause(args?.where, 'deletedAt')) return [];
+      const after: string | undefined = clause(args.where, 'id')?.gt;
+      return all.filter((id) => after === undefined || id > after).slice(0, args.take).map((id) => ({ id }));
+    }) as never;
+    return prisma;
+  };
+
+  it('au-delà du plafond d’une passe, le compte à blanc est marqué tronqué', async () => {
+    const report = await sweepRetention(world(25_000) as never, { now: NOW, apply: false });
+    expect(report.truncated).toBe(true);
+  });
+
+  it('sous le plafond, il ne l’est pas', async () => {
+    const report = await sweepRetention(world(1_200) as never, { now: NOW, apply: false });
+    expect(report.truncated).toBe(false);
+  });
+});
