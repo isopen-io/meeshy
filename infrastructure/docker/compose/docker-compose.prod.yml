@@ -191,14 +191,10 @@ services:
       retries: 5
       start_period: 60s
     labels:
-      - "traefik.enable=true"
-      # Service ML sur ml.${DOMAIN}
-      - "traefik.http.routers.translator.rule=Host(`ml.${DOMAIN:-localhost}`)"
-      - "traefik.http.routers.translator.entrypoints=websecure"
-      - "traefik.http.routers.translator.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.translator.middlewares=compress@file"
-      - "traefik.http.services.translator.loadbalancer.server.port=8000"
-      # Pas d'authentification pour ML service
+      # #9671 — aucun routage public : l'API ML servait ses routes sans authentification
+      # sur ml.<domaine>, et aucun client ne l'appelle par cette adresse (la gateway passe
+      # par translator:8000 et ZMQ, sur le réseau interne).
+      - "traefik.enable=false"
       # unhealthy déclenche un restart (#5610) — restart:unless-stopped ne
       # se déclenche que sur une SORTIE du process, jamais sur `unhealthy`.
       - "autoheal=true"
@@ -469,12 +465,9 @@ services:
       retries: 3
       start_period: 30s
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.agent.rule=Host(`agent.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.agent.entrypoints=websecure"
-      - "traefik.http.routers.agent.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.agent.middlewares=compress@file"
-      - "traefik.http.services.agent.loadbalancer.server.port=3200"
+      # #9671 — aucun routage public : agent.<domaine> répondait sans authentification,
+      # et aucun client ne l'appelle par cette adresse (accès interne seul).
+      - "traefik.enable=false"
 
   # COTURN - TURN/STUN Server for WebRTC
   coturn:

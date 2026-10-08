@@ -76,4 +76,19 @@ describe('les interfaces d\'administration Mongo/Redis ne sont plus routées pub
       );
     }
   });
+
+  describe("API ML et agent (#9671) — servis sans authentification sur ml. et agent.", () => {
+    it.each(['translator', 'agent'])("%s n'est routé par aucun routeur Traefik", (service) => {
+      const block = serviceBlock(source, service);
+      expect({
+        traefikActive: /traefik\.enable=true/.test(block),
+        routeur: /traefik\.http\.routers\./.test(block),
+        desactiveExplicitement: /"traefik\.enable=false"/.test(block),
+      }).toEqual({ traefikActive: false, routeur: false, desactiveExplicitement: true });
+    });
+
+    it("aucun service du fichier ne déclare l'hôte public ml. ni agent.", () => {
+      expect(/Host\(`(ml|agent)\./.test(source)).toBe(false);
+    });
+  });
 });
