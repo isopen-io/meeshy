@@ -49,8 +49,8 @@ enum GameFixture {
                 record: record, prestige: 0, canPrestige: GameLevels.canPrestige(level: levelState.level, prestige: 0)
             ),
             glory: GameBlock.Glory(
-                glory: standing.glory, rank: standing.rank, division: standing.division, next: standing.next,
-                gloryMissing: standing.gloryMissing, progress: standing.progress
+                glory: standing.glory, rank: standing.rank, division: standing.division, division5: standing.division5,
+                next: standing.next, gloryMissing: standing.gloryMissing, progress: standing.progress
             ),
             treasury: GameTreasury.standing(held: held),
             mint: GameMint.preview(score: score, mintedLifetime: minted, debitablePoints: debitable ?? score),

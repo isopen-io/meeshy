@@ -187,7 +187,7 @@ enum ProgressionConceptModel {
             return GameCopy.meeshes(progress.meesh?.balance ?? game?.treasury.held ?? 0)
         case .glory:
             guard let glory = game?.glory else { return "" }
-            return GameCopy.rankLabel(glory.rank, division: glory.division)
+            return GameCopy.rankLabel(glory)
         case .flame:
             return GameCopy.flameDays(game?.flame.days ?? progress.streak.currentDays)
         case .missions:
@@ -499,7 +499,7 @@ enum ProgressionConceptModel {
             let missing: String = glory.gloryMissing.map { " · " + ConceptText.chipMissing(count($0)) } ?? ""
             rows = [
                 fact(ConceptText.name(.glory), count(glory.glory), .glory),
-                glory.next.map { fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division: $0.division) + missing, .gloryMissing) },
+                glory.next.map { fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division5: $0.shownDivision) + missing, .gloryMissing) },
             ]
         case .flame:
             // La tête dit la série ; les tuiles de la fiche disent la forme et les gels.

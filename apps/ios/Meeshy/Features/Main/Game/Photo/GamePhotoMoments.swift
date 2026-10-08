@@ -13,7 +13,7 @@ import MeeshySDK
 /// qu'une division nouvelle est un moment nouveau.
 nonisolated enum PhotoEmblem: Equatable, Codable, Sendable {
     case start
-    case rank(GloryRank, GloryDivision?)
+    case rank(GloryRank, GloryDivision5?)
     case tier(LevelTierKey, level: Int)
     case levelHundred(prestige: Int)
     case meesh(number: Int, edition: MeeshEdition)
@@ -63,12 +63,12 @@ enum GamePhotoMoments {
         )
     }
 
-    static func rank(_ rank: GloryRank, division: GloryDivision?) -> PhotoMoment {
+    static func rank(_ rank: GloryRank, division: GloryDivision5?, mythic: MythicSeatRef? = nil) -> PhotoMoment {
         PhotoMoment(
             id: "rank:\(rank.rawValue):\(division?.rawValue ?? 0)",
             emblem: .rank(rank, division),
             kicker: String(localized: "game.photo.kicker.rank", defaultValue: "Nouveau rang", bundle: .main),
-            title: GameCopy.rankLabel(rank, division: division)
+            title: GameCopy.rankLabel(rank, division5: division, mythic: mythic)
         )
     }
 
@@ -144,7 +144,7 @@ enum GamePhotoMoments {
     static func fromCard(key: GuideMomentKey, game: GameBlock) -> PhotoMoment? {
         switch key {
         case .newRank:
-            return rank(game.glory.rank, division: game.glory.division)
+            return rank(game.glory.rank, division: game.glory.shownDivision, mythic: game.glory.mythicSeat)
         case .newTier:
             return tier(game.level.tier, level: tierLevel(game.level.tier))
         case .firstMint:
@@ -171,11 +171,11 @@ enum GamePhotoMoments {
         let minted = before.mint.number
 
         let divisionRose: Bool = {
-            guard let now = after.glory.division, let then = before.glory.division else { return false }
+            guard let now = after.glory.shownDivision, let then = before.glory.shownDivision else { return false }
             return now.rawValue < then.rawValue
         }()
         if (after.glory.rank != before.glory.rank || divisionRose) && after.glory.glory > before.glory.glory {
-            moments.append(rank(after.glory.rank, division: after.glory.division))
+            moments.append(rank(after.glory.rank, division: after.glory.shownDivision, mythic: after.glory.mythicSeat))
         }
         // Le Prestige a sa propre carte (le trophée numéroté) : la carte « niveau 100 » de la vague 1 ne la double pas.
         let wave2 = ofTransitionV2(from: before, to: after)

@@ -215,16 +215,22 @@ enum GameLawVectorEvaluator {
     // MARK: Gloire et trésor
 
     private static func gloryStanding(_ input: GameJSON) -> GameJSON {
-        let s = GameGlory.standing(glory: int(input, "glory"), mythic: input["mythic"].boolValue ?? false)
+        let seatJSON = input["mythicSeat"]
+        let seat = seatJSON.isNull ? nil : MythicSeatRef(number: int(seatJSON, "number"), edition: int(seatJSON, "edition"))
+        let s = GameGlory.standing(glory: int(input, "glory"), mythic: input["mythic"].boolValue ?? false, mythicSeat: seat)
         return object([
             "rank": .string(s.rank.rawValue),
             "division": .optionalInt(s.division?.rawValue),
+            "division5": .optionalInt(s.division5?.rawValue),
             "divisionMinGlory": .optionalInt(s.divisionMinGlory),
             "nextRank": .optionalString(s.next?.rank.rawValue),
             "nextDivision": .optionalInt(s.next?.division.rawValue),
+            "nextDivision5": .optionalInt(s.next?.division5?.rawValue),
             "nextMinGlory": .optionalInt(s.next?.minGlory),
             "gloryMissing": .optionalInt(s.gloryMissing),
             "progress": .number(s.progress),
+            "mythicNumber": .optionalInt(s.mythic?.number),
+            "mythicEdition": .optionalInt(s.mythic?.edition),
         ])
     }
 
@@ -386,7 +392,7 @@ enum GameLawVectorEvaluator {
         case "price-rises": return .priceRises(nextPrice: int(json, "nextPrice"))
         case "new-rank":
             guard let rank = GloryRank(rawValue: string(json, "rank")) else { throw GameLawVectorError.malformed("rang") }
-            return .newRank(rank: rank, division: optionalInt(json, "division").flatMap(GloryDivision.init(rawValue:)),
+            return .newRank(rank: rank, division: optionalInt(json, "division").flatMap(GloryDivision5.init(rawValue:)),
                             glory: int(json, "glory"), gloryMissing: optionalInt(json, "gloryMissing"))
         case "treasury-tier":
             guard let key = TreasuryTierKey(rawValue: string(json, "tier")) else { throw GameLawVectorError.malformed("trésor") }

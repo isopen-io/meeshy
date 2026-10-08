@@ -53,6 +53,24 @@ public enum GameMaterial: String, CaseIterable, Sendable, Hashable {
         }
     }
 
+    /// La couleur PLEINE d'un trait de la matière (jeton `-1` du web ; obsidienne : `-0`, prisme : `-2`) —
+    /// un dégradé en boîte englobante ne peint pas un trait horizontal (#9636).
+    var lineColor: Color {
+        switch self {
+        case .copper: Color(hex: "a5552b")
+        case .bronze: Color(hex: "8a5a24")
+        case .silver: Color(hex: "8e98a8")
+        case .gold: Color(hex: "b7791f")
+        case .platinum: Color(hex: "5b7c99")
+        case .obsidian: Color(hex: "55527a")
+        case .prism: Color(hex: "34d399")
+        case .flame: Color(hex: "f97316")
+        }
+    }
+
+    /// Les cinq couleurs du prisme, dans l'ordre (jetons `--game-prism-0…4`).
+    static var prismColors: [Color] { GamePalette.prismStops.map(\.color) }
+
     fileprivate var direction: (from: UnitPoint, to: UnitPoint) {
         self == .flame ? (.bottom, .top) : (.topLeading, .bottomTrailing)
     }

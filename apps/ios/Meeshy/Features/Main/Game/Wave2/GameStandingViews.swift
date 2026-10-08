@@ -29,7 +29,7 @@ extension GameStandingContent {
         var parts: [String] = []
         if let standing {
             parts.append(GameCopy.levelRingAccessibility(level: standing.level, tier: standing.tier))
-            parts.append(GameCopy.rankLabel(standing.rank, division: standing.division))
+            parts.append(GameCopy.rankLabel(standing))
             if let flame = standing.flame { parts.append(GameText.visitorFlame(form: GameCopy.flameFormName(flame))) }
         }
         if let tier = treasuryTier { parts.append(GameText.visitorTreasury(tier: GameCopy.treasuryName(tier))) }
@@ -54,7 +54,7 @@ struct GameStandingView: View {
                     Text(GameText.profileLevel(level: GameCopy.formatCount(standing.level), tier: GameCopy.tierName(standing.tier)))
                         .font(MeeshyFont.relative(compact ? MeeshyFont.smallSize : MeeshyFont.bodySize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
-                    Text(GameCopy.rankLabel(standing.rank, division: standing.division))
+                    Text(GameCopy.rankLabel(standing))
                         .font(MeeshyFont.relative(compact ? MeeshyFont.footnoteSize : MeeshyFont.smallSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                     if let tier = content.treasuryTier {
@@ -70,7 +70,8 @@ struct GameStandingView: View {
                         .frame(width: compact ? 18 : 22, height: compact ? 18 : 22)
                         .accessibilityHidden(true)
                 }
-                RankBlasonView(rank: standing.rank, division: standing.division, title: nil, figures: nil)
+                RankBlasonView(rank: standing.rank, division5: standing.shownDivision, level: standing.level,
+                               mythic: standing.mythic, title: nil, figures: nil)
                     .frame(width: compact ? 36 : 56, height: compact ? 34 : 52)
                     .accessibilityHidden(true)
             } else if let tier = content.treasuryTier {

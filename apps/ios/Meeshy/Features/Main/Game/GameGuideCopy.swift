@@ -131,7 +131,7 @@ enum GameGuideCopy {
                 action: action
             )
         case .newRank(let rank, let division, _, let gloryMissing):
-            let name = GameCopy.rankLabel(rank, division: division)
+            let name = GameCopy.rankLabel(rank, division5: division)
             return GuideCopy(
                 what: String(localized: "game.guide.moment.new_rank.what", defaultValue: "Nouveau rang : \(name).", bundle: .main),
                 means: String(localized: "game.guide.moment.new_rank.means", defaultValue: "Ta Gloire a passé un seuil, et elle ne redescend pas.", bundle: .main),

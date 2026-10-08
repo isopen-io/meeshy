@@ -98,26 +98,26 @@ final class GameGuideSessionTests: XCTestCase {
     func test_observe_aTransitionReplacesTheCardAfterTheOnboarding() {
         let (sut, _, _) = makeSUT()
         let seen = allOnboardingKeys()
-        sut.observe(game: GameFixture.game(score: 12_180, glory: 400, guideSeen: seen + ["first-level", "new-tier", "missions-unlocked", "treasury-tier"]), settled: true)
+        sut.observe(game: GameFixture.game(score: 12_180, glory: 1_900, guideSeen: seen + ["first-level", "new-tier", "missions-unlocked", "treasury-tier"]), settled: true)
         XCTAssertNil(sut.card)
-        sut.observe(game: GameFixture.game(score: 12_180, glory: 500, guideSeen: seen), settled: true)
+        sut.observe(game: GameFixture.game(score: 12_180, glory: 2_000, guideSeen: seen), settled: true)
         XCTAssertEqual(sut.card?.key, "new-rank")
         XCTAssertEqual(sut.card?.presentation, .full)
     }
 
     func test_observe_aTransitionDoesNotInterruptTheOnboarding() {
         let (sut, _, _) = makeSUT()
-        sut.observe(game: GameFixture.game(glory: 1_490), settled: true)
-        sut.observe(game: GameFixture.game(glory: 1_590), settled: true)
+        sut.observe(game: GameFixture.game(glory: 5_990), settled: true)
+        sut.observe(game: GameFixture.game(glory: 6_090), settled: true)
         XCTAssertEqual(sut.card?.key, "onboarding.welcome")
     }
 
     func test_observe_aRefusedGesture_whoseStateWasRestored_leavesNoCard() {
         let (sut, _, _) = makeSUT()
         let seen = allOnboardingKeys()
-        let calm = GameFixture.game(score: 12_180, glory: 400, guideSeen: seen + ["first-level", "new-tier", "missions-unlocked", "treasury-tier"])
+        let calm = GameFixture.game(score: 12_180, glory: 1_900, guideSeen: seen + ["first-level", "new-tier", "missions-unlocked", "treasury-tier"])
         sut.observe(game: calm, settled: true)
-        sut.observe(game: GameFixture.game(score: 12_180, glory: 500, guideSeen: seen), settled: false)
+        sut.observe(game: GameFixture.game(score: 12_180, glory: 2_000, guideSeen: seen), settled: false)
         sut.observe(game: calm, settled: true)
         XCTAssertNil(sut.card)
     }

@@ -36,7 +36,7 @@ enum PlayerBannerCopy {
             : [banner.showsScore ? GameText.bannerPoints(points: GameCopy.formatCount(banner.score)) : nil]
         let parts: [String?] = levelParts + [
             banner.meeshes.map { GameCopy.meeshes($0) },
-            banner.rank.map { GameCopy.rankLabel($0.rank, division: $0.division) },
+            banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) },
             banner.league.map {
                 GameText.bannerLeague(league: GameText.leagueName($0.league), place: GameText.bannerPlace(count: $0.place))
             },

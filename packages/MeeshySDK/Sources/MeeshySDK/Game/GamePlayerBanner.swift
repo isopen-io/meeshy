@@ -23,12 +23,15 @@ public struct GamePlayerBanner: Equatable, Sendable {
 
     public struct Rank: Equatable, Sendable {
         public let rank: GloryRank
-        /// `nil` pour Mythe.
-        public let division: GloryDivision?
+        /// V (5) à I (1) — `nil` pour Mythe.
+        public let division: GloryDivision5?
+        /// La place du Mythe (son numéro se dit : « Mythe n° 42 »).
+        public let mythic: MythicSeatRef?
 
-        public init(rank: GloryRank, division: GloryDivision?) {
+        public init(rank: GloryRank, division: GloryDivision5?, mythic: MythicSeatRef? = nil) {
             self.rank = rank
             self.division = division
+            self.mythic = mythic
         }
     }
 
@@ -96,7 +99,7 @@ public struct GamePlayerBanner: Equatable, Sendable {
         self.nextLevel = atTop ? nil : level.level + 1
         self.pointsToNext = atTop ? nil : level.pointsToNext
         self.meeshes = game.treasury.held > 0 ? game.treasury.held : nil
-        self.rank = game.glory.glory > 0 ? Rank(rank: game.glory.rank, division: game.glory.division) : nil
+        self.rank = game.glory.glory > 0 ? Rank(rank: game.glory.rank, division: game.glory.shownDivision, mythic: game.glory.mythicSeat) : nil
         if let league = game.league, league.access == .open, let current = league.current {
             self.league = League(league: current.league, place: current.rank)
         } else {

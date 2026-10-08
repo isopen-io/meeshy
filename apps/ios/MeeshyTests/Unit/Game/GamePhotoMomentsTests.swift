@@ -21,9 +21,9 @@ final class GamePhotoMomentsTests: XCTestCase {
     }
 
     func test_transition_aRankGainedWithMoreGlory_proposesThePhoto() {
-        let before = GameFixture.game(glory: 1_490)
-        let after = GameFixture.game(glory: 1_590)
-        XCTAssertEqual(ids(GamePhotoMoments.ofTransition(from: before, to: after)), ["rank:voix:3"])
+        let before = GameFixture.game(glory: 5_990)
+        let after = GameFixture.game(glory: 6_090)
+        XCTAssertEqual(ids(GamePhotoMoments.ofTransition(from: before, to: after)), ["rank:voix:5"])
     }
 
     func test_transition_theTenthMint_proposesThePhoto_butTheSecondDoesNot() {

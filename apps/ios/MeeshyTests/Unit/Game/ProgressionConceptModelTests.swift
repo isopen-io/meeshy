@@ -104,7 +104,7 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(value(.level), GameText.bannerLevel(level: GameCopy.formatCount(game.level.level)))
         XCTAssertEqual(value(.points), GameCopy.points(game.level.score))
         XCTAssertEqual(value(.meesh), GameCopy.meeshes(served.meesh?.balance ?? -1))
-        XCTAssertEqual(value(.glory), GameCopy.rankLabel(game.glory.rank, division: game.glory.division))
+        XCTAssertEqual(value(.glory), GameCopy.rankLabel(game.glory))
         XCTAssertEqual(value(.flame), GameCopy.days(game.flame.days))
         XCTAssertEqual(value(.missions), ConceptText.ratio("0", "3"))
         XCTAssertEqual(value(.badges), ConceptText.ratio(GameCopy.formatCount(served.badgesEarned), GameCopy.formatCount(served.badgesTotal)))

@@ -93,7 +93,7 @@ struct GamePlayerBannerTests {
     func treasuryAndRank() throws {
         let banner = GamePlayerBanner(game: try block())
         #expect(banner.meeshes == 9)
-        #expect(banner.rank == GamePlayerBanner.Rank(rank: .voix, division: .iii))
+        #expect(banner.rank == GamePlayerBanner.Rank(rank: .voix, division: .v))
     }
 
     @Test("Mythe n'a pas de division")

@@ -153,7 +153,7 @@ public struct DrawnMission: Sendable, Equatable {
     public let target: Int
     /// Points crédités à la validation, bonus de Flamme compris.
     public let reward: Int
-    /// Gloire de la mission : `GameMissions.glory(of:)`, lue dans `GameGlory.points`.
+    /// Gloire de la mission : `GameGlory.missionGlory(_:)`, selon la difficulté.
     public let glory: Int
 
     public init(difficulty: MissionDifficulty, templateKey: String, signal: MissionSignal, prism: Bool,
@@ -321,9 +321,9 @@ public enum GameMissions {
         )
     }
 
-    /// La Gloire d'un défi : l'Or et « faire connaître » en portent ; le montant se lit dans `GameGlory.points`.
+    /// La Gloire d'un défi : celle de sa difficulté (`GameGlory.missionGlory`, 40 / 100 / 250 / 500).
     public static func glory(of template: MissionTemplate) -> Int {
-        template.difficulty == .gold || template.goal == .reach ? GameGlory.points.goldMission : 0
+        GameGlory.missionGlory(template.difficulty)
     }
 
     /// Un tirage pondéré : une valeur du générateur ; à poids égaux, le même indice que `pickIndex`.

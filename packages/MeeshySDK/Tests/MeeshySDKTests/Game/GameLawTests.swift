@@ -115,7 +115,7 @@ struct GameLawTests {
         #expect(preview.gloryGained == 0)
     }
 
-    @Test("une frappe possible coûte des niveaux et rapporte 100 de Gloire")
+    @Test("une frappe possible coûte des niveaux et rapporte 1 000 de Gloire")
     func previewWithEnoughPoints() {
         let preview = GameMint.preview(score: 12_180, mintedLifetime: 12, debitablePoints: 12_180)
         #expect(preview.canMint)
@@ -123,35 +123,57 @@ struct GameLawTests {
         #expect(preview.price == 1294)
         #expect(preview.levelsLost == preview.levelBefore - preview.levelAfter)
         #expect(preview.levelsLost > 0)
-        #expect(preview.gloryGained == 100)
+        #expect(preview.gloryGained == 1000)
     }
 
     // MARK: Gloire
 
-    @Test("la Gloire se coupe en tiers égaux et Légende avance par 40 000")
+    @Test("chaque rang se coupe en cinq divisions égales, V au départ, I avant le rang suivant")
     func divisionBoundaries() {
-        let murmure = GameGlory.steps.filter { $0.rank == .murmure }.map(\.minGlory)
-        #expect(murmure == [0, 166, 333])
+        let echo = GameGlory.steps.filter { $0.rank == .echo }
+        #expect(echo.map(\.minGlory) == [2000, 2800, 3600, 4400, 5200])
+        #expect(echo.map(\.division5) == [.v, .iv, .iii, .ii, .i])
+        #expect(echo.map(\.division) == [.iii, .iii, .ii, .ii, .i])
         let legende = GameGlory.steps.filter { $0.rank == .legende }.map(\.minGlory)
-        #expect(legende == [80_000, 120_000, 160_000])
-        #expect(GameGlory.steps.count == 30)
+        #expect(legende == [600_000, 680_000, 760_000, 840_000, 920_000])
+        #expect(GameGlory.steps.count == 50)
     }
 
-    @Test("Légende I n'a plus de suite")
+    @Test("à chaque seuil de rang, on entre en division V ; un point avant, on était en I du rang d'avant")
+    func everyRankThresholdOpensDivisionV() {
+        for (index, rank) in GloryRank.ladder.enumerated() {
+            let start = rank.minGlory ?? 0
+            let at = GameGlory.standing(glory: start, mythic: false)
+            #expect(at.rank == rank && at.division5 == .v)
+            guard index > 0 else { continue }
+            let before = GameGlory.standing(glory: start - 1, mythic: false)
+            #expect(before.rank == GloryRank.ladder[index - 1] && before.division5 == .i)
+        }
+    }
+
+    @Test("au-delà du million sans place, on reste Légende I, sans suite")
     func legendTopHasNoNext() {
-        let s = GameGlory.standing(glory: 900_000, mythic: false)
+        let s = GameGlory.standing(glory: 1_200_000, mythic: false)
         #expect(s.rank == .legende)
+        #expect(s.division5 == .i)
         #expect(s.division == .i)
         #expect(s.next == nil)
         #expect(s.gloryMissing == nil)
         #expect(s.progress == 1)
     }
 
-    @Test("Mythe est un drapeau du serveur, refusé sous Légende")
-    func mythicNeedsLegend() {
-        #expect(GameGlory.standing(glory: 200_000, mythic: true).rank == .mythe)
-        #expect(GameGlory.standing(glory: 200_000, mythic: true).division == nil)
-        #expect(GameGlory.standing(glory: 3000, mythic: true).rank == .voix)
+    @Test("Mythe vient du serveur et ne se perd pas ; une place hors de 1–100 est ignorée")
+    func mythicComesFromTheServer() {
+        let seat = GameGlory.standing(glory: 3000, mythic: false, mythicSeat: MythicSeatRef(number: 42, edition: 137))
+        #expect(seat.rank == .mythe && seat.division5 == nil && seat.mythic == MythicSeatRef(number: 42, edition: 137))
+        #expect(GameGlory.standing(glory: 3000, mythic: true).rank == .mythe)
+        let refused = GameGlory.standing(glory: 1_000_000, mythic: false, mythicSeat: MythicSeatRef(number: 101, edition: 1))
+        #expect(refused.rank == .legende && refused.division5 == .i && refused.mythic == nil)
+    }
+
+    @Test("la Gloire des missions suit la difficulté : 40 / 100 / 250 / 500")
+    func missionGloryByDifficulty() {
+        #expect(MissionDifficulty.allCases.map(GameGlory.missionGlory) == [40, 100, 250, 500])
     }
 
     @Test("les records de Flamme ne paient qu'une fois chacun")
@@ -297,7 +319,7 @@ struct GameLawTests {
 
         let gold = GameMissions.draw(MissionDrawInput(userId: "u1", dayKey: "2026-10-05", level: 50, flameDays: 5, treasury: 0))
         #expect(gold.missions.map(\.difficulty) == [.easy, .medium, .gold])
-        #expect(gold.missions.last?.glory == 40)
+        #expect(gold.missions.last?.glory == 500)
 
         let rich = GameMissions.draw(MissionDrawInput(userId: "u1", dayKey: "2026-10-05", level: 12, flameDays: 5, treasury: 50))
         #expect(rich.missions.last?.difficulty == .gold)
@@ -316,7 +338,7 @@ struct GameLawTests {
         let gold = GameMissions.catalog(for: .gold)
         #expect(gold.allSatisfy { $0.difficulty == .gold && $0.basePoints == 320 })
         #expect(GameMissions.catalog(for: .hard).allSatisfy { hard in gold.contains { $0.key == hard.key } })
-        #expect(GameMissions.templates.filter { $0.goal == .reach }.allSatisfy { GameMissions.glory(of: $0) == GameGlory.points.goldMission })
+        #expect(GameMissions.templates.allSatisfy { GameMissions.glory(of: $0) == GameGlory.missionGlory($0.difficulty) })
     }
 
     @Test("un signal impossible pour ce compte n'est jamais tiré")
@@ -403,7 +425,7 @@ struct GameLawTests {
     func oneCardPerOpening() {
         let events: [GuideEvent] = [
             .firstLevel(level: 2, pointsToNext: 50),
-            .newRank(rank: .voix, division: .ii, glory: 2200, gloryMissing: 634),
+            .newRank(rank: .voix, division: .ii, glory: 9600, gloryMissing: 1800),
             .flameAtRisk(days: 12),
         ]
         #expect(GameGuide.chooseMoment(events: events, seen: [String]())?.key == .newRank)

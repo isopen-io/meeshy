@@ -13,7 +13,7 @@ import MeeshySDK
 
 extension GameLawVectorEvaluator {
 
-    /// Les quarante-quatre lois de la vague 2 — la liste que `GameLawVectorTests` exige.
+    /// Les quarante-six lois de la vague 2 — la liste que `GameLawVectorTests` exige.
     static let wave2Laws: [String] = [
         "league-week", "league-week-points", "league-access", "league-pseudonym", "league-pseudonym-draw",
         "league-pseudonym-check", "league-snapshot", "league-groups", "league-settle", "league-friends",
@@ -21,7 +21,7 @@ extension GameLawVectorEvaluator {
         "season-calendar", "season-at", "season-progress", "season-reward", "season-claim", "season-settlement",
         "season-stars", "season-seal", "trophy-key", "trophy-parse", "trophy-flame", "showcase-order",
         "showcase-view", "showcase-cap", "trophy-month", "atlas", "atlas-language", "prestige", "rarity",
-        "rarity-display", "mythic", "badge-tier", "badge-served", "guide-v2", "guide-choose", "photo-moment",
+        "rarity-display", "mythic-seats", "mythic-crossing", "mythic-signature", "badge-tier", "badge-served", "guide-v2", "guide-choose", "photo-moment",
         "trophy-visitor-key", "showcase-visitor",
     ]
 
@@ -64,7 +64,9 @@ extension GameLawVectorEvaluator {
         case "rarity": return rarity(input)
         case "rarity-display":
             return object(["displayable": .bool(GameRarity.isShareDisplayable(holders: int(input, "holders"), population: int(input, "population")))])
-        case "mythic": return mythic(input)
+        case "mythic-seats": return mythicSeats(input)
+        case "mythic-crossing": return mythicCrossing(input)
+        case "mythic-signature": return mythicSignature(input)
         case "badge-tier": return badgeTier(input)
         case "badge-served":
             let served = GameBadgeTiers.servedThresholds(knowsExtendedTiers: input["knowsExtendedTiers"].boolValue ?? false)
@@ -471,9 +473,40 @@ extension GameLawVectorEvaluator {
         ])
     }
 
-    private static func mythic(_ input: GameJSON) -> GameJSON {
-        let candidates = input["candidates"].arrayValue.map { (userId: string($0, "userId"), glory: int($0, "glory")) }
-        return object(["ids": .array(GameRarity.mythicUserIds(candidates).map(GameJSON.string))])
+    private static func mythicSeats(_ input: GameJSON) -> GameJSON {
+        let arrivals = input["arrivals"].arrayValue.map {
+            MythicArrival(userId: string($0, "userId"), glory: int($0, "glory"), crossedAt: string($0, "crossedAt"))
+        }
+        let grants = GameMythe.assignSeats(taken: input["taken"].arrayValue.compactMap(\.intValue),
+                                           seated: input["seated"].arrayValue.compactMap(\.stringValue), arrivals: arrivals)
+        return object(["grants": .array(grants.map { object(["userId": .string($0.userId), "number": .int($0.number)]) })])
+    }
+
+    private static func mythicCrossing(_ input: GameJSON) -> GameJSON {
+        let gains = input["gains"].arrayValue.map { GloryGain(delta: int($0, "delta"), createdAt: string($0, "createdAt")) }
+        return object(["crossedAt": .optionalString(GameMythe.crossedAt(gains))])
+    }
+
+    private static func mythicSignature(_ input: GameJSON) -> GameJSON {
+        guard let design = GameMythe.signature(edition: int(input, "edition")) else { return object(["signature": .null]) }
+        func line(_ ray: MythicSignatureLine) -> GameJSON {
+            object(["x1": .number(ray.x1), "y1": .number(ray.y1), "x2": .number(ray.x2), "y2": .number(ray.y2)])
+        }
+        return object(["signature": object([
+            "edition": .int(design.edition),
+            "hue": .int(design.hue),
+            "halo": object(["cx": .number(design.halo.cx), "cy": .number(design.halo.cy), "inner": .number(design.halo.inner),
+                            "outer": .number(design.halo.outer), "strokeWidth": .number(design.halo.strokeWidth)]),
+            "rays": .array(design.rays.map(line)),
+            "gem": object(["cx": .number(design.gem.cx), "cy": .number(design.gem.cy), "r": .number(design.gem.r),
+                           "orbit": .number(design.gem.orbit), "angle": .number(design.gem.angle)]),
+            "beads": .array(design.beads.map {
+                object(["cx": .number($0.cx), "cy": .number($0.cy), "r": .number($0.r), "slot": .int($0.slot)])
+            }),
+            "numeral": .string(design.numeral),
+            "engraving": object(["x": .number(design.engraving.x), "y": .number(design.engraving.y),
+                                 "size": .number(design.engraving.size)]),
+        ])])
     }
 
     private static func badgeTier(_ input: GameJSON) -> GameJSON {

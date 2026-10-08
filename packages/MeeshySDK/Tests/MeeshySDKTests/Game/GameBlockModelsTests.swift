@@ -16,7 +16,8 @@ struct GameBlockModelsTests {
         #expect(block.level.nextThreshold == 12_250)
         #expect(block.glory.rank == .voix)
         #expect(block.glory.division == .iii)
-        #expect(block.glory.next == GloryStep(rank: .voix, division: .ii, minGlory: 2166))
+        #expect(block.glory.division5 == .v)
+        #expect(block.glory.next == GloryStep(rank: .voix, division: .iii, division5: .iv, minGlory: 7800))
         #expect(block.treasury.tier == .bourse)
         #expect(block.treasury.next?.key == .escarcelle)
         #expect(block.mint.number == 13)
@@ -55,6 +56,29 @@ struct GameBlockModelsTests {
         #expect(GameBlock.parse(GameBlockFixture.withoutFlame) == nil)
         #expect(GameBlock.parse(Data("{}".utf8)) == nil)
         #expect(GameBlock.parse(Data("n'importe quoi".utf8)) == nil)
+    }
+
+    @Test("un ancien serveur sans division5 : la division héritée se relit telle quelle, aucune place")
+    func oldServerFallsBackToTheLegacyDivision() throws {
+        let patched = GameBlockFixture.json.replacingOccurrences(of: #""division":3,"division5":5,"#, with: #""division":2,"#)
+        let block = try #require(GameBlock.parse(Data(patched.utf8)))
+        #expect(block.glory.division5 == nil)
+        #expect(block.glory.shownDivision == .ii)
+        #expect(block.glory.mythicSeat == nil)
+    }
+
+    @Test("le Mythe servi porte sa place et son émission ; une place illisible se tait sans faire tomber le bloc")
+    func mythicSeatIsReadOrSilenced() throws {
+        let mythe = #""glory":{"glory":1000000,"rank":"mythe","division":null,"division5":null,"next":null,"gloryMissing":null,"progress":1,"mythic":{"number":42,"edition":57}}"#
+        let served = GameBlockFixture.json.replacingOccurrences(
+            of: #""glory":{"glory":7000,"rank":"voix","division":3,"division5":5,"next":{"rank":"voix","division":3,"division5":4,"minGlory":7800},"gloryMissing":800,"progress":0.5555555555555556}"#,
+            with: mythe)
+        let block = try #require(GameBlock.parse(Data(served.utf8)))
+        #expect(block.glory.mythicSeat == MythicSeatRef(number: 42, edition: 57))
+        #expect(block.glory.shownDivision == nil)
+        let broken = served.replacingOccurrences(of: #""mythic":{"number":42,"edition":57}"#, with: #""mythic":{"number":42}"#)
+        let tolerant = try #require(GameBlock.parse(Data(broken.utf8)))
+        #expect(tolerant.glory.rank == .mythe && tolerant.glory.mythicSeat == nil)
     }
 
     @Test("une clé en plus, ajoutée par un serveur plus récent, est ignorée")

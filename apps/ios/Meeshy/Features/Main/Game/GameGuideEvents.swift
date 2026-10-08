@@ -32,9 +32,10 @@ enum GameGuideEvents {
         return TreasuryTierKey.allCases.firstIndex(of: tier) ?? -1
     }
 
-    /// Un ordre total des (rang, division) : une division gagnée est une marche, un rang aussi.
+    /// Un ordre total des (rang, division V–I) : une division gagnée est une marche, un rang aussi —
+    /// V → IV compte, même quand la projection héritée reste à III (#9636).
     static func standingOrder(_ game: GameBlock) -> Int {
-        game.glory.rank.index * 4 + (game.glory.division.map { 3 - $0.rawValue } ?? 3)
+        game.glory.rank.index * 6 + (game.glory.shownDivision.map { 5 - $0.rawValue } ?? 5)
     }
 
     /// Une marche GAGNÉE — jamais la marche retrouvée quand un geste refusé restaure la lecture d'avant.
@@ -48,7 +49,7 @@ enum GameGuideEvents {
     }
 
     private static func rankEvent(_ game: GameBlock) -> GuideEvent {
-        .newRank(rank: game.glory.rank, division: game.glory.division, glory: game.glory.glory,
+        .newRank(rank: game.glory.rank, division: game.glory.shownDivision, glory: game.glory.glory,
                  gloryMissing: game.glory.gloryMissing)
     }
 

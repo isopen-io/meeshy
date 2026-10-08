@@ -39,20 +39,27 @@ public struct GameStanding: Codable, Sendable, Equatable {
     /// La FORME de la Flamme, jamais ses jours. `nil` : pas de Flamme allumée, ou une forme que ce client ne connaît pas.
     public let flame: FlameFormKey?
     public let rank: GloryRank
-    /// `nil` pour Mythe.
+    /// Projection héritée (1–3), `nil` pour Mythe.
     public let division: GloryDivision?
+    /// V (5) à I (1) — absente d'un ancien serveur (#9636).
+    public let division5: GloryDivision5?
+    /// La place du Mythe et son émission (#9636).
+    public let mythic: MythicSeatRef?
 
-    public init(level: Int, tier: LevelTierKey, prestige: Int, flame: FlameFormKey?, rank: GloryRank, division: GloryDivision?) {
+    public init(level: Int, tier: LevelTierKey, prestige: Int, flame: FlameFormKey?, rank: GloryRank, division: GloryDivision?,
+                division5: GloryDivision5? = nil, mythic: MythicSeatRef? = nil) {
         self.level = level
         self.tier = tier
         self.prestige = prestige
         self.flame = flame
         self.rank = rank
         self.division = division
+        self.division5 = division5
+        self.mythic = mythic
     }
 
     private enum CodingKeys: String, CodingKey {
-        case level, tier, prestige, flame, rank, division
+        case level, tier, prestige, flame, rank, division, division5, mythic
     }
 
     public init(from decoder: Decoder) throws {
@@ -64,6 +71,13 @@ public struct GameStanding: Codable, Sendable, Equatable {
         flame = (try? container.decodeIfPresent(FlameFormKey.self, forKey: .flame)) ?? nil
         rank = try container.decode(GloryRank.self, forKey: .rank)
         division = (try? container.decodeIfPresent(GloryDivision.self, forKey: .division)) ?? nil
+        division5 = (try? container.decodeIfPresent(GloryDivision5.self, forKey: .division5)) ?? nil
+        mythic = ((try? container.decodeIfPresent(MythicSeatRef.self, forKey: .mythic)) ?? nil).flatMap { $0.isValid ? $0 : nil }
+    }
+
+    /// La division à montrer : `division5` servie, sinon la division héritée relue (ancien serveur).
+    public var shownDivision: GloryDivision5? {
+        division5 ?? division.map(GloryDivision5.init(legacy:))
     }
 }
 

@@ -40,7 +40,7 @@ struct ProgressionConceptEmblem: View {
             MeeshCoinView(face: .obverse, edition: game?.mint.edition ?? .silver, figures: nil)
         case .glory:
             if let glory = game?.glory {
-                RankBlasonView(rank: glory.rank, division: glory.division)
+                RankBlasonView(rank: glory.rank, division5: glory.shownDivision, level: game?.level.level, mythic: glory.mythicSeat)
             } else {
                 signature(.engraved, MeeshyColors.brandPrimary)
             }

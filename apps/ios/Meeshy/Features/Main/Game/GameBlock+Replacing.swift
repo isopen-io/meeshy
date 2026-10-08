@@ -50,14 +50,16 @@ extension GameBlock.Level {
 
 extension GameBlock.Glory {
     func atGlory(_ newGlory: Int) -> GameBlock.Glory {
-        let standing = GameGlory.standing(glory: newGlory, mythic: rank == .mythe)
+        let standing = GameGlory.standing(glory: newGlory, mythic: rank == .mythe, mythicSeat: mythicSeat)
         return GameBlock.Glory(
             glory: standing.glory,
             rank: standing.rank,
             division: standing.division,
+            division5: standing.division5,
             next: standing.next,
             gloryMissing: standing.gloryMissing,
-            progress: standing.progress
+            progress: standing.progress,
+            mythic: rank == .mythe ? mythic : nil
         )
     }
 }

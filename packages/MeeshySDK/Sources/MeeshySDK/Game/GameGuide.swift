@@ -115,7 +115,7 @@ public enum GuideEvent: Sendable, Equatable {
     case firstMint(levelBefore: Int, levelAfter: Int, tailwindUntilLevel: Int)
     case badgeExtinguished(missingActions: Int)
     case priceRises(nextPrice: Int)
-    case newRank(rank: GloryRank, division: GloryDivision?, glory: Int, gloryMissing: Int?)
+    case newRank(rank: GloryRank, division: GloryDivision5?, glory: Int, gloryMissing: Int?)
     case treasuryTier(tier: TreasuryTierKey, nextTierMissing: Int?)
     case flameAtRisk(days: Int)
     case flameOut(lostDays: Int, relightPrice: Int, canRelight: Bool)

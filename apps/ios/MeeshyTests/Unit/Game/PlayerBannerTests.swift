@@ -92,7 +92,7 @@ final class PlayerBannerTests: XCTestCase {
             GameText.bannerLevel(level: GameCopy.formatCount(banner.level)),
             GameCopy.tierName(banner.tier),
             GameCopy.meeshes(banner.meeshes ?? 0),
-            GameCopy.rankLabel(banner.rank?.rank ?? .murmure, division: banner.rank?.division),
+            GameCopy.rankLabel(banner.rank?.rank ?? .murmure, division5: banner.rank?.division, mythic: banner.rank?.mythic),
             GameText.leagueName(banner.league?.league ?? .quartz),
             GameCopy.days(banner.flame?.days ?? 0),
         ]

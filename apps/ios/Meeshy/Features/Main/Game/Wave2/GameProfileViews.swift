@@ -57,7 +57,7 @@ struct GameProfileOwnCard: View {
                 Text(GameText.profileLevel(level: GameCopy.formatCount(game.level.level), tier: GameCopy.tierName(game.level.tier)))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                     .foregroundColor(theme.textPrimary)
-                Text(GameCopy.rankLabel(game.glory.rank, division: game.glory.division))
+                Text(GameCopy.rankLabel(game.glory))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                 Text(GameText.profileGlory(glory: GameCopy.formatCount(game.glory.glory)))
@@ -65,7 +65,8 @@ struct GameProfileOwnCard: View {
                     .foregroundColor(theme.textMuted)
             }
             Spacer(minLength: 0)
-            RankBlasonView(rank: game.glory.rank, division: game.glory.division, title: GameCopy.rankName(game.glory.rank), figures: nil)
+            RankBlasonView(rank: game.glory.rank, division5: game.glory.shownDivision, level: game.level.level,
+                           mythic: game.glory.mythicSeat, title: GameCopy.rankName(game.glory.rank), figures: nil)
                 .frame(width: 64, height: 60)
         }
         .accessibilityElement(children: .combine)

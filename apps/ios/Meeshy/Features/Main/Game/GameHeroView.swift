@@ -224,12 +224,12 @@ struct GameHeroView: View {
     private var rankRow: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
             RankBlasonStage(
-                rank: glory.rank, division: glory.division, title: GameCopy.rankName(glory.rank),
-                play: playRank, accessibilityLabel: nil
+                rank: glory.rank, division: glory.shownDivision, level: level.level, mythic: glory.mythicSeat,
+                title: GameCopy.rankName(glory.rank), play: playRank, accessibilityLabel: nil
             )
             .frame(width: 64, height: 59)
             VStack(alignment: .leading, spacing: 2) {
-                Text(GameCopy.rankLabel(glory.rank, division: glory.division))
+                Text(GameCopy.rankLabel(glory))
                     .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                 Text(String(localized: "game.rank.glory", defaultValue: "Gloire \(GameCopy.formatCount(glory.glory))", bundle: .main))

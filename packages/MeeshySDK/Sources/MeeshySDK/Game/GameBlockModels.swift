@@ -46,20 +46,54 @@ public struct GameBlock: Codable, Sendable, Equatable {
     public struct Glory: Codable, Sendable, Equatable {
         public let glory: Int
         public let rank: GloryRank
-        /// `nil` pour Mythe.
+        /// Projection héritée (1–3), `nil` pour Mythe — la seule que lisent les clients publiés.
         public let division: GloryDivision?
+        /// V (5) à I (1), `nil` pour Mythe ou devant un ancien serveur (#9636).
+        public let division5: GloryDivision5?
         public let next: GloryStep?
         public let gloryMissing: Int?
         public let progress: Double
+        /// La place du Mythe et son émission, quand le serveur les sert (#9636).
+        public let mythic: MythicSeatRef?
 
-        public init(glory: Int, rank: GloryRank, division: GloryDivision?, next: GloryStep?,
-                    gloryMissing: Int?, progress: Double) {
+        public init(glory: Int, rank: GloryRank, division: GloryDivision?, division5: GloryDivision5? = nil,
+                    next: GloryStep?, gloryMissing: Int?, progress: Double, mythic: MythicSeatRef? = nil) {
             self.glory = glory
             self.rank = rank
             self.division = division
+            self.division5 = division5
             self.next = next
             self.gloryMissing = gloryMissing
             self.progress = progress
+            self.mythic = mythic
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case glory, rank, division, division5, next, gloryMissing, progress, mythic
+        }
+
+        /// Les deux champs neufs (#9636) sont OPTIONNELS et tolérés : illisibles, ils se taisent
+        /// (division héritée, pas de place) sans faire tomber le bloc du jeu.
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            glory = try container.decode(Int.self, forKey: .glory)
+            rank = try container.decode(GloryRank.self, forKey: .rank)
+            division = try container.decodeIfPresent(GloryDivision.self, forKey: .division)
+            division5 = (try? container.decodeIfPresent(GloryDivision5.self, forKey: .division5)) ?? nil
+            next = try container.decodeIfPresent(GloryStep.self, forKey: .next)
+            gloryMissing = try container.decodeIfPresent(Int.self, forKey: .gloryMissing)
+            progress = try container.decode(Double.self, forKey: .progress)
+            mythic = ((try? container.decodeIfPresent(MythicSeatRef.self, forKey: .mythic)) ?? nil).flatMap { $0.isValid ? $0 : nil }
+        }
+
+        /// La division à montrer : `division5` servie, sinon la division héritée relue (ancien serveur).
+        public var shownDivision: GloryDivision5? {
+            division5 ?? division.map(GloryDivision5.init(legacy:))
+        }
+
+        /// La place du Mythe, seulement quand le rang servi EST le Mythe et la place lisible.
+        public var mythicSeat: MythicSeatRef? {
+            rank == .mythe ? mythic.flatMap { $0.isValid ? $0 : nil } : nil
         }
     }
 

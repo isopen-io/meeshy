@@ -41,7 +41,7 @@ struct GameMintPreviewView: View {
     }
 
     private var rankChanges: Bool {
-        afterStanding.rank != game.glory.rank || afterStanding.division != game.glory.division
+        afterStanding.rank != game.glory.rank || afterStanding.division5 != game.glory.shownDivision
     }
 
     var body: some View {
@@ -148,7 +148,7 @@ struct GameMintPreviewView: View {
             )
             if rankChanges {
                 GameChip(
-                    text: "\(GameCopy.rankLabel(game.glory.rank, division: game.glory.division)) → \(GameCopy.rankLabel(afterStanding.rank, division: afterStanding.division))",
+                    text: "\(GameCopy.rankLabel(game.glory)) → \(GameCopy.rankLabel(afterStanding.rank, division5: afterStanding.division5))",
                     tint: MeeshyColors.success
                 )
             }

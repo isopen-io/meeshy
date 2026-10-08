@@ -50,8 +50,8 @@ final class GameGuideEventsTests: XCTestCase {
     }
 
     func test_transitions_aNewRank_isToldWithTheGloryStillMissing() {
-        let before = GameFixture.game(glory: 1_490)
-        let after = GameFixture.game(glory: 1_590)
+        let before = GameFixture.game(glory: 5_990)
+        let after = GameFixture.game(glory: 6_090)
         let events = GameGuideEvents.transitions(from: before, to: after)
         XCTAssertEqual(keys(events), [.newRank])
     }
@@ -104,13 +104,21 @@ final class GameGuideEventsTests: XCTestCase {
     /// L'écu ne MONTE que sur une marche gagnée : une frappe refusée restaure la Gloire
     /// d'avant, et la division retrouvée n'est pas une promotion à célébrer.
     func test_rankClimbed_onlyForAStepUp_neverForTheStepRestoredAfterARefusal() {
-        let voixIII = GameFixture.game(glory: 1_500)
-        let voixII = GameFixture.game(glory: 2_200)
-        let mythe = GameFixture.game(glory: 90_000, mythic: true)
-        let legende = GameFixture.game(glory: 90_000)
+        let voixIII = GameFixture.game(glory: 9_600)
+        let voixII = GameFixture.game(glory: 11_400)
+        let mythe = GameFixture.game(glory: 1_000_000, mythic: true)
+        let legende = GameFixture.game(glory: 1_000_000)
         XCTAssertTrue(GameGuideEvents.rankClimbed(from: voixIII, to: voixII))
         XCTAssertFalse(GameGuideEvents.rankClimbed(from: voixII, to: voixIII))
         XCTAssertFalse(GameGuideEvents.rankClimbed(from: voixII, to: voixII))
         XCTAssertTrue(GameGuideEvents.rankClimbed(from: legende, to: mythe))
+    }
+
+    /// V → IV est une division GAGNÉE, même quand la projection héritée reste à III (#9636).
+    func test_rankClimbed_fromVToIV_countsEvenThoughTheLegacyDivisionStaysIII() {
+        let voixV = GameFixture.game(glory: 6_000)
+        let voixIV = GameFixture.game(glory: 7_800)
+        XCTAssertEqual(voixV.glory.division, voixIV.glory.division)
+        XCTAssertTrue(GameGuideEvents.rankClimbed(from: voixV, to: voixIV))
     }
 }

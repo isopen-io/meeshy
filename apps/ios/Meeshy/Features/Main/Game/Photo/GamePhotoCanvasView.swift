@@ -120,7 +120,7 @@ struct GamePhotoCanvasView: View {
         case .start:
             SignatureMark(style: .struck, color: .white)
         case .rank(let rank, let division):
-            RankBlasonView(rank: rank, division: division, title: GameCopy.rankName(rank), figures: nil)
+            RankBlasonView(rank: rank, division5: division, title: GameCopy.rankName(rank), figures: nil)
         case .tier(let tier, let level):
             LevelRingView(level: level, progress: 1, tier: tier)
         case .levelHundred(let prestige):
