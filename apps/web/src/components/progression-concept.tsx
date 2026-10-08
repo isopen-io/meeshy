@@ -185,7 +185,7 @@ export function ConceptGauge({ gaugeKey, progress, label, tint = GAME_BRAND }: {
       className="block h-1.5 w-full overflow-hidden rounded-chip"
       style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 28%, transparent)' }}
     >
-      <span data-game-gauge-fill="" className="block h-full rounded-chip" style={{ width: `${shown}%`, backgroundColor: tint }} />
+      <span data-game-gauge-fill="" className="block h-full w-full rounded-chip" style={{ ['--gauge-shown' as string]: `${shown}%`, backgroundColor: tint }} />
     </span>
   );
 }
