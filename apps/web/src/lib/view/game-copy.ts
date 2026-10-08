@@ -1,6 +1,6 @@
 import type { EngagementAxisFamily } from '@meeshy/shared/types/engagement';
 import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
-import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
+import type { GloryDivision5, GloryRankOrMythic, MythicSeatRef } from '@meeshy/shared/utils/game/glory';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import type { MissionDifficulty } from '@meeshy/shared/utils/game/missions';
@@ -134,12 +134,22 @@ export const difficultyName = (difficulty: MissionDifficulty, language: Language
 export const editionName = (edition: MeeshEdition, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.edition.${edition}`);
 
-const DIVISIONS: Readonly<Record<GloryDivision, string>> = { 3: 'III', 2: 'II', 1: 'I' };
+const DIVISIONS: Readonly<Record<GloryDivision5, string>> = { 5: 'V', 4: 'IV', 3: 'III', 2: 'II', 1: 'I' };
 
-export const divisionLabel = (division: GloryDivision): string => DIVISIONS[division];
+/** La division en chiffres romains, de V à I (#9636) ; une division héritée (III, II, I) se lit pareil. */
+export const divisionLabel = (division: GloryDivision5): string => DIVISIONS[division];
 
-export const rankLabel = (rank: GloryRankOrMythic, division: GloryDivision | null, language: Language = currentInterfaceLanguage()): string =>
+export const rankLabel = (rank: GloryRankOrMythic, division: GloryDivision5 | null, language: Language = currentInterfaceLanguage()): string =>
   division === null ? rankName(rank, language) : `${rankName(rank, language)} ${divisionLabel(division)}`;
+
+/** Le rang tel qu'on le DIT : « Voix IV », « Mythe n° 42 » quand la place est servie (#9636). */
+export const standingLabel = (
+  standing: { readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null; readonly mythic: MythicSeatRef | null },
+  language: Language = currentInterfaceLanguage(),
+): string =>
+  standing.rank === 'mythe' && standing.mythic !== null
+    ? translateGame(language, 'game.rank.mythe_seat', { number: String(standing.mythic.number) })
+    : rankLabel(standing.rank, standing.division, language);
 
 /** Un gabarit de mission : une phrase qui s'accorde au nombre, ou une phrase unique qui le porte. */
 type SingleMissionKey =

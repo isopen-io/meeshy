@@ -30,6 +30,7 @@ import {
   missionTitle,
   pointsLabel,
   rankLabel,
+  standingLabel,
   rankName,
   treasuryName,
 } from './game-copy';
@@ -132,6 +133,24 @@ describe('rang et division', () => {
     expect(divisionLabel(1)).toBe('I');
     expect(rankLabel('voix', 2, 'fr')).toBe('Voix II');
     expect(rankLabel('mythe', null, 'fr')).toBe('Mythe');
+  });
+  test('cinq divisions, de V à I (#9636)', () => {
+    expect(divisionLabel(5)).toBe('V');
+    expect(divisionLabel(4)).toBe('IV');
+    expect(rankLabel('echo', 5, 'fr')).toBe('Écho V');
+    expect(rankLabel('legende', 4, 'en')).toBe('Legend IV');
+  });
+  test('un Mythe se dit avec sa place, dans les sept langues ; sans place servie, son nom seul', () => {
+    const seat = { number: 42, edition: 57 };
+    expect(standingLabel({ rank: 'mythe', division: null, mythic: seat }, 'fr')).toBe('Mythe n° 42');
+    expect(standingLabel({ rank: 'mythe', division: null, mythic: seat }, 'en')).toBe('Myth #42');
+    for (const language of ['de', 'es', 'it', 'pt', 'ar'] as const) {
+      const label = standingLabel({ rank: 'mythe', division: null, mythic: seat }, language);
+      expect(label).toContain('42');
+      expect(label).toContain(rankLabel('mythe', null, language));
+    }
+    expect(standingLabel({ rank: 'mythe', division: null, mythic: null }, 'fr')).toBe('Mythe');
+    expect(standingLabel({ rank: 'voix', division: 4, mythic: null }, 'fr')).toBe('Voix IV');
   });
   test('édition de la Meesh', () => {
     expect(editionName('silver', 'fr')).toBe('argent');

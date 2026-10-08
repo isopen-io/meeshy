@@ -38,6 +38,12 @@ describe('mon profil', () => {
     expect(t).toContain('de Gloire');
   });
 
+  test('la division V..I se dit, le niveau se grave sur le blason (#9636)', () => {
+    expect(t).toMatch(/(Murmure|Écho|Voix|Conteur) (V|IV|III|II|I)\b/);
+    expect(html).toContain('data-game-level-engraving');
+    expect(html).toContain('data-game-notch="on"');
+  });
+
   test('le trésor et la Flamme', () => {
     expect(t).toMatch(/Meeshes?/);
     expect(t).toContain('Flamme : 6 jours');
@@ -208,6 +214,17 @@ describe('le jeu d’un autre : niveau, rang, trésor, Flamme', () => {
     expect(mythic).toContain('data-game-rank="mythe"');
     expect(text(mythic)).not.toContain('Flamme :');
     expect(text(mythic)).not.toContain('Trésor :');
+  });
+
+  test('la division V..I servie, la place du Mythe et son émission (#9636) ; un ancien serveur garde la division héritée', () => {
+    const at = (standing: UserGameProfileResponse['standing']) => renderToStaticMarkup(<GameProfileVisitor game={{ visible: true, standing, treasury: null }} showcase={undefined} name="Amina" />);
+    const four = at({ level: 34, tier: 'eclat', prestige: 0, flame: null, rank: 'voix', division: 3, division5: 4 });
+    expect(text(four)).toContain('Voix IV');
+    expect(four.match(/data-game-notch="on"/g)).toHaveLength(2);
+    const mythe = at({ level: 100, tier: 'galaxie', prestige: 0, flame: null, rank: 'mythe', division: null, division5: null, mythic: { number: 61, edition: 75 } });
+    expect(text(mythe)).toContain('Mythe n° 61');
+    expect(mythe).toContain('data-game-mythic-halo="75"');
+    expect(text(at({ level: 34, tier: 'eclat', prestige: 0, flame: null, rank: 'voix', division: 3 }))).toContain('Voix III');
   });
 
   test('fermé, refusé ou pas encore lu : RIEN — pas un mot qui dise qu’un jeu existe', () => {

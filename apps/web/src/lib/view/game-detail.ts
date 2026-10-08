@@ -5,7 +5,7 @@ import { engagementAchievementCondition, engagementAchievementTitle, engagementA
 import type { EngagementAchievementProgress, EngagementAxisProgress } from '@meeshy/shared/utils/engagement-progress';
 import { badgeGuideOfProgress } from '@meeshy/shared/utils/game/badge-guide';
 import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
-import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
+import type { GloryDivision5, GloryRankOrMythic, MythicSeatRef } from '@meeshy/shared/utils/game/glory';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
@@ -17,6 +17,7 @@ import { GAME_DETAIL_HOW, type GameDetailFact, type GameDetailFamily } from '@/l
 import { earnRules } from '@/lib/game/earn-rules';
 import type { GameMaterial } from '@/lib/game/materials';
 import { medalOfAxis } from '@/lib/game/medal';
+import { servedDivision, shownRank } from '@/lib/game/served-rank';
 import { rarityPercent, visibleRarity, type AchievementRarityMap, type RarityEntry } from '@/lib/game/rarity';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -36,6 +37,7 @@ import {
   missionTitle,
   pointsLabel,
   rankLabel,
+  standingLabel,
   treasuryName,
 } from '@/lib/view/game-copy';
 import { awardedDate, dayLabel, languageName, leagueName, rarityName, trophyView, zoneLabel } from '@/lib/view/game-copy-v2';
@@ -67,7 +69,14 @@ export type DetailEmblem =
   | { readonly kind: 'seal'; readonly owned: boolean }
   | { readonly kind: 'gem'; readonly league: LeagueKey }
   | { readonly kind: 'ring'; readonly level: number; readonly tier: LevelTierKey; readonly progress: number; readonly prestige: number }
-  | { readonly kind: 'rank'; readonly rank: GloryRankOrMythic; readonly division: GloryDivision | null }
+  | {
+      readonly kind: 'rank';
+      readonly rank: GloryRankOrMythic;
+      readonly division: GloryDivision5 | null;
+      readonly mythic: MythicSeatRef | null;
+      /** Le niveau gravé sur le blason ; `null` quand l'hôte ne le connaît pas. */
+      readonly level: number | null;
+    }
   | { readonly kind: 'flame'; readonly form: FlameFormKey; readonly out: boolean }
   | { readonly kind: 'chest'; readonly open: boolean }
   | { readonly kind: 'coin'; readonly edition: MeeshEdition }
@@ -300,12 +309,13 @@ export function starDetail(prestige: GamePrestigeBlock, index: number): ElementD
   });
 }
 
-/** LE BLASON du rang : le rang, la Gloire, et le rang suivant avec ce qu'il manque. */
-export function rankDetail(glory: GameGlory): ElementDetail {
-  const next = glory.next === null ? null : rankLabel(glory.next.rank, glory.next.division);
+/** LE BLASON du rang : le rang, la Gloire, et le rang suivant avec ce qu'il manque ; le niveau, quand l'hôte le tient, se grave sur l'écu. */
+export function rankDetail(glory: GameGlory, level: number | null = null): ElementDetail {
+  const next = glory.next === null ? null : rankLabel(glory.next.rank, servedDivision(glory.next));
+  const shown = shownRank(glory);
   return ofFamily('rank', glory.rank, 'glory', {
-    emblem: { kind: 'rank', rank: glory.rank, division: glory.division },
-    name: rankLabel(glory.rank, glory.division),
+    emblem: { kind: 'rank', rank: shown.rank, division: shown.division, mythic: shown.mythic, level },
+    name: standingLabel(shown),
     state: value(gameText('game.rank.glory', { glory: formatCount(glory.glory) }), next === null ? null : glory.progress),
     facts: present([
       next === null ? row(gameText('game.fact.next_rank'), gameText('game.rank.top')) : row(gameText('game.fact.next_rank'), next),

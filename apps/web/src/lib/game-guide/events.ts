@@ -5,6 +5,7 @@ import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
+import { servedDivision } from '@/lib/game/served-rank';
 
 /**
  * LES ÉVÉNEMENTS DU GUIDE (#9379) — la loi partagée (`chooseGuideMoment`)
@@ -34,9 +35,11 @@ const ABSENCE_DAYS = 7;
 const tierIndex = (game: GameBlock): number => LEVEL_TIER_KEYS.indexOf(game.level.tier);
 const treasuryIndex = (game: GameBlock): number => TREASURY_TIERS.findIndex((tier) => tier.key === game.treasury.tier);
 
-/** Un ordre total des (rang, division) : une division gagnée est une marche, un rang aussi. */
-const standing = (game: GameBlock): number =>
-  RANK_KEYS.indexOf(game.glory.rank) * 4 + (game.glory.division === null ? 3 : 3 - game.glory.division);
+/** Un ordre total des (rang, division V..I) : une division gagnée est une marche, un rang aussi (#9636). */
+const standing = (game: GameBlock): number => {
+  const division = servedDivision(game.glory);
+  return RANK_KEYS.indexOf(game.glory.rank) * 6 + (division === null ? 5 : 5 - division);
+};
 
 const nextTierLevel = (game: GameBlock): number | null => {
   const next = tierIndex(game) + 1;
@@ -46,7 +49,7 @@ const nextTierLevel = (game: GameBlock): number | null => {
 const rankEvent = (game: GameBlock): GuideEvent => ({
   kind: 'new-rank',
   rank: game.glory.rank,
-  division: game.glory.division,
+  division: servedDivision(game.glory),
   glory: game.glory.glory,
   gloryMissing: game.glory.gloryMissing,
 });

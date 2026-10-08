@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+import { gloryLadder } from '@meeshy/shared/utils/game/glory';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
@@ -69,7 +70,7 @@ describe('chaque moment porte son identité, son emblème et ses mots', () => {
   test('un rang, division comprise', () => {
     const moment = rankMoment({ rank: 'voix', division: 2 });
     expect(moment.id).toBe('rank:voix:2');
-    expect(moment.emblem).toEqual({ kind: 'rank', rank: 'voix', division: 2 });
+    expect(moment.emblem).toEqual({ kind: 'rank', rank: 'voix', division: 2, mythic: null });
     expect(moment.kicker).toBe('Nouveau rang');
     expect(moment.title).toBe('Voix II');
   });
@@ -168,9 +169,18 @@ describe('photoMomentsOfTransition — ce qui se propose APRÈS la célébration
   });
 
   test('un rang gagné, un palier franchi, un palier du trésor', () => {
-    expect(photoMomentsOfTransition(view({ glory: 820 }), view({ glory: 840 })).map((m) => m.kicker)).toContain('Nouveau rang');
+    const echoIV = gloryLadder().find((step) => step.rank === 'echo' && step.division5 === 4)!.minGlory;
+    const gained = photoMomentsOfTransition(view({ glory: echoIV - 1 }), view({ glory: echoIV }));
+    expect(gained.map((m) => m.kicker)).toContain('Nouveau rang');
+    expect(gained.map((m) => m.title)).toContain('Écho IV');
     expect(photoMomentsOfTransition(view({ score: 10 * 9 * 9 + 5 }), view({ score: 10 * 10 * 10 })).map((m) => m.id)).toContain('tier:lueur');
     expect(photoMomentsOfTransition(view({ balance: 9 }), view({ balance: 10 })).map((m) => m.id)).toContain('treasury:escarcelle');
+  });
+
+  test('le Mythe se photographie avec sa place, et son blason porte son émission (#9636)', () => {
+    const moment = rankMoment({ rank: 'mythe', division: null, mythic: { number: 5, edition: 8 } });
+    expect(moment.title).toBe('Mythe n° 5');
+    expect(moment.emblem).toEqual({ kind: 'rank', rank: 'mythe', division: null, mythic: { number: 5, edition: 8 } });
   });
 
   test('une baisse ne se photographie pas', () => {

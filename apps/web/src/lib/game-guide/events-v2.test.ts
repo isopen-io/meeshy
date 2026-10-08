@@ -8,6 +8,7 @@ import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 
 import { standingGuideEventsV2, transitionGuideEventsV2 } from './events-v2';
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 
 /**
  * LES ÉVÉNEMENTS DU GUIDE, VAGUE 2 (#9481) — ce que le bloc `game` laisse lire :
@@ -77,10 +78,10 @@ describe('pendant que l’écran est ouvert', () => {
     expect(transitionGuideEventsV2(view(), without)).toContainEqual({ kind: 'season-end', season: 1, stepsReached: 14, completed: false, gloryGained: 0 });
   });
 
-  test('un parcours terminé : la fin de saison porte les 500 de Gloire', () => {
+  test('un parcours terminé : la fin de saison porte sa Gloire (GLORY_POINTS.season)', () => {
     const done = withGame((g) => (g.season === null || g.season === undefined ? g : { ...g, season: { ...g.season, steps: 40, completed: true } }));
     const without = withGame((g) => ({ ...g, season: null }), done);
-    expect(transitionGuideEventsV2(done, without)).toContainEqual({ kind: 'season-end', season: 1, stepsReached: 40, completed: true, gloryGained: 500 });
+    expect(transitionGuideEventsV2(done, without)).toContainEqual({ kind: 'season-end', season: 1, stepsReached: 40, completed: true, gloryGained: GLORY_POINTS.season });
   });
 
   test('un nouveau trophée : un événement par clé reçue', () => {
@@ -96,7 +97,7 @@ describe('pendant que l’écran est ouvert', () => {
   test('un Prestige de plus : le moment du Prestige', () => {
     const before = view(gameBlockWithExtrasFixture({ score: levelThreshold(100) + 1 }));
     const after = withGame((g) => ({ ...g, level: { ...g.level, prestige: g.level.prestige + 1 } }), before);
-    expect(transitionGuideEventsV2(before, after)).toContainEqual({ kind: 'prestige', prestige: 1, gloryGained: 1000 });
+    expect(transitionGuideEventsV2(before, after)).toContainEqual({ kind: 'prestige', prestige: 1, gloryGained: GLORY_POINTS.prestige });
   });
 
   test('un ancien serveur, des deux côtés : rien', () => {

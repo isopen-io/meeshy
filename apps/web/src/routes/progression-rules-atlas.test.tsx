@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { RulesBody } from './progression-rules';
 import { RulesAtlas } from './progression-rules-atlas';
+import { gloryForAchievement } from '@meeshy/shared/utils/game/glory';
+import { formatCount } from '@/lib/view/game-copy';
 
 const atlas = renderToStaticMarkup(<RulesAtlas />);
 const count = (needle: RegExp, html = atlas): number => html.match(needle)?.length ?? 0;
@@ -91,7 +93,7 @@ describe('les neuf familles sont dessinées', () => {
     expect(count(/data-game-rarity=/g, html)).toBe(5);
     expect(html).toContain('Mythique');
     expect(html).toContain('moins de 0,2 % des comptes');
-    expect(html).toContain('+400 de Gloire');
+    expect(html).toContain(`+${formatCount(gloryForAchievement('epic'), 'fr')} de Gloire`);
   });
 });
 

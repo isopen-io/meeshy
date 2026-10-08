@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ENGAGEMENT_AXIS_WEIGHTS } from '@meeshy/shared/types/engagement';
 import type { GameBlock } from '@meeshy/shared/types/game';
+import { gloryLadder } from '@meeshy/shared/utils/game/glory';
 
 import { gameBlockFixture } from '@/lib/api/game-fixture';
 import { earnRules } from '@/lib/game/earn-rules';
@@ -60,9 +61,32 @@ describe('où j’en suis', () => {
 
   test('le rang : blason, nom et division, Gloire, ancre « game-rank »', () => {
     expect(page).toContain('id="game-rank"');
-    expect(page).toContain('Écho III');
+    expect(page).toContain('Murmure IV');
     expect(page).toContain('Gloire 620');
-    expect(page).toContain('data-game-rank="echo"');
+    expect(page).toContain('data-game-rank="murmure"');
+  });
+
+  const echoIV = gloryLadder().find((step) => step.rank === 'echo' && step.division5 === 4)!;
+
+  test('la division à cinq crans se lit et se compte en encoches ; le niveau est gravé sur le blason (#9636)', () => {
+    const shown = html({ glory: echoIV.minGlory });
+    expect(text(shown)).toContain('Écho IV');
+    expect(shown.match(/data-game-notch="on"/g)).toHaveLength(2);
+    expect(shown).toMatch(/data-game-level-engraving=""[\s\S]*?>11<\/text>/);
+  });
+
+  test('un serveur d’avant #9636, sans division5 : la division héritée (III), trois encoches', () => {
+    const game = gameBlockFixture({ glory: echoIV.minGlory });
+    const { division5: _d5, mythic: _m, ...legacy } = game.glory;
+    const shown = renderToStaticMarkup(<GameHero {...base({ ...game, glory: legacy })} />);
+    expect(text(shown)).toContain('Écho III');
+    expect(shown.match(/data-game-notch="on"/g)).toHaveLength(3);
+  });
+
+  test('un Mythe se dit avec sa place, son halo porte son émission (#9636)', () => {
+    const shown = html({ glory: 1_200_000, mythic: true, mythicSeat: { number: 7, edition: 31 } });
+    expect(text(shown)).toContain('Mythe n° 7');
+    expect(shown).toContain('data-game-mythic-halo="31"');
   });
 
   test('une grande Signature en filigrane, décorative', () => {

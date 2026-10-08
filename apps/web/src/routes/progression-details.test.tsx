@@ -1,3 +1,5 @@
+import { shownRank } from '@/lib/game/served-rank';
+import { standingLabel } from '@/lib/view/game-copy';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -383,7 +385,7 @@ describe('l’en-tête de la première page', () => {
     expect(items.map((item) => item.dataset.headerItem)).toEqual(['rank', 'meesh']);
     for (const item of items) expect(item.className).toContain('game-press');
     expect(surface.querySelector('[data-header-item="meesh"]')?.textContent).toContain(String(playing.meesh?.balance));
-    expect(surface.querySelector('[data-header-item="rank"]')?.getAttribute('aria-label')).toContain('Écho');
+    expect(surface.querySelector('[data-header-item="rank"]')?.getAttribute('aria-label')).toContain(standingLabel(shownRank(must(playing.game, 'game').glory), 'fr'));
   });
 
   test('rien si la donnée n’est pas servie : ni blason sans le jeu, ni compteur sans solde, ni groupe vide', () => {

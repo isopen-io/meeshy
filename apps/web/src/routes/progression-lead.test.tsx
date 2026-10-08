@@ -1,3 +1,4 @@
+import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act } from 'react';
@@ -172,13 +173,13 @@ describe('un moment qui se photographie', () => {
   const seen = [...ALL_STEPS, 'first-level', 'new-tier', 'missions-unlocked', 'first-mint-possible', 'treasury-tier'];
 
   test('la carte du nouveau rang propose « Immortaliser » — et c’est ELLE qui propose, pas une seconde carte', async () => {
-    const r = await render(view({ guideSeen: seen, glory: 1700, mintedLifetime: 3 }));
+    const r = await render(view({ guideSeen: seen, glory: GLORY_RANKS[1].minGlory + 100, mintedLifetime: 3 }));
     expect(r.host.querySelector('[data-game-guide="new-rank"]')).not.toBeNull();
     expect(r.host.querySelector('[data-photo-offer]')).toBeNull();
   });
 
   test('le bouton principal du rang EST la photo : il ouvre le déroulé du rang', async () => {
-    const r = await render(view({ guideSeen: seen, glory: 1700, mintedLifetime: 3 }));
+    const r = await render(view({ guideSeen: seen, glory: GLORY_RANKS[1].minGlory + 100, mintedLifetime: 3 }));
     await click(by(r.host, 'data-game-guide-action'));
     await settle();
     expect(r.host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toMatch(/^Photo : /);

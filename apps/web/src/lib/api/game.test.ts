@@ -87,6 +87,24 @@ describe('readGameBlock — jamais à moitié lu', () => {
     expect(readGameBlock({ ...block, flame: { ...block.flame, bonusPercent: '12' } })).toBeNull();
   });
 
+  test('la division à cinq crans et la place du Mythe sont lues (#9636)', () => {
+    const block = gameBlockFixture({ glory: 0, mythic: true, mythicSeat: { number: 3, edition: 7 } });
+    expect(readGameBlock(block)?.glory.mythic).toEqual({ number: 3, edition: 7 });
+    expect(readGameBlock(gameBlockFixture())?.glory.division5).toBe(gameBlockFixture().glory.division5);
+  });
+
+  test('un serveur d’avant #9636 (sans division5 ni mythic) reste lu', () => {
+    const { division5: _d5, mythic: _m, ...ancien } = gameBlockFixture().glory;
+    expect(readGameBlock({ ...gameBlockFixture(), glory: ancien })?.glory).toEqual(ancien);
+  });
+
+  test('une division5 hors V..I ou une place illisible refuse le bloc', () => {
+    const block = gameBlockFixture();
+    expect(readGameBlock({ ...block, glory: { ...block.glory, division5: 6 } })).toBeNull();
+    expect(readGameBlock({ ...block, glory: { ...block.glory, mythic: { number: 101, edition: 1 } } })).toBeNull();
+    expect(readGameBlock({ ...block, glory: { ...block.glory, mythic: { number: 4, edition: 0 } } })).toBeNull();
+  });
+
   test('un coffre ouvert porte sa récompense, un coffre fermé non', () => {
     const open = gameBlockFixture({ chestClaimed: true, chestReward: { points: 90, fragment: true, freeze: false } });
     expect(readGameBlock(open)?.chest.reward).toEqual({ points: 90, fragment: true, freeze: false });

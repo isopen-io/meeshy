@@ -296,6 +296,14 @@
     animation-delay: calc(var(--game-enter-index, 0) * var(--game-enter-stagger));
   }
 
+  /* La décoration d'un blason (#9636) se pose une fois, sobrement : elle monte
+     de quelques points depuis l'écu. Sous « animations réduites », elle est là. */
+  [data-game-crest] {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    animation: gameCrestIn 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
   /* Une jauge se remplit depuis sa valeur précédente. */
   [data-game-gauge-fill] {
     transition: width 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -314,6 +322,13 @@
   .game-pop,
   dialog[data-sheet-presentation='bottom'] {
     animation: gameFade 160ms linear both;
+  }
+}
+
+@keyframes gameCrestIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.94);
   }
 }
 

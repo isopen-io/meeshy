@@ -54,7 +54,7 @@ export function afterMint(view: EngagementWithGame): EngagementWithGame {
   const score = Math.max(0, game.level.score - price);
   const debitable = Math.max(0, (view.meesh?.debitablePoints ?? game.level.score) - price);
   const progress = levelProgress(score);
-  const standing = gloryStanding({ glory: game.glory.glory + game.mint.gloryGained, mythic: game.glory.rank === 'mythe' });
+  const standing = gloryStanding({ glory: game.glory.glory + game.mint.gloryGained, mythic: game.glory.rank === 'mythe', mythicSeat: game.glory.mythic ?? null });
   const next = onGame(view, (current) => ({
     ...current,
     level: {
@@ -72,9 +72,11 @@ export function afterMint(view: EngagementWithGame): EngagementWithGame {
       glory: standing.glory,
       rank: standing.rank,
       division: standing.division,
+      division5: standing.division5,
       next: standing.next,
       gloryMissing: standing.gloryMissing,
       progress: standing.progress,
+      mythic: standing.mythic,
     },
     mint: previewMint({ score, mintedLifetime: current.mint.number, debitablePoints: debitable }),
     boosts: { ...current.boosts, tailwind: tailwindFactor({ level: progress.level, levelRecord: current.level.record }) },

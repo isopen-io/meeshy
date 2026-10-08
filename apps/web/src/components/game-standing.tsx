@@ -1,7 +1,8 @@
 import type { UserGameProfileResponse } from '@meeshy/shared/types/game';
 
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { flameFormName, formatCount, gameText, levelTierName, rankLabel, rankName, treasuryName } from '@/lib/view/game-copy';
+import { flameFormName, formatCount, gameText, levelTierName, rankName, standingLabel, treasuryName } from '@/lib/view/game-copy';
+import { shownRank } from '@/lib/game/served-rank';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 
 import { Flame } from './game/flame';
@@ -52,10 +53,10 @@ export function GameStanding({ game }: { readonly game: VisibleStanding }) {
               {gameText('game.profile.level', { level: formatCount(standing.level), tier: levelTierName(standing.tier) })}
             </p>
             <p className="text-caption font-semibold" style={{ color: GAME_INK }}>
-              {rankLabel(standing.rank, standing.division)}
+              {standingLabel(shownRank(standing))}
             </p>
           </div>
-          <RankBlason rank={standing.rank} division={standing.division} size={56} label={rankName(standing.rank)} />
+          <RankBlason {...shownRank(standing)} level={standing.level} size={56} label={rankName(standing.rank)} />
         </div>
       )}
       {treasuryTier === null && standing?.flame == null ? null : (
@@ -98,8 +99,8 @@ export function GameStandingMini({ game }: { readonly game: VisibleStanding }) {
             prestige={standing.prestige}
             label={levelRingLabelWithPrestige(standing.level, standing.tier, standing.prestige, language)}
           />
-          <RankBlason rank={standing.rank} division={standing.division} size={30} label={rankName(standing.rank)} />
-          <span className="sr-only">{rankLabel(standing.rank, standing.division)}</span>
+          <RankBlason {...shownRank(standing)} size={30} label={rankName(standing.rank)} />
+          <span className="sr-only">{standingLabel(shownRank(standing))}</span>
         </>
       )}
       {treasuryTier === null ? null : (

@@ -8,6 +8,8 @@ import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { GamePrestige, type GamePrestigeProps } from './game-prestige';
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
+import { formatCount } from '@/lib/view/game-copy';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click, rerender } = createActMounter();
@@ -43,7 +45,7 @@ describe('la proposition au niveau 100', () => {
     const t = text(html);
     expect(t).toContain('Tu es au niveau 100 : le sommet');
     expect(t).toContain('Ton niveau repart à 1');
-    expect(t).toContain('1 000 de Gloire');
+    expect(t).toContain(`${formatCount(GLORY_POINTS.prestige, 'fr').replace(/\s/g, ' ')} de Gloire`);
     expect(html).toContain('data-game-bird="meeGuide"');
     expect(html).toContain('data-game-bird="meoGuide"');
   });

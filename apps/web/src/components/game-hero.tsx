@@ -6,8 +6,9 @@ import type { EngagementElanProgress } from '@meeshy/shared/utils/engagement-pro
 import { GameBird, LevelRing, RankBlason, Signature, useChoreography } from '@/components/game';
 import { earnRules, type EarnRule } from '@/lib/game/earn-rules';
 import { enamelToken } from '@/lib/game/medal';
+import { shownRank } from '@/lib/game/served-rank';
 import { tierTint } from '@/lib/game/tier-emblem';
-import { familyName, formatCount, gameText, levelTierName, pointsLabel, rankLabel, rankName } from '@/lib/view/game-copy';
+import { familyName, formatCount, gameText, levelTierName, pointsLabel, rankName, standingLabel } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 import { elanDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
 
@@ -88,14 +89,15 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
     previousLevel.current = level.level;
   }, [level.level, ring.play]);
 
+  const shown = shownRank(glory);
   const blason = useChoreography<HTMLSpanElement>();
-  const previousRank = useRef(`${glory.rank}/${glory.division ?? 0}`);
+  const previousRank = useRef(`${shown.rank}/${shown.division ?? 0}`);
   useEffect(() => {
-    const now = `${glory.rank}/${glory.division ?? 0}`;
+    const now = `${shown.rank}/${shown.division ?? 0}`;
     if (now === previousRank.current) return;
     blason.play('rank');
     previousRank.current = now;
-  }, [glory.rank, glory.division, blason.play]);
+  }, [shown.rank, shown.division, blason.play]);
 
   const atTop = level.nextThreshold === null;
   return (
@@ -130,13 +132,13 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
           </span>
         ) : null}
       </div>
-      <GameTouch detail={rankDetail(glory)} className="flex shrink-0 flex-col items-center gap-0.5 rounded-card text-center">
+      <GameTouch detail={rankDetail(glory, level.level)} className="flex shrink-0 flex-col items-center gap-0.5 rounded-card text-center">
         <span id="game-rank" className="flex flex-col items-center gap-0.5">
           <span ref={blason.ref}>
-            <RankBlason rank={glory.rank} division={glory.division} size={80} label={rankName(glory.rank)} />
+            <RankBlason rank={shown.rank} division={shown.division} mythic={shown.mythic} level={level.level} size={80} label={rankName(shown.rank)} />
           </span>
           <span className="text-caption font-bold" style={{ color: GAME_INK }}>
-            {rankLabel(glory.rank, glory.division)}
+            {standingLabel(shown)}
           </span>
           <span className="text-check" style={{ color: GAME_INK_2 }}>
             {gameText('game.rank.glory', { glory: formatCount(glory.glory) })}

@@ -7,6 +7,8 @@ import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { GameMintPreview } from './game-mint-preview';
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
+import { formatCount } from '@/lib/view/game-copy';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click } = createActMounter();
@@ -63,7 +65,7 @@ describe('une frappe possible', () => {
     const impact = /data-game-mint-impact=""[^>]*>([\s\S]*?)<\/ul>/.exec(html)?.[1] ?? '';
     const lines = Array.from(impact.matchAll(/<li[^>]*>([^<]*)<\/li>/g)).map((m) => m[1]);
     expect(lines.some((line) => /niveaux?/.test(line ?? ''))).toBe(true);
-    expect(lines).toContain('+100 Gloire');
+    expect(lines).toContain(`+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`);
     expect(lines).toContain('2 badges redescendent');
   });
 

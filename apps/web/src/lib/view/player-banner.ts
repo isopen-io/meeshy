@@ -1,13 +1,14 @@
 import type { GameBlock } from '@meeshy/shared/types/game';
 import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
-import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 
 import { formatGameNumber, translateGame, translateGameOrdinal, translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
-import { boundedPercent, levelTierName, pointsLabel, rankLabel } from './game-copy';
+import { shownRank, type ShownRank } from '@/lib/game/served-rank';
+
+import { boundedPercent, levelTierName, pointsLabel, standingLabel } from './game-copy';
 import { leagueName } from './game-copy-v2';
 
 /**
@@ -42,7 +43,8 @@ export type PlayerBannerModel = {
   /** Le total de points ; `null` quand le joueur n'en a aucun. */
   readonly points: number | null;
   readonly meeshes: number | null;
-  readonly rank: { readonly rank: GloryRankOrMythic; readonly division: GloryDivision | null } | null;
+  /** Le rang servi : la division V..I (ou héritée), la place du Mythe. */
+  readonly rank: ShownRank | null;
   readonly league: { readonly league: LeagueKey; readonly place: number } | null;
   readonly flame: { readonly form: FlameFormKey; readonly days: number } | null;
 };
@@ -76,7 +78,7 @@ export function playerBannerModel(game: GameBlock): PlayerBannerModel | null {
       : null,
     points: level.score > 0 ? level.score : null,
     meeshes: treasury.held > 0 ? treasury.held : null,
-    rank: glory.glory > 0 ? { rank: glory.rank, division: glory.division } : null,
+    rank: glory.glory > 0 ? shownRank(glory) : null,
     league: league?.access === 'open' && league.current !== null ? { league: league.current.league, place: league.current.rank } : null,
     flame: BURNING.has(flame.status) && flame.form !== null && flame.days > 0 ? { form: flame.form, days: flame.days } : null,
   };
@@ -111,7 +113,7 @@ export function playerBannerLabel(model: PlayerBannerModel, language: InterfaceL
           }),
     level !== null || model.points === null ? null : pointsLabel(model.points, language),
     model.meeshes === null ? null : translateGamePlural(language, 'game.meeshes', model.meeshes),
-    model.rank === null ? null : rankLabel(model.rank.rank, model.rank.division, language),
+    model.rank === null ? null : standingLabel(model.rank, language),
     model.league === null
       ? null
       : translateGame(language, 'game.banner.league', { league: leagueName(model.league.league, language), place: leaguePlace(model.league.place, language) }),

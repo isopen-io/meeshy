@@ -132,6 +132,15 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
     expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, 12 Meeshes, [\p{L} ]+, ligue Jade \d+(re|e), Flamme 23 jours$/u);
   });
 
+  test('le rang : la division V..I et la place du Mythe, dites et dessinées (#9636)', () => {
+    const model = shownExtras({ glory: 620 });
+    expect(model.rank).toEqual({ rank: 'murmure', division: 4, mythic: null });
+    expect(playerBannerLabel(model, 'fr')).toContain('Murmure IV');
+    const mythe = shownExtras({ glory: 1_000_000, mythic: true, mythicSeat: { number: 18, edition: 22 } });
+    expect(mythe.rank).toEqual({ rank: 'mythe', division: null, mythic: { number: 18, edition: 22 } });
+    expect(playerBannerLabel(mythe, 'fr')).toContain('Mythe n° 18');
+  });
+
   test('en : l’ordinal anglais de la place', () => {
     const model = shownExtras({ balance: 12, streak: 23 });
     expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Jade league \d+(st|nd|rd|th), Flame 23 days$/);

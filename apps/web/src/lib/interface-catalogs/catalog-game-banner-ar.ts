@@ -30,6 +30,7 @@ const ar = {
   'game.rank.oracle': 'عرّاف',
   'game.rank.legende': 'أسطورة',
   'game.rank.mythe': 'خرافة',
+  'game.rank.mythe_seat': 'خرافة رقم {number}',
   'game.points.two': 'نقطتان',
   'game.points.few': '{count} نقاط',
   'game.days.two': 'يومان',

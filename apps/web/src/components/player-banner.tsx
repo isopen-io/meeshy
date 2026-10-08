@@ -219,8 +219,8 @@ export function PlayerBanner({ model, motion = {}, backdrop = null }: { readonly
           </Piece>
         )}
         {model.rank === null ? null : (
-          <Piece name="rank" value={`${model.rank.rank}/${model.rank.division ?? 0}`}>
-            <RankBlason rank={model.rank.rank} division={model.rank.division} size={34} />
+          <Piece name="rank" value={`${model.rank.rank}/${model.rank.division ?? 0}/${model.rank.mythic?.edition ?? 0}`}>
+            <RankBlason rank={model.rank.rank} division={model.rank.division} mythic={model.rank.mythic} size={34} />
           </Piece>
         )}
         {model.league === null ? null : (

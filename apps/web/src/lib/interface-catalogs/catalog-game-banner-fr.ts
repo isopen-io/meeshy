@@ -28,6 +28,7 @@ const fr = {
   'game.rank.oracle': 'Oracle',
   'game.rank.legende': 'Légende',
   'game.rank.mythe': 'Mythe',
+  'game.rank.mythe_seat': 'Mythe n° {number}',
   'game.banner.level': 'Niveau {level}',
   'game.banner.to_next': '{percent} % vers le {level}',
   'game.banner.top': 'au sommet',

@@ -1,4 +1,5 @@
 import type { GloryRankKey, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
+import { RANK_CRESTS, type CrestPiece } from '@meeshy/shared/utils/game/rank-crest';
 
 import type { GameBirdKey } from './birds';
 import type { GameMaterial } from './materials';
@@ -10,12 +11,13 @@ import type { GameMaterial } from './materials';
  * matière et les pièces héraldiques montent avec lui. À partir d'Ambassadeur,
  * Mee et Meo tiennent l'écu ; à Légende ils sont couronnés ; à Mythe,
  * auréolés. »
+ *
+ * La DÉCORATION propre à chaque rang (un trait, deux arcs… la couronne de
+ * traits) n'est pas écrite ici : c'est la table partagée par le web et iOS,
+ * `@meeshy/shared/utils/game/rank-crest` (#9636).
  */
 
 export const BLASON_RANKS: readonly GloryRankOrMythic[] = ['murmure', 'echo', 'voix', 'conteur', 'passeur', 'polyglotte', 'ambassadeur', 'orateur', 'oracle', 'legende', 'mythe'];
-
-export type BlasonPieces = 'none' | 'stars' | 'dots';
-export type BlasonCrest = 'none' | 'star' | 'crown';
 
 export type BlasonDesign = {
   readonly index: number;
@@ -24,13 +26,12 @@ export type BlasonDesign = {
   readonly inner: boolean;
   /** Le chef sombre en haut de l'écu (dès Conteur). */
   readonly band: boolean;
-  readonly pieces: BlasonPieces;
-  readonly crest: BlasonCrest;
-  readonly laurel: boolean;
+  /** La décoration du rang, à la Signature — la table partagée (`RANK_CRESTS`). */
+  readonly crest: readonly CrestPiece[];
   readonly ribbon: boolean;
   readonly tenants: { readonly mee: GameBirdKey; readonly meo: GameBirdKey } | null;
-  /** Les chevrons de division sous l'écu : tous les rangs sauf le Mythe (qui n'a pas de division). */
-  readonly chevrons: boolean;
+  /** Les encoches de division sous l'écu : tous les rangs sauf le Mythe (qui n'a pas de division). */
+  readonly notches: boolean;
 };
 
 const MATERIAL: Readonly<Record<GloryRankOrMythic, GameMaterial>> = {
@@ -56,19 +57,15 @@ const tenantsAt = (rank: GloryRankOrMythic, index: number): BlasonDesign['tenant
 
 export const blasonDesign = (rank: GloryRankOrMythic): BlasonDesign => {
   const index = BLASON_RANKS.indexOf(rank);
-  const pieces: BlasonPieces = rank === 'passeur' ? 'stars' : rank === 'polyglotte' ? 'dots' : 'none';
-  const crest: BlasonCrest = rank === 'oracle' ? 'star' : index >= 9 ? 'crown' : 'none';
   return {
     index,
     material: MATERIAL[rank],
     inner: index >= 1,
     band: index >= 3,
-    pieces,
-    crest,
-    laurel: index >= 7,
+    crest: RANK_CRESTS[rank],
     ribbon: index >= 6,
     tenants: tenantsAt(rank, index),
-    chevrons: rank !== 'mythe',
+    notches: rank !== 'mythe',
   };
 };
 

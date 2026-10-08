@@ -1,7 +1,8 @@
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { medalOfAxis } from '@/lib/game/medal';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { formatCount, gameText, levelTierName, meeshCount, rankLabel, rankName, treasuryName, daysLabel, medalLabel } from '@/lib/view/game-copy';
+import { formatCount, gameText, levelTierName, meeshCount, rankName, standingLabel, treasuryName, daysLabel, medalLabel } from '@/lib/view/game-copy';
+import { shownRank } from '@/lib/game/served-rank';
 import { levelRingLabelWithPrestige, trophyView } from '@/lib/view/game-copy-v2';
 import { Link } from '@/routes/route-table';
 import { engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
@@ -57,13 +58,13 @@ export function GameProfileOwn({ progress }: { readonly progress: EngagementWith
             {gameText('game.profile.level', { level: formatCount(level.level), tier: levelTierName(level.tier) })}
           </p>
           <p className="text-caption font-semibold" style={{ color: GAME_INK }}>
-            {rankLabel(glory.rank, glory.division)}
+            {standingLabel(shownRank(glory))}
           </p>
           <p className="text-check" style={{ color: GAME_INK_2 }}>
             {gameText('game.profile.glory', { glory: formatCount(glory.glory) })}
           </p>
         </div>
-        <RankBlason rank={glory.rank} division={glory.division} size={64} label={rankName(glory.rank)} />
+        <RankBlason {...shownRank(glory)} level={level.level} size={64} label={rankName(glory.rank)} />
       </div>
 
       <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption" style={{ color: GAME_INK }} data-game-profile-stats="">

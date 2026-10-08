@@ -71,7 +71,7 @@ function Emblem({ emblem, view }: { readonly emblem: DetailEmblem; readonly view
     case 'ring':
       return <LevelRing level={emblem.level} tier={emblem.tier} progress={emblem.progress} size={EMBLEM} prestige={emblem.prestige} showTier />;
     case 'rank':
-      return <RankBlason rank={emblem.rank} division={emblem.division} size={EMBLEM} />;
+      return <RankBlason rank={emblem.rank} division={emblem.division} mythic={emblem.mythic} level={emblem.level} size={EMBLEM} />;
     case 'flame':
       return <Flame form={emblem.form} size={EMBLEM} out={emblem.out} />;
     case 'chest':

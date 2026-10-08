@@ -14,7 +14,7 @@ import { FLAME_FORMS } from '@meeshy/shared/utils/game/flame';
 import { MISSION_DIFFICULTIES } from '@meeshy/shared/utils/game/missions';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 
-import { isBool, isFraction, isInt, isOneOf, isText, orNull, shape } from './game-guards';
+import { isBool, isDivision, isDivision5, isFraction, isInt, isMythicSeat, isOneOf, isText, optional, orNull, shape } from './game-guards';
 import { readGameExtensions, withoutExtensions, type GameBlockV2 } from './game-v2';
 import type { ApiResult, HttpTransport } from './http';
 
@@ -46,7 +46,6 @@ const isTier = isOneOf(LEVEL_TIER_KEYS);
 const isRank = isOneOf([...GLORY_RANKS.map((rank) => rank.key), 'mythe']);
 const isTreasuryKey = isOneOf(TREASURY_TIERS.map((tier) => tier.key));
 const isFlameForm = isOneOf(FLAME_FORMS.map((form) => form.key));
-const isDivision = (value: unknown): boolean => value === 1 || value === 2 || value === 3;
 const isEdition = isOneOf(['silver', 'gold', 'prism']);
 
 const isLevel = (value: unknown): boolean =>
@@ -64,16 +63,18 @@ const isLevel = (value: unknown): boolean =>
   });
 
 const isGloryStep = (value: unknown): boolean =>
-  shape(value, { rank: isRank, division: isDivision, minGlory: (v) => isInt(v) });
+  shape(value, { rank: isRank, division: isDivision, division5: optional(isDivision5), minGlory: (v) => isInt(v) });
 
 const isGlory = (value: unknown): boolean =>
   shape(value, {
     glory: (v) => isInt(v),
     rank: isRank,
     division: orNull(isDivision),
+    division5: optional(orNull(isDivision5)),
     next: orNull(isGloryStep),
     gloryMissing: orNull((v) => isInt(v)),
     progress: isFraction,
+    mythic: optional(orNull(isMythicSeat)),
   });
 
 const isTreasury = (value: unknown): boolean =>

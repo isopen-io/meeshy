@@ -6,7 +6,7 @@ import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 import { SHOWCASE_VISIBILITIES } from '@meeshy/shared/utils/game/trophies';
 
-import { isBool, isInt, isOneOf, orNull, shape } from './game-guards';
+import { isBool, isDivision, isDivision5, isInt, isMythicSeat, isOneOf, optional, orNull, shape } from './game-guards';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -52,7 +52,9 @@ const isStanding = (value: unknown): boolean =>
     prestige: (n) => isInt(n, 0, 5),
     flame: orNull(isOneOf(FLAME_FORMS.map((form) => form.key))),
     rank: isOneOf([...GLORY_RANKS.map((rank) => rank.key), 'mythe']),
-    division: orNull((n) => n === 1 || n === 2 || n === 3),
+    division: orNull(isDivision),
+    division5: optional(orNull(isDivision5)),
+    mythic: optional(orNull(isMythicSeat)),
   });
 
 const isUserGame = (value: unknown): value is UserGameProfileResponse =>

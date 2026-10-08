@@ -1,3 +1,4 @@
+import { shownRank } from '@/lib/game/served-rank';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
@@ -64,7 +65,7 @@ export function ConceptEmblem({ concept, view, size }: { readonly concept: Progr
     case 'meesh':
       return <MeeshCoin side="obverse" size={size} edition="silver" />;
     case 'glory':
-      return game === undefined ? <SignatureEmblem size={size} tint={GAME_WARM} /> : <RankBlason rank={game.glory.rank} division={game.glory.division} size={size} />;
+      return game === undefined ? <SignatureEmblem size={size} tint={GAME_WARM} /> : <RankBlason {...shownRank(game.glory)} level={game.level.level} size={size} />;
     case 'flame': {
       const flame = game?.flame;
       if (flame === undefined) return <Flame form="braise" size={size} out={view.streak.currentDays === 0} />;

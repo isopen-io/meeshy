@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+import { gloryLadder } from '@meeshy/shared/utils/game/glory';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockFixture } from '@/lib/api/game-fixture';
 
 import { standingGuideEvents, transitionGuideEvents } from './events';
+
+const at = (rank: string, division5: number): number => gloryLadder().find((s) => s.rank === rank && s.division5 === division5)!.minGlory;
 
 /**
  * LES ÉVÉNEMENTS DU GUIDE (#9379) — la loi partagée choisit LE moment parmi
@@ -66,13 +69,14 @@ describe('l’état, à l’ouverture', () => {
     expect(kinds(standingGuideEvents(gameBlockFixture({ mintedLifetime: 2 }), none))).not.toContain('first-mint-possible');
   });
 
-  test('un rang au-delà du premier', () => {
-    const game = gameBlockFixture({ glory: 1700 });
+  test('un rang au-delà du premier, à sa division V..I (#9636)', () => {
+    const glory = at('voix', 4) + 10;
+    const game = gameBlockFixture({ glory });
     expect(standingGuideEvents(game, none)).toContainEqual({
       kind: 'new-rank',
       rank: 'voix',
-      division: game.glory.division,
-      glory: 1700,
+      division: 4,
+      glory,
       gloryMissing: game.glory.gloryMissing,
     });
   });
@@ -133,8 +137,12 @@ describe('les transitions, pendant que l’écran est ouvert', () => {
   });
 
   test('un rang gagné, une division gagnée', () => {
-    expect(kinds(transitionGuideEvents(view({ glory: 820 }), view({ glory: 840 })))).toContain('new-rank');
-    expect(kinds(transitionGuideEvents(view({ glory: 100 }), view({ glory: 140 })))).not.toContain('new-rank');
+    expect(kinds(transitionGuideEvents(view({ glory: at('echo', 5) - 1 }), view({ glory: at('echo', 5) })))).toContain('new-rank');
+    expect(kinds(transitionGuideEvents(view({ glory: at('echo', 5) + 1 }), view({ glory: at('echo', 5) + 40 })))).not.toContain('new-rank');
+  });
+
+  test('V → IV est une division gagnée, même si la projection héritée (III) ne bouge pas (#9636)', () => {
+    expect(kinds(transitionGuideEvents(view({ glory: at('echo', 4) - 1 }), view({ glory: at('echo', 4) })))).toContain('new-rank');
   });
 
   test('un palier du trésor', () => {

@@ -137,7 +137,7 @@ export const afterPrestige = (view: EngagementWithGame): EngagementWithGame => {
   if (!transition.allowed) return view;
 
   const progress = levelProgress(transition.scoreAfter);
-  const standing = gloryStanding({ glory: game.glory.glory + transition.gloryGained, mythic: game.glory.rank === 'mythe' });
+  const standing = gloryStanding({ glory: game.glory.glory + transition.gloryGained, mythic: game.glory.rank === 'mythe', mythicSeat: game.glory.mythic ?? null });
   const trophies = game.trophies;
   return onGame(view, (current) => ({
     ...current,
@@ -154,7 +154,7 @@ export const afterPrestige = (view: EngagementWithGame): EngagementWithGame => {
       prestige: transition.prestigeAfter,
       canPrestige: false,
     },
-    glory: { glory: standing.glory, rank: standing.rank, division: standing.division, next: standing.next, gloryMissing: standing.gloryMissing, progress: standing.progress },
+    glory: { glory: standing.glory, rank: standing.rank, division: standing.division, division5: standing.division5, next: standing.next, gloryMissing: standing.gloryMissing, progress: standing.progress, mythic: standing.mythic },
     mint: previewMint({ score: transition.scoreAfter, mintedLifetime: current.mint.number, debitablePoints: 0 }),
     boosts: { ...current.boosts, tailwind: tailwindFactor({ level: progress.level, levelRecord: transition.levelRecordAfter }) },
     prestige: { ...prestige, stars: transition.prestigeAfter, canPrestige: false },

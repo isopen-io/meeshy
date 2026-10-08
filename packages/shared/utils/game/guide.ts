@@ -17,7 +17,7 @@
  * l'intégration — c'est une règle d'AFFICHAGE, que la loi ne peut pas tenir.
  */
 
-import type { GloryDivision, GloryRankOrMythic } from './glory.js';
+import type { GloryDivision5, GloryRankOrMythic } from './glory.js';
 import type { LevelTierKey } from './levels.js';
 import type { TreasuryTierKey } from './treasury.js';
 
@@ -101,7 +101,8 @@ export type GuideEvent =
   | {
       readonly kind: 'new-rank';
       readonly rank: GloryRankOrMythic;
-      readonly division: GloryDivision | null;
+      /** V (5) à I (1) — #9636 ; une division héritée (III, II, I) en est un sous-ensemble. */
+      readonly division: GloryDivision5 | null;
       readonly glory: number;
       readonly gloryMissing: number | null;
     }

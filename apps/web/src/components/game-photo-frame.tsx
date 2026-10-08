@@ -46,7 +46,7 @@ function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem }) {
     case 'start':
       return <Signature size={512} color="var(--ios-on-brand)" mode="struck" />;
     case 'rank':
-      return <RankBlason rank={emblem.rank} division={emblem.division} size={512} label={rankName(emblem.rank)} />;
+      return <RankBlason rank={emblem.rank} division={emblem.division} mythic={emblem.mythic} size={512} label={rankName(emblem.rank)} />;
     case 'tier':
       return <LevelRing level={emblem.level} tier={emblem.tier} progress={1} size={512} showTier />;
     case 'level-hundred':

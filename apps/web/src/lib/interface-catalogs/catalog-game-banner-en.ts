@@ -30,6 +30,7 @@ const en = {
   'game.rank.oracle': 'Oracle',
   'game.rank.legende': 'Legend',
   'game.rank.mythe': 'Myth',
+  'game.rank.mythe_seat': 'Myth #{number}',
   'game.banner.level': 'Level {level}',
   'game.banner.to_next': '{percent}% to {level}',
   'game.banner.top': 'at the top',

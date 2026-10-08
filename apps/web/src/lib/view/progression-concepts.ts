@@ -1,3 +1,4 @@
+import { servedDivision, shownRank } from '@/lib/game/served-rank';
 import { LEAGUE_MIN_LEVEL } from '@meeshy/shared/utils/game/league';
 import { MISSIONS_MIN_LEVEL } from '@meeshy/shared/utils/game/missions';
 import { SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
@@ -21,6 +22,7 @@ import {
   meeshCount,
   pointsLabel,
   rankLabel,
+  standingLabel,
   treasuryName,
 } from '@/lib/view/game-copy';
 import { leagueName, remainingLabel, timerLabel, visibilityLabel, zoneLabel } from '@/lib/view/game-copy-v2';
@@ -253,8 +255,8 @@ function meesh(view: EngagementWithGame): Body {
 function glory(view: EngagementWithGame): Body {
   const served = view.game?.glory;
   if (served === undefined) return EMPTY;
-  const next = served.next === null ? null : rankLabel(served.next.rank, served.next.division);
-  const rank = rankLabel(served.rank, served.division);
+  const next = served.next === null ? null : rankLabel(served.next.rank, servedDivision(served.next));
+  const rank = standingLabel(shownRank(served));
   return {
     value: rank,
     chips: [

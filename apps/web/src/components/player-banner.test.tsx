@@ -63,7 +63,7 @@ describe('seulement ce qui existe', () => {
 
   const alone: ReadonlyArray<readonly [(typeof PIECES)[number], PlayerBannerModel]> = [
     ['meeshes', { ...newcomer(), meeshes: 1 }],
-    ['rank', { ...newcomer(), rank: { rank: 'murmure', division: 3 } }],
+    ['rank', { ...newcomer(), rank: { rank: 'murmure', division: 3, mythic: null } }],
     ['league', { ...newcomer(), league: { league: 'jade', place: 4 } }],
     ['flame', { ...newcomer(), flame: { form: 'braise', days: 3 } }],
   ];
