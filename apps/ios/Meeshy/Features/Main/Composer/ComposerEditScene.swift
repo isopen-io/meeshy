@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import MeeshySDK
 
 /// Ce qui s'ouvre sous la scène de retouche, au-dessus des outils.
 nonisolated enum ComposerEditPanel: Equatable, Sendable {
@@ -127,7 +128,7 @@ nonisolated enum ComposerCropPreset: CaseIterable, Hashable, Sendable {
         case .original:
             guard source.width > 0, source.height > 0 else { return ComposerLookPainter.designAspect }
             return ComposerEditScene.clampedAspect(source.width / source.height)
-        case .story: return 9.0 / 16.0
+        case .story: return SceneShape.aspect
         case .portrait: return 4.0 / 5.0
         case .square: return 1
         case .landscape: return 16.0 / 9.0
