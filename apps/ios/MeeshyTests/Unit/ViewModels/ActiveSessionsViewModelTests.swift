@@ -363,6 +363,48 @@ final class SessionClosedNoticeCopyTests: XCTestCase {
     }
 }
 
+// MARK: - Ce que le manifeste de confidentialité déclare (#9645)
+
+/// Le lieu d'une session (pays, ville approximative tirés de l'adresse),
+/// l'identifiant d'appareil des sessions et des notifications, l'avis de
+/// capture d'écran et les rapports de plantage rattachés au compte : le
+/// manifeste doit dire ce que l'app collecte, LIÉ quand c'est lié.
+final class SessionPrivacyManifestTests: XCTestCase {
+
+    private func collected() throws -> [String: (linked: Bool, purposes: Set<String>)] {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // ViewModels
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // ios
+            .appendingPathComponent("Meeshy/PrivacyInfo.xcprivacy")
+        let data = try Data(contentsOf: url)
+        let plist = try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+        let types = try XCTUnwrap(plist["NSPrivacyCollectedDataTypes"] as? [[String: Any]])
+        return types.reduce(into: [:]) { result, entry in
+            guard let type = entry["NSPrivacyCollectedDataType"] as? String else { return }
+            let purposes = entry["NSPrivacyCollectedDataTypePurposes"] as? [String] ?? []
+            result[type] = (entry["NSPrivacyCollectedDataTypeLinked"] as? Bool ?? false, Set(purposes))
+        }
+    }
+
+    func test_manifest_declaresWhatSessionsAndCaptureNoticesCollect() throws {
+        let types = try collected()
+        let functionality = "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+
+        let coarse = try XCTUnwrap(types["NSPrivacyCollectedDataTypeCoarseLocation"])
+        XCTAssertTrue(coarse.linked && coarse.purposes.contains(functionality), "lieu approximatif d'une session")
+
+        let interaction = try XCTUnwrap(types["NSPrivacyCollectedDataTypeProductInteraction"], "l'avis de capture d'écran")
+        XCTAssertTrue(interaction.linked && interaction.purposes.contains(functionality))
+
+        let device = try XCTUnwrap(types["NSPrivacyCollectedDataTypeDeviceID"])
+        XCTAssertTrue(device.linked && device.purposes.contains(functionality), "jeton de notification et sessions, rattachés au compte")
+
+        XCTAssertEqual(types["NSPrivacyCollectedDataTypeCrashData"]?.linked, true, "les rapports de plantage portent l'identifiant du compte")
+    }
+}
+
 // MARK: - Cache en mémoire
 
 actor InMemorySessionsCache: MutableCacheStore {
