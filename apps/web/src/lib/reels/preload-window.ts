@@ -115,3 +115,28 @@ export function recordVisit(history: readonly ReelVisit[], visit: ReelVisit): re
   if (visit.dwellMs < TRAVERSAL_MS) return history;
   return [...history, visit].slice(-HISTORY_LENGTH);
 }
+
+/**
+ * Les cibles de l'amorceur (`media-primer.ts`), dans l'ordre où les servir :
+ * le plus proche d'abord, DEVANT avant derrière à distance égale (le geste
+ * majoritaire va vers l'avant). `urls[i]` est la source lisible du réel `i`,
+ * `undefined` quand il n'en a pas (images, scène composée). Une source
+ * répétée ne s'amorce qu'une fois, à sa distance la plus proche.
+ */
+export function primeTargetsOf(params: {
+  readonly urls: readonly (string | undefined)[];
+  readonly activeIndex: number;
+  readonly window: PreloadWindow;
+  readonly network: PreloadNetwork;
+}): readonly { readonly url: string; readonly bytes: number }[] {
+  const { urls, activeIndex, window, network } = params;
+  const reach = Math.max(window.ahead, window.behind);
+  const offsets = Array.from({ length: reach }, (_, i) => i + 1).flatMap((d) => [d, -d]);
+  const candidates = offsets.flatMap((offset) => {
+    const url = urls[activeIndex + offset];
+    const tier = preloadTierOf(offset, window);
+    const bytes = primeBytesOf({ tier, distance: Math.abs(offset), network });
+    return url === undefined || bytes === 0 ? [] : [{ url, bytes }];
+  });
+  return candidates.filter((c, i) => candidates.findIndex((o) => o.url === c.url) === i);
+}

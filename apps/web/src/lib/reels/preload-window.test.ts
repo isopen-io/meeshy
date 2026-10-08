@@ -7,6 +7,7 @@ import {
   preloadTierOf,
   preloadWindowOf,
   primeBytesOf,
+  primeTargetsOf,
   recordVisit,
 } from './preload-window';
 
@@ -164,5 +165,26 @@ describe('recordVisit — l’historique est borné et ignore les traversées', 
     expect(next).toHaveLength(12);
     expect(next[0]?.dwellMs).toBe(1_001);
     expect(next.at(-1)).toEqual({ dwellMs: 9_999, direction: 'backward' });
+  });
+});
+
+describe('primeTargetsOf — ce que l’amorceur reçoit, le plus proche d’abord', () => {
+  const urls = ['u0', 'u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8'];
+
+  test('seuls les paliers « monté » et « amorcé » ; devant avant derrière à distance égale', () => {
+    const targets = primeTargetsOf({ urls, activeIndex: 4, window: { ahead: 4, behind: 3 }, network: { effectiveType: '4g' } });
+    expect(targets.map((t) => t.url)).toEqual(['u6', 'u2', 'u7', 'u1', 'u8']);
+    expect(targets.every((t) => t.bytes > 0)).toBe(true);
+  });
+
+  test('un réel sans média lisible (image, scène) ne s’amorce pas', () => {
+    const sparse = ['u0', undefined, 'u2', undefined, 'u4'];
+    const targets = primeTargetsOf({ urls: sparse, activeIndex: 0, window: { ahead: 4, behind: 2 }, network: {} });
+    expect(targets.map((t) => t.url)).toEqual(['u2', 'u4']);
+  });
+
+  test('une même source répétée ne s’amorce qu’une fois', () => {
+    const targets = primeTargetsOf({ urls: ['a', 'x', 'b', 'x', 'x'], activeIndex: 0, window: { ahead: 4, behind: 2 }, network: {} });
+    expect(targets.map((t) => t.url)).toEqual(['b', 'x']);
   });
 });
