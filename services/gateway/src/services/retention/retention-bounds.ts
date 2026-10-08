@@ -1,3 +1,5 @@
+import type { Prisma } from '@meeshy/shared/prisma/client';
+
 /**
  * LES BORNES DE CONSERVATION, une seule fois (#9614, #9642) — la PURGE les
  * applique (`jobs/retention-sweep.ts`), et les LECTEURS aussi : une session
@@ -27,33 +29,55 @@ export const monthsBefore = (now: Date, months: number): Date => {
   return cutoff;
 };
 
-/** Une session close avant que `invalidatedAt` ne soit écrit : sa date de fin est sa dernière activité. */
-const CLOSED_WITHOUT_DATE = { OR: [{ invalidatedAt: null }, { invalidatedAt: { isSet: false } }] };
+/**
+ * UN CHAMP ABSENT N'EST PAS `null`, ET UNE NÉGATION ÉCARTE LE DOCUMENT QUI N'A
+ * PAS LA CLÉ (sémantique mesurée contre mongo:8, #8309 ; double
+ * `__tests__/helpers/mongo-where.ts`). Une session vivante n'a jamais de clé
+ * `invalidatedAt` : toute borne s'écrit donc en branches POSITIVES, jamais en
+ * `NOT` — un `NOT` de la purge masquait toutes les sessions vivantes.
+ */
+const CLOSED_WITHOUT_DATE: Prisma.UserSessionWhereInput = { OR: [{ invalidatedAt: null }, { invalidatedAt: { isSet: false } }] };
 
 /**
- * Les sessions dont la conservation est ÉCHUE : closes depuis plus de 90 jours,
- * ou ÉCHUES depuis plus de 90 jours même si rien n'a jamais écrit leur clôture
- * (`expiresAt` dépassé, `isValid` resté vrai) — une session échue n'est plus
- * utilisable, elle n'est donc jamais une session vivante.
+ * Les sessions dont la conservation est ÉCHUE :
+ *  - closes depuis plus de 90 jours ;
+ *  - closes sans date de clôture, inactives depuis plus de 90 jours ;
+ *  - échues depuis plus de 90 jours ET inactives depuis plus de 90 jours —
+ *    l'échéance seule ne suffit pas : `/auth/refresh` et la garde REST ne
+ *    lisent pas `expiresAt`, une session échue mais rafraîchie est VIVANTE
+ *    (audit A2-2, #9656).
  */
-export function expiredSessionRetentionWhere(now: Date) {
+export function expiredSessionRetentionWhere(now: Date): Prisma.UserSessionWhereInput {
   const cutoff = daysBefore(now, RETENTION.closedSessionDays);
   return {
     OR: [
       { isValid: false, invalidatedAt: { lt: cutoff } },
       { isValid: false, AND: [CLOSED_WITHOUT_DATE, { lastActivityAt: { lt: cutoff } }] },
-      { expiresAt: { lt: cutoff } },
+      { expiresAt: { lt: cutoff }, lastActivityAt: { lt: cutoff } },
     ],
   };
 }
 
-/** Ce qu'un lecteur de sessions peut encore servir. */
-export function retainedSessionWhere(now: Date) {
-  return { NOT: [expiredSessionRetentionWhere(now)] };
+/**
+ * Ce qu'un lecteur de sessions peut encore servir : le COMPLÉMENT exact de la
+ * purge, écrit en branches positives (un témoin le vérifie ligne à ligne).
+ */
+export function retainedSessionWhere(now: Date): Prisma.UserSessionWhereInput {
+  const cutoff = daysBefore(now, RETENTION.closedSessionDays);
+  return {
+    AND: [
+      // ni close il y a plus de 90 jours…
+      { OR: [{ isValid: true }, { invalidatedAt: { gte: cutoff } }, CLOSED_WITHOUT_DATE] },
+      // …ni close sans date et inactive depuis plus de 90 jours…
+      { OR: [{ isValid: true }, { invalidatedAt: { not: null } }, { lastActivityAt: { gte: cutoff } }] },
+      // …ni échue et inactive depuis plus de 90 jours.
+      { OR: [{ expiresAt: { gte: cutoff } }, { lastActivityAt: { gte: cutoff } }] },
+    ],
+  };
 }
 
 /** Ce qu'un lecteur d'événements de sécurité peut encore servir. */
-export function retainedSecurityEventWhere(now: Date) {
+export function retainedSecurityEventWhere(now: Date): Prisma.SecurityEventWhereInput {
   return { createdAt: { gte: monthsBefore(now, RETENTION.securityEventMonths) } };
 }
 

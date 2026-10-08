@@ -49,7 +49,7 @@ describe('exportSessions', () => {
     await exportSessions(prisma as never, USER_ID, PAGE, 'fr');
     const { select, where, take } = prisma.userSession.findMany.mock.calls[0][0] as { select: Record<string, boolean>; where: unknown; take: number };
 
-    expect(where).toMatchObject({ userId: USER_ID, NOT: expect.any(Array) });
+    expect(where).toMatchObject({ userId: USER_ID, AND: expect.any(Array) });
     expect(take).toBe(500);
     for (const field of ['id', 'createdAt', 'lastActivityAt', 'expiresAt', 'invalidatedAt', 'invalidatedReason',
       'deviceType', 'deviceVendor', 'deviceModel', 'deviceName', 'osName', 'osVersion', 'browserName', 'browserVersion',

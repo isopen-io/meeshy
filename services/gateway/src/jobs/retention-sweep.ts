@@ -38,8 +38,9 @@
  * sur l'état à corriger, leur premier passage solde l'arriéré comme les
  * suivants font l'entretien.
  */
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { unsetOrNull } from '../utils/prisma-unset';
 import {
   RETENTION,
   daysBefore,
@@ -104,14 +105,21 @@ type RetentionStore = Pick<PrismaClient, 'userSession' | 'securityEvent' | 'admi
 /** Les comptes visés par une procédure en cours — leurs traces ne partent pas. */
 async function accountsUnderProcedure(prisma: RetentionStore, now: Date): Promise<readonly string[]> {
   const [bans, reports, locked] = await Promise.all([
+    // `BanService.createBan` n'écrit NI `liftedAt` NI parfois `expiresAt` : la
+    // clé est ABSENTE, et `{ liftedAt: null }` ne l'apparie pas (audit A2-1) —
+    // `unsetOrNull`, comme `BanService.listActiveBans`.
     prisma.ban.findMany({
-      where: { liftedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      where: {
+        AND: [
+          unsetOrNull('liftedAt'),
+          { OR: [...unsetOrNull('expiresAt').OR, { expiresAt: { gt: now } }] },
+        ],
+      },
       select: { userId: true },
     }),
     prisma.report.findMany({
-      // Le STATUT, jamais `resolvedAt` : aucun chemin de résolution ne l'écrit,
-      // et tout compte jamais signalé restait gelé à vie (revue
-      // « privacy-retention-bypass »).
+      // Le STATUT, jamais `resolvedAt` : un signalement ouvert n'a pas la clé
+      // (absente ≠ null), et `dismissed` ne l'écrit pas (`report.service.ts`).
       where: { reportedType: 'user', status: { in: ['pending', 'under_review'] } },
       select: { reportedEntityId: true },
     }),
@@ -161,17 +169,26 @@ export async function sweepRetention(
     logger.error('retention sweep suspended — procedures could not be read, nothing is erased', error);
     return NOTHING_SWEPT(apply);
   }
-  const spareOwner = held.length > 0 ? { NOT: [{ userId: { in: [...held] } }] } : {};
-  const spareAccount = held.length > 0 ? { NOT: [{ id: { in: [...held] } }] } : {};
-  const spareAudit = held.length > 0 ? { NOT: [{ userId: { in: [...held] } }, { adminId: { in: [...held] } }] } : {};
+  // Les comptes sous procédure s'écartent par des branches POSITIVES : une
+  // négation écarterait aussi le document sans la clé (un événement sans
+  // `userId` serait gardé à jamais).
+  const heldIds = [...held];
+  // `SecurityEvent.userId` est NULLABLE (tentative sans compte) : l'absence et
+  // `null` se gardent par des branches positives. `UserSession.userId` est requis.
+  const spareEventOwner: Prisma.SecurityEventWhereInput[] = heldIds.length > 0
+    ? [{ OR: [{ userId: { notIn: heldIds } }, { userId: null }, { userId: { isSet: false } }] }]
+    : [];
+  const spareSessionOwner: Prisma.UserSessionWhereInput[] = heldIds.length > 0 ? [{ userId: { notIn: heldIds } }] : [];
+  const spareAccount: Prisma.UserWhereInput[] = heldIds.length > 0 ? [{ id: { notIn: heldIds } }] : [];
+  const spareAudit: Prisma.AdminAuditLogWhereInput[] = heldIds.length > 0 ? [{ userId: { notIn: heldIds } }, { adminId: { notIn: heldIds } }] : [];
 
-  const closedSessionsWhere = { ...spareOwner, ...expiredSessionRetentionWhere(now) };
+  const closedSessionsWhere: Prisma.UserSessionWhereInput = { AND: [expiredSessionRetentionWhere(now), ...spareSessionOwner] };
   const closedSessions = await step('closed sessions', async () =>
     apply
       ? (await prisma.userSession.deleteMany({ where: closedSessionsWhere })).count
       : prisma.userSession.count({ where: closedSessionsWhere }));
 
-  const eventsWhere = { createdAt: { lt: eventCutoff }, ...spareOwner };
+  const eventsWhere: Prisma.SecurityEventWhereInput = { AND: [{ createdAt: { lt: eventCutoff } }, ...spareEventOwner] };
   const securityEvents = await step('security events', async () =>
     apply
       ? (await prisma.securityEvent.deleteMany({ where: eventsWhere })).count
@@ -188,12 +205,16 @@ export async function sweepRetention(
     eachPage(
       (after) => prisma.user.findMany({
         where: {
-          deletedAt: { lt: purgeCutoff },
-          isActive: false,
-          accountDeletionRequests: { some: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] } } },
-          securityEvents: { some: {} },
-          ...spareAccount,
-          ...after,
+          AND: [
+            {
+              deletedAt: { lt: purgeCutoff },
+              isActive: false,
+              accountDeletionRequests: { some: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] } } },
+              securityEvents: { some: {} },
+            },
+            ...spareAccount,
+            after,
+          ],
         },
         select: { id: true },
         orderBy: { id: 'asc' },
@@ -205,16 +226,18 @@ export async function sweepRetention(
       },
     ));
 
-  const auditWhere = { createdAt: { lt: auditCutoff }, ...spareAudit };
+  const auditWhere = { AND: [{ createdAt: { lt: auditCutoff } }, ...spareAudit] };
   const adminAuditLogs = await step('admin audit log', async () =>
     apply
       ? (await prisma.adminAuditLog.deleteMany({ where: auditWhere })).count
       : prisma.adminAuditLog.count({ where: auditWhere }));
 
   const registrationWhere = {
-    ...spareAccount,
-    createdAt: { lt: traceCutoff },
-    OR: [{ registrationIp: { not: null } }, { registrationLocation: { not: null } }, { registrationDevice: { not: null } }],
+    AND: [
+      { createdAt: { lt: traceCutoff } },
+      { OR: [{ registrationIp: { not: null } }, { registrationLocation: { not: null } }, { registrationDevice: { not: null } }] },
+      ...spareAccount,
+    ],
   };
   const registrationTraces = await step('registration address', async () =>
     apply
@@ -223,19 +246,23 @@ export async function sweepRetention(
 
   const loginTraceFields = { OR: [{ lastLoginIp: { not: null } }, { lastLoginLocation: { not: null } }, { lastLoginDevice: { not: null } }] };
   const loginTraces = await step('last login address', async () => {
-    const datedWhere = { lastLoginAt: { lt: traceCutoff }, ...loginTraceFields, ...spareAccount };
+    const datedWhere = { AND: [{ lastLoginAt: { lt: traceCutoff } }, loginTraceFields, ...spareAccount] };
     const dated = apply
       ? (await prisma.user.updateMany({ where: datedWhere, data: { lastLoginIp: null, lastLoginLocation: null, lastLoginDevice: null } })).count
       : await prisma.user.count({ where: datedWhere });
     const legacy = await eachPage(
       (after) => prisma.user.findMany({
         where: {
-          lastLoginAt: { isSet: false },
-          createdAt: { lt: traceCutoff },
-          sessions: { none: { createdAt: { gte: traceCutoff } } },
-          ...loginTraceFields,
-          ...spareAccount,
-          ...after,
+          AND: [
+            {
+              lastLoginAt: { isSet: false },
+              createdAt: { lt: traceCutoff },
+              sessions: { none: { createdAt: { gte: traceCutoff } } },
+            },
+            loginTraceFields,
+            ...spareAccount,
+            after,
+          ],
         },
         select: { id: true },
         orderBy: { id: 'asc' },
@@ -244,7 +271,7 @@ export async function sweepRetention(
       async (users) => {
         if (!apply) return users.length;
         const erased = await prisma.user.updateMany({
-          where: { id: { in: users.map((user) => user.id) }, lastLoginAt: { isSet: false }, ...spareAccount },
+          where: { AND: [{ id: { in: users.map((user) => user.id) }, lastLoginAt: { isSet: false } }, ...spareAccount] },
           data: { lastLoginIp: null, lastLoginLocation: null, lastLoginDevice: null },
         });
         return erased.count;

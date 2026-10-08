@@ -168,7 +168,7 @@ describe('GET /admin/users/:userId/sessions', () => {
     expect(body.pagination).toEqual({ total: 1, offset: 0, limit: 20, hasMore: false });
 
     const call = mockPrisma.userSession.findMany.mock.calls[0][0];
-    expect(call.where).toMatchObject({ userId: 'user123', NOT: expect.any(Array) });
+    expect(call.where).toMatchObject({ userId: 'user123', AND: expect.any(Array) });
     expect(call.orderBy).toEqual({ lastActivityAt: 'desc' });
     // Ni le jeton, ni son renouvellement, ni l'empreinte d'appareil ne sortent.
     expect(call.select.sessionToken).toBeUndefined();

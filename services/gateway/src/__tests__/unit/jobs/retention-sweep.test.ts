@@ -8,6 +8,10 @@
  *  - l'adresse et le lieu d'inscription s'effacent 12 mois après l'inscription,
  *    ceux de la dernière connexion 12 mois après elle.
  *
+ * Les règles elles-mêmes se jugent sur DOCUMENTS dans
+ * `retention-sweep.mongo-behavior.test.ts` (champ absent ≠ null, négations) ;
+ * ce fichier garde les durées, l'interrupteur, la pagination et le fail-closed.
+ *
  * Et la PREMIÈRE exécution en production supprime des données anciennes : la
  * purge n'écrit que si `RETENTION_PURGE_ENABLED` vaut exactement `true`.
  * Désarmée, elle COMPTE ce qu'elle effacerait, et n'écrit rien.
@@ -28,6 +32,17 @@ const monthsBefore = (months: number) => {
   const d = new Date(NOW);
   d.setUTCMonth(d.getUTCMonth() - months);
   return d;
+};
+
+/** Cherche une clé dans un `where`, à travers ses `AND` / `OR` — la passe compose ses filtres. */
+const clause = (where: any, key: string): any => {
+  if (!where || typeof where !== 'object') return undefined;
+  if (key in where) return where[key];
+  for (const branch of [...(where.AND ?? []), ...(where.OR ?? [])]) {
+    const found = clause(branch, key);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 };
 
 type FakeOverrides = {
@@ -53,9 +68,9 @@ const fakePrisma = (overrides: FakeOverrides = {}) => {
       // Deux lectures distinctes : les comptes PURGÉS (filtre `deletedAt`) et
       // les comptes ANTÉRIEURS à `lastLoginAt` (filtre `lastLoginAt`).
       findMany: jest.fn(async (args: any) =>
-        (args?.where?.lockedUntil
+        (clause(args?.where, 'lockedUntil')
           ? overrides.lockedUserIds ?? []
-          : args?.where?.deletedAt ? overrides.purgedUserIds ?? [] : overrides.legacyLoginUserIds ?? []).map((id) => ({ id }))),
+          : clause(args?.where, 'deletedAt') ? overrides.purgedUserIds ?? [] : overrides.legacyLoginUserIds ?? []).map((id) => ({ id }))),
     },
   };
 };
@@ -108,108 +123,12 @@ describe('sweepRetention — désarmée', () => {
 });
 
 describe('sweepRetention — armée', () => {
-  it('efface les sessions closes depuis plus de 90 jours, et seulement des sessions closes', async () => {
-    const prisma = fakePrisma();
-
-    await sweepRetention(prisma as never, { now: NOW, apply: true });
-
-    expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({
-      where: {
-        OR: [
-          { isValid: false, invalidatedAt: { lt: daysBefore(90) } },
-          {
-            isValid: false,
-            AND: [
-              { OR: [{ invalidatedAt: null }, { invalidatedAt: { isSet: false } }] },
-              { lastActivityAt: { lt: daysBefore(90) } },
-            ],
-          },
-          // Revue « privacy-retention-bypass » — une session échue depuis plus
-          // de 90 jours est close, même si rien n'a jamais écrit sa clôture.
-          { expiresAt: { lt: daysBefore(90) } },
-        ],
-      },
-    });
-  });
-
-  it('efface les événements de sécurité de plus de 12 mois et le journal d’audit de plus de 15 mois', async () => {
-    const prisma = fakePrisma();
-
-    await sweepRetention(prisma as never, { now: NOW, apply: true });
-
-    expect(prisma.securityEvent.deleteMany).toHaveBeenCalledWith({ where: { createdAt: { lt: monthsBefore(12) } } });
-    expect(prisma.adminAuditLog.deleteMany).toHaveBeenCalledWith({ where: { createdAt: { lt: monthsBefore(15) } } });
-  });
-
-  it('efface les événements de sécurité d’un compte purgé depuis plus de 90 jours', async () => {
-    const prisma = fakePrisma({ purgedUserIds: ['u-purge-1', 'u-purge-2'] });
-
-    await sweepRetention(prisma as never, { now: NOW, apply: true });
-
-    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: {
-        deletedAt: { lt: daysBefore(90) },
-        isActive: false,
-        accountDeletionRequests: { some: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] } } },
-        securityEvents: { some: {} },
-      },
-    }));
-    expect(prisma.securityEvent.deleteMany).toHaveBeenCalledWith({ where: { userId: { in: ['u-purge-1', 'u-purge-2'] } } });
-  });
-
   it('aucun compte purgé : aucune suppression par compte', async () => {
     const prisma = fakePrisma({ purgedUserIds: [] });
 
     await sweepRetention(prisma as never, { now: NOW, apply: true });
 
     expect(prisma.securityEvent.deleteMany).not.toHaveBeenCalledWith(expect.objectContaining({ where: { userId: expect.anything() } }));
-  });
-
-  it('met à null l’adresse et le lieu d’inscription 12 mois après l’inscription', async () => {
-    const prisma = fakePrisma();
-
-    await sweepRetention(prisma as never, { now: NOW, apply: true });
-
-    expect(prisma.user.updateMany).toHaveBeenCalledWith({
-      where: {
-        createdAt: { lt: monthsBefore(12) },
-        OR: [{ registrationIp: { not: null } }, { registrationLocation: { not: null } }, { registrationDevice: { not: null } }],
-      },
-      data: { registrationIp: null, registrationLocation: null, registrationDevice: null },
-    });
-  });
-
-  it('met à null l’adresse et le lieu de dernière connexion 12 mois après elle', async () => {
-    const prisma = fakePrisma();
-
-    await sweepRetention(prisma as never, { now: NOW, apply: true });
-
-    expect(prisma.user.updateMany).toHaveBeenCalledWith({
-      where: {
-        lastLoginAt: { lt: monthsBefore(12) },
-        OR: [{ lastLoginIp: { not: null } }, { lastLoginLocation: { not: null } }, { lastLoginDevice: { not: null } }],
-      },
-      data: { lastLoginIp: null, lastLoginLocation: null, lastLoginDevice: null },
-    });
-  });
-
-  it('un compte d’avant la date de dernière connexion, sans session ouverte depuis 12 mois, perd aussi sa trace', async () => {
-    const prisma = fakePrisma({ legacyLoginUserIds: ['u-ancien'] });
-
-    await sweepRetention(prisma as never, { now: NOW, apply: true });
-
-    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: {
-        lastLoginAt: { isSet: false },
-        createdAt: { lt: monthsBefore(12) },
-        sessions: { none: { createdAt: { gte: monthsBefore(12) } } },
-        OR: [{ lastLoginIp: { not: null } }, { lastLoginLocation: { not: null } }, { lastLoginDevice: { not: null } }],
-      },
-    }));
-    expect(prisma.user.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ['u-ancien'] }, lastLoginAt: { isSet: false } },
-      data: { lastLoginIp: null, lastLoginLocation: null, lastLoginDevice: null },
-    });
   });
 
   it('une étape qui échoue n’empêche pas les suivantes, et son compte est absent', async () => {
@@ -231,7 +150,7 @@ describe('audit L2-5 — la passe va jusqu’au bout, par curseur, pas sur les m
   const paged = (all: readonly string[], toRow: (id: string) => Record<string, string>) =>
     jest.fn(async (args: any) => {
       expect(args.orderBy).toEqual({ id: 'asc' });
-      const after: string | undefined = args.where?.id?.gt;
+      const after: string | undefined = clause(args.where, 'id')?.gt;
       return all.filter((id) => after === undefined || id > after).slice(0, args.take).map(toRow);
     });
 
@@ -245,9 +164,9 @@ describe('audit L2-5 — la passe va jusqu’au bout, par curseur, pas sur les m
     const withEvents = new Set(all);
     const prisma = fakePrisma();
     prisma.user.findMany = jest.fn(async (args: any) => {
-      if (!args?.where?.deletedAt) return [];
+      if (!clause(args?.where, 'deletedAt')) return [];
       expect(args.orderBy).toEqual({ id: 'asc' });
-      const after: string | undefined = args.where?.id?.gt;
+      const after: string | undefined = clause(args.where, 'id')?.gt;
       return all.filter((id) => withEvents.has(id) && (after === undefined || id > after)).slice(0, args.take).map((id) => ({ id }));
     }) as never;
     prisma.securityEvent.deleteMany = jest.fn(async (args: any) => {
@@ -292,31 +211,20 @@ describe('audit L2-5 — la passe va jusqu’au bout, par curseur, pas sur les m
     const prisma = fakePrisma();
     const legacyPage = paged(legacy, (id) => ({ id }));
     prisma.user.findMany = jest.fn(async (args: any) =>
-      (args?.where?.deletedAt || args?.where?.lockedUntil ? [] : legacyPage(args))) as never;
+      (clause(args?.where, 'deletedAt') || clause(args?.where, 'lockedUntil') ? [] : legacyPage(args))) as never;
 
     const report = await sweepRetention(prisma as never, { now: NOW, apply: false });
     expect(report.loginTraces).toBe(2 + 1100);
 
     await sweepRetention(prisma as never, { now: NOW, apply: true });
     const erased = prisma.user.updateMany.mock.calls
-      .map(([args]) => (args as { where: { id?: { in: string[] } } }).where.id?.in ?? [])
+      .map(([args]) => (clause((args as { where: unknown }).where, 'id') as { in?: string[] } | undefined)?.in ?? [])
       .flat();
     expect(new Set(erased)).toEqual(new Set(legacy));
   });
 });
 
 describe('revue « privacy-retention-logic » — rien de vivant ne part', () => {
-  it('une session n’est effacée que close (`isValid: false`) ou échue depuis plus de 90 jours — jamais une session vivante', async () => {
-    const prisma = fakePrisma();
-    await sweepRetention(prisma as never, { now: NOW, apply: true });
-    const where = (prisma.userSession.deleteMany.mock.calls[0][0] as { where: { OR: Array<Record<string, any>> } }).where;
-    for (const branch of where.OR) {
-      const closed = branch.isValid === false;
-      const longExpired = branch.expiresAt?.lt instanceof Date && branch.expiresAt.lt.getTime() < NOW.getTime();
-      expect(closed || longExpired).toBe(true);
-    }
-  });
-
   it('aucun état ne survit d’une passe à l’autre : une passe dont les procédures ne se lisent pas n’efface rien, même après une passe réussie', async () => {
     const prisma = fakePrisma({ bannedUserIds: [] });
     await sweepRetention(prisma as never, { now: NOW, apply: true });
@@ -328,23 +236,12 @@ describe('revue « privacy-retention-logic » — rien de vivant ne part', () =>
     expect(writes(prisma).length).toBe(before);
   });
 
-  it('les événements d’un compte ne partent par la règle du compte purgé que s’il est désactivé, supprimé depuis plus de 90 jours ET purgé par une demande aboutie', async () => {
-    const prisma = fakePrisma({ purgedUserIds: ['u-1'] });
-    await sweepRetention(prisma as never, { now: NOW, apply: true });
-    const where = (prisma.user.findMany.mock.calls.find(([args]: any) => args?.where?.deletedAt)?.[0] as { where: Record<string, unknown> }).where;
-    expect(where).toMatchObject({
-      isActive: false,
-      deletedAt: { lt: daysBefore(90) },
-      accountDeletionRequests: { some: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] } } },
-    });
-  });
-
   it('toute durée se compte vers le PASSÉ : chaque seuil est antérieur à maintenant', async () => {
     const prisma = fakePrisma();
     await sweepRetention(prisma as never, { now: NOW, apply: true });
     const cutoffs = [
-      ...prisma.securityEvent.deleteMany.mock.calls.map(([a]: any) => a?.where?.createdAt?.lt),
-      ...prisma.adminAuditLog.deleteMany.mock.calls.map(([a]: any) => a?.where?.createdAt?.lt),
+      ...prisma.securityEvent.deleteMany.mock.calls.map(([a]: any) => clause(a?.where, 'createdAt')?.lt),
+      ...prisma.adminAuditLog.deleteMany.mock.calls.map(([a]: any) => clause(a?.where, 'createdAt')?.lt),
     ].filter(Boolean) as Date[];
     expect(cutoffs.length).toBeGreaterThan(0);
     cutoffs.forEach((cutoff) => expect(cutoff.getTime()).toBeLessThan(NOW.getTime()));
@@ -355,41 +252,11 @@ describe('revue « evidence-destruction » — une trace visée par une procédu
   const held = () => fakePrisma({ bannedUserIds: ['u-banni'], reportedUserIds: ['u-signale'], lockedUserIds: ['u-verrouille'] });
   const HELD = ['u-banni', 'u-signale', 'u-verrouille'];
 
-  it('relève les comptes sous procédure : bannissement en cours, signalement ouvert, verrou actif', async () => {
-    const prisma = held();
-    await sweepRetention(prisma as never, { now: NOW, apply: true });
-
-    expect(prisma.ban.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { liftedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: NOW } }] },
-    }));
-    expect(prisma.report.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      // Revue « privacy-retention-bypass » : `resolvedAt` n'est écrit par aucun
-      // chemin de résolution — tout compte jamais signalé restait gelé à vie.
-      where: { reportedType: 'user', status: { in: ['pending', 'under_review'] } },
-    }));
-    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { lockedUntil: { gt: NOW } } }));
-  });
-
-  it('ni leurs sessions closes, ni leurs événements, ni le journal d’audit qui les vise ou qu’ils ont écrit, ni leurs adresses ne partent', async () => {
-    const prisma = held();
-    await sweepRetention(prisma as never, { now: NOW, apply: true });
-
-    const sessionWhere = (prisma.userSession.deleteMany.mock.calls[0][0] as any).where;
-    expect(sessionWhere.NOT).toEqual([{ userId: { in: HELD } }]);
-    const eventWhere = (prisma.securityEvent.deleteMany.mock.calls[0][0] as any).where;
-    expect(eventWhere.NOT).toEqual([{ userId: { in: HELD } }]);
-    const auditWhere = (prisma.adminAuditLog.deleteMany.mock.calls[0][0] as any).where;
-    expect(auditWhere.NOT).toEqual([{ userId: { in: HELD } }, { adminId: { in: HELD } }]);
-    for (const [args] of prisma.user.updateMany.mock.calls as any[]) {
-      expect(args.where.NOT ?? []).toContainEqual({ id: { in: HELD } });
-    }
-  });
-
   it('un compte purgé sous procédure garde ses événements au-delà de purge + 90 jours', async () => {
     const prisma = held();
     await sweepRetention(prisma as never, { now: NOW, apply: true });
-    const purgedQuery = (prisma.user.findMany.mock.calls.find(([a]: any) => a?.where?.deletedAt)?.[0] as any).where;
-    expect(purgedQuery.NOT).toEqual([{ id: { in: HELD } }]);
+    const purgedQuery = (prisma.user.findMany.mock.calls.find(([a]: any) => clause(a?.where, 'deletedAt'))?.[0] as any).where;
+    expect(clause(purgedQuery, 'id')).toEqual({ notIn: HELD });
   });
 
   it('si les procédures ne se lisent pas, la passe n’efface RIEN (fail-closed)', async () => {
