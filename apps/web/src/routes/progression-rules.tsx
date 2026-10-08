@@ -14,7 +14,7 @@ import { useOptionalRoute } from '@/lib/router';
 import { ProgressionShell } from '@/routes/progression-shell';
 import { RulesAtlas } from '@/routes/progression-rules-atlas';
 import { RulesBadges } from '@/routes/progression-rules-badges';
-import { BADGES_SECTION_ID, isBadgesSection } from '@/lib/game/badge-guide-link';
+import { BADGES_SECTION_ID, isBadgesSection } from '@/lib/game/medal';
 
 /**
  * « COMMENT ÇA MARCHE » (#9379) — le carnet des règles. Le texte que Mee et Meo

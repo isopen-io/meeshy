@@ -79,10 +79,16 @@ export function BadgeLadder({ view }: { readonly view: BadgeGuideView }) {
   );
 }
 
+/** Sous le nom, à droite de la médaille — en style et non en classe arbitraire :
+ * une classe arbitraire de retrait (60 px) entrait dans la feuille CRITIQUE et
+ * faisait passer la première peinture au-dessus de son plafond (#9639). Tailwind
+ * lit aussi les commentaires : ne pas y écrire le nom de la classe. */
+const UPCOMING_INSET = { paddingInlineStart: 60 } as const;
+
 /** La suite compacte : les paliers à venir, leur matière et leur seuil ; « Échelle complète » au Prisme. */
 export function BadgeUpcoming({ view, axisLabel }: { readonly view: BadgeGuideView; readonly axisLabel: string }) {
   return (
-    <div data-badge-upcoming={view.upcoming.length} className="flex flex-wrap items-center gap-x-3 gap-y-1 ps-[60px] pb-2">
+    <div data-badge-upcoming={view.upcoming.length} className="flex flex-wrap items-center gap-x-3 gap-y-1 pb-2" style={UPCOMING_INSET}>
       {view.upcoming.length === 0 ? (
         <span className="text-check" style={{ color: INK_2 }}>
           {view.next}

@@ -1,7 +1,7 @@
 import { engagementAxisWhatCounts } from '@meeshy/shared/utils/engagement-labels';
 import type { BadgeGuide, BadgeRung } from '@meeshy/shared/utils/game/badge-guide';
 
-import { webMaterial } from '@/lib/game/badge-guide-link';
+import { webMaterial } from '@/lib/game/medal';
 import type { GameMaterial } from '@/lib/game/materials';
 import { translateGame } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -20,7 +20,7 @@ import { awardedDate } from '@/lib/view/game-copy-v2';
  * badges du carnet des règles (`routes/progression-rules.tsx`), ancrée.
  */
 
-export { BADGES_GUIDE_LINK, BADGES_SECTION_ID, isBadgesSection, webMaterial } from '@/lib/game/badge-guide-link';
+export { BADGES_GUIDE_LINK, BADGES_SECTION_ID, isBadgesSection, webMaterial } from '@/lib/game/medal';
 
 export type BadgeRungState = 'reached' | 'next' | 'upcoming';
 

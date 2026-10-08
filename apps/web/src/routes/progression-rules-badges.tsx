@@ -5,9 +5,8 @@ import { badgeGuide, badgeGuidesByFamily } from '@meeshy/shared/utils/game/badge
 
 import { GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { GameMedal } from '@/components/game/medal';
-import { pictogramOf } from '@/lib/game/medal';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { BADGES_SECTION_ID, webMaterial } from '@/lib/game/badge-guide-link';
+import { BADGES_SECTION_ID, pictogramOf, webMaterial } from '@/lib/game/medal';
 import { familyName, formatCount, gameText, materialName } from '@/lib/view/game-copy';
 
 /**
