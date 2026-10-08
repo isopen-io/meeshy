@@ -20,8 +20,18 @@ import {
   exportVoiceProfile,
 } from '../../../../routes/me/export-sections';
 import { exportSessions } from '../../../../routes/me/export-security';
+import { matchesMongoWhere } from '../../../helpers/mongo-where';
 
 const USER_ID = '507f1f77bcf86cd799439011';
+const OTHER_USER_ID = '507f1f77bcf86cd799439012';
+const NOW = new Date('2026-10-08T12:00:00.000Z');
+const daysBeforeNow = (days: number) => new Date(NOW.getTime() - days * 24 * 60 * 60 * 1000);
+const liveSession = (userId: string) => ({
+  userId,
+  isValid: true,
+  lastActivityAt: daysBeforeNow(1),
+  expiresAt: daysBeforeNow(-30),
+});
 
 function fakePrisma(overrides: Record<string, any> = {}) {
   return {
@@ -333,9 +343,30 @@ describe('exportSessions', () => {
 
   it('is bounded and filtered by userId', async () => {
     const prisma = fakePrisma();
-    await exportSessions(prisma, USER_ID, { limit: 50, offset: 10 }, 'fr');
-    expect(prisma.userSession.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: USER_ID }, take: 50, skip: 10 })
-    );
+    await exportSessions(prisma, USER_ID, { limit: 50, offset: 10 }, 'fr', NOW);
+    expect(prisma.userSession.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 50, skip: 10 }));
+    const { where } = prisma.userSession.findMany.mock.calls[0][0];
+    expect(prisma.userSession.count).toHaveBeenCalledWith({ where });
+    expect(matchesMongoWhere(liveSession(USER_ID), where)).toBe(true);
+    expect(matchesMongoWhere(liveSession(OTHER_USER_ID), where)).toBe(false);
+  });
+
+  // La borne de la purge s'applique à l'export, armée ou non (décision
+  // 2026-10-08 « une session … ne se garde pas sans fin », § Lecteurs bornés,
+  // #9614) : le where est évalué contre des DOCUMENTS — une session vivante n'a
+  // aucune clé `invalidatedAt`, et une négation l'écarterait.
+  it('serves the live and recently closed sessions, never one closed beyond the 90-day bound', async () => {
+    const prisma = fakePrisma();
+    await exportSessions(prisma, USER_ID, { limit: 50, offset: 0 }, 'fr', NOW);
+    const { where } = prisma.userSession.findMany.mock.calls[0][0];
+    const closed = (daysAgo: number) => ({
+      userId: USER_ID,
+      isValid: false,
+      invalidatedAt: daysBeforeNow(daysAgo),
+      lastActivityAt: daysBeforeNow(daysAgo),
+      expiresAt: daysBeforeNow(daysAgo - 30),
+    });
+    expect(matchesMongoWhere(closed(10), where)).toBe(true);
+    expect(matchesMongoWhere(closed(120), where)).toBe(false);
   });
 });
