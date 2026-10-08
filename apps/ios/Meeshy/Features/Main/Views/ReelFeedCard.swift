@@ -369,8 +369,7 @@ struct ReelFeedCard: View, Equatable {
             // annonce que la carte de post et le lecteur de réels. Un réel
             // republié joue (et annonce) le son de l'original.
             BackgroundSoundBadge(
-                announcement: BackgroundSoundBadge.announcement(
-                    for: post.storyEffects ?? repostedReel?.storyEffects),
+                announcement: BackgroundSoundBadge.announcement(for: post.storyEffects ?? repostedReel?.storyEffects),
                 accentHex: BackgroundSoundBadge.overMediaAccentHex
             )
             .equatable()
