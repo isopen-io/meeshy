@@ -212,6 +212,12 @@ targets:
       # Foundation/Darwin uniquement, tout est `nonisolated`.
       - path: MeeshyBroadcastExtension/ScreenShareWire.swift
       - path: MeeshyBroadcastExtension/ScreenShareUnixSocket.swift
+      # #9680 — la Live Activity d'envoi : l'app la DEMANDE et la met à jour,
+      # l'extension de widgets la PEINT. Les attributs sont compilés dans les
+      # deux cibles pour qu'une seule définition tienne les deux bouts du fil
+      # (ActivityKit décode en silence un état qui ne correspond pas).
+      # Foundation + ActivityKit ; garde : `OutboxActivityLawTests`.
+      - path: MeeshyWidgets/OutboxActivityAttributes.swift
     settings:
       INFOPLIST_FILE: Meeshy/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app

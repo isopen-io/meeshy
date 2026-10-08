@@ -325,7 +325,8 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                     onItemTap: onSyncPillTap,
                     activeConversationId: activeConversationIdForBanner
                 )
-                .padding(.top, activeConversationId != nil ? 0 : MeeshySpacing.sm)
+                // Au centre de la barre d'état, libre sur iPad (#9680).
+                .inSyncPillBand()
             }
             .modifier(CallPresentationLayer(
                 miniPlayerOnTapBody: onMiniPlayerTap,

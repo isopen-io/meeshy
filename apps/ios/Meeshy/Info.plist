@@ -80,6 +80,8 @@
 	<string>Meeshy needs access to your photo library to share photos and videos with your contacts.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Meeshy uses on-device speech recognition for real-time voice translation and voice message transcription. Your voice data stays on your device for maximum privacy.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>INSendMessageIntent</string>

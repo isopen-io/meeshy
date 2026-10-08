@@ -588,6 +588,10 @@ struct MeeshyApp: App {
                         EngagementRetryScheduler.shared.startObservingNetworkReconnect()
                     }
 
+                    // #9680 — un envoi long (média, story, publication) se suit
+                    // dans la Dynamic Island et sur l'écran verrouillé.
+                    OutboxLiveActivityCoordinator.shared.start()
+
                     // Session check gates auth and MUST finish before the splash
                     // dismisses. Friendship hydration only powers non-critical
                     // friend-status badges, yet it fetches ALL sent + received
