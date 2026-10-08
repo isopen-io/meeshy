@@ -251,6 +251,20 @@ describe('le barème sur le kit (#8876)', () => {
     for (const variant of variants) expect(variant.style.minHeight).toBe('44px');
   });
 
+  test('un message texte se règle par type de conversation : cinq variantes nommées, aux valeurs servies (#9666)', async () => {
+    const host = await mountPanel(scaleTransport());
+    const row = host.querySelector('tr[data-scale-operation="content.text_message"]');
+    const values = Object.fromEntries(
+      [...(row?.querySelectorAll<HTMLInputElement>('[data-scale-variant]') ?? [])].map((field) => [
+        field.dataset.scaleVariant?.split(':')[1],
+        field.value,
+      ]),
+    );
+    expect(values).toEqual({ direct: '2', group: '4', public: '6', global: '8', other: '4' });
+    const names = [...(row?.querySelectorAll('label > span') ?? [])].map((span) => span.textContent);
+    expect(names).toEqual((['direct', 'group', 'public', 'global', 'other'] as const).map((variant) => translateAdmin('fr', `admin.scale.variant.${variant}`)));
+  });
+
   test('les six blocs sont des cartes titrées du kit', async () => {
     const host = await mountPanel(scaleTransport());
     for (const id of ['scale-operations', 'scale-links', 'scale-streak', 'scale-abuse', 'scale-multiplier', 'scale-levels']) {

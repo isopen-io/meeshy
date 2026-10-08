@@ -130,14 +130,15 @@ export function replayServedState(input: {
 }
 
 /**
- * **LE BARÈME NU** (§ 1 du parcours) — un premier message dans une
- * conversation : `content.text_message` (9) + `conversation.public` (5) ; une
+ * **LE BARÈME NU** (§ 1 du parcours) — un premier message dans Meeshy
+ * Global : `content.text_message` au prix d'un message de la conversation
+ * globale (8, #9666) + `conversation.public` (5) ; une
  * story : `content.story` (9) + `tool.direct_publish` (1) ; une amitié
  * acceptée : `social.friendship` (7) à chacun. Le serveur les MULTIPLIE par
  * l'élan (#7908) : ce barème n'est qu'un PLANCHER, servi quand la passerelle
  * ne dit pas `stepRewards`, et jamais la mesure d'un gain.
  */
-const BASE_POINTS = { global: 14, story: 10 } as const;
+const BASE_POINTS = { global: 13, story: 10 } as const;
 
 export const FRIENDSHIP_POINTS = 7;
 export const LEVEL_ONE_POINTS = 10;

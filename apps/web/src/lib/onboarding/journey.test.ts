@@ -136,7 +136,7 @@ describe('announcedPoints — l’annonce avant le geste est celle du serveur, �
   });
 
   test('un serveur qui ne la sert pas : le barème nu, un plancher', () => {
-    expect(announcedPoints('global', state())).toBe(14);
+    expect(announcedPoints('global', state())).toBe(13);
     expect(announcedPoints('story', state())).toBe(10);
   });
 

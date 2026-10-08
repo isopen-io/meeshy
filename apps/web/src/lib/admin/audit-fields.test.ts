@@ -61,6 +61,7 @@ describe('auditFieldLabel — le champ en mots', () => {
     expect(auditFieldLabel('operations.content.text_message.points', 'fr', 'EngagementScaleConfig')).toBe('Points — Envoyer un message texte');
     expect(auditFieldLabel('operations.content.text_message.multiplied', 'fr', 'EngagementScaleConfig')).toBe('Multiplié par l’élan — Envoyer un message texte');
     expect(auditFieldLabel('operations.content.text_message.cap', 'fr', 'EngagementScaleConfig')).toBe('Plafond — Envoyer un message texte');
+    expect(auditFieldLabel('operations.content.text_message.variantPoints.global', 'fr', 'EngagementScaleConfig')).toBe('Points (globale) — Envoyer un message texte');
     expect(auditFieldLabel('multiplier.windowDays', 'fr', 'EngagementScaleConfig')).toBe('Multiplicateur › Fenêtre glissante (jours)');
     expect(auditFieldLabel('multiplier.levelCaps', 'fr', 'EngagementScaleConfig')).toBe('Plafond par niveau');
     expect(auditFieldLabel('streakBonuses', 'fr', 'EngagementScaleConfig')).toBe(translateAdmin('fr', 'admin.scale.streak.title'));

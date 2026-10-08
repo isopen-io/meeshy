@@ -41,6 +41,9 @@ const VARIANT_LABELS = {
   other: 'admin.scale.variant.other',
   live: 'admin.scale.variant.live',
   static: 'admin.scale.variant.static',
+  direct: 'admin.scale.variant.direct',
+  group: 'admin.scale.variant.group',
+  global: 'admin.scale.variant.global',
 } as const;
 
 const isVariantKey = (variant: string): variant is keyof typeof VARIANT_LABELS => variant in VARIANT_LABELS;
