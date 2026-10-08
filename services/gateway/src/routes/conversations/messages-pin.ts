@@ -9,6 +9,9 @@
  * appelle `registerMessagePinRoutes`.
  */
 import { FastifyInstance } from 'fastify';
+import { signMessagesAttachmentsForReader } from '../../services/attachments/signServedAttachments';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
+import { readerParticipantIdOf } from './readerParticipant';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
@@ -604,7 +607,14 @@ export function registerMessagePinRoutes(
         };
       });
 
-      return sendSuccess(reply, formattedMessages, {
+      // #9646 — les pièces d'un message protégé épinglé, signées pour CE lecteur.
+      const servedMessages = await signMessagesAttachmentsForReader(prisma, {
+        messages: formattedMessages,
+        readerParticipantId: await readerParticipantIdOf(prisma, conversationId, authRequest.authContext),
+        signer: readerFileUrlSignerFromEnv(new Date()),
+      });
+
+      return sendSuccess(reply, servedMessages, {
         pagination: { total, offset, limit, hasMore: offset + formattedMessages.length < total }
       });
     } catch (error) {

@@ -10,7 +10,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { readSigningKeys, readerFileUrlSigner } from '../readerFileSignature';
-import { signAttachmentsForReader } from '../signServedAttachments';
+import { signAttachmentsForReader, signMessagesAttachmentsForReader } from '../signServedAttachments';
 
 const SIGNER = readerFileUrlSigner({ keys: readSigningKeys({ ATTACHMENT_URL_SIGNING_KEY: Buffer.alloc(32, 6).toString('base64') }), now: new Date() });
 const KEY = '2026/10/68f2a81417a557e8ce4ddfc1/photo.jpg';
@@ -65,5 +65,26 @@ describe('signAttachmentsForReader', () => {
     expect(await signAttachmentsForReader(prisma as never, { attachments, readerParticipantId: READER, signer: null })).toBe(attachments);
     expect(await signAttachmentsForReader(prisma as never, { attachments, readerParticipantId: null, signer: SIGNER })).toBe(attachments);
     expect(prisma.message.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('signMessagesAttachmentsForReader', () => {
+  it('signe les pièces d’un message protégé de la page, garde la forme de chaque pièce et le message ordinaire intact', async () => {
+    const prisma = prismaWith([
+      { id: 'm-flame', ...ordinary, isViewOnce: true },
+      { id: 'm-plain', ...ordinary },
+    ]);
+    const bare = (id: string) => ({ id, mimeType: 'image/jpeg', fileUrl: KEY, thumbnailUrl: null });
+    const plain = { id: 'm-plain', attachments: [bare('aaaaaaaaaaaaaaaaaaaaaaa2')] };
+    const [flame, kept] = await signMessagesAttachmentsForReader(prisma as never, {
+      messages: [{ id: 'm-flame', attachments: [bare('aaaaaaaaaaaaaaaaaaaaaaa1')] }, plain],
+      readerParticipantId: READER,
+      signer: SIGNER,
+    });
+    const served = (flame?.attachments as Array<Record<string, unknown>>)[0];
+    expect(served?.fileUrl).toMatch(/^\/api\/v1\/attachments\/signed\//);
+    expect(served).not.toHaveProperty('messageId');
+    expect(served?.mimeType).toBe('image/jpeg');
+    expect(kept).toBe(plain);
   });
 });

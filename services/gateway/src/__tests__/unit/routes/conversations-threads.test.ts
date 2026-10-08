@@ -342,3 +342,34 @@ describe('GET /conversations/:id/threads/:messageId — plancher d’historique 
     await app.close();
   });
 });
+
+describe('GET /conversations/:id/threads/:messageId — #9646 pièce protégée', () => {
+  const READER = 'cccccccccccccccccccccc01';
+  const PIECE = 'aaaaaaaaaaaaaaaaaaaaaaa1';
+  const KEY = '2026/10/68f2a81417a557e8ce4ddfc1/photo.jpg';
+
+  async function servedParentFileUrl(pieceIsViewOnce: boolean): Promise<string> {
+    process.env.ATTACHMENT_URL_SIGNING_KEY = Buffer.alloc(32, 5).toString('base64');
+    mockResolveConversationId.mockResolvedValue(CONV_RESOLVED_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+    const parent = { ...MOCK_PARENT_MESSAGE, attachments: [{ id: PIECE, messageId: MESSAGE_ID, fileName: 'photo.jpg', mimeType: 'image/jpeg', fileUrl: KEY }] };
+    const app = await buildApp({
+      prismaOverrides: {
+        message: { findFirst: jest.fn<any>().mockResolvedValue(parent), findMany: jest.fn<any>().mockResolvedValue([]) },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: READER, joinedAt: new Date(0), shareLinkId: null }) },
+        messageAttachment: { findMany: jest.fn<any>().mockResolvedValue([{ id: PIECE, isViewOnce: pieceIsViewOnce, isBlurred: false, effectFlags: 0 }]) },
+      },
+    });
+    try {
+      const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+      return res.json().data.parent.attachments[0].fileUrl;
+    } finally {
+      await app.close();
+      delete process.env.ATTACHMENT_URL_SIGNING_KEY;
+    }
+  }
+
+  it('signe pour son lecteur la pièce à vue unique du message parent', async () => {
+    expect(await servedParentFileUrl(true)).toMatch(new RegExp(`^/api/v1/attachments/signed/${PIECE}\\.${READER}\\.`));
+  });
+});

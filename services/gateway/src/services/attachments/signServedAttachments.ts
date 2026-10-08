@@ -59,3 +59,47 @@ export async function signAttachmentsForReader<T extends SignableAttachment & { 
     return signed === relued ? attachment : { ...attachment, fileUrl: signed.fileUrl, thumbnailUrl: signed.thumbnailUrl, imageVariants: signed.imageVariants, translations: signed.translations };
   });
 }
+
+type AttachmentRecord = SignableAttachment & { readonly id?: unknown };
+
+/**
+ * La même signature sur les pièces d'une page de MESSAGES servis hors de la
+ * liste (fil de discussion, messages épinglés) : une lecture de protection
+ * pour toute la page, puis chaque message rendu avec ses pièces signées. La
+ * forme de chaque pièce ne change pas — seules ses adresses.
+ */
+export async function signMessagesAttachmentsForReader<M extends { readonly id: string; readonly attachments?: unknown }>(
+  prisma: Pick<PrismaClient, 'message' | 'messageAttachment'>,
+  input: { readonly messages: readonly M[]; readonly readerParticipantId: string | null | undefined; readonly signer: ReaderFileUrlSigner | null }
+): Promise<readonly M[]> {
+  const { messages, readerParticipantId, signer } = input;
+  if (!signer || !readerParticipantId) return messages;
+  const piecesOf = (message: M): readonly AttachmentRecord[] =>
+    Array.isArray(message.attachments)
+      ? message.attachments.filter((entry): entry is AttachmentRecord => typeof entry === 'object' && entry !== null)
+      : [];
+  const flat = messages.flatMap((message) => piecesOf(message).map((piece) => ({ ...piece, messageId: message.id })));
+  if (flat.length === 0) return messages;
+  const signed = await signAttachmentsForReader(prisma, { attachments: flat, readerParticipantId, signer });
+  const urlsByPiece = new Map(
+    signed.flatMap((piece, index) => (piece === flat[index] || typeof piece.id !== 'string' ? [] : [[piece.id, piece] as const]))
+  );
+  if (urlsByPiece.size === 0) return messages;
+  const signedId = (entry: unknown): string | undefined => {
+    const id = typeof entry === 'object' && entry !== null ? (entry as AttachmentRecord).id : undefined;
+    return typeof id === 'string' && urlsByPiece.has(id) ? id : undefined;
+  };
+  return messages.map((message) => {
+    if (!Array.isArray(message.attachments) || !message.attachments.some((entry: unknown) => signedId(entry))) return message;
+    return {
+      ...message,
+      attachments: message.attachments.map((entry: unknown) => {
+        const id = typeof entry === 'object' && entry !== null ? (entry as AttachmentRecord).id : undefined;
+        const urls = typeof id === 'string' ? urlsByPiece.get(id) : undefined;
+        return urls
+          ? { ...(entry as object), fileUrl: urls.fileUrl, thumbnailUrl: urls.thumbnailUrl, imageVariants: urls.imageVariants, translations: urls.translations }
+          : entry;
+      }),
+    };
+  });
+}
