@@ -79,18 +79,20 @@ enum ShareFileSource {
     func makeProvider() -> LazyShareFileProvider? {
         switch self {
         case .story(let story):
-            return LazyShareFileProvider(placeholderName: "Meeshy-\(story.id).mp4",
-                                         typeIdentifier: UTType.mpeg4Movie.identifier) {
-                await StoryPhotoSaveService.shared.renderStoryFile(of: story)
+            return ShareFilePlaceholder.video(named: "Meeshy-\(story.id).mp4").map { placeholder in
+                LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier) {
+                    await StoryPhotoSaveService.shared.renderStoryFile(of: story)
+                }
             }
         case .post(let post):
             switch PostSaveRoute.resolve(for: post, mayLeave: ContentExitGate.open.mayLeave()) {
             case .unavailable:
                 return nil
             case .renderScene:
-                return LazyShareFileProvider(placeholderName: "Meeshy-\(post.id).mp4",
-                                             typeIdentifier: UTType.mpeg4Movie.identifier) {
-                    await StoryPhotoSaveService.shared.renderSceneFile(of: post)
+                return ShareFilePlaceholder.video(named: "Meeshy-\(post.id).mp4").map { placeholder in
+                    LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier) {
+                        await StoryPhotoSaveService.shared.renderSceneFile(of: post)
+                    }
                 }
             case .rawFile(let media):
                 return Self.rawFileProvider(media)
@@ -104,7 +106,9 @@ enum ShareFileSource {
         let name = MediaSaveCoordinator.exportFileName(for: request)
         let fallbackType: UTType = media.kind == .video ? .movie : .image
         let type = UTType(filenameExtension: (name as NSString).pathExtension) ?? fallbackType
-        return LazyShareFileProvider(placeholderName: name, typeIdentifier: type.identifier) {
+        let placeholder = media.kind == .video ? ShareFilePlaceholder.video(named: name) : ShareFilePlaceholder.image(named: name)
+        guard let placeholder else { return nil }
+        return LazyShareFileProvider(placeholder: placeholder, typeIdentifier: type.identifier) {
             guard let local = try? await AttachmentMediaSaveResolver().resolveLocalFile(for: request) else { return nil }
             let branded = await MeeshyMediaSaveBranding().stamp(local, kind: request.kind, origin: request.origin)
             defer { if branded.isStamped { MediaSaveCoordinator.discardStagingDirectory(of: branded.url) } }
@@ -130,24 +134,31 @@ nonisolated enum ShareFileActivity {
     }
 }
 
-/// Source de fichier PARESSEUSE de la feuille de partage : le placeholder (une
-/// adresse de fichier typée) suffit à faire paraître les activités de fichier ;
-/// le fichier n'est produit — scène rendue, ou média résolu — que lorsque
-/// l'utilisateur choisit l'une d'elles, sur le fil secondaire de l'opération.
-/// Le fichier produit est jeté avec la source.
+/// Source de fichier PARESSEUSE de la feuille de partage. Son placeholder est un
+/// VRAI fichier minuscule sous le nom final (`ShareFilePlaceholder`, dont le
+/// doc-comment cite la documentation Apple) : c'est sur lui que la feuille offre
+/// « Enregistrer la vidéo » et « Enregistrer dans Fichiers ». Le fichier réel —
+/// scène rendue, ou média résolu — n'est produit que lorsque l'utilisateur choisit
+/// l'une de ces activités, sur le fil secondaire de l'opération
+/// (`UIActivityItemProvider.item`). Placeholder et fichier produit sont jetés
+/// avec la source.
 nonisolated final class LazyShareFileProvider: UIActivityItemProvider, @unchecked Sendable {
     private let typeIdentifier: String
     private let produce: @MainActor @Sendable () async -> URL?
     private let lock = NSLock()
     private var produced: URL?
 
-    init(placeholderName: String, typeIdentifier: String, produce: @escaping @MainActor @Sendable () async -> URL?) {
+    init(placeholder: URL, typeIdentifier: String, produce: @escaping @MainActor @Sendable () async -> URL?) {
         self.typeIdentifier = typeIdentifier
         self.produce = produce
-        super.init(placeholderItem: FileManager.default.temporaryDirectory.appendingPathComponent(placeholderName))
+        super.init(placeholderItem: placeholder)
     }
 
     deinit {
+        if let directory = (placeholderItem as? URL)?.deletingLastPathComponent(),
+           directory.lastPathComponent.hasPrefix("share-placeholder-") {
+            try? FileManager.default.removeItem(at: directory)
+        }
         guard let produced else { return }
         let directory = produced.deletingLastPathComponent()
         let ownsDirectory = directory.lastPathComponent.hasPrefix("media-save-")

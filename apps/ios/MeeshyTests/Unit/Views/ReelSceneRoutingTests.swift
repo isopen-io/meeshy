@@ -1,6 +1,7 @@
 import XCTest
 import UIKit
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// #6745 — **un réel composé se rejoue comme sa scène.**
@@ -141,6 +142,35 @@ final class ReelSceneRoutingTests: XCTestCase {
         XCTAssertEqual(photos.savedVideoURLs.count, 1)
     }
 
+    // MARK: - Un réel à plusieurs scènes s'enregistre ENTIER (#9681)
+
+    func test_renderableSlides_oneSlidePerScene_inTheDocumentOrder() {
+        XCTAssertEqual(StoryPhotoSaveService.renderableSlides(of: Self.twoSceneReel(), preferredLanguages: []).count, 2)
+        XCTAssertEqual(StoryPhotoSaveService.renderableSlides(of: Self.composedReel(), preferredLanguages: []).count, 1)
+    }
+
+    func test_savePost_aTwoSceneReel_bakesBothScenes_thenJoinsThemInOneVideo() async {
+        let exporter = ScriptedStoryExporter()
+        let photos = StubPhotoSaver()
+        let joined = JoinedParts()
+        let sut = StoryPhotoSaveService(exporter: exporter, photoSaver: photos, toasts: MockFeedbackToast(),
+                                        preferredLanguages: { [] }, intro: { nil },
+                                        concatenate: { parts, output in
+                                            joined.counts.append(parts.count)
+                                            return FileManager.default.createFile(atPath: output.path, contents: Data())
+                                        })
+        let reel = Self.twoSceneReel()
+
+        sut.save(post: reel)
+        for _ in 0..<400 where sut.progress(for: reel.id) != nil { await Task.yield() }
+
+        XCTAssertEqual(exporter.prepareCallCount, 2, "chaque scène passe par le moteur")
+        XCTAssertEqual(joined.counts, [2], "puis les deux morceaux s'enchaînent en UN fichier")
+        XCTAssertEqual(exporter.lastAppendsBrandOutro, false)
+        XCTAssertEqual(photos.savedVideoURLs.count, 1, "Photos reçoit UNE vidéo, la suite entière")
+        XCTAssertGreaterThanOrEqual(exporter.cleanupCallCount, 2, "les morceaux intermédiaires sont jetés")
+    }
+
     // MARK: - Partager emporte aussi le fichier, rendu à la demande (#9682)
 
     func test_shareFile_onlyFileActivitiesPayTheRender() {
@@ -159,8 +189,10 @@ final class ReelSceneRoutingTests: XCTestCase {
         XCTAssertEqual(items.count, 2)
         XCTAssertEqual(items.first as? URL, url, "le lien part toujours, en premier")
         let provider = try XCTUnwrap(items.last as? LazyShareFileProvider)
-        XCTAssertEqual((provider.placeholderItem as? URL)?.pathExtension, "mp4",
-                       "le placeholder typé vidéo fait paraître « Enregistrer la vidéo » et « Fichiers »")
+        let placeholder = try XCTUnwrap(provider.placeholderItem as? URL)
+        XCTAssertEqual(placeholder.lastPathComponent, "Meeshy-6aa868a7d5f0ce06898b8222.mp4")
+        XCTAssertTrue(UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(placeholder.path),
+                      "un VRAI fichier vidéo : « Enregistrer la vidéo » peut paraître")
     }
 
     func test_shareItems_nothingToCarry_staysTheLinkAlone() throws {
@@ -170,8 +202,9 @@ final class ReelSceneRoutingTests: XCTestCase {
     }
 
     /// Paresseux : rien n'est rendu à la construction, ni pour une activité de LIEN.
-    func test_shareFileProvider_rendersNothingUntilAFileActivityIsChosen() {
-        let provider = LazyShareFileProvider(placeholderName: "Meeshy-x.mp4", typeIdentifier: "public.mpeg-4") {
+    func test_shareFileProvider_rendersNothingUntilAFileActivityIsChosen() throws {
+        let placeholder = try XCTUnwrap(ShareFilePlaceholder.video(named: "Meeshy-x.mp4"))
+        let provider = LazyShareFileProvider(placeholder: placeholder, typeIdentifier: "public.mpeg-4") {
             XCTFail("aucun rendu tant qu'aucune activité de fichier n'est choisie")
             return nil
         }
@@ -229,6 +262,36 @@ final class ReelSceneRoutingTests: XCTestCase {
         return post.toFeedPost(preferredLanguages: [])
     }
 
+    private static func twoSceneReel() -> FeedPost {
+        let scene = #"""
+        {"id":"s1","objects":[
+           {"id":"bg","kind":"media","plane":"bg","z":0,
+            "anchor":{"t":"free","x":0.5,"y":0.5},
+            "transform":{"rotation":0,"opacity":1,"scale":1},
+            "payload":{"transform":{"videoFitMode":"fill"}}},
+           {"id":"D2686BB9-02E2-4B2B-8E14-735042780017","kind":"media","plane":"content","z":1,"locale":"fr",
+            "anchor":{"t":"free","x":0.5,"y":0.5},
+            "transform":{"rotation":0,"opacity":1,"scale":1},
+            "payload":{"loop":true,"duration":3,"postMediaId":"6aa868a7d5f0ce06898b8220","mutedVolumeMemento":1,
+                       "mediaType":"video","muted":true,"intrinsicDuration":3,"isBackground":true,
+                       "aspectRatio":0.5625,"volume":0}},
+           {"id":"C69078CA-1777-4797-B725-28EBD56FA1EB","kind":"audio","plane":"content","z":2,"locale":"fr",
+            "anchor":{"t":"free","x":0.5,"y":0.65},
+            "transform":{"rotation":0,"opacity":1,"scale":1},
+            "payload":{"placement":"overlay","soundAuthorUsername":"elvirandjiki","postMediaId":null,
+                       "duration":19.902,"mediaURL":"/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a",
+                       "soundId":"6a9a7b41e19ad1985081de32","isBackground":true}}
+         ]}
+        """#
+        let post: APIPost = JSONStub.decode("""
+        {"id":"6aa868a7d5f0ce06898b8295","type":"REEL","content":"","createdAt":"2026-09-14T21:35:35.412Z",
+         "author":{"id":"68f33afa8ae497b2054c84d7","username":"auteur"},
+         "media":[\(videoMedia)],
+         "storyEffects":{"v":3,"scenes":[\(scene),\(scene.replacingOccurrences(of: "\"id\":\"s1\"", with: "\"id\":\"s2\""))]}}
+        """)
+        return post.toFeedPost(preferredLanguages: [])
+    }
+
     private static func plainVideoReelWithAddress() -> FeedPost {
         let post: APIPost = JSONStub.decode("""
         {"id":"6aa868a7d5f0ce06898b8297","type":"REEL","content":"","createdAt":"2026-09-14T21:35:35.412Z",
@@ -265,4 +328,9 @@ final class ReelSceneRoutingTests: XCTestCase {
         reel.storyEffects = effects
         return reel
     }
+}
+
+/// Les morceaux remis à l'enchaînement, un relevé par appel.
+private final class JoinedParts: @unchecked Sendable {
+    var counts: [Int] = []
 }
