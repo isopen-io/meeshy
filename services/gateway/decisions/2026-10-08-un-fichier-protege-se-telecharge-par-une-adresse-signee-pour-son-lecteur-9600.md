@@ -90,3 +90,28 @@ Rotation : nouvelle clé en courante, ancienne en précédente, retrait de celle
 | journal sans identité ; bascule au mot `true` ; 304 refusé sous bascule | `readerFileGate.ts`, `readerFileSignatureEnforced` | `attachments-signed-file-route.test.ts`, `readerFileSignature.test.ts` |
 
 Ce lot outille ; il ne remplace pas un audit cryptographique tiers.
+
+### Amendement du 2026-10-08 — après l'audit adversarial (L1-B, L1-C) et #9646
+
+**Le jeton n'entre dans aucun journal (L1-B).** `redactReaderFileUrl` (`utils/redact-reader-file-url.ts`, sans dépendance) remplace tout ce qui suit `/attachments/signed/` — jeton, clé, requête — par `[redacted]` dans le chronométrage des requêtes lentes (extrait de `server.ts` vers `plugins/request-timing.plugin.ts` : un flux audio ou vidéo dure presque toujours plus de 2 s), le gestionnaire d'erreurs, la validation et le journal de requêtes. Traefik ne sait pas masquer un segment de chemin : l'adresse signée a son **routeur propre** (`gateway[-staging]-signed-files`, `PathPrefix(/api/v1/attachments/signed/)`, plus spécifique donc prioritaire) avec `observability.accessLogs=false`, en production et en staging (même Traefik). Le `docker-compose.yml` de l'hôte de production diverge du dépôt : ces libellés y sont à reporter à la main.
+
+**La bascule sans clé est ignorée, bruyamment (L1-C).** `ATTACHMENT_URL_SIGNATURE_ENFORCE=true` sans `ATTACHMENT_URL_SIGNING_KEY` lisible refuserait tout média protégé sans rien signer ; refuser de démarrer couperait toute la passerelle pour une variable. Elle est donc ignorée, avec une erreur journalisée une fois par processus. La mesure d'usage de l'adresse nue porte `keyShape` : `signable` (arborescence datée, pistes `translated/`) ou `legacy` (jamais signée — son lecteur n'a aucune adresse signée vers laquelle migrer, elle se compte à part).
+
+**Un seul prédicat d'admission (constat de sécurité moyen).** `fileReaderAdmission.ts` : actif, `bannedAt` absent ou nul, lien de partage d'entrée non échu (une lecture de liens en panne ferme tous les invités par lien). La garde de lecture (adresse signée ET routes par identifiant) et la remise des adresses signées l'appliquent l'une et l'autre ; la remise relit TOUJOURS ses destinataires, jamais la liste de l'appelant.
+
+**#9646 — où l'adresse signée est servie désormais.**
+
+| charge | lecteur | mécanisme |
+|---|---|---|
+| `message:new` (socket et REST/ZMQ) | chaque participant admis | `messageNewEmission.ts` (extrait des deux producteurs, hors budget) : pour une pièce qui se lit par lecteur, aucune diffusion de room, une émission par room personnelle |
+| `message:edited` (socket, `broadcastMessageMutation` des trois routes REST) | idem, variante scellée conservée | `readerSignedPlanForMessageId` (relit cinq colonnes ; ligne introuvable ⇒ signe) |
+| `message:attachment-updated` | idem | idem ; un plan illisible n'émet rien en direct plutôt que l'adresse nue |
+| liste, `/sync` | le lecteur de la page | #9600 |
+| détail d'une pièce, galerie | le lecteur | `signAttachmentsForReader` (relit porteurs ET pièces) ; le détail signé passe en `no-cache`, ETag sur l'adresse |
+| fil de discussion, épinglés | le lecteur | `signMessagesAttachmentsForReader` |
+| aperçu `forwardedFrom` | — | la pièce d'une source qui se lit par lecteur QUITTE l'aperçu (le lecteur de la copie n'est pas forcément membre de la source) |
+| recherche de pièces, favoris, pousse | — | rien à signer : ils excluent déjà tout contenu protégé (`messageProtectionWhereExclusion`, `starredMessageVerdict`, `mediaMayTravel`) |
+
+**Coût mesuré** (`readerSignedDelivery.test.ts`) : 1 000 destinataires, 1 000 émissions, ~4 Ko sérialisés chacune, ~17 ms de signature et sérialisation, pour les seuls messages protégés. La charge est construite une fois, seul `attachments` est recopié par lecteur : la variante « signer une fois par conversation, ne personnaliser que l'adresse » est celle-ci. Un socket présent dans la room sans être participant admis ne reçoit plus un message protégé en direct (il relira la page).
+
+**Reste avant #9647** : la file hors ligne rejoue les charges enfilées telles quelles (adresses nues) ; les messages de lien (`linkMessageEmissions`) et le résumé d'appel édité (`broadcastMessageEdited`, jamais protégé) ne passent pas par la remise par lecteur. Suivi : #9646.
