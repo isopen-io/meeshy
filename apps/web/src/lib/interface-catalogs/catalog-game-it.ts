@@ -112,6 +112,7 @@ const it = {
   'game.gauge.level': 'Livello',
   'game.level.title': 'Livello {level} · {tier}',
   'game.level.top': 'Sei in cima.',
+  'game.level.capped': 'Tetto raggiunto: il grado {rank} apre il seguito.',
   'game.level.to_next': 'Ancora {points} al livello {level}',
   'game.level.record': 'Record: livello {level}',
   'game.level.tailwind': ' · Vento in poppa ×{factor}',

@@ -1,6 +1,7 @@
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import type { GameMaterial } from './materials';
+import { LEVEL_TIER_KEYS, levelTierStart } from '@meeshy/shared/utils/game/levels';
 
 /**
  * LE CARNET DES RÈGLES, ILLUSTRÉ (#9538, conception I, II et IV) — ce que
@@ -23,7 +24,7 @@ export const atlasSpeaker = (family: AtlasFamily): AtlasSpeaker =>
   family === 'levels' || family === 'treasury' || family === 'flames' || family === 'medals' || family === 'rarities' ? 'mee' : 'meo';
 
 /** Le premier niveau que couvre un palier (ordinal de 1 à 10) : 1, 10, 20 … 90. */
-export const firstLevelOfTier = (ordinal: number): number => (ordinal <= 1 ? 1 : (ordinal - 1) * 10);
+export const firstLevelOfTier = (ordinal: number): number => levelTierStart(LEVEL_TIER_KEYS[ordinal - 1] ?? 'etincelle');
 
 export type AtlasCoinPlate = {
   readonly key: 'obverse' | 'reverse' | 'gold' | 'prism';

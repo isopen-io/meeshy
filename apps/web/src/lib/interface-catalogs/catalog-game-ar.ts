@@ -112,6 +112,7 @@ const ar = {
   'game.gauge.level': 'المستوى',
   'game.level.title': 'المستوى {level} · {tier}',
   'game.level.top': 'أنت في القمة.',
+  'game.level.capped': 'بلغت الحدّ: رتبة {rank} تفتح ما بعده.',
   'game.level.to_next': 'بقي {points} للوصول إلى المستوى {level}',
   'game.level.record': 'الرقم القياسي: المستوى {level}',
   'game.level.tailwind': ' · رياح مواتية ×{factor}',

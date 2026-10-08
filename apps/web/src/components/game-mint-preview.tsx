@@ -2,6 +2,7 @@ import type { GameMintPreview as MintPreview } from '@meeshy/shared/types/game';
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { MintStrike } from '@/components/game-mint-strike';
+import { mintLevels } from '@/lib/game/ladder';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { convertiblePointsLabel, editionName, formatCount, gameText, levelsLabel, pointsLabel } from '@/lib/view/game-copy';
@@ -66,7 +67,7 @@ function Chips({ lines }: { readonly lines: readonly string[] }) {
 export function GameMintPreview(props: GameMintPreviewProps) {
   const { mint, badgesLost, online, minting, error, celebration, strikeKey = 0, onMint } = props;
   const impact = [
-    mint.levelsLost > 0 ? gameText('game.hero.mint_cost', { levels: levelsLabel(mint.levelsLost) }) : null,
+    mintLevels(mint).levelsLost > 0 ? gameText('game.hero.mint_cost', { levels: levelsLabel(mintLevels(mint).levelsLost) }) : null,
     gameText('game.hero.mint_glory', { glory: formatCount(mint.gloryGained) }),
     badgesLost === undefined || badgesLost === 0 ? null : badgesLine(badgesLost),
   ].filter((line): line is string => line !== null);

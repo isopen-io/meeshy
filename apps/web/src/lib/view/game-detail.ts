@@ -15,6 +15,7 @@ import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { GAME_DETAIL_HOW, type GameDetailFact, type GameDetailFamily } from '@/lib/game/detail-families';
 import { earnRules } from '@/lib/game/earn-rules';
+import { shownLevelOf } from '@/lib/game/ladder';
 import type { GameMaterial } from '@/lib/game/materials';
 import { medalOfAxis } from '@/lib/game/medal';
 import { rarityPercent, visibleRarity, type AchievementRarityMap, type RarityEntry } from '@/lib/game/rarity';
@@ -31,6 +32,7 @@ import {
   formatCount,
   gameText,
   levelTierName,
+  levelTopLine,
   materialName,
   meeshCount,
   missionTitle,
@@ -413,13 +415,14 @@ export function coinDetail(view: EngagementWithGame): ElementDetail | null {
 }
 
 /** L'ANNEAU du niveau. */
-export function ringDetail(level: GameLevel): ElementDetail {
+export function ringDetail(served: GameLevel): ElementDetail {
+  const level = shownLevelOf(served);
   const atTop = level.nextThreshold === null;
   return ofFamily('ring', 'level', 'level', {
     emblem: { kind: 'ring', level: level.level, tier: level.tier, progress: level.progress, prestige: level.prestige },
     name: gameText('game.level.title', { level: formatCount(level.level), tier: levelTierName(level.tier) }),
     state: value(
-      atTop ? gameText('game.level.top') : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) }),
+      atTop ? levelTopLine(level) : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) }),
       atTop ? null : level.progress,
     ),
     facts: present([

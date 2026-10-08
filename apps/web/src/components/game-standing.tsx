@@ -1,5 +1,6 @@
 import type { UserGameProfileResponse } from '@meeshy/shared/types/game';
 
+import { shownStanding } from '@/lib/game/ladder';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { flameFormName, formatCount, gameText, levelTierName, rankName, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
@@ -33,7 +34,8 @@ export function visibleStanding(game: UserGameProfileResponse | undefined): Visi
 
 export function GameStanding({ game }: { readonly game: VisibleStanding }) {
   const language = currentInterfaceLanguage();
-  const { standing, treasury } = game;
+  const { treasury } = game;
+  const standing = shownStanding(game.standing);
   const treasuryTier = treasury?.tier ?? null;
   return (
     <div className="flex flex-col gap-2" data-game-standing="">
@@ -84,7 +86,8 @@ export function GameStanding({ game }: { readonly game: VisibleStanding }) {
  */
 export function GameStandingMini({ game }: { readonly game: VisibleStanding }) {
   const language = currentInterfaceLanguage();
-  const { standing, treasury } = game;
+  const { treasury } = game;
+  const standing = shownStanding(game.standing);
   const treasuryTier = treasury?.tier ?? null;
   return (
     <span className="flex items-center gap-2" data-game-contact-standing="">

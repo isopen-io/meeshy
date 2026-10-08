@@ -1,4 +1,5 @@
 import type { EngagementWithGame } from '@/lib/api/engagement';
+import { shownLevelOf } from '@/lib/game/ladder';
 import { medalOfAxis } from '@/lib/game/medal';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { formatCount, gameText, levelTierName, meeshCount, rankName, standingLabel, treasuryName, daysLabel, medalLabel, shownRank } from '@/lib/view/game-copy';
@@ -33,7 +34,8 @@ export function GameProfileOwn({ progress }: { readonly progress: EngagementWith
   const game = progress.game;
   if (game === undefined) return null;
   const language = currentInterfaceLanguage();
-  const { level, glory, treasury, flame } = game;
+  const { glory, treasury, flame } = game;
+  const level = shownLevelOf(game.level);
 
   const shelf = game.trophies === undefined ? [] : shelfOrder(game.trophies).flatMap((key) => {
     const view = trophyView(key, language);

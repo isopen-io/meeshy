@@ -42,6 +42,7 @@ const fr = {
   'game.banner.level': 'Niveau {level}',
   'game.banner.to_next': '{percent} % vers le {level}',
   'game.banner.top': 'au sommet',
+  'game.banner.capped': '{rank} ouvre la suite',
   'game.banner.league': 'ligue {league} {place}',
   'game.banner.flame': 'Flamme {days}',
   'game.banner.place.one': '{count}re',

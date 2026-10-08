@@ -231,7 +231,7 @@ describe('le chiffre qui roule et le reflet d’un niveau', () => {
   const at = (level: number, score: number, progress: number, pointsToNext: number): PlayerBannerModel => ({
     ...newcomer(),
     points: score,
-    level: { level, progress, prestige: 0, nextLevel: level + 1, pointsToNext },
+    level: { level, progress, prestige: 0, nextLevel: level + 1, pointsToNext, opener: null },
   });
   const before = (): PlayerBannerModel => at(4, 400, 0.9, 40);
 

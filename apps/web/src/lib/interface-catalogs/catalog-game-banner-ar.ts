@@ -48,6 +48,7 @@ const ar = {
   'game.banner.level': 'المستوى {level}',
   'game.banner.to_next': '{percent}٪ نحو المستوى {level}',
   'game.banner.top': 'في القمة',
+  'game.banner.capped': '{rank} تفتح المزيد',
   'game.banner.league': 'دوري {league} {place}',
   'game.banner.flame': 'اللهب {days}',
   'game.banner.place.one': 'المركز {count}',

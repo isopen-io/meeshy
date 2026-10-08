@@ -9,6 +9,7 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 
 import { boundedPercent, levelTierName, pointsLabel, standingLabel, shownRank, type ShownRank } from './game-copy';
 import { leagueName } from './game-copy-v2';
+import { capOpener, shownLevelOf } from '@/lib/game/ladder';
 
 /**
  * LA BANNIÈRE DU JOUEUR (#9494, conception XIII.1) — ce que le bandeau du haut
@@ -29,9 +30,11 @@ export type PlayerBannerLevel = {
   readonly level: number;
   readonly progress: number;
   readonly prestige: number;
-  /** `null` au sommet (niveau 100) : plus rien ne manque. */
+  /** `null` au plafond que le rang ouvre (ou devant un ancien serveur, au niveau 100) : plus rien ne manque. */
   readonly nextLevel: number | null;
   readonly pointsToNext: number | null;
+  /** Le rang qui lève le plafond atteint (#9688) — `null` quand rien ne bloque. */
+  readonly opener: 'ambassadeur' | 'oracle' | null;
 };
 
 export type PlayerBannerModel = {
@@ -61,7 +64,8 @@ const BURNING: ReadonlySet<GameBlock['flame']['status']> = new Set(['lit', 'at-r
  *     ligue ⇒ pas de ligue ; pas de Flamme ⇒ pas de Flamme.
  */
 export function playerBannerModel(game: GameBlock): PlayerBannerModel | null {
-  const { level, glory, treasury, flame, league } = game;
+  const { glory, treasury, flame, league } = game;
+  const level = shownLevelOf(game.level);
   const atTop = level.nextThreshold === null;
   const detailed = level.level > 1 || level.prestige > 0;
   const model: PlayerBannerModel = {
@@ -73,6 +77,7 @@ export function playerBannerModel(game: GameBlock): PlayerBannerModel | null {
           prestige: level.prestige,
           nextLevel: atTop ? null : level.level + 1,
           pointsToNext: atTop ? null : level.pointsToNext,
+          opener: capOpener(level),
         }
       : null,
     points: level.score > 0 ? level.score : null,
@@ -105,7 +110,9 @@ export function playerBannerLabel(model: PlayerBannerModel, language: InterfaceL
     level === null
       ? null
       : level.nextLevel === null
-        ? translateGame(language, 'game.banner.top')
+        ? level.opener === null
+          ? translateGame(language, 'game.banner.top')
+          : translateGame(language, 'game.banner.capped', { rank: translateGame(language, `game.rank.${level.opener}`) })
         : translateGame(language, 'game.banner.to_next', {
             percent: count(Math.floor(boundedPercent(level.progress * 100))),
             level: count(level.nextLevel),

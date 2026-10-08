@@ -112,6 +112,7 @@ const de = {
   'game.gauge.level': 'Level',
   'game.level.title': 'Level {level} · {tier}',
   'game.level.top': 'Du bist ganz oben.',
+  'game.level.capped': 'Obergrenze erreicht: Der Rang {rank} öffnet die nächsten Level.',
   'game.level.to_next': 'Noch {points} bis Level {level}',
   'game.level.record': 'Rekord: Level {level}',
   'game.level.tailwind': ' · Rückenwind ×{factor}',

@@ -1,4 +1,4 @@
-import type { GameBlock } from '@meeshy/shared/types/game';
+import type { GameBlock, UserGameProfileResponse } from '@meeshy/shared/types/game';
 import { LEVEL_TIER_KEYS, levelTierStart, type LevelCap, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
 
 /**
@@ -45,3 +45,23 @@ export const nextTierLevel = (tier: LevelTierKey): number | null => {
 
 /** Galaxie et Singularité sont des spectres : elles se peignent au prisme. */
 export const isSpectralTier = (tier: LevelTierKey): boolean => tier === 'galaxie' || tier === 'singularite';
+
+/** Le niveau servi, dont les champs de lecture sont ceux de la vérité (`ladder`) — prestige, score et Prestige inchangés. */
+export type ShownLevel = Omit<GameBlock['level'], keyof LevelReading | 'ladder'> & LevelReading;
+
+export const shownLevelOf = (level: GameBlock['level']): ShownLevel => {
+  const { ladder: _ladder, ...served } = level;
+  return { ...served, ...levelReading(level) };
+};
+
+/** Le rang qui lève le plafond où le niveau s'est arrêté : Ambassadeur ouvre 500, Oracle ouvre 1001 ; `null` sans plafond atteint. */
+export const capOpener = (level: LevelReading): 'ambassadeur' | 'oracle' | null => {
+  if (!level.isMax || level.cap === null || level.cap === undefined) return null;
+  return level.cap < 1000 ? 'ambassadeur' : 'oracle';
+};
+
+type ServedStanding = NonNullable<UserGameProfileResponse['standing']>;
+
+/** Le profil d'un autre membre tel que l'écran le montre : son niveau et son palier ouverts par le rang. */
+export const shownStanding = (standing: ServedStanding | null): (Omit<ServedStanding, 'tier'> & { readonly tier: LevelTierKey }) | null =>
+  standing === null ? null : { ...standing, level: standing.ladder?.level ?? standing.level, tier: standing.ladder?.tier ?? standing.tier };

@@ -44,6 +44,7 @@ const es = {
   'game.banner.level': 'Nivel {level}',
   'game.banner.to_next': '{percent} % hacia el {level}',
   'game.banner.top': 'en la cima',
+  'game.banner.capped': '{rank} abre más',
   'game.banner.league': 'liga {league} {place}',
   'game.banner.flame': 'Llama {days}',
   'game.banner.place.one': '{count}.º',

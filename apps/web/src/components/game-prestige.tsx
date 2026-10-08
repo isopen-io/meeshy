@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 
-import type { GameLevel, GamePrestigeBlock } from '@meeshy/shared/types/game';
+import type { GamePrestigeBlock } from '@meeshy/shared/types/game';
 
 import type { EffectEnv } from '@/lib/game/gl/effect-runner';
+import type { LevelReading } from '@/lib/game/ladder';
 import type { PlayOptions } from '@/lib/game/play';
 import { formatCount, gameText } from '@/lib/view/game-copy';
 import { trophyView } from '@/lib/view/game-copy-v2';
@@ -32,7 +33,8 @@ import { GameTouch } from './game-touch';
  * il le fête, sans rien proposer.
  */
 export type GamePrestigeProps = {
-  readonly level: Pick<GameLevel, 'level' | 'tier' | 'progress'>;
+  /** Le niveau MONTRÉ (la lecture ouverte par le rang, #9688). */
+  readonly level: Pick<LevelReading, 'level' | 'tier' | 'progress'>;
   readonly prestige: GamePrestigeBlock;
   readonly online: boolean;
   readonly pending: boolean;

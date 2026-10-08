@@ -18,6 +18,7 @@ import {
 import { SealMark } from '@/components/game/seal-mark';
 import { GlyphSvg } from '@/components/glyph';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
+import { shownLevelOf } from '@/lib/game/ladder';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { gameText, shownRank } from '@/lib/view/game-copy';
 import { progressPercent } from '@/lib/view/progression';
@@ -57,14 +58,14 @@ export function ConceptEmblem({ concept, view, size }: { readonly concept: Progr
       return game === undefined ? (
         <SignatureEmblem size={size} tint={GAME_BRAND} />
       ) : (
-        <LevelRing level={game.level.level} tier={game.level.tier} progress={game.level.progress} size={size} prestige={game.level.prestige} />
+        <LevelRing level={shownLevelOf(game.level).level} tier={shownLevelOf(game.level).tier} progress={shownLevelOf(game.level).progress} size={size} prestige={game.level.prestige} />
       );
     case 'points':
       return <ConceptMark kind="points" size={size} />;
     case 'meesh':
       return <MeeshCoin side="obverse" size={size} edition="silver" />;
     case 'glory':
-      return game === undefined ? <SignatureEmblem size={size} tint={GAME_WARM} /> : <RankBlason {...shownRank(game.glory)} level={game.level.level} size={size} />;
+      return game === undefined ? <SignatureEmblem size={size} tint={GAME_WARM} /> : <RankBlason {...shownRank(game.glory)} level={shownLevelOf(game.level).level} size={size} />;
     case 'flame': {
       const flame = game?.flame;
       if (flame === undefined) return <Flame form="braise" size={size} out={view.streak.currentDays === 0} />;

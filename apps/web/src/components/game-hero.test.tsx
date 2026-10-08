@@ -98,8 +98,21 @@ describe('où j’en suis', () => {
     expect(html()).not.toContain('Record :');
   });
 
-  test('au sommet : « Tu es au sommet »', () => {
-    expect(text(html({ score: 10 * 100 * 100 }))).toContain('Tu es au sommet');
+  test('le niveau 100 n’est plus un sommet : la marche continue (#9688)', () => {
+    expect(text(html({ score: 10 * 100 * 100 }))).not.toContain('Tu es au sommet');
+    expect(text(html({ score: 10 * 100 * 100 }))).toContain('101');
+  });
+
+  test('au plafond du rang : le niveau 499 dit que le rang Ambassadeur ouvre la suite', () => {
+    const page = text(html({ score: 10 * 640 * 640, debitablePoints: 10 * 640 * 640 }));
+    expect(page).toContain('Niveau 499');
+    expect(page).toContain('Plafond atteint : le rang Ambassadeur ouvre la suite.');
+  });
+
+  test('au plafond d’Ambassadeur : le niveau 1000 attend Oracle', () => {
+    const page = text(html({ score: 10 * 1001 * 1001, debitablePoints: 0, glory: 130_000 }));
+    expect(page).toMatch(/Niveau 1\s?000 · Singularité/);
+    expect(page).toContain('le rang Oracle ouvre la suite');
   });
 
   test('Galaxie se teinte au prisme, pas d’un jeton absent', () => {

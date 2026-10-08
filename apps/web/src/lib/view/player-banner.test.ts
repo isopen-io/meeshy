@@ -109,10 +109,11 @@ describe('seulement ce qui a du sens (#9536)', () => {
     expect({ level: model.level, points: model.points, meeshes: model.meeshes, rank: model.rank }).toEqual({ level: null, points: null, meeshes: null, rank: null });
   });
 
-  test('au sommet, plus de niveau suivant ni de points manquants', () => {
+  test('au plafond du rang, plus de niveau suivant ni de points manquants, et le rang qui l’ouvre (#9688)', () => {
     const top = shown({ ...NEWCOMER, score: 50_000_000, debitablePoints: 50_000_000 });
-    expect(top.level?.level).toBe(100);
-    expect({ nextLevel: top.level?.nextLevel, pointsToNext: top.level?.pointsToNext }).toEqual({ nextLevel: null, pointsToNext: null });
+    expect(top.level?.level).toBe(499);
+    expect({ nextLevel: top.level?.nextLevel, pointsToNext: top.level?.pointsToNext, opener: top.level?.opener }).toEqual({ nextLevel: null, pointsToNext: null, opener: 'ambassadeur' });
+    expect(playerBannerLabel(top, 'fr')).toContain('Ambassadeur ouvre la suite');
   });
 });
 

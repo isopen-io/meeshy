@@ -112,6 +112,7 @@ const en = {
   'game.gauge.level': 'Level',
   'game.level.title': 'Level {level} · {tier}',
   'game.level.top': 'You are at the top.',
+  'game.level.capped': 'Ceiling reached: the {rank} rank opens what comes next.',
   'game.level.to_next': '{points} more before level {level}',
   'game.level.record': 'Record: level {level}',
   'game.level.tailwind': ' · Tailwind ×{factor}',

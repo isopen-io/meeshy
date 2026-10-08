@@ -5,6 +5,7 @@ import { GameDuo } from '@/components/game-duo';
 import { GameFriendsLeague, type FriendsState } from '@/components/game-friends-league';
 import { GameLeague, type WeekState } from '@/components/game-league';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
+import { shownLevelOf } from '@/lib/game/ladder';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import type { EngagementWithGame } from '@/lib/api/engagement';
@@ -124,7 +125,7 @@ export function LigueBody(props: LigueBodyProps) {
         {tab === 'mine' ? (
           <GameLeague
             league={league}
-            levelRecord={game.level.record}
+            levelRecord={shownLevelOf(game.level).record}
             week={week}
             online={online}
             now={now}
@@ -140,7 +141,7 @@ export function LigueBody(props: LigueBodyProps) {
         {game.duo === undefined ? null : (
           <GameDuo
             duo={game.duo}
-            levelRecord={game.level.record}
+            levelRecord={shownLevelOf(game.level).record}
             friends={friends}
             online={online}
             busy={actions.invite.pending || actions.accept.pending || actions.abandon.pending}

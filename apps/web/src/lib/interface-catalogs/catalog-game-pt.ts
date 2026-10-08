@@ -112,6 +112,7 @@ const pt = {
   'game.gauge.level': 'Nível',
   'game.level.title': 'Nível {level} · {tier}',
   'game.level.top': 'Você está no topo.',
+  'game.level.capped': 'Teto atingido: o posto {rank} abre o que vem a seguir.',
   'game.level.to_next': 'Mais {points} para o nível {level}',
   'game.level.record': 'Recorde: nível {level}',
   'game.level.tailwind': ' · Vento a favor ×{factor}',

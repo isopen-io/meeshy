@@ -5,9 +5,10 @@ import type { EngagementElanProgress } from '@meeshy/shared/utils/engagement-pro
 
 import { GameBird, LevelRing, RankBlason, Signature, useChoreography } from '@/components/game';
 import { earnRules, type EarnRule } from '@/lib/game/earn-rules';
+import { levelReading, shownLevelOf } from '@/lib/game/ladder';
 import { enamelToken } from '@/lib/game/medal';
 import { tierTint } from '@/lib/game/tier-emblem';
-import { familyName, formatCount, gameText, levelTierName, pointsLabel, rankName, standingLabel, shownRank } from '@/lib/view/game-copy';
+import { familyName, formatCount, gameText, levelTierName, levelTopLine, pointsLabel, rankName, standingLabel, shownRank } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 import { elanDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
 
@@ -79,7 +80,8 @@ function MeeCorner({ line }: { readonly line: string }) {
 }
 
 function WhereIAm({ game }: { readonly game: GameBlock }) {
-  const { level, glory, boosts } = game;
+  const { glory, boosts } = game;
+  const level = shownLevelOf(game.level);
   const ring = useChoreography<HTMLDivElement>();
   const previousLevel = useRef(level.level);
   useEffect(() => {
@@ -101,7 +103,7 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
   const atTop = level.nextThreshold === null;
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <GameTouch detail={ringDetail(level)} named className="shrink-0 rounded-full">
+      <GameTouch detail={ringDetail(game.level)} named className="shrink-0 rounded-full">
       <div ref={ring.ref}>
         <LevelRing
           level={level.level}
@@ -120,7 +122,7 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
           {gameText('game.level.title', { level: formatCount(level.level), tier: levelTierName(level.tier) })}
         </h2>
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {atTop ? gameText('game.level.top') : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) })}
+          {atTop ? levelTopLine(level) : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) })}
         </p>
         {level.record > level.level ? (
           <span className="mt-1 self-start">
@@ -181,11 +183,12 @@ function HowToEarn({ rules, elan }: { readonly rules: readonly EarnRule[]; reado
 }
 
 export function GameHero({ game, guideLine = null, rules, elan }: GameHeroProps) {
-  const tint = tierTint(game.level.tier);
+  const tier = levelReading(game.level).tier;
+  const tint = tierTint(tier);
   return (
     <section
       id="game-level"
-      data-game-hero={game.level.tier}
+      data-game-hero={tier}
       aria-labelledby="game-hero-title"
       className="relative flex min-w-0 flex-col gap-4 overflow-hidden rounded-card px-4 py-4"
       style={{

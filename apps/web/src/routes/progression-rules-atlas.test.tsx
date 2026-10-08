@@ -29,12 +29,15 @@ describe('les neuf familles sont dessinées', () => {
     }
   });
 
-  test('les dix paliers : dix anneaux et leur niveau d’entrée', () => {
+  test('les vingt paliers : vingt anneaux et leur niveau d’entrée (#9688)', () => {
     const html = section('levels');
-    expect(count(/data-game-ring-sweep=/g, html)).toBe(10);
+    expect(count(/data-game-ring-sweep=/g, html)).toBe(20);
     expect(html).toContain('Étincelle');
     expect(html).toContain('Galaxie');
     expect(html).toContain('Niveau 90');
+    expect(html).toContain('Nébuleuse');
+    expect(html).toContain('Niveau 101');
+    expect(html).toContain('Singularité');
   });
 
   test('la Meesh : avers, revers, éditions or et prisme', () => {

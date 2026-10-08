@@ -126,6 +126,7 @@ const fr = {
   'game.gauge.level': 'Niveau',
   'game.level.title': 'Niveau {level} · {tier}',
   'game.level.top': 'Tu es au sommet.',
+  'game.level.capped': 'Plafond atteint : le rang {rank} ouvre la suite.',
   'game.level.to_next': 'Encore {points} avant le niveau {level}',
   'game.level.record': 'Record : niveau {level}',
   'game.level.tailwind': ' · Vent arrière ×{factor}',

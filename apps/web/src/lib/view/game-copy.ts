@@ -15,6 +15,7 @@ import {
   type GamePluralBase,
   type TranslateGameArgs,
 } from '@/lib/i18n-game-catalog';
+import { capOpener, type LevelReading } from '@/lib/game/ladder';
 import type { GameMaterial } from '@/lib/game/materials';
 import type { Medal } from '@/lib/game/medal';
 import { tierOrdinal } from '@/lib/game/tier-emblem';
@@ -131,6 +132,18 @@ export function medalLabel(
 
 export const rankName = (rank: GloryRankOrMythic, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.rank.${rank}`);
+
+/** La ligne d'un niveau qui ne monte plus (#9688) : le rang qui lève son plafond, ou « au sommet » devant un ancien serveur. */
+export const levelTopLine = (level: LevelReading, language: Language = currentInterfaceLanguage()): string => {
+  const opener = capOpener(level);
+  return opener === null ? translateGame(language, 'game.level.top') : translateGame(language, 'game.level.capped', { rank: rankName(opener, language) });
+};
+
+/** La même, en puce courte. */
+export const bannerTopLine = (level: LevelReading, language: Language = currentInterfaceLanguage()): string => {
+  const opener = capOpener(level);
+  return opener === null ? translateGame(language, 'game.banner.top') : translateGame(language, 'game.banner.capped', { rank: rankName(opener, language) });
+};
 
 export const treasuryName = (tier: TreasuryTierKey, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.treasury.${tier}`);

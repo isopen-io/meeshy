@@ -2,6 +2,7 @@ import { MeeshCoin, RankBlason } from '@/components/game';
 import { useRollingNumber } from '@/components/game/use-rolling-number';
 import { GAME_INK } from '@/components/game-surface';
 import { GameTouch, PRESS } from '@/components/game-touch';
+import { shownLevelOf } from '@/lib/game/ladder';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { useGamePrefs } from '@/lib/game/preferences';
 import { formatCount, gameText, meeshCount, shownRank } from '@/lib/view/game-copy';
@@ -41,7 +42,7 @@ export function ProgressionHeaderGroup({ progress }: { readonly progress: Engage
   return (
     <div data-progression-header-group="" role="group" aria-label={gameText('game.detail.header_group')} className="flex shrink-0 items-center" style={SURFACE}>
       {glory === undefined ? null : (
-        <GameTouch detail={rankDetail(glory, view.game?.level.level ?? null)} named marker={{ 'data-header-item': 'rank' }} className="grid place-items-center ps-2 pe-1" style={{ minHeight: 44, minWidth: 44 }}>
+        <GameTouch detail={rankDetail(glory, view.game === undefined ? null : shownLevelOf(view.game.level).level)} named marker={{ 'data-header-item': 'rank' }} className="grid place-items-center ps-2 pe-1" style={{ minHeight: 44, minWidth: 44 }}>
           <RankBlason {...shownRank(glory)} size={34} />
         </GameTouch>
       )}
