@@ -159,7 +159,7 @@ enum GameCopy {
     /// Le rang et sa division V–I (#9636) ; le Mythe dit sa PLACE quand le serveur la sert : « Mythe n° 42 ».
     static func rankLabel(_ rank: GloryRank, division5: GloryDivision5?, mythic: MythicSeatRef? = nil) -> String {
         if rank == .mythe, let mythic, mythic.isValid {
-            return mythicSeatLabel(number: mythic.number)
+            return mythicSeatLabel(seat: mythic.number)
         }
         guard let division5 else { return rankName(rank) }
         return "\(rankName(rank)) \(division5.roman)"
@@ -175,8 +175,8 @@ enum GameCopy {
         rankLabel(standing.rank, division5: standing.shownDivision, mythic: standing.mythic)
     }
 
-    static func mythicSeatLabel(number: Int) -> String {
-        let value = formatCount(number)
+    static func mythicSeatLabel(seat: Int) -> String {
+        let value = formatCount(seat)
         return String(localized: "game.rank.mythe_seat", defaultValue: "Mythe n° \(value)", bundle: .main)
     }
 
