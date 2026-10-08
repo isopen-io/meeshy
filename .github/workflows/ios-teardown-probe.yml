@@ -1,0 +1,333 @@
+name: iOS — sonde du démontage (runtimes préinstallés)
+
+# Sonde de #9694. La suite MeeshyTests plante au démontage de xctest sur les
+# runtimes iOS 18.5+/26.x préinstallés du runner (`swift_task_deinitOnExecutor…`
+# → double-free, Swift #85663), et ios.yml télécharge donc 18.2 à chaque run.
+# Cette sonde bâtit une fois, puis exécute la suite sur un ou plusieurs runtimes
+# DÉJÀ installés sur macos-15 — aucun `-downloadPlatform` — et publie ce qu'il
+# faut pour établir la cause : le xcresult, les rapports de plantage (.ips) du
+# simulateur, et la pile du fil fautif de chacun dans le résumé du run.
+#
+# Elle n'entre dans aucun verdict : ios.yml reste le seul gate. Déclenchée à la
+# main, ou par une poussée sur une branche `ci/teardown-probe*` (une branche
+# neuve ne peut pas être visée par workflow_dispatch tant que le fichier n'est
+# pas sur la branche par défaut).
+
+on:
+  push:
+    branches:
+      - 'ci/teardown-probe*'
+    paths:
+      - 'apps/ios/**'
+      - 'packages/MeeshySDK/**'
+      - '.github/workflows/ios-teardown-probe.yml'
+  workflow_dispatch:
+    inputs:
+      runtimes:
+        description: 'Runtimes préinstallés, en JSON (ex. ["18.6","26.1"]) — voir « Runtimes du runner » dans le log'
+        required: false
+        default: '["18.6","26.1"]'
+      parts:
+        description: 'Nombre de parts par runtime (la suite entière est répartie entre elles)'
+        required: false
+        default: '4'
+      only_testing:
+        description: 'Classes MeeshyTests seules (ex. FooTests,BarTests) — vide = toute la suite'
+        required: false
+        default: ''
+
+concurrency:
+  group: ios-teardown-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PROBE_RUNTIMES: ${{ inputs.runtimes || '["18.6","26.1"]' }}
+  PROBE_PARTS: ${{ inputs.parts || '4' }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      runtimes: ${{ steps.p.outputs.runtimes }}
+      parts: ${{ steps.p.outputs.parts }}
+    steps:
+      - id: p
+        run: |
+          echo "runtimes=${PROBE_RUNTIMES}" >> "$GITHUB_OUTPUT"
+          echo "parts=$(jq -cn --argjson n "${PROBE_PARTS}" '[range(1; $n + 1)]')" >> "$GITHUB_OUTPUT"
+
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode 26.1.1 (Swift 6.2)
+        run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
+
+      - name: Runtimes du runner
+        run: |
+          xcrun simctl list runtimes
+          {
+            echo '## Runtimes iOS préinstallés'
+            echo '```'
+            xcrun simctl list runtimes
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Caches en LECTURE seule : la sonde ne doit pas évincer les lignées
+      # d'ios.yml dans un budget de cache déjà plein (#9692).
+      - name: Restore SPM cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/spm
+          key: ios-spm-${{ hashFiles('apps/ios/Meeshy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ios-spm-
+
+      - name: SDK build version
+        id: sdkver
+        run: |
+          SDK=$(xcodebuild -version -sdk iphonesimulator ProductBuildVersion)
+          ROOT=$(xcrun --sdk iphonesimulator --show-sdk-path)
+          RACINE=$(stat -f %m "$ROOT" 2>/dev/null || echo 0)
+          ENTETE=$(stat -f %m "$ROOT/usr/include/AvailabilityVersions.h" 2>/dev/null || echo 0)
+          echo "v=${SDK}-${RACINE}-${ENTETE}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore DerivedData build cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/DerivedData
+          key: ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
+          restore-keys: |
+            ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-
+            ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-
+
+      - name: Generate Xcode project (XcodeGen)
+        run: |
+          brew install xcodegen
+          cd apps/ios
+          xcodegen generate
+
+      - name: Resolve SPM packages
+        run: |
+          scripts/ci/resolve-spm-packages.sh \
+            apps/ios/Meeshy.xcodeproj Meeshy \
+            "$RUNNER_TEMP/DerivedData" "$RUNNER_TEMP/spm"
+
+      - name: Build for testing
+        run: |
+          set +e
+          xcodebuild build-for-testing \
+            -project apps/ios/Meeshy.xcodeproj \
+            -scheme Meeshy \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            DEBUG_INFORMATION_FORMAT=dwarf \
+            ARCHS=arm64 \
+            -quiet > /tmp/xcodebuild-build.log 2>&1
+          rc=$?
+          grep -E ': (error|fatal error): ' /tmp/xcodebuild-build.log | sort -u | head -n 50 || true
+          exit "$rc"
+
+      - name: Archive test products
+        run: |
+          set -euo pipefail
+          tar -cf "$RUNNER_TEMP/ios-probe-products.tar" -C "$RUNNER_TEMP/DerivedData/Build" Products
+          du -h "$RUNNER_TEMP/ios-probe-products.tar"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ios-probe-products
+          path: ${{ runner.temp }}/ios-probe-products.tar
+          compression-level: 1
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+
+  test:
+    needs: [plan, build]
+    name: iOS ${{ matrix.runtime }} — part ${{ matrix.part }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: ${{ fromJSON(needs.plan.outputs.runtimes) }}
+        part: ${{ fromJSON(needs.plan.outputs.parts) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            apps/ios/MeeshyTests
+
+      - name: Select Xcode 26.1.1 (Swift 6.2)
+        run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ios-probe-products
+          path: ${{ runner.temp }}
+
+      - name: Unpack test products
+        id: products
+        run: |
+          set -euo pipefail
+          tar -xf "$RUNNER_TEMP/ios-probe-products.tar" -C "$RUNNER_TEMP"
+          rm -f "$RUNNER_TEMP/ios-probe-products.tar"
+          echo "xctestrun=$(find "$RUNNER_TEMP/Products" -maxdepth 1 -name '*.xctestrun' | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      # AUCUN téléchargement : un runtime absent est une erreur de la sonde,
+      # la liste du runner est imprimée pour choisir.
+      - name: Simulateur sur le runtime préinstallé
+        id: sim
+        env:
+          VERSION: ${{ matrix.runtime }}
+        run: |
+          set -euo pipefail
+          xcrun simctl list runtimes
+          RUNTIME_ID=$(xcrun simctl list runtimes -j \
+            | jq -r --arg v "$VERSION" '.runtimes[] | select(.platform == "iOS" and .isAvailable and (.version == $v or (.version | startswith($v + ".")))) | .identifier' \
+            | tail -n 1)
+          [ -n "$RUNTIME_ID" ] || { echo "::error::runtime iOS ${VERSION} non préinstallé sur ce runner"; exit 1; }
+          echo "runtime ${VERSION} → ${RUNTIME_ID}"
+          SIM_ID=$(xcrun simctl create "iPhone16Pro-probe" "iPhone 16 Pro" "$RUNTIME_ID")
+          xcrun simctl boot "$SIM_ID"
+          xcrun simctl privacy "$SIM_ID" grant photos-add me.meeshy.app || true
+          echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
+          date +%s > "$RUNNER_TEMP/start.ts"
+
+      # Répartition : classes XCTestCase lues dans les sources, réparties par
+      # indice ; la DERNIÈRE part prend le reste (toute la cible moins les
+      # autres parts) — une classe que la lecture des sources manquerait
+      # tourne quand même, une fois.
+      - name: Sélection de la part
+        env:
+          PART: ${{ matrix.part }}
+          PARTS: ${{ env.PROBE_PARTS }}
+          ONLY: ${{ inputs.only_testing }}
+        run: |
+          set -euo pipefail
+          SEL="$RUNNER_TEMP/selection.txt"
+          : > "$SEL"
+          if [ -n "${ONLY}" ]; then
+            if [ "$PART" = "1" ]; then
+              echo "$ONLY" | tr ',' '\n' | sed '/^$/d; s/^/-only-testing:MeeshyTests\//' >> "$SEL"
+            else
+              echo "-only-testing:MeeshyTests/__RienDansCettePart__" >> "$SEL"
+            fi
+          else
+            grep -rhoE 'class[[:space:]]+[A-Za-z0-9_]+Tests[[:space:]]*:[[:space:]]*XCTestCase' apps/ios/MeeshyTests \
+              | sed -E 's/class[[:space:]]+([A-Za-z0-9_]+).*/\1/' | sort -u > "$RUNNER_TEMP/classes.txt"
+            echo "$(wc -l < "$RUNNER_TEMP/classes.txt") classes lues"
+            if [ "$PART" -lt "$PARTS" ]; then
+              awk -v p="$PART" -v n="$PARTS" '(NR - 1) % n == p - 1 { print "-only-testing:MeeshyTests/" $0 }' "$RUNNER_TEMP/classes.txt" >> "$SEL"
+            else
+              echo "-only-testing:MeeshyTests" >> "$SEL"
+              awk -v n="$PARTS" '(NR - 1) % n != n - 1 { print "-skip-testing:MeeshyTests/" $0 }' "$RUNNER_TEMP/classes.txt" >> "$SEL"
+            fi
+          fi
+          wc -l "$SEL"
+
+      - name: Run tests (without building)
+        id: tests
+        env:
+          XCTESTRUN: ${{ steps.products.outputs.xctestrun }}
+          SIM_ID: ${{ steps.sim.outputs.sim_id }}
+        run: |
+          set +e
+          set -uo pipefail
+          SELECTION=()
+          while IFS= read -r arg; do SELECTION+=("$arg"); done < "$RUNNER_TEMP/selection.txt"
+          xcodebuild test-without-building \
+            -xctestrun "$XCTESTRUN" \
+            -destination "platform=iOS Simulator,id=${SIM_ID},arch=arm64" \
+            "${SELECTION[@]}" \
+            -skip-testing:MeeshyTests/MessageListPerformanceTests \
+            -skip-testing:MeeshyTests/BubbleSimpleMessagePerfTests \
+            -skip-testing:MeeshyTests/SearchPerformanceTests \
+            -skip-testing:MeeshyTests/CameraCaptureSaveRuntimeTests \
+            -resultBundlePath TestResults.xcresult \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 180 \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" \
+            | grep -E --line-buffered 'crashed|unexpected exit|Restarting|Executed [0-9]+ test|TEST (SUCCEEDED|FAILED)|pointer being freed'
+          rc=${PIPESTATUS[0]}
+          echo "rc=${rc}" >> "$GITHUB_OUTPUT"
+          exit "$rc"
+
+      - name: Rapports de plantage et résumé
+        if: always()
+        env:
+          RUNTIME: ${{ matrix.runtime }}
+          PART: ${{ matrix.part }}
+          RC: ${{ steps.tests.outputs.rc }}
+        run: |
+          set -uo pipefail
+          OUT="$RUNNER_TEMP/probe-out"
+          mkdir -p "$OUT/crashes"
+          START=$(cat "$RUNNER_TEMP/start.ts" 2>/dev/null || echo 0)
+          for d in "$HOME/Library/Logs/DiagnosticReports" "/Library/Logs/DiagnosticReports"; do
+            [ -d "$d" ] || continue
+            find "$d" -type f \( -name '*.ips' -o -name '*.crash' \) -newermt "@${START}" -exec cp {} "$OUT/crashes/" \; 2>/dev/null || true
+          done
+          cp "$RUNNER_TEMP/xcodebuild-test.log" "$OUT/" 2>/dev/null || true
+          if [ -d TestResults.xcresult ]; then
+            xcrun xcresulttool get test-results summary --path TestResults.xcresult > "$OUT/summary.json" 2>/dev/null || echo '{}' > "$OUT/summary.json"
+          else
+            echo '{}' > "$OUT/summary.json"
+          fi
+          # La pile du fil fautif de chaque .ips (format JSON deux lignes :
+          # en-tête puis corps).
+          cat > "$RUNNER_TEMP/ips.py" <<'PY'
+          import json, sys, pathlib
+          for p in sorted(pathlib.Path(sys.argv[1]).glob('*.ips')):
+              try:
+                  head, body = p.read_text(errors='replace').split('\n', 1)
+                  h = json.loads(head); b = json.loads(body)
+              except Exception as e:
+                  print(f'### {p.name}\n(illisible : {e})\n'); continue
+              if 'xctest' not in (h.get('app_name','') + b.get('procName','')).lower() and 'meeshy' not in (h.get('app_name','') + b.get('procName','')).lower():
+                  continue
+              ex = b.get('exception', {}); ft = b.get('faultingThread', 0)
+              imgs = b.get('usedImages', [])
+              print(f"### {p.name} — {b.get('procName')} — {ex.get('type')} {ex.get('signal')} — {b.get('asi', '')}")
+              print('```')
+              th = b.get('threads', [])
+              frames = th[ft].get('frames', []) if ft < len(th) else []
+              for f in frames[:40]:
+                  img = imgs[f.get('imageIndex', 0)].get('name', '?') if f.get('imageIndex', -1) < len(imgs) else '?'
+                  print(f"{img:28.28} {f.get('symbol', '?')}")
+              print('```')
+          PY
+          python3 -I "$RUNNER_TEMP/ips.py" "$OUT/crashes" > "$OUT/crashes.md" || true
+          {
+            echo "## iOS ${RUNTIME} — part ${PART} (xcodebuild rc=${RC:-?})"
+            jq -r '"tests : \(.totalTestCount // 0) · réussis \(.passedTests // 0) · échecs \(.failedTests // 0) · ignorés \(.skippedTests // 0) · résultat \(.result // "?")"' "$OUT/summary.json"
+            echo ''
+            echo "plantages relevés : $(ls "$OUT/crashes" | wc -l | tr -d ' ')"
+            echo ''
+            grep -E 'crashed|unexpected exit|Restarting' "$OUT/xcodebuild-test.log" 2>/dev/null | sort | uniq -c | head -n 40 | sed 's/^/    /'
+            echo ''
+            head -c 30000 "$OUT/crashes.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+          jq -r '(.testFailures // [])[] | "\(.testIdentifierString // .testName // "?") — \((.failureText // "?") | .[0:200] | gsub("\n"; " "))"' "$OUT/summary.json" | head -n 60 > "$OUT/failures.txt" || true
+          head -n 10 "$OUT/failures.txt" | while IFS= read -r l; do echo "::warning title=iOS ${RUNTIME} p${PART}::${l}"; done
+          ls -la "$OUT/crashes"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-ios-${{ matrix.runtime }}-part-${{ matrix.part }}
+          path: |
+            ${{ runner.temp }}/probe-out
+            TestResults.xcresult
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: warn
