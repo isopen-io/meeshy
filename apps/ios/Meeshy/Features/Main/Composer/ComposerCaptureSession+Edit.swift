@@ -75,10 +75,11 @@ extension ComposerCaptureSession {
     // MARK: - ✓ Terminé
 
     /// **✓ Terminé** (spec § 3.3 / § 3.4) : le rendu final — effet et cadrage —
-    /// part en galerie ET vers l'hôte. Un second toucher pendant le rendu ne
-    /// remet rien.
+    /// part vers l'hôte, et en galerie si `CaptureSavePolicy` le veut et que la
+    /// flèche ne l'y a pas déjà mis (#9684). Un second toucher pendant le rendu ne
+    /// remet rien ; un enregistrement en cours se laisse finir.
     func finishEditing() {
-        guard !isRenderingLook else { return }
+        guard !isRenderingLook, takeSaveState != .saving else { return }
         switch phase {
         case .capturing: return
         case .editing(.photo): finishPhoto()
@@ -99,6 +100,7 @@ extension ComposerCaptureSession {
         let galerie = gallery
         let prise = editPhotoData
         let proportions = canvasAspect
+        let enregistre = savePolicy().savesRenderOnFinish(alreadySaved: takeSaveState != .idle)
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
@@ -112,7 +114,7 @@ extension ComposerCaptureSession {
             }
             let octets = await ComposerPhotoEncoding.encode(rendu, like: prise)
             guard isStillEditing(source) else { return }
-            if let octets { _ = await galerie.saveImage(octets) }
+            if let octets, enregistre { _ = await galerie.saveImage(octets) }
             guard isStillEditing(source) else { return }
             deliverEdited(.photo(UIImage(cgImage: rendu), data: octets))
         }
@@ -120,8 +122,8 @@ extension ComposerCaptureSession {
 
     /// La vidéo part avec le look, le cadrage et la découpe qu'on voyait en la
     /// retouchant, lue dans l'espace où la boucle la lisait. Sans effet, sans
-    /// cadrage ni découpe, le rendu EST le brut, déjà en galerie : rien de plus
-    /// n'y part. **Un rendu qui échoue ne remet RIEN** : le brut porte ce que la
+    /// cadrage ni découpe, le rendu EST le brut : il ne part en galerie que s'il
+    /// n'y est pas déjà (`CaptureSavePolicy.writesUntouchedTake`). **Un rendu qui échoue ne remet RIEN** : le brut porte ce que la
     /// découpe et le cadrage ont retiré, et le remettre à sa place enverrait à
     /// l'hôte un passage que l'auteur a coupé. La retouche reste ouverte, comme
     /// pour une photo dont le cadre ne se peint pas — la prise n'est pas perdue.
@@ -137,6 +139,8 @@ extension ComposerCaptureSession {
         let espace = loopPlayer?.declaredSpace?.name as String?
         let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
         let proportions = canvasAspect
+        let politique = savePolicy()
+        let enregistre = politique.savesRenderOnFinish(alreadySaved: takeSaveState != .idle)
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
@@ -150,7 +154,9 @@ extension ComposerCaptureSession {
                 return
             }
             let neuve = rendue == url ? nil : rendue
-            if let neuve, isStillEditing(source) { _ = await galerie.saveVideo(at: neuve) }
+            if enregistre, isStillEditing(source) {
+                _ = await Self.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
+            }
             guard isStillEditing(source) else {
                 if let neuve {
                     FileManager.default.removeItemLogging(at: neuve, context: "rendu d'une retouche abandonnée",
@@ -195,6 +201,65 @@ extension ComposerCaptureSession {
         framing = .identity
         editAspect = nil
         cropPresetsOpen = false
+        takeSaveState = .idle
+    }
+
+    // MARK: - ⬇︎ Enregistrer dans Photos (#9684)
+
+    /// **La flèche ⬇︎** : la prise retouchée rejoint Photos telle qu'on la voit —
+    /// effet, cadre, cadrage et découpe ; l'original s'il n'y a rien de tout
+    /// cela. UNE fois par prise : ensuite la flèche devient ✓. On reste en
+    /// retouche ; un refus de Photos se dit et laisse la flèche disponible.
+    func saveTakeToPhotos() {
+        guard phase.isEditing, !isRenderingLook, takeSaveState.offersSave, let source = editSource else { return }
+        let regard = look
+        let cadrage = framing
+        let auteur = lookPerson
+        let date = lookDate
+        let cache = scenes
+        let galerie = gallery
+        let proportions = canvasAspect
+        let politique = savePolicy()
+        let ecriture: @MainActor () async -> Bool
+        switch phase {
+        case .capturing:
+            return
+        case .editing(.photo):
+            guard let photo = editPhoto else { return }
+            let prise = editPhotoData
+            ecriture = {
+                guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
+                                                                        aspect: proportions, person: auteur,
+                                                                        date: date, scenes: cache),
+                      let octets = await ComposerPhotoEncoding.encode(rendu, like: prise) else { return false }
+                return await galerie.saveImage(octets)
+            }
+        case .editing(.video(let url)):
+            let espace = loopPlayer?.declaredSpace?.name as String?
+            let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
+            ecriture = {
+                guard let rendue = await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage,
+                                                                          timeRange: plage, aspect: proportions,
+                                                                          person: auteur, date: date,
+                                                                          declaredSpaceName: espace)
+                else { return false }
+                let enregistree = await Self.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
+                if rendue != url {
+                    FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré par la flèche",
+                                                          logger: .media)
+                }
+                return enregistree
+            }
+        }
+        takeSaveState = .saving
+        Task { @MainActor in
+            let enregistree = await ecriture()
+            guard isStillEditing(source) else { return }
+            takeSaveState = enregistree ? .saved : .idle
+            guard enregistree else { return HapticFeedback.error() }
+            HapticFeedback.success()
+            UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.savedToPhotos)
+        }
     }
 
     // MARK: - Le recadrage (#9567)

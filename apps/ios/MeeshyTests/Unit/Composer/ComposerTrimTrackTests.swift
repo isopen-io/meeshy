@@ -144,7 +144,9 @@ final class ComposerTrimTrackTests: XCTestCase {
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         let galerie = MockComposerGallery()
         let lecteur = MockComposerLoopPlayer(duration: 3)
-        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, loopPlayerFactory: { _ in lecteur })
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
+                                             savePolicy: { CaptureSavePolicy(savesOriginal: false, renderedMode: .automatic) },
+                                             loopPlayerFactory: { _ in lecteur })
         await session.beginEditing(video: url)
         session.setTrim(1...2.5, committed: false)
         session.setTrim(1...2, committed: true)
@@ -158,7 +160,7 @@ final class ComposerTrimTrackTests: XCTestCase {
         XCTAssertNotEqual(livree, url, "le rendu découpé, pas le brut entier")
         let duree = try await AVURLAsset(url: livree).load(.duration).seconds
         XCTAssertEqual(duree, 1, accuracy: 0.1, "la plage choisie en retouche est celle qui part")
-        XCTAssertEqual(galerie.saveVideoCount, 1, "« Terminé » enregistre le rendu découpé en galerie")
+        XCTAssertEqual(galerie.saveVideoCount, 1, "en mode automatique, « Terminé » enregistre le rendu découpé en galerie")
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
         XCTAssertNil(session.trim, "la retouche finie, plus de plage")
     }

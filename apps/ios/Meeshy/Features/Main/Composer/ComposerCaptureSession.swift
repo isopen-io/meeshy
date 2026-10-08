@@ -91,6 +91,10 @@ final class ComposerCaptureSession: ObservableObject {
     /// Les segments s'assemblent, ou la vidéo se rend avec son look : le `✓`
     /// attend, et le dit.
     @Published var isRenderingLook = false
+    /// La flèche ⬇︎ de la retouche (#9684) : la prise ne s'enregistre qu'une fois.
+    @Published var takeSaveState = ComposerTakeSaveState.idle
+    /// Ce que la capture écrit dans Photos — lu à chaque décision, jamais figé.
+    let savePolicy: @MainActor () -> CaptureSavePolicy
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
     /// la MÊME dans leur cadre.
     let lookDate = Date()
@@ -161,6 +165,7 @@ final class ComposerCaptureSession: ObservableObject {
          thermal: (any ThermalStateMonitorProviding)? = nil,
          gallery: any ComposerGalleryProviding = ComposerGallery.shared,
          scenes: any ComposerLookSceneProviding = ComposerLookSceneCache.shared,
+         savePolicy: (@MainActor () -> CaptureSavePolicy)? = nil,
          loopPlayerFactory: @escaping @MainActor (URL) async -> (any ComposerLoopPlayerProviding)? = {
              await ComposerLoopPlayer.load(url: $0)
          }) {
@@ -172,6 +177,7 @@ final class ComposerCaptureSession: ObservableObject {
         self.thermal = thermal ?? ThermalStateMonitor()
         self.gallery = gallery
         self.scenes = scenes
+        self.savePolicy = savePolicy ?? { CaptureSavePolicy.stored(in: defaults) }
         self.loopPlayerFactory = loopPlayerFactory
         flashIntensity = defaults.object(forKey: ComposerFlashIntensity.storageKey) as? Double
             ?? ComposerFlashIntensity.defaultLevel

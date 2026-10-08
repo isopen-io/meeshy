@@ -22,7 +22,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// tant qu'aucune photo n'a été prise.
     var capturedPhotoData: Data?
     var capturedVideoURL: URL?
-    /// L'enregistrement du BRUT de la dernière prise, posé AVANT son identifiant (#9351).
+    /// L'enregistrement du BRUT de la dernière prise, posé AVANT son identifiant (#9351) —
+    /// `nil` quand `CaptureSavePolicy` ne l'enregistre pas (défaut, #9684).
     var librarySave: Task<Bool, Never>?
     /// Le jeton de la prise, de son départ à sa LIVRAISON — chaque fichier porte
     /// le sien (`segmentTokens`) : `capturedVideoId` à l'arrivée, `abandonedRecordingId` sans fichier.
@@ -817,14 +818,18 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             // last recorded segment rather than losing the whole capture.
             if let lastSegment = segments.last {
                 capturedVideoURL = lastSegment
-                librarySave = Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) } }
+                librarySave = CaptureSavePolicy.stored().savesOriginal
+                    ? Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) } }
+                    : nil
                 capturedVideoId = token ?? UUID().uuidString
                 return closeRecordingToken(token)
             }
             return abandonRecording(token: token)
         }
         capturedVideoURL = finalURL
-        librarySave = Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: finalURL) } }
+        librarySave = CaptureSavePolicy.stored().savesOriginal
+            ? Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: finalURL) } }
+            : nil
         capturedVideoId = token ?? UUID().uuidString
         closeRecordingToken(token)
         if segments.count > 1 {
@@ -953,8 +958,12 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         // `PhotoLibraryManager` is deliberately non-@MainActor so its
         // `performChanges` block runs on Photos' own queue without the
         // executor-isolation SIGTRAP the previous inline save hit.
+        // L'original ne rejoint Photos que si le réglage le demande (#9684) :
+        // la prise reste dans la session de toute façon.
         let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
-        let enregistrement = Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
+        let enregistrement: Task<Bool, Never>? = CaptureSavePolicy.stored().savesOriginal
+            ? Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
+            : nil
         Task { @MainActor in
             self.isTakingPhoto = false
             self.capturedPhoto = image

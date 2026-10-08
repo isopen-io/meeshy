@@ -535,15 +535,30 @@ final class ComposerCaptureTakesTests: XCTestCase {
     }
 
     /// M8 (#9351) : sans effet, brut et rendu sont identiques au pixel près — UN fichier.
-    func test_videoArrived_galleryIntent_untouchedLook_savesOneFile() async throws {
+    func test_videoArrived_galleryIntent_untouchedLook_originalAlreadySaved_writesNothingMore() async throws {
         let galerie = MockComposerGallery()
-        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
+                                             savePolicy: { CaptureSavePolicy(savesOriginal: true, renderedMode: .manual) })
         session.bindRecording(.gallery, to: "film")
         let url = try Self.tempFile()
         session.camera.capturedVideoURL = url
         session.camera.capturedVideoId = "film"
         await Self.waitUntil { session.pendingGallerySaves == 0 }
         XCTAssertEqual(galerie.saveVideoCount, 0, "le brut enregistré par la caméra est déjà le rendu")
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.savedToPhotos)
+    }
+
+    /// #9684 : l'original ne part plus seul en galerie — la miniature, qui
+    /// demande Photos, y écrit alors la prise sans effet elle-même, une fois.
+    func test_videoArrived_galleryIntent_untouchedLook_byDefault_writesTheTakeOnce() async throws {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard })
+        session.bindRecording(.gallery, to: "film")
+        let url = try Self.tempFile()
+        session.camera.capturedVideoURL = url
+        session.camera.capturedVideoId = "film"
+        await Self.waitUntil { session.pendingGallerySaves == 0 }
+        XCTAssertEqual(galerie.saveVideoCount, 1, "la prise demandée en galerie y est, l'original n'y étant pas")
         XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.savedToPhotos)
     }
 

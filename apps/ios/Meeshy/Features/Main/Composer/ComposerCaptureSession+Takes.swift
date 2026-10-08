@@ -7,7 +7,8 @@ import UIKit
 nonisolated enum ComposerTakeIntent: Equatable, Sendable {
     /// La scène : la prise mène à l'édition (puis à l'hôte).
     case edit
-    /// La miniature choisie : brut ET rendu partent en galerie, on reste en capture.
+    /// La miniature choisie : le rendu part en galerie (l'original aussi si
+    /// `CaptureSavePolicy` le veut), on reste en capture.
     case gallery
 }
 
@@ -15,15 +16,25 @@ extension ComposerCaptureCopy {
     static var savedToPhotos: String {
         String(localized: "composer.capture.savedToPhotos", defaultValue: "Enregistré dans Photos", bundle: .main)
     }
+
+    /// La flèche ⬇︎ de la retouche (#9684).
+    static var saveToPhotos: String {
+        String(localized: "composer.capture.saveToPhotos", defaultValue: "Enregistrer dans Photos", bundle: .main)
+    }
+
+    static var savingToPhotos: String {
+        String(localized: "composer.capture.savingToPhotos", defaultValue: "Enregistrement dans Photos…", bundle: .main)
+    }
 }
 
 /// **Les prises arrivent à la session, une fois** (#9351) — plus aux hôtes.
 ///
-/// Brut ET rendu partent ensemble en galerie (décision porteur) : le brut, à la
-/// prise, par `CameraModel` ; le rendu — filtre et cadre combinés, sur le canevas
-/// qu'on voyait — ici. Une vidéo sans effet n'en fait qu'UN, son rendu
-/// étant identique au brut. « Enregistré » ne se dit que quand tout a réussi ;
-/// un refus se dit, lui, par `reportPhotoLibraryRefusal`.
+/// Ce qui part en galerie suit `CaptureSavePolicy` (#9684) : le brut, à la prise
+/// et seulement si le réglage le demande, par `CameraModel` ; le rendu — filtre
+/// et cadre combinés, sur le canevas qu'on voyait — ici. Une vidéo sans effet
+/// n'en fait qu'UN, son rendu étant identique au brut : il s'écrit s'il n'y est
+/// pas déjà. « Enregistré » ne se dit que quand tout a réussi ; un refus se dit,
+/// lui, par `reportPhotoLibraryRefusal`.
 extension ComposerCaptureSession {
 
     /// Les IDENTIFIANTS, jamais les valeurs : deux prises identiques d'affilée
@@ -161,8 +172,8 @@ extension ComposerCaptureSession {
         }
     }
 
-    /// Une vidéo arrivée APRÈS la fermeture ne devient rien : son brut est déjà en
-    /// galerie, son fichier temporaire part. Le jeton est celui que l'éditeur
+    /// Une vidéo arrivée APRÈS la fermeture ne devient rien : son fichier
+    /// temporaire part (après le brut, si le réglage l'enregistre). Le jeton est celui que l'éditeur
     /// PUBLIE : `@Published` émet avant d'écrire, `camera.capturedVideoId` serait
     /// encore l'ancien.
     func videoArrived(_ id: String) {
@@ -178,8 +189,8 @@ extension ComposerCaptureSession {
         }
     }
 
-    /// Le RENDU part en galerie, encodé avec l'EXIF de la prise, à côté du brut.
-    /// Le verdict du brut d'abord : refusé, rien n'est peint (et le refus ne se
+    /// Le RENDU part en galerie, encodé avec l'EXIF de la prise. Le verdict du
+    /// brut d'abord, s'il s'enregistre : refusé, rien n'est peint (et le refus ne se
     /// dit qu'une fois). Les rendus passent un par un.
     func saveRenderedPhoto(_ image: UIImage, data: Data?) {
         let repli = data == nil ? image : nil
@@ -232,11 +243,12 @@ extension ComposerCaptureSession {
         ] as CFDictionary)
     }
 
-    /// Le RENDU de la vidéo part en galerie, à côté du brut. **Sans effet, UN seul
-    /// fichier** (tranché par le coordinateur, à confirmer par le porteur — #9351) :
-    /// la vidéo brute est déjà sur le canevas qu'on voyait, et son rendu lui serait
-    /// identique au pixel près — l'export rend alors le brut lui-même.
+    /// Le RENDU de la vidéo part en galerie. **Sans effet, UN seul fichier**
+    /// (#9351) : la vidéo brute est déjà sur le canevas qu'on voyait, et son rendu
+    /// lui serait identique au pixel près — l'export rend alors le brut lui-même,
+    /// qui s'écrit s'il n'est pas déjà en galerie (#9684).
     func saveRenderedVideo(_ url: URL) {
+        let politique = savePolicy()
         let regard = look
         let auteur = lookPerson
         let date = lookDate
@@ -257,14 +269,24 @@ extension ComposerCaptureSession {
                                                                  person: auteur, date: date,
                                                                  declaredSpaceName: espace)
             guard let rendue else { return }
+            let enregistree = await Self.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
             if rendue != url {
-                let enregistree = await galerie.saveVideo(at: rendue)
                 FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré en galerie",
                                                       logger: .media)
-                guard enregistree else { return }
             }
+            guard enregistree else { return }
             FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
         }
+    }
+
+    /// **Le chemin UNIQUE d'une vidéo vers Photos** (#9684) — miniature, flèche
+    /// ⬇︎ et « Terminé ». Un rendu distinct s'écrit ; un rendu identique à
+    /// l'original ne s'écrit que si l'original n'y est pas déjà. `true` : la
+    /// prise est dans Photos.
+    static func writeVideo(_ rendue: URL, original: URL, policy: CaptureSavePolicy,
+                           gallery: any ComposerGalleryProviding) async -> Bool {
+        guard rendue != original || policy.writesUntouchedTake else { return true }
+        return await gallery.saveVideo(at: rendue)
     }
 
     /// Le fichier temporaire part — une fois le brut lu par la galerie.
