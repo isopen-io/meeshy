@@ -228,10 +228,11 @@ enum GameWave2Optimistic {
               case .allowed(let passage) = GamePrestige.transition(score: game.level.score, prestige: game.level.prestige)
         else { return state }
 
-        let progress = GameLevels.progress(forScore: passage.scoreAfter)
-        let level = game.level.atScore(passage.scoreAfter).replacing(
-            record: passage.levelRecordAfter, prestige: passage.prestigeAfter, canPrestige: false)
         let glory = game.glory.atGlory(game.glory.glory + passage.gloryGained)
+        // Le plafond se relit sur le rang d'APRÈS le passage : la Gloire du Prestige peut l'ouvrir (#9688).
+        let levelCap = GameGlory.levelCap(forRank: glory.rank)
+        let level = GameLevelWire.level(score: passage.scoreAfter, levelCap: levelCap,
+                                         levelRecord: passage.levelRecordAfter, prestige: passage.prestigeAfter)
         let trophies = game.trophies.map { block -> GameTrophiesBlock in
             let stamp = ISO8601DateFormatter().string(from: now)
             return GameTrophiesBlock(
@@ -248,8 +249,10 @@ enum GameWave2Optimistic {
         let passed = game.replacing(
             level: level,
             glory: glory,
-            mint: GameMint.preview(score: passage.scoreAfter, mintedLifetime: game.mint.number, debitablePoints: 0),
-            boosts: game.boosts.replacing(tailwind: GameBoosts.tailwind(level: progress.level, levelRecord: passage.levelRecordAfter)),
+            mint: GameLevelWire.mint(
+                GameMint.preview(score: passage.scoreAfter, mintedLifetime: game.mint.number, debitablePoints: 0, levelCap: levelCap)
+            ),
+            boosts: game.boosts.replacing(tailwind: GameBoosts.tailwind(level: passage.levelAfter, levelRecord: passage.levelRecordAfter)),
             wave2: wave2
         )
         return GameState(game: passed, meesh: state.meesh)

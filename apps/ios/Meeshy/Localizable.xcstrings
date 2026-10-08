@@ -232762,6 +232762,476 @@
         }
       }
     },
+    "game.tier.nebuleuse": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سديم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nebel"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nebula"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nebulosa"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nébuleuse"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nebulosa"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nebulosa"
+          }
+        }
+      }
+    },
+    "game.tier.pulsar": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نجم نابض"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsar"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Púlsar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsar"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsar"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsar"
+          }
+        }
+      }
+    },
+    "game.tier.quasar": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كوازار"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quasar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quasar"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuásar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quasar"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quasar"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quasar"
+          }
+        }
+      }
+    },
+    "game.tier.supernova": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مستعر أعظم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supernova"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supernova"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supernova"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supernova"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supernova"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supernova"
+          }
+        }
+      }
+    },
+    "game.tier.magnetar": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماغنيتار"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magnetar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magnetar"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magnetar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magnétar"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magnetar"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magnetar"
+          }
+        }
+      }
+    },
+    "game.tier.amas": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عنقود"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sternhaufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cluster"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cúmulo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Amas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ammasso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aglomerado"
+          }
+        }
+      }
+    },
+    "game.tier.superamas": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عنقود فائق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Superhaufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supercluster"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supercúmulo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Superamas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Superammasso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Superaglomerado"
+          }
+        }
+      }
+    },
+    "game.tier.cosmos": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الكون"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kosmos"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosmos"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosmos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosmos"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosmo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosmos"
+          }
+        }
+      }
+    },
+    "game.tier.infini": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اللانهاية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unendlichkeit"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Infinity"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Infinito"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Infini"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Infinito"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Infinito"
+          }
+        }
+      }
+    },
+    "game.tier.singularite": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التفرد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Singularität"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Singularity"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Singularidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Singularité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Singolarità"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Singularidade"
+          }
+        }
+      }
+    },
     "game.rank.murmure": {
       "extractionState": "manual",
       "localizations": {
@@ -236663,6 +237133,100 @@
         }
       }
     },
+    "game.level.cap.reached": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المستوى %@: أعلى ما تفتحه رتبتك. رتبة %@ تفتح ما بعده."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level %@: das höchste, das dein Rang öffnet. Der Rang %@ öffnet die nächsten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level %@: the highest your rank opens. The %@ rank opens what comes next."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel %@: el más alto que abre tu rango. El rango %@ abre lo que sigue."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau %@ : le plus haut que ton rang ouvre. Le rang %@ ouvre la suite."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Livello %@: il più alto che il tuo rango apre. Il rango %@ apre i successivi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nível %@: o mais alto que sua patente abre. A patente %@ abre os próximos."
+          }
+        }
+      }
+    },
+    "game.level.cap.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُفتح برتبة %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "öffnet ab Rang %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "opens at the %@ rank"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "se abre con el rango %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "s’ouvre au rang %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "si apre al rango %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "abre na patente %@"
+          }
+        }
+      }
+    },
     "game.level.to_next": {
       "extractionState": "manual",
       "localizations": {
@@ -239066,43 +239630,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُميّز المراحل طريقك: عشرة مستويات لكل منها."
+            "value": "تُميّز المراحل طريقك: عشرة مستويات لكل منها حتى 100، ثم مئة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Stufen markieren deinen Weg: je zehn Level."
+            "value": "Die Stufen markieren deinen Weg: je zehn Level bis 100, danach je hundert."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tiers mark your road: ten levels each."
+            "value": "Tiers mark your road: ten levels each up to 100, then a hundred."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los tramos jalonan tu camino: diez niveles cada uno."
+            "value": "Los tramos jalonan tu camino: diez niveles cada uno hasta el 100, luego cien."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les paliers jalonnent ta route : dix niveaux chacun."
+            "value": "Les paliers jalonnent ta route : dix niveaux chacun jusqu’au 100, puis cent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le fasce segnano il tuo cammino: dieci livelli ciascuna."
+            "value": "Le fasce segnano il tuo cammino: dieci livelli ciascuna fino al 100, poi cento."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "As faixas marcam o seu caminho: dez níveis cada uma."
+            "value": "As faixas marcam o seu caminho: dez níveis cada uma até o 100, depois cem."
           }
         }
       }
@@ -241369,43 +241933,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المستوى 100: أنت في القمة!"
+            "value": "المستوى 100: يُفتح التميّز!"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Level 100: Du bist ganz oben!"
+            "value": "Level 100: Prestige öffnet sich!"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Level 100: you are at the top!"
+            "value": "Level 100: Prestige opens!"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nivel 100: ¡estás en la cima!"
+            "value": "Nivel 100: ¡se abre el Prestigio!"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau 100 : tu es au sommet !"
+            "value": "Niveau 100 : le Prestige s’ouvre !"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Livello 100: sei in cima!"
+            "value": "Livello 100: si apre il Prestigio!"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nível 100: você está no topo!"
+            "value": "Nível 100: o Prestígio se abre!"
           }
         }
       }
@@ -241416,43 +241980,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يعيد التميّز مستواك إلى 1 ويمنحك نجمة وكأسًا."
+            "value": "يعيد التميّز مستواك إلى 1 ويمنحك نجمة وكأسًا. وهو اختياري."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prestige setzt dein Level auf 1 zurück und schenkt dir einen Stern und eine Trophäe."
+            "value": "Prestige setzt dein Level auf 1 zurück und schenkt dir einen Stern und eine Trophäe. Es ist freiwillig."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prestige resets your level to 1 and gives you a star and a trophy."
+            "value": "Prestige resets your level to 1 and gives you a star and a trophy. It is optional."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El Prestigio devuelve tu nivel a 1 y te da una estrella y un trofeo."
+            "value": "El Prestigio devuelve tu nivel a 1 y te da una estrella y un trofeo. Es opcional."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Prestige remet ton niveau à 1 et te donne une étoile et un trophée."
+            "value": "Le Prestige remet ton niveau à 1 et te donne une étoile et un trophée. Il est facultatif."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il Prestigio riporta il tuo livello a 1 e ti dà una stella e un trofeo."
+            "value": "Il Prestigio riporta il tuo livello a 1 e ti dà una stella e un trofeo. È facoltativo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Prestígio volta o seu nível para 1 e dá uma estrela e um troféu."
+            "value": "O Prestígio volta o seu nível para 1 e dá uma estrela e um troféu. É opcional."
           }
         }
       }
@@ -241463,43 +242027,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انتقل إلى التميّز، أو ابقَ في القمة."
+            "value": "انتقل إلى التميّز، أو واصل الصعود."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wechsle zu Prestige oder bleibe oben."
+            "value": "Wechsle zu Prestige oder steig weiter auf."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Go Prestige, or stay at the top."
+            "value": "Go Prestige, or keep climbing."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pasa a Prestigio, o quédate en la cima."
+            "value": "Pasa a Prestigio, o sigue subiendo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passe en Prestige, ou reste au sommet."
+            "value": "Passe en Prestige, ou continue de monter."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passa al Prestigio, oppure resta in cima."
+            "value": "Passa al Prestigio, oppure continua a salire."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vá para o Prestígio, ou fique no topo."
+            "value": "Vá para o Prestígio, ou continue subindo."
           }
         }
       }
@@ -241510,43 +242074,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ابقَ في القمة ما شئت."
+            "value": "واصل الصعود ما شئت."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bleib oben, so lange du willst."
+            "value": "Steig weiter auf, so lange du willst."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stay at the top as long as you like."
+            "value": "Keep climbing as long as you like."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quédate en la cima el tiempo que quieras."
+            "value": "Sigue subiendo tanto como quieras."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reste au sommet autant que tu veux."
+            "value": "Continue de monter autant que tu veux."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Resta in cima quanto vuoi."
+            "value": "Continua a salire quanto vuoi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fique no topo o quanto quiser."
+            "value": "Continue subindo o quanto quiser."
           }
         }
       }
@@ -241557,43 +242121,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أنت في القمة."
+            "value": "يُفتح التميّز."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du bist ganz oben."
+            "value": "Prestige öffnet sich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You are at the top."
+            "value": "Prestige opens."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estás en la cima."
+            "value": "Se abre el Prestigio."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es au sommet."
+            "value": "Le Prestige s’ouvre."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sei in cima."
+            "value": "Si apre il Prestigio."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você está no topo."
+            "value": "O Prestígio se abre."
           }
         }
       }
@@ -241886,43 +242450,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مئة مستوى، وعشر مراحل."
+            "value": "عشرون مرحلة، ومستويات تفتحها رتبتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hundert Level, zehn Stufen."
+            "value": "Zwanzig Stufen, und Level, die dein Rang öffnet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A hundred levels, ten tiers."
+            "value": "Twenty tiers, and levels your rank opens."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cien niveles, diez tramos."
+            "value": "Veinte tramos, y niveles que tu rango abre."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cent niveaux, dix paliers."
+            "value": "Vingt paliers, et des niveaux que ton rang ouvre."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cento livelli, dieci fasce."
+            "value": "Venti fasce, e livelli che il tuo rango apre."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cem níveis, dez faixas."
+            "value": "Vinte faixas, e níveis que sua patente abre."
           }
         }
       }
@@ -242732,43 +243296,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "100 مستوى في 10 مراحل. يتطلّب كل مستوى أكثر قليلًا من الذي قبله."
+            "value": "عشرون مرحلة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "100 Level in 10 Stufen. Jedes Level verlangt etwas mehr als das vorherige."
+            "value": "Zwanzig Stufen. Die Level steigen bis 499; der Rang Botschafter öffnet sie bis 1.000, der Rang Orakel ohne Grenze. Jedes Level verlangt etwas mehr als das vorherige."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "100 levels in 10 tiers. Each level asks for a little more than the one before."
+            "value": "Twenty tiers. Levels climb up to 499; the Ambassador rank opens them up to 1,000, and the Oracle rank opens them without limit. Each level asks for a little more than the one before."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "100 niveles en 10 tramos. Cada nivel pide un poco más que el anterior."
+            "value": "Veinte tramos. Los niveles suben hasta 499; el rango Embajador los abre hasta 1000, y el rango Oráculo, sin límite. Cada nivel pide un poco más que el anterior."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "100 niveaux en 10 paliers. Chaque niveau demande un peu plus que le précédent."
+            "value": "Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "100 livelli in 10 fasce. Ogni livello richiede un po’ più del precedente."
+            "value": "Venti fasce. I livelli salgono fino a 499; il rango Ambasciatore li apre fino a 1000, il rango Oracolo senza limite. Ogni livello richiede un po’ più del precedente."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "100 níveis em 10 faixas. Cada nível pede um pouco mais do que o anterior."
+            "value": "Vinte faixas. Os níveis vão até 499; a patente Embaixador os abre até 1.000, e a patente Oráculo, sem limite. Cada nível pede um pouco mais do que o anterior."
           }
         }
       }
@@ -248413,6 +248977,476 @@
         }
       }
     },
+    "game.tier.ordinal.11": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحادية عشرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "elfte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eleventh"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "undécimo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "onzième"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "undicesima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "décima primeira"
+          }
+        }
+      }
+    },
+    "game.tier.ordinal.12": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الثانية عشرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zwölfte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "twelfth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "duodécimo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "douzième"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dodicesima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "décima segunda"
+          }
+        }
+      }
+    },
+    "game.tier.ordinal.13": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الثالثة عشرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dreizehnte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "thirteenth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "decimotercer"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "treizième"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tredicesima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "décima terceira"
+          }
+        }
+      }
+    },
+    "game.tier.ordinal.14": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرابعة عشرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vierzehnte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fourteenth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "decimocuarto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "quatorzième"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "quattordicesima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "décima quarta"
+          }
+        }
+      }
+    },
+    "game.tier.ordinal.15": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الخامسة عشرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fünfzehnte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fifteenth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "decimoquinto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "quinzième"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "quindicesima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "décima quinta"
+          }
+        }
+      }
+    },
+    "game.tier.ordinal.16": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "السادسة عشرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sechzehnte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sixteenth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "decimosexto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "seizième"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sedicesima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "décima sexta"
+          }
+        }
+      }
+    },
+    "game.tier.ordinal.17": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "السابعة عشرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "siebzehnte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "seventeenth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "decimoséptimo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dix-septième"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "diciassettesima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "décima sétima"
+          }
+        }
+      }
+    },
+    "game.tier.ordinal.18": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الثامنة عشرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "achtzehnte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eighteenth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "decimoctavo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dix-huitième"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "diciottesima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "décima oitava"
+          }
+        }
+      }
+    },
+    "game.tier.ordinal.19": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التاسعة عشرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "neunzehnte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nineteenth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "decimonoveno"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dix-neuvième"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "diciannovesima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "décima nona"
+          }
+        }
+      }
+    },
+    "game.tier.ordinal.20": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "العشرون"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zwanzigste"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "twentieth"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vigésimo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vingtième"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ventesima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vigésima"
+          }
+        }
+      }
+    },
     "game.material.copper": {
       "extractionState": "manual",
       "localizations": {
@@ -248936,43 +249970,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المراحل العشر"
+            "value": "المراحل العشرون"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die 10 Stufen"
+            "value": "Die 20 Stufen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The 10 tiers"
+            "value": "The 20 tiers"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los 10 escalones"
+            "value": "Los 20 escalones"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les 10 paliers"
+            "value": "Les 20 paliers"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I 10 gradini"
+            "value": "I 20 gradini"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Os 10 patamares"
+            "value": "Os 20 patamares"
           }
         }
       }
@@ -248983,43 +250017,325 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عشر مراحل، من الشرارة الأولى إلى المجرة: تتغيّر حلقتك مع كل مرحلة."
+            "value": "عشرون مرحلة، من الشرارة إلى التفرد: تتغيّر حلقتك مع كل مرحلة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zehn Stufen, vom ersten Funken bis zur Galaxie: Dein Ring ändert sich mit jeder."
+            "value": "Zwanzig Stufen, vom Funken bis zur Singularität: Dein Ring ändert sich mit jeder."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ten tiers, from the first spark to the galaxy: your ring changes at each one."
+            "value": "Twenty tiers, from the spark to the singularity: your ring changes at each one."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diez niveles, de la primera chispa a la galaxia: tu anillo cambia en cada uno."
+            "value": "Veinte niveles, de la chispa a la singularidad: tu anillo cambia en cada uno."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dix paliers, du premier éclat à la galaxie : ton anneau change à chacun."
+            "value": "Vingt paliers, de l’étincelle à la singularité : ton anneau change à chacun."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieci livelli, dalla prima scintilla alla galassia: il tuo anello cambia a ogni passo."
+            "value": "Venti livelli, dalla scintilla alla singolarità: il tuo anello cambia a ogni passo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dez patamares, da primeira centelha à galáxia: seu anel muda a cada um."
+            "value": "Vinte patamares, da centelha à singularidade: seu anel muda a cada um."
+          }
+        }
+      }
+    },
+    "game.atlas.tiers.cap.base": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حتى المستوى %@ دون رتبة %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bis Level %@ unter dem Rang %@."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to level %@ below the %@ rank."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hasta el nivel %@ por debajo del rango %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jusqu’au niveau %@ sous le rang %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fino al livello %@ sotto il rango %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Até o nível %@ abaixo da patente %@."
+          }
+        }
+      }
+    },
+    "game.atlas.tiers.cap.ranks": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حتى المستوى %@ في رتبتَي %@ و%@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bis Level %@ in den Rängen %@ und %@."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to level %@ at the %@ and %@ ranks."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hasta el nivel %@ en los rangos %@ y %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jusqu’au niveau %@ aux rangs %@ et %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fino al livello %@ ai ranghi %@ e %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Até o nível %@ nas patentes %@ e %@."
+          }
+        }
+      }
+    },
+    "game.atlas.tiers.cap.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حتى المستوى %@ في رتبة %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bis Level %@ im Rang %@."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to level %@ at the %@ rank."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hasta el nivel %@ en el rango %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jusqu’au niveau %@ au rang %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fino al livello %@ al rango %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Até o nível %@ na patente %@."
+          }
+        }
+      }
+    },
+    "game.atlas.tiers.cap.none": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بلا حدّ ابتداءً من رتبة %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Grenze ab dem Rang %@."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No limit from the %@ rank on."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin límite a partir del rango %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sans limite à partir du rang %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senza limite dal rango %@ in su."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem limite a partir da patente %@."
+          }
+        }
+      }
+    },
+    "game.atlas.tiers.prestige": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُفتح التميّز عند المستوى %@: وهو اختياري، يمكنك مواصلة الصعود."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prestige öffnet sich ab Level %@: Es ist freiwillig, du kannst weiter aufsteigen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prestige opens at level %@: it is optional, you can keep climbing."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El Prestigio se abre en el nivel %@: es opcional, puedes seguir subiendo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le Prestige s’offre au niveau %@ : il est facultatif, tu peux continuer à monter."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il Prestigio si apre al livello %@: è facoltativo, puoi continuare a salire."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Prestígio se abre no nível %@: é opcional, você pode continuar subindo."
+          }
+        }
+      }
+    },
+    "game.atlas.tiers.glory": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مجد العبور الأول: %@ لكل مستوى حتى %@، ثم %@ كل عشرة مستويات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruhm beim ersten Erreichen: %@ pro Level bis %@, danach %@ alle zehn Level."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First-pass Glory: %@ per level up to %@, then %@ every ten levels."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gloria del primer paso: %@ por nivel hasta el %@, luego %@ cada diez niveles."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gloire du premier passage : %@ par niveau jusqu’au %@, puis %@ tous les dix niveaux."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gloria del primo passaggio: %@ per livello fino al %@, poi %@ ogni dieci livelli."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glória da primeira passagem: %@ por nível até o %@, depois %@ a cada dez níveis."
           }
         }
       }
@@ -256456,43 +257772,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "البقاء في القمة"
+            "value": "مواصلة الصعود"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Oben bleiben"
+            "value": "Weiter aufsteigen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stay at the top"
+            "value": "Keep climbing"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quedarme en la cima"
+            "value": "Seguir subiendo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rester au sommet"
+            "value": "Continuer à monter"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Restare in vetta"
+            "value": "Continuare a salire"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ficar no topo"
+            "value": "Continuar subindo"
           }
         }
       }
@@ -256832,43 +258148,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أنت في المستوى 100: القمة! يمكنك الانتقال إلى التميّز."
+            "value": "وصلت إلى المستوى 100: يمكنك الانتقال إلى التميّز، أو مواصلة الصعود."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du bist auf Level 100: ganz oben! Du kannst zu Prestige wechseln."
+            "value": "Du hast Level 100 erreicht: Du kannst zu Prestige wechseln oder weiter aufsteigen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You are at level 100: the top! You can go Prestige."
+            "value": "You reached level 100: you can go Prestige, or keep climbing."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¡Estás en el nivel 100: la cima! Puedes pasar a Prestigio."
+            "value": "Llegaste al nivel 100: puedes pasar a Prestigio, o seguir subiendo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es au niveau 100 : le sommet ! Tu peux passer en Prestige."
+            "value": "Tu as atteint le niveau 100 : tu peux passer en Prestige, ou continuer à monter."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sei al livello 100: la vetta! Puoi passare a Prestigio."
+            "value": "Hai raggiunto il livello 100: puoi passare a Prestigio, oppure continuare a salire."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você está no nível 100: o topo! Pode passar para Prestígio."
+            "value": "Você chegou ao nível 100: pode passar para Prestígio, ou continuar subindo."
           }
         }
       }

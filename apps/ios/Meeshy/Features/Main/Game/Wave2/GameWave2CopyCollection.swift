@@ -191,7 +191,7 @@ extension GameText {
 
     static var prestigeMax: String { String(localized: "game2.prestige.max", defaultValue: "Tu as les cinq étoiles : le sommet du sommet.", bundle: .main) }
 
-    static var prestigeMee: String { String(localized: "game2.prestige.mee", defaultValue: "Tu es au niveau 100 : le sommet ! Tu peux passer en Prestige.", bundle: .main) }
+    static var prestigeMee: String { String(localized: "game2.prestige.mee", defaultValue: "Tu as atteint le niveau 100 : tu peux passer en Prestige, ou continuer à monter.", bundle: .main) }
 
     static func prestigeMeo(glory: String) -> String {
         String(localized: "game2.prestige.meo", defaultValue: "Ton niveau repart à 1 et tes points en poche à 0. En échange : une étoile sur ton anneau, un trophée numéroté et \(glory) de Gloire. Ton rang ne baisse jamais.", bundle: .main)
@@ -219,7 +219,7 @@ extension GameText {
 
     static var prestigeGo: String { String(localized: "game2.prestige.go", defaultValue: "Passer en Prestige", bundle: .main) }
 
-    static var prestigeStay: String { String(localized: "game2.prestige.stay", defaultValue: "Rester au sommet", bundle: .main) }
+    static var prestigeStay: String { String(localized: "game2.prestige.stay", defaultValue: "Continuer à monter", bundle: .main) }
 
     static func prestigeDone(number: String) -> String {
         String(localized: "game2.prestige.done", defaultValue: "Prestige \(number) ! Une étoile de plus sur ton anneau.", bundle: .main)

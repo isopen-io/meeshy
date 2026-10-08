@@ -44,7 +44,7 @@ public enum GamePrestige {
     public static func transition(score: Int, prestige: Int) -> PrestigeTransition {
         let stars = max(0, prestige)
         if stars >= GameLevels.maxPrestige { return .refused(.atMaximum) }
-        if GameLevels.level(forScore: score) < GameLevels.maxLevel { return .refused(.levelTooLow) }
+        if GameLevels.levelForUnlocks(score: score) < GameLevels.prestigeLevel { return .refused(.levelTooLow) }
         let after = stars + 1
         return .allowed(PrestigePassage(
             prestigeAfter: after,

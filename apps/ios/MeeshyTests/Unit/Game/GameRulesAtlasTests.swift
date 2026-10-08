@@ -25,9 +25,31 @@ final class GameRulesAtlasTests: XCTestCase {
         XCTAssertTrue(speakers.contains(.meo))
     }
 
-    func test_tenTiers_startAtLevelOne_thenEveryTenLevels() {
-        XCTAssertEqual(GameRulesAtlas.tiers.count, 10)
-        XCTAssertEqual(GameRulesAtlas.tiers.map(GameRulesAtlas.firstLevel(of:)), [1, 10, 20, 30, 40, 50, 60, 70, 80, 90])
+    func test_twentyTiers_tenLevelsEachUpTo100_thenAHundred_thenSingularityAt1000() {
+        XCTAssertEqual(GameRulesAtlas.tiers.count, 20)
+        XCTAssertEqual(
+            GameRulesAtlas.tiers.map(GameRulesAtlas.firstLevel(of:)),
+            [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 101, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+        )
+    }
+
+    /// Le carnet dit la règle ouverte par le rang (#9688) : 499 sous Ambassadeur, 1000 pour Ambassadeur et Orateur,
+    /// sans limite à partir d'Oracle — dérivé de la loi, jamais recopié.
+    func test_theLevelCapBands_comeFromTheLaw() {
+        XCTAssertEqual(GameRulesAtlas.levelCapBands.map(\.cap), [GameLevels.capBase, GameLevels.capAmbassador, nil])
+        XCTAssertEqual(GameRulesAtlas.levelCapBands[1].ranks, [.ambassadeur, .orateur])
+        XCTAssertEqual(GameRulesAtlas.levelCapBands[2].ranks.first, .oracle)
+    }
+
+    func test_theLevelRules_sayEachCap_theOptionalPrestige_andTheFirstPassGlory() {
+        let rules = GameAtlasCopy.levelRules
+        XCTAssertEqual(rules.count, 5)
+        XCTAssertTrue(rules[0].contains(GameCopy.formatCount(499)) && rules[0].contains(GameCopy.rankName(.ambassadeur)), rules[0])
+        XCTAssertTrue(rules[1].contains(GameCopy.formatCount(1000)) && rules[1].contains(GameCopy.rankName(.orateur)), rules[1])
+        XCTAssertTrue(rules[2].contains(GameCopy.rankName(.oracle)), rules[2])
+        XCTAssertTrue(rules[3].contains(GameCopy.formatCount(GameLevels.prestigeLevel)), rules[3])
+        XCTAssertTrue(rules[4].contains(GameCopy.formatCount(GameGlory.points.levelDecade)), rules[4])
+        for rule in rules { XCTAssertFalse(rule.hasPrefix("game."), "clé brute : \(rule)") }
     }
 
     func test_theMeeshShowsItsObverse_itsReverse_andTheGoldAndPrismEditions() {

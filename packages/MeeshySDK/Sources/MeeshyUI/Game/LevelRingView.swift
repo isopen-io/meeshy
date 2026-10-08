@@ -38,7 +38,7 @@ public struct LevelRingView: View {
     @ScaledMetric(relativeTo: .headline) private var typeScale: CGFloat = 1
 
     /// - Parameters:
-    ///   - level: le niveau (1 à 100), peint au centre.
+    ///   - level: le niveau, peint au centre — de 1 à 5 chiffres (#9688).
     ///   - progress: la barre du niveau, de 0 à 1.
     ///   - tier: le palier de nom — il fixe la couleur de l'arc.
     ///   - prestige: les étoiles de Prestige (0 à 5) sous l'anneau.
@@ -109,7 +109,7 @@ public struct LevelRingView: View {
             TierEmblemView(tier: tier, knockout: discColor, opacity: Self.watermarkOpacity)
                 .frame(width: 34 * k, height: 34 * k)
             Text("\(level)")
-                .font(.system(size: (String(level).count >= 3 ? 11 : 14) * k * min(max(typeScale, 1), GameTypeScale.maximum),
+                .font(.system(size: Self.levelTypeSize(forLevel: level) * k * min(max(typeScale, 1), GameTypeScale.maximum),
                               weight: .heavy, design: .rounded))
                 .foregroundColor(inkColor)
                 .lineLimit(1)
@@ -118,6 +118,17 @@ public struct LevelRingView: View {
                 .frame(width: 30 * k)
                 .position(x: 28 * k, y: 26.5 * k)
             tierCartouche(k: k)
+        }
+    }
+
+    /// Le corps du chiffre selon son nombre de chiffres (#9688 : les niveaux s'ouvrent au-delà de 100) — il tient
+    /// dans le disque de 1 à 5 chiffres : 14, puis 11, 9 et 7,5. Miroir de `levelFontSize` (`level-ring.tsx`).
+    public static func levelTypeSize(forLevel level: Int) -> CGFloat {
+        switch String(max(0, level)).count {
+        case ...2: 14
+        case 3: 11
+        case 4: 9
+        default: 7.5
         }
     }
 

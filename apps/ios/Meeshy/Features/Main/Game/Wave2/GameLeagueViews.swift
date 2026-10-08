@@ -61,7 +61,7 @@ struct GameLeagueScreen: View {
                     GameFriendsLeagueCard(model: model)
                 }
                 if let duo = game.duo {
-                    GameDuoCard(model: model, duo: duo, levelRecord: game.level.record)
+                    GameDuoCard(model: model, duo: duo, levelRecord: game.level.shown.record)
                 }
             } else {
                 GameNote(text: GameText.unavailable)
@@ -125,7 +125,7 @@ private struct GameLeagueMineView: View {
         case .locked:
             GameCard(title: GameText.leagueTitle) {
                 GameNote(text: GameText.leagueLocked(
-                    level: GameCopy.formatCount(GameLeague.minLevel), current: GameCopy.formatCount(game.level.record)))
+                    level: GameCopy.formatCount(GameLeague.minLevel), current: GameCopy.formatCount(game.level.shown.record)))
             }
             .accessibilityIdentifier("game.league.locked")
         case .minor:

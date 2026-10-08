@@ -171,7 +171,8 @@ enum GameLawVectorEvaluator {
     // MARK: Niveaux
 
     private static func level(_ input: GameJSON) -> GameJSON {
-        let p = GameLevels.progress(forScore: int(input, "score"))
+        let p = GameLevels.progress(forScore: int(input, "score"), cap: GameGlory.levelCap(forGlory: int(input, "glory")))
+        let legacy = GameLevels.legacyProgress(forScore: int(input, "score"))
         return object([
             "level": .int(p.level),
             "tier": .string(p.tier.rawValue),
@@ -180,6 +181,9 @@ enum GameLawVectorEvaluator {
             "pointsToNext": .int(p.pointsToNext),
             "progress": .number(p.progress),
             "isMax": .bool(p.isMax),
+            "cap": .optionalInt(p.cap),
+            "legacyLevel": .int(legacy.level),
+            "legacyTier": .string(legacy.tier.rawValue),
         ])
     }
 
@@ -208,7 +212,8 @@ enum GameLawVectorEvaluator {
 
     private static func mintPreview(_ input: GameJSON) throws -> GameJSON {
         let preview = GameMint.preview(score: int(input, "score"), mintedLifetime: int(input, "mintedLifetime"),
-                                       debitablePoints: int(input, "debitablePoints"))
+                                       debitablePoints: int(input, "debitablePoints"),
+                                       levelCap: GameGlory.levelCap(forGlory: int(input, "glory")))
         return try GameJSON.parse(JSONEncoder().encode(preview))
     }
 
@@ -231,6 +236,7 @@ enum GameLawVectorEvaluator {
             "progress": .number(s.progress),
             "mythicNumber": .optionalInt(s.mythic?.number),
             "mythicEdition": .optionalInt(s.mythic?.edition),
+            "levelCap": .optionalInt(GameGlory.levelCap(forRank: s.rank)),
         ])
     }
 

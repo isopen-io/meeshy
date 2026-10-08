@@ -167,8 +167,10 @@ struct GameMintPreviewView: View {
             : String(localized: "game.mint.badges.other", defaultValue: "\(number) badges redescendent", bundle: .main)
     }
 
+    /// Les niveaux de la frappe lus sur la VÉRITÉ (`shownLevels`, #9688) : au-delà de 100, les champs d'hier mentiraient.
     private var levelValue: String {
-        let base = "\(GameCopy.formatCount(mint.levelBefore)) → \(GameCopy.formatCount(mint.levelAfter))"
-        return mint.levelsLost > 0 ? base + " (−\(GameCopy.formatCount(mint.levelsLost)))" : base
+        let levels = mint.shownLevels
+        let base = "\(GameCopy.formatCount(levels.levelBefore)) → \(GameCopy.formatCount(levels.levelAfter))"
+        return levels.levelsLost > 0 ? base + " (−\(GameCopy.formatCount(levels.levelsLost)))" : base
     }
 }

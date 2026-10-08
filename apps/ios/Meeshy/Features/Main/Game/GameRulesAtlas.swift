@@ -40,11 +40,31 @@ enum GameRulesAtlas {
 
     // MARK: Les éléments de chaque famille
 
-    /// Les dix paliers, du premier éclat à la galaxie, chacun avec le premier niveau qu'il couvre (1, 10, 20 … 90).
+    /// Les vingt paliers, de l'étincelle à la singularité, chacun avec le premier niveau qu'il couvre — par la loi
+    /// (`GameLevels.tierStart`) : 1, 10 … 90, puis 101, 200 … 900, et 1000 (#9688).
     static let tiers: [LevelTierKey] = LevelTierKey.allCases
 
     static func firstLevel(of tier: LevelTierKey) -> Int {
-        tier.ordinal == 1 ? 1 : (tier.ordinal - 1) * 10
+        GameLevels.tierStart(of: tier)
+    }
+
+    /// Les rangs qui ouvrent les niveaux (#9688), DÉRIVÉS de la loi (`GameGlory.levelCap(forRank:)`) : chaque
+    /// plafond distinct, et les rangs qui le portent — 499 sous Ambassadeur, 1000 pour Ambassadeur et Orateur,
+    /// sans limite (`nil`) à partir d'Oracle.
+    struct LevelCapBand: Equatable {
+        let cap: Int?
+        let ranks: [GloryRank]
+    }
+
+    static var levelCapBands: [LevelCapBand] {
+        GloryRank.ladder.reduce(into: [LevelCapBand]()) { bands, rank in
+            let cap = GameGlory.levelCap(forRank: rank)
+            guard let last = bands.last, last.cap == cap else {
+                bands.append(LevelCapBand(cap: cap, ranks: [rank]))
+                return
+            }
+            bands[bands.count - 1] = LevelCapBand(cap: cap, ranks: last.ranks + [rank])
+        }
     }
 
     /// Les quatre faces de la planche IV.2 : l'avers, le revers numéroté, l'édition or (chaque centième), l'édition prisme
@@ -167,7 +187,7 @@ enum GameAtlasCopy {
 
     static func title(_ family: GameRulesAtlas.Family) -> String {
         switch family {
-        case .tiers: String(localized: "game.atlas.tiers.title", defaultValue: "Les 10 paliers", bundle: .main)
+        case .tiers: String(localized: "game.atlas.tiers.title", defaultValue: "Les 20 paliers", bundle: .main)
         case .coin: String(localized: "game.atlas.coin.title", defaultValue: "La Meesh : avers et revers", bundle: .main)
         case .treasury: String(localized: "game.atlas.treasury.title", defaultValue: "Les paliers du trésor", bundle: .main)
         case .ranks: String(localized: "game.atlas.ranks.title", defaultValue: "Les blasons des rangs", bundle: .main)
@@ -182,7 +202,7 @@ enum GameAtlasCopy {
     static func line(_ family: GameRulesAtlas.Family) -> String {
         switch family {
         case .tiers:
-            String(localized: "game.atlas.tiers.line", defaultValue: "Dix paliers, du premier éclat à la galaxie : ton anneau change à chacun.", bundle: .main)
+            String(localized: "game.atlas.tiers.line", defaultValue: "Vingt paliers, de l’étincelle à la singularité : ton anneau change à chacun.", bundle: .main)
         case .coin:
             String(localized: "game.atlas.coin.line", defaultValue: "Chaque Meesh est numérotée : une pièce d’or tous les cent, un prisme tous les mille.", bundle: .main)
         case .treasury:
@@ -239,6 +259,44 @@ enum GameAtlasCopy {
         case .legendary: String(localized: "game.atlas.rarity.legendary", defaultValue: "0,2 à 2 % des comptes", bundle: .main)
         case .mythic: String(localized: "game.atlas.rarity.mythic", defaultValue: "moins de 0,2 % des comptes", bundle: .main)
         }
+    }
+
+    /// La règle des niveaux sous la grille des paliers (#9688) : jusqu'où chaque rang ouvre les niveaux, le Prestige
+    /// facultatif au niveau 100, et la Gloire du premier passage. Les nombres et les rangs viennent de la loi.
+    static var levelRules: [String] {
+        GameRulesAtlas.levelCapBands.compactMap(levelCapLine) + [prestigeLine, firstPassGloryLine]
+    }
+
+    private static func levelCapLine(_ band: GameRulesAtlas.LevelCapBand) -> String? {
+        guard let first = band.ranks.first else { return nil }
+        guard let cap = band.cap else {
+            let rank = GameCopy.rankName(first)
+            return String(localized: "game.atlas.tiers.cap.none", defaultValue: "Sans limite à partir du rang \(rank).", bundle: .main)
+        }
+        let level = GameCopy.formatCount(cap)
+        if first == GloryRank.ladder.first, let opening = GameCopy.rankOpening(beyond: cap) {
+            let rank = GameCopy.rankName(opening)
+            return String(localized: "game.atlas.tiers.cap.base", defaultValue: "Jusqu’au niveau \(level) sous le rang \(rank).", bundle: .main)
+        }
+        guard band.ranks.count > 1, let last = band.ranks.last else {
+            let rank = GameCopy.rankName(first)
+            return String(localized: "game.atlas.tiers.cap.one", defaultValue: "Jusqu’au niveau \(level) au rang \(rank).", bundle: .main)
+        }
+        let from = GameCopy.rankName(first)
+        let to = GameCopy.rankName(last)
+        return String(localized: "game.atlas.tiers.cap.ranks", defaultValue: "Jusqu’au niveau \(level) aux rangs \(from) et \(to).", bundle: .main)
+    }
+
+    private static var prestigeLine: String {
+        let level = GameCopy.formatCount(GameLevels.prestigeLevel)
+        return String(localized: "game.atlas.tiers.prestige", defaultValue: "Le Prestige s’offre au niveau \(level) : il est facultatif, tu peux continuer à monter.", bundle: .main)
+    }
+
+    private static var firstPassGloryLine: String {
+        let perLevel = GameCopy.formatCount(GameGlory.points.firstLevel)
+        let upTo = GameCopy.formatCount(GameLevels.legacyMaxLevel)
+        let perDecade = GameCopy.formatCount(GameGlory.points.levelDecade)
+        return String(localized: "game.atlas.tiers.glory", defaultValue: "Gloire du premier passage : \(perLevel) par niveau jusqu’au \(upTo), puis \(perDecade) tous les dix niveaux.", bundle: .main)
     }
 
     /// Mythe est un rang à part : cent places, aux cent premiers qui atteignent 1 000 000 de Gloire (#9636).

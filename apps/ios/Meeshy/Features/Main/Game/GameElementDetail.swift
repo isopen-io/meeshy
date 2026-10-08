@@ -582,17 +582,19 @@ enum GameElementDetails {
 
     // MARK: Niveau
 
-    static func levelRing(_ level: GameBlock.Level) -> GameElementDetail {
+    /// Le niveau se lit sur la VÉRITÉ (`level.shown`, #9688) ; au plafond du rang, le fait dit quel rang ouvre la suite.
+    static func levelRing(_ block: GameBlock.Level) -> GameElementDetail {
+        let level = block.shown
         let record: ProgressionConceptFact? = level.record > level.level
             ? fact(ConceptText.factRecord, GameText.bannerLevel(level: count(level.record))) : nil
         return GameElementDetail(
             kind: .levelRing, key: "\(level.level)",
             emblem: .tier(level.tier),
             name: GameText.bannerLevel(level: count(level.level)) + " · " + GameCopy.tierName(level.tier),
-            status: .value(GameCopy.points(level.score), progress: level.nextThreshold == nil ? nil : level.progress),
+            status: .value(GameCopy.points(block.score), progress: level.nextThreshold == nil ? nil : level.progress),
             facts: [
                 fact(ConceptText.factNextLevel, level.nextThreshold == nil
-                    ? GameText.bannerTop : ConceptText.chipMissing(GameCopy.points(level.pointsToNext))),
+                    ? GameCopy.levelTopShort(cap: level.cap) : ConceptText.chipMissing(GameCopy.points(level.pointsToNext))),
                 record,
             ].compactMap { $0 },
             concept: .level

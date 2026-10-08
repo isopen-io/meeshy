@@ -211,7 +211,7 @@ public struct RankBlasonView: View {
     private func drawLevel(_ level: Int, in context: inout GraphicsContext) {
         let spot = GameRankCrest.levelEngraving
         let digits = String(level)
-        let font = Font.system(size: spot.size, weight: .heavy)
+        let font = Font.system(size: GameRankCrest.levelEngravingSize(forLevel: level), weight: .heavy)
         Self.drawOnBaseline(Text(digits).font(font).foregroundColor(.white.opacity(0.35)),
                             at: CGPoint(x: spot.x + 0.6, y: spot.y + 0.8), in: &context)
         Self.drawOnBaseline(Text(digits).font(font).foregroundColor(material.ink.opacity(0.85)),

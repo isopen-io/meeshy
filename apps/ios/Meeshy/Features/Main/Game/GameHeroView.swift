@@ -47,14 +47,15 @@ struct GameHeroView: View {
         self.settled = settled
         self.elan = elan
         self.onOpenGuide = onOpenGuide
-        _shownLevel = State(initialValue: game.level.level)
-        _shownProgress = State(initialValue: game.level.progress)
-        _confirmation = State(initialValue: GameLevelConfirmation(confirmed: game.level.level))
+        _shownLevel = State(initialValue: game.level.shown.level)
+        _shownProgress = State(initialValue: game.level.shown.progress)
+        _confirmation = State(initialValue: GameLevelConfirmation(confirmed: game.level.shown.level))
         _seenOrder = State(initialValue: GameGuideEvents.standingOrder(game))
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
-    private var level: GameBlock.Level { game.level }
+    /// La VÉRITÉ du niveau (#9688) : la lecture ouverte par le rang, ou les champs d'hier devant un serveur antérieur.
+    private var level: GameBlock.Level.Ladder { game.level.shown }
     private var glory: GameBlock.Glory { game.glory }
     private var tint: Color { LevelTierPalette.color(for: level.tier) }
 
@@ -139,7 +140,7 @@ struct GameHeroView: View {
     private var levelRow: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.lg) {
             LevelRingView(
-                level: shownLevel, progress: shownProgress, tier: level.tier, prestige: level.prestige,
+                level: shownLevel, progress: shownProgress, tier: level.tier, prestige: game.level.prestige,
                 // Redescendu : le repère du record reste au bout de la barre.
                 recordMarker: level.record > level.level ? 1 : nil,
                 trackColor: theme.textMuted.opacity(0.22),
@@ -150,7 +151,7 @@ struct GameHeroView: View {
             )
             .frame(width: 88, height: 88)
             // L'anneau SE TOUCHE (#9564) : il rebondit et ouvre les précisions du niveau.
-            .gameElement(GameElementDetails.levelRing(level), identifier: "game.hero.level")
+            .gameElement(GameElementDetails.levelRing(game.level), identifier: "game.hero.level")
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(GameCopy.tierName(level.tier))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -197,7 +198,7 @@ struct GameHeroView: View {
 
     private var toNextText: String {
         level.nextThreshold == nil
-            ? String(localized: "game.level.top", defaultValue: "Tu es au sommet.", bundle: .main)
+            ? GameCopy.levelTop(cap: level.cap)
             : String(
                 localized: "game.level.to_next",
                 defaultValue: "Encore \(GameCopy.points(level.pointsToNext)) avant le niveau \(GameCopy.formatCount(level.level + 1))",

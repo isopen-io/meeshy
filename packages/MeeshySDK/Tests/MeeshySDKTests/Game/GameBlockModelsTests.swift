@@ -41,13 +41,29 @@ struct GameBlockModelsTests {
     func servedBlockAgreesWithTheLaw() throws {
         let block = try #require(GameBlock.parse(GameBlockFixture.data))
 
-        #expect(block.mint == GameMint.preview(score: 12_180, mintedLifetime: 12, debitablePoints: 12_180))
-        #expect(GameLevels.progress(forScore: block.level.score).level == block.level.level)
+        #expect(block.mint == GameMint.preview(score: 12_180, mintedLifetime: 12, debitablePoints: 12_180,
+                                               levelCap: GameGlory.levelCap(forRank: block.glory.rank)))
+        #expect(GameLevels.progress(forScore: block.level.score, cap: GameGlory.levelCap(forRank: block.glory.rank)).level == block.level.level)
+        #expect(block.level.ladder == nil)
+        #expect(block.level.shown.level == block.level.level)
         #expect(GameGlory.standing(glory: block.glory.glory, mythic: false).rank == block.glory.rank)
         #expect(GameTreasury.standing(held: block.treasury.held) == block.treasury)
         #expect(GameFlame.bonusPercent(forDays: block.flame.days) == block.flame.bonusPercent)
         #expect(block.boosts.tailwind == GameBoosts.tailwind(level: block.level.level, levelRecord: block.level.record))
         #expect(block.boosts.prismHour?.window == GameBoosts.prismHour(userId: "u1", dayKey: "2026-10-05"))
+    }
+
+    @Test("un bloc à jour porte la lecture ouverte par le rang dans ladder, les champs d'hier restent sous l'ancienne loi (#9688)")
+    func ladderCarriesTheRankOpenedLevel() throws {
+        let json = String(decoding: GameBlockFixture.data, as: UTF8.self).replacingOccurrences(
+            of: "\"canPrestige\":false}",
+            with: "\"canPrestige\":false,\"ladder\":{\"level\":640,\"tier\":\"amas\",\"floorScore\":4096000,\"nextThreshold\":4108810,\"pointsToNext\":100,\"progress\":0.99,\"record\":640,\"cap\":1000,\"isMax\":false}}"
+        )
+        let block = try #require(GameBlock.parse(Data(json.utf8)))
+        #expect(block.level.level == 34)
+        #expect(block.level.ladder?.level == 640)
+        #expect(block.level.shown.tier == .amas)
+        #expect(block.level.shown.cap == 1000)
     }
 
     @Test("un bloc à moitié compris n'est jamais lu : une clé de palier inconnue, un champ manquant")

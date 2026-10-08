@@ -121,4 +121,30 @@ final class GameGuideEventsTests: XCTestCase {
         XCTAssertEqual(voixV.glory.division, voixIV.glory.division)
         XCTAssertTrue(GameGuideEvents.rankClimbed(from: voixV, to: voixIV))
     }
+
+    // MARK: - Les niveaux ouverts par le rang (#9688)
+
+    func test_nextTierLevel_afterGalaxie_is101_andAfterSingularite_isNil() {
+        XCTAssertEqual(GameGuideEvents.nextTierLevel(after: .constellation), 90)
+        XCTAssertEqual(GameGuideEvents.nextTierLevel(after: .galaxie), 101)
+        XCTAssertEqual(GameGuideEvents.nextTierLevel(after: .nebuleuse), 200)
+        XCTAssertEqual(GameGuideEvents.nextTierLevel(after: .infini), 1000)
+        XCTAssertNil(GameGuideEvents.nextTierLevel(after: .singularite))
+    }
+
+    func test_transitions_crossingLevel101_announcesNebuleuse_readFromTheLadder() {
+        let before = GameFixture.game(score: GameLevels.threshold(of: 100) + 5)
+        let after = GameFixture.game(score: GameLevels.threshold(of: 101) + 5)
+        XCTAssertEqual(before.level.tier, after.level.tier, "les champs d'hier s'arrêtent à Galaxie")
+        let events = GameGuideEvents.transitions(from: before, to: after)
+        XCTAssertTrue(events.contains(.newTier(tier: .nebuleuse, nextTierLevel: 200)))
+    }
+
+    func test_standing_beyondLevel100_saysTheOpenedLevelAndPrestige() {
+        let game = GameFixture.game(score: GameLevels.threshold(of: 230) + 9)
+        let events = GameGuideEvents.standing(game: game, seen: [], daysAway: nil)
+        XCTAssertTrue(events.contains(.firstLevel(level: 230, pointsToNext: game.level.shown.pointsToNext)))
+        XCTAssertTrue(events.contains(.newTier(tier: .pulsar, nextTierLevel: 300)))
+        XCTAssertTrue(keys(events).contains(.level100), "le Prestige s'offre au-delà de 100, pas seulement à 100")
+    }
 }

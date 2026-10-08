@@ -74,4 +74,17 @@ final class GamePhotoMomentsTests: XCTestCase {
     func test_fromCard_aMomentThatIsNotAPhotoRendersNothing() {
         XCTAssertNil(GamePhotoMoments.fromCard(key: .priceRises, game: GameFixture.game()))
     }
+
+    /// Les paliers au-delà de 100 se photographient au premier niveau qu'ils couvrent (#9688) : 101 pour Nébuleuse.
+    func test_transition_crossingLevel101_proposesNebuleuseAtLevel101() {
+        let before = GameFixture.game(score: GameLevels.threshold(of: 100) + 5)
+        let after = GameFixture.game(score: GameLevels.threshold(of: 101) + 5)
+        let moment = GamePhotoMoments.ofTransition(from: before, to: after).first { $0.id == "tier:nebuleuse" }
+        XCTAssertEqual(moment?.emblem, .tier(.nebuleuse, level: 101))
+    }
+
+    func test_fromCard_theNewTierCard_readsTheTierOfTheLadder() {
+        let game = GameFixture.game(score: GameLevels.threshold(of: 1_050), glory: 400_000)
+        XCTAssertEqual(GamePhotoMoments.fromCard(key: .newTier, game: game)?.emblem, .tier(.singularite, level: 1000))
+    }
 }
