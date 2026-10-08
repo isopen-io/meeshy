@@ -65,7 +65,7 @@ struct CommentMoreMenu: View {
     /// « Imager » s'offre-t-il ? Pour un commentaire de post, dès qu'un mode compose une carte.
     private var canImagine: Bool {
         guard let post else { return ownRequest != nil }
-        let source = PostCommentCardSource(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal)
+        let source = PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal)
         return !PostCommentCardComposition.modes(of: source).isEmpty
     }
 

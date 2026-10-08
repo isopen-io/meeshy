@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Les entrées des menus qui mènent à l'atelier « Imagine » — libellés,
 /// symboles et le fait qui ouvre « Export rapide ». Un seul site pour tous
@@ -149,7 +150,7 @@ enum MessageCardExportMenu {
     /// rien ne s'image (`PostCommentCardComposition` en tient les gardes).
     static func request(post: FeedPost, comment: FeedComment, thread: [FeedComment], showOriginal: Bool, accentColor: String,
                         viewer: MessageCardSubject.Viewer, handle: String?, audioPrism: [String] = []) -> MessageCardExportRequest? {
-        let source = PostCommentCardSource(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal)
+        let source = PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal)
         let served = (thread + [comment]).reduce(into: [String: String]()) { languages, item in
             guard !(item.id == comment.id && showOriginal) else { return }
             languages.merge(servedAudioLanguages(of: item, prism: audioPrism)) { own, _ in own }

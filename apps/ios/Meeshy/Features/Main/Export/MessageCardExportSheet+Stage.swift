@@ -207,8 +207,7 @@ extension MessageCardExportSheet {
                 composition: composition,
                 mode: $compositionMode,
                 showsPost: $showsPost,
-                chosen: $chosenReplies,
-                accent: accent
+                chosen: $chosenReplies
             )
         }
     }
@@ -220,7 +219,6 @@ struct MessageCardCompositionBar: View {
     @Binding var mode: PostCommentCardMode?
     @Binding var showsPost: Bool
     @Binding var chosen: Set<String>
-    let accent: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
@@ -245,7 +243,7 @@ struct MessageCardCompositionBar: View {
                     HStack(spacing: MeeshySpacing.sm) {
                         ForEach(composition.choosable) { comment in
                             let selected = chosen.contains(comment.id)
-                            chip("\(comment.author) · \(Self.excerpt(comment.displayContent))",
+                            chip("\(comment.author) · \(Self.excerpt(composition.source.read(comment.displayContent)))",
                                  systemImage: selected ? "checkmark.circle.fill" : "circle", selected: selected) {
                                 if selected { chosen.remove(comment.id) } else { chosen.insert(comment.id) }
                             }
@@ -274,14 +272,25 @@ struct MessageCardCompositionBar: View {
                 if let systemImage { Image(systemName: systemImage).accessibilityHidden(true) }
                 Text(title).lineLimit(1)
             }
-            .font(.footnote.weight(.semibold))
+            .font(.subheadline.weight(.semibold))
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .frame(minHeight: 44)
-            .foregroundStyle(selected ? accent : Color.primary)
-            .adaptiveGlass(in: Capsule(), tint: selected ? accent : nil, interactive: true)
+            .foregroundStyle(Color(uiColor: Self.ink(selected: selected)))
+            .background(Capsule().fill(Color(uiColor: Self.fill(selected: selected))))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MessageCardPressStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// L'encre et le fond d'une puce — ceux des pastilles du plateau (`pill`) :
+    /// sélectionnée, l'encre du fond système sur l'encre du texte, opaque ; sinon
+    /// le texte sur un voile à 7 %. Le contraste tient en clair ET en sombre.
+    static func ink(selected: Bool) -> UIColor {
+        selected ? .systemBackground : .label
+    }
+
+    static func fill(selected: Bool) -> UIColor {
+        selected ? .label : UIColor.label.withAlphaComponent(0.07)
     }
 
     private static func excerpt(_ text: String) -> String {
