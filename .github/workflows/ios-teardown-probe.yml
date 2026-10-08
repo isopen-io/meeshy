@@ -175,10 +175,11 @@ jobs:
         runtime: ${{ fromJSON(needs.plan.outputs.runtimes) }}
         part: ${{ fromJSON(needs.plan.outputs.parts) }}
     steps:
+      # Checkout COMPLET : les gardes de source de MeeshyTests lisent
+      # apps/ios/Meeshy/** et packages/MeeshySDK/** au chemin #filePath du
+      # build — un checkout clairsemé les fait toutes échouer (760 faux rouges
+      # mesurés au premier passage de la sonde).
       - uses: actions/checkout@v7
-        with:
-          sparse-checkout: |
-            apps/ios/MeeshyTests
 
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
@@ -282,6 +283,7 @@ jobs:
           PART: ${{ matrix.part }}
           RC: ${{ steps.tests.outputs.rc }}
         run: |
+          set +e
           set -uo pipefail
           OUT="$RUNNER_TEMP/probe-out"
           mkdir -p "$OUT/crashes"
