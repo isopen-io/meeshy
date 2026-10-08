@@ -305,6 +305,14 @@ services:
       # unsetOrNull('liftedAt'), témoin sur documents Mongo vert). Production :
       # toujours désarmée, feu vert du porteur et sauvegarde vérifiée d'abord.
       - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-true}
+      # #9668 — le verdict de la sauvegarde nocturne (etat.json), lu par la carte
+      # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
+      # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les
+      # ADMIN et BIGBOSS et écrivent au BIGBOSS. Seule la valeur exacte true arme le contrôle.
+      # Staging : aucune sauvegarde n'y tourne ; la recette y POSE un etat.json à la main
+      # et arme le contrôle par BACKUP_STATUS_ALERTS_ENABLED=true dans le .env de l'hôte.
+      - BACKUP_STATUS_FILE=/backup-status/etat.json
+      - BACKUP_STATUS_ALERTS_ENABLED=${BACKUP_STATUS_ALERTS_ENABLED:-false}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@meeshy.me}
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Meeshy Staging}
       - BREVO_API_KEY=${BREVO_API_KEY:-}
@@ -315,6 +323,9 @@ services:
       # #9609 — base de géolocalisation LOCALE (DB-IP Lite), tenue à jour sur l'hôte
       # par infrastructure/scripts/geoip-update-dbip.sh ; lecture seule, jamais dans l'image.
       - ${GEOIP_HOST_DIR:-/opt/meeshy/geoip}:/app/geoip:ro
+      # #9668 — le SEUL dossier du verdict de sauvegarde, en lecture seule : la passerelle
+      # ne voit jamais les sauvegardes elles-mêmes (/opt/meeshy/backups/nightly).
+      - ${BACKUP_STATUS_HOST_DIR:-/opt/meeshy/staging/backup-status}:/backup-status:ro
     depends_on:
       mongo-init-staging:
         condition: service_completed_successfully

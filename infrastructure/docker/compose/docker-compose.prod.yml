@@ -242,6 +242,13 @@ services:
       # PRODUCTION : la première passe efface l'arriéré — feu vert du porteur et
       # sauvegarde vérifiée AVANT de poser RETENTION_PURGE_ENABLED=true sur l'hôte.
       - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-false}
+      # #9668 — le verdict de la sauvegarde nocturne (etat.json), lu par la carte
+      # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
+      # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les
+      # ADMIN et BIGBOSS et écrivent au BIGBOSS. Seule la valeur exacte true arme le contrôle.
+      # Production : le script de l'hôte y publie chaque nuit ; contrôle armé par défaut.
+      - BACKUP_STATUS_FILE=/backup-status/etat.json
+      - BACKUP_STATUS_ALERTS_ENABLED=${BACKUP_STATUS_ALERTS_ENABLED:-true}
       - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS absente sur l hote. Poser la liste d origines separees par des virgules. Vide, la passerelle refuse TOUTE origine de navigateur}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:?ALLOWED_ORIGINS absente sur l hote. C est le repli de CORS_ORIGINS. Vide, il ne rattrape rien}
       - FRONTEND_URL=${FRONTEND_URL:?FRONTEND_URL absente sur l hote. Sans elle les liens de reinitialisation et de confirmation partent brises}
@@ -337,6 +344,9 @@ services:
       # #9609 — base de géolocalisation LOCALE (DB-IP Lite), tenue à jour sur l'hôte
       # par infrastructure/scripts/geoip-update-dbip.sh ; lecture seule, jamais dans l'image.
       - ${GEOIP_HOST_DIR:-/opt/meeshy/geoip}:/app/geoip:ro
+      # #9668 — le SEUL dossier du verdict de sauvegarde, en lecture seule : la passerelle
+      # ne voit jamais les sauvegardes elles-mêmes (/opt/meeshy/backups/nightly).
+      - ${BACKUP_STATUS_HOST_DIR:-/opt/meeshy/backups/nightly-status}:/backup-status:ro
     depends_on:
       database:
         condition: service_healthy
