@@ -371,12 +371,43 @@ final class BackgroundSoundSingleCreditTests: XCTestCase {
         XCTAssertTrue(badge.contains("AudioChipMarquee("), "le crédit défile quand il dépasse")
     }
 
-    /// En taille d'ACCESSIBILITÉ le crédit passe sous le nom, au lieu de
-    /// l'écraser ; en taille ordinaire il reste sur la ligne.
-    func test_theCreditGoesBelow_onlyAtAccessibilitySizes() {
-        XCTAssertFalse(SoundCreditLine<EmptyView, EmptyView>.placesCreditBelow(.large))
-        XCTAssertFalse(SoundCreditLine<EmptyView, EmptyView>.placesCreditBelow(.xxxLarge))
-        XCTAssertTrue(SoundCreditLine<EmptyView, EmptyView>.placesCreditBelow(.accessibility1))
-        XCTAssertTrue(SoundCreditLine<EmptyView, EmptyView>.placesCreditBelow(.accessibility5))
+    /// **Le crédit du réel a sa ligne** (recette 2026-10-08 : ≈ 40 pt à 402,
+    /// « ♫ ɪbeth »). Le bloc d'infos du lecteur = l'écran moins les deux
+    /// gouttières, le rail d'actions et leur espacement ; la ligne du crédit
+    /// n'y partage sa largeur qu'avec le bouton muet. Il doit garder au moins
+    /// 60 % du bloc, à 402 comme à 320 pt.
+    func test_theReelCredit_getsMostOfTheInfoBlock_at402And320() {
+        for screen: CGFloat in [402, 320] {
+            let block = screen - 2 * MeeshySpacing.lg
+                - FullscreenChromeMetrics.floatingCellWidth - MeeshySpacing.md
+            let credit = SoundCreditLine<EmptyView, EmptyView>.creditWidth(
+                blockWidth: block, trailingWidth: MeeshyControlSize.tapTarget, spacing: MeeshySpacing.xs)
+            XCTAssertGreaterThanOrEqual(credit, block * 0.6,
+                "à \(Int(screen)) pt le crédit n'a que \(Int(credit)) pt sur \(Int(block))")
+        }
+    }
+
+    /// Et la vue tient cette règle : le crédit n'est PAS sur la ligne du
+    /// @pseudo et des compteurs — il est sur la sienne, sous elle.
+    func test_theCreditLine_putsTheBadgeOnItsOwnRow() throws {
+        let src = try source("Meeshy/Features/Main/Components/BackgroundSoundBadge.swift")
+        let ligne = try XCTUnwrap(src.range(of: "struct SoundCreditLine"))
+        let corps = String(src[ligne.lowerBound...])
+        let pseudo = try XCTUnwrap(corps.range(of: "leading\n"))
+        let badge = try XCTUnwrap(corps.range(of: "badge.equatable()"))
+        XCTAssertTrue(pseudo.lowerBound < badge.lowerBound)
+        let entre = String(corps[pseudo.upperBound..<badge.lowerBound])
+        XCTAssertTrue(entre.contains("HStack"),
+                      "le badge doit ouvrir une SECONDE rangée, pas suivre le @pseudo sur la même")
+    }
+
+    /// La carte d'un réel dans le FIL annonce son son, comme la carte de post.
+    func test_theReelFeedCard_announcesItsBackgroundSound() throws {
+        let card = try source("Meeshy/Features/Main/Views/ReelFeedCard.swift")
+        XCTAssertTrue(card.contains("BackgroundSoundBadge("),
+                      "recette : un réel à son de bibliothèque s'affichait dans le fil sans « ♫ … »")
+        XCTAssertTrue(card.contains("BackgroundSoundBadge.announcement(for:"))
+        XCTAssertTrue(card.contains("accentHex: BackgroundSoundBadge.overMediaAccentHex"),
+                      "la carte du réel pose son crédit sur le média")
     }
 }

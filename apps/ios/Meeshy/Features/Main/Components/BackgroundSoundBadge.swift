@@ -351,20 +351,22 @@ extension BackgroundSoundBadge {
     }
 }
 
-// MARK: - Le crédit À CÔTÉ du nom, ou SOUS lui (#9677)
+// MARK: - Le crédit SUR SA LIGNE, sous le @pseudo (#9677)
 
-/// **Une ligne qui porte le crédit du son à côté de ce qui la précède** — le
-/// @pseudo et les compteurs d'un réel. Le crédit y prend la place qui reste
-/// (priorité basse) et défile dedans ; en taille de texte d'ACCESSIBILITÉ, où
-/// cette place tombe à rien, il passe sous la ligne au lieu de l'écraser ou de
-/// se replier.
+/// **Le crédit du son a sa PROPRE ligne, sous le @pseudo et les compteurs** —
+/// la forme du lecteur de story, où le crédit est l'`accessory` posé sous le
+/// nom. Recette du 2026-10-08 (iPhone 17 Pro, 402 pt) : partagé avec
+/// « @pseudo · ▮▮ 0 · 👁 0 » et le bouton muet, le crédit n'avait que le RESTE
+/// de la ligne, ≈ 40 pt — « ♫ ɪbeth », « ♫ Recet » : une fente illisible.
+///
+/// Sa ligne porte le crédit, puis ce qui le PILOTE (le muet) : le bouton suit
+/// le son qu'il coupe, et la largeur que le crédit reçoit est celle du bloc
+/// moins ce seul bouton (`creditWidth`).
 struct SoundCreditLine<Leading: View, Trailing: View>: View {
     let spacing: CGFloat
     let badge: BackgroundSoundBadge
     let leading: Leading
     let trailing: Trailing
-
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(spacing: CGFloat,
          badge: BackgroundSoundBadge,
@@ -376,24 +378,21 @@ struct SoundCreditLine<Leading: View, Trailing: View>: View {
         self.trailing = trailing()
     }
 
-    /// La règle, interrogeable sans vue.
-    nonisolated static func placesCreditBelow(_ size: DynamicTypeSize) -> Bool {
-        size.isAccessibilitySize
+    /// La place que reçoit le crédit : la largeur du bloc, moins le bouton qui
+    /// le suit sur SA ligne. Rien d'autre ne la partage.
+    nonisolated static func creditWidth(blockWidth: CGFloat,
+                                        trailingWidth: CGFloat,
+                                        spacing: CGFloat) -> CGFloat {
+        max(0, blockWidth - (trailingWidth > 0 ? trailingWidth + spacing : 0))
     }
 
     var body: some View {
-        if Self.placesCreditBelow(dynamicTypeSize) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                HStack(spacing: spacing) {
-                    leading
-                    trailing
-                }
-                badge.equatable()
-            }
-        } else {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             HStack(spacing: spacing) {
                 leading
-                badge.equatable().layoutPriority(-1)
+            }
+            HStack(spacing: spacing) {
+                badge.equatable()
                 trailing
             }
         }
