@@ -90,3 +90,15 @@ Ce paragraphe AMENDE les sections précédentes là où elles divergent.
   - **`AdminAuditLog` : 15 mois** — le journal survit à toute donnée qu'il décrit. Écart à la décision du porteur (12 mois), à confirmer dans #9650 ;
   - l'interrupteur se relit à CHAQUE passe, valeur exacte `true` seulement ; aucun état ne survit d'une passe à l'autre.
 - **Lecteurs bornés** (`services/retention/retention-bounds.ts`, module unique des durées) : liste et événements d'administration, export, `GET /me/security-events` et fiche d'administration n'affichent plus ce que la purge effacerait — qu'elle soit armée ou non. Une donnée gardée pour une procédure reste en base mais ne se sert plus par l'interface (#9650).
+
+### Reprise après l'audit adversarial n°2 (2026-10-08)
+
+- **Champ absent ≠ `null`, et une négation écarte le document sans la clé** (sémantique mongo:8, #8309). La passe lit le ban par `unsetOrNull('liftedAt')` (et une échéance absente vaut « sans échéance ») : `BanService.createBan` n'écrit pas la clé, et `{ liftedAt: null }` laissait un compte banni sans protection (A2-1). Toutes les exemptions et toutes les bornes de lecture s'écrivent en branches POSITIVES ; la borne de lecture des sessions est le complément exact de la purge, vérifié ligne à ligne sur documents (un `NOT` masquait toute session vivante). La garde #8309 voit désormais la forme `NOT: [{…}]`.
+- **Une session échue ne part que si elle est aussi inactive depuis 90 jours** (A2-2) : `/auth/refresh` et la garde REST ne lisent pas `expiresAt` (#9656).
+- **Un événement masqué perd aussi `metadata`** (A2-3) : les producteurs y recopient la trace de l'acteur.
+- **Traces de connexion sur la fiche et la liste d'administration : à qui SURCLASSE le membre, ou à lui-même** (A2-4).
+- **Refermer une session close ne fait rien** (A2-5) : ni motif écrasé, ni `invalidatedAt` relancé, ni e-mail.
+- E-mails de fermeture dédoublonnés par membre ET par nature ; la lecture d'administration applique « compte purgé + 90 jours » ; une passe tronquée le dit (`truncated`).
+- **Limite assumée, écrite pour qu'on ne la croie pas fermée** : `PASSWORD_RESET_SUCCESS` et `MAGIC_LINK_LOGIN_SUCCESS` sont classés `holder` — prouvés par la possession de la boîte mail. Si la boîte a été volée, le titulaire voit l'adresse de celui qui l'a volée. C'est tolérable (c'est l'information dont il a besoin pour réagir), mais ce n'est pas « l'acteur est le titulaire » au sens strict.
+- Défauts préexistants ouverts : #9656 (échéance non appliquée au rafraîchissement), #9657 (`AccountPurgeService` efface les adresses sans regarder les procédures), #9658 (seul un signalement de COMPTE protège), #9659 (un verrou déclenché par des demandes de réinitialisation de tiers gèle la purge), #9660 (lieu de dernière connexion périmé), #9661 (lecteurs du journal d'audit non bornés).
+- Compte à blanc relevé le 2026-10-08 (lecture seule, mongosh) : staging — 316 sessions closes sur 1 465, aucun événement, ligne d'audit ni adresse au-delà des bornes, 2 comptes sous procédure (signalements) ; production — 508 sessions closes sur 2 944, rien d'autre, 3 comptes sous procédure.
