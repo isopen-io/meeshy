@@ -271,6 +271,21 @@ describe.each(bareUrls)('%s — l’adresse NUE d’un fichier protégé pendant
     await app.close();
   });
 
+  it('compte à part l’usage dont la clé n’a jamais pu être signée (forme ancienne)', async () => {
+    const app = await buildApp(makePrisma({ message: VIEW_ONCE() }));
+    await app.inject({ method: 'GET', url });
+    expect(mockInfo).toHaveBeenCalledWith(UNSIGNED_READER_BOUND_FILE_EVENT, expect.objectContaining({ keyShape: 'signable' }));
+    await app.close();
+  });
+
+  it('n’impose rien sans clé de signature lisible, même bascule posée', async () => {
+    process.env.ATTACHMENT_URL_SIGNATURE_ENFORCE = 'true';
+    delete process.env.ATTACHMENT_URL_SIGNING_KEY;
+    const app = await buildApp(makePrisma({ message: VIEW_ONCE() }));
+    expect((await app.inject({ method: 'GET', url })).statusCode).toBe(200);
+    await app.close();
+  });
+
   it('est refusée une fois la bascule posée', async () => {
     process.env.ATTACHMENT_URL_SIGNATURE_ENFORCE = 'true';
     const app = await buildApp(makePrisma({ message: TIMED_FLAME() }));

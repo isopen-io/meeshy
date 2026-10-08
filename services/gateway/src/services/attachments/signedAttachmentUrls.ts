@@ -65,9 +65,12 @@ export type ReaderSigningContext = {
 
 const TRANSLATED_TRACK = /^translated\/[0-9a-f]{24}_[^/]+$/;
 
+/** Les seules clés que ce module réécrit : l'arborescence datée et les pistes traduites. */
+export const isSignableStorageKey = (key: string): boolean => STORAGE_KEY_SHAPE.test(key) || TRANSLATED_TRACK.test(key);
+
 const signableKeyOf = (url: string): string | null => {
   const key = storageKeyFromMediaUrl(url);
-  return key !== null && (STORAGE_KEY_SHAPE.test(key) || TRANSLATED_TRACK.test(key)) ? key : null;
+  return key !== null && isSignableStorageKey(key) ? key : null;
 };
 
 /** Le fichier de CETTE pièce se lit-il par lecteur ? Vrai sur toute nature non ordinaire. */

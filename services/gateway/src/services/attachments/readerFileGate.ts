@@ -24,6 +24,7 @@ import { normaliserPlateforme, normaliserVersion } from '../route-usage.service'
 import { resolveSignedReaderVerdict } from './attachmentReadVerdict';
 import { resolveFileRouteVerdict, type FileRouteVerdict } from './fileRouteVerdict';
 import { checkReaderFileToken, type SigningKeys } from './readerFileSignature';
+import { isSignableStorageKey } from './signedAttachmentUrls';
 
 const log = enhancedLogger.child({ module: 'AttachmentReaderFileGate' });
 
@@ -61,14 +62,26 @@ export type UnsignedRequestFacts = {
   readonly userAgent: string | undefined;
 };
 
+/**
+ * `legacy` : une clé que `signedAttachmentUrls` ne signe jamais (hors de
+ * l'arborescence datée `STORAGE_KEY_SHAPE` et des pistes `translated/`). Son
+ * lecteur n'a aucune adresse signée vers laquelle migrer : la mesure la compte
+ * à part (audit #9600, L1-C), sans quoi elle ne pourrait jamais tomber à zéro.
+ */
+export function signableStorageKeyShape(storageKey: string): 'signable' | 'legacy' {
+  return isSignableStorageKey(storageKey) ? 'signable' : 'legacy';
+}
+
 export function admitUnsignedFile(input: {
   readonly verdict: FileRouteVerdict;
   readonly request: UnsignedRequestFacts;
   readonly enforced: boolean;
+  readonly storageKey: string;
 }): 'serve' | 'refuse' {
   if (input.verdict.kind !== 'serve' || !input.verdict.readerBound) return 'serve';
   log.info(UNSIGNED_READER_BOUND_FILE_EVENT, {
     route: input.request.route ?? 'unknown',
+    keyShape: signableStorageKeyShape(input.storageKey),
     platform: normaliserPlateforme(input.request.platformHeader, input.request.userAgent),
     version: normaliserVersion(input.request.versionHeader),
     enforced: input.enforced,

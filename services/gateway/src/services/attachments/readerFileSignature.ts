@@ -120,9 +120,27 @@ export function readSigningKeys(env: Env = process.env): SigningKeys {
   };
 }
 
-/** Vrai au seul mot `true` : une bascule de refus ne s'active pas par accident. */
+let enforcementWithoutKeyReported = false;
+
+/**
+ * Vrai au seul mot `true` : une bascule de refus ne s'active pas par accident.
+ *
+ * Et seulement avec une clé COURANTE lisible (audit #9600, L1-C) : sans elle
+ * rien n'est signé, et imposer la signature refuserait tout média protégé à
+ * tous ses lecteurs. Refuser de démarrer couperait toute la passerelle pour une
+ * variable ; la bascule est donc IGNORÉE, et le défaut journalisé en erreur une
+ * fois par processus — l'adresse nue reste servie, mesurée, comme avant.
+ */
 export function readerFileSignatureEnforced(env: Env = process.env): boolean {
-  return env[ATTACHMENT_URL_SIGNATURE_ENFORCE_ENV]?.trim().toLowerCase() === 'true';
+  if (env[ATTACHMENT_URL_SIGNATURE_ENFORCE_ENV]?.trim().toLowerCase() !== 'true') return false;
+  if (readSigningKeys(env).current !== null) return true;
+  if (!enforcementWithoutKeyReported) {
+    enforcementWithoutKeyReported = true;
+    log.error(
+      `${ATTACHMENT_URL_SIGNATURE_ENFORCE_ENV}=true is IGNORED: ${ATTACHMENT_URL_SIGNING_KEY_ENV} is missing or unreadable, nothing is signed, enforcing would refuse every protected file`
+    );
+  }
+  return false;
 }
 
 export type ReaderFileGrant = {

@@ -357,6 +357,7 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
         const unsigned = admitUnsignedFile({
           verdict,
           enforced: readerFileSignatureEnforced(),
+          storageKey,
           request: {
             route: request.routeOptions?.url,
             platformHeader: headerOf(request, 'x-meeshy-platform') ?? headerOf(request, 'x-app-platform'),

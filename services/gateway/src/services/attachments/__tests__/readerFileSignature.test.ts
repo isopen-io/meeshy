@@ -177,16 +177,30 @@ describe('checkReaderFileToken', () => {
 });
 
 describe('readerFileSignatureEnforced', () => {
-  it("n'est vrai qu'au mot « true »", () => {
-    expect(readerFileSignatureEnforced({ ATTACHMENT_URL_SIGNATURE_ENFORCE: 'true' })).toBe(true);
-    expect(readerFileSignatureEnforced({ ATTACHMENT_URL_SIGNATURE_ENFORCE: ' TRUE ' })).toBe(true);
-    expect(readerFileSignatureEnforced({ ATTACHMENT_URL_SIGNATURE_ENFORCE: '1' })).toBe(false);
-    expect(readerFileSignatureEnforced({})).toBe(false);
+  it("n'est vrai qu'au mot « true », clé lisible posée", () => {
+    expect(readerFileSignatureEnforced({ ATTACHMENT_URL_SIGNATURE_ENFORCE: 'true', ATTACHMENT_URL_SIGNING_KEY: KEY_A })).toBe(true);
+    expect(readerFileSignatureEnforced({ ATTACHMENT_URL_SIGNATURE_ENFORCE: ' TRUE ', ATTACHMENT_URL_SIGNING_KEY: KEY_A })).toBe(true);
+    expect(readerFileSignatureEnforced({ ATTACHMENT_URL_SIGNATURE_ENFORCE: '1', ATTACHMENT_URL_SIGNING_KEY: KEY_A })).toBe(false);
+    expect(readerFileSignatureEnforced({ ATTACHMENT_URL_SIGNING_KEY: KEY_A })).toBe(false);
+  });
+
+  it("IGNORE l'imposition sans clé courante lisible — rien n'étant signé, elle refuserait tout média protégé — et le dit une fois", () => {
+    mockError.mockClear();
+    const withoutKey = { ATTACHMENT_URL_SIGNATURE_ENFORCE: 'true' };
+    const unreadable = { ATTACHMENT_URL_SIGNATURE_ENFORCE: 'true', ATTACHMENT_URL_SIGNING_KEY: 'illisible' };
+    const previousOnly = { ATTACHMENT_URL_SIGNATURE_ENFORCE: 'true', ATTACHMENT_URL_SIGNING_KEY_PREVIOUS: KEY_A };
+    expect(readerFileSignatureEnforced(withoutKey)).toBe(false);
+    expect(readerFileSignatureEnforced(unreadable)).toBe(false);
+    expect(readerFileSignatureEnforced(previousOnly)).toBe(false);
+    readerFileSignatureEnforced(withoutKey);
+    expect(mockError).toHaveBeenCalledTimes(1);
+    expect(String(mockError.mock.calls[0]?.[0])).toContain('ATTACHMENT_URL_SIGNATURE_ENFORCE');
   });
 });
 
 describe('readerFileUrlSignerFromEnv', () => {
   it('dit UNE fois qu\'une clé posée est illisible, sans jamais citer sa valeur', () => {
+    mockError.mockClear();
     const env = { ATTACHMENT_URL_SIGNING_KEY: 'cle-mal-formee-secrete' };
     expect(readerFileUrlSignerFromEnv(NOW, env)).toBeNull();
     readerFileUrlSignerFromEnv(NOW, env);
