@@ -1622,32 +1622,8 @@ EngagementGlyph(
                 : String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main))
             .accessibilityHint(String(localized: "a11y.post.bookmark.hint", defaultValue: "Enregistrer cette publication", bundle: .main))
 
-            // Muet du canvas (B3.6, Task E2) — monté SI ET SEULEMENT SI une
-            // piste existe (résolveur partagé E1, sur `renderedItem` HISSÉ par
-            // l'appelant — pas une reconstruction locale, correctif revue
-            // mineur #8) ET si un canvas est RÉELLEMENT rendu quelque part
-            // dans `postDetailContent` (`detailCanvasIsRendered`, correctif
-            // revue majeur #3) : l'annonce seule peut être vraie pour un post
-            // NON-story portant son PROPRE fond (son emprunté, E1) sans
-            // qu'aucun canvas ne rende — le bouton serait alors décoratif.
-            let detailAnnouncement = BackgroundSoundBadge.announcement(for: renderedItem.storyEffects)
-            if BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem),
-               BackgroundSoundBadge.showsMuteButton(for: detailAnnouncement) {
-                Spacer()
-
-                Button {
-                    isCanvasMuted.toggle()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: isCanvasMuted))
-                        .font(.body)
-                        .foregroundColor(theme.textSecondary)
-                }
-                .engagementHitArea()
-                .accessibilityLabel(isCanvasMuted
-                    ? String(localized: "a11y.feed.post.sound.unmute", defaultValue: "Réactiver le son du fond", bundle: .main)
-                    : String(localized: "a11y.feed.post.sound.mute", defaultValue: "Couper le son du fond", bundle: .main))
-            }
+            // Plus de baffle ici (#9677, directive porteur 2026-10-08) : c'est la
+            // NOTE du crédit, au-dessus de la scène, qui coupe le son de fond.
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.smPlus)

@@ -102,4 +102,28 @@ final class BorrowedSoundCreditDataTests: XCTestCase {
                                     storyEffects: effects(borrowed()))
         XCTAssertNil(post.playedStoryEffects)
     }
+
+    // MARK: - Le baffle du lecteur de story ne double pas la note (#9677)
+
+    func test_theStorySoundButton_steps_aside_whenTheBackgroundSoundIsTheOnlySound() {
+        XCTAssertFalse(StoryAudioAvailability.needsSoundButton(
+            effects: effects(borrowed()), videoAudioTracks: [:], backgroundSoundIsAnnounced: true),
+            "la note du crédit coupe le fond : un baffle de plus coupe le MÊME son")
+        XCTAssertTrue(StoryAudioAvailability.needsSoundButton(
+            effects: effects(borrowed()), videoAudioTracks: [:], backgroundSoundIsAnnounced: false),
+            "sans annonce, la règle d'avant tient")
+    }
+
+    func test_theStorySoundButton_stays_forAVoiceNoteOrAVideoTrack() {
+        var withVoice = effects(borrowed())
+        withVoice.voiceAttachmentId = "voice-1"
+        XCTAssertTrue(StoryAudioAvailability.needsSoundButton(
+            effects: withVoice, videoAudioTracks: [:], backgroundSoundIsAnnounced: true))
+
+        var withVideo = effects(borrowed())
+        withVideo.mediaObjects = [StoryMediaObject(id: "v1", mediaType: "video", aspectRatio: 1)]
+        XCTAssertTrue(StoryAudioAvailability.needsSoundButton(
+            effects: withVideo, videoAudioTracks: ["v1": true], backgroundSoundIsAnnounced: true),
+            "la piste PROPRE d'une vidéo garde son contrôle")
+    }
 }

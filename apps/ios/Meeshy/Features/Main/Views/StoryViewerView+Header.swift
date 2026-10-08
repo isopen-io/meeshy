@@ -34,6 +34,9 @@ struct StoryHeaderView: View {
     /// résolveur partagé avec la carte de post et le plein écran réel,
     /// `BackgroundSoundBadge.announcement(for:)`.
     let backgroundSoundAnnouncement: BackgroundAudioAnnouncement
+    /// Le muet du lecteur — le MÊME état que le rail (#9677) : la note du crédit
+    /// le bascule, le baffle du rail ne reste que pour un autre son.
+    @Binding var isGlobalMuted: Bool
     /// La story porte-t-elle une transcription affichable ? Primitive, même
     /// règle : le header ne consulte pas les `StoryEffects` lui-même.
     let hasAudioTranscript: Bool
@@ -254,11 +257,24 @@ struct StoryHeaderView: View {
                             // `BackgroundSoundBadge` rend `EmptyView` sans piste (B3.5) ; elle
                             // ne dépend JAMAIS du muet. Accent FIXE (pas `group.avatarColor`) :
                             // l'en-tête se pose sur un média arbitraire.
+                            //
+                            // Directive porteur 2026-10-08 (#9677) : la NOTE coupe le son
+                            // de fond et se barre — plus de baffle pour ce son. Le crédit
+                            // vit dans le bouton du profil : le toucher passe par un geste
+                            // PRIORITAIRE (comme le rail), VoiceOver par l'action nommée
+                            // du bouton parent.
                             BackgroundSoundBadge(
                                 announcement: backgroundSoundAnnouncement,
-                                accentHex: BackgroundSoundBadge.overMediaAccentHex
+                                accentHex: BackgroundSoundBadge.overMediaAccentHex,
+                                isMuted: isGlobalMuted
                             )
                             .equatable()
+                            .padding(.vertical, MeeshySpacing.md)
+                            .contentShape(Rectangle())
+                            .padding(.vertical, -MeeshySpacing.md)
+                            .highPriorityGesture(TapGesture().onEnded {
+                                StoryGlobalMute.toggle($isGlobalMuted)
+                            })
                         }
                     )
                     .contentShape(Rectangle())
@@ -270,6 +286,10 @@ struct StoryHeaderView: View {
                 // inclus) — VoiceOver ne lirait jamais la republication sans
                 // l'inclure explicitement ici (post-revue 2026-07-13).
                 .accessibilityLabel(cachedProfileLabel)
+                .accessibilityAction(named: Text(BackgroundSoundMuteControl.accessibilityLabel(isMuted: isGlobalMuted))) {
+                    guard BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement) else { return }
+                    StoryGlobalMute.toggle($isGlobalMuted)
+                }
                 .accessibilityHint(String(localized: "story.viewer.a11y.profileOf.hint", defaultValue: "Ouvre le profil de \(group.username)", bundle: .main))
                 .onAppear { cachedProfileLabel = computeProfileLabel(for: group) }
                 .adaptiveOnChange(of: currentStory?.id) { _, _ in
@@ -581,6 +601,20 @@ struct StoryHeaderView: View {
         return ComposerSeedTarget(
             story: story,
             preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        )
+    }
+}
+
+/// **Le muet du lecteur de story, une seule bascule** (#9677) — le rail (baffle)
+/// et la note du crédit l'appellent tous deux : basculer l'état ET prévenir le
+/// canvas, jamais l'un sans l'autre.
+enum StoryGlobalMute {
+    static func toggle(_ isMuted: Binding<Bool>) {
+        HapticFeedback.light()
+        isMuted.wrappedValue.toggle()
+        NotificationCenter.default.post(
+            name: isMuted.wrappedValue ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
+            object: nil
         )
     }
 }

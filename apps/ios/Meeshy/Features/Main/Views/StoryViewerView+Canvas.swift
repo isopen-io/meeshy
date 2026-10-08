@@ -1591,7 +1591,7 @@ struct StoryCardView: View {
                     currentGroup: currentGroup,
                     currentStory: currentStory,
                     isOwnStory: isOwnStory,
-                    backgroundSoundAnnouncement: backgroundSoundAnnouncement,
+                    backgroundSoundAnnouncement: backgroundSoundAnnouncement, isGlobalMuted: $isGlobalMutedBinding,
                     hasAudioTranscript: storyHasAudioTranscript,
                     showAudioTranscript: $showAudioTranscript,
                     selectedProfileUser: $selectedProfileUser,

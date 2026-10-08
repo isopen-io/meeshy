@@ -37,14 +37,18 @@ import MeeshyUI
 struct BackgroundSoundBadge: View, Equatable {
     let announcement: BackgroundAudioAnnouncement
     let accentHex: String
+    /// Le son de fond est-il COUPÉ ? La note se barre, le crédit se fige — la
+    /// note EST le contrôle (directive porteur 2026-10-08, #9677).
+    let isMuted: Bool
 
     /// Le crédit suit la taille de texte choisie, plafonnée : en très grande
     /// police, ce sont les hôtes qui le passent SOUS le nom.
     @ScaledMetric(relativeTo: .caption2) private var creditFontSize: CGFloat = 11
 
-    init(announcement: BackgroundAudioAnnouncement, accentHex: String) {
+    init(announcement: BackgroundAudioAnnouncement, accentHex: String, isMuted: Bool = false) {
         self.announcement = announcement
         self.accentHex = accentHex
+        self.isMuted = isMuted
     }
 
     /// Accent pour une surface posée sur un MÉDIA arbitraire (photo/vidéo/
@@ -78,6 +82,7 @@ struct BackgroundSoundBadge: View, Equatable {
 
     static func == (lhs: BackgroundSoundBadge, rhs: BackgroundSoundBadge) -> Bool {
         lhs.announcement == rhs.announcement && lhs.accentHex == rhs.accentHex
+            && lhs.isMuted == rhs.isMuted
     }
 
     var body: some View {
@@ -86,12 +91,12 @@ struct BackgroundSoundBadge: View, Equatable {
             EmptyView()
         case .original:
             HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: "music.note")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                    .foregroundColor(Color(hex: accentHex).opacity(MeeshyOpacity.intense))
+                BackgroundSoundNote(isMuted: isMuted,
+                                    font: MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold),
+                                    tint: Color(hex: accentHex).opacity(MeeshyOpacity.intense))
                     .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
-                StoryHeaderAudioWaveform()
-                    .opacity(MeeshyOpacity.intense)
+                StoryHeaderAudioWaveform(paused: isMuted)
+                    .opacity(isMuted ? MeeshyOpacity.strong : MeeshyOpacity.intense)
             }
         case .credit(let title, let username, _, let releasedAt):
             let text = Self.creditText(title: title, username: username, releasedAt: releasedAt)
@@ -103,16 +108,15 @@ struct BackgroundSoundBadge: View, Equatable {
             let creditFont = Font.system(size: fontSize, weight: .semibold)
             let height = ceil(fontSize * 1.3)
             HStack(spacing: MeeshySpacing.xxs) {
-                Image(systemName: "music.note")
-                    .font(creditFont)
-                    .foregroundColor(tint)
+                BackgroundSoundNote(isMuted: isMuted, font: creditFont, tint: tint)
                 Text(text)
                     .font(creditFont)
                     .lineLimit(1)
                     .frame(height: height)
                     .hidden()
                     .overlay(
-                        AudioChipMarquee(text: text, height: height, fontSize: fontSize, tint: tint)
+                        AudioChipMarquee(text: text, paused: isMuted, height: height,
+                                         fontSize: fontSize, tint: tint)
                     )
             }
             .opacity(MeeshyOpacity.intense)
@@ -127,6 +131,17 @@ struct BackgroundSoundBadge: View, Equatable {
     static func creditAccessibilityLabel(_ text: String) -> String {
         let track = String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main)
         return text == unknownCreditText ? track : "\(track) · \(text)"
+    }
+
+    /// Ce que VoiceOver dit du son : « Audio de fond · titre · @auteur », ou
+    /// « Audio de fond » pour l'original et le crédit inconnu.
+    static func spokenDescription(of announcement: BackgroundAudioAnnouncement) -> String {
+        switch announcement {
+        case .none: return ""
+        case .original: return creditAccessibilityLabel(unknownCreditText)
+        case .credit(let title, let username, _, let releasedAt):
+            return creditAccessibilityLabel(creditText(title: title, username: username, releasedAt: releasedAt))
+        }
     }
 
     /// Ce qui suit la note quand rien du son n'est connu : « ♫ — ».
@@ -351,50 +366,79 @@ extension BackgroundSoundBadge {
     }
 }
 
-// MARK: - Le crédit SUR SA LIGNE, sous le @pseudo (#9677)
+// MARK: - La note qui se barre, et la note qui COUPE (#9677)
 
-/// **Le crédit du son a sa PROPRE ligne, sous le @pseudo et les compteurs** —
-/// la forme du lecteur de story, où le crédit est l'`accessory` posé sous le
-/// nom. Recette du 2026-10-08 (iPhone 17 Pro, 402 pt) : partagé avec
-/// « @pseudo · ▮▮ 0 · 👁 0 » et le bouton muet, le crédit n'avait que le RESTE
-/// de la ligne, ≈ 40 pt — « ♫ ɪbeth », « ♫ Recet » : une fente illisible.
+/// **La note du son de fond, barrée quand il est coupé.** Aucun glyphe système
+/// ne barre une note : la barre oblique est tracée par-dessus, à la couleur de
+/// la note, comme le `speaker.slash` qu'elle remplace.
+struct BackgroundSoundNote: View {
+    let isMuted: Bool
+    let font: Font
+    let tint: Color
+
+    var body: some View {
+        Image(systemName: "music.note")
+            .font(font)
+            .foregroundColor(tint)
+            .overlay(
+                GeometryReader { geo in
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: max(1.5, geo.size.width * 0.14),
+                               height: hypot(geo.size.width, geo.size.height))
+                        .rotationEffect(.degrees(-45))
+                        .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                }
+                .opacity(isMuted ? 1 : 0)
+            )
+    }
+}
+
+/// **Le crédit du son de fond EST le contrôle de ce son** (directive porteur
+/// 2026-10-08) : plus de baffle à côté — un toucher sur la note (ou la
+/// sinusoïde) coupe le fond et barre la note, un second le rétablit.
 ///
-/// Sa ligne porte le crédit, puis ce qui le PILOTE (le muet) : le bouton suit
-/// le son qu'il coupe, et la largeur que le crédit reçoit est celle du bloc
-/// moins ce seul bouton (`creditWidth`).
-struct SoundCreditLine<Leading: View, Trailing: View>: View {
-    let spacing: CGFloat
-    let badge: BackgroundSoundBadge
-    let leading: Leading
-    let trailing: Trailing
+/// L'état ne vit pas ici : c'est celui que la surface tenait déjà pour son
+/// baffle (`sceneSoundMuted` du réel composé, le lecteur du son emprunté,
+/// `isCanvasMuted` du détail, `isGlobalMuted` du lecteur de story) — un seul
+/// état par son, jamais un double.
+struct BackgroundSoundMuteControl: View {
+    let announcement: BackgroundAudioAnnouncement
+    let accentHex: String
+    let isMuted: Bool
+    let onToggle: () -> Void
 
-    init(spacing: CGFloat,
-         badge: BackgroundSoundBadge,
-         @ViewBuilder leading: () -> Leading,
-         @ViewBuilder trailing: () -> Trailing) {
-        self.spacing = spacing
-        self.badge = badge
-        self.leading = leading()
-        self.trailing = trailing()
+    /// Ce que VoiceOver annonce : l'ACTION que le toucher fait.
+    static func accessibilityLabel(isMuted: Bool) -> String {
+        isMuted
+            ? String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main)
+            : String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main)
     }
 
-    /// La place que reçoit le crédit : la largeur du bloc, moins le bouton qui
-    /// le suit sur SA ligne. Rien d'autre ne la partage.
-    nonisolated static func creditWidth(blockWidth: CGFloat,
-                                        trailingWidth: CGFloat,
-                                        spacing: CGFloat) -> CGFloat {
-        max(0, blockWidth - (trailingWidth > 0 ? trailingWidth + spacing : 0))
+    /// L'ÉTAT du son, en valeur — « Muet » ou « Son ».
+    static func accessibilityValue(isMuted: Bool) -> String {
+        isMuted
+            ? String(localized: "story.viewer.action.mute", defaultValue: "Muet", bundle: .main)
+            : String(localized: "story.viewer.action.sound", defaultValue: "Son", bundle: .main)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-            HStack(spacing: spacing) {
-                leading
+        if BackgroundSoundBadge.showsMuteButton(for: announcement) {
+            Button {
+                HapticFeedback.light()
+                onToggle()
+            } label: {
+                BackgroundSoundBadge(announcement: announcement, accentHex: accentHex, isMuted: isMuted)
+                    .equatable()
+                    .frame(minHeight: MeeshyControlSize.tapTarget, alignment: .leading)
+                    .contentShape(Rectangle())
             }
-            HStack(spacing: spacing) {
-                badge.equatable()
-                trailing
-            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Self.accessibilityLabel(isMuted: isMuted))
+            .accessibilityValue(Self.accessibilityValue(isMuted: isMuted))
+            .accessibilityHint(BackgroundSoundBadge.spokenDescription(of: announcement))
+            .accessibilityAddTraits(.isButton)
         }
     }
 }

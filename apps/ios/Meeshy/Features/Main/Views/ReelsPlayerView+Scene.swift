@@ -25,25 +25,6 @@ extension ReelPageView {
     var sceneDocument: CanvasV3? { ReelSceneRouting.sceneDocument(for: reel) }
 
     var isSceneReel: Bool { sceneDocument != nil }
-
-    /// Le muet du son de fond d'un réel composé. Il pilote le muet du PLAYER de
-    /// la scène — le moteur qui joue réellement ce son —, jamais un état écrit
-    /// sans consommateur : l'icône dit donc ce qui s'entend.
-    var sceneSoundMuteButton: some View {
-        Button {
-            sceneSoundMuted.toggle()
-            HapticFeedback.light()
-        } label: {
-            Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: sceneSoundMuted))
-                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                .foregroundColor(MeeshyColors.mediaChromeSecondary)
-                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel(sceneSoundMuted
-            ? String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main)
-            : String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main))
-    }
 }
 
 /// La position de lecture de la scène, publiée à la cadence du player et lue par
@@ -63,7 +44,7 @@ final class ReelSceneClock: ObservableObject {
 
 /// Possède le moteur audio d'une page de réel SANS le republier : la page le
 /// garde en vie et l'appelle, seuls ses lecteurs (`ReelAudioView`,
-/// `ReelAudioControl`, `ReelBorrowedSoundToggle`) l'observent.
+/// `ReelAudioControl`, `ReelBorrowedSoundCredit`) l'observent.
 @MainActor
 final class ReelAudioEngineBox: ObservableObject {
     nonisolated deinit {}

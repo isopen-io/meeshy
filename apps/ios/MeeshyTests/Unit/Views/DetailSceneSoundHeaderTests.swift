@@ -108,8 +108,8 @@ final class DetailSceneSoundHeaderTests: XCTestCase {
     /// Pas de piste ⇒ RIEN. La scène reprend toute la hauteur, et aucun
     /// contrôle ne paraît pour un son qui n'existe pas.
     func test_header_rendersNothing_withoutATrack() throws {
-        let vue = PostSceneSoundHeader(trace: nil, announcement: .none, isPaused: false,
-                                       accentHex: "#7C3AED", onTogglePlayback: {})
+        let vue = PostSceneSoundHeader(trace: nil, announcement: .none, isMuted: false, isPaused: false,
+                                       accentHex: "#7C3AED", onToggleMute: {}, onTogglePlayback: {})
         XCTAssertNil(vue.trace)
     }
 
@@ -117,8 +117,8 @@ final class DetailSceneSoundHeaderTests: XCTestCase {
     /// image muette pour le lecteur d'écran : sans cette composition, VoiceOver
     /// n'apprendrait ni le titre ni la durée que l'écran affiche.
     func test_accessibilityLabel_carriesCreditAndDuration() throws {
-        let vue = PostSceneSoundHeader(trace: trace(), announcement: .original, isPaused: false,
-                                       accentHex: "#7C3AED", onTogglePlayback: {})
+        let vue = PostSceneSoundHeader(trace: trace(), announcement: .original, isMuted: false, isPaused: false,
+                                       accentHex: "#7C3AED", onToggleMute: {}, onTogglePlayback: {})
         let libelle = try XCTUnwrap(vue.trace.map { vue.accessibilityLabel(for: $0) })
         XCTAssertTrue(libelle.contains("Miroir"), libelle)
         XCTAssertTrue(libelle.contains("jcnm"), libelle)
@@ -129,8 +129,8 @@ final class DetailSceneSoundHeaderTests: XCTestCase {
     /// inerte que `MuteButtonExistenceGuardTests` a déjà rejeté deux fois.
     func test_touching_togglesTheViewerCommand() {
         var arrete = false
-        let vue = PostSceneSoundHeader(trace: trace(), announcement: .original, isPaused: arrete,
-                                       accentHex: "#7C3AED",
+        let vue = PostSceneSoundHeader(trace: trace(), announcement: .original, isMuted: false, isPaused: arrete,
+                                       accentHex: "#7C3AED", onToggleMute: {},
                                        onTogglePlayback: { arrete.toggle() })
         vue.onTogglePlayback()
         XCTAssertTrue(arrete)
@@ -164,7 +164,7 @@ final class DetailSceneSoundHeaderTests: XCTestCase {
     func test_theDetailHeader_mountsTheSharedBadge() throws {
         let src = MyStoriesSourceCorpus.strippingComments(
             try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/PostSceneSoundHeader.swift"))
-        XCTAssertTrue(src.contains("BackgroundSoundBadge("),
+        XCTAssertTrue(src.contains("BackgroundSoundMuteControl("),
                       "le détail doit dire le son comme la carte, le réel et la story")
         XCTAssertFalse(src.contains("showsWaveformEvenWhenBorrowed"),
                        "plus de sinusoïde de repli sous un son emprunté")
@@ -179,5 +179,35 @@ final class DetailSceneSoundHeaderTests: XCTestCase {
             try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/PostDetailView+RepostEmbed.swift"))
         XCTAssertTrue(src.contains("sceneSoundHeader(repost.storyEffects)"),
                       "l'embed d'une story republiée doit porter la trace du son qu'il joue")
+    }
+
+    // MARK: - La note coupe le son (#9677, directive porteur 2026-10-08)
+
+    /// Toucher la note coupe le son de fond ; la retoucher le rétablit — et
+    /// c'est l'état du canvas (`isCanvasMuted`) qu'elle bascule, pas la pause.
+    func test_touchingTheNote_mutesThenRestoresTheBackgroundSound() {
+        var coupe = false
+        var arrete = false
+        let vue = PostSceneSoundHeader(trace: trace(), announcement: .original, isMuted: coupe,
+                                       isPaused: arrete, accentHex: "#7C3AED",
+                                       onToggleMute: { coupe.toggle() },
+                                       onTogglePlayback: { arrete.toggle() })
+        vue.onToggleMute()
+        XCTAssertTrue(coupe)
+        XCTAssertFalse(arrete, "couper le son n'arrête pas l'image")
+        vue.onToggleMute()
+        XCTAssertFalse(coupe)
+    }
+
+    /// Le détail pilote le MÊME état que l'ancien baffle, et le baffle est parti.
+    func test_theDetail_hasNoSpeakerButtonForTheBackgroundSound() throws {
+        let canvas = MyStoriesSourceCorpus.strippingComments(
+            try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/PostDetailView+Canvas.swift"))
+        XCTAssertTrue(canvas.contains("onToggleMute: { isCanvasMuted.toggle() }"))
+        XCTAssertTrue(canvas.contains("isMuted: isCanvasMuted"))
+        let detail = MyStoriesSourceCorpus.strippingComments(
+            try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/PostDetailView.swift"))
+        XCTAssertFalse(detail.contains("muteIconName(isMuted: isCanvasMuted)"),
+                       "plus de baffle dans la rangée d'actions : la note le remplace")
     }
 }

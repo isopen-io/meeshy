@@ -56,11 +56,16 @@ struct PostSceneSoundHeader: View {
     /// autres surfaces (`BackgroundSoundBadge.announcement(for:)`), résolue par
     /// l'appelant sur les effets que la scène JOUE.
     let announcement: BackgroundAudioAnnouncement
+    /// Le son de fond est-il COUPÉ ? (#9677, directive porteur 2026-10-08) La
+    /// NOTE du crédit le coupe et se barre — plus de baffle dans la rangée
+    /// d'actions. L'état est `isCanvasMuted`, celui que le baffle pilotait.
+    let isMuted: Bool
     /// La lecture est-elle ARRÊTÉE par le viewer ? Elle vit chez l'hôte : c'est
     /// lui qui la sert aux trois chemins de rendu, et une commande qui n'en
     /// atteindrait qu'un laisserait jouer le canvas d'à côté.
     let isPaused: Bool
     let accentHex: String
+    let onToggleMute: () -> Void
     let onTogglePlayback: () -> Void
 
     /// `Color(hex:)` n'est PAS faillible : sur une chaîne illisible, son
@@ -76,40 +81,38 @@ struct PostSceneSoundHeader: View {
     }
 
     var body: some View {
-        if let trace {
-            Button(action: {
-                HapticFeedback.light()
-                onTogglePlayback()
-            }) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    BackgroundSoundBadge(
-                        announcement: announcement,
-                        accentHex: accentHex.isEmpty ? MeeshyColors.indigo400Hex : accentHex
-                    )
-                    .equatable()
-                    Spacer(minLength: 4)
+        if trace != nil {
+            HStack(spacing: MeeshySpacing.sm) {
+                // La NOTE coupe le son de fond (#9677) — le crédit est le contrôle.
+                BackgroundSoundMuteControl(
+                    announcement: announcement,
+                    accentHex: accentHex.isEmpty ? MeeshyColors.indigo400Hex : accentHex,
+                    isMuted: isMuted,
+                    onToggle: onToggleMute
+                )
+                Spacer(minLength: 4)
+                // L'arrêt de la SCÈNE entière (directive 2026-09-06) garde son
+                // propre bouton : couper le son n'arrête pas l'image.
+                Button(action: {
+                    HapticFeedback.light()
+                    onTogglePlayback()
+                }) {
                     Image(systemName: isPaused ? "play.fill" : "pause.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))
                         .foregroundStyle(tint)
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(tint.opacity(0.12)))
+                        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                        .contentShape(Rectangle())
                 }
-                // La cible tactile couvre la rangée ENTIÈRE, pas le seul
-                // glyphe : le porteur demande « quand on touche », et un
-                // toucher qui ne prend que 28 pt sur une ligne pleine largeur
-                // se solde par des touchers qui ne font rien.
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(isPaused
+                    ? String(localized: "feed.detail.sound.resume.hint",
+                             defaultValue: "Reprend la lecture de la scène", bundle: .main)
+                    : String(localized: "feed.detail.sound.pause.hint",
+                             defaultValue: "Arrête la lecture de la scène", bundle: .main)))
             }
-            .buttonStyle(.plain)
-            .frame(minHeight: 44)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(accessibilityLabel(for: trace)))
-            .accessibilityHint(Text(isPaused
-                ? String(localized: "feed.detail.sound.resume.hint",
-                         defaultValue: "Reprend la lecture de la scène", bundle: .main)
-                : String(localized: "feed.detail.sound.pause.hint",
-                         defaultValue: "Arrête la lecture de la scène", bundle: .main)))
-            .accessibilityAddTraits(.isButton)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
         }
     }
 

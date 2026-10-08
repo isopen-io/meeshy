@@ -1807,9 +1807,9 @@ struct StoryViewerView: View {
     /// or shot without an audio track) keeps the button hidden — the video-track
     /// presence is resolved asynchronously by `refreshVideoAudioTrackPresence()`.
     var storyHasAudibleSound: Bool { // internal for cross-file extension access
-        StoryAudioAvailability.hasAudibleSound(
-            effects: currentStory?.storyEffects,
-            videoAudioTracks: videoAudioTrackPresence
+        StoryAudioAvailability.needsSoundButton(
+            effects: currentStory?.storyEffects, videoAudioTracks: videoAudioTrackPresence,
+            backgroundSoundIsAnnounced: BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement)
         )
     }
 
