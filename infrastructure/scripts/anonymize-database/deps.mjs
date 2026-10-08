@@ -1,6 +1,6 @@
 // Résolution des deux dépendances (`mongodb`, `bcryptjs`) sans les ajouter au
 // dépôt racine : depuis le script, puis depuis le répertoire courant (un dossier
-// où l'on a fait `npm install mongodb bcryptjs`), puis depuis la passerelle du
+// où l'on a fait `npm install` des versions EXACTES de PINNED), puis depuis la passerelle du
 // dépôt, qui porte les deux.
 
 import { createRequire } from 'node:module';
@@ -14,6 +14,9 @@ const anchors = [
   path.resolve(here, '../../../package.json'),
 ];
 
+/** Versions EXACTES installées par la procédure (README) : aucune résolution de plage. */
+export const PINNED = Object.freeze({ mongodb: '7.6.0', bcryptjs: '3.0.3' });
+
 export async function load(name) {
   try {
     return await import(name);
@@ -26,7 +29,7 @@ export async function load(name) {
       }
     }
   }
-  throw new Error(`Dépendance introuvable : ${name}. Lancer depuis un dossier où « npm install mongodb bcryptjs » a été fait.`);
+  throw new Error(`Dépendance introuvable : ${name}. Lancer depuis un dossier où « npm install --no-save --no-package-lock --ignore-scripts mongodb@${PINNED.mongodb} bcryptjs@${PINNED.bcryptjs} » a été fait.`);
 }
 
 export async function loadMongo() {

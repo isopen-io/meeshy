@@ -1,5 +1,5 @@
 // Petits outils partagés par l'inventaire : composer une mise à jour Mongo à
-// partir d'un document, et les prédicats du contrôle d'échantillonnage.
+// partir d'un document, et les prédicats du contrôle final.
 
 import * as s from './synth.mjs';
 import { scrubJson, scrubSetting, jsonViolations } from './scrub-json.mjs';

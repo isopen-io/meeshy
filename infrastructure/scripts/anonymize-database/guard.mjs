@@ -12,6 +12,13 @@
 //     `--allow-host` ajoute un hôte précis, jamais un motif ;
 //  3. pour ÉCRIRE, le drapeau `--i-know-this-is-not-production`, absent par
 //     défaut. Le mode `--dry-run` et le contrôle seul ne l'exigent pas.
+//
+// Puis, UNE FOIS CONNECTÉ et avant toute lecture ou écriture : le serveur doit
+// se présenter (`hello`) comme le replica set de staging — `setName` et
+// `hosts` égaux à ceux du compose (`rs.initiate` de mongo-init-staging). Un
+// tunnel, un port ou un nom d'hôte trompeur mène à un serveur qui se nomme
+// autrement : il est refusé. `--expect-replica-set` / `--expect-host` changent
+// la cible attendue, pour une base jetable de test seulement.
 
 const PRODUCTION_ENV = new Set(['production', 'prod']);
 const NON_PRODUCTION_ENV = new Set(['staging', 'test', 'development', 'local']);
@@ -63,4 +70,21 @@ export function assertNotProduction({ uri, env = process.env, confirmed = false,
     );
   }
   return { hosts, database };
+}
+
+/** La cible attendue par défaut : le replica set du compose de staging. */
+export const STAGING_TARGET = Object.freeze({ setName: 'rs0', hosts: Object.freeze(['database-staging:27017']) });
+
+/** Refuse un serveur dont `hello` ne rend pas exactement le `setName` et les `hosts` attendus. */
+export function assertExpectedTarget(hello, expected = STAGING_TARGET) {
+  const served = { setName: hello?.setName ?? null, hosts: [...(hello?.hosts ?? [])].map((h) => h.toLowerCase()).sort() };
+  const wanted = { setName: expected.setName, hosts: [...expected.hosts].map((h) => h.toLowerCase()).sort() };
+  const same = served.setName === wanted.setName && served.hosts.length === wanted.hosts.length && served.hosts.every((h, i) => h === wanted.hosts[i]);
+  if (!same) {
+    throw new ProductionGuardError(
+      `REFUS — le serveur joint n'est pas la cible attendue : il se présente comme ${served.setName ?? '(sans replica set)'} ` +
+        `[${served.hosts.join(', ')}], attendu ${wanted.setName} [${wanted.hosts.join(', ')}]. Rien n'a été lu ni écrit.`,
+    );
+  }
+  return served;
 }

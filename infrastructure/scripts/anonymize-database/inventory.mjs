@@ -9,10 +9,10 @@
 //    de l'`_id`) ;
 //  - `constant`  : une même valeur pour tous les documents concernés (côté serveur) ;
 //  - `purge`     : suppression (jetons, secrets, clés privées, journaux dérivés).
-// `checks` nomme le prédicat de chaque champ pour le contrôle d'échantillonnage.
+// `checks` nomme le prédicat de chaque champ pour le contrôle final ; un champ
+// réécrit sans prédicat doit avoir sa raison dans UNCHECKED (un témoin le tient).
 
 import * as s from './synth.mjs';
-import { normalizePhone } from './scrub-json.mjs';
 import { ok } from './patch.mjs';
 
 const OPAQUE_IDENTIFIER = /^mshy_[A-Za-z0-9]{8,16}$/;
@@ -29,16 +29,14 @@ function identifier(p, ctx) {
 
 const identifierCheck = (v, doc) => PUBLIC_CONVERSATION_TYPES.has(doc.type) || isOpaqueIdentifier(v) || /^mshy_[0-9a-f]{16}$/.test(v);
 
-/** Les mots d'identité RÉELS d'un compte, gardés en mémoire seulement : un réglage qui les contient est remplacé. */
-function identityWords(row) {
-  const local = typeof row.email === 'string' ? row.email.split('@')[0] : '';
-  return [row.username, row.firstName, row.lastName, row.displayName, local]
-    .filter((v) => typeof v === 'string')
-    .flatMap((v) => v.toLowerCase().split(/[^\p{L}\p{N}]+/u))
-    .filter((w) => w.length >= 3);
-}
+const isSyntheticIdentity = (v) => s.isSyntheticUsername(v) || s.isSyntheticName(v) || /^anon-[0-9a-f]{16}$/.test(v);
 
-/** Pré-passe User : les cartes « valeur réelle → valeur synthétique » qui tiennent les relations. */
+/**
+ * Pré-passe User : les relations « valeur réelle → valeur synthétique » et le
+ * filtre d'identité, tous deux sous empreinte salée (context.mjs). Une relance
+ * après interruption les retrouve dans le manifeste ; les valeurs déjà
+ * synthétiques n'y ajoutent rien.
+ */
 async function prepareUsers(db, ctx) {
   const rows = await db
     .collection('User')
@@ -62,10 +60,11 @@ async function prepareUsers(db, ctx) {
     };
     ctx.users.set(id, synthetic);
     if (kept) ctx.keptUsernames.add(row.username);
-    if (typeof row.username === 'string') ctx.byUsername.set(row.username.toLowerCase(), synthetic.username);
-    if (typeof row.email === 'string') ctx.byEmail.set(row.email.toLowerCase(), synthetic.email);
-    if (typeof row.phoneNumber === 'string' && row.phoneNumber) ctx.byPhone.set(normalizePhone(row.phoneNumber), synthetic.phone);
-    identityWords(row).forEach((w) => ctx.identityWords.add(w));
+    ctx.remember('username', row.username, synthetic.username);
+    ctx.remember('email', row.email, synthetic.email);
+    ctx.remember('phone', row.phoneNumber, synthetic.phone);
+    const local = typeof row.email === 'string' ? row.email.split('@')[0] : null;
+    ctx.noteIdentity(...[row.username, row.firstName, row.lastName, row.displayName, local].filter((v) => typeof v === 'string' && !isSyntheticIdentity(v)));
   });
   ctx.missingKeepLogins = [...ctx.keepLogins].filter((u) => !ctx.keptUsernames.has(u));
 }
@@ -84,6 +83,7 @@ async function transformUser(p, ctx) {
   p.replace('bio', () => s.sentence(ctx.salt, id, 'bio'));
   p.replace('phoneNumber', () => u.phone).replace('phoneCountryCode', () => s.SYNTHETIC_PHONE_COUNTRY);
   p.replace('birthDate', () => s.date(ctx.salt, 1970, 30, id, 'birth'));
+  p.replace('lockedReason', () => s.sentence(ctx.salt, id, 'lockedReason'));
   p.dropFile('avatar').dropFile('banner');
   p.ip('lastLoginIp', 'registrationIp').userAgent('lastLoginDevice', 'registrationDevice');
   p.nullify('lastLoginLocation', 'registrationLocation');
@@ -109,9 +109,9 @@ function transformContact(p, ctx) {
   const { doc, id } = p;
   p.token('contactKey');
   p.replace('displayName', () => s.fullName(ctx.salt, id, 'contact'));
-  if (Array.isArray(doc.phoneNumbers)) p.set('phoneNumbers', doc.phoneNumbers.map((v, i) => ctx.byPhone.get(normalizePhone(v)) ?? s.phone(ctx.salt, id, 'p', i)));
-  if (Array.isArray(doc.emails)) p.set('emails', doc.emails.map((v, i) => ctx.byEmail.get(String(v).toLowerCase()) ?? s.email(ctx.salt, id, 'e', i)));
-  if (Array.isArray(doc.usernames)) p.set('usernames', doc.usernames.map((v, i) => ctx.byUsername.get(String(v).toLowerCase()) ?? s.username(ctx.salt, id, 'u', i)));
+  if (Array.isArray(doc.phoneNumbers)) p.set('phoneNumbers', doc.phoneNumbers.map((v, i) => ctx.recall('phone', v) ?? (s.isSyntheticPhone(v) ? v : s.phone(ctx.salt, id, 'p', i))));
+  if (Array.isArray(doc.emails)) p.set('emails', doc.emails.map((v, i) => ctx.recall('email', v) ?? (s.isSyntheticEmail(v) ? v : s.email(ctx.salt, id, 'e', i))));
+  if (Array.isArray(doc.usernames)) p.set('usernames', doc.usernames.map((v, i) => ctx.recall('username', v) ?? (s.isSyntheticUsername(v) ? v : s.username(ctx.salt, id, 'u', i))));
 }
 
 function transformParticipant(p, ctx) {
@@ -140,7 +140,7 @@ function transformMessage(p, ctx) {
   const { doc } = p;
   p.text('content').json('translations', 'metadata').nullify('encryptedContent', 'encryptionMetadata');
   if (Array.isArray(doc.validatedMentions) && doc.validatedMentions.length > 0) {
-    p.set('validatedMentions', doc.validatedMentions.map((v) => ctx.byUsername.get(String(v).toLowerCase())).filter(Boolean));
+    p.set('validatedMentions', doc.validatedMentions.map((v) => ctx.recall('username', v) ?? (s.isSyntheticUsername(v) || ctx.keptUsernames.has(v) ? v : null)).filter(Boolean));
   }
 }
 
@@ -168,8 +168,10 @@ const AGENT_ROLE_DESCRIPTORS = [
   'traitPatience', 'traitAdaptability', 'traitEmpathy', 'traitPoliteness', 'traitLeadership', 'traitConflictStyle', 'traitSupportiveness',
   'traitDiplomacy', 'traitTrustLevel', 'traitEmotionalStability', 'traitPositivity', 'traitSensitivity', 'traitStressResponse',
 ];
+const UTM_FIELDS = ['utmClickSource', 'utmClickMedium', 'utmClickCampaign', 'utmClickTerm', 'utmClickContent'];
 const PREFERENCE_BLOBS = ['privacy', 'audio', 'message', 'notification', 'video', 'document', 'application', 'social'];
 const settingChecks = (fields) => Object.fromEntries(fields.map((f) => [f, ok.setting]));
+const emptyChecks = (fields) => Object.fromEntries(fields.map((f) => [f, ok.empty]));
 
 /** Préfixe de famille gardé (`aff_`, `mshy_`), tirage remplacé : la valeur d'origine est une CAPACITÉ. */
 function capability(p, ctx, key, fallbackPrefix) {
@@ -224,13 +226,57 @@ export const SECRET_EXEMPTIONS = Object.freeze({
 export const NESTED_COVERAGE = Object.freeze({
   'AnonymousSessionDetails.sessionTokenHash': 'Participant.anonymousSession',
   'AnonymousSessionDetails.deviceFingerprint': 'Participant.anonymousSession',
+  'AnonymousProfile.firstName': 'Participant.anonymousSession',
+  'AnonymousProfile.lastName': 'Participant.anonymousSession',
+  'AnonymousProfile.username': 'Participant.anonymousSession',
+  'AnonymousProfile.email': 'Participant.anonymousSession',
 });
+
+/**
+ * Les champs réécrits SANS prédicat au contrôle final, chacun avec sa raison.
+ * Un témoin refuse tout autre champ réécrit qui n'a pas de prédicat.
+ */
+export const UNCHECKED = Object.freeze({
+  'User.password': 'haché bcrypt d’un mot de passe aléatoire : aucune forme ne distingue un haché neuf du haché d’origine ; le témoin bcrypt.compare le prouve',
+});
+
+const USER_SECRETS = [
+  'emailVerificationToken', 'emailVerificationCode', 'phoneVerificationCode', 'pendingEmail', 'pendingEmailVerificationToken',
+  'pendingPhoneNumber', 'pendingPhoneVerificationCode', 'claimedEmail', 'twoFactorSecret', 'twoFactorPendingSecret', 'twoFactorChallengeHash',
+  'twoFactorChallengeExpiresAt', 'twoFactorEnabledAt', 'signalIdentityKeyPublic', 'signalIdentityKeyPrivate',
+];
+
+function packSlug(p, ctx) {
+  const fresh = `pack-${s.hex(ctx.salt, 12, p.id, 'slug')}`;
+  ctx.remember('packSlug', p.doc.slug, fresh);
+  if (typeof p.doc.slug === 'string' && !isSyntheticSlug(p.doc.slug)) p.set('slug', fresh);
+}
+const isSyntheticSlug = (v) => /^pack-[0-9a-f]{12}$/.test(v);
+
+async function preparePacks(db, ctx) {
+  for await (const pack of db.collection('StickerPack').find({}, { projection: { slug: 1 } })) {
+    if (typeof pack.slug === 'string' && !isSyntheticSlug(pack.slug)) ctx.remember('packSlug', pack.slug, `pack-${s.hex(ctx.salt, 12, pack._id.toHexString(), 'slug')}`);
+  }
+}
+
+function hashtagDisplay(p, ctx) {
+  const { doc } = p;
+  if (typeof doc.display !== 'string' || !doc.hashtagId) return;
+  const tag = s.hashtag(ctx.salt, String(doc.hashtagId));
+  p.set('display', doc.display.startsWith('#') ? `#${tag}` : tag);
+}
 
 export const INVENTORY = Object.freeze([
   {
     model: 'User', collection: 'User', action: 'transform', prepare: prepareUsers, transform: transformUser,
-    fields: t(['username', 'usernameHistory', 'firstName', 'lastName', 'displayName', 'bio', 'email', 'phoneNumber', 'phoneCountryCode', 'searchTokens', 'password', 'avatar', 'banner', 'birthDate', 'lastLoginIp', 'lastLoginLocation', 'lastLoginDevice', 'registrationIp', 'registrationLocation', 'registrationDevice', 'emailVerificationToken', 'emailVerificationCode', 'phoneVerificationCode', 'pendingEmail', 'pendingEmailVerificationToken', 'pendingPhoneNumber', 'pendingPhoneVerificationCode', 'claimedEmail', 'twoFactorSecret', 'twoFactorBackupCodes', 'twoFactorPendingSecret', 'twoFactorChallengeHash', 'twoFactorChallengeExpiresAt', 'twoFactorEnabledAt', 'signalIdentityKeyPublic', 'signalIdentityKeyPrivate']),
-    checks: { username: ok.username, firstName: ok.name, lastName: ok.name, displayName: ok.name, bio: ok.text, email: ok.email, phoneNumber: ok.phone, avatar: ok.absent, banner: ok.absent, birthDate: ok.date, lastLoginIp: ok.ip, registrationIp: ok.ip, lastLoginDevice: ok.userAgent, registrationDevice: ok.userAgent, lastLoginLocation: ok.absent, registrationLocation: ok.absent, pendingEmail: ok.absent, pendingPhoneNumber: ok.absent, claimedEmail: ok.absent, twoFactorSecret: ok.absent, twoFactorPendingSecret: ok.absent, signalIdentityKeyPrivate: ok.absent, usernameHistory: ok.empty, twoFactorBackupCodes: ok.empty },
+    fields: t(['username', 'usernameHistory', 'firstName', 'lastName', 'displayName', 'bio', 'email', 'phoneNumber', 'phoneCountryCode', 'searchTokens', 'password', 'avatar', 'banner', 'birthDate', 'lockedReason', 'lastLoginIp', 'lastLoginLocation', 'lastLoginDevice', 'registrationIp', 'registrationLocation', 'registrationDevice', 'twoFactorBackupCodes', ...USER_SECRETS]),
+    checks: {
+      ...Object.fromEntries(USER_SECRETS.map((f) => [f, ok.absent])),
+      username: ok.username, firstName: ok.name, lastName: ok.name, displayName: ok.name, bio: ok.text, email: ok.email, phoneNumber: ok.phone,
+      phoneCountryCode: (v) => v == null || v === s.SYNTHETIC_PHONE_COUNTRY, searchTokens: (v, doc) => v == null || JSON.stringify(v) === JSON.stringify(s.searchTokensFor(doc)),
+      avatar: ok.absent, banner: ok.absent, birthDate: ok.date, lockedReason: ok.text, lastLoginIp: ok.ip, registrationIp: ok.ip, lastLoginDevice: ok.userAgent,
+      registrationDevice: ok.userAgent, lastLoginLocation: ok.absent, registrationLocation: ok.absent, usernameHistory: ok.empty, twoFactorBackupCodes: ok.empty,
+    },
   },
   {
     model: 'UserContact', collection: 'UserContact', action: 'transform', transform: transformContact,
@@ -245,12 +291,12 @@ export const INVENTORY = Object.freeze([
   {
     model: 'Message', collection: 'Message', action: 'transform', transform: transformMessage,
     fields: t(['content', 'translations', 'metadata', 'encryptedContent', 'encryptionMetadata', 'validatedMentions']),
-    checks: { content: ok.text, translations: ok.json, metadata: ok.json, encryptedContent: ok.absent, validatedMentions: ok.usernames },
+    checks: { content: ok.text, translations: ok.json, metadata: ok.json, encryptedContent: ok.absent, encryptionMetadata: ok.absent, validatedMentions: ok.usernames },
   },
   {
     model: 'MessageAttachment', collection: 'MessageAttachment', action: 'transform', transform: transformMedia,
     fields: t(['fileName', 'originalName', 'filePath', 'fileUrl', 'thumbnailPath', 'thumbnailUrl', 'thumbHash', 'imageVariants', 'title', 'alt', 'caption', 'captionTranslations', 'moderationReason', 'transcription', 'translations', 'metadata', ...ATTACHMENT_CRYPTO]),
-    checks: { ...Object.fromEntries(ATTACHMENT_CRYPTO.map((f) => [f, ok.absent])), fileName: ok.fileName, originalName: ok.fileName, filePath: ok.placeholder, fileUrl: ok.placeholder, thumbnailPath: ok.placeholder, thumbnailUrl: ok.placeholder, thumbHash: ok.absent, imageVariants: ok.absent, title: ok.text, alt: ok.text, caption: ok.text, captionTranslations: ok.json, transcription: ok.json, translations: ok.json, metadata: ok.json },
+    checks: { ...Object.fromEntries(ATTACHMENT_CRYPTO.map((f) => [f, ok.absent])), fileName: ok.fileName, originalName: ok.fileName, filePath: ok.placeholder, fileUrl: ok.placeholder, thumbnailPath: ok.placeholder, thumbnailUrl: ok.placeholder, thumbHash: ok.absent, imageVariants: ok.absent, title: ok.text, alt: ok.text, caption: ok.text, moderationReason: ok.text, captionTranslations: ok.json, transcription: ok.json, translations: ok.json, metadata: ok.json },
   },
   {
     model: 'PostMedia', collection: 'PostMedia', action: 'transform', transform: transformMedia,
@@ -271,7 +317,43 @@ export const INVENTORY = Object.freeze([
   },
   {
     model: 'PostInteractiveResponse', collection: 'PostInteractiveResponse', action: 'transform',
-    transform: (p) => p.text('text'), fields: t(['text']), checks: { text: ok.text },
+    transform: (p) => p.text('text').settings('choice'), fields: t(['text', 'choice']), checks: { text: ok.text, choice: ok.setting },
+  },
+  {
+    model: 'Hashtag', collection: 'Hashtag', action: 'transform',
+    transform: (p, ctx) => p.replace('tag', () => s.hashtag(ctx.salt, p.id)),
+    fields: t(['tag']), checks: { tag: (v) => v == null || s.isSyntheticHashtag(v) },
+  },
+  {
+    model: 'PostHashtag', collection: 'PostHashtag', action: 'transform', transform: hashtagDisplay,
+    fields: t(['display']), checks: { display: (v) => v == null || s.isSyntheticHashtag(String(v).replace(/^#/, '')) },
+  },
+  {
+    model: 'StickerPack', collection: 'StickerPack', action: 'transform', prepare: preparePacks,
+    transform: (p, ctx) => {
+      p.label('name').text('description', 'reviewNote').replace('author', () => s.fullName(ctx.salt, p.id, 'author'));
+      packSlug(p, ctx);
+    },
+    fields: t(['slug', 'name', 'description', 'author', 'reviewNote']),
+    checks: { slug: (v) => v == null || isSyntheticSlug(v), name: ok.text, description: ok.text, author: ok.name, reviewNote: ok.text },
+  },
+  {
+    model: 'StickerPackItem', collection: 'StickerPackItem', action: 'transform',
+    transform: (p) => p.label('title').file('filePath', { mimeType: 'image/png' }),
+    fields: t(['title', 'filePath']), checks: { title: ok.text, filePath: ok.placeholder },
+  },
+  {
+    model: 'UserStickerPack', collection: 'UserStickerPack', action: 'transform',
+    transform: (p, ctx) => p.replace('packSlug', (v) => ctx.recall('packSlug', v) ?? (isSyntheticSlug(v) ? v : `pack-${s.hex(ctx.salt, 12, p.id, 'orphan')}`)),
+    fields: t(['packSlug']), checks: { packSlug: (v) => v == null || isSyntheticSlug(v) },
+  },
+  {
+    model: 'AgentConfig', collection: 'AgentConfig', action: 'transform',
+    transform: (p) => p.text('agentInstructions'), fields: t(['agentInstructions']), checks: { agentInstructions: ok.text },
+  },
+  {
+    model: 'AdminBroadcast', collection: 'AdminBroadcast', action: 'transform',
+    transform: (p) => p.nullify('errorMessage'), fields: t(['errorMessage']), checks: { errorMessage: ok.absent },
   },
   {
     model: 'Sound', collection: 'StoryBackgroundAudio', action: 'transform',
@@ -339,8 +421,8 @@ export const INVENTORY = Object.freeze([
   },
   {
     model: 'Report', collection: 'Report', action: 'transform',
-    transform: (p, ctx) => p.replace('reporterName', () => s.fullName(ctx.salt, p.id, 'reporter')).text('reason', 'moderatorNotes'),
-    fields: t(['reporterName', 'reason', 'moderatorNotes']), checks: { reporterName: ok.name, reason: ok.text, moderatorNotes: ok.text },
+    transform: (p, ctx) => p.replace('reporterName', () => s.fullName(ctx.salt, p.id, 'reporter')).text('reason', 'moderatorNotes').settings('actionTaken'),
+    fields: t(['reporterName', 'reason', 'moderatorNotes', 'actionTaken']), checks: { reporterName: ok.name, reason: ok.text, moderatorNotes: ok.text, actionTaken: ok.setting },
   },
   { model: 'Ban', collection: 'Ban', action: 'transform', transform: (p) => p.text('reason', 'liftReason'), fields: t(['reason', 'liftReason']), checks: { reason: ok.text, liftReason: ok.text } },
   {
@@ -351,7 +433,7 @@ export const INVENTORY = Object.freeze([
   },
   {
     model: 'EmailInvitation', collection: 'EmailInvitation', action: 'transform',
-    transform: (p, ctx) => p.replace('email', (v) => ctx.byEmail.get(v.toLowerCase()) ?? s.email(ctx.salt, p.id, 'invite')),
+    transform: (p, ctx) => p.replace('email', (v) => ctx.recall('email', v) ?? (s.isSyntheticEmail(v) ? v : s.email(ctx.salt, p.id, 'invite'))),
     fields: t(['email']), checks: { email: ok.email },
   },
   {
@@ -371,9 +453,9 @@ export const INVENTORY = Object.freeze([
   },
   {
     model: 'TrackingLinkClick', collection: 'TrackingLinkClick', action: 'transform',
-    transform: (p) => p.ip('ipAddress').userAgent('userAgent').fingerprint('deviceFingerprint').nullify('city', 'region', 'referrer'),
-    fields: t(['ipAddress', 'userAgent', 'deviceFingerprint', 'city', 'region', 'referrer']),
-    checks: { ipAddress: ok.ip, userAgent: ok.userAgent, deviceFingerprint: ok.token, city: ok.absent, region: ok.absent, referrer: ok.absent },
+    transform: (p) => p.ip('ipAddress').userAgent('userAgent').fingerprint('deviceFingerprint').nullify('city', 'region', 'referrer', ...UTM_FIELDS),
+    fields: t(['ipAddress', 'userAgent', 'deviceFingerprint', 'city', 'region', 'referrer', ...UTM_FIELDS]),
+    checks: { ...Object.fromEntries(UTM_FIELDS.map((f) => [f, ok.absent])), ipAddress: ok.ip, userAgent: ok.userAgent, deviceFingerprint: ok.token, city: ok.absent, region: ok.absent, referrer: ok.absent },
   },
   {
     model: 'AffiliateToken', collection: 'AffiliateToken', action: 'transform',
@@ -437,14 +519,14 @@ export const INVENTORY = Object.freeze([
   { model: 'AnonymousPostOpen', collection: 'AnonymousPostOpen', action: 'transform', transform: (p) => p.token('sessionKey'), fields: t(['sessionKey']), checks: { sessionKey: ok.token } },
   {
     model: 'AgentLlmConfig', collection: 'AgentLlmConfig', action: 'transform',
-    transform: (p) => p.replace('apiKeyEncrypted', () => '').nullify('fallbackApiKeyEncrypted'),
-    fields: t(['apiKeyEncrypted', 'fallbackApiKeyEncrypted']), checks: { apiKeyEncrypted: (v) => v === '' || v == null, fallbackApiKeyEncrypted: ok.absent },
+    transform: (p) => p.replace('apiKeyEncrypted', () => '').nullify('fallbackApiKeyEncrypted', 'baseUrl'),
+    fields: t(['apiKeyEncrypted', 'fallbackApiKeyEncrypted', 'baseUrl']), checks: { apiKeyEncrypted: (v) => v === '' || v == null, fallbackApiKeyEncrypted: ok.absent, baseUrl: ok.absent },
   },
   {
     model: 'AgentGlobalProfile', collection: 'AgentGlobalProfile', action: 'transform',
     transform: (p) => p.text('personaSummary').settings(...AGENT_DESCRIPTORS).emptyArrays('catchphrases', 'topicsOfExpertise', 'topicsAvoided', 'responsePatterns', 'commonEmojis', 'reactionPatterns'),
     fields: t(['personaSummary', ...AGENT_DESCRIPTORS, 'catchphrases', 'topicsOfExpertise', 'topicsAvoided', 'responsePatterns', 'commonEmojis', 'reactionPatterns']),
-    checks: { ...settingChecks(AGENT_DESCRIPTORS), personaSummary: ok.text, catchphrases: ok.empty, responsePatterns: ok.empty },
+    checks: { ...settingChecks(AGENT_DESCRIPTORS), ...emptyChecks(['catchphrases', 'topicsOfExpertise', 'topicsAvoided', 'responsePatterns', 'commonEmojis', 'reactionPatterns']), personaSummary: ok.text },
   },
   {
     model: 'AgentUserRole', collection: 'AgentUserRole', action: 'transform',
@@ -453,7 +535,10 @@ export const INVENTORY = Object.freeze([
       if (p.doc.relationshipMap != null) p.set('relationshipMap', {});
     },
     fields: t(['personaSummary', ...AGENT_ROLE_DESCRIPTORS, 'catchphrases', 'responseTriggers', 'silenceTriggers', 'topicsOfExpertise', 'topicsAvoided', 'commonEmojis', 'reactionPatterns', 'relationshipMap']),
-    checks: { ...settingChecks(AGENT_ROLE_DESCRIPTORS), personaSummary: ok.text, catchphrases: ok.empty, responseTriggers: ok.empty, silenceTriggers: ok.empty },
+    checks: {
+      ...settingChecks(AGENT_ROLE_DESCRIPTORS), ...emptyChecks(['catchphrases', 'responseTriggers', 'silenceTriggers', 'topicsOfExpertise', 'topicsAvoided', 'commonEmojis', 'reactionPatterns']),
+      personaSummary: ok.text, relationshipMap: (v) => v == null || (typeof v === 'object' && Object.keys(v).length === 0),
+    },
   },
   { model: 'ConversationMessageStats', collection: 'ConversationMessageStats', action: 'transform', transform: (p) => p.json('participantStats'), fields: t(['participantStats']), checks: { participantStats: ok.json } },
   { model: 'LeagueGroupWeek', collection: 'LeagueGroupWeek', action: 'transform', transform: (p) => p.json('snapshot'), fields: t(['snapshot']), checks: { snapshot: ok.json } },

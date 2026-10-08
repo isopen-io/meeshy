@@ -4,24 +4,9 @@ import { randomBytes } from 'node:crypto';
 import { INVENTORY } from './inventory.mjs';
 import { patchFor } from './patch.mjs';
 
-const BATCH = 500;
+export { newContext } from './context.mjs';
 
-export function newContext({ salt, keepLogins = [], hashRandomPassword, issuePassword = async () => null }) {
-  return {
-    salt,
-    keepLogins: new Set(keepLogins),
-    keptUsernames: new Set(),
-    missingKeepLogins: [],
-    users: new Map(),
-    byUsername: new Map(),
-    byEmail: new Map(),
-    byPhone: new Map(),
-    identityWords: new Set(),
-    keptCredentials: [],
-    hashRandomPassword,
-    issuePassword,
-  };
-}
+const BATCH = 500;
 
 export function passwordHasher({ bcrypt, cost, dryRun }) {
   if (dryRun) return async () => null;
@@ -41,16 +26,23 @@ export function passwordIssuer({ bcrypt, cost, dryRun }) {
   };
 }
 
-async function runTransform(db, spec, ctx, { dryRun, record }) {
-  if (spec.prepare) await spec.prepare(db, ctx);
+async function runTransform(db, spec, ctx, { dryRun, journal }) {
   const collection = db.collection(spec.collection);
   const cursor = collection.find(spec.filter ?? {}).batchSize(BATCH);
   const pending = [];
+  const recorded = [];
+  const all = [];
+  const record = (entry) => {
+    recorded.push(entry);
+    all.push(entry);
+  };
   const result = { matched: 0, modified: 0 };
   const flush = async () => {
     if (pending.length === 0) return;
     const ops = pending.splice(0, pending.length);
+    const media = recorded.splice(0, recorded.length);
     if (dryRun) return;
+    await journal?.media(media);
     const written = await collection.bulkWrite(ops, { ordered: false });
     result.modified += written.modifiedCount;
   };
@@ -64,7 +56,7 @@ async function runTransform(db, spec, ctx, { dryRun, record }) {
     if (pending.length >= BATCH) await flush();
   }
   await flush();
-  return result;
+  return { ...result, manifest: all };
 }
 
 async function runConstant(db, spec, _ctx, { dryRun }) {
@@ -82,23 +74,41 @@ async function runPurge(db, spec, _ctx, { dryRun }) {
   return { matched: removed.deletedCount, deleted: removed.deletedCount };
 }
 
-/**
- * Anonymise la base `db`. Rend le rapport par collection et le manifeste des
- * fichiers référencés (chemins d'ORIGINE → remplaçant), que l'appelant écrit.
- * En `dryRun`, rien n'est écrit : `matched` compte ce qui serait modifié.
- */
-export async function anonymizeDatabase(db, ctx, { dryRun = false, inventory = INVENTORY } = {}) {
-  const manifest = [];
-  const record = (entry) => manifest.push(entry);
+async function dropCollections(db, names, { dryRun }) {
   const report = [];
+  for (const name of names) {
+    const matched = await db.collection(name).countDocuments();
+    if (!dryRun) await db.collection(name).drop();
+    report.push({ collection: name, action: 'drop', matched, deleted: dryRun ? 0 : matched });
+  }
+  return report;
+}
+
+/**
+ * Anonymise la base `db`. `drop` nomme les collections inconnues que
+ * l'opérateur a demandé de retirer (après le relevé `auditCollections`).
+ * `journal` (manifestJournal) reçoit l'état après chaque pré-passe et les
+ * références de fichiers AVANT l'écriture qui les déréférence. En `dryRun`,
+ * rien n'est écrit : `matched` compte ce qui serait modifié.
+ */
+export async function anonymizeDatabase(db, ctx, { dryRun = false, inventory = INVENTORY, journal = null, drop = [] } = {}) {
+  ctx.startedAt ??= new Date();
+  const manifest = [];
+  const report = await dropCollections(db, drop, { dryRun });
   for (const spec of inventory) {
+    if (spec.prepare) {
+      await spec.prepare(db, ctx);
+      if (!dryRun) await journal?.state(ctx);
+    }
     const run = spec.action === 'purge' ? runPurge : spec.action === 'constant' ? runConstant : runTransform;
-    const outcome = await run(db, spec, ctx, { dryRun, record });
+    const { manifest: recorded = [], ...outcome } = await run(db, spec, ctx, { dryRun, journal });
+    manifest.push(...recorded);
     report.push({ collection: spec.collection, action: spec.action, ...outcome });
   }
   if (!dryRun) {
     await db.collection('_anonymizationRuns').insertOne({
-      at: new Date(),
+      startedAt: ctx.startedAt,
+      finishedAt: new Date(),
       keptLogins: ctx.keptUsernames.size,
       collections: report.map(({ collection, action, matched }) => ({ collection, action, matched })),
     });

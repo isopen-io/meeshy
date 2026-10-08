@@ -1,20 +1,17 @@
 // Témoins du script d'anonymisation (#9663), sur une base MongoDB JETABLE.
 //
 // Lancer depuis la racine du dépôt :
-//   node --import tsx --test infrastructure/scripts/anonymize-database.test.mjs
+//   node --import tsx --test infrastructure/scripts/anonymize-database*.test.mjs
 //
-// La base : `MEESHY_TEST_MONGO_URI` si fournie, sinon un `mongod` lancé par le
-// témoin (binaire `MEESHY_TEST_MONGOD`, ou celui du cache de mongodb-memory-server
-// `~/.cache/mongodb-binaries/mongod-*`), sinon un conteneur jetable `mongo:8`.
+// La base : un replica set d'un membre (anonymize-database/test-mongo.mjs).
 // Toutes les données sont SYNTHÉTIQUES (domaine `.test`, plages privées).
 
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
-import { createServer } from 'node:net';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,47 +20,18 @@ import { assertNotProduction, ProductionGuardError } from './anonymize-database/
 import { anonymizeDatabase, newContext, passwordHasher, passwordIssuer } from './anonymize-database/run.mjs';
 import { verifyDatabase } from './anonymize-database/verify.mjs';
 import { neutralizeMedia } from './anonymize-database/media.mjs';
-import { INVENTORY, NESTED_COVERAGE, SECRET_EXEMPTIONS } from './anonymize-database/inventory.mjs';
+import { INVENTORY, NESTED_COVERAGE, SECRET_EXEMPTIONS, UNCHECKED } from './anonymize-database/inventory.mjs';
+import { FIELD_EXEMPTIONS } from './anonymize-database/schema-exemptions.mjs';
+import { COLLECTION_EXEMPTIONS } from './anonymize-database/collections.mjs';
 import { loadBcrypt, loadMongo } from './anonymize-database/deps.mjs';
+import { startMongo, targetFlags, uriFor } from './anonymize-database/test-mongo.mjs';
+import { KEPT_PASSWORD, USER_PASSWORD, seed as seedWith } from './anonymize-database/test-seed.mjs';
 import * as s from './anonymize-database/synth.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../..');
 const script = path.join(here, 'anonymize-database.mjs');
 const TEST_ENV = { MEESHY_ENV: 'test' };
-
-const freePort = () =>
-  new Promise((resolve) => {
-    const server = createServer();
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address();
-      server.close(() => resolve(port));
-    });
-  });
-
-function cachedMongod() {
-  if (process.env.MEESHY_TEST_MONGOD) return process.env.MEESHY_TEST_MONGOD;
-  const dir = path.join(homedir(), '.cache', 'mongodb-binaries');
-  if (!existsSync(dir)) return null;
-  const found = readdirSync(dir).filter((f) => /^mongod-[a-z0-9_-]+-\d+\.\d+\.\d+$/.test(f)).sort().pop();
-  return found ? path.join(dir, found) : null;
-}
-
-async function startMongo() {
-  if (process.env.MEESHY_TEST_MONGO_URI) return { uri: process.env.MEESHY_TEST_MONGO_URI, stop: async () => {} };
-  const port = await freePort();
-  const binary = cachedMongod();
-  if (binary) {
-    const dbpath = mkdtempSync(path.join(tmpdir(), 'anon-mongo-'));
-    const child = spawn(binary, ['--dbpath', dbpath, '--port', String(port), '--bind_ip', '127.0.0.1', '--wiredTigerCacheSizeGB', '0.25', '--quiet'], { stdio: 'ignore' });
-    child.once('error', (error) => { throw error; });
-    return { uri: `mongodb://127.0.0.1:${port}`, stop: async () => { child.kill('SIGTERM'); await new Promise((r) => child.once('exit', r)); rmSync(dbpath, { recursive: true, force: true }); } };
-  }
-  const run = spawnSync('docker', ['run', '-d', '--rm', '-p', `127.0.0.1:${port}:27017`, 'mongo:8'], { encoding: 'utf8' });
-  if (run.status !== 0) throw new Error('Aucune base de test : ni MEESHY_TEST_MONGO_URI, ni binaire mongod en cache, ni docker.');
-  const id = run.stdout.trim();
-  return { uri: `mongodb://127.0.0.1:${port}`, stop: async () => { spawnSync('docker', ['rm', '-f', id]); } };
-}
 
 let mongo;
 let client;
@@ -72,147 +40,17 @@ let ObjectId;
 let Binary;
 
 before(async () => {
-  const driver = await loadMongo();
-  ({ ObjectId, Binary } = driver);
+  ({ ObjectId, Binary } = await loadMongo());
   bcrypt = await loadBcrypt();
   mongo = await startMongo();
-  client = new driver.MongoClient(mongo.uri, { serverSelectionTimeoutMS: 2_000 });
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await client.connect();
-      break;
-    } catch (error) {
-      if (attempt > 40) throw error;
-      await new Promise((r) => setTimeout(r, 250));
-    }
-  }
+  client = mongo.client;
 });
 
 after(async () => {
-  await client?.close();
   await mongo?.stop();
 });
 
-const KEPT_PASSWORD = 'Recette#2026';
-const USER_PASSWORD = 'MotDePasse!1';
-
-async function seed(db) {
-  const ids = Object.fromEntries(['jeanne', 'recette', 'lien', 'link', 'group', 'global', 'pA', 'pAnon', 'msg', 'msgE2ee', 'att', 'post', 'contact'].map((k) => [k, new ObjectId()]));
-  await Promise.all([
-    db.collection('User').createIndex({ username: 1 }, { unique: true }),
-    db.collection('User').createIndex({ email: 1 }, { unique: true }),
-    db.collection('UserContact').createIndex({ ownerId: 1, contactKey: 1 }, { unique: true }),
-    db.collection('UserSession').createIndex({ sessionToken: 1 }, { unique: true }),
-    db.collection('Conversation').createIndex({ identifier: 1 }, { unique: true }),
-    db.collection('AnonymousPostOpen').createIndex({ postId: 1, sessionKey: 1 }, { unique: true }),
-    db.collection('account_deletion_requests').createIndex({ confirmTokenHash: 1 }, { unique: true }),
-  ]);
-  const base = { isActive: true, systemLanguage: 'fr', role: 'USER', createdAt: new Date('2026-01-02T08:00:00Z') };
-  await db.collection('User').insertMany([
-    {
-      _id: ids.jeanne, ...base, username: 'jeanne.essai', firstName: 'Jeanne', lastName: 'Essai', displayName: 'Jeanne E.',
-      bio: 'Je vis à Lyon et j’adore le vélo', email: 'jeanne.essai@real-mail.test', phoneNumber: '+33612345678', phoneCountryCode: 'FR',
-      birthDate: new Date('1990-05-04T00:00:00Z'), avatar: 'https://cdn.real.test/jeanne.jpg', banner: 'attachments/2026/01/banner.jpg',
-      lastLoginIp: '10.20.30.40', lastLoginLocation: 'Lyon, France', lastLoginDevice: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)',
-      registrationIp: '10.20.30.41', registrationLocation: 'Lyon, France', registrationDevice: 'Mozilla/5.0 (Macintosh)',
-      twoFactorSecret: 'JBSWY3DPEHPK3PXP', twoFactorBackupCodes: ['h1', 'h2'], pendingEmail: 'nouvelle@real-mail.test',
-      usernameHistory: [{ newUsername: 'jeanne', ipAddress: '10.0.0.9' }], searchTokens: ['je', 'jea'],
-      password: await bcrypt.hash(USER_PASSWORD, 4),
-    },
-    {
-      _id: ids.recette, ...base, username: 'recette.ios', firstName: 'Paul', lastName: 'Recette', displayName: null,
-      bio: '', email: 'recette@real-mail.test', phoneNumber: '+33698765432', twoFactorEnabledAt: new Date(), twoFactorSecret: 'KRSXG5CTMVRXEZLU',
-      password: await bcrypt.hash(KEPT_PASSWORD, 4),
-    },
-    { _id: ids.lien, ...base, username: 'lien.magique', firstName: 'Lou', lastName: 'Lien', bio: '', email: 'lien@real-mail.test', password: null },
-  ]);
-  await db.collection('UserContact').insertOne({
-    _id: ids.contact, ownerId: ids.jeanne, contactKey: 'f'.repeat(64), displayName: 'Paul du bureau',
-    phoneNumbers: ['+33698765432', '+33700000001'], emails: ['recette@real-mail.test', 'ami@real-mail.test'],
-    usernames: ['recette.ios', 'inconnu'], matchedUserId: ids.recette, matchedBy: 'phone',
-  });
-  await db.collection('Conversation').insertMany([
-    { _id: ids.group, identifier: 'mshy_famille-essai', type: 'group', title: 'Famille Essai', description: 'Le groupe de la famille', avatar: 'attachments/g.jpg', serverEncryptionKeyId: 'key-1' },
-    { _id: ids.global, identifier: 'meeshy', type: 'global', title: 'Meeshy' },
-  ]);
-  await db.collection('Participant').insertMany([
-    { _id: ids.pA, conversationId: ids.group, userId: ids.jeanne, type: 'user', displayName: 'Jeanne E.', nickname: 'Maman', avatar: 'https://cdn.real.test/jeanne.jpg', role: 'member' },
-    {
-      _id: ids.pAnon, conversationId: ids.group, type: 'anonymous', displayName: 'Invité Marc', role: 'member', sessionTokenHash: 'a'.repeat(64),
-      anonymousSession: {
-        shareLinkId: new ObjectId(),
-        session: { sessionTokenHash: 'a'.repeat(64), country: 'FR', deviceFingerprint: 'fp-real-123', ipAddress: '10.9.9.9', connectedAt: new Date() },
-        profile: { firstName: 'Marc', lastName: 'Invité', username: 'marc.invite', email: 'marc@real-mail.test', birthday: new Date('1985-02-03T00:00:00Z') },
-      },
-    },
-  ]);
-  await db.collection('Message').insertMany([
-    {
-      _id: ids.msg, conversationId: ids.group, senderId: ids.pA, content: 'Rendez-vous chez moi à 18h, appelle le +33612345678',
-      originalLanguage: 'fr', messageType: 'text', validatedMentions: ['recette.ios', 'disparu'],
-      translations: { en: { text: 'Meet at my place at 6pm', translationModel: 'nllb' } },
-      metadata: {
-        kind: 'note', location: { latitude: 45.76, longitude: 4.83, address: '10 rue des Essais, Lyon' }, link: { url: 'https://perso.real.test/album' },
-        extra: { notes2: 'Appelle Jeanne au bureau demain', contactInfo: 'jeanne.essai@real-mail.test', list: ['Jeanne Essai', 'Paul'], deep: [{ who: 'jeanne.essai', count: 3, seen: true }] },
-      },
-    },
-    { _id: ids.msgE2ee, conversationId: ids.group, senderId: ids.pA, content: '[chiffré]', originalLanguage: 'fr', messageType: 'text', isEncrypted: true, encryptedContent: 'Q2lwaGVydGV4dA==', encryptionMetadata: { iv: 'abc' } },
-    { _id: new ObjectId(), conversationId: ids.global, senderId: ids.pA, content: 'Appel terminé avec Jeanne', messageType: 'system', messageSource: 'system', metadata: { kind: 'call-summary', callerName: 'Jeanne' } },
-  ]);
-  await db.collection('MessageAttachment').insertOne({
-    _id: ids.att, messageId: ids.msg, fileName: 'voix-jeanne.m4a', originalName: 'Mémo vocal Jeanne.m4a', mimeType: 'audio/mp4', fileSize: 1200,
-    filePath: `attachments/2026/01/${ids.jeanne}/voix.m4a`, fileUrl: `attachments/2026/01/${ids.jeanne}/voix.m4a`, thumbHash: 'abc', uploadedBy: ids.jeanne,
-    transcription: { text: 'Bonjour c’est Jeanne', language: 'fr', segments: [{ text: 'Bonjour', start: 0, end: 1 }] },
-    translations: { en: { type: 'audio', transcription: 'Hello it is Jeanne', url: '/api/v1/attachments/file/translated/x_en.mp3', path: 'translated/x_en.mp3', format: 'mp3' } },
-    caption: 'Pour toi maman', encryptionIv: 'aXY=', encryptionAuthTag: 'dGFn', serverKeyId: 'key-1', originalFileHash: 'f'.repeat(64),
-  });
-  await db.collection('Notification').insertOne({
-    userId: ids.recette, type: 'new_message', title: 'Jeanne Essai', content: 'Jeanne : Rendez-vous chez moi',
-    actor: { id: ids.jeanne.toHexString(), username: 'jeanne.essai', displayName: 'Jeanne E.', avatar: 'https://cdn.real.test/jeanne.jpg' },
-    context: { conversationTitle: 'Famille Essai', messagePreview: 'Rendez-vous chez moi', senderEmail: 'jeanne.essai@real-mail.test' },
-  });
-  await db.collection('UserSession').insertOne({
-    userId: ids.jeanne, sessionToken: 'b'.repeat(64), refreshToken: 'r'.repeat(40), ipAddress: '10.20.30.40', city: 'Lyon', location: 'Lyon, France',
-    latitude: 45.76, longitude: 4.83, userAgent: 'Mozilla/5.0 (iPhone)', deviceFingerprint: 'fp-sess', deviceName: 'iPhone de Jeanne', expiresAt: new Date(),
-  });
-  await db.collection('SecurityEvent').insertOne({
-    userId: ids.jeanne, eventType: 'LOGIN_FAILED', severity: 'LOW', status: 'FAILED', description: 'Échec de connexion pour jeanne.essai@real-mail.test',
-    metadata: { email: 'jeanne.essai@real-mail.test', note: 'tentative depuis 10.1.1.1' }, ipAddress: '10.1.1.1', userAgent: 'curl/8', deviceFingerprint: 'fp-sec', geoLocation: 'Lyon, France',
-  });
-  await db.collection('TrackingLinkClick').insertOne({ trackingLinkId: new ObjectId(), ipAddress: '10.3.3.3', city: 'Lyon', region: 'ARA', userAgent: 'Mozilla/5.0', referrer: 'https://perso.real.test', deviceFingerprint: 'fp-click' });
-  await db.collection('PushToken').insertOne({ userId: ids.jeanne, token: 'apns-token-real', type: 'apns', platform: 'ios' });
-  await db.collection('UserVoiceModel').insertOne({
-    userId: ids.jeanne, embedding: new Binary(Buffer.from([1, 2, 3])), chatterboxConditionals: new Binary(Buffer.from([4])), embeddingPath: 'voices/jeanne.npy',
-    referenceAudioUrl: 'voices/jeanne.wav', fingerprint: { hash: 'x' }, signatureShort: 'sig', audioCount: 2, totalDurationMs: 9000, qualityScore: 0.8,
-  });
-  await db.collection('Post').insertOne({
-    _id: ids.post, authorId: ids.jeanne, type: 'STORY', content: 'Joyeux anniversaire Jeanne !', audioUrl: 'attachments/2026/01/song.mp3',
-    storyEffects: { elements: [{ kind: 'text', payload: { text: 'Bon anniversaire maman' } }] }, geoPoint: { type: 'Point', coordinates: [4.83, 45.76] },
-    reactions: [{ userId: ids.jeanne, displayName: 'Jeanne E.', emoji: '❤️' }],
-  });
-  await db.collection('PostComment').insertOne({ postId: ids.post, authorId: ids.recette, content: 'Bravo Jeanne' });
-  await db.collection('CallParticipant').insertOne({ callSessionId: new ObjectId(), participantId: ids.pA, analytics: { candidates: ['candidate:1 1 udp 2122260223 10.0.0.5 54321 typ host'] } });
-  await db.collection('PasswordHistory').insertOne({ userId: ids.jeanne, passwordHash: '$2b$12$ancien', changedVia: 'RESET', ipAddress: '10.4.4.4' });
-  await db.collection('MagicLinkToken').insertOne({ userId: ids.lien, tokenHash: 'c'.repeat(64), ipAddress: '10.5.5.5' });
-  await db.collection('SignalPreKeyBundle').insertOne({ userId: ids.jeanne, identityKey: 'pub', identityKeyPrivate: 'priv' });
-  await db.collection('AnonymousPostOpen').insertOne({ postId: ids.post, sessionKey: 'session-token-real' });
-  await db.collection('account_deletion_requests').insertOne({ userId: ids.lien, status: 'PENDING_EMAIL_CONFIRMATION', confirmTokenHash: 'd'.repeat(64), cancelTokenHash: 'e'.repeat(64) });
-  await db.collection('EmailInvitation').insertOne({ senderId: ids.jeanne, email: 'cousin@real-mail.test', affiliateTokenId: new ObjectId() });
-  await db.collection('user_preferences').insertOne({
-    userId: ids.jeanne,
-    application: { theme: 'dark', accentColor: 'blue', interfaceLanguage: 'fr', downloadPath: '/Users/jeanne.essai/Downloads', signature: 'Jeanne, maman de Léo' },
-    notification: { dndStartTime: '22:00', dndEnabled: true },
-  });
-  await db.collection('ConversationShareLink').insertOne({ _id: ids.link, linkId: 'mshy_Ab12Cd34', identifier: 'mshy_Ab12Cd34', conversationId: ids.group, createdBy: ids.jeanne, name: 'Lien famille' });
-  await db.collection('AffiliateToken').insertOne({ token: 'aff_Zx98Yw76', name: 'Parrainage Jeanne', createdBy: ids.jeanne });
-  await db.collection('TrackingLink').insertOne({ token: 'Qw12Er34', shortUrl: 'https://example.test/l/Qw12Er34', originalUrl: 'https://perso.real.test', createdBy: ids.jeanne });
-  await db.collection('ConversationPublicKey').insertOne({ conversationId: ids.group, userId: ids.jeanne, keyType: 'x25519', publicKey: 'cHVi' });
-  await db.collection('DMAEnrollment').insertOne({ userId: ids.jeanne, platform: 'x', identityKey: 'id', signedPreKey: 'spk', signedPreKeySignature: 'sig', status: 'active' });
-  await db.collection('AffiliateVisitSession').insertOne({ sessionKey: 'affiliate_session_real', affiliateTokenId: new ObjectId(), affiliateUserId: ids.jeanne, expiresAt: new Date() });
-  await db.collection('PostEngagement').insertOne({ postId: ids.post, userId: ids.recette, sessionId: 'client-session-real', contentType: 'story', surface: 'feed', actions: [{ type: 'view', note: 'vu par Paul' }], watchSamples: [] });
-  await db.collection('EngagementQuota').insertMany([{ bucket: 'visit:lien:empreinte', count: 1 }, { bucket: 'day:2026-09-30', count: 2 }]);
-  return ids;
-}
+const seed = (db) => seedWith(db, { ObjectId, Binary, bcrypt });
 
 let dbCounter = 0;
 async function freshDb() {
@@ -407,6 +245,74 @@ describe('anonymisation d’une base', () => {
     assert.deepEqual(verification.violations, []);
   });
 
+  it('les champs relevés par l’audit sont traités, secrets compris', async () => {
+    const { db, ids } = await freshDb();
+    await anonymizeDatabase(db, ctxFor());
+    const one = (c, q = {}) => db.collection(c).findOne(q);
+    const jeanne = await one('User', { _id: ids.jeanne });
+    for (const field of ['signalIdentityKeyPrivate', 'signalIdentityKeyPublic', 'emailVerificationToken', 'emailVerificationCode', 'phoneVerificationCode', 'pendingEmailVerificationToken', 'pendingPhoneNumber', 'pendingPhoneVerificationCode', 'twoFactorPendingSecret', 'twoFactorChallengeHash', 'claimedEmail']) {
+      assert.equal(jeanne[field], null, `User.${field} survit`);
+    }
+    assert.ok(s.isSyntheticText(jeanne.lockedReason), 'User.lockedReason');
+
+    const llm = await one('AgentLlmConfig');
+    assert.equal(llm.apiKeyEncrypted, '', 'clé d’API de l’agent');
+    assert.equal(llm.fallbackApiKeyEncrypted, null, 'clé d’API de secours');
+    assert.equal(llm.baseUrl, null, 'adresse du fournisseur (peut porter une clé)');
+    assert.equal(llm.model, 'gpt-4o-mini');
+    assert.equal(await db.collection('PhonePasswordResetToken').countDocuments(), 0, 'PhonePasswordResetToken purgé');
+
+    const report = await one('Report');
+    for (const field of ['reason', 'moderatorNotes', 'actionTaken']) assert.ok(s.isSyntheticText(report[field]), `Report.${field}`);
+    assert.ok(s.isSyntheticName(report.reporterName));
+
+    const hashtag = await one('Hashtag', { _id: ids.hashtag });
+    assert.ok(s.isSyntheticHashtag(hashtag.tag), 'Hashtag.tag');
+    assert.equal((await one('PostHashtag')).display, `#${hashtag.tag}`, 'PostHashtag.display suit son hashtag');
+
+    const pack = await one('StickerPack', { _id: ids.pack });
+    for (const field of ['name', 'description', 'reviewNote']) assert.ok(s.isSyntheticText(pack[field]), `StickerPack.${field}`);
+    assert.ok(s.isSyntheticName(pack.author), 'StickerPack.author');
+    assert.notEqual(pack.slug, 'famille-essai', 'StickerPack.slug');
+    assert.equal((await one('UserStickerPack')).packSlug, pack.slug, 'UserStickerPack.packSlug suit son paquet');
+    const item = await one('StickerPackItem');
+    assert.ok(s.isSyntheticText(item.title), 'StickerPackItem.title');
+    assert.equal(item.filePath, 'anonymized/placeholder.png', 'StickerPackItem.filePath');
+    assert.equal(item.emoji, '🏖️');
+
+    assert.ok(s.isSyntheticText((await one('AgentConfig')).agentInstructions), 'AgentConfig.agentInstructions');
+    assert.equal((await one('AdminBroadcast')).errorMessage, null, 'AdminBroadcast.errorMessage');
+    const response = await one('PostInteractiveResponse');
+    assert.ok(s.isSyntheticText(response.choice), 'PostInteractiveResponse.choice (texte libre)');
+    assert.equal(response.objectId, 'poll-1');
+    const click = await one('TrackingLinkClick');
+    for (const field of ['utmClickSource', 'utmClickMedium', 'utmClickCampaign', 'utmClickTerm', 'utmClickContent']) assert.equal(click[field], null, `TrackingLinkClick.${field}`);
+
+    const message = await one('Message', { _id: ids.msg });
+    assert.notEqual(message.metadata.extra.source, 'jeanne', 'un mot d’identité sous une clé autorisée est remplacé');
+    const prefs = await one('user_preferences');
+    for (const field of ['voiceProfile', 'homeCity', 'wifi']) assert.ok(s.isSyntheticText(prefs.application[field]), `réglage ${field} gardé`);
+    assert.deepEqual((await verifyDatabase(db, ctxFor())).violations, []);
+  });
+
+  it('le contrôle final rougit sur chaque champ relevé par l’audit resté réel', async () => {
+    const { db, ids } = await freshDb();
+    await anonymizeDatabase(db, ctxFor());
+    await db.collection('User').updateOne({ _id: ids.jeanne }, { $set: { signalIdentityKeyPrivate: 'cHJpdg==', emailVerificationCode: '482913', lockedReason: 'Bloqué : Jeanne' } });
+    await db.collection('AgentLlmConfig').updateOne({}, { $set: { apiKeyEncrypted: 'sk-reel', baseUrl: 'https://llm.real.test' } });
+    await db.collection('PhonePasswordResetToken').insertOne({ userId: ids.jeanne, codeHash: 'c'.repeat(64) });
+    await db.collection('Report').updateOne({}, { $set: { reason: 'Il harcèle Léa', moderatorNotes: 'Appel à Jeanne', actionTaken: 'Paul suspendu' } });
+    await db.collection('Hashtag').updateOne({}, { $set: { tag: 'jeanneessai' } });
+    await db.collection('StickerPack').updateOne({}, { $set: { name: 'Famille Essai', author: 'Jeanne Essai', reviewNote: 'Visage de Léa' } });
+    await db.collection('AgentConfig').updateOne({}, { $set: { agentInstructions: 'Jeanne est enceinte' } });
+    await db.collection('TrackingLinkClick').updateOne({}, { $set: { utmClickTerm: 'jeanne' } });
+    const { violations } = await verifyDatabase(db, ctxFor());
+    const fields = new Set(violations.map((v) => `${v.collection}.${v.field}`));
+    for (const expected of ['User.signalIdentityKeyPrivate', 'User.emailVerificationCode', 'User.lockedReason', 'AgentLlmConfig.apiKeyEncrypted', 'AgentLlmConfig.baseUrl', 'PhonePasswordResetToken.*', 'Report.reason', 'Report.moderatorNotes', 'Report.actionTaken', 'Hashtag.tag', 'StickerPack.name', 'StickerPack.author', 'StickerPack.reviewNote', 'AgentConfig.agentInstructions', 'TrackingLinkClick.utmClickTerm']) {
+      assert.ok(fields.has(expected), `${expected} non signalé par le contrôle`);
+    }
+  });
+
   it('tient les index uniques et reste sûr à relancer (deux passes)', async () => {
     const { db } = await freshDb();
     const salt = s.newSalt();
@@ -449,7 +355,7 @@ describe('anonymisation d’une base', () => {
       spec.model === 'Message' ? { ...spec, transform: (p) => p.text('content').json('translations').nullify('encryptedContent', 'encryptionMetadata') } : spec,
     );
     await anonymizeDatabase(db, ctxFor(), { inventory: crippled });
-    const { violations } = await verifyDatabase(db, ctxFor(), { sampleSize: 1000 });
+    const { violations } = await verifyDatabase(db, ctxFor());
     const fields = violations.filter((v) => v.collection === 'Message').map((v) => v.field);
     for (const leaked of ['metadata.extra.notes2', 'metadata.extra.contactInfo', 'metadata.extra.list', 'metadata.extra.deep[0].who', 'metadata.callerName']) {
       assert.ok(fields.some((f) => f === leaked || f.startsWith(`${leaked}[`)), `${leaked} non signalé par le contrôle`);
@@ -457,12 +363,12 @@ describe('anonymisation d’une base', () => {
     assert.ok(!fields.includes('metadata.kind'), 'une énumération technique n’est pas une fuite');
   });
 
-  it('le contrôle d’échantillonnage échoue sur une valeur réelle restée en base', async () => {
+  it('le contrôle final échoue sur une valeur réelle restée en base', async () => {
     const { db } = await freshDb();
     await anonymizeDatabase(db, ctxFor());
     await db.collection('User').insertOne({ username: 'oublie', firstName: 'Réel', lastName: 'Oubli', email: 'oubli@real-mail.test', phoneNumber: '+33611111111', bio: '' });
     await db.collection('Notification').updateOne({}, { $set: { 'context.extra': 'écrire à oubli@real-mail.test' } });
-    const { violations } = await verifyDatabase(db, ctxFor(), { sampleSize: 1000 });
+    const { violations } = await verifyDatabase(db, ctxFor());
     const fields = violations.map((v) => `${v.collection}.${v.field}`);
     assert.ok(fields.includes('User.email') && fields.includes('User.phoneNumber') && fields.includes('User.username'));
     assert.ok(violations.some((v) => v.collection === 'Notification' && v.rule.includes('e-mail')));
@@ -474,11 +380,12 @@ describe('anonymisation d’une base', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'anon-cli-'));
     const manifest = path.join(dir, 'm.jsonl');
     const lines = [];
-    const uri = `${mongo.uri}/${db.databaseName}`;
-    assert.equal(await main(['--uri', uri, '--dry-run'], { env: TEST_ENV, log: (l) => lines.push(l) }), 0);
+    const uri = uriFor(mongo, db.databaseName);
+    const target = targetFlags(mongo);
+    assert.equal(await main(['--uri', uri, '--dry-run', ...target], { env: TEST_ENV, log: (l) => lines.push(l) }), 0);
     assert.ok(!existsSync(manifest));
     const credentials = path.join(dir, 'recette.credentials');
-    const code = await main(['--uri', uri, '--i-know-this-is-not-production', '--keep-login', 'recette.ios', '--manifest', manifest, '--credentials', credentials, '--bcrypt-cost', '4'], { env: TEST_ENV, log: (l) => lines.push(l) });
+    const code = await main(['--uri', uri, '--i-know-this-is-not-production', '--oplog-rebuild-pending', '--keep-login', 'recette.ios', '--manifest', manifest, '--credentials', credentials, '--bcrypt-cost', '4', ...target], { env: TEST_ENV, log: (l) => lines.push(l) });
     assert.equal(code, 0);
     assert.equal(statSync(credentials).mode & 0o777, 0o600, 'le fichier des mots de passe neufs n’est lisible que par son propriétaire');
     const [username, fresh] = readFileSync(credentials, 'utf8').trim().split('\t');
@@ -486,9 +393,10 @@ describe('anonymisation d’une base', () => {
     assert.equal(await bcrypt.compare(fresh, (await db.collection('User').findOne({ username })).password), true);
     assert.ok(lines.every((l) => !l.includes(fresh)), 'le mot de passe neuf n’est jamais affiché');
     assert.ok(readFileSync(manifest, 'utf8').includes('voix.m4a'));
+    assert.equal(statSync(manifest).mode & 0o777, 0o600, 'le manifeste n’est lisible que par son propriétaire');
     assert.ok(lines.some((l) => l.includes('Contrôle : aucune forme réelle trouvée.')));
     assert.ok(lines.some((l) => l.includes(' media --manifest ')));
-    assert.equal(await main(['--uri', uri, '--verify-only', '--keep-login', 'recette.ios'], { env: TEST_ENV, log: () => {} }), 0);
+    assert.equal(await main(['--uri', uri, '--verify-only', '--oplog-rebuild-pending', '--manifest', manifest, '--keep-login', 'recette.ios', ...target], { env: TEST_ENV, log: () => {} }), 0);
     rmSync(dir, { recursive: true, force: true });
   });
 });
@@ -573,6 +481,45 @@ describe('inventaire', () => {
     assert.deepEqual(untreated, []);
     Object.entries(SECRET_EXEMPTIONS).forEach(([field, reason]) => assert.ok(reason.length > 20, `${field} : raison absente`));
     Object.values(NESTED_COVERAGE).forEach((owner) => assert.ok(handled.has(owner), `${owner} ne couvre rien`));
+  });
+
+  const blocks = [...schema.matchAll(/^(model|type) (\w+) \{([\s\S]*?)^\}/gm)];
+  const textFields = blocks.flatMap(([, kind, name, body]) =>
+    body.split('\n').flatMap((line) => {
+      const field = /^\s+(\w+)\s+(String|Json|Bytes)(\[\])?\??(?:\s|$)/.exec(line);
+      return field && !line.includes('@db.ObjectId') && !line.includes('@id') ? [{ kind, model: name, field: field[1] }] : [];
+    }),
+  );
+
+  it('BALAYAGE FERMÉ : chaque champ texte, JSON ou binaire du schéma est traité ou exempté avec sa raison', () => {
+    const handled = new Set(INVENTORY.flatMap((spec) => spec.fields.map((f) => `${spec.model}.${f}`)));
+    const purgedWhole = new Set(INVENTORY.filter((spec) => spec.action === 'purge' && !spec.filter).map((spec) => spec.model));
+    const classified = (key, model) => handled.has(key) || purgedWhole.has(model) || key in NESTED_COVERAGE || key in SECRET_EXEMPTIONS || key in FIELD_EXEMPTIONS;
+    const unclassified = textFields.map(({ kind, model, field }) => [`${model}.${field}`, model, kind]).filter(([key, model]) => !classified(key, model)).map(([key, , kind]) => `${kind} ${key}`);
+    assert.deepEqual(unclassified, [], 'champs du schéma ni traités ni exemptés');
+    const known = new Set(textFields.map(({ model, field }) => `${model}.${field}`));
+    const stale = Object.keys(FIELD_EXEMPTIONS).filter((key) => !known.has(key) || handled.has(key));
+    assert.deepEqual(stale, [], 'exemptions qui ne désignent plus un champ texte non traité du schéma');
+    Object.entries(FIELD_EXEMPTIONS).forEach(([field, reason]) => assert.ok(reason.length > 20, `${field} : raison absente`));
+  });
+
+  it('chaque modèle du schéma a sa collection inventoriée ou déclarée sans donnée personnelle', () => {
+    const inventoried = new Set(INVENTORY.map((spec) => spec.collection));
+    const collections = [...models.values()].map((m) => m.collection);
+    assert.deepEqual(collections.filter((c) => !inventoried.has(c) && !(c in COLLECTION_EXEMPTIONS)), []);
+    assert.deepEqual(Object.keys(COLLECTION_EXEMPTIONS).filter((c) => !collections.includes(c) || inventoried.has(c)), [], 'déclarations périmées');
+    Object.entries(COLLECTION_EXEMPTIONS).forEach(([c, reason]) => assert.ok(reason.length > 20, `${c} : raison absente`));
+    const declaredModels = [...models.entries()].filter(([, m]) => m.collection in COLLECTION_EXEMPTIONS).map(([name]) => name);
+    const personal = textFields.filter(({ model, field }) => declaredModels.includes(model) && !(`${model}.${field}` in FIELD_EXEMPTIONS) && !(`${model}.${field}` in SECRET_EXEMPTIONS));
+    assert.deepEqual(personal, [], 'une collection déclarée sans donnée personnelle porte un champ texte non exempté');
+  });
+
+  it('chaque champ réécrit a son prédicat au contrôle final, ou une raison écrite de ne pas en avoir', () => {
+    const missing = INVENTORY.filter((spec) => spec.action !== 'purge').flatMap((spec) =>
+      spec.fields.filter((f) => !(f in (spec.checks ?? {})) && !(`${spec.model}.${f}` in UNCHECKED)).map((f) => `${spec.model}.${f}`),
+    );
+    assert.deepEqual(missing, []);
+    Object.entries(UNCHECKED).forEach(([field, reason]) => assert.ok(reason.length > 20, `${field} : raison absente`));
   });
 
   it('les jetons de recherche suivent la règle de la passerelle', async () => {

@@ -74,7 +74,7 @@ async function walk(dir) {
 
 export async function readManifest(file) {
   const text = await readFile(file, 'utf8');
-  return text.split('\n').filter(Boolean).map((line) => JSON.parse(line));
+  return text.split('\n').filter(Boolean).map((line) => JSON.parse(line)).filter((entry) => typeof entry.original === 'string');
 }
 
 /**

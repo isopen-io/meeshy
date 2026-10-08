@@ -6,9 +6,10 @@
 // d'un numéro ou d'une adresse se retrouve en essayant les numéros : ce ne serait
 // pas une anonymisation.
 //
-// Chaque générateur a son prédicat `is…` : le contrôle d'échantillonnage final
-// ne sait reconnaître que ce qu'on sait produire, et c'est voulu — une valeur qui
-// n'a pas la forme synthétique est, par défaut, une valeur réelle.
+// Chaque générateur a son prédicat `is…`, qui reconnaît la forme COMPLÈTE de
+// ce qu'il produit (jamais un préfixe ni un suffixe) : le contrôle final ne sait
+// reconnaître que ce qu'on sait produire, et c'est voulu — une valeur qui n'a
+// pas la forme synthétique est, par défaut, une valeur réelle.
 
 import { createHash, randomBytes } from 'node:crypto';
 
@@ -95,8 +96,10 @@ export function email(salt, ...parts) {
   return `${ANON_PREFIX}${hex(salt, 16, 'email', ...parts)}@${EMAIL_DOMAIN}`;
 }
 
+const SYNTHETIC_EMAIL = /^anon-[0-9a-f]{16}@example\.invalid$/;
+
 export function isSyntheticEmail(value) {
-  return typeof value === 'string' && value.toLowerCase().endsWith(`@${EMAIL_DOMAIN}`);
+  return typeof value === 'string' && SYNTHETIC_EMAIL.test(value);
 }
 
 // Plage FICTIVE du plan de numérotation nord-américain : 555-0100 à 555-0199 est
@@ -130,18 +133,22 @@ export function ipv4(salt, ...parts) {
   return `${TEST_NETS[n % TEST_NETS.length]}.${1 + (Math.floor(n / 3) % 254)}`;
 }
 
+const SYNTHETIC_IPV4 = /^(?:192\.0\.2|198\.51\.100|203\.0\.113)\.(?:25[0-5]|2[0-4]\d|1?\d?\d)$/;
+const DOCUMENTATION_IPV6 = /^2001:0?db8(?::[0-9a-f]{0,4}){1,6}$/i;
+
 export function isSyntheticIp(value) {
-  if (typeof value !== 'string') return false;
-  if (value.toLowerCase().startsWith('2001:db8:')) return true;
-  return TEST_NETS.some((net) => value.startsWith(`${net}.`));
+  return typeof value === 'string' && (SYNTHETIC_IPV4.test(value) || DOCUMENTATION_IPV6.test(value));
 }
 
 export function token(salt, ...parts) {
   return `${ANON_PREFIX}${hex(salt, 48, 'token', ...parts)}`;
 }
 
+const SYNTHETIC_TOKEN = /^anon-[0-9a-f]{32}(?:[0-9a-f]{16})?$/;
+
+/** Un jeton (48 hex) ou une empreinte (32 hex) synthétique — forme COMPLÈTE, jamais un préfixe. */
 export function isSyntheticToken(value) {
-  return typeof value === 'string' && value.startsWith(ANON_PREFIX);
+  return typeof value === 'string' && SYNTHETIC_TOKEN.test(value);
 }
 
 export function text(salt, minWords, maxWords, ...parts) {
@@ -174,15 +181,28 @@ export function date(salt, fromYear, years, ...parts) {
 }
 
 export function isSyntheticDate(value) {
-  return value instanceof Date && value.toISOString().endsWith(SYNTHETIC_TIME_OF_DAY);
+  return value instanceof Date && !Number.isNaN(value.getTime()) && value.toISOString().endsWith(SYNTHETIC_TIME_OF_DAY);
+}
+
+const SYNTHETIC_DATE_TEXT = /^\d{4}-\d{2}-\d{2}T12:34:56\.789Z$/;
+
+export function isSyntheticDateText(value) {
+  return typeof value === 'string' && SYNTHETIC_DATE_TEXT.test(value);
+}
+
+export function isSyntheticDateNumber(value) {
+  return typeof value === 'number' && Number.isInteger(value) && isSyntheticDate(new Date(value));
 }
 
 export function coordinate(salt, ...parts) {
   return ((uint(salt, 'geo', ...parts) % 1000) - 500) / 1000;
 }
 
+/** Millièmes entiers dans [-0,5 ; 0,5[ : la forme exacte de `coordinate`, pas une simple borne. */
 export function isSyntheticCoordinate(value) {
-  return typeof value === 'number' && Math.abs(value) <= 0.5;
+  if (typeof value !== 'number' || Math.abs(value) > 0.5) return false;
+  const thousandths = value * 1000;
+  return Math.abs(thousandths - Math.round(thousandths)) < 1e-9;
 }
 
 export function fingerprint(salt, ...parts) {
@@ -223,8 +243,10 @@ export function placeholderFor(hints) {
   return PLACEHOLDER_FILES[mediaCategory(hints)];
 }
 
+const PLACEHOLDER_SET = new Set(Object.values(PLACEHOLDER_FILES));
+
 export function isPlaceholderPath(value) {
-  return typeof value === 'string' && value.startsWith(PLACEHOLDER_DIR);
+  return typeof value === 'string' && PLACEHOLDER_SET.has(value);
 }
 
 export function fileName(salt, original, ...parts) {
@@ -232,8 +254,23 @@ export function fileName(salt, original, ...parts) {
   return `${ANON_PREFIX}${hex(salt, 16, 'file', ...parts)}${ext ? `.${ext}` : ''}`;
 }
 
+const SYNTHETIC_FILE_NAME = /^anon-[0-9a-f]{16}(?:\.[a-z0-9]{1,5})?$/;
+
 export function isSyntheticFileName(value) {
-  return typeof value === 'string' && value.startsWith(ANON_PREFIX);
+  return typeof value === 'string' && SYNTHETIC_FILE_NAME.test(value);
+}
+
+/** Un nom de clé d'objet JSON remplacé : `k_` + 12 hex. */
+export function keyName(salt, ...parts) {
+  return `k_${hex(salt, 12, 'key', ...parts)}`;
+}
+
+export function hashtag(salt, ...parts) {
+  return `anon${hex(salt, 12, 'tag', ...parts)}`;
+}
+
+export function isSyntheticHashtag(value) {
+  return typeof value === 'string' && /^anon[0-9a-f]{12}$/.test(value);
 }
 
 // Miroir de `searchTokensFor` (services/gateway/src/utils/search-tokens.ts) —
