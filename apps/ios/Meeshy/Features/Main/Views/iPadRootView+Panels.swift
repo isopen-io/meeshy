@@ -24,6 +24,14 @@ struct GamePanelTrail {
     }
 }
 
+/// La pile du jeu, tenue par RÉFÉRENCE : une `Route` est lourde, et `iPadRootView` est une valeur que chaque
+/// closure de son corps copie (budget de `ConversationViewValueSizeGuardTests`).
+final class GamePanelTrailStore: ObservableObject {
+    // Même garde que `Router` : une deinit synthétisée isolée plante au démontage hors d'une tâche (iOS 26.1).
+    nonisolated deinit {}
+    @Published var trail = GamePanelTrail()
+}
+
 /// Le panneau droit de l'iPad quand une route (autre qu'une conversation) y
 /// est ouverte : une `NavigationStack` locale autour de `iPadPanelDestination`.
 ///

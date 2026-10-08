@@ -203,9 +203,8 @@ struct ProgressionConceptContent: View {
         if hasPiece {
             // UNE pièce, UN héros : l'anneau du niveau, la frappe, le détail de ligue ou les Élans REMPLACENT le
             // héros générique au lieu de s'y ajouter. Elle porte la section « À toi de jouer » qu'une entrée vise.
+            // Aucun identifiant sur l'enveloppe : il recouvrirait celui de la pièce (« game.hero », la frappe…).
             VStack(alignment: .leading, spacing: MeeshySpacing.xl) { gestures }
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("progression.concept.piece")
                 .id(ProgressionConceptSection.act)
         } else {
             ProgressionConceptHero(
