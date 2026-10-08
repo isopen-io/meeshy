@@ -65,7 +65,28 @@ export type ViewerIdentityModel = {
 };
 
 /** Avatar 32, nom, heure — sur UNE ligne : l'heure qualifie l'auteur, elle n'est pas un sous-titre. */
-export function ViewerIdentity({ identity, nameProbe }: { readonly identity: ViewerIdentityModel; readonly nameProbe?: ViewerProbe }) {
+export function ViewerIdentity({
+  identity,
+  nameProbe,
+  meta,
+}: {
+  readonly identity: ViewerIdentityModel;
+  readonly nameProbe?: ViewerProbe;
+  /** Une ligne SOUS le nom (le crédit du son de fond, #9678) — sa propre ligne, jamais en concurrence avec le nom. */
+  readonly meta?: ReactNode;
+}) {
+  const nameLine = (
+    <div {...nameProbe} className="flex min-w-0 items-baseline gap-2">
+      <PersonName name={identity.name} username={identity.profileUsername} className="viewer-ink-shadow truncate text-body font-semibold">
+        {identity.name}
+      </PersonName>
+      {identity.time === undefined ? null : (
+        <time dateTime={identity.time.iso} className="viewer-ink-muted viewer-ink-shadow shrink-0 text-check">
+          {identity.time.label}
+        </time>
+      )}
+    </div>
+  );
   return (
     <div data-viewer-identity="" className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2" onPointerDown={stop}>
       <Avatar
@@ -76,16 +97,14 @@ export function ViewerIdentity({ identity, nameProbe }: { readonly identity: Vie
         {...(identity.avatarSrc === undefined ? {} : { src: identity.avatarSrc })}
         {...(identity.profileUsername === undefined ? {} : { profileUsername: identity.profileUsername })}
       />
-      <div {...nameProbe} className="flex min-w-0 items-baseline gap-2">
-        <PersonName name={identity.name} username={identity.profileUsername} className="viewer-ink-shadow truncate text-body font-semibold">
-          {identity.name}
-        </PersonName>
-        {identity.time === undefined ? null : (
-          <time dateTime={identity.time.iso} className="viewer-ink-muted viewer-ink-shadow shrink-0 text-check">
-            {identity.time.label}
-          </time>
-        )}
-      </div>
+      {meta === undefined || meta === null ? (
+        nameLine
+      ) : (
+        <div className="flex min-w-0 flex-col">
+          {nameLine}
+          {meta}
+        </div>
+      )}
     </div>
   );
 }
@@ -284,6 +303,7 @@ export function ViewerActionRail({
 export function ViewerTopBar({
   exit,
   identity,
+  identityMeta,
   trailing,
   above,
   hidden = false,
@@ -293,6 +313,8 @@ export function ViewerTopBar({
   readonly probe?: ViewerProbe;
   readonly exit: ViewerExit;
   readonly identity?: ViewerIdentityModel;
+  /** La ligne sous le nom (`ViewerIdentity.meta`). */
+  readonly identityMeta?: ReactNode;
   /** Menu « … », Enregistrer… — posés entre l'identité et la croix. */
   readonly trailing?: ReactNode;
   /** Ce qui se pose AU-DESSUS de la ligne : les segments de progression d'une story. */
@@ -315,7 +337,7 @@ export function ViewerTopBar({
       {above}
       <div className="flex min-h-11 items-center gap-2">
         {exit.kind === 'back' ? <ViewerExitButton exit={exit} /> : null}
-        {identity === undefined ? <span className="flex-1" /> : <ViewerIdentity identity={identity} />}
+        {identity === undefined ? <span className="flex-1" /> : <ViewerIdentity identity={identity} meta={identityMeta} />}
         {trailing === undefined ? null : (
           <div className="pointer-events-auto flex shrink-0 items-center gap-1" onPointerDown={stop}>
             {trailing}

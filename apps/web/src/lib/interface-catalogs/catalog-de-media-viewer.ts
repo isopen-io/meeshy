@@ -33,6 +33,9 @@ const deMediaViewer = {
   'media.audio.mini.label': 'Audioplayer',
   'media.audio.mini.title': 'Sprachnachricht',
   'media.audio.mini.close': 'Player schließen',
+  'media.sound.original': 'Originalton',
+  'media.sound.credit': 'Ton: {credit}',
+  'media.sound.library': 'Ton aus der Bibliothek',
 };
 
 export default deMediaViewer;

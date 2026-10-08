@@ -33,6 +33,9 @@ const arMediaViewer = {
   'media.audio.mini.label': 'مشغّل الصوت',
   'media.audio.mini.title': 'رسالة صوتية',
   'media.audio.mini.close': 'إغلاق المشغّل',
+  'media.sound.original': 'صوت أصلي',
+  'media.sound.credit': 'الصوت: {credit}',
+  'media.sound.library': 'صوت من المكتبة',
 };
 
 export default arMediaViewer;

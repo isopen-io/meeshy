@@ -1,6 +1,6 @@
 import { attachmentSrc } from '@/lib/api/media-url';
 import { objectMediaIdentity, type SceneCarrier } from '@/lib/canvas/carrier';
-import type { CanvasDocument } from '@/lib/canvas/document';
+import { backgroundAudioObject, type CanvasDocument } from '@/lib/canvas/document';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
 import { isVideoObject } from '@/lib/feed/scene-motion';
 
@@ -55,8 +55,7 @@ export function electBackgroundTrack(params: {
   readonly carrier: SceneCarrier;
 }): BackgroundTrack | null {
   const { document, sceneIndex, carrier } = params;
-  const scene = document.scenes[sceneIndex];
-  const backgroundAudio = scene?.objects.find((o) => o.kind === 'audio' && o.payload.isBackground === true);
+  const backgroundAudio = backgroundAudioObject(document.scenes[sceneIndex]);
 
   if (backgroundAudio !== undefined) {
     const identity = objectMediaIdentity(backgroundAudio);

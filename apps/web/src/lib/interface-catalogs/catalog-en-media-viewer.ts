@@ -33,6 +33,9 @@ const enMediaViewer = {
   'media.audio.mini.label': 'Audio player',
   'media.audio.mini.title': 'Voice message',
   'media.audio.mini.close': 'Close player',
+  'media.sound.original': 'Original sound',
+  'media.sound.credit': 'Sound: {credit}',
+  'media.sound.library': 'Library sound',
 };
 
 export default enMediaViewer;

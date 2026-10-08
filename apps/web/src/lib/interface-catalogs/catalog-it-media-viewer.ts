@@ -33,6 +33,9 @@ const itMediaViewer = {
   'media.audio.mini.label': 'Lettore audio',
   'media.audio.mini.title': 'Messaggio vocale',
   'media.audio.mini.close': 'Chiudi il lettore',
+  'media.sound.original': 'Audio originale',
+  'media.sound.credit': 'Audio: {credit}',
+  'media.sound.library': 'Audio della libreria',
 };
 
 export default itMediaViewer;

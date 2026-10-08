@@ -187,6 +187,16 @@ describe('la barre haute de la story est la barre commune des plein écrans', ()
     expect(who?.querySelector('a[href="/u/amie2"]')).not.toBeNull();
   });
 
+  test('le crédit du son de fond occupe SA ligne, sous le nom et l’heure (#9678, vue `2f`)', () => {
+    const el = mount(topBar({ sound: <span data-fake-sound>Pluie · @sam</span> }));
+    const who = el.querySelector('[data-viewer-identity]');
+    const sound = who?.querySelector('[data-fake-sound]');
+    const nameLine = who?.querySelector('time')?.parentElement;
+    expect(sound).not.toBeNull();
+    expect(nameLine?.contains(sound ?? null)).toBe(false);
+    expect(sound?.parentElement).toBe(nameLine?.parentElement ?? null);
+  });
+
   test('masquée (appui long, feuille ouverte) la barre devient INERTE — jamais une croix invisible mais cliquable (D-90)', () => {
     const el = mount(topBar({ hidden: true }));
     const header = el.querySelector('[data-story-header]');

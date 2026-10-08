@@ -33,6 +33,9 @@ const ptMediaViewer = {
   'media.audio.mini.label': 'Player de áudio',
   'media.audio.mini.title': 'Mensagem de voz',
   'media.audio.mini.close': 'Fechar o player',
+  'media.sound.original': 'Som original',
+  'media.sound.credit': 'Som: {credit}',
+  'media.sound.library': 'Som da biblioteca',
 };
 
 export default ptMediaViewer;

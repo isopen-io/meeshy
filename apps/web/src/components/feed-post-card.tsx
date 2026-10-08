@@ -2,6 +2,7 @@ import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { useCallback, useState, type ReactNode } from 'react';
 
 import { Avatar } from './avatar';
+import { BackgroundSoundCredit } from './background-sound-credit';
 import { FeedActionsRow, type CommentHandler, type GestureHandler, type RepostHandler, type ShareHandler } from './feed-actions-row';
 import { FeedPostMenu, type PostMenuHost } from './feed-post-menu';
 import { FeedRepostEmbed } from './feed-repost-embed';
@@ -178,6 +179,9 @@ function FeedPostHeader({ model, storyRing, mood, isDetail, hosts }: { readonly 
               date, à sa taille et à son encre ; absent ou nul, rien. */}
           {model.viewerPoints === undefined ? null : <PostPointsMark points={model.viewerPoints} language={language} />}
         </div>
+        {/* LE CRÉDIT DU SON (#9678, vue `1h`) — sa PROPRE ligne sous le nom :
+            qui publie et à qui appartient la musique sont deux attributions. */}
+        <BackgroundSoundCredit document={model.scene?.document} language={language} surface="card" />
       </div>
       {/* LE « ⋯ » EN HAUT À DROITE (#7533) — miroir
           `FeedPostCard+Header.swift:164-241`, après le `Spacer()`. */}
