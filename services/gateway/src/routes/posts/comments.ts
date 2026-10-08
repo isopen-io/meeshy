@@ -64,6 +64,22 @@ function hoistCommentCarriers<T extends Record<string, unknown>>(comment: T): T 
   return hoistStickerOnto(hoistLocationOnto(comment));
 }
 
+/**
+ * L'auteur que vise le crédit d'un commentaire (#9673) : celui du commentaire parent pour une
+ * réponse, sinon celui du contenu qui porte le fil. Une lecture qui échoue retombe sur l'auteur du fil.
+ */
+async function commentCreditOwner(
+  prisma: PrismaClient,
+  parentId: string | null | undefined,
+  threadAuthorId: string | undefined,
+): Promise<string | undefined> {
+  if (!parentId) return threadAuthorId;
+  const parent = await prisma.postComment
+    .findUnique({ where: { id: parentId }, select: { authorId: true } })
+    .catch(() => null);
+  return parent?.authorId ?? threadAuthorId;
+}
+
 export function registerCommentRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -413,11 +429,16 @@ export function registerCommentRoutes(
       const commentAxis = commentMedia.some((media) => media.mimeType?.startsWith('audio/')) ? 'comment.audio' : 'comment.text';
       // #9667 — il vaut selon la visibilité du CONTENU COMMENTÉ, celle de la publication qui porte le fil,
       // lue ici en base (inconnue ⇒ amis, jamais public).
-      if (counted) engagementService
+      // #9673 — commenter SON propre contenu ne rapporte rien ; répondre à une AUTRE personne dessous, si.
+      // L'auteur visé est celui du commentaire parent pour une réponse, sinon celui du contenu qui porte le
+      // fil ; la garde d'auto-interaction d'`EngagementService` refuse quand c'est soi. Inconnu ⇒ rien.
+      const creditedOwnerId = await commentCreditOwner(prisma, parsed.data.parentId, post?.authorId);
+      if (counted && creditedOwnerId !== undefined) engagementService
         .recordActivity(authContext.registeredUser.id, commentAxis, {
           postId: targetPostId,
           receipt: creditSource.comment(comment.id),
           variant: visibilityVariant(post?.visibility),
+          targetOwnerId: creditedOwnerId,
         })
         .catch((err) => enhancedLogger.warn(`[POST /posts/:postId/comments]: engagement ${commentAxis} failed`, { err }));
       if (counted) recordCommentFacts({
