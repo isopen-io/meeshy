@@ -169,6 +169,7 @@ struct CanvasV3MigrationTests {
         let audio = try #require(fx.audioPlayerObjects?.first)
         #expect(audio.soundId == "64b0000000000000000000dd")
         #expect(audio.soundAuthorUsername == "sam")
+        #expect(audio.soundCreatedAt == "2026-03-12T09:30:00.000Z")
         #expect(audio.name == "Pluie en forêt")
         #expect(audio.volume == 0.35)
         #expect(audio.isBackground == true)
