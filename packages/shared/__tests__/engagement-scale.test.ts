@@ -47,7 +47,8 @@ describe('les défauts du barème', () => {
 
   it('suivent la liste remplie par le porteur', () => {
     const ops = DEFAULT_ENGAGEMENT_SCALE.operations;
-    expect(ops['content.text_message']).toMatchObject({ points: 3, cap: 300 });
+    expect(ops['content.text_message']).toMatchObject({ points: 4, cap: 300 });
+    expect(ops['content.text_message'].variantPoints).toEqual({ direct: 2, group: 4, public: 6, global: 8, other: 4 });
     expect(ops['content.audio_message']).toMatchObject({ points: 5, cap: 500 });
     expect(ops['tool.reaction']).toMatchObject({ points: 2, cap: 30 });
     expect(ops['content.reel']).toMatchObject({ points: 199, cap: 10 });
@@ -189,7 +190,7 @@ describe('pointsForOperation', () => {
         'tool.reaction': { points: 2, multiplied: false, cap: 10, variantPoints: {} },
       },
     };
-    expect(pointsForOperation(scale, 'content.text_message', 3)).toBe(9);
+    expect(pointsForOperation(scale, 'content.text_message', 3)).toBe(12);
     expect(pointsForOperation(scale, 'tool.reaction', 3)).toBe(2);
   });
 

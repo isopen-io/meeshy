@@ -57,7 +57,8 @@ export type EngagementOperationRule = {
   readonly cap: number | null;
   /**
    * Les points de chaque VARIANTE déclarée par le catalogue (visibilité d'un
-   * post ou d'une story, position en direct ou statique). Une variante absente
+   * post ou d'une story, position en direct ou statique, type de la
+   * conversation d'un message texte). Une variante absente
    * crédite `points`.
    */
   readonly variantPoints: Readonly<Record<string, number>>;

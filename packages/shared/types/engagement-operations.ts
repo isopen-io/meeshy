@@ -103,13 +103,21 @@ export type VisibilityVariant = (typeof VISIBILITY_VARIANTS)[number];
 
 export const LOCATION_VARIANTS = ['live', 'static'] as const;
 
+/**
+ * Les variantes de points d'un message texte, selon le TYPE de sa conversation
+ * (#9666, décision du porteur du 2026-10-08) : `broadcast` et tout type
+ * inconnu tombent dans `other`.
+ */
+export const CONVERSATION_TYPE_VARIANTS = ['direct', 'group', 'public', 'global', 'other'] as const;
+export type ConversationTypeVariant = (typeof CONVERSATION_TYPE_VARIANTS)[number];
+
 export type EngagementOperationDefinition = {
   readonly domain: EngagementOperationDomain;
   readonly frequency: EngagementOperationFrequency;
   readonly capScope: EngagementCapScope;
   /** La famille qui compte pour l'élan ; `null` ⇒ l'opération n'en ouvre aucune. */
   readonly family: EngagementAxisFamily | null;
-  /** Les variantes possibles (visibilité, position) ; vide ⇒ une seule valeur. */
+  /** Les variantes possibles (visibilité, position, type de conversation) ; vide ⇒ une seule valeur. */
   readonly variants: readonly string[];
   readonly defaults: {
     readonly points: number;
@@ -160,8 +168,17 @@ const byVisibility = (
   defaults: { points: variantPoints.other, multiplied: true, cap, variantPoints },
 });
 
+const byConversationType = (cap: number, variantPoints: Readonly<Record<ConversationTypeVariant, number>>): Def => ({
+  domain: 'messaging',
+  frequency: 'repeatable',
+  capScope: 'conversation-day',
+  family: 'content',
+  variants: CONVERSATION_TYPE_VARIANTS,
+  defaults: { points: variantPoints.other, multiplied: true, cap, variantPoints },
+});
+
 export const ENGAGEMENT_OPERATION_CATALOG: Readonly<Record<EngagementOperationKey, EngagementOperationDefinition>> = {
-  'content.text_message': repeat('messaging', 'content', 3, 'conversation-day', 300),
+  'content.text_message': byConversationType(300, { direct: 2, group: 4, public: 6, global: 8, other: 4 }),
   'content.audio_message': repeat('messaging', 'content', 5, 'conversation-day', 500),
   'tool.attachment': repeat('messaging', 'tool', 4, 'conversation-day', 100),
   'tool.sticker': repeat('messaging', 'tool', 1, 'conversation-day', 100),
@@ -261,6 +278,12 @@ export const hasConfigurableCap = (key: EngagementOperationKey): boolean => {
   const operation = ENGAGEMENT_OPERATION_CATALOG[key];
   return operation.frequency === 'repeatable' && operation.capScope !== 'none';
 };
+
+/** Type d'une conversation, tel que la base l'écrit, en variante de points d'un message. */
+export function conversationTypeVariant(type: string | null | undefined): ConversationTypeVariant {
+  const normalized = (type ?? '').toLowerCase();
+  return CONVERSATION_TYPE_VARIANTS.find((variant) => variant !== 'other' && variant === normalized) ?? 'other';
+}
 
 /** Visibilité d'une publication, telle que la base l'écrit, en variante de points. */
 export function visibilityVariant(visibility: string | null | undefined): VisibilityVariant {
