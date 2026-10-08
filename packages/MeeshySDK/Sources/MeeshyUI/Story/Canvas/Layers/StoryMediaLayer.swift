@@ -114,7 +114,7 @@ public final class StoryMediaLayer: CALayer {
     /// vraie fenêtre arrive (rattrapée par `alignToTimelineThenPlay` dès que
     /// `applyResolvedTrimBounds` la pose, via le même seuil de dérive que le
     /// calage timeline normal).
-    private nonisolated(unsafe) var currentTrimBounds: MediaTrimBounds?
+    private(set) nonisolated(unsafe) var currentTrimBounds: MediaTrimBounds?
 
     /// Reflète l'état de mute global du reader (bouton sidebar / contexte). Le
     /// canvas synchronise cette propriété sur chaque media layer dès qu'un
@@ -192,7 +192,7 @@ public final class StoryMediaLayer: CALayer {
     /// Au-delà de cette dérive (secondes) entre la position du player et la cible
     /// timeline, on seek ; en-deçà on lance la lecture telle quelle (pas de
     /// hoquet sur un resume déjà aligné).
-    private static let timelineSeekDriftThreshold: Double = 0.30
+    static let timelineSeekDriftThreshold: Double = 0.30
 
     private nonisolated(unsafe) var loopObserver: NSObjectProtocol?
 

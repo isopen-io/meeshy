@@ -157,6 +157,18 @@
   transform-origin: 50% 100%;
 }
 
+/* LA JAUGE EST UNE TRANSLATION (#9702) — la barre pleine largeur glisse depuis
+   le début de ligne, et la piste (`overflow: hidden`) la rogne : le compositeur
+   la déplace seul, sans relayout, et son bout arrondi reste rond. Elle part du
+   début de ligne dans les deux sens d'écriture, comme la largeur d'avant. */
+[data-game-gauge-fill] {
+  transform: translateX(calc(var(--gauge-shown, 0%) - 100%));
+}
+
+[data-game-gauge-fill]:dir(rtl) {
+  transform: translateX(calc(100% - var(--gauge-shown, 0%)));
+}
+
 /* Le reflet de repli — quand WebGL2 manque, le trait blanc du dessin balaie
    le métal, trois fois, puis se repose. Hors de ce mode (`data-game-gl='on'`),
    c'est le canvas qui le joue et le trait SVG se tait. */
@@ -316,7 +328,7 @@
 
   /* Une jauge se remplit depuis sa valeur précédente. */
   [data-game-gauge-fill] {
-    transition: width 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: transform 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 }
 

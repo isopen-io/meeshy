@@ -19,6 +19,8 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
+import { reelPrimeSourceOf } from '@/lib/reels/scene';
+import { useReelPreload } from '@/lib/reels/use-reel-preload';
 import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
 import { chromeYields } from '@/lib/view/chrome-yields';
@@ -259,6 +261,10 @@ export default function ReelsScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const active = Math.min(activeIndex, Math.max(0, count - 1));
   const activeId = models[active]?.id ?? '';
+  /* LA FENÊTRE ÉLARGIE (#9702) : au-delà de N±2, les têtes des réels se
+     téléchargent selon la cadence du lecteur, jusqu'à N±10. */
+  const primeSources = useMemo(() => models.map(reelPrimeSourceOf), [models]);
+  useReelPreload({ urls: primeSources, activeIndex: active });
   usePublicationRoom(useSettled(activeId, REEL_ROOM_SETTLE_MS));
   /* LA FEUILLE DE COMMENTAIRES, PARTAGÉE avec le lecteur de stories (D-89,
      #6484) — la loi d'hôte (focus, fermeture au changement de réel) vit dans

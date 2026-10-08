@@ -115,6 +115,7 @@ extension StoryCanvasUIView {
             // rafraîchit la cible timeline ; comme le playhead n'a pas bougé
             // pendant la pause, la dérive est ~0 → aucun seek (pas de hoquet).
             displayLink?.isPaused = false
+            playheadTickClock.reset()
             pushSlidePlayheadToLayers()
             backgroundLayer.isPlaybackActive = true
             foregroundVideosPlaybackActive = true
@@ -263,6 +264,7 @@ extension StoryCanvasUIView {
         // `didMoveToWindow` (dismiss d'un cover). Le sondage du tick re-dérivera
         // l'état réel dès la première frame.
         resetPlaybackHealthState()
+        playheadTickClock = PlayheadTickClock()
         // Proxy weak partagé : le link ne retient pas le canvas — un canvas
         // jamais fenêtré (setMode avant attach puis jeté) reste libérable.
         let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
@@ -319,10 +321,29 @@ extension StoryCanvasUIView {
         // un stall (seul `isPlaybackPaused` met le link en pause), donc ce
         // sondage détecte aussi la reprise alors que le playhead est gelé.
         refreshPlaybackHealth(now: link.timestamp)
-        advancePlayheadIfActive(by: link.targetTimestamp - link.timestamp)
+        // Temps RÉEL écoulé depuis le tick précédent, pas la durée nominale
+        // d'une frame : une image perdue ne fait plus prendre de retard à la
+        // scène sur l'audio (#9702). Mesuré à CHAQUE tick, même gaté, pour
+        // qu'un stall ne se rattrape pas d'un bond à la reprise.
+        let elapsed = playheadTickClock.advance(now: link.timestamp,
+                                                nominal: link.targetTimestamp - link.timestamp)
+        advancePlayheadIfActive(by: elapsed)
         // Le volume suit le playhead : posé APRÈS l'avancée, sinon l'automation
         // retarderait d'une image sur l'image affichée.
         applyVolumeAutomation(at: Float(currentTime.seconds))
+        if playheadTickClock.isDriftCheckDue(now: link.timestamp) {
+            correctVideoDriftIfNeeded()
+        }
+    }
+
+    /// Les vidéos ne se calaient sur la timeline qu'au démarrage et à la
+    /// reprise : une dérive en cours de route (stall d'une vidéo non primaire,
+    /// décodage en retard) ne se rattrapait jamais (#9702). Gaté comme
+    /// l'avancée du playhead : rien à recaler sur une timeline gelée.
+    func correctVideoDriftIfNeeded() {
+        guard mode == .play, contentReadyFired, !isPlaybackPaused, !isPlaybackStalled else { return }
+        backgroundLayer.correctTimelineDriftIfNeeded()
+        forEachMediaLayer { $0.correctTimelineDriftIfNeeded() }
     }
 
     /// Avance le playhead canvas (`currentTime`) si la lecture est active.

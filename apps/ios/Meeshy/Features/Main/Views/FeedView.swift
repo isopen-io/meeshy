@@ -483,18 +483,7 @@ struct FeedView: View {
 
     private var feedBody: some View {
         ZStack {
-            // Themed background
-            theme.backgroundGradient.ignoresSafeArea()
-
-            // Ambient orbs
-            ForEach(0..<theme.ambientOrbs.count, id: \.self) { i in
-                let orb = theme.ambientOrbs[i]
-                Circle()
-                    .fill(Color(hex: orb.color).opacity(orb.opacity))
-                    .frame(width: orb.size, height: orb.size)
-                    .blur(radius: orb.size / 3)
-                    .offset(x: orb.offset.x, y: orb.offset.y)
-            }
+            FeedAmbientBackdrop()
 
             feedScrollView
 

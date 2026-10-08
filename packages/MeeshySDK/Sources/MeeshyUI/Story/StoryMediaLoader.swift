@@ -160,12 +160,28 @@ public final class StoryMediaLoader {
 
     // MARK: - Preload Video Player
 
+    /// **La source d'un lecteur préparé : le fichier local d'abord** (#9702).
+    ///
+    /// Le pool est indexé par l'URL DISTANTE — la clé que les surfaces
+    /// demandent — mais un lecteur bâti sur elle jouait en streaming et
+    /// re-téléchargeait un fichier que le registre partagé venait de poser sur
+    /// le disque. La clé reste distante, la SOURCE devient locale dès qu'elle
+    /// existe : décodage depuis le disque, aucun octet réseau en double.
+    nonisolated static func prerollSource(remote: URL, localFile: URL?) -> URL {
+        localFile ?? remote
+    }
+
     /// Create an AVPlayer with preroll — ready for instant playback.
     /// Must run on MainActor since AVPlayer is not thread-safe.
     /// Waits for .readyToPlay status before calling preroll (required by AVPlayer).
+    ///
+    /// Annulable (#9702) : un balayage rapide annule la tâche qui prépare un
+    /// réel déjà dépassé ; les deux attentes (statut, préroulage) se libèrent
+    /// aussitôt au lieu de tenir un décodeur jusqu'à cinq secondes.
     public func preloadVideoPlayer(url: URL) async -> AVPlayer {
         let thermalState = ProcessInfo.processInfo.thermalState
-        let item = AVPlayerItem(url: url)
+        let localFile = url.isFileURL ? nil : CacheCoordinator.videoLocalFileURL(for: url.absoluteString)
+        let item = AVPlayerItem(url: Self.prerollSource(remote: url, localFile: localFile))
         // SOTA buffer/bitrate, thermal-aware (WWDC19 #422). Offscreen preroll is
         // always bitrate-capped; the cap tightens — and the decoded-ahead window
         // shrinks — once the device heats up. Forward buffer was 2.0s (now ~1s).
@@ -176,47 +192,61 @@ public final class StoryMediaLoader {
 
         // Wait for readyToPlay before prerolling — preroll crashes if called too early
         // Uses a timeout to avoid hanging the prefetch pipeline on bad URLs
-        // Both KVO callback and timeout dispatch to main to avoid race on resumed flag
-        if item.status != .readyToPlay {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                // Use a class wrapper for shared mutable state to satisfy Sendable
-                final class ResumeState: @unchecked Sendable {
+        // KVO callback, timeout and cancellation all resume on main to avoid a
+        // race on the resumed flag.
+        if item.status != .readyToPlay, !Task.isCancelled {
+            // Use a class wrapper for shared mutable state to satisfy Sendable
+            final class ResumeState: @unchecked Sendable {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-                    var resumed = false
-                    var observation: NSKeyValueObservation?
-                }
-                let state = ResumeState()
+                var resumed = false
+                var observation: NSKeyValueObservation?
+                var continuation: CheckedContinuation<Void, Never>?
 
-                state.observation = item.observe(\.status, options: [.new]) { item, _ in
-                    guard item.status == .readyToPlay || item.status == .failed else { return }
-                    DispatchQueue.main.async {
-                        guard !state.resumed else { return }
-                        state.resumed = true
-                        state.observation?.invalidate()
-                        continuation.resume()
+                /// Sur le fil principal uniquement : une seule reprise, quel
+                /// que soit le premier des trois signaux.
+                func resumeOnce() {
+                    guard !resumed else { return }
+                    resumed = true
+                    observation?.invalidate()
+                    continuation?.resume()
+                    continuation = nil
+                }
+            }
+            let state = ResumeState()
+            await withTaskCancellationHandler {
+                await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                    state.continuation = continuation
+                    state.observation = item.observe(\.status, options: [.new]) { item, _ in
+                        guard item.status == .readyToPlay || item.status == .failed else { return }
+                        DispatchQueue.main.async { state.resumeOnce() }
                     }
+                    // Timeout after 5 seconds to avoid hanging on bad URLs
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) { state.resumeOnce() }
                 }
-                // Timeout after 5 seconds to avoid hanging on bad URLs
-                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                    state.observation?.invalidate()
-                    guard !state.resumed else { return }
-                    state.resumed = true
-                    continuation.resume()
-                }
+            } onCancel: {
+                Task { @MainActor in state.resumeOnce() }
             }
         }
 
-        // Only preroll if player is ready (skip if failed)
-        guard player.currentItem?.status == .readyToPlay else { return player }
+        // Only preroll if player is ready (skip if failed) — and never for a
+        // reel the user has already swiped past.
+        guard player.currentItem?.status == .readyToPlay, !Task.isCancelled else { return player }
 
-        await withCheckedContinuation { continuation in
-            player.preroll(atRate: 1.0) { _ in
-                continuation.resume()
+        let prerolling = PrerollHandle(player: player)
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                player.preroll(atRate: 1.0) { _ in
+                    continuation.resume()
+                }
             }
+        } onCancel: {
+            // `cancelPendingPrerolls` rappelle la complétion avec `false` :
+            // la continuation ci-dessus reprend, une seule fois.
+            Task { @MainActor in prerolling.cancel() }
         }
         return player
     }
@@ -229,22 +259,48 @@ public final class StoryMediaLoader {
     private var playerCacheOrder: [String] = []
     /// SOTA short-video pool size: previous / current / next. Was 6 — six prerolled
     /// `AVQueuePlayer`s each holding decoded frames was a major CPU/GPU/thermal load.
+    /// Les décodeurs matériels sont une ressource BORNÉE (#9702) : la fenêtre
+    /// des réels s'étend jusqu'à N±10, mais seul le palier « décode » (N±1)
+    /// tient un lecteur — le reste se prépare en octets, jamais en lecteurs.
     private let maxCachedPlayers = 3
 
     /// Preroll and cache a player for later retrieval via `cachedPlayer(for:)`.
+    ///
+    /// Une tâche ANNULÉE ne met rien en cache (#9702) : un lecteur préparé pour
+    /// un réel déjà dépassé chasserait, par FIFO, le voisin qu'on va montrer.
+    /// Un lecteur dont l'élément a ÉCHOUÉ n'y entre pas non plus — il
+    /// occuperait une place de décodeur pour une image qui ne viendra pas.
     public func preloadAndCachePlayer(url: URL) async {
         let key = url.absoluteString
-        guard playerCache[key] == nil else { return }
+        guard playerCache[key] == nil, !Task.isCancelled else { return }
         let player = await preloadVideoPlayer(url: url)
-        playerCache[key] = player
-        playerCacheOrder.append(key)
-        // Enforce limit — evict oldest first (FIFO)
-        while playerCache.count > maxCachedPlayers, !playerCacheOrder.isEmpty {
-            let oldest = playerCacheOrder.removeFirst()
-            playerCache[oldest]?.pause()
-            playerCache[oldest]?.replaceCurrentItem(with: nil)
-            playerCache.removeValue(forKey: oldest)
+        guard !Task.isCancelled,
+              player.currentItem?.status != .failed,
+              playerCache[key] == nil else {
+            Self.release(player)
+            return
         }
+        insert(player, for: key)
+    }
+
+    /// **Rend au pool le lecteur qu'une surface quitte** (#9702), au lieu de le
+    /// détruire : un retour en arrière le retrouve prêt — son élément, son
+    /// fichier, ses images décodées — au lieu de repartir à froid. Même borne
+    /// et même éviction FIFO que le préchauffage.
+    public func returnPlayer(_ player: AVPlayer, for url: URL) {
+        let key = url.absoluteString
+        if let held = playerCache[key] {
+            if held !== player { Self.release(player) }
+            return
+        }
+        insert(player, for: key)
+    }
+
+    /// Libère le lecteur préparé pour `url`, s'il y en a un : son décodeur
+    /// revient à un voisin plus proche (#9702).
+    public func discardCachedPlayer(for url: URL) {
+        guard let player = cachedPlayer(for: url) else { return }
+        Self.release(player)
     }
 
     /// Retrieve a prerolled player from cache (removes it — AVPlayer cannot be shared).
@@ -259,16 +315,53 @@ public final class StoryMediaLoader {
     /// Clear all cached players.
     public func clearPlayerCache() {
         for (_, player) in playerCache {
-            player.pause()
-            player.replaceCurrentItem(with: nil)
+            Self.release(player)
         }
         playerCache.removeAll()
         playerCacheOrder.removeAll()
+    }
+
+    private func insert(_ player: AVPlayer, for key: String) {
+        playerCache[key] = player
+        playerCacheOrder.append(key)
+        // Enforce limit — evict oldest first (FIFO)
+        while playerCache.count > maxCachedPlayers, !playerCacheOrder.isEmpty {
+            let oldest = playerCacheOrder.removeFirst()
+            if let evicted = playerCache.removeValue(forKey: oldest) {
+                Self.release(evicted)
+            }
+        }
+    }
+
+    private static func release(_ player: AVPlayer) {
+        player.pause()
+        player.replaceCurrentItem(with: nil)
     }
 
     // MARK: - Cache Management
 
     public func clearThumbnailCache() {
         thumbnailCache.removeAllObjects()
+    }
+}
+
+// MARK: - Preroll Handle
+
+/// Porte le lecteur jusqu'au gestionnaire d'annulation, qui est `@Sendable` :
+/// `cancelPendingPrerolls()` n'y est appelé que sur le MainActor.
+private final class PrerollHandle: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+    private let player: AVPlayer
+
+    init(player: AVPlayer) {
+        self.player = player
+    }
+
+    func cancel() {
+        player.cancelPendingPrerolls()
     }
 }

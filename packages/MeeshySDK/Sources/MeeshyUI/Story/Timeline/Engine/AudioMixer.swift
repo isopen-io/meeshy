@@ -8,7 +8,9 @@ public protocol AudioMixerProviding: AnyObject {
     var isMuted: Bool { get set }
     var maxActiveNodes: Int { get }
     func configure(audios: [StoryAudioPlayerObject], urls: [String: URL]) throws
-    func play() throws
+    /// Joue depuis `timelineTime`, la position timeline atteinte À `hostTime`
+    /// (l'ancre partagée avec la vidéo, cf. `TimelinePlaybackSync`).
+    func play(from timelineTime: Float, atHostTime hostTime: UInt64) throws
     func pause()
     func seek(to time: Float)
     func setVolume(_ volume: Float, for audioId: String)
@@ -86,6 +88,16 @@ public final class AudioMixer: AudioMixerProviding {
     }
 
     public func play() throws {
+        try play(from: lastSeekTime, atHostTime: mach_absolute_time())
+    }
+
+    /// Repart TOUJOURS d'un état propre : les nœuds sont arrêtés puis
+    /// replanifiés depuis `timelineTime`, et démarrent tous à la MÊME ancre
+    /// hôte. Replanifier sans arrêter doublait le segment après une pause
+    /// (la fin de l'ancienne file rejouait, puis la nouvelle).
+    public func play(from timelineTime: Float, atHostTime hostTime: UInt64) throws {
+        let timelineStart = max(0, timelineTime)
+        lastSeekTime = timelineStart
         guard !nodes.isEmpty else {
             _isPlayingStorage = true
             return
@@ -101,11 +113,13 @@ public final class AudioMixer: AudioMixerProviding {
                 throw error
             }
         }
-        let timelineStart = lastSeekTime
+        for node in nodes.values { node.stop() }
+        let anchor = AVAudioTime(hostTime: hostTime)
         for (id, node) in nodes {
             guard let file = files[id] else { continue }
-            scheduleNodeFromTimelineTime(audioId: id, node: node, file: file, time: timelineStart)
-            node.play()
+            scheduleNodeFromTimelineTime(audioId: id, node: node, file: file,
+                                         time: timelineStart, anchorHostTime: hostTime)
+            node.play(at: anchor)
         }
         _isPlayingStorage = true
     }
@@ -125,7 +139,8 @@ public final class AudioMixer: AudioMixerProviding {
         audioId: String,
         node: AVAudioPlayerNode,
         file: AVAudioFile,
-        time timelineTime: Float
+        time timelineTime: Float,
+        anchorHostTime: UInt64
     ) {
         let startTime = startTimes[audioId] ?? 0
         let sampleRate = file.processingFormat.sampleRate
@@ -133,10 +148,12 @@ public final class AudioMixer: AudioMixerProviding {
 
         if timelineTime < startTime {
             // Future schedule. Translate the (startTime - timelineTime)
-            // delay into mach host ticks and pin the file at that hostTime.
-            let delaySeconds = Double(startTime - timelineTime)
-            let hostDelay = AudioMixer.hostTime(forDelaySeconds: delaySeconds)
-            let scheduleAt = AVAudioTime(hostTime: mach_absolute_time() + hostDelay)
+            // delay into mach host ticks COUNTED FROM THE SHARED ANCHOR — the
+            // instant the video resumes too — never from "now".
+            let scheduleAt = AVAudioTime(hostTime: TimelinePlaybackSync.clipStartHostTime(
+                anchor: anchorHostTime,
+                clipStartSeconds: Double(startTime),
+                playheadSeconds: Double(timelineTime)))
             node.scheduleFile(file, at: scheduleAt, completionHandler: nil)
         } else {
             // Already past startTime — schedule immediate playback from a
@@ -225,7 +242,8 @@ public final class AudioMixer: AudioMixerProviding {
         for node in nodes.values { node.stop() }
         for (id, node) in nodes {
             guard let file = files[id] else { continue }
-            scheduleNodeFromTimelineTime(audioId: id, node: node, file: file, time: clamped)
+            scheduleNodeFromTimelineTime(audioId: id, node: node, file: file,
+                                         time: clamped, anchorHostTime: mach_absolute_time())
         }
         if wasPlaying {
             for node in nodes.values { node.play() }

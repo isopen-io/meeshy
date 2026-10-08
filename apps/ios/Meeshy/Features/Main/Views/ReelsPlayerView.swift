@@ -73,6 +73,12 @@ struct ReelsPlayerView: View {
     @State private var shareInFlightIds: Set<String> = []
     /// Flux « Enregistrer en local » du menu « … » de la barre haute.
     @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator(exitGate: .open)
+    /// La fenêtre de préchargement (#9702) : l'horloge des visites traverse
+    /// les `.task(id:)` du pager, la fenêtre courante gouverne quelles pages
+    /// ont le droit de télécharger d'elles-mêmes.
+    @State private var preloader = ReelPagerPreloader()
+    @State private var preloadWindow = ReelPreloadWindow.Window(
+        ahead: ReelPreloadWindow.minRadius, behind: ReelPreloadWindow.minRadius)
 
     var body: some View {
         ZStack {
@@ -207,6 +213,7 @@ struct ReelsPlayerView: View {
             // Quitte la post room du réel actif (real-time like) + finalise la session
             // d'engagement (watch-time + vue qualifiée) du réel courant.
             viewModel.leaveActivePostRoom()
+            preloader.releaseAll(reels: viewModel.reels, except: viewModel.currentId)
             finalizeReelSession(for: viewModel.currentId)
             NotificationToastManager.shared.onPostClosed(viewModel.currentId)
             Task { await EngagementTracker.shared.end(surface: .reels) }
@@ -280,7 +287,8 @@ struct ReelsPlayerView: View {
     // MARK: Pager
 
     private var pager: some View {
-        AdaptiveVerticalPager(items: viewModel.reels, currentPageID: $viewModel.currentId) { _, reel in
+        let activeIndex = viewModel.reels.firstIndex { $0.id == viewModel.currentId }
+        return AdaptiveVerticalPager(items: viewModel.reels, currentPageID: $viewModel.currentId) { index, reel in
             ReelPageView(
                 reel: reel,
                 isActive: viewModel.currentId == reel.id,
@@ -295,26 +303,31 @@ struct ReelsPlayerView: View {
                     commentsReel = reel
                 },
                 onTapAuthorName: { openProfile(for: reel) },
-                onTapAvatar: { openAvatarDestination(for: reel) }
+                onTapAvatar: { openAvatarDestination(for: reel) },
+                isWithinPreloadWindow: isWithinPreloadWindow(index, activeIndex: activeIndex)
             )
             .onAppear {
                 Task { await viewModel.loadMoreIfNeeded(currentReel: reel) }
             }
         }
         .ignoresSafeArea()
-        // Le swipe trouve le voisin PRÊT : fichier sur disque, lecteur préparé
-        // pour le suivant (#7625, #7009). Relancé à chaque réel affiché ; un
-        // swipe rapide annule la préparation devenue inutile.
+        // Le swipe trouve ses voisins PRÊTS (#7625, #7009, #9702) : la fenêtre
+        // va de N±2 à N±10 selon l'usage, chaque palier prépare ce qu'il
+        // mérite (lecteur à N±1, fichier au-delà). Relancé à chaque réel
+        // affiché ; un swipe rapide annule la préparation devenue inutile.
         .task(id: viewModel.currentId) {
-            let ids = viewModel.reels.map(\.id)
-            let neighbours = ReelPagerPrewarmWindow.neighbours(of: viewModel.currentId, in: ids)
-            let next = ReelPagerPrewarmWindow.next(of: viewModel.currentId, in: ids)
-            for id in neighbours {
-                guard !Task.isCancelled,
-                      let reel = viewModel.reels.first(where: { $0.id == id }) else { continue }
-                await ReelPrewarm.prepare(reel, preroll: id == next)
-            }
+            let reels = viewModel.reels
+            guard let activeIndex = reels.firstIndex(where: { $0.id == viewModel.currentId }) else { return }
+            let window = preloader.enter(index: activeIndex)
+            if preloadWindow != window { preloadWindow = window }
+            await preloader.prepare(reels: reels, activeIndex: activeIndex, window: window)
         }
+    }
+
+    /// Une page hors de la fenêtre de préchargement ne télécharge pas d'elle-même (#9702).
+    private func isWithinPreloadWindow(_ index: Int, activeIndex: Int?) -> Bool {
+        guard let activeIndex else { return false }
+        return ReelPreloadWindow.tier(offset: index - activeIndex, in: preloadWindow) != .idle
     }
 
     // MARK: Author navigation
@@ -468,6 +481,10 @@ struct ReelPageView: View {
     var onTapAuthorName: () -> Void
     /// Avatar tap → story (if active) else profile.
     var onTapAvatar: () -> Void
+    /// La page est dans la fenêtre de préchargement (#9702) : hors d'elle, sa
+    /// vidéo ne se télécharge pas d'elle-même (le `TabView` d'iOS 16 monte
+    /// toutes les pages d'un coup).
+    var isWithinPreloadWindow: Bool = true
 
     @State var descriptionExpanded = false
     @State private var audioFullscreen: AudioFullscreenSource?
@@ -870,7 +887,8 @@ struct ReelPageView: View {
         } else if let media = reel.primaryReelDisplayMedia {
             switch media.type {
             case .video:
-                ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted)
+                ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted,
+                              mayDownload: isActive || isWithinPreloadWindow)
             case .image:
                 ReelImageView(reel: reel) { visibleCarouselMediaId = $0 }
             case .audio:

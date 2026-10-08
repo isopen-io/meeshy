@@ -212,7 +212,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             do {
                 let data = try await CacheCoordinator.shared.audio.data(for: resolved)
                 guard !Task.isCancelled else { return }
-                playData(data)
+                await playData(data)
             } catch {
                 Self.log.error("play(urlString) cache fetch echec (\(resolved, privacy: .public)): \(error.localizedDescription, privacy: .public)")
                 isLoading = false
@@ -254,7 +254,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
                 isLoading = false
                 return
             }
-            playData(data)
+            await playData(data)
         }
     }
 
@@ -263,24 +263,28 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// quand un preview ne déclenche aucune lecture audible.
     private static let log = os.Logger(subsystem: "me.meeshy.app", category: "audio-playback")
 
-    private func playData(_ data: Data) {
-        do {
-            player = try AVAudioPlayer(data: data)
-            player?.delegate = self
-            player?.enableRate = true
-            player?.rate = Float(speed.rawValue)
-            player?.prepareToPlay()
-            duration = player?.duration ?? 0
+    /// Décodage et préparation HORS du MainActor (#9702) ; une piste changée
+    /// pendant ce temps (`resetState` annule `loadTask`) n'est pas jouée.
+    private func playData(_ data: Data) async {
+        let prepared = await AudioBytesLoader.preparedPlayer(from: data)
+        guard !Task.isCancelled else { return }
+        switch prepared {
+        case .failure(let error):
+            Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
+            isLoading = false
+        case .success(let box):
+            let ready = box.player
+            player = ready
+            ready.delegate = self
+            ready.rate = Float(speed.rawValue)
+            duration = ready.duration
             applyResumePositionIfAvailable()
-            player?.play()
+            ready.play()
             isPlaying = true
             isLoading = false
             listenStartTime = Date()
             stretchTracker.begin(positionMs)
             startProgressTimer()
-        } catch {
-            Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
-            isLoading = false
         }
     }
 
@@ -575,23 +579,29 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     private func startProgressTimer() {
         timer?.invalidate()
+        // Le minuteur tire sur le run loop principal qui l'a planifié : le
+        // corps y est déjà isolé, une `Task` par tick n'ajoutait qu'une
+        // allocation et un saut de file (#9702).
         timer = Timer.scheduledTimer(withTimeInterval: Self.progressTickInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self = self, let player = self.player else { return }
-                guard player.isPlaying else { return }
-                let newTime = player.currentTime
-                // Le traqueur ne crée rien ici : il retient seulement la dernière
-                // position connue, pour pouvoir clore proprement une écoute dont
-                // la position finale serait illisible (fermeture brutale).
-                self.stretchTracker.observe(Int(newTime * 1000))
-                let newProgress = player.duration > 0 ? newTime / player.duration : 0
-                if abs(newTime - self.currentTime) >= Self.currentTimeWriteThresholdSeconds {
-                    self.currentTime = newTime
-                }
-                if abs(newProgress - self.progress) >= Self.progressWriteThreshold {
-                    self.progress = newProgress
-                }
+            MainActor.assumeIsolated {
+                self?.publishProgressTick()
             }
+        }
+    }
+
+    private func publishProgressTick() {
+        guard let player, player.isPlaying else { return }
+        let newTime = player.currentTime
+        // Le traqueur ne crée rien ici : il retient seulement la dernière
+        // position connue, pour pouvoir clore proprement une écoute dont
+        // la position finale serait illisible (fermeture brutale).
+        stretchTracker.observe(Int(newTime * 1000))
+        let newProgress = player.duration > 0 ? newTime / player.duration : 0
+        if abs(newTime - currentTime) >= Self.currentTimeWriteThresholdSeconds {
+            currentTime = newTime
+        }
+        if abs(newProgress - progress) >= Self.progressWriteThreshold {
+            progress = newProgress
         }
     }
 

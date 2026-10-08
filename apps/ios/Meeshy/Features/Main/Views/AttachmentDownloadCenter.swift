@@ -161,6 +161,19 @@ final class AttachmentDownloadCenter {
         haptics(.light)
     }
 
+    /// **Annule EN SILENCE un préchargement devenu inutile** (#9702) — le réel
+    /// sorti de la fenêtre du pager. Aucune vibration (l'utilisateur n'a rien
+    /// demandé), et jamais un téléchargement qu'un tap a lancé : celui-là
+    /// appartient à l'utilisateur.
+    func cancelPrefetch(urlString: String) {
+        let key = Self.key(for: urlString)
+        guard tasks[key] != nil, origins[key] != .manual else { return }
+        byteTasks[key]?.cancel()
+        tasks[key]?.cancel()
+        origins[key] = nil
+        publish(.cancelled, for: key)
+    }
+
     private func registerByteTask(_ task: Task<Data, Error>, for key: String) {
         byteTasks[key] = task
     }

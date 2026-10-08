@@ -15,7 +15,7 @@
  *     carte de réel ;
  *  2. toucher la carte ouvre `/reels?seed=<id>` SUR ce réel, peint depuis le
  *     cache : aucun squelette, aucun disque flottant ;
- *  3. le réel visible JOUE, et lui seul ; au plus trois lecteurs montés ;
+ *  3. le réel visible JOUE, et lui seul ; au plus cinq lecteurs montés (N±2, #9702) ;
  *  4. un balayage tactile vers le haut accroche le réel SUIVANT (un arrêt par
  *     réel), vers le bas le PRÉCÉDENT, sans tâche longue ; la lecture suit ;
  *  5. les flèches du clavier valent le balayage ;
@@ -137,7 +137,7 @@ const settle = async (page, expected) => {
  * portait son propre diagnostic dans son message d'échec.
  *
  * La restriction ne relâche rien. L'invariante 3 — « lui seul joue », « au
- * plus trois lecteurs montés » — parle des lecteurs de RÉEL, et c'est
+ * plus cinq lecteurs montés » (N±2 depuis #9702) — parle des lecteurs de RÉEL, et c'est
  * exactement ce qui est compté maintenant ; un média du fil n'y entrait que
  * par accident de sélecteur. */
 const players = (page) =>
@@ -387,7 +387,7 @@ try {
       check(await waitPlaying(page, 0), `${label} : le réel visible joue`);
       const atRest = await players(page);
       check(atRest.filter((p) => p.playing).length === 1 && atRest.every((p) => !p.playing || p.page === 0), `${label} : lui seul (${JSON.stringify(atRest)})`);
-      check(atRest.length <= 3, `${label} : au plus trois lecteurs montés — le visible et ses voisins (${atRest.length})`);
+      check(atRest.length <= 5, `${label} : au plus cinq lecteurs montés — le visible et la fenêtre N±2 (${atRest.length})`);
       await capture(page, `reels-lecture-${slug}`);
 
       // ------------------------------------------------ 7. contraste et cibles
