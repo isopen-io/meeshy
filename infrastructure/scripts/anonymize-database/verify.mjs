@@ -12,8 +12,8 @@ function docViolations(spec, doc, ctx) {
   const id = doc._id.toHexString();
   return Object.entries(spec.checks).flatMap(([field, pred]) => {
     const value = valueAt(doc, field);
-    if (pred === 'json') {
-      return jsonCheck(value, ctx).map((v) => ({ collection: spec.collection, id, field: v.path ? `${field}.${v.path}` : field, rule: v.rule }));
+    if (pred === 'json' || pred === 'settings') {
+      return jsonCheck(value, ctx, pred === 'json' ? 'strict' : 'settings').map((v) => ({ collection: spec.collection, id, field: v.path ? `${field}.${v.path}` : field, rule: v.rule }));
     }
     return pred(value, doc, ctx) ? [] : [{ collection: spec.collection, id, field, rule: 'forme non synthétique' }];
   });

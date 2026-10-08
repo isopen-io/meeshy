@@ -17,7 +17,16 @@
 //    possible : une valeur qui n'a pas une forme synthétique est réputée réelle ;
 //  - mots de passe : haché bcrypt d'un mot de passe aléatoire non conservé ; un
 //    compte sans mot de passe (lien magique) le reste. `--keep-login <pseudo>`
-//    garde le pseudo ET le mot de passe d'un compte de recette — et rien d'autre ;
+//    garde le PSEUDO d'un compte de recette et lui pose un mot de passe NEUF,
+//    écrit dans le fichier `--credentials` (mode 600) — jamais le haché
+//    d'origine, exploitable si le compte est un compte réel copié de la
+//    production ; tout le reste de son profil est anonymisé ;
+//  - secrets, jetons, clés et capacités : régénérés ou supprimés. Un témoin
+//    balaie `schema.prisma` : tout champ dont le NOM évoque un secret doit être
+//    traité ici ou exempté avec sa raison (SECRET_EXEMPTIONS) ;
+//  - JSON libres : FERMÉS PAR DÉFAUT — toute chaîne est remplacée, à toute
+//    profondeur, sauf forme technique (ObjectId, date, condensé…) ou énumération
+//    sous une clé de la liste blanche (anonymize-database/scrub-json.mjs) ;
 //  - relancer le script est sans danger : il réanonymise ce qui l'est déjà.
 //
 // INVENTAIRE — champ par champ, depuis packages/shared/prisma/schema.prisma
@@ -27,7 +36,7 @@
 //
 //   User                  username (sauf --keep-login), usernameHistory → [], firstName, lastName,
 //                         displayName, bio, email, phoneNumber, phoneCountryCode, searchTokens
-//                         (recalculés), password (bcrypt aléatoire, sauf --keep-login), avatar,
+//                         (recalculés), password (bcrypt aléatoire ; NEUF pour --keep-login), avatar,
 //                         banner (→ null + manifeste), birthDate, lastLoginIp, lastLoginLocation,
 //                         lastLoginDevice, registrationIp, registrationLocation, registrationDevice,
 //                         emailVerificationToken, emailVerificationCode, phoneVerificationCode,
@@ -37,14 +46,17 @@
 //                         twoFactorChallengeExpiresAt, twoFactorEnabledAt, signalIdentityKeyPublic,
 //                         signalIdentityKeyPrivate (secrets → null)
 //   UserContact           contactKey (régénéré), displayName, phoneNumbers, emails, usernames
-//   Participant           displayName, nickname, avatar, anonymousSession (profil : prénom, nom,
-//                         pseudo, e-mail, naissance ; session : empreinte, ancienne IP retirée)
+//   Participant           displayName, nickname, avatar, sessionTokenHash (régénéré), anonymousSession
+//                         (profil : prénom, nom, pseudo, e-mail, naissance ; session : condensé de
+//                         jeton, empreinte, ancienne IP retirée)
 //   Message               content, translations, metadata (lieux, liens), encryptedContent,
 //                         encryptionMetadata (chiffré retiré), validatedMentions (pseudos remappés)
 //   MessageAttachment     fileName, originalName, filePath, fileUrl, thumbnailPath, thumbnailUrl
 //                         (→ fichier), thumbHash, imageVariants, title, alt, caption,
 //                         captionTranslations, moderationReason, transcription, translations
-//                         (transcriptions, pistes TTS → fichier), metadata
+//                         (transcriptions, pistes TTS → fichier), metadata, encryptionIv,
+//                         encryptionAuthTag, encryptionHmac, thumbnailEncryptionIv,
+//                         thumbnailEncryptionAuthTag, serverKeyId, originalFileHash, encryptedFileHash
 //   PostMedia             fileName, originalName, filePath, fileUrl, thumbnailPath, thumbnailUrl,
 //                         thumbHash, caption, alt, captionTranslations, altTranslations,
 //                         transcription, translations
@@ -52,25 +64,33 @@
 //                         reactions, storyViews
 //   PostComment           content, translations, metadata
 //   PostInteractiveResponse text
-//   Sound                 title, fileUrl, coverUrl, coverThumbHash, translations
-//   UserSticker           name, filePath
+//   Sound                 title, fileUrl, coverUrl, coverThumbHash, translations, contentHash
+//   UserSticker           name, filePath, contentHash
 //   Conversation          identifier (s'il n'est pas opaque, hors global/public), title (hors
-//                         global), description, avatar, banner
+//                         global), description, avatar, banner, serverEncryptionKeyId (clé purgée)
 //   Community             identifier, name, description, avatar, banner
 //   ConversationShare     title, description
-//   ConversationShareLink identifier, name, description, allowedIpRanges
+//   ConversationShareLink linkId, identifier (capacités : régénérés), name, description, allowedIpRanges
 //   UserConversationPreferences customName, tags
 //   UserConversationCategory name
 //   UserCommunityPreferences customName
 //   FriendRequest         message
-//   Notification          title, subtitle, content, actor, context, metadata
+//   Notification          title, subtitle, content, actor, context, metadata, delivery
 //   Report                reporterName, reason, moderatorNotes
 //   Ban                   reason, liftReason
 //   AdminAuditLog         changes, metadata (→ null), ipAddress, userAgent
 //   EmailInvitation       email
-//   TrackingLink          name, originalUrl
+//   TrackingLink          name, originalUrl, token, shortUrl (jeton régénéré)
 //   TrackingLinkClick     ipAddress, userAgent, deviceFingerprint, city, region, referrer
-//   AffiliateToken        name
+//   AffiliateToken        name, token (jeton d'affiliation régénéré)
+//   AffiliateVisitSession sessionKey (régénéré)
+//   PostEngagement        sessionId (régénéré), actions, watchSamples
+//   UserPreferences       privacy, audio, message, notification, video, document, application, social
+//                         (réglages : énumérations gardées, texte libre et chemins remplacés)
+//   UserPreference        value (réglage), description
+//   ConversationPreference value (réglage), description
+//   MeeshLedger           meta
+//   GloryLedger           meta
 //   CallSession           metadata
 //   CallParticipant       analytics, feedback (candidats ICE : IP remplacées)
 //   Transcription         text
@@ -86,11 +106,21 @@
 //   AccountDeletionRequest confirmTokenHash, cancelTokenHash (régénérés)
 //   AnonymousPostOpen     sessionKey (régénéré)
 //   AgentLlmConfig        apiKeyEncrypted, fallbackApiKeyEncrypted (secrets vidés)
-//   AgentGlobalProfile    personaSummary, catchphrases, topicsOfExpertise, topicsAvoided,
-//                         responsePatterns, commonEmojis, reactionPatterns
+//   AgentGlobalProfile    personaSummary, tone, vocabularyLevel, typicalLength, emojiUsage,
+//                         catchphrases, topicsOfExpertise, topicsAvoided, responsePatterns,
+//                         commonEmojis, reactionPatterns
 //   AgentUserRole         personaSummary, catchphrases, responseTriggers, silenceTriggers,
 //                         topicsOfExpertise, topicsAvoided, commonEmojis, reactionPatterns,
-//                         relationshipMap
+//                         relationshipMap, et ses descripteurs (réglages) : tone, vocabularyLevel,
+//                         typicalLength, emojiUsage, engagementLevel, dominantEmotions, overrideTone,
+//                         overrideVocabularyLevel, overrideTypicalLength, overrideEmojiUsage,
+//                         traitVerbosity, traitFormality, traitResponseSpeed, traitInitiativeRate,
+//                         traitClarity, traitArgumentation, traitSocialStyle, traitAssertiveness,
+//                         traitAgreeableness, traitHumor, traitEmotionality, traitOpenness,
+//                         traitConfidence, traitCreativity, traitPatience, traitAdaptability,
+//                         traitEmpathy, traitPoliteness, traitLeadership, traitConflictStyle,
+//                         traitSupportiveness, traitDiplomacy, traitTrustLevel,
+//                         traitEmotionalStability, traitPositivity, traitSensitivity, traitStressResponse
 //   ConversationMessageStats participantStats
 //   LeagueGroupWeek       snapshot
 //   MessageStatusEntry    readDevice (constante)
@@ -103,10 +133,15 @@
 //   MagicLinkToken        tokenHash, ipAddress, userAgent, deviceFingerprint, geoLocation, geoCoordinates
 //   EmailVerificationWatch tokenHash
 //   PasswordHistory       passwordHash, ipAddress, userAgent
-//   SignalPreKeyBundle    identityKeyPrivate, signedPreKeyPrivate
+//   SignalPreKeyBundle    identityKey, identityKeyPrivate, preKeyPublic, signedPreKeyPublic,
+//                         signedPreKeySignature, signedPreKeyPrivate, kyberPreKeyPublic,
+//                         kyberPreKeySignature, preKeyPool
+//   ConversationPublicKey keyType, publicKey, signature
+//   DMAEnrollment         identityKey, signedPreKey, signedPreKeySignature
 //   PreKey                keyData
-//   DMASession            rootKey, chainKeySend, chainKeyReceive, dhRatchetPrivateKey
-//   ServerEncryptionKey   encryptedKey (la passerelle en régénère une à la demande)
+//   DMASession            rootKey, chainKeySend, chainKeyReceive, dhRatchetPublicKey,
+//                         dhRatchetPrivateKey, dhRatchetRemoteKey, sessionType, sessionState
+//   ServerEncryptionKey   encryptedKey, iv, authTag (la passerelle en régénère une à la demande)
 //   AgentConversationSummary summary, currentTopics
 //   AgentAnalysisSnapshot participantSnapshots, topTopics
 //   AgentScanLog          nodeResults, configSnapshot
@@ -120,10 +155,10 @@
 // d'un jeton aléatoire), `referralCode` (code aléatoire), hachés de contenu.
 // FIN DE L'INVENTAIRE
 
-import { writeFile } from 'node:fs/promises';
+import { chmod, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { assertNotProduction, parseMongoTarget, redactUri, ProductionGuardError } from './anonymize-database/guard.mjs';
-import { anonymizeDatabase, newContext, passwordHasher } from './anonymize-database/run.mjs';
+import { anonymizeDatabase, newContext, passwordHasher, passwordIssuer } from './anonymize-database/run.mjs';
 import { verifyDatabase } from './anonymize-database/verify.mjs';
 import { neutralizeMedia, readManifest } from './anonymize-database/media.mjs';
 import { loadBcrypt, loadMongo } from './anonymize-database/deps.mjs';
@@ -131,7 +166,7 @@ import { newSalt } from './anonymize-database/synth.mjs';
 
 const USAGE = `Usage :
   anonymize-database.mjs --uri <mongodb://…/base> [--dry-run | --i-know-this-is-not-production]
-                         [--keep-login <pseudo>]… [--allow-host <hôte>]… [--manifest <fichier.jsonl>]
+                         [--keep-login <pseudo>]… [--credentials <fichier>] [--allow-host <hôte>]… [--manifest <fichier.jsonl>]
                          [--sample-size 200] [--bcrypt-cost 10] [--salt <hex> : rejouer une exécution, jamais conservé]
   anonymize-database.mjs --uri <…> --verify-only [--keep-login <pseudo>]…
   anonymize-database.mjs media --manifest <fichier.jsonl> --uploads-root <dossier> [--all] [--apply]
@@ -140,7 +175,7 @@ const USAGE = `Usage :
   Codes de sortie : 0 succès, 1 refus ou usage, 2 contrôle d'échantillonnage en échec.`;
 
 const REPEATABLE = new Set(['keep-login', 'allow-host']);
-const VALUED = new Set(['uri', 'manifest', 'sample-size', 'bcrypt-cost', 'uploads-root', 'salt', ...REPEATABLE]);
+const VALUED = new Set(['uri', 'manifest', 'credentials', 'sample-size', 'bcrypt-cost', 'uploads-root', 'salt', ...REPEATABLE]);
 
 export function parseArgs(argv) {
   const args = { _: [], 'keep-login': [], 'allow-host': [] };
@@ -233,10 +268,19 @@ export async function main(argv, { env = process.env, log = console.log } = {}) 
       salt: args.salt ?? newSalt(),
       keepLogins: args['keep-login'],
       hashRandomPassword: passwordHasher({ bcrypt, cost: Number(args['bcrypt-cost'] ?? 10), dryRun }),
+      issuePassword: passwordIssuer({ bcrypt, cost: Number(args['bcrypt-cost'] ?? 10), dryRun }),
     });
     const outcome = await anonymizeDatabase(db, ctx, { dryRun });
     printReport(log, outcome, dryRun);
     if (dryRun) return 0;
+
+    if (outcome.keptCredentials.length > 0) {
+      const credentialsPath = args.credentials ?? `anonymize-recette-${new Date().toISOString().replace(/[:.]/g, '-')}.credentials`;
+      await writeFile(credentialsPath, '', { mode: 0o600 });
+      await chmod(credentialsPath, 0o600);
+      await writeFile(credentialsPath, outcome.keptCredentials.map((c) => `${c.username}\t${c.password}`).join('\n') + '\n');
+      log(`Mots de passe NEUFS des comptes de recette : ${credentialsPath} (mode 600 — à ranger dans le gestionnaire de secrets, puis supprimer).`);
+    }
 
     const manifestPath = args.manifest ?? `anonymize-media-manifest-${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`;
     await writeFile(manifestPath, outcome.manifest.map((e) => JSON.stringify(e)).join('\n') + (outcome.manifest.length ? '\n' : ''), { mode: 0o600 });

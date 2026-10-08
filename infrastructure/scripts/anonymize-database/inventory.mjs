@@ -29,11 +29,20 @@ function identifier(p, ctx) {
 
 const identifierCheck = (v, doc) => PUBLIC_CONVERSATION_TYPES.has(doc.type) || isOpaqueIdentifier(v) || /^mshy_[0-9a-f]{16}$/.test(v);
 
+/** Les mots d'identité RÉELS d'un compte, gardés en mémoire seulement : un réglage qui les contient est remplacé. */
+function identityWords(row) {
+  const local = typeof row.email === 'string' ? row.email.split('@')[0] : '';
+  return [row.username, row.firstName, row.lastName, row.displayName, local]
+    .filter((v) => typeof v === 'string')
+    .flatMap((v) => v.toLowerCase().split(/[^\p{L}\p{N}]+/u))
+    .filter((w) => w.length >= 3);
+}
+
 /** Pré-passe User : les cartes « valeur réelle → valeur synthétique » qui tiennent les relations. */
 async function prepareUsers(db, ctx) {
   const rows = await db
     .collection('User')
-    .find({}, { projection: { username: 1, email: 1, phoneNumber: 1, displayName: 1 } })
+    .find({}, { projection: { username: 1, email: 1, phoneNumber: 1, displayName: 1, firstName: 1, lastName: 1 } })
     .toArray();
   const ranked = rows
     .map((row) => ({ row, rank: s.hex(ctx.salt, 16, row._id.toHexString(), 'phone-rank') }))
@@ -56,6 +65,7 @@ async function prepareUsers(db, ctx) {
     if (typeof row.username === 'string') ctx.byUsername.set(row.username.toLowerCase(), synthetic.username);
     if (typeof row.email === 'string') ctx.byEmail.set(row.email.toLowerCase(), synthetic.email);
     if (typeof row.phoneNumber === 'string' && row.phoneNumber) ctx.byPhone.set(normalizePhone(row.phoneNumber), synthetic.phone);
+    identityWords(row).forEach((w) => ctx.identityWords.add(w));
   });
   ctx.missingKeepLogins = [...ctx.keepLogins].filter((u) => !ctx.keptUsernames.has(u));
 }
@@ -84,7 +94,15 @@ async function transformUser(p, ctx) {
     'twoFactorChallengeExpiresAt', 'twoFactorEnabledAt', 'signalIdentityKeyPublic', 'signalIdentityKeyPrivate',
   );
   p.emptyArrays('twoFactorBackupCodes');
-  if (!kept && typeof doc.password === 'string' && doc.password) p.set('password', await ctx.hashRandomPassword());
+  if (kept) {
+    const issued = await ctx.issuePassword();
+    if (issued) {
+      p.set('password', issued.hash);
+      ctx.keptCredentials.push({ username: doc.username, password: issued.password });
+    }
+  } else if (typeof doc.password === 'string' && doc.password) {
+    p.set('password', await ctx.hashRandomPassword());
+  }
 }
 
 function transformContact(p, ctx) {
@@ -103,8 +121,11 @@ function transformParticipant(p, ctx) {
   const last = owner?.lastName ?? s.lastName(ctx.salt, id);
   p.replace('displayName', () => owner?.displayName ?? `${first} ${last}`);
   p.replace('nickname', () => first).dropFile('avatar');
+  const sessionHash = s.token(ctx.salt, id, 'session');
+  p.replace('sessionTokenHash', () => sessionHash);
   const anon = doc.anonymousSession;
   if (!anon) return;
+  if (anon.session?.sessionTokenHash) p.set('anonymousSession.session.sessionTokenHash', sessionHash);
   if (anon.profile) {
     p.set('anonymousSession.profile.firstName', first).set('anonymousSession.profile.lastName', last);
     p.set('anonymousSession.profile.username', s.username(ctx.salt, id, 'anon'));
@@ -131,10 +152,79 @@ function transformMedia(p, ctx) {
   p.nullify('thumbHash').json('imageVariants');
   if (doc.imageVariants != null) p.set('imageVariants', null);
   p.text('title', 'alt', 'caption', 'moderationReason');
+  p.nullify(...ATTACHMENT_CRYPTO);
   p.json('captionTranslations', 'altTranslations', 'transcription', 'translations', 'metadata');
 }
 
 const t = (fields) => fields;
+
+const ATTACHMENT_CRYPTO = ['encryptionIv', 'encryptionAuthTag', 'encryptionHmac', 'thumbnailEncryptionIv', 'thumbnailEncryptionAuthTag', 'serverKeyId', 'originalFileHash', 'encryptedFileHash'];
+
+const AGENT_DESCRIPTORS = ['tone', 'vocabularyLevel', 'typicalLength', 'emojiUsage'];
+const AGENT_ROLE_DESCRIPTORS = [
+  ...AGENT_DESCRIPTORS, 'engagementLevel', 'dominantEmotions', 'overrideTone', 'overrideVocabularyLevel', 'overrideTypicalLength', 'overrideEmojiUsage',
+  'traitVerbosity', 'traitFormality', 'traitResponseSpeed', 'traitInitiativeRate', 'traitClarity', 'traitArgumentation', 'traitSocialStyle',
+  'traitAssertiveness', 'traitAgreeableness', 'traitHumor', 'traitEmotionality', 'traitOpenness', 'traitConfidence', 'traitCreativity',
+  'traitPatience', 'traitAdaptability', 'traitEmpathy', 'traitPoliteness', 'traitLeadership', 'traitConflictStyle', 'traitSupportiveness',
+  'traitDiplomacy', 'traitTrustLevel', 'traitEmotionalStability', 'traitPositivity', 'traitSensitivity', 'traitStressResponse',
+];
+const PREFERENCE_BLOBS = ['privacy', 'audio', 'message', 'notification', 'video', 'document', 'application', 'social'];
+const settingChecks = (fields) => Object.fromEntries(fields.map((f) => [f, ok.setting]));
+
+/** Préfixe de famille gardé (`aff_`, `mshy_`), tirage remplacé : la valeur d'origine est une CAPACITÉ. */
+function capability(p, ctx, key, fallbackPrefix) {
+  const value = p.doc[key];
+  if (typeof value !== 'string' || value === '') return null;
+  const prefix = value.includes('_') ? value.split('_')[0] : fallbackPrefix;
+  const fresh = `${prefix}_${s.hex(ctx.salt, 16, p.id, key)}`;
+  p.set(key, fresh);
+  return fresh;
+}
+const isCapability = (v) => v == null || /_[0-9a-f]{16}$/.test(v);
+
+/**
+ * Les champs dont le NOM évoque un secret, une clé ou un jeton et qu'on laisse
+ * en place, chacun avec sa raison. Un témoin balaie `schema.prisma` : un tel
+ * champ qui n'est ni traité par l'inventaire ni nommé ici le fait échouer.
+ */
+export const SECRET_EXEMPTIONS = Object.freeze({
+  'AnonymousSession.shareLinkId': 'identifiant Mongo du lien de partage (pas le lien lui-même, dont linkId et identifier sont régénérés)',
+  'User.referralCode': 'code de parrainage public, partagé par son titulaire ; il attribue une inscription et n’ouvre aucune session',
+  'Conversation.lastReactionTargetKey': 'clé composée d’identifiants de la dernière cible de réaction, ni secret ni donnée personnelle',
+  'MessageAttachment.codec': 'nom de codec audio (opus, aac), donnée de format',
+  'MessageAttachment.videoCodec': 'nom de codec vidéo (h264, vp9), donnée de format',
+  'PostMedia.codec': 'nom de codec du média, donnée de format',
+  'UserPreference.key': 'nom d’un réglage (sa valeur est nettoyée), donnée de structure',
+  'ConversationPreference.key': 'nom d’un réglage (sa valeur est nettoyée), donnée de structure',
+  'AgentTopicCatalog.keywordPatterns': 'catalogue éditorial de sujets de l’agent, sans donnée d’utilisateur',
+  'EngagementCounter.axisKey': 'nom d’un axe d’engagement, clé technique du barème',
+  'EngagementMilestone.milestoneKey': 'nom d’un palier d’engagement, clé technique du barème',
+  'EngagementConversationCredit.axisKey': 'nom d’un axe d’engagement, clé technique du barème',
+  'EngagementSignatureCredit.axisKey': 'nom d’un axe d’engagement, clé technique du barème',
+  'EngagementSignatureCredit.signature': 'sha256 d’identifiants Mongo triés (dédoublonnage), aucune donnée personnelle ni secret',
+  'EngagementQuota.operationKey': 'nom d’une opération créditée, clé technique (les seaux visit:* sont purgés)',
+  'EngagementScaleConfig.key': 'nom d’une configuration de barème, donnée éditoriale',
+  'DailyMission.dayKey': 'jour civil AAAA-MM-JJ, clé technique du jeu',
+  'DailyMission.templateKey': 'nom d’un gabarit de mission, donnée éditoriale',
+  'GameDay.dayKey': 'jour civil AAAA-MM-JJ, clé technique du jeu',
+  'LeaguePseudonym.pseudonymKey': 'clé d’unicité d’un pseudonyme GÉNÉRÉ par le jeu (déjà un alias)',
+  'LeagueGroupWeek.weekKey': 'semaine ISO, clé technique de la ligue',
+  'LeagueMembership.weekKey': 'semaine ISO, clé technique de la ligue',
+  'GameWeekPoints.weekKey': 'semaine ISO, clé technique du jeu',
+  'GameWeekPoints.dayKey': 'jour civil, clé technique du jeu',
+  'GameDuo.weekKey': 'semaine ISO, clé technique du jeu',
+  'GameDuo.templateKey': 'nom d’un gabarit de duo, donnée éditoriale',
+  'GameDuoSlot.weekKey': 'semaine ISO, clé technique du jeu',
+  'GameTrophy.key': 'nom d’un trophée, donnée éditoriale',
+  'AchievementRarityStat.milestoneKey': 'nom d’un palier, statistique agrégée sans individu',
+  'StickerPackItem.key': 'clé d’un sticker éditorial, sans donnée d’utilisateur',
+});
+
+/** Champs de types COMPOSITES (Prisma `type`) couverts par le modèle qui les embarque. */
+export const NESTED_COVERAGE = Object.freeze({
+  'AnonymousSessionDetails.sessionTokenHash': 'Participant.anonymousSession',
+  'AnonymousSessionDetails.deviceFingerprint': 'Participant.anonymousSession',
+});
 
 export const INVENTORY = Object.freeze([
   {
@@ -149,8 +239,8 @@ export const INVENTORY = Object.freeze([
   },
   {
     model: 'Participant', collection: 'Participant', action: 'transform', transform: transformParticipant,
-    fields: t(['displayName', 'nickname', 'avatar', 'anonymousSession']),
-    checks: { displayName: ok.name, nickname: ok.name, avatar: ok.absent, anonymousSession: ok.json },
+    fields: t(['displayName', 'nickname', 'avatar', 'sessionTokenHash', 'anonymousSession']),
+    checks: { displayName: ok.name, nickname: ok.name, avatar: ok.absent, sessionTokenHash: ok.token, anonymousSession: ok.json },
   },
   {
     model: 'Message', collection: 'Message', action: 'transform', transform: transformMessage,
@@ -159,8 +249,8 @@ export const INVENTORY = Object.freeze([
   },
   {
     model: 'MessageAttachment', collection: 'MessageAttachment', action: 'transform', transform: transformMedia,
-    fields: t(['fileName', 'originalName', 'filePath', 'fileUrl', 'thumbnailPath', 'thumbnailUrl', 'thumbHash', 'imageVariants', 'title', 'alt', 'caption', 'captionTranslations', 'moderationReason', 'transcription', 'translations', 'metadata']),
-    checks: { fileName: ok.fileName, originalName: ok.fileName, filePath: ok.placeholder, fileUrl: ok.placeholder, thumbnailPath: ok.placeholder, thumbnailUrl: ok.placeholder, thumbHash: ok.absent, imageVariants: ok.absent, title: ok.text, alt: ok.text, caption: ok.text, captionTranslations: ok.json, transcription: ok.json, translations: ok.json, metadata: ok.json },
+    fields: t(['fileName', 'originalName', 'filePath', 'fileUrl', 'thumbnailPath', 'thumbnailUrl', 'thumbHash', 'imageVariants', 'title', 'alt', 'caption', 'captionTranslations', 'moderationReason', 'transcription', 'translations', 'metadata', ...ATTACHMENT_CRYPTO]),
+    checks: { ...Object.fromEntries(ATTACHMENT_CRYPTO.map((f) => [f, ok.absent])), fileName: ok.fileName, originalName: ok.fileName, filePath: ok.placeholder, fileUrl: ok.placeholder, thumbnailPath: ok.placeholder, thumbnailUrl: ok.placeholder, thumbHash: ok.absent, imageVariants: ok.absent, title: ok.text, alt: ok.text, caption: ok.text, captionTranslations: ok.json, transcription: ok.json, translations: ok.json, metadata: ok.json },
   },
   {
     model: 'PostMedia', collection: 'PostMedia', action: 'transform', transform: transformMedia,
@@ -185,24 +275,24 @@ export const INVENTORY = Object.freeze([
   },
   {
     model: 'Sound', collection: 'StoryBackgroundAudio', action: 'transform',
-    transform: (p) => p.label('title').file('fileUrl', { mimeType: 'audio/mpeg' }).file('coverUrl', { mimeType: 'image/png' }).nullify('coverThumbHash').json('translations'),
-    fields: t(['title', 'fileUrl', 'coverUrl', 'coverThumbHash', 'translations']),
-    checks: { title: ok.text, fileUrl: ok.placeholder, coverUrl: ok.placeholder, coverThumbHash: ok.absent, translations: ok.json },
+    transform: (p) => p.label('title').file('fileUrl', { mimeType: 'audio/mpeg' }).file('coverUrl', { mimeType: 'image/png' }).nullify('coverThumbHash').json('translations').token('contentHash'),
+    fields: t(['title', 'fileUrl', 'coverUrl', 'coverThumbHash', 'translations', 'contentHash']),
+    checks: { contentHash: ok.token, title: ok.text, fileUrl: ok.placeholder, coverUrl: ok.placeholder, coverThumbHash: ok.absent, translations: ok.json },
   },
   {
     model: 'UserSticker', collection: 'UserSticker', action: 'transform',
-    transform: (p) => p.label('name').file('filePath', { mimeType: 'image/png' }),
-    fields: t(['name', 'filePath']), checks: { name: ok.text, filePath: ok.placeholder },
+    transform: (p) => p.label('name').file('filePath', { mimeType: 'image/png' }).token('contentHash'),
+    fields: t(['name', 'filePath', 'contentHash']), checks: { name: ok.text, filePath: ok.placeholder, contentHash: ok.token },
   },
   {
     model: 'Conversation', collection: 'Conversation', action: 'transform',
     transform: (p, ctx) => {
       if (p.doc.type !== 'global') p.label('title');
-      p.text('description').dropFile('avatar').dropFile('banner');
+      p.text('description').dropFile('avatar').dropFile('banner').nullify('serverEncryptionKeyId');
       identifier(p, ctx);
     },
-    fields: t(['identifier', 'title', 'description', 'avatar', 'banner']),
-    checks: { identifier: identifierCheck, title: (v, doc) => doc.type === 'global' || ok.text(v), description: ok.text, avatar: ok.absent, banner: ok.absent },
+    fields: t(['identifier', 'title', 'description', 'avatar', 'banner', 'serverEncryptionKeyId']),
+    checks: { serverEncryptionKeyId: ok.absent, identifier: identifierCheck, title: (v, doc) => doc.type === 'global' || ok.text(v), description: ok.text, avatar: ok.absent, banner: ok.absent },
   },
   {
     model: 'Community', collection: 'Community', action: 'transform',
@@ -223,10 +313,12 @@ export const INVENTORY = Object.freeze([
     transform: (p, ctx) => {
       p.label('name').text('description');
       if (Array.isArray(p.doc.allowedIpRanges) && p.doc.allowedIpRanges.length > 0) p.set('allowedIpRanges', ['192.0.2.0/24']);
-      identifier(p, ctx);
+      const linkId = capability(p, ctx, 'linkId', 'mshy');
+      if (p.doc.identifier === p.doc.linkId && linkId) p.set('identifier', linkId);
+      else capability(p, ctx, 'identifier', 'mshy');
     },
-    fields: t(['identifier', 'name', 'description', 'allowedIpRanges']),
-    checks: { identifier: identifierCheck, name: ok.text, description: ok.text, allowedIpRanges: (v) => ok.empty(v) || (v.length === 1 && v[0] === '192.0.2.0/24') },
+    fields: t(['linkId', 'identifier', 'name', 'description', 'allowedIpRanges']),
+    checks: { linkId: isCapability, identifier: isCapability, name: ok.text, description: ok.text, allowedIpRanges: (v) => ok.empty(v) || (v.length === 1 && v[0] === '192.0.2.0/24') },
   },
   {
     model: 'UserConversationPreferences', collection: 'UserConversationPreferences', action: 'transform',
@@ -241,9 +333,9 @@ export const INVENTORY = Object.freeze([
   { model: 'FriendRequest', collection: 'FriendRequest', action: 'transform', transform: (p) => p.text('message'), fields: t(['message']), checks: { message: ok.text } },
   {
     model: 'Notification', collection: 'Notification', action: 'transform',
-    transform: (p) => p.label('title', 'subtitle').text('content').json('actor', 'context', 'metadata'),
-    fields: t(['title', 'subtitle', 'content', 'actor', 'context', 'metadata']),
-    checks: { title: ok.text, subtitle: ok.text, content: ok.text, actor: ok.json, context: ok.json, metadata: ok.json },
+    transform: (p) => p.label('title', 'subtitle').text('content').json('actor', 'context', 'metadata', 'delivery'),
+    fields: t(['title', 'subtitle', 'content', 'actor', 'context', 'metadata', 'delivery']),
+    checks: { delivery: ok.json, title: ok.text, subtitle: ok.text, content: ok.text, actor: ok.json, context: ok.json, metadata: ok.json },
   },
   {
     model: 'Report', collection: 'Report', action: 'transform',
@@ -264,9 +356,18 @@ export const INVENTORY = Object.freeze([
   },
   {
     model: 'TrackingLink', collection: 'TrackingLink', action: 'transform',
-    transform: (p, ctx) => p.label('name').replace('originalUrl', () => `https://${s.EMAIL_DOMAIN}/${s.hex(ctx.salt, 16, p.id, 'url')}`),
-    fields: t(['name', 'originalUrl']),
-    checks: { name: ok.text, originalUrl: (v) => typeof v === 'string' && v.startsWith(`https://${s.EMAIL_DOMAIN}/`) },
+    transform: (p, ctx) => {
+      p.label('name').replace('originalUrl', () => `https://${s.EMAIL_DOMAIN}/${s.hex(ctx.salt, 16, p.id, 'url')}`);
+      const old = p.doc.token;
+      const fresh = s.hex(ctx.salt, 12, p.id, 'token');
+      if (typeof old === 'string' && old) p.set('token', fresh);
+      if (typeof p.doc.shortUrl === 'string' && p.doc.shortUrl) {
+        const base = p.doc.shortUrl.slice(0, p.doc.shortUrl.lastIndexOf('/') + 1);
+        p.set('shortUrl', `${base}${fresh}`);
+      }
+    },
+    fields: t(['name', 'originalUrl', 'token', 'shortUrl']),
+    checks: { token: (v) => v == null || /^[0-9a-f]{12}$/.test(v), shortUrl: (v, doc) => v == null || v.endsWith(`/${doc.token}`), name: ok.text, originalUrl: (v) => typeof v === 'string' && v.startsWith(`https://${s.EMAIL_DOMAIN}/`) },
   },
   {
     model: 'TrackingLinkClick', collection: 'TrackingLinkClick', action: 'transform',
@@ -274,7 +375,35 @@ export const INVENTORY = Object.freeze([
     fields: t(['ipAddress', 'userAgent', 'deviceFingerprint', 'city', 'region', 'referrer']),
     checks: { ipAddress: ok.ip, userAgent: ok.userAgent, deviceFingerprint: ok.token, city: ok.absent, region: ok.absent, referrer: ok.absent },
   },
-  { model: 'AffiliateToken', collection: 'AffiliateToken', action: 'transform', transform: (p) => p.label('name'), fields: t(['name']), checks: { name: ok.text } },
+  {
+    model: 'AffiliateToken', collection: 'AffiliateToken', action: 'transform',
+    transform: (p, ctx) => {
+      p.label('name');
+      capability(p, ctx, 'token', 'aff');
+    },
+    fields: t(['name', 'token']), checks: { name: ok.text, token: isCapability },
+  },
+  { model: 'AffiliateVisitSession', collection: 'AffiliateVisitSession', action: 'transform', transform: (p) => p.token('sessionKey'), fields: t(['sessionKey']), checks: { sessionKey: ok.token } },
+  {
+    model: 'PostEngagement', collection: 'PostEngagement', action: 'transform',
+    transform: (p) => p.token('sessionId').json('actions', 'watchSamples'),
+    fields: t(['sessionId', 'actions', 'watchSamples']), checks: { sessionId: ok.token, actions: ok.json, watchSamples: ok.json },
+  },
+  {
+    model: 'UserPreferences', collection: 'user_preferences', action: 'transform',
+    transform: (p) => p.settingsJson(...PREFERENCE_BLOBS),
+    fields: t(PREFERENCE_BLOBS), checks: Object.fromEntries(PREFERENCE_BLOBS.map((f) => [f, ok.settingsJson])),
+  },
+  {
+    model: 'UserPreference', collection: 'user_preference', action: 'transform',
+    transform: (p) => p.settings('value').label('description'), fields: t(['value', 'description']), checks: { value: ok.setting, description: ok.text },
+  },
+  {
+    model: 'ConversationPreference', collection: 'ConversationPreference', action: 'transform',
+    transform: (p) => p.settings('value').label('description'), fields: t(['value', 'description']), checks: { value: ok.setting, description: ok.text },
+  },
+  { model: 'MeeshLedger', collection: 'MeeshLedger', action: 'transform', transform: (p) => p.json('meta'), fields: t(['meta']), checks: { meta: ok.json } },
+  { model: 'GloryLedger', collection: 'GloryLedger', action: 'transform', transform: (p) => p.json('meta'), fields: t(['meta']), checks: { meta: ok.json } },
   { model: 'CallSession', collection: 'CallSession', action: 'transform', transform: (p) => p.json('metadata'), fields: t(['metadata']), checks: { metadata: ok.json } },
   { model: 'CallParticipant', collection: 'CallParticipant', action: 'transform', transform: (p) => p.json('analytics', 'feedback'), fields: t(['analytics', 'feedback']), checks: { analytics: ok.json, feedback: ok.json } },
   { model: 'Transcription', collection: 'Transcription', action: 'transform', transform: (p) => p.text('text'), fields: t(['text']), checks: { text: ok.text } },
@@ -313,18 +442,18 @@ export const INVENTORY = Object.freeze([
   },
   {
     model: 'AgentGlobalProfile', collection: 'AgentGlobalProfile', action: 'transform',
-    transform: (p) => p.text('personaSummary').emptyArrays('catchphrases', 'topicsOfExpertise', 'topicsAvoided', 'responsePatterns', 'commonEmojis', 'reactionPatterns'),
-    fields: t(['personaSummary', 'catchphrases', 'topicsOfExpertise', 'topicsAvoided', 'responsePatterns', 'commonEmojis', 'reactionPatterns']),
-    checks: { personaSummary: ok.text, catchphrases: ok.empty, responsePatterns: ok.empty },
+    transform: (p) => p.text('personaSummary').settings(...AGENT_DESCRIPTORS).emptyArrays('catchphrases', 'topicsOfExpertise', 'topicsAvoided', 'responsePatterns', 'commonEmojis', 'reactionPatterns'),
+    fields: t(['personaSummary', ...AGENT_DESCRIPTORS, 'catchphrases', 'topicsOfExpertise', 'topicsAvoided', 'responsePatterns', 'commonEmojis', 'reactionPatterns']),
+    checks: { ...settingChecks(AGENT_DESCRIPTORS), personaSummary: ok.text, catchphrases: ok.empty, responsePatterns: ok.empty },
   },
   {
     model: 'AgentUserRole', collection: 'AgentUserRole', action: 'transform',
     transform: (p) => {
-      p.text('personaSummary').emptyArrays('catchphrases', 'responseTriggers', 'silenceTriggers', 'topicsOfExpertise', 'topicsAvoided', 'commonEmojis', 'reactionPatterns');
+      p.text('personaSummary').settings(...AGENT_ROLE_DESCRIPTORS).emptyArrays('catchphrases', 'responseTriggers', 'silenceTriggers', 'topicsOfExpertise', 'topicsAvoided', 'commonEmojis', 'reactionPatterns');
       if (p.doc.relationshipMap != null) p.set('relationshipMap', {});
     },
-    fields: t(['personaSummary', 'catchphrases', 'responseTriggers', 'silenceTriggers', 'topicsOfExpertise', 'topicsAvoided', 'commonEmojis', 'reactionPatterns', 'relationshipMap']),
-    checks: { personaSummary: ok.text, catchphrases: ok.empty, responseTriggers: ok.empty, silenceTriggers: ok.empty },
+    fields: t(['personaSummary', ...AGENT_ROLE_DESCRIPTORS, 'catchphrases', 'responseTriggers', 'silenceTriggers', 'topicsOfExpertise', 'topicsAvoided', 'commonEmojis', 'reactionPatterns', 'relationshipMap']),
+    checks: { ...settingChecks(AGENT_ROLE_DESCRIPTORS), personaSummary: ok.text, catchphrases: ok.empty, responseTriggers: ok.empty, silenceTriggers: ok.empty },
   },
   { model: 'ConversationMessageStats', collection: 'ConversationMessageStats', action: 'transform', transform: (p) => p.json('participantStats'), fields: t(['participantStats']), checks: { participantStats: ok.json } },
   { model: 'LeagueGroupWeek', collection: 'LeagueGroupWeek', action: 'transform', transform: (p) => p.json('snapshot'), fields: t(['snapshot']), checks: { snapshot: ok.json } },
@@ -337,10 +466,12 @@ export const INVENTORY = Object.freeze([
   { model: 'MagicLinkToken', collection: 'MagicLinkToken', action: 'purge', fields: t(['tokenHash', 'ipAddress', 'userAgent', 'deviceFingerprint', 'geoLocation', 'geoCoordinates']) },
   { model: 'EmailVerificationWatch', collection: 'EmailVerificationWatch', action: 'purge', fields: t(['tokenHash']) },
   { model: 'PasswordHistory', collection: 'PasswordHistory', action: 'purge', fields: t(['passwordHash', 'ipAddress', 'userAgent']) },
-  { model: 'SignalPreKeyBundle', collection: 'SignalPreKeyBundle', action: 'purge', fields: t(['identityKeyPrivate', 'signedPreKeyPrivate']) },
+  { model: 'SignalPreKeyBundle', collection: 'SignalPreKeyBundle', action: 'purge', fields: t(['identityKey', 'identityKeyPrivate', 'preKeyPublic', 'signedPreKeyPublic', 'signedPreKeySignature', 'signedPreKeyPrivate', 'kyberPreKeyPublic', 'kyberPreKeySignature', 'preKeyPool']) },
+  { model: 'ConversationPublicKey', collection: 'ConversationPublicKey', action: 'purge', fields: t(['keyType', 'publicKey', 'signature']) },
+  { model: 'DMAEnrollment', collection: 'DMAEnrollment', action: 'purge', fields: t(['identityKey', 'signedPreKey', 'signedPreKeySignature']) },
   { model: 'PreKey', collection: 'PreKey', action: 'purge', fields: t(['keyData']) },
-  { model: 'DMASession', collection: 'DMASession', action: 'purge', fields: t(['rootKey', 'chainKeySend', 'chainKeyReceive', 'dhRatchetPrivateKey']) },
-  { model: 'ServerEncryptionKey', collection: 'ServerEncryptionKey', action: 'purge', fields: t(['encryptedKey']) },
+  { model: 'DMASession', collection: 'DMASession', action: 'purge', fields: t(['rootKey', 'chainKeySend', 'chainKeyReceive', 'dhRatchetPublicKey', 'dhRatchetPrivateKey', 'dhRatchetRemoteKey', 'sessionType', 'sessionState']) },
+  { model: 'ServerEncryptionKey', collection: 'ServerEncryptionKey', action: 'purge', fields: t(['encryptedKey', 'iv', 'authTag']) },
   { model: 'AgentConversationSummary', collection: 'AgentConversationSummary', action: 'purge', fields: t(['summary', 'currentTopics']) },
   { model: 'AgentAnalysisSnapshot', collection: 'AgentAnalysisSnapshot', action: 'purge', fields: t(['participantSnapshots', 'topTopics']) },
   { model: 'AgentScanLog', collection: 'AgentScanLog', action: 'purge', fields: t(['nodeResults', 'configSnapshot']) },

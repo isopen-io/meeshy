@@ -6,7 +6,7 @@ import { patchFor } from './patch.mjs';
 
 const BATCH = 500;
 
-export function newContext({ salt, keepLogins = [], hashRandomPassword }) {
+export function newContext({ salt, keepLogins = [], hashRandomPassword, issuePassword = async () => null }) {
   return {
     salt,
     keepLogins: new Set(keepLogins),
@@ -16,13 +16,29 @@ export function newContext({ salt, keepLogins = [], hashRandomPassword }) {
     byUsername: new Map(),
     byEmail: new Map(),
     byPhone: new Map(),
+    identityWords: new Set(),
+    keptCredentials: [],
     hashRandomPassword,
+    issuePassword,
   };
 }
 
 export function passwordHasher({ bcrypt, cost, dryRun }) {
   if (dryRun) return async () => null;
   return () => bcrypt.hash(randomBytes(32).toString('base64url'), cost);
+}
+
+/**
+ * Un mot de passe NEUF pour un compte de recette — jamais le haché d'origine,
+ * qui resterait exploitable si le compte est un compte réel copié de la
+ * production. Le clair ne vit qu'en mémoire jusqu'au fichier `600` de la CLI.
+ */
+export function passwordIssuer({ bcrypt, cost, dryRun }) {
+  if (dryRun) return async () => null;
+  return async () => {
+    const password = randomBytes(18).toString('base64url');
+    return { password, hash: await bcrypt.hash(password, cost) };
+  };
 }
 
 async function runTransform(db, spec, ctx, { dryRun, record }) {
@@ -87,5 +103,5 @@ export async function anonymizeDatabase(db, ctx, { dryRun = false, inventory = I
       collections: report.map(({ collection, action, matched }) => ({ collection, action, matched })),
     });
   }
-  return { report, manifest, missingKeepLogins: ctx.missingKeepLogins };
+  return { report, manifest, missingKeepLogins: ctx.missingKeepLogins, keptCredentials: ctx.keptCredentials };
 }

@@ -73,14 +73,24 @@ supprimés, et prévient si un compte de recette est introuvable. Rien n'est éc
 ```bash
 anon --i-know-this-is-not-production \
   --keep-login <COMPTE_RECETTE_1> --keep-login <COMPTE_RECETTE_2> \
-  --manifest /work/medias.jsonl
+  --manifest /work/medias.jsonl --credentials /work/recette.credentials
 ```
 
-Les comptes `--keep-login` gardent leur pseudo et leur mot de passe — rien
-d'autre : leur e-mail, leur numéro et leur profil deviennent synthétiques, et
-leur double authentification est retirée (son secret part avec le reste). Tous
-les autres mots de passe deviennent le haché d'un mot de passe aléatoire non
-conservé ; toutes les sessions et tous les jetons push tombent.
+Les comptes `--keep-login` gardent leur PSEUDO et reçoivent un mot de passe
+NEUF, écrit (`pseudo<TAB>mot de passe`, mode 600) dans `--credentials` et
+jamais affiché : le haché d'origine ne survit pas, puisqu'il resterait
+exploitable si le compte est un compte réel copié de la production. Leur
+e-mail, leur numéro et leur profil deviennent synthétiques, et leur double
+authentification est retirée. Ranger ces mots de passe dans le gestionnaire de
+secrets, puis supprimer le fichier. Tous les autres mots de passe deviennent le
+haché d'un mot de passe aléatoire non conservé ; sessions, jetons push, jetons
+de réinitialisation, liens de partage, jetons d'affiliation et de suivi sont
+régénérés ou supprimés, et aucune clé E2EE ni clé serveur ne survit.
+
+Les champs JSON libres (métadonnées, contextes, réglages, analytics) sont
+nettoyés FERMÉS PAR DÉFAUT : toute chaîne, à toute profondeur, est remplacée,
+sauf une forme technique (identifiant, date, condensé) ou une énumération sous
+une clé de la liste blanche.
 
 Le script se termine par le contrôle d'échantillonnage : code de sortie `2` si
 un champ garde une forme réelle (le rapport nomme la collection, l'`_id` et le
@@ -93,7 +103,8 @@ anon --verify-only --sample-size 2000 --keep-login <COMPTE_RECETTE_1> --keep-log
 echo $?   # 0 attendu
 ```
 
-Puis, à la main, la connexion d'un compte de recette sur le staging. Chaque
+Puis, à la main, la connexion d'un compte de recette sur le staging, avec le
+mot de passe neuf du fichier `--credentials`. Chaque
 exécution réelle laisse une ligne datée dans la collection `_anonymizationRuns`.
 
 Vider le cache Redis du staging (il garde des copies de profils et de

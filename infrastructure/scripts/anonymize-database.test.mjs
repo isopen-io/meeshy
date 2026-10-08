@@ -12,7 +12,7 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
@@ -20,10 +20,10 @@ import { fileURLToPath } from 'node:url';
 
 import { main } from './anonymize-database.mjs';
 import { assertNotProduction, ProductionGuardError } from './anonymize-database/guard.mjs';
-import { anonymizeDatabase, newContext, passwordHasher } from './anonymize-database/run.mjs';
+import { anonymizeDatabase, newContext, passwordHasher, passwordIssuer } from './anonymize-database/run.mjs';
 import { verifyDatabase } from './anonymize-database/verify.mjs';
 import { neutralizeMedia } from './anonymize-database/media.mjs';
-import { INVENTORY } from './anonymize-database/inventory.mjs';
+import { INVENTORY, NESTED_COVERAGE, SECRET_EXEMPTIONS } from './anonymize-database/inventory.mjs';
 import { loadBcrypt, loadMongo } from './anonymize-database/deps.mjs';
 import * as s from './anonymize-database/synth.mjs';
 
@@ -97,7 +97,7 @@ const KEPT_PASSWORD = 'Recette#2026';
 const USER_PASSWORD = 'MotDePasse!1';
 
 async function seed(db) {
-  const ids = Object.fromEntries(['jeanne', 'recette', 'lien', 'group', 'global', 'pA', 'pAnon', 'msg', 'msgE2ee', 'att', 'post', 'contact'].map((k) => [k, new ObjectId()]));
+  const ids = Object.fromEntries(['jeanne', 'recette', 'lien', 'link', 'group', 'global', 'pA', 'pAnon', 'msg', 'msgE2ee', 'att', 'post', 'contact'].map((k) => [k, new ObjectId()]));
   await Promise.all([
     db.collection('User').createIndex({ username: 1 }, { unique: true }),
     db.collection('User').createIndex({ email: 1 }, { unique: true }),
@@ -132,7 +132,7 @@ async function seed(db) {
     usernames: ['recette.ios', 'inconnu'], matchedUserId: ids.recette, matchedBy: 'phone',
   });
   await db.collection('Conversation').insertMany([
-    { _id: ids.group, identifier: 'mshy_famille-essai', type: 'group', title: 'Famille Essai', description: 'Le groupe de la famille', avatar: 'attachments/g.jpg' },
+    { _id: ids.group, identifier: 'mshy_famille-essai', type: 'group', title: 'Famille Essai', description: 'Le groupe de la famille', avatar: 'attachments/g.jpg', serverEncryptionKeyId: 'key-1' },
     { _id: ids.global, identifier: 'meeshy', type: 'global', title: 'Meeshy' },
   ]);
   await db.collection('Participant').insertMany([
@@ -151,7 +151,10 @@ async function seed(db) {
       _id: ids.msg, conversationId: ids.group, senderId: ids.pA, content: 'Rendez-vous chez moi à 18h, appelle le +33612345678',
       originalLanguage: 'fr', messageType: 'text', validatedMentions: ['recette.ios', 'disparu'],
       translations: { en: { text: 'Meet at my place at 6pm', translationModel: 'nllb' } },
-      metadata: { location: { latitude: 45.76, longitude: 4.83, address: '10 rue des Essais, Lyon' }, link: { url: 'https://perso.real.test/album' } },
+      metadata: {
+        kind: 'note', location: { latitude: 45.76, longitude: 4.83, address: '10 rue des Essais, Lyon' }, link: { url: 'https://perso.real.test/album' },
+        extra: { notes2: 'Appelle Jeanne au bureau demain', contactInfo: 'jeanne.essai@real-mail.test', list: ['Jeanne Essai', 'Paul'], deep: [{ who: 'jeanne.essai', count: 3, seen: true }] },
+      },
     },
     { _id: ids.msgE2ee, conversationId: ids.group, senderId: ids.pA, content: '[chiffré]', originalLanguage: 'fr', messageType: 'text', isEncrypted: true, encryptedContent: 'Q2lwaGVydGV4dA==', encryptionMetadata: { iv: 'abc' } },
     { _id: new ObjectId(), conversationId: ids.global, senderId: ids.pA, content: 'Appel terminé avec Jeanne', messageType: 'system', messageSource: 'system', metadata: { kind: 'call-summary', callerName: 'Jeanne' } },
@@ -161,7 +164,7 @@ async function seed(db) {
     filePath: `attachments/2026/01/${ids.jeanne}/voix.m4a`, fileUrl: `attachments/2026/01/${ids.jeanne}/voix.m4a`, thumbHash: 'abc', uploadedBy: ids.jeanne,
     transcription: { text: 'Bonjour c’est Jeanne', language: 'fr', segments: [{ text: 'Bonjour', start: 0, end: 1 }] },
     translations: { en: { type: 'audio', transcription: 'Hello it is Jeanne', url: '/api/v1/attachments/file/translated/x_en.mp3', path: 'translated/x_en.mp3', format: 'mp3' } },
-    caption: 'Pour toi maman',
+    caption: 'Pour toi maman', encryptionIv: 'aXY=', encryptionAuthTag: 'dGFn', serverKeyId: 'key-1', originalFileHash: 'f'.repeat(64),
   });
   await db.collection('Notification').insertOne({
     userId: ids.recette, type: 'new_message', title: 'Jeanne Essai', content: 'Jeanne : Rendez-vous chez moi',
@@ -195,6 +198,18 @@ async function seed(db) {
   await db.collection('AnonymousPostOpen').insertOne({ postId: ids.post, sessionKey: 'session-token-real' });
   await db.collection('account_deletion_requests').insertOne({ userId: ids.lien, status: 'PENDING_EMAIL_CONFIRMATION', confirmTokenHash: 'd'.repeat(64), cancelTokenHash: 'e'.repeat(64) });
   await db.collection('EmailInvitation').insertOne({ senderId: ids.jeanne, email: 'cousin@real-mail.test', affiliateTokenId: new ObjectId() });
+  await db.collection('user_preferences').insertOne({
+    userId: ids.jeanne,
+    application: { theme: 'dark', accentColor: 'blue', interfaceLanguage: 'fr', downloadPath: '/Users/jeanne.essai/Downloads', signature: 'Jeanne, maman de Léo' },
+    notification: { dndStartTime: '22:00', dndEnabled: true },
+  });
+  await db.collection('ConversationShareLink').insertOne({ _id: ids.link, linkId: 'mshy_Ab12Cd34', identifier: 'mshy_Ab12Cd34', conversationId: ids.group, createdBy: ids.jeanne, name: 'Lien famille' });
+  await db.collection('AffiliateToken').insertOne({ token: 'aff_Zx98Yw76', name: 'Parrainage Jeanne', createdBy: ids.jeanne });
+  await db.collection('TrackingLink').insertOne({ token: 'Qw12Er34', shortUrl: 'https://example.test/l/Qw12Er34', originalUrl: 'https://perso.real.test', createdBy: ids.jeanne });
+  await db.collection('ConversationPublicKey').insertOne({ conversationId: ids.group, userId: ids.jeanne, keyType: 'x25519', publicKey: 'cHVi' });
+  await db.collection('DMAEnrollment').insertOne({ userId: ids.jeanne, platform: 'x', identityKey: 'id', signedPreKey: 'spk', signedPreKeySignature: 'sig', status: 'active' });
+  await db.collection('AffiliateVisitSession').insertOne({ sessionKey: 'affiliate_session_real', affiliateTokenId: new ObjectId(), affiliateUserId: ids.jeanne, expiresAt: new Date() });
+  await db.collection('PostEngagement').insertOne({ postId: ids.post, userId: ids.recette, sessionId: 'client-session-real', contentType: 'story', surface: 'feed', actions: [{ type: 'view', note: 'vu par Paul' }], watchSamples: [] });
   await db.collection('EngagementQuota').insertMany([{ bucket: 'visit:lien:empreinte', count: 1 }, { bucket: 'day:2026-09-30', count: 2 }]);
   return ids;
 }
@@ -207,7 +222,7 @@ async function freshDb() {
 }
 
 const ctxFor = ({ salt = s.newSalt(), keepLogins = [], dryRun = false } = {}) =>
-  newContext({ salt, keepLogins, hashRandomPassword: passwordHasher({ bcrypt, cost: 4, dryRun }) });
+  newContext({ salt, keepLogins, hashRandomPassword: passwordHasher({ bcrypt, cost: 4, dryRun }), issuePassword: passwordIssuer({ bcrypt, cost: 4, dryRun }) });
 
 async function snapshot(db) {
   const names = (await db.listCollections().toArray()).map((c) => c.name).sort();
@@ -315,6 +330,38 @@ describe('anonymisation d’une base', () => {
     assert.deepEqual(message.validatedMentions, [recette.username]);
     assert.equal((await one('Message', { _id: ids.msgE2ee })).encryptedContent, null);
     assert.equal((await one('Message', { messageType: 'system' })).metadata.kind, 'call-summary');
+    assert.equal(message.metadata.kind, 'note', 'une énumération technique reste');
+    assert.ok(s.isSyntheticText(message.metadata.extra.notes2), 'une clé INCONNUE porteuse de texte est remplacée');
+    assert.ok(s.isSyntheticEmail(message.metadata.extra.contactInfo), 'une clé inconnue porteuse d’un e-mail reçoit un e-mail synthétique');
+    assert.ok(message.metadata.extra.list.every(s.isSyntheticText), 'un tableau de chaînes sous une clé inconnue est remplacé');
+    assert.ok(s.isSyntheticText(message.metadata.extra.deep[0].who), 'une valeur imbriquée dans un tableau d’objets est remplacée');
+    assert.equal(message.metadata.extra.deep[0].count, 3);
+    assert.equal(message.metadata.extra.deep[0].seen, true);
+
+    const prefs = await one('user_preferences');
+    assert.equal(prefs.application.theme, 'dark');
+    assert.equal(prefs.application.accentColor, 'blue');
+    assert.equal(prefs.application.interfaceLanguage, 'fr');
+    assert.equal(prefs.notification.dndStartTime, '22:00');
+    assert.equal(prefs.notification.dndEnabled, true);
+    assert.ok(s.isSyntheticText(prefs.application.downloadPath), 'un chemin personnel dans un réglage est remplacé');
+    assert.ok(s.isSyntheticText(prefs.application.signature), 'un texte libre dans un réglage est remplacé');
+
+    const link = await one('ConversationShareLink', { _id: ids.link });
+    assert.notEqual(link.linkId, 'mshy_Ab12Cd34', 'un lien de partage de production n’ouvre rien depuis le staging');
+    assert.notEqual(link.identifier, 'mshy_Ab12Cd34');
+    assert.notEqual((await one('AffiliateToken')).token, 'aff_Zx98Yw76');
+    const tracking = await one('TrackingLink');
+    assert.notEqual(tracking.token, 'Qw12Er34');
+    assert.ok(tracking.shortUrl.endsWith(`/l/${tracking.token}`));
+    assert.notEqual((await one('AffiliateVisitSession')).sessionKey, 'affiliate_session_real');
+    const engagement = await one('PostEngagement');
+    assert.notEqual(engagement.sessionId, 'client-session-real');
+    assert.ok(s.isSyntheticText(engagement.actions[0].note));
+    assert.equal(engagement.actions[0].type, 'view');
+    assert.equal(anon.sessionTokenHash, anon.anonymousSession.session.sessionTokenHash, 'les deux copies du condensé de session restent égales');
+    assert.notEqual(anon.sessionTokenHash, 'a'.repeat(64));
+    assert.equal((await one('Conversation', { _id: ids.group })).serverEncryptionKeyId, null);
 
     const attachment = await one('MessageAttachment', { _id: ids.att });
     assert.equal(attachment.filePath, 'anonymized/placeholder.wav');
@@ -323,6 +370,7 @@ describe('anonymisation d’une base', () => {
     assert.ok(s.isSyntheticText(attachment.translations.en.transcription));
     assert.ok(s.isPlaceholderPath(attachment.translations.en.url));
     assert.equal(attachment.thumbHash, null);
+    for (const field of ['encryptionIv', 'encryptionAuthTag', 'serverKeyId', 'originalFileHash']) assert.equal(attachment[field], null, `MessageAttachment.${field}`);
     assert.ok(outcome.manifest.some((e) => e.original === `attachments/2026/01/${ids.jeanne}/voix.m4a`));
     assert.ok(outcome.manifest.some((e) => e.original === 'translated/x_en.mp3'));
 
@@ -348,7 +396,7 @@ describe('anonymisation d’une base', () => {
     assert.equal(voice.embedding, null);
     assert.equal(voice.chatterboxConditionals, null);
 
-    for (const purged of ['PushToken', 'PasswordHistory', 'MagicLinkToken', 'SignalPreKeyBundle']) {
+    for (const purged of ['PushToken', 'PasswordHistory', 'MagicLinkToken', 'SignalPreKeyBundle', 'ConversationPublicKey', 'DMAEnrollment']) {
       assert.equal(await db.collection(purged).countDocuments(), 0, `${purged} purgé`);
     }
     assert.equal(await db.collection('EngagementQuota').countDocuments(), 1, 'seuls les seaux visit:* partent');
@@ -376,19 +424,37 @@ describe('anonymisation d’une base', () => {
     assert.deepEqual((await verifyDatabase(db, ctxFor())).violations, []);
   });
 
-  it('les comptes --keep-login gardent pseudo et mot de passe, et rien d’autre', async () => {
+  it('les comptes --keep-login gardent leur pseudo et reçoivent un mot de passe NEUF — jamais le haché d’origine', async () => {
     const { db, ids } = await freshDb();
     const ctx = ctxFor({ keepLogins: ['recette.ios', 'absent.du.jeu'] });
     const outcome = await anonymizeDatabase(db, ctx);
     const recette = await db.collection('User').findOne({ _id: ids.recette });
     assert.equal(recette.username, 'recette.ios');
-    assert.equal(await bcrypt.compare(KEPT_PASSWORD, recette.password), true, 'le compte de recette se connecte encore');
+    assert.equal(await bcrypt.compare(KEPT_PASSWORD, recette.password), false, 'le mot de passe de production ne vaut plus rien sur le staging');
+    assert.deepEqual(outcome.keptCredentials.map((c) => c.username), ['recette.ios']);
+    const [{ password: fresh }] = outcome.keptCredentials;
+    assert.ok(fresh.length >= 20 && fresh !== KEPT_PASSWORD);
+    assert.equal(await bcrypt.compare(fresh, recette.password), true, 'le compte de recette se connecte avec son mot de passe neuf');
     assert.notEqual(recette.email, 'recette@real-mail.test');
     assert.notEqual(recette.phoneNumber, '+33698765432');
     assert.notEqual(recette.lastName, 'Recette');
     assert.equal(recette.twoFactorEnabledAt, null, 'sans secret TOTP, la double authentification est retirée');
     assert.deepEqual(outcome.missingKeepLogins, ['absent.du.jeu']);
     assert.deepEqual((await verifyDatabase(db, ctx)).violations, []);
+  });
+
+  it('le contrôle échoue si le nettoyage d’un JSON libre est désactivé', async () => {
+    const { db } = await freshDb();
+    const crippled = INVENTORY.map((spec) =>
+      spec.model === 'Message' ? { ...spec, transform: (p) => p.text('content').json('translations').nullify('encryptedContent', 'encryptionMetadata') } : spec,
+    );
+    await anonymizeDatabase(db, ctxFor(), { inventory: crippled });
+    const { violations } = await verifyDatabase(db, ctxFor(), { sampleSize: 1000 });
+    const fields = violations.filter((v) => v.collection === 'Message').map((v) => v.field);
+    for (const leaked of ['metadata.extra.notes2', 'metadata.extra.contactInfo', 'metadata.extra.list', 'metadata.extra.deep[0].who', 'metadata.callerName']) {
+      assert.ok(fields.some((f) => f === leaked || f.startsWith(`${leaked}[`)), `${leaked} non signalé par le contrôle`);
+    }
+    assert.ok(!fields.includes('metadata.kind'), 'une énumération technique n’est pas une fuite');
   });
 
   it('le contrôle d’échantillonnage échoue sur une valeur réelle restée en base', async () => {
@@ -411,8 +477,14 @@ describe('anonymisation d’une base', () => {
     const uri = `${mongo.uri}/${db.databaseName}`;
     assert.equal(await main(['--uri', uri, '--dry-run'], { env: TEST_ENV, log: (l) => lines.push(l) }), 0);
     assert.ok(!existsSync(manifest));
-    const code = await main(['--uri', uri, '--i-know-this-is-not-production', '--keep-login', 'recette.ios', '--manifest', manifest, '--bcrypt-cost', '4'], { env: TEST_ENV, log: (l) => lines.push(l) });
+    const credentials = path.join(dir, 'recette.credentials');
+    const code = await main(['--uri', uri, '--i-know-this-is-not-production', '--keep-login', 'recette.ios', '--manifest', manifest, '--credentials', credentials, '--bcrypt-cost', '4'], { env: TEST_ENV, log: (l) => lines.push(l) });
     assert.equal(code, 0);
+    assert.equal(statSync(credentials).mode & 0o777, 0o600, 'le fichier des mots de passe neufs n’est lisible que par son propriétaire');
+    const [username, fresh] = readFileSync(credentials, 'utf8').trim().split('\t');
+    assert.equal(username, 'recette.ios');
+    assert.equal(await bcrypt.compare(fresh, (await db.collection('User').findOne({ username })).password), true);
+    assert.ok(lines.every((l) => !l.includes(fresh)), 'le mot de passe neuf n’est jamais affiché');
     assert.ok(readFileSync(manifest, 'utf8').includes('voix.m4a'));
     assert.ok(lines.some((l) => l.includes('Contrôle : aucune forme réelle trouvée.')));
     assert.ok(lines.some((l) => l.includes(' media --manifest ')));
@@ -484,6 +556,23 @@ describe('inventaire', () => {
       assert.ok(block, `${spec.model} absent de l'en-tête`);
       spec.fields.forEach((f) => assert.ok(new RegExp(`\\b${f}\\b`).test(block), `${spec.model}.${f} absent de l'en-tête`));
     }
+  });
+
+  it('chaque champ du schéma dont le NOM évoque un secret, un jeton ou une clé est traité ou exempté avec sa raison', () => {
+    const SECRET_NAME = /token|secret|password|passwd|hash|salt|apikey|key|code|otp|signature|credential|private|refresh|session|fingerprint|nonce|hmac|authtag|^iv$|Iv$|cipher|encrypted|webhook|oauth|backup|linkId|identifier|shortUrl/i;
+    const handled = new Set(INVENTORY.flatMap((spec) => spec.fields.map((f) => `${spec.model}.${f}`)));
+    const declared = new Set([...handled, ...Object.keys(NESTED_COVERAGE), ...Object.keys(SECRET_EXEMPTIONS)]);
+    const untreated = [];
+    for (const [, kind, name, body] of schema.matchAll(/^(model|type) (\w+) \{([\s\S]*?)^\}/gm)) {
+      for (const line of body.split('\n')) {
+        const field = /^\s+(\w+)\s+(String|Json|Bytes)\b/.exec(line);
+        if (!field || line.includes('@db.ObjectId') || !SECRET_NAME.test(field[1])) continue;
+        if (!declared.has(`${name}.${field[1]}`)) untreated.push(`${kind} ${name}.${field[1]}`);
+      }
+    }
+    assert.deepEqual(untreated, []);
+    Object.entries(SECRET_EXEMPTIONS).forEach(([field, reason]) => assert.ok(reason.length > 20, `${field} : raison absente`));
+    Object.values(NESTED_COVERAGE).forEach((owner) => assert.ok(handled.has(owner), `${owner} ne couvre rien`));
   });
 
   it('les jetons de recherche suivent la règle de la passerelle', async () => {

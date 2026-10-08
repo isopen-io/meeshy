@@ -2,7 +2,7 @@
 // partir d'un document, et les prédicats du contrôle d'échantillonnage.
 
 import * as s from './synth.mjs';
-import { scrubJson, jsonViolations } from './scrub-json.mjs';
+import { scrubJson, scrubSetting, jsonViolations } from './scrub-json.mjs';
 
 const present = (v) => v !== null && v !== undefined && v !== '';
 
@@ -50,6 +50,22 @@ export function patchFor(doc, ctx, collection, record) {
         .filter((k) => doc[k] !== null && doc[k] !== undefined)
         .forEach((k) => {
           $set[k] = scrubJson(doc[k], ctx, [id, k], media(k));
+        });
+      return self;
+    },
+    settingsJson(...keys) {
+      keys
+        .filter((k) => doc[k] !== null && doc[k] !== undefined)
+        .forEach((k) => {
+          $set[k] = scrubJson(doc[k], ctx, [id, k], media(k), 'settings');
+        });
+      return self;
+    },
+    settings(...keys) {
+      keys
+        .filter((k) => typeof doc[k] === 'string' || Array.isArray(doc[k]))
+        .forEach((k) => {
+          $set[k] = Array.isArray(doc[k]) ? doc[k].map((v, i) => scrubSetting(v, ctx, [id, k, i])) : scrubSetting(doc[k], ctx, [id, k]);
         });
       return self;
     },
@@ -121,8 +137,10 @@ export const ok = Object.freeze({
   username: (v, _doc, ctx) => s.isSyntheticUsername(v) || ctx.keptUsernames.has(v),
   usernames: each((v, _doc, ctx) => s.isSyntheticUsername(v) || ctx.keptUsernames.has(v)),
   json: 'json',
+  settingsJson: 'settings',
+  setting: (v, _doc, ctx) => jsonViolations(v, ctx, 'settings').length === 0,
 });
 
-export function jsonCheck(value, ctx) {
-  return jsonViolations(value, ctx);
+export function jsonCheck(value, ctx, policy = 'strict') {
+  return jsonViolations(value, ctx, policy);
 }
