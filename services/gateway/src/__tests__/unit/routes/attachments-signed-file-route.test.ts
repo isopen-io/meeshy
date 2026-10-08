@@ -49,6 +49,7 @@ const CONVERSATION = 'dddddddddddddddddddddd01';
 const READER = 'cccccccccccccccccccccc01';
 const OUTSIDER = 'cccccccccccccccccccccc09';
 const SENDER = 'cccccccccccccccccccccc02';
+const BANNED = 'cccccccccccccccccccccc03';
 const SIGNING_KEY = Buffer.alloc(32, 5).toString('base64');
 const MINUTE = 60_000;
 
@@ -84,7 +85,8 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown>): 
     if (field === 'OR') return (condition as Record<string, unknown>[]).some((branch) => matches(row, branch));
     const value = row[field];
     if (condition !== null && typeof condition === 'object') {
-      const c = condition as { startsWith?: string; in?: unknown[] };
+      const c = condition as { startsWith?: string; in?: unknown[]; isSet?: boolean };
+      if (c.isSet !== undefined) return c.isSet === (value !== undefined);
       if (c.startsWith !== undefined) return typeof value === 'string' && value.startsWith(c.startsWith);
       if (c.in !== undefined) return c.in.includes(value);
       return false;
@@ -100,6 +102,7 @@ function makePrisma(input: { message: Carrier; entries?: Entry[]; pieceViewOnce?
   const carriers = [input.message];
   const participants = [
     { id: READER, conversationId: CONVERSATION, isActive: true },
+    { id: BANNED, conversationId: CONVERSATION, isActive: true, bannedAt: new Date(Date.now() - MINUTE) },
     { id: SENDER, conversationId: CONVERSATION, isActive: true },
     { id: OUTSIDER, conversationId: 'dddddddddddddddddddddd02', isActive: true },
   ];
@@ -205,6 +208,12 @@ describe('GET /api/v1/attachments/signed/:token/* — l’adresse signée par le
   it('refuse une adresse signée pour un participant d’une AUTRE conversation', async () => {
     const app = await buildApp(makePrisma({ message: VIEW_ONCE() }));
     expect((await app.inject({ method: 'GET', url: signedUrlFor(OUTSIDER) })).statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('refuse une adresse signée pour un participant BANNI resté marqué actif', async () => {
+    const app = await buildApp(makePrisma({ message: VIEW_ONCE() }));
+    expect((await app.inject({ method: 'GET', url: signedUrlFor(BANNED) })).statusCode).toBe(404);
     await app.close();
   });
 

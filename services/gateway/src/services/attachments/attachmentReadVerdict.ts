@@ -29,13 +29,14 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sendForbidden, sendNotFound } from '../../utils/response.js';
 import { carrierMessageStillServesBytes } from './carrierMessageLifecycle';
 import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from './readerAttachmentLifecycle';
+import { ADMITTED_FILE_READER_WHERE, withoutExpiredShareLinks } from './fileReaderAdmission';
 
 export type AttachmentReadVerdict = 'allow' | 'forbidden' | 'gone';
 
 export async function resolveAttachmentReadVerdict(
   request: FastifyRequest,
   attachment: { messageId?: string | null; uploadedBy?: string | null; isViewOnce?: boolean | null },
-  prisma: Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry'>
+  prisma: Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry' | 'conversationShareLink'>
 ): Promise<AttachmentReadVerdict> {
   const authContext = (request as unknown as { authContext?: {
     isAuthenticated?: boolean; isAnonymous?: boolean; userId?: string; participantId?: string;
@@ -54,8 +55,8 @@ export async function resolveAttachmentReadVerdict(
   // d'un jeton de session est authentifié lui aussi.
   const participantWhere = (conversationId: string) =>
     authContext.isAnonymous && authContext.participantId
-      ? { id: authContext.participantId, conversationId, isActive: true }
-      : { userId: authContext.userId, conversationId, isActive: true };
+      ? { id: authContext.participantId, conversationId }
+      : { userId: authContext.userId, conversationId };
 
   return memberReadVerdict(prisma, {
     messageId: attachment.messageId,
@@ -73,7 +74,7 @@ export async function resolveAttachmentReadVerdict(
  * — son message porteur et sa vue unique propre ne voyagent pas dans l'adresse.
  */
 export async function resolveSignedReaderVerdict(
-  prisma: Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry' | 'messageAttachment'>,
+  prisma: Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry' | 'messageAttachment' | 'conversationShareLink'>,
   input: { readonly attachmentId: string; readonly readerParticipantId: string; readonly now: Date }
 ): Promise<AttachmentReadVerdict> {
   const attachment = await prisma.messageAttachment.findUnique({
@@ -85,7 +86,7 @@ export async function resolveSignedReaderVerdict(
   return memberReadVerdict(prisma, {
     messageId: attachment.messageId,
     attachmentIsViewOnce: attachment.isViewOnce,
-    participantWhere: (conversationId) => ({ id: input.readerParticipantId, conversationId, isActive: true }),
+    participantWhere: (conversationId) => ({ id: input.readerParticipantId, conversationId }),
     now: input.now,
   });
 }
@@ -96,11 +97,11 @@ export async function resolveSignedReaderVerdict(
  * raison écrite en tête de fichier.
  */
 async function memberReadVerdict(
-  prisma: Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry'>,
+  prisma: Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry' | 'conversationShareLink'>,
   input: {
     readonly messageId: string;
     readonly attachmentIsViewOnce?: boolean | null;
-    readonly participantWhere: (conversationId: string) => { conversationId: string; isActive: boolean; id?: string; userId?: string };
+    readonly participantWhere: (conversationId: string) => { conversationId: string; id?: string; userId?: string };
     readonly now: Date;
   }
 ): Promise<AttachmentReadVerdict> {
@@ -112,8 +113,15 @@ async function memberReadVerdict(
   });
   if (!message) return 'forbidden';
 
-  const participant = await prisma.participant.findFirst({ where: input.participantWhere(message.conversationId), select: { id: true } });
-  if (participant === null) return 'forbidden';
+  // #9600 / #9646 — le prédicat d'admission PARTAGÉ avec la remise des
+  // adresses signées (`fileReaderAdmission.ts`) : actif, jamais banni, lien
+  // d'entrée non échu.
+  const found = await prisma.participant.findFirst({
+    where: { ...input.participantWhere(message.conversationId), ...ADMITTED_FILE_READER_WHERE },
+    select: { id: true, shareLinkId: true },
+  });
+  const [participant] = found ? await withoutExpiredShareLinks(prisma, [found], input.now) : [];
+  if (!participant) return 'forbidden';
 
   // Le dernier maillon de la chaîne de destruction des cycles 92 à 94 : les
   // octets suivent la vie du message porteur. Cf. `carrierMessageLifecycle`.

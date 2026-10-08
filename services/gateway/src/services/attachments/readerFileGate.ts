@@ -31,7 +31,7 @@ const log = enhancedLogger.child({ module: 'AttachmentReaderFileGate' });
 /** Le nom STABLE de la ligne de journal que la transition compte. */
 export const UNSIGNED_READER_BOUND_FILE_EVENT = 'attachment-file:unsigned-reader-bound';
 
-export type SignedFilePrisma = Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry' | 'messageAttachment'>;
+export type SignedFilePrisma = Pick<PrismaClient, 'message' | 'participant' | 'messageStatusEntry' | 'messageAttachment' | 'conversationShareLink'>;
 
 export type SignedFileAccess =
   | { readonly kind: 'serve'; readonly cacheControl: string }

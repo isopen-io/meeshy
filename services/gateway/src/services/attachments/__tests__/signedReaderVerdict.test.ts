@@ -20,7 +20,18 @@ const NOW = new Date('2026-10-08T10:00:00.000Z');
 const ago = (ms: number) => new Date(NOW.getTime() - ms);
 const ahead = (ms: number) => new Date(NOW.getTime() + ms);
 
-type Participant = { id: string; conversationId: string; isActive: boolean };
+type Participant = { id: string; conversationId: string; isActive: boolean; bannedAt?: Date | null; shareLinkId?: string | null };
+
+/** Le prédicat Prisma tel que MongoDB l'évalue : `OR`, égalité, `{ isSet: false }` (clé absente). */
+function matches(row: Record<string, unknown>, where: Record<string, unknown>): boolean {
+  return Object.entries(where).every(([field, condition]) => {
+    if (field === 'OR') return (condition as Record<string, unknown>[]).some((branch) => matches(row, branch));
+    if (condition !== null && typeof condition === 'object' && 'isSet' in condition) {
+      return (condition as { isSet: boolean }).isSet === (field in row && row[field] !== undefined);
+    }
+    return row[field] === condition;
+  });
+}
 
 const carrier = (over: Record<string, unknown> = {}) => ({
   conversationId: CONVERSATION,
@@ -39,12 +50,14 @@ function prismaWith(input: {
   piece?: { messageId: string | null; isViewOnce: boolean } | null;
   message?: ReturnType<typeof carrier> | null;
   participants?: Participant[];
+  links?: Array<{ id: string; expiresAt: Date | null }>;
   entry?: { ephemeralExpiresAt: Date | null; viewedOnceAt: Date | null } | null;
 }) {
   const participants = input.participants ?? [{ id: READER, conversationId: CONVERSATION, isActive: true }];
   const participantFindFirst = jest.fn(async ({ where }: { where: Record<string, unknown> }) =>
-    participants.find((p) => Object.entries(where).every(([field, value]) => (p as Record<string, unknown>)[field] === value)) ?? null,
+    participants.find((p) => matches(p as Record<string, unknown>, where)) ?? null,
   );
+  const links = input.links ?? [];
   return {
     prisma: {
       messageAttachment: {
@@ -53,6 +66,9 @@ function prismaWith(input: {
       message: { findUnique: jest.fn(async () => (input.message === undefined ? carrier() : input.message)) },
       participant: { findFirst: participantFindFirst },
       messageStatusEntry: { findFirst: jest.fn(async () => input.entry ?? null) },
+      conversationShareLink: {
+        findMany: jest.fn(async ({ where }: { where: { id: { in: string[] } } }) => links.filter((l) => where.id.in.includes(l.id))),
+      },
     },
     participantFindFirst,
   };
@@ -66,17 +82,34 @@ describe('resolveSignedReaderVerdict', () => {
     expect(await verdictOf(prismaWith({}))).toBe('allow');
   });
 
-  it('cherche le lecteur PAR SON IDENTIFIANT de participant, dans la conversation du message, actif', async () => {
+  it('cherche le lecteur PAR SON IDENTIFIANT de participant, dans la conversation du message, actif et jamais banni', async () => {
     const setup = prismaWith({});
     await verdictOf(setup);
     expect(setup.participantFindFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: READER, conversationId: CONVERSATION, isActive: true } }),
+      expect.objectContaining({
+        where: { id: READER, conversationId: CONVERSATION, isActive: true, OR: [{ bannedAt: null }, { bannedAt: { isSet: false } }] },
+      }),
     );
   });
 
   it("refuse un participant qui a quitté la conversation, ou celui d'une AUTRE conversation", async () => {
     expect(await verdictOf(prismaWith({ participants: [{ id: READER, conversationId: CONVERSATION, isActive: false }] }))).not.toBe('allow');
     expect(await verdictOf(prismaWith({ participants: [{ id: READER, conversationId: 'dddddddddddddddddddddd02', isActive: true }] }))).not.toBe('allow');
+  });
+
+  it('refuse un participant BANNI, même resté marqué actif (restauration de compte)', async () => {
+    const banned = [{ id: READER, conversationId: CONVERSATION, isActive: true, bannedAt: ago(60_000) }];
+    expect(await verdictOf(prismaWith({ participants: banned }))).not.toBe('allow');
+  });
+
+  it('admet un participant dont la colonne de bannissement est ABSENTE ou nulle', async () => {
+    expect(await verdictOf(prismaWith({ participants: [{ id: READER, conversationId: CONVERSATION, isActive: true, bannedAt: null }] }))).toBe('allow');
+  });
+
+  it('refuse un invité dont le lien de partage est échu', async () => {
+    const guest = [{ id: READER, conversationId: CONVERSATION, isActive: true, shareLinkId: 'l1' }];
+    expect(await verdictOf(prismaWith({ participants: guest, links: [{ id: 'l1', expiresAt: ago(1) }] }))).not.toBe('allow');
+    expect(await verdictOf(prismaWith({ participants: guest, links: [{ id: 'l1', expiresAt: ahead(60_000) }] }))).toBe('allow');
   });
 
   it("refuse une pièce disparue, pas encore rattachée, ou dont le message n'existe plus", async () => {
