@@ -136,6 +136,19 @@ jobs:
           grep -E ': (error|fatal error): ' /tmp/xcodebuild-build.log | sort -u | head -n 50 || true
           exit "$rc"
 
+      # La liste EXACTE des deinit isolées que le compilateur a produites —
+      # informative ici (la sonde doit exécuter la suite pour mesurer).
+      - name: Deinit isolées dans les binaires (garde #9694)
+        continue-on-error: true
+        run: |
+          scripts/ci/check-ios-isolated-deinits.sh "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator" | tee /tmp/isolated-deinits.txt
+          {
+            echo '## Deinit isolées (symboles `__isolated_deallocating_deinit`)'
+            echo '```'
+            head -n 400 /tmp/isolated-deinits.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Archive test products
         run: |
           set -euo pipefail
