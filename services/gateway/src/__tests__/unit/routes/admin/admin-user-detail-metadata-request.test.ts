@@ -88,7 +88,7 @@ describe('la fiche demande adminMetadata, la liste non', () => {
     const res = await app.inject({ method: 'GET', url: '/admin/users/user123' });
 
     expect(res.statusCode).toBe(200);
-    expect(sanitizationService.sanitizeUser).toHaveBeenCalledWith(mockUser, 'ADMIN', { withAdminMetadata: true });
+    expect(sanitizationService.sanitizeUser).toHaveBeenCalledWith(mockUser, 'ADMIN', { withAdminMetadata: true, viewerId: 'admin123' });
     await app.close();
   });
 
@@ -98,7 +98,7 @@ describe('la fiche demande adminMetadata, la liste non', () => {
     const res = await app.inject({ method: 'GET', url: '/admin/users' });
 
     expect(res.statusCode).toBe(200);
-    expect(sanitizationService.sanitizeUsers).toHaveBeenCalledWith([mockUser], 'ADMIN');
+    expect(sanitizationService.sanitizeUsers).toHaveBeenCalledWith([mockUser], 'ADMIN', 'admin123');
     expect(sanitizationService.sanitizeUser).not.toHaveBeenCalled();
     await app.close();
   });
