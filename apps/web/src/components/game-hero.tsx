@@ -6,9 +6,8 @@ import type { EngagementElanProgress } from '@meeshy/shared/utils/engagement-pro
 import { GameBird, LevelRing, RankBlason, Signature, useChoreography } from '@/components/game';
 import { earnRules, type EarnRule } from '@/lib/game/earn-rules';
 import { enamelToken } from '@/lib/game/medal';
-import { shownRank } from '@/lib/game/served-rank';
 import { tierTint } from '@/lib/game/tier-emblem';
-import { familyName, formatCount, gameText, levelTierName, pointsLabel, rankName, standingLabel } from '@/lib/view/game-copy';
+import { familyName, formatCount, gameText, levelTierName, pointsLabel, rankName, standingLabel, shownRank } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 import { elanDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
 

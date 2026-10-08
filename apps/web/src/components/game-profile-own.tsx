@@ -1,8 +1,7 @@
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { medalOfAxis } from '@/lib/game/medal';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { formatCount, gameText, levelTierName, meeshCount, rankName, standingLabel, treasuryName, daysLabel, medalLabel } from '@/lib/view/game-copy';
-import { shownRank } from '@/lib/game/served-rank';
+import { formatCount, gameText, levelTierName, meeshCount, rankName, standingLabel, treasuryName, daysLabel, medalLabel, shownRank } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige, trophyView } from '@/lib/view/game-copy-v2';
 import { Link } from '@/routes/route-table';
 import { engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';

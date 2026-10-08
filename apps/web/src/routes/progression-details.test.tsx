@@ -1,5 +1,4 @@
-import { shownRank } from '@/lib/game/served-rank';
-import { standingLabel } from '@/lib/view/game-copy';
+import { standingLabel, shownRank } from '@/lib/view/game-copy';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';

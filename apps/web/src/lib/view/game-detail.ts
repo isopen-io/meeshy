@@ -17,7 +17,6 @@ import { GAME_DETAIL_HOW, type GameDetailFact, type GameDetailFamily } from '@/l
 import { earnRules } from '@/lib/game/earn-rules';
 import type { GameMaterial } from '@/lib/game/materials';
 import { medalOfAxis } from '@/lib/game/medal';
-import { servedDivision, shownRank } from '@/lib/game/served-rank';
 import { rarityPercent, visibleRarity, type AchievementRarityMap, type RarityEntry } from '@/lib/game/rarity';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -39,6 +38,8 @@ import {
   rankLabel,
   standingLabel,
   treasuryName,
+  servedDivision,
+  shownRank,
 } from '@/lib/view/game-copy';
 import { awardedDate, dayLabel, languageName, leagueName, rarityName, trophyView, zoneLabel } from '@/lib/view/game-copy-v2';
 import { generatedAchievementLabel } from '@/lib/view/progression';

@@ -6,9 +6,8 @@ import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import { formatGameNumber, translateGame, translateGameOrdinal, translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
-import { shownRank, type ShownRank } from '@/lib/game/served-rank';
 
-import { boundedPercent, levelTierName, pointsLabel, standingLabel } from './game-copy';
+import { boundedPercent, levelTierName, pointsLabel, standingLabel, shownRank, type ShownRank } from './game-copy';
 import { leagueName } from './game-copy-v2';
 
 /**

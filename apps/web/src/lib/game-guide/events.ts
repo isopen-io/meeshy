@@ -5,7 +5,7 @@ import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
-import { servedDivision } from '@/lib/game/served-rank';
+import { servedDivision } from '@/lib/view/game-copy';
 
 /**
  * LES ÉVÉNEMENTS DU GUIDE (#9379) — la loi partagée (`chooseGuideMoment`)

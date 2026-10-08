@@ -4,7 +4,7 @@ import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
 import { RANK_CRESTS } from '@meeshy/shared/utils/game/rank-crest';
 
 import { BLASON_RANKS, blasonDesign } from './ranks';
-import { servedDivision, shownRank } from './served-rank';
+import { servedDivision, shownRank } from '@/lib/view/game-copy';
 
 /**
  * LES ONZE BLASONS (#9380, conception IV.3) : « un écu par rang ; la matière et

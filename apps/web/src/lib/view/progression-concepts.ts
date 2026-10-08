@@ -1,4 +1,3 @@
-import { servedDivision, shownRank } from '@/lib/game/served-rank';
 import { LEAGUE_MIN_LEVEL } from '@meeshy/shared/utils/game/league';
 import { MISSIONS_MIN_LEVEL } from '@meeshy/shared/utils/game/missions';
 import { SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
@@ -24,6 +23,8 @@ import {
   rankLabel,
   standingLabel,
   treasuryName,
+  servedDivision,
+  shownRank,
 } from '@/lib/view/game-copy';
 import { leagueName, remainingLabel, timerLabel, visibilityLabel, zoneLabel } from '@/lib/view/game-copy-v2';
 

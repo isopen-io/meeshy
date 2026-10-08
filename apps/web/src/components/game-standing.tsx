@@ -1,8 +1,7 @@
 import type { UserGameProfileResponse } from '@meeshy/shared/types/game';
 
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { flameFormName, formatCount, gameText, levelTierName, rankName, standingLabel, treasuryName } from '@/lib/view/game-copy';
-import { shownRank } from '@/lib/game/served-rank';
+import { flameFormName, formatCount, gameText, levelTierName, rankName, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 
 import { Flame } from './game/flame';

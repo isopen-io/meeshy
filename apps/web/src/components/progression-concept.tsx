@@ -1,4 +1,3 @@
-import { shownRank } from '@/lib/game/served-rank';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
@@ -20,7 +19,7 @@ import { SealMark } from '@/components/game/seal-mark';
 import { GlyphSvg } from '@/components/glyph';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import type { EngagementWithGame } from '@/lib/api/engagement';
-import { gameText } from '@/lib/view/game-copy';
+import { gameText, shownRank } from '@/lib/view/game-copy';
 import { progressPercent } from '@/lib/view/progression';
 import type { ElementDetail } from '@/lib/view/game-detail';
 import type { ConceptChipView, ConceptView } from '@/lib/view/progression-concepts';

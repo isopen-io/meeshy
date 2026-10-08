@@ -13,8 +13,7 @@ import { TREASURY_TIERS, type TreasuryTierKey } from '@meeshy/shared/utils/game/
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { transitionGuideEventsV2 } from '@/lib/game-guide/events-v2';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { shownRank } from '@/lib/game/served-rank';
-import { editionName, formatCount, levelTierName, standingLabel, treasuryName } from '@/lib/view/game-copy';
+import { editionName, formatCount, levelTierName, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
 import { leagueName, rarityName, trophyView } from '@/lib/view/game-copy-v2';
 import { translateGame } from '@/lib/i18n-game-catalog';
 

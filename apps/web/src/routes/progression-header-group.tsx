@@ -1,11 +1,10 @@
-import { shownRank } from '@/lib/game/served-rank';
 import { MeeshCoin, RankBlason } from '@/components/game';
 import { useRollingNumber } from '@/components/game/use-rolling-number';
 import { GAME_INK } from '@/components/game-surface';
 import { GameTouch, PRESS } from '@/components/game-touch';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { useGamePrefs } from '@/lib/game/preferences';
-import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
+import { formatCount, gameText, meeshCount, shownRank } from '@/lib/view/game-copy';
 import { rankDetail } from '@/lib/view/game-detail';
 import { shownConcepts, shownProgress } from '@/lib/view/progression-concepts';
 import { Link } from '@/routes/route-table';
