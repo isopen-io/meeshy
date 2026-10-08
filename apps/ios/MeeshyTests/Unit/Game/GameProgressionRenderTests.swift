@@ -170,7 +170,7 @@ final class GameProgressionRenderTests: XCTestCase {
 
         let identifiants = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm)).identifiers
 
-        XCTAssertTrue(identifiants.contains("game.mint.missing"), "« Encore N points » : une phrase lisible à la place du bouton")
+        XCTAssertTrue(identifiants.contains("game.mint.spend.mint_missing"), "« Il te manque N points convertibles » : la rangée de dépense à la place du bouton (#9705)")
         XCTAssertFalse(identifiants.contains("game.mint.action"), "un bouton grisé : la directive est « sinon pas de bouton »")
     }
 

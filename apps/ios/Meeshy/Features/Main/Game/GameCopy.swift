@@ -65,6 +65,11 @@ enum GameCopy {
             : String(localized: "game.actions.other", defaultValue: "\(number) actions", bundle: .main)
     }
 
+    /// « Changer · 1 Meesh » — le prix vient de la loi (`GameMissions.rerollPrice`), jamais du texte (#9705).
+    static var rerollLabel: String {
+        String(localized: "game.mission.reroll", defaultValue: "Changer · \(meeshes(GameMissions.rerollPrice))", bundle: .main)
+    }
+
     static func levels(_ count: Int) -> String {
         let number = formatCount(count)
         return isSingular(count)

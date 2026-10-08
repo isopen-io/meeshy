@@ -105,6 +105,7 @@ final class GameElementDetailTests: XCTestCase {
             "missions_done", "league_place", "week_points", "league_zone", "league_missing", "league_closes",
             "league_friends", "season", "season_week", "season_steps", "season_stars", "prestige_glory", "elan_families",
             "badges_earned", "defis_earned", "succes_earned", "trophies", "showcase_visibility", "atlas_stamps", "atlas_pending",
+            "spend_held", "spend_cost", "spend_after", "spend_missing", "level_now", "level_required",
         ])
         XCTAssertEqual(GameElementKind.families.count, 18)
         for kind in GameElementKind.families {
@@ -348,5 +349,57 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertEqual(detail.key, "100")
         let next = detail.facts.first { $0.label == ConceptText.factNextLevel }
         XCTAssertEqual(next?.value, GameText.bannerTop)
+    }
+
+    // MARK: - Ce qu'un geste dépense ou exige, avant le geste (#9705)
+
+    func test_theSpendRow_saysWhatIsHeld_whatItCosts_andWhatRemains() {
+        let items = GameSpendRows.spend(GameSpend.preview(held: 5, cost: 3), format: GameCopy.meeshes)
+        XCTAssertEqual(items.map(\.label), [ConceptText.factBalance, ConceptText.factCost, ConceptText.factAfter])
+        XCTAssertEqual(items.map(\.value), [GameCopy.meeshes(5), GameCopy.meeshes(3), GameCopy.meeshes(2)])
+        XCTAssertEqual(items.map(\.detail), [.spendHeld, .spendCost, .spendAfter])
+        XCTAssertFalse(items.contains { $0.short })
+    }
+
+    func test_theSpendRow_saysWhatIsMissing_insteadOfWhatRemains() {
+        let items = GameSpendRows.spend(GameSpend.preview(held: 4, cost: 10), format: GameCopy.meeshes)
+        XCTAssertEqual(items.last?.label, ConceptText.factMissing)
+        XCTAssertEqual(items.last?.value, GameCopy.meeshes(6))
+        XCTAssertEqual(items.last?.short, true)
+        XCTAssertFalse(items.contains { $0.label == ConceptText.factAfter })
+    }
+
+    func test_theMintHero_spendsThePocket_butIsPaidByConvertiblePointsOnly() {
+        let rich = GameMintPreviewView(game: GameFixture.game(score: 5000, debitable: 5000), online: true, minting: false,
+                                       error: nil, celebration: nil, onMint: {})
+        XCTAssertEqual(rich.spend.held, 5000)
+        XCTAssertEqual(rich.spend.after, 5000 - rich.spend.cost)
+        XCTAssertTrue(rich.spend.affordable)
+
+        let locked = GameMintPreviewView(game: GameFixture.game(score: 5000, debitable: 900), online: true, minting: false,
+                                         error: nil, celebration: nil, onMint: {})
+        XCTAssertFalse(locked.spend.affordable, "des points de conversation ne paient pas la frappe")
+        XCTAssertEqual(locked.spend.missing, locked.spend.cost - 900)
+    }
+
+    func test_theRequirementRow_saysTheGap_andFallsSilentOnceMet() {
+        let below = GameSpendRows.requirement(GameSpend.requirement(current: 3, required: GameMissions.minLevel))
+        XCTAssertEqual(below.map(\.label), [ConceptText.name(.level), ConceptText.factRequired, ConceptText.factMissing])
+        XCTAssertEqual(below.last?.value, GameCopy.levels(GameMissions.minLevel - 3))
+
+        let met = GameSpendRows.requirement(GameSpend.requirement(current: 40, required: GameDuo.minLevel), record: true)
+        XCTAssertEqual(met.map(\.label), [ConceptText.factRecord, ConceptText.factRequired])
+    }
+
+    func test_thePrestigeConfirmation_givesTheValuesBeforeAndAfter() throws {
+        let game = GameWave2Fixture.atLevel100(prestige: 1)
+        let values = GamePrestigeScreen.passValues(game: game)
+        XCTAssertEqual(values.map(\.label), [
+            ConceptText.factBalance, ConceptText.name(.level), ConceptText.factRecord, ConceptText.factStars, ConceptText.name(.glory),
+        ])
+        XCTAssertEqual(values.first?.value, "\(GameCopy.points(game.level.score)) → \(GameCopy.points(0))")
+        XCTAssertEqual(values[3].value, "\(GameCopy.formatCount(1)) → \(GameCopy.formatCount(2))")
+        XCTAssertNotNil(values[3].element, "l'étoile ouvre les précisions de l'étoile posée")
+        XCTAssertTrue(GamePrestigeScreen.passValues(game: GameFixture.game(score: 400)).isEmpty, "sous le niveau 100, rien à confirmer")
     }
 }

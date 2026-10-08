@@ -84,9 +84,24 @@ describe('changer de mission', () => {
     expect(text(html)).toContain('Changer · 1 Meesh');
   });
 
+  test('avant le changement : les Meeshes en poche, son prix et ce qui restera (#9705)', () => {
+    const page = text(renderToStaticMarkup(<GameMissions {...props({ balance: 3 })} />));
+    expect(page).toContain('En poche 3 Meeshes');
+    expect(page).toContain('Coûte 1 Meesh');
+    expect(page).toContain('Restera 2 Meeshes');
+  });
+
+  test('sans Meesh : le changement n’est pas offert, et la ligne dit combien il manque', () => {
+    const html = renderToStaticMarkup(<GameMissions {...props({ balance: 0 })} />);
+    expect(html).not.toContain('data-game-reroll=""');
+    expect(text(html)).toContain('Changer · 1 Meesh');
+    expect(text(html)).toContain('Il manque 1 Meesh');
+  });
+
   test('une fois le changement du jour pris : plus aucun bouton', () => {
     const html = renderToStaticMarkup(<GameMissions {...props({ rerollsUsedToday: 1 })} />);
     expect(html).not.toContain('data-game-reroll');
+    expect(html).not.toContain('data-game-spend');
   });
 
   test('hors ligne : le bouton se tait et l’écran le dit', () => {
@@ -119,6 +134,7 @@ describe('le coffre', () => {
   test('fermé tant que les missions ne sont pas finies, avec ce qu’il contient AVANT l’ouverture', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props()} />));
     expect(page).toContain('Termine les missions du jour');
+    expect(page).toMatch(/Faites \d \/ 3/);
     expect(page).toMatch(/60 à 200 points/);
     expect(page).toContain('1 chance sur 6');
     expect(page).toContain('1 chance sur 20');
@@ -162,6 +178,8 @@ describe('avant le niveau 5', () => {
   test('les missions se disent verrouillées, avec la marche à franchir', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props({ score: 100, missions: [] })} />));
     expect(page).toContain('Les missions s’ouvrent au niveau 5');
+    expect(page).toContain('Requis 5');
+    expect(page).toMatch(/Il manque \d+ niveaux?/);
     expect(page).not.toContain('Ouvrir le coffre');
   });
 });

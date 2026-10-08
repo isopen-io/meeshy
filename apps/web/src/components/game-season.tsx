@@ -2,6 +2,7 @@ import type { GameSeasonBlock } from '@meeshy/shared/types/game';
 import { SEASON_SEAL_EVERY, SEASON_STARS_PER_STEP, SEASON_STEPS, seasonStepReward } from '@meeshy/shared/utils/game/season';
 
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
+import { spendPreview } from '@meeshy/shared/utils/game/spend';
 import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
 import { seasonThemeName } from '@/lib/view/game-copy-v2';
 import { sealDetail, stepDetail } from '@/lib/view/game-detail';
@@ -10,7 +11,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GameCard } from './game-surface';
 import { SealMark } from './game/seal-mark';
-import { GameTouch, PRESS, touchProps } from './game-touch';
+import { GameSpendLine, GameTouch, PRESS, touchProps } from './game-touch';
 
 /**
  * LA SAISON (#9386, conception II.7) — huit semaines, un thème (une langue),
@@ -109,7 +110,7 @@ export function GameSeason(props: GameSeasonProps) {
   const next = season.nextReward;
   const percent = Math.round(season.progress * 100);
   const sealSteps = Array.from({ length: SEASON_STEPS / SEASON_SEAL_EVERY }, (_, i) => (i + 1) * SEASON_SEAL_EVERY);
-  const cannotPaySeal = held < season.sealPrice;
+  const seal = spendPreview({ held, cost: season.sealPrice });
 
   return (
     <>
@@ -209,10 +210,11 @@ export function GameSeason(props: GameSeasonProps) {
           </p>
         ) : (
           <>
+            <GameSpendLine concept="season" held={held} cost={season.sealPrice} format={meeshCount} />
             <button
               type="button"
               data-game-seal-buy=""
-              disabled={!online || cannotPaySeal || buyingSeal}
+              disabled={!online || !seal.affordable || buyingSeal}
               aria-busy={buyingSeal}
               onClick={onBuySeal}
               className="rounded-chip px-4 text-body font-bold disabled:opacity-60"
@@ -220,11 +222,6 @@ export function GameSeason(props: GameSeasonProps) {
             >
               {gameText('game.season.seal.buy', { price: meeshCount(season.sealPrice) })}
             </button>
-            {cannotPaySeal ? (
-              <p className="text-caption" style={{ color: GAME_INK_2 }}>
-                {gameText('game.season.seal.missing')}
-              </p>
-            ) : null}
           </>
         )}
         {errors.seal === undefined ? null : (

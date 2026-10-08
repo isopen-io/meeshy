@@ -162,6 +162,12 @@ enum GameDetailText {
         case .showcaseVisibility: String(localized: "game.detail.fact.showcase_visibility", defaultValue: "Tu choisis qui voit ta vitrine : tout le monde, tes amis, ou toi seul.", bundle: .main)
         case .atlasStamps: String(localized: "game.detail.fact.atlas_stamps", defaultValue: "Ce sont les langues où tu as un tampon, sur toutes celles de l’Atlas.", bundle: .main)
         case .atlasPending: String(localized: "game.detail.fact.atlas_pending", defaultValue: "Ce sont les langues où il manque encore un message, envoyé ou reçu.", bundle: .main)
+        case .spendHeld: String(localized: "game.detail.fact.spend_held", defaultValue: "C’est ce que tu as avant ce geste.", bundle: .main)
+        case .spendCost: String(localized: "game.detail.fact.spend_cost", defaultValue: "C’est ce que ce geste te prend.", bundle: .main)
+        case .spendAfter: String(localized: "game.detail.fact.spend_after", defaultValue: "C’est ce qu’il te restera après ce geste.", bundle: .main)
+        case .spendMissing: String(localized: "game.detail.fact.spend_missing", defaultValue: "C’est ce qu’il te manque pour faire ce geste.", bundle: .main)
+        case .levelNow: String(localized: "game.detail.fact.level_now", defaultValue: "C’est ton niveau en ce moment.", bundle: .main)
+        case .levelRequired: String(localized: "game.detail.fact.level_required", defaultValue: "C’est le niveau qu’il faut atteindre pour l’ouvrir.", bundle: .main)
         }
     }
 

@@ -20,6 +20,10 @@ import MeeshyUI
 /// confirmée par la passerelle la joue (1,2 s) et la laisse sur son revers
 /// numéroté. `badgesLost` est ABSENT quand le serveur ne sert pas de quoi le
 /// calculer (`GameMintBadgeImpact`) : « inconnu » ne se dit pas « aucun ».
+///
+/// AVANT le geste, la rangée de dépense (#9705) dit les points en poche, le prix et ce qui restera — ou, frappe
+/// impossible, les points CONVERTIBLES qui manquent : la frappe se retranche du score, mais seuls les convertibles
+/// la paient, et le verdict reste celui du serveur (`mint.canMint`).
 struct GameMintPreviewView: View {
     let game: GameBlock
     /// Les badges que la frappe éteindrait ; `nil` quand le serveur ne sert pas de quoi le calculer.
@@ -40,6 +44,14 @@ struct GameMintPreviewView: View {
         GameGlory.standing(glory: game.glory.glory + mint.gloryGained, mythic: game.glory.rank == .mythe)
     }
 
+    /// Ce que la frappe dépense, lu sur la loi (`GameSpend`) : la part qui paie est celle que le serveur a jugée.
+    var spend: SpendPreview {
+        GameSpend.preview(
+            held: game.level.score, cost: mint.price,
+            spendable: mint.canMint ? mint.price : mint.price - mint.missingPoints
+        )
+    }
+
     private var rankChanges: Bool {
         afterStanding.rank != game.glory.rank || afterStanding.division5 != game.glory.shownDivision
     }
@@ -58,6 +70,12 @@ struct GameMintPreviewView: View {
                 .accessibilityAddTraits(.updatesFrequently)
                 .accessibilityIdentifier("game.mint.celebration")
             }
+            GameFactChipRow(
+                concept: .meesh,
+                items: GameSpendRows.spend(spend, format: GameCopy.points, formatMissing: GameCopy.convertiblePoints,
+                                           heldFact: .score, missingFact: .mintMissing),
+                identifier: "game.mint.spend"
+            )
             if mint.canMint {
                 consequences
                 GameActionButton(
@@ -69,13 +87,6 @@ struct GameMintPreviewView: View {
                 if !online {
                     GameNote(text: String(localized: "game.mint.offline", defaultValue: "Hors ligne : la frappe reprendra avec la connexion.", bundle: .main))
                 }
-            } else {
-                GameNote(text: String(
-                    localized: "game.mint.missing",
-                    defaultValue: "Encore \(GameCopy.convertiblePoints(mint.missingPoints)) avant la prochaine Meesh : elle coûte \(GameCopy.points(mint.price)).",
-                    bundle: .main
-                ))
-                .accessibilityIdentifier("game.mint.missing")
             }
             if !minting {
                 GameErrorLine(message: error, identifier: "game.mint.error")

@@ -126,6 +126,11 @@ private struct GameLeagueMineView: View {
             GameCard(title: GameText.leagueTitle) {
                 GameNote(text: GameText.leagueLocked(
                     level: GameCopy.formatCount(GameLeague.minLevel), current: GameCopy.formatCount(game.level.shown.record)))
+                GameFactChipRow(
+                    concept: .league,
+                    items: GameSpendRows.requirement(GameSpend.requirement(current: game.level.shown.record, required: GameLeague.minLevel), record: true),
+                    identifier: "game.league.requirement"
+                )
             }
             .accessibilityIdentifier("game.league.locked")
         case .minor:

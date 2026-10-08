@@ -9,7 +9,9 @@ import MeeshyUI
 /// connaît aucun. Miroir de `apps/web/src/components/game-flame-panel.tsx`.
 ///
 /// Un bouton qui ne peut pas servir se TAIT en disant pourquoi (réserve pleine,
-/// pas assez de Meeshes, hors ligne) ; il ne reste pas grisé sans explication. Une
+/// pas assez de Meeshes, hors ligne) ; il ne reste pas grisé sans explication.
+/// Avant chaque achat, la rangée de dépense (#9705) dit les Meeshes en poche, le
+/// prix et ce qui restera — ou combien il en manque. Une
 /// Flamme trop longtemps éteinte ne propose rien : elle annonce qu'une nouvelle
 /// commence au prochain geste.
 struct GameFlamePanelView: View {
@@ -24,7 +26,13 @@ struct GameFlamePanelView: View {
     private var flame: GameBlock.Flame { game.flame }
     private var held: Int { game.treasury.held }
     private var isOut: Bool { flame.status == .out }
-    private var cannotPayRelight: Bool { held < flame.relightPrice }
+    var freezeSpend: SpendPreview { GameSpend.preview(held: held, cost: flame.freezePrice) }
+    var relightSpend: SpendPreview { GameSpend.preview(held: held, cost: flame.relightPrice) }
+    private var cannotPayRelight: Bool { !relightSpend.affordable }
+
+    private func spendRow(_ spend: SpendPreview, identifier: String) -> some View {
+        GameFactChipRow(concept: .flame, items: GameSpendRows.spend(spend, format: GameCopy.meeshes), identifier: identifier)
+    }
 
     var body: some View {
         GameCard(anchor: .flamePanel, title: String(localized: "game.flame_panel.title", defaultValue: "Protéger la Flamme", bundle: .main)) {
@@ -62,22 +70,16 @@ struct GameFlamePanelView: View {
                 bundle: .main
             ))
         } else {
+            spendRow(freezeSpend, identifier: "game.flame.freeze.spend")
             GameActionButton(
                 title: String(
                     localized: "game.flame_panel.freeze_buy",
                     defaultValue: "Acheter un gel · \(GameCopy.meeshes(flame.freezePrice))",
                     bundle: .main
                 ),
-                busy: buyingFreeze, disabled: !online || held < flame.freezePrice, identifier: "game.flame.freeze.buy",
+                busy: buyingFreeze, disabled: !online || !freezeSpend.affordable, identifier: "game.flame.freeze.buy",
                 action: onBuyFreeze
             )
-            if held < flame.freezePrice {
-                GameNote(text: String(
-                    localized: "game.flame_panel.freeze_missing",
-                    defaultValue: "Il te faut \(GameCopy.meeshes(flame.freezePrice)) pour un gel.",
-                    bundle: .main
-                ))
-            }
         }
     }
 
@@ -89,6 +91,7 @@ struct GameFlamePanelView: View {
                 defaultValue: "Ta Flamme s’est éteinte : rallume-la maintenant, elle repart là où elle s’était arrêtée.",
                 bundle: .main
             ))
+            spendRow(relightSpend, identifier: "game.flame.relight.spend")
             GameActionButton(
                 title: String(
                     localized: "game.flame_panel.relight",
@@ -97,13 +100,6 @@ struct GameFlamePanelView: View {
                 ),
                 busy: relighting, disabled: !online || cannotPayRelight, identifier: "game.flame.relight", action: onRelight
             )
-            if cannotPayRelight {
-                GameNote(text: String(
-                    localized: "game.flame_panel.relight_missing",
-                    defaultValue: "Il te faut \(GameCopy.meeshes(flame.relightPrice)) pour la rallumer.",
-                    bundle: .main
-                ))
-            }
             GameErrorLine(message: errors.relight, identifier: "game.flame.relight.error")
         } else if isOut && cannotPayRelight {
             GameNote(text: String(
@@ -111,6 +107,7 @@ struct GameFlamePanelView: View {
                 defaultValue: "Il te faut \(GameCopy.meeshes(flame.relightPrice)) pour la rallumer, si elle s’est éteinte il y a moins de 48 h.",
                 bundle: .main
             ))
+            spendRow(relightSpend, identifier: "game.flame.relight.spend")
         } else if isOut {
             GameNote(
                 text: String(

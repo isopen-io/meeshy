@@ -249,6 +249,14 @@ enum ConceptText {
 
     static var factMissing: String { String(localized: "game.concept.fact.missing", defaultValue: "Il te manque", bundle: .main) }
 
+    static var factBalance: String { String(localized: "game.concept.fact.balance", defaultValue: "En poche", bundle: .main) }
+
+    static var factCost: String { String(localized: "game.concept.fact.cost", defaultValue: "Coûte", bundle: .main) }
+
+    static var factAfter: String { String(localized: "game.concept.fact.after", defaultValue: "Restera", bundle: .main) }
+
+    static var factRequired: String { String(localized: "game.concept.fact.required", defaultValue: "Requis", bundle: .main) }
+
     static func factCoin(_ a: String, _ b: String) -> String {
         String(localized: "game.concept.fact.coin", defaultValue: "n° \(a) · \(b)", bundle: .main)
     }

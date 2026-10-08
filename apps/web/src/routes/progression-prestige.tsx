@@ -27,6 +27,7 @@ export function PrestigeBody({ progress, actions, online }: { readonly progress:
   return (
     <GamePrestige
       level={shownLevelOf(game.level)}
+      score={game.level.score}
       prestige={game.prestige}
       online={online}
       pending={actions.prestige.pending}

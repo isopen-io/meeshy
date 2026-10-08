@@ -28,3 +28,4 @@ export * from './game-block-extras.js';
 export * from './notifications.js';
 export * from './personal-mission.js';
 export * from './personal-mission-copy.js';
+export * from './spend.js';

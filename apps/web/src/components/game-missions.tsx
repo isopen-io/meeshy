@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { GameBlock, GameChest, GameMission, GameMissions as GameMissionsBlock } from '@meeshy/shared/types/game';
+import { MISSION_REROLL_PRICE, MISSIONS_MIN_LEVEL } from '@meeshy/shared/utils/game/missions';
+import { spendPreview } from '@meeshy/shared/utils/game/spend';
 
 import { dailyMissionClock, endOfGameDay, type DailyMissionClock } from '@/lib/game/mission-clock';
 import { personalMissionClock } from '@/lib/game/personal-mission-clock';
@@ -8,11 +10,11 @@ import { timerLabel } from '@/lib/view/game-copy-v2';
 
 import { Chest, useChoreography } from '@/components/game';
 import { ProgressBar } from '@/components/progress-bar';
-import { difficultyName, formatCount, gameText, missionTitle, pointsLabel } from '@/lib/view/game-copy';
+import { difficultyName, formatCount, gameText, meeshCount, missionTitle, pointsLabel } from '@/lib/view/game-copy';
 import { chestDetail, missionDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard, GameChip } from './game-surface';
-import { GameTouch } from './game-touch';
+import { GameFactChips, GameRequirementLine, GameSpendLine, GameTouch } from './game-touch';
 
 /**
  * LES MISSIONS DU JOUR ET LE COFFRE (#9383) — trois missions, leur avancement,
@@ -52,9 +54,6 @@ export type GameMissionsProps = {
   readonly now?: Date | undefined;
 };
 
-/** Le prix d'un changement ; le libellé du bouton le dit dans la phrase du catalogue (« Changer · 1 Meesh »), comme sur iOS. */
-const REROLL_PRICE = 1;
-
 const clock = (minute: number): string =>
   `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 
@@ -66,7 +65,7 @@ function MissionRow({
   canReroll,
   pending,
   online,
-  held,
+  affordable,
   onReroll,
 }: {
   readonly mission: GameMission;
@@ -75,7 +74,8 @@ function MissionRow({
   readonly canReroll: boolean;
   readonly pending: boolean;
   readonly online: boolean;
-  readonly held: number;
+  /** Le solde couvre le prix d'un changement (`MISSION_REROLL_PRICE`). */
+  readonly affordable: boolean;
   readonly onReroll: (missionId: string) => void;
 }) {
   const done = mission.completedAt !== null;
@@ -123,13 +123,13 @@ function MissionRow({
           <button
             type="button"
             data-game-reroll=""
-            disabled={!online || pending || held < REROLL_PRICE}
-            aria-label={gameText('game.mission.reroll.a11y', { title })}
+            disabled={!online || pending || !affordable}
+            aria-label={gameText('game.mission.reroll.a11y', { title, price: meeshCount(MISSION_REROLL_PRICE) })}
             onClick={() => onReroll(mission.id)}
             className="rounded-chip px-3 text-check font-semibold disabled:opacity-50"
             style={{ minHeight: 44, color: GAME_BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
           >
-            {gameText('game.mission.reroll')}
+            {gameText('game.mission.reroll', { price: meeshCount(MISSION_REROLL_PRICE) })}
           </button>
         ) : null}
       </div>
@@ -236,7 +236,22 @@ function Rewards({ reward }: { readonly reward: NonNullable<GameChest['reward']>
   );
 }
 
-function ChestCard({ chest, opening, online, onClaim, error }: { readonly chest: GameChest; readonly opening: boolean; readonly online: boolean; readonly onClaim: () => void; readonly error: string | undefined }) {
+function ChestCard({
+  chest,
+  done,
+  opening,
+  online,
+  onClaim,
+  error,
+}: {
+  readonly chest: GameChest;
+  /** Les missions du jour faites, sur celles du jour : ce que le coffre attend. */
+  readonly done: { readonly count: number; readonly total: number };
+  readonly opening: boolean;
+  readonly online: boolean;
+  readonly onClaim: () => void;
+  readonly error: string | undefined;
+}) {
   const { ref, play } = useChoreography<HTMLDivElement>();
   const rewarded = useRef(chest.reward !== null);
   useEffect(() => {
@@ -264,9 +279,16 @@ function ChestCard({ chest, opening, online, onClaim, error }: { readonly chest:
         {gameText('game.chest.title')}
       </h3>
       {state === 'locked' ? (
-        <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {gameText('game.chest.locked')}
-        </p>
+        <>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.chest.locked')}
+          </p>
+          <GameFactChips
+            concept="missions"
+            marker="data-game-chest-requirement"
+            chips={[{ fact: 'missions_done', label: gameText('game.fact.done'), value: gameText('game.fmt.fraction', { done: formatCount(done.count), total: formatCount(done.total) }) }]}
+          />
+        </>
       ) : null}
       {state === 'opening' ? (
         <p role="status" className="text-caption" style={{ color: GAME_INK_2 }}>
@@ -330,9 +352,17 @@ export function GameMissions(props: GameMissionsProps) {
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.missions.locked', { level: formatCount(level) })}
         </p>
+        <GameRequirementLine concept="missions" current={level} required={MISSIONS_MIN_LEVEL} />
       </GameCard>
     );
   }
+
+  const reroll = spendPreview({ held, cost: MISSION_REROLL_PRICE });
+  /* Le serveur retire le changement faute de Meesh (`rerollAvailable`) : la ligne reste, pour dire combien il en manque. */
+  const rows = missions.items.map((mission) => ({ mission, clock: dailyMissionClock({ dayKey: missions.dayKey, completed: mission.completedAt !== null, now }) }));
+  const rerollable = rows.some(({ mission, clock: timer }) => mission.completedAt === null && (timer?.actionable ?? true));
+  const rerollShown = rerollable && (missions.rerollAvailable || !reroll.affordable);
+  const done = { count: missions.items.filter((mission) => mission.completedAt !== null).length, total: missions.items.length };
 
   return (
     <GameCard id="game-missions" labelledBy="game-missions-title">
@@ -350,20 +380,29 @@ export function GameMissions(props: GameMissionsProps) {
         </p>
       )}
       <ul className="flex flex-col gap-2">
-        {missions.items.map((mission) => (
+        {rows.map(({ mission, clock: timer }) => (
           <MissionRow
             key={mission.id}
             mission={mission}
-            clock={dailyMissionClock({ dayKey: missions.dayKey, completed: mission.completedAt !== null, now })}
+            clock={timer}
             canReroll={missions.rerollAvailable}
             pending={pendingRerollId === mission.id}
             online={online}
-            held={held}
+            affordable={reroll.affordable}
             onReroll={onReroll}
           />
         ))}
         {missions.personal == null ? null : <PersonalMissionRow mission={missions.personal} now={now} />}
       </ul>
+      {/* Le prix d'un changement, avant le geste (#9705) : une ligne pour la liste, pas une par mission. */}
+      {rerollShown ? (
+        <div data-game-spend-reroll="" className="flex flex-col gap-1">
+          <p className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
+            {gameText('game.mission.reroll', { price: meeshCount(MISSION_REROLL_PRICE) })}
+          </p>
+          <GameSpendLine concept="missions" held={held} cost={MISSION_REROLL_PRICE} format={meeshCount} />
+        </div>
+      ) : null}
       {errors?.reroll === undefined ? null : (
         <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
           {errors.reroll}
@@ -374,7 +413,7 @@ export function GameMissions(props: GameMissionsProps) {
           {gameText('game.missions.offline')}
         </p>
       )}
-      <ChestCard chest={chest} opening={chestOpening} online={online} onClaim={onClaim} error={errors?.chest} />
+      <ChestCard chest={chest} done={done} opening={chestOpening} online={online} onClaim={onClaim} error={errors?.chest} />
     </GameCard>
   );
 }

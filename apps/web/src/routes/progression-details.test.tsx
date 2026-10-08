@@ -317,7 +317,7 @@ describe('les sous-pages : chaque élément se touche et ouvre SES précisions',
 
   test('Prestige : les étoiles', async () => {
     const host = await mounter.mount(
-      tree(playing, <GamePrestige level={game.level} prestige={must(game.prestige, 'prestige')} online pending={false} onPass={noop} createEnv={() => ({ reducedMotion: true }) as never} />),
+      tree(playing, <GamePrestige level={game.level} score={game.level.score} prestige={must(game.prestige, 'prestige')} online pending={false} onPass={noop} createEnv={() => ({ reducedMotion: true }) as never} />),
     );
     expect(await sweep(host)).toBeGreaterThanOrEqual(1);
     expect(host.querySelector<HTMLButtonElement>('button[data-detail]')?.dataset.detail).toMatch(/^star:/);
