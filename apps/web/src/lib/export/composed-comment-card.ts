@@ -14,7 +14,8 @@ import type { FeedAuthor, FeedPost } from '@/lib/api/feed-pages';
 import type { PostComment } from '@/lib/api/publication-comments';
 import { resolveFeedText } from '@/lib/feed/text';
 
-import { cardMediaOf, type MessageCardMediaItem, type MessageCardSubject } from './message-card-subject';
+import { commentCardMediaOf } from './comment-card-subject';
+import type { MessageCardMediaItem, MessageCardSubject } from './message-card-subject';
 
 /**
  * **IMAGER UN COMMENTAIRE DE POST — CE QUE LE WEB REMET À LA COMPOSITION**
@@ -23,7 +24,7 @@ import { cardMediaOf, type MessageCardMediaItem, type MessageCardSubject } from 
  * `@meeshy/shared/utils/comment-card-composition` ; ici, ce que seul le
  * web sait : le texte SERVI de chaque commentaire et du post (le Prisme des
  * commentaires, `resolveFeedText`), celui que la rangée visée AFFICHE (sa puce
- * de langue), les médias PEIGNABLES (`cardMediaOf`), et la projection sur la
+ * de langue), les médias PEIGNABLES, un vocal dans la piste de son texte servi (`commentCardMediaOf`), et la projection sur la
  * carte d'« Imagine » (`MessageCardSubject`), dont le moteur ne change pas.
  */
 
@@ -38,13 +39,18 @@ export type PostCommentCardInput = {
   readonly target: PostComment;
   /** Le texte que la rangée visée AFFICHE — le Prisme, ou l'original demandé. */
   readonly targetText: string;
+  /** La rangée visée montre son ORIGINAL : son vocal part dans sa piste originale, comme iOS. */
+  readonly targetShowsOriginal?: boolean;
   /** La racine et les réponses chargées autour de la cible. */
   readonly thread: readonly PostComment[];
   readonly readerLanguages: readonly string[];
   readonly viewer: { readonly id: string; readonly displayName: string };
 };
 
-const entriesOf = (media: Parameters<typeof cardMediaOf>[0]): readonly PostCommentCardEntry[] => cardMediaOf(media).map((item) => ({ kind: item.card.kind, item }));
+type AudioPrism = Parameters<typeof commentCardMediaOf>[1];
+
+const entriesOf = (media: Parameters<typeof commentCardMediaOf>[0], prism: AudioPrism): readonly PostCommentCardEntry[] =>
+  commentCardMediaOf(media, prism).map((item) => ({ kind: item.card.kind, item }));
 
 const authorOf = (author: FeedAuthor | null | undefined): PostCommentCardAuthor => ({
   id: author?.id ?? '',
@@ -56,7 +62,7 @@ const timeOf = (value: string | Date): number => (value instanceof Date ? value.
 
 const parentOf = (comment: PostComment): string | null => (typeof comment.parentId === 'string' && comment.parentId !== '' ? comment.parentId : null);
 
-function entryOf(comment: PostComment, text: string): PostCommentCardComment<PostCommentCardEntry> {
+function entryOf(comment: PostComment, text: string, readerLanguages: readonly string[] | null): PostCommentCardComment<PostCommentCardEntry> {
   return {
     id: comment.id,
     parentId: parentOf(comment),
@@ -65,7 +71,7 @@ function entryOf(comment: PostComment, text: string): PostCommentCardComment<Pos
     inFlight: comment.pending === true,
     author: authorOf(comment.author),
     text,
-    media: entriesOf(comment.media),
+    media: entriesOf(comment.media, readerLanguages === null ? null : { readerLanguages, fallbackLanguage: comment.originalLanguage ?? '' }),
   };
 }
 
@@ -83,10 +89,10 @@ export function postCommentCardSourceOf(input: PostCommentCardInput): PostCommen
             createdAt: timeOf(post.createdAt),
             author: authorOf(post.author),
             text: served(post.content, post.originalLanguage, post.translations),
-            media: entriesOf(post.media),
+            media: entriesOf(post.media, null),
           },
-    target: entryOf(input.target, input.targetText),
-    thread: input.thread.map((comment) => entryOf(comment, served(comment.content, comment.originalLanguage, comment.translations))),
+    target: entryOf(input.target, input.targetText, input.targetShowsOriginal === true ? null : input.readerLanguages),
+    thread: input.thread.map((comment) => entryOf(comment, served(comment.content, comment.originalLanguage, comment.translations), input.readerLanguages)),
     viewer: input.viewer,
   };
 }

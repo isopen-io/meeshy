@@ -118,9 +118,10 @@ export function CommentThread({
   });
   const rootOf = (comment: PostComment): PostComment | undefined =>
     typeof comment.parentId === 'string' ? comments.find((candidate) => candidate.id === comment.parentId) : undefined;
-  const imageRequestOf = (comment: PostComment, servedText: string): CommentImageRequest => {
+  /* Un vocal part dans la piste de son texte servi ; la rangée qui montre l'ORIGINAL garde son vocal original (`readerLanguages: null`). */
+  const imageRequestOf = (comment: PostComment, servedText: string, showsOriginal = false): CommentImageRequest => {
     const root = rootOf(comment);
-    return { comment, servedText, parent: root === undefined ? null : servedOf(root) };
+    return { comment, servedText, parent: root === undefined ? null : servedOf(root), readerLanguages: showsOriginal ? null : reader.languages };
   };
   /**
    * « IMAGER » UN COMMENTAIRE DE POST (#9687, jumelle de #9686) — l'atelier
@@ -132,10 +133,10 @@ export function CommentThread({
   /* Lu une fois par lot de commentaires, jamais par rangée : la recherche traverse toutes les caisses de cartes. */
   const composingPost = useMemo(() => composingPostOf(findCardPost(appQueryClient, postId)), [postId, comments]);
   const viewerOfCard = { id: viewer.id ?? '', displayName: viewer.displayName };
-  const imageComposed = (post: FeedPost, comment: PostComment, servedText: string) => {
+  const imageComposed = (post: FeedPost, comment: PostComment, servedText: string, showsOriginal: boolean) => {
     const root = rootOf(comment);
     const composition = { post, thread: root === undefined ? [] : [root], readerLanguages: reader.languages, viewer: viewerOfCard };
-    const request: CommentImageRequest = { ...imageRequestOf(comment, servedText), composition };
+    const request: CommentImageRequest = { ...imageRequestOf(comment, servedText, showsOriginal), composition };
     setImaging(request);
     if (root === undefined) return;
     void loadCommentRepliesAction(postId, root.id).then((replies) =>
@@ -155,8 +156,8 @@ export function CommentThread({
    * première page. Une lecture ratée laisse la carte sans elles — jamais
    * d'attente muette avant l'atelier.
    */
-  const imageWithReplies = (comment: PostComment, servedText: string) => {
-    const request = imageRequestOf(comment, servedText);
+  const imageWithReplies = (comment: PostComment, servedText: string, showsOriginal: boolean) => {
+    const request = imageRequestOf(comment, servedText, showsOriginal);
     setImaging(request);
     void loadCommentRepliesAction(postId, comment.id).then((replies) =>
       setImaging((current) => (current === request ? { ...request, replies: replies.map(servedOf) } : current)),
@@ -321,9 +322,10 @@ export function CommentThread({
             onReply: setReplyTarget,
             onImage: (comment, servedText, options) => {
               const post = composingPost;
-              if (post !== null) imageComposed(post, comment, servedText);
-              else if (options.withReplies) imageWithReplies(comment, servedText);
-              else setImaging(imageRequestOf(comment, servedText));
+              const showsOriginal = options.showsOriginal === true;
+              if (post !== null) imageComposed(post, comment, servedText, showsOriginal);
+              else if (options.withReplies) imageWithReplies(comment, servedText, showsOriginal);
+              else setImaging(imageRequestOf(comment, servedText, showsOriginal));
             },
             postImageableOf,
             onCopy: (text) => void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed')),

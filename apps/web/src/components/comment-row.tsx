@@ -84,7 +84,7 @@ export type CommentGestureHandlers = {
    * qu'on lit. `withReplies` (#8734) : une racine emporte ses réponses sous
    * elle. Absent ⇒ aucune entrée.
    */
-  readonly onImage?: (comment: PostComment, servedText: string, options: { readonly withReplies: boolean }) => void;
+  readonly onImage?: (comment: PostComment, servedText: string, options: { readonly withReplies: boolean; readonly showsOriginal?: boolean }) => void;
   /**
    * LE COMMENTAIRE D'UN POST (#9687) — « Imager » compose la carte (post en
    * tête, fil jusqu'à une réponse, réponses choisies) : l'hôte dit si un mode
@@ -530,7 +530,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
         return;
       case 'image':
       case 'imageWithReplies':
-        actionable?.onImage?.(comment, lu.text, { withReplies: choice.entry === 'imageWithReplies' });
+        actionable?.onImage?.(comment, lu.text, { withReplies: choice.entry === 'imageWithReplies', showsOriginal: showingOriginal });
         return;
       case 'edit':
         setEditing(true);

@@ -150,3 +150,45 @@ describe('le choix de composition dans l’atelier', () => {
   });
 });
 
+describe('le son d’un vocal part dans la piste du texte servi (#9687, famille audio du Prisme)', () => {
+  const voice = (overrides: Partial<PostComment> = {}) =>
+    comment('v', {
+      content: '',
+      originalLanguage: 'es',
+      media: [
+        {
+          id: 'a-1',
+          fileUrl: '/voz.m4a',
+          mimeType: 'audio/mp4',
+          duration: 9000,
+          transcription: { text: 'Hola a todos', language: 'es' },
+          translations: { en: { type: 'audio', transcription: 'Hello everyone', url: '/voice-en.m4a', durationMs: 8000 } },
+        } as never,
+      ],
+      ...overrides,
+    });
+  const audioOf = (input: Parameters<typeof postCommentCardSourceOf>[0]) =>
+    postCommentMessageCardSubjectOf(postCommentCardSourceOf(input), { mode: 'commentAlone', showsPost: false }, labels)?.media.find((item) => item.card.kind === 'audio');
+
+  test('prisme [fr, en] sans traduction française : au RANG 2, la piste anglaise — sa durée avec elle', () => {
+    const audio = audioOf({ post: post(), target: voice(), targetText: '', thread: [], readerLanguages: ['fr', 'en'], viewer });
+    expect(audio?.url).toBe('/voice-en.m4a');
+    expect(audio?.card).toMatchObject({ kind: 'audio', durationMs: 8000 });
+  });
+
+  test('aucune langue du prisme n’a de piste : l’original', () => {
+    expect(audioOf({ post: post(), target: voice(), targetText: '', thread: [], readerLanguages: ['fr', 'de'], viewer })?.url).toBe('/voz.m4a');
+  });
+
+  test('la rangée visée montre son original : son vocal original, comme iOS', () => {
+    expect(audioOf({ post: post(), target: voice(), targetText: '', targetShowsOriginal: true, thread: [], readerLanguages: ['fr', 'en'], viewer })?.url).toBe('/voz.m4a');
+  });
+
+  test('un vocal VOISIN du fil suit le même prisme', () => {
+    const rootVoice = voice({ id: 'root' });
+    const source = postCommentCardSourceOf({ post: post(), target: reply, targetText: 'texte r1', thread: [rootVoice], readerLanguages: ['fr', 'en'], viewer });
+    const subject = postCommentMessageCardSubjectOf(source, { mode: 'threadToHere', showsPost: false }, labels);
+    expect(subject?.media.map((item) => item.url)).toEqual(['/voice-en.m4a']);
+  });
+});
+

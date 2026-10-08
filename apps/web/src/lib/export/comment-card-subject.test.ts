@@ -61,3 +61,28 @@ describe('commentCardSubjectOf — un commentaire s’image comme un message (#8
     expect(commentCardSubjectOf({ comment: comment({ content: ' ' }), servedText: ' ', parent: null })).toBeNull();
   });
 });
+
+describe('le vocal d’un commentaire de story part dans la piste du texte servi (#9687)', () => {
+  const voice = comment({
+    content: '',
+    originalLanguage: 'es',
+    media: [
+      {
+        id: 'a-1',
+        fileUrl: '/voz.m4a',
+        mimeType: 'audio/mp4',
+        transcription: { text: 'Hola', language: 'es' },
+        translations: { en: { type: 'audio', transcription: 'Hello', url: '/voice-en.m4a', durationMs: 4000 } },
+      } as never,
+    ],
+  });
+
+  test('prisme [fr, en] sans piste française : la piste anglaise, au rang 2', () => {
+    expect(commentCardSubjectOf({ comment: voice, servedText: '', parent: null, readerLanguages: ['fr', 'en'] })?.media[0]?.url).toBe('/voice-en.m4a');
+  });
+
+  test('sans prisme (la rangée montre l’original) : le vocal original', () => {
+    expect(commentCardSubjectOf({ comment: voice, servedText: '', parent: null, readerLanguages: null })?.media[0]?.url).toBe('/voz.m4a');
+  });
+});
+

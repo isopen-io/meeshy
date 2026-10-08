@@ -1,4 +1,5 @@
 import type { InfiniteData } from '@tanstack/react-query';
+import type { Attachment } from '@meeshy/shared/types/attachment';
 import type { PostVisibility } from '@meeshy/shared/types/post';
 
 /**
@@ -76,6 +77,10 @@ export type FeedMedia = {
   readonly captionTranslations?: unknown;
   readonly alt?: string | null;
   readonly order?: number | null;
+  /** La transcription d'un vocal (`PostMedia.transcription`, forme de `Attachment.transcription`). */
+  readonly transcription?: Attachment['transcription'] | null;
+  /** Les pistes audio traduites et leurs transcriptions (`PostMedia.translations`) — dépouillées par `transcriptTranslationTracks`. */
+  readonly translations?: Attachment['translations'] | null;
 };
 
 /**

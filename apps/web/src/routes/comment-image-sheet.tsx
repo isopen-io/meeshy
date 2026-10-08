@@ -54,6 +54,8 @@ export type CommentImageRequest = {
   readonly parent: { readonly comment: PostComment; readonly servedText: string } | null;
   /** « Avec les réponses » (#8734) — absentes tant qu'elles ne sont pas lues. */
   readonly replies?: readonly { readonly comment: PostComment; readonly servedText: string }[];
+  /** Le prisme du lecteur, qui élit la piste d'un vocal (#9687) — `null` ou absent : la rangée montre l'original. */
+  readonly readerLanguages?: readonly string[] | null;
   /** Le commentaire d'un POST (#9687) — absent : une story, la carte du commentaire. */
   readonly composition?: PostCommentComposition;
 };
@@ -79,6 +81,7 @@ function ComposedCommentImage({ request, composition, handle, onClose, announce,
         post: composition.post,
         target: request.comment,
         targetText: request.servedText,
+        targetShowsOriginal: request.readerLanguages === null,
         thread: composition.thread,
         readerLanguages: composition.readerLanguages,
         viewer: composition.viewer,
