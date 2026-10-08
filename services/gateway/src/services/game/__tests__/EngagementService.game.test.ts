@@ -194,7 +194,7 @@ describe('la série : un gel couvre le jour manqué, sinon la Flamme s’éteint
     await service(db).recordActivity(USER, 'tool.reaction');
 
     expect(db.gloryLedger.rows.filter((r) => r.reason === 'flame-record')).toEqual([
-      expect.objectContaining({ delta: 50, requestId: 'flame-record:7' }),
+      expect.objectContaining({ delta: 500, requestId: 'flame-record:7' }),
     ]);
   });
 });

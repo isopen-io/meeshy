@@ -63,12 +63,12 @@ export const gloryForAchievement = (rarity: AchievementRarity): number => ACHIEV
 export const gloryForNewLevels = (params: { readonly level: number; readonly previousRecord: number | null }): number =>
   newLevelsReached(params).count * GLORY_POINTS.firstLevel;
 
-/** Records de Flamme (jours de série) et leur Gloire. */
+/** Records de Flamme (jours de série) et leur Gloire — ×10 avec la nouvelle échelle des rangs (porteur, 2026-10-08, #9636). */
 export const FLAME_RECORD_GLORY = [
-  { days: 7, glory: 50 },
-  { days: 30, glory: 150 },
-  { days: 100, glory: 500 },
-  { days: 365, glory: 2000 },
+  { days: 7, glory: 500 },
+  { days: 30, glory: 1500 },
+  { days: 100, glory: 5000 },
+  { days: 365, glory: 20000 },
 ] as const;
 
 export const gloryForFlameRecords = (params: { readonly previousLongest: number; readonly longest: number }): number =>

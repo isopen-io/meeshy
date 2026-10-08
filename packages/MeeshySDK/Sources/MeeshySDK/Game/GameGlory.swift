@@ -244,9 +244,9 @@ public enum GameGlory {
         GameLevels.newLevelsReached(level: level, previousRecord: previousRecord).count * points.firstLevel
     }
 
-    /// Records de Flamme (jours de série) et leur Gloire.
+    /// Records de Flamme (jours de série) et leur Gloire — ×10 avec la nouvelle échelle des rangs (#9636).
     public static let flameRecordGlory: [(days: Int, glory: Int)] = [
-        (7, 50), (30, 150), (100, 500), (365, 2000),
+        (7, 500), (30, 1500), (100, 5000), (365, 20000),
     ]
 
     public static func gloryForFlameRecords(previousLongest: Int, longest: Int) -> Int {

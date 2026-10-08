@@ -178,9 +178,9 @@ struct GameLawTests {
 
     @Test("les records de Flamme ne paient qu'une fois chacun")
     func flameRecordsPayOnce() {
-        #expect(GameGlory.gloryForFlameRecords(previousLongest: 6, longest: 7) == 50)
+        #expect(GameGlory.gloryForFlameRecords(previousLongest: 6, longest: 7) == 500)
         #expect(GameGlory.gloryForFlameRecords(previousLongest: 7, longest: 29) == 0)
-        #expect(GameGlory.gloryForFlameRecords(previousLongest: 0, longest: 365) == 2700)
+        #expect(GameGlory.gloryForFlameRecords(previousLongest: 0, longest: 365) == 27000)
     }
 
     // MARK: Trésor

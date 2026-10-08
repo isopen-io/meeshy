@@ -1519,7 +1519,7 @@
       "expected": {
         "achievement": 100,
         "newLevels": 400,
-        "flameRecords": 50
+        "flameRecords": 500
       }
     },
     {
@@ -1535,7 +1535,7 @@
       "expected": {
         "achievement": 250,
         "newLevels": 0,
-        "flameRecords": 200
+        "flameRecords": 2000
       }
     },
     {
@@ -1551,7 +1551,7 @@
       "expected": {
         "achievement": 600,
         "newLevels": 100,
-        "flameRecords": 2500
+        "flameRecords": 25000
       }
     },
     {

@@ -52,9 +52,9 @@ describe('le barème des sources (#9636)', () => {
 
   it('paie chaque record de Flamme franchi, une fois', () => {
     expect(gloryForFlameRecords({ previousLongest: 0, longest: 6 })).toBe(0);
-    expect(gloryForFlameRecords({ previousLongest: 6, longest: 7 })).toBe(50);
-    expect(gloryForFlameRecords({ previousLongest: 6, longest: 31 })).toBe(200);
-    expect(gloryForFlameRecords({ previousLongest: 0, longest: 365 })).toBe(2700);
+    expect(gloryForFlameRecords({ previousLongest: 6, longest: 7 })).toBe(500);
+    expect(gloryForFlameRecords({ previousLongest: 6, longest: 31 })).toBe(2000);
+    expect(gloryForFlameRecords({ previousLongest: 0, longest: 365 })).toBe(27000);
     expect(gloryForFlameRecords({ previousLongest: 365, longest: 400 })).toBe(0);
   });
 });

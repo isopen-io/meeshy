@@ -99,8 +99,8 @@ describe('GloryService.creditFlameRecords', () => {
 
     const gained = await service.creditFlameRecords({ userId: USER, previousLongest: 6, longest: 7 });
 
-    expect(gained).toBe(50);
-    expect(db.gloryLedger.rows[0]).toMatchObject({ requestId: 'flame-record:7', reason: 'flame-record', delta: 50 });
+    expect(gained).toBe(500);
+    expect(db.gloryLedger.rows[0]).toMatchObject({ requestId: 'flame-record:7', reason: 'flame-record', delta: 500 });
   });
 
   it('ne repaie pas un record déjà franchi', async () => {
@@ -111,7 +111,7 @@ describe('GloryService.creditFlameRecords', () => {
     const again = await service.creditFlameRecords({ userId: USER, previousLongest: 6, longest: 7 });
 
     expect(again).toBe(0);
-    expect(await service.total(USER)).toBe(50);
+    expect(await service.total(USER)).toBe(500);
   });
 });
 
