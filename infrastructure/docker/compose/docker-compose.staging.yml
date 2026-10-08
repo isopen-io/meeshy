@@ -301,7 +301,11 @@ services:
       # #9614, #9642 — la purge de conservation (sessions closes 90 j, journaux
       # 12 mois, adresses d'inscription et de connexion 12 mois). ARMÉE par la
       # seule valeur exacte true ; sinon elle compte et journalise sans écrire.
-      - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-true}
+      # DÉSARMÉE en staging le 2026-10-08 : l'audit adversarial a prouvé qu'elle
+      # efface les traces d'un compte BANNI (exemption lue par liftedAt: null,
+      # champ absent du document Mongo). Elle ne se réarme qu'après le correctif
+      # et son témoin de comportement.
+      - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-false}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@meeshy.me}
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Meeshy Staging}
       - BREVO_API_KEY=${BREVO_API_KEY:-}
