@@ -199,6 +199,27 @@ export type AuthDeps = {
 };
 
 /**
+ * LE CLIENT SE DÉCLARE EN OUVRANT UNE SESSION (#9611) — chaque requête de ce
+ * flux porte les en-têtes `X-Meeshy-*` (`lib/net/client-session.ts`), que la
+ * passerelle ne lit qu'à `createSession`. Un en-tête nommé par l'appelant
+ * l'emporte ; une déclaration indisponible (chunk refusé, hôte muet) laisse
+ * partir la requête sans elle — se connecter ne dépend jamais d'elle.
+ */
+export function declaringClient(
+  transport: AuthTransport,
+  declaration: () => Promise<Readonly<Record<string, string>>>,
+): AuthTransport {
+  return {
+    request: async <T>(req: HttpRequest) => {
+      const declared = await declaration().catch(() => ({}));
+      return transport.request<T>({ ...req, headers: { ...declared, ...req.headers } });
+    },
+  };
+}
+
+const clientDeclaration = () => import('@/lib/net/client-session').then(({ learnedClientHeaders }) => learnedClientHeaders());
+
+/**
  * LA BRANCHE PARTAGÉE d'une réponse « connexion réussie » (`LoginResponseData`)
  * — extraite (#5816, E5) pour que `login()` ET `validateMagicLink()` la
  * suivent SANS la recopier : les deux routes rendent la MÊME union
@@ -479,7 +500,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
  * PARTAGÉ (`client.ts`) et le magasin PARTAGÉ (`session.ts`) — jamais une
  * seconde instance de l'un ou de l'autre.
  */
-export const auth = createAuthClient({ transport: httpTransport, store: sessionStore });
+export const auth = createAuthClient({ transport: declaringClient(httpTransport, clientDeclaration), store: sessionStore });
 export const {
   login,
   register,

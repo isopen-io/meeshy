@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-import type { SocketClient, SocketFactory } from './socket';
+import type { SocketAuth, SocketClient, SocketFactory } from './socket';
 
 /**
  * LA FABRIQUE RÉELLE (#5793) — le SEUL fichier du dépôt qui importe
@@ -24,10 +24,31 @@ import type { SocketClient, SocketFactory } from './socket';
  * `base === ''` (DEV, proxy Vite) passe `undefined` à `io()` : même origine
  * que le document, comme `api/client.ts` le fait déjà pour `fetch`.
  */
+/**
+ * LA POIGNÉE DE MAIN (#9611) — le crédential, et ce que le client déclare de
+ * lui-même sous `client` (`CLIENT_SESSION_AUTH_KEY`, que le témoin relit par
+ * le lecteur de la passerelle) : la liste CORS de Socket.IO est fermée, la
+ * socket ne peut pas porter les en-têtes `X-Meeshy-*`.
+ */
+export function handshakeAuth(
+  auth: SocketAuth,
+  declared: Readonly<Record<string, string>>,
+): { readonly token: string; readonly sessionToken: string; readonly client?: Readonly<Record<string, string>> } {
+  const base = { token: auth.token, sessionToken: auth.sessionToken };
+  return Object.keys(declared).length === 0 ? base : { ...base, client: declared };
+}
+
 export const createSocketIOClient: SocketFactory = ({ base, auth }) => {
   const socket = io(base === '' ? undefined : base, {
     path: '/socket.io/',
-    auth: { token: auth.token, sessionToken: auth.sessionToken },
+    /* Relue à CHAQUE (re)connexion, chargée à la demande (`client-session.ts`) ;
+       un chargement refusé n'empêche pas de se connecter. */
+    auth: (callback) => {
+      void import('./client-session')
+        .then(({ learnedClientAuth }) => learnedClientAuth())
+        .catch(() => ({}))
+        .then((declared) => callback(handshakeAuth(auth, declared)));
+    },
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 16000,
