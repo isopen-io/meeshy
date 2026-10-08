@@ -581,7 +581,7 @@ struct PostDetailView: View {
                 replies: viewModel.repliesFor(comment.id),
                 isExpanded: viewModel.expandedThreads.contains(comment.id),
                 isLoadingReplies: viewModel.loadingReplies.contains(comment.id),
-                accentColor: accentColor,
+                accentColor: accentColor, post: displayPost,
                 // Like de commentaire optimiste + réaction socket cœur, porté par le
                 // ViewModel (miroir de `CommentsSheetView`). L'état est semé depuis
                 // `currentUserReactions` au chargement, donc les commentaires déjà

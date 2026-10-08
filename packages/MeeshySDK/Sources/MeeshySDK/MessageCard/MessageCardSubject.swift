@@ -300,7 +300,12 @@ public struct MessageCardSubject: Equatable, Sendable {
     }
 
     public static func paintableMedia(of comment: FeedComment, audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
-        comment.media.compactMap { item in
+        paintableMedia(of: comment.media, audioLanguages: audioLanguages)
+    }
+
+    /// Les pièces d'un commentaire ou d'un post qu'une carte peut peindre (#9686).
+    static func paintableMedia(of items: [FeedMedia], audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
+        items.compactMap { item in
             let kind: MessageCardMediaKind
             switch item.type {
             case .image: kind = .image
@@ -354,7 +359,7 @@ public struct MessageCardSubject: Equatable, Sendable {
         )
     }
 
-    private static func author(isViewer: Bool, names: [String?], viewer: Viewer) -> String {
+    static func author(isViewer: Bool, names: [String?], viewer: Viewer) -> String {
         let candidates = isViewer ? [viewer.displayName] + names : names
         return candidates.lazy.compactMap { MessageCardText.nonBlank($0) }.first ?? "Meeshy"
     }

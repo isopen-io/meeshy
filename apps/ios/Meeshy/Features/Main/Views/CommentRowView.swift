@@ -50,6 +50,8 @@ struct CommentRowView: View, Equatable {
     var threadRoot: FeedComment? = nil
     /// Les réponses chargées d'une racine — « Imager » peut en emporter une.
     var threadReplies: [FeedComment] = []
+    /// Le post commenté — « Imager » le met en tête de la carte (#9686).
+    var post: FeedPost? = nil
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&
@@ -80,7 +82,8 @@ struct CommentRowView: View, Equatable {
         // éditée ou une réponse arrivée laisserait le menu sur l'ancien fil.
         lhs.threadRoot?.id == rhs.threadRoot?.id &&
         lhs.threadRoot?.displayContent == rhs.threadRoot?.displayContent &&
-        lhs.threadReplies.map(\.id) == rhs.threadReplies.map(\.id)
+        lhs.threadReplies.map(\.id) == rhs.threadReplies.map(\.id) &&
+        lhs.post?.id == rhs.post?.id && lhs.post?.displayContent == rhs.post?.displayContent
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -357,6 +360,7 @@ struct CommentRowView: View, Equatable {
                         accentColor: accentColor,
                         root: threadRoot,
                         loadedReplies: threadReplies,
+                        post: post,
                         onEdit: onEditComment,
                         onDelete: onDeleteComment,
                         glyphSize: isReply ? 12 : 14,

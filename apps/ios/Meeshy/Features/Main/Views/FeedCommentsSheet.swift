@@ -384,7 +384,7 @@ struct CommentsSheetView: View {
                                     replies: repliesMap[comment.id] ?? [],
                                     isExpanded: expandedThreads.contains(comment.id),
                                     isLoadingReplies: loadingReplies.contains(comment.id),
-                                    accentColor: accentColor,
+                                    accentColor: accentColor, post: post,
                                     likedIds: likedIds,
                                     likeDelta: likeDelta,
                                     heartInFlightIds: heartInFlightIds,

@@ -20,6 +20,10 @@ struct CommentMoreMenu: View {
     var root: FeedComment? = nil
     /// Les réponses chargées d'une racine — « Imager » peut en emporter une.
     var loadedReplies: [FeedComment] = []
+    /// Le post du commentaire (#9686) : « Imager » compose alors la carte — le
+    /// post en tête, le fil jusqu'à une réponse, les réponses choisies. `nil`
+    /// (story) : la carte du commentaire, sa racine en citation.
+    var post: FeedPost? = nil
     var onEdit: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
     var glyphSize: CGFloat = 14
@@ -44,7 +48,26 @@ struct CommentMoreMenu: View {
         )
     }
 
-    private var ownRequest: MessageCardExportRequest? { imagineRequest(comment, quoting: root) }
+    private var ownRequest: MessageCardExportRequest? {
+        guard let post else { return imagineRequest(comment, quoting: root) }
+        return MessageCardExportMenu.request(
+            post: post, comment: comment, thread: thread, showOriginal: showOriginal, accentColor: accentColor,
+            viewer: viewer, handle: viewer.username,
+            audioPrism: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved
+        )
+    }
+
+    /// Le fil chargé autour du commentaire : sa racine et les réponses qu'on a.
+    private var thread: [FeedComment] {
+        (root.map { [$0] } ?? []) + loadedReplies
+    }
+
+    /// « Imager » s'offre-t-il ? Pour un commentaire de post, dès qu'un mode compose une carte.
+    private var canImagine: Bool {
+        guard let post else { return ownRequest != nil }
+        let source = PostCommentCardSource(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal)
+        return !PostCommentCardComposition.modes(of: source).isEmpty
+    }
 
     private var threadReplies: [FeedComment] {
         CommentMenuPolicy.imagineReplies(for: comment, loaded: loadedReplies)
@@ -55,7 +78,7 @@ struct CommentMoreMenu: View {
             for: comment,
             viewerId: viewer.id,
             servedText: servedText,
-            canImagine: ownRequest != nil,
+            canImagine: canImagine,
             editable: onEdit != nil,
             deletable: onDelete != nil
         )
@@ -96,7 +119,7 @@ struct CommentMoreMenu: View {
     @ViewBuilder
     private func entry(_ action: CommentMenuAction) -> some View {
         switch action {
-        case .imagine where !threadReplies.isEmpty:
+        case .imagine where post == nil && !threadReplies.isEmpty:
             Menu {
                 Button(String(localized: "comment.imagine.alone", defaultValue: "Ce commentaire seul", bundle: .main)) {
                     perform(.imagine)

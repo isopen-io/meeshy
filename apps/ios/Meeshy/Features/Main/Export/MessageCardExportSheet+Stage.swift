@@ -193,3 +193,99 @@ private struct MessageCardScaleAccessibility: ViewModifier {
         }
     }
 }
+
+// MARK: - Les compositions d'un commentaire de post (#9686)
+
+extension MessageCardExportSheet {
+
+    /// Au-dessus de l'aperçu : les modes, « Post en tête », et les cases du fil
+    /// sous « Choisir les réponses ». Rien quand il n'y a rien à choisir.
+    @ViewBuilder
+    var compositionBar: some View {
+        if let composition = request.composition, composition.offersChoice {
+            MessageCardCompositionBar(
+                composition: composition,
+                mode: $compositionMode,
+                showsPost: $showsPost,
+                chosen: $chosenReplies,
+                accent: accent
+            )
+        }
+    }
+}
+
+/// Les puces de composition — un toucher change la carte, l'aperçu se repeint aussitôt.
+struct MessageCardCompositionBar: View {
+    let composition: MessageCardCommentComposition
+    @Binding var mode: PostCommentCardMode?
+    @Binding var showsPost: Bool
+    @Binding var chosen: Set<String>
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: MeeshySpacing.sm) {
+                    if composition.modes.count > 1 {
+                        ForEach(composition.modes, id: \.self) { item in
+                            chip(MessageCardCommentComposition.label(of: item), systemImage: nil, selected: mode == item) {
+                                select(item)
+                            }
+                        }
+                    }
+                    if composition.offersPostToggle {
+                        chip(MessageCardCommentComposition.postToggleLabel, systemImage: showsPost ? "checkmark" : "plus", selected: showsPost) {
+                            showsPost.toggle()
+                        }
+                    }
+                }
+            }
+            if mode == .chosenReplies {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: MeeshySpacing.sm) {
+                        ForEach(composition.choosable) { comment in
+                            let selected = chosen.contains(comment.id)
+                            chip("\(comment.author) · \(Self.excerpt(comment.displayContent))",
+                                 systemImage: selected ? "checkmark.circle.fill" : "circle", selected: selected) {
+                                if selected { chosen.remove(comment.id) } else { chosen.insert(comment.id) }
+                            }
+                        }
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: mode)
+    }
+
+    private func select(_ next: PostCommentCardMode) {
+        guard mode != next else { return }
+        mode = next
+        showsPost = next.showsPostByDefault
+        if next == .chosenReplies { chosen = composition.initialChoice }
+    }
+
+    private func chip(_ title: String, systemImage: String?, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            HStack(spacing: MeeshySpacing.xs) {
+                if let systemImage { Image(systemName: systemImage).accessibilityHidden(true) }
+                Text(title).lineLimit(1)
+            }
+            .font(.footnote.weight(.semibold))
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .frame(minHeight: 44)
+            .foregroundStyle(selected ? accent : Color.primary)
+            .adaptiveGlass(in: Capsule(), tint: selected ? accent : nil, interactive: true)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private static func excerpt(_ text: String) -> String {
+        let flat = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return flat.count > 24 ? String(flat.prefix(24)) + "…" : flat
+    }
+}
