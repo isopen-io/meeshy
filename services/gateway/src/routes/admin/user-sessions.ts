@@ -45,8 +45,14 @@ import { UserAuditAction } from '@meeshy/shared/types';
 import type { UserAuditService } from '../../services/admin/user-audit.service';
 import { GEOLOCATION_ATTRIBUTION } from '@meeshy/shared/utils/client-session';
 import { invalidateAllSessions, invalidateSession } from '../../services/SessionService';
-import { informMemberOfTeamClosure, type TeamClosureMailer } from '../../services/auth/team-session-closure';
+import {
+  informMemberOfTeamClosure,
+  TEAM_CLOSURE_EMAIL_WINDOW_SECONDS,
+  type TeamClosureMailer,
+} from '../../services/auth/team-session-closure';
+import { getCacheStore } from '../../services/CacheStore';
 import { disconnectSession } from '../../socketio/disconnectSession';
+import { withoutThirdPartyTrace } from '../../services/auth/security-event-view';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 import { requireUserViewAccess } from '../../middleware/admin-user-auth.middleware';
 import { requirePermission, requireHierarchy } from '../../middleware/authorize';
@@ -126,8 +132,11 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
     });
   };
 
-  const informMember = (userId: string, scope: 'one' | 'all', sessionIds: readonly string[]) => {
-    void informMemberOfTeamClosure({ prisma: fastify.prisma, emailService }, { userId, scope, sessionIds })
+  const claimEmailSlot = (userId: string) =>
+    getCacheStore().setnx(`team-session-closure-email:${userId}`, '1', TEAM_CLOSURE_EMAIL_WINDOW_SECONDS);
+
+  const informMember = (userId: string, scope: 'one' | 'all', sessionIds: readonly string[], revokedCount: number) => {
+    void informMemberOfTeamClosure({ prisma: fastify.prisma, emailService, claimEmailSlot }, { userId, scope, sessionIds, revokedCount })
       .catch((error) => logWarn(fastify.log, '[ADMIN] member not informed of session closure', error));
   };
 
@@ -241,7 +250,7 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
         userAgent: request.headers['user-agent']
       });
 
-      informMember(userId, 'one', [sessionId]);
+      informMember(userId, 'one', [sessionId], 1);
 
       return sendSuccess(reply, { message: 'Session révoquée avec succès' });
     } catch (error) {
@@ -293,7 +302,7 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
         userAgent: request.headers['user-agent']
       });
 
-      informMember(userId, 'all', []);
+      informMember(userId, 'all', [], revokedCount);
 
       return sendSuccess(reply, { revokedCount });
     } catch (error) {
@@ -360,7 +369,9 @@ export function registerUserSessionRoutes(fastify: FastifyInstance, deps: Deps):
         ...(severity ? { severity } : {}),
       });
 
-      return sendPaginatedSuccess(reply, events, {
+      // Audit L2-2 — l'adresse et le lieu d'un TIERS (le demandeur d'un
+      // transfert de numéro) ne sortent pas, même vers l'administration.
+      return sendPaginatedSuccess(reply, events.map(withoutThirdPartyTrace), {
         total,
         offset: offsetNum,
         limit: limitNum,

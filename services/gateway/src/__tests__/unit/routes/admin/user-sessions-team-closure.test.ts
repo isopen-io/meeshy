@@ -33,8 +33,18 @@ jest.mock('../../../../services/admin/permissions.service', () => ({
     canViewPresence: jest.fn().mockReturnValue(true),
   },
 }));
+const mockClaimed = new Set<string>();
 jest.mock('../../../../services/CacheStore', () => ({
-  getCacheStore: jest.fn(() => ({ del: jest.fn(), get: jest.fn().mockResolvedValue(null), set: jest.fn() })),
+  getCacheStore: jest.fn(() => ({
+    del: jest.fn(),
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn(),
+    setnx: jest.fn(async (key: string) => {
+      if (mockClaimed.has(key)) return false;
+      mockClaimed.add(key);
+      return true;
+    }),
+  })),
 }));
 jest.mock('../../../../services/SessionService', () => ({
   invalidateSession: (...args: unknown[]) => mockSessionService.invalidateSession(...args),
@@ -76,6 +86,7 @@ function buildApp(sockets: Array<{ emit: jest.Mock; disconnect: jest.Mock; data?
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockClaimed.clear();
   (permissionsService.hasPermission as jest.Mock).mockReturnValue(true);
   (permissionsService.canManageUser as jest.Mock).mockReturnValue(true);
   mockPrisma.user.findUnique.mockImplementation(async (args: { select?: Record<string, boolean> }) =>
@@ -191,6 +202,17 @@ describe('DELETE /admin/users/:userId/sessions — tout fermer d’un geste', ()
     expect(JSON.stringify(mockEmail.sendSecurityAlertEmail.mock.calls[0][0])).not.toMatch(/admin/);
   });
 
+  it('audit L2-6 — rien n’était ouvert (revokedCount 0) : ni e-mail, ni événement', async () => {
+    mockSessionService.invalidateAllSessions.mockResolvedValue(0);
+    const app = buildApp();
+    await app.inject({ method: 'DELETE', url: '/admin/users/user123/sessions' });
+    await settle();
+    await app.close();
+
+    expect(mockEmail.sendSecurityAlertEmail).not.toHaveBeenCalled();
+    expect(mockPrisma.securityEvent.create).not.toHaveBeenCalled();
+  });
+
   it('403 quand la hiérarchie ne surclasse pas la cible', async () => {
     (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const app = buildApp();
@@ -215,17 +237,19 @@ describe('DELETE /admin/users/:userId/sessions/:sessionId — le membre est info
     });
   });
 
-  it('pas d’e-mail tant qu’une autre session vit encore', async () => {
+  it('audit L2-4 — un e-mail AUSSI quand d’autres sessions vivent : « toujours informé »', async () => {
     mockPrisma.userSession.count.mockResolvedValue(2);
     const app = buildApp();
     await app.inject({ method: 'DELETE', url: '/admin/users/user123/sessions/sess-1' });
     await settle();
     await app.close();
 
-    expect(mockEmail.sendSecurityAlertEmail).not.toHaveBeenCalled();
+    expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'ada@example.com', alertType: 'session_closed_by_team', language: 'de',
+    }));
   });
 
-  it('un e-mail quand c’était la dernière session vivante', async () => {
+  it('quand c’était la dernière session vivante, l’e-mail dit que TOUT est fermé', async () => {
     mockPrisma.userSession.count.mockResolvedValue(0);
     const app = buildApp();
     await app.inject({ method: 'DELETE', url: '/admin/users/user123/sessions/sess-1' });
@@ -233,6 +257,21 @@ describe('DELETE /admin/users/:userId/sessions/:sessionId — le membre est info
     await app.close();
 
     expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledWith(expect.objectContaining({ alertType: 'sessions_closed_by_team' }));
+  });
+
+  it('audit L2-6 — pas plus d’un e-mail par membre sur une fenêtre courte, l’événement de sécurité, lui, chaque fois', async () => {
+    mockPrisma.userSession.count.mockResolvedValue(2);
+    const app = buildApp();
+    await app.inject({ method: 'DELETE', url: '/admin/users/user123/sessions/sess-1' });
+    await settle();
+    await app.inject({ method: 'DELETE', url: '/admin/users/user123/sessions/sess-1' });
+    await settle();
+    await app.inject({ method: 'DELETE', url: '/admin/users/user123/sessions' });
+    await settle();
+    await app.close();
+
+    expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.securityEvent.create).toHaveBeenCalledTimes(3);
   });
 });
 

@@ -58,6 +58,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case preferencesPrivacy
     case preferencesVideo
     case root
+    case securityEvents
     case starredMessages
     case starredMessagesByMessageId(messageId: String)
     case stickers
@@ -113,6 +114,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .preferencesPrivacy: return "/api/v1/me/preferences/privacy"
         case .preferencesVideo: return "/api/v1/me/preferences/video"
         case .root: return "/api/v1/me"
+        case .securityEvents: return "/api/v1/me/security-events"
         case .starredMessages: return "/api/v1/me/starred-messages"
         case .starredMessagesByMessageId(let messageId): return "/api/v1/me/starred-messages/\(messageId)"
         case .stickers: return "/api/v1/me/stickers"

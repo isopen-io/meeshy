@@ -8,9 +8,13 @@
  *    `disconnectRevokedSessions`) ;
  *  - un `SecurityEvent` reste dans l'historique du compte, que le membre
  *    retrouve dans son export et l'administration dans sa fiche ;
- *  - un e-mail, quand plus AUCUNE session ne vit — le membre n'a alors plus
- *    d'appareil pour l'apprendre autrement. Il part par le gabarit d'alerte de
- *    sécurité existant, dans la langue de CADRAGE du membre (Prisme).
+ *  - un e-mail, à CHAQUE fermeture (audit L2-4 : « toujours informé » valait
+ *    aussi quand d'autres sessions vivent) — « une de vos sessions » tant qu'il
+ *    en reste, « toutes vos sessions » quand plus aucune ne vit. Gabarit
+ *    d'alerte de sécurité existant, langue de CADRAGE du membre (Prisme).
+ *    Dédoublonné (audit L2-6) : au plus UN e-mail par membre et par heure
+ *    (`SET NX EX`), et aucun quand rien n'était ouvert (`revokedCount` 0) —
+ *    l'événement de sécurité, lui, s'écrit à chaque fermeture effective.
  *
  * Ni l'identifiant, ni l'adresse, ni l'agent de l'administrateur n'entrent dans
  * l'événement ou l'e-mail : ils vivent dans `AdminAuditLog`, que l'équipe lit.
@@ -31,8 +35,15 @@ const CLOSURE_EVENT = {
   all: { eventType: 'SESSIONS_CLOSED_BY_TEAM', description: 'Toutes les sessions ont été fermées par l’équipe Meeshy' },
 } as const;
 
-/** Le gabarit d'alerte (`services/email/translations.ts`) qui dit la fermeture au membre. */
+/** Les gabarits d'alerte (`services/email/translations.ts`) qui disent la fermeture au membre. */
 export const TEAM_CLOSURE_ALERT_TYPE = 'sessions_closed_by_team';
+export const TEAM_SINGLE_CLOSURE_ALERT_TYPE = 'session_closed_by_team';
+
+/** La fenêtre de dédoublonnage des e-mails de fermeture, par membre. */
+export const TEAM_CLOSURE_EMAIL_WINDOW_SECONDS = 60 * 60;
+
+/** Réserve le créneau d'e-mail d'un membre ; `false` : un e-mail est déjà parti dans la fenêtre. */
+export type ClosureEmailSlot = (userId: string) => Promise<boolean>;
 
 type ClosureStore = Pick<PrismaClient, 'securityEvent' | 'userSession' | 'user'>;
 
@@ -41,11 +52,18 @@ export type TeamClosureMailer = {
 };
 
 export async function informMemberOfTeamClosure(
-  deps: { readonly prisma: ClosureStore; readonly emailService: TeamClosureMailer },
-  params: { readonly userId: string; readonly scope: TeamClosureScope; readonly sessionIds: readonly string[] },
+  deps: { readonly prisma: ClosureStore; readonly emailService: TeamClosureMailer; readonly claimEmailSlot: ClosureEmailSlot },
+  params: {
+    readonly userId: string;
+    readonly scope: TeamClosureScope;
+    readonly sessionIds: readonly string[];
+    /** Combien de sessions la fermeture a réellement closes ; 0 : rien à dire. */
+    readonly revokedCount: number;
+  },
 ): Promise<void> {
-  const { prisma, emailService } = deps;
-  const { userId, scope, sessionIds } = params;
+  const { prisma, emailService, claimEmailSlot } = deps;
+  const { userId, scope, sessionIds, revokedCount } = params;
+  if (revokedCount <= 0) return;
 
   try {
     await prisma.securityEvent.create({
@@ -65,7 +83,7 @@ export async function informMemberOfTeamClosure(
     const live = await prisma.userSession.count({
       where: { userId, isValid: true, expiresAt: { gt: new Date() } },
     });
-    if (live > 0) return;
+    if (!(await claimEmailSlot(userId))) return;
 
     const member = await prisma.user.findUnique({
       where: { id: userId },
@@ -76,7 +94,7 @@ export async function informMemberOfTeamClosure(
     await emailService.sendSecurityAlertEmail({
       to: member.email,
       name: member.displayName || member.firstName || member.username,
-      alertType: TEAM_CLOSURE_ALERT_TYPE,
+      alertType: live > 0 ? TEAM_SINGLE_CLOSURE_ALERT_TYPE : TEAM_CLOSURE_ALERT_TYPE,
       details: '',
       language: recipientLanguage(member, 'fr'),
     });
