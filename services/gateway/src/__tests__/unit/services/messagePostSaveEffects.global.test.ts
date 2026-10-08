@@ -49,7 +49,7 @@ function makePrisma(params: { type?: string; recentContents?: string[]; findMany
     conversation: {
       update: jest.fn<any>().mockResolvedValue(undefined),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-      findUnique: jest.fn<any>().mockResolvedValue({ type: params.type ?? 'global', communityId: null }),
+      findUnique: jest.fn<any>().mockResolvedValue({ type: params.type ?? 'global', communityId: null, identifier: (params.type ?? 'global') === 'global' ? 'meeshy' : null }),
     },
     message: { findMany },
   } as any;

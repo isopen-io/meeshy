@@ -5,8 +5,8 @@
  * moins visible au-dessus.
  */
 import { describe, it, expect } from 'vitest';
-import { VISIBILITY_VARIANTS } from '../types/engagement-operations.js';
-import { DEFAULT_ENGAGEMENT_SCALE, basePointsForOperation, dailyGestureLimit } from '../types/engagement-scale.js';
+import { ENGAGEMENT_OPERATION_CATALOG, VISIBILITY_VARIANTS } from '../types/engagement-operations.js';
+import { DEFAULT_ENGAGEMENT_SCALE, basePointsForOperation, dailyGestureLimit, gestureFamilyOf } from '../types/engagement-scale.js';
 import { ErrorCode, ErrorMessages } from '../types/errors.js';
 
 const ops = DEFAULT_ENGAGEMENT_SCALE.operations;
@@ -55,5 +55,23 @@ describe('un refus de limite quotidienne dit qu’il compte des gestes, jamais d
   it.each([ErrorCode.DAILY_COMMENT_LIMIT, ErrorCode.DAILY_REACTION_LIMIT])('%s', (code) => {
     expect(ErrorMessages[code].fr).toMatch(/gestes, jamais vos points/);
     expect(ErrorMessages[code].en).toMatch(/actions, never your points/);
+  });
+});
+
+describe('aucun geste répétable n’échappe à une borne d’actes (#9667)', () => {
+  it('les seuls répétables sans plafond propre sont bornés ailleurs : limites de gestes, ou une fois par publication', () => {
+    const uncapped = Object.entries(ENGAGEMENT_OPERATION_CATALOG)
+      .filter(([key, definition]) => definition.frequency === 'repeatable' && (definition.capScope === 'none' || ops[key as keyof typeof ops].cap === null))
+      .map(([key]) => key)
+      .sort();
+    expect(uncapped).toEqual(['comment.audio', 'comment.text', 'tool.direct_publish', 'tool.in_app_edit', 'tool.post_reaction']);
+    expect(gestureFamilyOf('comment.text')).toBe('comment');
+    expect(gestureFamilyOf('comment.audio')).toBe('comment');
+    expect(gestureFamilyOf('tool.post_reaction')).toBe('reaction');
+  });
+
+  it('un réel et une humeur gardent leur plafond d’actes par jour', () => {
+    expect(ENGAGEMENT_OPERATION_CATALOG['content.reel'].capScope).toBe('day');
+    expect(ENGAGEMENT_OPERATION_CATALOG['content.status'].capScope).toBe('day');
   });
 });

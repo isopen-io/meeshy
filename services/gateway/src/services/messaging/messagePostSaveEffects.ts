@@ -394,11 +394,11 @@ export function runMessagePostSaveEffects(params: {
   // de la conversation quand elle ne peut mener nulle part.
   // UNE lecture de la conversation, partagée par les deux axes qui en ont
   // besoin — mémoïsée, et jamais faite pour un expéditeur anonyme.
-  let conversationRead: Promise<{ type: string; communityId: string | null } | null> | null = null;
+  let conversationRead: Promise<{ type: string; communityId: string | null; identifier?: string | null } | null> | null = null;
   const readConversation = () => {
     conversationRead ??= prisma.conversation.findUnique({
       where: { id: message.conversationId },
-      select: { type: true, communityId: true },
+      select: { type: true, communityId: true, identifier: true },
     });
     return conversationRead;
   };
@@ -560,6 +560,19 @@ function creditMessagingTools(params: {
   }
 }
 
+/** L'identifiant que porte Meeshy Global, et elle seule (`InitService`) : un identifiant choisi reçoit le préfixe `mshy_`. */
+const MEESHY_GLOBAL_IDENTIFIER = 'meeshy';
+
+/**
+ * La variante de valeur d'un message texte (#9666), lue en base. La création de conversation accepte le
+ * type `global` : seule Meeshy Global (identifiant `meeshy`) vaut le prix de la conversation globale ; une
+ * conversation qu'un compte s'est fabriquée sous ce type vaut « autres ».
+ */
+function messageValueVariant(conversation: { readonly type: string; readonly identifier?: string | null } | null) {
+  const variant = conversationTypeVariant(conversation?.type);
+  return variant === 'global' && conversation?.identifier !== MEESHY_GLOBAL_IDENTIFIER ? 'other' : variant;
+}
+
 /**
  * Le texte répète-t-il l'un des derniers messages de Meeshy Global (#7740) ?
  * Hors Global, jamais : la lecture de l'historique n'a lieu que là.
@@ -597,7 +610,7 @@ async function isRepeatedGlobalText(params: {
  */
 async function creditMessageContent(params: {
   readonly prisma: Pick<PrismaClient, 'conversation' | 'message'>;
-  readonly readConversation: () => Promise<{ readonly type: string; readonly communityId: string | null } | null>;
+  readonly readConversation: () => Promise<{ readonly type: string; readonly communityId: string | null; readonly identifier?: string | null } | null>;
   readonly engagementService: PostSaveEngagementService;
   readonly message: PostSaveMessage;
   readonly senderUserId: string;
@@ -616,7 +629,7 @@ async function creditMessageContent(params: {
   const conversation = await readConversation();
   const credited = await engagementService.recordActivity(senderUserId, 'content.text_message', {
     conversationId: message.conversationId,
-    variant: conversationTypeVariant(conversation?.type),
+    variant: messageValueVariant(conversation),
   });
   return credited === true;
 }

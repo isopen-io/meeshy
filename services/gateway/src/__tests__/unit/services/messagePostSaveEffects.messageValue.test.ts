@@ -29,7 +29,7 @@ function makeEngagementService() {
   };
 }
 
-function run(params: { conversation: { type: string } | null; message?: Record<string, unknown> }) {
+function run(params: { conversation: { type: string; identifier?: string | null } | null; message?: Record<string, unknown> }) {
   const engagementService = makeEngagementService();
   runMessagePostSaveEffects({
     prisma: {
@@ -38,7 +38,7 @@ function run(params: { conversation: { type: string } | null; message?: Record<s
         updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
         findUnique: jest
           .fn<any>()
-          .mockResolvedValue(params.conversation ? { ...params.conversation, communityId: null, participants: [] } : null),
+          .mockResolvedValue(params.conversation ? { identifier: null, ...params.conversation, communityId: null, participants: [] } : null),
       },
       message: { findMany: jest.fn<any>().mockResolvedValue([]) },
     } as any,
@@ -78,7 +78,6 @@ describe('la valeur d’un message texte suit le type de sa conversation (#9666)
     ['direct', 'direct', 2],
     ['group', 'group', 4],
     ['public', 'public', 6],
-    ['global', 'global', 8],
     ['broadcast', 'other', 4],
     ['inconnu', 'other', 4],
   ])('une conversation %s crédite la variante %s, soit %i points', async (type, variant, points) => {
@@ -87,6 +86,24 @@ describe('la valeur d’un message texte suit le type de sa conversation (#9666)
 
     expect(contentCredits(service)).toEqual([[USER_ID, 'content.text_message', { conversationId: CONV_ID, variant }]]);
     expect(creditedPoints(service)).toBe(points);
+  });
+
+  it('Meeshy Global (identifiant « meeshy ») crédite la variante global, soit 8 points', async () => {
+    const service = run({ conversation: { type: 'global', identifier: 'meeshy' } });
+    await flush();
+
+    expect(contentCredits(service)).toEqual([[USER_ID, 'content.text_message', { conversationId: CONV_ID, variant: 'global' }]]);
+    expect(creditedPoints(service)).toBe(8);
+  });
+
+  // La création de conversation accepte le type `global` : une conversation qu'un compte s'est fabriquée
+  // sous ce type n'est pas Meeshy Global et ne peut pas sélectionner la variante la mieux payée.
+  it('une conversation de type global qui n’est pas Meeshy Global crédite « autres »', async () => {
+    const service = run({ conversation: { type: 'global', identifier: 'mshy_ma-globale' } });
+    await flush();
+
+    expect(contentCredits(service)).toEqual([[USER_ID, 'content.text_message', { conversationId: CONV_ID, variant: 'other' }]]);
+    expect(creditedPoints(service)).toBe(4);
   });
 
   it('une conversation introuvable crédite « autres »', async () => {

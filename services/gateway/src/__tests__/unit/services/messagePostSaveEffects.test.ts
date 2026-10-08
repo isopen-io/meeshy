@@ -373,7 +373,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
 
     expect(prisma.conversation.findUnique).toHaveBeenCalledWith({
       where: { id: CONV_ID },
-      select: { type: true, communityId: true },
+      select: { type: true, communityId: true, identifier: true },
     });
     expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
       USER_ID,
