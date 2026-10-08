@@ -50,13 +50,25 @@ public struct PostCommentCardSource: Sendable {
     public let viewer: MessageCardSubject.Viewer
     /// La ligne du commentaire visé montre son original (puce de langue).
     public let showOriginal: Bool
+    /// Ce que chaque texte écrit DONNE À LIRE, par texte brut — `[libellé](url)`
+    /// → libellé, `[[url]]` → url, `**gras**` → gras. La règle est celle du fil
+    /// (`MessageTextRenderer.plainText`, MeeshyUI) : `PostCommentCardSource.reading`
+    /// la remplit ; un texte absent se lit tel quel.
+    public let readable: [String: String]
 
-    public init(post: FeedPost?, target: FeedComment, thread: [FeedComment], viewer: MessageCardSubject.Viewer, showOriginal: Bool = false) {
+    public init(post: FeedPost?, target: FeedComment, thread: [FeedComment], viewer: MessageCardSubject.Viewer,
+                showOriginal: Bool = false, readable: [String: String] = [:]) {
         self.post = post
         self.target = target
         self.thread = thread
         self.viewer = viewer
         self.showOriginal = showOriginal
+        self.readable = readable
+    }
+
+    /// Le texte tel que le lecteur le lit, sans la notation de ses liens.
+    public func read(_ raw: String) -> String {
+        readable[raw] ?? raw
     }
 }
 
@@ -255,7 +267,7 @@ public enum PostCommentCardComposition {
     /// Le post en tête : son auteur et son texte servi, tronqué — `nil` quand il ne se met pas en tête.
     static func postHead(of source: PostCommentCardSource) -> MessageCardPart? {
         guard let post = source.post, !disappears(post) else { return nil }
-        let text = MessageCardText.nonBlank(post.displayContent).map(excerpt)
+        let text = MessageCardText.nonBlank(source.read(post.displayContent)).map(excerpt)
         guard text != nil || !postMedia(of: post).isEmpty else { return nil }
         let isViewer = !source.viewer.id.isEmpty && post.authorId == source.viewer.id
         return MessageCardPart(
@@ -287,7 +299,7 @@ public enum PostCommentCardComposition {
 
     private static func part(of comment: FeedComment, source: PostCommentCardSource) -> MessageCardPart {
         let shown = comment.id == source.target.id && source.showOriginal ? comment.content : comment.displayContent
-        let text = MessageCardText.nonBlank(shown) ?? MessageCardSubject.paintableMedia(of: comment).map { symbol(of: $0.media.kind) }.joined(separator: " ")
+        let text = MessageCardText.nonBlank(source.read(shown)) ?? MessageCardSubject.paintableMedia(of: comment).map { symbol(of: $0.media.kind) }.joined(separator: " ")
         let isViewer = !source.viewer.id.isEmpty && comment.authorId == source.viewer.id
         return MessageCardPart(
             author: MessageCardSubject.author(isViewer: isViewer, names: [comment.author, comment.authorUsername], viewer: source.viewer),
