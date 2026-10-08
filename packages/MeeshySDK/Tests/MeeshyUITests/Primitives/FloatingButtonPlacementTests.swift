@@ -86,6 +86,50 @@ final class FloatingButtonPlacementTests: XCTestCase {
         }
     }
 
+    // MARK: - La bannière du joueur pousse le conteneur (recette 2026-10-08)
+
+    /// Bannière REPLIÉE : le conteneur touche le haut de l'écran.
+    private let collapsed = FloatingButtonGeometry.measured(
+        container: CGRect(x: 0, y: 0, width: 402, height: 874),
+        safeRegion: CGRect(x: 0, y: 62, width: 402, height: 778),
+        reported: EdgeInsets()
+    )
+    /// Bannière DÉPLIÉE : elle pousse le conteneur de 80 pt vers le bas.
+    private let expanded = FloatingButtonGeometry.measured(
+        container: CGRect(x: 0, y: 80, width: 402, height: 794),
+        safeRegion: CGRect(x: 0, y: 80, width: 402, height: 760),
+        reported: EdgeInsets(top: 0, leading: 0, bottom: 34, trailing: 0)
+    )
+
+    func test_theBanner_neverChangesTheScreenGeometry() {
+        XCTAssertEqual(collapsed.screenSize, expanded.screenSize)
+        XCTAssertEqual(collapsed.minY, expanded.minY, accuracy: 0.001)
+        XCTAssertEqual(collapsed.maxY, expanded.maxY, accuracy: 0.001)
+    }
+
+    /// Le doigt lâche le bouton à 400 pt de l'ÉCRAN : le conteneur le reçoit
+    /// dans SON repère, la géométrie le remet en global.
+    private func drop(atScreenY y: CGFloat, in geometry: FloatingButtonGeometry) -> String {
+        let local = geometry.local(CGPoint(x: 30, y: y))
+        return geometry.placement(at: geometry.global(local)).storageValue
+    }
+
+    private func screenY(of stored: String, in geometry: FloatingButtonGeometry) -> CGFloat {
+        let local = geometry.local(geometry.center(forStorage: stored, default: FloatingButtonGeometry.defaultFeedStorage))
+        return local.y + geometry.origin.y
+    }
+
+    func test_writtenWithTheBannerCollapsed_readWithItExpanded_staysAt400() {
+        let stored = drop(atScreenY: 400, in: collapsed)
+        XCTAssertEqual(screenY(of: stored, in: expanded), 400, accuracy: 0.01)
+        XCTAssertEqual(expanded.local(expanded.center(forStorage: stored, default: "")).y, 320, accuracy: 0.01)
+    }
+
+    func test_writtenWithTheBannerExpanded_readWithItCollapsed_staysAt400() {
+        let stored = drop(atScreenY: 400, in: expanded)
+        XCTAssertEqual(screenY(of: stored, in: collapsed), 400, accuracy: 0.01)
+    }
+
     func test_aDropUnderTheSameSafeArea_roundTripsExactly() {
         for y in stride(from: pro.minY, through: pro.maxY, by: 37) {
             let stored = pro.placement(at: CGPoint(x: 380, y: y)).storageValue

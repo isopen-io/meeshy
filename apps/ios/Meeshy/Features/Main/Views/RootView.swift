@@ -1496,13 +1496,16 @@ struct RootView: View {
     // MARK: - Menu Ladder (positioned relative to menu button)
     private var menuLadder: some View {
         GeometryReader { proxy in
-            let geometry = floatingGeometry ?? FloatingButtonGeometry(screenSize: proxy.size, safeArea: proxy.safeAreaInsets)
-            let menuCenter = geometry.layout(feedStorage: feedButtonPosition, menuStorage: menuButtonPosition).menu
+            let frame = proxy.frame(in: .global)
+            let geometry = floatingGeometry
+                ?? FloatingButtonGeometry.measured(container: frame, safeRegion: frame, reported: proxy.safeAreaInsets)
+            let globalCenter = geometry.layout(feedStorage: feedButtonPosition, menuStorage: menuButtonPosition).menu
+            let menuCenter = CGPoint(x: globalCenter.x - frame.minX, y: globalCenter.y - frame.minY)
             let halfButton = FloatingButtonGeometry.buttonSize / 2
             let menuItemSize: CGFloat = 46
             let menuSpacing: CGFloat = MeeshySpacing.md
             let ladderExtent = CGFloat(RootMenuLadderEntry.allCases.count) * (menuItemSize + menuSpacing)
-            let expandDown = geometry.menuOpensDownward(from: menuCenter, ladderExtent: ladderExtent)
+            let expandDown = geometry.menuOpensDownward(from: globalCenter, ladderExtent: ladderExtent)
             let menuX = menuCenter.x
             let menuStartY = expandDown
                 ? menuCenter.y + halfButton + menuSpacing + menuItemSize / 2
@@ -1599,9 +1602,12 @@ private struct ReelsRevealContainer<Content: View>: View {
 
     var body: some View {
         GeometryReader { geo in
+            let frame = geo.frame(in: .global)
             let center = FeedButtonAnchor.unitPoint(
                 fromRaw: feedButtonPositionRaw,
-                geometry: floatingGeometry ?? FloatingButtonGeometry(screenSize: geo.size, safeArea: geo.safeAreaInsets)
+                geometry: floatingGeometry
+                    ?? FloatingButtonGeometry.measured(container: frame, safeRegion: frame, reported: geo.safeAreaInsets),
+                in: frame
             )
 
             content(geo.safeAreaInsets)
@@ -1668,11 +1674,13 @@ enum FeedButtonAnchor {
         geometry.center(forStorage: raw, default: FloatingButtonGeometry.defaultFeedStorage)
     }
 
-    static func unitPoint(fromRaw raw: String, geometry: FloatingButtonGeometry) -> UnitPoint {
-        let size = geometry.screenSize
-        guard size.width > 0, size.height > 0 else { return .topLeading }
+    /// Le centre du bouton (global) en fraction du cadre GLOBAL `frame` de la
+    /// vue qui révèle les réels — qui peut, comme le conteneur des boutons, ne
+    /// pas commencer en haut de l'écran (bannière du joueur).
+    static func unitPoint(fromRaw raw: String, geometry: FloatingButtonGeometry, in frame: CGRect) -> UnitPoint {
+        guard frame.width > 0, frame.height > 0 else { return .topLeading }
         let p = screenPoint(fromRaw: raw, geometry: geometry)
-        return UnitPoint(x: p.x / size.width, y: p.y / size.height)
+        return UnitPoint(x: (p.x - frame.minX) / frame.width, y: (p.y - frame.minY) / frame.height)
     }
 }
 

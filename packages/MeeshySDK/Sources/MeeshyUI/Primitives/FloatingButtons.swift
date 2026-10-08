@@ -146,10 +146,10 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         let layout = geometry.layout(feedStorage: leftPositionRaw, menuStorage: rightPositionRaw)
         return ZStack {
             FreeFloatingButton(
-                center: layout.feed,
+                center: geometry.local(layout.feed),
                 buttonSize: FloatingButtonGeometry.buttonSize,
                 onDrop: { point in
-                    leftPositionRaw = geometry.placement(droppedAt: point, avoiding: layout.menu).storageValue
+                    leftPositionRaw = geometry.placement(droppedAt: geometry.global(point), avoiding: layout.menu).storageValue
                 },
                 onTap: onLeftTap,
                 onLongPress: onLeftLongPress,
@@ -162,10 +162,10 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
             }
 
             FreeFloatingButton(
-                center: layout.menu,
+                center: geometry.local(layout.menu),
                 buttonSize: FloatingButtonGeometry.buttonSize,
                 onDrop: { point in
-                    rightPositionRaw = geometry.placement(droppedAt: point, avoiding: layout.feed).storageValue
+                    rightPositionRaw = geometry.placement(droppedAt: geometry.global(point), avoiding: layout.feed).storageValue
                 },
                 onTap: onRightTap,
                 onLongPress: onRightLongPress,
@@ -183,7 +183,7 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
 
 // MARK: - Free Floating Button
 
-/// Un disque flottant posé en `center` (coordonnées de l'écran entier). Il suit
+/// Un disque flottant posé en `center` (repère du conteneur qui le dessine). Il suit
 /// le doigt image par image pendant le glisser ; à la levée, `onDrop` reçoit le
 /// point lâché et la géométrie l'aimante au bord le plus proche.
 public struct FreeFloatingButton<Content: View>: View {

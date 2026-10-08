@@ -34,14 +34,24 @@ final class FeedButtonAnchorTests: XCTestCase {
 
     func test_unitPoint_isScreenPointFraction() {
         let p = FeedButtonAnchor.screenPoint(fromRaw: "v2,R,0.5000", geometry: geometry)
-        let u = FeedButtonAnchor.unitPoint(fromRaw: "v2,R,0.5000", geometry: geometry)
+        let u = FeedButtonAnchor.unitPoint(
+            fromRaw: "v2,R,0.5000", geometry: geometry, in: CGRect(x: 0, y: 0, width: 390, height: 844)
+        )
         XCTAssertEqual(u.x, p.x / 390, accuracy: 0.0001)
         XCTAssertEqual(u.y, p.y / 844, accuracy: 0.0001)
     }
 
+    /// La vue des réels peut, comme le conteneur des boutons, commencer sous la
+    /// bannière du joueur : le disque naît quand même au centre du bouton.
+    func test_unitPoint_inAFramePushedDownByTheBanner_staysOnTheButton() {
+        let frame = CGRect(x: 0, y: 80, width: 390, height: 764)
+        let p = FeedButtonAnchor.screenPoint(fromRaw: "v3,L,0.500000", geometry: geometry)
+        let u = FeedButtonAnchor.unitPoint(fromRaw: "v3,L,0.500000", geometry: geometry, in: frame)
+        XCTAssertEqual(frame.minY + u.y * frame.height, p.y, accuracy: 0.001)
+    }
+
     func test_unitPoint_zeroSize_returnsTopLeading() {
-        let empty = FloatingButtonGeometry(screenSize: .zero, safeArea: EdgeInsets())
-        XCTAssertEqual(FeedButtonAnchor.unitPoint(fromRaw: "v2,R,0.5000", geometry: empty), .topLeading)
+        XCTAssertEqual(FeedButtonAnchor.unitPoint(fromRaw: "v2,R,0.5000", geometry: geometry, in: .zero), .topLeading)
     }
 
     // MARK: - #9363 — les bulles ne recouvrent plus le « + » de la story
