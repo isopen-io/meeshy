@@ -158,6 +158,11 @@ final class GameBadgeShelfTests: XCTestCase {
         for axis in EngagementAxisKey.allCases {
             XCTAssertTrue(GameMedalGlyph.allCases.contains(GameMedalGlyph(axis: axis)), "\(axis)")
         }
-        XCTAssertEqual(GameMedalGlyph.allCases.count, 9)
+        let glyphs = EngagementAxisKey.allCases.map { GameMedalGlyph(axis: $0) }
+        XCTAssertEqual(Set(glyphs).count, EngagementAxisKey.allCases.count, "un glyphe PAR axe : deux axes ne partagent jamais leur dessin")
+        XCTAssertEqual(GameMedalGlyph.allCases.count, 20, "vingt glyphes, ni plus ni moins que les axes du catalogue")
+        XCTAssertEqual(Set(glyphs), Set(GameMedalGlyph.allCases), "aucun glyphe sans axe")
+        XCTAssertEqual(Set(GameMedalGlyph.allCases.map(\.webName)).count, 20, "chaque glyphe a son nom web, distinct")
+        XCTAssertFalse(GameMedalGlyph.allCases.map(\.webName).contains { $0.contains("bubble") }, "jamais une bulle")
     }
 }
