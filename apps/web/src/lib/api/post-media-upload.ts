@@ -1,5 +1,4 @@
 import * as uploadsEndpoints from '@meeshy/shared/api/endpoints/uploads';
-import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
 
 import { anySignal, timeoutSignal } from './abort';
 import type { DataSource } from './config';
@@ -142,9 +141,7 @@ function resolvedLocation(location: string, base: string): string {
 async function createUpload(params: PostMediaUploadParams, credential: Credential): Promise<string | ApiFailure> {
   const entries: Array<readonly [string, string]> = [
     ['filename', params.file.name],
-    // #9693 — le type de ce que le fichier EST (`audio/x-wav` → `audio/wav`,
-    // un MP3 sans type → `audio/mpeg`), pas le nom que le système lui donne.
-    ['filetype', canonicalMediaMimeType({ mimeType: params.file.type, fileName: params.file.name }) || 'application/octet-stream'],
+    ['filetype', params.file.type !== '' ? params.file.type : 'application/octet-stream'],
     ['uploadcontext', params.uploadContext],
     ...(params.thumbHash !== undefined ? [['thumbhash', params.thumbHash] as const] : []),
   ];
