@@ -7,6 +7,7 @@ import {
   IDENTITY_CHIP_HEIGHT,
   IDENTITY_NAME_SIZE,
 } from '@/lib/reading-mode/metrics';
+import { dayLabelsFor } from '@/lib/grouping';
 import { focusStampLabel } from '@/lib/reading-mode/stamp';
 import type { Delivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
@@ -235,7 +236,9 @@ export function FocusStamp({
 }) {
   const label = (
     <>
-      {focusStampLabel({ sentAt, now, timeString, locale })}
+      {/* Les trois mots relatifs viennent de l'APPELANT (`stamp.ts`) : ceux de
+          la locale du lecteur, jamais le défaut français (#9710). */}
+      {focusStampLabel({ sentAt, now, timeString, locale, ...dayLabelsFor(locale) })}
       {isMine && delivery !== null ? (
         <span className="ms-1 inline-flex align-middle">
           <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} />
