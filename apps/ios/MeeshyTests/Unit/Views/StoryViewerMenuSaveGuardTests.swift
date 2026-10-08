@@ -11,7 +11,7 @@ import XCTest
 final class StoryViewerMenuSaveGuardTests: XCTestCase {
 
     private static let headerFile = "Meeshy/Features/Main/Views/StoryViewerView+Header.swift"
-    private static let saveCall = "StoryPhotoSaveService.shared.save(story: story)"
+    private static let saveCall = "StoryPhotoSaveService.shared.save(story: story, authorUsername: group.username)"
 
     private func source() throws -> String {
         try MyStoriesSourceCorpus.text(of: Self.headerFile)

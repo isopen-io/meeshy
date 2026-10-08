@@ -55,8 +55,10 @@ private final class StubMediaSaveBranding: MediaSaveBranding, @unchecked Sendabl
     private(set) var stampedKinds: [AttachmentKind] = []
     private(set) var stampedOrigins: [MediaOrigin] = []
     private(set) var stampedFiles: [URL] = []
+    private(set) var stampedAuthors: [String?] = []
 
-    func stamp(_ file: URL, kind: AttachmentKind, origin: MediaOrigin) async -> BrandedMedia {
+    func stamp(_ file: URL, kind: AttachmentKind, origin: MediaOrigin, author: String?) async -> BrandedMedia {
+        stampedAuthors.append(author)
         stampedKinds.append(kind)
         stampedOrigins.append(origin)
         stampedFiles.append(file)
@@ -557,6 +559,20 @@ final class MediaSaveCoordinatorTests: XCTestCase {
             let moves = kind == .image ? photos.imageFileWrites.map(\.moveFile) : photos.videoMoveFlags
             XCTAssertEqual(moves, [true], "\(kind) : la copie marquée est déplacée, pas recopiée")
         }
+    }
+
+    /// Recette #9681 — la marque nomme l'AUTEUR de l'œuvre, que la requête porte
+    /// jusqu'au marquage ; jamais le spectateur qui enregistre.
+    func test_pick_handsTheWorkAuthor_toTheBranding() async throws {
+        let branding = StubMediaSaveBranding()
+        let (sut, resolver, _, _) = makeSUT(branding: branding)
+        resolver.result = .success(try makeTempSourceFile(named: "photo.jpg"))
+        sut.requestSave(MediaSaveRequest(kind: .image, origin: .composed, remoteURLString: "https://x/photo.jpg",
+                                         authorUsername: "demo-test-staging"))
+
+        await sut.pick(.photoLibrary)
+
+        XCTAssertEqual(branding.stampedAuthors, ["demo-test-staging"])
     }
 
     func test_pick_photoLibrary_video_savesTheStampedFile() async throws {

@@ -97,7 +97,8 @@ final class ReelSceneRoutingTests: XCTestCase {
 
     func test_saveRoute_aPlainMediaReel_keepsItsFile() {
         XCTAssertEqual(PostSaveRoute.resolve(for: Self.plainVideoReelWithAddress(), mayLeave: true),
-                       .rawFile(PostSaveMedia(kind: .video, url: "https://cdn.meeshy.test/0.mov", fileName: "0_7db3dc1a.mov")))
+                       .rawFile(PostSaveMedia(kind: .video, url: "https://cdn.meeshy.test/0.mov", fileName: "0_7db3dc1a.mov",
+                                             authorUsername: "auteur")))
     }
 
     func test_saveRoute_aTextOnlyReel_isRendered_butATextOnlyPostKeepsItsBookmark() {
@@ -171,6 +172,38 @@ final class ReelSceneRoutingTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(exporter.cleanupCallCount, 2, "les morceaux intermédiaires sont jetés")
     }
 
+    // MARK: - Le filigrane nomme l'AUTEUR (recette #9681, 2026-10-08)
+
+    func test_savePost_watermarksTheReelAuthor_notTheViewerWhoSaves() async {
+        let handles = JoinedHandles()
+        let sut = StoryPhotoSaveService(exporter: ScriptedStoryExporter(), photoSaver: StubPhotoSaver(),
+                                        toasts: MockFeedbackToast(), preferredLanguages: { [] }, intro: { nil },
+                                        watermark: { handle in handles.values.append(handle); return nil })
+        let reel = Self.composedReel()
+        XCTAssertNotEqual(AuthManager.shared.currentUser?.username, "auteur", "auteur et spectateur diffèrent")
+
+        sut.save(post: reel)
+        for _ in 0..<200 where sut.progress(for: reel.id) != nil { await Task.yield() }
+
+        XCTAssertEqual(handles.values, ["auteur"], "le réel de @auteur sort signé @auteur")
+    }
+
+    func test_saveStory_ofAnotherAuthor_watermarksThatAuthor_withoutTheViewerInterlude() async {
+        let handles = JoinedHandles()
+        let exporter = ScriptedStoryExporter()
+        let sut = StoryPhotoSaveService(exporter: exporter, photoSaver: StubPhotoSaver(),
+                                        toasts: MockFeedbackToast(), preferredLanguages: { [] },
+                                        intro: { XCTFail("l'interlude du spectateur ne précède pas la story d'un autre"); return nil },
+                                        watermark: { handle in handles.values.append(handle); return nil })
+        let story = StoryItem(id: "story-9681", content: "x", media: [], storyEffects: nil, createdAt: Date())
+
+        sut.save(story: story, authorUsername: "demo-test-staging")
+        for _ in 0..<200 where sut.progress(for: story.id) != nil { await Task.yield() }
+
+        XCTAssertEqual(handles.values, ["demo-test-staging"])
+        XCTAssertNil(exporter.lastIntro)
+    }
+
     // MARK: - Partager emporte aussi le fichier, rendu à la demande (#9682)
 
     func test_shareFile_onlyFileActivitiesPayTheRender() {
@@ -182,13 +215,19 @@ final class ReelSceneRoutingTests: XCTestCase {
         XCTAssertFalse(ShareFileActivity.wantsFile(nil))
     }
 
-    func test_shareItems_aComposedReel_carriesTheLinkThenATypedVideoSource() throws {
+    /// Recette #9682 : un lien http À CÔTÉ du fichier (« 1 Link and 1 Document »)
+    /// cachait « Enregistrer dans Fichiers ». UN élément, qui rend le fichier aux
+    /// activités de fichier et le lien aux autres.
+    func test_shareItems_aComposedReel_isOneSource_fileForFileActivities_linkForTheOthers() throws {
         let url = try XCTUnwrap(URL(string: "https://meeshy.me/l/abc"))
         let items = ShareableLink(url: url, fileSource: .post(Self.composedReel())).activityItems
 
-        XCTAssertEqual(items.count, 2)
-        XCTAssertEqual(items.first as? URL, url, "le lien part toujours, en premier")
-        let provider = try XCTUnwrap(items.last as? LazyShareFileProvider)
+        XCTAssertEqual(items.count, 1, "aucun lien http à côté du fichier")
+        let provider = try XCTUnwrap(items.first as? LazyShareFileProvider)
+        let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        XCTAssertEqual(provider.activityViewController(sheet, itemForActivityType: .message) as? URL, url,
+                       "Messages reçoit le lien")
+        XCTAssertEqual(provider.activityViewController(sheet, itemForActivityType: .copyToPasteboard) as? URL, url)
         let placeholder = try XCTUnwrap(provider.placeholderItem as? URL)
         XCTAssertEqual(placeholder.lastPathComponent, "Meeshy-6aa868a7d5f0ce06898b8222.mp4")
         XCTAssertTrue(UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(placeholder.path),
@@ -204,14 +243,15 @@ final class ReelSceneRoutingTests: XCTestCase {
     /// Paresseux : rien n'est rendu à la construction, ni pour une activité de LIEN.
     func test_shareFileProvider_rendersNothingUntilAFileActivityIsChosen() throws {
         let placeholder = try XCTUnwrap(ShareFilePlaceholder.video(named: "Meeshy-x.mp4"))
-        let provider = LazyShareFileProvider(placeholder: placeholder, typeIdentifier: "public.mpeg-4") {
+        let link = try XCTUnwrap(URL(string: "https://meeshy.me/l/abc"))
+        let provider = LazyShareFileProvider(placeholder: placeholder, typeIdentifier: "public.mpeg-4", link: link) {
             XCTFail("aucun rendu tant qu'aucune activité de fichier n'est choisie")
             return nil
         }
         let sheet = UIActivityViewController(activityItems: [provider], applicationActivities: nil)
 
-        XCTAssertNil(provider.activityViewController(sheet, itemForActivityType: .message))
-        XCTAssertNil(provider.activityViewController(sheet, itemForActivityType: .copyToPasteboard))
+        XCTAssertEqual(provider.activityViewController(sheet, itemForActivityType: .message) as? URL, link)
+        XCTAssertEqual(provider.activityViewController(sheet, itemForActivityType: .copyToPasteboard) as? URL, link)
         XCTAssertEqual(provider.activityViewController(sheet, dataTypeIdentifierForActivityType: .saveToCameraRoll),
                        "public.mpeg-4")
     }
@@ -333,4 +373,9 @@ final class ReelSceneRoutingTests: XCTestCase {
 /// Les morceaux remis à l'enchaînement, un relevé par appel.
 private final class JoinedParts: @unchecked Sendable {
     var counts: [Int] = []
+}
+
+/// Les pseudos remis au filigrane, un par rendu.
+private final class JoinedHandles: @unchecked Sendable {
+    var values: [String?] = []
 }

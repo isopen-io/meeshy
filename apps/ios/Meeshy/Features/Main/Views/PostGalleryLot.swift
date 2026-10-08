@@ -69,6 +69,8 @@ nonisolated struct GallerySceneItem: Equatable {
     /// C'est elle qui fait naître le curseur au couloir de transport
     /// (`GallerySceneTimeline`).
     var timeline: TimeInterval? = nil
+    /// L'auteur du post, que le filigrane d'un enregistrement nomme (recette #9681).
+    var authorUsername: String? = nil
 
     /// La scène elle-même, et non le document entier : deux pages d'un même
     /// document ne diffèrent que par elle, et comparer le document ferait payer
@@ -405,6 +407,7 @@ nonisolated struct PostGalleryLot {
             thumbHash: scene.thumbHash ?? media?.thumbHash,
             thumbnailURL: media.flatMap(thumbnailURL(of:))
         )
+        item.authorUsername = post.authorUsername
         item.timeline = GallerySceneTimeline.duration(moves: item.moves) { [item] in
             item.renderableSlide(preferredLanguages: []).computedTotalDuration()
         }

@@ -79,6 +79,11 @@ final class StoryPhotoSaveService: ObservableObject {
     /// Met bout à bout les scènes rendues d'une publication à plusieurs scènes.
     private let concatenate: @MainActor ([URL], URL) async -> Bool
 
+    /// **Le filigrane nomme l'AUTEUR de l'œuvre, jamais celui qui l'enregistre**
+    /// (recette #9681, 2026-10-08) : un réel de @demo-test-staging enregistré par
+    /// @atabeth sortait signé « @atabeth ».
+    private let watermark: @MainActor (String?) -> StoryExportWatermark?
+
     init(
         exporter: StoryVideoExportServiceProviding? = nil,
         photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
@@ -86,7 +91,8 @@ final class StoryPhotoSaveService: ObservableObject {
         preferredLanguages: (@MainActor () -> [String])? = nil,
         introTimeout: Duration = BoundedAsyncResolution.defaultTimeout,
         intro: (@MainActor @Sendable () async -> StoryExportIntroContent?)? = nil,
-        concatenate: (@MainActor ([URL], URL) async -> Bool)? = nil
+        concatenate: (@MainActor ([URL], URL) async -> Bool)? = nil,
+        watermark: (@MainActor (String?) -> StoryExportWatermark?)? = nil
     ) {
         // `StoryVideoExportService.shared` et `FeedbackToastManager.shared`
         // sont `@MainActor`-isolés : impossible en expression de valeur par
@@ -98,6 +104,7 @@ final class StoryPhotoSaveService: ObservableObject {
             ?? { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
         self.introTimeout = introTimeout
         self.intro = intro ?? StoryExportIntroFactory.currentUser
+        self.watermark = watermark ?? { @MainActor handle in MeeshyExportWatermark.make(username: handle) }
         self.concatenate = concatenate ?? { @MainActor parts, output in
             await StoryExportSequence.concatenate(parts, to: output)
         }
@@ -135,14 +142,34 @@ final class StoryPhotoSaveService: ObservableObject {
     /// progression sur `jobs[story.id]`. Idempotent : un second appel pendant
     /// qu'un job tourne pour la même story est ignoré (le menu reste
     /// atteignable via le long-press pendant l'export).
+    /// - Parameter authorUsername: le pseudo de l'AUTEUR de la story — celui que
+    ///   le filigrane nomme. L'interlude d'identité (celle de l'utilisateur
+    ///   connecté) ne précède que SA propre story : un lecteur qui enregistre la
+    ///   story d'un autre ne la signe pas de son visage.
+    func save(story: StoryItem, authorUsername: String?) {
+        bakeStory(story, author: authorUsername, resolvesIdentity: Self.isViewer(authorUsername))
+    }
+
+    /// SA propre story (« Mes stories », rail de l'auteur) : l'utilisateur
+    /// connecté EST l'auteur — son pseudo au filigrane, son interlude devant.
     func save(story: StoryItem) {
+        bakeStory(story, author: AuthManager.shared.currentUser?.username, resolvesIdentity: true)
+    }
+
+    private func bakeStory(_ story: StoryItem, author: String?, resolvesIdentity: Bool) {
         let languages = exportLanguages(of: story)
         bakeThenSave(jobKey: story.id,
                      slides: [story.toRenderableSlide(preferredLanguages: languages)],
                      languages: languages,
                      stickerMedia: story.media,
-                     resolvesIdentity: true,
+                     author: author,
+                     resolvesIdentity: resolvesIdentity,
                      appendsBrandOutro: true)
+    }
+
+    private static func isViewer(_ username: String?) -> Bool {
+        guard let username, let me = AuthManager.shared.currentUser?.username else { return false }
+        return username.caseInsensitiveCompare(me) == .orderedSame
     }
 
     /// **UNE SCÈNE DE POST S'ENREGISTRE COMME UNE STORY** (#7052) — même bake,
@@ -170,6 +197,7 @@ final class StoryPhotoSaveService: ObservableObject {
                      // que le porteur transporte (#4852) : sans cet index,
                      // Photos recevrait 🖼️ à leur place.
                      stickerMedia: scene.carrier.media,
+                     author: scene.authorUsername,
                      resolvesIdentity: false,
                      appendsBrandOutro: false)
     }
@@ -187,6 +215,7 @@ final class StoryPhotoSaveService: ObservableObject {
                      slides: Self.renderableSlides(of: post, preferredLanguages: languages),
                      languages: languages,
                      stickerMedia: post.media,
+                     author: post.savedWorkAuthorUsername,
                      resolvesIdentity: false,
                      appendsBrandOutro: false)
     }
@@ -198,15 +227,17 @@ final class StoryPhotoSaveService: ObservableObject {
     func renderSceneFile(of post: FeedPost) async -> URL? {
         let languages = preferredLanguages()
         return await bake(slides: Self.renderableSlides(of: post, preferredLanguages: languages),
-                          languages: languages, stickerMedia: post.media, intro: nil, appendsBrandOutro: false)
+                          languages: languages, stickerMedia: post.media, author: post.savedWorkAuthorUsername,
+                          intro: nil, appendsBrandOutro: false)
     }
 
     /// Le MP4 d'une story pour la feuille de partage (#9682) — le rendu de
     /// `save(story:)`, carte de fin comprise, sans l'attente de l'interlude.
-    func renderStoryFile(of story: StoryItem) async -> URL? {
+    func renderStoryFile(of story: StoryItem, authorUsername: String?) async -> URL? {
         let languages = exportLanguages(of: story)
         return await bake(slides: [story.toRenderableSlide(preferredLanguages: languages)],
-                          languages: languages, stickerMedia: story.media, intro: nil, appendsBrandOutro: true)
+                          languages: languages, stickerMedia: story.media, author: authorUsername,
+                          intro: nil, appendsBrandOutro: true)
     }
 
     /// **Le rendu d'une ou plusieurs slides en UN MP4** (#9681). Une slide : un
@@ -215,10 +246,10 @@ final class StoryPhotoSaveService: ObservableObject {
     /// fin sur la dernière —, puis les morceaux s'enchaînent dans l'ordre du
     /// document, comme le lecteur les enchaîne (#6763). La progression couvre la
     /// suite entière ; une annulation arrête avant la scène suivante.
-    private func bake(slides: [StorySlide], languages: [String], stickerMedia: [FeedMedia],
+    private func bake(slides: [StorySlide], languages: [String], stickerMedia: [FeedMedia], author: String?,
                       intro: StoryExportIntroContent?, appendsBrandOutro: Bool,
                       onProgress: ((Double) -> Void)? = nil) async -> URL? {
-        let watermark = MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)
+        let watermark = self.watermark(author)
         var parts: [URL] = []
         for (index, slide) in slides.enumerated() {
             guard !Task.isCancelled else { break }
@@ -275,6 +306,7 @@ final class StoryPhotoSaveService: ObservableObject {
                               slides: [StorySlide],
                               languages: [String],
                               stickerMedia: [FeedMedia],
+                              author: String?,
                               resolvesIdentity: Bool,
                               appendsBrandOutro: Bool) {
         guard jobs[storyId] == nil else { return }
@@ -325,6 +357,7 @@ final class StoryPhotoSaveService: ObservableObject {
                 slides: slides,
                 languages: languages,
                 stickerMedia: stickerMedia,
+                author: author,
                 intro: introContent,
                 appendsBrandOutro: appendsBrandOutro,
                 onProgress: { [weak self] fraction in

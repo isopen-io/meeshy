@@ -172,7 +172,8 @@ enum PostSaveRoute: Equatable {
         guard mayLeave else { return .unavailable }
         if ReelSceneRouting.sceneDocument(for: post) != nil || post.storyEffects != nil { return .renderScene }
         if let media = post.primaryReelDisplayMedia, let url = media.url, !url.isEmpty {
-            return .rawFile(PostSaveMedia(kind: media.type.attachmentKind, url: url, fileName: media.fileName))
+            return .rawFile(PostSaveMedia(kind: media.type.attachmentKind, url: url, fileName: media.fileName,
+                                          authorUsername: post.savedWorkAuthorUsername))
         }
         let hasText = !post.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return post.isReel && hasText ? .renderScene : .unavailable
@@ -184,9 +185,22 @@ struct PostSaveMedia: Equatable {
     let kind: AttachmentKind
     let url: String
     let fileName: String?
+    /// L'auteur de l'œuvre, que la marque nomme — jamais celui qui enregistre.
+    var authorUsername: String? = nil
 
     var request: MediaSaveRequest {
-        MediaSaveRequest(kind: kind, origin: .composed, remoteURLString: url, suggestedFileName: fileName)
+        MediaSaveRequest(kind: kind, origin: .composed, remoteURLString: url, suggestedFileName: fileName,
+                         authorUsername: authorUsername ?? "")
+    }
+}
+
+extension FeedPost {
+    /// **Qui a fait ce qu'on enregistre** (recette #9681, 2026-10-08) : l'auteur
+    /// du post — sauf pour un repartage nu, dont les médias sont ceux du post
+    /// repartagé. Le filigrane le nomme ; le spectateur qui enregistre, jamais.
+    var savedWorkAuthorUsername: String? {
+        let borrowsTheRepost = media.isEmpty && storyEffects == nil && repost != nil
+        return borrowsTheRepost ? repost?.authorUsername : authorUsername
     }
 }
 
