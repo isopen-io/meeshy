@@ -350,7 +350,11 @@ readonly SHARED_BASELINE=0
 # 504 → 502 (#8039, un vocal web se lit sur iOS) : les tests de couverture
 # d'`UploadProcessor` visent `normalizeAudio` — un seul cas paramétré couvre le
 # conteneur M4A pour toutes les sources, au lieu de trois `amplifyAudio` par format.
-readonly GATEWAY_BASELINE=501
+#
+# 501 → 498 (lots du 2026-10-07 : transfert gardé #9579, points par post #9569/#9584,
+# défis #9635, loi de sortie #9572) : trois `any` ont quitté la passerelle avec ces lots —
+# le progrès est inscrit, le cliquet ne peut que descendre.
+readonly GATEWAY_BASELINE=498
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO
