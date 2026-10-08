@@ -147,11 +147,11 @@ final class GameBadgeShelfTests: XCTestCase {
         ]))
         func item(_ axis: EngagementAxisKey) -> GameBadgeItem? { items.first { $0.axis == axis } }
         XCTAssertEqual(item(.textMessage)?.family, .content)
-        XCTAssertEqual(item(.textMessage)?.glyph, .text)
+        XCTAssertEqual(item(.textMessage)?.glyph, .textMessage)
         XCTAssertEqual(item(.audioComment)?.family, .comment)
-        XCTAssertEqual(item(.audioComment)?.glyph, .voice)
+        XCTAssertEqual(item(.audioComment)?.glyph, .audioComment)
         XCTAssertEqual(item(.friendship)?.family, .social)
-        XCTAssertEqual(item(.friendship)?.glyph, .social)
+        XCTAssertEqual(item(.friendship)?.glyph, .friendship)
     }
 
     func test_everyAxisOfTheCatalogHasAGlyph_neverABubble() {
