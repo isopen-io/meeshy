@@ -146,21 +146,21 @@ enum DailyGestureLimitNotice {
             switch limit.gesture {
             case .comment:
                 return String(localized: "post.daily_limit.comment.untimed",
-                              defaultValue: "Vous avez atteint votre limite de commentaires pour aujourd'hui.", bundle: .main)
+                              defaultValue: "Vous avez fait tous les commentaires permis aujourd'hui. La limite compte vos gestes, jamais vos points.", bundle: .main)
             case .reaction:
                 return String(localized: "post.daily_limit.reaction.untimed",
-                              defaultValue: "Vous avez atteint votre limite de réactions pour aujourd'hui.", bundle: .main)
+                              defaultValue: "Vous avez fait toutes les réactions permises aujourd'hui. La limite compte vos gestes, jamais vos points.", bundle: .main)
             }
         }
         let time = resetTime(resetAt, locale: locale, timeZone: timeZone)
         switch limit.gesture {
         case .comment:
             return String(localized: "post.daily_limit.comment",
-                          defaultValue: "Vous avez atteint votre limite de commentaires pour aujourd'hui. Vous pourrez recommenter à \(time).",
+                          defaultValue: "Vous avez fait tous les commentaires permis aujourd'hui. La limite compte vos gestes, jamais vos points : vous pourrez recommenter à \(time).",
                           bundle: .main)
         case .reaction:
             return String(localized: "post.daily_limit.reaction",
-                          defaultValue: "Vous avez atteint votre limite de réactions pour aujourd'hui. Vous pourrez réagir de nouveau à \(time).",
+                          defaultValue: "Vous avez fait toutes les réactions permises aujourd'hui. La limite compte vos gestes, jamais vos points : vous pourrez réagir de nouveau à \(time).",
                           bundle: .main)
         }
     }

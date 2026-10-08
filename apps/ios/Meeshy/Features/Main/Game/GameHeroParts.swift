@@ -60,7 +60,7 @@ struct GameHeroEarn: View {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
-            Text("+" + GameCopy.formatCount(item.weight))
+            Text(String(localized: "game.hero.earn.chip", defaultValue: "jusqu’à +\(GameCopy.formatCount(item.weight))", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
         }
@@ -74,7 +74,7 @@ struct GameHeroEarn: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(
             localized: "game.hero.earn.a11y",
-            defaultValue: "\(title), \(GameCopy.points(item.weight)) par geste",
+            defaultValue: "\(title), jusqu’à \(GameCopy.points(item.weight)) par geste",
             bundle: .main
         ))
         .gameElement(GameElementDetails.elanFamily(item.family, elan: elan), identifier: "game.hero.earn.\(item.family.rawValue)")

@@ -56,7 +56,7 @@ enum GameDetailText {
 
     /// « 10 points par geste » — ce qu'un geste de la famille rapporte.
     static func elanPoints(_ points: String) -> String {
-        String(localized: "game.detail.elan.points", defaultValue: "\(points) par geste", bundle: .main)
+        String(localized: "game.detail.elan.points", defaultValue: "jusqu’à \(points) par geste", bundle: .main)
     }
 
 

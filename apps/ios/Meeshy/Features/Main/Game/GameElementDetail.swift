@@ -603,7 +603,7 @@ enum GameElementDetails {
 
     /// Une famille d'élan : active dans la fenêtre servie, ou au repos — et ce qu'un geste de la famille rapporte.
     static func elanFamily(_ family: EngagementAxisFamily, elan: EngagementElanProgress?,
-                           weights: [EngagementAxisFamily: Int] = EngagementCatalog.familyWeights) -> GameElementDetail {
+                           weights: [EngagementAxisFamily: Int] = EngagementCatalog.familyTopPoints) -> GameElementDetail {
         let active = elan?.activeFamilies.contains(family) ?? false
         let window: ProgressionConceptFact? = elan.map { fact(ConceptText.factWindow, GameCopy.days($0.windowDays)) }
         let points: ProgressionConceptFact? = weights[family].map {

@@ -241839,43 +241839,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الكتابة والكلام والنشر والتفاعل والدعوة: كل إجراء مفيد يمنحك نقاطًا."
+            "value": "الكتابة والكلام والنشر والتفاعل والدعوة: كل إجراء مفيد يمنحك نقاطًا. الحدود تعدّ إجراءاتك، لا نقاطك أبدًا: المكافآت واللهب والفعاليات تزيد ما يمنحه كل إجراء."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jede nützliche Aktion bringt Punkte."
+            "value": "Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jede nützliche Aktion bringt Punkte. Limits zählen deine Aktionen, nie deine Punkte: Boni, Flamme und Events erhöhen, was jede Aktion bringt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Writing, talking, publishing, reacting, inviting: every useful action earns points."
+            "value": "Writing, talking, publishing, reacting, inviting: every useful action earns points. Limits count your actions, never your points: bonuses, the Flame and events raise what each action earns."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribir, hablar, publicar, reaccionar, invitar: cada acción útil da puntos."
+            "value": "Escribir, hablar, publicar, reaccionar, invitar: cada acción útil da puntos. Los límites cuentan tus gestos, nunca tus puntos: los bonus, la Llama y los eventos aumentan lo que da cada gesto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points."
+            "value": "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scrivere, parlare, pubblicare, reagire, invitare: ogni azione utile fa guadagnare punti."
+            "value": "Scrivere, parlare, pubblicare, reagire, invitare: ogni azione utile fa guadagnare punti. I limiti contano i tuoi gesti, mai i tuoi punti: bonus, Fiamma ed eventi aumentano ciò che ogni gesto fa guadagnare."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escrever, falar, publicar, reagir, convidar: cada ação útil rende pontos."
+            "value": "Escrever, falar, publicar, reagir, convidar: cada ação útil rende pontos. Os limites contam seus gestos, nunca seus pontos: bônus, Chama e eventos aumentam o que cada gesto rende."
           }
         }
       }
@@ -249876,43 +249876,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@، %@ لكل إجراء"
+            "value": "%@، حتى %@ لكل إجراء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@, %@ pro Aktion"
+            "value": "%@, bis zu %@ pro Aktion"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@, %@ per action"
+            "value": "%@, up to %@ per action"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@, %@ por gesto"
+            "value": "%@, hasta %@ por gesto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@, %@ par geste"
+            "value": "%@, jusqu’à %@ par geste"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@, %@ per gesto"
+            "value": "%@, fino a %@ per gesto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@, %@ por ação"
+            "value": "%@, até %@ por ação"
+          }
+        }
+      }
+    },
+    "game.hero.earn.chip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حتى ⁦+%@⁩"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bis zu +%@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "up to +%@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hasta +%@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "jusqu’à +%@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fino a +%@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "até +%@"
           }
         }
       }
@@ -273000,43 +273047,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ لكل إجراء"
+            "value": "حتى %@ لكل إجراء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ pro Aktion"
+            "value": "bis zu %@ pro Aktion"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ per action"
+            "value": "up to %@ per action"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ por gesto"
+            "value": "hasta %@ por gesto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ par geste"
+            "value": "jusqu’à %@ par geste"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ per gesto"
+            "value": "fino a %@ per gesto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ por gesto"
+            "value": "até %@ por gesto"
           }
         }
       }
@@ -277982,43 +278029,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لقد بلغت حدّ التعليقات لهذا اليوم. يمكنك التعليق مجددًا عند الساعة %@."
+            "value": "لقد كتبت كل التعليقات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا نقاطك أبدًا: يمكنك التعليق مجددًا عند الساعة %@."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast dein Kommentarlimit für heute erreicht. Ab %@ kannst du wieder kommentieren."
+            "value": "Du hast heute alle erlaubten Kommentare geschrieben. Das Limit zählt deine Aktionen, nie deine Punkte: Ab %@ kannst du wieder kommentieren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You’ve reached today’s comment limit. You can comment again at %@."
+            "value": "You’ve made all the comments allowed today. The limit counts your actions, never your points: you can comment again at %@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Has alcanzado tu límite de comentarios de hoy. Podrás volver a comentar a las %@."
+            "value": "Has hecho todos los comentarios permitidos hoy. El límite cuenta tus gestos, nunca tus puntos: podrás volver a comentar a las %@."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous avez atteint votre limite de commentaires pour aujourd’hui. Vous pourrez recommenter à %@."
+            "value": "Vous avez fait tous les commentaires permis aujourd’hui. La limite compte vos gestes, jamais vos points : vous pourrez recommenter à %@."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai raggiunto il limite di commenti per oggi. Potrai commentare di nuovo alle %@."
+            "value": "Hai fatto tutti i commenti consentiti oggi. Il limite conta i tuoi gesti, mai i tuoi punti: potrai commentare di nuovo alle %@."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você atingiu seu limite de comentários de hoje. Poderá comentar novamente às %@."
+            "value": "Você fez todos os comentários permitidos hoje. O limite conta seus gestos, nunca seus pontos: poderá comentar novamente às %@."
           }
         }
       }
@@ -278029,43 +278076,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لقد بلغت حدّ التفاعلات لهذا اليوم. يمكنك التفاعل مجددًا عند الساعة %@."
+            "value": "لقد قمت بكل التفاعلات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا نقاطك أبدًا: يمكنك التفاعل مجددًا عند الساعة %@."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast dein Reaktionslimit für heute erreicht. Ab %@ kannst du wieder reagieren."
+            "value": "Du hast heute alle erlaubten Reaktionen gesetzt. Das Limit zählt deine Aktionen, nie deine Punkte: Ab %@ kannst du wieder reagieren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You’ve reached today’s reaction limit. You can react again at %@."
+            "value": "You’ve made all the reactions allowed today. The limit counts your actions, never your points: you can react again at %@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Has alcanzado tu límite de reacciones de hoy. Podrás volver a reaccionar a las %@."
+            "value": "Has hecho todas las reacciones permitidas hoy. El límite cuenta tus gestos, nunca tus puntos: podrás volver a reaccionar a las %@."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous avez atteint votre limite de réactions pour aujourd’hui. Vous pourrez réagir de nouveau à %@."
+            "value": "Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos points : vous pourrez réagir de nouveau à %@."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai raggiunto il limite di reazioni per oggi. Potrai reagire di nuovo alle %@."
+            "value": "Hai fatto tutte le reazioni consentite oggi. Il limite conta i tuoi gesti, mai i tuoi punti: potrai reagire di nuovo alle %@."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você atingiu seu limite de reações de hoje. Poderá reagir novamente às %@."
+            "value": "Você fez todas as reações permitidas hoje. O limite conta seus gestos, nunca seus pontos: poderá reagir novamente às %@."
           }
         }
       }
@@ -278076,43 +278123,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لقد بلغت حدّ التعليقات لهذا اليوم."
+            "value": "لقد كتبت كل التعليقات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا نقاطك أبدًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast dein Kommentarlimit für heute erreicht."
+            "value": "Du hast heute alle erlaubten Kommentare geschrieben. Das Limit zählt deine Aktionen, nie deine Punkte."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You’ve reached today’s comment limit."
+            "value": "You’ve made all the comments allowed today. The limit counts your actions, never your points."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Has alcanzado tu límite de comentarios de hoy."
+            "value": "Has hecho todos los comentarios permitidos hoy. El límite cuenta tus gestos, nunca tus puntos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous avez atteint votre limite de commentaires pour aujourd’hui."
+            "value": "Vous avez fait tous les commentaires permis aujourd’hui. La limite compte vos gestes, jamais vos points."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai raggiunto il limite di commenti per oggi."
+            "value": "Hai fatto tutti i commenti consentiti oggi. Il limite conta i tuoi gesti, mai i tuoi punti."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você atingiu seu limite de comentários de hoje."
+            "value": "Você fez todos os comentários permitidos hoje. O limite conta seus gestos, nunca seus pontos."
           }
         }
       }
@@ -278123,43 +278170,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لقد بلغت حدّ التفاعلات لهذا اليوم."
+            "value": "لقد قمت بكل التفاعلات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا نقاطك أبدًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast dein Reaktionslimit für heute erreicht."
+            "value": "Du hast heute alle erlaubten Reaktionen gesetzt. Das Limit zählt deine Aktionen, nie deine Punkte."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You’ve reached today’s reaction limit."
+            "value": "You’ve made all the reactions allowed today. The limit counts your actions, never your points."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Has alcanzado tu límite de reacciones de hoy."
+            "value": "Has hecho todas las reacciones permitidas hoy. El límite cuenta tus gestos, nunca tus puntos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous avez atteint votre limite de réactions pour aujourd’hui."
+            "value": "Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos points."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai raggiunto il limite di reazioni per oggi."
+            "value": "Hai fatto tutte le reazioni consentite oggi. Il limite conta i tuoi gesti, mai i tuoi punti."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você atingiu seu limite de reações de hoje."
+            "value": "Você fez todas as reações permitidas hoje. O limite conta seus gestos, nunca seus pontos."
           }
         }
       }

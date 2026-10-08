@@ -280,7 +280,7 @@ enum GameGuideCopy {
         [
             Rule(index: 1,
                  title: String(localized: "game.rules.1.title", defaultValue: "Chaque geste rapporte", bundle: .main),
-                 body: String(localized: "game.rules.1.body", defaultValue: "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points.", bundle: .main)),
+                 body: String(localized: "game.rules.1.body", defaultValue: "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte.", bundle: .main)),
             Rule(index: 2,
                  title: String(localized: "game.rules.2.title", defaultValue: "Les points font le niveau", bundle: .main),
                  body: String(localized: "game.rules.2.body", defaultValue: "100 niveaux en 10 paliers. Chaque niveau demande un peu plus que le précédent.", bundle: .main)),
