@@ -14,6 +14,11 @@ jest.mock('../../../../services/admin/permissions.service', () => ({
   permissionsService: {
     canViewSensitiveData: (...args: unknown[]) => mockCanViewSensitiveData(...args),
     canViewPresence: (...args: unknown[]) => mockCanViewPresence(...args),
+    // Audit A2-4 — la hiérarchie décide des traces de connexion (rangs réels).
+    canManageUser: (viewer: string, target: string) => {
+      const rank: Record<string, number> = { BIGBOSS: 100, ADMIN: 80, MODERATOR: 60, AUDIT: 40, ANALYST: 30, USER: 10 };
+      return (rank[viewer] ?? 0) > (rank[target] ?? 0);
+    },
   },
 }));
 

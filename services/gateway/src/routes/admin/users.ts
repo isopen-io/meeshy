@@ -214,7 +214,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Sanitize selon le role du viewer
       const sanitizedUsers = sanitizationService.sanitizeUsers(
         result.users,
-        viewerRole
+        viewerRole,
+        authContext.registeredUser!.id
       );
 
       const paginationMeta = buildPaginationMeta(
@@ -272,7 +273,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       // Sanitize selon le role — la FICHE demande en plus le bloc de métadonnées
       // de compte (#8876), servi aux seuls rôles qui voient les données sensibles.
-      const sanitizedUser = sanitizationService.sanitizeUser(user, viewerRole, { withAdminMetadata: true });
+      const sanitizedUser = sanitizationService.sanitizeUser(user, viewerRole, {
+        withAdminMetadata: true,
+        viewerId: authContext.registeredUser!.id,
+      });
 
       // Log d'audit
       await userAuditService.logViewUser(
