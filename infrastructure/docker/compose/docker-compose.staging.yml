@@ -192,13 +192,13 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    # L'API ML n'a AUCUN routage public (#9662, incident du 2026-10-08) : 44
+    # routes sans authentification, dont /api/v1/admin/*, /debug/clear-cache et
+    # la bascule de modèle TTS. Aucun client ne l'appelle par ml.staging : la
+    # passerelle la joint par `translator-staging:8000` et ZMQ, sur le réseau
+    # interne. Sonde : `docker exec meeshy-translator-staging … /health`.
     labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=meeshy_meeshy-network"
-      - "traefik.http.routers.translator-staging.rule=Host(`ml.staging.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.translator-staging.entrypoints=websecure"
-      - "traefik.http.routers.translator-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.services.translator-staging.loadbalancer.server.port=8000"
+      - "traefik.enable=false"
       # unhealthy déclenche un restart (#5610) — voir le service `autoheal`.
       - "autoheal=true"
 
