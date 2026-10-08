@@ -119,7 +119,7 @@ public final class PhotoLibraryManager: @unchecked Sendable {
                 let localURL = try await CacheCoordinator.shared.video.localFileURLOrThrow(for: urlString)
                 return await saveVideo(at: localURL)
             } else {
-                if let onDisk = CacheCoordinator.shared.images.cachedFileURL(for: urlString) {
+                if let onDisk = CacheCoordinator.imageLocalFileURL(for: urlString) {
                     return await saveImageFile(at: onDisk)
                 }
                 let data = try await CacheCoordinator.shared.images.data(for: urlString)
