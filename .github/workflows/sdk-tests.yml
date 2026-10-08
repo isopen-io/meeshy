@@ -6,10 +6,13 @@ name: SDK Tests
 # triggered on both apps/ios/** and packages/MeeshySDK/** (the app depends on the
 # SDK), giving app-level coverage of SDK changes without coupling the two suites.
 #
-# Toolchain rationale (same as ios-tests.yml): COMPILE with Xcode 26.1.1
-# (Swift 6.2, required by the package) but RUN on an iOS 18.2 simulator — iOS 18.5+
-# and 26.x hit a Swift runtime isolated-deinit crash at xctest teardown, and the
-# Timeline snapshot baselines were recorded on 18.2.
+# Toolchain (same as ios.yml): COMPILE with Xcode 26.1.1 (Swift 6.2, required
+# by the package), RUN on the runner's PRE-INSTALLED iOS 26.1 simulator since
+# #9701. Until then the suite downloaded iOS 18.2 on every run: 18.4+/26.x
+# crashed at xctest teardown (isolated deinits, Swift #85663 — fixed at the root
+# by #9694, guarded on the binaries by sdk-build) and the snapshot baselines
+# had been recorded on 18.2. They are now re-recorded FROM THE CI'S OWN
+# IMAGES on 26.1 (input `record_snapshots`), never on a developer machine.
 on:
   push:
     branches:
@@ -34,6 +37,16 @@ on:
         description: 'Suites à exécuter seules (ex. ExportEquivalenceTests,MeeshySDKTests/AccountServiceTests) — vide = tout'
         required: false
         default: ''
+      # Ré-enregistre les références de capture qui ÉCHOUENT (ou manquent) sur
+      # le runtime qui juge, et publie les PNG produits en artefact
+      # `sdk-snapshots-<tranche>` : on les relit, puis on les commit. Jamais
+      # d'enregistrement local — la machine qui enregistre doit être celle qui
+      # juge (#9701).
+      record_snapshots:
+        description: 'Ré-enregistrer les références de capture en échec et les publier en artefact'
+        type: boolean
+        required: false
+        default: false
 
 # A hung xctest must never sit for GitHub's 6h default. A new push on the same
 # ref cancels stale in-progress runs so we never accumulate multi-hour zombies.
@@ -42,13 +55,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Tranches parallèles (#9692) et bascule du runtime (même script qu'ios.yml).
-  # Le SDK reste sur 18.2 TÉLÉCHARGÉ tant que ses références de capture,
-  # enregistrées sur 18.2, n'ont pas été ré-enregistrées (#9701) — après quoi
-  # '26.1' + 'false' supprime le téléchargement, comme pour MeeshyTests.
+  # Tranches parallèles (#9692) et bascule du runtime (même script qu'ios.yml) :
+  # 26.1 PRÉINSTALLÉ depuis #9701, plus aucun téléchargement.
   SDK_TEST_SHARDS: 6
-  IOS_TEST_RUNTIME: '18.2'
-  IOS_TEST_RUNTIME_DOWNLOAD: 'true'
+  IOS_TEST_RUNTIME: '26.1'
+  IOS_TEST_RUNTIME_DOWNLOAD: 'false'
 
 # BÂTIR UNE FOIS, EXÉCUTER EN TRANCHES (#9692, 2026-10-08). Le job unique
 # historique (provisionnement + `xcodebuild test`) a atteint son plafond de
@@ -108,6 +119,25 @@ jobs:
             ARCHS=arm64 \
             -quiet 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log"
 
+      # #9694 / #9701 — garde BINAIRE des deinit isolées, sur les binaires du
+      # SDK : MeeshyUI compile en `.defaultIsolation(MainActor.self)`, donc une
+      # classe non `nonisolated` y reçoit une deinit isolée qui tue xctest au
+      # démontage sur 18.4+/26. Les cibles du paquet sont liées statiquement
+      # dans les deux bundles de test : les lire, c'est lire le SDK entier.
+      - name: Aucune deinit isolée dans les binaires du SDK (#9694)
+        run: |
+          set -euo pipefail
+          PRODUCTS="$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator"
+          BINS=()
+          for t in MeeshySDKTests MeeshyUITests; do
+            BIN=$(find "$PRODUCTS" -path "*${t}.xctest/${t}" -type f | head -n 1)
+            [ -n "$BIN" ] || { echo "::error::${t}.xctest introuvable sous $PRODUCTS"; exit 1; }
+            BINS+=("$BIN")
+          done
+          while IFS= read -r fw; do BINS+=("$fw"); done < <(find "$PRODUCTS" -path '*.framework/*' -type f -perm -u+x -not -name '*.plist' 2>/dev/null)
+          scripts/ci/check-ios-isolated-deinits.sh --self-test
+          scripts/ci/check-ios-isolated-deinits.sh --binary "${BINS[@]}"
+
       # tar first: upload-artifact keeps neither permissions nor symlinks.
       - name: Archive test products
         run: |
@@ -130,13 +160,12 @@ jobs:
     needs: [sdk-plan, sdk-build]
     name: Tests SDK — tranche ${{ matrix.shard }}
     runs-on: macos-15
-    # Une tranche vise ~20 min : runtime 18.2 téléchargé puis PREMIER
-    # démarrage (~3-5 min + ~6-10 min de migration, payés par chaque tranche
-    # tant que #9701 n'a pas basculé le SDK sur le 26.1 préinstallé) et son
-    # sixième des tests. Mesuré en cinq tranches (run 37817254961) : 8 min 20
-    # de provisionnement 18.2 + 17 min 42 de tests = 29 min 23, au ras du
-    # plafond — d'où six. 30 est le plafond. Le délai PAR TEST (600 s ci-dessous) reste le garde-fou
-    # d'un test bloqué.
+    # Une tranche vise moins de 20 min. Sur 18.2 téléchargé, chaque tranche
+    # payait le téléchargement puis le PREMIER démarrage du runtime : mesuré en
+    # cinq tranches (run 37817254961), 8 min 20 de provisionnement + 17 min 42
+    # de tests = 29 min 23, au ras du plafond. Le 26.1 préinstallé (#9701)
+    # supprime les deux. 30 est le plafond ; le délai PAR TEST (600 s
+    # ci-dessous) reste le garde-fou d'un test bloqué.
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -166,17 +195,12 @@ jobs:
           [ "$COUNT" = "1" ] || { echo "::error::${COUNT} fichier(s) .xctestrun, 1 attendu"; exit 1; }
           echo "xctestrun=$(find "$RUNNER_TEMP/Products" -maxdepth 1 -name '*.xctestrun')" >> "$GITHUB_OUTPUT"
 
-      # iOS 18.5/18.6 (the runner's pre-installed 18.x) AND iOS 26.x all hit a
-      # Swift runtime isolated-deinit crash at xctest teardown
-      # (swift_task_deinitOnExecutorMainActorBackDeploy → double-free, #9694).
-      # Only iOS 18.0–18.2 are crash-free, and the Timeline snapshot baselines
-      # were recorded on 18.2 — the script downloads it on every shard.
-      # RUNTIME_PROBE on shard 2: the same download, exported as a .dmg then
-      # imported, timed — the measured price of a runtime cache (#9692).
-      - name: Provision iOS 18.2 simulator
+      # Pre-installed runtime (IOS_TEST_RUNTIME, no download — #9701). The
+      # isolated-deinit crash at xctest teardown that kept this suite on a
+      # downloaded 18.2 is fixed at the root (#9694) and guarded on the SDK's
+      # own binaries by the sdk-build job.
+      - name: Provision iOS simulator
         id: sim
-        env:
-          RUNTIME_PROBE: ${{ matrix.shard == 2 }}
         run: scripts/ci/provision-ios-simulator.sh
 
       - name: Run SDK tests
@@ -188,6 +212,11 @@ jobs:
           SHARD: ${{ matrix.shard }}
           XCTESTRUN: ${{ steps.products.outputs.xctestrun }}
           SIM_ID: ${{ steps.sim.outputs.sim_id }}
+          # swift-snapshot-testing lit SNAPSHOT_TESTING_RECORD dans le
+          # processus de test ; xcodebuild y transmet toute variable préfixée
+          # TEST_RUNNER_. « failed » réécrit seulement les références en échec
+          # ou absentes, et le test reste rouge.
+          TEST_RUNNER_SNAPSHOT_TESTING_RECORD: ${{ inputs.record_snapshots && 'failed' || '' }}
         run: |
           set -o pipefail
           START=$(date +%s)
@@ -285,6 +314,25 @@ jobs:
           head -n 9 /tmp/xctest-failures.txt | while IFS= read -r line; do
             echo "::error title=XCTest échec::${line}"
           done
+
+      - name: Collect re-recorded snapshots
+        if: always() && inputs.record_snapshots
+        run: |
+          mkdir -p "$RUNNER_TEMP/snapshots"
+          git status --porcelain --untracked-files=all -- 'packages/MeeshySDK/Tests/**/__Snapshots__/**' \
+            | cut -c4- | tee "$RUNNER_TEMP/snapshots/LIST.txt" \
+            | while IFS= read -r f; do mkdir -p "$RUNNER_TEMP/snapshots/$(dirname "$f")"; cp "$f" "$RUNNER_TEMP/snapshots/$f"; done
+          echo "::notice title=Captures ré-enregistrées (tranche ${{ matrix.shard }})::$(grep -c . "$RUNNER_TEMP/snapshots/LIST.txt" || true) fichier(s)"
+
+      - name: Publish re-recorded snapshots
+        if: always() && inputs.record_snapshots
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-snapshots-${{ matrix.shard }}
+          path: ${{ runner.temp }}/snapshots/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: warn
 
       - name: Publish shard summary
         if: always()

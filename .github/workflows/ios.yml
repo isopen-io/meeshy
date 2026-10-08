@@ -355,6 +355,11 @@ jobs:
     # voulu : les deux modes bâtissent désormais la MÊME destination, la
     # lignée DerivedData sert donc indifféremment PR et `dev`.
     name: ${{ needs.scope.outputs.run_tests == 'true' && 'Build app (produits de test)' || 'Build app (app + cibles de test)' }}
+    # `actions: write` : le remplacement de l'entrée DerivedData de la lignée
+    # (voir « Retire the previous DerivedData entry »).
+    permissions:
+      contents: read
+      actions: write
     # A draft PR is work in progress; its compile is the author's business, not
     # the shared macOS pool's. `ready_for_review` above brings the gate back.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -503,17 +508,24 @@ jobs:
       # Compiled modules / build products. RESTORE-ONLY; the save is explicit,
       # after the compile step (see "Save DerivedData build cache"), because the
       # post-job save is skipped on a timeout-cancellation exactly like the SPM
-      # one. Rolling key → incremental reuse from the most recent prior run; the
-      # toolchain + manifest prefix starts a fresh lineage on a dependency or
-      # Xcode bump.
+      # one. The toolchain + manifest prefix starts a fresh lineage on a
+      # dependency or Xcode bump.
+      #
+      # ONE ENTRY PER LINEAGE, NOT PER COMMIT (#9692, 2026-10-08). The key used
+      # to end in `${{ github.sha }}`: every run saved a new ~1 GB entry, and
+      # every branch (dev, each ci/*, each PR) kept its own. Measured that day:
+      # 6 DerivedData entries of ~1 GB, the repo at 10.6 GB against a 10 GB
+      # budget — the caches evicted each other, SPM included. Now the key is the
+      # lineage itself, only `dev` and `main` save it (every other ref RESTORES
+      # dev's, which GitHub allows from the default branch), and the save
+      # replaces the previous entry of the same ref instead of adding one.
       - name: Restore DerivedData build cache
         id: dd-restore
         uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/DerivedData
-          key: ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
+          key: ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}
           restore-keys: |
-            ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-
             ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-
 
       # XcodeGen owns project generation (see commit dropping hand-edited
@@ -686,13 +698,23 @@ jobs:
       # overruns. `success()` guards against caching a broken build. Progressive:
       # once seeded, the next run restores compiled modules and the compile is
       # incremental (minutes, not the ~15+ min cold compile that was overrunning
-      # the budget). Skipped when the restore already hit the exact key.
+      # the budget). Only `dev` and `main` save (see the restore step): a cache
+      # key is immutable, so the previous entry of THIS ref is deleted first,
+      # then the fresh products take the same key — one entry per lineage and
+      # per ref, always the latest build.
+      - name: Retire the previous DerivedData entry of this lineage
+        if: success() && github.event_name != 'pull_request' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}
+        run: gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/caches?key=${KEY}&ref=${GITHUB_REF}" >/dev/null 2>&1 || echo "aucune entrée précédente pour ${KEY} sur ${GITHUB_REF}"
+
       - name: Save DerivedData build cache
-        if: success() && steps.dd-restore.outputs.cache-hit != 'true'
+        if: success() && github.event_name != 'pull_request' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/DerivedData
-          key: ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
+          key: ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}
 
 
       # Les produits de test partent vers les tranches. Archivés en tar AVANT
