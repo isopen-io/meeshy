@@ -9,6 +9,7 @@ import { generateSessionToken, hashSessionToken } from '../../utils/session-toke
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { logError } from '../../utils/logger';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import { creditLinkJoin, type LinkJoinEngagement } from '../links/utils/link-join-credit';
 import {
   sendSuccess,
@@ -306,6 +307,7 @@ async function joinAsGuest(
       },
     },
   });
+  announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: profile.language });
 
   await postJoinSystemMessage(
     { prisma, broadcast },
@@ -411,6 +413,7 @@ async function joinAsRegistered(
       },
     });
   }
+  announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: linkMemberFields.language });
 
   await postJoinSystemMessage(
     { prisma, broadcast },
@@ -593,6 +596,7 @@ export async function endGuestSession(params: GuestSessionParams): Promise<EndGu
     where: { id: participant.id },
     data: { isActive: false, isOnline: false, leftAt: new Date() },
   });
+  announceConversationLanguageChange({ kind: 'departure', conversationId: participant.conversationId });
 
   const shareLinkId = participant.anonymousSession?.shareLinkId;
   if (shareLinkId) {

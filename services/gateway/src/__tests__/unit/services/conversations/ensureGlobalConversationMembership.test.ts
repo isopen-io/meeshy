@@ -16,6 +16,10 @@ import {
   type GlobalMembershipSocketManager,
 } from '../../../../services/conversations/ensureGlobalConversationMembership';
 import { matchesMongoWhere, type MongoDocument } from '../../../helpers/mongo-where';
+import {
+  subscribeConversationLanguageChanges,
+  type ConversationLanguageChange,
+} from '../../../../services/message-translation/conversationLanguageChanges';
 
 const GLOBAL_CONV = { id: 'conv-global', identifier: 'meeshy' };
 const USER_ID = 'user-new';
@@ -427,5 +431,23 @@ describe('#9711 — le participant du salon global porte la langue de son compte
 
     const data = (h.prisma.participant.create.mock.calls[0] as any[])[0].data;
     expect(data.language).toBe('es');
+  });
+});
+
+describe('#9708 — l’entrée au salon global est annoncée à la composition linguistique', () => {
+  it('avec la langue du compte, une seule fois, et rien pour un déjà-membre', async () => {
+    const annonces: ConversationLanguageChange[] = [];
+    const desabonner = subscribeConversationLanguageChanges((change) => { annonces.push(change); });
+    try {
+      await ensureGlobalConversationMembership({ prisma: harness().prisma as never }, baseInput);
+      await ensureGlobalConversationMembership(
+        { prisma: harness({ existingMember: { id: 'p', isActive: true } }).prisma as never },
+        baseInput,
+      );
+    } finally {
+      desabonner();
+    }
+
+    expect(annonces).toEqual([{ kind: 'arrival', conversationId: GLOBAL_CONV.id, language: 'es' }]);
   });
 });

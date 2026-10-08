@@ -1942,7 +1942,13 @@ describe('MeeshySocketIOManager', () => {
       it('still broadcasts the translation when the preview refresh query fails', async () => {
         prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-prisme-0001', senderId: 'part-author' });
         prisma.conversation.findUnique.mockResolvedValue(null);
-        prisma.participant.findMany.mockRejectedValue(new Error('DB down'));
+        // Seule la lecture de l'APERÇU tombe : celle des lecteurs autorisés
+        // (`translationReaders`, #9709) répond — sans elle, la traduction ne
+        // part pas du tout (fail-closed), ce qu'un autre témoin garde.
+        prisma.participant.findMany.mockImplementation(async (args: any) => {
+          if (args?.select?.historyVisibleFrom) return [];
+          throw new Error('DB down');
+        });
 
         await expect((manager as any)._handleTextTranslationReady(frData)).resolves.not.toThrow();
 

@@ -24,6 +24,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import { recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import { appliquerDroitsDeParticipant } from './participant-rights-core';
 import { registerParticipantPatchRoute } from './participant-patch';
 import { repondreAuRefus } from './utils/participant-geste-reponse';
@@ -321,6 +322,8 @@ export function registerParticipantWriteRoutes(
         conversationId,
       }).catch(() => undefined);
     }
+
+    announceConversationLanguageChange({ kind: 'arrival', conversationId, language: addedMemberFields.language });
 
     // Annoncer l'arrivée — quatrième et dernière porte, même loi. Une entrée
     // qui ne se voit pas dans le fil est une entrée que les présents

@@ -38,6 +38,7 @@ import { releaseParticipantAvatarSnapshots } from '../../services/participantAva
 import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 
 /**
  * Le seuil d'une bio qui « compte » (#8959) : le MÊME que l'anneau de
@@ -263,6 +264,8 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         body.regionalLanguage !== undefined ||
         body.customDestinationLanguage !== undefined;
       if (langChanged) {
+        // #9708 — les langues cibles des conversations de ce compte changent.
+        announceConversationLanguageChange({ kind: 'reader-languages', userId: userId! });
         fastify.socketIOHandler?.getManager?.()?.refreshUserResolvedLanguages(userId!, {
           systemLanguage: updatedUser.systemLanguage,
           regionalLanguage: updatedUser.regionalLanguage,

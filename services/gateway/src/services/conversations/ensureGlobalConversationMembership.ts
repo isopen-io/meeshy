@@ -9,6 +9,7 @@ import type { AfterResponse } from '../../utils/after-response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { differsOrUnset } from '../../utils/prisma-unset';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
 
 const logger = enhancedLogger.child({ module: 'EnsureGlobalConversationMembership' });
 
@@ -162,6 +163,7 @@ export async function ensureGlobalConversationMembership(
       isActive: true,
     },
   });
+  announceConversationLanguageChange({ kind: 'arrival', conversationId: globalConversation.id, language: recipientLanguage(account, 'fr') });
 
   const socketManager = deps.resolveSocketManager?.();
 

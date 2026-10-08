@@ -32,6 +32,7 @@ import { performLinkJoin, resolveClientIp } from './link-admission';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
@@ -895,6 +896,7 @@ export function registerSharingRoutes(
       if (entry.outcome === 'rejoin' && entry.participantId) {
         invalidateParticipantLookup(entry.participantId, conversationId);
       }
+      announceConversationLanguageChange({ kind: 'arrival', conversationId, language: invitedMemberFields.language });
 
       // `social.conversation_invite` (#8959) — même crédit que
       // `POST …/participants` : une fois par personne et par conversation.

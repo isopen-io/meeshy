@@ -13,6 +13,7 @@ import { participantActionRefusal } from './utils/participant-authority'
 import { accorder, refuser, type VerdictDeGeste } from './utils/participant-geste-verdict'
 import type { PasserelleSocketDeConversation } from './utils/participant-geste-socket'
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
 
 const logger = enhancedLogger.child({ module: 'ConversationBanCore' })
 
@@ -139,6 +140,9 @@ export async function bannirParticipant(
     data: ban.data,
   })
   invalidateParticipantLookup(targetParticipant.id, id)
+  if (targetParticipant.isActive) {
+    announceConversationLanguageChange({ kind: 'departure', conversationId: id })
+  }
 
   // #7593 — bannir un membre ACTIF le RETIRE : la liste des restants dit
   // « Demo a retiré Bob ». Bannir quelqu'un déjà parti ne sort personne.
@@ -351,6 +355,9 @@ export async function leverBannissementDeParticipant(
     data: unban.data,
   })
   invalidateParticipantLookup(targetParticipant.id, id)
+  if (unban.membershipRestored) {
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: id, language: targetParticipant.language })
+  }
 
   const manager = socketIO?.getManager()
   const io = manager?.getIO()
