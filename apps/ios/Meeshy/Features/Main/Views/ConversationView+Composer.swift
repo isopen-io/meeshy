@@ -174,7 +174,7 @@ extension ConversationView {
             // les rejoue FIFO. Les double-taps restent couverts par : champ vidé
             // synchrone (hasContent) et guard isUploading (attachments). Aucun
             // dedup par CONTENU : des emojis identiques partent en série (#7985).
-            onPhotoLibrary: { composerState.showPhotoPicker = true },
+            onPhotoLibrary: { openPhotoLibraryPreselecting([]) },
             onCamera: { composerState.showCamera = true },
             onFilePicker: { composerState.showFilePicker = true },
             onContactPicker: { composerState.showContactPicker = true },
@@ -205,6 +205,8 @@ extension ConversationView {
             },
             onRecentMediaSelected: { pick in ingestRecentMediaPick(pick) },
             onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
+            onRecentLibraryAssetSelected: { asset in ingestRecentLibraryAsset(asset) },
+            recentAttachedAssetIds: Set(composerState.attachedLibraryAssetIds),
             onPhotoLibraryPreselecting: { ids in openPhotoLibraryPreselecting(ids) },
             injectedEmoji: $composerState.emojiToInject,
             ephemeralChoice: $viewModel.composerEphemeralChoice,
@@ -379,6 +381,26 @@ extension ConversationView {
         }
     }
 
+    /// Un média de la grille entre dans la zone d'attachement AVEC son
+    /// identifiant (#9683) : sa tuile se marque, et ne se reprend pas tant
+    /// que la pièce reste dans la zone. Une photo est préparée depuis ses
+    /// octets d'origine, comme une photo du sélecteur système.
+    func ingestRecentLibraryAsset(_ asset: RecentMediaAsset) {
+        guard !composerState.attachedLibraryAssetIds.contains(asset.assetId) else {
+            if case .video(let url) = asset.payload { try? FileManager.default.removeItem(at: url) }
+            return
+        }
+        let prep: PreparingAttachment
+        switch asset.payload {
+        case .imageData(let data):
+            prep = AttachmentPreparationService.shared.prepareImageData(data, context: .message, accentColor: accentColor)
+            trackPreparation(prep)
+        case .video(let url):
+            prep = handleCameraVideo(url)
+        }
+        composerState.linkLibraryAsset(asset.assetId, to: prep.id)
+    }
+
     /// "Éditer" from the strip's long-press menu: opens the media editor on the
     /// resolved pick; the edited result is staged like a camera capture.
     func editRecentMediaPick(_ pick: RecentMediaPick) {
@@ -396,9 +418,19 @@ extension ConversationView {
     /// (`ConversationComposerState.maxMediaSelection`). With no strip
     /// selection, stale primed items from a cancelled run are dropped so
     /// the picker opens clean.
+    ///
+    /// **Les assets déjà joints sont présélectionnés AVANT la sélection de la
+    /// grille** (#9683) : le sélecteur les montre cochés, et ne les rend pas
+    /// comme une sélection nouvelle — `handlePhotoSelection` écarte, à
+    /// l'ingestion, tout identifiant déjà dans la zone.
     func openPhotoLibraryPreselecting(_ assetIds: [String]) {
-        if !assetIds.isEmpty {
-            let primed = assetIds.prefix(ConversationComposerState.maxMediaSelection).map { PhotosPickerItem(itemIdentifier: $0) }
+        let preselection = RecentMediaAttachmentLink.pickerPreselection(
+            attached: composerState.attachedLibraryAssetIds,
+            selection: assetIds,
+            limit: ConversationComposerState.maxMediaSelection
+        )
+        if !preselection.isEmpty {
+            let primed = preselection.map { PhotosPickerItem(itemIdentifier: $0) }
             // Arm the echo-swallow ONLY when priming actually mutates the
             // binding — an unchanged binding (same picks re-handed after a
             // cancelled run) fires no onChange, and a stale armed flag would
