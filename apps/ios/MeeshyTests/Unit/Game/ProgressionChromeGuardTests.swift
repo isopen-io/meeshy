@@ -108,7 +108,7 @@ final class ProgressionChromeGuardTests: XCTestCase {
             ("Meeshy/Features/Main/Views/ProgressionComponents.swift", "GameElementDetails.challenge(entry)"),
             ("Meeshy/Features/Main/Game/GameMissionsView.swift", "GameElementDetails.mission(mission)"),
             ("Meeshy/Features/Main/Game/GameMissionsView.swift", "GameElementDetails.chest(chest"),
-            ("Meeshy/Features/Main/Game/GameHeroView.swift", "GameElementDetails.levelRing(level)"),
+            ("Meeshy/Features/Main/Game/GameHeroView.swift", "GameElementDetails.levelRing(game.level)"),
             ("Meeshy/Features/Main/Game/GameHeroView.swift", "GameElementDetails.rank(glory)"),
             ("Meeshy/Features/Main/Game/ProgressionConceptPage.swift", "GameElementDetails.flameForm("),
             ("Meeshy/Features/Main/Game/ProgressionConceptPage.swift", "GameElementDetails.freeze("),

@@ -147,11 +147,11 @@ enum GameCopy {
         guard let cap, let rank = rankOpening(beyond: cap) else {
             return String(localized: "game.level.top", defaultValue: "Tu es au sommet.", bundle: .main)
         }
-        let level = formatCount(cap)
+        let capText = formatCount(cap)
         let name = rankName(rank)
         return String(
             localized: "game.level.cap.reached",
-            defaultValue: "Niveau \(level) : le plus haut que ton rang ouvre. Le rang \(name) ouvre la suite.",
+            defaultValue: "Niveau \(capText) : le plus haut que ton rang ouvre. Le rang \(name) ouvre la suite.",
             bundle: .main
         )
     }
