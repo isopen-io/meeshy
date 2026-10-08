@@ -1,6 +1,7 @@
 import { recordCommentFacts } from '../../services/game/commentGameFacts';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { visibilityVariant } from '@meeshy/shared/types/engagement-operations';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostCommentService } from '../../services/PostCommentService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
@@ -410,10 +411,13 @@ export function registerCommentRoutes(
       // premier, le geste, lui, ne dépend pas de l'ordre des pièces.
       const commentMedia = (comment as unknown as { media?: Array<{ mimeType?: string }> }).media ?? [];
       const commentAxis = commentMedia.some((media) => media.mimeType?.startsWith('audio/')) ? 'comment.audio' : 'comment.text';
+      // #9667 — il vaut selon la visibilité du CONTENU COMMENTÉ, celle de la publication qui porte le fil,
+      // lue ici en base (inconnue ⇒ amis, jamais public).
       if (counted) engagementService
         .recordActivity(authContext.registeredUser.id, commentAxis, {
           postId: targetPostId,
           receipt: creditSource.comment(comment.id),
+          variant: visibilityVariant(post?.visibility),
         })
         .catch((err) => enhancedLogger.warn(`[POST /posts/:postId/comments]: engagement ${commentAxis} failed`, { err }));
       if (counted) recordCommentFacts({

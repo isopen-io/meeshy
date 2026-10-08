@@ -110,6 +110,7 @@ async function guestAuth(req: FastifyRequest): Promise<void> {
 async function buildApp(
   auth: (req: FastifyRequest) => Promise<void> = requiredAuth,
   postRows?: Readonly<Record<string, Record<string, unknown>>>,
+  threadVisibility: string | null = 'PUBLIC',
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
@@ -117,14 +118,14 @@ async function buildApp(
       findFirst: postRows
         ? jest.fn(({ where }: any) => Promise.resolve(postRows[where.id] ?? null))
         : jest.fn<any>().mockResolvedValue({ id: POST_ID, ...PUBLIC_ACL }),
-      findUnique: jest.fn<any>().mockResolvedValue({
+      findUnique: jest.fn<any>().mockResolvedValue(threadVisibility === null ? null : {
         authorId: 'author-1',
         commentCount: 1,
         type: 'POST',
         content: 'Post content',
         createdAt: new Date(),
         expiresAt: null,
-        visibility: 'PUBLIC',
+        visibility: threadVisibility,
         visibilityUserIds: [],
       }),
       update: jest.fn<any>().mockResolvedValue({}),
@@ -164,7 +165,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.text » 
       payload: { content: 'Nice post!' },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-004' });
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-004', variant: 'public' });
     await app.close();
   });
 
@@ -200,7 +201,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
       payload: { attachmentIds: ['media-audio-003'] },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio', { postId: POST_ID, receipt: 'comment:comment-audio-engagement' });
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio', { postId: POST_ID, receipt: 'comment:comment-audio-engagement', variant: 'public' });
     await app.close();
   });
 
@@ -283,7 +284,7 @@ describe('POST /posts/:postId/comments — écrit sous une republication simple,
 
     expect(res.statusCode).toBe(201);
     expect(mockAddComment.mock.calls[0]?.[0]).toBe(REPOST_ID);
-    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: REPOST_ID, receipt: 'comment:comment-through-repost' }]]);
+    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: REPOST_ID, receipt: 'comment:comment-through-repost', variant: 'public' }]]);
   });
 
   it('sur l’original lui-même, un seul crédit', async () => {
@@ -293,6 +294,30 @@ describe('POST /posts/:postId/comments — écrit sous une republication simple,
     await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Bravo' } });
     await app.close();
 
-    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-direct' }]]);
+    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-direct', variant: 'public' }]]);
+  });
+});
+
+/**
+ * #9667 — un commentaire vaut selon la visibilité du CONTENU COMMENTÉ (la
+ * publication qui porte le fil), lue par le serveur : public 100, communauté
+ * 50, amis 10, audience restreinte 0 ; visibilité inconnue ⇒ amis.
+ */
+describe('POST /posts/:postId/comments — la valeur suit la visibilité du contenu commenté (#9667)', () => {
+  it.each([
+    ['PUBLIC', 'public'],
+    ['COMMUNITY', 'community'],
+    ['FRIENDS', 'friends'],
+    ['EXCEPT', 'other'],
+    ['ONLY', 'other'],
+    [null, 'friends'],
+  ])('un fil %s crédite la variante %s', async (visibility, variant) => {
+    mockAddComment.mockResolvedValue({ id: 'comment-visibility', content: 'Bravo', authorId: USER_ID, media: [] });
+    const app = await buildApp(requiredAuth, undefined, visibility);
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Bravo', visibility: 'PUBLIC', variant: 'public' } });
+    await app.close();
+
+    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-visibility', variant }]]);
   });
 });

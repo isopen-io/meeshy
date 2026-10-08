@@ -162,7 +162,7 @@ describe('interagir avec son propre contenu', () => {
 });
 
 describe('les gros poids', () => {
-  it('créditent un post public à 150 pour un compte vérifié, selon sa visibilité', async () => {
+  it('créditent un post public à 500 pour un compte vérifié, selon sa visibilité', async () => {
     const { prisma, counterUpsert } = makePrisma({ verified: true });
     const service = new EngagementService(prisma, scaled());
 
@@ -170,7 +170,7 @@ describe('les gros poids', () => {
     await service.recordActivity('u1', 'content.post', { targetId: 'p2', variant: 'friends' });
     await service.recordActivity('u1', 'content.post', { targetId: 'p3', variant: 'other' });
 
-    expect(credits(counterUpsert).map((c) => c.points)).toEqual([150, 70, 0]);
+    expect(credits(counterUpsert).map((c) => c.points)).toEqual([500, 100, 0]);
   });
 
   it('bornent un compte sans contact vérifié à la valeur plafond des non-vérifiés', async () => {
@@ -195,15 +195,15 @@ describe('les gros poids', () => {
   it('rendent leurs points quand le contenu est supprimé dans la fenêtre, une seule fois', async () => {
     const { prisma, counterUpdateMany, runCommandRaw } = makePrisma({ verified: true });
     const service = new EngagementService(prisma, scaled());
-    await service.recordActivity('u1', 'content.reel', { targetId: 'r1' });
+    await service.recordActivity('u1', 'content.reel', { targetId: 'r1', variant: 'public' });
 
     const first = await service.reclaimContent('u1', 'content.reel', 'r1');
     const second = await service.reclaimContent('u1', 'content.reel', 'r1');
 
-    expect([first, second]).toEqual([300, 0]);
+    expect([first, second]).toEqual([1000, 0]);
     expect(counterUpdateMany).toHaveBeenCalledTimes(1);
     const last = runCommandRaw.mock.calls.at(-1)?.[0] as { update: Array<{ $set: { engagementScore: unknown } }> };
-    expect(JSON.stringify(last.update)).toContain('300');
+    expect(JSON.stringify(last.update)).toContain('1000');
   });
 
   it('ne reprennent rien après la fenêtre', async () => {

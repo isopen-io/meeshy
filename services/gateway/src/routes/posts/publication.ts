@@ -306,7 +306,8 @@ const asVisibilityUserIds = (value: unknown): string[] | undefined =>
  * seulement l'auteur », schema.prisma), seul signal du dépôt qui porte cette
  * distinction — un PRIVATE ne crédite donc rien. Toute autre audience crédite,
  * sa valeur étant portée par la variante (`visibilityVariant`) : `EXCEPT` et
- * `ONLY` tombent sur `other`, que le barème paie zéro par défaut.
+ * `ONLY` tombent sur `other`, que le barème paie zéro par défaut, et une
+ * visibilité inconnue sur `friends`, jamais sur `public` (#9667).
  */
 function contentOperationFor(
   writtenType: PublishedPostType,
@@ -330,7 +331,7 @@ function contentOperationFor(
 /**
  * Les crédits d'une publication : l'opération de contenu, avec sa cible (le
  * post — c'est elle qui porte l'unicité d'un contenu lourd et sa reprise à la
- * suppression) et, pour POST et STORY, la variante de sa visibilité ; puis,
+ * suppression) et la variante de sa visibilité écrite (#9667) ; puis,
  * orthogonaux, les axes mutuellement exclusifs « montage in-app » (#5542) /
  * « publication directe » (#5543), réservés à POST, STORY et REEL. Le seul
  * signal du montage est celui que le client DÉCLARE (`editedInApp`) : le
@@ -358,10 +359,10 @@ function recordPublicationEngagement(params: {
       },
     );
 
-  const byVisibility = operation === 'content.post' || operation === 'content.story';
-  // La publication est la SOURCE de ses crédits : la retirer les reprend (#9584).
+  // La publication est la SOURCE de ses crédits : la retirer les reprend (#9584). Tout contenu
+  // (post, story, réel, humeur) vaut selon la visibilité ÉCRITE de sa ligne (#9667).
   const source = creditSource.post(postId);
-  const content = credit(operation, byVisibility ? { postId, targetId: postId, receipt: source, variant: visibilityVariant(visibility) } : { postId, targetId: postId, receipt: source });
+  const content = credit(operation, { postId, targetId: postId, receipt: source, variant: visibilityVariant(visibility) });
 
   if (operation === 'content.status') return;
   // L'un APRÈS l'autre (#9569) : les deux crédits nomment le même post, et
