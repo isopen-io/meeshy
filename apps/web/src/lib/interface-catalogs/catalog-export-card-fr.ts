@@ -132,6 +132,16 @@ const fr = {
   'export.announce.motionUnavailable': 'Ce navigateur ne sait pas créer cette animation',
   'export.announce.galleryMotion': 'Enregistré dans la galerie',
   'export.announce.sharedMotion': 'Prêt à partager',
+  'export.card.compose': 'Composition',
+  'export.card.compose.postAndComment': 'Post + commentaire',
+  'export.card.compose.commentAlone': 'Commentaire seul',
+  'export.card.compose.threadToHere': 'Fil jusqu’ici',
+  'export.card.compose.postRootAndReply': 'Post + racine + réponse',
+  'export.card.compose.chosenReplies': 'Choisir les réponses',
+  'export.card.compose.post': 'Post en tête',
+  'export.card.compose.replies': 'Réponses sur la carte',
+  'export.card.compose.thread': 'Fil de commentaires',
+  'export.card.compose.folded': '+{count} réponses',
 } as const;
 
 export default fr;

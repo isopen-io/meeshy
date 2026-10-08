@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { EXPORT_CARD_GLYPHS } from '@/components/glyphs-export-card';
@@ -209,6 +209,8 @@ export function MessageExportSheet({
   random = Math.random,
   loadSources = defaultSourcesLoader,
   recordMotion = defaultMotionRecorder,
+  above,
+  subjectKey = '',
 }: {
   /** La carte telle que le lecteur la lit. */
   readonly subject: MessageCardSubject;
@@ -232,6 +234,10 @@ export function MessageExportSheet({
   readonly loadSources?: SourcesLoader;
   /** Le GIF ou la vidéo de la carte (#8693) — injecté par les témoins. */
   readonly recordMotion?: MotionRecorder;
+  /** Au-dessus de l'aperçu : les choix de composition d'un commentaire de post (#9687). */
+  readonly above?: ReactNode;
+  /** Ce qui distingue une composition d'une autre : changer de composition repeint l'aperçu et ses vignettes. */
+  readonly subjectKey?: string;
 }) {
   const language = currentInterfaceLanguage();
   const [savedDefault, setSavedDefault] = useState<MessageCardFormat | null>(() => readDefaultMessageCardFormat(storage));
@@ -288,7 +294,7 @@ export function MessageExportSheet({
       featured,
     });
 
-  const key = `${formatKey(format)}|${featured ?? ''}|${media.version}`;
+  const key = `${formatKey(format)}|${featured ?? ''}|${media.version}|${subjectKey}`;
 
   useEffect(() => {
     let live = true;
@@ -316,7 +322,7 @@ export function MessageExportSheet({
      tout ce qui change la carte SAUF le template, qu'elle nomme elle-même. */
   const [cache] = useState(() => createThumbnailCache({ createObjectURL, revokeObjectURL }));
   useEffect(() => () => cache.dispose(), [cache]);
-  const context = `${JSON.stringify({ ...format, template: null })}|${featured ?? ''}|${exportLanguage ?? ''}|${media.version}`;
+  const context = `${JSON.stringify({ ...format, template: null })}|${featured ?? ''}|${exportLanguage ?? ''}|${media.version}|${subjectKey}`;
   const thumbs = useMemo<ThumbSource>(
     () => ({ cache, keyOf: (id) => `${id}|${context}`, render: (id) => thumbnail(inputFor(id), THUMB_WIDTH, media.sources) }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -446,6 +452,8 @@ export function MessageExportSheet({
         {shown === null ? null : (
           <img aria-hidden="true" alt="" src={shown.url} className="pointer-events-none absolute inset-0 h-full w-full object-cover" style={{ filter: 'blur(48px) saturate(1.5)', opacity: 0.5, transform: 'scale(1.25)' }} />
         )}
+
+        {above === undefined ? null : <div className="relative shrink-0 px-3 pt-2">{above}</div>}
 
         <div className="relative min-h-0 flex-1" aria-live="polite" aria-busy={!ready && !failed}>
           <div className="absolute inset-x-6 inset-y-3" style={{ containerType: 'size' }}>

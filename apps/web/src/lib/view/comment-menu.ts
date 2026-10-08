@@ -14,6 +14,9 @@ import { maskedByEffects } from '@/lib/export/message-card-subject';
  * - **Imager** : la garde est celle de la carte (`commentCardSubjectOf`) — une
  *   seule loi dit ce qui se peint. Une RACINE qui a des réponses offre aussi
  *   « avec les réponses » ; une RÉPONSE emporte déjà sa racine en citation.
+ *   Un commentaire de POST (#9687, `postComposition`) n'a qu'UN « Imager » :
+ *   l'atelier compose la carte (post en tête, fil, réponses choisies), et la
+ *   composition partagée dit seule s'il s'offre.
  * - **Modifier / Supprimer** : à l'AUTEUR seul, reflet de la passerelle
  *   (`PATCH`/`DELETE` gardés par le contrôle d'auteur).
  * - **Signaler** : aux AUTRES seuls — se signaler soi-même n'a aucun sens.
@@ -30,18 +33,20 @@ export function commentMenuEntries(params: {
   readonly canCopy: boolean;
   readonly canImage: boolean;
   readonly canReport: boolean;
+  /** Le commentaire d'un POST (#9687) : la composition a-t-elle un mode ? Absent : story, la carte du commentaire. */
+  readonly postComposition?: { readonly imageable: boolean };
 }): readonly CommentMenuEntry[] {
-  const { comment, viewerId, servedText, canCopy, canImage, canReport } = params;
+  const { comment, viewerId, servedText, canCopy, canImage, canReport, postComposition } = params;
   if (comment.pending === true) return [];
   const isMine = viewerId !== '' && comment.author.id === viewerId;
   const copyable = canCopy && !maskedByEffects(comment.effectFlags) && servedText.trim() !== '';
-  const imageable = canImage && commentCardSubjectOf({ comment, servedText, parent: null }) !== null;
+  const imageable = canImage && (postComposition?.imageable ?? commentCardSubjectOf({ comment, servedText, parent: null }) !== null);
   const isRoot = typeof comment.parentId !== 'string' || comment.parentId === '';
   const hasReplies = typeof comment.replyCount === 'number' && comment.replyCount > 0;
   return [
     ...(copyable ? (['copy'] as const) : []),
     ...(imageable ? (['image'] as const) : []),
-    ...(imageable && isRoot && hasReplies ? (['imageWithReplies'] as const) : []),
+    ...(imageable && isRoot && hasReplies && postComposition === undefined ? (['imageWithReplies'] as const) : []),
     ...(isMine ? (['edit', 'delete'] as const) : []),
     ...(!isMine && canReport ? (['report'] as const) : []),
   ];
