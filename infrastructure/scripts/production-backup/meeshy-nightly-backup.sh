@@ -72,13 +72,23 @@ cp -p "$COMPOSE_DIR/docker-compose.yml" "$COMPOSE_DIR/.env" "$WORK/config/"
 
 ops_password="$(grep -E '^MONGO_OPS_PASSWORD=' "$COMPOSE_DIR/.env" | tail -1 | cut -d= -f2- | sed -E 's/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/' || true)"
 export P_OPS="$ops_password"
-AUTH='${P_OPS:+--username ops --password "$P_OPS" --authenticationDatabase admin}'
+# Le mot de passe ne passe JAMAIS en argument de processus, lisible de tout compte de
+# l'hôte par ps : mongosh s'authentifie depuis son environnement, mongodump depuis un
+# fichier --config éphémère en 600 dans le conteneur, rempli par l'entrée standard.
+AUTH_JS='if (process.env.P_OPS) { db.getSiblingDB("admin").auth("ops", process.env.P_OPS) };'
 COUNT_JS='const d=db.getMongo().getDB("'"$DB_NAME"'"); d.getCollectionNames().sort().forEach(c=>print(c+"\t"+d.getCollection(c).countDocuments({})))'
 INDEX_JS='const d=db.getMongo().getDB("'"$DB_NAME"'"); let n=0; d.getCollectionNames().forEach(c=>{n+=d.getCollection(c).getIndexes().length}); print(n)'
-source_mongosh() { docker exec -e P_OPS -e JS="$1" "$DB_CONTAINER" sh -c "mongosh --quiet $AUTH --eval \"\$JS\""; }
+source_mongosh() { docker exec -e P_OPS -e JS="$AUTH_JS $1" "$DB_CONTAINER" sh -c 'mongosh --quiet --eval "$JS"'; }
+mongodump_config() {
+  [[ -z "$P_OPS" ]] || python3 -c 'import json, os; print("password: " + json.dumps(os.environ["P_OPS"]))'
+}
+# shellcheck disable=SC2016
+DUMP_SH='umask 077; f=$(mktemp); cat > "$f"; set -- --db="$DB" --gzip --archive
+[ -s "$f" ] && set -- --username ops --authenticationDatabase admin --config "$f" "$@"
+mongodump "$@"; rc=$?; rm -f "$f"; exit $rc'
 
 source_mongosh "$COUNT_JS" > "$WORK/base/comptes-avant.tsv" || fail "lecture des comptes de la base"
-docker exec -e P_OPS "$DB_CONTAINER" sh -c "mongodump $AUTH --db=$DB_NAME --gzip --archive" \
+mongodump_config | docker exec -i -e DB="$DB_NAME" "$DB_CONTAINER" sh -c "$DUMP_SH" \
   > "$WORK/base/$DB_NAME.archive.gz" 2> "$WORK/base/mongodump.log" || fail "mongodump (voir base/mongodump.log)"
 source_mongosh "$COUNT_JS" > "$WORK/base/comptes-apres.tsv" || fail "relecture des comptes de la base"
 source_mongosh "$INDEX_JS" > "$WORK/base/index-source.txt" || fail "lecture des index de la base"
