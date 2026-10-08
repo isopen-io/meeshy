@@ -6,6 +6,7 @@ import {
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueDeps } from './offlineParticipantQueue';
+import { readerSignedPlanForMessageId, type ReaderSignedPlan } from './readerSignedDelivery';
 import { serializeAttachmentForSocket, type SocketAttachmentRow } from './serializeAttachmentForSocket';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
@@ -13,7 +14,7 @@ const logger = enhancedLogger.child({ module: 'emitAttachmentUpdated' });
 
 export interface AttachmentUpdatedParams {
   io: ConversationRoomEmitter | null | undefined;
-  prisma: Pick<PrismaClient, 'participant'>;
+  prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>;
   deliveryQueue: OfflineParticipantQueueDeps['deliveryQueue'];
   connectedUsers: { has(key: string): boolean };
   conversationId: string;
@@ -83,13 +84,29 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
 
   const participants = await loadActiveParticipants(prisma, conversationId);
 
-  emitToConversationParticipants({
-    io,
-    conversationId,
-    participants,
-    event: SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED,
-    payload,
-  });
+  // #9646 — la pièce d'un message protégé (le vocal d'une flamme, dont la
+  // transcription et les pistes TTS arrivent après l'envoi) part par
+  // destinataire, ses adresses signées pour chacun ; la diffusion chaînée
+  // ci-dessous reste celle de toute autre pièce.
+  const plan = await readerSignedPlanBestEffort(prisma, conversationId, messageId, payload.attachment);
+  if (plan === 'unavailable') {
+    // Rien en direct : voir `readerSignedPlanBestEffort`.
+  } else if (plan) {
+    for (const target of plan.targets) {
+      io.to(target.room).emit(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, {
+        ...payload,
+        attachment: plan.signAttachment(payload.attachment, target.participantId),
+      });
+    }
+  } else {
+    emitToConversationParticipants({
+      io,
+      conversationId,
+      participants,
+      event: SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED,
+      payload,
+    });
+  }
 
   const attachmentId = typeof attachment.id === 'string' ? attachment.id : undefined;
 
@@ -128,5 +145,25 @@ async function loadActiveParticipants(
       error,
     });
     return [];
+  }
+}
+
+/**
+ * Le plan de remise par lecteur, ou `null`. Une lecture qui échoue NE retombe
+ * PAS sur la diffusion de room — elle servirait les adresses nues d'une pièce
+ * peut-être protégée — : rien ne part en direct, la file hors ligne et la
+ * relecture de la page servent la pièce enrichie.
+ */
+async function readerSignedPlanBestEffort(
+  prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>,
+  conversationId: string,
+  messageId: string,
+  attachment: unknown,
+): Promise<ReaderSignedPlan | null | 'unavailable'> {
+  try {
+    return await readerSignedPlanForMessageId(prisma, { conversationId, messageId, attachments: [attachment] });
+  } catch (error) {
+    logger.warn('attachment-updated reader-signed plan failed — no live emission', { conversationId, error });
+    return 'unavailable';
   }
 }

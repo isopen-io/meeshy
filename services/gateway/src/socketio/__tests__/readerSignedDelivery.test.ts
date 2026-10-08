@@ -101,7 +101,7 @@ describe('emitMessageNew — remise par lecteur', () => {
       senderParticipantId: SENDER,
       hiddenKeys: [],
       payloadForKey: () => peerPayload,
-      readerSigned: { targets: targets ?? [], signFor: (payload, participantId) => signedForReader(payload, { message: PROTECTED, participantId, signer: SIGNER }) },
+      readerSigned: { targets: targets ?? [], signFor: (payload, participantId) => signedForReader(payload, { message: PROTECTED, participantId, signer: SIGNER }), signAttachment: (attachment) => attachment },
     });
     expect(emitted.map((e) => e.room)).toEqual([`user:${member(2).userId}`, `user:${member(1).userId}`]);
     expect(emitted.map((e) => readerOf(e.payload.attachments[0]?.fileUrl ?? ''))).toEqual([SENDER, member(1).id]);
@@ -149,7 +149,7 @@ describe('emitMessageNew — remise par lecteur', () => {
       senderParticipantId: SENDER,
       hiddenKeys: [],
       payloadForKey: () => heavy as never,
-      readerSigned: { targets: targets ?? [], signFor: (payload, participantId) => signedForReader(payload, { message: PROTECTED, participantId, signer: SIGNER }) },
+      readerSigned: { targets: targets ?? [], signFor: (payload, participantId) => signedForReader(payload, { message: PROTECTED, participantId, signer: SIGNER }), signAttachment: (attachment) => attachment },
     });
     const serialized = emitted.reduce((bytes, e) => bytes + JSON.stringify(e.payload).length, 0);
     const elapsed = performance.now() - started;

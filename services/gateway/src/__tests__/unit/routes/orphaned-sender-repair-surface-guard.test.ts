@@ -147,6 +147,11 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9646 — relit les CINQ colonnes de protection d'un message édité ou dont
+  // une pièce est enrichie, pour décider de la remise par lecteur. Jamais
+  // `sender`. Absent du garde du masquage personnel : une `findUnique`, hors
+  // de son périmètre (`findMany`/`count`), et elle ne sert aucun contenu.
+  'readerSignedDelivery.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 };
 
 /** `services/` — même règle, troisième racine. */

@@ -103,38 +103,97 @@ export async function readerSignedTargets(
 }
 
 /** La charge d'UN lecteur : la même, ses adresses de pièces signées pour lui. */
-export function signedForReader<P extends { readonly attachments?: unknown }>(
+export function signedForReader<P extends object>(
   payload: P,
   input: { readonly message: ReaderBoundMessage; readonly participantId: string; readonly signer: ReaderFileUrlSigner | null }
 ): P {
-  if (!Array.isArray(payload.attachments)) return payload;
+  const attachments = (payload as { readonly attachments?: unknown }).attachments;
+  if (!Array.isArray(attachments)) return payload;
   const context = { message: input.message, readerParticipantId: input.participantId, signer: input.signer };
   return {
     ...payload,
-    attachments: payload.attachments.map((entry: unknown) =>
+    attachments: attachments.map((entry: unknown) =>
       typeof entry === 'object' && entry !== null ? signReaderAttachmentUrls(entry as SignableAttachment, context) : entry
     ),
   };
 }
 
-/**
- * Le plan de remise par lecteur d'une charge `message:new` : `null` quand la
- * diffusion de room suffit, sinon les destinataires admis et la signature de
- * CHACUN. La clé est lue à l'instant de l'émission (`readerFileUrlSignerFromEnv`).
- */
 export type ReaderSignedPlan = {
   readonly targets: ReadonlyArray<ReaderSignedTarget>;
-  readonly signFor: <P extends { readonly attachments?: unknown }>(payload: P, participantId: string) => P;
+  /** La charge d'un lecteur : son tableau `attachments` signé pour lui. */
+  readonly signFor: <P extends object>(payload: P, participantId: string) => P;
+  /** Une pièce seule (`message:attachment-updated`), signée pour un lecteur. */
+  readonly signAttachment: <A extends SignableAttachment>(attachment: A, participantId: string) => A;
 };
 
+async function planFor(
+  prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink'>,
+  input: {
+    readonly conversationId: string;
+    readonly protection: ReaderBoundMessage;
+    readonly attachments: unknown;
+    readonly signer: ReaderFileUrlSigner | null;
+    readonly now: Date;
+  }
+): Promise<ReaderSignedPlan | null> {
+  const { protection, signer } = input;
+  const targets = await readerSignedTargets(prisma, { ...input, message: protection });
+  if (!targets) return null;
+  return {
+    targets,
+    signFor: (payload, participantId) => signedForReader(payload, { message: protection, participantId, signer }),
+    signAttachment: (attachment, participantId) =>
+      signReaderAttachmentUrls(attachment, { message: protection, readerParticipantId: participantId, signer }),
+  };
+}
+
+/**
+ * Le plan de remise par lecteur d'une charge `message:new` — la ligne `Message`
+ * que l'émetteur vient d'écrire ou de relire ENTIÈRE (`protectionOfFullMessageRow`).
+ * `null` quand la diffusion de room suffit. La clé est lue à l'instant de
+ * l'émission (`readerFileUrlSignerFromEnv`).
+ */
 export async function readerSignedPlan(
   prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink'>,
   input: { readonly conversationId: string; readonly message: object; readonly attachments: unknown }
 ): Promise<ReaderSignedPlan | null> {
   const now = new Date();
+  return planFor(prisma, {
+    conversationId: input.conversationId,
+    protection: protectionOfFullMessageRow(input.message),
+    attachments: input.attachments,
+    signer: readerFileUrlSignerFromEnv(now),
+    now,
+  });
+}
+
+const MESSAGE_PROTECTION_COLUMNS = {
+  isViewOnce: true,
+  isBlurred: true,
+  effectFlags: true,
+  ephemeralDuration: true,
+  expiresAt: true,
+} as const;
+
+/**
+ * Le même plan quand l'émetteur ne tient pas la ligne entière (`message:edited`,
+ * `message:attachment-updated`) : la protection est RELUE, cinq colonnes, et
+ * seulement s'il y a une clé et une pièce à signer. Une ligne introuvable ne
+ * prouve pas l'ordinaire — la loi ferme, la pièce est signée.
+ */
+export async function readerSignedPlanForMessageId(
+  prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>,
+  input: { readonly conversationId: string; readonly messageId: string; readonly attachments: unknown }
+): Promise<ReaderSignedPlan | null> {
+  const now = new Date();
   const signer = readerFileUrlSignerFromEnv(now);
-  const protection = protectionOfFullMessageRow(input.message);
-  const targets = await readerSignedTargets(prisma, { conversationId: input.conversationId, message: protection, attachments: input.attachments, signer, now });
-  if (!targets) return null;
-  return { targets, signFor: (payload, participantId) => signedForReader(payload, { message: protection, participantId, signer }) };
+  if (!signer || asAttachments(input.attachments).length === 0) return null;
+  const row = await prisma.message.findUnique({ where: { id: input.messageId }, select: MESSAGE_PROTECTION_COLUMNS });
+  return planFor(prisma, {
+    conversationId: input.conversationId,
+    protection: row ?? {},
+    attachments: input.attachments,
+    signer,
+    now,
+  });
 }

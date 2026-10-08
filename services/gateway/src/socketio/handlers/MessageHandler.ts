@@ -67,7 +67,7 @@ import { resolveParticipant } from '../utils/participant-resolver.js';
 import { agentSenderIdentity } from './agentSenderIdentity.js';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
 import { emitMessageNew } from '../messageNewEmission';
-import { readerSignedPlan } from '../readerSignedDelivery';
+import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
 import { admitLoadedMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
@@ -984,8 +984,11 @@ export class MessageHandler {
         attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
+      // #9646 — un message protégé : par destinataire, adresses signées.
       const room = ROOMS.conversation(message.conversationId);
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+      const editPlan = await readerSignedPlanForMessageId(this.prisma, { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments });
+      if (editPlan) for (const t of editPlan.targets) this.io.to(t.room).emit(SERVER_EVENTS.MESSAGE_EDITED, editPlan.signFor(editedPayload, t.participantId));
+      else this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
 
       // Fan a conversation:updated preview refresh to participants sitting on
       // the conversation list (in user:<id> but not conversation:<id>) so an
