@@ -111,7 +111,7 @@ describe('le brouillon — la loi partagée en aller-retour', () => {
 
   test('une variante éditée ne touche que sa visibilité', () => {
     const scale = scaleOfDraft(withVariant(draftOf(DEFAULT_ENGAGEMENT_SCALE), 'content.post', 'friends', '40'));
-    expect(scale?.operations['content.post'].variantPoints).toEqual({ public: 150, community: 100, friends: 40, other: 0 });
+    expect(scale?.operations['content.post'].variantPoints).toEqual({ public: 500, community: 200, friends: 40, other: 0 });
   });
 
   test('un palier de constance ajouté double le dernier et reste valide', () => {
@@ -134,8 +134,11 @@ describe('le chargement', () => {
     expect(input(host, '[data-scale-multiplied="tool.reaction"]').checked).toBe(true);
     expect(host.querySelector('[data-scale-cap-fixed="profile.avatar"]')?.textContent).toBe(translateAdmin('fr', 'admin.scale.cap.perAccount'));
     expect(host.querySelector('[data-scale-points="content.post"]')).toBeNull();
-    expect(input(host, '[data-scale-variant="content.post:public"]').value).toBe('150');
-    expect(input(host, '[data-scale-points="content.reel"]').value).toBe('300');
+    expect(input(host, '[data-scale-variant="content.post:public"]').value).toBe('500');
+    expect(host.querySelector('[data-scale-points="content.reel"]')).toBeNull();
+    expect(input(host, '[data-scale-variant="content.reel:public"]').value).toBe('1000');
+    expect(input(host, '[data-scale-variant="comment.text:community"]').value).toBe('50');
+    expect(input(host, '[data-scale-variant="content.status:friends"]').value).toBe('10');
     expect(input(host, '[data-scale-multiplier="maxFactor"]').value).toBe('5');
     expect(host.querySelector('[data-scale-updated]')?.textContent).toBe(translateAdmin('fr', 'admin.scale.defaults'));
   });

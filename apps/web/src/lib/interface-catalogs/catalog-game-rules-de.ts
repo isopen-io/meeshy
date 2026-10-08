@@ -3,7 +3,7 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const de = {
   'game.rules.1.title': 'Jede Aktion zählt',
-  'game.rules.1.body': 'Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jede nützliche Aktion bringt Punkte. Limits zählen deine Aktionen, nie deine Punkte: Boni, Flamme und Events erhöhen, was jede Aktion bringt.',
+  'game.rules.1.body': 'Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jede nützliche Aktion bringt Punkte. Ein Beitrag bringt Punkte je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Limits zählen deine Aktionen, nie deine Punkte: Boni, Flamme und Events erhöhen, was jede Aktion bringt.',
   'game.rules.2.title': 'Punkte machen das Level',
   'game.rules.2.body': '100 Level in 10 Stufen. Jedes Level verlangt etwas mehr als das vorherige.',
   'game.rules.3.title': 'Man prägt Meeshes',

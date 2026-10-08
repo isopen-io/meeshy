@@ -1,7 +1,7 @@
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Le français est la SOURCE des clés ; les six autres langues portent exactement les mêmes. */
 const fr = {
   'game.rules.1.title': 'Chaque geste rapporte',
-  'game.rules.1.body': 'Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte.',
+  'game.rules.1.body': 'Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Une publication rapporte selon qui peut la voir : public, communauté ou amis. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte.',
   'game.rules.2.title': 'Les points font le niveau',
   'game.rules.2.body': '100 niveaux en 10 paliers. Chaque niveau demande un peu plus que le précédent.',
   'game.rules.3.title': 'On frappe des Meeshes',

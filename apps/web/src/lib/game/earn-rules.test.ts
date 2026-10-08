@@ -11,10 +11,10 @@ import { earnRules } from './earn-rules';
  * la famille rapporte AU PLUS), jamais recopiée dans une chaîne.
  */
 describe('earnRules — une ligne par famille, triée par points', () => {
-  test('les cinq familles, de la plus généreuse à la plus modeste : un réel 300, un commentaire 40', () => {
+  test('les cinq familles, de la plus généreuse à la plus modeste : un réel public 1 000, un commentaire sous un contenu public 100', () => {
     const rules = earnRules();
     expect(rules.map((rule) => rule.family)).toEqual(['content', 'comment', 'social', 'conversation', 'tool']);
-    expect(rules.map((rule) => rule.points)).toEqual([300, 40, 7, 5, 4]);
+    expect(rules.map((rule) => rule.points)).toEqual([1000, 100, 7, 5, 4]);
   });
 
   test('chaque famille du catalogue est énumérée une fois', () => {
@@ -23,9 +23,9 @@ describe('earnRules — une ligne par famille, triée par points', () => {
 });
 
 describe('earnRules — régler une famille change l’énumération', () => {
-  test('le commentaire passe devant tout le monde quand on lui donne 500', () => {
-    const rules = earnRules({ ...ENGAGEMENT_FAMILY_TOP_POINTS, comment: 500 });
-    expect(rules[0]).toEqual({ family: 'comment', points: 500 });
+  test('le commentaire passe devant tout le monde quand on lui donne 5000', () => {
+    const rules = earnRules({ ...ENGAGEMENT_FAMILY_TOP_POINTS, comment: 5000 });
+    expect(rules[0]).toEqual({ family: 'comment', points: 5000 });
   });
 
   test('une famille à zéro ne rapporte rien : elle n’est pas énumérée', () => {

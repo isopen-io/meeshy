@@ -241839,43 +241839,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الكتابة والكلام والنشر والتفاعل والدعوة: كل إجراء مفيد يمنحك نقاطًا. الحدود تعدّ إجراءاتك، لا نقاطك أبدًا: المكافآت واللهب والفعاليات تزيد ما يمنحه كل إجراء."
+            "value": "الكتابة والكلام والنشر والتفاعل والدعوة: كل إجراء مفيد يمنحك نقاطًا. يمنح المنشور نقاطًا بحسب من يستطيع رؤيته: العامة أو المجتمع أو الأصدقاء. الحدود تعدّ إجراءاتك، لا نقاطك أبدًا: المكافآت واللهب والفعاليات تزيد ما يمنحه كل إجراء."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jede nützliche Aktion bringt Punkte. Limits zählen deine Aktionen, nie deine Punkte: Boni, Flamme und Events erhöhen, was jede Aktion bringt."
+            "value": "Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jede nützliche Aktion bringt Punkte. Ein Beitrag bringt Punkte je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Limits zählen deine Aktionen, nie deine Punkte: Boni, Flamme und Events erhöhen, was jede Aktion bringt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Writing, talking, publishing, reacting, inviting: every useful action earns points. Limits count your actions, never your points: bonuses, the Flame and events raise what each action earns."
+            "value": "Writing, talking, publishing, reacting, inviting: every useful action earns points. A post earns according to who can see it: public, community or friends. Limits count your actions, never your points: bonuses, the Flame and events raise what each action earns."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribir, hablar, publicar, reaccionar, invitar: cada acción útil da puntos. Los límites cuentan tus gestos, nunca tus puntos: los bonus, la Llama y los eventos aumentan lo que da cada gesto."
+            "value": "Escribir, hablar, publicar, reaccionar, invitar: cada acción útil da puntos. Una publicación da puntos según quién puede verla: público, comunidad o amigos. Los límites cuentan tus gestos, nunca tus puntos: los bonus, la Llama y los eventos aumentan lo que da cada gesto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte."
+            "value": "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Une publication rapporte selon qui peut la voir : public, communauté ou amis. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scrivere, parlare, pubblicare, reagire, invitare: ogni azione utile fa guadagnare punti. I limiti contano i tuoi gesti, mai i tuoi punti: bonus, Fiamma ed eventi aumentano ciò che ogni gesto fa guadagnare."
+            "value": "Scrivere, parlare, pubblicare, reagire, invitare: ogni azione utile fa guadagnare punti. Un contenuto rende in base a chi può vederlo: pubblico, community o amici. I limiti contano i tuoi gesti, mai i tuoi punti: bonus, Fiamma ed eventi aumentano ciò che ogni gesto fa guadagnare."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escrever, falar, publicar, reagir, convidar: cada ação útil rende pontos. Os limites contam seus gestos, nunca seus pontos: bônus, Chama e eventos aumentam o que cada gesto rende."
+            "value": "Escrever, falar, publicar, reagir, convidar: cada ação útil rende pontos. Uma publicação rende conforme quem pode vê-la: público, comunidade ou amigos. Os limites contam seus gestos, nunca seus pontos: bônus, Chama e eventos aumentam o que cada gesto rende."
           }
         }
       }

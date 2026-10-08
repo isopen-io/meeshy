@@ -3,7 +3,7 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const ar = {
   'game.rules.1.title': 'كل إجراء له مكافأة',
-  'game.rules.1.body': 'الكتابة والكلام والنشر والتفاعل والدعوة: كل إجراء مفيد يمنحك نقاطًا. الحدود تعدّ إجراءاتك، لا نقاطك أبدًا: المكافآت واللهب والفعاليات تزيد ما يمنحه كل إجراء.',
+  'game.rules.1.body': 'الكتابة والكلام والنشر والتفاعل والدعوة: كل إجراء مفيد يمنحك نقاطًا. يمنح المنشور نقاطًا بحسب من يستطيع رؤيته: العامة أو المجتمع أو الأصدقاء. الحدود تعدّ إجراءاتك، لا نقاطك أبدًا: المكافآت واللهب والفعاليات تزيد ما يمنحه كل إجراء.',
   'game.rules.2.title': 'النقاط تصنع المستوى',
   'game.rules.2.body': '100 مستوى في 10 مراحل. يتطلّب كل مستوى أكثر قليلًا من الذي قبله.',
   'game.rules.3.title': 'نسكّ Meesh',

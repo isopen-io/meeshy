@@ -3,7 +3,7 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const pt = {
   'game.rules.1.title': 'Cada ação rende',
-  'game.rules.1.body': 'Escrever, falar, publicar, reagir, convidar: cada ação útil rende pontos. Os limites contam seus gestos, nunca seus pontos: bônus, Chama e eventos aumentam o que cada gesto rende.',
+  'game.rules.1.body': 'Escrever, falar, publicar, reagir, convidar: cada ação útil rende pontos. Uma publicação rende conforme quem pode vê-la: público, comunidade ou amigos. Os limites contam seus gestos, nunca seus pontos: bônus, Chama e eventos aumentam o que cada gesto rende.',
   'game.rules.2.title': 'Os pontos fazem o nível',
   'game.rules.2.body': '100 níveis em 10 faixas. Cada nível pede um pouco mais do que o anterior.',
   'game.rules.3.title': 'Cunham-se Meeshes',

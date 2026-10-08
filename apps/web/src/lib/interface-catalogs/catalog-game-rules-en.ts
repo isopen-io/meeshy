@@ -3,7 +3,7 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const en = {
   'game.rules.1.title': 'Every action pays',
-  'game.rules.1.body': 'Writing, talking, publishing, reacting, inviting: every useful action earns points. Limits count your actions, never your points: bonuses, the Flame and events raise what each action earns.',
+  'game.rules.1.body': 'Writing, talking, publishing, reacting, inviting: every useful action earns points. A post earns according to who can see it: public, community or friends. Limits count your actions, never your points: bonuses, the Flame and events raise what each action earns.',
   'game.rules.2.title': 'Points make the level',
   'game.rules.2.body': '100 levels in 10 tiers. Each level asks for a little more than the one before.',
   'game.rules.3.title': 'We mint Meeshes',

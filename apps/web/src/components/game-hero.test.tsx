@@ -118,17 +118,17 @@ describe('comment gagner — dérivé du barème', () => {
 
   test('chaque puce dit son nom et ses points, tirés du barème', () => {
     const body = text(page);
-    for (const rule of earnRules()) expect(body).toContain(`+${rule.points}`);
-    expect(body).toContain('Contenu jusqu’à +300');
-    expect(ENGAGEMENT_FAMILY_TOP_POINTS.content).toBe(300);
+    for (const rule of earnRules()) expect(body.replace(/\s/g, '')).toContain(`+${rule.points}`);
+    expect(body).toContain('Contenu jusqu’à +1 000');
+    expect(ENGAGEMENT_FAMILY_TOP_POINTS.content).toBe(1000);
   });
 
   test('régler un poids change ce que le héros énumère, sans toucher une chaîne', () => {
-    const rules = earnRules({ ...ENGAGEMENT_FAMILY_TOP_POINTS, comment: 500 });
+    const rules = earnRules({ ...ENGAGEMENT_FAMILY_TOP_POINTS, comment: 5000 });
     const markup = html({}, { rules });
     const chips = [...markup.matchAll(/data-game-earn-chip="([a-z]+)"/g)].map((m) => m[1]);
     expect(chips[0]).toBe('comment');
-    expect(text(markup)).toContain('+500');
+    expect(text(markup)).toContain('+5 000');
   });
 
   /* Les puces menaient au carnet des règles ; depuis #9563 (amendement n° 2) chaque famille se touche et ouvre SES précisions. */
@@ -140,7 +140,7 @@ describe('comment gagner — dérivé du barème', () => {
   });
 
   test('chaque puce se lit en entier et mesure 44 points', () => {
-    expect(text(page)).toContain('Contenu jusqu’à +300');
+    expect(text(page)).toContain('Contenu jusqu’à +1 000');
     expect(page).toMatch(/data-game-earn-chip="content"[^>]*min-height:44px/);
   });
 });
