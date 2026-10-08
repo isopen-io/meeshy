@@ -669,7 +669,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des messages texte (#5
     });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: CONV_ID });
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: CONV_ID, variant: 'direct' });
   });
 
   it('crédite content.text_message quand la pièce jointe n\'est pas audio', async () => {
@@ -685,7 +685,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des messages texte (#5
     });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: CONV_ID });
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: CONV_ID, variant: 'direct' });
   });
 
   it('ne crédite PAS content.text_message quand une pièce jointe audio est présente — distinct de content.audio_message', async () => {

@@ -3,7 +3,7 @@ import {
   isEngagementAxisKey,
   type EngagementAxisKey,
 } from '@meeshy/shared/types/engagement';
-import { visibilityVariant } from '@meeshy/shared/types/engagement-operations';
+import { conversationTypeVariant, visibilityVariant } from '@meeshy/shared/types/engagement-operations';
 import {
   elanUnderScaleFromRows,
   pointsForOperation,
@@ -15,9 +15,10 @@ import type { OnboardingStepRewards } from '@meeshy/shared/types/onboarding';
  * **CE QUE CHAQUE GESTE DE L'ONBOARDING CRÉDITERA, À L'ÉLAN COURANT** (#7908).
  *
  * Les axes que chaque geste crédite, tels que les producteurs les écrivent :
- * - le salut dans Meeshy Global — `content.text_message`
- *   (`messagePostSaveEffects`) + `conversation.public` au premier message de
- *   la conversation (`recordConversationActivity`, Global est publique) ;
+ * - le salut dans Meeshy Global — `content.text_message` à la valeur d'un
+ *   message de la conversation globale (`messagePostSaveEffects`, #9666) +
+ *   `conversation.public` au premier message de la conversation
+ *   (`recordConversationActivity`, Global est publique) ;
  * - la story — `content.story` + `tool.direct_publish` (`publication.ts` ;
  *   un montage in-app crédite `tool.in_app_edit`, même poids). Depuis #8959
  *   la story vaut selon sa VISIBILITÉ : la part annoncée est celle de la
@@ -69,7 +70,7 @@ export function onboardingStepRewards(rows: OnboardingRewardRows): OnboardingSte
       0,
     );
   return {
-    global: credit(STEP_AXES.global),
+    global: credit(STEP_AXES.global, conversationTypeVariant('global')),
     story: credit(STEP_AXES.story, visibilityVariant(rows.storyVisibility)),
     friendship: credit(STEP_AXES.friendship),
   };

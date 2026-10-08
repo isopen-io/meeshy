@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
-import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
+import { conversationTypeVariant, type EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import type { EngagementActivityOptions } from '../engagement/EngagementService';
 import { memberSignature } from '../engagement/memberSignature';
 import { sharedPlaceFromMetadata } from '../location/sharedPlace';
@@ -592,6 +592,8 @@ async function isRepeatedGlobalText(params: {
  * envoi ne crédite jamais les deux : AVEC au moins une pièce jointe dont le MIME résout en `audio` (même table que
  * le comptage de conversation, `resolveAttachmentType`) crédite l'axe audio, SANS crédite l'axe texte. Un texte
  * répété dans la conversation globale ne crédite rien. Rend `true` seulement quand le crédit a eu lieu (#9635).
+ * Un texte vaut selon le type de sa conversation, LU ICI en base (#9666) : directe 2, groupe et autres 4,
+ * publique 6, globale 8 ; une conversation introuvable vaut « autres ». Le vocal garde sa valeur unique.
  */
 async function creditMessageContent(params: {
   readonly prisma: Pick<PrismaClient, 'conversation' | 'message'>;
@@ -602,13 +604,20 @@ async function creditMessageContent(params: {
 }): Promise<boolean> {
   const { prisma, readConversation, engagementService, message, senderUserId } = params;
   const hasAudioAttachment = message.attachmentMimeTypes.some((mimeType) => resolveAttachmentType(mimeType) === 'audio');
-  const contentAxisKey = hasAudioAttachment ? 'content.audio_message' : 'content.text_message';
+  if (hasAudioAttachment) {
+    const credited = await engagementService.recordActivity(senderUserId, 'content.audio_message', { conversationId: message.conversationId });
+    return credited === true;
+  }
   const normalized = normalizeRepeatableText(message.content);
-  if (contentAxisKey === 'content.text_message' && normalized.length > 0) {
+  if (normalized.length > 0) {
     const repeated = await isRepeatedGlobalText({ prisma, readConversation, message, normalized });
     if (repeated) return false;
   }
-  const credited = await engagementService.recordActivity(senderUserId, contentAxisKey, { conversationId: message.conversationId });
+  const conversation = await readConversation();
+  const credited = await engagementService.recordActivity(senderUserId, 'content.text_message', {
+    conversationId: message.conversationId,
+    variant: conversationTypeVariant(conversation?.type),
+  });
   return credited === true;
 }
 
