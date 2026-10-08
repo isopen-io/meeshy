@@ -233896,43 +233896,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اكتب تعليقًا"
+            "value": "علّق على منشور شخص آخر"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Einen Kommentar schreiben"
+            "value": "Den Beitrag einer anderen Person kommentieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Write a comment"
+            "value": "Comment on someone’s post"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribir un comentario"
+            "value": "Comentar la publicación de alguien"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Écrire un commentaire"
+            "value": "Commenter le post de quelqu’un"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scrivi un commento"
+            "value": "Commentare il post di qualcuno"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escrever um comentário"
+            "value": "Comentar a publicação de alguém"
           }
         }
       }
@@ -233943,43 +233943,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اكتب %@ تعليقات"
+            "value": "علّق على %@ منشورات للآخرين"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ Kommentare schreiben"
+            "value": "%@ Beiträge anderer kommentieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Write %@ comments"
+            "value": "Comment on %@ posts by others"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribir %@ comentarios"
+            "value": "Comentar %@ publicaciones de otros"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Écrire %@ commentaires"
+            "value": "Commenter %@ posts des autres"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scrivi %@ commenti"
+            "value": "Commentare %@ post di altri"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escrever %@ comentários"
+            "value": "Comentar %@ publicações de outras pessoas"
           }
         }
       }
@@ -234178,43 +234178,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "شارك رابطًا"
+            "value": "شارك منشورًا"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Einen Link teilen"
+            "value": "Einen Beitrag teilen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Share a link"
+            "value": "Share a post"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compartir un enlace"
+            "value": "Compartir una publicación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Partager un lien"
+            "value": "Partager un post"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Condividi un link"
+            "value": "Condividere un post"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compartilhar um link"
+            "value": "Compartilhar uma publicação"
           }
         }
       }
@@ -234225,43 +234225,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "شارك %@ روابط"
+            "value": "شارك %@ منشورات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ Links teilen"
+            "value": "%@ Beiträge teilen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Share %@ links"
+            "value": "Share %@ posts"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compartir %@ enlaces"
+            "value": "Compartir %@ publicaciones"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Partager %@ liens"
+            "value": "Partager %@ posts"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Condividi %@ link"
+            "value": "Condividere %@ post"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compartilhar %@ links"
+            "value": "Compartilhar %@ publicações"
           }
         }
       }
@@ -276562,6 +276562,1275 @@
           "stringUnit": {
             "state": "translated",
             "value": "São os idiomas em que ainda falta uma mensagem, enviada ou recebida."
+          }
+        }
+      }
+    },
+    "game.mission.write_conversations.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكتب في محادثة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In einer Unterhaltung schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write in a conversation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir en una conversación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire dans une conversation"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivere in una conversazione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever numa conversa"
+          }
+        }
+      }
+    },
+    "game.mission.write_conversations.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكتب في %@ محادثات مختلفة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In %@ verschiedenen Unterhaltungen schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write in %@ different conversations"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir en %@ conversaciones distintas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire dans %@ conversations différentes"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivere in %@ conversazioni diverse"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever em %@ conversas diferentes"
+          }
+        }
+      }
+    },
+    "game.mission.react_posts.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تفاعل مع منشور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf einen Beitrag reagieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "React to a post"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reaccionar a una publicación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réagir à un post"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reagire a un post"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reagir a uma publicação"
+          }
+        }
+      }
+    },
+    "game.mission.react_posts.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تفاعل مع %@ منشورات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf %@ Beiträge reagieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "React to %@ posts"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reaccionar a %@ publicaciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réagir à %@ posts"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reagire a %@ post"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reagir a %@ publicações"
+          }
+        }
+      }
+    },
+    "game.mission.reply_story.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ردّ على قصة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf eine Story antworten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply to a story"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder a una historia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Répondre à une story"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rispondere a una storia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder a uma story"
+          }
+        }
+      }
+    },
+    "game.mission.reply_story.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ردّ على %@ قصص"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf %@ Storys antworten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply to %@ stories"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder a %@ historias"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Répondre à %@ stories"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rispondere a %@ storie"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder a %@ stories"
+          }
+        }
+      }
+    },
+    "game.mission.join_community.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انضم إلى مجتمع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einer Community beitreten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join a community"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirte a una comunidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejoindre une communauté"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirti a una community"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrar numa comunidade"
+          }
+        }
+      }
+    },
+    "game.mission.join_community.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انضم إلى %@ مجتمعات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Communities beitreten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join %@ communities"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirte a %@ comunidades"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejoindre %@ communautés"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirti a %@ community"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrar em %@ comunidades"
+          }
+        }
+      }
+    },
+    "game.mission.write_someone_new.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "راسل شخصًا لأول مرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jemandem zum ersten Mal schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write to someone for the first time"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir a alguien por primera vez"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire à quelqu’un pour la première fois"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivere a qualcuno per la prima volta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever para alguém pela primeira vez"
+          }
+        }
+      }
+    },
+    "game.mission.write_someone_new.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "راسل %@ أشخاص لأول مرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Personen zum ersten Mal schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write to %@ people for the first time"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir a %@ personas por primera vez"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire à %@ personnes pour la première fois"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivere a %@ persone per la prima volta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever para %@ pessoas pela primeira vez"
+          }
+        }
+      }
+    },
+    "game.mission.start_conversation.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابدأ محادثة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Unterhaltung beginnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a conversation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar una conversación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrer une conversation"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avviare una conversazione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Começar uma conversa"
+          }
+        }
+      }
+    },
+    "game.mission.start_conversation.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابدأ %@ محادثات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Unterhaltungen beginnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start %@ conversations"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar %@ conversaciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrer %@ conversations"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avviare %@ conversazioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Começar %@ conversas"
+          }
+        }
+      }
+    },
+    "game.mission.community_hello.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قدّم نفسك في مجتمع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dich in einer Community vorstellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce yourself in a community"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentarte en una comunidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te présenter dans une communauté"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentarti in una community"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se apresentar numa comunidade"
+          }
+        }
+      }
+    },
+    "game.mission.community_hello.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قدّم نفسك في %@ مجتمعات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dich in %@ Communities vorstellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce yourself in %@ communities"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentarte en %@ comunidades"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te présenter dans %@ communautés"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentarti in %@ community"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se apresentar em %@ comunidades"
+          }
+        }
+      }
+    },
+    "game.mission.comment_stranger_post.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "علّق على منشور عام لشخص لا تعرفه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den öffentlichen Beitrag einer unbekannten Person kommentieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment on a public post by someone you don’t know"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comentar la publicación pública de alguien que no conoces"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commenter le post public de quelqu’un que tu ne connais pas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commentare il post pubblico di qualcuno che non conosci"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comentar a publicação pública de alguém que você não conhece"
+          }
+        }
+      }
+    },
+    "game.mission.comment_stranger_post.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "علّق على %@ منشورات عامة لأشخاص لا تعرفهم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ öffentliche Beiträge unbekannter Personen kommentieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment on %@ public posts by people you don’t know"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comentar %@ publicaciones públicas de personas que no conoces"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commenter %@ posts publics de personnes que tu ne connais pas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commentare %@ post pubblici di persone che non conosci"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comentar %@ publicações públicas de pessoas que você não conhece"
+          }
+        }
+      }
+    },
+    "game.mission.cross_language_chat.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحدّث مع شخص يتكلم لغة أخرى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit jemandem schreiben, der eine andere Sprache spricht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat with someone who speaks another language"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hablar con alguien que habla otro idioma"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échanger avec quelqu’un qui parle une autre langue"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parlare con qualcuno che parla un’altra lingua"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversar com alguém que fala outro idioma"
+          }
+        }
+      }
+    },
+    "game.mission.cross_language_chat.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحدّث مع %@ أشخاص يتكلمون لغة أخرى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit %@ Personen schreiben, die eine andere Sprache sprechen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat with %@ people who speak another language"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hablar con %@ personas que hablan otro idioma"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échanger avec %@ personnes qui parlent une autre langue"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parlare con %@ persone che parlano un’altra lingua"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversar com %@ pessoas que falam outro idioma"
+          }
+        }
+      }
+    },
+    "game.mission.reply_their_language.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ردّ على شخص بلغته"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jemandem in seiner Sprache antworten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply to someone in their language"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder a alguien en su idioma"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Répondre à quelqu’un dans sa langue"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rispondere a qualcuno nella sua lingua"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder a alguém no idioma dela"
+          }
+        }
+      }
+    },
+    "game.mission.reply_their_language.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ردّ %@ مرات على شخص بلغته"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@-mal jemandem in seiner Sprache antworten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply %@ times to someone in their language"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder %@ veces a alguien en su idioma"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Répondre %@ fois à quelqu’un dans sa langue"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rispondere %@ volte a qualcuno nella sua lingua"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Responder %@ vezes a alguém no idioma dela"
+          }
+        }
+      }
+    },
+    "game.mission.create_invite_link.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنشئ رابط دعوتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deinen Einladungslink erstellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create your invite link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear tu enlace de invitación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créer ton lien d’invitation"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creare il tuo link d’invito"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criar seu link de convite"
+          }
+        }
+      }
+    },
+    "game.mission.create_invite_link.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنشئ %@ روابط دعوة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Einladungslinks erstellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create %@ invite links"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear %@ enlaces de invitación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créer %@ liens d’invitation"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creare %@ link d’invito"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criar %@ links de convite"
+          }
+        }
+      }
+    },
+    "game.mission.invite_contact.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ادعُ جهة اتصال إلى Meeshy"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Kontakt zu Meeshy einladen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invite a contact to Meeshy"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitar a un contacto a Meeshy"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviter un contact sur Meeshy"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitare un contatto su Meeshy"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convidar um contato para o Meeshy"
+          }
+        }
+      }
+    },
+    "game.mission.invite_contact.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ادعُ %@ جهات اتصال إلى Meeshy"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Kontakte zu Meeshy einladen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invite %@ contacts to Meeshy"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitar a %@ contactos a Meeshy"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviter %@ contacts sur Meeshy"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitare %@ contatti su Meeshy"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convidar %@ contatos para o Meeshy"
+          }
+        }
+      }
+    },
+    "game.mission.invite_joined.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اجعل شخصًا مدعوًّا ينضم إلى Meeshy"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine eingeladene Person zu Meeshy bringen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get an invited person to join Meeshy"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lograr que una persona invitada se una a Meeshy"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faire rejoindre Meeshy à une personne invitée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Far entrare in Meeshy una persona invitata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fazer uma pessoa convidada entrar no Meeshy"
+          }
+        }
+      }
+    },
+    "game.mission.invite_joined.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اجعل %@ أشخاص مدعوين ينضمون إلى Meeshy"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ eingeladene Personen zu Meeshy bringen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get %@ invited people to join Meeshy"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lograr que %@ personas invitadas se unan a Meeshy"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faire rejoindre Meeshy à %@ personnes invitées"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Far entrare in Meeshy %@ persone invitate"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fazer %@ pessoas convidadas entrarem no Meeshy"
+          }
+        }
+      }
+    },
+    "game.rank.mythe_seat": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خرافة رقم %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mythos Nr. %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Myth #%@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mito n.º %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mythe n° %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mito n. %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mito n.º %@"
           }
         }
       }

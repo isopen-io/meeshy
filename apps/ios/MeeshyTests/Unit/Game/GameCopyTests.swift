@@ -71,6 +71,27 @@ final class GameCopyTests: XCTestCase {
         XCTAssertEqual(GameCopy.rankLabel(.mythe, division: nil), GameCopy.rankName(.mythe))
     }
 
+    func test_rankLabel_readsTheFiveDivisions_VToI() {
+        XCTAssertEqual(GameCopy.rankLabel(.echo, division5: .v), "\(GameCopy.rankName(.echo)) V")
+        XCTAssertEqual(GameCopy.rankLabel(.echo, division5: .iv), "\(GameCopy.rankName(.echo)) IV")
+        XCTAssertEqual(GameCopy.rankLabel(.echo, division5: .i), "\(GameCopy.rankName(.echo)) I")
+    }
+
+    func test_rankLabel_ofAServedMyth_saysItsSeatNumber_andAnUnreadableSeatStaysTheName() {
+        let seated = GameCopy.rankLabel(.mythe, division5: nil, mythic: MythicSeatRef(number: 42, edition: 57))
+        XCTAssertTrue(seated.contains(GameCopy.formatCount(42)), seated)
+        XCTAssertNotEqual(seated, GameCopy.rankName(.mythe))
+        assertNotRaw(seated, "Mythe n° 42")
+        XCTAssertEqual(GameCopy.rankLabel(.mythe, division5: nil, mythic: MythicSeatRef(number: 101, edition: 1)), GameCopy.rankName(.mythe))
+    }
+
+    func test_rankLabel_ofTheServedBlock_prefersDivision5_overTheLegacyProjection() {
+        let glory = GameBlock.Glory(glory: 6000, rank: .voix, division: .iii, division5: .v, next: nil, gloryMissing: nil, progress: 0)
+        XCTAssertEqual(GameCopy.rankLabel(glory), "\(GameCopy.rankName(.voix)) V")
+        let legacy = GameBlock.Glory(glory: 6000, rank: .voix, division: .ii, next: nil, gloryMissing: nil, progress: 0)
+        XCTAssertEqual(GameCopy.rankLabel(legacy), "\(GameCopy.rankName(.voix)) II")
+    }
+
     // MARK: - Les missions
 
     func test_everyTemplateOfTheLaw_hasAPhrase_neverTheGenericOne() {

@@ -153,8 +153,31 @@ enum GameCopy {
     }
 
     static func rankLabel(_ rank: GloryRank, division: GloryDivision?) -> String {
-        guard let division else { return rankName(rank) }
-        return "\(rankName(rank)) \(divisionLabel(division))"
+        rankLabel(rank, division5: division.map(GloryDivision5.init(legacy:)))
+    }
+
+    /// Le rang et sa division V–I (#9636) ; le Mythe dit sa PLACE quand le serveur la sert : « Mythe n° 42 ».
+    static func rankLabel(_ rank: GloryRank, division5: GloryDivision5?, mythic: MythicSeatRef? = nil) -> String {
+        if rank == .mythe, let mythic, mythic.isValid {
+            return mythicSeatLabel(number: mythic.number)
+        }
+        guard let division5 else { return rankName(rank) }
+        return "\(rankName(rank)) \(division5.roman)"
+    }
+
+    /// Le rang servi par le bloc du jeu : division V–I, ou « Mythe n° 42 ».
+    static func rankLabel(_ glory: GameBlock.Glory) -> String {
+        rankLabel(glory.rank, division5: glory.shownDivision, mythic: glory.mythicSeat)
+    }
+
+    /// Le rang d'un autre, tel que son profil le montre.
+    static func rankLabel(_ standing: GameStanding) -> String {
+        rankLabel(standing.rank, division5: standing.shownDivision, mythic: standing.mythic)
+    }
+
+    static func mythicSeatLabel(number: Int) -> String {
+        let value = formatCount(number)
+        return String(localized: "game.rank.mythe_seat", defaultValue: "Mythe n° \(value)", bundle: .main)
     }
 
     static func treasuryName(_ tier: TreasuryTierKey) -> String {
@@ -222,12 +245,16 @@ enum GameCopy {
             return one
                 ? String(localized: "game.mission.send_attachments.one", defaultValue: "Envoyer une pièce jointe", bundle: .main)
                 : String(localized: "game.mission.send_attachments.other", defaultValue: "Envoyer \(n) pièces jointes", bundle: .main)
-        case "reply-conversations", "reply-conversations-wide", "gold-reply-conversations", "duo-replies":
+        case "duo-replies":
             return String(localized: "game.mission.reply_conversations", defaultValue: "Répondre dans \(n) conversations différentes", bundle: .main)
+        case "reply-conversations", "reply-conversations-wide", "gold-reply-conversations":
+            return one
+                ? String(localized: "game.mission.write_conversations.one", defaultValue: "Écrire dans une conversation", bundle: .main)
+                : String(localized: "game.mission.write_conversations.other", defaultValue: "Écrire dans \(n) conversations différentes", bundle: .main)
         case "comment-text":
             return one
-                ? String(localized: "game.mission.comment_text.one", defaultValue: "Écrire un commentaire", bundle: .main)
-                : String(localized: "game.mission.comment_text.other", defaultValue: "Écrire \(n) commentaires", bundle: .main)
+                ? String(localized: "game.mission.comment_text.one", defaultValue: "Commenter le post de quelqu’un", bundle: .main)
+                : String(localized: "game.mission.comment_text.other", defaultValue: "Commenter \(n) posts des autres", bundle: .main)
         case "publish-story", "duo-stories":
             return one
                 ? String(localized: "game.mission.publish_story.one", defaultValue: "Publier une story", bundle: .main)
@@ -238,8 +265,8 @@ enum GameCopy {
                 : String(localized: "game.mission.publish_post.other", defaultValue: "Publier \(n) posts", bundle: .main)
         case "share-link":
             return one
-                ? String(localized: "game.mission.share_link.one", defaultValue: "Partager un lien", bundle: .main)
-                : String(localized: "game.mission.share_link.other", defaultValue: "Partager \(n) liens", bundle: .main)
+                ? String(localized: "game.mission.share_link.one", defaultValue: "Partager un post", bundle: .main)
+                : String(localized: "game.mission.share_link.other", defaultValue: "Partager \(n) posts", bundle: .main)
         case "prism-foreign-messages", "duo-prism":
             return one
                 ? String(localized: "game.mission.prism_foreign_messages.one", defaultValue: "Écrire un message dans une autre langue que la tienne", bundle: .main)
@@ -258,6 +285,54 @@ enum GameCopy {
             return String(localized: "game.mission.long_chat", defaultValue: "Envoyer \(n) messages", bundle: .main)
         case "gold-replies-received":
             return String(localized: "game.mission.gold_replies_received", defaultValue: "Recevoir des réponses de \(n) personnes différentes", bundle: .main)
+        case "react-posts":
+            return one
+                ? String(localized: "game.mission.react_posts.one", defaultValue: "Réagir à un post", bundle: .main)
+                : String(localized: "game.mission.react_posts.other", defaultValue: "Réagir à \(n) posts", bundle: .main)
+        case "reply-story":
+            return one
+                ? String(localized: "game.mission.reply_story.one", defaultValue: "Répondre à une story", bundle: .main)
+                : String(localized: "game.mission.reply_story.other", defaultValue: "Répondre à \(n) stories", bundle: .main)
+        case "join-community":
+            return one
+                ? String(localized: "game.mission.join_community.one", defaultValue: "Rejoindre une communauté", bundle: .main)
+                : String(localized: "game.mission.join_community.other", defaultValue: "Rejoindre \(n) communautés", bundle: .main)
+        case "write-someone-new":
+            return one
+                ? String(localized: "game.mission.write_someone_new.one", defaultValue: "Écrire à quelqu’un pour la première fois", bundle: .main)
+                : String(localized: "game.mission.write_someone_new.other", defaultValue: "Écrire à \(n) personnes pour la première fois", bundle: .main)
+        case "start-conversation":
+            return one
+                ? String(localized: "game.mission.start_conversation.one", defaultValue: "Démarrer une conversation", bundle: .main)
+                : String(localized: "game.mission.start_conversation.other", defaultValue: "Démarrer \(n) conversations", bundle: .main)
+        case "community-hello":
+            return one
+                ? String(localized: "game.mission.community_hello.one", defaultValue: "Te présenter dans une communauté", bundle: .main)
+                : String(localized: "game.mission.community_hello.other", defaultValue: "Te présenter dans \(n) communautés", bundle: .main)
+        case "comment-stranger-post":
+            return one
+                ? String(localized: "game.mission.comment_stranger_post.one", defaultValue: "Commenter le post public de quelqu’un que tu ne connais pas", bundle: .main)
+                : String(localized: "game.mission.comment_stranger_post.other", defaultValue: "Commenter \(n) posts publics de personnes que tu ne connais pas", bundle: .main)
+        case "cross-language-chat":
+            return one
+                ? String(localized: "game.mission.cross_language_chat.one", defaultValue: "Échanger avec quelqu’un qui parle une autre langue", bundle: .main)
+                : String(localized: "game.mission.cross_language_chat.other", defaultValue: "Échanger avec \(n) personnes qui parlent une autre langue", bundle: .main)
+        case "reply-their-language":
+            return one
+                ? String(localized: "game.mission.reply_their_language.one", defaultValue: "Répondre à quelqu’un dans sa langue", bundle: .main)
+                : String(localized: "game.mission.reply_their_language.other", defaultValue: "Répondre \(n) fois à quelqu’un dans sa langue", bundle: .main)
+        case "create-invite-link":
+            return one
+                ? String(localized: "game.mission.create_invite_link.one", defaultValue: "Créer ton lien d’invitation", bundle: .main)
+                : String(localized: "game.mission.create_invite_link.other", defaultValue: "Créer \(n) liens d’invitation", bundle: .main)
+        case "invite-contact":
+            return one
+                ? String(localized: "game.mission.invite_contact.one", defaultValue: "Inviter un contact sur Meeshy", bundle: .main)
+                : String(localized: "game.mission.invite_contact.other", defaultValue: "Inviter \(n) contacts sur Meeshy", bundle: .main)
+        case "invite-joined":
+            return one
+                ? String(localized: "game.mission.invite_joined.one", defaultValue: "Faire rejoindre Meeshy à une personne invitée", bundle: .main)
+                : String(localized: "game.mission.invite_joined.other", defaultValue: "Faire rejoindre Meeshy à \(n) personnes invitées", bundle: .main)
         default:
             return String(localized: "game.mission.generic", defaultValue: "Mission du jour", bundle: .main)
         }
