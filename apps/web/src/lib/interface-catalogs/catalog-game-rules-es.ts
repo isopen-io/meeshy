@@ -59,7 +59,7 @@ const es = {
   'game.rules.atlas.share_legendary': 'del 0,2 al 2 % de las cuentas',
   'game.rules.atlas.share_mythic': 'menos del 0,2 % de las cuentas',
   'game.rules.atlas.rarity_glory': '+{glory} de Gloria',
-  'game.rules.atlas.myth': 'Las 100 Leyendas más gloriosas',
+  'game.rules.atlas.myth': 'Los 100 primeros en alcanzar 1 000 000 de Gloria',
   'game.rules.badges.title': 'Las insignias',
   'game.rules.badges.intro': 'Cada insignia cuenta UN gesto concreto: un mensaje de voz, una historia, una amistad nueva… Hay veinte, agrupadas en cinco familias.',
   'game.rules.badges.ladder': 'Cada insignia sube siete niveles. Cada vez que superas un umbral, cambia de material y enciende una estrella más.',

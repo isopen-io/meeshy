@@ -59,7 +59,7 @@ describe('les neuf familles sont dessinées', () => {
     expect(count(/data-game-rank=/g, html)).toBe(11);
     expect(html).toContain('Murmure');
     expect(html).toContain('Mythe');
-    expect(html).toContain('Les 100 Légendes les plus glorieuses');
+    expect(html).toContain('Les 100 premiers à atteindre 1 000 000 de Gloire');
   });
 
   test('les cinq formes de la Flamme', () => {

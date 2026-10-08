@@ -59,7 +59,7 @@ const ar = {
   'game.rules.atlas.share_legendary': 'من ⁦0٫2⁩ إلى ⁦2 %⁩ من الحسابات',
   'game.rules.atlas.share_mythic': 'أقل من ⁦0٫2 %⁩ من الحسابات',
   'game.rules.atlas.rarity_glory': '⁦+{glory}⁩ مجد',
-  'game.rules.atlas.myth': 'أمجد 100 أسطورة',
+  'game.rules.atlas.myth': 'أول 100 يبلغون 1٬000٬000 من المجد',
   'game.rules.badges.title': 'الشارات',
   'game.rules.badges.intro': 'كل شارة تحتسب خطوة واحدة محددة: رسالة صوتية، قصة، صداقة جديدة… هناك عشرون شارة، مرتبة في خمس عائلات.',
   'game.rules.badges.ladder': 'كل شارة ترتقي سبعة مستويات. عند كل عتبة تتجاوزها، تتغير مادتها وتُضاء نجمة أخرى.',

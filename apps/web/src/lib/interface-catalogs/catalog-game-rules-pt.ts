@@ -59,7 +59,7 @@ const pt = {
   'game.rules.atlas.share_legendary': '0,2 a 2 % das contas',
   'game.rules.atlas.share_mythic': 'menos de 0,2 % das contas',
   'game.rules.atlas.rarity_glory': '+{glory} de Glória',
-  'game.rules.atlas.myth': 'As 100 Lendas mais gloriosas',
+  'game.rules.atlas.myth': 'Os 100 primeiros a alcançar 1.000.000 de Glória',
   'game.rules.badges.title': 'Os emblemas',
   'game.rules.badges.intro': 'Cada emblema conta UM gesto preciso: uma mensagem de voz, uma story, uma nova amizade… São vinte, agrupados em cinco famílias.',
   'game.rules.badges.ladder': 'Cada emblema sobe sete níveis. A cada limite superado, ele muda de material e acende mais uma estrela.',

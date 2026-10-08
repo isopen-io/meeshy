@@ -59,7 +59,7 @@ const de = {
   'game.rules.atlas.share_legendary': '0,2 bis 2 % der Konten',
   'game.rules.atlas.share_mythic': 'unter 0,2 % der Konten',
   'game.rules.atlas.rarity_glory': '+{glory} Ruhm',
-  'game.rules.atlas.myth': 'Die 100 ruhmreichsten Legenden',
+  'game.rules.atlas.myth': 'Die ersten 100, die 1.000.000 Ruhm erreichen',
   'game.rules.badges.title': 'Die Abzeichen',
   'game.rules.badges.intro': 'Jedes Abzeichen zählt EINE bestimmte Geste: eine Sprachnachricht, eine Story, eine neue Freundschaft… Es gibt zwanzig, in fünf Familien geordnet.',
   'game.rules.badges.ladder': 'Jedes Abzeichen steigt über sieben Stufen. Bei jeder überschrittenen Schwelle wechselt es das Material und lässt einen Stern mehr leuchten.',

@@ -59,7 +59,7 @@ const it = {
   'game.rules.atlas.share_legendary': 'dallo 0,2 al 2 % degli account',
   'game.rules.atlas.share_mythic': 'meno dello 0,2 % degli account',
   'game.rules.atlas.rarity_glory': '+{glory} di Gloria',
-  'game.rules.atlas.myth': 'Le 100 Leggende più gloriose',
+  'game.rules.atlas.myth': 'I primi 100 a raggiungere 1.000.000 di Gloria',
   'game.rules.badges.title': 'I badge',
   'game.rules.badges.intro': 'Ogni badge conta UN gesto preciso: un messaggio vocale, una storia, una nuova amicizia… Sono venti, raggruppati in cinque famiglie.',
   'game.rules.badges.ladder': 'Ogni badge sale su sette livelli. A ogni soglia superata cambia materiale e accende una stella in più.',
