@@ -86,7 +86,7 @@ export const EMPTY_CLIENT_SESSION_INFO: ClientSessionInfo = {
   deviceName: null,
 };
 
-type FieldRule = { readonly max: number; readonly pattern?: RegExp };
+type FieldRule = { readonly max: number; readonly pattern?: RegExp; readonly accept?: (value: string) => boolean };
 
 const VERSION_LIKE = /^[0-9A-Za-z][0-9A-Za-z.+_-]*$/;
 
@@ -95,23 +95,51 @@ const FIELD_RULES: Readonly<Record<Exclude<keyof ClientSessionInfo, 'platform'>,
   appBuild: { max: 32, pattern: VERSION_LIKE },
   deviceModel: { max: 64 },
   osVersion: { max: 32, pattern: VERSION_LIKE },
-  timezone: { max: 64, pattern: /^[A-Za-z][A-Za-z_]*(\/[A-Za-z0-9_+-]+)*$/ },
+  timezone: { max: 64, pattern: /^[A-Za-z][A-Za-z_]*(\/[A-Za-z0-9_+-]+)*$/, accept: (value) => isValidTimeZone(value) },
   deviceLocale: { max: 35, pattern: /^[A-Za-z]{2,3}([_-][A-Za-z0-9]{2,8})*$/ },
   deviceName: { max: 64 },
 };
 
-const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/g;
+/**
+ * Les caractères qu'un texte déclaré par un client ne garde jamais : les
+ * contrôles C0/C1, et les contrôles BIDIRECTIONNELS (U+200E/F, U+202A–U+202E,
+ * U+2066–U+2069) — un nom d'appareil qui retourne l'affichage peut faire lire
+ * à l'écran autre chose que ce qui est stocké (audit L2-8).
+ */
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
 
 function firstValue(raw: unknown): unknown {
   return Array.isArray(raw) ? raw[0] : raw;
 }
 
-function cleanText(raw: unknown, rule: FieldRule): string | null {
+/**
+ * Un fuseau existe si `Intl` sait y formater une date (audit L2-1) : la forme
+ * IANA ne suffit pas — `Foo/Bar` la respecte, et `toLocaleString(…, { timeZone })`
+ * lève une `RangeError` sur lui.
+ */
+export function isValidTimeZone(value: unknown): value is string {
+  if (typeof value !== 'string' || value === '') return false;
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Un texte libre déclaré par un client, nettoyé et borné — `null` s'il ne reste rien. */
+export function cleanClientText(raw: unknown, max: number): string | null {
   const value = firstValue(raw);
   if (typeof value !== 'string') return null;
-  const text = value.replace(CONTROL_CHARACTERS, '').trim().slice(0, rule.max).trim();
-  if (text === '') return null;
-  return rule.pattern === undefined || rule.pattern.test(text) ? text : null;
+  const text = value.replace(CONTROL_CHARACTERS, '').trim().slice(0, max).trim();
+  return text === '' ? null : text;
+}
+
+function cleanText(raw: unknown, rule: FieldRule): string | null {
+  const text = cleanClientText(raw, rule.max);
+  if (text === null) return null;
+  if (rule.pattern !== undefined && !rule.pattern.test(text)) return null;
+  return rule.accept === undefined || rule.accept(text) ? text : null;
 }
 
 function cleanPlatform(raw: unknown): ClientPlatform | null {

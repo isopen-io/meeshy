@@ -10,7 +10,7 @@
 import { isIP } from 'node:net';
 import { FastifyRequest } from 'fastify';
 import * as UAParserModule from 'ua-parser-js';
-import { readClientSessionHeaders, type ClientSessionInfo } from '@meeshy/shared/utils/client-session';
+import { isValidTimeZone, readClientSessionHeaders, type ClientSessionInfo } from '@meeshy/shared/utils/client-session';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { defaultGeoIpDatabase, type GeoIpDatabase, type GeoIpDatabaseStatus, type GeoIpRecord } from './geoip/local-geoip-database';
 
@@ -259,7 +259,7 @@ function toGeoIpData(ip: string, record: GeoIpRecord): GeoIpData | null {
     countryName,
     city,
     region: record.subdivisions?.[0]?.names?.en ?? null,
-    timezone: record.location?.time_zone ?? null,
+    timezone: isValidTimeZone(record.location?.time_zone) ? record.location.time_zone : null,
     location: formatLocation(city, countryName ?? country),
   };
 }
@@ -358,15 +358,14 @@ export function mergeClientHeaders(
   geoData: GeoIpData | null,
   headers: Record<string, string | string[] | undefined>
 ): { deviceInfo: DeviceInfo | null; geoData: GeoIpData | null } {
-  const get = (key: string): string | null => {
-    const val = headers[key.toLowerCase()];
-    return typeof val === 'string' ? val : Array.isArray(val) ? val[0] : null;
-  };
-
-  const platform  = get('x-meeshy-platform');
-  const device    = get('x-meeshy-device');
-  const osVersion = get('x-meeshy-os');
-  const timezone  = get('x-meeshy-timezone');
+  // Le relevé NETTOYÉ du contrat (audit L2-1, L2-8) — jamais l'en-tête brut :
+  // un fuseau inconnu de `Intl` (`Foo/Bar`) faisait lever la composition de
+  // l'alerte « nouvelle connexion », et un modèle non borné entrait tel quel.
+  const declared = readClientSessionHeaders(headers);
+  const platform  = declared.platform;
+  const device    = declared.deviceModel;
+  const osVersion = declared.osVersion;
+  const timezone  = declared.timezone;
 
   const enrichedDevice: DeviceInfo | null = platform || device || osVersion
     ? {

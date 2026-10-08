@@ -9,6 +9,8 @@ import {
   readClientSessionHeaders,
   readClientSessionAuth,
   sessionClosureReasonText,
+  isValidTimeZone,
+  cleanClientText,
 } from '../utils/client-session';
 
 const iosHeaders = () => ({
@@ -157,5 +159,30 @@ describe('sessionClosureReasonText', () => {
   it('une session ouverte n’a pas de motif, un code inconnu se dit tel quel', () => {
     expect(sessionClosureReasonText(null, 'fr')).toBeNull();
     expect(sessionClosureReasonText('quantum_flux', 'en')).toBe('Closed (quantum_flux)');
+  });
+});
+
+describe('audit L2-1, L2-8 — ce qui passe la forme mais pas la réalité', () => {
+  it('un fuseau de forme IANA mais inconnu est refusé (Intl.DateTimeFormat)', () => {
+    expect(readClientSessionHeaders({ 'x-meeshy-timezone': 'Foo/Bar' }).timezone).toBeNull();
+    expect(readClientSessionHeaders({ 'x-meeshy-timezone': 'America/Argentina/Buenos_Aires' }).timezone).toBe('America/Argentina/Buenos_Aires');
+  });
+
+  it('isValidTimeZone dit si Intl connaît le fuseau', () => {
+    expect(isValidTimeZone('Europe/Paris')).toBe(true);
+    expect(isValidTimeZone('UTC')).toBe(true);
+    expect(isValidTimeZone('Foo/Bar')).toBe(false);
+    expect(isValidTimeZone(null)).toBe(false);
+  });
+
+  it('retire les contrôles bidirectionnels d’un nom d’appareil', () => {
+    const name = readClientSessionHeaders({ 'x-meeshy-device-name': 'iPhone ‮orp⁦ ‏de Ada‎' }).deviceName;
+    expect(name).toBe('iPhone orp de Ada');
+  });
+
+  it('cleanClientText borne et nettoie un texte libre', () => {
+    expect(cleanClientText(`a‫b\u0000c${'x'.repeat(100)}`, 10)).toBe('abcxxxxxxx');
+    expect(cleanClientText('  ', 10)).toBeNull();
+    expect(cleanClientText(42, 10)).toBeNull();
   });
 });

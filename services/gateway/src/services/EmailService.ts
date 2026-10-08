@@ -33,6 +33,7 @@ import { composeLoginCodeEmail, codeExpiryText, type LoginCodeEmailData } from '
 import { isStagingEnvironment, markForEnvironment } from './email/staging-marker';
 import { sendViaBrevo, sendViaMailgun, sendViaSendGrid, type EmailSender } from './email/providers';
 import { emailBaseStyles } from './email/base-styles';
+import { formatInTimeZone, safeTimeZone } from '../utils/time-zone-format';
 import { claimWarningFor } from './email/claim-warning';
 import { emailMayLeave, registeredEmailRecipientLookup, type RecipientAddressLookup } from './email/recipient-policy';
 
@@ -514,18 +515,17 @@ export class EmailService {
     const locale = this.getLocale(data.language);
     const la = t.loginAlert;
 
-    const timeFormatted = data.loginTime.toLocaleString(locale, {
+    // Un fuseau inconnu ne lève plus : l'alerte part, datée en UTC (audit L2-1).
+    const tzLabel = safeTimeZone(data.timezone);
+    const timeFormatted = formatInTimeZone(data.loginTime, locale, tzLabel, {
       year: 'numeric', month: 'long', day: 'numeric',
       hour: '2-digit', minute: '2-digit',
-      timeZone: data.timezone || 'UTC',
     });
-    const tzLabel = data.timezone || 'UTC';
 
     const prevTimeFormatted = data.previousLoginTime
-      ? data.previousLoginTime.toLocaleString(locale, {
+      ? formatInTimeZone(data.previousLoginTime, locale, tzLabel, {
           year: 'numeric', month: 'long', day: 'numeric',
           hour: '2-digit', minute: '2-digit',
-          timeZone: data.timezone || 'UTC',
         })
       : null;
 
