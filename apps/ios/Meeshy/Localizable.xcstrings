@@ -280466,6 +280466,53 @@
           }
         }
       }
+    },
+    "activation.gate.moreLinks": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بعد 5 روابط نشطة، أكّد عنوانك لإنشاء المزيد. سيُنشأ رابطك فور تأكيد الرمز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für mehr als 5 aktive Links bestätige deine Adresse. Dein Link wird erstellt, sobald der Code bestätigt ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beyond 5 active links, verify your address to create more. Your link will be created as soon as the code is confirmed."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más allá de 5 enlaces activos, valida tu dirección para crear otros. Tu enlace se creará en cuanto se valide el código."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Au-delà de 5 liens actifs, validez votre adresse pour en créer d’autres. Votre lien sera créé dès le code validé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oltre 5 link attivi, convalida il tuo indirizzo per crearne altri. Il tuo link sarà creato appena il codice sarà convalidato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Além de 5 links ativos, valide seu endereço para criar outros. Seu link será criado assim que o código for validado."
+          }
+        }
+      }
     }
   },
   "version": "1.1"
