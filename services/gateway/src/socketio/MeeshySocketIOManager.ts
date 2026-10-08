@@ -43,6 +43,8 @@ import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { attachmentSocketSelect } from '../services/attachments/attachmentIncludes';
 import { serializeMessageAttachmentsForSocket } from './serializeAttachmentForSocket';
+import { emitMessageNew } from './messageNewEmission';
+import { readerSignedPlan } from './readerSignedDelivery';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation.js';
@@ -3101,28 +3103,25 @@ export class MeeshySocketIOManager {
       // de room utilisateur (même règle que le chemin WS).
       const sealedQuote = await loadSealedQuoteAudience(this.prisma, message.replyTo);
       const sealedKeys = [...sealedQuote.keys()].filter((key) => key !== senderUserId && key !== message.senderId);
-      const sealedRooms = sealedKeys.map((key) => ROOMS.user(key));
-      const langFilterOn = process.env.SOCKET_LANG_FILTER === 'true' && sealedRooms.length === 0;
-
-      if (senderUserId) {
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, broadcastPayload, { excludeUserId: senderUserId });
-        } else {
-          this.io
-            .to(room)
-            .except([ROOMS.user(senderUserId), ...sealedRooms])
-            .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
-        }
-        this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
-      } else if (langFilterOn) {
-        this._emitMessageNewByLanguage(room, broadcastPayload);
-      } else {
-        const peers = this.io.to(room);
-        (sealedRooms.length > 0 ? peers.except(sealedRooms) : peers).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
-      }
-      for (const key of sealedKeys) {
-        this.io.to(ROOMS.user(key)).emit(SERVER_EVENTS.MESSAGE_NEW, sealedQuoteVariant(sealedQuote, key, broadcastPayload));
-      }
+      // L'émission — la même cascade que le chemin socket, et la remise par
+      // destinataire avec adresses signées pour un message dont une pièce se
+      // lit par lecteur (#9646) : `messageNewEmission.ts`. Aucun socket
+      // d'expéditeur ici : il est rejoué plus bas, pour les appelants de test.
+      emitMessageNew({
+        io: this.io,
+        room,
+        senderPayload,
+        peerPayload: broadcastPayload,
+        senderUserId,
+        senderParticipantId: message.senderId,
+        senderSocket: null,
+        hiddenKeys: sealedKeys,
+        payloadForKey: (key) => sealedQuoteVariant(sealedQuote, key, broadcastPayload),
+        emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
+          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
+          : null,
+        readerSigned: await readerSignedPlan(this.prisma, { conversationId: normalizedId, message, attachments: broadcastPayload.attachments }),
+      });
 
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore).
       // Il reçoit le payload cid-aware : c'est SON socket, et c'est lui qui doit
