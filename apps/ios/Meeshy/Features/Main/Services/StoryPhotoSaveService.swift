@@ -172,6 +172,31 @@ final class StoryPhotoSaveService: ObservableObject {
                      appendsBrandOutro: false)
     }
 
+    /// **UN RÉEL (OU UN POST COMPOSÉ) S'ENREGISTRE COMME UNE STORY** (#9681) —
+    /// même bake, même anneau, même annulation, clé de job = l'id du post.
+    ///
+    /// La scène rendue est celle que le lecteur de réels rejoue
+    /// (`ReelSceneRouting.sceneDocument`, scène 0), son de fond compris ; sans
+    /// document `canvasV3`, les effets de story du post tels quels. Comme une
+    /// scène de post (#7052) : ni interlude, ni carte de fin — l'œuvre seule.
+    func save(post: FeedPost) {
+        let languages = preferredLanguages()
+        bakeThenSave(jobKey: post.id,
+                     slide: Self.renderableSlide(of: post, preferredLanguages: languages),
+                     languages: languages,
+                     stickerMedia: post.media,
+                     resolvesIdentity: false,
+                     appendsBrandOutro: false)
+    }
+
+    static func renderableSlide(of post: FeedPost, preferredLanguages: [String]) -> StorySlide {
+        let effects = ReelSceneRouting.sceneDocument(for: post)
+            .map { StoryEffects(rendering: $0, sceneIndex: 0) } ?? post.storyEffects
+        return StoryItem(id: post.id, content: post.content, media: post.media,
+                         storyEffects: effects, createdAt: post.timestamp)
+            .toRenderableSlide(preferredLanguages: preferredLanguages)
+    }
+
     /// Le corps PARTAGÉ des deux entrées ci-dessus : bake, écriture Photos,
     /// anneau, annulation, nettoyage. Ce qui varie est passé en paramètre ;
     /// tout le reste — et c'est l'essentiel — ne se duplique pas.

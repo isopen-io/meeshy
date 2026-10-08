@@ -517,7 +517,7 @@ struct ReelFeedCard: View, Equatable {
         } label: {
             Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
         }
-        if media != nil {
+        if canSaveMedia {
             Button {
                 requestSaveMedia()
             } label: {
@@ -560,25 +560,14 @@ struct ReelFeedCard: View, Equatable {
         }
     }
 
-    /// Déclenche le flux unifié « Enregistrer en local » sur le média du réel
-    /// (pas le poste — un réel n'a de sens à « enregistrer » que par son
-    /// image/vidéo). No-op si le réel n'a pas de média résolvable.
+    /// « Sauvegarder » un réel (#9681) — la règle UNIQUE `PostSaveRoute` décide :
+    /// scène rendue comme une story, ou fichier brut d'un réel de médias simple.
     private func requestSaveMedia() {
-        guard let media, let url = media.url, !url.isEmpty else { return }
-        HapticFeedback.light()
-        let attachmentKind: AttachmentKind
-        switch media.type {
-        case .video: attachmentKind = .video
-        case .audio: attachmentKind = .audio
-        case .document: attachmentKind = .document
-        case .image: attachmentKind = .image
-        }
-        mediaSaveCoordinator.save(MediaSaveRequest(
-            kind: attachmentKind,
-            origin: .composed,
-            remoteURLString: url,
-            suggestedFileName: media.fileName
-        ))
+        PostSaveAction.perform(post, coordinator: mediaSaveCoordinator)
+    }
+
+    private var canSaveMedia: Bool {
+        PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable
     }
 
     /// Action glyph that gains an accent-colour BORDER on the glyph itself when

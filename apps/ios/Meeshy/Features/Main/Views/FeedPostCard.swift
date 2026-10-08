@@ -787,25 +787,16 @@ struct FeedPostCard: View {
         #endif
     }
 
-    /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
-    /// du post (repost-aware via `primaryReelDisplayMedia`). No-op si absent —
-    /// gardé par l'appelant (`post.primaryReelDisplayMedia != nil`).
+    /// « Sauvegarder » (#9681) : la règle UNIQUE `PostSaveRoute` — post composé
+    /// rendu comme une story, média simple enregistré tel quel.
     func requestSaveMedia() {
-        guard let media = post.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
-        HapticFeedback.light()
-        let attachmentKind: AttachmentKind
-        switch media.type {
-        case .video: attachmentKind = .video
-        case .audio: attachmentKind = .audio
-        case .document: attachmentKind = .document
-        case .image: attachmentKind = .image
-        }
-        mediaSaveCoordinator.save(MediaSaveRequest(
-            kind: attachmentKind,
-            origin: .composed,
-            remoteURLString: url,
-            suggestedFileName: media.fileName
-        ))
+        PostSaveAction.perform(post, coordinator: mediaSaveCoordinator)
+    }
+
+    /// Le menu offre « Sauvegarder » ssi la règle a quelque chose à enregistrer ;
+    /// sinon le même item reste le favori.
+    var canSaveMedia: Bool {
+        PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable
     }
 
 

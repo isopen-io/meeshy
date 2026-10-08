@@ -270,25 +270,11 @@ struct ReelsPlayerView: View {
 
     // MARK: Save
 
-    /// Déclenche le flux unifié « Enregistrer en local » sur le média du réel
-    /// (image/vidéo) — distinct du bouton favori dédié (bookmark) qui, lui,
-    /// enregistre le poste dans l'app. No-op si le réel n'a pas de média.
+    /// « Sauvegarder » un réel (#9681) : la règle UNIQUE `PostSaveRoute` décide —
+    /// un réel composé ou sans média se REND comme une story (scène, textes, son
+    /// de fond), un réel de médias simple garde son fichier. Distinct du favori.
     private func requestSaveMedia(_ reel: FeedPost) {
-        guard let media = reel.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
-        HapticFeedback.light()
-        let attachmentKind: AttachmentKind
-        switch media.type {
-        case .video: attachmentKind = .video
-        case .audio: attachmentKind = .audio
-        case .document: attachmentKind = .document
-        case .image: attachmentKind = .image
-        }
-        mediaSaveCoordinator.save(MediaSaveRequest(
-            kind: attachmentKind,
-            origin: .composed,
-            remoteURLString: url,
-            suggestedFileName: media.fileName
-        ))
+        PostSaveAction.perform(reel, coordinator: mediaSaveCoordinator)
     }
 
     // MARK: Pager
@@ -395,12 +381,14 @@ struct ReelsPlayerView: View {
 
             FullscreenTopBar(onClose: onClose) {
                 if let reel = currentReel {
+                    SceneSaveProgressButton(jobKey: reel.id)
                     ReelMoreOptionsMenu(
                         viewModel: viewModel,
                         reel: reel,
                         onShare: { shareReel(reel) },
                         onEdit: { editingReel = reel },
                         onOpenDetail: onOpenDetail.map { handler in { handler(reel.id) } },
+                        canSaveMedia: PostSaveAction.route(for: reel, coordinator: mediaSaveCoordinator) != .unavailable,
                         onSaveMedia: { requestSaveMedia(reel) }
                     )
                 }

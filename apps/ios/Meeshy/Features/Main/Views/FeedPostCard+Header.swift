@@ -184,7 +184,7 @@ extension FeedPostCard {
                     Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
                 }
                 Button {
-                    if post.primaryReelDisplayMedia != nil {
+                    if canSaveMedia {
                         requestSaveMedia()
                     } else {
                         onBookmark?(post.id)
@@ -192,10 +192,10 @@ extension FeedPostCard {
                     }
                 } label: {
                     Label(
-                        post.primaryReelDisplayMedia != nil
+                        canSaveMedia
                             ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
                             : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                        systemImage: post.primaryReelDisplayMedia != nil ? "arrow.down.to.line" : "bookmark"
+                        systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark"
                     )
                 }
                 if onPin != nil {

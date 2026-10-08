@@ -325,24 +325,14 @@ struct PostDetailView: View {
     }
 
     /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
-    /// du post (repost-aware via `primaryReelDisplayMedia`). No-op si absent —
-    /// gardé par l'appelant (`displayPost?.primaryReelDisplayMedia != nil`).
+    /// du post, aiguillé par `PostSaveRoute` (#9681) — gardé par `canSaveMedia`.
     private func requestSaveMedia() {
-        guard let media = displayPost?.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
-        HapticFeedback.light()
-        let attachmentKind: AttachmentKind
-        switch media.type {
-        case .video: attachmentKind = .video
-        case .audio: attachmentKind = .audio
-        case .document: attachmentKind = .document
-        case .image: attachmentKind = .image
-        }
-        mediaSaveCoordinator.save(MediaSaveRequest(
-            kind: attachmentKind,
-            origin: .composed,
-            remoteURLString: url,
-            suggestedFileName: media.fileName
-        ))
+        guard let post = displayPost else { return }
+        PostSaveAction.perform(post, coordinator: mediaSaveCoordinator)
+    }
+
+    private var canSaveMedia: Bool {
+        displayPost.map { PostSaveAction.route(for: $0, coordinator: mediaSaveCoordinator) != .unavailable } ?? false
     }
 
     @MainActor
@@ -1158,7 +1148,7 @@ struct PostDetailView: View {
                 Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
             }
             Button {
-                if displayPost?.primaryReelDisplayMedia != nil {
+                if canSaveMedia {
                     requestSaveMedia()
                 } else {
                     toggleDetailBookmark()
@@ -1175,12 +1165,12 @@ struct PostDetailView: View {
                 // étiquette depuis toujours, avec ces deux clés exactes : le
                 // savoir était à trente lignes d'ici.
                 Label(
-                    displayPost?.primaryReelDisplayMedia != nil
+                    canSaveMedia
                         ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
                         : (isPostBookmarked
                             ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
                             : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)),
-                    systemImage: displayPost?.primaryReelDisplayMedia != nil
+                    systemImage: canSaveMedia
                         ? "arrow.down.to.line"
                         : (isPostBookmarked ? "bookmark.fill" : "bookmark")
                 )

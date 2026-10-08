@@ -41,8 +41,8 @@ final class MediaSaveLabelGuardTests: XCTestCase {
         // n'aurait plus vu qu'une des deux étiquettes qu'elle oppose.
         let source = try sourceWithoutComments("Meeshy/Features/Main/Views/FeedPostCard.swift")
             + sourceWithoutComments("Meeshy/Features/Main/Views/FeedPostCard+Header.swift")
-        XCTAssertTrue(source.contains(#"post.primaryReelDisplayMedia != nil"#),
-            "La branche média du menu « … » de FeedPostCard doit rester conditionnée sur primaryReelDisplayMedia")
+        XCTAssertTrue(source.contains(#"PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable"#),
+            "#9681 — la branche « Sauvegarder » du menu de FeedPostCard est conditionnée par la règle UNIQUE PostSaveRoute")
         XCTAssertTrue(source.contains(#"String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)"#),
             "Quand la branche média est active, le menu « … » de FeedPostCard doit afficher « Sauvegarder »")
         XCTAssertTrue(source.contains(#"String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)"#),
@@ -51,8 +51,8 @@ final class MediaSaveLabelGuardTests: XCTestCase {
 
     func test_postDetailView_saveMenuItem_usesDynamicLabelByMediaPresence() throws {
         let source = try sourceWithoutComments("Meeshy/Features/Main/Views/PostDetailView.swift")
-        XCTAssertTrue(source.contains(#"displayPost?.primaryReelDisplayMedia != nil"#),
-            "La branche média du menu « … » de PostDetailView doit rester conditionnée sur primaryReelDisplayMedia")
+        XCTAssertTrue(source.contains(#"PostSaveAction.route(for: $0, coordinator: mediaSaveCoordinator) != .unavailable"#),
+            "#9681 — la branche « Sauvegarder » du menu de PostDetailView est conditionnée par la règle UNIQUE PostSaveRoute")
         XCTAssertTrue(source.contains(#"String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)"#),
             "Quand la branche média est active, le menu « … » de PostDetailView doit afficher « Sauvegarder »")
         XCTAssertTrue(source.contains(#"String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main)"#),

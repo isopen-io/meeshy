@@ -83,6 +83,63 @@ final class ReelSceneRoutingTests: XCTestCase {
         XCTAssertTrue(ReelSceneRouting.attachesSharedVideoWatch(for: Self.plainVideoReel(), loadedAttachmentId: nil))
     }
 
+    // MARK: - « Sauvegarder » : UNE règle (#9681)
+
+    func test_saveRoute_aComposedReel_isRenderedAsItsScene() {
+        XCTAssertEqual(PostSaveRoute.resolve(for: Self.composedReel(), mayLeave: true), .renderScene)
+    }
+
+    func test_saveRoute_aReelWithEffectsButNoMedia_isRendered_notAbsent() {
+        XCTAssertEqual(PostSaveRoute.resolve(for: Self.legacyBorrowedSoundReel(), mayLeave: true), .renderScene)
+    }
+
+    func test_saveRoute_aPlainMediaReel_keepsItsFile() {
+        XCTAssertEqual(PostSaveRoute.resolve(for: Self.plainVideoReelWithAddress(), mayLeave: true),
+                       .rawFile(PostSaveMedia(kind: .video, url: "https://cdn.meeshy.test/0.mov", fileName: "0_7db3dc1a.mov")))
+    }
+
+    func test_saveRoute_aTextOnlyReel_isRendered_butATextOnlyPostKeepsItsBookmark() {
+        XCTAssertEqual(PostSaveRoute.resolve(for: Self.textOnly(type: "REEL"), mayLeave: true), .renderScene)
+        XCTAssertEqual(PostSaveRoute.resolve(for: Self.textOnly(type: "POST"), mayLeave: true), .unavailable)
+    }
+
+    /// La loi de sortie gagne sur tout : un portillon fermé n'enregistre RIEN, ni
+    /// scène rendue, ni fichier.
+    func test_saveRoute_aClosedExitGate_savesNothing() {
+        for reel in [Self.composedReel(), Self.plainVideoReelWithAddress(), Self.textOnly(type: "REEL")] {
+            XCTAssertEqual(PostSaveRoute.resolve(for: reel, mayLeave: false), .unavailable)
+        }
+    }
+
+    func test_saveAction_followsTheGateOfTheHostCoordinator() {
+        XCTAssertEqual(PostSaveAction.route(for: Self.composedReel(), coordinator: MediaSaveCoordinator()), .unavailable,
+                       "un coordinateur sans portillon refuse — fermé par défaut")
+        XCTAssertEqual(PostSaveAction.route(for: Self.composedReel(), coordinator: MediaSaveCoordinator(exitGate: .open)),
+                       .renderScene)
+    }
+
+    /// Le réel part par le MÊME bake qu'une story : la scène 0 du document, son
+    /// de fond compris, sans carte de fin, job clé sur l'id du post, écrit dans Photos.
+    func test_savePost_bakesTheReelSceneWithItsBackgroundSound_likeAStory() async {
+        let exporter = ScriptedStoryExporter()
+        let photos = StubPhotoSaver()
+        let sut = StoryPhotoSaveService(exporter: exporter, photoSaver: photos, toasts: MockFeedbackToast(),
+                                        preferredLanguages: { [] }, intro: { nil })
+        let reel = Self.composedReel()
+
+        sut.save(post: reel)
+        XCTAssertNotNil(sut.progress(for: reel.id), "l'anneau du réel se lit sur l'id du post")
+        for _ in 0..<200 where sut.progress(for: reel.id) != nil { await Task.yield() }
+
+        XCTAssertEqual(exporter.prepareCallCount, 1)
+        XCTAssertEqual(exporter.lastAppendsBrandOutro, false, "l'œuvre seule, comme une scène de post")
+        XCTAssertNil(exporter.lastIntro)
+        XCTAssertEqual(exporter.lastSlide?.effects.resolvedBackgroundAudio?.mediaURL,
+                       "/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a",
+                       "le son de fond du réel part dans le MP4")
+        XCTAssertEqual(photos.savedVideoURLs.count, 1)
+    }
+
     // MARK: - Fixtures
 
     private static let videoId = "6aa868a7d5f0ce06898b8220"
@@ -125,6 +182,24 @@ final class ReelSceneRoutingTests: XCTestCase {
         {"id":"6aa868a7d5f0ce06898b8299","type":"REEL","content":"","createdAt":"2026-09-14T21:35:35.412Z",
          "author":{"id":"68f33afa8ae497b2054c84d7","username":"auteur"},
          "media":[\(videoMedia)]}
+        """)
+        return post.toFeedPost(preferredLanguages: [])
+    }
+
+    private static func plainVideoReelWithAddress() -> FeedPost {
+        let post: APIPost = JSONStub.decode("""
+        {"id":"6aa868a7d5f0ce06898b8297","type":"REEL","content":"","createdAt":"2026-09-14T21:35:35.412Z",
+         "author":{"id":"68f33afa8ae497b2054c84d7","username":"auteur"},
+         "media":[{"id":"\(videoId)","fileName":"0_7db3dc1a.mov","mimeType":"video/quicktime",
+                   "fileUrl":"https://cdn.meeshy.test/0.mov","duration":3000,"order":0}]}
+        """)
+        return post.toFeedPost(preferredLanguages: [])
+    }
+
+    private static func textOnly(type: String) -> FeedPost {
+        let post: APIPost = JSONStub.decode("""
+        {"id":"6aa868a7d5f0ce06898b8296","type":"\(type)","content":"Bonjour","createdAt":"2026-09-14T21:35:35.412Z",
+         "author":{"id":"68f33afa8ae497b2054c84d7","username":"auteur"}}
         """)
         return post.toFeedPost(preferredLanguages: [])
     }

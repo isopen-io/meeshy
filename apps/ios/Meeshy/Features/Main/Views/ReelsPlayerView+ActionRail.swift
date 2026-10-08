@@ -146,6 +146,9 @@ struct ReelMoreOptionsMenu: View {
     var onShare: () -> Void
     var onEdit: () -> Void
     var onOpenDetail: (() -> Void)?
+    /// « Sauvegarder » est offert ssi `PostSaveRoute` a quelque chose à enregistrer
+    /// (#9681) — résolu par l'hôte, qui possède le portillon de sortie.
+    var canSaveMedia: Bool
     /// Flux « Enregistrer en local » sur le média du réel (coordinateur possédé
     /// par `ReelsPlayerView`, seul habilité à présenter la sheet de destination).
     var onSaveMedia: () -> Void
@@ -182,7 +185,7 @@ struct ReelMoreOptionsMenu: View {
         } label: {
             Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: FullscreenChromeSymbol.share)
         }
-        if reel.primaryReelDisplayMedia != nil {
+        if canSaveMedia {
             Button {
                 onSaveMedia()
             } label: {
