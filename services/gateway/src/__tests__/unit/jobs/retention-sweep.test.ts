@@ -30,20 +30,32 @@ const monthsBefore = (months: number) => {
   return d;
 };
 
-const fakePrisma = (overrides: { purgedUserIds?: string[]; legacyLoginUserIds?: string[] } = {}) => {
+type FakeOverrides = {
+  purgedUserIds?: string[];
+  legacyLoginUserIds?: string[];
+  bannedUserIds?: string[];
+  reportedUserIds?: string[];
+  lockedUserIds?: string[];
+};
+
+const fakePrisma = (overrides: FakeOverrides = {}) => {
   const counted = (n: number) => jest.fn(async (_args: unknown) => n);
   const removed = (n: number) => jest.fn(async (_args: unknown) => ({ count: n }));
   return {
     userSession: { count: counted(3), deleteMany: removed(3) },
     securityEvent: { count: counted(5), deleteMany: removed(5) },
     adminAuditLog: { count: counted(7), deleteMany: removed(7) },
+    ban: { findMany: jest.fn(async (_args: unknown) => (overrides.bannedUserIds ?? []).map((userId) => ({ userId }))) },
+    report: { findMany: jest.fn(async (_args: unknown) => (overrides.reportedUserIds ?? []).map((reportedEntityId) => ({ reportedEntityId }))) },
     user: {
       count: counted(2),
       updateMany: removed(2),
       // Deux lectures distinctes : les comptes PURGÉS (filtre `deletedAt`) et
       // les comptes ANTÉRIEURS à `lastLoginAt` (filtre `lastLoginAt`).
       findMany: jest.fn(async (args: any) =>
-        (args?.where?.deletedAt ? overrides.purgedUserIds ?? [] : overrides.legacyLoginUserIds ?? []).map((id) => ({ id }))),
+        (args?.where?.lockedUntil
+          ? overrides.lockedUserIds ?? []
+          : args?.where?.deletedAt ? overrides.purgedUserIds ?? [] : overrides.legacyLoginUserIds ?? []).map((id) => ({ id }))),
     },
   };
 };
@@ -61,7 +73,7 @@ describe('les durées décidées', () => {
       closedSessionDays: 90,
       securityEventMonths: 12,
       purgedAccountSecurityEventDays: 90,
-      adminAuditLogMonths: 12,
+      adminAuditLogMonths: 15,
       connectionTraceMonths: 12,
     });
   });
@@ -117,13 +129,13 @@ describe('sweepRetention — armée', () => {
     });
   });
 
-  it('efface les événements de sécurité de plus de 12 mois et le journal d’audit de plus de 12 mois', async () => {
+  it('efface les événements de sécurité de plus de 12 mois et le journal d’audit de plus de 15 mois', async () => {
     const prisma = fakePrisma();
 
     await sweepRetention(prisma as never, { now: NOW, apply: true });
 
     expect(prisma.securityEvent.deleteMany).toHaveBeenCalledWith({ where: { createdAt: { lt: monthsBefore(12) } } });
-    expect(prisma.adminAuditLog.deleteMany).toHaveBeenCalledWith({ where: { createdAt: { lt: monthsBefore(12) } } });
+    expect(prisma.adminAuditLog.deleteMany).toHaveBeenCalledWith({ where: { createdAt: { lt: monthsBefore(15) } } });
   });
 
   it('efface les événements de sécurité d’un compte purgé depuis plus de 90 jours', async () => {
@@ -276,7 +288,8 @@ describe('audit L2-5 — la passe va jusqu’au bout, par curseur, pas sur les m
     const legacy = ids('l', 1100);
     const prisma = fakePrisma();
     const legacyPage = paged(legacy, (id) => ({ id }));
-    prisma.user.findMany = jest.fn(async (args: any) => (args?.where?.deletedAt ? [] : legacyPage(args))) as never;
+    prisma.user.findMany = jest.fn(async (args: any) =>
+      (args?.where?.deletedAt || args?.where?.lockedUntil ? [] : legacyPage(args))) as never;
 
     const report = await sweepRetention(prisma as never, { now: NOW, apply: false });
     expect(report.loginTraces).toBe(2 + 1100);
@@ -317,6 +330,63 @@ describe('revue « privacy-retention-logic » — rien de vivant ne part', () =>
     ].filter(Boolean) as Date[];
     expect(cutoffs.length).toBeGreaterThan(0);
     cutoffs.forEach((cutoff) => expect(cutoff.getTime()).toBeLessThan(NOW.getTime()));
+  });
+});
+
+describe('revue « evidence-destruction » — une trace visée par une procédure échappe à la purge', () => {
+  const held = () => fakePrisma({ bannedUserIds: ['u-banni'], reportedUserIds: ['u-signale'], lockedUserIds: ['u-verrouille'] });
+  const HELD = ['u-banni', 'u-signale', 'u-verrouille'];
+
+  it('relève les comptes sous procédure : bannissement en cours, signalement ouvert, verrou actif', async () => {
+    const prisma = held();
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+
+    expect(prisma.ban.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { liftedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: NOW } }] },
+    }));
+    expect(prisma.report.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { reportedType: 'user', resolvedAt: null },
+    }));
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { lockedUntil: { gt: NOW } } }));
+  });
+
+  it('ni leurs sessions closes, ni leurs événements, ni le journal d’audit qui les vise ou qu’ils ont écrit, ni leurs adresses ne partent', async () => {
+    const prisma = held();
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+
+    const sessionWhere = (prisma.userSession.deleteMany.mock.calls[0][0] as any).where;
+    expect(sessionWhere.NOT).toEqual([{ userId: { in: HELD } }]);
+    const eventWhere = (prisma.securityEvent.deleteMany.mock.calls[0][0] as any).where;
+    expect(eventWhere.NOT).toEqual([{ userId: { in: HELD } }]);
+    const auditWhere = (prisma.adminAuditLog.deleteMany.mock.calls[0][0] as any).where;
+    expect(auditWhere.NOT).toEqual([{ userId: { in: HELD } }, { adminId: { in: HELD } }]);
+    for (const [args] of prisma.user.updateMany.mock.calls as any[]) {
+      expect(args.where.NOT ?? []).toContainEqual({ id: { in: HELD } });
+    }
+  });
+
+  it('un compte purgé sous procédure garde ses événements au-delà de purge + 90 jours', async () => {
+    const prisma = held();
+    await sweepRetention(prisma as never, { now: NOW, apply: true });
+    const purgedQuery = (prisma.user.findMany.mock.calls.find(([a]: any) => a?.where?.deletedAt)?.[0] as any).where;
+    expect(purgedQuery.NOT).toEqual([{ id: { in: HELD } }]);
+  });
+
+  it('si les procédures ne se lisent pas, la passe n’efface RIEN (fail-closed)', async () => {
+    const prisma = held();
+    prisma.ban.findMany.mockRejectedValueOnce(new Error('mongo down'));
+
+    const report = await sweepRetention(prisma as never, { now: NOW, apply: true });
+
+    expect(writes(prisma)).toEqual([]);
+    expect(report.closedSessions).toBeNull();
+    expect(report.adminAuditLogs).toBeNull();
+  });
+
+  it('le journal d’audit survit plus longtemps que toute donnée qu’il décrit', () => {
+    expect(RETENTION.adminAuditLogMonths).toBeGreaterThan(RETENTION.securityEventMonths);
+    expect(RETENTION.adminAuditLogMonths).toBeGreaterThan(RETENTION.connectionTraceMonths);
+    expect(RETENTION.adminAuditLogMonths * 30).toBeGreaterThan(RETENTION.closedSessionDays);
   });
 });
 

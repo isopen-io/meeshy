@@ -8,7 +8,11 @@
  *    après la purge (`User.deletedAt`, posé à l'instant de la purge ; le
  *    compte doit être désactivé et porter une demande de suppression aboutie)
  *    — la plus courte des deux durées l'emporte ;
- *  - une ligne d'`AdminAuditLog` s'efface après 12 mois ;
+ *  - une ligne d'`AdminAuditLog` s'efface après 15 mois — le journal de
+ *    l'administration survit à TOUTE donnée qu'il décrit (12 mois au plus,
+ *    + 90 jours) : la décision du 2026-10-08 disait 12, la revue
+ *    « evidence-destruction » a montré qu'à égalité il disparaissait avec ce
+ *    qu'il prouve. À confirmer par le porteur ;
  *  - `registrationIp` / `registrationLocation` passent à `null` 12 mois après
  *    l'inscription, `lastLoginIp` / `lastLoginLocation` 12 mois après la
  *    dernière connexion (`lastLoginAt`). Un compte antérieur à `lastLoginAt`
@@ -19,6 +23,15 @@
  * La purge n'écrit donc que si `RETENTION_PURGE_ENABLED` vaut exactement
  * `true` (posé en staging, absent en production). Désarmée, elle COMPTE ce
  * qu'elle effacerait et l'écrit au journal — le porteur décide sur un chiffre.
+ *
+ * UNE TRACE VISÉE PAR UNE PROCÉDURE ÉCHAPPE À LA PURGE (revue
+ * « evidence-destruction »). Le schéma ne porte aucun indicateur de rétention
+ * légale ; les procédures qu'il SAIT dire sont : un bannissement en cours
+ * (`Ban` non levé, non échu), un signalement ouvert visant le compte (`Report`
+ * `reportedType: 'user'`, non résolu), un verrou actif (`lockedUntil` à venir).
+ * Les sessions closes, événements de sécurité, lignes d'audit (visant le
+ * compte OU écrites par lui) et adresses d'un tel compte sont gardés. Si ces
+ * procédures ne se lisent pas, la passe n'efface RIEN : fail-closed.
  *
  * Chaque étape est indépendante : une étape qui échoue est journalisée, rend
  * `null`, et n'empêche pas les suivantes. Toutes sont idempotentes : filtrées
@@ -34,7 +47,7 @@ export const RETENTION = {
   closedSessionDays: 90,
   securityEventMonths: 12,
   purgedAccountSecurityEventDays: 90,
-  adminAuditLogMonths: 12,
+  adminAuditLogMonths: 15,
   connectionTraceMonths: 12,
 } as const;
 
@@ -86,7 +99,37 @@ export type RetentionReport = {
   readonly loginTraces: number | null;
 };
 
-type RetentionStore = Pick<PrismaClient, 'userSession' | 'securityEvent' | 'adminAuditLog' | 'user'>;
+type RetentionStore = Pick<PrismaClient, 'userSession' | 'securityEvent' | 'adminAuditLog' | 'user' | 'ban' | 'report'>;
+
+/** Les comptes visés par une procédure en cours — leurs traces ne partent pas. */
+async function accountsUnderProcedure(prisma: RetentionStore, now: Date): Promise<readonly string[]> {
+  const [bans, reports, locked] = await Promise.all([
+    prisma.ban.findMany({
+      where: { liftedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+      select: { userId: true },
+    }),
+    prisma.report.findMany({
+      where: { reportedType: 'user', resolvedAt: null },
+      select: { reportedEntityId: true },
+    }),
+    prisma.user.findMany({ where: { lockedUntil: { gt: now } }, select: { id: true } }),
+  ]);
+  return [...new Set([
+    ...bans.map((ban) => ban.userId),
+    ...reports.map((report) => report.reportedEntityId),
+    ...locked.map((user) => user.id),
+  ])];
+}
+
+const NOTHING_SWEPT = (apply: boolean): RetentionReport => ({
+  applied: apply,
+  closedSessions: null,
+  securityEvents: null,
+  purgedAccountSecurityEvents: null,
+  adminAuditLogs: null,
+  registrationTraces: null,
+  loginTraces: null,
+});
 
 const daysBefore = (now: Date, days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
@@ -120,7 +163,19 @@ export async function sweepRetention(
   const auditCutoff = monthsBefore(now, RETENTION.adminAuditLogMonths);
   const traceCutoff = monthsBefore(now, RETENTION.connectionTraceMonths);
 
+  let held: readonly string[];
+  try {
+    held = await accountsUnderProcedure(prisma, now);
+  } catch (error) {
+    logger.error('retention sweep suspended — procedures could not be read, nothing is erased', error);
+    return NOTHING_SWEPT(apply);
+  }
+  const spareOwner = held.length > 0 ? { NOT: [{ userId: { in: [...held] } }] } : {};
+  const spareAccount = held.length > 0 ? { NOT: [{ id: { in: [...held] } }] } : {};
+  const spareAudit = held.length > 0 ? { NOT: [{ userId: { in: [...held] } }, { adminId: { in: [...held] } }] } : {};
+
   const closedSessionsWhere = {
+    ...spareOwner,
     isValid: false,
     OR: [
       { invalidatedAt: { lt: sessionCutoff } },
@@ -132,7 +187,7 @@ export async function sweepRetention(
       ? (await prisma.userSession.deleteMany({ where: closedSessionsWhere })).count
       : prisma.userSession.count({ where: closedSessionsWhere }));
 
-  const eventsWhere = { createdAt: { lt: eventCutoff } };
+  const eventsWhere = { createdAt: { lt: eventCutoff }, ...spareOwner };
   const securityEvents = await step('security events', async () =>
     apply
       ? (await prisma.securityEvent.deleteMany({ where: eventsWhere })).count
@@ -153,6 +208,7 @@ export async function sweepRetention(
           isActive: false,
           accountDeletionRequests: { some: { status: { in: ['GRACE_PERIOD_EXPIRED', 'COMPLETED'] } } },
           securityEvents: { some: {} },
+          ...spareAccount,
           ...after,
         },
         select: { id: true },
@@ -165,13 +221,14 @@ export async function sweepRetention(
       },
     ));
 
-  const auditWhere = { createdAt: { lt: auditCutoff } };
+  const auditWhere = { createdAt: { lt: auditCutoff }, ...spareAudit };
   const adminAuditLogs = await step('admin audit log', async () =>
     apply
       ? (await prisma.adminAuditLog.deleteMany({ where: auditWhere })).count
       : prisma.adminAuditLog.count({ where: auditWhere }));
 
   const registrationWhere = {
+    ...spareAccount,
     createdAt: { lt: traceCutoff },
     OR: [{ registrationIp: { not: null } }, { registrationLocation: { not: null } }],
   };
@@ -182,7 +239,7 @@ export async function sweepRetention(
 
   const loginTraceFields = { OR: [{ lastLoginIp: { not: null } }, { lastLoginLocation: { not: null } }] };
   const loginTraces = await step('last login address', async () => {
-    const datedWhere = { lastLoginAt: { lt: traceCutoff }, ...loginTraceFields };
+    const datedWhere = { lastLoginAt: { lt: traceCutoff }, ...loginTraceFields, ...spareAccount };
     const dated = apply
       ? (await prisma.user.updateMany({ where: datedWhere, data: { lastLoginIp: null, lastLoginLocation: null } })).count
       : await prisma.user.count({ where: datedWhere });
@@ -193,6 +250,7 @@ export async function sweepRetention(
           createdAt: { lt: traceCutoff },
           sessions: { none: { createdAt: { gte: traceCutoff } } },
           ...loginTraceFields,
+          ...spareAccount,
           ...after,
         },
         select: { id: true },
@@ -202,7 +260,7 @@ export async function sweepRetention(
       async (users) => {
         if (!apply) return users.length;
         const erased = await prisma.user.updateMany({
-          where: { id: { in: users.map((user) => user.id) }, lastLoginAt: { isSet: false } },
+          where: { id: { in: users.map((user) => user.id) }, lastLoginAt: { isSet: false }, ...spareAccount },
           data: { lastLoginIp: null, lastLoginLocation: null },
         });
         return erased.count;
