@@ -63,7 +63,20 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// au lieu de stop(). Reset à `false` par `cleanup()` → ne traverse pas
     /// un changement de vidéo. Toggle exclusif via le fullscreen overlay
     /// (inline n'expose pas `.loop` dans son ControlSet).
-    @Published public var shouldLoop: Bool = false
+    ///
+    /// Posé sur le lecteur comme `actionAtItemEnd` (#9702) : en boucle, le
+    /// lecteur garde son rythme à la fin de l'élément et la tête revient au
+    /// début sans pause ni `play()` — sans retour au coordinateur ni
+    /// réactivation de la session audio à chaque tour.
+    @Published public var shouldLoop: Bool = false {
+        didSet { player?.actionAtItemEnd = Self.actionAtItemEnd(looping: shouldLoop) }
+    }
+
+    /// Une file d'UN élément (le lecteur préparé est un `AVQueuePlayer`) qui
+    /// « avance » à la fin se vide : `.advance` n'est donc jamais rendu.
+    public nonisolated static func actionAtItemEnd(looping: Bool) -> AVPlayer.ActionAtItemEnd {
+        looping ? .none : .pause
+    }
 
     public var attachmentId: String?
 
@@ -151,7 +164,12 @@ public final class SharedAVPlayerManager: ObservableObject {
         guard !urlString.isEmpty else { return }
         guard urlString != activeURL else { return }
 
+        let outgoing = player
+        let outgoingURL = activeURL.isEmpty ? nil : MeeshyConfig.resolveMediaURL(activeURL)
         cleanup()
+        // Rendu au pool APRÈS l'adoption du lecteur entrant : rendu avant, il
+        // pourrait évincer (FIFO) précisément le lecteur préparé qu'on va adopter.
+        defer { if let outgoing, let outgoingURL { recycle(outgoing, for: outgoingURL) } }
         // Posé APRÈS `cleanup()` (qui le remet à `nil`) : tous les appelants
         // posaient auparavant `manager.attachmentId` AVANT `load()`, donc
         // `cleanup()` l'effaçait silencieusement à chaque chargement et
@@ -163,16 +181,25 @@ public final class SharedAVPlayerManager: ObservableObject {
         let resolved = url.absoluteString
 
         activeURL = urlString
+        let localURL = CacheCoordinator.videoLocalFileURL(for: resolved)
 
-        // 1. Check prerolled player cache (instant playback — already buffered)
+        // 1. Check prerolled player cache (instant playback — already buffered).
+        // Adopté seulement s'il lit le FICHIER (#9702) : un lecteur préparé sur
+        // l'URL distante jouerait en streaming un média déjà sur le disque, et
+        // le téléchargerait une seconde fois.
         if let cached = StoryMediaLoader.shared.cachedPlayer(for: url) {
-            player = cached
-            setupObservers(for: cached)
-            return
+            if Self.mayAdoptPrerolledPlayer(
+                playsLocalFile: Self.playsLocalFile(cached), localFileOnDisk: localURL != nil
+            ) {
+                player = cached
+                setupObservers(for: cached)
+                return
+            }
+            cached.pause()
+            cached.replaceCurrentItem(with: nil)
         }
 
         // 2. Check video disk cache (play from local file — no network)
-        let localURL = CacheCoordinator.videoLocalFileURL(for: resolved)
         if let localURL {
             let newPlayer = AVPlayer(url: localURL)
             player = newPlayer
@@ -189,6 +216,40 @@ public final class SharedAVPlayerManager: ObservableObject {
         // Stories don't pass through this manager (their pipeline is
         // StoryReaderPrefetcher + StoryMediaLoader), so removing the
         // fallback only affects conversation/feed video.
+    }
+
+    // MARK: - Prerolled players (#9702)
+
+    /// Un lecteur préparé s'adopte s'il lit le fichier local — ou, à défaut de
+    /// fichier sur le disque, tel quel (comportement d'avant, rien de mieux à
+    /// servir). Préparé sur le réseau alors que le fichier est là, il se jette.
+    public nonisolated static func mayAdoptPrerolledPlayer(playsLocalFile: Bool, localFileOnDisk: Bool) -> Bool {
+        playsLocalFile || !localFileOnDisk
+    }
+
+    /// Le lecteur sortant revient au pool s'il est PRÊT et lit le fichier :
+    /// un retour en arrière le retrouve décodé. Un lecteur en échec ou en
+    /// streaming n'y prendrait que la place d'un voisin utile.
+    public nonisolated static func mayRecycleOutgoingPlayer(isReadyToPlay: Bool, playsLocalFile: Bool) -> Bool {
+        isReadyToPlay && playsLocalFile
+    }
+
+    private static func playsLocalFile(_ player: AVPlayer) -> Bool {
+        (player.currentItem?.asset as? AVURLAsset)?.url.isFileURL == true
+    }
+
+    /// Rend le lecteur que `load()` remplace au pool de `StoryMediaLoader`
+    /// (borné à trois, FIFO) au lieu de le détruire — le retour en arrière
+    /// d'un réel ne repart plus à froid. Tête ramenée au début : on revient à
+    /// un réel, on ne reprend pas au milieu d'une boucle (la reprise servie,
+    /// elle, est réappliquée à l'adoption par `applyResumePositionIfAvailable`).
+    private func recycle(_ outgoing: AVPlayer, for url: URL) {
+        guard Self.mayRecycleOutgoingPlayer(
+            isReadyToPlay: outgoing.currentItem?.status == .readyToPlay,
+            playsLocalFile: Self.playsLocalFile(outgoing)
+        ) else { return }
+        outgoing.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+        StoryMediaLoader.shared.returnPlayer(outgoing, for: url)
     }
 
     // MARK: - Playback Controls
@@ -623,6 +684,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         // ça, un user qui mute en fullscreen puis ouvre une nouvelle vidéo
         // entend le son revenir alors que l'icône mute reste activée.
         player.isMuted = effectiveMuted
+        player.actionAtItemEnd = Self.actionAtItemEnd(looping: shouldLoop)
 
         // The active reel is on-screen: lift the offscreen preroll bitrate cap so
         // ABR can pick the best rendition (thermal-aware — stays capped when hot).
@@ -682,11 +744,18 @@ public final class SharedAVPlayerManager: ObservableObject {
                 self.emitWatchSample(complete: true)
                 self.watchClockStart = self.shouldLoop ? Date() : nil
                 if self.shouldLoop {
-                    // Loop fullscreen : seek + replay, on garde le player +
-                    // activeURL + audio session. Reset watchStartTime pour que
-                    // la prochaine fin de cycle puisse encore report progress.
+                    // Loop fullscreen SANS couture (#9702) : `actionAtItemEnd
+                    // = .none` a gardé le lecteur à son rythme, la tête revient
+                    // seulement au début. Plus de `play()` ici — il repassait
+                    // par le coordinateur et réactivait la session audio
+                    // (aller-retour bloquant au serveur audio, sur le fil
+                    // principal) à chaque tour : le trou visible et audible.
+                    // Reset watchStartTime pour que la prochaine fin de cycle
+                    // puisse encore report progress.
                     self.seek(to: 0)
-                    self.play()
+                    self.player?.rate = Float(self.playbackSpeed.rawValue)
+                    self.stretchTracker.begin(0)
+                    self.emitWatchSample()
                     self.watchStartTime = Date()
                 } else {
                     // Comportement par défaut : tear-down complet → bubble
