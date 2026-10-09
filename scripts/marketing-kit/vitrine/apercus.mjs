@@ -35,8 +35,9 @@ export const APERCUS = [
     plans: [
       { scene: 'jeu-frappe' },
       { scene: 'jeu-coffre' },
-      { scene: 'jeu-rang' },
+      // Le niveau AVANT le rang : on monte de niveau, puis de rang — l'histoire se lit dans l'ordre.
       { scene: 'jeu-niveau', facultatif: true, priorite: 2 },
+      { scene: 'jeu-rang' },
       { scene: 'jeu-badge', facultatif: true, priorite: 1 },
     ],
   },
@@ -60,6 +61,24 @@ export const APERCUS = [
     plans: [{ scene: 'conversation-traduite', famille: 'conversation' }],
   },
 ]
+
+// La mise en page d'un plan d'aperçu : une BANDE pleine en haut (16 % de la hauteur) porte la légende, et
+// l'écran de l'app, rogné de sa barre d'état, se pose dessous, réduit et centré sur le fond de la marque —
+// la légende ne recouvre jamais l'interface. Dimensions paires (yuv420p).
+const MARGES_ECRAN = { iphone: { haut: 24, bas: 36, cotes: 36 }, ipad: { haut: 28, bas: 36, cotes: 36 } }
+const pairBas = (n) => 2 * Math.floor(n / 2)
+
+export const dispositionApercu = ({ appareil, natif, rognageHaut }) => {
+  const { largeur, hauteur } = APPAREILS_APERCU[appareil]
+  const m = MARGES_ECRAN[appareil]
+  const bande = Math.round(hauteur * 0.16)
+  const [ln, hn] = [natif[0], natif[1] - rognageHaut]
+  const echelle = Math.min((largeur - 2 * m.cotes) / ln, (hauteur - bande - m.haut - m.bas) / hn)
+  const l = pairBas(ln * echelle)
+  const h = pairBas(hn * echelle)
+  const x = pairBas((largeur - l) / 2)
+  return { largeur, hauteur, bande, ecran: { x, y: bande + m.haut, largeur: l, hauteur: h, rayon: Math.round(l * 0.07) } }
+}
 
 export const apercuDe = (id) => {
   const a = APERCUS.find((x) => x.id === id)
@@ -157,13 +176,23 @@ export const CARTES_CREATIVES = [
     facultative: true,
     sources: [
       { famille: 'conversation', scene: 'conversation-traduite', image: 'traduction' },
+      // La vraie capture de la conversation amoureuse (capturer.mjs, scène `amour`) : le vocal transcrit et
+      // traduit, la transcription qui se surligne mot à mot. Même source que la capture App Store n° 1.
+      { capture: 'Marketing/02-captures/iphone/{lang}/amour.mov', instantS: 10, debutClipS: 8.5 },
       { famille: 'interaction', scene: 'interaction-emoji', image: 'reaction' },
     ],
   },
   { id: 'frappe', sources: [{ famille: 'jeu', scene: 'jeu-frappe', image: 'piece-retournee' }] },
-  { id: 'coffre', sources: [{ famille: 'jeu', scene: 'jeu-coffre', image: 'coffre-ouvert' }] },
+  // `recompenses` : le coffre ouvert ET ce qu'il donne (`coffre-ouvert`, à 0,45 s, montre encore le couvercle).
+  // Le coffre vit en bas de l'écran : la carte montre le BAS de l'écran quand elle file sous le bord.
+  { id: 'coffre', ancre: 'bas', sources: [{ famille: 'jeu', scene: 'jeu-coffre', image: 'recompenses' }] },
   { id: 'rang', sources: [{ famille: 'jeu', scene: 'jeu-rang', image: 'rang-revele' }] },
 ]
+
+// Les cartes montrent l'écran ENTIER, à la même échelle pour toutes. Quand une carte file sous le bord du
+// visuel, une carte ancrée en bas fait défiler son écran de ce qui dépasse : le bas de l'écran reste visible.
+export const decalageCarte = ({ carte, hauteurVisuel, ancre }) =>
+  ancre === 'bas' ? Math.max(0, carte.y + carte.hauteur - hauteurVisuel) : 0
 
 // Rapport largeur / hauteur de l'écran filmé (iPhone 6,9" : 1320 × 2868).
 export const RAPPORT_ECRAN = 1320 / 2868
