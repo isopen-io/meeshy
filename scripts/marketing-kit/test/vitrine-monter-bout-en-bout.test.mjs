@@ -25,7 +25,7 @@ const PRISES = {
   'jeu-frappe': 2.7, 'jeu-coffre': 2.9, 'jeu-rang': 3.1,
   'interaction-emoji': 4.6, 'interaction-sticker': 4.9, 'interaction-commentaire-audio': 7.5,
 }
-const IMAGES_CLES = { 'jeu-frappe': 'piece-retournee', 'jeu-coffre': 'coffre-ouvert', 'jeu-rang': 'rang-revele', 'interaction-emoji': 'reaction' }
+const IMAGES_CLES = { 'jeu-frappe': 'piece-retournee', 'jeu-coffre': 'recompenses', 'jeu-rang': 'rang-revele', 'interaction-emoji': 'reaction' }
 
 const tourner = ({ racine, appareil, lang, scene, secondes }) => {
   const famille = scene.startsWith('jeu-') ? 'jeu' : 'interaction'
@@ -36,7 +36,7 @@ const tourner = ({ racine, appareil, lang, scene, secondes }) => {
     '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-an', c.clip])
   if (IMAGES_CLES[scene] && appareil === 'iphone') {
     mkdirSync(c.images, { recursive: true })
-    execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=1320x2868', '-frames:v', '1', c.image(IMAGES_CLES[scene])])
+    execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=1320x2868', '-frames:v', '1', c.image(IMAGES_CLES[scene])])
   }
 }
 
@@ -103,16 +103,21 @@ describe.skipIf(!ffmpegPresent)('montage de bout en bout sur des prises synthét
     expect(cartes.map((c) => c.id)).toEqual(['conversation', 'frappe', 'coffre', 'rang'])
     expect(cartes[0].image.endsWith('/interaction/iphone/fr/interaction-emoji/reaction.png')).toBe(true)
     expect(cartes[0].clip.endsWith('/interaction-emoji.mp4')).toBe(true)
-    expect(cartesTournees({ lang: 'ar', source }).manquants).toEqual(['jeu-coffre/coffre-ouvert.png', 'jeu-rang/rang-revele.png'])
+    expect(cartesTournees({ lang: 'ar', source }).manquants).toEqual(['jeu-coffre/recompenses.png', 'jeu-rang/rang-revele.png'])
   })
 
-  test('en-tête image et vidéo, visuel de recherche : aux tailles Apple, RVB, vidéo en boucle — conformes', async () => {
+  test('en-tête image (tirée des IMAGES CLÉS, pas des clips) et vidéo, visuel de recherche : aux tailles Apple, RVB, vidéo en boucle — conformes', async () => {
     const creatifs = await monterCreatifs({ lang: 'fr', source, racine, rendre: rendreSansNavigateur, preset: 'ultrafast' })
     sorties.push(...creatifs)
     expect(creatifs.map((c) => [c.spec, c.statut])).toEqual([['entete-image', 'pret'], ['entete-video', 'pret'], ['recherche-image', 'pret']])
     const image = pngInfo(readFileSync(creatifs[0].chemin))
     expect(image).toMatchObject({ width: 3840, height: 1646, colorType: 2 })
     expect(pngInfo(readFileSync(creatifs[2].chemin))).toMatchObject({ width: 3840, height: 2560, colorType: 2 })
+    const { dispositionCreatif } = await import('../vitrine/apercus.mjs')
+    const carte = dispositionCreatif({ format: 'entete', nombre: 4 }).cartes[1]
+    const pixel = execFileSync('ffmpeg', ['-v', 'error', '-i', creatifs[0].chemin, '-vf', `crop=1:1:${carte.x + carte.largeur / 2}:${carte.y + carte.hauteur / 2}`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
+    const [r, g, b] = pixel
+    expect(r > 240 && g < 16 && b < 16).toBe(true)
     const video = sonderVideo(creatifs[1].chemin)
     expect(video.video).toMatchObject({ largeur: 3840, hauteur: 1646, cadence: 30 })
     expect(video.dureeS).toBeGreaterThanOrEqual(5)
@@ -162,6 +167,44 @@ describe.skipIf(!ffmpegPresent)('montage de bout en bout sur des prises synthét
 const chromiumPresent = await import('@playwright/test')
   .then(({ chromium }) => existsSync(chromium.executablePath()))
   .catch(() => false)
+
+// La prise RÉELLE du rang (filmer.mjs, simulateur), si elle est sur disque : jamais committée, le test saute
+// sans elle. Il prouve que la caméra a bien rejoint le cadrage déclaré : la fin du plan ressemble à la
+// fenêtre cible de la dernière image filmée, pas à l'image entière.
+const PRISES_REELLES = join(import.meta.dir, '../out/jeu/iphone/fr')
+const priseReelle = ['jeu-frappe', 'jeu-coffre', 'jeu-rang'].every((s) => existsSync(join(PRISES_REELLES, `${s}.mp4`)))
+
+describe.skipIf(!ffmpegPresent || !priseReelle)('montage sur les prises réelles françaises (iPhone)', () => {
+  test('le jeu se monte conforme, et la caméra finit sur le cadrage du rang', async () => {
+    const { cadrageDe, fenetreCible, largeurMinimale } = await import('../vitrine/cadrages.mjs')
+    const { cpSync } = await import('node:fs')
+    const dossier = mkdtempSync(join(tmpdir(), 'monter-reel-'))
+    try {
+      const source = join(dossier, 'rushes')
+      for (const scene of ['jeu-frappe', 'jeu-coffre', 'jeu-rang']) {
+        cpSync(join(PRISES_REELLES, `${scene}.mp4`), join(source, 'jeu/iphone/fr', `${scene}.mp4`), { recursive: true })
+      }
+      const s = await monterApercu({ apercu: apercuDe('jeu'), appareil: 'iphone', lang: 'fr', source, racine: join(dossier, 'as'), rendre: rendreSansNavigateur, musique: 'silence', preset: 'ultrafast' })
+      expect(controler(s.chemin, 'apercu-iphone')).toMatchObject({ conforme: true })
+      const rang = s.plans.findIndex((p) => p.scene === 'jeu-rang')
+      expect(s.plans[rang].cadre).toBe(true)
+      const debutRang = s.plans.slice(0, rang).reduce((t, p) => t + p.secondes - 0.4, 0)
+      const instant = (debutRang + s.plans[rang].secondes - 0.5).toFixed(3)
+      const gris = (args) => execFileSync('ffmpeg', ['-v', 'error', ...args, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'gray', '-'], { maxBuffer: 1 << 24 })
+      const basMonte = gris(['-ss', instant, '-i', s.chemin, '-vf', 'scale=44:96,crop=44:56:0:40'])
+      const clip = join(source, 'jeu/iphone/fr/jeu-rang.mp4')
+      const f = fenetreCible({ rect: cadrageDe({ scene: 'jeu-rang', appareil: 'iphone' }), natif: [1320, 2868], rapport: 1320 / 2868, largeurMin: largeurMinimale({ appareil: 'iphone', largeurClip: 1320, largeurSortie: 886 }) })
+      const fenetre = `crop=${Math.round(f.largeur)}:${Math.round(f.hauteur)}:${Math.round(f.x)}:${Math.round(f.y)},`
+      const dernier = ['-sseof', '-0.1', '-i', clip]
+      const attenduZoom = gris([...dernier, '-vf', `${fenetre}scale=44:96,crop=44:56:0:40`])
+      const pleinCadre = gris([...dernier, '-vf', 'scale=44:96,crop=44:56:0:40'])
+      const ecart = (a, b) => a.reduce((t, v, i) => t + Math.abs(v - b[i]), 0) / a.length
+      expect(ecart(basMonte, attenduZoom)).toBeLessThan(ecart(basMonte, pleinCadre) / 2)
+    } finally {
+      rmSync(dossier, { recursive: true, force: true })
+    }
+  }, LENT)
+})
 
 // Rendu dans un processus node à part : plusieurs Chromium lancés dans le même processus bun finissent par
 // ne plus démarrer (défaut préexistant de la suite complète, hors de ce lot), le rendu isolé ne l'est pas.

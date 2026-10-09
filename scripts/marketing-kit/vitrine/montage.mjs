@@ -20,7 +20,8 @@ const remplir = (largeur, hauteur) =>
 
 const image = (chemin, images) => ['-loop', '1', '-framerate', String(FPS), '-t', s(images + FPS), '-i', chemin]
 
-// `segments` : le plan de montage (apercus.mjs) où chaque clip a reçu `surimpression` (PNG de sa légende)
+// `segments` : le plan de montage (apercus.mjs) où chaque clip a reçu `surimpression` (PNG de sa légende),
+// éventuellement `camera` (le mouvement vers son cadrage, cadrages.mjs — sinon plein cadre),
 // et la fin son `carte` (PNG plein cadre). `audio` : { wav, fondu? } (tout fichier que lit ffmpeg, complété
 // de silence s'il est court, fondu d'entrée et de sortie si `fondu`) ou { silence: true }.
 export const argumentsApercu = ({ segments, largeur, hauteur, audio, sortie, preset = 'slow', fondu = FONDU_IMAGES }) => {
@@ -37,7 +38,7 @@ export const argumentsApercu = ({ segments, largeur, hauteur, audio, sortie, pre
       const l = ajouter(image(seg.surimpression, seg.images))
       const maintien = s(seg.images - seg.imagesClip + FPS)
       filtres.push(
-        `[${v}:v]fps=${FPS},${remplir(largeur, hauteur)},tpad=stop_mode=clone:stop_duration=${maintien},trim=end_frame=${seg.images},setpts=PTS-STARTPTS[v${i}]`,
+        `[${v}:v]fps=${FPS},${seg.camera ? `${seg.camera},` : ''}${remplir(largeur, hauteur)},tpad=stop_mode=clone:stop_duration=${maintien},trim=end_frame=${seg.images},setpts=PTS-STARTPTS[v${i}]`,
         `[${l}:v]format=rgba,fade=t=in:st=0.25:d=0.35:alpha=1,setpts=PTS-STARTPTS[l${i}]`,
         `[v${i}][l${i}]overlay=0:0:format=auto,format=yuv420p,trim=end_frame=${seg.images},setpts=PTS-STARTPTS,settb=1/${FPS},fps=${FPS}${etiquette}`,
       )
@@ -82,7 +83,8 @@ export const argumentsMasque = ({ largeur, hauteur, rayon, sortie }) => {
 
 // Un visuel créatif : le fond (PNG opaque : dégradé, titre, cadres des cartes) et, dans chaque carte, une
 // image clé (image fixe) ou un clip (vidéo). En vidéo, chaque carte entre et sort en fondu sur le fond : la
-// première et la dernière image sont le fond seul, la boucle d'Apple ne saute pas.
+// première et la dernière image sont le fond seul, la boucle d'Apple ne saute pas. Une carte dont la scène a
+// un cadrage reçoit `recadrage` (fenêtre fixe sur l'action) à la place du remplissage plein écran.
 export const argumentsCreatif = ({ fond, largeur, hauteur, cartes, video = null, sortie, preset = 'slow' }) => {
   const total = video ? Math.round(video.dureeS * FPS) : 1
   const entrees = video ? image(fond, total) : ['-i', fond]
@@ -92,7 +94,7 @@ export const argumentsCreatif = ({ fond, largeur, hauteur, cartes, video = null,
     const source = n
     const masque = n + 1
     n += 2
-    if (c.clip) entrees.push('-i', c.clip)
+    if (video && c.clip) entrees.push('-i', c.clip)
     else entrees.push(...(video ? image(c.image, total) : ['-i', c.image]))
     entrees.push(...(video ? image(c.masque, total) : ['-i', c.masque]))
     const tenue = video && c.clip
@@ -101,7 +103,7 @@ export const argumentsCreatif = ({ fond, largeur, hauteur, cartes, video = null,
     const temps = video ? `,fps=${FPS}${tenue},trim=end_frame=${total},setpts=PTS-STARTPTS` : ''
     const fondus = video ? `,fade=t=in:st=0:d=0.5:alpha=1,fade=t=out:st=${(video.dureeS - 0.6).toFixed(3)}:d=0.6:alpha=1` : ''
     filtres.push(
-      `[${source}:v]${remplir(c.largeur, c.hauteur)}${temps},format=rgba[c${i}]`,
+      `[${source}:v]${c.recadrage ?? remplir(c.largeur, c.hauteur)}${temps},format=rgba[c${i}]`,
       `[${masque}:v]format=gray,scale=${c.largeur}:${c.hauteur}${video ? `,trim=end_frame=${total},setpts=PTS-STARTPTS` : ''}[m${i}]`,
       `[c${i}][m${i}]alphamerge${fondus}[a${i}]`,
       `[b${i}][a${i}]overlay=${c.x}:${c.y}:format=auto[b${i + 1}]`,

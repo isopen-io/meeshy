@@ -12,36 +12,58 @@
 // fichier est contrôlé par ffprobe contre la spécification Apple de son emplacement ; un écart fait échouer
 // la commande et bloque --deposer.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { controler } from '../lib/conformite.mjs'
 import { KIT_LANGS, directionOf } from '../lib/locales.mjs'
 import { LICENCE_MUSIQUE, synthetiser, wav } from '../lib/musique.mjs'
+import { pngInfo } from '../lib/png.mjs'
 import { SOUS_TITRES_CREATIFS } from '../textes/apercus.mjs'
 import { LEGENDES } from '../textes/legendes.mjs'
 import {
   APERCUS, APPAREILS_APERCU, CARTES_CREATIVES, FASTLANE_METADATA, SORTIE_APPSTORE, apercuDe, cheminsAppStore, dispositionCreatif, familleDe, planDeMontage,
 } from './apercus.mjs'
 import { FPS, SORTIE, cheminsDePrise } from './filmer.mjs'
+import { ZOOM_MS, cadrageDe, fenetreCible, filtreCamera, filtreFenetre, largeurMinimale, rectAuClip } from './cadrages.mjs'
 import { argumentsApercu, argumentsCreatif, argumentsMasque } from './montage.mjs'
+import { SCENES_FILMEES } from './scenes-filmees.mjs'
 import { deposer } from './monter-depot.mjs'
 import { pageFin, pageFondCreatif, pageLegende } from './surimpressions.mjs'
 
 const ffmpeg = (args) => execFileSync('ffmpeg', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
 
-export const imagesDuClip = (chemin) => {
-  const sortie = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-count_frames', '-show_entries', 'stream=nb_read_frames', '-of', 'csv=p=0', chemin], { encoding: 'utf8' })
-  return Number(sortie.trim())
+// Images (comptées, pas déduites de la durée) et taille d'un clip.
+export const sonderClip = (chemin) => {
+  const sortie = execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-count_frames', '-show_entries', 'stream=nb_read_frames,width,height', '-of', 'json', chemin], { encoding: 'utf8' })
+  const { nb_read_frames: images, width: largeur, height: hauteur } = JSON.parse(sortie).streams[0]
+  return { images: Number(images), largeur, hauteur }
 }
 
-// Les clips tournés d'un aperçu, pour un appareil et une langue : { [scene]: { chemin, images } }.
-export const clipsTournes = ({ apercu, appareil, lang, source = SORTIE, compter = imagesDuClip }) =>
+export const imagesDuClip = (chemin) => sonderClip(chemin).images
+
+// Les clips tournés d'un aperçu, pour un appareil et une langue : { [scene]: { chemin, images, largeur, hauteur } }.
+export const clipsTournes = ({ apercu, appareil, lang, source = SORTIE, sonder = sonderClip }) =>
   Object.fromEntries(apercu.plans.flatMap((plan) => {
     const { clip } = cheminsDePrise({ famille: familleDe(plan), appareil, langue: lang, scene: plan.scene, racine: source })
-    return existsSync(clip) ? [[plan.scene, { chemin: clip, images: compter(clip) }]] : []
+    return existsSync(clip) ? [[plan.scene, { chemin: clip, ...sonder(clip) }]] : []
   }))
+
+// Le mouvement de caméra d'un plan dont la scène a un cadrage : plein écran pendant la marge d'avant
+// l'action, puis zoom vers la fenêtre qui contient le rectangle d'intérêt.
+export const cameraDuPlan = ({ scene, appareil, clip, sortie }) => {
+  const rect = cadrageDe({ scene, appareil })
+  if (!rect) return null
+  const natif = [clip.largeur, clip.hauteur]
+  const arrivee = fenetreCible({
+    rect: rectAuClip({ rect, appareil, largeurClip: clip.largeur }),
+    natif,
+    rapport: clip.largeur / clip.hauteur,
+    largeurMin: largeurMinimale({ appareil, largeurClip: clip.largeur, largeurSortie: sortie[0] }),
+  })
+  return filtreCamera({ arrivee, natif, debutS: (SCENES_FILMEES[scene]?.marges.avantMs ?? 600) / 1000, dureeS: ZOOM_MS / 1000, fps: FPS })
+}
 
 const ecrire = (chemin, contenu) => {
   mkdirSync(dirname(chemin), { recursive: true })
@@ -56,15 +78,16 @@ const pisteAudio = ({ musique, images, dossier }) => {
   return { wav: musique, fondu: true }
 }
 
-export const monterApercu = async ({ apercu, appareil, lang, source, racine, rendre, musique = 'generee', preset = 'slow', compter }) => {
-  const plan = planDeMontage({ apercu, lang, clips: clipsTournes({ apercu, appareil, lang, source, compter }) })
+export const monterApercu = async ({ apercu, appareil, lang, source, racine, rendre, musique = 'generee', preset = 'slow', sonder = sonderClip }) => {
+  const clips = clipsTournes({ apercu, appareil, lang, source, sonder })
+  const plan = planDeMontage({ apercu, lang, clips })
   const base = { type: 'apercu', lang, appareil, apercu: apercu.id, spec: APPAREILS_APERCU[appareil].spec }
   if (plan.statut !== 'pret') return { ...base, statut: 'incomplet', manquants: plan.manquants }
   const chemins = cheminsAppStore({ lang, racine })
   const { largeur, hauteur } = APPAREILS_APERCU[appareil]
   const dossier = resolve(chemins.travail, appareil, apercu.id)
   const segments = await Promise.all(plan.segments.map(async (seg, i) => (seg.type === 'clip'
-    ? { ...seg, surimpression: ecrire(resolve(dossier, `legende-${i}.png`), await rendre(pageLegende({ texte: seg.legende, lang, largeur, hauteur }))) }
+    ? { ...seg, camera: cameraDuPlan({ scene: seg.scene, appareil, clip: clips[seg.scene], sortie: [largeur, hauteur] }), surimpression: ecrire(resolve(dossier, `legende-${i}.png`), await rendre(pageLegende({ texte: seg.legende, lang, largeur, hauteur }))) }
     : { ...seg, carte: ecrire(resolve(dossier, 'fin.png'), await rendre(pageFin({ ...plan.fin, lang, largeur, hauteur }))) })))
   const chemin = chemins.apercu(appareil, apercu.fichier)
   mkdirSync(dirname(chemin), { recursive: true })
@@ -75,9 +98,29 @@ export const monterApercu = async ({ apercu, appareil, lang, source, racine, ren
     statut: 'pret',
     chemin,
     dureeS: plan.dureeS,
-    plans: plan.segments.map((s) => (s.type === 'clip' ? { scene: s.scene, legende: s.legende, secondes: s.images / FPS } : { fin: plan.fin, secondes: s.images / FPS })),
+    plans: segments.map((s) => (s.type === 'clip' ? { scene: s.scene, legende: s.legende, secondes: s.images / FPS, cadre: Boolean(s.camera) } : { fin: plan.fin, secondes: s.images / FPS })),
     ecartes: plan.ecartes,
   }
+}
+
+// Une carte dont la scène a un cadrage se resserre sur l'action : fenêtre FIXE au rapport de la carte, pas
+// plus serrée que dans l'aperçu iPhone (la carte la plus grande, 736 px, reste sous l'agrandissement borné).
+const LARGEUR_APERCU_IPHONE = APPAREILS_APERCU.iphone.largeur
+export const recadrageDeCarte = ({ scene, natif, carte }) => {
+  const rect = cadrageDe({ scene, appareil: 'iphone' })
+  if (!rect) return null
+  const fenetre = fenetreCible({
+    rect: rectAuClip({ rect, appareil: 'iphone', largeurClip: natif[0] }),
+    natif,
+    rapport: carte.largeur / carte.hauteur,
+    largeurMin: largeurMinimale({ appareil: 'iphone', largeurClip: natif[0], largeurSortie: LARGEUR_APERCU_IPHONE }),
+  })
+  return filtreFenetre({ fenetre, largeur: carte.largeur, hauteur: carte.hauteur })
+}
+
+const tailleImage = (chemin) => {
+  const { width, height } = pngInfo(readFileSync(chemin))
+  return [width, height]
 }
 
 // Chaque carte prend sa première source tournée : l'image clé (iPhone) et, s'il existe, son clip.
@@ -92,7 +135,7 @@ export const cartesTournees = ({ lang, source = SORTIE }) => {
   const manquants = resolues.filter((r) => !r.trouvee && !r.carte.facultative).map((r) => r.carte.sources[0])
   return {
     manquants: manquants.map((s) => `${s.scene}/${s.image}.png`),
-    cartes: resolues.filter((r) => r.trouvee).map(({ carte, trouvee }) => ({ id: carte.id, image: trouvee.image, clip: existsSync(trouvee.clip) ? trouvee.clip : null })),
+    cartes: resolues.filter((r) => r.trouvee).map(({ carte, trouvee }) => ({ id: carte.id, scene: trouvee.scene, image: trouvee.image, clip: existsSync(trouvee.clip) ? trouvee.clip : null })),
   }
 }
 
@@ -110,7 +153,9 @@ export const monterCreatifs = async ({ lang, source, racine, rendre, preset = 's
     const c0 = disposition.cartes[0]
     const masque = resolve(dossier, `${format}-masque.png`)
     ffmpeg(argumentsMasque({ largeur: c0.largeur, hauteur: c0.hauteur, rayon: c0.rayon, sortie: masque }))
-    const placees = disposition.cartes.map((rect, i) => ({ ...rect, ...cartes[i], masque }))
+    const placees = disposition.cartes.map((rect, i) => ({
+      ...rect, ...cartes[i], masque, recadrage: recadrageDeCarte({ scene: cartes[i].scene, natif: tailleImage(cartes[i].image), carte: rect }),
+    }))
     return { disposition, fond, placees }
   }
   const entete = await fabriquer('entete')
@@ -118,7 +163,11 @@ export const monterCreatifs = async ({ lang, source, racine, rendre, preset = 's
   ffmpeg(argumentsCreatif({ fond: entete.fond, largeur: entete.disposition.largeur, hauteur: entete.disposition.hauteur, cartes: entete.placees, sortie: chemins.enteteImage }))
   // En-tête animé : les clips entrent l'un après l'autre (0,45 s d'écart), tiennent leur image finale, puis
   // tout revient au fond — la boucle d'Apple reprend sans saut.
-  const animees = entete.placees.map((c, i) => (c.clip ? { ...c, debutS: 0.3 + i * 0.45 } : { ...c, clip: null }))
+  const animees = entete.placees.map((c, i) => {
+    if (!c.clip) return c
+    const { largeur, hauteur } = sonderClip(c.clip)
+    return { ...c, debutS: 0.3 + i * 0.45, recadrage: recadrageDeCarte({ scene: c.scene, natif: [largeur, hauteur], carte: c }) }
+  })
   const finS = Math.max(...animees.map((c) => (c.clip ? c.debutS + compter(c.clip) / FPS : 0)))
   const dureeS = Math.min(15, Math.max(6, Math.ceil(finS + 1.5)))
   ffmpeg(argumentsCreatif({ fond: entete.fond, largeur: entete.disposition.largeur, hauteur: entete.disposition.hauteur, cartes: animees, video: { dureeS }, sortie: chemins.enteteVideo, preset }))
