@@ -357,6 +357,20 @@ services:
       - "traefik.http.routers.gateway-staging-signed-files.tls.certresolver=letsencrypt"
       - "traefik.http.routers.gateway-staging-signed-files.service=gateway-staging"
       - "traefik.http.routers.gateway-staging-signed-files.observability.accessLogs=false"
+      # #9712 — les ROBOTS d'aperçu (WhatsApp, iMessage, Telegram, Messenger, Slack,
+      # X…) qui déplient /chat/<lien> reçoivent la page d'aperçu de la passerelle
+      # (GET /api/v1/links/<lien>/og) : la coquille de l'application ne porte aucune
+      # balise Open Graph et un robot n'exécute pas de JavaScript. Les humains, dont
+      # aucun navigateur ne s'annonce ainsi, restent sur le routeur de l'application.
+      # `$$` : un dollar littéral pour Compose (les regex et `$$1`).
+      - "traefik.http.routers.frontend-staging-unfurl.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && PathRegexp(`^/chat/[A-Za-z0-9_.-]+/?$$`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot)`)"
+      - "traefik.http.routers.frontend-staging-unfurl.priority=100"
+      - "traefik.http.routers.frontend-staging-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-staging-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-staging-unfurl.middlewares=chat-unfurl-staging-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-staging-unfurl.service=gateway-staging"
+      - "traefik.http.middlewares.chat-unfurl-staging-path.replacepathregex.regex=^/chat/([A-Za-z0-9_.-]+)/?$$"
+      - "traefik.http.middlewares.chat-unfurl-staging-path.replacepathregex.replacement=/api/v1/links/$$1/og"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
 
   # ===========================================================================

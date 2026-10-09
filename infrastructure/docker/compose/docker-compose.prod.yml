@@ -374,6 +374,20 @@ services:
       - "traefik.http.routers.gateway-signed-files.middlewares=rate-limit@file,compress@file"
       - "traefik.http.routers.gateway-signed-files.service=gateway"
       - "traefik.http.routers.gateway-signed-files.observability.accessLogs=false"
+      # #9712 — les ROBOTS d'aperçu (WhatsApp, iMessage, Telegram, Messenger, Slack,
+      # X…) qui déplient /chat/<lien> reçoivent la page d'aperçu de la passerelle
+      # (GET /api/v1/links/<lien>/og) : la coquille de l'application ne porte aucune
+      # balise Open Graph et un robot n'exécute pas de JavaScript. Les humains, dont
+      # aucun navigateur ne s'annonce ainsi, restent sur le routeur de l'application.
+      # `$$` : un dollar littéral pour Compose (les regex et `$$1`).
+      - "traefik.http.routers.frontend-unfurl.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && PathRegexp(`^/chat/[A-Za-z0-9_.-]+/?$$`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot)`)"
+      - "traefik.http.routers.frontend-unfurl.priority=100"
+      - "traefik.http.routers.frontend-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-unfurl.middlewares=chat-unfurl-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-unfurl.service=gateway"
+      - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.regex=^/chat/([A-Za-z0-9_.-]+)/?$$"
+      - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.replacement=/api/v1/links/$$1/og"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # Static Files Service - Nginx pour servir les fichiers uploadés sur static.${DOMAIN}
