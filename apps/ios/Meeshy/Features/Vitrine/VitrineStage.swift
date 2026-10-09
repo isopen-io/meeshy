@@ -65,8 +65,8 @@ enum VitrineStage {
     static func remplir() async {
         guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
         do {
-            // Une scène du jeu range la charge d'AVANT sa célébration : la fiche s'ouvre au repos.
-            let progression = scene.celebration.map { VitrineJeu.preparer($0, base: f.progression) }
+            // Une scène du jeu (ou l'interaction qui en déclenche une) range la charge d'AVANT : la fiche s'ouvre au repos.
+            let progression = scene.jeuServi.map { VitrineJeu.preparer($0, base: f.progression) }
             try await VitrineSeeder.remplir(f, progression: progression, dans: VitrineSeedTargetsReels())
         } catch {
             fatalError("Vitrine « \(scene.rawValue) » : remplissage impossible — \(error)")
@@ -86,6 +86,7 @@ enum VitrineStage {
             await achever(scene, destination, f)
             await annoncer(scene)
             await VitrineJeu.celebrer(scene)
+            await VitrineInteractions.jouer(scene)
         }
     }
 

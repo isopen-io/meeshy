@@ -311,15 +311,19 @@ enum VitrineJeu {
 
     /// Après « prêt » : le clap, « celebration-debut », la célébration, puis « celebration-fin » une fois sa durée passée.
     static func celebrer(_ scene: VitrineScene) async {
-        guard let celebration = scene.celebration else { return }
+        guard scene.celebration != nil else { return }
+        await VitrineTournage.tourner(scene) { await jouerSurLaFiche(scene) }
+    }
+
+    /// La célébration préparée, jouée sur la fiche ouverte, puis tenue le temps de sa chorégraphie — pour une scène du
+    /// jeu comme pour l'interaction qui ouvre elle-même la fiche (#9810).
+    static func jouerSurLaFiche(_ scene: VitrineScene) async {
         guard let enCours, let fiche else {
-            fatalError("Vitrine « \(scene.rawValue) » : la fiche \(celebration.concept.rawValue) n'a pas reçu le modèle de la scène")
+            fatalError("Vitrine « \(scene.rawValue) » : la fiche n'a pas reçu le modèle de la scène")
         }
-        await VitrineTournage.tourner(scene) {
-            let depart = ContinuousClock.now
-            await jouer(celebration, sur: fiche, serveur: enCours.serveur)
-            try? await Task.sleep(until: depart + .seconds(celebration.duree) + finDeChoregraphie, clock: .continuous)
-        }
+        let depart = ContinuousClock.now
+        await jouer(enCours.celebration, sur: fiche, serveur: enCours.serveur)
+        try? await Task.sleep(until: depart + .seconds(enCours.celebration.duree) + finDeChoregraphie, clock: .continuous)
     }
 }
 #endif
