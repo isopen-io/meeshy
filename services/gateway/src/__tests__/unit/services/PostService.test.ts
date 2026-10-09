@@ -113,6 +113,11 @@ function makePrisma(opts: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       count: jest.fn<any>().mockResolvedValue(opts.postCount ?? 0),
       groupBy: jest.fn<any>().mockResolvedValue([]),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    user: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      findUnique: jest.fn<any>().mockResolvedValue(null),
     },
     postComment: {
       groupBy: jest.fn<any>().mockResolvedValue([]),

@@ -64,7 +64,15 @@ const buildPrisma = (opts: {
       .mockResolvedValue(opts.postReactions ?? []),
   };
   const prisma = {
-    post: { ...post, groupBy: jest.fn<(arg?: unknown) => Promise<unknown[]>>().mockResolvedValue([]) },
+    post: {
+      ...post,
+      groupBy: jest.fn<(arg?: unknown) => Promise<unknown[]>>().mockResolvedValue([]),
+      findMany: jest.fn<(arg?: unknown) => Promise<unknown[]>>().mockResolvedValue([]),
+    },
+    user: {
+      findMany: jest.fn<(arg?: unknown) => Promise<unknown[]>>().mockResolvedValue([]),
+      findUnique: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue(null),
+    },
     postView,
     postReaction,
     trackingLink: { groupBy: jest.fn<(arg?: unknown) => Promise<unknown[]>>().mockResolvedValue([]) },

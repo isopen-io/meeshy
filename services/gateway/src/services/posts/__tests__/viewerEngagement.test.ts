@@ -12,6 +12,8 @@ import {
   engagementOf,
   mayReadViewerInteractions,
   readViewerInteractions,
+  viewerEngagementGates,
+  type ViewerEngagementGates,
   type ViewerEngagementPrisma,
 } from '../viewerEngagement';
 
@@ -33,7 +35,7 @@ const makePrisma = (opts: {
   total?: number;
   reactions?: Array<{ userId: string; emoji: string }>;
   shares?: Grouped<'createdBy'>[];
-  reposts?: Grouped<'authorId'>[];
+  reposts?: Array<{ id: string; authorId: string }>;
   comments?: Grouped<'authorId'>[];
   replies?: Grouped<'authorId'>[];
   bookmarks?: Array<{ userId: string }>;
@@ -45,7 +47,7 @@ const makePrisma = (opts: {
   const prisma = {
     post: {
       findFirst: jest.fn<any>(async () => (opts.post === undefined ? { id: POST, authorId: AUTHOR } : opts.post)),
-      groupBy: jest.fn<any>(async () => opts.reposts ?? []),
+      findMany: jest.fn<any>(async () => opts.reposts ?? []),
     },
     postView: {
       findMany: jest.fn<any>(async () => views),
@@ -59,8 +61,17 @@ const makePrisma = (opts: {
   return prisma;
 };
 
-const read = (prisma: ReturnType<typeof makePrisma>, reader: { id: string; role?: string | null } = { id: AUTHOR }) =>
-  readViewerInteractions(prisma as unknown as ViewerEngagementPrisma, POST, reader, 50, 0);
+const openGates = (opts: { visibleReposts?: readonly string[]; blocked?: readonly string[] } = {}): ViewerEngagementGates => ({
+  consumablePostIds: jest.fn(async (ids: readonly string[]) =>
+    new Set(opts.visibleReposts ?? ids)) as ViewerEngagementGates['consumablePostIds'],
+  blockRelatedIds: jest.fn(async () => new Set(opts.blocked ?? [])) as ViewerEngagementGates['blockRelatedIds'],
+});
+
+const read = (
+  prisma: ReturnType<typeof makePrisma>,
+  reader: { id: string; role?: string | null } = { id: AUTHOR },
+  gates: ViewerEngagementGates = openGates(),
+) => readViewerInteractions(prisma as unknown as ViewerEngagementPrisma, POST, reader, 50, 0, gates);
 
 describe('la porte de la liste des vues enrichie', () => {
   it("l'auteur la lit", () => {
@@ -109,7 +120,10 @@ describe('ce que chaque personne a fait', () => {
           { userId: ANNA, emoji: '😂' },
         ],
         shares: [{ createdBy: ANNA, _count: { _all: 1 } }],
-        reposts: [{ authorId: ANNA, _count: { _all: 2 } }],
+        reposts: [
+          { id: 'rp-1', authorId: ANNA },
+          { id: 'rp-2', authorId: ANNA },
+        ],
         comments: [{ authorId: ANNA, _count: { _all: 5 } }],
         replies: [{ authorId: ANNA, _count: { _all: 2 } }],
         bookmarks: [{ userId: ANNA }],
@@ -157,7 +171,7 @@ describe('ce que chaque personne a fait', () => {
 
   it("garde l'ordre et la pagination des vues", async () => {
     const prisma = makePrisma({ total: 120 });
-    const result = await readViewerInteractions(prisma as unknown as ViewerEngagementPrisma, POST, { id: AUTHOR }, 2, 10);
+    const result = await readViewerInteractions(prisma as unknown as ViewerEngagementPrisma, POST, { id: AUTHOR }, 2, 10, openGates());
     expect(prisma.postView.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { postId: POST }, orderBy: { viewedAt: 'desc' }, take: 2, skip: 10 }),
     );
@@ -169,7 +183,7 @@ describe('une lecture agrégée par source, jamais une requête par personne', (
   const sourceCalls = (prisma: ReturnType<typeof makePrisma>) =>
     prisma.postReaction.findMany.mock.calls.length +
     prisma.trackingLink.groupBy.mock.calls.length +
-    prisma.post.groupBy.mock.calls.length +
+    prisma.post.findMany.mock.calls.length +
     prisma.postComment.groupBy.mock.calls.length +
     prisma.postBookmark.findMany.mock.calls.length;
 
@@ -201,8 +215,8 @@ describe('une lecture agrégée par source, jamais une requête par personne', (
     expect(prisma.trackingLink.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({ by: ['createdBy'], where: { targetId: POST, createdBy: ids } }),
     );
-    expect(prisma.post.groupBy).toHaveBeenCalledWith(
-      expect.objectContaining({ by: ['authorId'], where: { repostOfId: POST, authorId: ids, deletedAt: { isSet: false } } }),
+    expect(prisma.post.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { repostOfId: POST, authorId: ids, deletedAt: { isSet: false } } }),
     );
     expect(prisma.postComment.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({ where: { postId: POST, authorId: ids, deletedAt: { isSet: false } } }),
@@ -217,6 +231,76 @@ describe('une lecture agrégée par source, jamais une requête par personne', (
     await read(prisma);
     const where = (prisma.postBookmark.findMany.mock.calls[0][0] as { where: { createdAt: { gte: Date } } }).where;
     expect(where.createdAt.gte.getTime()).toBeGreaterThan(new Date('2026-10-09T00:00:00Z').getTime());
+  });
+});
+
+describe("ce que le lecteur a le droit de voir de l'activité d'autrui (revue de sécurité)", () => {
+  it("une republication que le lecteur ne peut pas lire n'est pas comptée — son existence ne fuit pas", async () => {
+    const gates = openGates({ visibleReposts: ['rp-public'] });
+    const result = await read(
+      makePrisma({
+        reposts: [
+          { id: 'rp-public', authorId: ANNA },
+          { id: 'rp-amis', authorId: ANNA },
+          { id: 'rp-restreint', authorId: BRUNO },
+        ],
+      }),
+      { id: AUTHOR },
+      gates,
+    );
+    expect(gates.consumablePostIds).toHaveBeenCalledWith(['rp-public', 'rp-amis', 'rp-restreint'], AUTHOR);
+    expect(result?.viewers[0]).toEqual(expect.objectContaining({ repostCount: 1 }));
+    expect(result?.viewers[1]).not.toHaveProperty('repostCount');
+  });
+
+  it("une personne en relation de blocage reste dans la liste, sans rien de ce qu'elle a fait, et ses sources ne sont pas lues", async () => {
+    const prisma = makePrisma({
+      reactions: [{ userId: BRUNO, emoji: '🔥' }],
+      comments: [{ authorId: BRUNO, _count: { _all: 3 } }],
+      bookmarks: [{ userId: BRUNO }],
+    });
+    const result = await read(prisma, { id: AUTHOR }, openGates({ blocked: [BRUNO] }));
+    expect(result?.viewers.map((v) => v.id)).toEqual([ANNA, BRUNO]);
+    expect(result?.viewers[1]).toEqual(expect.objectContaining({ id: BRUNO, reaction: null }));
+    expect(result?.viewers[1]).not.toHaveProperty('commentCount');
+    expect(result?.viewers[1]).not.toHaveProperty('bookmarked');
+    expect(prisma.postBookmark.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: { in: [ANNA] } }) }),
+    );
+  });
+
+  it("une garde qui ne conclut pas ferme : la page part SANS aucun engagement, jamais avec un engagement non filtré", async () => {
+    const failing: ViewerEngagementGates = {
+      consumablePostIds: jest.fn(async () => new Set<string>()) as ViewerEngagementGates['consumablePostIds'],
+      blockRelatedIds: jest.fn(async () => {
+        throw new Error('base indisponible');
+      }) as ViewerEngagementGates['blockRelatedIds'],
+    };
+    const result = await read(
+      makePrisma({ reactions: [{ userId: ANNA, emoji: '❤️' }], bookmarks: [{ userId: ANNA }] }),
+      { id: AUTHOR },
+      failing,
+    );
+    expect(result?.viewers.map((v) => v.id)).toEqual([ANNA, BRUNO]);
+    expect(result?.viewers.every((v) => v.reaction === null && !('bookmarked' in v) && !('reactions' in v))).toBe(true);
+  });
+
+  it('les gardes par défaut lisent le blocage dans les DEUX sens', async () => {
+    const prisma = {
+      user: {
+        findMany: jest.fn<any>(async () => [{ id: ANNA }]),
+        findUnique: jest.fn<any>(async () => ({ blockedUserIds: [BRUNO] })),
+      },
+    };
+    const blocked = await viewerEngagementGates(prisma as unknown as ViewerEngagementPrisma).blockRelatedIds(AUTHOR, [
+      ANNA,
+      BRUNO,
+      '507f1f77bcf86cd799439c03',
+    ]);
+    expect([...blocked].sort()).toEqual([ANNA, BRUNO].sort());
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: [ANNA, BRUNO, '507f1f77bcf86cd799439c03'] }, blockedUserIds: { has: AUTHOR } } }),
+    );
   });
 });
 

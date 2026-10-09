@@ -3,6 +3,10 @@ import type { PostViewerEngagement } from '@meeshy/shared/types/publication-view
 import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { authorSelect } from './postIncludes';
 import { NOT_DELETED } from './softDelete';
+import { filterConsumablePostIds, type PostConsumptionPrisma } from '../../routes/posts/postConsumptionGate';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'viewerEngagement' });
 
 /**
  * La liste des vues d'un contenu, enrichie de ce que CHAQUE personne y a fait
@@ -21,8 +25,50 @@ import { NOT_DELETED } from './softDelete';
  */
 export type ViewerEngagementPrisma = Pick<
   PrismaClient,
-  'post' | 'postView' | 'postReaction' | 'trackingLink' | 'postComment' | 'postBookmark'
->;
+  'post' | 'postView' | 'postReaction' | 'trackingLink' | 'postComment' | 'postBookmark' | 'user'
+> &
+  PostConsumptionPrisma;
+
+/**
+ * Ce que le LECTEUR a le droit de voir de l'activité d'autrui (#9727, revue de
+ * sécurité) — deux questions que les six sources ne posent pas d'elles-mêmes :
+ *
+ * - **une republication n'existe pour lui que s'il peut la LIRE.** Republier en
+ *   « amis » ou en « restreint » crée un post dont l'audience n'inclut pas
+ *   forcément l'auteur de l'original : le compter lui révélerait un contenu
+ *   qu'aucune autre surface ne lui sert (`filterConsumablePostIds`, la même loi
+ *   que le fil et le partage) ;
+ * - **un blocage, dans un sens ou dans l'autre, coupe l'activité.** La personne
+ *   reste dans la liste des vues (comme avant ce lot), mais rien de ce qu'elle a
+ *   fait n'est servi.
+ *
+ * Les deux lectures sont FERMÉES sur l'échec : une lecture qui ne conclut pas
+ * rend la page SANS aucun engagement, jamais avec un engagement non filtré.
+ */
+export type ViewerEngagementGates = {
+  readonly consumablePostIds: (postIds: readonly string[], readerId: string) => Promise<ReadonlySet<string>>;
+  readonly blockRelatedIds: (readerId: string, viewerIds: readonly string[]) => Promise<ReadonlySet<string>>;
+};
+
+export function viewerEngagementGates(prisma: ViewerEngagementPrisma): ViewerEngagementGates {
+  return {
+    consumablePostIds: (postIds, readerId) => filterConsumablePostIds(prisma, postIds, readerId),
+    blockRelatedIds: async (readerId, viewerIds) => {
+      const [blockers, reader] = await Promise.all([
+        prisma.user.findMany({
+          where: { id: { in: [...viewerIds] }, blockedUserIds: { has: readerId } },
+          select: { id: true },
+        }),
+        prisma.user.findUnique({ where: { id: readerId }, select: { blockedUserIds: true } }),
+      ]);
+      const blockedByReader = new Set<string>(reader?.blockedUserIds ?? []);
+      return new Set([
+        ...blockers.map((row) => row.id),
+        ...viewerIds.filter((id) => blockedByReader.has(id)),
+      ]);
+    },
+  };
+}
 
 /**
  * Un favori posé AVANT cette date l'a été quand le geste était privé : il
@@ -109,9 +155,13 @@ export async function loadViewerEngagement(
   prisma: ViewerEngagementPrisma,
   postId: string,
   viewerIds: readonly string[],
+  readerId: string,
+  gates: ViewerEngagementGates,
 ): Promise<ReadonlyMap<string, PostViewerEngagement & { readonly reaction: string | null }>> {
   if (viewerIds.length === 0) return new Map();
-  const ids = [...viewerIds];
+  const blocked = await gates.blockRelatedIds(readerId, viewerIds);
+  const ids = viewerIds.filter((id) => !blocked.has(id));
+  if (ids.length === 0) return new Map();
 
   const [reactionRows, shareRows, repostRows, commentRows, replyRows, bookmarkRows] = await Promise.all([
     prisma.postReaction.findMany({
@@ -124,10 +174,9 @@ export async function loadViewerEngagement(
       where: { targetId: postId, createdBy: { in: ids } },
       _count: { _all: true },
     }),
-    prisma.post.groupBy({
-      by: ['authorId'],
+    prisma.post.findMany({
       where: { repostOfId: postId, authorId: { in: ids }, deletedAt: NOT_DELETED },
-      _count: { _all: true },
+      select: { id: true, authorId: true },
     }),
     prisma.postComment.groupBy({
       by: ['authorId'],
@@ -159,7 +208,13 @@ export async function loadViewerEngagement(
     new Map(),
   );
   const shares = countsBy(shareRows, 'createdBy');
-  const reposts = countsBy(repostRows, 'authorId');
+  const visibleReposts = await gates.consumablePostIds(repostRows.map((row) => row.id), readerId);
+  const reposts = repostRows
+    .filter((row) => visibleReposts.has(row.id))
+    .reduce<ReadonlyMap<string, number>>(
+      (acc, row) => new Map(acc).set(row.authorId, (acc.get(row.authorId) ?? 0) + 1),
+      new Map(),
+    );
   const allComments = countsBy(commentRows, 'authorId');
   const replies = countsBy(replyRows, 'authorId');
   const bookmarked = new Set(bookmarkRows.map((row) => row.userId));
@@ -197,6 +252,7 @@ export async function readViewerInteractions(
   reader: InteractionsReader,
   limit: number,
   offset: number,
+  gates: ViewerEngagementGates = viewerEngagementGates(prisma),
 ): Promise<ViewerInteractionsPage | null> {
   const post = await prisma.post.findFirst({
     where: { id: postId, deletedAt: NOT_DELETED },
@@ -216,7 +272,16 @@ export async function readViewerInteractions(
     prisma.postView.count({ where: { postId } }),
   ]);
 
-  const engagement = await loadViewerEngagement(prisma, postId, views.map((view) => view.user.id));
+  const engagement = await loadViewerEngagement(
+    prisma,
+    postId,
+    views.map((view) => view.user.id),
+    reader.id,
+    gates,
+  ).catch((error: unknown) => {
+    logger.warn('[viewerEngagement] lecture des engagements refusée faute de conclure', { postId, error });
+    return new Map<string, PostViewerEngagement & { readonly reaction: string | null }>();
+  });
 
   const viewers = views.map((view) => ({
     id: view.user.id,
