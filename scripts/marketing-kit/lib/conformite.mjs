@@ -18,7 +18,9 @@ import { pngInfo } from './png.mjs'
 const MO = 1024 * 1024
 const PROFILS_H264 = ['Baseline', 'Constrained Baseline', 'Main', 'High']
 
-const AUDIO_APERCU = { codec: 'aac', canaux: 2, frequences: [44100, 48000], debitKbps: [224, 288] }
+// 256 kb/s est le débit d'ENCODAGE demandé ; le débit mesuré d'un passage calme (un silence) tombe bien
+// en dessous sans rien enfreindre : seul le dépassement est un écart.
+const AUDIO_APERCU = { codec: 'aac', canaux: 2, frequences: [44100, 48000], debitMaxKbps: 320 }
 
 const apercu = (largeur, hauteur) => ({
   type: 'video',
@@ -151,7 +153,7 @@ const erreursAudio = (attendu, audios) => {
       a.codec !== attendu.codec && `${nom} : codec ${a.codec}, attendu ${attendu.codec}`,
       a.canaux !== attendu.canaux && `${nom} : ${a.canaux} canal(aux), attendu stéréo`,
       !attendu.frequences.includes(a.frequence) && `${nom} : ${a.frequence} Hz, attendu ${attendu.frequences.join(' ou ')}`,
-      a.debitKbps !== null && (a.debitKbps < attendu.debitKbps[0] || a.debitKbps > attendu.debitKbps[1]) && `${nom} : ${Math.round(a.debitKbps)} kb/s, attendu 256`,
+      a.debitKbps !== null && a.debitKbps > attendu.debitMaxKbps && `${nom} : ${Math.round(a.debitKbps)} kb/s, ${attendu.debitMaxKbps} au plus (256 visés)`,
       !a.active && `${nom} : désactivée (toutes les pistes doivent être actives)`,
     ].filter(Boolean)
   })

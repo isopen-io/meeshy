@@ -168,9 +168,12 @@ export const CARTES_CREATIVES = [
 // Rapport largeur / hauteur de l'écran filmé (iPhone 6,9" : 1320 × 2868).
 export const RAPPORT_ECRAN = 1320 / 2868
 
+// Un visuel de 3840 px s'affiche sur environ 400 points de large : un corps de 170 px y fait ~18 pt.
+// Titre et sous-titre sont donc grands et courts, centrés comme le demande Apple (« focal point … within
+// the center ») ; les cartes de l'en-tête filent sous le bord bas, celles de la recherche tiennent entières.
 export const CREATIFS = {
-  entete: { largeur: 3840, hauteur: 1646, carteHaut: 520, carteHauteur: 1300, ecart: 96, titre: { haut: 110, bas: 440 } },
-  recherche: { largeur: 3840, hauteur: 2560, carteHaut: 700, carteHauteur: 1720, ecart: 96, titre: { haut: 150, bas: 600 } },
+  entete: { largeur: 3840, hauteur: 1646, carteHaut: 680, carteHauteur: 1200, ecart: 110, titre: { haut: 90, bas: 600, corps: 170, sousCorps: 96 } },
+  recherche: { largeur: 3840, hauteur: 2560, carteHaut: 860, carteHauteur: 1600, ecart: 110, titre: { haut: 120, bas: 760, corps: 190, sousCorps: 108 } },
 }
 
 const pair = (n) => 2 * Math.round(n / 2)
