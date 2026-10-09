@@ -117,14 +117,15 @@ describe('/story/st-amie-1 — le lecteur français d’une story anglaise', () 
     expect(pastille?.getAttribute('aria-pressed')).toBe('false');
   });
 
-  test('clic sur Traductions ⇒ la barre est montée, la story est en PAUSE, le focus y entre', async () => {
+  test('clic sur Traductions ⇒ la barre est montée, la story JOUE EN BOUCLE (#9821), le focus y entre', async () => {
     const host = await mountAt('/story/st-amie-1');
     const button = host.querySelector<HTMLButtonElement>('[data-story-action="translations"]')!;
     button.focus();
     await act(async () => button.click());
     /* La barre est un chunk À LA DEMANDE (D-54) : elle se monte après l'import. */
     await waitFor(host, '[data-story-language-bar]');
-    expect(host.querySelector('[data-story-scene]')?.getAttribute('data-story-paused')).toBe('true');
+    expect(host.querySelector('[data-story-scene]')?.hasAttribute('data-story-paused')).toBe(false);
+    expect(host.querySelector('[data-story-scene]')?.getAttribute('data-story-looping')).toBe('true');
     await waitUntil(() => document.activeElement?.hasAttribute('data-story-language') === true);
     expect(host.contains(document.activeElement)).toBe(true);
   });
@@ -142,6 +143,7 @@ describe('/story/st-amie-1 — le lecteur français d’une story anglaise', () 
     expect(legend?.lang).toBe('en');
     expect(host.querySelector('[data-story-language-bar]')).toBeNull();
     expect(host.querySelector('[data-story-scene]')?.hasAttribute('data-story-paused')).toBe(false);
+    expect(host.querySelector('[data-story-scene]')?.hasAttribute('data-story-looping')).toBe(false);
     expect(host.querySelector('[data-story-action="translations"] [data-viewer-badge]')?.textContent).toBe('EN');
     expect(document.activeElement === translationsButton).toBe(true);
   });

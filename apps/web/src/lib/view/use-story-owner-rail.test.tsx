@@ -56,8 +56,6 @@ function storyOf(id: string, withMedia = true): StoryPlaybackStory {
 
 type Probe = {
   readonly rail: () => StoryOwnerRail;
-  readonly pauses: string[];
-  readonly resumes: string[];
   readonly announced: string[];
   readonly delivered: string[];
   readonly render: (story: StoryPlaybackStory | undefined, online?: boolean) => void;
@@ -80,18 +78,14 @@ function anchorHost(delivered: string[]): FileDeliveryHost {
 }
 
 function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null = null): Probe {
-  const pauses: string[] = [];
-  const resumes: string[] = [];
   const announced: string[] = [];
   const delivered: string[] = [];
   const deliveryHost = host ?? anchorHost(delivered);
   const seen: StoryOwnerRail[] = [];
-  const pause = () => pauses.push('pause');
-  const resume = () => resumes.push('resume');
   const announce = (message: string) => announced.push(message);
 
   function Harness({ story, online }: { readonly story: StoryPlaybackStory | undefined; readonly online: boolean }) {
-    seen.push(useStoryOwnerRail({ story, online, pause, resume, announce, language: 'fr', deliveryHost, gallerySaver }));
+    seen.push(useStoryOwnerRail({ story, online, announce, language: 'fr', deliveryHost, gallerySaver }));
     return null;
   }
 
@@ -100,8 +94,6 @@ function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null =
   const root: Root = createRoot(container);
   return {
     rail: () => seen[seen.length - 1] as StoryOwnerRail,
-    pauses,
-    resumes,
     announced,
     delivered,
     render: (story, online = true) => act(() => root.render(<Harness story={story} online={online} />)),
@@ -169,15 +161,16 @@ describe('useStoryOwnerRail — ce que le plan auteur OFFRE', () => {
   });
 });
 
-describe('useStoryOwnerRail — « Vues » met la lecture EN PAUSE ; « Partager » ouvre la feuille d’envoi (#8884)', () => {
-  test('ouvrir « Vues » met en pause et ouvre la feuille de CETTE story ; fermer reprend', () => {
+describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « Partager » ouvre la feuille d’envoi (#8884)', () => {
+  /* La story BOUCLE sous la feuille (#9821) : c'est le lecteur qui le décide
+     (`resolveStoryPlaybackHold`), le rail ne la fige plus. */
+  test('ouvrir « Vues » ouvre la feuille de CETTE story ; fermer la referme', () => {
     probe = mountProbe();
     probe.render(storyOf('st-a'));
     act(() => probe?.rail().handlers.views?.());
     expect(probe.rail().viewers.postId).toBe('st-a');
-    expect(probe.pauses).toEqual(['pause']);
     act(() => probe?.rail().viewers.close());
-    expect(probe.resumes).toEqual(['resume']);
+    expect(probe.rail().viewers.postId).toBeNull();
   });
 
   test('« Partager » ouvre la feuille d’envoi COMMUNE avec la story, publiée en STORY, et son lien pour « Plus d’options… »', async () => {
@@ -190,16 +183,6 @@ describe('useStoryOwnerRail — « Vues » met la lecture EN PAUSE ; « Partager
     const request = sendSheetStore.getState().request;
     expect(request?.payload).toMatchObject({ kind: 'publication', postId: 'st-a', postType: 'STORY' });
     expect(request?.moreOptions).toEqual({ url: 'https://meeshy.me/feeds/post/st-a' });
-  });
-
-  test('la pause de la lecture sous la feuille est celle du lecteur (`useStorySend.sheetOpen`) : le rail ne met pas en pause deux fois', async () => {
-    probe = mountProbe();
-    probe.render(storyOf('st-a'));
-    await act(async () => {
-      probe?.rail().handlers.share?.();
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    });
-    expect(probe.pauses).toEqual([]);
   });
 });
 
