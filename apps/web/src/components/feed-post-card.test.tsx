@@ -7,6 +7,9 @@ import type { FeedPost } from '@/lib/api/feed-pages';
 
 const NOW = new Date('2026-09-13T12:00:00.000Z');
 
+/** Le tracé du glyphe d'onde (`FEED_GLYPHS.waveform`) — ce que la carte peint pour un média audio. */
+const WAVEFORM_PATH = 'M56,96v64';
+
 const modelOf = (post: FeedPost, preferredLanguages: readonly string[] = ['fr']) =>
   resolveFeedCardModel(post, { preferredLanguages, now: NOW });
 
@@ -406,6 +409,56 @@ describe('FeedPostCard — le RÉEL, affiche immobile plein cadre', () => {
       />,
     );
     expect(html).not.toContain('<img');
+    expect(html).toContain(WAVEFORM_PATH);
+  });
+
+  /* #9737 — LE SON DE FOND NE SE DESSINE PAS SUR L'AFFICHE. L'affiche était
+   * `media[0]` : dès que le porteur d'un réel COMPOSÉ range sa piste de fond en
+   * tête (ou ne porte qu'elle — une scène de texte sur un son), la carte
+   * peignait le spectre d'onde plein cadre, sous le nom de l'auteur. Le son
+   * d'une scène se dit par le crédit, hors scène. */
+  const soundScene = (visual: readonly unknown[]) => ({
+    v: 3,
+    scenes: [
+      {
+        id: 's1',
+        objects: [
+          { id: 'a1', kind: 'audio', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'bg', z: 0, transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { postMediaId: 'son', isBackground: true } },
+          ...visual,
+        ],
+      },
+    ],
+  });
+  const photoObject = { id: 'm1', kind: 'media', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'bg', z: 0, transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { postMediaId: 'photo', mediaType: 'image/jpeg' } };
+  const textObject = { id: 't1', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 1, transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { content: 'Bonjour' } };
+
+  test('un réel à scène dont le porteur range le son de fond EN TÊTE ⇒ l’affiche est le visuel, jamais le spectre', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard
+        model={modelOf(
+          basePost({
+            type: 'REEL',
+            media: [
+              { id: 'son', mimeType: 'audio/mpeg', fileUrl: 'a.mp3', order: 0 },
+              { id: 'photo', mimeType: 'image/jpeg', fileUrl: 'photo.jpg', order: 1, width: 1080, height: 1920 },
+            ],
+            storyEffects: soundScene([photoObject]),
+          }),
+        )}
+      />,
+    );
+    expect(html).not.toContain(WAVEFORM_PATH);
+    expect(html).toContain('photo.jpg');
+  });
+
+  test('un réel à scène de TEXTE sur un son de fond ⇒ aucun spectre sur la carte', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard
+        model={modelOf(basePost({ type: 'REEL', media: [{ id: 'son', mimeType: 'audio/mpeg', fileUrl: 'a.mp3' }], storyEffects: soundScene([textObject]) }))}
+      />,
+    );
+    expect(html).not.toContain(WAVEFORM_PATH);
+    expect(html).toContain('data-feed-card="reel"');
   });
 });
 

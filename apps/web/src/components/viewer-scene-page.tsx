@@ -5,7 +5,7 @@ import type { CanvasScene } from '@/lib/canvas/document';
 import { SCENE_RATIO } from '@/lib/canvas/fit';
 import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
-import { isDocumentAudible } from '@/lib/feed/scene-motion';
+import { documentSoundsOnStage } from '@/lib/feed/scene-motion';
 import type { SceneGalleryEntry } from '@/lib/feed/gallery-lot';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -65,7 +65,7 @@ import { VIEWER_GLASS } from './viewer-chrome';
  * **LES DEUX BOUTONS N'EXISTENT QUE S'ILS ONT UN EFFET** (loi 4, miroir
  * `GalleryScenePlayPause`, `ConversationMediaGalleryView+ScenePage.swift:
  * 236-263`) : lecture/pause seulement si la scène BOUGE (`entry.moves`), son
- * seulement si le document PORTE du son à couper (`isDocumentAudible`) — et
+ * seulement si le document PORTE du son à couper (`documentSoundsOnStage`) — et
  * chaque libellé SUIT l'état, jamais un nom figé.
  *
  * **LE CURSEUR DE LA SCÈNE** (#8598) — une scène qui a une TIMELINE (un objet
@@ -148,7 +148,11 @@ export function ViewerScenePage({
   }, [pausedOnEntry]);
   const toggle = useCallback(() => setPlayback(scenePlaybackToggled), []);
 
-  const audible = isDocumentAudible(entry.document);
+  /* CE QUI SONNE SUR LA SCÈNE (#9737) — une vidéo, un son de premier plan : ce
+     que ce bouton coupe réellement. Le son de FOND d'une scène de publication
+     n'est pas joué par cette visionneuse : lui offrir un baffle posé sur la
+     scène serait un contrôle sans effet (loi 4). */
+  const audible = documentSoundsOnStage(entry.document);
   const scene = entry.document.scenes[entry.sceneIndex];
   const declaredDuration = scene !== undefined && hasTimedObjects(scene) ? sceneDurationSeconds(scene) : null;
   const duration = entry.moves && declaredDuration !== null && declaredDuration > 0 ? declaredDuration : null;

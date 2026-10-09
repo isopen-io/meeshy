@@ -3,9 +3,12 @@ import { useRef } from 'react';
 import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
-import type { CanvasObject } from '@/lib/canvas/document';
+import { sceneAudioChipForm, type CanvasObject } from '@/lib/canvas/document';
 import { objectMediaTimeline } from '@/lib/canvas/media-seek';
+import { cqw } from '@/lib/canvas/units';
 
+import { GlyphSvg } from './glyph';
+import { FEED_GLYPHS } from './glyphs-feed';
 import type { SceneClockHandle } from './scene-clock';
 import { useSceneMediaSync } from './scene-media-seek';
 import { SceneObjectFrame } from './scene-object-frame';
@@ -18,7 +21,8 @@ const isAutoplayRefusal = (error: unknown): boolean => error instanceof Error &&
 export const defaultAudioMediaDeps = protectedMediaDeps;
 
 /**
- * Un AUDIO **non-fond**. Le son de FOND (`payload.isBackground === true`) est
+ * Un AUDIO **non-fond** : sa piste, et sa PASTILLE sur la scène (#9737).
+ * Le son de FOND (`payload.isBackground === true`) est
  * servi par l'hôte, qui l'élit avec `electBackgroundTrack`
  * (`lib/canvas/background-sound.ts`, consommé par `story-scene-layer.tsx` et
  * `story-compose.tsx`) : ce composant ne le double JAMAIS, et c'est
@@ -100,6 +104,69 @@ export function SceneObjectAudio({
   return (
     <SceneObjectFrame object={object} kind="audio" clock={clock}>
       <audio ref={ref} src={src} muted={muted} loop={loop} preload="none" />
+      <SceneAudioChip object={object} />
     </SceneObjectFrame>
+  );
+}
+
+/** Le référentiel de design : 1080 de large (`cqw`, `lib/canvas/units.ts`). */
+const CHIP = { height: 84, padding: 28, gap: 14, font: 34, bar: 5, barGap: 5, maxBars: 24, wave: 96 } as const;
+const design = (value: number): string => cqw(value / 1080);
+
+/** Au plus `maxBars` barres, prises à pas régulier sur les échantillons gravés. */
+function chipBars(samples: readonly number[]): readonly number[] {
+  if (samples.length <= CHIP.maxBars) return samples;
+  return Array.from({ length: CHIP.maxBars }, (_, i) => samples[Math.round((i * (samples.length - 1)) / (CHIP.maxBars - 1))] ?? 0);
+}
+
+/**
+ * LA PASTILLE D'UN SON DE PREMIER PLAN (#9737, miroir `AudioForegroundChip`) —
+ * sur la scène, à la place, l'échelle et la rotation de l'objet (le cadre les
+ * pose), dans la forme de sa provenance (`sceneAudioChipForm`) : la note et
+ * l'onde d'un enregistrement, la note et « titre · @auteur » d'un emprunt.
+ * Immobile : aucune image n'est recalculée pendant la lecture. Un son de FOND
+ * n'arrive jamais ici (`SceneCanvas` l'écarte, `sceneAudioPresence`).
+ */
+function SceneAudioChip({ object }: { readonly object: CanvasObject }) {
+  const form = sceneAudioChipForm(object);
+  const bars = form.kind === 'recording' ? chipBars(form.samples) : [];
+  return (
+    <span
+      data-scene-audio-chip={form.kind}
+      {...(form.kind === 'recording' ? { 'aria-hidden': 'true' as const } : {})}
+      className="flex items-center whitespace-nowrap"
+      style={{
+        height: design(CHIP.height),
+        gap: design(CHIP.gap),
+        padding: `0 ${design(CHIP.padding)}`,
+        borderRadius: 9999,
+        fontSize: design(CHIP.font),
+        lineHeight: 1,
+        fontWeight: 600,
+        backgroundColor: 'var(--color-scrim)',
+        color: 'var(--color-on-media)',
+      }}
+    >
+      <span data-scene-audio-note="" aria-hidden="true" className="inline-grid shrink-0">
+        <GlyphSvg glyph={FEED_GLYPHS.musicNote} style={{ width: '1.1em', height: '1.1em' }} />
+      </span>
+      {form.kind === 'borrowed' ? (
+        form.label
+      ) : bars.length > 0 ? (
+        <span aria-hidden="true" className="flex items-center" style={{ gap: design(CHIP.barGap), height: '55%' }}>
+          {bars.map((level, i) => (
+            <span
+              key={i}
+              data-scene-audio-bar=""
+              style={{ width: design(CHIP.bar), height: `${Math.round(Math.min(1, Math.max(0.12, level)) * 100)}%`, borderRadius: 9999, backgroundColor: 'currentColor' }}
+            />
+          ))}
+        </span>
+      ) : (
+        <svg data-scene-audio-wave="" aria-hidden="true" viewBox="0 0 22 10" fill="none" style={{ width: design(CHIP.wave), height: '45%' }}>
+          <path d="M1 5 Q3.5 0 6 5 T11 5 T16 5 T21 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      )}
+    </span>
   );
 }
