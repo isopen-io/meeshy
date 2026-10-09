@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { CommentComposerTools } from '@/components/comment-composer-tools';
 import type { PickedSticker } from '@/components/composer-sticker-sheet';
@@ -15,6 +16,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
 import { removePendingAttachment, replacePendingAttachment, type PendingAttachment } from '@/lib/send/attachments';
 import { withReplyMention, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
+import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
+import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
 import { recordingSupported, useRecorder, type RecorderEngine, type RecorderStatus } from '@/lib/view/use-recorder';
@@ -46,6 +49,9 @@ import { recordingSupported, useRecorder, type RecorderEngine, type RecorderStat
  * première pièce jointe : ses vignettes portent « Éditer » et ouvrent la MÊME
  * retouche en série (`composer-retouch.tsx`). */
 const ComposerTray = lazy(() => import('@/components/composer-tray'));
+
+/** LA CAMÉRA (#9736) — le studio de capture du composeur de message, chargé au premier appui. */
+const ComposerCapture = lazy(() => import('@/components/composer-retouch').then((m) => ({ default: m.ComposerCapture })));
 
 /** La cible du ⌄ : 44 px, la taille minimale d'un contrôle au doigt. */
 const FOLD_TARGET_PX = 44;
@@ -152,6 +158,8 @@ export type CommentComposerProps = {
    */
   readonly draft?: CommentDraft;
   readonly onDraftChange?: (draft: CommentDraft) => void;
+  /** L'objectif et le rendu du studio de capture — injectés par les témoins. */
+  readonly capture?: { readonly camera?: CameraEngine; readonly render?: StudioRetouchDeps };
   /** Le micro et son horloge — injectés par les témoins ; absent, le micro
    * du navigateur (`useRecorder`), rendu seulement s'il existe. */
   readonly recording?: { readonly engine: RecorderEngine; readonly now?: () => number };
@@ -168,9 +176,11 @@ export function CommentComposer({
   foldOnSend = false,
   onSendSticker,
   recording,
+  capture,
   draft,
   onDraftChange,
 }: CommentComposerProps) {
+  const [capturing, setCapturing] = useState(false);
   const [text, setText] = useState(draft?.text ?? '');
   const [pending, setPending] = useState<readonly PendingAttachment[]>(draft?.pending ?? []);
   const reportDraft = useRef(onDraftChange);
@@ -315,6 +325,13 @@ export function CommentComposer({
     void recorder.stop().then((piece) => submit(piece));
   }, [recorder, submit]);
 
+  /** CE QUI ENTRE AU PLATEAU — la photothèque et la caméra passent par la même borne et le même refus dit. */
+  const addFiles = (files: readonly File[]) => {
+    const accepted = acceptCommentFiles(pending, files);
+    setPending(accepted.list);
+    setNotice(accepted.refusal === undefined ? null : { text: refusalText(language, accepted.refusal), issue: 'refused' });
+  };
+
   if (!canWrite) {
     return (
       <p data-comment-composer="signed-out" className="text-caption px-3 py-3" style={{ color: 'var(--color-ios-ink-2)' }}>
@@ -448,10 +465,7 @@ export function CommentComposer({
         onChange={(e) => {
           const files = Array.from(e.currentTarget.files ?? []);
           e.currentTarget.value = '';
-          if (files.length === 0) return;
-          const accepted = acceptCommentFiles(pending, files);
-          setPending(accepted.list);
-          setNotice(accepted.refusal === undefined ? null : { text: refusalText(language, accepted.refusal), issue: 'refused' });
+          if (files.length > 0) addFiles(files);
         }}
       />
       <label className="sr-only" htmlFor={fieldId}>
@@ -544,8 +558,25 @@ export function CommentComposer({
           recordBusy={recorder.state.status === 'requesting'}
           onEmoji={insertEmoji}
           onSticker={onSendSticker === undefined ? undefined : (picked) => void sendSticker(picked)}
+          onCamera={() => setCapturing(true)}
         />
       )}
+      {capturing
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ComposerCapture
+                onCancel={() => setCapturing(false)}
+                onDone={(file) => {
+                  setCapturing(false);
+                  addFiles([file]);
+                }}
+                {...(capture?.camera === undefined ? {} : { camera: capture.camera })}
+                {...(capture?.render === undefined ? {} : { render: capture.render })}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
       {/**
        * L'ANNONCE — `performComment` distingue « parti » de « posé mais non
        * confirmé » ; sans ce texte, le second serait indiscernable du

@@ -45,9 +45,12 @@ export type CommentComposerToolsProps = {
   readonly onEmoji: (emoji: string) => void;
   /** Absent ⇒ aucun sticker : l'hôte ne sait pas l'envoyer. */
   readonly onSticker?: ((picked: PickedSticker) => void) | undefined;
+  /** LA CAMÉRA (#9736, décision porteur du 2026-10-09) — à DROITE de la
+   * rangée, le glyphe et le libellé de celle du message (`composer-top-row`). */
+  readonly onCamera: () => void;
 };
 
-export function CommentComposerTools({ language, onAttach, onRecord, recordBusy, onEmoji, onSticker }: CommentComposerToolsProps) {
+export function CommentComposerTools({ language, onAttach, onRecord, recordBusy, onEmoji, onSticker, onCamera }: CommentComposerToolsProps) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [stickerOpen, setStickerOpen] = useState(false);
   return (
@@ -90,6 +93,16 @@ export function CommentComposerTools({ language, onAttach, onRecord, recordBusy,
           <GlyphSvg glyph={COMPOSER_GLYPHS.sticker} size={20} />
         </button>
       )}
+      <button
+        type="button"
+        data-comment-camera=""
+        aria-label={translate(language, 'composer.attach.camera.action')}
+        onClick={onCamera}
+        className={TOOL_CLASS}
+        style={{ ...TOOL_STYLE, marginInlineStart: 'auto' }}
+      >
+        <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={20} />
+      </button>
       {emojiOpen ? (
         <Suspense fallback={null}>
           <ComposerEmojiSheet
