@@ -958,21 +958,18 @@ extension StoryViewerView {
         let tempCommentId = optimisticComment.id
         Task {
             let medias = [pendingMedia].compactMap { $0 }
-            var acquired: [UploadedCommentMedia] = []
+            // La charge est bâtie UNE fois, avec son auteur relevé avant toute
+            // attente : l'envoi direct et la file portent la même (#9743).
+            let payload = CreateCommentPayload(
+                clientMutationId: tempCommentId, postId: story.id,
+                parentCommentId: parentId, content: text,
+                originalLanguage: language, authorId: authorId,
+                location: location, effectFlags: effectFlags,
+                mobileTranscription: pendingMedia?.mobileTranscription
+            )
+            StoryInteractionService().noteComment(storyId: story.id)
             do {
-                acquired = try await CommentMediaUploader.uploadAll(medias, authorId: authorId)
-                let attachmentIds = CommentMediaUploader.attachmentIds(acquired)
-                try await StoryInteractionService().postComment(
-                    storyId: story.id,
-                    content: text,
-                    originalLanguage: language,
-                    effectFlags: effectFlags,
-                    parentId: parentId,
-                    attachmentIds: attachmentIds,
-                    mobileTranscription: pendingMedia?.mobileTranscription,
-                    location: location,
-                    clientMutationId: tempCommentId
-                )
+                try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(medias))
                 CommentMediaUploader.discardLocalFiles(medias)
             } catch {
                 // Le POST direct a échoué — le plus souvent parce qu'on est
@@ -987,16 +984,8 @@ extension StoryViewerView {
                     // MÊME cmid que la tentative REST : un POST abouti dont la
                     // réponse s'est perdue est dédoublonné au rejeu (MutationLog).
                     let cmid = tempCommentId
-                    try await CommentMediaDelivery.entrust(
-                        CreateCommentPayload(
-                            clientMutationId: cmid, postId: story.id,
-                            parentCommentId: parentId, content: text,
-                            originalLanguage: language,
-                            location: location, effectFlags: effectFlags,
-                            mobileTranscription: pendingMedia?.mobileTranscription, authorId: authorId
-                        ),
-                        medias: medias, acquired: CommentMediaDelivery.acquired(from: error, known: acquired)
-                    )
+                    try await CommentMediaDelivery.entrust(payload, medias: medias,
+                                                           acquired: CommentMediaDelivery.acquired(from: error))
                     observeStoryCommentOutcome(cmid: cmid,
                                                tempId: tempCommentId,
                                                parentId: parentId)
@@ -1191,7 +1180,7 @@ extension StoryViewerView {
             for await event in stream {
                 if case .exhausted = event {
                     rollbackOptimisticComment(id: tempId, parentId: parentId)
-                    await OfflineQueue.shared.cancelCreateComment(clientMutationId: cmid)
+                    await OfflineQueue.shared.cancelCreateComment(clientMutationId: cmid, ownerId: CommentPublisher.currentAccountId())
                     FeedbackToastManager.shared.showError(
                         // Clé du feed réutilisée : message identique, et le
                         // catalogue est verrouillé à 100 % de couverture — une

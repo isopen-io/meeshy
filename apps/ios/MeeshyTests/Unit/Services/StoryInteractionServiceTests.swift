@@ -30,14 +30,10 @@ final class StoryInteractionServiceTests: XCTestCase {
         return (sut, api, participation)
     }
 
-    /// Le rail de la story pose l'anneau du cœur sur « Commentaires » dès que le
-    /// lecteur a commenté (directive porteur 2026-10-01) : la passerelle ne le sert
-    /// pas, c'est le POST qui le note — au départ, comme la ligne optimiste.
-    func test_postComment_notesTheCommentForTheStoryRail() async throws {
-        let (sut, api, participation) = makeSUTWithParticipation()
-        api.stub("/posts/\(Self.storyId)/comments", result: makeEmptyResponse())
+    func test_noteComment_notesTheCommentForTheStoryRail() {
+        let (sut, _, participation) = makeSUTWithParticipation()
 
-        try await sut.postComment(storyId: Self.storyId, content: "great story", originalLanguage: "fr")
+        sut.noteComment(storyId: Self.storyId)
 
         XCTAssertEqual(participation.notes.map { $0.storyId }, [Self.storyId])
         XCTAssertEqual(participation.notes.map { $0.mark }, [.commented])
@@ -76,60 +72,6 @@ final class StoryInteractionServiceTests: XCTestCase {
         await sut.requestTranslation(storyId: Self.storyId, targetLanguage: "es")
 
         XCTAssertEqual(api.postCount, 1)
-    }
-
-    // MARK: - postComment
-
-    func test_postComment_minimalArgs_hitsEndpoint() async throws {
-        let (sut, api) = makeSUT()
-        let endpoint = "/posts/\(Self.storyId)/comments"
-        api.stub(endpoint, result: makeEmptyResponse())
-
-        try await sut.postComment(
-            storyId: Self.storyId,
-            content: "great story",
-            originalLanguage: "fr"
-        )
-
-        XCTAssertEqual(api.postCount, 1)
-        XCTAssertEqual(api.requestEndpoints.last, endpoint)
-    }
-
-    func test_postComment_replyWithEffectFlags_hitsEndpoint() async throws {
-        let (sut, api) = makeSUT()
-        let endpoint = "/posts/\(Self.storyId)/comments"
-        api.stub(endpoint, result: makeEmptyResponse())
-
-        try await sut.postComment(
-            storyId: Self.storyId,
-            content: "👏",
-            originalLanguage: "fr",
-            effectFlags: 7,
-            parentId: "comment-parent"
-        )
-
-        XCTAssertEqual(api.postCount, 1)
-        XCTAssertEqual(api.requestEndpoints.last, endpoint)
-    }
-
-    /// `postComment` MUST throw (not swallow) so the caller — `sendComment`
-    /// in `StoryViewerView+Content.swift` — can roll back the optimistic
-    /// `temp_` comment/reply it already inserted instead of leaving a
-    /// phantom row that silently never reached the server.
-    func test_postComment_apiFailure_throwsAndLogs() async {
-        let (sut, api) = makeSUT()
-        api.errorToThrow = NSError(domain: "TestNetwork", code: 401)
-
-        do {
-            try await sut.postComment(
-                storyId: Self.storyId,
-                content: "not swallowed anymore",
-                originalLanguage: "fr"
-            )
-            XCTFail("Expected postComment to rethrow")
-        } catch {
-            XCTAssertEqual(api.postCount, 1)
-        }
     }
 
     // MARK: - react

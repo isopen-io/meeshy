@@ -237,6 +237,8 @@ final class DependencyContainer {
         guard UIApplication.shared.isProtectedDataAvailable else { return }
         let retained = retainedAccountKeys()
         let dropped = storeRouter.dropSessions(keeping: retained)
+        // Les pièces de commentaire des comptes que l'appareil ne garde plus (#9743).
+        OfflineQueue.purgePendingCommentMedia(keepingOwners: Set(retained.map(\.userId)))
         MessageStoreRouter.sweepDormantAccountStores(
             in: storeDirectory,
             keeping: storeRouter.openAccountFileNames
@@ -255,6 +257,9 @@ final class DependencyContainer {
     }
 
     private nonisolated static func purge(_ session: MessageStoreSession) async {
+        // #9743 — les pièces de commentaire en attente d'un compte retiré
+        // quittent le disque avec sa base.
+        OfflineQueue.purgePendingCommentMedia(ownerId: session.key?.userId)
         do {
             try await session.messagePersistence.clearAllMessagesForLogout()
         } catch {
@@ -449,7 +454,7 @@ final class DependencyContainer {
                         // #9743 — les pièces de commentaire en attente du compte
                         // quitté partent avec sa file : rien ne reste sur le
                         // disque pour le compte suivant.
-                        if let ownerId = session.key?.userId { OfflineQueue.purgePendingCommentMedia(ownerId: ownerId) }
+                        OfflineQueue.purgePendingCommentMedia(ownerId: session.key?.userId)
                         do {
                             try await feed.clearAllForLogout()
                         } catch {

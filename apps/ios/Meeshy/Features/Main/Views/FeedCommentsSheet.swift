@@ -1335,15 +1335,21 @@ struct CommentsSheetView: View {
         }
         liveCommentCount = (liveCommentCount ?? post.commentCount) + 1
 
+        // La charge est bâtie UNE fois, avec son auteur relevé ICI, avant toute
+        // attente : l'envoi direct et la file portent la même, sous le même cmid.
+        let payload = CreateCommentPayload(
+            clientMutationId: tempId, postId: post.id,
+            parentCommentId: parentId, content: trimmed,
+            originalLanguage: lang, authorId: me?.id,
+            location: place, effectFlags: effectFlags,
+            mobileTranscription: media.first?.mobileTranscription
+        )
         Task {
-            var acquired: [UploadedCommentMedia] = []
             do {
-                acquired = try await CommentMediaUploader.uploadAll(media, authorId: me?.id)
-                let apiComment = try await PostService.shared.addComment(
-                    postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
-                    attachmentIds: CommentMediaUploader.attachmentIds(acquired), mobileTranscription: media.first?.mobileTranscription,
-                    originalLanguage: lang, location: place, clientMutationId: tempId
-                )
+                guard let apiComment = try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(media)) else {
+                    onCommentSent?(post.id)
+                    return
+                }
                 CommentMediaUploader.discardLocalFiles(media)
                 let feedComment = FeedComment(
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -1384,20 +1390,11 @@ struct CommentsSheetView: View {
                 // #9743 — les PIÈCES partent avec lui : la file garde leurs
                 // fichiers et les rejoue, sans re-monter ce qui l'est déjà.
                 do {
-                    // MÊME cmid que la tentative REST : si le POST a abouti côté
-                    // serveur mais que sa réponse s'est perdue, le rejeu outbox
-                    // est dédoublonné par le MutationLog au lieu de créer un
-                    // second commentaire.
-                    let cmid = tempId
-                    let payload = CreateCommentPayload(
-                        clientMutationId: cmid, postId: post.id,
-                        parentCommentId: parentId, content: trimmed,
-                        originalLanguage: lang,
-                        location: place, effectFlags: effectFlags,
-                        mobileTranscription: media.first?.mobileTranscription, authorId: me?.id
-                    )
+                    // MÊME charge, donc MÊME cmid que la tentative directe : un
+                    // envoi abouti dont la réponse s'est perdue est dédoublonné
+                    // au rejeu par le MutationLog.
                     try await CommentMediaDelivery.entrust(payload, medias: media,
-                                                           acquired: CommentMediaDelivery.acquired(from: error, known: acquired))
+                                                           acquired: CommentMediaDelivery.acquired(from: error))
                     onCommentSent?(post.id)
                     // Si la file renonce, la ligne RESTE, marquée « non
                     // envoyé » et relançable (`CommentUnsentBadge`, #9743).

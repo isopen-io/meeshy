@@ -65,7 +65,7 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
     }
 
     private func cleanup(_ cmid: String) async {
-        await queue.cancelCreateComment(clientMutationId: cmid)
+        await queue.cancelCreateComment(clientMutationId: cmid, ownerId: alice)
     }
 
     // MARK: - La ligne emporte les deux pièces, dans un dossier durable
@@ -224,7 +224,8 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         let result = try await enqueueTwoPieces(cmid)
         let paths = try XCTUnwrap(try payload(result.outboxId).localMediaPaths)
 
-        await queue.cancelCreateComment(clientMutationId: cmid)
+        let removed = await queue.cancelCreateComment(clientMutationId: cmid, ownerId: alice)
+        XCTAssertTrue(removed)
 
         let remaining = await queue.unsentComments(postId: "post-1", ownerId: alice)
         XCTAssertTrue(remaining.isEmpty)
@@ -279,26 +280,134 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         await cleanup(cmid)
     }
 
-    func test_mayReplay_onlyUnderTheAuthor() {
-        let written = comment("cmid_replay_1").withMedia(localMediaPaths: ["p/0.jpg"], localMediaMimeTypes: nil, uploadedMedia: nil)
-        XCTAssertTrue(CommentOwnership.mayReplay(written, currentUserId: alice))
-        XCTAssertFalse(CommentOwnership.mayReplay(written, currentUserId: bob), "Une entrée écrite par A ne se rejoue jamais sous B.")
-        XCTAssertFalse(CommentOwnership.mayReplay(written, currentUserId: nil))
-        XCTAssertFalse(CommentOwnership.mayReplay(written, currentUserId: ""))
+    // MARK: - Fermé par défaut : ce qui ne permet pas de décider vaut NON
+
+    func test_owns_isFalseWheneverTheAuthorCannotBeDecided() {
+        XCTAssertTrue(CommentOwnership.owns(comment("c"), currentUserId: alice))
+        XCTAssertFalse(CommentOwnership.owns(comment("c"), currentUserId: bob), "Une entrée écrite par A n'est pas celle de B.")
+        XCTAssertFalse(CommentOwnership.owns(comment("c"), currentUserId: nil), "identité courante absente")
+        XCTAssertFalse(CommentOwnership.owns(comment("c"), currentUserId: ""), "identité courante vide")
+        XCTAssertFalse(CommentOwnership.owns(comment("c", author: nil), currentUserId: alice), "entrée sans propriétaire")
+        XCTAssertFalse(CommentOwnership.owns(comment("c", author: ""), currentUserId: alice), "propriétaire vide")
+        XCTAssertFalse(CommentOwnership.owns(comment("c", author: ""), currentUserId: ""), "deux vides ne sont pas le même compte")
+        XCTAssertFalse(CommentOwnership.owns(comment("c", author: nil), currentUserId: nil), "deux absents non plus")
+        XCTAssertFalse(CommentOwnership.owns(comment("c", author: "  "), currentUserId: "  "), "deux blancs non plus")
     }
 
-    func test_mayReplay_aRowWithoutAuthor_neverCarriesPieces() {
-        let legacyText = comment("cmid_replay_2", author: nil)
-        XCTAssertTrue(CommentOwnership.mayReplay(legacyText, currentUserId: alice),
-                      "Une ligne de texte gravée avant le champ rejoue comme avant, dans la base de son compte.")
-        let orphanWithMedia = legacyText.withMedia(localMediaPaths: ["p/0.jpg"], localMediaMimeTypes: nil, uploadedMedia: nil)
-        XCTAssertFalse(CommentOwnership.mayReplay(orphanWithMedia, currentUserId: alice),
-                       "Des pièces sans propriétaire lisible ne s'envoient pas.")
-        let orphanUploaded = legacyText.withMedia(
-            localMediaPaths: nil, localMediaMimeTypes: nil,
-            uploadedMedia: [UploadedCommentMedia(sourceIndex: 0, id: "m", uploadedAt: 0)])
-        XCTAssertFalse(CommentOwnership.mayReplay(orphanUploaded, currentUserId: alice))
-        XCTAssertFalse(CommentOwnership.mayReplay(comment("cmid_replay_3", author: ""), currentUserId: alice))
+    private func token(userId: Any?) -> String {
+        var claims: [String: Any] = ["exp": 4_000_000_000]
+        if let userId { claims["userId"] = userId }
+        let body = try! JSONSerialization.data(withJSONObject: claims).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "e30.\(body).sig"
+    }
+
+    func test_tokenBound_returnsTheVeryTokenItVerified_orRefuses() throws {
+        let aliceToken = token(userId: alice)
+        XCTAssertEqual(try CommentOwnership.tokenBound(to: comment("c"), token: aliceToken), aliceToken)
+        let refused: [(CreateCommentPayload, String?)] = [
+            (comment("c"), token(userId: bob)),
+            (comment("c"), nil),
+            (comment("c"), ""),
+            (comment("c"), "pas-un-jeton"),
+            (comment("c"), "a.b"),
+            (comment("c"), token(userId: nil)),
+            (comment("c"), token(userId: "")),
+            (comment("c"), token(userId: 42)),
+            (comment("c", author: nil), aliceToken),
+            (comment("c", author: ""), aliceToken),
+            (comment("c", author: ""), token(userId: "")),
+        ]
+        for (payload, candidate) in refused {
+            XCTAssertThrowsError(try CommentOwnership.tokenBound(to: payload, token: candidate)) { error in
+                XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+            }
+        }
+    }
+
+    func test_ownedMediaPaths_refusesAnyPathOutsideTheAuthorsFolder() {
+        let folder = "pending-media/comments-\(alice)/cmid_x"
+        let mine = comment("c").withMedia(localMediaPaths: ["\(folder)/0.jpg"], localMediaMimeTypes: nil, uploadedMedia: nil)
+        XCTAssertEqual(CommentOwnership.ownedMediaPaths(mine), ["\(folder)/0.jpg"])
+        XCTAssertEqual(CommentOwnership.ownedMediaPaths(comment("c")), [], "Un commentaire de texte n'a aucune pièce à prouver.")
+        for foreign in ["pending-media/comments-\(bob)/cmid_x/0.jpg",
+                        "/etc/passwd",
+                        "pending-media/comments-\(alice)/../comments-\(bob)/cmid_x/0.jpg",
+                        "pending-media/cmid_x/0.jpg"] {
+            let tampered = comment("c").withMedia(localMediaPaths: [foreign], localMediaMimeTypes: nil, uploadedMedia: nil)
+            XCTAssertNil(CommentOwnership.ownedMediaPaths(tampered), foreign)
+        }
+        let orphan = comment("c", author: nil).withMedia(localMediaPaths: ["\(folder)/0.jpg"], localMediaMimeTypes: nil, uploadedMedia: nil)
+        XCTAssertNil(CommentOwnership.ownedMediaPaths(orphan), "Des pièces sans propriétaire lisible ne se lisent pas.")
+    }
+
+    // MARK: - Annuler et relancer : l'auteur seul
+
+    func test_cancelAndRetry_areClosedToAnotherAccount() async throws {
+        let cmid = "cmid_comment_owner_7"
+        let result = try await enqueueTwoPieces(cmid)
+
+        let cancelledByBob = await queue.cancelCreateComment(clientMutationId: cmid, ownerId: bob)
+        XCTAssertFalse(cancelledByBob)
+        let cancelledByNobody = await queue.cancelCreateComment(clientMutationId: cmid, ownerId: nil)
+        XCTAssertFalse(cancelledByNobody)
+        XCTAssertTrue(result.localMediaPaths.allSatisfy {
+            FileManager.default.fileExists(atPath: OfflineQueue.absoluteMediaPath(forStored: $0))
+        }, "Une ligne ne se supprime que sous son auteur — les pièces d'Alice sont intactes.")
+
+        do {
+            try await queue.retryCreateComment(clientMutationId: cmid, ownerId: bob)
+            XCTFail("Bob ne relance pas le commentaire d'Alice.")
+        } catch {
+            XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+        }
+        try await queue.retryCreateComment(clientMutationId: cmid, ownerId: alice)
+        await cleanup(cmid)
+    }
+
+    // MARK: - Rien ne reste sur le disque sans une ligne
+
+    func test_sweepOrphanCommentMedia_removesAFolderWithoutARow_andKeepsTheLivingOne() async throws {
+        let living = "cmid_comment_sweep_1"
+        let result = try await enqueueTwoPieces(living)
+        let orphan = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(
+            forStored: "pending-media/comments-\(alice)/cmid_comment_sweep_orphan"), isDirectory: true)
+        try FileManager.default.createDirectory(at: orphan, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: orphan.appendingPathComponent("0.jpg"))
+
+        await OfflineQueue.sweepOrphanCommentMedia(ownerId: alice, reader: pool)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path), "Un dossier sans ligne quitte le disque.")
+        XCTAssertTrue(result.localMediaPaths.allSatisfy {
+            FileManager.default.fileExists(atPath: OfflineQueue.absoluteMediaPath(forStored: $0))
+        }, "Les pièces d'une ligne vivante restent.")
+        await cleanup(living)
+    }
+
+    func test_purgePendingCommentMedia_keepingOwners_dropsEveryOtherAccount() async throws {
+        let mine = "cmid_comment_sweep_2"
+        let result = try await enqueueTwoPieces(mine)
+        let bobFolder = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(
+            forStored: "pending-media/comments-\(bob)/cmid_b"), isDirectory: true)
+        try FileManager.default.createDirectory(at: bobFolder, withIntermediateDirectories: true)
+
+        OfflineQueue.purgePendingCommentMedia(keepingOwners: [alice])
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: bobFolder.path))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: OfflineQueue.absoluteMediaPath(forStored: try XCTUnwrap(result.localMediaPaths.first))))
+        await cleanup(mine)
+    }
+
+    // MARK: - Le plafond du disque
+
+    func test_quota_refusesWhatWouldExceedTheCeiling() {
+        XCTAssertTrue(CommentMediaQuota.admits(incoming: 10, alreadyStored: 80, ceiling: 100))
+        XCTAssertTrue(CommentMediaQuota.admits(incoming: 20, alreadyStored: 80, ceiling: 100))
+        XCTAssertFalse(CommentMediaQuota.admits(incoming: 21, alreadyStored: 80, ceiling: 100))
+        XCTAssertFalse(CommentMediaQuota.admits(incoming: 1, alreadyStored: 500, ceiling: 100))
+        XCTAssertFalse(CommentMediaQuota.admits(incoming: -1, alreadyStored: 0, ceiling: 100))
     }
 
     func test_purgePendingCommentMedia_removesOnlyThatAccountsPieces() async throws {
@@ -306,7 +415,7 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         let result = try await enqueueTwoPieces(mine)
         let aliceFile = OfflineQueue.absoluteMediaPath(forStored: try XCTUnwrap(result.localMediaPaths.first))
         let bobFolder = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(
-            forStored: "pending-media/\(CommentOwnership.mediaDirectoryName(ownerId: bob))/cmid_b"), isDirectory: true)
+            forStored: "pending-media/comments-\(bob)/cmid_b"), isDirectory: true)
         try FileManager.default.createDirectory(at: bobFolder, withIntermediateDirectories: true)
         let bobFile = bobFolder.appendingPathComponent("0.jpg")
         try Data("b".utf8).write(to: bobFile)
@@ -319,8 +428,11 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         await cleanup(mine)
     }
 
-    func test_mediaDirectoryName_cannotEscapeItsFolder() {
+    func test_mediaDirectoryName_cannotEscapeItsFolder_andNeedsAnOwner() {
         XCTAssertEqual(CommentOwnership.mediaDirectoryName(ownerId: "../../etc"), "comments-etc")
+        XCTAssertNil(CommentOwnership.mediaDirectoryName(ownerId: nil))
+        XCTAssertNil(CommentOwnership.mediaDirectoryName(ownerId: ""))
+        XCTAssertNil(CommentOwnership.mediaDirectoryName(ownerId: "../.."))
     }
 
     // MARK: - Une file gravée avant ce lot se relit

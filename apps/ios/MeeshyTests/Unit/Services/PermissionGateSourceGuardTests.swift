@@ -455,8 +455,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// ne reçoit jamais rien à persister.
     func test_feedCommentsSheet_submitComment_sendsLocationOnTheDirectPath() throws {
         let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
-        let fn = try body(from: "let apiComment = try await PostService.shared.addComment(",
-                          to: "let feedComment = FeedComment(", in: src)
+        let fn = try body(from: "let payload = CreateCommentPayload(",
+                          to: "CommentPublisher.live.publish(", in: src)
 
         XCTAssertTrue(fn.contains("location: place"),
                       "submitComment doit transmettre le lieu capturé à addComment — sinon il ne part jamais sur le réseau.")
@@ -509,8 +509,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     func test_feedCommentsSheet_submitComment_declaresTheComposerLanguageOnBothPaths() throws {
         let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
 
-        let direct = try body(from: "let apiComment = try await PostService.shared.addComment(",
-                              to: "let feedComment = FeedComment(", in: src)
+        let direct = try body(from: "let payload = CreateCommentPayload(",
+                              to: "CommentPublisher.live.publish(", in: src)
         XCTAssertTrue(direct.contains("originalLanguage: lang"),
                       "Le chemin direct doit déclarer la langue de la pastille, sinon le serveur la devine.")
 
@@ -523,8 +523,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     func test_storyViewer_submitComment_declaresTheComposerLanguageOnBothPaths() throws {
         let src = try source("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
 
-        let offline = try body(from: "try await CommentMediaDelivery.entrust(",
-                               to: "medias: medias", in: src)
+        let offline = try body(from: "let payload = CreateCommentPayload(",
+                               to: "try await CommentMediaDelivery.entrust(", in: src)
         XCTAssertTrue(offline.contains("originalLanguage: language"),
                       "Le repli hors-ligne d'un commentaire de story doit porter la langue déclarée.")
 
@@ -532,8 +532,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         // ENTIER était satisfaite par le repli qu'on vient de vérifier — la
         // garde restait VERTE sur un chemin direct neutralisé, donc elle
         // n'assurait rien. Une garde de source ne vaut que par sa fenêtre.
-        let direct = try body(from: "try await StoryInteractionService().postComment(",
-                              to: "effectFlags: effectFlags", in: src)
+        let direct = try body(from: "let payload = CreateCommentPayload(",
+                              to: "CommentPublisher.live.publish(", in: src)
         XCTAssertTrue(direct.contains("originalLanguage: language,"),
                       "Le chemin direct de la story doit déclarer la même langue que son repli.")
     }
@@ -582,7 +582,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         XCTAssertTrue(optimistic.contains("originalLanguage: lang"),
                       "La ligne optimiste doit porter la langue de la pastille : son auteur la LIT.")
 
-        let served = try body(from: "originalLanguage: lang, location: place, clientMutationId: tempId",
+        let served = try body(from: "CommentPublisher.live.publish(payload",
                               to: "// Swap the optimistic temp", in: src)
         XCTAssertTrue(served.contains("originalLanguage: apiComment.originalLanguage"),
                       "La ligne serveur qui remplace l'optimiste doit garder la langue, sinon la pastille clignote.")

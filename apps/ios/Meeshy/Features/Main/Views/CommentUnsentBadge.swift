@@ -96,7 +96,7 @@ struct CommentUnsentBadge: View {
     /// L'état se lit d'abord dans la ligne (un commentaire abandonné avant
     /// l'ouverture de l'écran), puis se suit au fil de la file.
     private func watch() async {
-        if let unsent = await OfflineQueue.shared.unsentComment(clientMutationId: commentId, ownerId: AuthManager.shared.currentUser?.id), unsent.isFailed {
+        if let unsent = await OfflineQueue.shared.unsentComment(clientMutationId: commentId, ownerId: CommentPublisher.currentAccountId()), unsent.isFailed {
             markFailed()
         }
         let outcomes = await OfflineQueue.shared.outcomeStream(for: commentId)
@@ -116,7 +116,7 @@ struct CommentUnsentBadge: View {
         isFailed = false
         Task {
             do {
-                try await OfflineQueue.shared.retryByClientMessageId(commentId)
+                try await OfflineQueue.shared.retryCreateComment(clientMutationId: commentId, ownerId: CommentPublisher.currentAccountId())
                 round += 1
             } catch {
                 isFailed = true
@@ -126,9 +126,11 @@ struct CommentUnsentBadge: View {
 
     private func discard() {
         HapticFeedback.light()
-        isDiscarded = true
         Task {
-            await OfflineQueue.shared.cancelCreateComment(clientMutationId: commentId)
+            // Seul l'auteur supprime sa ligne : sous un autre compte, rien ne part.
+            guard await OfflineQueue.shared.cancelCreateComment(
+                clientMutationId: commentId, ownerId: CommentPublisher.currentAccountId()) else { return }
+            isDiscarded = true
             NotificationCenter.default.post(name: .commentUnsentDiscarded, object: commentId)
         }
     }

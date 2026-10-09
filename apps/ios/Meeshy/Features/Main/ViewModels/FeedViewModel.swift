@@ -1165,7 +1165,7 @@ class FeedViewModel: ObservableObject {
         let payload = CreateCommentPayload(
             clientMutationId: cmid, postId: postId,
             parentCommentId: parentId, content: content,
-            originalLanguage: originalLanguage,
+            originalLanguage: originalLanguage, authorId: currentUser?.id,
             location: location, effectFlags: effectFlags
         )
         do {

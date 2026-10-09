@@ -54,7 +54,7 @@ extension PostDetailViewModel {
         let payload = CreateCommentPayload(
             clientMutationId: cmid, postId: post.id,
             parentCommentId: nil, content: content,
-            originalLanguage: originalLanguage,
+            originalLanguage: originalLanguage, authorId: currentUser?.id,
             location: location, effectFlags: effectFlags,
             // La file DURABLE transporte l'ancre exactement comme le chemin
             // direct : un commentaire écrit hors ligne doit citer le même média
@@ -126,7 +126,7 @@ extension PostDetailViewModel {
         let payload = CreateCommentPayload(
             clientMutationId: cmid, postId: post.id,
             parentCommentId: parentId, content: content,
-            originalLanguage: originalLanguage,
+            originalLanguage: originalLanguage, authorId: currentUser?.id,
             location: location, effectFlags: effectFlags,
             quotedPostMediaId: quoted?.postMediaId
         )
@@ -229,15 +229,19 @@ extension PostDetailViewModel {
         }
         self.post?.commentCount = snapshotCount + 1
 
-        var acquired: [UploadedCommentMedia] = []
+        // La charge est bâtie UNE fois, avec son auteur relevé avant toute
+        // attente : l'envoi direct et la file portent la même, sous le même cmid.
+        let payload = CreateCommentPayload(
+            clientMutationId: tempId, postId: post.id, parentCommentId: parentId,
+            content: content, originalLanguage: originalLanguage, authorId: me?.id,
+            location: location, effectFlags: effectFlags,
+            quotedPostMediaId: quoted?.postMediaId,
+            mobileTranscription: pendingMedia.first?.mobileTranscription)
         do {
-            acquired = try await CommentMediaUploader.uploadAll(pendingMedia, authorId: me?.id)
-            let apiComment = try await postService.addComment(
-                postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
-                attachmentIds: CommentMediaUploader.attachmentIds(acquired), mobileTranscription: pendingMedia.first?.mobileTranscription,
-                originalLanguage: originalLanguage, location: location, clientMutationId: tempId,
-                quotedPostMediaId: quoted?.postMediaId
-            )
+            guard let apiComment = try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(pendingMedia)) else {
+                CommentMediaUploader.discardLocalFiles(pendingMedia)
+                return
+            }
             let server = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                 authorUsername: apiComment.author.username,
@@ -271,21 +275,15 @@ extension PostDetailViewModel {
                 self.post?.commentCount = snapshotCount
             }
             // La limite du jour est un refus : la ligne part, avec sa raison.
-            guard !DailyGestureLimitNotice.surface(error) else { return rollback() }
+            let cause = (error as? CommentPublisher.Interrupted)?.underlying ?? error
+            guard !DailyGestureLimitNotice.surface(cause) else { return rollback() }
             // **Sinon le commentaire rejoint la file AVEC ses pièces** (#9743) :
             // il était retiré de l'écran et son média perdu. La ligne optimiste
             // reste ; l'écho `comment:added` la réconcilie au rejeu, et
             // `CommentUnsentBadge` la marque relançable si la file renonce.
             do {
-                try await CommentMediaDelivery.entrust(
-                    CreateCommentPayload(
-                        clientMutationId: tempId, postId: post.id, parentCommentId: parentId,
-                        content: content, originalLanguage: originalLanguage,
-                        location: location, effectFlags: effectFlags,
-                        quotedPostMediaId: quoted?.postMediaId,
-                        mobileTranscription: pendingMedia.first?.mobileTranscription, authorId: me?.id),
-                    medias: pendingMedia,
-                    acquired: CommentMediaDelivery.acquired(from: error, known: acquired))
+                try await CommentMediaDelivery.entrust(payload, medias: pendingMedia,
+                                                       acquired: CommentMediaDelivery.acquired(from: error))
             } catch {
                 rollback()
                 FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))

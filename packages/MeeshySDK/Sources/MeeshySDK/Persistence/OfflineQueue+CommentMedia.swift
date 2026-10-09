@@ -49,38 +49,100 @@ public struct UploadedCommentMedia: Codable, Sendable, Equatable {
 /// Un commentaire en attente appartient au compte qui l'a écrit, et à lui
 /// seul : il ne s'enfile, ne se rejoue, ne se montre et ne se relance que
 /// sous ce compte.
+///
+/// **UNE règle, fermée par défaut.** Tout ce qui ne permet pas de DÉCIDER —
+/// auteur absent (ligne gravée avant le champ), auteur vide, compte courant
+/// absent ou vide, jeton illisible — vaut NON. Deux chaînes vides ne sont
+/// jamais « le même compte ».
 public enum CommentOwnership {
 
     public enum Refusal: Error, Sendable, Equatable {
-        /// Personne n'est connecté, ou le compte courant n'est pas l'auteur.
+        /// Personne n'est connecté, l'auteur n'est pas lisible, ou le compte
+        /// courant n'est pas l'auteur.
         case notTheAuthor
     }
 
-    /// `true` quand `currentUserId` est l'auteur DÉCLARÉ de la charge. Un
-    /// auteur absent, vide ou différent ne possède rien — fail-closed.
+    /// Un identifiant de compte utilisable — `nil` quand il est absent ou vide.
+    public static func identity(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// `true` SEULEMENT quand `currentUserId` est l'auteur déclaré de la charge.
     public static func owns(_ payload: CreateCommentPayload, currentUserId: String?) -> Bool {
-        guard let author = payload.authorId, !author.isEmpty,
-              let current = currentUserId, !current.isEmpty else { return false }
+        guard let author = identity(payload.authorId), let current = identity(currentUserId) else { return false }
         return author == current
     }
 
-    /// Le rejeu d'une ligne. Une ligne qui déclare son auteur ne part que
-    /// sous lui. Une ligne SANS auteur est une ligne gravée avant le champ :
-    /// elle ne portait alors que du texte, dans la base de son compte, et
-    /// rejoue comme avant — mais jamais si elle emporte des pièces, qu'aucune
-    /// ligne ancienne ne pouvait emporter.
-    public static func mayReplay(_ payload: CreateCommentPayload, currentUserId: String?) -> Bool {
-        guard let current = currentUserId, !current.isEmpty else { return false }
-        guard let author = payload.authorId else {
-            return (payload.localMediaPaths ?? []).isEmpty && (payload.uploadedMedia ?? []).isEmpty
+    /// Le compte qu'un jeton de session DÉSIGNE (revendication `userId` du
+    /// JWT) — `nil` pour tout jeton mal formé. Lue dans le jeton lui-même :
+    /// c'est ce qui lie l'identité vérifiée à l'identifiant qui signe la
+    /// requête, sans aucune seconde source qui pourrait avoir changé.
+    public static func userId(inToken token: String?) -> String? {
+        guard let token else { return nil }
+        let parts = token.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 3 else { return nil }
+        var base64 = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while base64.count % 4 != 0 { base64.append("=") }
+        guard let data = Data(base64Encoded: base64),
+              let claims = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        return identity(claims["userId"] as? String)
+    }
+
+    /// Le jeton sous lequel ce commentaire a le droit de partir : celui qui
+    /// est remis, SI il désigne l'auteur déclaré. Le jeton rendu est celui que
+    /// l'appelant doit poser sur la requête — vérification et envoi lisent la
+    /// même valeur.
+    public static func tokenBound(to payload: CreateCommentPayload, token: String?) throws -> String {
+        guard let token, !token.isEmpty,
+              let author = identity(payload.authorId),
+              let designated = userId(inToken: token),
+              author == designated else {
+            throw Refusal.notTheAuthor
         }
-        return !author.isEmpty && author == current
+        return token
+    }
+
+    /// Les pièces de la charge, SI toutes vivent dans le dossier de son
+    /// auteur — `nil` sinon. Un chemin absolu, un `..`, ou le dossier d'un
+    /// autre compte : la ligne ne lit pas les fichiers d'un autre.
+    public static func ownedMediaPaths(_ payload: CreateCommentPayload) -> [String]? {
+        let paths = payload.localMediaPaths ?? []
+        guard !paths.isEmpty else { return [] }
+        guard let folder = mediaDirectoryName(ownerId: payload.authorId) else { return nil }
+        let prefix = "\(OfflineQueue.pendingMediaDirectoryName)/\(folder)/"
+        let owned = paths.allSatisfy { path in
+            path.hasPrefix(prefix) && !path.split(separator: "/").contains("..")
+        }
+        return owned ? paths : nil
     }
 
     /// Le dossier des pièces en attente d'UN compte, sous `pending-media/` :
-    /// cloisonné, et purgé d'un bloc à sa déconnexion.
-    public static func mediaDirectoryName(ownerId: String) -> String {
-        "comments-" + ownerId.filter { $0.isLetter || $0.isNumber }
+    /// cloisonné, et purgé d'un bloc à sa déconnexion. `nil` sans identifiant
+    /// utilisable — on ne range rien dans un dossier sans propriétaire.
+    public static func mediaDirectoryName(ownerId: String?) -> String? {
+        guard let owner = identity(ownerId) else { return nil }
+        let safe = owner.filter { $0.isLetter || $0.isNumber }
+        return safe.isEmpty ? nil : "comments-" + safe
+    }
+}
+
+// MARK: - Le plafond du disque
+
+/// Ce qu'UN compte peut tenir en attente sur le disque.
+public enum CommentMediaQuota {
+    /// 512 Mo : dix vidéos de commentaire en attente tiennent, une file qui
+    /// ne se vide jamais ne remplit pas l'appareil.
+    public static let byteCeilingPerAccount: Int64 = 512 * 1024 * 1024
+
+    public struct Exceeded: Error, Sendable, Equatable {
+        public let limit: Int64
+    }
+
+    public static func admits(incoming: Int64, alreadyStored: Int64,
+                              ceiling: Int64 = byteCeilingPerAccount) -> Bool {
+        incoming >= 0 && alreadyStored >= 0 && incoming <= ceiling - min(alreadyStored, ceiling)
     }
 }
 
@@ -172,7 +234,8 @@ extension OfflineQueue {
         acquired: [UploadedCommentMedia] = [],
         ownerId: String?
     ) async throws -> EnqueueMediaResult {
-        guard CommentOwnership.owns(comment, currentUserId: ownerId), let ownerId else {
+        guard CommentOwnership.owns(comment, currentUserId: ownerId),
+              let folder = CommentOwnership.mediaDirectoryName(ownerId: ownerId) else {
             throw CommentOwnership.Refusal.notTheAuthor
         }
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
@@ -181,15 +244,29 @@ extension OfflineQueue {
         // déjà là garde SES fichiers : les recopier puis échouer à l'insertion
         // les aurait supprimés sous elle.
         let existingId = "ofqm_\(cmid)"
-        if let existing = try? await pool.read({ db in try OutboxRecord.fetchOne(db, key: existingId) }),
-           let stored = try? decoder.decode(CreateCommentPayload.self, from: existing.payload) {
+        if let existing = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: existingId) }) {
+            // La ligne déjà là doit être LA MÊME, du même auteur : sinon on
+            // refuse, plutôt que de rendre les pièces d'un autre.
+            let stored = try decoder.decode(CreateCommentPayload.self, from: existing.payload)
+            guard CommentOwnership.owns(stored, currentUserId: ownerId) else {
+                throw CommentOwnership.Refusal.notTheAuthor
+            }
             return EnqueueMediaResult(outboxId: existingId, localMediaPaths: stored.localMediaPaths ?? [])
+        }
+        // **La file ne grossit pas sans borne** (audit, constat 7) : au-delà du
+        // plafond par compte, la pose est refusée AVANT toute copie.
+        let incoming = sourceMediaURLs.reduce(Int64(0)) { $0 + Self.fileSize(atPath: $1.path) }
+        let stored = Self.directorySize(atPath: Self.absoluteMediaPath(
+            forStored: "\(Self.pendingMediaDirectoryName)/\(folder)"))
+        guard CommentMediaQuota.admits(incoming: incoming, alreadyStored: stored) else {
+            throw CommentMediaQuota.Exceeded(limit: CommentMediaQuota.byteCeilingPerAccount)
         }
         let relativePaths: [String] = try sourceMediaURLs.indices.map { index in
             try Self.pendingMediaRelativePath(
-                for: "\(CommentOwnership.mediaDirectoryName(ownerId: ownerId))/\(cmid)",
+                for: "\(folder)/\(cmid)",
                 index: index, ext: sourceMediaURLs[index].pathExtension)
         }
+        Self.excludeFromBackup(relativePath: "\(Self.pendingMediaDirectoryName)/\(folder)")
         do {
             try Self.copyPendingMediaFiles(sources: sourceMediaURLs, to: relativePaths)
         } catch {
@@ -230,7 +307,7 @@ extension OfflineQueue {
                                arguments: [encoded, Date(), outboxId])
             }
         } catch {
-            logger.error("recordUploadedCommentMedia(\(outboxId, privacy: .public), index \(media.sourceIndex, privacy: .public)) failed — pièce re-téléversée au prochain rejeu : \(error.localizedDescription, privacy: .public)")
+            logger.error("recordUploadedCommentMedia(\(outboxId, privacy: .private), index \(media.sourceIndex, privacy: .public)) failed — pièce re-téléversée au prochain rejeu : \(error.localizedDescription, privacy: .private)")
         }
     }
 
@@ -248,7 +325,7 @@ extension OfflineQueue {
                     .fetchAll(db)
             }
         } catch {
-            logger.error("unsentComments read failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("unsentComments read failed: \(error.localizedDescription, privacy: .private)")
             return []
         }
         return records.compactMap { record in
@@ -257,9 +334,8 @@ extension OfflineQueue {
             guard let payload = try? decoder.decode(CreateCommentPayload.self, from: record.payload),
                   payload.postId == postId,
                   CommentOwnership.owns(payload, currentUserId: ownerId) else { return nil }
-            let urls = (payload.localMediaPaths ?? []).map {
-                URL(fileURLWithPath: Self.absoluteMediaPath(forStored: $0))
-            }
+            guard let owned = CommentOwnership.ownedMediaPaths(payload) else { return nil }
+            let urls = owned.map { URL(fileURLWithPath: Self.absoluteMediaPath(forStored: $0)) }
             return UnsentComment(payload: payload, isFailed: record.status == .exhausted,
                                  lastError: record.lastError, createdAt: record.createdAt,
                                  localMediaURLs: urls)
@@ -273,35 +349,114 @@ extension OfflineQueue {
         guard let record = try? await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
               record.kind == .createComment,
               let payload = try? decoder.decode(CreateCommentPayload.self, from: record.payload),
-              CommentOwnership.owns(payload, currentUserId: ownerId) else { return nil }
+              CommentOwnership.owns(payload, currentUserId: ownerId),
+              let owned = CommentOwnership.ownedMediaPaths(payload) else { return nil }
         return UnsentComment(
             payload: payload, isFailed: record.status == .exhausted, lastError: record.lastError,
             createdAt: record.createdAt,
-            localMediaURLs: (payload.localMediaPaths ?? []).map {
-                URL(fileURLWithPath: Self.absoluteMediaPath(forStored: $0))
-            })
+            localMediaURLs: owned.map { URL(fileURLWithPath: Self.absoluteMediaPath(forStored: $0)) })
     }
 
-    /// Renonce à un commentaire qui n'est pas parti : la ligne et ses fichiers.
-    public func cancelCreateComment(clientMutationId cmid: String) async {
+    /// L'AUTEUR renonce à un commentaire qui n'est pas parti : la ligne et
+    /// ses fichiers. Sans effet pour tout autre compte — une ligne ne se
+    /// supprime que sous celui qui l'a écrite. Rend `true` si elle est partie.
+    @discardableResult
+    public func cancelCreateComment(clientMutationId cmid: String, ownerId: String?) async -> Bool {
         let outboxId = "ofqm_\(cmid)"
-        guard let pool = outboxPool else { return }
+        guard let pool = outboxPool else { return false }
         do {
-            if let record = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
-               let payload = try? decoder.decode(CreateCommentPayload.self, from: record.payload) {
-                removePendingCommentFiles(payload.localMediaPaths ?? [])
-            }
+            guard let record = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
+                  record.kind == .createComment else { return false }
+            let payload = try decoder.decode(CreateCommentPayload.self, from: record.payload)
+            guard CommentOwnership.owns(payload, currentUserId: ownerId) else { return false }
+            // Seuls les fichiers du dossier de l'auteur se suppriment.
+            let owned = CommentOwnership.ownedMediaPaths(payload) ?? []
+            removePendingCommentFiles(owned)
+            Self.removeEmptyParentDirectories(of: owned)
             try await pool.write { db in _ = try OutboxRecord.deleteOne(db, key: outboxId) }
         } catch {
-            logger.error("cancelCreateComment failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("cancelCreateComment failed: \(error.localizedDescription, privacy: .private)")
+            return false
         }
         await refreshPendingCount()
+        return true
+    }
+
+    /// L'AUTEUR relance un commentaire que la file a abandonné. Refusé pour
+    /// tout autre compte.
+    public func retryCreateComment(clientMutationId cmid: String, ownerId: String?) async throws {
+        guard await unsentComment(clientMutationId: cmid, ownerId: ownerId) != nil else {
+            throw CommentOwnership.Refusal.notTheAuthor
+        }
+        try await retryItem("ofqm_\(cmid)")
+    }
+
+    /// **Un dossier de pièces sans ligne dans la file est supprimé** (audit,
+    /// constat 4). Une ligne purgée à 7 jours, un envoi abouti dont le
+    /// nettoyage a échoué, une copie interrompue : rien ne reste sur le disque
+    /// sans une ligne qui le rejouera. `reader` est la base du compte `ownerId`.
+    public nonisolated static func sweepOrphanCommentMedia(ownerId: String?, reader: any DatabaseReader) async {
+        guard let folder = CommentOwnership.mediaDirectoryName(ownerId: ownerId) else { return }
+        let root = absoluteMediaPath(forStored: "\(pendingMediaDirectoryName)/\(folder)")
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: root), !entries.isEmpty else { return }
+        // Fail-closed à l'envers : si la base ne se lit pas, on ne supprime RIEN.
+        guard let living = try? await reader.read({ db in
+            try String.fetchAll(db, sql: "SELECT id FROM outbox WHERE kind = ?",
+                                arguments: [OutboxKind.createComment.rawValue])
+        }) else { return }
+        let alive = Set(living)
+        for entry in entries where !alive.contains("ofqm_\(entry)") {
+            FileManager.default.removeItemLogging(atPath: (root as NSString).appendingPathComponent(entry),
+                                                  context: "pièces de commentaire orphelines")
+        }
+    }
+
+    /// Retire du disque les pièces en attente de tout compte ABSENT de
+    /// `retainedOwnerIds` — les comptes que l'appareil ne garde plus.
+    public nonisolated static func purgePendingCommentMedia(keepingOwners retainedOwnerIds: Set<String>) {
+        let root = absoluteMediaPath(forStored: pendingMediaDirectoryName)
+        let kept = Set(retainedOwnerIds.compactMap { CommentOwnership.mediaDirectoryName(ownerId: $0) })
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: root) else { return }
+        for entry in entries where entry.hasPrefix("comments-") && !kept.contains(entry) {
+            FileManager.default.removeItemLogging(atPath: (root as NSString).appendingPathComponent(entry),
+                                                  context: "pièces de commentaire d'un compte retiré")
+        }
+    }
+
+    /// Le dossier d'un commentaire parti, une fois vidé.
+    public nonisolated static func removeEmptyParentDirectories(of relativePaths: [String]) {
+        let parents = Set(relativePaths.map { (absoluteMediaPath(forStored: $0) as NSString).deletingLastPathComponent })
+        for parent in parents {
+            guard let contents = try? FileManager.default.contentsOfDirectory(atPath: parent), contents.isEmpty else { continue }
+            FileManager.default.removeItemLogging(atPath: parent, context: "dossier de commentaire vidé")
+        }
+    }
+
+    nonisolated static func fileSize(atPath path: String) -> Int64 {
+        ((try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? NSNumber)?.int64Value ?? 0
+    }
+
+    nonisolated static func directorySize(atPath path: String) -> Int64 {
+        guard let files = FileManager.default.enumerator(atPath: path) else { return 0 }
+        return files.reduce(Int64(0)) { total, entry in
+            guard let name = entry as? String else { return total }
+            return total + fileSize(atPath: (path as NSString).appendingPathComponent(name))
+        }
+    }
+
+    /// Les pièces en attente ne partent pas dans une sauvegarde de l'appareil.
+    nonisolated static func excludeFromBackup(relativePath: String) {
+        var url = URL(fileURLWithPath: absoluteMediaPath(forStored: relativePath), isDirectory: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? url.setResourceValues(values)
     }
 
     /// Retire du disque toutes les pièces en attente d'UN compte — à sa
     /// déconnexion, quand sa file est purgée : rien ne reste pour le suivant.
-    public nonisolated static func purgePendingCommentMedia(ownerId: String) {
-        let relative = "\(pendingMediaDirectoryName)/\(CommentOwnership.mediaDirectoryName(ownerId: ownerId))"
+    public nonisolated static func purgePendingCommentMedia(ownerId: String?) {
+        guard let folder = CommentOwnership.mediaDirectoryName(ownerId: ownerId) else { return }
+        let relative = "\(pendingMediaDirectoryName)/\(folder)"
         FileManager.default.removeItemLogging(atPath: absoluteMediaPath(forStored: relative),
                                               context: "pending comment media (déconnexion)")
     }

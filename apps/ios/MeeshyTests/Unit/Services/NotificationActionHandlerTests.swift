@@ -142,6 +142,8 @@ final class NotificationActionHandlerTests: XCTestCase {
         let messageService: MockMessageService
         let conversationService: MockConversationService
         let postService: MockPostService
+        /// Ce que le SEUL chemin réseau d'un commentaire a créé (#9743).
+        let comments: CommentPublisherSpy
         let friendService: MockFriendService
         let queue: MockReplyQueue
         let persistence: MockOptimisticPersistence
@@ -167,6 +169,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         let messageService = MockMessageService()
         let conversationService = MockConversationService()
         let postService = MockPostService()
+        let comments = CommentPublisherSpy(token: currentUserId.map { TestSessionToken.make(userId: $0) })
         let friendService = MockFriendService()
         let queue = MockReplyQueue()
         let persistence = MockOptimisticPersistence()
@@ -185,6 +188,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             messageService: messageService,
             conversationService: conversationService,
             postService: postService,
+            commentPublisher: comments.publisher,
             friendService: friendService,
             replyQueue: queue,
             messagePersistence: persistence,
@@ -208,6 +212,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             messageService: messageService,
             conversationService: conversationService,
             postService: postService,
+            comments: comments,
             friendService: friendService,
             queue: queue,
             persistence: persistence,
@@ -566,10 +571,10 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "Bien vu !"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
-        XCTAssertEqual(ctx.postService.lastAddCommentPostId, "post1")
-        XCTAssertEqual(ctx.postService.lastAddCommentContent, "Bien vu !")
-        XCTAssertEqual(ctx.postService.lastAddCommentParentId, "c9",
+        XCTAssertEqual(ctx.comments.created.count, 1)
+        XCTAssertEqual(ctx.comments.created.last?.postId, "post1")
+        XCTAssertEqual(ctx.comments.created.last?.content, "Bien vu !")
+        XCTAssertEqual(ctx.comments.created.last?.parentCommentId, "c9",
                        "post_comment → threaded reply to THE notified comment")
     }
 
@@ -583,7 +588,7 @@ final class NotificationActionHandlerTests: XCTestCase {
                 replyText: "réponse"
             )
 
-            XCTAssertEqual(ctx.postService.lastAddCommentParentId, "c42",
+            XCTAssertEqual(ctx.comments.created.last?.parentCommentId, "c42",
                            "\(type) must thread under the notified comment")
         }
     }
@@ -597,8 +602,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "Premier !"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
-        XCTAssertNil(ctx.postService.lastAddCommentParentId,
+        XCTAssertEqual(ctx.comments.created.count, 1)
+        XCTAssertNil(ctx.comments.created.last?.parentCommentId,
                      "friend_new_post → root comment, never threaded")
     }
 
@@ -611,8 +616,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "ok"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
-        XCTAssertNil(ctx.postService.lastAddCommentParentId)
+        XCTAssertEqual(ctx.comments.created.count, 1)
+        XCTAssertNil(ctx.comments.created.last?.parentCommentId)
     }
 
     func test_handle_comment_anonymousSession_isLoggedNoop() async {
@@ -624,7 +629,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "anonyme"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 0,
+        XCTAssertEqual(ctx.comments.created.count, 0,
                        "The comments endpoint requires a registered user — no call")
         XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
         XCTAssertEqual(ctx.backgroundTasks.endCallCount, 1)
@@ -632,7 +637,7 @@ final class NotificationActionHandlerTests: XCTestCase {
 
     func test_handle_comment_networkFailure_keepsDurableOutboxRow() async throws {
         let ctx = makeSUT()
-        ctx.postService.addCommentResult = .failure(TestError())
+        ctx.comments.createFailure = TestError()
 
         await ctx.sut.handle(
             actionIdentifier: MeeshyNotificationAction.comment.rawValue,
@@ -658,7 +663,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         )
 
         let payload = try decodedCommentPayload(ctx)
-        XCTAssertEqual(ctx.postService.lastAddCommentClientMutationId, payload.clientMutationId,
+        XCTAssertEqual(ctx.comments.created.last?.clientMutationId, payload.clientMutationId,
                        "Outbox replay and direct REST must share ONE mutation id so the gateway MutationLog dedups")
         XCTAssertTrue(payload.clientMutationId.hasPrefix("cmid_"))
     }
@@ -684,7 +689,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "sans cible"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 0)
+        XCTAssertEqual(ctx.comments.created.count, 0)
         XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
     }
 
@@ -697,7 +702,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "  \n "
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 0)
+        XCTAssertEqual(ctx.comments.created.count, 0)
         XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
     }
 

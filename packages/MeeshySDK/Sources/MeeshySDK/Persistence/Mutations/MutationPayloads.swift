@@ -713,7 +713,8 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     /// file — un singleton rebranché à la bascule — aurait rejoué le
     /// commentaire, pièces comprises, sous le jeton du compte SUIVANT.
     /// L'auteur voyage donc DANS la charge, et le rejeu le compare au compte
-    /// courant. `nil` pour une ligne gravée avant le champ.
+    /// courant. `nil` pour une ligne gravée avant le champ — qui, faute
+    /// d'auteur lisible, ne se rejoue JAMAIS (fail-closed).
     public let authorId: String?
 
     public init(
@@ -722,14 +723,16 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         parentCommentId: String?,
         content: String,
         originalLanguage: String?,
+        /// REQUIS, sans défaut : c'est le compilateur qui impose à chaque
+        /// site d'envoi de dire QUI écrit. Une charge sans auteur ne part pas.
+        authorId: String?,
         location: SharedPlace? = nil,
         effectFlags: Int? = nil,
         quotedPostMediaId: String? = nil,
         localMediaPaths: [String]? = nil,
         localMediaMimeTypes: [String]? = nil,
         uploadedMedia: [UploadedCommentMedia]? = nil,
-        mobileTranscription: MobileTranscriptionPayload? = nil,
-        authorId: String? = nil
+        mobileTranscription: MobileTranscriptionPayload? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.postId = postId

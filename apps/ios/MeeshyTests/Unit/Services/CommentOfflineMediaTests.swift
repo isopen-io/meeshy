@@ -2,26 +2,237 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-/// **Un commentaire avec média envoyé hors ligne garde son média** (#9743).
+/// **Le rejeu d'un commentaire avec pièces, EXÉCUTÉ** (#9743, audit constat 6).
 ///
-/// La file (témoins du SDK, `OfflineQueueCommentMediaTests`) garde les
-/// fichiers et les acquis ; ces témoins-ci tiennent le dernier mètre côté
-/// app : le corps HTTP du rejeu, ce que l'envoi direct lègue à la file, et la
-/// ligne « non envoyé » relue après un redémarrage.
+/// Les gardes de ce lot étaient prouvées par du texte (`code.contains`) : aucun
+/// témoin n'exécutait `dispatchCreateComment`. Ceux-ci le font, avec un
+/// publieur dont le réseau est un journal — ce qui part, sous quel jeton, et
+/// ce qu'il advient des fichiers.
+@MainActor
+final class CommentReplayDispatchTests: XCTestCase {
+
+    private let alice = "66f0a1b2c3d4e5f6000000a1"
+    private let bob = "66f0a1b2c3d4e5f6000000b0"
+    private var created: [String] = []
+
+    override func tearDown() async throws {
+        for path in created { try? FileManager.default.removeItem(atPath: path) }
+        created = []
+        OfflineQueue.purgePendingCommentMedia(ownerId: alice)
+    }
+
+    /// Une ligne de la file d'Alice, avec `pieces` fichiers RÉELS sous son
+    /// dossier durable.
+    private func makeRow(pieces: Int, author: String? = "66f0a1b2c3d4e5f6000000a1",
+                         missingIndex: Int? = nil,
+                         acquired: [UploadedCommentMedia]? = nil) throws -> (record: OutboxRecord, files: [String]) {
+        let cmid = "cmid_" + UUID().uuidString.lowercased()
+        let folder = "pending-media/comments-\(alice)/\(cmid)"
+        let directory = OfflineQueue.absoluteMediaPath(forStored: folder)
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        created.append(directory)
+        let relative = (0..<pieces).map { "\(folder)/\($0).jpg" }
+        for (index, path) in relative.enumerated() where index != missingIndex {
+            try Data("octets-\(index)".utf8).write(to: URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(forStored: path)))
+        }
+        let payload = CreateCommentPayload(
+            clientMutationId: cmid, postId: "post-1", parentCommentId: nil, content: "regarde",
+            originalLanguage: "fr", authorId: author,
+            localMediaPaths: relative.isEmpty ? nil : relative, uploadedMedia: acquired)
+        let record = OutboxRecord(id: "ofqm_\(cmid)", kind: .createComment, conversationId: "post-1",
+                                  clientMessageId: cmid, payload: try JSONEncoder().encode(payload))
+        return (record, relative.map { OfflineQueue.absoluteMediaPath(forStored: $0) })
+    }
+
+    private func exists(_ paths: [String]) -> [Bool] { paths.map { FileManager.default.fileExists(atPath: $0) } }
+
+    private func outcome(_ record: OutboxRecord, _ spy: CommentPublisherSpy) async -> Error? {
+        do {
+            try await OutboxDispatcher().dispatchCreateComment(record, publisher: spy.publisher)
+            return nil
+        } catch {
+            return error
+        }
+    }
+
+    private func isDeferral(_ error: Error?) -> Bool {
+        if case MeeshyError.auth? = error { return true }
+        return false
+    }
+
+    // MARK: - La file rejoue un commentaire avec deux pièces
+
+    func test_replay_uploadsBothPieces_createsOnce_thenRemovesTheFiles() async throws {
+        let row = try makeRow(pieces: 2)
+        let aliceToken = TestSessionToken.make(userId: alice)
+        let spy = CommentPublisherSpy(token: aliceToken)
+
+        let error = await outcome(row.record, spy)
+
+        XCTAssertNil(error)
+        XCTAssertEqual(spy.uploadTokens, [aliceToken, aliceToken])
+        XCTAssertEqual(spy.created.count, 1, "Pas de doublon : une ligne, une création.")
+        XCTAssertEqual(spy.created.first?.clientMutationId, row.record.clientMessageId)
+        XCTAssertEqual(spy.createAttachmentIds, [["media0", "media1"]])
+        XCTAssertEqual(exists(row.files), [false, false], "Le commentaire est créé : ses fichiers ne servent plus.")
+    }
+
+    func test_replay_doesNotReuploadAnAcquiredPiece() async throws {
+        let done = UploadedCommentMedia(sourceIndex: 0, id: "acquis", uploadedAt: Date().timeIntervalSince1970)
+        let row = try makeRow(pieces: 2, acquired: [done])
+        let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: alice))
+
+        let error = await outcome(row.record, spy)
+
+        XCTAssertNil(error)
+        XCTAssertEqual(spy.uploadTokens.count, 1)
+        XCTAssertEqual(spy.createAttachmentIds, [["acquis", "media1"]])
+    }
+
+    func test_replay_reuploadsAPieceTheServerHasSweptByNow() async throws {
+        let stale = UploadedCommentMedia(sourceIndex: 0, id: "balayé",
+                                         uploadedAt: Date().timeIntervalSince1970 - 21 * 60 * 60)
+        let row = try makeRow(pieces: 1, acquired: [stale])
+        let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: alice))
+
+        _ = await outcome(row.record, spy)
+
+        XCTAssertEqual(spy.createAttachmentIds, [["media0"]], "Un id que le serveur n'a plus ne se présente pas.")
+    }
+
+    // MARK: - Le compte change PENDANT la montée ⇒ aucun POST
+
+    func test_accountSwitchDuringTheUpload_sendsNoCreation_andKeepsTheRowsFiles() async throws {
+        let row = try makeRow(pieces: 2)
+        let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: alice))
+        let bobToken = TestSessionToken.make(userId: bob)
+        spy.afterUpload = { spy.token = bobToken }
+
+        let error = await outcome(row.record, spy)
+
+        XCTAssertTrue(spy.created.isEmpty, "Aucune création ne part sous l'autre compte.")
+        XCTAssertFalse(spy.uploadTokens.contains(bobToken), "Aucune pièce ne part sous l'autre compte.")
+        XCTAssertTrue(isDeferral(error), "Un refus REPORTE la ligne : il ne l'épuise pas et ne la détruit pas.")
+        XCTAssertEqual(exists(row.files), [true, true], "Les pièces d'Alice restent pour son retour.")
+    }
+
+    // MARK: - Personne n'est connecté ⇒ la ligne reste intacte
+
+    func test_noCurrentSession_sendsNothing_destroysNothing_andDefers() async throws {
+        let row = try makeRow(pieces: 1)
+        let spy = CommentPublisherSpy(token: nil)
+
+        let error = await outcome(row.record, spy)
+
+        XCTAssertTrue(spy.uploadTokens.isEmpty)
+        XCTAssertTrue(spy.created.isEmpty)
+        XCTAssertTrue(isDeferral(error), "Une session absente est transitoire : la ligne attend, sans consommer son budget.")
+        XCTAssertEqual(exists(row.files), [true])
+    }
+
+    func test_anotherAccount_sendsNothing_andLeavesTheRowIntact() async throws {
+        let row = try makeRow(pieces: 1)
+        let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: bob))
+
+        let error = await outcome(row.record, spy)
+
+        XCTAssertTrue(spy.uploadTokens.isEmpty)
+        XCTAssertTrue(spy.created.isEmpty)
+        XCTAssertTrue(isDeferral(error))
+        XCTAssertEqual(exists(row.files), [true], "Un changement de compte n'efface pas les commentaires du compte légitime.")
+    }
+
+    // MARK: - Fermé par défaut
+
+    func test_aRowWithoutAuthor_isNeverReplayed_evenAsText() async throws {
+        for author in [String?.none, "", "  "] {
+            let row = try makeRow(pieces: 0, author: author)
+            let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: alice))
+
+            let error = await outcome(row.record, spy)
+
+            XCTAssertNotNil(error)
+            XCTAssertTrue(spy.created.isEmpty, "Une entrée sans propriétaire lisible ne part jamais.")
+        }
+    }
+
+    func test_aRowWhoseFilesAreNotInItsAuthorsFolder_isRefused() async throws {
+        let row = try makeRow(pieces: 1, author: bob)   // fichiers d'Alice, ligne « de Bob »
+        let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: bob))
+
+        let error = await outcome(row.record, spy)
+
+        XCTAssertNotNil(error)
+        XCTAssertTrue(spy.uploadTokens.isEmpty, "La ligne d'un compte ne lit pas les fichiers d'un autre.")
+        XCTAssertTrue(spy.created.isEmpty)
+        XCTAssertEqual(exists(row.files), [true])
+    }
+
+    // MARK: - Une pièce manquante ⇒ rien ne part
+
+    func test_aMissingPiece_sendsNothing_notEvenTheRest() async throws {
+        let row = try makeRow(pieces: 2, missingIndex: 1)
+        let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: alice))
+
+        let error = await outcome(row.record, spy)
+
+        XCTAssertTrue(spy.uploadTokens.isEmpty, "Un commentaire ne part pas amputé.")
+        XCTAssertTrue(spy.created.isEmpty)
+        guard case MeeshyError.server(let status, _)? = error else { return XCTFail("échec permanent attendu, reçu \(String(describing: error))") }
+        XCTAssertEqual(status, 422)
+        XCTAssertEqual(exists(row.files), [true, false], "Ce qui reste n'est pas supprimé : la ligne se voit « non envoyée ».")
+    }
+
+    func test_aFailedUpload_reportsTheRealCause_andKeepsEverything() async throws {
+        let row = try makeRow(pieces: 2)
+        let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: alice))
+        spy.uploadFailureAtIndex = 1
+
+        let error = await outcome(row.record, spy)
+
+        XCTAssertTrue(error is CommentPublisherSpy.TestFailure)
+        XCTAssertTrue(spy.created.isEmpty)
+        XCTAssertEqual(exists(row.files), [true, true])
+    }
+
+    // MARK: - 410 : déjà créé
+
+    func test_aGoneAnswer_meansTheCommentAlreadyExists() async throws {
+        let row = try makeRow(pieces: 1)
+        let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: alice))
+        spy.createFailure = MeeshyError.server(statusCode: 410, message: "déjà appliqué")
+
+        let error = await outcome(row.record, spy)
+
+        XCTAssertNil(error, "Le serveur a déjà ce commentaire : la ligne se clôt, elle ne s'affiche pas en erreur.")
+        XCTAssertEqual(exists(row.files), [false])
+    }
+
+    func test_aServerRefusal_staysAFailure() async throws {
+        let row = try makeRow(pieces: 1)
+        let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: alice))
+        spy.createFailure = MeeshyError.server(statusCode: 404, message: "publication retirée")
+
+        let error = await outcome(row.record, spy)
+
+        guard case MeeshyError.server(let status, _)? = error else { return XCTFail("refus attendu") }
+        XCTAssertEqual(status, 404)
+        XCTAssertEqual(exists(row.files), [true], "Un échec garde ses pièces : il reste relançable.")
+    }
+}
+
+/// Le corps HTTP du rejeu, et la ligne « non envoyé » relue de la file.
 @MainActor
 final class CommentOfflineMediaTests: XCTestCase {
 
     private func payload(_ cmid: String = "cmid_00000000-0000-4000-8000-000000009743") -> CreateCommentPayload {
         CreateCommentPayload(clientMutationId: cmid, postId: "post-1", parentCommentId: "racine",
-                             content: "regarde", originalLanguage: "fr", effectFlags: 4,
-                             localMediaPaths: ["pending-media/\(cmid)/0.jpg", "pending-media/\(cmid)/1.m4a"])
+                             content: "regarde", originalLanguage: "fr", authorId: "user-1", effectFlags: 4)
     }
 
     private func json(_ data: Data) throws -> [String: Any] {
         try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
-
-    // MARK: - Le corps du rejeu
 
     func test_theReplayedBody_carriesBothPieces_inTheAuthorsOrder() throws {
         let uploaded = [
@@ -33,32 +244,13 @@ final class CommentOfflineMediaTests: XCTestCase {
         XCTAssertEqual(body["attachmentIds"] as? [String], ["media0", "media1"])
         XCTAssertEqual(body["content"] as? String, "regarde")
         XCTAssertEqual(body["parentId"] as? String, "racine")
+        XCTAssertNil(body["authorId"], "L'auteur ne voyage pas dans le corps : c'est le jeton qui le dit au serveur.")
     }
 
     func test_theReplayedBody_ofATextComment_hasNoAttachmentKey() throws {
         let body = try json(CreateCommentBody.encoded(for: payload()))
         XCTAssertNil(body["attachmentIds"], "Un commentaire sans pièce rejoue comme avant le champ.")
     }
-
-    // MARK: - Ce que l'envoi direct lègue à la file
-
-    func test_acquired_readsWhatAnInterruptedUploadAlreadyGot() {
-        let done = UploadedCommentMedia(sourceIndex: 0, id: "media0", uploadedAt: 1)
-        let interrupted = CommentMediaUploader.Interrupted(acquired: [done], underlying: URLError(.notConnectedToInternet))
-        XCTAssertEqual(CommentMediaDelivery.acquired(from: interrupted, known: []), [done])
-    }
-
-    func test_acquired_keepsEverything_whenOnlyTheCreationFailed() {
-        let all = [UploadedCommentMedia(sourceIndex: 0, id: "media0", uploadedAt: 1),
-                   UploadedCommentMedia(sourceIndex: 1, id: "media1", uploadedAt: 1)]
-        XCTAssertEqual(CommentMediaDelivery.acquired(from: URLError(.timedOut), known: all), all)
-    }
-
-    func test_attachmentIds_isAbsentWithoutPieces() {
-        XCTAssertNil(CommentMediaUploader.attachmentIds([]))
-    }
-
-    // MARK: - La ligne « non envoyé », relue de la file
 
     func test_row_keepsTheClientIdentifier_theText_andThePieces() {
         let cmid = "cmid_00000000-0000-4000-8000-000000000001"
@@ -89,110 +281,60 @@ final class CommentOfflineMediaTests: XCTestCase {
     }
 }
 
-/// Le câblage — trois hôtes, un seul chemin vers la file.
+/// Le câblage que seul le texte peut tenir — ce que les témoins ci-dessus
+/// n'exécutent pas : les hôtes SwiftUI, et la déconnexion.
 final class CommentOfflineMediaWiringGuardTests: XCTestCase {
 
     private func source(_ relative: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        let text = try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/\(relative)"), encoding: .utf8)
+        let text = try String(contentsOf: root.appendingPathComponent("Meeshy/\(relative)"), encoding: .utf8)
         return AppSourceGuard.stripComments(text)
     }
 
     func test_everyCommentHost_entrustsAFailedSendWithItsPieces() throws {
-        for host in ["Views/FeedCommentsSheet.swift",
-                     "ViewModels/PostDetailViewModel+CommentSend.swift",
-                     "Views/StoryViewerView+Content.swift"] {
+        for host in ["Features/Main/Views/FeedCommentsSheet.swift",
+                     "Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift",
+                     "Features/Main/Views/StoryViewerView+Content.swift"] {
             let code = try source(host)
-            XCTAssertTrue(code.contains("CommentMediaDelivery.entrust("),
+            XCTAssertTrue(code.contains("CommentMediaDelivery.entrust(payload, medias:"),
                           "\(host) n'emporte pas les pièces d'un commentaire dont l'envoi échoue.")
-            XCTAssertTrue(code.contains("CommentMediaDelivery.acquired(from: error"),
+            XCTAssertTrue(code.contains("CommentMediaDelivery.acquired(from: error)"),
                           "\(host) re-téléverserait ce que l'envoi direct a déjà monté.")
+            XCTAssertTrue(code.contains("authorId: "), "\(host) : la charge ne déclare pas son auteur.")
         }
     }
 
-    func test_theReplay_uploadsAsCommentMedia_recordsEachPiece_andKeepsTheClientId() throws {
-        let code = try source("Services/OutboxDispatcher+Comments.swift")
-        XCTAssertTrue(code.contains("uploadContext: \"comment\""),
-                      "Sans ce contexte le serveur crée une pièce de MESSAGE, que le commentaire ne réclame pas.")
-        XCTAssertTrue(code.contains("recordUploadedCommentMedia("),
-                      "Un téléversement acquis doit être gravé sur la ligne, sinon chaque rejeu repart de zéro.")
-        XCTAssertTrue(code.contains("\"X-Client-Mutation-Id\": payload.clientMutationId"),
-                      "L'identifiant client dédoublonne un rejeu dont la première réponse s'est perdue.")
-        XCTAssertTrue(code.contains("CommentMediaReplay.plan("))
-    }
-
-    /// **Contrôle d'accès** : une entrée écrite par A n'est ni rejouée, ni
-    /// enfilée, ni montrée sous B. La règle est dans le SDK
-    /// (`CommentOwnership`, témoins `OfflineQueueCommentMediaTests`) ; ces
-    /// gardes tiennent ses QUATRE points de passage côté app.
-    func test_theReplay_isClosedToAnyAccountButTheAuthor_beforeAnythingIsSent() throws {
-        let code = try source("Services/OutboxDispatcher+Comments.swift")
-        let gate = try XCTUnwrap(code.range(of: "guard CommentOwnership.mayReplay(payload, currentUserId: AuthManager.shared.currentUser?.id) else {"),
-                                 "Le rejeu ne compare plus l'auteur de la ligne au compte courant.")
-        let upload = try XCTUnwrap(code.range(of: "uploadedCommentMedia(for: payload"))
-        let post = try XCTUnwrap(code.range(of: "requestWithHeaders("))
-        XCTAssertLessThan(gate.lowerBound, upload.lowerBound, "La garde doit précéder le téléversement.")
-        XCTAssertLessThan(gate.lowerBound, post.lowerBound, "La garde doit précéder la création.")
-        XCTAssertTrue(code.contains("cancelCreateComment(clientMutationId: payload.clientMutationId)"),
-                      "Une ligne étrangère doit quitter le disque avec ses pièces, pas attendre un autre rejeu.")
-    }
-
-    func test_entrusting_andUploading_recheckTheAuthorRecordedAtCompose() throws {
-        let code = try source("Views/CommentComposerMedia.swift")
+    func test_entrusting_recordsTheVerifiedAccount_once_forTheRowAndItsFolder() throws {
+        let code = try source("Features/Main/Views/CommentComposerMedia.swift")
         let entrust = try XCTUnwrap(code.range(of: "static func entrust("))
         let enqueue = try XCTUnwrap(code.range(of: "OfflineQueue.shared.enqueue(", range: entrust.upperBound..<code.endIndex))
-        XCTAssertTrue(code[entrust.upperBound..<enqueue.lowerBound].contains("try confirmAuthor(payload.authorId)"),
+        XCTAssertTrue(code[entrust.upperBound..<enqueue.lowerBound].contains("let owner = try confirmAuthor(payload)"),
                       "L'enfilement arrive après une attente réseau : le compte a pu changer.")
-        XCTAssertTrue(code.contains("ownerId: AuthManager.shared.currentUser?.id"))
-        XCTAssertEqual(code.components(separatedBy: "try CommentMediaDelivery.confirmAuthor(authorId)").count - 1, 2,
-                       "L'auteur se revérifie avant chaque montée ET avant de rendre la main à la création.")
+        XCTAssertTrue(code.contains("ownerId: owner"), "Le dossier des pièces doit être celui du compte vérifié, pas une seconde lecture.")
     }
 
-    func test_everyHost_declaresTheAuthorItRecordedBeforeAwaiting() throws {
-        for (host, direct, queued) in [
-            ("Views/FeedCommentsSheet.swift", "uploadAll(media, authorId: me?.id)", "mobileTranscription, authorId: me?.id"),
-            ("ViewModels/PostDetailViewModel+CommentSend.swift", "uploadAll(pendingMedia, authorId: me?.id)", "mobileTranscription, authorId: me?.id"),
-            ("Views/StoryViewerView+Content.swift", "uploadAll(medias, authorId: authorId)", "mobileTranscription, authorId: authorId"),
-        ] {
-            let code = try source(host)
-            XCTAssertTrue(code.contains(direct), "\(host) : l'envoi direct ne revérifie pas l'auteur relevé à la composition.")
-            XCTAssertTrue(code.contains(queued), "\(host) : la charge confiée à la file ne déclare pas son auteur.")
-        }
-    }
-
-    func test_whatIsShown_andWhatIsPurged_followTheAccount() throws {
-        XCTAssertTrue(try source("Views/CommentUnsentBadge.swift").contains("ownerId: AuthManager.shared.currentUser?.id"))
-        XCTAssertTrue(try source("Views/FeedCommentsSheet+Attachments.swift")
-            .contains("unsentComments(postId: post.id, ownerId: AuthManager.shared.currentUser?.id)"))
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-        let container = AppSourceGuard.stripComments(try String(
-            contentsOf: root.appendingPathComponent("Meeshy/Core/DependencyContainer.swift"), encoding: .utf8))
-        XCTAssertTrue(container.contains("OfflineQueue.purgePendingCommentMedia(ownerId: ownerId)"),
-                      "La déconnexion laisse sur le disque des pièces que le compte suivant pourrait lire.")
-    }
-
-    func test_aDirectUpload_doesNotDeleteTheFileBeforeTheCommentExists() throws {
-        let code = try source("Views/CommentComposerMedia.swift")
-        let upload = try XCTUnwrap(code.range(of: "static func upload(_ media: PendingCommentMedia)"))
-        let next = try XCTUnwrap(code.range(of: "static func uploadAll(", range: upload.upperBound..<code.endIndex))
-        XCTAssertFalse(code[upload.upperBound..<next.lowerBound].contains("removeItem"),
-                       "Le fichier doit survivre au téléversement : c'est lui que la file rejoue si la création échoue.")
-    }
-
-    func test_anAbandonedComment_staysOnScreen_andIsRetriable() throws {
-        XCTAssertTrue(try source("Views/CommentRowView.swift").contains("CommentUnsentBadge("),
+    func test_anAbandonedComment_staysOnScreen_andOnlyItsAuthorActsOnIt() throws {
+        XCTAssertTrue(try source("Features/Main/Views/CommentRowView.swift").contains("CommentUnsentBadge("),
                       "La ligne d'un commentaire non envoyé ne porte plus sa marque.")
-        let badge = try source("Views/CommentUnsentBadge.swift")
-        XCTAssertTrue(badge.contains("retryByClientMessageId("))
-        XCTAssertTrue(badge.contains("cancelCreateComment("))
-        let sheet = try source("Views/FeedCommentsSheet.swift")
+        let badge = try source("Features/Main/Views/CommentUnsentBadge.swift")
+        XCTAssertTrue(badge.contains("retryCreateComment(clientMutationId: commentId, ownerId: CommentPublisher.currentAccountId())"))
+        XCTAssertTrue(badge.contains("clientMutationId: commentId, ownerId: CommentPublisher.currentAccountId())"))
+        XCTAssertFalse(badge.contains("retryByClientMessageId("), "Une relance sans garde de propriétaire.")
+        let sheet = try source("Features/Main/Views/FeedCommentsSheet.swift")
         XCTAssertFalse(sheet.contains("if case .exhausted = event"),
                        "La feuille retire de l'écran un commentaire que la file abandonne : il doit rester, relançable.")
-        XCTAssertTrue(sheet.contains(".unsentComments(restore:"),
-                      "La feuille ne relit plus de la file les commentaires qui ne sont pas partis.")
+        XCTAssertTrue(sheet.contains(".unsentComments(restore:"))
+        XCTAssertTrue(try source("Features/Main/Views/FeedCommentsSheet+Attachments.swift")
+            .contains("unsentComments(postId: post.id, ownerId: CommentPublisher.currentAccountId())"))
+    }
+
+    func test_removingAnAccount_removesItsPendingPieces() throws {
+        let container = try source("Core/DependencyContainer.swift")
+        XCTAssertEqual(container.components(separatedBy: "OfflineQueue.purgePendingCommentMedia(ownerId: session.key?.userId)").count - 1, 2,
+                       "La déconnexion ET le retrait d'un compte emportent ses pièces en attente.")
+        XCTAssertTrue(container.contains("OfflineQueue.purgePendingCommentMedia(keepingOwners:"),
+                      "Les comptes que l'appareil ne garde plus laissent leurs pièces sur le disque.")
     }
 }

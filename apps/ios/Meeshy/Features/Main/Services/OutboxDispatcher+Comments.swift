@@ -15,78 +15,70 @@ import os
 extension OutboxDispatcher {
 
     func dispatchCreateComment(_ record: OutboxRecord) async throws {
-        let payload = try decodePayload(record, as: CreateCommentPayload.self)
-        // **Un commentaire ne part que sous le compte qui l'a écrit.** La file
-        // est un singleton rebranché à chaque bascule de compte : une ligne
-        // arrivée dans la base d'un autre que son auteur ne se téléverse pas,
-        // ne se publie pas, et quitte le disque avec ses pièces.
-        guard CommentOwnership.mayReplay(payload, currentUserId: AuthManager.shared.currentUser?.id) else {
-            await OfflineQueue.shared.cancelCreateComment(clientMutationId: payload.clientMutationId)
-            logger.error("createComment refusé : le compte courant n'est pas l'auteur de \(payload.clientMutationId, privacy: .public)")
-            throw MeeshyError.server(statusCode: 403, message: "Comment \(payload.clientMutationId) belongs to another account")
-        }
-        let uploaded = try await uploadedCommentMedia(for: payload, outboxId: record.id)
-        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            PostsEndpoint.byPostIdComments(postId: payload.postId),
-            method: "POST",
-            body: try CreateCommentBody.encoded(for: payload,
-                                                attachmentIds: CommentMediaReplay.attachmentIds(uploaded)),
-            queryItems: nil,
-            // Le MÊME identifiant client à chaque tentative : un POST abouti
-            // dont la réponse s'est perdue est dédoublonné par le serveur.
-            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
-        )
-        // Les fichiers ne partent qu'une fois le commentaire créé : un échec
-        // plus haut laisse la ligne avec ses octets.
-        for stored in payload.localMediaPaths ?? [] {
-            FileManager.default.removeItemLogging(atPath: OfflineQueue.absoluteMediaPath(forStored: stored),
-                                                  context: "createComment media envoyé", logger: logger)
-        }
-        logger.info("createComment dispatched on \(payload.postId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public) pièces=\(uploaded.count, privacy: .public)")
+        try await dispatchCreateComment(record, publisher: .live)
     }
 
-    /// Les pièces du commentaire, montées. Reprend ce qu'une tentative
-    /// précédente a acquis, téléverse le reste, et REPORTE l'envoi tant qu'une
-    /// pièce encore sur le disque n'est pas montée : un commentaire ne part
-    /// pas amputé d'un média qu'un rejeu obtiendra.
-    private func uploadedCommentMedia(for payload: CreateCommentPayload, outboxId: String) async throws -> [UploadedCommentMedia] {
-        let paths = (payload.localMediaPaths ?? []).map { OfflineQueue.absoluteMediaPath(forStored: $0) }
-        guard !paths.isEmpty else { return [] }
+    /// Tout rejeu passe ici — retour du réseau, reprise au lancement, relance
+    /// manuelle, retour au premier plan : le flusher n'a qu'une porte. Et
+    /// cette porte n'envoie rien elle-même : `CommentPublisher` signe chaque
+    /// requête d'un jeton vérifié contre l'auteur de la ligne.
+    ///
+    /// **Un refus ne détruit RIEN** (audit, constat 3). Le flusher tient la
+    /// base du compte qui l'a créé : pendant une bascule de compte, il peut
+    /// rejouer les lignes de A alors que la session est celle de B, ou de
+    /// personne. Ces lignes ne partent pas — et elles ne s'effacent pas non
+    /// plus : elles attendent leur auteur, sans consommer leur budget.
+    func dispatchCreateComment(_ record: OutboxRecord, publisher: CommentPublisher) async throws {
+        let payload = try decodePayload(record, as: CreateCommentPayload.self)
+        // Les fichiers de la ligne doivent vivre dans le dossier de SON
+        // auteur ; une ligne sans auteur lisible n'en a aucun.
+        guard let stored = CommentOwnership.ownedMediaPaths(payload) else {
+            throw MeeshyError.server(statusCode: 403, message: "createComment: pièces hors du dossier de l'auteur")
+        }
+        let paths = stored.map { OfflineQueue.absoluteMediaPath(forStored: $0) }
         let plan = CommentMediaReplay.plan(for: payload, now: Date()) { index in
             FileManager.default.fileExists(atPath: paths[index])
         }
-        if !plan.missing.isEmpty {
-            logger.error("createComment: \(plan.missing.count, privacy: .public) pièce(s) disparue(s) du disque — les octets n'existent plus")
+        // **Aucun envoi amputé** (constat 5) : une pièce dont les octets ont
+        // disparu ne reviendra pas. Le commentaire ne part pas sans elle — la
+        // ligne s'épuise avec son motif, et l'auteur la voit « non envoyée ».
+        guard plan.missing.isEmpty else {
+            throw MeeshyError.server(statusCode: 422, message: "createComment: \(plan.missing.count) pièce(s) disparue(s) du disque")
         }
-        guard !plan.toUpload.isEmpty else { return plan.acquired }
-        guard let baseURL = URL(string: MeeshyConfig.shared.serverOrigin),
-              let token = APIClient.shared.authToken else {
-            throw NSError(domain: "OutboxDispatcher", code: 401,
-                          userInfo: [NSLocalizedDescriptionKey: "No baseURL or auth token to upload comment media"])
-        }
-        let uploader = TusUploadManager(baseURL: baseURL)
-        var uploaded = plan.acquired
-        for index in plan.toUpload {
+        let pieces = plan.toUpload.map { index in
             let url = URL(fileURLWithPath: paths[index])
             let declared = payload.localMediaMimeTypes.flatMap { $0.indices.contains(index) ? $0[index] : nil }
-            do {
-                let result = try await uploader.uploadFile(
-                    fileURL: url,
-                    mimeType: declared ?? MimeTypeResolver.mimeType(forExtension: url.pathExtension),
-                    credential: .bearer(token),
-                    uploadContext: "comment"
-                )
-                let piece = UploadedCommentMedia(sourceIndex: index, id: result.id,
-                                                 uploadedAt: Date().timeIntervalSince1970)
-                uploaded.append(piece)
-                await OfflineQueue.shared.recordUploadedCommentMedia(outboxId: outboxId, piece)
-            } catch {
-                throw NSError(domain: "OutboxDispatcher", code: 503, userInfo: [
-                    NSLocalizedDescriptionKey: "Pièce \(uploaded.count)/\(paths.count) montée — commentaire reporté : \(error.localizedDescription)",
-                    NSUnderlyingErrorKey: error,
-                ])
-            }
+            return CommentPublisher.Piece(
+                sourceIndex: index, fileURL: url,
+                mimeType: declared ?? MimeTypeResolver.mimeType(forExtension: url.pathExtension))
         }
-        return uploaded
+        let outboxId = record.id
+        do {
+            try await publisher.publish(payload, pieces: pieces, acquired: plan.acquired) { piece in
+                await OfflineQueue.shared.recordUploadedCommentMedia(outboxId: outboxId, piece)
+            }
+        } catch is CommentOwnership.Refusal {
+            // Ni envoi, ni suppression : la ligne est REPORTÉE (le flusher ne
+            // consomme pas le budget d'une session absente) et reste intacte
+            // dans la base de son compte.
+            logger.info("createComment reporté : la session courante n'est pas celle de l'auteur")
+            throw MeeshyError.auth(.sessionExpired)
+        } catch let interrupted as CommentPublisher.Interrupted {
+            // **410 = déjà créé** (constat 8) : le serveur a appliqué ce cmid
+            // lors d'une tentative dont la réponse s'est perdue. Ce n'est pas
+            // un échec à montrer « Réessayer » sans fin.
+            guard Self.isAlreadyCreated(interrupted.underlying) else { throw interrupted.underlying }
+        }
+        // Les fichiers ne partent qu'une fois le commentaire créé.
+        for path in paths {
+            FileManager.default.removeItemLogging(atPath: path, context: "createComment media envoyé", logger: logger)
+        }
+        OfflineQueue.removeEmptyParentDirectories(of: stored)
+        logger.info("createComment dispatched, pièces=\(paths.count, privacy: .public)")
+    }
+
+    static func isAlreadyCreated(_ error: Error) -> Bool {
+        if case MeeshyError.server(statusCode: 410, _) = error { return true }
+        return false
     }
 }

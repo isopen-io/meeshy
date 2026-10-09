@@ -124,6 +124,9 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let messageService: MessageServiceProviding
     private let conversationService: ConversationServiceProviding
     private let postService: PostServiceProviding
+    /// Le seul chemin réseau d'un commentaire (#9743) — il lie la requête au
+    /// compte de l'auteur.
+    private let commentPublisher: CommentPublisher
     private let friendService: FriendServiceProviding
     private let replyQueue: NotificationReplyQueueing
     private let injectedPersistence: OptimisticMessagePersisting?
@@ -180,6 +183,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         messageService: MessageServiceProviding = MessageService.shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
         postService: PostServiceProviding = PostService.shared,
+        commentPublisher: CommentPublisher = .live,
         friendService: FriendServiceProviding = FriendService.shared,
         replyQueue: NotificationReplyQueueing = OfflineQueue.shared,
         messagePersistence: OptimisticMessagePersisting? = nil,
@@ -238,6 +242,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.messageService = messageService
         self.conversationService = conversationService
         self.postService = postService
+        self.commentPublisher = commentPublisher
         self.friendService = friendService
         self.replyQueue = replyQueue
         self.injectedPersistence = messagePersistence
@@ -591,12 +596,9 @@ final class NotificationActionHandler: NotificationActionHandling {
             notifiedCommentId: userInfo["commentId"] as? String
         )
         let clientMutationId = ClientMutationId.generate()
-
-        await prepareReplyQueue()
-        do {
-            try await replyQueue.enqueue(
-                .createComment,
-                payload: CreateCommentPayload(
+        // La charge est bâtie UNE fois, avec son auteur relevé ICI, avant
+        // toute attente : la file et l'envoi direct portent la même (#9743).
+        let comment = CreateCommentPayload(
                     clientMutationId: clientMutationId,
                     postId: postId,
                     parentCommentId: parentId,
@@ -607,22 +609,19 @@ final class NotificationActionHandler: NotificationActionHandling {
                     // comme sur la tentative REST jumelle ci-dessous — les deux
                     // chemins partagent le même cmid et doivent donner le même
                     // commentaire, quel que soit celui qui atterrit le premier.
-                    originalLanguage: nil
-                ),
-                conversationId: nil
-            )
+                    originalLanguage: nil,
+                    authorId: currentUserId()
+        )
+
+        await prepareReplyQueue()
+        do {
+            try await replyQueue.enqueue(.createComment, payload: comment, conversationId: nil)
         } catch {
             logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .public)")
         }
 
         do {
-            _ = try await postService.addComment(
-                postId: postId,
-                content: text,
-                parentId: parentId,
-                effectFlags: nil,
-                clientMutationId: clientMutationId
-            )
+            try await commentPublisher.publish(comment, pieces: [])
             logger.info("notification comment sent for post \(postId, privacy: .public)")
         } catch {
             logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .public)")

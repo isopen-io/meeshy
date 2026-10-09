@@ -69,57 +69,15 @@ final class StoryInteractionService {
         let force: Bool?
     }
 
-    /// Posts a comment (or a reply if `parentId` is set). Optimistic UI
-    /// already inserted the comment locally before this call — see
-    /// `StoryViewerView+Content.sendComment`. Throws on failure so the
-    /// caller can roll that optimistic insert back instead of leaving a
-    /// phantom `temp_` comment that silently never made it to the server
-    /// (most visible offline, where the whole call fails).
-    func postComment(
-        storyId: String,
-        content: String,
-        originalLanguage: String,
-        effectFlags: Int? = nil,
-        parentId: String? = nil,
-        attachmentIds: [String]? = nil,
-        mobileTranscription: MobileTranscriptionPayload? = nil,
-        location: SharedPlace? = nil,
-        clientMutationId: String? = nil
-    ) async throws {
-        // Noté AU DÉPART, comme la ligne optimiste que l'appelant vient d'insérer : un
-        // POST échoué part en outbox (`sendComment`), le commentaire reste celui du lecteur.
+    /// Le lecteur vient de commenter cette story : sa participation se note
+    /// AU DÉPART, comme la ligne optimiste — un envoi qui échoue part en file,
+    /// le commentaire reste le sien.
+    ///
+    /// La création elle-même passe par `CommentPublisher`, le seul chemin
+    /// réseau d'un commentaire (#9743) : il lie la requête au compte de
+    /// l'auteur.
+    func noteComment(storyId: String) {
         participation.note(.commented, storyId: storyId)
-        let body = StoryCommentBody(
-            content: content,
-            originalLanguage: originalLanguage,
-            effectFlags: effectFlags,
-            parentId: parentId,
-            attachmentIds: (attachmentIds?.isEmpty == false) ? attachmentIds : nil,
-            mobileTranscription: mobileTranscription,
-            location: location
-        )
-        do {
-            // Le cmid (header `X-Client-Mutation-Id`) fait dédoublonner les
-            // rejeux côté gateway et revient dans l'écho `comment:added` pour
-            // la réconciliation de la ligne optimiste de l'émetteur.
-            if let clientMutationId, !clientMutationId.isEmpty {
-                let _: APIResponse<AnyCodable> = try await api.requestWithHeaders(
-                    PostsEndpoint.byPostIdComments(postId: storyId),
-                    method: "POST",
-                    body: try JSONEncoder().encode(body),
-                    queryItems: nil,
-                    headers: ["X-Client-Mutation-Id": clientMutationId]
-                )
-            } else {
-                let _: APIResponse<AnyCodable> = try await api.post(
-                    PostsEndpoint.byPostIdComments(postId: storyId),
-                    body: body
-                )
-            }
-        } catch {
-            Self.logger.error("Failed to post comment on story \(storyId, privacy: .public): \(error.localizedDescription)")
-            throw error
-        }
     }
 
     /// Fetches the list of viewers (with what each of them did on it —
@@ -175,40 +133,6 @@ final class StoryInteractionService {
         } catch {
             Self.logger.error("Failed to react on story \(storyId, privacy: .public) with emoji: \(error.localizedDescription)")
             throw error
-        }
-    }
-
-    // MARK: - Wire shapes
-
-    /// Encodable body for `POST /posts/:id/comments`. Encodes `effectFlags`
-    /// and `parentId` only when present so the gateway can treat absent
-    /// fields as defaults (root comment, no effects).
-    private struct StoryCommentBody: Encodable {
-        let content: String
-        let originalLanguage: String
-        let effectFlags: Int?
-        let parentId: String?
-        /// IDs de PostMedia pré-uploadés (uploadContext=comment) — un seul média
-        /// par commentaire (le gateway borne à 1). Omis quand vide.
-        let attachmentIds: [String]?
-        let mobileTranscription: MobileTranscriptionPayload?
-        /// Lieu partagé — une story est un post de type STORY, donc la même
-        /// clé `location` que pour un commentaire de post s'applique ici.
-        let location: SharedPlace?
-
-        enum CodingKeys: String, CodingKey {
-            case content, originalLanguage, effectFlags, parentId, attachmentIds, mobileTranscription, location
-        }
-
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(content, forKey: .content)
-            try container.encode(originalLanguage, forKey: .originalLanguage)
-            try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
-            try container.encodeIfPresent(parentId, forKey: .parentId)
-            try container.encodeIfPresent(attachmentIds, forKey: .attachmentIds)
-            try container.encodeIfPresent(location, forKey: .location)
-            try container.encodeIfPresent(mobileTranscription, forKey: .mobileTranscription)
         }
     }
 

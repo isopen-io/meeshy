@@ -37,69 +37,14 @@ struct PendingCommentMedia: Identifiable, Sendable {
     }
 }
 
-/// Upload d'un média de commentaire via le pipeline TUS partagé (même mécanisme
-/// que posts/stories), avec `uploadContext: "comment"` → le gateway crée un
-/// `PostMedia` pending (postId/commentId = null) que `addComment(attachmentIds:)`
-/// lie ensuite au commentaire.
+/// Les fichiers locaux d'un commentaire en cours d'envoi.
 ///
-/// **Le fichier local SURVIT au téléversement** (#9743) : il n'est retiré
-/// (`discardLocalFiles`) qu'une fois le commentaire créé. Le supprimer dès la
-/// montée laissait un commentaire dont la création échouait ensuite sans rien
-/// à confier à la file.
+/// **Le téléversement et la création vivent dans `CommentPublisher`** — le seul
+/// chemin réseau d'un commentaire, qui lie chaque requête au compte de
+/// l'auteur (#9743). Le fichier local SURVIT au téléversement : il n'est
+/// retiré qu'une fois le commentaire créé, sinon un échec de création ne
+/// laisserait rien à confier à la file.
 enum CommentMediaUploader {
-    enum UploadError: Error { case missingAuth }
-
-    /// La montée s'est arrêtée en chemin : ce qui est acquis voyage avec la
-    /// cause, pour que la file ne le re-téléverse pas.
-    struct Interrupted: Error {
-        let acquired: [UploadedCommentMedia]
-        let underlying: Error
-    }
-
-    static func upload(_ media: PendingCommentMedia) async throws -> String {
-        guard let baseURL = URL(string: MeeshyConfig.shared.serverOrigin),
-              let token = APIClient.shared.authToken else {
-            throw UploadError.missingAuth
-        }
-        let uploader = TusUploadManager(baseURL: baseURL)
-        let result = try await uploader.uploadFile(
-            fileURL: media.fileURL,
-            mimeType: media.mimeType,
-            credential: .bearer(token),
-            uploadContext: "comment",
-            thumbHash: media.thumbHash
-        )
-        return result.id
-    }
-
-    /// Téléverse toutes les pièces d'un commentaire, dans l'ordre de la zone
-    /// (#9736). Lève `Interrupted` avec ce qui a déjà été monté.
-    ///
-    /// `authorId` est le compte relevé À LA COMPOSITION : il est revérifié
-    /// avant chaque montée ET une dernière fois au retour — l'appelant crée le
-    /// commentaire juste après, et ne doit pas le faire sous un autre compte.
-    static func uploadAll(_ medias: [PendingCommentMedia], authorId: String?) async throws -> [UploadedCommentMedia] {
-        var acquired: [UploadedCommentMedia] = []
-        for (index, media) in medias.enumerated() {
-            do {
-                try CommentMediaDelivery.confirmAuthor(authorId)
-                let id = try await upload(media)
-                acquired.append(UploadedCommentMedia(sourceIndex: index, id: id,
-                                                     uploadedAt: Date().timeIntervalSince1970))
-            } catch {
-                throw Interrupted(acquired: acquired, underlying: error)
-            }
-        }
-        try CommentMediaDelivery.confirmAuthor(authorId)
-        return acquired
-    }
-
-    /// Les ids à lier au commentaire — `nil` quand il n'a aucune pièce : le
-    /// champ ne part pas.
-    static func attachmentIds(_ acquired: [UploadedCommentMedia]) -> [String]? {
-        acquired.isEmpty ? nil : CommentMediaReplay.attachmentIds(acquired)
-    }
-
     /// Le commentaire est créé : ses fichiers locaux ne servent plus.
     static func discardLocalFiles(_ medias: [PendingCommentMedia]) {
         for media in medias { try? FileManager.default.removeItem(at: media.fileURL) }
@@ -110,20 +55,20 @@ enum CommentMediaUploader {
 /// ses pièces** (#9743) — site unique des trois hôtes de commentaire.
 enum CommentMediaDelivery {
 
-    /// Ce que la tentative directe avait acquis, lu dans l'erreur quand la
-    /// montée s'est arrêtée en chemin, sinon dans ce que l'appelant tenait.
-    static func acquired(from error: Error, known: [UploadedCommentMedia]) -> [UploadedCommentMedia] {
-        (error as? CommentMediaUploader.Interrupted)?.acquired ?? known
+    /// Ce que la tentative directe avait déjà monté quand elle s'est arrêtée.
+    static func acquired(from error: Error) -> [UploadedCommentMedia] {
+        (error as? CommentPublisher.Interrupted)?.acquired ?? []
     }
 
-    /// **Le compte courant est-il encore l'auteur ?** L'envoi d'un commentaire
-    /// traverse des attentes réseau ; si le compte a changé entre-temps, ni
-    /// l'appel direct ni la file ne doivent partir sous le jeton du suivant.
-    /// `authorId` est celui qui a été relevé À LA COMPOSITION.
-    static func confirmAuthor(_ authorId: String?) throws {
-        guard let authorId, !authorId.isEmpty, authorId == AuthManager.shared.currentUser?.id else {
+    /// **Le compte courant est-il encore l'auteur ?** L'enfilement arrive après
+    /// des attentes réseau ; si le compte a changé entre-temps, la ligne ne
+    /// s'écrit pas dans la file du suivant. Rend le compte vérifié.
+    static func confirmAuthor(_ payload: CreateCommentPayload) throws -> String {
+        guard let current = CommentPublisher.currentAccountId(),
+              CommentOwnership.owns(payload, currentUserId: current) else {
             throw CommentOwnership.Refusal.notTheAuthor
         }
+        return current
     }
 
     /// Confie le commentaire à la file. Sans pièce, c'est l'enfilement
@@ -132,7 +77,9 @@ enum CommentMediaDelivery {
     /// déclaré par la charge.
     static func entrust(_ payload: CreateCommentPayload, medias: [PendingCommentMedia],
                         acquired: [UploadedCommentMedia]) async throws {
-        try confirmAuthor(payload.authorId)
+        // Lu UNE fois : c'est ce compte-là qui possède la ligne ET le dossier
+        // de ses pièces. La file revérifie à l'écriture et au rejeu.
+        let owner = try confirmAuthor(payload)
         guard !medias.isEmpty else {
             try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: payload.postId)
             return
@@ -142,7 +89,7 @@ enum CommentMediaDelivery {
             sourceMediaURLs: medias.map(\.fileURL),
             sourceMediaMimeTypes: medias.map(\.mimeType),
             acquired: acquired,
-            ownerId: AuthManager.shared.currentUser?.id
+            ownerId: owner
         )
         // Les fichiers d'origine restent : la ligne optimiste les affiche
         // encore. La file tient SA copie, durable.
