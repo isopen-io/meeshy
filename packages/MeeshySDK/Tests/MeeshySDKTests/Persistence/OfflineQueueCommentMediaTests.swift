@@ -446,7 +446,8 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
 
         let discarded = await queue.cancelCreateComment(clientMutationId: cmid, ownerId: bob)
         XCTAssertFalse(discarded)
-        XCTAssertNotNil(try pool.read { db in try OutboxRecord.fetchOne(db, key: outboxId) })
+        let kept = try await pool.read { db in try OutboxRecord.fetchOne(db, key: outboxId) }
+        XCTAssertNotNil(kept)
     }
 
     func test_baseOfA_tokenOfB_bobsOwnCommentIsNotWrittenIntoAlicesBase() async throws {
