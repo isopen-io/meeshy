@@ -312,6 +312,20 @@ public final class StoryMediaLoader {
         return player
     }
 
+    /// **Le lecteur préparé pour `url`, LAISSÉ dans le pool** (#9837).
+    ///
+    /// Une page voisine du lecteur de réels y attache sa surface, en pause,
+    /// pour que sa première image soit déjà à l'écran pendant le geste. Le
+    /// moteur partagé l'adoptera ensuite par `cachedPlayer(for:)` — la même
+    /// instance, donc la même surface, sans nouvelle image à attendre.
+    public func peekCachedPlayer(for url: URL) -> AVPlayer? {
+        nil
+    }
+
+    /// Posté quand le pool gagne ou perd un lecteur : une surface qui affiche
+    /// un lecteur préparé relit le pool au lieu de garder une référence morte.
+    public static let poolDidChange = Notification.Name("StoryMediaLoader.poolDidChange")
+
     /// Clear all cached players.
     public func clearPlayerCache() {
         for (_, player) in playerCache {
