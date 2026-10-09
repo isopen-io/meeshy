@@ -626,6 +626,18 @@ describe('AuthService', () => {
       mockPrisma.conversation.findFirst.mockResolvedValue(globalConversation);
       mockPrisma.participant.findFirst.mockResolvedValue(null); // Not already a member
       mockPrisma.participant.create.mockResolvedValue({});
+      // #9711 — la langue du participant descend le prisme du COMPTE, relu par
+      // `ensureGlobalConversationMembership`. Le double ne rend que ce que le
+      // `select` demande, et le compte n'a que son rang 2 : un participant posé
+      // sans la descente prendrait le défaut `"en"` du schéma.
+      const compte: Record<string, unknown> = {
+        id: 'new-user-id', systemLanguage: '', regionalLanguage: 'pt', customDestinationLanguage: null, deviceLocale: null,
+      };
+      mockPrisma.user.findUnique.mockImplementation(async (args: any) =>
+        args?.where?.id === 'new-user-id' && args?.select
+          ? Object.fromEntries(Object.keys(args.select).filter((k) => args.select[k]).map((k) => [k, compte[k]]))
+          : null
+      );
 
       const result = await authService.register(validRegisterData);
 
@@ -637,6 +649,7 @@ describe('AuthService', () => {
           type: 'user',
           displayName: expect.any(String),
           role: 'member',
+          language: 'pt',
           permissions: {
             canSendMessages: true,
             canSendFiles: true,
