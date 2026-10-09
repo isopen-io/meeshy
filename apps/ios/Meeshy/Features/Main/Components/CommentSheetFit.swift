@@ -42,35 +42,101 @@ struct CommentSheetComposerTopKey: PreferenceKey {
     }
 }
 
+// MARK: - Le panneau cède avant que le composeur ne déborde
+
+/// Un hôte dont la hauteur est COMPTÉE (une feuille) demande au panneau
+/// d'entrée du composeur de céder de la place plutôt que de pousser le reste
+/// hors de l'écran. Absent — la conversation, le plein écran — le panneau
+/// garde sa hauteur fixe, celle du clavier, pour que la rangée de saisie ne
+/// bouge pas d'un point quand clavier et panneau s'échangent.
+private struct ComposerPanelYieldsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var composerPanelYieldsToHost: Bool {
+        get { self[ComposerPanelYieldsKey.self] }
+        set { self[ComposerPanelYieldsKey.self] = newValue }
+    }
+}
+
+/// La hauteur du panneau d'entrée (carrousel des pièces, grille des récents).
+///
+/// **L'ordre garanti, de haut en bas : en-tête, zone d'aperçu, rangée
+/// d'outils, champ, panneau.** Quand la place manque, ce n'est ni la zone
+/// d'aperçu ni la rangée d'outils qui passent sous l'en-tête : c'est le
+/// panneau qui se réduit — sa grille défile — jusqu'à son plancher.
+struct ComposerPanelFrame: ViewModifier {
+    /// La hauteur de repos : celle du clavier.
+    let resting: CGFloat
+    let yields: Bool
+
+    /// Une rangée de vignettes reste atteignable ; en dessous, la feuille
+    /// grandit (`keepsComposerBelowSheetHeader`).
+    static let floor: CGFloat = 96
+
+    func body(content: Content) -> some View {
+        if yields {
+            content.frame(minHeight: min(Self.floor, resting), idealHeight: resting, maxHeight: resting)
+        } else {
+            content.frame(height: resting)
+        }
+    }
+}
+
 extension View {
     /// La zone de contenu de la feuille, dont le haut est le bas de l'en-tête.
     ///
     /// **La zone a la taille qu'on lui PROPOSE, jamais celle de son contenu.**
-    /// L'espace de coordonnées était posé sur le conteneur du contenu
-    /// lui-même : quand le composeur débordait, ce conteneur grandissait avec
-    /// lui et remontait d'autant sous l'en-tête — son origine suivait le
-    /// débordement, le haut du composeur n'y devenait jamais négatif, et la
-    /// sonde ne voyait rien (recette du 2026-10-09 : feuille restée à
-    /// mi-hauteur). Un `GeometryReader` prend exactement la place offerte ;
-    /// le contenu y est ancré en BAS, et ce qui dépasse dépasse en haut de
-    /// CETTE zone, où la sonde le mesure.
+    /// Un `GeometryReader` prend exactement la place offerte ; le contenu y
+    /// est ancré en BAS, et ce qui dépasserait dépasse en haut de CETTE zone,
+    /// où la sonde le mesure. Elle dit aussi au composeur que sa place est
+    /// comptée : son panneau cède (`composerPanelYieldsToHost`).
     func commentSheetContent() -> some View {
         GeometryReader { area in
             self.frame(width: area.size.width, height: area.size.height, alignment: .bottom)
+                .environment(\.composerPanelYieldsToHost, true)
+                .onAppear { CommentSheetFit.trace("zone", area.frame(in: .global)) }
+                .onChange(of: area.size.height) { _ in CommentSheetFit.trace("zone", area.frame(in: .global)) }
         }
         .coordinateSpace(name: CommentSheetFit.space)
     }
 
-    /// Sonde le haut du composeur et fait grandir la feuille quand il dépasse.
+    /// Le composeur d'une feuille : il est servi AVANT la liste (qui cède
+    /// jusqu'à zéro), et sondé — s'il dépasse encore le haut de la zone, la
+    /// feuille passe à sa grande détente.
     func keepsComposerBelowSheetHeader(detent: Binding<PresentationDetent>) -> some View {
-        background(GeometryReader { proxy in
+        layoutPriority(1)
+        .background(GeometryReader { proxy in
             Color.clear.preference(key: CommentSheetComposerTopKey.self,
                                    value: proxy.frame(in: .named(CommentSheetFit.space)).minY)
+                .onChange(of: proxy.size.height) { _ in CommentSheetFit.trace("composeur", proxy.frame(in: .global)) }
         })
         .onPreferenceChange(CommentSheetComposerTopKey.self) { top in
             let needed = CommentSheetFit.detent(composerTop: top, current: detent.wrappedValue)
+            CommentSheetFit.trace("sonde haut=\(Int(top)) détente=\(CommentSheetFit.name(detent.wrappedValue)) demandée=\(CommentSheetFit.name(needed))", nil)
             guard needed != detent.wrappedValue else { return }
             withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { detent.wrappedValue = needed }
         }
+    }
+}
+
+// MARK: - Instrumentation de recette (Debug)
+
+extension CommentSheetFit {
+    static func name(_ detent: PresentationDetent) -> String {
+        detent == .large ? "large" : (detent == .medium ? "medium" : "autre")
+    }
+
+    /// Les cadres et la détente, lisibles au simulateur :
+    /// `xcrun simctl spawn booted log stream --predicate 'eventMessage CONTAINS "CommentSheetFit"'`.
+    static func trace(_ what: String, _ frame: CGRect?) {
+        #if DEBUG
+        if let frame {
+            NSLog("[CommentSheetFit] %@ y=%.1f…%.1f h=%.1f", what, frame.minY, frame.maxY, frame.height)
+        } else {
+            NSLog("[CommentSheetFit] %@", what)
+        }
+        #endif
     }
 }

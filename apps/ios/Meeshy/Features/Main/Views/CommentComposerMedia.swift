@@ -51,6 +51,16 @@ enum CommentMediaUploader {
     }
 }
 
+/// Les traces de recette du chemin d'envoi d'un commentaire (Debug) :
+/// `xcrun simctl spawn booted log stream --predicate 'eventMessage CONTAINS "CommentSend"'`.
+enum CommentSendTrace {
+    static func log(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        NSLog("[CommentSend] %@", message())
+        #endif
+    }
+}
+
 /// **Un commentaire que l'envoi direct n'a pas pu poser rejoint la file AVEC
 /// ses pièces** (#9743) — site unique des trois hôtes de commentaire.
 enum CommentMediaDelivery {
@@ -79,18 +89,37 @@ enum CommentMediaDelivery {
                         acquired: [UploadedCommentMedia]) async throws {
         // Lu UNE fois : c'est ce compte-là qui possède la ligne ET le dossier
         // de ses pièces. La file revérifie à l'écriture et au rejeu.
-        let owner = try confirmAuthor(payload)
+        let owner: String
+        do {
+            owner = try confirmAuthor(payload)
+        } catch {
+            CommentSendTrace.log("file : refus — le compte du jeton n'est pas l'auteur (jeton lisible : \(CommentPublisher.currentAccountId() != nil))")
+            throw error
+        }
+        CommentSendTrace.log("file : enfilement décidé, pièces=\(medias.count), acquises=\(acquired.count)")
         guard !medias.isEmpty else {
-            try await OfflineQueue.shared.enqueueComment(payload, ownerId: owner)
+            do {
+                try await OfflineQueue.shared.enqueueComment(payload, ownerId: owner)
+                CommentSendTrace.log("file : accepté (texte)")
+            } catch {
+                CommentSendTrace.log("file : refusé — \(String(describing: error))")
+                throw error
+            }
             return
         }
-        try await OfflineQueue.shared.enqueueCommentMedia(
-            payload,
-            sourceMediaURLs: medias.map(\.fileURL),
-            sourceMediaMimeTypes: medias.map(\.mimeType),
-            acquired: acquired,
-            ownerId: owner
-        )
+        do {
+            try await OfflineQueue.shared.enqueueCommentMedia(
+                payload,
+                sourceMediaURLs: medias.map(\.fileURL),
+                sourceMediaMimeTypes: medias.map(\.mimeType),
+                acquired: acquired,
+                ownerId: owner
+            )
+            CommentSendTrace.log("file : accepté avec \(medias.count) pièce(s)")
+        } catch {
+            CommentSendTrace.log("file : refusé — \(String(describing: error))")
+            throw error
+        }
         // Les fichiers d'origine restent : la ligne optimiste les affiche
         // encore. La file tient SA copie, durable.
     }

@@ -345,6 +345,12 @@ final class CommentSheetFitTests: XCTestCase {
                       "Sans l'espace de la zone de contenu, la sonde mesure contre l'écran.")
         let fit = AppSourceGuard.stripComments(try String(
             contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Components/CommentSheetFit.swift"), encoding: .utf8))
+        XCTAssertTrue(sheet.contains("onShowAttachments: { growSheetForComposer() }"),
+                      "Ouvrir le panneau des pièces ne demande plus la grande détente.")
+        let bar = AppSourceGuard.stripComments(try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Components/UniversalComposerBar+Layout.swift"), encoding: .utf8))
+        XCTAssertTrue(bar.contains(".modifier(ComposerPanelFrame(resting: attachmentPanelHeight, yields: panelYieldsToHost))"),
+                      "Le panneau de la barre ne cède plus dans une feuille : il repousse la zone d'aperçu sous l'en-tête.")
         XCTAssertTrue(fit.contains("self.frame(width: area.size.width, height: area.size.height, alignment: .bottom)"),
                       "La zone de contenu doit avoir la taille PROPOSÉE : posée sur un conteneur qui grandit avec le débordement, la sonde ne voit rien.")
         XCTAssertTrue(sheet.contains(".presentationDetents([.large, .medium], selection: $sheetDetent)"),
@@ -354,52 +360,90 @@ final class CommentSheetFitTests: XCTestCase {
 
 // MARK: - La mise en page de la feuille, EXÉCUTÉE
 
-/// **Le témoin qui exécute la mise en page** — un témoin de texte avait rendu
-/// un faux vert : les modificateurs étaient montés, et la sonde ne mesurait
-/// rien. Ici la zone de contenu, la liste, le composeur et la sonde RÉELS sont
-/// posés dans une fenêtre à la hauteur d'une feuille à mi-hauteur, et on lit
-/// ce que la sonde demande.
+/// **Le témoin qui exécute la mise en page.** La zone de contenu, la sonde et
+/// le cadre du panneau sont ceux de la feuille (`commentSheetContent`,
+/// `keepsComposerBelowSheetHeader`, `ComposerPanelFrame`) ; la barre elle-même
+/// est figurée par ses hauteurs — zone d'aperçu, rangée d'outils et champ
+/// (incompressibles), puis le panneau.
+///
+/// Ce témoin prouve la RÈGLE de mise en page. Il ne présente pas la feuille
+/// réelle par son `.sheet` : la détente effective se lit au simulateur, par
+/// les traces `[CommentSheetFit]`.
 @MainActor
 final class CommentSheetFitLayoutTests: XCTestCase {
 
     private final class Recorder {
         var detent: PresentationDetent = .medium
-        var composerTop: CGFloat?
+        var area: CGRect = .zero
+        var composer: CGRect = .zero
+        var preview: CGRect = .zero
+        var panel: CGRect = .zero
+        var list: CGRect = .zero
     }
 
-    /// La structure de `CommentsSheetView.sheetBody` : un fond, puis une
-    /// colonne « liste défilante + composeur », dans la zone de contenu.
+    private struct Panel: View {
+        let recorder: Recorder
+        @Environment(\.composerPanelYieldsToHost) private var yields
+
+        var body: some View {
+            Color.green
+                .modifier(ComposerPanelFrame(resting: 324, yields: yields))
+                .background(GeometryReader { proxy -> Color in
+                    recorder.panel = proxy.frame(in: .named(CommentSheetFit.space))
+                    return Color.clear
+                })
+        }
+    }
+
+    /// La structure de `CommentsSheetView.sheetBody` : une colonne « liste
+    /// défilante + composeur » dans la zone de contenu.
     private struct Sheet: View {
-        let composerHeight: CGFloat
+        /// Zone d'aperçu (100) + rangée d'outils et champ.
+        let chromeHeight: CGFloat
         let recorder: Recorder
         @State private var detent: PresentationDetent = .medium
+
+        private func record(_ path: ReferenceWritableKeyPath<Recorder, CGRect>) -> some View {
+            GeometryReader { proxy -> Color in
+                recorder[keyPath: path] = proxy.frame(in: .named(CommentSheetFit.space))
+                return Color.clear
+            }
+        }
 
         var body: some View {
             ZStack {
                 Color.clear.ignoresSafeArea()
                 VStack(spacing: 0) {
                     ScrollView { Color.gray.frame(height: 2_000) }
-                    Color.blue
-                        .frame(height: composerHeight)
-                        .background(GeometryReader { proxy -> Color in
-                            // Relu à CHAQUE passe de mise en page : la dernière fait foi.
-                            recorder.composerTop = proxy.frame(in: .named(CommentSheetFit.space)).minY
-                            return Color.clear
-                        })
-                        .keepsComposerBelowSheetHeader(detent: $detent)
+                        .background(record(\.list))
+                    VStack(spacing: 0) {
+                        Color.orange.frame(height: 100).background(record(\.preview))
+                        Color.blue.frame(height: chromeHeight - 100)
+                        Panel(recorder: recorder)
+                    }
+                    .background(record(\.composer))
+                    .keepsComposerBelowSheetHeader(detent: $detent)
                 }
             }
             .commentSheetContent()
+            .background(GeometryReader { proxy -> Color in
+                recorder.area = CGRect(origin: .zero, size: proxy.size)
+                return Color.clear
+            })
             .onChange(of: detent) { recorder.detent = $0 }
         }
     }
 
-    /// Pose la feuille dans une fenêtre de la taille de sa zone de contenu à
-    /// mi-hauteur, et laisse SwiftUI faire ses passes de mise en page.
-    private func layOut(composerHeight: CGFloat, areaHeight: CGFloat = 380) -> Recorder {
+    /// Pose la feuille dans une fenêtre et laisse SwiftUI faire ses passes.
+    private func layOut(chromeHeight: CGFloat, windowHeight: CGFloat) -> Recorder {
         let recorder = Recorder()
-        let host = UIHostingController(rootView: Sheet(composerHeight: composerHeight, recorder: recorder))
-        let frame = CGRect(x: 0, y: 0, width: 402, height: areaHeight)
+        render(Sheet(chromeHeight: chromeHeight, recorder: recorder), windowHeight: windowHeight)
+        return recorder
+    }
+
+    private func render<Root: View>(_ root: Root, windowHeight: CGFloat) {
+        let host = UIHostingController(rootView: root)
+        let frame = CGRect(x: 0, y: 0, width: 402, height: windowHeight)
         // Une fenêtre sans scène ne fait pas ses passes de rendu : on prend
         // celle de l'application hôte des tests.
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
@@ -413,31 +457,54 @@ final class CommentSheetFitLayoutTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.6))
         host.view.layoutIfNeeded()
         window.isHidden = true
-        return recorder
     }
 
-    /// Panneau des pièces (324) + rangée d'outils et champ (~110) + zone
-    /// d'aperçu (100) : plus haut que la feuille à mi-hauteur.
-    func test_aComposerTallerThanTheMediumSheet_isSeenAboveTheContentArea_andAsksForTheLargeDetent() {
-        let recorder = layOut(composerHeight: 534)
+    /// À mi-hauteur, panneau ouvert et une pièce jointe : rien ne passe sous
+    /// l'en-tête. C'est la LISTE qui cède, puis le panneau, dans cet ordre.
+    func test_atMediumHeight_thePreviewZoneAndTheToolRowStayBelowTheHeader() {
+        let recorder = layOut(chromeHeight: 204, windowHeight: 440)
 
-        XCTAssertNotNil(recorder.composerTop, "La mise en page n'a pas été exécutée.")
-        XCTAssertLessThan(recorder.composerTop ?? 0, 0, "La sonde doit VOIR le composeur dépasser le haut de la zone : c'est ce qu'elle ne voyait pas.")
-        XCTAssertEqual(recorder.detent, .large, "Un composeur qui passe sous l'en-tête fait grandir la feuille.")
+        XCTAssertGreaterThan(recorder.area.height, 0, "La mise en page n'a pas été exécutée.")
+        XCTAssertGreaterThanOrEqual(recorder.preview.minY, -0.5,
+                                    "Le haut de la zone d'aperçu est sous le bas de l'en-tête.")
+        XCTAssertLessThanOrEqual(recorder.composer.maxY, recorder.area.height + 0.5,
+                                 "Le bas du composeur ne dépasse pas le bas de la feuille.")
+        XCTAssertLessThan(recorder.panel.height, 324, "La place manque : c'est le panneau qui cède.")
+        XCTAssertGreaterThanOrEqual(recorder.panel.height, ComposerPanelFrame.floor - 0.5)
+        XCTAssertEqual(recorder.list.height, 0, accuracy: 0.5, "La liste des commentaires cède jusqu'à zéro avant le composeur.")
+        XCTAssertEqual(recorder.detent, .medium, "Rien ne déborde : la sonde ne demande rien.")
     }
 
-    func test_aComposerThatFits_leavesTheSheetAtMedium() {
-        let recorder = layOut(composerHeight: 120)
+    /// Même le plancher du panneau ne tient pas : la sonde le VOIT, et demande
+    /// la grande détente.
+    func test_whenEvenTheFloorDoesNotFit_theProbeSeesIt_andAsksForTheLargeDetent() {
+        let recorder = layOut(chromeHeight: 420, windowHeight: 440)
 
-        XCTAssertGreaterThanOrEqual(recorder.composerTop ?? -1, 0, "Le haut du composeur est sous le bas de l'en-tête.")
+        XCTAssertLessThan(recorder.composer.minY, 0, "La sonde doit voir le composeur dépasser le haut de la zone.")
+        XCTAssertEqual(recorder.detent, .large)
+    }
+
+    /// À la grande détente, le panneau retrouve sa hauteur de repos et la
+    /// liste reprend ce qui reste.
+    func test_atLargeHeight_thePanelRests_andTheListTakesTheRemainder() {
+        let recorder = layOut(chromeHeight: 204, windowHeight: 800)
+
+        XCTAssertEqual(recorder.panel.height, 324, accuracy: 0.5)
+        XCTAssertGreaterThanOrEqual(recorder.preview.minY, 0)
+        XCTAssertGreaterThan(recorder.list.height, 0)
         XCTAssertEqual(recorder.detent, .medium)
     }
 
-    func test_onceTheSheetIsLarge_theSameComposerSitsBelowTheHeader() {
-        let recorder = layOut(composerHeight: 534, areaHeight: 760)
+    /// Hors d'une feuille, le panneau garde sa hauteur fixe : la rangée de
+    /// saisie d'une conversation ne bouge pas quand clavier et panneau s'échangent.
+    func test_outsideASheet_thePanelKeepsItsFixedHeight() {
+        let recorder = Recorder()
+        render(VStack(spacing: 0) {
+            Color.gray
+            Panel(recorder: recorder)
+        }.coordinateSpace(name: CommentSheetFit.space), windowHeight: 300)
 
-        XCTAssertGreaterThanOrEqual(recorder.composerTop ?? -1, 0,
-                                    "À sa grande détente, la zone d'aperçu et la rangée d'outils sont entièrement sous l'en-tête.")
+        XCTAssertEqual(recorder.panel.height, 324, accuracy: 0.5)
     }
 }
 

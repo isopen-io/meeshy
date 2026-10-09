@@ -13,6 +13,18 @@ import MeeshyUI
 /// photothèque système la retire de la zone.
 extension CommentsSheetView {
 
+    // MARK: - La feuille
+
+    /// Le panneau des pièces s'ouvre, ou une pièce est posée : la feuille
+    /// passe à sa grande détente SANS attendre qu'une mesure le lui demande.
+    /// La sonde (`keepsComposerBelowSheetHeader`) reste le filet pour tout ce
+    /// qui grandit le composeur autrement.
+    func growSheetForComposer() {
+        CommentSheetFit.trace("croissance demandée, détente=\(CommentSheetFit.name(sheetDetent))", nil)
+        guard sheetDetent != .large else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { sheetDetent = .large }
+    }
+
     // MARK: - La zone
 
     var commentAttachmentsPreview: some View {
@@ -157,7 +169,10 @@ extension CommentsSheetView {
     /// lieu — pour être renvoyé d'un toucher.
     func restoreRefusedComment(text: String, attachments: [ComposerAttachment], place: SharedPlace?) {
         if composerText.isEmpty { composerText = text }
-        if commentAttachments.isEmpty { commentAttachments = attachments }
+        // Les pièces revenues gardent leurs identifiants : la grille les marque
+        // à nouveau, et rien n'est re-téléversé.
+        let present = Set(commentAttachments.map(\.id))
+        commentAttachments += attachments.filter { !present.contains($0.id) }
         if commentPendingPlace == nil { commentPendingPlace = place }
     }
 

@@ -79,6 +79,9 @@ nonisolated final class MessageStoreSession: Sendable {
                 databasePath: pool.path
             )
         }
+        // #9743 — le compte de ce fichier, inscrit à l'ouverture : c'est la
+        // preuve que la file lit pour écrire ou montrer un commentaire.
+        if let key { AccountStoreRegistry.register(databasePath: pool.path, ownerId: key.userId) }
         let session = MessageStoreSession(key: key, path: pool.path, dbPool: pool, diagnostics: diagnostics)
         let persistence = session.messagePersistence
         Task { await persistence.start() }

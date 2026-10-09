@@ -99,9 +99,18 @@ public enum CommentOwnership {
     /// (`MessageStoreAccountKey.databaseFileName`) : on recalcule celle de
     /// `ownerId` et on la compare au fichier réellement ouvert. Chemin absent,
     /// base en mémoire, base héritée non cloisonnée, autre compte : NON.
+    ///
+    /// **La preuve première est le REGISTRE** (`AccountStoreRegistry`) : le
+    /// compte pour lequel l'app a OUVERT ce fichier, inscrit à l'ouverture. Le
+    /// recalcul de l'empreinte depuis l'environnement courant n'en est que le
+    /// repli — il refusait à tort un compte légitime dès que l'environnement
+    /// avait changé depuis l'ouverture de la base (hôte personnalisé posé
+    /// après la connexion, recette du 2026-10-09 : commentaire hors ligne
+    /// refusé par la file).
     public static func baseBelongs(toOwner ownerId: String?, databasePath: String?, serverOrigin: String) -> Bool {
-        guard let owner = identity(ownerId), let path = databasePath, !path.isEmpty,
-              let key = MessageStoreAccountKey(userId: owner, serverOrigin: serverOrigin) else { return false }
+        guard let owner = identity(ownerId), let path = databasePath, !path.isEmpty else { return false }
+        if let registered = AccountStoreRegistry.owner(ofDatabaseAt: path) { return registered == owner }
+        guard let key = MessageStoreAccountKey(userId: owner, serverOrigin: serverOrigin) else { return false }
         return (path as NSString).lastPathComponent == key.databaseFileName
     }
 
@@ -182,6 +191,28 @@ public enum CommentMediaQuota {
     public static func admits(incoming: Int64, alreadyStored: Int64,
                               ceiling: Int64 = byteCeilingPerAccount) -> Bool {
         incoming >= 0 && alreadyStored >= 0 && incoming <= ceiling - min(alreadyStored, ceiling)
+    }
+}
+
+// MARK: - Le registre des bases de compte
+
+/// Le compte pour lequel chaque base locale a été OUVERTE — inscrit par l'app
+/// au moment où elle ouvre le fichier d'un compte (`MessageStoreSession.open`).
+/// Indexé par le chemin du fichier, il se lit depuis la connexion utilisée.
+public enum AccountStoreRegistry {
+    private static let owners = OSAllocatedUnfairLock<[String: String]>(initialState: [:])
+
+    public static func register(databasePath: String, ownerId: String) {
+        guard let owner = CommentOwnership.identity(ownerId) else { return }
+        owners.withLock { $0[normalized(databasePath)] = owner }
+    }
+
+    public static func owner(ofDatabaseAt path: String) -> String? {
+        owners.withLock { $0[normalized(path)] }
+    }
+
+    private static func normalized(_ path: String) -> String {
+        (path as NSString).standardizingPath
     }
 }
 
