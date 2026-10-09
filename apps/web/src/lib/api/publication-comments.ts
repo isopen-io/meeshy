@@ -20,7 +20,8 @@ import { appendReply, commentRepliesQueryKey, dropReply, settleReply } from './c
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import type { FeedAuthor, FeedMedia } from './feed-pages';
-import type { ApiResult, HttpTransport } from './http';
+import type { ApiResult, Credential, HttpTransport } from './http';
+import type { OwnerCredential } from './owner-session';
 import type { PostMediaUploadResult } from './post-media-upload';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
@@ -378,6 +379,14 @@ const stickerRowOf = (send: CommentStickerSend | undefined, media?: readonly Pos
 };
 
 /**
+ * `owner` — LA SESSION DE L'AUTEUR, lue dans le tour de la requête (#9743,
+ * `owner-session.ts`) : fourni (le site de production, `commentAction`), un
+ * envoi dont l'auteur n'est plus le lecteur connecté ne part pas, et la
+ * requête porte SON jeton, jamais celui que le transport relirait plus tard.
+ */
+export type CommentSendDeps = CommentDeps & { readonly queryClient: QueryClient; readonly owner?: OwnerCredential };
+
+/**
  * L'ENVOI — optimiste, puis l'issue, exactement la forme de
  * `performPostGesture` :
  *
@@ -404,7 +413,7 @@ export async function performComment(params: {
   readonly media?: readonly PostMediaUploadResult[] | undefined;
   /** Les pièces d'ORIGINE de ces médias (#9743) — rendues au brouillon si un rejeu est refusé pour de bon. */
   readonly pieces?: readonly PendingAttachment[] | undefined;
-  readonly deps: CommentDeps & { readonly queryClient: QueryClient };
+  readonly deps: CommentSendDeps;
 }): Promise<CommentResult> {
   const { postId, author, deps } = params;
   const content = params.content.trim();
@@ -414,6 +423,8 @@ export async function performComment(params: {
   }
   const parentId = typeof params.parentId === 'string' && params.parentId !== '' ? params.parentId : undefined;
   if (parentId !== undefined) return performReply({ ...params, content, parentId });
+  const credential = deps.owner?.(`u_${author.id}`);
+  if (credential === null) return { ok: false, message: COMMENT_FAILED_MESSAGE };
 
   const tempId = newClientMessageId();
   const optimistic: PostComment = {
@@ -436,7 +447,7 @@ export async function performComment(params: {
     ...stickerBodyOf(params.sticker, params.media),
   };
 
-  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
+  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId), ...(credential === undefined ? {} : { credential }) }).catch(() => null);
   const wait = () => parkUnsent({ tempId, authorId: author.id, postId, body, row: optimistic, pieces: params.pieces });
 
   if (result === null) {
@@ -509,9 +520,11 @@ async function performReply(params: {
   readonly sticker?: CommentStickerSend | undefined;
   readonly media?: readonly PostMediaUploadResult[] | undefined;
   readonly pieces?: readonly PendingAttachment[] | undefined;
-  readonly deps: CommentDeps & { readonly queryClient: QueryClient };
+  readonly deps: CommentSendDeps;
 }): Promise<CommentResult> {
   const { postId, content, parentId, author, deps } = params;
+  const credential = deps.owner?.(`u_${author.id}`);
+  if (credential === null) return { ok: false, message: COMMENT_FAILED_MESSAGE };
   const tempId = newClientMessageId();
   const optimistic: PostComment = {
     id: tempId,
@@ -536,7 +549,7 @@ async function performReply(params: {
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
     ...stickerBodyOf(params.sticker, params.media),
   };
-  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
+  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId), ...(credential === undefined ? {} : { credential }) }).catch(() => null);
   const wait = () => parkUnsent({ tempId, authorId: author.id, postId, parentId, body, row: optimistic, pieces: params.pieces });
 
   if (result === null) {
@@ -585,6 +598,8 @@ export function sendComment(
     readonly body: Readonly<Record<string, unknown>>;
     /** DÉRIVÉ du `tempId` de la rangée provisoire — voir `mutationIdOf`. */
     readonly clientMutationId: string;
+    /** Le jeton IMPOSÉ à cette requête — celui de l'auteur, lu avec son identité (#9743). */
+    readonly credential?: Credential;
   },
 ): Promise<ApiResult<PostComment>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
@@ -595,6 +610,7 @@ export function sendComment(
     path: postsEndpoints.byPostIdComments(params.postId),
     body: params.body,
     headers: { 'X-Client-Mutation-Id': params.clientMutationId },
+    ...(params.credential === undefined ? {} : { credential: params.credential }),
   });
 }
 

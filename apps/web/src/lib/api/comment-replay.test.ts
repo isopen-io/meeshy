@@ -20,7 +20,8 @@ const SCOPE = 'u_u-me';
 const PHOTO = { postMediaId: '507f1f77bcf86cd799439011', fileUrl: '/u/a.jpg', mimeType: 'image/jpeg' };
 const piece = () => pendingAttachmentOf(new File([new Uint8Array([1])], 'a.jpg', { type: 'image/jpeg' }));
 
-type Call = { readonly body?: unknown; readonly headers?: Readonly<Record<string, string>> };
+type Call = { readonly body?: unknown; readonly headers?: Readonly<Record<string, string>>; readonly credential?: unknown };
+const JETON_A = { kind: 'registered' as const, token: 'jeton-a' };
 type Answer = { ok: true; status: number; data: unknown } | { ok: false; status: number; error: string } | 'network';
 
 function world(answers: Answer[]) {
@@ -36,10 +37,13 @@ function world(answers: Answer[]) {
       return answer;
     },
   };
-  const deps = { source: 'gateway' as const, transport: transport as never, queryClient };
+  /* QUI EST CONNECTÉ — le lecteur A par défaut ; un témoin le change en cours de route. */
+  const session = { scope: SCOPE as string | null };
+  const owner = (scope: string) => (session.scope === scope ? JETON_A : null);
+  const deps = { source: 'gateway' as const, transport: transport as never, queryClient, owner };
   const rows = () => flattenCommentPages(queryClient.getQueryData<CommentInfiniteData>(commentsQueryKey('p1')));
   const count = () => queryClient.getQueryData<{ commentCount: number }>(postQueryKey('p1'))?.commentCount;
-  return { deps, calls, rows, count };
+  return { deps, calls, rows, count, session };
 }
 
 const poser = (deps: ReturnType<typeof world>['deps'], pieces = [piece()]) =>
@@ -126,6 +130,72 @@ describe('un commentaire dont la création échoue attend, avec ses pièces (#97
     expect(rows()).toHaveLength(0);
     expect(count()).toBe(0);
     expect(commentDrafts.get(SCOPE, 'p1')).toEqual({ text: 'Regarde', pending: pieces });
+  });
+
+  test('SÉCURITÉ — l’attente de A sous la session de B : zéro requête, elle attend A', async () => {
+    const { deps, calls, rows, session } = world(['network', { ok: true, status: 201, data: { id: 'cm-1', content: 'Regarde', createdAt: '2026-10-09T10:00:00.000Z', author } }]);
+    await poser(deps);
+    const tempId = unsentOf(unsentComments.getState(), SCOPE, 'p1')[0]?.tempId ?? '';
+    session.scope = 'u_b';
+    expect(await replayUnsentComment(deps, tempId)).toBe('absent');
+    expect(await replayUnsentComments(deps, SCOPE, 'p1')).toBe(0);
+    expect(calls).toHaveLength(1);
+    expect(unsentOf(unsentComments.getState(), SCOPE, 'p1')[0]?.state).toBe('unsent');
+    expect(rows()).toHaveLength(1);
+    session.scope = null;
+    expect(await replayUnsentComment(deps, tempId)).toBe('absent');
+    expect(calls).toHaveLength(1);
+  });
+
+  test('SÉCURITÉ — le rejeu part sous le jeton du PROPRIÉTAIRE, lu avec son identité', async () => {
+    const { deps, calls } = world(['network', { ok: true, status: 201, data: { id: 'cm-1', content: 'Regarde', createdAt: '2026-10-09T10:00:00.000Z', author } }]);
+    await poser(deps);
+    await replayUnsentComments(deps, SCOPE, 'p1');
+    expect(calls[0]?.credential).toEqual(JETON_A);
+    expect(calls[1]?.credential).toEqual(JETON_A);
+  });
+
+  test('SÉCURITÉ — la session change PENDANT le rejeu : aucune création de plus ne part', async () => {
+    const { deps, calls, session } = world(['network', 'network']);
+    await poser(deps);
+    await poser(deps);
+    expect(unsentOf(unsentComments.getState(), SCOPE, 'p1')).toHaveLength(2);
+    const servi = { ok: true as const, status: 201, data: { id: 'cm-1', content: 'Regarde', createdAt: '2026-10-09T10:00:00.000Z', author } };
+    const transport = deps.transport as unknown as { request: (request: Call) => Promise<unknown> };
+    transport.request = async (request: Call) => {
+      calls.push(request);
+      session.scope = 'u_b';
+      return servi;
+    };
+    await replayUnsentComments(deps, SCOPE, 'p1');
+    expect(calls).toHaveLength(3);
+    expect(unsentOf(unsentComments.getState(), SCOPE, 'p1')).toHaveLength(1);
+  });
+
+  test('SÉCURITÉ — la session a changé pendant que la création était en vol : la liste du nouveau lecteur n’est pas touchée', async () => {
+    const { deps, rows, session } = world(['network']);
+    await poser(deps);
+    const avant = rows();
+    const transport = deps.transport as unknown as { request: (request: Call) => Promise<unknown> };
+    transport.request = async () => {
+      session.scope = 'u_b';
+      return { ok: false, status: 403, error: 'fermé' };
+    };
+    await replayUnsentComments(deps, SCOPE, 'p1');
+    expect(rows()).toEqual(avant);
+    expect(unsentOf(unsentComments.getState(), SCOPE, 'p1')).toHaveLength(0);
+    expect(commentDrafts.get(SCOPE, 'p1').text).toBe('Regarde');
+    expect(commentDrafts.get('u_b', 'p1').text).toBe('');
+  });
+
+  test('SÉCURITÉ — un premier envoi sous une AUTRE session que celle de l’auteur ne part pas', async () => {
+    const { deps, calls, rows, session } = world([]);
+    session.scope = 'u_b';
+    const result = await poser(deps);
+    expect(result.ok).toBe(false);
+    expect(calls).toHaveLength(0);
+    expect(rows()).toHaveLength(0);
+    expect(unsentComments.getState().entries).toHaveLength(0);
   });
 
   test('le rejeu ne touche jamais l’attente d’un AUTRE compte', async () => {

@@ -70,35 +70,58 @@ export type CommentMediaUploaded = { readonly ok: true; readonly media: readonly
  * temps : un `PostMedia` jamais rattaché est balayé par la passerelle à 24 h.
  */
 const UPLOADED_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-const uploadedFiles = new WeakMap<File, { readonly media: PostMediaUploadResult; readonly at: number }>();
+const uploadedFiles = new WeakMap<File, { readonly media: PostMediaUploadResult; readonly at: number; readonly owner: string }>();
 
-const alreadyUploaded = (file: File, now: number): PostMediaUploadResult | undefined => {
+/** Reprise pour le MÊME propriétaire seulement — sans propriétaire nommé, rien n'est retenu ni repris. */
+const alreadyUploaded = (file: File, now: number, owner: string | undefined): PostMediaUploadResult | undefined => {
   const held = uploadedFiles.get(file);
-  return held !== undefined && now - held.at < UPLOADED_MAX_AGE_MS ? held.media : undefined;
+  return owner !== undefined && held !== undefined && held.owner === owner && now - held.at < UPLOADED_MAX_AGE_MS ? held.media : undefined;
 };
 
-/** UNE pièce après l'autre : la première refusée arrête tout, rien ne part.
- * `report` reçoit la montée de CHAQUE pièce, par son `localId` (#9736). */
+export type CommentUploadOptions = {
+  /** La montée de CHAQUE pièce, par son `localId` (#9736). */
+  readonly report?: (localId: string, fraction: number) => void;
+  /** Le lecteur qui téléverse (`u_<id>`) — une pièce montée n'est reprise que pour lui. */
+  readonly owner?: string;
+  readonly now?: () => number;
+};
+
+/** UNE pièce après l'autre : la première refusée arrête tout, rien ne part. */
 export async function uploadCommentMedia(
   pending: readonly PendingAttachment[],
   upload: CommentMediaUpload,
-  report?: (localId: string, fraction: number) => void,
-  now: () => number = Date.now,
+  { report, owner, now = Date.now }: CommentUploadOptions = {},
 ): Promise<CommentMediaUploaded> {
   let media: readonly PostMediaUploadResult[] = [];
   for (const piece of pending) {
-    const held = alreadyUploaded(piece.file, now());
+    const held = alreadyUploaded(piece.file, now(), owner);
     const result = held !== undefined ? { ok: true as const, data: held } : await upload(piece.file, report === undefined ? undefined : (fraction) => report(piece.localId, fraction));
     if (!result.ok) return { ok: false };
-    if (held === undefined) uploadedFiles.set(piece.file, { media: result.data, at: now() });
+    if (held === undefined && owner !== undefined) uploadedFiles.set(piece.file, { media: result.data, at: now(), owner });
     report?.(piece.localId, 1);
     media = [...media, result.data];
   }
   return { ok: true, media };
 }
 
-/** Le téléversement de production — le client TUS chargé au premier envoi. */
-export const browserCommentUpload: CommentMediaUpload = async (file, onProgress) => {
-  const [{ uploadPostMedia }, { postMediaUploadDeps }] = await Promise.all([import('@/lib/api/post-media-upload'), import('@/lib/api/deps')]);
-  return uploadPostMedia({ ...postMediaUploadDeps, file, uploadContext: 'comment', ...(onProgress === undefined ? {} : { onProgress }) });
-};
+/**
+ * Le téléversement de production — le client TUS chargé au premier envoi,
+ * LIÉ À SON AUTEUR (#9743) : chaque requête relit la session et ne part que
+ * sous le jeton de `owner` ; un autre compte connecté entre-temps l'arrête.
+ */
+export const browserCommentUploadFor =
+  (owner: string): CommentMediaUpload =>
+  async (file, onProgress) => {
+    const [{ uploadPostMedia }, { postMediaUploadDeps }, { currentOwnerCredential }] = await Promise.all([
+      import('@/lib/api/post-media-upload'),
+      import('@/lib/api/deps'),
+      import('@/lib/api/owner-session'),
+    ]);
+    return uploadPostMedia({
+      ...postMediaUploadDeps,
+      credential: () => currentOwnerCredential(owner),
+      file,
+      uploadContext: 'comment',
+      ...(onProgress === undefined ? {} : { onProgress }),
+    });
+  };

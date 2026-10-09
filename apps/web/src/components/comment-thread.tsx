@@ -15,7 +15,7 @@ import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import { flattenCommentPages, type CommentInfiniteData, type CommentStickerSend, type PostComment } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
 import { commentDrafts, type CommentDraft } from '@/lib/comments/comment-draft';
-import { browserCommentUpload, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
+import { browserCommentUploadFor, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { unsentComments, unsentOf } from '@/lib/comments/unsent-comments';
 import { composingPostOf, postCommentImageable } from '@/lib/export/composed-comment-card';
 import { resolveFeedText } from '@/lib/feed/text';
@@ -72,7 +72,7 @@ export function CommentThread({
   onWritingChange,
   foldOnSend = false,
   listHidden = false,
-  uploadMedia = browserCommentUpload,
+  uploadMedia: injectedUpload,
 }: CommentThreadProps) {
   const language = currentInterfaceLanguage();
   const online = useOnline();
@@ -88,13 +88,19 @@ export function CommentThread({
    */
   const scope = viewer.id === null ? null : `u_${viewer.id}`;
   const held = useStore(unsentComments, (state) => state.entries);
+  /* Le téléversement est LIÉ au lecteur qui écrit : il s'arrête si la session change. */
+  const uploadMedia = useMemo<CommentMediaUpload>(() => injectedUpload ?? browserCommentUploadFor(scope ?? ''), [injectedUpload, scope]);
   const waiting = useMemo(() => (scope === null ? [] : unsentOf({ entries: held }, scope, postId)), [held, scope, postId]);
   const comments = useMemo(() => {
-    const served = flattenCommentPages(query.data as CommentInfiniteData | undefined);
+    /* L'attente d'un AUTRE compte n'est ni montrée ni rejouée ici : sa rangée
+       provisoire, si le cache la porte encore, est retirée de ce qu'on rend. */
+    const foreign = new Set(held.filter((entry) => entry.scope !== scope).map((entry) => entry.tempId));
+    const all = flattenCommentPages(query.data as CommentInfiniteData | undefined);
+    const served = foreign.size === 0 ? all : all.filter((comment) => !foreign.has(comment.id));
     const known = new Set(served.map((comment) => comment.id));
     const missing = waiting.filter((entry) => entry.parentId === undefined && !known.has(entry.tempId)).map((entry) => entry.row);
     return missing.length === 0 ? served : [...missing.reverse(), ...served];
-  }, [query.data, waiting]);
+  }, [query.data, waiting, held, scope]);
 
   /* LE REJEU part à l'ouverture du fil et au RETOUR du réseau — jamais en
      boucle sur un échec : la rangée garde alors son « Réessayer ». */
@@ -261,7 +267,7 @@ export function CommentThread({
          pendant la montée ne repropose pas ce qui est en train de partir. Un
          échec le REND, texte et pièces, que le composeur soit encore là ou non. */
       keepDraft({ text: '', pending: [] });
-      const uploaded = pending.length === 0 ? { ok: true as const, media: [] } : await uploadCommentMedia(pending, uploadMedia, report);
+      const uploaded = pending.length === 0 ? { ok: true as const, media: [] } : await uploadCommentMedia(pending, uploadMedia, { report, ...(scope === null ? {} : { owner: scope }) });
       const result: CommentComposerResult = uploaded.ok ? await deliver({ content, media: uploaded.media, pieces: pending }) : { ok: false, message: 'comments.media.upload_failed' };
       if (!result.ok) keepDraft({ text: content, pending });
       return result;

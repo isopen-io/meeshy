@@ -16,6 +16,7 @@ import { conversationQuery, conversationsQuery, refreshConversations } from './c
 import type { PendingAttachment } from '@/lib/send/attachments';
 
 import { apiDeps } from './deps';
+import { currentOwnerCredential } from './owner-session';
 import { feedQuery, refreshFeed } from './feed';
 import { forwardMessages, type ForwardResult, type ForwardSource } from './forward';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
@@ -552,7 +553,8 @@ export function commentAction(params: {
     ...(params.media === undefined || params.media.length === 0 ? {} : { media: params.media }),
     ...(params.sticker === undefined ? {} : { sticker: params.sticker }),
     ...(params.pieces === undefined ? {} : { pieces: params.pieces }),
-    deps: { ...apiDeps, queryClient: appQueryClient },
+    /* L'auteur doit ÊTRE le lecteur connecté au moment où la requête part (#9743). */
+    deps: { ...apiDeps, queryClient: appQueryClient, owner: currentOwnerCredential },
   }).then((result) => {
     /* Un commentaire RETENU (servi, ou gardé en attente) allume l'anneau de
        « Commentaires » ; un refus permanent, défait, ne l'allume pas. */
@@ -567,7 +569,7 @@ export function commentAction(params: {
  * rejouer (l'appelant lit `unsentComments` d'abord).
  */
 export function replayCommentsAction(scope: string, postId: string): Promise<number> {
-  return import('./comment-replay').then(({ replayUnsentComments }) => replayUnsentComments({ ...apiDeps, queryClient: appQueryClient }, scope, postId));
+  return import('./comment-replay').then(({ replayUnsentComments }) => replayUnsentComments({ ...apiDeps, queryClient: appQueryClient, owner: currentOwnerCredential }, scope, postId));
 }
 
 /**

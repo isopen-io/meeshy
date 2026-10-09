@@ -7,6 +7,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { resetFixtureCommentsForTests } from '@/lib/api/fixtures-comments';
 import type { ApiResult } from '@/lib/api/http';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
+import { commentsQueryKey, insertComment, type CommentInfiniteData } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
@@ -36,6 +37,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await act(async () => {});
   delete globals.IS_REACT_ACT_ENVIRONMENT;
   await releaseHappyDomIfRegistered();
 });
@@ -64,6 +66,7 @@ afterEach(() => {
   appQueryClient.clear();
   resetFixtureCommentsForTests();
   unsentComments.getState().forgetScope(scope());
+  unsentComments.getState().forgetScope('u_autre');
   commentDrafts.set(scope(), POST, { text: '', pending: [] });
   setOnline(true);
 });
@@ -121,11 +124,11 @@ async function joindre(host: HTMLElement): Promise<void> {
 const champ = (host: HTMLElement) => host.querySelector<HTMLTextAreaElement>('[data-comment-field]')?.value;
 const tuiles = (host: HTMLElement) => host.querySelectorAll('[data-pending-tile]').length;
 
-function attendre(tempId: string): void {
+function attendre(tempId: string, owner: string = scope()): void {
   const me = viewer();
   unsentComments.getState().park({
     tempId,
-    scope: scope(),
+    scope: owner,
     postId: POST,
     body: { content: 'Parti hors ligne', attachmentIds: ['fx-pm-photo'] },
     clientMutationId: tempId.replace(/^cid_/, 'cmid_'),
@@ -230,5 +233,27 @@ describe('un commentaire non envoyé reste dans le fil, relançable (#9743)', ()
     await settle();
     expect(unsentComments.getState().entries).toHaveLength(0);
     expect(host.textContent).toContain('Parti hors ligne');
+  });
+});
+
+describe('SÉCURITÉ — ce qui attend un AUTRE compte ne se voit ni ne part ici (#9743)', () => {
+  test('l’attente de A sous la session de B : aucune rangée, aucun rejeu — ni à l’ouverture, ni au retour du réseau, ni brouillon', async () => {
+    commentDrafts.set('u_autre', POST, { text: 'Brouillon de A', pending: [] });
+    attendre('cid_de-a', 'u_autre');
+    const host = await mountThread();
+    /* Même si le cache de requêtes porte encore sa rangée provisoire. */
+    const row = unsentComments.getState().entries[0]?.row;
+    await act(async () => {
+      appQueryClient.setQueryData<CommentInfiniteData>(commentsQueryKey(POST), (data) => (row === undefined ? data : insertComment(data, row)));
+    });
+    await settle();
+    expect(host.textContent).not.toContain('Parti hors ligne');
+    expect(host.querySelector('[data-comment-send-retry]')).toBeNull();
+    expect(champ(host)).toBe('');
+    await act(async () => setOnline(false));
+    await act(async () => setOnline(true));
+    await settle();
+    expect(unsentComments.getState().entries.map((entry) => entry.state)).toEqual(['unsent']);
+    commentDrafts.set('u_autre', POST, { text: '', pending: [] });
   });
 });

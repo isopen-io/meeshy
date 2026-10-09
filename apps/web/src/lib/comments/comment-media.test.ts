@@ -106,7 +106,7 @@ describe('uploadCommentMedia — chaque pièce en contexte « comment »', () =>
     };
     const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg')), pendingAttachmentOf(file('b.mp4', 'video/mp4'))];
     const seen: [string, number][] = [];
-    await uploadCommentMedia(pending, upload, (localId, fraction) => seen.push([localId, fraction]));
+    await uploadCommentMedia(pending, upload, { report: (localId, fraction) => seen.push([localId, fraction]) });
     const [a, b] = pending.map((piece) => piece.localId);
     expect(seen).toEqual([[a, 0.5], [a, 1], [b, 0.5], [b, 1]] as [string, number][]);
   });
@@ -120,13 +120,27 @@ describe('uploadCommentMedia — chaque pièce en contexte « comment »', () =>
       return { ok: true, status: 201, data: { postMediaId: `pm-${f.name}-${seen.length}`, fileUrl: `/u/${f.name}`, mimeType: f.type } };
     };
     const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg')), pendingAttachmentOf(file('b.mp4', 'video/mp4'))];
-    expect(await uploadCommentMedia(pending, upload, undefined, () => 0)).toEqual({ ok: false });
+    expect(await uploadCommentMedia(pending, upload, { owner: 'u_a', now: () => 0 })).toEqual({ ok: false });
     coupé = false;
-    const reprise = await uploadCommentMedia(pending, upload, undefined, () => 1_000);
+    const reprise = await uploadCommentMedia(pending, upload, { owner: 'u_a', now: () => 1_000 });
     expect(seen).toEqual(['a.jpg', 'b.mp4', 'b.mp4']);
     expect(reprise.ok && reprise.media.map((m) => m.postMediaId)).toEqual(['pm-a.jpg-1', 'pm-b.mp4-3']);
-    await uploadCommentMedia(pending, upload, undefined, () => 7 * 60 * 60 * 1000);
+    await uploadCommentMedia(pending, upload, { owner: 'u_a', now: () => 7 * 60 * 60 * 1000 });
     expect(seen.slice(3)).toEqual(['a.jpg', 'b.mp4']);
+  });
+
+  test('SÉCURITÉ (#9743) — une pièce montée par A n’est jamais reprise pour B, ni sans propriétaire', async () => {
+    const seen: string[] = [];
+    const upload = async (f: File): Promise<ApiResult<PostMediaUploadResult>> => {
+      seen.push(f.name);
+      return { ok: true, status: 201, data: { postMediaId: `pm-${seen.length}`, fileUrl: `/u/${f.name}`, mimeType: f.type } };
+    };
+    const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg'))];
+    await uploadCommentMedia(pending, upload, { owner: 'u_a' });
+    const pourB = await uploadCommentMedia(pending, upload, { owner: 'u_b' });
+    expect(pourB.ok && pourB.media[0]?.postMediaId).toBe('pm-2');
+    await uploadCommentMedia(pending, upload);
+    expect(seen).toHaveLength(3);
   });
 
   test('une seule pièce refusée : rien ne part, et les suivantes ne montent pas', async () => {

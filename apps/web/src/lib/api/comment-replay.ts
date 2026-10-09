@@ -5,6 +5,7 @@ import { unsentComments, unsentOf, type UnsentComment } from '@/lib/comments/uns
 
 import { commentRepliesQueryKey, dropReply, settleReply } from './comment-replies';
 import { outcomeOf } from './outcome';
+import type { OwnerCredential } from './owner-session';
 import {
   commentsQueryKey,
   dropComment,
@@ -34,7 +35,14 @@ import {
  *    les pièces reviennent au brouillon de la publication ;
  *  - panne passagère : il attend encore, relançable.
  */
-export type ReplayDeps = CommentDeps & { readonly queryClient: QueryClient };
+/**
+ * `owner` — OBLIGATOIRE, et fermé : la session du PROPRIÉTAIRE de l'entrée,
+ * lue dans le tour même où la requête part (`owner-session.ts`). Un autre
+ * compte connecté, un invité, personne : rien ne part, l'entrée attend son
+ * auteur. La requête porte le jeton lu avec l'identité — le transport n'en
+ * relit aucun.
+ */
+export type ReplayDeps = CommentDeps & { readonly queryClient: QueryClient; readonly owner: OwnerCredential };
 
 export type ReplayOutcome = 'sent' | 'unsent' | 'refused' | 'absent';
 
@@ -78,25 +86,36 @@ export async function replayUnsentComment(deps: ReplayDeps, tempId: string): Pro
   const store = unsentComments.getState();
   const entry = store.entries.find((held) => held.tempId === tempId);
   if (entry === undefined || entry.state === 'sending') return 'absent';
+  /* LE PROPRIÉTAIRE, PUIS LA REQUÊTE, DANS LE MÊME TOUR — aucun `await` entre
+     la lecture de la session et le départ, et le jeton lu est IMPOSÉ. */
+  const credential = deps.owner(entry.scope);
+  if (credential === null) return 'absent';
   store.mark(tempId, 'sending');
 
-  const result = await sendComment(deps, { postId: entry.postId, body: entry.body, clientMutationId: entry.clientMutationId }).catch(() => null);
+  const result = await sendComment(deps, { postId: entry.postId, body: entry.body, clientMutationId: entry.clientMutationId, credential }).catch(() => null);
+
+  /* LA SESSION A PU CHANGER PENDANT LE VOL : la file et le brouillon sont au
+     propriétaire (leur portée le dit), mais le cache de requêtes est celui du
+     lecteur COURANT — il n'est écrit que si c'est encore le propriétaire. */
+  const stillOwner = deps.owner(entry.scope) !== null;
 
   if (result !== null && result.ok) {
-    if (isServed(result.data)) settle(deps.queryClient, entry, result.data);
+    if (stillOwner && isServed(result.data)) settle(deps.queryClient, entry, result.data);
     store.remove(tempId);
     return 'sent';
   }
   if (result !== null && result.status === RESULT_GONE) {
-    deps.queryClient.setQueryData<CommentInfiniteData>(listKeyOf(entry), (data) =>
-      entry.parentId === undefined ? dropComment(data, tempId) : dropReply(data, tempId),
-    );
     store.remove(tempId);
-    void deps.queryClient.invalidateQueries({ queryKey: listKeyOf(entry), exact: true });
+    if (stillOwner) {
+      deps.queryClient.setQueryData<CommentInfiniteData>(listKeyOf(entry), (data) =>
+        entry.parentId === undefined ? dropComment(data, tempId) : dropReply(data, tempId),
+      );
+      void deps.queryClient.invalidateQueries({ queryKey: listKeyOf(entry), exact: true });
+    }
     return 'sent';
   }
   if (result !== null && outcomeOf(result) === 'permanent') {
-    undo(deps.queryClient, entry);
+    if (stillOwner) undo(deps.queryClient, entry);
     store.remove(tempId);
     giveBack(entry);
     return 'refused';
