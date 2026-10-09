@@ -11,11 +11,13 @@ import MeeshySDK
 nonisolated enum VitrineInteraction: String, CaseIterable, Sendable {
     /// Le compteur de Meeshes ouvre la fiche, Mee et Meo frappent (`ProgressionViewModel.mint()`).
     case frappe
+    case emoji
 
     /// La célébration du jeu que l'interaction déclenche : la passerelle fictive la prépare.
     var celebration: VitrineCelebration? {
         switch self {
         case .frappe: .frappe
+        case .emoji: nil
         }
     }
 }
@@ -24,9 +26,12 @@ extension VitrineScene {
     nonisolated var interaction: VitrineInteraction? {
         switch self {
         case .interactionFrappe: .frappe
+        case .interactionEmoji: nil
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: nil
         }
     }
+
+    nonisolated var sceneDuKit: VitrineScene { self }
 
     /// Le jeu que la passerelle fictive sert : la célébration d'une scène du jeu, ou celle qu'une interaction déclenche.
     nonisolated var jeuServi: VitrineCelebration? {
@@ -42,9 +47,12 @@ enum VitrineInteractions {
         await VitrineTournage.tourner(scene) {
             switch interaction {
             case .frappe: await frapperDepuisLeCompteur(scene)
+            case .emoji: break
             }
         }
     }
+
+    static func messageAReagir(_ f: VitrineFixtures, conversationId: String) -> String? { nil }
 
     /// Le toucher du compteur (`ProgressionHeaderStanding.onOpenMeesh`) pousse la fiche des Meeshes ; la scène y
     /// frappe par le geste réel une fois la fiche lue et sa transition posée.

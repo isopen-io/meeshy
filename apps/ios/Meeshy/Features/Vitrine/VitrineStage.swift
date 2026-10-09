@@ -103,7 +103,7 @@ enum VitrineStage {
 
     private static func montrer(_ scene: VitrineScene, _ destination: VitrineFixtures.Destination?, _ f: VitrineFixtures) {
         switch scene {
-        case .global, .amour, .groupe, .imagine:
+        case .global, .amour, .groupe, .imagine, .interactionEmoji:
             guard let conversation = f.conversationsServies().first(where: { $0.id == destination?.conversationId }) else {
                 fatalError("Vitrine « \(scene.rawValue) » : sa conversation manque aux fixtures")
             }
@@ -131,7 +131,7 @@ enum VitrineStage {
         case .amour: await faireEntendre(destination)
         case .groupe: rouvrirSurLOriginal(destination)
         case .imagine: await imaginer(destination, f)
-        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe: break
+        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe, .interactionEmoji: break
         }
     }
 

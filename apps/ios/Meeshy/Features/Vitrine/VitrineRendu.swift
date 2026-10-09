@@ -13,6 +13,8 @@ nonisolated enum VitrineEvenement: Hashable, Sendable {
     case imagine
     /// La fiche d'un concept du jeu, lue (#9805) : la célébration s'y joue.
     case fiche(ProgressionConcept)
+    /// La bande d'émojis du menu unifié, montée (#9810).
+    case menuDeReactions
 }
 
 nonisolated enum VitrineAppareil: Sendable {
@@ -26,7 +28,7 @@ extension VitrineScene {
     /// observée : la capture échoue en nommant la scène plutôt que de photographier autre chose.
     nonisolated func rendusAttendus(conversationId: String?, appareil: VitrineAppareil) -> Set<VitrineEvenement> {
         switch self {
-        case .global, .amour, .groupe, .imagine: return [.conversation(conversationId ?? "")]
+        case .global, .amour, .groupe, .imagine, .interactionEmoji: return [.conversation(conversationId ?? "")]
         case .progression, .interactionFrappe: return appareil == .ipad ? [.progression, .fil] : [.progression]
         case .lien: return [.lien]
         case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
@@ -76,6 +78,13 @@ final class VitrineRendu {
         conversation = viewModel
         signaler(.conversation(viewModel.conversationId))
     }
+
+    private(set) var appuyerLongtemps: ((String) -> Void)?
+    private(set) var reagirAuMenu: ((String) -> Void)?
+
+    func listeDeMessagesAffichee(appuiLong: @escaping (String) -> Void) {}
+
+    func menuDeReactionsAffiche(reagir: @escaping (String) -> Void) {}
 
     func attendre(_ attendus: Set<VitrineEvenement>) async {
         guard !attendus.isSubset(of: observes) else { return }
