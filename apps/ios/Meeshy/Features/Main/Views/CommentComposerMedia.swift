@@ -60,12 +60,23 @@ enum CommentMediaUploader {
         try? FileManager.default.removeItem(at: media.fileURL)
         return result.id
     }
+
+    /// Téléverse toutes les pièces d'un commentaire, dans l'ordre de la zone
+    /// (#9736). `nil` quand il n'y en a aucune : le champ ne part pas.
+    static func uploadAll(_ medias: [PendingCommentMedia]) async throws -> [String]? {
+        guard !medias.isEmpty else { return nil }
+        var ids: [String] = []
+        for media in medias {
+            ids.append(try await upload(media))
+        }
+        return ids
+    }
 }
 
 /// Helpers partagés de staging d'un média de commentaire — utilisés par TOUTES les
 /// surfaces de composer commentaire (feed/reels `CommentsSheetView`, `PostDetailView`,
-/// composer stories) pour garantir un comportement identique (un seul média ;
-/// image/vidéo/audio ; voix réelle).
+/// composer stories) pour garantir un comportement identique (image/vidéo/audio ;
+/// voix réelle ; `MAX_POST_MEDIA` pièces au plus, le plafond du serveur).
 enum CommentComposerStaging {
     /// Construit un `PendingCommentMedia` depuis une pièce jointe stagée par le
     /// composer. Renvoie nil pour les types hors périmètre (file/location) ou sans
@@ -94,8 +105,15 @@ enum CommentComposerStaging {
         )
     }
 
-    /// Premier média exploitable (image/vidéo/audio) d'une liste stagée — un
-    /// commentaire ne porte qu'un seul média.
+    /// Les médias exploitables d'une zone, dans son ordre, plafonnés à ce que
+    /// le serveur accepte sur un commentaire (`attachmentIds`, `MAX_POST_MEDIA`,
+    /// #9736). La zone en montrait plusieurs et l'envoi n'en prenait qu'un.
+    static func pendingMedia(in attachments: [ComposerAttachment], limit: Int = MAX_POST_MEDIA) -> [PendingCommentMedia] {
+        Array(attachments.compactMap { pendingMedia(from: $0) }.prefix(max(0, limit)))
+    }
+
+    /// Premier média exploitable d'une zone — pour l'hôte qui n'en porte
+    /// qu'un (la réponse à une story).
     static func firstPendingMedia(in attachments: [ComposerAttachment]) -> PendingCommentMedia? {
         attachments.lazy.compactMap { pendingMedia(from: $0) }.first
     }
@@ -105,29 +123,6 @@ enum CommentComposerStaging {
         var voice = ComposerAttachment.voice(duration: duration)
         voice.url = url
         return voice
-    }
-
-    /// `PhotosPickerItem[]` → `ComposerAttachment[]` (image/vidéo), écrits dans des
-    /// fichiers temporaires. Un commentaire ne porte qu'un média → bornage à 1 fait
-    /// par l'appelant (maxSelectionCount: 1).
-    static func photoAttachments(from items: [PhotosPickerItem]) async -> [ComposerAttachment] {
-        var result: [ComposerAttachment] = []
-        for item in items {
-            let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-            let ext = isVideo ? "mov" : await imageFileExtension(for: data)
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("comment_\(UUID().uuidString).\(ext)")
-            guard (try? data.write(to: url)) != nil else { continue }
-            if isVideo {
-                result.append(ComposerAttachment(
-                    id: "video-\(UUID().uuidString)", type: .video,
-                    name: MediaKindLabel.name(.video), url: url, size: data.count, thumbnailColor: "FF6B6B"))
-            } else {
-                result.append(ComposerAttachment.image(url: url))
-            }
-        }
-        return result
     }
 
     /// **L'extension d'une image, lue dans ses OCTETS** (#4925).
@@ -298,7 +293,7 @@ enum CommentComposerIngestion {
 
     /// Vidéo déposée → compression partagée (`deleteSourceAfterCompression` :
     /// la source du dépôt est consommée par le service) puis pièce jointe vidéo
-    /// du staging commentaire — mêmes champs que `photoAttachments`.
+    /// du staging commentaire — mêmes champs que `CommentAttachmentIntake.placeholder`.
     private static func stageVideo(_ file: (url: URL, name: String, mime: String),
                                    accentColor: String) async -> ComposerAttachment? {
         let preparing = AttachmentPreparationService.shared.prepareVideo(

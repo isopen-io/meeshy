@@ -445,7 +445,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Le lieu en attente doit être capturé au début de submitComment, avant tout early-return.")
         XCTAssertTrue(fn.contains("commentPendingPlace = nil"),
                       "La chip doit être effacée après capture — sinon elle réapparaît sur le commentaire suivant.")
-        XCTAssertTrue(fn.contains("guard !trimmed.isEmpty || media != nil || place != nil else { return }"),
+        XCTAssertTrue(fn.contains("guard !trimmed.isEmpty || !media.isEmpty || place != nil else { return }"),
                       "Un commentaire « lieu seul » (sans texte ni média) doit pouvoir partir — l'ancienne garde à 2 conditions l'aurait avorté silencieusement, exactement comme le bug déjà corrigé sur publishPost.")
     }
 

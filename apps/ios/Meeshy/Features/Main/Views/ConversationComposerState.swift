@@ -82,6 +82,9 @@ struct ConversationComposerState {
     /// pour les médias venus de la grille ou du sélecteur système. Ne fait
     /// foi que pour les pièces VIVANTES : lire `attachedLibraryAssetIds`.
     var libraryAssetLinks: [String: String] = [:]
+    /// Les assets JOINTS que le sélecteur système a reçus cochés à son
+    /// ouverture (#9697) : ceux qui n'en reviennent pas ont été décochés.
+    var pickerPreselectedAttached: [String] = []
     
     // Location & Upload
     var isLoadingLocation = false
@@ -150,6 +153,38 @@ extension ConversationComposerState {
         libraryAssetLinks = RecentMediaAttachmentLink.linking(
             assetId, to: attachmentId, in: libraryAssetLinks, liveAttachmentIds: liveAttachmentIds
         )
+    }
+
+    /// Arme le retour du sélecteur système (#9697) et rend ce qu'il doit
+    /// montrer coché : les assets joints d'abord, puis la sélection de la
+    /// grille.
+    mutating func primePickerPreselection(selection: [String]) -> [String] {
+        let preselection = RecentMediaAttachmentLink.pickerPreselection(
+            attached: attachedLibraryAssetIds, selection: selection, limit: Self.maxMediaSelection
+        )
+        pickerPreselectedAttached = RecentMediaAttachmentLink.preselectedAttached(
+            attached: attachedLibraryAssetIds, preselection: preselection
+        )
+        return preselection
+    }
+
+    /// Les pièces que le sélecteur système vient de décocher (#9697). Désarme
+    /// le retour : l'écho de la remise à zéro de la sélection ne retire rien.
+    mutating func consumePickerDeselection(returned: [String?]) -> [String] {
+        let preselected = pickerPreselectedAttached
+        pickerPreselectedAttached = []
+        return RecentMediaAttachmentLink.deselectedAttachmentIds(
+            links: libraryAssetLinks, liveAttachmentIds: liveAttachmentIds,
+            preselected: preselected, returned: returned
+        )
+    }
+
+    /// Un brouillon restauré retrouve ses pièces ET la carte pièce → asset
+    /// (#9697) : la grille les marque encore, et ne les reprend pas.
+    mutating func adoptRestoredDraft(attachments: [MessageAttachment], files: [String: URL], assetLinks: [String: String]) {
+        pendingAttachments = attachments
+        pendingMediaFiles = files
+        libraryAssetLinks = assetLinks
     }
 
     /// Replaces the audio attachment `attachmentId` in place with the freshly

@@ -190,12 +190,12 @@ extension PostDetailViewModel {
         }
     }
 
-    /// Envoi d'un commentaire (top-level OU réponse) portant UN média
-    /// (image/vidéo/audio). Contrairement au chemin texte top-level qui transite par
+    /// Envoi d'un commentaire (top-level OU réponse) portant ses médias
+    /// (image/vidéo/audio, `MAX_POST_MEDIA` au plus — #9736). Contrairement au chemin texte top-level qui transite par
     /// l'OfflineQueue, un commentaire média DOIT passer en direct (l'upload du fichier
     /// exige le réseau). Optimistic-first avec le média local, puis upload TUS
     /// (`uploadContext=comment`) → `addComment(attachmentIds:)`, réconcilie/rollback.
-    func submitCommentWithMedia(_ content: String, originalLanguage: String?, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia, location: SharedPlace? = nil, quoted: CommentQuotedMedia? = nil) async {
+    func submitCommentWithMedia(_ content: String, originalLanguage: String?, effectFlags: Int?, parentId: String?, pendingMedia: [PendingCommentMedia], location: SharedPlace? = nil, quoted: CommentQuotedMedia? = nil) async {
         guard let post else { return }
         if parentId != nil { replyingTo = nil }
         // La ligne optimiste est keyée par le cmid envoyé au gateway : l'écho
@@ -212,7 +212,7 @@ extension PostDetailViewModel {
             content: content, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            originalLanguage: originalLanguage, media: [pendingMedia.optimistic],
+            originalLanguage: originalLanguage, media: pendingMedia.map(\.optimistic),
             quotedMedia: quoted
         )
         let snapshotComments = comments
@@ -230,10 +230,10 @@ extension PostDetailViewModel {
         self.post?.commentCount = snapshotCount + 1
 
         do {
-            let attachmentId = try await CommentMediaUploader.upload(pendingMedia)
+            let attachmentIds = try await CommentMediaUploader.uploadAll(pendingMedia)
             let apiComment = try await postService.addComment(
                 postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
-                attachmentIds: [attachmentId], mobileTranscription: pendingMedia.mobileTranscription,
+                attachmentIds: attachmentIds, mobileTranscription: pendingMedia.first?.mobileTranscription,
                 originalLanguage: originalLanguage, location: location, clientMutationId: tempId,
                 quotedPostMediaId: quoted?.postMediaId
             )

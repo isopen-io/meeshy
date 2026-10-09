@@ -2,9 +2,14 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Bandeau réutilisable des pièces jointes stagées d'un commentaire (chips avec
-/// retrait). Partagé par toutes les surfaces de composer commentaire (feed/reels,
-/// post detail, stories) via `customAttachmentsPreview` de `UniversalComposerBar`.
+/// **La zone d'attachement d'un commentaire EST celle du message** (#9736).
+///
+/// Ce bandeau rendait des pastilles de texte — un glyphe, un nom, une croix —
+/// là où le message montre ce qu'on joint. Il monte désormais les MÊMES vues
+/// (`ComposerAttachmentZone`, `ComposerAttachmentTile`, `ComposerPlaceTile`) :
+/// vignette de l'image, première image de la vidéo, onde d'un son, retrait en
+/// coin, « Éditer » au centre. Partagé par les trois surfaces de commentaire
+/// (fil et réels, détail d'un post, story) via `customAttachmentsPreview`.
 struct CommentAttachmentsTray: View {
     let attachments: [ComposerAttachment]
     let onRemove: (String) -> Void
@@ -14,92 +19,31 @@ struct CommentAttachmentsTray: View {
     /// défaut pour les hôtes qui ne câblent pas encore le partage de position.
     var place: SharedPlace? = nil
     var onRemovePlace: (() -> Void)? = nil
+    var accentColor: String = MeeshyColors.brandPrimaryHex
 
     /// « Éditer » une pièce dans la scène (#9127) — posé par l'hôte via
-    /// `.commentSceneRetouch` ; absent, le bandeau ne promet aucune édition.
+    /// `.commentSceneRetouch` ; absent, la zone ne promet aucune édition.
     @Environment(\.commentRetouch) private var retouch
 
-    private var theme: ThemeManager { ThemeManager.shared }
-
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: MeeshySpacing.sm) {
-                if let place {
-                    placeChip(place)
-                }
-                ForEach(attachments) { attachment in
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        attachmentLabel(attachment)
-                        Button {
-                            remove(attachment)
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(theme.textMuted)
-                                .frame(width: 18, height: 18)
-                                .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
-                        }
-                        .accessibilityHidden(true)
-                    }
-                    .padding(.horizontal, MeeshySpacing.smPlus)
-                    .padding(.vertical, MeeshySpacing.xsPlus)
-                    .background(
-                        Capsule()
-                            .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
-                    )
-                    .foregroundColor(theme.textPrimary)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))) {
-                        remove(attachment)
-                    }
-                    .modifier(EditableChipAccessibility(label: editLabel(attachment), open: editAction(attachment)))
-                }
+        ComposerAttachmentZone(accentColor: accentColor) {
+            ForEach(attachments) { attachment in
+                CommentAttachmentTile(
+                    attachment: attachment,
+                    fileURL: attachment.url,
+                    edit: editAction(attachment),
+                    onRemove: { remove(attachment) }
+                )
             }
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.sm)
-        }
-    }
-
-    /// Une pièce que la scène ouvre se touche pour s'éditer : le glyphe
-    /// « Éditer » le dit, comme au centre d'une tuile de conversation (#9119).
-    @ViewBuilder
-    private func attachmentLabel(_ attachment: ComposerAttachment) -> some View {
-        let label = HStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: attachment.type.glyph)
-                .font(.caption)
-                .foregroundColor(Color(hex: attachment.thumbnailColor))
-                .accessibilityHidden(true)
-            Text(attachment.name)
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-                .frame(maxWidth: 120)
-        }
-        if let open = editAction(attachment), let glyph = CommentSceneRetouch.editGlyph(for: attachment) {
-            Button(action: open) {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    label
-                    Image(systemName: glyph)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(MeeshyColors.mediaChromeForeground)
-                        .frame(width: 18, height: 18)
-                        .background(Circle().fill(MeeshyColors.mediaChromeFill))
-                        .accessibilityHidden(true)
-                }
+            if let place {
+                ComposerPlaceTile(place: place, onRemove: removePlace)
             }
-            .buttonStyle(.plain)
-        } else {
-            label
         }
     }
 
     private func editAction(_ attachment: ComposerAttachment) -> (() -> Void)? {
         guard let retouch, CommentSceneRetouch.editGlyph(for: attachment) != nil else { return nil }
         return { retouch.open(attachment.id) }
-    }
-
-    private func editLabel(_ attachment: ComposerAttachment) -> String {
-        String(localized: "conversation.composer.attachment.edit", defaultValue: "Éditer \(attachment.name)", bundle: .main)
     }
 
     private func remove(_ attachment: ComposerAttachment) {
@@ -110,61 +54,73 @@ struct CommentAttachmentsTray: View {
         if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
     }
 
-    /// Même gabarit de chip que les pièces jointes ci-dessus, pour un lieu.
-    private func placeChip(_ place: SharedPlace) -> some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: "location.fill")
-                .font(.caption)
-                .foregroundColor(MeeshyColors.success)
-                .accessibilityHidden(true)
-            Text(MediaKindLabel.placeLabel(place.name))
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-                .frame(maxWidth: 120)
-            Button {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                    onRemovePlace?()
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(theme.textMuted)
-                    .frame(width: 18, height: 18)
-                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
-            }
-            .accessibilityHidden(true)
-        }
-        .padding(.horizontal, MeeshySpacing.smPlus)
-        .padding(.vertical, MeeshySpacing.xsPlus)
-        .background(
-            Capsule()
-                .fill(theme.inputBackground)
-                .overlay(Capsule().stroke(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
-        )
-        .foregroundColor(theme.textPrimary)
-        .accessibilityElement(children: .combine)
-        .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))) {
+    private func removePlace() {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
             onRemovePlace?()
         }
     }
 }
 
-/// Une pièce éditable se lit « Éditer … » et s'ouvre par l'action par défaut
-/// de VoiceOver ; les autres gardent leur lecture.
-private struct EditableChipAccessibility: ViewModifier {
-    let label: String
-    let open: (() -> Void)?
+/// La tuile d'une pièce de commentaire : elle lit sa vignette dans le fichier
+/// local de la pièce, et la relit quand la scène le remplace. `fileURL` est
+/// passé À PART de la pièce — deux `ComposerAttachment` de même identifiant
+/// sont égaux, et le fichier qui arrive doit quand même repeindre la tuile.
+private struct CommentAttachmentTile: View {
+    let attachment: ComposerAttachment
+    let fileURL: URL?
+    let edit: (() -> Void)?
+    let onRemove: () -> Void
 
-    func body(content: Content) -> some View {
-        if let open {
-            content
-                .accessibilityLabel(label)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction { open() }
-        } else {
-            content
+    @State private var thumbnail: UIImage?
+
+    var body: some View {
+        ComposerAttachmentTile(
+            thumbnail: thumbnail,
+            art: art,
+            tint: attachment.thumbnailColor,
+            typeGlyph: attachment.type.glyph,
+            centerGlyph: edit == nil ? nil : ComposerPendingTileGlyph.edit,
+            label: attachment.name,
+            tapAccessibilityLabel: tapLabel,
+            removeAccessibilityLabel: String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(attachment.name)", bundle: .main),
+            onTap: { edit?() },
+            onRemove: onRemove
+        )
+        .contextMenu {
+            Button(role: .destructive, action: onRemove) {
+                Label(
+                    String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(attachment.name)", bundle: .main),
+                    systemImage: "trash"
+                )
+            }
+        } preview: {
+            if attachment.type == .image || attachment.type == .video {
+                AttachmentQuickLookPreview(
+                    kind: attachment.type == .video ? .video : .image,
+                    fileURL: fileURL,
+                    thumbnail: thumbnail
+                )
+            }
         }
+        .task(id: fileURL) {
+            thumbnail = await CommentAttachmentThumbnail.load(type: attachment.type, url: fileURL)
+        }
+    }
+
+    /// Le dessin d'une pièce sans vignette : la lecture en cours d'un fichier
+    /// qui n'est pas encore là, l'onde d'un son.
+    private var art: AnyView? {
+        if fileURL == nil { return AnyView(ComposerAttachmentLoadingArt(tint: attachment.thumbnailColor)) }
+        if attachment.type == .voice { return AnyView(ComposerAudioTileArt(tint: attachment.thumbnailColor)) }
+        return nil
+    }
+
+    private var tapLabel: String {
+        guard edit != nil else {
+            return String(localized: "conversation.composer.attachment.preview", defaultValue: "Aperçu \(attachment.name)", bundle: .main)
+        }
+        return String(localized: "conversation.composer.attachment.edit", defaultValue: "Éditer \(attachment.name)", bundle: .main)
     }
 }
 

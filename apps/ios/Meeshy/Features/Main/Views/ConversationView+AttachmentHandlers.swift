@@ -778,13 +778,19 @@ extension ConversationView {
 
     // MARK: - Attachment Handlers
     func handlePhotoSelection(_ items: [PhotosPickerItem]) {
-        guard !items.isEmpty else { return }
+        // Une sélection VIDE n'est une confirmation que si le sélecteur a été
+        // ouvert avec des pièces jointes cochées (#9697) : tout décocher puis
+        // valider les retire. Sinon c'est l'écho d'une remise à zéro.
+        guard !items.isEmpty || !composerState.pickerPreselectedAttached.isEmpty else { return }
         // Priming echo (strip multi-selection injected before presenting the
         // picker) — not a user confirmation, nothing to ingest yet.
-        if composerState.photoPickerPriming {
+        if composerState.photoPickerPriming, !items.isEmpty {
             composerState.photoPickerPriming = false
             return
         }
+        // #9697 — décocher dans le sélecteur une image déjà jointe la retire
+        // de la zone. Lu AVANT la remise à zéro, dont l'écho ne retire rien.
+        detachPendingPieces(composerState.consumePickerDeselection(returned: items.map(\.itemIdentifier)))
         composerState.selectedPhotoItems.removeAll()
         // #9683 — ce qui est déjà dans la zone (présélectionné à l'ouverture)
         // n'est pas une sélection nouvelle : écarté, comme les doublons.

@@ -226,7 +226,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // (`FullscreenCloseButton`, `FullscreenMoreMenu`, `FullscreenActionButton`),
         // qui portent LEURS glyphes figés dans leur disque.
         "Features/Main/Views/ConversationMediaGalleryView+Pages.swift",
-        "Features/Main/Views/ConversationView+ComposerAttachments.swift",
+        // #9736 — RELOCALISATION pure : la tuile d'une pièce en attente quitte
+        // `ConversationView+ComposerAttachments.swift` pour le composant que
+        // le message et les commentaires montent ensemble. Ses glyphes figés
+        // (tuile fixe de 56, pastille de 18) ont suivi ; le fichier d'origine
+        // n'en porte plus aucun et sort de la liste.
+        "Features/Main/Components/ComposerAttachmentZone.swift",
         "Features/Main/Views/ConversationView+ComposerBanners.swift",
         "Features/Main/Views/ConversationView+MessageRow.swift",
         "Features/Main/Views/DataExportView.swift",
