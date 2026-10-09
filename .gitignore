@@ -383,7 +383,10 @@ match_key.pub
 # sur apps/ios/ laissait un .andp/ de racine traçable — donc committable.
 .andp/
 secrets.yml
-apps/ios/andp.yml
+# apps/ios/andp.yml est SUIVI depuis le 2026-10-09 (#9752) : il ne porte aucun
+# secret (cibles de build, politique de conformité, fiche App Store dont les
+# valeurs sensibles passent par des clés `_env`). La release ne le réécrit
+# plus (meeshy.sh ne le crée que s'il manque).
 
 apps/ios/SourcePackages/
 .superpowers/
