@@ -52,5 +52,8 @@ nonisolated enum VitrineLaunch {
     /// Une scène du jeu (#9805) : la célébration démarre, puis elle est finie — le script de tournage filme entre les deux.
     static var marqueurCelebrationDebut: URL { dossier.appendingPathComponent("celebration-debut.txt") }
     static var marqueurCelebrationFin: URL { dossier.appendingPathComponent("celebration-fin.txt") }
+
+    /// Le clap (#9810) : le script de tournage le dépose quand l'enregistreur tourne ; l'action attend ce fichier.
+    static var marqueurGo: URL { dossier.appendingPathComponent("go.txt") }
 }
 #endif
