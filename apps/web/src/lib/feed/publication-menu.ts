@@ -25,6 +25,13 @@
  * ajoutées, supprimées. Un post de texte seul, ou une republication, garde la
  * feuille de texte (`publication-edit-sheet.tsx`).
  *
+ * ## « VUES » (#9727) — QUI A VU MA PUBLICATION, ET CE QUE CHACUN Y A FAIT
+ *
+ * Sur SES publications seulement, en tête du bloc de l'auteur : la feuille
+ * « Vues » des stories (`publication-viewers-sheet.tsx`), servie par la même
+ * route (`GET /posts/:postId/interactions`, auteur ou ADMIN/BIGBOSS). Même
+ * entrée, même place, dans le menu iOS (`FeedPostCard+Header.swift`).
+ *
  * ## « À MOI » SE DÉCIDE PAR L'IDENTITÉ DE SESSION
  *
  * Un invité (`viewerId === null`) ou une carte sans auteur connu n'est jamais
@@ -32,7 +39,7 @@
  * exige un compte. La passerelle reste l'autorité (403) ; ceci ne décide que
  * de ce qu'on MONTRE.
  */
-export type PostMenuEntry = 'open' | 'copyText' | 'share' | 'save' | 'pin' | 'edit' | 'delete' | 'report';
+export type PostMenuEntry = 'open' | 'copyText' | 'share' | 'save' | 'views' | 'pin' | 'edit' | 'delete' | 'report';
 
 export function postMenuEntries(params: {
   readonly viewerId: string | null;
@@ -51,7 +58,7 @@ export function postMenuEntries(params: {
     ...(hasText ? (['copyText'] as const) : []),
     ...(canShare ? (['share'] as const) : []),
     ...(canSave && signedIn ? (['save'] as const) : []),
-    ...(isOwn ? (['pin', 'edit', 'delete'] as const) : []),
+    ...(isOwn ? (['views', 'pin', 'edit', 'delete'] as const) : []),
     ...(signedIn && !isOwn ? (['report'] as const) : []),
   ];
 }

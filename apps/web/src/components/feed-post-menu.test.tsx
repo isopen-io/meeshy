@@ -171,7 +171,9 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
       monte(post(), menu);
 
       const entrees = await ouvre();
-      expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'pin', 'edit', 'delete']);
+      expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'views', 'pin', 'edit', 'delete']);
+      // #9727 — « Vues » ouvre la liste de qui a vu, et ce que chacun a fait.
+      expect(entrees.find((e) => e.dataset.feedPostAction === 'views')?.textContent).toContain('Vues');
 
       const modifier = entrees.find((e) => e.dataset.feedPostAction === 'edit')!;
       expect(modifier.textContent).toContain('Modifier');

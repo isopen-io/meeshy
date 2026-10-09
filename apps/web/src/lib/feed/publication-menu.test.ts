@@ -14,7 +14,7 @@ describe('postMenuEntries', () => {
   });
 
   test('MA publication : Épingler, Modifier puis Supprimer — dans l’ordre d’iOS —, jamais Signaler', () => {
-    expect(postMenuEntries({ ...base, authorId: 'u-me' })).toEqual(['open', 'copyText', 'share', 'save', 'pin', 'edit', 'delete']);
+    expect(postMenuEntries({ ...base, authorId: 'u-me' })).toEqual(['open', 'copyText', 'share', 'save', 'views', 'pin', 'edit', 'delete']);
   });
 
   test('sans texte, rien à copier ; sur la fiche, rien à ouvrir', () => {
@@ -22,7 +22,7 @@ describe('postMenuEntries', () => {
   });
 
   test('sur la fiche, MA publication garde Épingler, Modifier et Supprimer', () => {
-    expect(postMenuEntries({ ...base, authorId: 'u-me', isDetail: true })).toEqual(['copyText', 'share', 'save', 'pin', 'edit', 'delete']);
+    expect(postMenuEntries({ ...base, authorId: 'u-me', isDetail: true })).toEqual(['copyText', 'share', 'save', 'views', 'pin', 'edit', 'delete']);
   });
 
   test('sans hôte de partage ni de signet, ces entrées n’existent pas', () => {

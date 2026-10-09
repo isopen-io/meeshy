@@ -100,6 +100,7 @@ export function FeedPostMenu({
 }) {
   const [reporting, setReporting] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [viewing, setViewing] = useState(false);
   const entries = postMenuEntries({
     viewerId: menu.viewerId,
     authorId,
@@ -170,7 +171,7 @@ export function FeedPostMenu({
         </span>
       </button>
 
-      {open || reporting || editing ? (
+      {open || reporting || editing || viewing ? (
         <Suspense fallback={null}>
           <PostMenuPanel
             open={open}
@@ -196,6 +197,8 @@ export function FeedPostMenu({
             setReporting={setReporting}
             editing={editing}
             setEditing={setEditing}
+            viewing={viewing}
+            setViewing={setViewing}
           />
         </Suspense>
       ) : null}

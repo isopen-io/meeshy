@@ -493,8 +493,8 @@
       "pattern": "^assets/publication-viewers-sheet-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 3,
-        "status": "CIBLE -- MESUREE EN REVUE-CORRECTION DE #7116, NON ARBITREE",
+        "value": 4,
+        "status": "REMESURE PAR LA LISTE DES VUES ENRICHIE (#9727) -- 2,81 Ko gzip -9 (`bun run build` puis `node scripts/measure-weight.mjs`, le 2026-10-09) : sous chaque nom ce que la personne a fait (reactions, commentaires, reponses, republications, partages, favori), le detail d une personne au toucher et le chargement de son catalogue. Plafond porte a ceil(2,81) + 1 = 4. La premiere peinture ne bouge pas (89,62 Ko). PRECEDENT : CIBLE -- MESUREE EN REVUE-CORRECTION DE #7116, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-24 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,13 Ko gzip -9 -- la feuille « Vues » du lecteur de stories (`components/publication-viewers-sheet.tsx` : cinq etats dessines via `coldStateOf`, une ligne-lien par lecteur). CHARGEE A LA DEMANDE (`lazy()`, `publication-viewers-sheet-lazy.tsx`, motif D-54) au premier tap sur « Vues » : l'auteur qui ne l'ouvre pas ne la telecharge jamais, et le lecteur d'une story d'autrui n'a pas le bouton. Nommee HORS du prefixe `story-` pour ne pas entrer dans le motif de `story_reader`, qui compterait alors un fichier jamais charge a l'ouverture du lecteur. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
@@ -895,6 +895,15 @@
         "value": 8,
         "status": "CIBLE -- MESUREE PAR #8884, NON ARBITREE",
         "source": "Mesure du 2026-09-30 (`bun run build` puis gzip -9) : 6,05 Ko pour les SEPT catalogues de la feuille d'envoi (cles `sendSheet.*` et `shareLinkSheet.*`), de 0,79 Ko (en) a 1,00 Ko (ar). Charges avec la feuille seulement (`i18n-send-sheet-catalog`), jamais avec la premiere peinture ; un lecteur n'en telecharge qu'UN. Arrondi au Ko SUPERIEUR (7) + 1 Ko de marge."
+      }
+    },
+    "interface_catalogs_viewer_engagement": {
+      "pattern": "^assets/catalog-viewer-engagement-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 5,
+        "status": "CIBLE -- MESUREE PAR #9727, NON ARBITREE",
+        "source": "Mesure du 2026-10-09 (`bun run build` puis gzip -9) : 3,03 Ko pour les SEPT catalogues de la feuille « Vues » enrichie (cles `viewerEngagement.*` : ce que chaque personne a fait, le detail d une personne, l etat vide et le refus d une publication). Charges AVEC la feuille (`preparePublicationViewersSheet`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
       }
     },
     "send_sheet_screen": {

@@ -21,6 +21,10 @@ const VIEWERS_OF_ST_MIENNE: readonly PostViewerRow[] = [
     avatarUrl: null,
     viewedAt: minutesAgo(4).toISOString(),
     reaction: '❤️',
+    reactions: ['🔥', '❤️'],
+    commentCount: 1,
+    replyCount: 2,
+    bookmarked: true,
   },
   {
     id: 'u-viewer-elan',

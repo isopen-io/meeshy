@@ -1,4 +1,5 @@
 import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+import type { PostViewerRow } from '@meeshy/shared/types/publication-viewers';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -13,15 +14,14 @@ import type { ApiResult, HttpTransport } from './http';
  * C'est la route que le lecteur iOS appelle (`StoryInteractionService.swift:125-147`),
  * pas `GET /posts/:id/views` (qui sert la ligne `postView` brute, sans les
  * réactions) : la même forme ENRICHIE, ici comme là-bas.
+ *
+ * Chaque ligne porte aussi, depuis #9727, ce que la personne a fait sur ce
+ * contenu (réactions, partages, republications, commentaires, réponses,
+ * favori) — champs OPTIONNELS, absents quand ils valent zéro
+ * (`@meeshy/shared/types/publication-viewers`). Story, post et réel : une
+ * seule route, une seule forme.
  */
-export type PostViewerRow = {
-  readonly id: string;
-  readonly username: string;
-  readonly displayName: string | null;
-  readonly avatarUrl: string | null;
-  readonly viewedAt: string;
-  readonly reaction: string | null;
-};
+export type { PostViewerRow };
 
 export type PostInteractionsPayload = {
   readonly viewers: readonly PostViewerRow[];
