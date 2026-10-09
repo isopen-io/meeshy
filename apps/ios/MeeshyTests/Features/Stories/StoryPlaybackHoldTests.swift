@@ -1,5 +1,7 @@
 import XCTest
+import Combine
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 // **Décision du porteur, 2026-10-09 (#9821)** : une story ne se FIGE que pour
@@ -24,6 +26,7 @@ private enum StoryPlaybackHoldSource {
     static func canvas() throws -> String { try read(views + "StoryViewerView+Canvas.swift") }
     static func sidebar() throws -> String { try read(views + "StoryViewerView+Sidebar.swift") }
     static func header() throws -> String { try read(views + "StoryViewerView+Header.swift") }
+    static func revealHost() throws -> String { try read(views + "EngagementRevealHost.swift") }
 
     static func block(_ source: String, from marker: String) throws -> String {
         let start = try XCTUnwrap(source.range(of: marker), "« \(marker) » introuvable")
@@ -78,6 +81,13 @@ final class StoryPlaybackHoldRuleTests: XCTestCase {
         XCTAssertEqual(StoryPlaybackHold.resolve(StoryPlaybackCauses(coveredByScreen: true)), .pause)
     }
 
+    /// Le porteur, 2026-10-09 : un APPEL DIRECT ou un ÉVÉNEMENT DU JEU passe
+    /// devant la story — elle se fige, même engagée.
+    func test_aCallOrAGameMoment_freezesTheStory_evenWhileLooping() {
+        XCTAssertEqual(StoryPlaybackHold.resolve(StoryPlaybackCauses(interrupted: true)), .pause)
+        XCTAssertEqual(StoryPlaybackHold.resolve(StoryPlaybackCauses(interrupted: true, engaged: true)), .pause)
+    }
+
     /// En boucle, la fin de la story la relance ; sinon on avance.
     func test_theEndOfTheStory_restartsOnlyInALoop() {
         XCTAssertEqual(StoryPlaybackHold.endAction(for: .loop), .restartInPlace)
@@ -108,6 +118,7 @@ final class StoryPlaybackHoldWiringTests: XCTestCase {
                      "reactionFlight != nil", "showEmojiStrip", "showFullEmojiPicker",
                      "gestureAxis != 0", "isScrubbingRail", "isTransitioning", "isDismissing", "showGroupIntro",
                      "coveredByScreen: isPaused",
+                     "interrupted: isCallInterrupting || isGameMomentShown",
                      "isComposerEngaged", "hasComposerContent", "showTextEmojiPicker",
                      "showCommentsOverlay", "showLanguageOptions", "showFullLanguagePicker",
                      "isCaptionExpanded", "showAudioTranscript",
@@ -155,5 +166,58 @@ final class StoryPlaybackHoldWiringTests: XCTestCase {
             XCTAssertNil(source.range(of: pattern, options: .regularExpression),
                          "Une feuille posée sur la story ne la fige plus : \(pattern)")
         }
+    }
+}
+
+// MARK: - Un appel direct et un événement du jeu figent la story (#9821)
+
+@MainActor
+final class StoryPlaybackInterruptionTests: XCTestCase {
+
+    /// Un appel ENTRANT qui sonne interrompt déjà les lecteurs à timeline.
+    func test_anIncomingRingingCall_interruptsPlayback() {
+        XCTAssertEqual(CallPlaybackInterruptionRule.transition(for: .ringing(isOutgoing: false)), true)
+        XCTAssertEqual(CallPlaybackInterruptionRule.transition(for: .connected), true)
+        XCTAssertEqual(CallPlaybackInterruptionRule.transition(for: .idle), false)
+    }
+
+    /// Même une story qui BOUCLE (minuteur non pausé) ne court plus pendant
+    /// l'appel : l'horloge reste figée, la fin n'arrive pas.
+    func test_aCall_freezesTheSlideClock_evenWhenNotPaused() {
+        let interruption = PlaybackInterruption()
+        let timer = StoryReaderTimerController(useDisplayLink: false, interruption: interruption)
+        var completions = 0
+        timer.onCompletion = { completions += 1 }
+        timer.setCurrentSlide(id: "s1", duration: 6)
+        timer.markContentReady(slideId: "s1")
+        timer._advanceClockForTesting(by: 2)
+        interruption.begin()
+        timer._advanceClockForTesting(by: 10)
+        XCTAssertEqual(timer.progress, 2.0 / 6.0, accuracy: 0.0001)
+        XCTAssertEqual(completions, 0)
+        interruption.end()
+        timer._advanceClockForTesting(by: 4)
+        XCTAssertEqual(completions, 1)
+    }
+
+    func test_theGameMomentSignal_followsTheCelebration() {
+        let presence = GameMomentPresence()
+        XCTAssertFalse(presence.isPresented)
+        presence.update(isPresented: true)
+        XCTAssertTrue(presence.isPresented)
+        presence.update(isPresented: false)
+        XCTAssertFalse(presence.isPresented)
+    }
+
+    /// La célébration se DÉCLARE, et le lecteur écoute les deux signaux.
+    func test_theViewer_listensToTheCallAndTheGameMoment() throws {
+        XCTAssertTrue(try StoryPlaybackHoldSource.revealHost()
+            .contains("GameMomentPresence.shared.update(isPresented: présent)"))
+        XCTAssertTrue(try StoryPlaybackHoldSource.viewer()
+            .contains(".storyPlaybackInterruptions(callInterrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown)"))
+        let modifier = try StoryPlaybackHoldSource.block(try StoryPlaybackHoldSource.hold(),
+                                                         from: "struct StoryPlaybackInterruptions: ViewModifier {")
+        XCTAssertTrue(modifier.contains("PlaybackInterruption.shared.$isActive"))
+        XCTAssertTrue(modifier.contains("GameMomentPresence.shared.$isPresented"))
     }
 }

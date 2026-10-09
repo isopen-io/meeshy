@@ -155,6 +155,8 @@ struct StoryViewerView: View {
     @State var isContentReady: Bool = false // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
     @State var storyLoopPass = 0 // tours de boucle de la story courante (#9821)
+    @State var isCallInterrupting = false // un appel sonne ou se tient (#9821)
+    @State var isGameMomentShown = false // un événement du jeu passe devant (#9821)
     /// Légende dépliée. Vit ici parce que déplier SUSPEND la lecture : la carte
     /// de contenu porte la vue, le lecteur porte l'horloge.
     @State var isCaptionExpanded = false // internal for cross-file extension access
@@ -626,9 +628,7 @@ struct StoryViewerView: View {
             }
         }
         // Long-press toggle UNIQUEMENT — pas les autres pauses du timer.
-        //
-        // Sheets, drag-to-dismiss, composer engaged… mutent `isPaused`
-        // (timer-only). Si on postait `.storyPlayerPause` dessus, chaque
+        // Si on postait `.storyPlayerPause` sur les autres causes, chaque
         // ouverture/fermeture de sheet ferait un cycle pause/play sur
         // l'audio mixer et la vidéo BG — blip audible. Le canvas ne se
         // freeze comme une vidéo que quand l'utilisateur le demande
@@ -639,8 +639,8 @@ struct StoryViewerView: View {
                 object: nil
             )
         }
-        // Seule une PAUSE (réaction, appui long, geste, écran plein) arrête le
-        // timer gated ; une boucle le laisse courir (#9821).
+        // Seule une PAUSE arrête le timer gated ; une boucle le laisse courir (#9821).
+        .storyPlaybackInterruptions(callInterrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown)
         .adaptiveOnChange(of: shouldPauseTimer) { _, paused in
             slideTimer.setPaused(paused)
         }

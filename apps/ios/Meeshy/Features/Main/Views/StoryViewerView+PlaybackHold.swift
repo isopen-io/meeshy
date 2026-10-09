@@ -24,7 +24,8 @@ enum StoryPlaybackHold: Equatable {
     /// Une pause l'emporte sur une boucle : la réaction posée pendant qu'on
     /// compose fige l'image le temps de son vol.
     static func resolve(_ causes: StoryPlaybackCauses) -> StoryPlaybackHold? {
-        if causes.explicitPause || causes.reacting || causes.gestureInFlight || causes.coveredByScreen {
+        if causes.explicitPause || causes.reacting || causes.gestureInFlight || causes.coveredByScreen
+            || causes.interrupted {
             return .pause
         }
         return causes.engaged ? .loop : nil
@@ -43,6 +44,8 @@ enum StoryPlaybackHold: Equatable {
 ///   fermeture, interlude d'identité — l'horloge attend la fin du geste.
 /// - `coveredByScreen` : un écran plein recouvre la story (composeur, citer ou
 ///   republier en post, lieu plein écran) — elle ne joue pas son son derrière.
+/// - `interrupted` : un appel direct (qui sonne ou se tient) ou un événement du
+///   jeu (célébration d'un palier, sa carte photo) passe devant elle.
 /// - `engaged` : commentaires, composition, options, langues, légende,
 ///   transcription, feuilles posées sur la story — elle boucle.
 struct StoryPlaybackCauses: Equatable {
@@ -50,6 +53,7 @@ struct StoryPlaybackCauses: Equatable {
     var reacting = false
     var gestureInFlight = false
     var coveredByScreen = false
+    var interrupted = false
     var engaged = false
 }
 
@@ -65,6 +69,7 @@ extension StoryViewerView {
             gestureInFlight: gestureAxis != 0 || isScrubbingRail || isTransitioning
                 || isDismissing || showGroupIntro,
             coveredByScreen: isPaused,
+            interrupted: isCallInterrupting || isGameMomentShown,
             engaged: isComposerEngaged || hasComposerContent || showTextEmojiPicker
                 || showCommentsOverlay || showLanguageOptions || showFullLanguagePicker
                 || isCaptionExpanded || showAudioTranscript
@@ -109,7 +114,26 @@ struct StoryLoopRestart: ViewModifier {
     }
 }
 
+// MARK: - Ce qui passe devant la story : un appel, un événement du jeu
+
+/// Deux signaux d'app, lus dès le montage (`@Published` livre sa valeur
+/// courante) : un appel qui sonne déjà quand on ouvre la story la fige aussi.
+struct StoryPlaybackInterruptions: ViewModifier {
+    @Binding var callInterrupting: Bool
+    @Binding var gameMomentShown: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(PlaybackInterruption.shared.$isActive.removeDuplicates()) { callInterrupting = $0 }
+            .onReceive(GameMomentPresence.shared.$isPresented.removeDuplicates()) { gameMomentShown = $0 }
+    }
+}
+
 extension View {
+    func storyPlaybackInterruptions(callInterrupting: Binding<Bool>, gameMomentShown: Binding<Bool>) -> some View {
+        modifier(StoryPlaybackInterruptions(callInterrupting: callInterrupting, gameMomentShown: gameMomentShown))
+    }
+
     func storyLoopRestart(pass: Int, scrubber: ScenePlaybackScrubber) -> some View {
         modifier(StoryLoopRestart(pass: pass, scrubber: scrubber))
     }
