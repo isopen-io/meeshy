@@ -81,6 +81,17 @@ extension ConversationListViewModel {
                     }
                 }
 
+                // #9804 — le préchargement des médias dure des secondes : entre-
+                // temps `StoryViewModel` a pu peupler la clé et y graver les vues
+                // de l'utilisateur. Écraser ce tray par la version serveur brute
+                // (et lui rendre sa fraîcheur) rallumait les anneaux au lancement
+                // suivant. On n'écrit que dans une clé encore vide.
+                switch await CacheCoordinator.shared.stories.load(for: StoryViewModel.storiesCacheKey) {
+                case .fresh, .stale:
+                    return
+                case .expired, .empty:
+                    break
+                }
                 try? await CacheCoordinator.shared.stories.save(storyGroups, for: StoryViewModel.storiesCacheKey)
                 Logger.messages.info("[ConversationListVM] Stories prefetched: \(storyGroups.count) groups, \(uniqueImageURLs.count) images, \(uniqueVideoURLs.count) videos")
             } catch {

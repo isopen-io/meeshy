@@ -181,7 +181,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let cached = await CacheCoordinator.shared.stories.load(for: Self.storiesCacheKey)
         switch cached {
         case .fresh(let data, _):
-            storyGroups = data
+            // #9804 — l'instantané a pu être réécrit par un autre écrivain avec
+            // la version serveur : le registre des vues fait foi pour le « vu ».
+            storyGroups = applyViewedLedger(to: data)
             // Le cache survit délibérément à la fenêtre de visibilité d'une
             // story : sans cette purge, il ressert des stories mortes et le
             // prefetch ci-dessous irait re-télécharger leurs médias.
@@ -191,7 +193,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             renderMissingReceiverCovers()
             return
         case .stale(let data, _):
-            storyGroups = data
+            storyGroups = applyViewedLedger(to: data)
             purgeDeadStories()
             sortStoryGroupsInPlace()
             prefetchAllStoryMedia(storyGroups)
@@ -359,7 +361,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                             localViewedAt: viewedAt == .distantPast ? nil : viewedAt,
                             contentEditedAt: story.contentEditedAt
                         ) else { return story }
-                        var copy = story; copy.isViewed = true; return copy
+                        var copy = story; copy.isViewed = true
+                        // L'horodatage voyage avec le drapeau : sans lui, la
+                        // fusion suivante cède devant tout `contentEditedAt`.
+                        copy.viewedAt = viewedAt == .distantPast ? nil : viewedAt
+                        return copy
                     }
                     return group.with(stories: merged)
                 }
@@ -520,7 +526,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// un `isViewedByMe` serveur en retard ne dé-voit jamais un anneau local.
     func insertOrMergeStoryGroups(_ groups: [StoryGroup], replacingExisting: Bool = false) {
         let selfId = AuthManager.shared.currentUser?.id
-        for newGroup in groups {
+        for newGroup in applyViewedLedger(to: groups) {
             if let idx = storyGroups.firstIndex(where: { $0.id == newGroup.id }) {
                 let isOwnGroup = newGroup.id == selfId
                 var stories = storyGroups[idx].stories
