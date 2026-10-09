@@ -9,14 +9,20 @@ final class GameOptimisticTests: XCTestCase {
 
     // MARK: - Frappe
 
+    /// Un score juste au-dessus d'un seuil de niveau (100 × N², #9706) : la frappe le fait redescendre d'un niveau.
+    private static let scoreJustAboveLevel34 = GameLevels.threshold(of: 34) + 100
+
     func test_afterMint_dropsTheLevelByTheLawAndRaisesTheTreasuryByOne() {
-        let state = GameFixture.state(GameFixture.game(score: 121_800, held: 9), meesh: GameFixture.meesh(balance: 9, minted: 12))
+        let score = Self.scoreJustAboveLevel34
+        let state = GameFixture.state(
+            GameFixture.game(score: score, held: 9), meesh: GameFixture.meesh(balance: 9, minted: 12, debitable: score)
+        )
         let price = state.game.mint.price
 
         let next = GameOptimistic.afterMint(state)
 
-        XCTAssertEqual(next.game.level.score, 121_800 - price)
-        XCTAssertEqual(next.game.level.shown.level, GameLevels.level(forScore: 121_800 - price, cap: GameLevels.capBase))
+        XCTAssertEqual(next.game.level.score, score - price)
+        XCTAssertEqual(next.game.level.shown.level, GameLevels.level(forScore: score - price, cap: GameLevels.capBase))
         XCTAssertLessThan(next.game.level.shown.level, state.game.level.shown.level)
         XCTAssertEqual(next.game.treasury.held, 10)
         XCTAssertEqual(next.meesh?.balance, 10)
@@ -37,7 +43,8 @@ final class GameOptimisticTests: XCTestCase {
     }
 
     func test_afterMint_turnsTheTailwindOnBecauseTheLevelIsNowBelowTheRecord() {
-        let state = GameFixture.state()
+        let score = Self.scoreJustAboveLevel34
+        let state = GameFixture.state(GameFixture.game(score: score), meesh: GameFixture.meesh(debitable: score))
         XCTAssertEqual(state.game.boosts.tailwind, 1)
         XCTAssertGreaterThan(GameOptimistic.afterMint(state).game.boosts.tailwind, 1)
     }

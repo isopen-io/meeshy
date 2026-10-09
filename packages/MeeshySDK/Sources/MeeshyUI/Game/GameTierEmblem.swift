@@ -225,7 +225,10 @@ public struct TierEmblemView: View {
     ///   - tier: le palier de nom — il fixe le dessin et la couleur spectrale.
     ///   - knockout: la couleur du fond sur lequel l'emblème se pose (la Signature s'y creuse
     ///     quand le cœur est plein).
-    ///   - opacity: 1 plein ; vers 0,18, un filigrane.
+    ///   - opacity: 1 plein ; vers 0,18, un filigrane. Elle se pose sur la VUE, en groupe : la
+    ///     Signature creusée couvre le cœur au lieu de le laisser transparaître, et le filigrane
+    ///     ne dépend pas de l'opacité d'un `GraphicsContext`, que `ImageRenderer` a rendue vide
+    ///     sous iOS 26.1.
     ///   - accessibilityLabel: `nil` ⇒ décoratif ; l'hôte dit « palier Éclat ».
     public init(tier: LevelTierKey, knockout: Color = .white, opacity: Double = 1, accessibilityLabel: String? = nil) {
         self.tier = tier
@@ -238,9 +241,10 @@ public struct TierEmblemView: View {
         Canvas { context, size in
             GameTierEmblem.draw(
                 in: &context, tier: tier, center: CGPoint(x: size.width / 2, y: size.height / 2),
-                side: min(size.width, size.height), knockout: knockout, opacity: opacity
+                side: min(size.width, size.height), knockout: knockout
             )
         }
+        .opacity(opacity)
         .aspectRatio(1, contentMode: .fit)
         .gameAccessibility(label: accessibilityLabel)
     }

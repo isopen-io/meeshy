@@ -51,7 +51,9 @@ final class GamePhotoMomentsTests: XCTestCase {
     }
 
     func test_transition_aNewTier_proposesThePhoto() {
-        let moments = GamePhotoMoments.ofTransition(from: GameFixture.game(score: 3_900), to: GameFixture.game(score: 4_100))
+        let moments = GamePhotoMoments.ofTransition(
+            from: GameFixture.game(score: GameLevels.threshold(of: 20) - 100), to: GameFixture.game(score: GameLevels.threshold(of: 20) + 100)
+        )
         XCTAssertTrue(ids(moments).contains("tier:lueur") || ids(moments).contains("tier:lumiere"))
     }
 

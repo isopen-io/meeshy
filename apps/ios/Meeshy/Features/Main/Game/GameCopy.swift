@@ -180,18 +180,18 @@ enum GameCopy {
 
     /// Ce que l'étape demande — le nom du rang vient des noms de rang, jamais reformulé.
     static func levelStepGoal(_ step: GameLevelStep) -> String {
-        let count = formatCount(step.target)
+        let targetText = formatCount(step.target)
         switch step.kind {
         case .mint:
             return step.target == 1
                 ? String(localized: "game.level.step.mint_one", defaultValue: "frapper ta première Meesh", bundle: .main)
-                : String(localized: "game.level.step.mint_many", defaultValue: "frapper \(count) Meeshes", bundle: .main)
+                : String(localized: "game.level.step.mint_many", defaultValue: "frapper \(targetText) Meeshes", bundle: .main)
         case .missions:
             return step.target == 1
                 ? String(localized: "game.level.step.missions_one", defaultValue: "accomplir une mission du jour", bundle: .main)
-                : String(localized: "game.level.step.missions_many", defaultValue: "accomplir \(count) missions du jour", bundle: .main)
+                : String(localized: "game.level.step.missions_many", defaultValue: "accomplir \(targetText) missions du jour", bundle: .main)
         case .flame:
-            return String(localized: "game.level.step.flame", defaultValue: "tenir une Flamme de \(count) jours", bundle: .main)
+            return String(localized: "game.level.step.flame", defaultValue: "tenir une Flamme de \(targetText) jours", bundle: .main)
         case .rank:
             let ruled: GloryRank? = GameLevelSteps.rules.first(where: { $0.level == step.level })?.rank
             let rank = rankName(step.rank ?? ruled ?? .echo)
@@ -201,9 +201,9 @@ enum GameCopy {
 
     /// « Étape du niveau 10 : frapper ta première Meesh ».
     static func levelStepLine(_ step: GameLevelStep) -> String {
-        let level = formatCount(step.level)
+        let levelText = formatCount(step.level)
         let what = levelStepGoal(step)
-        return String(localized: "game.level.step.line", defaultValue: "Étape du niveau \(level) : \(what)", bundle: .main)
+        return String(localized: "game.level.step.line", defaultValue: "Étape du niveau \(levelText) : \(what)", bundle: .main)
     }
 
     static var levelStepDone: String {
