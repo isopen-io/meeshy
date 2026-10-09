@@ -349,7 +349,9 @@ describe('ReelPage — un réel COMPOSÉ (#6903)', () => {
   test('mode="active" ⇒ jamais data-reel-media="video" (la scène gagne, même en attendant son chunk)', () => {
     const html = page(REEL_SCENE_LOOP, { mode: 'active' });
     expect(html).toContain('data-reel-poster');
-    expect(html).toContain('Activer le son');
+    // #9698 — le son de fond d'une scène se coupe par la NOTE de son crédit
+    // (chargé à la demande) : le rail ne porte plus de baffle pour lui.
+    expect(html).not.toContain('Activer le son');
     expect(html).not.toContain('data-reel-media="video"');
   });
 

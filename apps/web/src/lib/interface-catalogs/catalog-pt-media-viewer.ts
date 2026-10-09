@@ -36,6 +36,8 @@ const ptMediaViewer = {
   'media.sound.original': 'Som original',
   'media.sound.credit': 'Som: {credit}',
   'media.sound.library': 'Som da biblioteca',
+  'media.sound.mute': 'Silenciar o som de fundo',
+  'media.sound.unmute': 'Reativar o som de fundo',
 };
 
 export default ptMediaViewer;

@@ -36,6 +36,8 @@ const deMediaViewer = {
   'media.sound.original': 'Originalton',
   'media.sound.credit': 'Ton: {credit}',
   'media.sound.library': 'Ton aus der Bibliothek',
+  'media.sound.mute': 'Hintergrundton stummschalten',
+  'media.sound.unmute': 'Hintergrundton wieder einschalten',
 };
 
 export default deMediaViewer;

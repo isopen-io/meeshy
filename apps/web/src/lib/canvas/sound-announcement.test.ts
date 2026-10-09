@@ -60,9 +60,9 @@ describe('announceBackgroundSound — la provenance du fond (miroir BackgroundSo
     expect(announceBackgroundSound({ document: noAuthor, sceneIndex: 0 })).toEqual({ kind: 'credit', text: 'Pluie' });
   });
 
-  test('un emprunt SANS métadonnées reste un crédit « ♫ — », jamais la sinusoïde', () => {
+  test('un emprunt SANS métadonnées reste un crédit « — » après la note, jamais la sinusoïde', () => {
     const document = documentWith({ objects: [audio({ isBackground: true, soundId: 'snd1', name: '   ' })] });
-    expect(announceBackgroundSound({ document, sceneIndex: 0 })).toEqual({ kind: 'credit', text: '♫ —' });
+    expect(announceBackgroundSound({ document, sceneIndex: 0 })).toEqual({ kind: 'credit', text: '—' });
   });
 
   test('le document qui déclare une piste de BIBLIOTHÈQUE prime, les métadonnées viennent de l’objet de fond', () => {
@@ -76,8 +76,27 @@ describe('announceBackgroundSound — la provenance du fond (miroir BackgroundSo
   test('document `library` sans objet ⇒ crédit générique ; `original` ⇒ sinusoïde', () => {
     const library = documentWith({ sound: { source: { t: 'library', soundId: 'snd' }, volume: 1 } });
     const original = documentWith({ sound: { source: { t: 'original' }, volume: 1 } });
-    expect(announceBackgroundSound({ document: library, sceneIndex: 0 })).toEqual({ kind: 'credit', text: '♫ —' });
+    expect(announceBackgroundSound({ document: library, sceneIndex: 0 })).toEqual({ kind: 'credit', text: '—' });
     expect(announceBackgroundSound({ document: original, sceneIndex: 0 })).toEqual({ kind: 'original' });
+  });
+
+  test('sans titre ⇒ « @auteur · date du son », dans la langue du lecteur (#9698)', () => {
+    const document = documentWith({
+      objects: [audio({ isBackground: true, soundId: 'snd1', soundAuthorUsername: 'sam', soundCreatedAt: '2026-03-12T10:00:00.000Z' })],
+    });
+    expect(announceBackgroundSound({ document, sceneIndex: 0, language: 'fr', timeZone: 'UTC' })).toEqual({ kind: 'credit', text: '@sam · 12 mars 2026' });
+    expect(announceBackgroundSound({ document, sceneIndex: 0, language: 'en', timeZone: 'UTC' })).toEqual({ kind: 'credit', text: '@sam · Mar 12, 2026' });
+  });
+
+  test('la date ne remplace QUE le titre absent, et ne se dit jamais sans auteur', () => {
+    const titled = documentWith({
+      objects: [audio({ isBackground: true, soundId: 'snd1', name: 'Pluie', soundAuthorUsername: 'sam', soundCreatedAt: '2026-03-12T10:00:00.000Z' })],
+    });
+    const anonymous = documentWith({ objects: [audio({ isBackground: true, soundId: 'snd1', soundCreatedAt: '2026-03-12T10:00:00.000Z' })] });
+    const broken = documentWith({ objects: [audio({ isBackground: true, soundId: 'snd1', soundAuthorUsername: 'sam', soundCreatedAt: 'hier' })] });
+    expect(announceBackgroundSound({ document: titled, sceneIndex: 0, language: 'fr', timeZone: 'UTC' })).toEqual({ kind: 'credit', text: 'Pluie · @sam' });
+    expect(announceBackgroundSound({ document: anonymous, sceneIndex: 0, language: 'fr', timeZone: 'UTC' })).toEqual({ kind: 'credit', text: '—' });
+    expect(announceBackgroundSound({ document: broken, sceneIndex: 0, language: 'fr', timeZone: 'UTC' })).toEqual({ kind: 'credit', text: '@sam' });
   });
 
   test('une scène hors du document ⇒ rien', () => {

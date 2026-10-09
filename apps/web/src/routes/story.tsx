@@ -19,6 +19,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { backgroundCss } from '@/lib/canvas/background';
+import { documentAnnouncesSound } from '@/lib/canvas/document';
 import { useOnline } from '@/lib/net/online';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
@@ -293,6 +294,14 @@ export default function StoryScreen() {
   const [storySoundMuted, setStorySoundMuted] = useState(false);
   const muteBlockedPlayback = useCallback(() => setStorySoundMuted(true), []);
   const toggleSound = useCallback(() => setStorySoundMuted((m) => !m), []);
+  /* LA NOTE DU CRÉDIT EST LE MUET (#9698) dès que la scène annonce un son de
+     fond : le rail ne garde son bouton « Son » que pour une scène sans crédit
+     (la piste propre d'une vidéo de fond). */
+  const noteMutes = showsSound && documentAnnouncesSound(sceneDocument);
+  const soundControl = useMemo(
+    () => (noteMutes ? { muted: storySoundMuted, onToggle: toggleSound, probe: { 'data-story-sound-toggle': '' } as const } : undefined),
+    [noteMutes, storySoundMuted, toggleSound],
+  );
 
   const [paused, setPaused] = useState(false);
   /* Le chrome se MASQUE pendant la pause par APPUI LONG et revient à la
@@ -548,7 +557,7 @@ export default function StoryScreen() {
     story: currentStory,
     isOwnStory: group?.isMine === true,
     visitor,
-    showsSound,
+    showsSound: showsSound && !noteMutes,
     toggleSound,
     announce,
     language: interfaceLanguage,
@@ -803,6 +812,7 @@ export default function StoryScreen() {
             /* LE CRÉDIT DU SON (#9678, vue `2f`) — lu sur la scène QUI JOUE : celle
                de la source pour une story repartagée sans effets propres. */
             soundDocument={sceneDocument}
+            soundControl={soundControl}
             /* LA PASTILLE DU PRISME (D-99, #7114) — entre l'heure et la croix,
                comme le fil et les commentaires. */
             prism={

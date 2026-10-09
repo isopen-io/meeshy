@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
@@ -14,6 +14,7 @@ import { carrierMediaIdentity } from '@/lib/canvas/carrier';
 import { watchMediaStall } from '@/lib/media/media-stall';
 import { sceneWaitingImage } from '@/lib/canvas/scene-placeholder';
 import { sceneHasAudibleBackgroundVideo, sceneHasControllableSound } from '@/lib/canvas/background-sound';
+import { documentAnnouncesSound } from '@/lib/canvas/document';
 import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import type { FeedCardMedia, FeedCardModel, FeedCardScene } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
@@ -400,6 +401,15 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
       ? sceneHasControllableSound({ document: stage.scene.document, sceneIndex: 0, carrier: stage.scene.carrier })
       : sceneHasAudibleBackgroundVideo({ document: stage.scene.document, sceneIndex: 0 }));
   const playable = stage.kind === 'video' || stage.kind === 'audio' || sceneSound;
+  /* LA NOTE DU CRÉDIT EST LE MUET (#9698) dès que la scène annonce un son de
+     fond qu'on peut couper ; le bouton son du rail ne reste que sans crédit —
+     la piste propre d'une vidéo, d'un son, ou d'une vidéo de fond. */
+  const noteMutes = sceneSound && documentAnnouncesSound(model.scene?.document);
+  const { soundOn, onToggleSound } = props;
+  const soundControl = useMemo(
+    () => (noteMutes ? { muted: !soundOn, onToggle: onToggleSound, probe: { 'data-reel-gesture': 'sound' } as const } : undefined),
+    [noteMutes, soundOn, onToggleSound],
+  );
   const chromeHidden = props.chromeHidden === true;
 
   return (
@@ -453,6 +463,7 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
                 <ViewerIdentity
                   nameProbe={{ 'data-reel-author': '' }}
                   soundDocument={model.scene?.document}
+                  soundControl={soundControl}
                   identity={{
                     name: model.author.name,
                     initials: model.author.initials,
@@ -482,7 +493,7 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
               hidden={chromeHidden}
               actions={reelActions({
                 model,
-                playable,
+                playable: playable && !noteMutes,
                 soundOn: props.soundOn,
                 language,
                 onToggleSound: props.onToggleSound,

@@ -36,6 +36,8 @@ const enMediaViewer = {
   'media.sound.original': 'Original sound',
   'media.sound.credit': 'Sound: {credit}',
   'media.sound.library': 'Library sound',
+  'media.sound.mute': 'Mute background sound',
+  'media.sound.unmute': 'Unmute background sound',
 };
 
 export default enMediaViewer;

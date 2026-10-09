@@ -36,6 +36,8 @@ const esMediaViewer = {
   'media.sound.original': 'Sonido original',
   'media.sound.credit': 'Sonido: {credit}',
   'media.sound.library': 'Sonido de la biblioteca',
+  'media.sound.mute': 'Silenciar el sonido de fondo',
+  'media.sound.unmute': 'Reactivar el sonido de fondo',
 };
 
 export default esMediaViewer;

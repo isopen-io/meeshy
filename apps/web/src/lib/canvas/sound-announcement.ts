@@ -1,21 +1,24 @@
-import type { CanvasDocument, CanvasObject, CanvasScene } from '@/lib/canvas/document';
+import { backgroundAudioOf, backgroundSoundProvenance, soundAuthorTag, type CanvasDocument, type CanvasObject } from '@/lib/canvas/document';
 
 /**
- * L'ANNONCE DU SON DE FOND (#9678) — miroir de `BackgroundSoundBadge.announcement(for:)`
- * (`apps/ios/.../BackgroundSoundBadge.swift`) et de `AudioChipDisplay`
- * (`MeeshyUI/Story/Controls/AudioChipDisplay.swift`), la loi iOS :
+ * L'ANNONCE DU SON DE FOND (#9678, #9698) — miroir de
+ * `BackgroundSoundBadge.announcement(for:)` et d'`AudioChipDisplay.creditLine`,
+ * la loi iOS :
  *
  * - `none` : aucune piste de fond — l'annonce n'existe que si une piste existe ;
  * - `original` : une piste PROPRE (aucun `soundId`) — la note et la sinusoïde ;
- * - `credit` : une piste EMPRUNTÉE à la bibliothèque (`soundId`) — « titre · @auteur »,
- *   et « ♫ — » quand ses métadonnées manquent : jamais la sinusoïde, qui mentirait
+ * - `credit` : une piste EMPRUNTÉE à la bibliothèque — « titre · @auteur » ;
+ *   sans titre « @auteur · date du son » (`soundCreatedAt`, date courte de la
+ *   langue du lecteur) ; sans rien « — ». Jamais la sinusoïde, qui mentirait
  *   sur la provenance.
  *
- * `soundId` décide, jamais la présence d'un titre (`StoryAudioIdentity.form(of:)`).
- * Le document (`CanvasV3.sound`) prime pour la provenance, comme
- * `backgroundSound(of:)` ; les métadonnées viennent de l'objet de fond.
+ * Le texte ne porte PAS la note : elle est le contrôle du crédit
+ * (`background-sound-credit.tsx`), dessinée devant lui.
  *
- * Chargé à la demande avec le crédit (`background-sound-credit.tsx`).
+ * Quel objet est le fond, et sa provenance : la règle partagée
+ * (`@meeshy/shared/utils/scene-audio`, lue par `lib/canvas/document`).
+ *
+ * Chargé à la demande avec le crédit.
  */
 export type BackgroundSoundAnnouncement =
   | { readonly kind: 'none' }
@@ -24,56 +27,51 @@ export type BackgroundSoundAnnouncement =
 
 export const NO_BACKGROUND_SOUND: BackgroundSoundAnnouncement = { kind: 'none' };
 
-export const GENERIC_CREDIT = '♫ —';
+export const GENERIC_CREDIT = '—';
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 const trimmed = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
   const text = value.trim();
   return text === '' ? undefined : text;
 };
 
-function creditText(object: CanvasObject | undefined): string {
+type DateContext = { readonly language?: string | undefined; readonly timeZone?: string | undefined };
+
+/** « 12 mars 2026 » — `undefined` pour une date illisible : le crédit s'en passe. */
+function creditDate(iso: string | undefined, { language, timeZone }: DateContext): string | undefined {
+  if (iso === undefined) return undefined;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return new Intl.DateTimeFormat(language, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    ...(timeZone !== undefined ? { timeZone } : {}),
+  }).format(date);
+}
+
+function creditText(object: CanvasObject | undefined, context: DateContext): string {
   const title = trimmed(object?.payload.name);
-  const author = trimmed(object?.payload.soundAuthorUsername)?.replace(/^@+/, '');
-  const tag = author === undefined || author === '' ? undefined : `@${author}`;
-  const parts = [title, tag].filter((part): part is string => part !== undefined);
+  const tag = soundAuthorTag(object?.payload.soundAuthorUsername);
+  const date = title === undefined && tag !== undefined ? creditDate(trimmed(object?.payload.soundCreatedAt), context) : undefined;
+  const parts = [title, tag, date].filter((part): part is string => part !== undefined);
   return parts.length === 0 ? GENERIC_CREDIT : parts.join(' · ');
-}
-
-/** Le fond sonore d'une scène — MÊME prédicat que `electBackgroundTrack`
- * (`background-sound.ts`), que ce module n'importe pas : il tirerait le porteur
- * et la résolution d'adresse dans le chunk du crédit, et un nom de plus dans la
- * table de l'entrée (mesuré, #9678). */
-function backgroundAudioObject(scene: CanvasScene): CanvasObject | undefined {
-  return scene.objects.find((o) => o.kind === 'audio' && o.payload.isBackground === true);
-}
-
-type Provenance = 'original' | 'library' | null;
-
-function documentProvenance(sound: unknown): Provenance {
-  if (!isRecord(sound) || !isRecord(sound.source)) return null;
-  if (sound.source.t === 'library') return 'library';
-  if (sound.source.t === 'original') return 'original';
-  return null;
-}
-
-function objectProvenance(object: CanvasObject | undefined): Provenance {
-  if (object === undefined) return null;
-  return trimmed(object.payload.soundId) === undefined ? 'original' : 'library';
 }
 
 export function announceBackgroundSound(params: {
   readonly document: CanvasDocument;
   readonly sceneIndex: number;
+  /** La langue d'interface du lecteur : celle de la date du son. */
+  readonly language?: string | undefined;
+  /** Le fuseau du lecteur par défaut ; fixé par les témoins. */
+  readonly timeZone?: string | undefined;
 }): BackgroundSoundAnnouncement {
   const scene = params.document.scenes[params.sceneIndex];
   if (scene === undefined) return NO_BACKGROUND_SOUND;
-  const object = backgroundAudioObject(scene);
-  const provenance = documentProvenance(params.document.sound) ?? objectProvenance(object);
+  const provenance = backgroundSoundProvenance({ documentSound: params.document.sound, objects: scene.objects });
   if (provenance === null) return NO_BACKGROUND_SOUND;
   if (provenance === 'original') return { kind: 'original' };
-  return { kind: 'credit', text: creditText(object) };
+  return { kind: 'credit', text: creditText(backgroundAudioOf(scene.objects), params) };
 }
 
 /** `AudioChipMarquee` : 28 points par seconde, 24 points entre les deux copies. */

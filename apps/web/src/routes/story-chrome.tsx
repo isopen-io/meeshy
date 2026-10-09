@@ -4,6 +4,7 @@ import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 
 import { GlyphSvg } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
+import type { SoundCreditControl } from '@/components/background-sound-credit';
 import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from '@/components/viewer-chrome';
 import { ViewerCaption } from '@/components/viewer-caption';
 import { ViewerMenu } from '@/components/viewer-chrome-menu';
@@ -51,6 +52,7 @@ export function StoryTopBar({
   onOptionsOpenChange,
   prism,
   soundDocument,
+  soundControl,
 }: {
   /** `data-story-author` est la PRISE de mesure du gate de la Lentille : une comparaison d'identifiants, jamais de libellés. */
   readonly authorId: string;
@@ -67,6 +69,8 @@ export function StoryTopBar({
   readonly prism?: ReactNode;
   /** La scène qui joue : son crédit de son (#9678, vue `2f`) a sa propre ligne, sous le nom. */
   readonly soundDocument?: CanvasDocument | null;
+  /** Présent ⇒ la note du crédit est le muet de la story (#9698) : plus de bouton « Son » au rail. */
+  readonly soundControl?: SoundCreditControl | undefined;
 }) {
   return (
     <ViewerTopBar
@@ -76,6 +80,7 @@ export function StoryTopBar({
       above={progress}
       identity={identity}
       soundDocument={soundDocument}
+      soundControl={soundControl}
       exit={{ kind: 'close', label: 'Fermer', onExit: onClose }}
       trailing={
         <>
