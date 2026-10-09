@@ -36,6 +36,7 @@ final class VitrineSourceGuardTests: XCTestCase {
             "apps/ios/Meeshy/Features/Main/Views/MessageListViewController+SeenTracking.swift",
             "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",
             "apps/ios/Meeshy/Features/Main/Views/PostDetailView+CommentComposer.swift",
+            "apps/ios/Meeshy/Features/Main/Views/CommentReplyFocus.swift",
             "apps/ios/Meeshy/Features/Main/Views/ReactionPaletteModifier.swift",
             "apps/ios/Meeshy/Features/Main/Views/PostReactionPalette.swift",
             "apps/ios/Meeshy/Features/Main/Services/CommentPublisher.swift",
