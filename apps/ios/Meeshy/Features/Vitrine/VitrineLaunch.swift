@@ -21,6 +21,7 @@ nonisolated enum VitrineScene: String, CaseIterable, Sendable {
     case jeuFrappe = "jeu-frappe"
     case jeuNiveau = "jeu-niveau"
     case jeuBadge = "jeu-badge"
+    case interactionFrappe = "interaction-frappe"
 
     /// La scène « lien » montre ce que voit un invité SANS compte.
     var ouvreUneSession: Bool { self != .lien }

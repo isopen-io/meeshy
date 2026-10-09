@@ -107,7 +107,7 @@ enum VitrineStage {
                 fatalError("Vitrine « \(scene.rawValue) » : sa conversation manque aux fixtures")
             }
             NotificationCenter.default.post(name: .navigateToConversation, object: conversation)
-        case .progression, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
+        case .progression, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe:
             NotificationCenter.default.post(name: Notification.Name("pushNavigateToRoute"), object: "progression")
         case .lien:
             break
@@ -130,7 +130,7 @@ enum VitrineStage {
         case .amour: await faireEntendre(destination)
         case .groupe: rouvrirSurLOriginal(destination)
         case .imagine: await imaginer(destination, f)
-        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: break
+        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe: break
         }
     }
 

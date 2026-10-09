@@ -27,7 +27,7 @@ extension VitrineScene {
     nonisolated func rendusAttendus(conversationId: String?, appareil: VitrineAppareil) -> Set<VitrineEvenement> {
         switch self {
         case .global, .amour, .groupe, .imagine: return [.conversation(conversationId ?? "")]
-        case .progression: return appareil == .ipad ? [.progression, .fil] : [.progression]
+        case .progression, .interactionFrappe: return appareil == .ipad ? [.progression, .fil] : [.progression]
         case .lien: return [.lien]
         case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
             let fiche = VitrineEvenement.fiche(celebration?.concept ?? .level)
