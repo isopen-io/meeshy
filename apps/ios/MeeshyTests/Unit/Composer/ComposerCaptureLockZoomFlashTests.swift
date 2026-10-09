@@ -224,7 +224,7 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         // #9351 — le cadenas, le zoom et la phrase sont passés au bas de la capture.
         let bas = try source("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("ComposerCaptureHold.showsLock"))
-        XCTAssertTrue(bas.contains("ComposerCaptureZoomPresets("))
+        XCTAssertTrue(bas.contains("ComposerCaptureZoomBar("), "les crans, montés par la barre qui morphe (#9753)")
         XCTAssertTrue(bas.contains("ComposerSceneCameraCopy.lockHint"), "la phrase du bas dit le cadenas")
         let bande = try source("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(bande.contains("session.releaseStaleHold()"),
