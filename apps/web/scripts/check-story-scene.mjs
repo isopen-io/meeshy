@@ -572,8 +572,8 @@ async function runScheme(colorScheme) {
 
        LE TÉMOIN MESURE LA CAUSE, PAS SON DÉLAI. Attendre les six secondes de
        la diapositive rendrait un gate lent ET fragile ; ce qui se mesure ici
-       est que la lecture N'A PAS REPRIS (`data-story-paused` tient) et que
-       DEUX taps au bord — reprendre, puis naviguer — ne déplacent rien.
+       est que la story BOUCLE toujours sous la feuille (`data-story-hold` vaut
+       `loop`, #9821) et que DEUX taps au bord ne déplacent rien.
        C'est le scénario exact de la recette manuelle, en un dixième du temps. */
     const bordDroit = await page.$eval('[data-story-scene]', (el) => {
       const r = el.getBoundingClientRect();
@@ -586,13 +586,13 @@ async function runScheme(colorScheme) {
     await page.waitForTimeout(350);
     const apresTap = await page.evaluate(() => ({
       story: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
-      pause: document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') ?? null,
+      hold: document.querySelector('[data-story-scene]')?.getAttribute('data-story-hold') ?? null,
       sheet: document.querySelector('[data-story-comments-sheet]') !== null,
       text: document.querySelector('[data-comment-field]')?.value ?? null,
     }));
     check(
-      apresTap.story === avantTap && apresTap.pause === 'true' && apresTap.sheet === true && apresTap.text === typed,
-      `${tag} st-amie-2 : DEUX taps sur la scène nue, feuille ouverte, ne doivent ni reprendre la lecture ni naviguer ni emporter le brouillon — ${avantTap} → ${JSON.stringify(apresTap)}`,
+      apresTap.story === avantTap && apresTap.hold === 'loop' && apresTap.sheet === true && apresTap.text === typed,
+      `${tag} st-amie-2 : DEUX taps sur la scène nue, feuille ouverte, ne doivent ni sortir la story de sa boucle ni naviguer ni emporter le brouillon — ${avantTap} → ${JSON.stringify(apresTap)}`,
     );
     /* MÊME DISCIPLINE QU'AU SYMPTÔME a : si celui-ci tombe, la feuille a été
        emportée et les témoins SUIVANTS mourraient d'un `page.click` en
@@ -623,7 +623,7 @@ async function runScheme(colorScheme) {
           const scene = document.querySelector('[data-story-scene]');
           return (
             scene?.getAttribute('data-story-scene') !== avant ||
-            scene?.getAttribute('data-story-paused') !== 'true' ||
+            scene?.getAttribute('data-story-hold') !== 'loop' ||
             document.querySelector('[data-story-comments-sheet]') === null
           );
         },
@@ -633,12 +633,12 @@ async function runScheme(colorScheme) {
       .catch(() => undefined);
     const apresPanneau = await page.evaluate(() => ({
       story: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
-      pause: document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') ?? null,
+      hold: document.querySelector('[data-story-scene]')?.getAttribute('data-story-hold') ?? null,
       sheet: document.querySelector('[data-story-comments-sheet]') !== null,
     }));
     check(
-      apresPanneau.story === avantPanneau && apresPanneau.pause === 'true' && apresPanneau.sheet === true,
-      `${tag} st-amie-2 : une flèche ou Espace sur la feuille nue ne doit ni avancer la story ni la relancer — ${avantPanneau} → ${JSON.stringify(apresPanneau)}`,
+      apresPanneau.story === avantPanneau && apresPanneau.hold === 'loop' && apresPanneau.sheet === true,
+      `${tag} st-amie-2 : une flèche ou Espace sur la feuille nue ne doit ni avancer la story ni la figer — ${avantPanneau} → ${JSON.stringify(apresPanneau)}`,
     );
     if (!apresPanneau.sheet) {
       await page.goto(`${BASE}/story/st-amie-2`, { waitUntil: 'load' });
@@ -893,7 +893,7 @@ async function runAuthorRail(colorScheme) {
     JSON.stringify(feuille.liens) === JSON.stringify(['/u/noor.haddad', '/u/elan.roy', '/u/mika.sorel']),
     `${tag} : chaque lecteur mène à son profil — ${JSON.stringify(feuille.liens)}`,
   );
-  check(pendantFeuille.paused, `${tag} : la story doit être EN PAUSE sous la feuille — ${JSON.stringify(pendantFeuille)}`);
+  check(pendantFeuille.paused, `${tag} : la pause voulue (Espace) tient sous la feuille — ${JSON.stringify(pendantFeuille)}`);
   check(!feuille.railAtteignable, `${tag} : feuille ouverte, le rail ne doit plus être atteignable`);
 
   await page.keyboard.press('Escape');
@@ -903,8 +903,7 @@ async function runAuthorRail(colorScheme) {
   await page
     .waitForFunction(
       () =>
-        document.querySelector('dialog[open]') === null &&
-        (location.pathname !== '/story/st-mienne' || document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') !== 'true'),
+        document.querySelector('dialog[open]') === null,
       undefined,
       { timeout: 3000 },
     )
@@ -915,7 +914,9 @@ async function runAuthorRail(colorScheme) {
     apresEchap.path === '/story/st-mienne' && apresEchap.scene === 'st-mienne',
     `${tag} : Échap ferme la FEUILLE, jamais le lecteur — ${JSON.stringify(apresEchap)}`,
   );
-  check(!apresEchap.paused, `${tag} : la feuille fermée, la lecture doit REPRENDRE — ${JSON.stringify(apresEchap)}`);
+  /* La pause VOULUE (Espace, posée par `figer`) survit à la feuille : la
+     fermer ne relance pas une story que l'utilisateur a figée (#9821). */
+  check(apresEchap.paused, `${tag} : la feuille fermée, la pause voulue doit TENIR — ${JSON.stringify(apresEchap)}`);
   check(focusRendu === 'views', `${tag} : la feuille fermée rend le focus à « Vues » — reçu ${JSON.stringify(focusRendu)}`);
 
   /* MÊME DISCIPLINE QU'AU § 7 : si Échap a emporté le lecteur, les témoins

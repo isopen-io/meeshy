@@ -6,12 +6,11 @@
  *   espace), l'onglet caché, un appel en cours.
  * - `loop` : commentaires, options, langues, feuilles « Vues » / « Envoyer »,
  *   profil, composition — la story JOUE ; à sa fin, elle repart à son début
- *   au lieu de passer à la suivante ou de fermer le lecteur.
+ *   au lieu de passer à la suivante ou de fermer le lecteur (le minuteur
+ *   de `routes/story.tsx` la relance en place quand elle vaut `loop`).
  * - `null` : rien ne la retient, elle avance.
  */
 export type StoryPlaybackHold = 'pause' | 'loop';
-
-export type StoryEndAction = 'advance' | 'restart-in-place';
 
 export function resolveStoryPlaybackHold(causes: {
   readonly paused: boolean;
@@ -19,8 +18,4 @@ export function resolveStoryPlaybackHold(causes: {
 }): StoryPlaybackHold | null {
   if (causes.paused) return 'pause';
   return causes.engaged ? 'loop' : null;
-}
-
-export function storyEndAction(hold: StoryPlaybackHold | null): StoryEndAction {
-  return hold === 'loop' ? 'restart-in-place' : 'advance';
 }

@@ -52,7 +52,7 @@ import {
   type StoryPlaybackGroup,
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
-import { resolveStoryPlaybackHold, storyEndAction } from '@/lib/stories/playback-hold';
+import { resolveStoryPlaybackHold } from '@/lib/stories/playback-hold';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { useProfilePeekOpen } from '@/lib/view/profile-peek';
@@ -364,8 +364,8 @@ export default function StoryScreen() {
   const painterRef = useRef<SceneScrubPainter | null>(null);
   /** Le segment actif se parcourt au doigt (#7879) — loi d'hôte extraite. */
   const scrub = useStoryScrub({ storyId: currentStory?.id, elapsedRef, startTsRef });
-  /** Une surface engage la story (#9821) — lu par le minuteur à la fin du tour. */
-  const engagedRef = useRef(false);
+  /** Ce qui retient la story (#9821) — lu par le minuteur à la fin du tour. */
+  const holdRef = useRef<ReturnType<typeof resolveStoryPlaybackHold>>(null);
 
   /** L'UNIQUE écriture de la progression — hors de React, à chaque image. */
   const paintProgress = useCallback((ratio: number) => painterRef.current?.(ratio), []);
@@ -422,12 +422,12 @@ export default function StoryScreen() {
       const ratio = Math.min(1, elapsed / dureeMs);
       paintProgress(ratio);
       if (ratio >= 1) {
-        if (storyEndAction(resolveStoryPlaybackHold({ paused: false, engaged: engagedRef.current })) === 'advance') {
+        if (holdRef.current !== 'loop') {
           advance('next');
           return;
         }
+        /* En boucle : la story repart de zéro, la barre suit à l'image suivante. */
         scrub.onScrub(0);
-        paintProgress(0);
       }
       raf = requestAnimationFrame(tick);
     };
@@ -546,8 +546,8 @@ export default function StoryScreen() {
      mi-phrase). Seule la pause demandée la fige. */
   const [optionsOpen, setOptionsOpen] = useState(false);
   const engaged = commentsOpen || viewersOpen || profilePeekOpen || optionsOpen || storySend.sheetOpen || language.barOpen;
-  engagedRef.current = engaged;
-  const looping = resolveStoryPlaybackHold({ paused, engaged }) === 'loop';
+  const hold = resolveStoryPlaybackHold({ paused, engaged });
+  holdRef.current = hold;
 
   /* LE RAIL D'ACTIONS, CÔTÉ HÔTE — le GEL et les GESTIONNAIRES vivent dans
      `use-story-action-rail.ts` (§ budget, #7114) ; ce lecteur BRANCHE ce
@@ -735,7 +735,7 @@ export default function StoryScreen() {
           className="relative flex flex-1 flex-col overflow-hidden select-none"
           data-story-scene={currentStory.id}
           data-story-paused={paused ? 'true' : undefined}
-          data-story-looping={looping ? 'true' : undefined}
+          data-story-hold={hold ?? undefined}
           onPointerDown={gestures.onPointerDown}
           onPointerUp={gestures.onPointerUp}
           onPointerMove={gestures.onPointerMove}
