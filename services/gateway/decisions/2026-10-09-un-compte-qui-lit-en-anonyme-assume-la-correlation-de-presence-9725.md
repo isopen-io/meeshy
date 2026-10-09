@@ -1,4 +1,4 @@
-# Un compte qui lit en anonyme assume la corrélation de présence avec son invité (2026-10-09, #9725)
+## Un compte qui lit en anonyme assume la corrélation de présence avec son invité (2026-10-09, #9725)
 
 ## Contexte
 
