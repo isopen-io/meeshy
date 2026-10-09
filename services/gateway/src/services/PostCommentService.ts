@@ -7,7 +7,7 @@ import { syncCommentTrackingLinks } from './posts/publicationTrackingLinks';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace } from './location/sharedPlace';
 import { parseMessageSticker } from './stickers/messageSticker';
-import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { assertCommentMediaClaimable, claimCommentMedia } from './posts/commentMediaClaim';
 import { applyCommentMediaOrder } from './posts/mediaOrder';
 import type { QuotedPostMedia } from './posts/quotedPostMediaSnapshot';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -127,20 +127,11 @@ export class PostCommentService {
       if (!parent) throw new Error('PARENT_NOT_FOUND');
     }
 
-    // Verify the pending media belongs to no post/comment yet (anti-hijack) before linking.
+    // Chaque média demandé doit être LIBRE et téléversé par l'auteur de la
+    // requête, AVANT toute création (#9745) — `posts/commentMediaClaim.ts`.
     // Un SEUL média indisponible refuse tout le lot : publier un commentaire
-    // amputé d'une de ses photos, en silence, est pire que le refus — c'est la
-    // même règle que `describeClaimShortfall` rend visible plus bas.
-    if (demandes.length > 0) {
-      const libres = await this.prisma.postMedia.findMany({
-        where: { id: { in: demandes } },
-        select: { id: true, postId: true, commentId: true },
-      });
-      const disponibles = libres.filter((m) => !m.postId && !m.commentId);
-      if (disponibles.length !== demandes.length) {
-        throw new Error('MEDIA_NOT_AVAILABLE');
-      }
-    }
+    // amputé d'une de ses pièces, en silence, est pire que le refus.
+    await assertCommentMediaClaimable(this.prisma, { authorId, mediaIds: demandes });
 
     // Lieu partagé : validation stricte côté serveur (bornes, rejet
     // NaN/Infinity, bornage des chaînes). Chiffrement : stockage EN CLAIR
@@ -149,7 +140,7 @@ export class PostCommentService {
     const sharedPlace = parseSharedPlace(location);
     const stickerDescriptor = parseMessageSticker(sticker);
 
-    const comment = await this.prisma.postComment.create({
+    const creation = {
       data: {
         postId,
         authorId,
@@ -179,32 +170,19 @@ export class PostCommentService {
           : {}),
       },
       select: CREATED_COMMENT_SELECT,
-    });
-
-    // Lier le média pending au commentaire + persister la transcription mobile éventuelle.
-    //
-    // La pré-vérification anti-hijack plus haut couvre « le média est déjà
-    // pris ». Elle ne couvre PAS deux choses : à qui il appartient, et le fait
-    // qu'elle vérifie puis agit en deux temps — entre le `findUnique` et cet
-    // écrit, un autre commentaire peut avoir réclamé le même média.
-    //
-    // Porter la condition dans le `where` de l'écriture règle les deux : la
-    // base tranche en une opération. `updateMany` est obligatoire pour ça —
-    // `update` n'accepte qu'un critère unique, pas une clause composée.
-    if (demandes.length > 0) {
-      const linked = await this.prisma.postMedia.updateMany({
-        where: { id: { in: demandes }, ...claimableMediaWhere(authorId) },
-        data: { commentId: comment.id },
-      });
-      const shortfall = describeClaimShortfall(demandes, linked.count);
-      if (shortfall) {
-        // Le commentaire existe déjà et reste publié : refuser le média sans
-        // trace donnerait un commentaire vide inexplicable.
-        enhancedLogger.warn(`[PostCommentService] createComment: ${shortfall}`, {
-          commentId: comment.id, authorId, mediaIds: demandes,
+    };
+    // Création et réclamation dans UNE transaction dès qu'il y a des médias :
+    // un média pris entre l'admission et la réclamation annule la création.
+    // Sans média, une seule écriture — aucune transaction à ouvrir.
+    const comment = demandes.length === 0
+      ? await this.prisma.postComment.create(creation)
+      : await this.prisma.$transaction(async (tx) => {
+          const created = await tx.postComment.create(creation);
+          await claimCommentMedia(tx, { commentId: created.id, authorId, mediaIds: demandes });
+          return created;
         });
-      }
 
+    if (demandes.length > 0) {
       // Le RANG suit l'ordre de la requête — c'est le seul endroit qui porte
       // l'ordre voulu par l'utilisateur. Même raison, et même garde, que
       // `applyMediaOrder` côté post : sans lui, `orderBy: { order: 'asc' }`

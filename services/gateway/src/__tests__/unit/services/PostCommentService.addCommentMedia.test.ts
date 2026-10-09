@@ -40,7 +40,7 @@ const buildPrismaForAdd = (postMedia: ReturnType<typeof makePostMediaMock>) => {
     createdAt: new Date('2025-01-01T00:00:00Z'), metadata: null,
     author: { id: 'a1', username: 'al', displayName: 'Al', avatar: null },
   };
-  return {
+  const prisma = {
     post: {
       findFirst: jest.fn().mockResolvedValue({ id: 'post-1' }),
       update: jest.fn().mockResolvedValue({}),
@@ -51,7 +51,11 @@ const buildPrismaForAdd = (postMedia: ReturnType<typeof makePostMediaMock>) => {
       update: jest.fn().mockResolvedValue({}),
     },
     postMedia,
-  } as unknown as PrismaClient;
+    // Création + réclamation partagent une transaction (#9745) : le double la
+    // déroule sur le même client.
+    $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
+  };
+  return prisma as unknown as PrismaClient;
 };
 
 describe('PostCommentService.addComment — media', () => {
@@ -149,28 +153,38 @@ describe('PostCommentService.addComment — media', () => {
     expect(result.media).toHaveLength(3);
   });
 
+  // La garde vit dans la REQUÊTE (#9745) : libre ET téléversé par l'auteur. Un
+  // média pris, inconnu ou à quelqu'un d'autre n'en revient pas — la lecture
+  // rend moins de lignes que demandé. Le comportement de bout en bout, sur un
+  // double qui honore le filtre : `PostCommentService.mediaOwnership.test.ts`.
   it('throws MEDIA_NOT_AVAILABLE when the media is already linked', async () => {
     const postMedia = makePostMediaMock();
-    postMedia.findMany.mockResolvedValue([{ id: 'm-3', postId: 'other-post', commentId: null }]);
+    postMedia.findMany.mockResolvedValue([]);
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
     await expect(service.addComment('post-1', 'a1', 'hi', { effectFlags: 0, originalLanguage: 'fr', mediaIds: ['m-3'] }))
       .rejects.toThrow('MEDIA_NOT_AVAILABLE');
+    const admission = postMedia.findMany.mock.calls[0][0];
+    expect(admission.where.id).toEqual({ in: ['m-3'] });
+    expect(admission.where.uploaderId).toBe('a1');
+    expect(admission.where.AND).toEqual([
+      { OR: [{ postId: null }, { postId: { isSet: false } }] },
+      { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+    ]);
+    expect((prisma as any).postComment.create).not.toHaveBeenCalled();
   });
 
   it('REFUSE le lot ENTIER dès qu’UN média est indisponible — jamais un commentaire amputé en silence', async () => {
     const postMedia = makePostMediaMock();
-    postMedia.findMany.mockResolvedValue([
-      { id: 'libre', postId: null, commentId: null },
-      { id: 'pris', postId: null, commentId: 'autre-commentaire' },
-    ]);
+    postMedia.findMany.mockResolvedValue([{ id: 'libre' }]);
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
     await expect(service.addComment('post-1', 'a1', 'hi', { mediaIds: ['libre', 'pris'] }))
       .rejects.toThrow('MEDIA_NOT_AVAILABLE');
     expect(postMedia.updateMany).not.toHaveBeenCalled();
+    expect((prisma as any).postComment.create).not.toHaveBeenCalled();
   });
 
   it('grave `metadata.quotedPostMedia` À CÔTÉ du lieu partagé — une seule écriture, pas deux (#6578)', async () => {
