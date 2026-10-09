@@ -107,6 +107,16 @@ extension ConversationView {
     func startRecording() {
         audioRecorder.startRecording()
         HapticFeedback.medium()
+        // #9784 — la prise se suit dans l'îlot quand on quitte l'app, et s'y
+        // arrête par les MÊMES gestes que le composeur.
+        let recorder = audioRecorder
+        VoiceRecordingLiveActivityCoordinator.shared.track(
+            recorder: recorder,
+            conversationId: viewModel.conversationId,
+            title: viewModel.currentConversationName,
+            onStop: { _ = stopRecordingToAttachment() },
+            onCancel: { recorder.cancelRecording() }
+        )
     }
 
     /// Stop the recorder and drop the audio into the composer's attachment

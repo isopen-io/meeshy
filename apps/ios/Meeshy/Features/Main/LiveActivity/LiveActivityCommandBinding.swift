@@ -37,8 +37,10 @@ final class LiveActivityCommandBinding {
             ConversationAudioCoordinator.shared.skip(by: -VoicePlaybackActivityLaw.skipInterval)
         case .playbackForward:
             ConversationAudioCoordinator.shared.skip(by: VoicePlaybackActivityLaw.skipInterval)
-        case .recordingStop, .recordingCancel:
-            return
+        case .recordingStop:
+            VoiceRecordingLiveActivityCoordinator.shared.stop()
+        case .recordingCancel:
+            VoiceRecordingLiveActivityCoordinator.shared.cancel()
         }
     }
 }
