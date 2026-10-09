@@ -256,7 +256,12 @@ final class FloatingButtonPlacementTests: XCTestCase {
         let code = ComposerSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
         let writes = code.components(separatedBy: "\n").filter {
             $0.range(of: #"PositionRaw\s*=[^=]"#, options: .regularExpression) != nil
+                && !$0.contains("self._")
         }
+        let wirings = code.components(separatedBy: "\n").filter {
+            $0.range(of: #"self\._(left|right)PositionRaw\s*=[^=]"#, options: .regularExpression) != nil
+        }
+        XCTAssertEqual(wirings.count, 2, "l'initialiseur câble les deux liaisons, il n'écrit aucune position : \(wirings)")
         XCTAssertEqual(writes.count, 2, "\(writes)")
         let guarded = code.components(separatedBy: "geometry.storage(afterDragFrom:").count - 1
         XCTAssertEqual(guarded, 2, "chaque écriture passe par le seuil du glisser")
