@@ -232,6 +232,13 @@ describe('SceneObjectAudio — la pastille du son de premier plan (#9737)', () =
     expect(chip?.getAttribute('aria-hidden')).toBe('true');
   });
 
+  test('100 000 échantillons FORGÉS par un auteur ⇒ au plus 24 barres rendues : le contenu ne commande jamais la taille du DOM', () => {
+    const el = render(posed({ waveformSamples: Array.from({ length: 100_000 }, (_, i) => (i % 10) / 10) }));
+    const bars = el.querySelectorAll('[data-scene-audio-bar]').length;
+    expect(bars).toBeGreaterThan(0);
+    expect(bars).toBeLessThanOrEqual(24);
+  });
+
   test('un enregistrement sans échantillons ⇒ l’onde de repos, jamais une pastille vide ni des barres qui se diraient les siennes', () => {
     const el = render(posed({}));
     const chip = el.querySelector('[data-scene-audio-chip="recording"]');

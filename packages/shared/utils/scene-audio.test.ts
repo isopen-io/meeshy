@@ -4,6 +4,7 @@ import {
   backgroundAudioOf,
   backgroundSoundProvenance,
   isBackgroundAudio,
+  SCENE_AUDIO_CHIP_BARS,
   sceneAudioChipForm,
   sceneAudioPresence,
   soundAuthorTag,
@@ -36,6 +37,26 @@ describe('sceneAudioChipForm — la forme de la pastille (miroir StoryAudioIdent
       samples: [0.2, 0.8],
     });
     expect(sceneAudioChipForm(audio({ name: 'Mémo du mardi' }))).toEqual({ kind: 'recording', samples: [] });
+  });
+
+  it('un tableau FORGÉ de 100 000 échantillons rend au plus 24 barres, prises à pas régulier dans la tête de l’entrée', () => {
+    const forged = Array.from({ length: 100_000 }, (_, i) => i);
+    const form = sceneAudioChipForm(audio({ waveformSamples: forged }));
+    expect(SCENE_AUDIO_CHIP_BARS).toBe(24);
+    expect(form.kind).toBe('recording');
+    const samples = form.kind === 'recording' ? form.samples : [];
+    expect(samples.length).toBe(24);
+    expect(samples[0]).toBe(0);
+    expect(samples[23]).toBe(4095);
+    expect(samples.every((value, i) => i === 0 || value > (samples[i - 1] ?? -1))).toBe(true);
+  });
+
+  it('25 échantillons se ramènent à 24, 24 restent intacts', () => {
+    const of = (length: number) => sceneAudioChipForm(audio({ waveformSamples: Array.from({ length }, (_, i) => i / length) }));
+    const exact = of(24);
+    const over = of(25);
+    expect(exact.kind === 'recording' ? exact.samples.length : -1).toBe(24);
+    expect(over.kind === 'recording' ? over.samples.length : -1).toBe(24);
   });
 
   it('soundId ⇒ un emprunt « titre · @auteur », sans onde même si des échantillons existent', () => {

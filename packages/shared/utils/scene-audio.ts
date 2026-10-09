@@ -43,22 +43,42 @@ export function soundAuthorTag(username: unknown): string | undefined {
 
 /**
  * LA FORME de la pastille — `soundId` décide, jamais la présence d'un titre :
- * un son CAPTÉ montre son onde (les échantillons gravés à la composition, vides
- * quand ils manquent) ; un son EMPRUNTÉ à la bibliothèque montre « titre ·
+ * un son CAPTÉ montre son onde (les échantillons gravés à la composition, BORNÉS
+ * par `chipSamples`, vides quand ils manquent) ; un son EMPRUNTÉ à la bibliothèque montre « titre ·
  * @auteur », sans onde.
  */
 export type SceneAudioChipForm =
   | { readonly kind: 'recording'; readonly samples: readonly number[] }
   | { readonly kind: 'borrowed'; readonly label: string | undefined };
 
+/** Le nombre de barres qu'une pastille peint AU PLUS. */
+export const SCENE_AUDIO_CHIP_BARS = 24;
+
+/** Ce qu'on lit AU PLUS d'un tableau d'échantillons servi : le reste est ignoré. */
+const SCENE_AUDIO_SAMPLE_CEILING = 4096;
+
+/**
+ * LES ÉCHANTILLONS D'UNE PASTILLE SONT BORNÉS ICI, À LA SOURCE. `waveformSamples`
+ * est écrit par l'AUTEUR du contenu : un tableau forgé d'un million d'entrées
+ * rendu barre par barre gèlerait l'onglet de chaque lecteur. La tête de l'entrée
+ * est donc tronquée AVANT tout parcours, puis ramenée à `SCENE_AUDIO_CHIP_BARS`
+ * valeurs prises à pas régulier. Cette borne est une garde, pas une optimisation :
+ * elle ne se retire pas pour gagner des octets.
+ */
+function chipSamples(raw: unknown): readonly number[] {
+  if (!Array.isArray(raw)) return [];
+  const finite = raw
+    .slice(0, SCENE_AUDIO_SAMPLE_CEILING)
+    .filter((sample): sample is number => typeof sample === 'number' && Number.isFinite(sample));
+  if (finite.length <= SCENE_AUDIO_CHIP_BARS) return finite;
+  const step = (finite.length - 1) / (SCENE_AUDIO_CHIP_BARS - 1);
+  return Array.from({ length: SCENE_AUDIO_CHIP_BARS }, (_, index) => finite[Math.round(index * step)] ?? 0);
+}
+
 export function sceneAudioChipForm(object: SceneAudioCarrier): SceneAudioChipForm {
   const { payload } = object;
   if (text(payload.soundId) === undefined) {
-    const raw = Array.isArray(payload.waveformSamples) ? payload.waveformSamples : [];
-    return {
-      kind: 'recording',
-      samples: raw.filter((sample): sample is number => typeof sample === 'number' && Number.isFinite(sample)),
-    };
+    return { kind: 'recording', samples: chipSamples(payload.waveformSamples) };
   }
   const parts = [text(payload.name), soundAuthorTag(payload.soundAuthorUsername)].filter(
     (part): part is string => part !== undefined,
