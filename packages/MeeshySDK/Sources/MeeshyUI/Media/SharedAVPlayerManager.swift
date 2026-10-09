@@ -69,13 +69,51 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// début sans pause ni `play()` — sans retour au coordinateur ni
     /// réactivation de la session audio à chaque tour.
     @Published public var shouldLoop: Bool = false {
-        didSet { player?.actionAtItemEnd = Self.actionAtItemEnd(looping: shouldLoop) }
+        didSet { if let player { applyLoop(to: player) } }
     }
 
-    /// Une file d'UN élément (le lecteur préparé est un `AVQueuePlayer`) qui
-    /// « avance » à la fin se vide : `.advance` n'est donc jamais rendu.
-    public nonisolated static func actionAtItemEnd(looping: Bool) -> AVPlayer.ActionAtItemEnd {
-        looping ? .none : .pause
+    /// **La boucle est une FILE, pas un retour en arrière (#9702).** Revenir au
+    /// début par `seek` à la notification de fin coûte un saut de fil, une
+    /// purge du décodeur et une image-clé à redécoder : ≈ 0,1 s de trou à
+    /// chaque tour (mesuré à la recette du 2026-10-09 : claps à 8,10–8,13 s
+    /// pour un média de 8,00 s). Avec un successeur du MÊME média déjà en file,
+    /// `.advance` l'enchaîne sans couture — c'est ce que fait `AVPlayerLooper`,
+    /// sans vider la file ni perdre l'élément déjà préparé.
+    ///
+    /// Sans successeur en file (lecteur qui n'est pas une file, insertion
+    /// refusée), `.advance` viderait le lecteur : `.none`, et le retour au
+    /// début par `seek` reste le repli.
+    public nonisolated static func actionAtItemEnd(looping: Bool, successorQueued: Bool = false) -> AVPlayer.ActionAtItemEnd {
+        guard looping else { return .pause }
+        return successorQueued ? .advance : .none
+    }
+
+    /// Les éléments que CE moteur a mis en lecture — l'élément chargé et ses
+    /// successeurs de boucle. La notification de fin s'écoute pour tous.
+    private var engineItems = Set<ObjectIdentifier>()
+
+    private func applyLoop(to player: AVPlayer) {
+        let queued = shouldLoop ? queueLoopSuccessor(on: player) : false
+        if !shouldLoop { Self.dropLoopSuccessors(of: player) }
+        player.actionAtItemEnd = Self.actionAtItemEnd(looping: shouldLoop, successorQueued: queued)
+    }
+
+    /// Met en file UN successeur du média en cours, s'il n'y est pas déjà.
+    private func queueLoopSuccessor(on player: AVPlayer) -> Bool {
+        guard let queue = player as? AVQueuePlayer, let current = queue.currentItem else { return false }
+        if queue.items().count > 1 { return true }
+        let successor = AVPlayerItem(asset: current.asset)
+        successor.preferredForwardBufferDuration = current.preferredForwardBufferDuration
+        successor.preferredPeakBitRate = current.preferredPeakBitRate
+        guard queue.canInsert(successor, after: current) else { return false }
+        queue.insert(successor, after: current)
+        engineItems.insert(ObjectIdentifier(successor))
+        return true
+    }
+
+    private static func dropLoopSuccessors(of player: AVPlayer) {
+        guard let queue = player as? AVQueuePlayer else { return }
+        queue.items().dropFirst().forEach { queue.remove($0) }
     }
 
     public var attachmentId: String?
@@ -200,8 +238,11 @@ public final class SharedAVPlayerManager: ObservableObject {
         }
 
         // 2. Check video disk cache (play from local file — no network)
+        // Une FILE, comme le lecteur préparé : la boucle y enchaîne sans
+        // couture. Fichier local : rien à attendre du réseau avant de jouer.
         if let localURL {
-            let newPlayer = AVPlayer(url: localURL)
+            let newPlayer = AVQueuePlayer(url: localURL)
+            newPlayer.automaticallyWaitsToMinimizeStalling = false
             player = newPlayer
             setupObservers(for: newPlayer)
             return
@@ -248,8 +289,30 @@ public final class SharedAVPlayerManager: ObservableObject {
             isReadyToPlay: outgoing.currentItem?.status == .readyToPlay,
             playsLocalFile: Self.playsLocalFile(outgoing)
         ) else { return }
-        outgoing.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+        Self.dropLoopSuccessors(of: outgoing)
+        outgoing.actionAtItemEnd = Self.actionAtItemEnd(looping: false)
+        // Ramené au début PUIS préroulé (#9702) : le lecteur préparé du réel
+        // suivant l'est, celui du réel précédent ne l'était pas — ses tampons
+        // se remplissaient au `play()` du retour en arrière, image figée.
+        outgoing.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { finished in
+            guard finished else { return }
+            Task { @MainActor in Self.prerollIfIdle(outgoing) }
+        }
         StoryMediaLoader.shared.returnPlayer(outgoing, for: url)
+    }
+
+    /// `preroll` lève une exception sur un lecteur qui joue ou dont l'élément
+    /// n'est pas prêt : entre le `seek` et sa complétion, le lecteur a pu être
+    /// repris (il joue) ou évincé du pool (plus d'élément).
+    public nonisolated static func mayPrerollRecycledPlayer(rate: Float, isReadyToPlay: Bool) -> Bool {
+        rate == 0 && isReadyToPlay
+    }
+
+    private static func prerollIfIdle(_ player: AVPlayer) {
+        guard mayPrerollRecycledPlayer(
+            rate: player.rate, isReadyToPlay: player.currentItem?.status == .readyToPlay
+        ) else { return }
+        player.preroll(atRate: 1.0) { _ in }
     }
 
     // MARK: - Playback Controls
@@ -684,7 +747,8 @@ public final class SharedAVPlayerManager: ObservableObject {
         // ça, un user qui mute en fullscreen puis ouvre une nouvelle vidéo
         // entend le son revenir alors que l'icône mute reste activée.
         player.isMuted = effectiveMuted
-        player.actionAtItemEnd = Self.actionAtItemEnd(looping: shouldLoop)
+        if let item = player.currentItem { engineItems.insert(ObjectIdentifier(item)) }
+        applyLoop(to: player)
 
         // The active reel is on-screen: lift the offscreen preroll bitrate cap so
         // ABR can pick the best rendition (thermal-aware — stays capped when hot).
@@ -735,25 +799,29 @@ public final class SharedAVPlayerManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification, object: player.currentItem)
+        NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
+            .sink { [weak self] notification in
+                guard let self, let finished = notification.object as? AVPlayerItem,
+                      self.engineItems.remove(ObjectIdentifier(finished)) != nil else { return }
                 self.stretchTracker.completed(Int(self.duration * 1000))
                 self.reportWatchProgress(complete: true)
                 self.emitWatchSample(complete: true)
                 self.watchClockStart = self.shouldLoop ? Date() : nil
                 if self.shouldLoop {
-                    // Loop fullscreen SANS couture (#9702) : `actionAtItemEnd
-                    // = .none` a gardé le lecteur à son rythme, la tête revient
-                    // seulement au début. Plus de `play()` ici — il repassait
-                    // par le coordinateur et réactivait la session audio
-                    // (aller-retour bloquant au serveur audio, sur le fil
-                    // principal) à chaque tour : le trou visible et audible.
+                    // Boucle SANS couture (#9702) : la file a déjà enchaîné sur
+                    // le successeur, à son rythme — ni `seek`, ni `play()`
+                    // (qui repassait par le coordinateur et réactivait la
+                    // session audio à chaque tour). Le tour suivant reçoit son
+                    // successeur. Sans file, la tête revient au début.
                     // Reset watchStartTime pour que la prochaine fin de cycle
                     // puisse encore report progress.
-                    self.seek(to: 0)
-                    self.player?.rate = Float(self.playbackSpeed.rawValue)
+                    if self.player?.currentItem === finished {
+                        self.engineItems.insert(ObjectIdentifier(finished))
+                        self.seek(to: 0)
+                        self.player?.rate = Float(self.playbackSpeed.rawValue)
+                    }
+                    if let player = self.player { self.applyLoop(to: player) }
                     self.stretchTracker.begin(0)
                     self.emitWatchSample()
                     self.watchStartTime = Date()
@@ -793,6 +861,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         }
         timeObserver = nil
         cancellables.removeAll()
+        engineItems.removeAll()
         player?.pause()
         if player != nil { player = nil }
         if isPlaying { isPlaying = false }

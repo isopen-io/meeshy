@@ -64,6 +64,53 @@ final class SharedAVPlayerManagerPrerolledPlayerTests: XCTestCase {
         manager.stop()
     }
 
+    func test_actionAtItemEnd_loopingWithAQueuedSuccessor_advancesWithoutSeam() {
+        XCTAssertEqual(
+            SharedAVPlayerManager.actionAtItemEnd(looping: true, successorQueued: true),
+            AVPlayer.ActionAtItemEnd.advance)
+        XCTAssertEqual(
+            SharedAVPlayerManager.actionAtItemEnd(looping: false, successorQueued: true),
+            AVPlayer.ActionAtItemEnd.pause)
+    }
+
+    /// Recette du 2026-10-09 (#9702) : un média de 8,00 s bouclait en 8,10 à
+    /// 8,13 s — le retour au début par `seek`. La boucle met en file un
+    /// successeur du même média, que la file enchaîne d'elle-même.
+    @MainActor
+    func test_shouldLoop_onAQueuePlayer_queuesOneSuccessorOfTheSameAsset() throws {
+        let manager = SharedAVPlayerManager.shared
+        manager.stop()
+        let item = AVPlayerItem(url: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("reel-loop.mp4"))
+        let queue = AVQueuePlayer(playerItem: item)
+        manager.player = queue
+
+        manager.shouldLoop = true
+        manager.shouldLoop = true
+        XCTAssertEqual(queue.items().count, 2, "un seul successeur, même réaffirmé à chaque passe")
+        XCTAssertTrue(queue.items().first === item, "l'élément déjà préparé reste en tête : rien n'est rechargé")
+        let successor = try XCTUnwrap(queue.items().last)
+        XCTAssertEqual((successor.asset as? AVURLAsset)?.url, (item.asset as? AVURLAsset)?.url)
+        XCTAssertEqual(queue.actionAtItemEnd, AVPlayer.ActionAtItemEnd.advance)
+
+        manager.shouldLoop = false
+        XCTAssertEqual(queue.items().count, 1, "sans boucle, la file ne garde que l'élément en cours")
+        XCTAssertEqual(queue.actionAtItemEnd, AVPlayer.ActionAtItemEnd.pause)
+        manager.player = nil
+        manager.stop()
+    }
+
+    // MARK: - (e) Le lecteur rendu au pool est préroulé
+
+    func test_mayPrerollRecycledPlayer_onlyAnIdleReadyPlayer() {
+        XCTAssertTrue(SharedAVPlayerManager.mayPrerollRecycledPlayer(rate: 0, isReadyToPlay: true))
+        XCTAssertFalse(
+            SharedAVPlayerManager.mayPrerollRecycledPlayer(rate: 1, isReadyToPlay: true),
+            "repris entre-temps, il joue : `preroll` lèverait une exception")
+        XCTAssertFalse(
+            SharedAVPlayerManager.mayPrerollRecycledPlayer(rate: 0, isReadyToPlay: false),
+            "évincé du pool, il n'a plus d'élément prêt")
+    }
+
     /// La boucle ne rappelle plus `play()` — donc plus la session audio.
     func test_theLoopBranch_doesNotCallPlay() throws {
         let url = URL(fileURLWithPath: #filePath)
