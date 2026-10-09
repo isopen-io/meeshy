@@ -20,7 +20,7 @@ nonisolated struct VitrineCommentaireVocal: Sendable {
     static func depuis(_ f: VitrineFixtures, dossier: URL) -> VitrineCommentaireVocal? {
         let destination = f.destination(.interactionCommentaireAudio) ?? f.destination(.amour)
         guard let destination, let attachmentId = destination.attachmentId,
-              let piece = f.messages[destination.conversationId]?.lazy.compactMap({ $0.attachments?.first { $0.id == attachmentId } }).first,
+              let piece = f.messages[destination.conversationId]?.flatMap({ $0.attachments ?? [] }).first(where: { $0.id == attachmentId }),
               let url = piece.fileUrl,
               let media = f.medias.first(where: { $0.url == url && $0.genre == .audio }) else { return nil }
         return VitrineCommentaireVocal(
@@ -68,8 +68,8 @@ final class VitrineCommentaireServeur {
     var publieur: CommentPublisher {
         CommentPublisher(
             prepare: {},
-            token: { [jeton] in jeton },
-            upload: { [montee] piece, _ in
+            token: { [jeton = self.jeton] in jeton },
+            upload: { [montee = self.montee] piece, _ in
                 try? await Task.sleep(for: montee)
                 return "vitrine-piece-\(piece.sourceIndex)-\(UUID().uuidString)"
             },
@@ -97,12 +97,12 @@ final class VitrineCommentaireServeur {
     }
 
     private func creer(_ payload: CreateCommentPayload) throws -> APIPostComment {
-        let commentaire = try Self.decoder(APIPostComment.self, commentaire(payload, id: Self.identifiant(), transcription: nil, traductions: nil))
-        cree = commentaire
-        let attentes = self.attentes
-        self.attentes = []
-        attentes.forEach { $0.resume(returning: commentaire) }
-        return commentaire
+        let servi = try Self.decoder(APIPostComment.self, commentaire(payload, id: Self.identifiant(), transcription: nil, traductions: nil))
+        cree = servi
+        let enAttente = attentes
+        attentes = []
+        enAttente.forEach { $0.resume(returning: servi) }
+        return servi
     }
 
     private func enrichi(transcription: APIAttachmentTranscription?, traductions: [String: APIAttachmentTranslation]?) throws -> SocketCommentMediaUpdatedData {
