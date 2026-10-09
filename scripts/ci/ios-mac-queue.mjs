@@ -48,14 +48,10 @@ const api = async (path) => {
   return response.json();
 };
 
-const unfinishedRuns = async () => {
-  const pages = await Promise.all(
-    ['in_progress', 'queued', 'waiting', 'pending'].map((status) =>
-      api(`/actions/workflows/ios.yml/runs?status=${status}&per_page=100`),
-    ),
-  );
-  return pages.flatMap((page) => page.workflow_runs).map((run) => ({ id: run.id, status: run.status }));
-};
+const unfinishedRuns = async () =>
+  (await api('/actions/workflows/ios.yml/runs?per_page=50')).workflow_runs
+    .filter((run) => run.status !== 'completed')
+    .map((run) => ({ id: run.id, status: run.status }));
 
 const jobsOf = async (runId) => (await api(`/actions/runs/${runId}/jobs?filter=latest&per_page=100`)).jobs;
 

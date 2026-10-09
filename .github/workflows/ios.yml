@@ -361,7 +361,7 @@ jobs:
         if: needs.scope.outputs.run_tests == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/ci/ios-mac-queue.mjs --poll-seconds 90 --max-minutes 150
+        run: node scripts/ci/ios-mac-queue.mjs --poll-seconds 120 --max-minutes 150
 
   ios-build:
     needs: [scope, file-mac]
