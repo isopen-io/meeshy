@@ -3843,6 +3843,13 @@ model Sound {
   isPublic    Boolean  @default(true)
   /// ARRÊT DE DIFFUSION (DMCA, modération). Consulté par la route de service.
   mutedAt     DateTime?
+  /// RETRAIT DE LA BIBLIOTHÈQUE par son auteur (ou ADMIN/BIGBOSS) — #9848.
+  /// Logique, jamais physique : le son quitte toutes les listes et ne peut
+  /// plus être emprunté par un NOUVEAU post, mais les posts déjà publiés qui
+  /// l'utilisent continuent de jouer (`GET /static/:filename` ne lit que
+  /// `mutedAt`). La ligne reste pour que `@@unique([uploaderId, contentHash])`
+  /// empêche une extraction suivante de la recréer.
+  deletedAt   DateTime?
   contentHash String?
   sourcePostId String? @db.ObjectId
   /// PostMedia d'origine — la lecture iOS ne sait résoudre qu'un postMediaId.
