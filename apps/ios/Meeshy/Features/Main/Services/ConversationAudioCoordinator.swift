@@ -41,6 +41,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
     // MARK: - Published State
 
     @Published public private(set) var activeContext: ActiveAudioContext?
+    /// La piste en TÊTE de file telle qu'elle joue — sa langue et sa
+    /// protection, que l'îlot affiche (#9783). Suit `playVariant`.
+    @Published public private(set) var activeTrack: QueuedAudio?
     @Published public private(set) var queueCount: Int = 0
     @Published public private(set) var isPlaying: Bool = false
     @Published public private(set) var progress: Double = 0
@@ -186,25 +189,17 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// ou retour à l'original) en CONSERVANT le contexte et la file — le
     /// sélecteur de langue du plein écran route ici pour que la carte système
     /// et l'enchaînement survivent au changement de langue.
-    public func playVariant(urlString: String) {
+    public func playVariant(urlString: String, language: String? = nil, isTranslated: Bool = false) {
         guard !CallManagerHost.shared.isCallActiveForAudioGuard else { return }
         guard activeContext != nil, !urlString.isEmpty, let head = queue.first else { return }
         // Rejoue la tête avec la nouvelle URL — SANS ça, tout chemin qui
         // rejoue `queue.first.fileUrl` (ex: `resumeAfterSystemCall()` via
         // `startCurrentHead()`) ramènerait silencieusement l'audio à sa
-        // langue d'origine. `QueuedAudio` est immuable : rebuild champ à
-        // champ, seul `fileUrl` change. `ActiveAudioContext` ne porte pas
-        // d'URL — `activeContext` reste donc identique, comme attendu.
-        queue[0] = QueuedAudio(
-            attachmentId: head.attachmentId,
-            messageId: head.messageId,
-            conversationId: head.conversationId,
-            fileUrl: urlString,
-            durationMs: head.durationMs,
-            senderName: head.senderName,
-            senderAvatarURL: head.senderAvatarURL,
-            receivedAt: head.receivedAt
-        )
+        // langue d'origine. Seules l'URL et sa langue changent ;
+        // `ActiveAudioContext` ne porte pas d'URL — `activeContext` reste
+        // donc identique, comme attendu.
+        queue[0] = head.playing(url: urlString, language: language, isTranslated: isTranslated)
+        activeTrack = queue[0]
         engine.play(urlString: urlString)
     }
 
@@ -222,23 +217,15 @@ public final class ConversationAudioCoordinator: ObservableObject {
     ///   comportement honnête.
     /// No-op quand la bascule résout la piste déjà en tête (jamais de replay
     /// à zéro pour rien).
-    public func syncActiveTrack(urlString: String) {
+    public func syncActiveTrack(urlString: String, language: String? = nil, isTranslated: Bool = false) {
         guard activeContext != nil, !urlString.isEmpty,
               let head = queue.first, head.fileUrl != urlString else { return }
         if isPlaying {
-            playVariant(urlString: urlString)
+            playVariant(urlString: urlString, language: language, isTranslated: isTranslated)
             return
         }
-        queue[0] = QueuedAudio(
-            attachmentId: head.attachmentId,
-            messageId: head.messageId,
-            conversationId: head.conversationId,
-            fileUrl: urlString,
-            durationMs: head.durationMs,
-            senderName: head.senderName,
-            senderAvatarURL: head.senderAvatarURL,
-            receivedAt: head.receivedAt
-        )
+        queue[0] = head.playing(url: urlString, language: language, isTranslated: isTranslated)
+        activeTrack = queue[0]
         engine.stop()
     }
 
@@ -488,9 +475,21 @@ public final class ConversationAudioCoordinator: ObservableObject {
         history = []
         derniereFin = .fermee
         activeContext = nil
+        activeTrack = nil
     }
 
     public func seek(toFraction fraction: Double) { engine.seek(to: fraction) }
+
+    /// Saute de `seconds` (négatif = recule) dans la piste active — les
+    /// boutons ±15 s de l'îlot (#9783).
+    public func skip(by seconds: TimeInterval) {
+        guard !CallManagerHost.shared.isCallActiveForAudioGuard, activeContext != nil else { return }
+        let known = duration > 0 ? duration : Double(activeContext?.durationMs ?? 0) / 1000
+        guard let fraction = VoicePlaybackActivityLaw.seekFraction(
+            position: currentTime, duration: known, offset: seconds
+        ) else { return }
+        engine.seek(to: fraction)
+    }
     public func setSpeed(_ s: PlaybackSpeed) { engine.setSpeed(s) }
     public func cycleSpeed() { engine.cycleSpeed() }
 
@@ -552,11 +551,13 @@ public final class ConversationAudioCoordinator: ObservableObject {
         guard let head = queue.first else {
             derniereFin = .epuisee
             activeContext = nil
+            activeTrack = nil
             return
         }
         activeContext = ActiveAudioContext(
             from: head, conversationName: currentName, conversationArtworkURL: currentArtwork
         )
+        activeTrack = head
         engine.attachmentId = head.attachmentId
         engine.play(urlString: head.fileUrl)
     }
@@ -582,6 +583,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
             engine.stop()
             derniereFin = .epuisee
             activeContext = nil
+            activeTrack = nil
             endAdvanceBackgroundTask()
         } else {
             beginAdvanceBackgroundTask()

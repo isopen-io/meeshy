@@ -90,6 +90,10 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
             "extension ConversationViewModel: ConversationSocketDelegate",
             "func applyAttachmentUpdate(",
         ]),
+        ("ConversationViewModel+AudioQueue.swift", [
+            "func playAudio(attachmentId:", "func audioQueueTail(after:",
+            "func queuedAudio(for attachment:",
+        ]),
     ]
 
     // MARK: - Lecture

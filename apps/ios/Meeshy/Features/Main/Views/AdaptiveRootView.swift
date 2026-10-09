@@ -24,6 +24,8 @@ struct AdaptiveRootView: View {
         .task {
             let coord = ConversationAudioCoordinator.shared
             coord.activateNowPlayingBridge()
+            // #9783 — le même lecteur alimente l'îlot dynamique.
+            VoicePlaybackLiveActivityCoordinator.shared.bind(coord)
         }
         // B4 — The mini-player overlay used to live HERE but the tap-body
         // handler had no access to the `Router` (instantiated inside

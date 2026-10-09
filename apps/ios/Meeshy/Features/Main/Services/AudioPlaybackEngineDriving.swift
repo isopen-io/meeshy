@@ -52,11 +52,20 @@ public struct QueuedAudio: Equatable, Identifiable, Sendable {
     public let senderName: String
     public let senderAvatarURL: String?
     public let receivedAt: Date
+    /// Langue de la piste `fileUrl` — originale ou traduite, élue par la langue
+    /// du texte servi (Prisme). `nil` quand l'appelant ne la connaît pas.
+    public let trackLanguage: String?
+    public let isTranslatedTrack: Bool
+    /// Éphémère, vue unique, flouté ou chiffré : rien de son contenu ne part
+    /// vers l'écran verrouillé (#9783).
+    public let isProtected: Bool
     public var id: String { attachmentId }
 
     public init(attachmentId: String, messageId: String, conversationId: String,
                 fileUrl: String, durationMs: Int, senderName: String,
-                senderAvatarURL: String?, receivedAt: Date) {
+                senderAvatarURL: String?, receivedAt: Date,
+                trackLanguage: String? = nil, isTranslatedTrack: Bool = false,
+                isProtected: Bool = false) {
         self.attachmentId = attachmentId
         self.messageId = messageId
         self.conversationId = conversationId
@@ -65,6 +74,20 @@ public struct QueuedAudio: Equatable, Identifiable, Sendable {
         self.senderName = senderName
         self.senderAvatarURL = senderAvatarURL
         self.receivedAt = receivedAt
+        self.trackLanguage = trackLanguage
+        self.isTranslatedTrack = isTranslatedTrack
+        self.isProtected = isProtected
+    }
+
+    /// La même entrée sur une autre piste (variante de langue) : seuls l'URL
+    /// et sa langue changent.
+    public func playing(url: String, language: String?, isTranslated: Bool) -> QueuedAudio {
+        QueuedAudio(
+            attachmentId: attachmentId, messageId: messageId, conversationId: conversationId,
+            fileUrl: url, durationMs: durationMs, senderName: senderName,
+            senderAvatarURL: senderAvatarURL, receivedAt: receivedAt,
+            trackLanguage: language, isTranslatedTrack: isTranslated, isProtected: isProtected
+        )
     }
 }
 

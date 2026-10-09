@@ -30,7 +30,14 @@ final class LiveActivityCommandBinding {
             manager.toggleMute()
         case .callHangUp:
             CallManagerHost.shared.manager?.endCall()
-        case .playbackToggle, .playbackBack, .playbackForward, .recordingStop, .recordingCancel:
+        case .playbackToggle:
+            guard ConversationAudioCoordinator.shared.activeContext != nil else { return }
+            ConversationAudioCoordinator.shared.togglePlayPause()
+        case .playbackBack:
+            ConversationAudioCoordinator.shared.skip(by: -VoicePlaybackActivityLaw.skipInterval)
+        case .playbackForward:
+            ConversationAudioCoordinator.shared.skip(by: VoicePlaybackActivityLaw.skipInterval)
+        case .recordingStop, .recordingCancel:
             return
         }
     }

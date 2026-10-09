@@ -157,6 +157,7 @@ struct MeeshyWidgetBundle: WidgetBundle {
             MeeshyLiveActivity()
             OutboxLiveActivity()
             CallLiveActivity()
+            VoicePlaybackLiveActivity()
         }
         #endif
     }
