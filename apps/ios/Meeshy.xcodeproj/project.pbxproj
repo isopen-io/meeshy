@@ -2796,6 +2796,7 @@
 		EBAE2B02F9A91FB0CC8C61D3 /* ArrivalCelebrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B5628BA24799414BEE67AD /* ArrivalCelebrationView.swift */; };
 		EBFB1520C0381A51B120D11E /* VitrineStageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A63867EA9878A73079EABC53 /* VitrineStageTests.swift */; };
 		BD2A81DBF732B9C3F964D52A /* VitrineJeuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D292AE8AEAC7647648FAC7C /* VitrineJeuTests.swift */; };
+		FF326528DCD9DA01804F97A0 /* VitrineInteractionsComposeurTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4866C9B69F94D2F5B622F654 /* VitrineInteractionsComposeurTests.swift */; };
 		7A3232923ECF5CBE45429F69 /* VitrineInteractionsPostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6765EEE9474500B08340581 /* VitrineInteractionsPostTests.swift */; };
 		84C5D1563D28CCD6E36A27F4 /* VitrineInteractionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24123C6F0223AD6A34C6F7A9 /* VitrineInteractionsTests.swift */; };
 		660347A3A414E2AA5AD48107 /* VitrineTournageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3891668A0867C54B4B70370 /* VitrineTournageTests.swift */; };
@@ -5121,6 +5122,7 @@
 		A610A8A7A4A6B76A7D1A186D /* CallStarter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStarter.swift; sourceTree = "<group>"; };
 		A63867EA9878A73079EABC53 /* VitrineStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineStageTests.swift; sourceTree = "<group>"; };
 		8D292AE8AEAC7647648FAC7C /* VitrineJeuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineJeuTests.swift; sourceTree = "<group>"; };
+		4866C9B69F94D2F5B622F654 /* VitrineInteractionsComposeurTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractionsComposeurTests.swift; sourceTree = "<group>"; };
 		D6765EEE9474500B08340581 /* VitrineInteractionsPostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractionsPostTests.swift; sourceTree = "<group>"; };
 		24123C6F0223AD6A34C6F7A9 /* VitrineInteractionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractionsTests.swift; sourceTree = "<group>"; };
 		B3891668A0867C54B4B70370 /* VitrineTournageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineTournageTests.swift; sourceTree = "<group>"; };
@@ -6964,6 +6966,7 @@
 				C2CD2E7E3442F8210C337448 /* VitrineSourceGuardTests.swift */,
 				A63867EA9878A73079EABC53 /* VitrineStageTests.swift */,
 				8D292AE8AEAC7647648FAC7C /* VitrineJeuTests.swift */,
+				4866C9B69F94D2F5B622F654 /* VitrineInteractionsComposeurTests.swift */,
 				D6765EEE9474500B08340581 /* VitrineInteractionsPostTests.swift */,
 				24123C6F0223AD6A34C6F7A9 /* VitrineInteractionsTests.swift */,
 				B3891668A0867C54B4B70370 /* VitrineTournageTests.swift */,
@@ -13426,6 +13429,7 @@
 				B863147EC8B6A7DCAA19AB3F /* VitrineSourceGuardTests.swift in Sources */,
 				EBFB1520C0381A51B120D11E /* VitrineStageTests.swift in Sources */,
 				BD2A81DBF732B9C3F964D52A /* VitrineJeuTests.swift in Sources */,
+				FF326528DCD9DA01804F97A0 /* VitrineInteractionsComposeurTests.swift in Sources */,
 				7A3232923ECF5CBE45429F69 /* VitrineInteractionsPostTests.swift in Sources */,
 				84C5D1563D28CCD6E36A27F4 /* VitrineInteractionsTests.swift in Sources */,
 				660347A3A414E2AA5AD48107 /* VitrineTournageTests.swift in Sources */,

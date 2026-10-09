@@ -50,7 +50,7 @@ extension VitrineScene {
         case .jeuFrappe: .frappe
         case .jeuNiveau: .niveau
         case .jeuBadge: .badge
-        case .amour, .groupe, .global, .lien, .progression, .imagine, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost: nil
+        case .amour, .groupe, .global, .lien, .progression, .imagine, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker: nil
         }
     }
 }

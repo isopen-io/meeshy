@@ -17,12 +17,13 @@ nonisolated enum VitrineInteraction: String, CaseIterable, Sendable {
     case emojiPost
     /// Un vocal part en commentaire d'un post, sa transcription puis sa traduction arrivent (`CommentPublisher`).
     case commentaireAudio
+    case sticker
 
     /// La célébration du jeu que l'interaction déclenche : la passerelle fictive la prépare.
     var celebration: VitrineCelebration? {
         switch self {
         case .frappe: .frappe
-        case .emoji, .emojiPost, .commentaireAudio: nil
+        case .emoji, .emojiPost, .commentaireAudio, .sticker: nil
         }
     }
 }
@@ -34,6 +35,7 @@ extension VitrineScene {
         case .interactionEmoji: .emoji
         case .interactionEmojiPost: .emojiPost
         case .interactionCommentaireAudio: .commentaireAudio
+        case .interactionSticker: nil
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: nil
         }
     }
@@ -44,7 +46,7 @@ extension VitrineScene {
         switch self {
         case .interactionEmoji: .amour
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge,
-             .interactionFrappe, .interactionEmojiPost, .interactionCommentaireAudio: self
+             .interactionFrappe, .interactionEmojiPost, .interactionCommentaireAudio, .interactionSticker: self
         }
     }
 
@@ -71,9 +73,13 @@ enum VitrineInteractions {
             case .emoji: await reagirAuMessage(scene, f)
             case .emojiPost: await reagirAuPost(scene)
             case .commentaireAudio: await commenterDeVive(scene, f)
+            case .sticker: break
             }
         }
     }
+
+    static func photoDeLaScene(_ f: VitrineFixtures, dossier: URL) -> URL? { nil }
+    static var stickerDeLaScene: StickerSheetChoice? { nil }
 
     /// Le dernier message REÇU et écrit de la conversation : celui auquel on répond d'un émoji.
     static func messageAReagir(_ f: VitrineFixtures, conversationId: String) -> String? {

@@ -21,6 +21,10 @@ nonisolated enum VitrineEvenement: Hashable, Sendable {
     case paletteDeReactionsPrete
     /// La palette d'émojis d'un post, ouverte (#9810).
     case paletteDeReactions
+    /// Le composeur, monté (#9810).
+    case composeur
+    /// La feuille des stickers du composeur, ouverte (#9810).
+    case feuilleDeStickers
 }
 
 nonisolated enum VitrineAppareil: Sendable {
@@ -38,6 +42,7 @@ extension VitrineScene {
         case .progression, .interactionFrappe: return appareil == .ipad ? [.progression, .fil] : [.progression]
         case .lien: return [.lien]
         case .interactionCommentaireAudio: return appareil == .ipad ? [.composeurDeCommentaire, .fil] : [.composeurDeCommentaire]
+        case .interactionSticker: return []
         case .interactionEmojiPost: return appareil == .ipad ? [.paletteDeReactionsPrete, .fil] : [.paletteDeReactionsPrete]
         case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
             let fiche = VitrineEvenement.fiche(celebration?.concept ?? .level)
@@ -129,6 +134,13 @@ final class VitrineRendu {
         choisirDansLaPalette = choisir
         signaler(.paletteDeReactions)
     }
+
+    var photoDuComposeur: URL?
+    private(set) var ouvrirLesStickers: (() -> Void)?
+    private(set) var choisirUnSticker: ((StickerSheetChoice) -> Void)?
+
+    func composeurAffiche(ouvrirLesStickers: @escaping () -> Void) -> URL? { nil }
+    func feuilleDeStickersAffichee(choisir: @escaping (StickerSheetChoice) -> Void) {}
 
     func attendre(_ attendus: Set<VitrineEvenement>) async {
         guard !attendus.isSubset(of: observes) else { return }
