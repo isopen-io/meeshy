@@ -316,6 +316,15 @@ final class CommentAttachmentZoneMountingGuardTests: XCTestCase {
 /// de la feuille recouvrait le ✕ des tuiles.
 final class CommentSheetFitTests: XCTestCase {
 
+    /// Le cadre d'une vue pas encore placée (ou déjà retirée) est nul : son
+    /// haut n'est pas fini. La sonde n'en tire rien, et ne plante pas.
+    func test_aNonFiniteMeasure_isNotAnOverflow_andLeavesTheDetent() {
+        XCTAssertFalse(CommentSheetFit.overflows(composerTop: .infinity))
+        XCTAssertFalse(CommentSheetFit.overflows(composerTop: -CGFloat.infinity))
+        XCTAssertFalse(CommentSheetFit.overflows(composerTop: .nan))
+        XCTAssertEqual(CommentSheetFit.detent(composerTop: CGRect.null.minY, current: .medium), .medium)
+    }
+
     func test_aComposerWhoseTopIsAboveTheContentArea_overflows() {
         XCTAssertTrue(CommentSheetFit.overflows(composerTop: -40))
         XCTAssertFalse(CommentSheetFit.overflows(composerTop: 0))
@@ -360,6 +369,18 @@ final class CommentSheetFitTests: XCTestCase {
 
 // MARK: - La mise en page de la feuille, EXÉCUTÉE
 
+/// Ce que la mise en page a posé, et la détente que la sonde a demandée.
+/// `@unchecked Sendable` : il n'est lu et écrit que sur le fil principal, par
+/// la mise en page et par la sonde.
+private final class CommentSheetFitRecorder: @unchecked Sendable {
+    var detent: PresentationDetent = .medium
+    var area: CGRect = .zero
+    var composer: CGRect = .zero
+    var preview: CGRect = .zero
+    var panel: CGRect = .zero
+    var list: CGRect = .zero
+}
+
 /// **Le témoin qui exécute la mise en page.** La zone de contenu, la sonde et
 /// le cadre du panneau sont ceux de la feuille (`commentSheetContent`,
 /// `keepsComposerBelowSheetHeader`, `ComposerPanelFrame`) ; la barre elle-même
@@ -372,14 +393,7 @@ final class CommentSheetFitTests: XCTestCase {
 @MainActor
 final class CommentSheetFitLayoutTests: XCTestCase {
 
-    private final class Recorder {
-        var detent: PresentationDetent = .medium
-        var area: CGRect = .zero
-        var composer: CGRect = .zero
-        var preview: CGRect = .zero
-        var panel: CGRect = .zero
-        var list: CGRect = .zero
-    }
+    private typealias Recorder = CommentSheetFitRecorder
 
     private struct Panel: View {
         let recorder: Recorder
@@ -401,7 +415,13 @@ final class CommentSheetFitLayoutTests: XCTestCase {
         /// Zone d'aperçu (100) + rangée d'outils et champ.
         let chromeHeight: CGFloat
         let recorder: Recorder
-        @State private var detent: PresentationDetent = .medium
+
+        /// La détente que la sonde DEMANDE, lue sans attendre un second rendu :
+        /// c'est la demande qui est la règle, pas la réaction de la feuille.
+        private var detent: Binding<PresentationDetent> {
+            let recorder = recorder
+            return Binding(get: { recorder.detent }, set: { recorder.detent = $0 })
+        }
 
         private func record(_ path: ReferenceWritableKeyPath<Recorder, CGRect>) -> some View {
             GeometryReader { proxy -> Color in
@@ -422,7 +442,7 @@ final class CommentSheetFitLayoutTests: XCTestCase {
                         Panel(recorder: recorder)
                     }
                     .background(record(\.composer))
-                    .keepsComposerBelowSheetHeader(detent: $detent)
+                    .keepsComposerBelowSheetHeader(detent: detent)
                 }
             }
             .commentSheetContent()
@@ -430,7 +450,6 @@ final class CommentSheetFitLayoutTests: XCTestCase {
                 recorder.area = CGRect(origin: .zero, size: proxy.size)
                 return Color.clear
             })
-            .onChange(of: detent) { recorder.detent = $0 }
         }
     }
 

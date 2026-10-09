@@ -336,8 +336,15 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
         let code = try source("Features/Main/Views/CommentComposerMedia.swift")
         let entrust = try XCTUnwrap(code.range(of: "static func entrust("))
         let enqueue = try XCTUnwrap(code.range(of: "OfflineQueue.shared.enqueueComment(payload, ownerId: owner)", range: entrust.upperBound..<code.endIndex))
-        XCTAssertTrue(code[entrust.upperBound..<enqueue.lowerBound].contains("let owner = try confirmAuthor(payload)"),
+        let beforeEnqueue = code[entrust.upperBound..<enqueue.lowerBound]
+        // La lecture peut être enveloppée (trace du refus) : c'est `owner`,
+        // affecté UNE fois par `confirmAuthor` avant tout enfilement, qui fait foi.
+        XCTAssertTrue(beforeEnqueue.contains("owner = try confirmAuthor(payload)"),
                       "L'enfilement arrive après une attente réseau : le compte a pu changer.")
+        XCTAssertEqual(beforeEnqueue.components(separatedBy: "confirmAuthor(").count - 1, 1,
+                       "Le compte se lit une fois : deux lectures peuvent désigner deux comptes.")
+        XCTAssertTrue(code.contains("let owner: String") || code.contains("let owner = try confirmAuthor(payload)"),
+                      "Le compte vérifié est une constante : rien ne le réaffecte entre la ligne et son dossier.")
         XCTAssertTrue(code.contains("ownerId: owner"), "Le dossier des pièces doit être celui du compte vérifié, pas une seconde lecture.")
     }
 
@@ -425,9 +432,17 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
             .contains("offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())"))
     }
 
+    /// #9743, M2 — l'auteur de la réponse est le compte que le JETON désigne
+    /// (et la notification doit s'adresser à lui), jamais l'utilisateur en
+    /// mémoire : c'est ce compte-là que la file prouve contre sa base.
     func test_theNotificationReply_enqueuesItsComment_throughTheProvenEntry() throws {
-        XCTAssertTrue(try source("Features/Main/Services/NotificationActionHandler.swift")
-            .contains("replyQueue.enqueueComment(comment, ownerId: currentUserId())"))
+        let code = try source("Features/Main/Services/NotificationActionHandler.swift")
+        XCTAssertTrue(code.contains("guard let owner = NotificationReplyFailure.author(token: authTokenProvider(), userInfo: userInfo) else {"),
+                      "L'auteur de la réponse ne vient plus du jeton.")
+        XCTAssertTrue(code.contains("replyQueue.enqueueComment(comment, ownerId: owner)"))
+        XCTAssertTrue(code.contains("authorId: owner"), "La charge déclare un autre auteur que le compte prouvé.")
+        XCTAssertFalse(code.contains("enqueueComment(comment, ownerId: currentUserId())"),
+                       "L'utilisateur en mémoire peut ne plus être celui du jeton.")
     }
 
     func test_theFailedSendFallback_enqueuesThroughTheProvenEntries() throws {

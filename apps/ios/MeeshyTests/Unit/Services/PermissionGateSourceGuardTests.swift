@@ -445,8 +445,18 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Le lieu en attente doit être capturé au début de submitComment, avant tout early-return.")
         XCTAssertTrue(fn.contains("commentPendingPlace = nil"),
                       "La chip doit être effacée après capture — sinon elle réapparaît sur le commentaire suivant.")
-        XCTAssertTrue(fn.contains("guard !trimmed.isEmpty || !media.isEmpty || place != nil else { return }"),
-                      "Un commentaire « lieu seul » (sans texte ni média) doit pouvoir partir — l'ancienne garde à 2 conditions l'aurait avorté silencieusement, exactement comme le bug déjà corrigé sur publishPost.")
+        // La garde « rien à envoyer » vit dans `CommentSendGate.decide` (#9743) :
+        // le lieu y entre, et `CommentSendGateTests.test_readyPieces_send` exécute
+        // qu'un lieu seul part. Ici, la feuille doit le lui REMETTRE.
+        XCTAssertTrue(fn.contains("CommentSendGate.decide(text: trimmed, zone: staged, hasPlace: commentPendingPlace != nil)"),
+                      "Un commentaire « lieu seul » (sans texte ni média) doit pouvoir partir — une décision d'envoi qui ignore le lieu l'avorterait silencieusement, exactement comme le bug déjà corrigé sur publishPost.")
+        let decide = try XCTUnwrap(fn.range(of: "CommentSendGate.decide("))
+        let capture = try XCTUnwrap(fn.range(of: "let place = commentPendingPlace"))
+        let clear = try XCTUnwrap(fn.range(of: "commentPendingPlace = nil"))
+        XCTAssertLessThan(decide.lowerBound, clear.lowerBound,
+                          "La décision lit le lieu AVANT que la chip ne soit effacée.")
+        XCTAssertLessThan(capture.lowerBound, clear.lowerBound,
+                          "Le lieu est capturé avant d'être effacé : sinon le commentaire part sans lui.")
     }
 
     /// Le chemin direct (réseau disponible) doit transmettre le lieu à

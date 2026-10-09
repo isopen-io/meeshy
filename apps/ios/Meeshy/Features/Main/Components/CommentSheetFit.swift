@@ -22,9 +22,11 @@ nonisolated enum CommentSheetFit {
     static let tolerance: CGFloat = 0.5
 
     /// `true` quand le composeur dépasse sous l'en-tête. `composerTop` est le
-    /// haut du composeur dans `space`.
+    /// haut du composeur dans `space`. Une mesure non finie (cadre nul d'une
+    /// vue pas encore placée, ou déjà retirée) ne prouve rien : elle ne
+    /// déborde pas.
     nonisolated static func overflows(composerTop: CGFloat) -> Bool {
-        composerTop < -tolerance
+        composerTop.isFinite && composerTop < -tolerance
     }
 
     /// La détente que la feuille doit prendre : la grande dès que le composeur
@@ -114,7 +116,7 @@ extension View {
         })
         .onPreferenceChange(CommentSheetComposerTopKey.self) { top in
             let needed = CommentSheetFit.detent(composerTop: top, current: detent.wrappedValue)
-            CommentSheetFit.trace("sonde haut=\(Int(top)) détente=\(CommentSheetFit.name(detent.wrappedValue)) demandée=\(CommentSheetFit.name(needed))", nil)
+            CommentSheetFit.trace("sonde haut=\(String(format: "%.0f", top)) détente=\(CommentSheetFit.name(detent.wrappedValue)) demandée=\(CommentSheetFit.name(needed))", nil)
             guard needed != detent.wrappedValue else { return }
             withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { detent.wrappedValue = needed }
         }
