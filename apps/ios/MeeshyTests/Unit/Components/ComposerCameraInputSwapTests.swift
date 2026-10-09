@@ -65,6 +65,52 @@ final class ComposerCameraInputSwapTests: XCTestCase {
         XCTAssertTrue(graph.inputs.isEmpty)
     }
 
+    // MARK: - #9778 : UNE reconfiguration par bascule
+
+    /// Orienter les connexions et ouvrir l'objectif APRÈS la validation
+    /// relançait, session tournante, une reconfiguration implicite par réglage
+    /// — sur la caméra arrière virtuelle (trois capteurs), la bascule vers
+    /// l'arrière payait chacune (599–976 ms contre 337–399 vers l'avant).
+    func test_swap_configuresTheNewInput_insideTheSameTransaction() {
+        let graph = makeGraph()
+        let issue = ComposerCameraInputSwap.swap(in: graph, replacing: "arrière", with: "avant") { issue in
+            graph.journal.append("configure \(issue)")
+        }
+        XCTAssertEqual(issue, .swapped)
+        XCTAssertEqual(graph.journal, ["begin", "remove arrière", "add avant", "configure swapped", "commit"],
+                       "les réglages partent avec la bascule, dans la même validation")
+    }
+
+    func test_swap_refused_configuresTheOldInputPutBack_beforeTheCommit() {
+        let graph = makeGraph(refusing: ["avant"])
+        _ = ComposerCameraInputSwap.swap(in: graph, replacing: "arrière", with: "avant") { issue in
+            graph.journal.append("configure \(issue)")
+        }
+        XCTAssertEqual(graph.journal, ["begin", "remove arrière", "add arrière", "configure kept", "commit"])
+    }
+
+    func test_swap_inputFactoryFailed_configuresNothing() {
+        let graph = makeGraph()
+        var configure = 0
+        _ = ComposerCameraInputSwap.swap(in: graph, replacing: "arrière", with: nil) { _ in configure += 1 }
+        XCTAssertEqual(configure, 0)
+    }
+
+    func test_camera_orientsAndOpensTheLensInsideTheSwap_andOnlyReassertsTheZoomAfter() throws {
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let debut = try XCTUnwrap(camera.range(of: "ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle) { issue in"))
+        let fin = try XCTUnwrap(camera.range(of: "return InstalledCamera(", range: debut.upperBound..<camera.endIndex))
+        let bascule = String(camera[debut.upperBound..<fin.lowerBound])
+        let validation = try XCTUnwrap(bascule.range(of: "\n        }\n"), "la fermeture de la transaction")
+        let dedans = String(bascule[..<validation.lowerBound])
+        XCTAssertTrue(dedans.contains("orient(outputs, for: objectif)"), "les connexions s'orientent AVANT la validation")
+        XCTAssertTrue(dedans.contains("openLens(device"), "l'objectif s'ouvre (zoom, lumière, netteté) AVANT la validation")
+        let apres = String(bascule[validation.upperBound...])
+        XCTAssertFalse(apres.contains("orient("), "plus aucune orientation après la validation")
+        XCTAssertTrue(apres.contains("ComposerCameraSwitchRule.needsZoomReassert("),
+                      "après, le zoom seul se ré-affirme — et seulement si la validation l'a remis à zéro")
+    }
+
     func test_camera_switchesThroughTheSafeSwap() throws {
         let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
         XCTAssertTrue(camera.contains("ComposerCameraInputSwap.swap("))

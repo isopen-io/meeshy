@@ -44,11 +44,23 @@ nonisolated enum ComposerCameraInputSwap {
         }
     }
 
+    /// `configure` règle l'entrée en place — connexions, objectif — DANS la
+    /// même transaction, avant sa validation (#9778) : session tournante, un
+    /// réglage posé après la validation relance à lui seul une reconfiguration,
+    /// et la caméra arrière virtuelle en paie le prix de ses trois capteurs.
     static func swap<Graph: ComposerCaptureInputGraph>(in graph: Graph, replacing old: Graph.Input?,
-                                                      with new: Graph.Input?) -> Outcome {
+                                                      with new: Graph.Input?,
+                                                      configure: (Outcome) -> Void = { _ in }) -> Outcome {
         guard let new else { return old == nil ? .none : .kept }
         graph.beginConfiguration()
         defer { graph.commitConfiguration() }
+        let issue = exchange(in: graph, replacing: old, with: new)
+        configure(issue)
+        return issue
+    }
+
+    private static func exchange<Graph: ComposerCaptureInputGraph>(in graph: Graph, replacing old: Graph.Input?,
+                                                                  with new: Graph.Input) -> Outcome {
         if let old { graph.removeInput(old) }
         if graph.canAddInput(new) {
             graph.addInput(new)

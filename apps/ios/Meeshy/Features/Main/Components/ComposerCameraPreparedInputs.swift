@@ -64,12 +64,30 @@ nonisolated final class ComposerCameraPreparedInputs<Input: AnyObject>: @uncheck
     }
 }
 
+/// Où passe le temps d'une bascule (#9778), en millisecondes : l'attente de
+/// la file, la trame de couverture, la reconfiguration (retirer, ajouter,
+/// orienter, ouvrir l'objectif, valider), le zoom ré-affirmé après elle, et la
+/// publication sur le fil principal.
+nonisolated struct ComposerCameraSwitchPhases: Equatable, Sendable {
+    var queue = 0
+    var frame = 0
+    var commit = 0
+    var settle = 0
+    var main = 0
+}
+
 /// **Le temps de la bascule, mesuré** (#9753) : du toucher à l'objectif publié,
 /// en millisecondes — relevé dans la console (`Logger.media`, « camera switch »)
-/// sur l'appareil, là où il se juge.
+/// sur l'appareil, là où il se juge ; ses phases disent où il passe (#9778).
 nonisolated enum ComposerCameraSwitchTiming {
     static func milliseconds(from start: CFTimeInterval, to end: CFTimeInterval) -> Int {
         Int(((end - start) * 1000).rounded())
+    }
+
+    static func report(to position: AVCaptureDevice.Position, total: Int, phases: ComposerCameraSwitchPhases) -> String {
+        let objectif = position == .front ? "front" : "back"
+        return "camera switch to \(objectif): \(total) ms (queue \(phases.queue) · frame \(phases.frame)"
+            + " · commit \(phases.commit) · settle \(phases.settle) · main \(phases.main))"
     }
 
     static func opposite(of position: AVCaptureDevice.Position) -> AVCaptureDevice.Position {

@@ -56,7 +56,7 @@ final class ComposerCaptureMotionTests: XCTestCase {
     func test_theCameraModel_switchesWithThePreparedInput_andMeasuresTheSwitch() throws {
         let modele = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Components/CameraModel.swift")
         XCTAssertTrue(modele.contains("prepared.take(position) ?? videoInput(position: position)"))
-        XCTAssertTrue(modele.contains("prepared.keep(after: issue, removed: ancienne"))
+        XCTAssertTrue(modele.contains("prepared.keep(after: resultat, removed: ancienne"))
         XCTAssertTrue(modele.contains("self?.preparedInputs.prepare(.front)"), "l'objectif avant se prépare au repos")
         XCTAssertTrue(modele.contains("ComposerCameraSwitchTiming.milliseconds("), "le temps de bascule se relève")
         XCTAssertEqual(ComposerCameraSwitchTiming.milliseconds(from: 10, to: 10.2345), 235)
