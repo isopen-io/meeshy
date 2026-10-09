@@ -259,7 +259,7 @@ extension ConversationView {
         // la pièce posée (#9126).
         .conversationCover(isPresented: $composerState.showCamera) {
             ComposerViewfinder { result in
-                stageSceneMedia(ComposerReturnedMedia(capture: result))
+                stageCapture(result)
             }
         }
         .sheet(isPresented: $composerState.showLocationPicker) {

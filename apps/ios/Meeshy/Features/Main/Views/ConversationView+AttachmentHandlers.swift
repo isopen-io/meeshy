@@ -542,6 +542,10 @@ extension ConversationView {
                                 localTranscriptions[att.id]?.tusUploadMetadata
                             )
                         }
+                    let uploadItems = pendingUploads.map {
+                        (fileURL: $0.fileURL, mimeType: $0.mimeType, thumbHash: $0.thumbHash,
+                         transcription: $0.transcription, capturedInApp: $0.attachment.capturedInApp)
+                    }
 
                     // Déclarer le lot complet AVANT de lancer les uploads, pour
                     // que la barre de progression affiche d'emblée le vrai total
@@ -561,28 +565,18 @@ extension ConversationView {
                     // `catch` ci-dessous, qui renvoie le groupe entier vers
                     // l'outbox durable. Le dedup par `clientMessageId` côté
                     // gateway couvre le rejeu des pièces déjà montées.
-                    var uploadResults = [TusUploadResult?](repeating: nil, count: pendingUploads.count)
-                    try await withThrowingTaskGroup(of: (Int, TusUploadResult).self) { group in
-                        for (index, item) in pendingUploads.enumerated() {
-                            let fileURL = item.fileURL
-                            let mime = item.mimeType
-                            let thumbHash = item.thumbHash
-                            let transcription = item.transcription
-                            group.addTask {
-                                let result = try await uploader.uploadFile(
-                                    fileURL: fileURL, mimeType: mime, credential: credential,
-                                    thumbHash: thumbHash, transcription: transcription
-                                )
-                                return (index, result)
-                            }
-                        }
-                        for try await (index, result) in group {
-                            uploadResults[index] = result
-                        }
+                    // L'ORDRE DU COMPOSEUR (#9776) : les fichiers finissent dans
+                    // le désordre, les ids partent dans l'ordre des pièces — la
+                    // passerelle en fait le rang de chacune.
+                    let uploadResults = try await OrderedParallelUpload.run(uploadItems) { item in
+                        try await uploader.uploadFile(
+                            fileURL: item.fileURL, mimeType: item.mimeType, credential: credential,
+                            thumbHash: item.thumbHash, transcription: item.transcription,
+                            capturedInApp: item.capturedInApp
+                        )
                     }
 
-                    for (index, item) in pendingUploads.enumerated() {
-                        guard let result = uploadResults[index] else { continue }
+                    for (item, result) in zip(pendingUploads, uploadResults) {
                         let att = item.attachment
                         let fileURL = item.fileURL
                         // Off-MainActor read: this `Task` inherits the
@@ -624,7 +618,8 @@ extension ConversationView {
                                 DiskCacheStore.cacheImageForPreview(thumbImage, key: thumbKey)
                             }
                         }
-                        localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))
+                        localAttachments.append(PreparationTracking.promoted(
+                            result.toMessageAttachment(uploadedBy: currentUserId), capturedInApp: att.capturedInApp))
                         // La bulle réconciliée porte l'id SERVEUR de la pièce :
                         // la transcription locale la suit sous cet id, le temps
                         // que `transcription:completed` la confirme.
@@ -1020,24 +1015,24 @@ extension ConversationView {
     }
 
     @discardableResult
-    func handleCameraVideo(_ url: URL) -> PreparingAttachment {
+    func handleCameraVideo(_ url: URL, capturedInApp: Bool = false) -> PreparingAttachment {
         let prep = AttachmentPreparationService.shared.prepareVideo(
             sourceURL: url,
             deleteSourceAfterCompression: true,
             context: .message,
             accentColor: MeeshyColors.errorHex
         )
-        trackPreparation(prep)
+        trackPreparation(prep, capturedInApp: capturedInApp)
         return prep
     }
 
-    func handleCameraCapture(_ image: UIImage) {
+    func handleCameraCapture(_ image: UIImage, capturedInApp: Bool = false) {
         let prep = AttachmentPreparationService.shared.prepareImage(
             image,
             context: .message,
             accentColor: accentColor
         )
-        trackPreparation(prep)
+        trackPreparation(prep, capturedInApp: capturedInApp)
     }
 
     /// Wire a `PreparingAttachment` into the composer:
@@ -1045,9 +1040,10 @@ extension ConversationView {
     /// 2. Observe the handle and, when it reaches `.ready`, promote the
     ///    result into the legacy pending dicts the send pipeline already
     ///    knows how to consume. `.failed` simply drops the tile + toasts.
-    func trackPreparation(_ prep: PreparingAttachment) {
+    func trackPreparation(_ prep: PreparingAttachment, capturedInApp: Bool = false) {
         PreparationTracking.track(prep, preparing: $composerState.preparingAttachments, attachments: $composerState.pendingAttachments,
-                                  mediaFiles: $composerState.pendingMediaFiles, thumbnails: $composerState.pendingThumbnails)
+                                  mediaFiles: $composerState.pendingMediaFiles, thumbnails: $composerState.pendingThumbnails,
+                                  capturedInApp: capturedInApp)
     }
 
     func sendMessage() {

@@ -7,6 +7,33 @@ import MeeshySDK
 /// composer, viseur armé à l'ouverture (#9123), a été retirée (#9298).
 final class ComposerReturnMediaTests: XCTestCase {
 
+    // MARK: - La prise de la caméra se déclare capturée (#9775)
+
+    func test_promoted_capture_declaresCapturedInApp() {
+        let prete = MessageAttachment(id: "prise", mimeType: "image/jpeg")
+
+        let posee = PreparationTracking.promoted(prete, capturedInApp: true)
+
+        XCTAssertTrue(posee.capturedInApp, "Une prise de la caméra de la barre part déclarée capturée.")
+        XCTAssertEqual(posee.id, "prise")
+    }
+
+    func test_promoted_libraryPick_staysUndeclared() {
+        let prete = MessageAttachment(id: "galerie", mimeType: "image/jpeg")
+
+        XCTAssertFalse(PreparationTracking.promoted(prete, capturedInApp: false).capturedInApp,
+                       "Une image de la galerie a déjà été vue : rien ne la déclare capturée.")
+    }
+
+    /// La provenance gouverne la confirmation de la feuille de partage : une
+    /// prise posée par la barre la demande avant d'ouvrir le média au-delà de
+    /// la conversation.
+    func test_capturedPick_requiresPublicationConfirmation() {
+        let posee = PreparationTracking.promoted(MessageAttachment(id: "prise", mimeType: "video/mp4"), capturedInApp: true)
+
+        XCTAssertTrue(PublicationTargetRule.needsCaptureConfirmation(capturedInApp: posee.capturedInApp, target: .story))
+    }
+
     // MARK: - Ce que « Terminé » rend
 
     func test_returnAction_untouchedCapture_returnsTheCaptureItself() {
