@@ -511,7 +511,6 @@ struct StoryHeaderView: View {
                         // créerait deux règles pour un seul geste.
                         Button {
                             HapticFeedback.light()
-                            pauseTimer()
                             EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
                             sharedContentWrapper = SharedContentWrapper(
                                 content: .story(item: story, authorName: group.username)

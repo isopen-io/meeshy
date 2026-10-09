@@ -828,11 +828,11 @@ struct StoryCardView: View {
     /// uniquement sur ses transitions — pas sur celles de `isPaused`.
     @Binding var isLongPressPaused: Bool
 
-    /// Reflète `shouldPauseTimer` du parent (aggrégation des pauses UI : sheets,
-    /// composer, drag, long-press, transition). Propagée au canvas via
-    /// `MeeshyScenePlayer.isPlaying` (nié) pour que la timeline canvas (vidéo,
-    /// audio, displayLink) gèle EN PHASE avec la progress bar du viewer.
+    /// `shouldPauseTimer` du parent : le canvas gèle EN PHASE avec la barre, et
+    /// joue pendant une boucle (#9821).
     let isCanvasPlaybackPaused: Bool
+    /// Tour de boucle de la story courante : chaque tour rembobine le canvas.
+    let loopPass: Int
 
     /// Jeton de purge de l'état gestuel transient, relayé tel quel à
     /// `StoryGestureOverlayView` (cf. sa doc). Bumpé par le viewer sur les
@@ -1313,10 +1313,10 @@ struct StoryCardView: View {
             if currentStoryIsUnpaintable {
                 sentinelLayer
             } else if let story = currentStory {
-                // La porte v3 et les fils du viewer vivent dans
-                // `currentContentHost(_:)`.
+                // La porte v3 et les fils du viewer : `currentContentHost(_:)`.
                 currentContentHost(story)
                     .id(story.id)
+                    .storyLoopRestart(pass: loopPass, scrubber: sceneScrubber)
                     // U6 inc.2 — la navigation prev/next est une gesture
                     // SPATIALE (position x du tap dans le canvas) que VoiceOver
                     // ne peut pas produire : on l'expose en actions custom du

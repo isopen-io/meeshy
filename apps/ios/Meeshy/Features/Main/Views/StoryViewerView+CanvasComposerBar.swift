@@ -97,7 +97,7 @@ struct StoryComposerBarView: View {
         DynamicColorGenerator.hueShiftedHex(composerAccent, degrees: 30)
     }
 
-    /// La story attend tant qu'une pièce se compose (#9821) : le lecteur ne
+    /// La story BOUCLE tant qu'une pièce se compose (#9821) : le lecteur ne
     /// lit qu'UN drapeau, `hasComposerContent`, et c'est ici qu'il se compose.
     private var holdsStory: Bool {
         StoryComposerHold.holds(
@@ -260,7 +260,7 @@ struct StoryComposerBarView: View {
                 return (text: draft.text, attachments: draft.attachments)
             },
             onAnyInteraction: {
-                // No-op: shouldPauseTimer handles all pause logic based on UI state
+                // No-op : `playbackCauses` range chaque état de l'UI (#9821)
             },
             focusTrigger: $composerFocusTrigger,
             // #6587 — `onRecordingChange` RETIRÉ : déclaré, affecté, jamais
@@ -314,8 +314,8 @@ struct StoryComposerBarView: View {
 
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`). Un dépôt
     /// est une interaction utilisateur : il engage le composer
-    /// (`isComposerEngaged`), ce qui met le minuteur de story en pause via
-    /// `shouldPauseTimer` — exactement comme la saisie le fait déjà par le
+    /// (`isComposerEngaged`), ce qui fait boucler la story via
+    /// `playbackCauses` — exactement comme la saisie le fait déjà par le
     /// focus ; le tap sur la story (`dismissComposer`) le relâche. Textes
     /// fusionnés en UNE insertion (au curseur si focus ; sinon en fin de champ
     /// via le canal `injectedEmoji` — cette surface n'a pas de binding texte),
@@ -404,12 +404,12 @@ struct StoryComposerBarView: View {
     }
 }
 
-// MARK: - La story se tient pendant qu'une pièce se compose
+// MARK: - La story boucle pendant qu'une pièce se compose
 
 /// **Joindre une pièce ne laisse pas la story filer** (#9821). Panneau « + »
-/// ouvert, sélecteur présenté ou pièce posée dans la zone : la lecture
-/// attend. Sans cela, la progression avançait sous le sélecteur de photos,
-/// la story se fermait, et la photo choisie était perdue.
+/// ouvert, sélecteur présenté ou pièce posée dans la zone : la story joue EN
+/// BOUCLE (`StoryPlaybackHold.loop`) — elle ne passe pas à la suivante et ne
+/// se ferme pas, sans quoi la photo choisie était perdue.
 enum StoryComposerHold {
     static func holds(barHasContent: Bool, zoneHasPieces: Bool,
                       attachmentPanelOpen: Bool, pickerPresented: Bool) -> Bool {
