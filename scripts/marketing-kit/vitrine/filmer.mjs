@@ -216,7 +216,7 @@ const tourner = async ({ udid, appareil, langue, plan, voix, chemins, etiquette 
   const dossier = preparerScene({ udid, lang: langue, scene: plan.scene, theme: plan.theme, voix, etiquette, fil: plan.montreUnFil })
   for (const nom of marqueursDe(plan)) rmSync(resolve(dossier, nom), { force: true })
   simctl('launch', udid, BUNDLE, ...argumentsDeLancement({ scene: plan.scene, lang: langue }))
-  await attendreLeSignal({ existe: () => existsSync(resolve(dossier, 'pret.txt')), etiquette })
+  await attendreLeSignal({ existe: () => existsSync(resolve(dossier, 'pret.txt')), pasMs: 100, etiquette })
   const enregistreur = await demarrerEnregistrement({ udid, sortie: chemins.source })
   try {
     if (plan.gestes.length) await pause(AVANCE_MS)
