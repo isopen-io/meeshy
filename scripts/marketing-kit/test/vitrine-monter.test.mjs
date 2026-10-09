@@ -196,15 +196,21 @@ describe('cadrage : la caméra va où l’action se joue', async () => {
     expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone' })).toEqual(CADRAGES['jeu-rang'].iphone)
     expect(cadrageDe({ scene: 'jeu-niveau', appareil: 'iphone' })).toEqual(CADRAGES['jeu-niveau'].iphone)
     expect(cadrageDe({ scene: 'jeu-coffre', appareil: 'iphone' })).toEqual(CADRAGES['jeu-coffre'].iphone)
-    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'ipad' })).toBeNull()
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'ipad' })).toEqual(CADRAGES['jeu-rang'].ipad)
+    expect(cadrageDe({ scene: 'interaction-sticker', appareil: 'ipad' })).toBeNull()
     expect(cadrageDe({ scene: 'jeu-badge', appareil: 'iphone' })).toEqual(CADRAGES['jeu-badge'].iphone)
     expect(cadrageDe({ scene: 'interaction-sticker', appareil: 'iphone' })).toBeNull()
     // En arabe, l'écran est en miroir : le rectangle se retourne, sa largeur et sa hauteur ne changent pas.
     const rang = CADRAGES['jeu-rang'].iphone
     expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone', langue: 'ar' })).toEqual({ ...rang, x: 1320 - rang.x - rang.largeur })
     expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone', langue: 'de' })).toEqual(rang)
-    for (const [scene, { iphone }] of Object.entries(CADRAGES)) {
-      if (iphone) expect({ scene, dansLEcran: iphone.x >= 0 && iphone.y >= 0 && iphone.x + iphone.largeur <= 1320 && iphone.y + iphone.hauteur <= 2868 }).toEqual({ scene, dansLEcran: true })
+    const ecrans = { iphone: [1320, 2868], ipad: [2064, 2752] }
+    for (const [scene, parAppareil] of Object.entries(CADRAGES)) {
+      for (const [appareil, r] of Object.entries(parAppareil)) {
+        const [l, h] = ecrans[appareil]
+        expect({ scene, appareil, dansLEcran: r.x >= 0 && r.y >= 0 && r.x + r.largeur <= l && r.y + r.hauteur <= h })
+          .toEqual({ scene, appareil, dansLEcran: true })
+      }
     }
   })
 

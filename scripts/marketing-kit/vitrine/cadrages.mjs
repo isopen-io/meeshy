@@ -29,16 +29,18 @@ export const ROGNAGE_HAUT = { iphone: 165, ipad: 60 }
 // - interaction-commentaire-audio : « Commentaires (1) », le vocal, sa transcription et ses langues : x 20…1120,
 //   y 1560…2380.
 // - interaction-reel : la carte du réel publiée en tête du fil : x 30…1290, y 990…2530.
-// Un autre agent ajoute les entrées iPad et des interactions : AJOUTER une entrée, ne pas réécrire les autres.
+// iPad (2064×2752, prises françaises du 2026-10-09) : l'écran est partagé — le fil à gauche, la fiche ou la
+// conversation à droite (x ≥ 830) ; le réel se publie dans le fil, à gauche. Le zoom y est borné à 938 px natifs.
+// AJOUTER une entrée, ne pas réécrire les autres.
 export const CADRAGES = {
-  'jeu-rang': { iphone: { x: 120, y: 780, largeur: 420, hauteur: 240 } },
-  'jeu-coffre': { iphone: { x: 330, y: 1950, largeur: 660, hauteur: 530 } },
-  'jeu-niveau': { iphone: { x: 40, y: 400, largeur: 780, hauteur: 400 } },
-  'jeu-frappe': { iphone: { x: 100, y: 500, largeur: 940, hauteur: 200 } },
-  'jeu-badge': { iphone: { x: 90, y: 660, largeur: 780, hauteur: 270 } },
-  'interaction-emoji': { iphone: { x: 30, y: 1150, largeur: 640, hauteur: 380 } },
-  'interaction-commentaire-audio': { iphone: { x: 20, y: 1560, largeur: 1100, hauteur: 820 } },
-  'interaction-reel': { iphone: { x: 30, y: 990, largeur: 1260, hauteur: 1540 } },
+  'jeu-rang': { iphone: { x: 120, y: 780, largeur: 420, hauteur: 240 }, ipad: { x: 860, y: 270, largeur: 640, hauteur: 330 } },
+  'jeu-coffre': { iphone: { x: 330, y: 1950, largeur: 660, hauteur: 530 }, ipad: { x: 870, y: 1690, largeur: 1130, hauteur: 470 } },
+  'jeu-niveau': { iphone: { x: 40, y: 400, largeur: 780, hauteur: 400 }, ipad: { x: 870, y: 270, largeur: 700, hauteur: 330 } },
+  'jeu-frappe': { iphone: { x: 100, y: 500, largeur: 940, hauteur: 200 }, ipad: { x: 870, y: 260, largeur: 700, hauteur: 180 } },
+  'jeu-badge': { iphone: { x: 90, y: 660, largeur: 780, hauteur: 270 }, ipad: { x: 870, y: 780, largeur: 1000, hauteur: 200 } },
+  'interaction-emoji': { iphone: { x: 30, y: 1150, largeur: 640, hauteur: 380 }, ipad: { x: 830, y: 1750, largeur: 480, hauteur: 240 } },
+  'interaction-commentaire-audio': { iphone: { x: 20, y: 1560, largeur: 1100, hauteur: 820 }, ipad: { x: 840, y: 1370, largeur: 760, hauteur: 590 } },
+  'interaction-reel': { iphone: { x: 30, y: 990, largeur: 1260, hauteur: 1540 }, ipad: { x: 30, y: 480, largeur: 740, hauteur: 1270 } },
 }
 
 // En arabe, l'app se met en miroir (RTL) : l'action se joue de l'autre côté de l'écran, et le rectangle relevé sur une
