@@ -342,6 +342,81 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         XCTAssertNil(CommentOwnership.ownedMediaPaths(orphan), "Des pièces sans propriétaire lisible ne se lisent pas.")
     }
 
+    // MARK: - Une ligne de texte héritée ne se perd pas à la mise à jour
+
+    /// Une ligne gravée AVANT le champ « auteur », telle qu'une version
+    /// antérieure l'a laissée dans la base de son compte.
+    private func enqueueInheritedText(_ cmid: String) async throws -> String {
+        try await queue.enqueue(.createComment, payload: comment(cmid, content: "écrit avant", author: nil),
+                                conversationId: "post-1")
+    }
+
+    func test_anInheritedTextRow_isShownUnsent_toTheSignedInAccount_andToNoOneElse() async throws {
+        let cmid = "cmid_inherited_1"
+        _ = try await enqueueInheritedText(cmid)
+
+        let shown = await queue.unsentComments(postId: "post-1", ownerId: alice)
+        XCTAssertEqual(shown.map(\.clientMutationId), [cmid], "Elle reste visible pour le compte dont la base la contient.")
+        XCTAssertEqual(shown.first?.isFailed, true, "« Non envoyée » : elle ne partira pas d'elle-même.")
+        XCTAssertEqual(shown.first?.needsAdoption, true)
+        XCTAssertEqual(shown.first?.payload.content, "écrit avant")
+
+        let signedOut = await queue.unsentComments(postId: "post-1", ownerId: nil)
+        XCTAssertTrue(signedOut.isEmpty, "Sans compte connecté, elle n'est attribuable à personne.")
+        let blank = await queue.unsentComments(postId: "post-1", ownerId: "")
+        XCTAssertTrue(blank.isEmpty)
+    }
+
+    func test_aManualRetry_givesTheInheritedRow_theSignedInAccountAsAuthor() async throws {
+        let cmid = "cmid_inherited_2"
+        let outboxId = try await enqueueInheritedText(cmid)
+        XCTAssertNil(try payload(outboxId).authorId)
+
+        try await queue.retryCreateComment(clientMutationId: cmid, ownerId: alice)
+
+        let adopted = try payload(outboxId)
+        XCTAssertEqual(adopted.authorId, alice, "La relance est un acte explicite du compte connecté, dans sa propre base.")
+        XCTAssertEqual(adopted.content, "écrit avant")
+        XCTAssertTrue(CommentOwnership.owns(adopted, currentUserId: alice))
+        let after = await queue.unsentComment(clientMutationId: cmid, ownerId: alice)
+        XCTAssertEqual(after?.needsAdoption, false)
+        XCTAssertEqual(after?.isFailed, false, "Relancée, elle est en route.")
+    }
+
+    func test_aManualRetry_withoutASignedInAccount_adoptsNothing() async throws {
+        let cmid = "cmid_inherited_3"
+        let outboxId = try await enqueueInheritedText(cmid)
+        for owner in [String?.none, "", "  "] {
+            do {
+                try await queue.retryCreateComment(clientMutationId: cmid, ownerId: owner)
+                XCTFail("Sans compte, rien ne s'attribue.")
+            } catch {
+                XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+            }
+        }
+        XCTAssertNil(try payload(outboxId).authorId)
+    }
+
+    func test_onlyTextIsAdoptable_neverPiecesWithoutAnOwner() {
+        let text = comment("c", author: nil)
+        XCTAssertTrue(CommentOwnership.isUnattributedText(text))
+        XCTAssertTrue(CommentOwnership.mayHandle(text, ownerId: alice))
+        XCTAssertFalse(CommentOwnership.mayHandle(text, ownerId: nil))
+        let withPieces = text.withMedia(localMediaPaths: ["pending-media/x/0.jpg"], localMediaMimeTypes: nil, uploadedMedia: nil)
+        XCTAssertFalse(CommentOwnership.isUnattributedText(withPieces))
+        XCTAssertFalse(CommentOwnership.mayHandle(withPieces, ownerId: alice), "Des pièces sans propriétaire ne s'adoptent pas.")
+        XCTAssertFalse(CommentOwnership.mayHandle(comment("c"), ownerId: bob), "La ligne d'Alice n'est pas à Bob.")
+    }
+
+    func test_anInheritedRow_canBeDiscardedByTheSignedInAccount() async throws {
+        let cmid = "cmid_inherited_4"
+        _ = try await enqueueInheritedText(cmid)
+        let refused = await queue.cancelCreateComment(clientMutationId: cmid, ownerId: nil)
+        XCTAssertFalse(refused)
+        let removed = await queue.cancelCreateComment(clientMutationId: cmid, ownerId: alice)
+        XCTAssertTrue(removed)
+    }
+
     // MARK: - Annuler et relancer : l'auteur seul
 
     func test_cancelAndRetry_areClosedToAnotherAccount() async throws {

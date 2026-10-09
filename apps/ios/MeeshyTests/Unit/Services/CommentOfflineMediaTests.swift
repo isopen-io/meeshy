@@ -144,16 +144,35 @@ final class CommentReplayDispatchTests: XCTestCase {
 
     // MARK: - Fermé par défaut
 
-    func test_aRowWithoutAuthor_isNeverReplayed_evenAsText() async throws {
+    /// **Une ligne héritée sans auteur : zéro rejeu automatique**, et la
+    /// ligne s'ÉPUISE (elle devient visible « non envoyée ») au lieu d'attendre
+    /// sans fin et sans se montrer.
+    func test_aRowWithoutAuthor_isNeverReplayedAutomatically_evenAsText() async throws {
         for author in [String?.none, "", "  "] {
             let row = try makeRow(pieces: 0, author: author)
             let spy = CommentPublisherSpy(token: TestSessionToken.make(userId: alice))
 
             let error = await outcome(row.record, spy)
 
-            XCTAssertNotNil(error)
-            XCTAssertTrue(spy.created.isEmpty, "Une entrée sans propriétaire lisible ne part jamais.")
+            XCTAssertTrue(spy.created.isEmpty, "Une entrée sans propriétaire lisible ne part jamais d'elle-même.")
+            guard case MeeshyError.server(let status, _)? = error else { return XCTFail("échec permanent attendu") }
+            XCTAssertEqual(status, 422, "La ligne s'épuise : elle se voit « non envoyée », relançable à la main.")
         }
+    }
+
+    /// La relance MANUELLE lui donne pour auteur le compte connecté
+    /// (`OfflineQueue.retryCreateComment`, témoin du SDK) : le rejeu qui suit
+    /// crée UNE fois, sous le jeton de ce compte.
+    func test_onceAdoptedByItsAccount_theInheritedRow_isCreatedOnce_underThatAccount() async throws {
+        let adopted = try makeRow(pieces: 0, author: alice)
+        let aliceToken = TestSessionToken.make(userId: alice)
+        let spy = CommentPublisherSpy(token: aliceToken)
+
+        let error = await outcome(adopted.record, spy)
+
+        XCTAssertNil(error)
+        XCTAssertEqual(spy.created.count, 1)
+        XCTAssertEqual(spy.createTokens, [aliceToken])
     }
 
     func test_aRowWhoseFilesAreNotInItsAuthorsFolder_isRefused() async throws {

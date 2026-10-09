@@ -30,6 +30,13 @@ extension OutboxDispatcher {
     /// plus : elles attendent leur auteur, sans consommer leur budget.
     func dispatchCreateComment(_ record: OutboxRecord, publisher: CommentPublisher) async throws {
         let payload = try decodePayload(record, as: CreateCommentPayload.self)
+        // **Une ligne sans auteur ne se rejoue jamais d'elle-même.** Gravée
+        // avant le champ, elle s'épuise ICI — sans rien envoyer ni supprimer —
+        // et reste visible « non envoyée » : c'est la relance MANUELLE de son
+        // compte qui lui donnera un auteur (`OfflineQueue.retryCreateComment`).
+        guard CommentOwnership.identity(payload.authorId) != nil else {
+            throw MeeshyError.server(statusCode: 422, message: "createComment: ligne sans auteur, relance manuelle requise")
+        }
         // Les fichiers de la ligne doivent vivre dans le dossier de SON
         // auteur ; une ligne sans auteur lisible n'en a aucun.
         guard let stored = CommentOwnership.ownedMediaPaths(payload) else {

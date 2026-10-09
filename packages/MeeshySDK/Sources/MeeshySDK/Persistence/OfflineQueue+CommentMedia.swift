@@ -75,6 +75,29 @@ public enum CommentOwnership {
         return author == current
     }
 
+    /// Une ligne de TEXTE gravée avant le champ « auteur » : sans auteur, et
+    /// sans aucune pièce (aucune ligne ancienne ne pouvait en emporter).
+    ///
+    /// Elle ne se rejoue JAMAIS d'elle-même. Mais elle vit dans la base d'un
+    /// compte, et la laisser inerte ferait perdre en silence, à la mise à
+    /// jour, ce que son auteur a écrit : elle reste donc VISIBLE pour ce
+    /// compte, « non envoyée », et c'est sa relance MANUELLE — un acte
+    /// explicite du compte connecté, dans sa propre base — qui lui donne un
+    /// auteur (`adopting`).
+    public static func isUnattributedText(_ payload: CreateCommentPayload) -> Bool {
+        identity(payload.authorId) == nil
+            && (payload.localMediaPaths ?? []).isEmpty
+            && (payload.uploadedMedia ?? []).isEmpty
+    }
+
+    /// Ce que `ownerId` a le droit de VOIR et de relancer dans sa base : ses
+    /// propres lignes, et les lignes de texte héritées sans auteur. Jamais la
+    /// ligne d'un autre compte, jamais rien sans compte connecté.
+    public static func mayHandle(_ payload: CreateCommentPayload, ownerId: String?) -> Bool {
+        guard identity(ownerId) != nil else { return false }
+        return owns(payload, currentUserId: ownerId) || isUnattributedText(payload)
+    }
+
     /// Le compte qu'un jeton de session DÉSIGNE (revendication `userId` du
     /// JWT) — `nil` pour tout jeton mal formé. Lue dans le jeton lui-même :
     /// c'est ce qui lie l'identité vérifiée à l'identifiant qui signe la
@@ -205,6 +228,10 @@ public struct UnsentComment: Sendable, Equatable {
 
     public var clientMutationId: String { payload.clientMutationId }
 
+    /// Une ligne héritée sans auteur : elle n'ira nulle part sans une relance
+    /// manuelle, qui l'attribuera au compte connecté.
+    public var needsAdoption: Bool { CommentOwnership.isUnattributedText(payload) }
+
     public init(payload: CreateCommentPayload, isFailed: Bool, lastError: String?,
                 createdAt: Date, localMediaURLs: [URL]) {
         self.payload = payload
@@ -333,10 +360,11 @@ extension OfflineQueue {
             // ne posent pas la même ancre sur la ligne.
             guard let payload = try? decoder.decode(CreateCommentPayload.self, from: record.payload),
                   payload.postId == postId,
-                  CommentOwnership.owns(payload, currentUserId: ownerId) else { return nil }
+                  CommentOwnership.mayHandle(payload, ownerId: ownerId) else { return nil }
             guard let owned = CommentOwnership.ownedMediaPaths(payload) else { return nil }
             let urls = owned.map { URL(fileURLWithPath: Self.absoluteMediaPath(forStored: $0)) }
-            return UnsentComment(payload: payload, isFailed: record.status == .exhausted,
+            return UnsentComment(payload: payload,
+                                 isFailed: record.status == .exhausted || CommentOwnership.isUnattributedText(payload),
                                  lastError: record.lastError, createdAt: record.createdAt,
                                  localMediaURLs: urls)
         }
@@ -349,10 +377,12 @@ extension OfflineQueue {
         guard let record = try? await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
               record.kind == .createComment,
               let payload = try? decoder.decode(CreateCommentPayload.self, from: record.payload),
-              CommentOwnership.owns(payload, currentUserId: ownerId),
+              CommentOwnership.mayHandle(payload, ownerId: ownerId),
               let owned = CommentOwnership.ownedMediaPaths(payload) else { return nil }
         return UnsentComment(
-            payload: payload, isFailed: record.status == .exhausted, lastError: record.lastError,
+            payload: payload,
+            isFailed: record.status == .exhausted || CommentOwnership.isUnattributedText(payload),
+            lastError: record.lastError,
             createdAt: record.createdAt,
             localMediaURLs: owned.map { URL(fileURLWithPath: Self.absoluteMediaPath(forStored: $0)) })
     }
@@ -368,7 +398,7 @@ extension OfflineQueue {
             guard let record = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
                   record.kind == .createComment else { return false }
             let payload = try decoder.decode(CreateCommentPayload.self, from: record.payload)
-            guard CommentOwnership.owns(payload, currentUserId: ownerId) else { return false }
+            guard CommentOwnership.mayHandle(payload, ownerId: ownerId) else { return false }
             // Seuls les fichiers du dossier de l'auteur se suppriment.
             let owned = CommentOwnership.ownedMediaPaths(payload) ?? []
             removePendingCommentFiles(owned)
@@ -384,11 +414,26 @@ extension OfflineQueue {
 
     /// L'AUTEUR relance un commentaire que la file a abandonné. Refusé pour
     /// tout autre compte.
+    ///
+    /// **Une ligne de texte héritée sans auteur est ADOPTÉE par ce geste** :
+    /// le compte connecté, dans sa propre base, déclare vouloir l'envoyer —
+    /// elle prend `ownerId` pour auteur, puis rejoue comme toute autre, sous
+    /// le jeton de ce compte.
     public func retryCreateComment(clientMutationId cmid: String, ownerId: String?) async throws {
-        guard await unsentComment(clientMutationId: cmid, ownerId: ownerId) != nil else {
+        guard let pool = outboxPool,
+              let owner = CommentOwnership.identity(ownerId),
+              let unsent = await unsentComment(clientMutationId: cmid, ownerId: owner) else {
             throw CommentOwnership.Refusal.notTheAuthor
         }
-        try await retryItem("ofqm_\(cmid)")
+        let outboxId = "ofqm_\(cmid)"
+        if unsent.needsAdoption {
+            let adopted = try encoder.encode(unsent.payload.adopting(authorId: owner))
+            try await pool.write { db in
+                try db.execute(sql: "UPDATE outbox SET payload = ?, updatedAt = ? WHERE id = ?",
+                               arguments: [adopted, Date(), outboxId])
+            }
+        }
+        try await retryItem(outboxId)
     }
 
     /// **Un dossier de pièces sans ligne dans la file est supprimé** (audit,
@@ -470,6 +515,18 @@ extension OfflineQueue {
 }
 
 extension CreateCommentPayload {
+    /// La même charge, attribuée à `authorId` — pour l'adoption manuelle
+    /// d'une ligne de texte héritée (`OfflineQueue.retryCreateComment`).
+    func adopting(authorId: String) -> CreateCommentPayload {
+        CreateCommentPayload(
+            clientMutationId: clientMutationId, postId: postId, parentCommentId: parentCommentId,
+            content: content, originalLanguage: originalLanguage, authorId: authorId,
+            location: location, effectFlags: effectFlags, quotedPostMediaId: quotedPostMediaId,
+            localMediaPaths: localMediaPaths, localMediaMimeTypes: localMediaMimeTypes,
+            uploadedMedia: uploadedMedia, mobileTranscription: mobileTranscription
+        )
+    }
+
     /// Une copie portant d'AUTRES pièces. Écrite par l'`init` complet : un
     /// champ ajouté en amont sans passer ici ferait rougir le compilateur
     /// plutôt que de se perdre à la première écriture de progression.
@@ -484,14 +541,14 @@ extension CreateCommentPayload {
             parentCommentId: parentCommentId,
             content: content,
             originalLanguage: originalLanguage,
+            authorId: authorId,
             location: location,
             effectFlags: effectFlags,
             quotedPostMediaId: quotedPostMediaId,
             localMediaPaths: localMediaPaths,
             localMediaMimeTypes: localMediaMimeTypes,
             uploadedMedia: uploadedMedia,
-            mobileTranscription: mobileTranscription,
-            authorId: authorId
+            mobileTranscription: mobileTranscription
         )
     }
 }
