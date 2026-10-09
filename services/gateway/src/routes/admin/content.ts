@@ -9,7 +9,7 @@ import {
   type TranslationListQuery
 } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { requirePermission } from '../../middleware/authorize';
@@ -393,7 +393,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
                 type: true
               }
             },
-            attachments: { select: attachmentSocketSelect },
+            attachments: { select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
             _count: {
               select: {
                 replies: true

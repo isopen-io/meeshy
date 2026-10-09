@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
 import {
@@ -80,7 +81,7 @@ const PREVIEW_MESSAGE_SELECT = {
   sender: { select: PREVIEW_MEDIA_SENDER_SELECT },
   // Bornée, plus plafonnée à 1 : le résumé (« 3 photos · 1,4 Mo ») lit
   // TOUTES les pièces jointes ; le groupe n'en sert que la première en détail.
-  attachments: { take: PREVIEW_ATTACHMENT_SUMMARY_LIMIT, select: PREVIEW_MEDIA_ATTACHMENT_SELECT },
+  attachments: { take: PREVIEW_ATTACHMENT_SUMMARY_LIMIT, select: PREVIEW_MEDIA_ATTACHMENT_SELECT, orderBy: MESSAGE_ATTACHMENT_ORDER },
   _count: { select: { attachments: true } },
 } as const;
 

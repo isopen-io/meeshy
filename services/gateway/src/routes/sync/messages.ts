@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@meeshy/shared/prisma/client';
-import { attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from '../conversations/utils/message-sender-select';
 import { serializeAttachmentForSocket } from '../../socketio/serializeAttachmentForSocket';
 import { signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
@@ -129,7 +129,7 @@ export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   // masquée — pour tout le monde, alors qu'aucune ne l'est. Un fail-closed
   // protège des fuites ; il ne protège pas de l'oubli d'alimenter la garde, et
   // transforme alors l'oubli en panne totale.
-  attachments: { select: attachmentSocketSelect },
+  attachments: { select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
   sender: {
     select: {
       id: true,

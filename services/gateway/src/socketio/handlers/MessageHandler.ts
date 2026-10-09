@@ -42,7 +42,7 @@ import { carriesNonTextBody } from '../../services/messaging/nonTextBody';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket, serializeMessageAttachmentsForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
@@ -767,7 +767,7 @@ export class MessageHandler {
               // `attachmentMediaSelect` est délibérément SANS drapeau de
               // protection. Sans les trois colonnes, l'édition d'un message
               // rediffusait une pièce MUETTE sur sa propre protection.
-              attachments: { select: attachmentSocketSelect },
+              attachments: { select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
             },
           })
       );
@@ -1263,7 +1263,7 @@ export class MessageHandler {
               // position sur le chemin socket (parité avec le chemin REST).
               metadata: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, type: true } },
-              attachments: { select: attachmentForwardPreviewSelect, take: 1 }
+              attachments: { select: attachmentForwardPreviewSelect, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 1 }
             }
           }),
           message.forwardedFromConversationId

@@ -69,7 +69,7 @@ describe('AttachmentService.associateAttachmentsToMessage — protection (#7498)
 
     expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
       where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
-      data: { messageId: MSG_ID, isViewOnce: true, isBlurred: true, effectFlags: 0b111 },
+      data: { messageId: MSG_ID, isViewOnce: true, isBlurred: true, rank: 0, effectFlags: 0b111 },
     });
   });
 
@@ -85,7 +85,7 @@ describe('AttachmentService.associateAttachmentsToMessage — protection (#7498)
 
     expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
       where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
-      data: { messageId: MSG_ID, isViewOnce: true },
+      data: { messageId: MSG_ID, isViewOnce: true, rank: 0 },
     });
   });
 
@@ -99,7 +99,7 @@ describe('AttachmentService.associateAttachmentsToMessage — protection (#7498)
 
     expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
       where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
-      data: { messageId: MSG_ID },
+      data: { messageId: MSG_ID, rank: 0 },
     });
   });
 });
@@ -127,7 +127,7 @@ describe('AttachmentService.associateAttachmentsToMessage — le lien ne déplac
 
     expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
       where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
-      data: { messageId: MSG_ID },
+      data: { messageId: MSG_ID, rank: 0 },
     });
     expect(prisma.messageAttachment.findMany).not.toHaveBeenCalled();
   });
@@ -151,12 +151,12 @@ describe('AttachmentService.associateAttachmentsToMessage — le lien ne déplac
     expect(writes).toContainEqual({
       ids: [ATTACH_ID],
       where: { id: { in: [ATTACH_ID] }, ...UNATTACHED },
-      data: { messageId: MSG_ID, isBlurred: true, effectFlags: EPHEMERAL | EPHEMERAL_AFTER_READ | BLURRED },
+      data: { messageId: MSG_ID, isBlurred: true, rank: 0, effectFlags: EPHEMERAL | EPHEMERAL_AFTER_READ | BLURRED },
     });
     expect(writes).toContainEqual({
       ids: [OTHER_ATTACH_ID],
       where: { id: { in: [OTHER_ATTACH_ID] }, ...UNATTACHED },
-      data: { messageId: MSG_ID, isBlurred: true, effectFlags: BLURRED },
+      data: { messageId: MSG_ID, isBlurred: true, rank: 1, effectFlags: BLURRED },
     });
   });
 

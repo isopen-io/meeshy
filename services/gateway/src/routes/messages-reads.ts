@@ -6,7 +6,7 @@
  */
 import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
-import { attachmentFullSelect } from '../services/attachments/attachmentIncludes';
+import { attachmentFullSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { hoistLocationOnto } from '../services/location/sharedPlace';
 import { hoistStickerOnto } from '../services/stickers/messageSticker';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../services/messaging/viewOnceAudience';
@@ -272,7 +272,7 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
               }
             }
           },
-          attachments: { select: attachmentFullSelect }
+          attachments: { select: attachmentFullSelect, orderBy: MESSAGE_ATTACHMENT_ORDER }
         }
       })
       );

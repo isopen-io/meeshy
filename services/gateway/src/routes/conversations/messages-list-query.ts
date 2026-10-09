@@ -30,7 +30,7 @@ import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forw
 import { FORWARD_PIECE_PROTECTION_SELECT, FORWARD_SOURCE_PROTECTION_SELECT, forwardPreviewOf, signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
 import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
 import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
-import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import {
   resolveParticipantAvatar,
   resolveParticipantDisplayName,
@@ -317,7 +317,7 @@ export function buildMessageListSelect(options: {
         // nu, délibérément SANS drapeau de protection, ni une union locale des
         // deux) : c'est littéralement la forme du canal socket que #7014 a
         // nommée, et que cette route écrivait à la main jusqu'ici.
-        attachments: { select: attachmentSocketSelect },
+        attachments: { select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
         _count: {
           select: {
             reactions: true,
@@ -415,7 +415,7 @@ export function buildMessageListSelect(options: {
             // par page (`backfillCitedAttachments`).
             attachments: {
               select: attachmentFullSelect,
-              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              orderBy: MESSAGE_ATTACHMENT_ORDER,
               take: 4,
             },
             _count: {
@@ -863,7 +863,7 @@ export async function enrichForwardedMessagesForList(
                   select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
                 },
                 ...FORWARD_SOURCE_PROTECTION_SELECT, // #9646 — `forwardPreviewOf`
-                attachments: { select: { ...attachmentForwardPreviewSelect, ...FORWARD_PIECE_PROTECTION_SELECT }, take: 1 }
+                attachments: { select: { ...attachmentForwardPreviewSelect, ...FORWARD_PIECE_PROTECTION_SELECT }, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 1 }
               }
             })
         );

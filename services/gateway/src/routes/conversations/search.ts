@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import {
   generateDefaultConversationTitle,
   resolveUserLanguagesOrdered
@@ -56,7 +57,7 @@ const conversationSearchPreviewInclude = {
       },
     },
   },
-  attachments: { take: 1 },
+  attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER, take: 1 },
   _count: { select: { attachments: true } },
 } as const;
 
