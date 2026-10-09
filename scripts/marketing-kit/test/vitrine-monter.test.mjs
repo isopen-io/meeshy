@@ -208,6 +208,14 @@ describe('cadrage : la caméra va où l’action se joue', async () => {
     }
   })
 
+  test('la caméra d’un plan arabe vise l’action retournée : l’écran est en miroir', async () => {
+    const { cameraDuPlan } = await import('../vitrine/monter.mjs')
+    const clip = { largeur: 1320, hauteur: 2868 }
+    const camera = (langue) => cameraDuPlan({ scene: 'jeu-rang', appareil: 'iphone', langue, clip, rognageHaut: ROGNAGE_HAUT.iphone })
+    expect(camera('ar')).not.toEqual(camera('fr'))
+    expect(camera('de')).toEqual(camera('fr'))
+  })
+
   test('zoom borné à ×2,2 : 600 px natifs sur un iPhone de 1320 ; la borne suit la taille du clip', () => {
     expect(ZOOM_MAX).toBe(2.2)
     expect(minIphone).toBeCloseTo(600, 9)

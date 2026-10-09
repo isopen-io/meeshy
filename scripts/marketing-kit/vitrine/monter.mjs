@@ -54,8 +54,8 @@ export const clipsTournes = ({ apercu, appareil, lang, source = SORTIE, sonder =
 // Le mouvement de caméra d'un plan dont la scène a un cadrage : plein écran pendant la marge d'avant
 // l'action, puis zoom vers la fenêtre qui contient le rectangle d'intérêt — dans l'image rognée de sa barre
 // d'état, au rapport de cette image.
-export const cameraDuPlan = ({ scene, appareil, clip, rognageHaut }) => {
-  const rect = cadrageDe({ scene, appareil })
+export const cameraDuPlan = ({ scene, appareil, langue, clip, rognageHaut }) => {
+  const rect = cadrageDe({ scene, appareil, langue })
   if (!rect) return null
   const natif = [clip.largeur, clip.hauteur - rognageHaut]
   const arrivee = fenetreCible({
@@ -104,7 +104,7 @@ export const monterApercu = async ({ apercu, appareil, lang, source, racine, ren
     if (seg.type !== 'clip') return { ...seg, carte: ecrire(resolve(dossier, 'fin.png'), await rendre(pageFin({ ...plan.fin, lang, largeur, hauteur }))) }
     const clip = clips[seg.scene]
     const rognageHaut = rognageDuClip({ appareil, largeurClip: clip.largeur })
-    const camera = cameraDuPlan({ scene: seg.scene, appareil, clip, rognageHaut })
+    const camera = cameraDuPlan({ scene: seg.scene, appareil, langue: lang, clip, rognageHaut })
     const cadre = ecrire(resolve(dossier, `cadre-${i}.png`), await rendre(pageCadreApercu({ texte: seg.legende, lang, disposition })))
     return { ...seg, camera, rognageHaut, cadre, masque, voile: camera ? voile : null }
   }))
