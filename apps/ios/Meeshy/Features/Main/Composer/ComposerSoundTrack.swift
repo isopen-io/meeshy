@@ -91,7 +91,7 @@ struct ComposerSoundTrack: View {
         GeometryReader { proxy in
             let largeur = proxy.size.width
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                     .fill(Color.white.opacity(0.1))
                 spectrum(width: largeur)
                 volumeLine(width: largeur)
