@@ -70,7 +70,7 @@ export const SCENES_FILMEES = {
   // Couvercle 0–0,4 s, récompenses à 0,5 / 0,8 / 1,1 s (0,3 s chacune).
   'jeu-coffre': jeu('jeu-coffre', {
     dureeMs: 1400,
-    mouvement: [{ etape: 'mouvement', de: 20, a: 300 }, { etape: 'mouvement', de: 560, a: 1110 }],
+    mouvement: [{ etape: 'mouvement', de: 40, a: 300 }, { etape: 'mouvement', de: 560, a: 1000 }],
     imagesCles: [{ nom: 'coffre-ouvert', etape: 'mouvement', instantMs: 410 }, { nom: 'recompenses', etape: 'mouvement', instantMs: 1460 }],
   }),
   // Plaque 0–0,3 s, marteau jusqu'à l'impact 0,45 s, retournement 0,55–1,2 s.
@@ -84,11 +84,12 @@ export const SCENES_FILMEES = {
     mouvement: [{ etape: 'mouvement', de: 20, a: 480 }],
     imagesCles: [{ nom: 'niveau-monte', etape: 'mouvement', instantMs: 660 }],
   }),
-  // La médaille se rallume quand la lecture servie est rendue ; la matière remonte en 0,7 s.
+  // La médaille se rallume quand la lecture servie est rendue : l'étagère change d'abord ses compteurs (premier
+  // mouvement), se recalcule 0,1 à 0,15 s, puis la matière remonte en 0,7 s.
   'jeu-badge': jeu('jeu-badge', {
     dureeMs: 700,
-    mouvement: [{ etape: 'mouvement', de: 20, a: 440 }],
-    imagesCles: [{ nom: 'badge-gagne', etape: 'mouvement', instantMs: 600 }],
+    mouvement: [{ etape: 'mouvement', de: 220, a: 600 }],
+    imagesCles: [{ nom: 'badge-gagne', etape: 'mouvement', instantMs: 800 }],
   }),
   // Le toucher du compteur pousse la fiche des Meeshes : la poussée paraît 0,2 à 0,35 s après, le temps que la fiche se
   // bâtisse — aucune fenêtre n'y est posée. La fiche lue et posée (étape « frappe »), Mee et Meo frappent : la
