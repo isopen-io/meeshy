@@ -183,9 +183,7 @@ enum GameTierEmblem {
     // MARK: - Le dessin
 
     /// La peinture du palier : une couleur franche, ou le prisme tournant de Galaxie et de Singularité.
-    /// L'opacité d'un filigrane voyage DANS la couleur, jamais dans le contexte ni sur la vue :
-    /// sous iOS 26.1, `ImageRenderer` rend vide un `Canvas` dont le `GraphicsContext` ou la vue
-    /// porte une opacité réduite — seule une couleur translucide survit à tous les rendus.
+    /// L'opacité d'un filigrane voyage dans la couleur de chaque tracé.
     private static func shading(for tier: LevelTierKey, opacity: Double) -> GraphicsContext.Shading {
         tier.isSpectral
             ? .conicGradient(
@@ -230,9 +228,8 @@ public struct TierEmblemView: View {
     ///   - tier: le palier de nom — il fixe le dessin et la couleur spectrale.
     ///   - knockout: la couleur du fond sur lequel l'emblème se pose (la Signature s'y creuse
     ///     quand le cœur est plein).
-    ///   - opacity: 1 plein ; vers 0,18, un filigrane. Elle est portée par les COULEURS du dessin
-    ///     (`GameTierEmblem.draw`) : ni l'opacité d'un `GraphicsContext` ni `.opacity` sur la vue
-    ///     ne survivent à `ImageRenderer` sous iOS 26.1 — mesuré, le filigrane y sortait vide.
+    ///   - opacity: 1 plein ; vers 0,18, un filigrane. Elle est portée par les couleurs du dessin
+    ///     (`GameTierEmblem.draw`).
     ///   - accessibilityLabel: `nil` ⇒ décoratif ; l'hôte dit « palier Éclat ».
     public init(tier: LevelTierKey, knockout: Color = .white, opacity: Double = 1, accessibilityLabel: String? = nil) {
         self.tier = tier
