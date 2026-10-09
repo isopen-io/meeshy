@@ -445,6 +445,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         try await StoryViewModel.enqueueMarkStoryViewed(storyId)
     }
 
+    /// #9804 — registre durable des vues, distinct de l'instantané du tray.
+    var viewedLedger: StoryViewedLedgerProviding = StoryViewedLedger.shared
+
     // MARK: - Lookup Methods
 
     func storyGroupForUser(userId: String) -> StoryGroup? {
