@@ -6,7 +6,7 @@ import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
-import { readViewerInteractions } from './posts/viewerEngagement';
+import { readPostViews, readViewerInteractions } from './posts/viewerEngagement';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { borrowedSoundReelEntries } from './posts/storyReelCompanion';
 import { applyMediaOrder } from './posts/mediaOrder';
@@ -2078,25 +2078,7 @@ export class PostService {
   }
 
   async getPostViews(postId: string, userId: string, limit: number = 50, offset: number = 0) {
-    const post = await this.prisma.post.findFirst({
-      where: { id: postId, deletedAt: NOT_DELETED },
-    });
-    if (!post) return null;
-    if (post.authorId !== userId) throw new Error('FORBIDDEN');
-
-    const views = await this.prisma.postView.findMany({
-      where: { postId },
-      include: {
-        user: { select: authorSelect },
-      },
-      orderBy: { viewedAt: 'desc' },
-      take: limit,
-      skip: offset,
-    });
-
-    const total = await this.prisma.postView.count({ where: { postId } });
-
-    return { items: views, total, hasMore: offset + limit < total };
+    return readPostViews(this.prisma, postId, userId, limit, offset);
   }
 
   /**

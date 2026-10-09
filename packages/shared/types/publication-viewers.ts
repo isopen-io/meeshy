@@ -15,10 +15,15 @@
  *   pas compté ici, et rien ne l'invente ;
  * - `repostCount` — ses republications (simples ou citées) encore en ligne ;
  * - `commentCount` / `replyCount` — ses commentaires de premier niveau et ses
- *   réponses à un commentaire, supprimés exclus ;
- * - `bookmarked` — présent (et `true`) seulement si elle l'a mis en favori
- *   DEPUIS la mise en service de cette liste : un favori posé quand le geste
- *   était privé n'est jamais révélé (`BOOKMARKS_DISCLOSED_SINCE`, passerelle).
+ *   réponses à un commentaire, supprimés exclus.
+ *
+ * Le FAVORI n'y figure jamais (décision porteur 2026-10-09) : mettre un contenu
+ * de côté reste un geste privé. Un client qui décodait un `bookmarked`
+ * optionnel continue de fonctionner sans lui.
+ *
+ * Pour un POST ou un RÉEL, la liste ne porte que les vues et les partages par
+ * lien postérieurs à la mise en service (`VIEWER_ACTIVITY_DISCLOSED_SINCE`,
+ * passerelle) ; une story garde tout son historique.
  */
 export type PostViewerEngagement = {
   readonly reactions?: readonly string[];
@@ -26,7 +31,6 @@ export type PostViewerEngagement = {
   readonly repostCount?: number;
   readonly commentCount?: number;
   readonly replyCount?: number;
-  readonly bookmarked?: true;
 };
 
 /** Une ligne de la liste des vues, telle que la passerelle la sert. */

@@ -615,7 +615,7 @@ describe('GET /posts/:postId/interactions', () => {
   it("sert chaque ligne enrichie telle quelle, compteurs absents compris", async () => {
     const enriched = {
       id: 'viewer-1', username: 'v', displayName: 'V', avatarUrl: null, viewedAt: '2026-10-10T12:00:00.000Z',
-      reaction: '😂', reactions: ['❤️', '😂'], shareCount: 1, repostCount: 2, commentCount: 3, replyCount: 1, bookmarked: true,
+      reaction: '😂', reactions: ['❤️', '😂'], shareCount: 1, repostCount: 2, commentCount: 3, replyCount: 1,
     };
     const bare = { id: 'viewer-2', username: 'w', displayName: null, avatarUrl: null, viewedAt: '2026-10-10T11:00:00.000Z', reaction: null };
     mockGetPostInteractions.mockResolvedValueOnce({ viewers: [enriched, bare], total: 2, hasMore: false });

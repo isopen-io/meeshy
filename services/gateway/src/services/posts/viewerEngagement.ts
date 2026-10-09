@@ -1,5 +1,6 @@
 import { PostVisibility, type PrismaClient } from '@meeshy/shared/prisma/client';
 import type { PostViewerEngagement, PostViewersPage } from '@meeshy/shared/types/publication-viewers';
+import { activityDisclosureFloor, viewerActivityDisclosedSince } from '../../config/viewer-activity-disclosure';
 import { authorSelect } from './postIncludes';
 import { NOT_DELETED } from './softDelete';
 import { filterConsumablePostIds, type PostConsumptionPrisma } from '../../routes/posts/postConsumptionGate';
@@ -11,21 +12,30 @@ const logger = enhancedLogger.child({ module: 'viewerEngagement' });
 /**
  * La liste des vues d'un contenu, enrichie de ce que CHAQUE personne y a fait
  * (#9727) — réactions, partages par lien, republications, commentaires,
- * réponses, favori. Extrait de `PostService` (hors budget de taille) : le
- * service n'y garde qu'un appel.
+ * réponses. Extrait de `PostService` (hors budget de taille) : le service n'y
+ * garde qu'un appel.
  *
- * **Une lecture agrégée par source, jamais une requête par personne.** Les sept
+ * **Le favori n'y figure pas, et ne s'y lit pas** (décision porteur
+ * 2026-10-09 : « ne jamais montrer les favoris ») : mettre un contenu de côté
+ * reste un geste PRIVÉ, la table `PostBookmark` est hors de ce module.
+ *
+ * **Une lecture agrégée par source, jamais une requête par personne.** Les six
  * lectures partent en parallèle, bornées aux identifiants de la PAGE servie
  * (`in: viewerIds`) : le coût suit le nombre de sources, pas la taille de la
  * page, et une page vide ne déclenche aucune lecture.
  *
  * **Un compteur à zéro n'est pas servi.** Chaque champ d'engagement est absent
- * quand il vaut zéro (et `bookmarked` absent quand il est faux) : le client
- * n'a rien à filtrer, et un ancien client continue de lire `reaction`.
+ * quand il vaut zéro : le client n'a rien à filtrer, et un ancien client
+ * continue de lire `reaction`.
+ *
+ * **Un post ou un réel ne montre que ce qui suit la mise en service** (décision
+ * porteur 2026-10-09 : « seulement à partir de maintenant ») : ses vues et ses
+ * partages par lien antérieurs à `VIEWER_ACTIVITY_DISCLOSED_SINCE` ne sortent
+ * pas, et le `total` les ignore aussi. Une story garde tout son historique.
  */
 export type ViewerEngagementPrisma = Pick<
   PrismaClient,
-  'post' | 'postView' | 'postReaction' | 'trackingLink' | 'postComment' | 'postBookmark' | 'user'
+  'post' | 'postView' | 'postReaction' | 'trackingLink' | 'postComment' | 'user'
 > &
   PostConsumptionPrisma;
 
@@ -76,14 +86,6 @@ export function viewerEngagementGates(prisma: ViewerEngagementPrisma): ViewerEng
  */
 export const REPOSTS_INSPECTED_PER_PERSON = 10;
 export const REPOSTS_INSPECTED_PER_PAGE = 100;
-
-/**
- * Un favori posé AVANT cette date l'a été quand le geste était privé : il
- * n'est jamais montré à l'auteur (avis `conformite-juridique` sur #9727 — pas
- * d'effet rétroactif, RGPD art. 5(1)(a) et 13(3)). Seuls les favoris posés
- * depuis la mise en service de la liste enrichie le sont.
- */
-export const BOOKMARKS_DISCLOSED_SINCE = new Date('2026-10-10T00:00:00.000Z');
 
 /** Qui demande la liste : son identifiant et son rôle GLOBAL. */
 export type InteractionsReader = {
@@ -139,7 +141,6 @@ export function engagementOf(input: {
   readonly reposts?: number;
   readonly comments?: number;
   readonly replies?: number;
-  readonly bookmarked: boolean;
 }): PostViewerEngagement {
   const shareCount = positive(input.shares);
   const repostCount = positive(input.reposts);
@@ -151,7 +152,6 @@ export function engagementOf(input: {
     ...(repostCount !== undefined ? { repostCount } : {}),
     ...(commentCount !== undefined ? { commentCount } : {}),
     ...(replyCount !== undefined ? { replyCount } : {}),
-    ...(input.bookmarked ? { bookmarked: true as const } : {}),
   };
 }
 
@@ -226,8 +226,9 @@ async function visibleRestrictedReposts(
 
 /**
  * Les engagements des personnes nommées, sur UN contenu, tels que son AUTEUR
- * a le droit de les voir. Sept lectures groupées, en parallèle, quel que soit
- * le nombre de personnes.
+ * a le droit de les voir. Six lectures groupées, en parallèle, quel que soit
+ * le nombre de personnes. `disclosedFrom` borne les partages par lien (`null`
+ * ⇒ tout l'historique).
  */
 export async function loadViewerEngagement(
   prisma: ViewerEngagementPrisma,
@@ -235,13 +236,14 @@ export async function loadViewerEngagement(
   viewerIds: readonly string[],
   authorId: string,
   gates: ViewerEngagementGates,
+  disclosedFrom: Date | null = null,
 ): Promise<ReadonlyMap<string, PostViewerEngagement & { readonly reaction: string | null }>> {
   if (viewerIds.length === 0) return new Map();
   const blocked = await gates.blockRelatedIds(authorId, viewerIds);
   const ids = viewerIds.filter((id) => !blocked.has(id));
   if (ids.length === 0) return new Map();
 
-  const [reactionRows, shareRows, publicRepostRows, restrictedReposts, commentRows, replyRows, bookmarkRows] =
+  const [reactionRows, shareRows, publicRepostRows, restrictedReposts, commentRows, replyRows] =
     await Promise.all([
       prisma.postReaction.findMany({
         where: { postId, userId: { in: ids } },
@@ -250,7 +252,11 @@ export async function loadViewerEngagement(
       }),
       prisma.trackingLink.groupBy({
         by: ['createdBy'],
-        where: { targetId: postId, createdBy: { in: ids } },
+        where: {
+          targetId: postId,
+          createdBy: { in: ids },
+          ...(disclosedFrom !== null ? { createdAt: { gte: disclosedFrom } } : {}),
+        },
         _count: { _all: true },
       }),
       prisma.post.groupBy({
@@ -278,10 +284,6 @@ export async function loadViewerEngagement(
         },
         _count: { _all: true },
       }),
-      prisma.postBookmark.findMany({
-        where: { postId, userId: { in: ids }, createdAt: { gte: BOOKMARKS_DISCLOSED_SINCE } },
-        select: { userId: true },
-      }),
     ]);
 
   const reactionsByUser = reactionRows.reduce<ReadonlyMap<string, readonly string[]>>(
@@ -292,7 +294,6 @@ export async function loadViewerEngagement(
   const publicReposts = countsBy(publicRepostRows, 'authorId');
   const allComments = countsBy(commentRows, 'authorId');
   const replies = countsBy(replyRows, 'authorId');
-  const bookmarked = new Set(bookmarkRows.map((row) => row.userId));
 
   return new Map(
     ids.map((id) => {
@@ -308,12 +309,25 @@ export async function loadViewerEngagement(
             reposts: (publicReposts.get(id) ?? 0) + (restrictedReposts.get(id) ?? 0),
             comments: Math.max(0, (allComments.get(id) ?? 0) - replyCount),
             replies: replyCount,
-            bookmarked: bookmarked.has(id),
           }),
         },
       ] as const;
     }),
   );
+}
+
+/**
+ * Ce qu'une liste des vues lit de `PostView` : le contenu, et pour un post ou
+ * un réel, les seules vues postérieures à la mise en service. Partagé par la
+ * liste enrichie et par l'ancienne `GET /posts/:postId/views`, pour que les
+ * deux et leurs `total` disent la même chose.
+ */
+export function disclosedViewsWhere(
+  post: { readonly id: string; readonly type?: string | null },
+  disclosedSince: Date = viewerActivityDisclosedSince(),
+): { readonly postId: string; readonly viewedAt?: { readonly gte: Date } } {
+  const floor = activityDisclosureFloor(post.type, disclosedSince);
+  return floor === null ? { postId: post.id } : { postId: post.id, viewedAt: { gte: floor } };
 }
 
 /**
@@ -329,20 +343,22 @@ export async function loadViewerEngagement(
  */
 export async function readViewerEngagementPage(
   prisma: ViewerEngagementPrisma,
-  post: { readonly id: string; readonly authorId: string },
+  post: { readonly id: string; readonly authorId: string; readonly type?: string | null },
   limit: number,
   offset: number,
   gates: ViewerEngagementGates = viewerEngagementGates(prisma),
+  disclosedSince: Date = viewerActivityDisclosedSince(),
 ): Promise<ViewerInteractionsPage> {
+  const where = disclosedViewsWhere(post, disclosedSince);
   const [views, total] = await Promise.all([
     prisma.postView.findMany({
-      where: { postId: post.id },
+      where,
       include: { user: { select: authorSelect } },
       orderBy: { viewedAt: 'desc' },
       take: limit,
       skip: offset,
     }),
-    prisma.postView.count({ where: { postId: post.id } }),
+    prisma.postView.count({ where }),
   ]);
 
   const engagement = await loadViewerEngagement(
@@ -351,6 +367,7 @@ export async function readViewerEngagementPage(
     views.map((view) => view.user.id),
     post.authorId,
     gates,
+    activityDisclosureFloor(post.type, disclosedSince),
   ).catch((error: unknown) => {
     logger.warn('[viewerEngagement] lecture des engagements refusée faute de conclure', { postId: post.id, error });
     return null;
@@ -385,12 +402,48 @@ export async function readViewerInteractions(
   limit: number,
   offset: number,
   gates: ViewerEngagementGates = viewerEngagementGates(prisma),
+  disclosedSince: Date = viewerActivityDisclosedSince(),
 ): Promise<ViewerInteractionsPage | null> {
   const post = await prisma.post.findFirst({
     where: { id: postId, deletedAt: NOT_DELETED },
-    select: { id: true, authorId: true },
+    select: { id: true, authorId: true, type: true },
   });
   if (!post) return null;
   if (!mayReadViewerInteractions(post.authorId, reader)) throw new Error('FORBIDDEN');
-  return readViewerEngagementPage(prisma, post, limit, offset, gates);
+  return readViewerEngagementPage(prisma, post, limit, offset, gates, disclosedSince);
+}
+
+/**
+ * `GET /posts/:postId/views` — l'ancienne liste « Vu par », auteur seul.
+ * `null` ⇒ contenu introuvable ; lève `FORBIDDEN` pour tout autre lecteur. Un
+ * post ou un réel n'y montre que les vues postérieures à la mise en service
+ * (même borne que la liste enrichie) ; une story garde tout son historique.
+ */
+export async function readPostViews(
+  prisma: Pick<PrismaClient, 'post' | 'postView'>,
+  postId: string,
+  userId: string,
+  limit: number,
+  offset: number,
+  disclosedSince: Date = viewerActivityDisclosedSince(),
+) {
+  const post = await prisma.post.findFirst({
+    where: { id: postId, deletedAt: NOT_DELETED },
+    select: { id: true, authorId: true, type: true },
+  });
+  if (!post) return null;
+  if (post.authorId !== userId) throw new Error('FORBIDDEN');
+
+  const where = disclosedViewsWhere(post, disclosedSince);
+  const [items, total] = await Promise.all([
+    prisma.postView.findMany({
+      where,
+      include: { user: { select: authorSelect } },
+      orderBy: { viewedAt: 'desc' },
+      take: limit,
+      skip: offset,
+    }),
+    prisma.postView.count({ where }),
+  ]);
+  return { items, total, hasMore: offset + limit < total };
 }
