@@ -117,4 +117,12 @@ export const SCENES_FILMEES = {
     mouvement: [],
     imagesCles: [{ nom: 'envoi', instantMs: 500 }, { nom: 'transcription', instantMs: 2700 }, { nom: 'traduction', instantMs: 4600 }],
   }),
+  // La porte du sticker s'ouvre par le rail : la feuille monte (0,35 s), tenue 1,3 s, puis Mee et Meo se posent sur la
+  // scène — la feuille redescend (0,3 s) et le sticker s'ouvre en édition.
+  'interaction-sticker': interaction('interaction-sticker', {
+    montreUnFil: false,
+    dureeMs: 3100,
+    mouvement: [[40, 330]],
+    imagesCles: [{ nom: 'feuille', instantMs: 1100 }, { nom: 'sticker-pose', instantMs: 3100 }],
+  }),
 }
