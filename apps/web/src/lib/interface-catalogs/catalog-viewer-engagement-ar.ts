@@ -19,6 +19,7 @@ const ar = {
   'viewerEngagement.openDetail': 'عرض ما فعله {name}',
   'viewerEngagement.empty.subtitle': 'سيظهر هنا الأشخاص الذين يشاهدون هذا المنشور.',
   'viewerEngagement.forbidden': 'المؤلف وحده يمكنه رؤية من شاهد هذا المنشور.',
+  'viewerEngagement.unavailable': 'تفاصيل النشاط غير متاحة مؤقتًا.',
 } satisfies ViewerEngagementCatalog;
 
 export default ar;

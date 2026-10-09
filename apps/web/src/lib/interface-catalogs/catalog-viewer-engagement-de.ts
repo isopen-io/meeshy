@@ -19,6 +19,7 @@ const de = {
   'viewerEngagement.openDetail': 'Ansehen, was {name} getan hat',
   'viewerEngagement.empty.subtitle': 'Personen, die diesen Beitrag ansehen, erscheinen hier.',
   'viewerEngagement.forbidden': 'Nur der Autor kann sehen, wer diesen Beitrag angesehen hat.',
+  'viewerEngagement.unavailable': 'Die Aktivitätsdetails sind vorübergehend nicht verfügbar.',
 } satisfies ViewerEngagementCatalog;
 
 export default de;

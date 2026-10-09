@@ -34,8 +34,13 @@ import { Link } from '@/routes/route-table';
  * pas (`viewerEngagementMarks`) : la ligne reste aérée.
  *
  * **Story, post et réel** — la même feuille, la même route
- * (`GET /posts/:postId/interactions`, auteur ou ADMIN/BIGBOSS). `subject`
- * choisit seulement les phrases de l'état vide et du refus.
+ * (`GET /posts/:postId/interactions`, auteur seul). `subject` choisit
+ * seulement les phrases de l'état vide et du refus.
+ *
+ * **Détail INDISPONIBLE** (`engagement: 'unavailable'`) : la passerelle n'a
+ * pas pu établir ce que les personnes ont fait et sert des lignes NUES. La
+ * liste le dit en tête, discrètement, et le détail d'une personne le redit au
+ * lieu de « sans autre interaction » — qui serait un mensonge.
  *
  * **Toucher une ligne REBONDIT et ouvre son DÉTAIL** dans la feuille : ce que
  * la personne a fait, en toutes lettres, et « Voir le profil ». « Retour aux
@@ -78,6 +83,7 @@ export function PublicationViewersSheet({
   const labelsReady = useViewerEngagementCatalog(lang);
   const query = useQuery({ ...storyViewersQueryOptions({ ...apiDeps, postId }), staleTime: 0 });
   const viewers: readonly PostViewerRow[] = query.data?.viewers ?? [];
+  const engagementUnavailable = query.data?.engagement === 'unavailable';
   const [openedId, setOpenedId] = useState<string | null>(null);
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const opened = openedId === null ? undefined : viewers.find((viewer) => viewer.id === openedId);
@@ -93,6 +99,7 @@ export function PublicationViewersSheet({
         <ViewerDetail
           viewer={opened}
           lang={lang}
+          engagementUnavailable={engagementUnavailable}
           onBack={() => {
             setReturnTo(opened.id);
             setOpenedId(null);
@@ -105,6 +112,7 @@ export function PublicationViewersSheet({
           lang={lang}
           subject={subject}
           labelsReady={labelsReady}
+          engagementUnavailable={engagementUnavailable}
           returnFocusTo={returnTo}
           onOpen={setOpenedId}
         />
@@ -143,6 +151,7 @@ function ViewersBody({
   lang,
   subject,
   labelsReady,
+  engagementUnavailable,
   returnFocusTo,
   onOpen,
 }: {
@@ -151,6 +160,7 @@ function ViewersBody({
   readonly lang: InterfaceLanguage;
   readonly subject: ViewersSubject;
   readonly labelsReady: boolean;
+  readonly engagementUnavailable: boolean;
   readonly returnFocusTo: string | null;
   readonly onOpen: (viewerId: string) => void;
 }) {
@@ -211,6 +221,11 @@ function ViewersBody({
   }
   return (
     <>
+      {engagementUnavailable && labelsReady ? (
+        <li className="px-4 py-2 text-mini" style={MUTED} role="status" data-viewers-engagement-unavailable>
+          {translateViewerEngagement(lang, 'viewerEngagement.unavailable')}
+        </li>
+      ) : null}
       {viewers.map((viewer) => (
         <ViewerRow
           key={viewer.id}
@@ -334,10 +349,12 @@ function markSentence(lang: InterfaceLanguage, mark: ViewerEngagementMark): stri
 function ViewerDetail({
   viewer,
   lang,
+  engagementUnavailable,
   onBack,
 }: {
   readonly viewer: PostViewerRow;
   readonly lang: InterfaceLanguage;
+  readonly engagementUnavailable: boolean;
   readonly onBack: () => void;
 }) {
   const back = useRef<HTMLButtonElement | null>(null);
@@ -369,7 +386,11 @@ function ViewerDetail({
         </p>
       </div>
       <ul className="grid gap-2" data-viewer-detail-marks>
-        {marks.length === 0 ? (
+        {marks.length === 0 && engagementUnavailable ? (
+          <li className="text-body" style={MUTED} data-viewer-detail-unavailable>
+            {translateViewerEngagement(lang, 'viewerEngagement.unavailable')}
+          </li>
+        ) : marks.length === 0 ? (
           <li className="text-body" style={MUTED} data-viewer-detail-only-viewed>
             {translateViewerEngagement(lang, 'viewerEngagement.onlyViewed')}
           </li>

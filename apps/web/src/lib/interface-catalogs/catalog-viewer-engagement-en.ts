@@ -19,6 +19,7 @@ const en = {
   'viewerEngagement.openDetail': 'See what {name} did',
   'viewerEngagement.empty.subtitle': 'People who see this post will appear here.',
   'viewerEngagement.forbidden': 'Only the author can see who viewed this post.',
+  'viewerEngagement.unavailable': 'Activity details are temporarily unavailable.',
 } satisfies ViewerEngagementCatalog;
 
 export default en;

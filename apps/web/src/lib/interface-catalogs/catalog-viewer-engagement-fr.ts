@@ -24,6 +24,7 @@ const fr = {
   'viewerEngagement.openDetail': 'Voir ce que {name} a fait',
   'viewerEngagement.empty.subtitle': 'Les personnes qui verront cette publication apparaîtront ici.',
   'viewerEngagement.forbidden': 'Seul l’auteur peut voir qui a vu cette publication.',
+  'viewerEngagement.unavailable': 'Le détail de l’activité est momentanément indisponible.',
 } as const;
 
 export default fr;

@@ -125,6 +125,21 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
     expect(document.activeElement).toBe(host.querySelector('[data-story-viewer="u-viewer-elan"] [data-story-viewer-open]'));
   });
 
+  test('détail de l’activité INDISPONIBLE ⇒ la liste le dit, discrètement, et le détail d’une personne ne prétend pas qu’elle n’a rien fait (#9727)', async () => {
+    const host = await mountSheet({ postId: 'st-mienne-detail-indisponible', viewCount: 2 });
+    expect(host.querySelector('[data-viewers-engagement-unavailable]')?.textContent).toBe('Le détail de l’activité est momentanément indisponible.');
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(2);
+    host.querySelector<HTMLButtonElement>('[data-story-viewer-open]')?.click();
+    await mounter.settle();
+    expect(host.querySelector('[data-viewer-detail-only-viewed]')).toBeNull();
+    expect(host.querySelector('[data-viewer-detail-unavailable]')?.textContent).toBe('Le détail de l’activité est momentanément indisponible.');
+  });
+
+  test('détail servi ⇒ aucune mention d’indisponibilité', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    expect(host.querySelector('[data-viewers-engagement-unavailable]')).toBeNull();
+  });
+
   test('sur un post, le refus parle de la publication, pas d’une story', async () => {
     const host = await mountSheet({ postId: 'st-amie-1', viewCount: 5, subject: 'publication' });
     expect(host.querySelector('[data-viewers-forbidden]')?.textContent).toBe('Seul l’auteur peut voir qui a vu cette publication.');

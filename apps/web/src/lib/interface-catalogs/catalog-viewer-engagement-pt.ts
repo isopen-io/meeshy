@@ -19,6 +19,7 @@ const pt = {
   'viewerEngagement.openDetail': 'Ver o que {name} fez',
   'viewerEngagement.empty.subtitle': 'As pessoas que virem esta publicação aparecerão aqui.',
   'viewerEngagement.forbidden': 'Só o autor pode ver quem viu esta publicação.',
+  'viewerEngagement.unavailable': 'O detalhe da atividade está temporariamente indisponível.',
 } satisfies ViewerEngagementCatalog;
 
 export default pt;
