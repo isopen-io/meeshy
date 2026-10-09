@@ -495,14 +495,16 @@ export default function StoryScreen() {
      relâchement ne reprend pas, le tap suivant reprend sans naviguer ; le
      balayage commun des plein écrans (`swipe`) y est relayé aux mêmes points
      qu'avant ; `dismissLayer` AVALE le tap qui ferme la barre rapide des
-     langues (« un toucher n'importe où les referme »). */
+     langues (« un toucher n'importe où les referme »). Une feuille ouverte
+     (commentaires ou « Vues ») est une couche : un toucher dedans ne reprend
+     ni n'avance la story dessous. */
   const gestures = useStoryGestures({
     paused,
     pause,
     resume,
     advance,
     setChromeHidden,
-    layerOpen: commentsOpen,
+    layerOpen: sheetOpen,
     swipe: swipe.handlers,
     dismissLayer: () => {
       if (!language.barOpen) return false;

@@ -882,10 +882,25 @@ async function runAuthorRail(colorScheme) {
     return {
       titre: dialog?.querySelector('h2')?.textContent ?? null,
       lignes: dialog?.querySelectorAll('[data-story-viewer]').length ?? 0,
-      liens: [...(dialog?.querySelectorAll('[data-story-viewer] a') ?? [])].map((a) => a.getAttribute('href')),
       railAtteignable: document.activeElement === views,
     };
   });
+  /* #9727 — une ligne ouvre le DÉTAIL de la personne (ce qu'elle a fait), et
+     le profil s'y ouvre par « Voir le profil » : chaque lecteur mène toujours
+     à son profil, à un toucher de plus. « Retour aux vues » rend la liste. */
+  const liens = [];
+  for (const id of await page.$$eval('dialog[open] [data-story-viewer]', (els) => els.map((e) => e.getAttribute('data-story-viewer')))) {
+    await page.click(`dialog[open] [data-story-viewer="${id}"] [data-story-viewer-open]`, { timeout: 3000 }).catch(() => {});
+    liens.push(
+      await page
+        .waitForSelector('dialog[open] [data-viewer-detail-profile]', { timeout: 3000 })
+        .then((lien) => lien.getAttribute('href'))
+        .catch(() => null),
+    );
+    await page.click('dialog[open] [data-viewer-detail-back]', { timeout: 3000 }).catch(() => {});
+    await page.waitForSelector(`dialog[open] [data-story-viewer="${id}"]`, { timeout: 3000 }).catch(() => {});
+  }
+  feuille.liens = liens;
   const pendantFeuille = await lecture();
   check(feuille.titre === '8 vues', `${tag} : l'en-tête de la feuille lit le compte AUTORITATIF — « ${feuille.titre} »`);
   check(feuille.lignes === 3, `${tag} : la feuille doit lister les trois lecteurs servis — ${feuille.lignes}`);
@@ -898,12 +913,14 @@ async function runAuthorRail(colorScheme) {
 
   await page.keyboard.press('Escape');
   /* Un FAIT attendu, jamais un délai (`lib/fixed-delay-ratchet.test.ts`) : la
-     feuille fermée ET la lecture repartie — ou le lecteur parti, le défaut
-     que ce témoin existe pour attraper. */
+     feuille fermée ET le focus posé quelque part — ou le lecteur parti, le
+     défaut que ce témoin existe pour attraper. Échap ferme le `<dialog>` natif
+     AVANT que React ne démonte la feuille et ne rende le focus (un effet) :
+     lire le focus dès `open` retiré lisait l'entre-deux, `BODY`. */
   await page
     .waitForFunction(
       () =>
-        document.querySelector('dialog[open]') === null,
+        document.querySelector('dialog[open]') === null && document.activeElement !== document.body,
       undefined,
       { timeout: 3000 },
     )
