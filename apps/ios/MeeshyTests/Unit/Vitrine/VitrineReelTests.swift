@@ -237,6 +237,22 @@ final class VitrineReelTests: XCTestCase {
         XCTAssertEqual((objets[1]["payload"] as? [String: Any])?["mediaURL"] as? String, "/api/v1/y.mp4")
     }
 
+    /// Une vidéo servie porte son affiche, ses dimensions et sa durée, comme la passerelle les sert : la carte du réel au fil
+    /// a une image à montrer avant la première frame.
+    func test_postServi_aVideo_carriesItsPosterSizeAndDuration() throws {
+        let f = try fixtures()
+        let affiche = VitrineAffiche(url: "file:///tmp/affiche.jpg", largeur: 1080, hauteur: 1920, dureeS: 6)
+        let piece = VitrineTeleverse(id: "m1", url: "file:///tmp/m1.mp4", mimeType: "video/mp4", affiche: affiche)
+
+        let post = try VitrinePostServi.post(corps(), auteur: f.lecteur, televerses: [piece])
+
+        let media = try XCTUnwrap(post.media?.first)
+        XCTAssertEqual(media.thumbnailUrl, "file:///tmp/affiche.jpg")
+        XCTAssertEqual(media.width, 1080)
+        XCTAssertEqual(media.height, 1920)
+        XCTAssertEqual(media.duration, 6)
+    }
+
     /// Les médias du post sont ceux que la publication RATTACHE (`mediaIds`), dans son ordre.
     func test_postServi_keepsTheAttachedMedia_inTheirOrder() throws {
         let f = try fixtures()

@@ -25,6 +25,20 @@ final class VitrineRenduTests: XCTestCase {
         XCTAssertEqual(rendu.observes, [.fil])
     }
 
+    /// Le commentaire envoyé se ramène dans la vue : la liste du détail prête son défilement (#9810). Sans lui, le vocal,
+    /// sa transcription et sa traduction restaient sous le pli, le film ne montrant que « Léa Martin · maintenant ».
+    func test_commentairesAffiches_relaysTheScroll_onlyInsideTheVitrine() {
+        let rendu = VitrineRendu(actif: true)
+        var montre: String?
+        rendu.commentairesAffiches { montre = $0 }
+        rendu.montrerUnCommentaire?("c1")
+        XCTAssertEqual(montre, "c1")
+
+        let horsVitrine = VitrineRendu(actif: false)
+        horsVitrine.commentairesAffiches { _ in }
+        XCTAssertNil(horsVitrine.montrerUnCommentaire)
+    }
+
     func test_signaler_outsideTheVitrine_observesNothing() {
         let rendu = VitrineRendu(actif: false)
         rendu.signaler(.progression)

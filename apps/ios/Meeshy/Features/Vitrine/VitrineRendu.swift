@@ -126,6 +126,15 @@ final class VitrineRendu {
     /// Le toucher d'un émoji de la palette ouverte (#9810).
     private(set) var choisirDansLaPalette: ((String) -> Void)?
 
+    /// Le défilement de la liste des commentaires (#9810) : le commentaire envoyé est ramené dans la vue, comme le doigt
+    /// le ferait.
+    private(set) var montrerUnCommentaire: ((String) -> Void)?
+
+    func commentairesAffiches(montrer: @escaping (String) -> Void) {
+        guard actif else { return }
+        montrerUnCommentaire = montrer
+    }
+
     func composeurDeCommentaireAffiche(envoyerUnVocal: @escaping (URL, TimeInterval) -> Void) {
         guard actif else { return }
         self.envoyerUnVocal = envoyerUnVocal
