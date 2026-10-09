@@ -10,7 +10,8 @@ import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
-import { currentInterfaceLanguage, subscribeInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, interfaceLanguageChoice, subscribeInterfaceLanguage } from '@/lib/interface-language';
+import { syncShellLocaleAtStart } from '@/lib/shell-locale';
 import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
 import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
@@ -186,6 +187,15 @@ if (__SHELL__) {
  */
 if (__SHELL__) {
   void import('@/lib/share-incoming/native-start').then(({ startNativeShareInboxInShell }) => startNativeShareInboxInShell());
+}
+
+/**
+ * LA LANGUE CHOISIE DANS MEESHY REJOINT LES TEXTES NATIFS DE LA COQUE (#9749)
+ * — un choix fait avant cette version, ou qu'un Android antérieur au 13 a
+ * oublié, sans jamais écraser la langue posée depuis les réglages d'Android.
+ */
+if (__SHELL__) {
+  void syncShellLocaleAtStart(interfaceLanguageChoice());
 }
 
 /**

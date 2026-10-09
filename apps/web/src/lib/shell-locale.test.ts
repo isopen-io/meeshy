@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { INTERFACE_LANGUAGE_KEY } from './inline-interface-language-bootstrap.js';
-import { followBrowserInterfaceLanguage, setInterfaceLanguage } from './interface-language';
+import { followBrowserInterfaceLanguage, interfaceLanguageChoice, setInterfaceLanguage } from './interface-language';
 import type { CoqueNative } from './native-shell';
 import { syncShellLocaleAtStart } from './shell-locale';
 
@@ -29,7 +29,7 @@ function coque(appels: Appel[], methodes: readonly string[] = ['setLocales'], ec
 }
 
 function installer(hote: CoqueNative | undefined): void {
-  (globalThis as { Capacitor?: CoqueNative }).Capacitor = hote;
+  (globalThis as { Capacitor?: CoqueNative | undefined }).Capacitor = hote;
 }
 
 beforeAll(() => {
@@ -87,13 +87,13 @@ describe('au démarrage, un choix déjà fait rejoint la coque sans écraser le 
   test('un choix enregistré part, seulement si la coque n’a encore aucune langue', async () => {
     const appels: Appel[] = [];
     localStorage.setItem(INTERFACE_LANGUAGE_KEY, 'ar');
-    await syncShellLocaleAtStart(coque(appels));
+    await syncShellLocaleAtStart(interfaceLanguageChoice(), coque(appels));
     expect(appels).toEqual([{ plugin: 'MeeshyLocale', methode: 'setLocales', options: { tag: 'ar', ifUnset: true } }]);
   });
 
   test('en « Automatique », rien ne part : la langue choisie dans les réglages d’Android reste', async () => {
     const appels: Appel[] = [];
-    await syncShellLocaleAtStart(coque(appels));
+    await syncShellLocaleAtStart(interfaceLanguageChoice(), coque(appels));
     expect(appels).toEqual([]);
   });
 });
