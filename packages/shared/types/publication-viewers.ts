@@ -1,7 +1,7 @@
 /**
  * Ce que chaque personne de la liste des vues a fait sur UN contenu (story,
- * post ou réel) — servi à l'AUTEUR seul (et ADMIN/BIGBOSS) par
- * `GET /posts/:postId/interactions` (#9727).
+ * post ou réel) — servi à l'AUTEUR seul par `GET /posts/:postId/interactions`
+ * (#9727 ; la lecture ADMIN/BIGBOSS attend sa trace d'audit, #9733).
  *
  * Chaque champ est OPTIONNEL et ABSENT quand il vaut zéro : « un compteur à 0
  * ne s'affiche pas » se décide au serveur, une fois, pour les deux clients.
@@ -39,3 +39,18 @@ export type PostViewerRow = {
   /** Réaction la plus récente — le champ historique, gardé pour les anciens clients. */
   readonly reaction: string | null;
 } & PostViewerEngagement;
+
+/**
+ * La page servie sous `data` par `GET /posts/:postId/interactions`.
+ *
+ * `engagement` est OPTIONNEL (un ancien client l'ignore) et ne prend qu'une
+ * valeur : `'unavailable'` quand la passerelle n'a pas pu établir ce que les
+ * personnes ont fait (une garde de blocage ou de visibilité qui ne conclut
+ * pas). Les lignes partent alors sans aucun champ d'engagement — ce qui ne
+ * veut PAS dire que personne n'a rien fait : le client le dit, discrètement.
+ * Absent ⇒ le détail est servi.
+ */
+export type PostViewersPage = {
+  readonly viewers: readonly PostViewerRow[];
+  readonly engagement?: 'unavailable';
+};

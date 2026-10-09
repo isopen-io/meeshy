@@ -2101,7 +2101,7 @@ export class PostService {
 
   /**
    * La liste des vues enrichie de ce que chaque personne a fait (#9727) —
-   * AUTEUR ou ADMIN/BIGBOSS seulement. Le corps vit dans
+   * AUTEUR seul (ADMIN/BIGBOSS attend sa trace d'audit, #9733). Le corps vit dans
    * `posts/viewerEngagement.ts` (une lecture agrégée par source).
    */
   async getPostInteractions(

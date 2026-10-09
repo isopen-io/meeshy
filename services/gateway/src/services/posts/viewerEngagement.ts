@@ -1,9 +1,9 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { PostViewerEngagement } from '@meeshy/shared/types/publication-viewers';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { PostVisibility, type PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PostViewerEngagement, PostViewersPage } from '@meeshy/shared/types/publication-viewers';
 import { authorSelect } from './postIncludes';
 import { NOT_DELETED } from './softDelete';
 import { filterConsumablePostIds, type PostConsumptionPrisma } from '../../routes/posts/postConsumptionGate';
+import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'viewerEngagement' });
@@ -14,8 +14,8 @@ const logger = enhancedLogger.child({ module: 'viewerEngagement' });
  * réponses, favori. Extrait de `PostService` (hors budget de taille) : le
  * service n'y garde qu'un appel.
  *
- * **Une lecture agrégée par source, jamais une requête par personne.** Les six
- * sources se lisent en parallèle, bornées aux identifiants de la PAGE servie
+ * **Une lecture agrégée par source, jamais une requête par personne.** Les sept
+ * lectures partent en parallèle, bornées aux identifiants de la PAGE servie
  * (`in: viewerIds`) : le coût suit le nombre de sources, pas la taille de la
  * page, et une page vide ne déclenche aucune lecture.
  *
@@ -30,8 +30,8 @@ export type ViewerEngagementPrisma = Pick<
   PostConsumptionPrisma;
 
 /**
- * Ce que le LECTEUR a le droit de voir de l'activité d'autrui (#9727, revue de
- * sécurité) — deux questions que les six sources ne posent pas d'elles-mêmes :
+ * Ce que l'AUTEUR du contenu a le droit de voir de l'activité d'autrui (#9727,
+ * revue de sécurité) — deux questions que les sources ne posent pas d'elles-mêmes :
  *
  * - **une republication n'existe pour lui que s'il peut la LIRE.** Republier en
  *   « amis » ou en « restreint » crée un post dont l'audience n'inclut pas
@@ -40,35 +40,42 @@ export type ViewerEngagementPrisma = Pick<
  *   que le fil et le partage) ;
  * - **un blocage, dans un sens ou dans l'autre, coupe l'activité.** La personne
  *   reste dans la liste des vues (comme avant ce lot), mais rien de ce qu'elle a
- *   fait n'est servi.
+ *   fait n'est servi (`getBlockedUserIdsAmong`, la loi bidirectionnelle du dépôt).
  *
- * Les deux lectures sont FERMÉES sur l'échec : une lecture qui ne conclut pas
- * rend la page SANS aucun engagement, jamais avec un engagement non filtré.
+ * Les deux se calculent pour l'auteur du contenu, jamais pour qui demande la
+ * page : c'est son audience et ses blocages que la liste reflète.
  */
 export type ViewerEngagementGates = {
-  readonly consumablePostIds: (postIds: readonly string[], readerId: string) => Promise<ReadonlySet<string>>;
-  readonly blockRelatedIds: (readerId: string, viewerIds: readonly string[]) => Promise<ReadonlySet<string>>;
+  readonly consumablePostIds: (postIds: readonly string[], authorId: string) => Promise<ReadonlySet<string>>;
+  readonly blockRelatedIds: (authorId: string, viewerIds: readonly string[]) => Promise<ReadonlySet<string>>;
 };
 
 export function viewerEngagementGates(prisma: ViewerEngagementPrisma): ViewerEngagementGates {
   return {
-    consumablePostIds: (postIds, readerId) => filterConsumablePostIds(prisma, postIds, readerId),
-    blockRelatedIds: async (readerId, viewerIds) => {
-      const [blockers, reader] = await Promise.all([
-        prisma.user.findMany({
-          where: { id: { in: [...viewerIds] }, blockedUserIds: { has: readerId } },
-          select: { id: true },
-        }),
-        prisma.user.findUnique({ where: { id: readerId }, select: { blockedUserIds: true } }),
-      ]);
-      const blockedByReader = new Set<string>(reader?.blockedUserIds ?? []);
-      return new Set([
-        ...blockers.map((row) => row.id),
-        ...viewerIds.filter((id) => blockedByReader.has(id)),
-      ]);
-    },
+    consumablePostIds: (postIds, authorId) => filterConsumablePostIds(prisma, postIds, authorId),
+    blockRelatedIds: (authorId, viewerIds) => getBlockedUserIdsAmong(prisma, authorId, [...viewerIds]),
   };
 }
+
+/**
+ * Combien de republications RESTREINTES (tout sauf `PUBLIC`) une page inspecte
+ * au plus, par personne puis au total (#9727, revue de sécurité). Chacune
+ * passe par la loi de consommation — une lecture d'ACL par republication — et
+ * rien n'empêche un compte d'en publier des centaines d'un même contenu.
+ *
+ * - **Par personne** : la base ne rend que les dix plus récentes de chacun
+ *   (`$firstN`) ; une personne ne fixe donc ni le coût de la page ni la part
+ *   des autres.
+ * - **Au total** : les parts se prennent rang par rang (la plus récente de
+ *   chacun, puis la deuxième…), si bien que chaque personne de la page en
+ *   garde au moins une sous la borne.
+ *
+ * Une republication PUBLIQUE ne coûte rien : la loi la sert à tout lecteur, elle
+ * se compte en base, sans borne. Au-delà des bornes, le compteur d'une
+ * personne est un PLANCHER, jamais un excès.
+ */
+export const REPOSTS_INSPECTED_PER_PERSON = 10;
+export const REPOSTS_INSPECTED_PER_PAGE = 100;
 
 /**
  * Un favori posé AVANT cette date l'a été quand le geste était privé : il
@@ -76,16 +83,6 @@ export function viewerEngagementGates(prisma: ViewerEngagementPrisma): ViewerEng
  * d'effet rétroactif, RGPD art. 5(1)(a) et 13(3)). Seuls les favoris posés
  * depuis la mise en service de la liste enrichie le sont.
  */
-/**
- * Combien de republications au plus une page inspecte (#9727, revue de
- * sécurité). Chacune passe par la loi de consommation — une lecture d'ACL par
- * republication — et rien n'empêche un compte d'en publier des centaines d'un
- * même contenu : sans borne, une seule personne de la page fixait le coût de la
- * requête de l'auteur, et pouvait la faire échouer. Au-delà, le compteur d'une
- * personne est un PLANCHER (les plus récentes d'abord), jamais un excès.
- */
-export const REPOSTS_INSPECTED_PER_PAGE = 100;
-
 export const BOOKMARKS_DISCLOSED_SINCE = new Date('2026-10-10T00:00:00.000Z');
 
 /** Qui demande la liste : son identifiant et son rôle GLOBAL. */
@@ -107,15 +104,16 @@ export type ViewerInteractionsPage = {
   readonly viewers: readonly ViewerInteractionRow[];
   readonly total: number;
   readonly hasMore: boolean;
+  readonly engagement?: PostViewersPage['engagement'];
 };
 
 /**
- * La porte : l'AUTEUR du contenu, ou un administrateur global (ADMIN/BIGBOSS).
- * Fail-closed — un rôle absent, inconnu ou de modération ne l'ouvre pas.
+ * La porte : l'AUTEUR du contenu, et lui seul. Le rôle global est transmis
+ * mais n'ouvre rien : la lecture ADMIN/BIGBOSS de l'activité d'autrui attend
+ * sa trace d'audit (#9733), et rouvrira par ici.
  */
 export function mayReadViewerInteractions(postAuthorId: string, reader: InteractionsReader): boolean {
-  if (postAuthorId === reader.id) return true;
-  return typeof reader.role === 'string' && isGlobalAdmin(reader.role);
+  return postAuthorId === reader.id;
 }
 
 type Counts = ReadonlyMap<string, number>;
@@ -157,83 +155,141 @@ export function engagementOf(input: {
   };
 }
 
+type RestrictedRepost = { readonly id: string; readonly authorId: string };
+
+/** `aggregateRaw` rend les ObjectId en Extended JSON (`{ $oid }`). */
+const objectIdOf = (value: unknown): string | null => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value !== null && '$oid' in value && typeof value.$oid === 'string') return value.$oid;
+  return null;
+};
+
+const restrictedRepostsOf = (rows: unknown): ReadonlyArray<readonly RestrictedRepost[]> =>
+  (Array.isArray(rows) ? rows : []).flatMap((row: unknown) => {
+    if (typeof row !== 'object' || row === null || !('_id' in row) || !('ids' in row) || !Array.isArray(row.ids)) return [];
+    const authorId = objectIdOf(row._id);
+    if (authorId === null) return [];
+    const reposts = row.ids.flatMap((raw: unknown) => {
+      const id = objectIdOf(raw);
+      return id === null ? [] : [{ id, authorId }];
+    });
+    return [reposts.slice(0, REPOSTS_INSPECTED_PER_PERSON)];
+  });
+
+/** Rang par rang : la plus récente de chacun, puis la deuxième… jusqu'à la borne. */
+const takeByRank = (groups: ReadonlyArray<readonly RestrictedRepost[]>): readonly RestrictedRepost[] => {
+  const depth = groups.reduce((deepest, group) => Math.max(deepest, group.length), 0);
+  return Array.from({ length: depth }, (_, rank) => groups.flatMap((group) => (rank < group.length ? [group[rank]] : [])))
+    .flat()
+    .slice(0, REPOSTS_INSPECTED_PER_PAGE);
+};
+
 /**
- * Les engagements des personnes nommées, sur UN contenu. Six lectures
- * groupées, en parallèle, quel que soit le nombre de personnes.
+ * Les republications RESTREINTES que l'auteur peut lire, comptées par
+ * personne. Une lecture qui ne conclut pas — l'agrégation ou la loi de
+ * consommation — retire ces republications, et elles seules : le reste de la
+ * page n'a pas à payer pour elles.
+ */
+async function visibleRestrictedReposts(
+  prisma: ViewerEngagementPrisma,
+  postId: string,
+  ids: readonly string[],
+  authorId: string,
+  gates: ViewerEngagementGates,
+): Promise<Counts> {
+  try {
+    const rows = await prisma.post.aggregateRaw({
+      pipeline: [
+        {
+          $match: {
+            repostOfId: { $oid: postId },
+            authorId: { $in: ids.map((id) => ({ $oid: id })) },
+            visibility: { $ne: PostVisibility.PUBLIC },
+            deletedAt: { $exists: false },
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: '$authorId', ids: { $firstN: { input: '$_id', n: REPOSTS_INSPECTED_PER_PERSON } } } },
+      ],
+    });
+    const inspected = takeByRank(restrictedRepostsOf(rows));
+    if (inspected.length === 0) return new Map();
+    const visible = await gates.consumablePostIds(inspected.map((repost) => repost.id), authorId);
+    return inspected
+      .filter((repost) => visible.has(repost.id))
+      .reduce<Counts>((acc, repost) => new Map(acc).set(repost.authorId, (acc.get(repost.authorId) ?? 0) + 1), new Map());
+  } catch (error: unknown) {
+    logger.warn('[viewerEngagement] republications restreintes non conclues — non comptées', { postId, error });
+    return new Map();
+  }
+}
+
+/**
+ * Les engagements des personnes nommées, sur UN contenu, tels que son AUTEUR
+ * a le droit de les voir. Sept lectures groupées, en parallèle, quel que soit
+ * le nombre de personnes.
  */
 export async function loadViewerEngagement(
   prisma: ViewerEngagementPrisma,
   postId: string,
   viewerIds: readonly string[],
-  readerId: string,
+  authorId: string,
   gates: ViewerEngagementGates,
 ): Promise<ReadonlyMap<string, PostViewerEngagement & { readonly reaction: string | null }>> {
   if (viewerIds.length === 0) return new Map();
-  const blocked = await gates.blockRelatedIds(readerId, viewerIds);
+  const blocked = await gates.blockRelatedIds(authorId, viewerIds);
   const ids = viewerIds.filter((id) => !blocked.has(id));
   if (ids.length === 0) return new Map();
 
-  const [reactionRows, shareRows, repostRows, commentRows, replyRows, bookmarkRows] = await Promise.all([
-    prisma.postReaction.findMany({
-      where: { postId, userId: { in: ids } },
-      select: { userId: true, emoji: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.trackingLink.groupBy({
-      by: ['createdBy'],
-      where: { targetId: postId, createdBy: { in: ids } },
-      _count: { _all: true },
-    }),
-    prisma.post.findMany({
-      where: { repostOfId: postId, authorId: { in: ids }, deletedAt: NOT_DELETED },
-      select: { id: true, authorId: true },
-      orderBy: { createdAt: 'desc' },
-      take: REPOSTS_INSPECTED_PER_PAGE,
-    }),
-    prisma.postComment.groupBy({
-      by: ['authorId'],
-      where: { postId, authorId: { in: ids }, deletedAt: NOT_DELETED },
-      _count: { _all: true },
-    }),
-    // Une RÉPONSE porte un `parentId` présent et non nul — le complément exact
-    // du filtre « premier niveau » de `PostCommentService` (`parentId: null`
-    // OU absent). Les commentaires de premier niveau se déduisent par
-    // différence : une lecture de moins.
-    prisma.postComment.groupBy({
-      by: ['authorId'],
-      where: {
-        postId,
-        authorId: { in: ids },
-        deletedAt: NOT_DELETED,
-        AND: [{ parentId: { isSet: true } }, { NOT: { parentId: null } }],
-      },
-      _count: { _all: true },
-    }),
-    prisma.postBookmark.findMany({
-      where: { postId, userId: { in: ids }, createdAt: { gte: BOOKMARKS_DISCLOSED_SINCE } },
-      select: { userId: true },
-    }),
-  ]);
+  const [reactionRows, shareRows, publicRepostRows, restrictedReposts, commentRows, replyRows, bookmarkRows] =
+    await Promise.all([
+      prisma.postReaction.findMany({
+        where: { postId, userId: { in: ids } },
+        select: { userId: true, emoji: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.trackingLink.groupBy({
+        by: ['createdBy'],
+        where: { targetId: postId, createdBy: { in: ids } },
+        _count: { _all: true },
+      }),
+      prisma.post.groupBy({
+        by: ['authorId'],
+        where: { repostOfId: postId, authorId: { in: ids }, deletedAt: NOT_DELETED, visibility: PostVisibility.PUBLIC },
+        _count: { _all: true },
+      }),
+      visibleRestrictedReposts(prisma, postId, ids, authorId, gates),
+      prisma.postComment.groupBy({
+        by: ['authorId'],
+        where: { postId, authorId: { in: ids }, deletedAt: NOT_DELETED },
+        _count: { _all: true },
+      }),
+      // Une RÉPONSE porte un `parentId` présent et non nul — le complément exact
+      // du filtre « premier niveau » de `PostCommentService` (`parentId: null`
+      // OU absent). Les commentaires de premier niveau se déduisent par
+      // différence : une lecture de moins.
+      prisma.postComment.groupBy({
+        by: ['authorId'],
+        where: {
+          postId,
+          authorId: { in: ids },
+          deletedAt: NOT_DELETED,
+          AND: [{ parentId: { isSet: true } }, { NOT: { parentId: null } }],
+        },
+        _count: { _all: true },
+      }),
+      prisma.postBookmark.findMany({
+        where: { postId, userId: { in: ids }, createdAt: { gte: BOOKMARKS_DISCLOSED_SINCE } },
+        select: { userId: true },
+      }),
+    ]);
 
   const reactionsByUser = reactionRows.reduce<ReadonlyMap<string, readonly string[]>>(
     (acc, row) => new Map(acc).set(row.userId, [...(acc.get(row.userId) ?? []), row.emoji]),
     new Map(),
   );
   const shares = countsBy(shareRows, 'createdBy');
-  // Une garde de republication qui ne conclut pas retire les republications,
-  // et elles seules : le reste de la page n'a pas à payer pour elles.
-  const visibleReposts = await gates
-    .consumablePostIds(repostRows.map((row) => row.id), readerId)
-    .catch((error: unknown) => {
-      logger.warn('[viewerEngagement] visibilité des republications non conclue — non comptées', { postId, error });
-      return new Set<string>();
-    });
-  const reposts = repostRows
-    .filter((row) => visibleReposts.has(row.id))
-    .reduce<ReadonlyMap<string, number>>(
-      (acc, row) => new Map(acc).set(row.authorId, (acc.get(row.authorId) ?? 0) + 1),
-      new Map(),
-    );
+  const publicReposts = countsBy(publicRepostRows, 'authorId');
   const allComments = countsBy(commentRows, 'authorId');
   const replies = countsBy(replyRows, 'authorId');
   const bookmarked = new Set(bookmarkRows.map((row) => row.userId));
@@ -249,7 +305,7 @@ export async function loadViewerEngagement(
           ...engagementOf({
             reactions,
             shares: shares.get(id),
-            reposts: reposts.get(id),
+            reposts: (publicReposts.get(id) ?? 0) + (restrictedReposts.get(id) ?? 0),
             comments: Math.max(0, (allComments.get(id) ?? 0) - replyCount),
             replies: replyCount,
             bookmarked: bookmarked.has(id),
@@ -261,8 +317,65 @@ export async function loadViewerEngagement(
 }
 
 /**
- * `GET /posts/:postId/interactions` — la page des vues (ordre et pagination
- * inchangés), chaque ligne enrichie. `null` ⇒ contenu introuvable ; lève
+ * La page des vues d'un contenu DONT LA PORTE EST DÉJÀ PASSÉE — ordre et
+ * pagination inchangés, chaque ligne enrichie. Elle ne connaît pas le lecteur :
+ * tout ce qu'elle filtre l'est pour l'AUTEUR du contenu, quel que soit celui
+ * qui la demande (une future lecture ADMIN, #9733, passe par ici telle quelle).
+ *
+ * Une lecture d'engagement qui ne conclut pas ferme : la page part SANS aucun
+ * engagement, jamais avec un engagement non filtré, et le DIT
+ * (`engagement: 'unavailable'`) — sans quoi elle affirmerait que personne n'a
+ * rien fait.
+ */
+export async function readViewerEngagementPage(
+  prisma: ViewerEngagementPrisma,
+  post: { readonly id: string; readonly authorId: string },
+  limit: number,
+  offset: number,
+  gates: ViewerEngagementGates = viewerEngagementGates(prisma),
+): Promise<ViewerInteractionsPage> {
+  const [views, total] = await Promise.all([
+    prisma.postView.findMany({
+      where: { postId: post.id },
+      include: { user: { select: authorSelect } },
+      orderBy: { viewedAt: 'desc' },
+      take: limit,
+      skip: offset,
+    }),
+    prisma.postView.count({ where: { postId: post.id } }),
+  ]);
+
+  const engagement = await loadViewerEngagement(
+    prisma,
+    post.id,
+    views.map((view) => view.user.id),
+    post.authorId,
+    gates,
+  ).catch((error: unknown) => {
+    logger.warn('[viewerEngagement] lecture des engagements refusée faute de conclure', { postId: post.id, error });
+    return null;
+  });
+
+  const viewers = views.map((view) => ({
+    id: view.user.id,
+    username: view.user.username,
+    displayName: view.user.displayName,
+    avatarUrl: view.user.avatar,
+    viewedAt: view.viewedAt,
+    reaction: null,
+    ...engagement?.get(view.user.id),
+  }));
+
+  return {
+    viewers,
+    total,
+    hasMore: offset + limit < total,
+    ...(engagement === null ? { engagement: 'unavailable' as const } : {}),
+  };
+}
+
+/**
+ * `GET /posts/:postId/interactions` — `null` ⇒ contenu introuvable ; lève
  * `FORBIDDEN` pour tout lecteur que la porte refuse.
  */
 export async function readViewerInteractions(
@@ -279,38 +392,5 @@ export async function readViewerInteractions(
   });
   if (!post) return null;
   if (!mayReadViewerInteractions(post.authorId, reader)) throw new Error('FORBIDDEN');
-
-  const [views, total] = await Promise.all([
-    prisma.postView.findMany({
-      where: { postId },
-      include: { user: { select: authorSelect } },
-      orderBy: { viewedAt: 'desc' },
-      take: limit,
-      skip: offset,
-    }),
-    prisma.postView.count({ where: { postId } }),
-  ]);
-
-  const engagement = await loadViewerEngagement(
-    prisma,
-    postId,
-    views.map((view) => view.user.id),
-    reader.id,
-    gates,
-  ).catch((error: unknown) => {
-    logger.warn('[viewerEngagement] lecture des engagements refusée faute de conclure', { postId, error });
-    return new Map<string, PostViewerEngagement & { readonly reaction: string | null }>();
-  });
-
-  const viewers = views.map((view) => ({
-    id: view.user.id,
-    username: view.user.username,
-    displayName: view.user.displayName,
-    avatarUrl: view.user.avatar,
-    viewedAt: view.viewedAt,
-    reaction: null,
-    ...engagement.get(view.user.id),
-  }));
-
-  return { viewers, total, hasMore: offset + limit < total };
+  return readViewerEngagementPage(prisma, post, limit, offset, gates);
 }

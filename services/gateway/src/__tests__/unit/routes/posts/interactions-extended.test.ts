@@ -604,8 +604,8 @@ describe('GET /posts/:postId/interactions', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  // #9727 — la porte « auteur OU ADMIN/BIGBOSS » se décide sur le rôle GLOBAL :
-  // la route doit le transmettre, sinon un administrateur serait refusé.
+  // #9727 — la porte est l'auteur seul ; le rôle GLOBAL reste transmis pour la
+  // lecture ADMIN/BIGBOSS qui rouvrira avec sa trace d'audit (#9733).
   it("transmet le rôle global du lecteur à la porte", async () => {
     mockGetPostInteractions.mockResolvedValueOnce({ viewers: [], total: 0, hasMore: false });
     await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions?limit=10&offset=20` });
@@ -622,6 +622,14 @@ describe('GET /posts/:postId/interactions', () => {
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
     expect(res.json().data.viewers).toEqual([enriched, bare]);
     expect(res.json().pagination).toEqual(expect.objectContaining({ total: 2, hasMore: false }));
+    expect(res.json().data).not.toHaveProperty('engagement');
+  });
+
+  it("dit quand le détail de l'activité n'a pas pu être établi — engagement: 'unavailable'", async () => {
+    const bare = { id: 'viewer-1', username: 'v', displayName: null, avatarUrl: null, viewedAt: '2026-10-10T11:00:00.000Z', reaction: null };
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [bare], total: 1, hasMore: false, engagement: 'unavailable' });
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
+    expect(res.json().data).toEqual({ viewers: [bare], engagement: 'unavailable' });
   });
 });
 

@@ -3796,6 +3796,7 @@ model Post {
   @@index([expiresAt])
   @@index([type, createdAt])
   @@index([originalRepostOfId])
+  @@index([repostOfId, authorId])
 }
 
 /// Déduplication des ouvertures ANONYMES d'un post (v1 "comptage bête").

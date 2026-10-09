@@ -77,7 +77,7 @@ export async function hasBlocked(
  * relationship with `userId` (either side blocked the other).
  */
 export async function getBlockedUserIdsAmong(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'user'>,
   userId: string,
   candidateIds: string[]
 ): Promise<Set<string>> {

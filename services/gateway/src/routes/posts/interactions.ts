@@ -672,7 +672,8 @@ export function registerInteractionRoutes(
   });
 
   // GET /posts/:postId/interactions — la liste des vues d'une story, d'un post ou d'un réel, chaque
-  // personne avec ce qu'elle y a fait (#9727) — auteur ou ADMIN/BIGBOSS seulement
+  // personne avec ce qu'elle y a fait (#9727) — auteur seul (ADMIN/BIGBOSS attend sa trace d'audit, #9733) ;
+  // `engagement: 'unavailable'` dit que le détail n'a pas pu être établi
   fastify.get('/posts/:postId/interactions', {
     schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
@@ -696,9 +697,11 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      return sendSuccess(reply, { viewers: result.viewers }, {
-        pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
-      });
+      return sendSuccess(
+        reply,
+        { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}) },
+        { pagination: { total: result.total, offset, limit, hasMore: result.hasMore } },
+      );
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can view interactions', { code: 'FORBIDDEN' });
