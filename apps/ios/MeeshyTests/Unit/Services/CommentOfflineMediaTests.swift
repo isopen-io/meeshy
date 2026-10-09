@@ -1,6 +1,6 @@
 import XCTest
 import GRDB
-import MeeshySDK
+@_spi(AccountStore) import MeeshySDK
 @testable import Meeshy
 
 /// **Le rejeu d'un commentaire avec pièces, EXÉCUTÉ** (#9743, audit constat 6).
@@ -484,10 +484,11 @@ final class CommentOfflineFirstSendTests: XCTestCase {
     /// depuis l'ouverture — inscrite pour Alice : c'est l'inscription qui
     /// prouve, pas le recalcul de l'empreinte depuis l'hôte courant.
     private func openAlicesBase() async throws -> DatabaseQueue {
-        let path = scratch.appendingPathComponent("ouverte-sous-un-autre-hote.sqlite").path
+        let key = try XCTUnwrap(MessageStoreAccountKey(userId: alice, serverOrigin: "https://ancien-hote.example"))
+        let path = scratch.appendingPathComponent(key.databaseFileName).path
         let base = try DatabaseQueue(path: path)
         try MessageDatabaseMigrations.runAll(on: base)
-        AccountStoreRegistry.register(databasePath: base.path, ownerId: alice)
+        AccountStoreRegistry.register(databasePath: base.path, key: key)
         await OfflineQueue.shared.configure(pool: base)
         return base
     }
@@ -552,5 +553,32 @@ final class CommentOfflineFirstSendTests: XCTestCase {
         XCTAssertTrue(sheet[submit.upperBound..<publish.lowerBound].contains("composerText = \"\""),
                       "Sans vider la source, la remettre ne change rien et la barre reste vide.")
         XCTAssertTrue(sheet.contains("restoreRefusedComment(text: trimmed, attachments: staged, place: place)"))
+    }
+}
+
+/// Une base de SECOURS éphémère ne s'inscrit pas : elle ne prouve rien, et un
+/// commentaire enfilé là serait perdu au lancement suivant.
+final class AccountStoreRegistryAdmissionTests: XCTestCase {
+    func test_onlyTheAccountsOwnFile_isAdmitted_neverAnEphemeralFallback() throws {
+        let key = try XCTUnwrap(MessageStoreAccountKey(userId: "66f0a1b2c3d4e5f6000000a1", serverOrigin: "https://gate.meeshy.me"))
+        XCTAssertTrue(AccountStoreRegistry.admits(databasePath: "/x/\(key.databaseFileName)", for: key))
+        XCTAssertFalse(AccountStoreRegistry.admits(
+            databasePath: "/tmp/meeshy_messages_ephemeral_\(UUID().uuidString).sqlite", for: key))
+        XCTAssertFalse(AccountStoreRegistry.admits(databasePath: "/x/meeshy_messages.sqlite", for: key))
+    }
+
+    func test_anEphemeralBase_provesNothing_soTheCommentIsRefusedAndGivenBack() {
+        let ephemeral = "/tmp/meeshy_messages_ephemeral_\(UUID().uuidString).sqlite"
+        XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: "66f0a1b2c3d4e5f6000000a1", databasePath: ephemeral,
+                                                    serverOrigin: "https://gate.meeshy.me"))
+    }
+
+    func test_theSessionRegisters_onlyAdmittedFiles() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let code = AppSourceGuard.stripComments(try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Core/MessageStoreSession.swift"), encoding: .utf8))
+        XCTAssertTrue(code.contains("if let key, AccountStoreRegistry.admits(databasePath: pool.path, for: key) {"))
     }
 }

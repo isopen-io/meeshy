@@ -555,3 +555,52 @@ final class CommentCameraDoorMountingGuardTests: XCTestCase {
                       "La prise doit entrer par l'entrée commune : aperçu immédiat et plafond des pièces.")
     }
 }
+
+// MARK: - Envoyer, ou garder : jamais « vider puis abandonner »
+
+/// **Recette du 2026-10-09** : une pièce encore en préparation, sans texte, et
+/// l'envoi vidait le composeur puis sortait sans rien garder. La décision se
+/// prend désormais AVANT de toucher à quoi que ce soit.
+@MainActor
+final class CommentSendGateTests: XCTestCase {
+
+    private func piece(_ id: String, file: String?) -> ComposerAttachment {
+        ComposerAttachment(id: id, type: .image, name: id, url: file.map { URL(fileURLWithPath: "/tmp/\($0)") })
+    }
+
+    func test_aPieceStillPreparing_keepsEverything_evenWithText() {
+        XCTAssertEqual(CommentSendGate.decide(text: "", zone: [piece("a", file: nil)], hasPlace: false),
+                       .keepWhilePreparing(loading: 1))
+        XCTAssertEqual(CommentSendGate.decide(text: "regarde", zone: [piece("a", file: "a.jpg"), piece("b", file: nil)], hasPlace: false),
+                       .keepWhilePreparing(loading: 1), "Rien ne part amputé d'une pièce qui se prépare.")
+    }
+
+    func test_readyPieces_send() {
+        XCTAssertEqual(CommentSendGate.decide(text: "", zone: [piece("a", file: "a.jpg")], hasPlace: false),
+                       .send(pieceIds: ["a"]))
+        XCTAssertEqual(CommentSendGate.decide(text: "salut", zone: [], hasPlace: false), .send(pieceIds: []))
+        XCTAssertEqual(CommentSendGate.decide(text: "", zone: [], hasPlace: true), .send(pieceIds: []))
+    }
+
+    func test_nothingToSend() {
+        XCTAssertEqual(CommentSendGate.decide(text: "  ", zone: [], hasPlace: false), .nothing)
+    }
+
+    /// La tuile tournait sans fin : une pièce dont le fichier arrive était
+    /// « égale » à elle-même sans fichier, et SwiftUI sautait le rendu.
+    func test_aPieceWhoseFileArrived_isNotEqualToItselfWithoutIt() {
+        XCTAssertNotEqual(piece("a", file: nil), piece("a", file: "a.jpg"))
+        XCTAssertEqual(piece("a", file: "a.jpg"), piece("a", file: "a.jpg"))
+    }
+
+    func test_theSheet_decidesBeforeClearing() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let sheet = AppSourceGuard.stripComments(try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Views/FeedCommentsSheet.swift"), encoding: .utf8))
+        let gate = try XCTUnwrap(sheet.range(of: "CommentSendGate.decide("))
+        let clear = try XCTUnwrap(sheet.range(of: "commentAttachments = []"))
+        XCTAssertLessThan(gate.lowerBound, clear.lowerBound, "La décision précède le vidage du composeur.")
+    }
+}

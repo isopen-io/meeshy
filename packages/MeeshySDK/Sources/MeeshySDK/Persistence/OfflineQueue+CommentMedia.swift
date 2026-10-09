@@ -199,16 +199,31 @@ public enum CommentMediaQuota {
 /// Le compte pour lequel chaque base locale a été OUVERTE — inscrit par l'app
 /// au moment où elle ouvre le fichier d'un compte (`MessageStoreSession.open`).
 /// Indexé par le chemin du fichier, il se lit depuis la connexion utilisée.
+///
+/// La clé inscrite est COMPLÈTE (utilisateur + environnement), mais la preuve
+/// ne compare que l'utilisateur : une base ouverte pour un compte reste la
+/// sienne si l'environnement change ensuite (hôte personnalisé posé après la
+/// connexion). C'est un choix assumé : la base est celle du compte, le jeton
+/// qui signe est vérifié à chaque envoi, et refuser ferait perdre le
+/// commentaire.
 public enum AccountStoreRegistry {
-    private static let owners = OSAllocatedUnfairLock<[String: String]>(initialState: [:])
+    private static let owners = OSAllocatedUnfairLock<[String: MessageStoreAccountKey]>(initialState: [:])
 
-    public static func register(databasePath: String, ownerId: String) {
-        guard let owner = CommentOwnership.identity(ownerId) else { return }
-        owners.withLock { $0[normalized(databasePath)] = owner }
+    /// Réservé à l'ouverture d'une base de compte par l'app.
+    @_spi(AccountStore)
+    public static func register(databasePath: String, key: MessageStoreAccountKey) {
+        owners.withLock { $0[normalized(databasePath)] = key }
     }
 
     public static func owner(ofDatabaseAt path: String) -> String? {
-        owners.withLock { $0[normalized(path)] }
+        owners.withLock { $0[normalized(path)]?.userId }
+    }
+
+    /// Une base ne s'inscrit que si son fichier EST celui de la clé : une
+    /// base de secours éphémère (`meeshy_messages_ephemeral_<UUID>`) ne
+    /// prouve rien — un commentaire enfilé là serait perdu au lancement suivant.
+    public static func admits(databasePath: String, for key: MessageStoreAccountKey) -> Bool {
+        (databasePath as NSString).lastPathComponent == key.databaseFileName
     }
 
     private static func normalized(_ path: String) -> String {

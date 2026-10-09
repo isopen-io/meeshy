@@ -249,20 +249,49 @@ enum CommentAttachmentIntake {
     private static func fill(_ id: String, with file: (url: URL, size: Int)?,
                              in attachments: Binding<[ComposerAttachment]>) {
         guard let file else {
+            CommentSendTrace.log("préparation : échec d'écriture, pièce retirée")
             remove(ids: [id], from: &attachments.wrappedValue)
             return
         }
         guard let zone = filling(attachments.wrappedValue, id: id, url: file.url, size: file.size) else {
+            CommentSendTrace.log("préparation : la pièce a quitté la zone, fichier jeté")
             try? FileManager.default.removeItem(at: file.url)
             return
         }
         attachments.wrappedValue = zone
+        CommentSendTrace.log("préparation : pièce prête (\(file.size) octets)")
     }
 
     private static func discard(_ pieces: [ComposerAttachment]) {
         for url in pieces.compactMap(\.url) {
             try? FileManager.default.removeItem(at: url)
         }
+    }
+}
+
+// ============================================================================
+// MARK: - CommentSendGate
+// ============================================================================
+
+/// **Envoyer, ou garder** (#9743) — décidé AVANT de toucher au composeur.
+/// Jamais « vider puis abandonner » : tant qu'une pièce de la zone n'a pas
+/// son fichier, rien ne part et rien ne se vide.
+enum CommentSendGate {
+    enum Decision: Equatable {
+        /// Tout est prêt : le commentaire part avec ces pièces.
+        case send(pieceIds: [String])
+        /// Une pièce se prépare encore : le composeur reste intact.
+        case keepWhilePreparing(loading: Int)
+        /// Rien à envoyer.
+        case nothing
+    }
+
+    static func decide(text: String, zone: [ComposerAttachment], hasPlace: Bool) -> Decision {
+        let loading = zone.filter { $0.url == nil }
+        if !loading.isEmpty { return .keepWhilePreparing(loading: loading.count) }
+        let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard hasText || !zone.isEmpty || hasPlace else { return .nothing }
+        return .send(pieceIds: zone.map(\.id))
     }
 }
 

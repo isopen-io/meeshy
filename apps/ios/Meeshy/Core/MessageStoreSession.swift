@@ -2,7 +2,7 @@
 
 import Foundation
 import GRDB
-import MeeshySDK
+@_spi(AccountStore) import MeeshySDK
 import os
 
 private nonisolated let storeSessionLogger = Logger(subsystem: "me.meeshy.app", category: "message-store-session")
@@ -81,7 +81,10 @@ nonisolated final class MessageStoreSession: Sendable {
         }
         // #9743 — le compte de ce fichier, inscrit à l'ouverture : c'est la
         // preuve que la file lit pour écrire ou montrer un commentaire.
-        if let key { AccountStoreRegistry.register(databasePath: pool.path, ownerId: key.userId) }
+        // Pas une base de secours éphémère : seul le fichier du compte s'inscrit.
+        if let key, AccountStoreRegistry.admits(databasePath: pool.path, for: key) {
+            AccountStoreRegistry.register(databasePath: pool.path, key: key)
+        }
         let session = MessageStoreSession(key: key, path: pool.path, dbPool: pool, diagnostics: diagnostics)
         let persistence = session.messagePersistence
         Task { await persistence.start() }

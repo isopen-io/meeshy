@@ -168,12 +168,22 @@ extension CommentsSheetView {
     /// nulle part ailleurs : il revient dans le composeur — texte, pièces et
     /// lieu — pour être renvoyé d'un toucher.
     func restoreRefusedComment(text: String, attachments: [ComposerAttachment], place: SharedPlace?) {
-        if composerText.isEmpty { composerText = text }
+        // Un texte déjà repris par l'auteur n'avale pas le texte refusé.
+        composerText = CommentUnsent.resuming(text, into: composerText)
         // Les pièces revenues gardent leurs identifiants : la grille les marque
         // à nouveau, et rien n'est re-téléversé.
         let present = Set(commentAttachments.map(\.id))
         commentAttachments += attachments.filter { !present.contains($0.id) }
         if commentPendingPlace == nil { commentPendingPlace = place }
+    }
+
+    /// Le texte d'un envoi qui n'est pas parti revient dans le champ : la barre
+    /// a vidé le sien, la source est vidée puis remise au tour suivant pour
+    /// que la barre la ré-affiche.
+    func keepRefusedText(_ text: String) {
+        guard !text.isEmpty else { return }
+        composerText = ""
+        DispatchQueue.main.async { composerText = CommentUnsent.resuming(text, into: composerText) }
     }
 
     private func linkCommentAsset(_ assetId: String, to attachmentId: String) {

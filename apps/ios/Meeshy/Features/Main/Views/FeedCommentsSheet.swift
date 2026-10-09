@@ -1270,22 +1270,29 @@ struct CommentsSheetView: View {
             return
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Toutes les pièces de la zone partent ; celles encore en lecture y restent.
-        let media = CommentComposerStaging.pendingMedia(in: attachments)
+        // **La zone de la feuille fait foi**, pas la copie remise par la barre :
+        // et la décision se prend AVANT de vider quoi que ce soit (#9743).
         let staged = commentAttachments
-        commentAttachments = CommentAttachmentIntake.stillLoading(commentAttachments)
+        switch CommentSendGate.decide(text: trimmed, zone: staged, hasPlace: commentPendingPlace != nil) {
+        case .keepWhilePreparing(let loading):
+            CommentSendTrace.log("envoi : \(loading) pièce(s) en préparation — rien ne part, composeur intact")
+            HapticFeedback.warning()
+            keepRefusedText(trimmed)
+            return
+        case .nothing:
+            CommentSendTrace.log("envoi : rien à envoyer")
+            return
+        case .send:
+            break
+        }
+        let media = CommentComposerStaging.pendingMedia(in: staged)
+        commentAttachments = []
         // La SOURCE du champ se vide avec la barre : si l'envoi échoue, la
         // remettre la change, et la barre ré-affiche le texte (#9743).
         composerText = ""
-        CommentSendTrace.log("envoi : texte=\(!text.isEmpty), pièces=\(media.count)/\(attachments.count)")
-        // Lieu partagé en attente — capturé puis effacé AVANT le guard (comme
-        // `PostDetailView.submitComment`) : la chip ne doit pas ré-apparaître
-        // sur le commentaire suivant, qu'il parte ou soit rejeté par le guard.
+        CommentSendTrace.log("envoi : texte=\(!trimmed.isEmpty), pièces=\(media.count)/\(staged.count)")
         let place = commentPendingPlace
         commentPendingPlace = nil
-
-        // Rien à envoyer (ni texte, ni média, ni lieu exploitable).
-        guard !trimmed.isEmpty || !media.isEmpty || place != nil else { return }
 
         // Réponse plate à 2 niveaux : répondre à une réponse rattache la nouvelle
         // réponse au MÊME parent racine (`replyingTo.parentId`) pour qu'elle reste

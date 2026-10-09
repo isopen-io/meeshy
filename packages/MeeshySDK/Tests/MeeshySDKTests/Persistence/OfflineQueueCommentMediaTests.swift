@@ -1,6 +1,6 @@
 import XCTest
 import GRDB
-@testable import MeeshySDK
+@_spi(AccountStore) @testable import MeeshySDK
 
 /// **Un commentaire hors ligne garde ses pièces** (#9743).
 ///
@@ -613,6 +613,27 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
                        "base héritée non cloisonnée")
         XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: nil, databasePath: "/x/\(aliceFile)", serverOrigin: origin))
         XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: "", databasePath: "/x/\(aliceFile)", serverOrigin: origin))
+    }
+
+    // MARK: - Le registre refuse
+
+    /// Le fichier porte l'empreinte d'Alice, mais il a été OUVERT pour Bob :
+    /// le registre fait foi, la base n'est pas celle d'Alice.
+    func test_theRegistryRefuses_whenTheFileWasOpenedForAnotherAccount() throws {
+        let origin = "https://gate.meeshy.me"
+        let aliceFile = try XCTUnwrap(MessageStoreAccountKey(userId: alice, serverOrigin: origin)).databaseFileName
+        let path = "/registre-\(UUID().uuidString)/\(aliceFile)"
+        AccountStoreRegistry.register(databasePath: path, key: try XCTUnwrap(MessageStoreAccountKey(userId: bob, serverOrigin: origin)))
+        XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: alice, databasePath: path, serverOrigin: origin))
+    }
+
+    func test_theRegistryRefuses_anotherAccountOnABaseOpenedForAlice() throws {
+        let path = "/registre-\(UUID().uuidString)/quelconque.sqlite"
+        AccountStoreRegistry.register(databasePath: path,
+                                      key: try XCTUnwrap(MessageStoreAccountKey(userId: alice, serverOrigin: "https://ancien.example")))
+        XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: bob, databasePath: path, serverOrigin: "https://gate.meeshy.me"))
+        XCTAssertTrue(CommentOwnership.baseBelongs(toOwner: alice, databasePath: path, serverOrigin: "https://gate.meeshy.me"),
+                      "La base ouverte pour Alice reste la sienne si l'environnement a changé depuis.")
     }
 
     func test_mayHandle_withoutTheProof_handlesNothing_notEvenOnesOwnRow() {
