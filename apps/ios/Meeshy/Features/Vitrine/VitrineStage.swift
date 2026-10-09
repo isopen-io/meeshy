@@ -129,7 +129,7 @@ enum VitrineStage {
         guard let ouvrir = VitrineRendu.shared.ouvrirLeJeu else {
             fatalError("Vitrine « \(scene.rawValue) » : l'écran Progression n'a pas prêté son routeur")
         }
-        ouvrir(.progressionConcept(celebration.concept))
+        ouvrir(.progressionConcept(celebration.concept, section: celebration.section))
     }
 
     /// Ce que la scène FAIT une fois sa conversation affichée — le geste qu'y ferait le lecteur.

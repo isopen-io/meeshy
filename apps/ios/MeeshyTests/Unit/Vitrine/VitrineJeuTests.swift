@@ -57,6 +57,15 @@ final class VitrineJeuTests: XCTestCase {
         XCTAssertEqual(VitrineCelebration.badge.concept, .badges)
     }
 
+    /// Le coffre vit SOUS la liste des missions : ouverte en haut, la fiche le jouerait hors de l'écran, et le film
+    /// ne verrait rien bouger (prise du 2026-10-09, 26 images figées). La fiche s'ouvre donc sur « À toi de jouer ».
+    func test_celebration_theChestOpensItsFicheOnTheGestures_theHeroPiecesAtTheTop() {
+        XCTAssertEqual(VitrineCelebration.coffre.section, .act)
+        XCTAssertNil(VitrineCelebration.rang.section)
+        XCTAssertNil(VitrineCelebration.niveau.section)
+        XCTAssertNil(VitrineCelebration.frappe.section)
+    }
+
     /// La durée annoncée au script est celle de la chorégraphie, jamais une valeur recopiée.
     func test_celebration_lastsItsChoreography() {
         XCTAssertEqual(VitrineCelebration.rang.duree, GameTimeline.rankDuration)

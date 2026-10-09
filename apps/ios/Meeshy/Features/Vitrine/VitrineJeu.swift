@@ -30,6 +30,14 @@ nonisolated enum VitrineCelebration: String, CaseIterable, Sendable {
         }
     }
 
+    /// La section où la fiche s'ouvre : le coffre vit sous la liste des missions, hors de l'écran à l'ouverture.
+    var section: ProgressionConceptSection? {
+        switch self {
+        case .coffre: .act
+        case .rang, .niveau, .frappe, .badge: nil
+        }
+    }
+
     /// La durée de la chorégraphie, lue sur la planche des durées : le script filme entre les deux marqueurs.
     var duree: TimeInterval {
         switch self {
