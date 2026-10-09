@@ -64,10 +64,22 @@ export const marqueursDe = (plan) => [plan.debut.marqueur, plan.fin?.marqueur].f
 // Les étapes que l'app date en cours d'action (`etape-<nom>.txt`, #9810) : une fenêtre de mouvement s'y ancre quand
 // l'instant de son animation dépend du rendu d'un écran — le choix d'un émoji une fois le menu montré, par exemple.
 export const ETAPE = (nom) => `etape-${nom}.txt`
-export const etapesDe = (plan) => [...new Set([
+// L'étape VIRTUELLE « mouvement » : la première image qui change après le début de l'action, lue dans le film même. Une
+// célébration du jeu part quand l'état servi est RENDU, et ce rendu tarde avec la charge de la machine (0,05 s au repos,
+// 0,5 s pendant un build voisin) : ancrée sur son premier mouvement, sa fenêtre ne dépend plus de cette latence.
+export const MOUVEMENT = 'mouvement'
+const etapesNommees = (plan) => [...new Set([
   ...plan.mouvement.filter((f) => !Array.isArray(f)).map((f) => f.etape),
   ...plan.imagesCles.filter((i) => i.etape).map((i) => i.etape),
 ])]
+export const etapesDe = (plan) => etapesNommees(plan).filter((nom) => nom !== MOUVEMENT)
+export const ancreSurLeMouvement = (plan) => etapesNommees(plan).includes(MOUVEMENT)
+
+// En ms d'action, l'instant de la première image qui diffère de la précédente, à partir du début de l'action.
+export const premierMouvement = ({ empreintes, origineMs, fps = FPS }) => {
+  const i = empreintes.findIndex((e, k) => k > 0 && (k * 1000) / fps >= origineMs && e !== empreintes[k - 1])
+  return i < 0 ? null : Math.round((i * 1000) / fps - origineMs)
+}
 
 // L'instant d'une image clé en ms d'action : depuis le début de l'action, ou depuis son étape (`etapes` en ms d'action).
 export const instantDeLImage = ({ image, etapes }) => {
@@ -80,7 +92,11 @@ export const instantDeLImage = ({ image, etapes }) => {
 export const fenetresDeMouvement = ({ mouvement, etapesMs, debutActionMs }) => mouvement.map((fenetre) => {
   if (Array.isArray(fenetre)) return fenetre
   const instant = etapesMs[fenetre.etape]
-  if (!Number.isFinite(instant)) throw new Error(`l'app n'a pas daté l'étape « ${fenetre.etape} » (${ETAPE(fenetre.etape)})`)
+  if (!Number.isFinite(instant)) {
+    throw new Error(fenetre.etape === MOUVEMENT
+      ? 'aucune image ne bouge après le début de l’action : la scène ne joue pas, ou hors du film'
+      : `l'app n'a pas daté l'étape « ${fenetre.etape} » (${ETAPE(fenetre.etape)})`)
+  }
   const decalage = Math.round(instant - debutActionMs)
   return [decalage + fenetre.de, decalage + fenetre.a]
 })
@@ -296,12 +312,14 @@ export const filmer = async ({ udid, appareil, langue, scene, voix, essais = 3, 
   }
   for (let essai = 1; essai <= essais; essai += 1) {
     const etiquette = `${appareil}/${langue}/${scene} (prise ${essai})`
-    const { etapesMs, ...horloges } = await tourner({ udid, appareil, langue, plan, voix, chemins, etiquette })
+    const { etapesMs: datees, ...horloges } = await tourner({ udid, appareil, langue, plan, voix, chemins, etiquette })
     const bornes = bornesDeLaPrise({ ...horloges, marges: plan.marges })
-    const fenetres = fenetresDeMouvement({ mouvement: plan.mouvement, etapesMs, debutActionMs: horloges.debutActionMs })
-    const etapes = Object.fromEntries(Object.entries(etapesMs).map(([nom, ms]) => [nom, Math.round(ms - horloges.debutActionMs)]))
     const empreintes = lireEmpreintes(ffmpeg(argumentsEmpreintes({ source: chemins.source, rognage: bornes.rognage })))
     const origineMs = Math.round((bornes.action.debutS - bornes.rognage.debutS) * 1000)
+    const mouvementMs = ancreSurLeMouvement(plan) ? premierMouvement({ empreintes, origineMs }) : null
+    const etapesMs = mouvementMs === null ? datees : { ...datees, [MOUVEMENT]: horloges.debutActionMs + mouvementMs }
+    const fenetres = fenetresDeMouvement({ mouvement: plan.mouvement, etapesMs, debutActionMs: horloges.debutActionMs })
+    const etapes = Object.fromEntries(Object.entries(etapesMs).map(([nom, ms]) => [nom, Math.round(ms - horloges.debutActionMs)]))
     const figees = imagesFigees({ empreintes, origineMs, fenetres })
     const mesure = { essai, horloges, bornes, etapes, fenetres, images: empreintes.length, dureeActionMs: Math.round(horloges.finActionMs - horloges.debutActionMs), figees }
     if (figees.length) {
