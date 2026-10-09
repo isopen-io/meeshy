@@ -26,6 +26,9 @@ export const ROGNAGE_HAUT = { iphone: 165, ipad: 60 }
 // - jeu-frappe : Mee, la pièce qui se retourne, Meo et « 2 187 points » : x 100…1040, y 500…700.
 // - jeu-badge : la médaille des messages texte qui se rallume, sa ligne et ses paliers : x 90…870, y 660…930.
 // - interaction-emoji : la bulle « Plus que 12 jours » et la réaction qui s'y pose : x 30…670, y 1150…1530.
+// - interaction-commentaire-audio : « Commentaires (1) », le vocal, sa transcription et ses langues : x 20…1120,
+//   y 1560…2380.
+// - interaction-reel : la carte du réel publiée en tête du fil : x 30…1290, y 990…2530.
 // Un autre agent ajoute les entrées iPad et des interactions : AJOUTER une entrée, ne pas réécrire les autres.
 export const CADRAGES = {
   'jeu-rang': { iphone: { x: 120, y: 780, largeur: 420, hauteur: 240 } },
@@ -34,6 +37,8 @@ export const CADRAGES = {
   'jeu-frappe': { iphone: { x: 100, y: 500, largeur: 940, hauteur: 200 } },
   'jeu-badge': { iphone: { x: 90, y: 660, largeur: 780, hauteur: 270 } },
   'interaction-emoji': { iphone: { x: 30, y: 1150, largeur: 640, hauteur: 380 } },
+  'interaction-commentaire-audio': { iphone: { x: 20, y: 1560, largeur: 1100, hauteur: 820 } },
+  'interaction-reel': { iphone: { x: 30, y: 990, largeur: 1260, hauteur: 1540 } },
 }
 
 // En arabe, l'app se met en miroir (RTL) : l'action se joue de l'autre côté de l'écran, et le rectangle relevé sur une
