@@ -104,7 +104,7 @@ enum VitrineStage {
             NotificationCenter.default.post(name: .navigateToConversation, object: conversation)
         case .progression:
             NotificationCenter.default.post(name: Notification.Name("pushNavigateToRoute"), object: "progression")
-        case .lien:
+        case .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
             break
         }
     }
@@ -115,7 +115,7 @@ enum VitrineStage {
         case .amour: await faireEntendre(destination)
         case .groupe: rouvrirSurLOriginal(destination)
         case .imagine: await imaginer(destination, f)
-        case .global, .progression, .lien: break
+        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: break
         }
     }
 

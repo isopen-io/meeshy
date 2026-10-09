@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import MeeshySDK
 
 /// Ce qu'un écran annonce une fois RENDU (#8921) : « prêt » n'en part qu'après l'avoir observé.
 nonisolated enum VitrineEvenement: Hashable, Sendable {
@@ -10,6 +11,8 @@ nonisolated enum VitrineEvenement: Hashable, Sendable {
     case fil
     /// La carte d'Imagine peinte, médias compris.
     case imagine
+    /// La fiche d'un concept du jeu, lue (#9805) : la célébration s'y joue.
+    case fiche(ProgressionConcept)
 }
 
 nonisolated enum VitrineAppareil: Sendable {
@@ -26,6 +29,7 @@ extension VitrineScene {
         case .global, .amour, .groupe, .imagine: return [.conversation(conversationId ?? "")]
         case .progression: return appareil == .ipad ? [.progression, .fil] : [.progression]
         case .lien: return [.lien]
+        case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: return []
         }
     }
 }
