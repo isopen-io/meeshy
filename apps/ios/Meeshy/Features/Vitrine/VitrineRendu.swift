@@ -79,12 +79,23 @@ final class VitrineRendu {
         signaler(.conversation(viewModel.conversationId))
     }
 
+    /// L'appui long sur un message, tel que la liste le remet à la conversation (#9810).
     private(set) var appuyerLongtemps: ((String) -> Void)?
+    /// Le toucher d'un émoji de la bande du menu unifié ouvert (#9810).
     private(set) var reagirAuMenu: ((String) -> Void)?
 
-    func listeDeMessagesAffichee(appuiLong: @escaping (String) -> Void) {}
+    /// La liste de messages tourne : elle prête son gestionnaire d'appui long, la scène y ouvre le menu unifié.
+    func listeDeMessagesAffichee(appuiLong: @escaping (String) -> Void) {
+        guard actif else { return }
+        appuyerLongtemps = appuiLong
+    }
 
-    func menuDeReactionsAffiche(reagir: @escaping (String) -> Void) {}
+    /// La bande d'émojis du menu est montée : elle prête son geste, la scène y pose l'émoji.
+    func menuDeReactionsAffiche(reagir: @escaping (String) -> Void) {
+        guard actif else { return }
+        reagirAuMenu = reagir
+        signaler(.menuDeReactions)
+    }
 
     func attendre(_ attendus: Set<VitrineEvenement>) async {
         guard !attendus.isSubset(of: observes) else { return }

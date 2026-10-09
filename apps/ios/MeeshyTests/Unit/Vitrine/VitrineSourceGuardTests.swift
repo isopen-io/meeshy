@@ -33,6 +33,8 @@ final class VitrineSourceGuardTests: XCTestCase {
             "apps/ios/Meeshy/Features/Main/Game/ProgressionConceptPage.swift",
             "apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift",
             "apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet.swift",
+            "apps/ios/Meeshy/Features/Main/Views/MessageListViewController+SeenTracking.swift",
+            "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkService.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine+Vitrine.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Configuration/MeeshyConfig.swift",

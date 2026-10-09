@@ -79,14 +79,14 @@ enum VitrineStage {
         guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
         Task {
             guard await attendreLaRacine(voile.values) else { return }
-            let destination = f.destination(scene)
+            let destination = f.destination(scene.sceneDuKit)
             montrer(scene, destination, f)
             await ouvrirLaFiche(scene)
             await VitrineRendu.shared.attendre(scene.rendusAttendus(conversationId: destination?.conversationId, appareil: appareil))
             await achever(scene, destination, f)
             await annoncer(scene)
             await VitrineJeu.celebrer(scene)
-            await VitrineInteractions.jouer(scene)
+            await VitrineInteractions.jouer(scene, f)
         }
     }
 
