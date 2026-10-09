@@ -31,6 +31,7 @@ import {
 import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
 import { clientDeclaredMetadata } from '../../../services/messaging/clientDeclaredMetadata';
 import { backfillCitedAttachments } from '../../../services/messaging/citedAttachmentBackfill';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../../services/attachments/attachmentIncludes';
 
 const piece = (rang: number, extra: Record<string, unknown> = {}) => ({
   id: `507f1f77bcf86cd79943900${rang}`,
@@ -218,9 +219,8 @@ describe('#6164 — la pièce NOMMÉE d’une citation', () => {
     };
 
     it('ordonne les pièces de la citation — sans orderBy, « la première » est ARBITRAIRE d’un appel à l’autre', () => {
-      expect(blocSelect()).toMatch(
-        /attachments:\s*\{[^}]*orderBy:\s*\[\{\s*createdAt:\s*'asc'\s*\},\s*\{\s*id:\s*'asc'\s*\}\]/
-      );
+      expect(blocSelect()).toMatch(/attachments:\s*\{[^}]*orderBy:\s*MESSAGE_ATTACHMENT_ORDER\b/);
+      expect(MESSAGE_ATTACHMENT_ORDER).toEqual([{ rank: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }]);
     });
 
     it('ne remonte PAS le take à 10 — chaque message du fil le paierait', () => {
