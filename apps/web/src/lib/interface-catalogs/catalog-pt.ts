@@ -30,6 +30,7 @@ import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
+import ptSoundsMine from './catalog-pt-sounds-mine';
 import ptContactCard from './catalog-pt-contact-card';
 import ptQuote from './catalog-pt-quote';
 import ptCommentRow from './catalog-pt-comment-row';
@@ -1127,6 +1128,7 @@ const pt = {
   ...ptMessageCard,
   ...ptConversationCard,
   ...ptStoriesMine,
+  ...ptSoundsMine,
   ...ptContactCard,
   ...ptQuote,
   ...ptCommentRow,

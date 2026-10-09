@@ -30,6 +30,7 @@ import esStudioChrome from './catalog-es-studio-chrome';
 import esEphemeral from './catalog-es-ephemeral';
 import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
+import esSoundsMine from './catalog-es-sounds-mine';
 import esContactCard from './catalog-es-contact-card';
 import esQuote from './catalog-es-quote';
 import esCommentRow from './catalog-es-comment-row';
@@ -1123,6 +1124,7 @@ const es = {
   ...esMessageCard,
   ...esConversationCard,
   ...esStoriesMine,
+  ...esSoundsMine,
   ...esContactCard,
   ...esQuote,
   ...esCommentRow,

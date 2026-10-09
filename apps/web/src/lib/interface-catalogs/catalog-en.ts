@@ -30,6 +30,7 @@ import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
 import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
+import enSoundsMine from './catalog-en-sounds-mine';
 import enContactCard from './catalog-en-contact-card';
 import enQuote from './catalog-en-quote';
 import enCommentRow from './catalog-en-comment-row';
@@ -1123,6 +1124,7 @@ const en = {
   ...enMessageCard,
   ...enConversationCard,
   ...enStoriesMine,
+  ...enSoundsMine,
   ...enContactCard,
   ...enQuote,
   ...enCommentRow,

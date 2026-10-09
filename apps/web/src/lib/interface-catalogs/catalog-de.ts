@@ -30,6 +30,7 @@ import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
+import deSoundsMine from './catalog-de-sounds-mine';
 import deContactCard from './catalog-de-contact-card';
 import deQuote from './catalog-de-quote';
 import deCommentRow from './catalog-de-comment-row';
@@ -1123,6 +1124,7 @@ const de = {
   ...deMessageCard,
   ...deConversationCard,
   ...deStoriesMine,
+  ...deSoundsMine,
   ...deContactCard,
   ...deQuote,
   ...deCommentRow,
