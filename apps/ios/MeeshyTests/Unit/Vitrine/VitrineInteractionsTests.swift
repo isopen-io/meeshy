@@ -97,8 +97,8 @@ final class VitrineInteractionsTests: XCTestCase {
     /// L'émoji part par le MÊME geste que la bande du menu : `reagirDepuisLaBande`, que la bande et la vitrine appellent.
     func test_emoji_reactsThroughTheMenuBandItself() throws {
         let menu = try source("apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift")
-        XCTAssertTrue(menu.contains("onReact: reagirDepuisLaBande"))
-        XCTAssertTrue(menu.contains("VitrineRendu.shared.menuDeReactionsAffiche(reagir: reagirDepuisLaBande)"))
+        XCTAssertTrue(menu.contains("onReact: { reagirDepuisLaBande($0) }"))
+        XCTAssertTrue(menu.contains("VitrineRendu.shared.menuDeReactionsAffiche { reagirDepuisLaBande($0) }"))
     }
 
     func test_rendu_relaysTheLongPressAndTheMenuBand() {

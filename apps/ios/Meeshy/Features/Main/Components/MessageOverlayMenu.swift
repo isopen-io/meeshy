@@ -527,7 +527,7 @@ struct MessageOverlayMenu: View {
             style: .dark,
             scrollable: true,
             chrome: .none,
-            onReact: reagirDepuisLaBande,
+            onReact: { reagirDepuisLaBande($0) },
             onExpandFullPicker: {
                 HapticFeedback.light()
                 onExpandFullPicker?()
@@ -540,7 +540,7 @@ struct MessageOverlayMenu: View {
                 cachedTopEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: Self.defaultEmojis)
             }
             #if DEBUG
-            VitrineRendu.shared.menuDeReactionsAffiche(reagir: reagirDepuisLaBande)
+            VitrineRendu.shared.menuDeReactionsAffiche { reagirDepuisLaBande($0) }
             #endif
         }
     }

@@ -127,7 +127,8 @@ final class VitrineInteractionsPostTests: XCTestCase {
 
     func test_enrichissements_bringTheTranscription_thenTheTranslations() async throws {
         let (serveur, f, vocal) = try makeServeur()
-        let commentaire = try XCTUnwrap(try await serveur.publieur.publish(charge(f, postId: serveur.postId), pieces: [piece()]))
+        let cree = try await serveur.publieur.publish(charge(f, postId: serveur.postId), pieces: [piece()])
+        let commentaire = try XCTUnwrap(cree)
 
         let transcription = try XCTUnwrap(serveur.transcriptionArrivee())
         let traduction = try XCTUnwrap(serveur.traductionArrivee())
@@ -167,8 +168,8 @@ final class VitrineInteractionsPostTests: XCTestCase {
         XCTAssertTrue(geste.contains("VitrineRendu.shared.paletteDeReactionsPrete"))
         XCTAssertEqual(geste.components(separatedBy: "ouvrirLaPalette(isPresented)").count - 1, 2, "l'appui long et la vitrine ouvrent la palette par la même fonction")
         let palette = try source("apps/ios/Meeshy/Features/Main/Views/PostReactionPalette.swift")
-        XCTAssertTrue(palette.contains("onReact: choisir"))
-        XCTAssertTrue(palette.contains("VitrineRendu.shared.paletteDeReactionsAffichee(choisir: choisir)"))
+        XCTAssertTrue(palette.contains("onReact: { choisir($0) }"))
+        XCTAssertTrue(palette.contains("VitrineRendu.shared.paletteDeReactionsAffichee { choisir($0) }"))
     }
 
     func test_publisher_isOverriddenOnlyInsideDebug() throws {

@@ -162,7 +162,7 @@ extension MeeshyComposerHost {
             choisirDansLesStickers(choice)
         })
         #if DEBUG
-        .onAppear { VitrineRendu.shared.feuilleDeStickersAffichee(choisir: choisirDansLesStickers) }
+        .onAppear { VitrineRendu.shared.feuilleDeStickersAffichee { choisirDansLesStickers($0) } }
         #endif
     }
 

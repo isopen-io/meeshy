@@ -42,7 +42,7 @@ struct PostReactionPalette: View {
                 // lui, les neuf derniers seraient rognés — invisibles, donc
                 // inatteignables, sans qu'aucun témoin ne le dise.
                 scrollable: true,
-                onReact: choisir,
+                onReact: { choisir($0) },
                 onDismiss: {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         isPresented = false
@@ -52,7 +52,7 @@ struct PostReactionPalette: View {
             .transition(.scale(scale: 0.85, anchor: .trailing).combined(with: .opacity))
             #if DEBUG
             // La vitrine (#9810) choisit par la fonction même du toucher d'un émoji.
-            .onAppear { VitrineRendu.shared.paletteDeReactionsAffichee(choisir: choisir) }
+            .onAppear { VitrineRendu.shared.paletteDeReactionsAffichee { choisir($0) } }
             #endif
         }
     }
