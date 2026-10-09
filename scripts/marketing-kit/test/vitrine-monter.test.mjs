@@ -185,3 +185,65 @@ describe('textes : aucune promesse que l’app ne tient pas', () => {
     }
   })
 })
+
+describe('cadrage : la caméra va où l’action se joue', async () => {
+  const { AGRANDISSEMENT_MAX, CADRAGES, cadrageDe, fenetreCible, filtreCamera, largeurMinimale, rectAuClip } = await import('../vitrine/cadrages.mjs')
+  const IPHONE = [1320, 2868]
+  const RAPPORT = 1320 / 2868
+  const minIphone = largeurMinimale({ appareil: 'iphone', largeurClip: 1320, largeurSortie: 886 })
+
+  test('jeu-rang et jeu-coffre iPhone ont leur rectangle ; ailleurs, plein cadre', () => {
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone' })).toEqual(CADRAGES['jeu-rang'].iphone)
+    expect(cadrageDe({ scene: 'jeu-coffre', appareil: 'iphone' })).toEqual(CADRAGES['jeu-coffre'].iphone)
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'ipad' })).toBeNull()
+    expect(cadrageDe({ scene: 'jeu-badge', appareil: 'iphone' })).toBeNull()
+  })
+
+  test('jamais plus étroit que 600 px natifs pour 886 px de sortie ; la borne suit la taille du clip', () => {
+    expect(AGRANDISSEMENT_MAX).toBeCloseTo(886 / 600, 9)
+    expect(minIphone).toBeCloseTo(600, 9)
+    expect(largeurMinimale({ appareil: 'iphone', largeurClip: 660, largeurSortie: 886 })).toBeCloseTo(300, 9)
+    expect(largeurMinimale({ appareil: 'ipad', largeurClip: 2064, largeurSortie: 1200 })).toBeCloseTo(1200 * 600 / 886, 9)
+  })
+
+  for (const scene of ['jeu-rang', 'jeu-coffre']) {
+    test(`${scene} : la fenêtre CONTIENT le rectangle, au rapport de l’image, dans l’image, agrandie ×1,6 au moins`, () => {
+      const rect = CADRAGES[scene].iphone
+      const f = fenetreCible({ rect, natif: IPHONE, rapport: RAPPORT, largeurMin: minIphone })
+      expect(f.largeur / f.hauteur).toBeCloseTo(RAPPORT, 9)
+      expect(f.x).toBeLessThanOrEqual(rect.x)
+      expect(f.y).toBeLessThanOrEqual(rect.y)
+      expect(f.x + f.largeur).toBeGreaterThanOrEqual(rect.x + rect.largeur)
+      expect(f.y + f.hauteur).toBeGreaterThanOrEqual(rect.y + rect.hauteur)
+      expect(f.x).toBeGreaterThanOrEqual(0)
+      expect(f.y + f.hauteur).toBeLessThanOrEqual(2868 + 1e-9)
+      expect(1320 / f.largeur).toBeGreaterThan(1.6)
+    })
+  }
+
+  test('un écusson minuscule ne fait pas zoomer au-delà de la borne', () => {
+    const f = fenetreCible({ rect: { x: 600, y: 900, largeur: 120, hauteur: 120 }, natif: IPHONE, rapport: RAPPORT, largeurMin: minIphone })
+    expect(f.largeur).toBeCloseTo(600, 9)
+  })
+
+  test('un rectangle au bord ramène la fenêtre dans l’image ; un rectangle trop grand rend l’image entière', () => {
+    const coin = fenetreCible({ rect: { x: 0, y: 0, largeur: 100, hauteur: 100 }, natif: IPHONE, rapport: RAPPORT, largeurMin: minIphone })
+    expect([coin.x, coin.y]).toEqual([0, 0])
+    const tout = fenetreCible({ rect: { x: 0, y: 0, largeur: 1320, hauteur: 2868 }, natif: IPHONE, rapport: RAPPORT, largeurMin: minIphone })
+    expect(tout).toEqual({ x: 0, y: 0, largeur: 1320, hauteur: 2868 })
+  })
+
+  test('un rectangle déclaré en px natifs se porte à la taille réelle du clip', () => {
+    expect(rectAuClip({ rect: { x: 60, y: 450, largeur: 700, hauteur: 550 }, appareil: 'iphone', largeurClip: 660 }))
+      .toEqual({ x: 30, y: 225, largeur: 350, hauteur: 275 })
+  })
+
+  test('mouvement : image entière jusqu’au début de l’action, cosinus surélevé, évalué image par image', () => {
+    const arrivee = fenetreCible({ rect: CADRAGES['jeu-rang'].iphone, natif: IPHONE, rapport: RAPPORT, largeurMin: minIphone })
+    const filtre = filtreCamera({ arrivee, natif: IPHONE, debutS: 0.6, dureeS: 0.9 })
+    expect(filtre).toMatch(/^perspective=x0=\(0\+/)
+    expect(filtre).toContain('clip((in/30-0.6)/0.9\\,0\\,1)')
+    expect(filtre).toContain('0.5-0.5*cos(PI*')
+    expect(filtre).toMatch(/interpolation=cubic:eval=frame$/)
+  })
+})

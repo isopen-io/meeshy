@@ -161,7 +161,8 @@ export const CARTES_CREATIVES = [
     ],
   },
   { id: 'frappe', sources: [{ famille: 'jeu', scene: 'jeu-frappe', image: 'piece-retournee' }] },
-  { id: 'coffre', sources: [{ famille: 'jeu', scene: 'jeu-coffre', image: 'coffre-ouvert' }] },
+  // `recompenses` : le coffre ouvert ET ce qu'il donne (`coffre-ouvert`, à 0,45 s, montre encore le couvercle).
+  { id: 'coffre', sources: [{ famille: 'jeu', scene: 'jeu-coffre', image: 'recompenses' }] },
   { id: 'rang', sources: [{ famille: 'jeu', scene: 'jeu-rang', image: 'rang-revele' }] },
 ]
 
