@@ -7,6 +7,7 @@
 // Le zoom est borné à ×2,2 de la largeur de l'écran (600 px natifs sur un iPhone de 1320) : au-delà, l'écran
 // réduit de l'aperçu (≈ 760 px de large) agrandirait chaque px natif de plus de 1,3 et pixeliserait.
 // La barre d'état de l'app (heure, batterie) est rognée en haut de chaque prise : ROGNAGE_HAUT.
+import { directionOf } from '../lib/locales.mjs'
 import { TAILLES_NATIVES } from './capturer.mjs'
 
 export const ZOOM_MAX = 2.2
@@ -35,7 +36,13 @@ export const CADRAGES = {
   'interaction-emoji': { iphone: { x: 30, y: 1150, largeur: 640, hauteur: 380 } },
 }
 
-export const cadrageDe = ({ scene, appareil, cadrages = CADRAGES }) => cadrages[scene]?.[appareil] ?? null
+// En arabe, l'app se met en miroir (RTL) : l'action se joue de l'autre côté de l'écran, et le rectangle relevé sur une
+// prise française se retourne autour de l'axe vertical.
+export const cadrageDe = ({ scene, appareil, langue, cadrages = CADRAGES }) => {
+  const rect = cadrages[scene]?.[appareil] ?? null
+  if (!rect || directionOf(langue) !== 'rtl') return rect
+  return { ...rect, x: TAILLES_NATIVES[appareil][0] - rect.x - rect.largeur }
+}
 
 const borner = (v, min, max) => Math.min(max, Math.max(min, v))
 

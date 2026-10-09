@@ -199,6 +199,10 @@ describe('cadrage : la caméra va où l’action se joue', async () => {
     expect(cadrageDe({ scene: 'jeu-rang', appareil: 'ipad' })).toBeNull()
     expect(cadrageDe({ scene: 'jeu-badge', appareil: 'iphone' })).toEqual(CADRAGES['jeu-badge'].iphone)
     expect(cadrageDe({ scene: 'interaction-sticker', appareil: 'iphone' })).toBeNull()
+    // En arabe, l'écran est en miroir : le rectangle se retourne, sa largeur et sa hauteur ne changent pas.
+    const rang = CADRAGES['jeu-rang'].iphone
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone', langue: 'ar' })).toEqual({ ...rang, x: 1320 - rang.x - rang.largeur })
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone', langue: 'de' })).toEqual(rang)
     for (const [scene, { iphone }] of Object.entries(CADRAGES)) {
       if (iphone) expect({ scene, dansLEcran: iphone.x >= 0 && iphone.y >= 0 && iphone.x + iphone.largeur <= 1320 && iphone.y + iphone.hauteur <= 2868 }).toEqual({ scene, dansLEcran: true })
     }
