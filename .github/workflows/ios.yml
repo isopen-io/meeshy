@@ -335,8 +335,36 @@ jobs:
       - name: Le project.pbxproj committé reste lisible par Xcode
         run: bash apps/ios/scripts/check_pbxproj_quoting.sh
 
-  ios-build:
+  # File d'attente des suites complètes (#9751). L'org a 5 jobs macOS
+  # simultanés, et une suite complète les prend tous (build + 4 tranches) : deux
+  # suites lancées ensemble entrelaçaient leurs tranches et finissaient en 60 à
+  # 90 min pour 30 min de travail. Ce job, sur ubuntu, attend qu'aucune suite
+  # plus ancienne ne tourne ni n'attende — premier arrivé, premier servi. Un
+  # groupe `concurrency` commun annulerait les runs en attente des autres
+  # sessions. Le NOM du job est lu par la file des autres runs : une
+  # compilation seule porte un autre nom et ne bloque personne.
+  file-mac:
     needs: scope
+    name: ${{ needs.scope.outputs.run_tests == 'true' && 'File d''attente Mac' || 'File d''attente Mac (compilation seule)' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 160
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        if: needs.scope.outputs.run_tests == 'true'
+        with:
+          sparse-checkout: scripts/ci
+          fetch-depth: 1
+      - name: Attendre que les suites plus anciennes libèrent les Mac
+        if: needs.scope.outputs.run_tests == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/ci/ios-mac-queue.mjs --poll-seconds 90 --max-minutes 150
+
+  ios-build:
+    needs: [scope, file-mac]
     # Le nom du check DIT ce qui a tourné. C'est la seule chose qui distingue,
     # dans l'interface de la PR, un vert qui a bâti l'app d'un vert qui a bâti
     # ET tout exécuté — et sans cette distinction, « iOS Tests : vert » se lit
