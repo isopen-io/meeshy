@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import MeeshySDK
 @testable import Meeshy
 
@@ -305,5 +306,44 @@ final class CommentAttachmentZoneMountingGuardTests: XCTestCase {
         let attachments = try source("Views/FeedCommentsSheet+Attachments.swift")
         XCTAssertTrue(attachments.contains("commentLibrary.deselected("),
                       "Décocher une image jointe dans la photothèque ne la retire pas de la zone.")
+    }
+}
+
+// MARK: - Le composeur reste sous l'en-tête de la feuille
+
+/// **La zone d'aperçu ne passe jamais sous l'en-tête** (#9736, recette du
+/// 2026-10-09) : à mi-hauteur, le composeur débordait vers le haut et la croix
+/// de la feuille recouvrait le ✕ des tuiles.
+final class CommentSheetFitTests: XCTestCase {
+
+    func test_aComposerWhoseTopIsAboveTheContentArea_overflows() {
+        XCTAssertTrue(CommentSheetFit.overflows(composerTop: -40))
+        XCTAssertFalse(CommentSheetFit.overflows(composerTop: 0))
+        XCTAssertFalse(CommentSheetFit.overflows(composerTop: 120))
+        XCTAssertFalse(CommentSheetFit.overflows(composerTop: -0.25), "Un arrondi de mise en page n'est pas un débordement.")
+    }
+
+    func test_anOverflowingComposer_takesTheLargeDetent() {
+        XCTAssertEqual(CommentSheetFit.detent(composerTop: -40, current: .medium), .large)
+    }
+
+    func test_aFittingComposer_leavesTheDetentToTheUser() {
+        XCTAssertEqual(CommentSheetFit.detent(composerTop: 80, current: .medium), .medium)
+        XCTAssertEqual(CommentSheetFit.detent(composerTop: 80, current: .large), .large,
+                       "La feuille ne se réduit jamais d'elle-même.")
+    }
+
+    func test_theSheet_probesItsComposer_andBindsItsDetent() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let sheet = AppSourceGuard.stripComments(try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Views/FeedCommentsSheet.swift"), encoding: .utf8))
+        XCTAssertTrue(sheet.contains(".keepsComposerBelowSheetHeader(detent: $sheetDetent)"),
+                      "Le composeur n'est plus sondé : il peut repasser sous l'en-tête.")
+        XCTAssertTrue(sheet.contains(".commentSheetContent()"),
+                      "Sans l'espace de la zone de contenu, la sonde mesure contre l'écran.")
+        XCTAssertTrue(sheet.contains(".presentationDetents([.large, .medium], selection: $sheetDetent)"),
+                      "Une détente que rien ne lie ne peut pas grandir.")
     }
 }

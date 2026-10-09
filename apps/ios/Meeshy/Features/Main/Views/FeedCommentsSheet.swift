@@ -90,6 +90,8 @@ struct CommentsSheetView: View {
     @State var commentAttachments: [ComposerAttachment] = []
     /// Le lien grille ↔ zone (#9697) : ce qui est joint ne se reprend pas.
     @State var commentLibrary = CommentLibraryLink()
+    /// La détente de la feuille : elle grandit quand le composeur déborde (`CommentSheetFit`).
+    @State private var sheetDetent: PresentationDetent = .medium
     @State var showCommentPhotoPicker: Bool = false
     @State var commentPhotoItems: [PhotosPickerItem] = []
     /// True while `commentPhotoItems` is being primed with the recent-media
@@ -444,9 +446,11 @@ struct CommentsSheetView: View {
                         }
                         commentComposer.foldableComment(isReplying: replyingTo != nil)
                     }
+                    .keepsComposerBelowSheetHeader(detent: $sheetDetent)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
                 }
             }
+            .commentSheetContent()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -471,7 +475,7 @@ struct CommentsSheetView: View {
                 }
             }
         }
-        .presentationDetents([.large, .medium])
+        .presentationDetents([.large, .medium], selection: $sheetDetent)
         .presentationDragIndicator(.visible)
         .adaptiveWideSheet()
         .modifier(TranslucentSheetBackground())
