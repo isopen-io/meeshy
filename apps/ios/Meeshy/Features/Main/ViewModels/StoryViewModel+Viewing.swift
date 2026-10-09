@@ -20,13 +20,47 @@ extension StoryViewModel {
     /// garde monotone raffinée : une vue sans horodatage cède toujours devant
     /// une édition de contenu.
     func buildLocallyViewedMap() -> [String: Date] {
-        var map: [String: Date] = [:]
+        // #9804 — le registre durable d'abord : un démarrage à froid sur cache
+        // vide n'a AUCUN tray en mémoire, et c'est précisément là que la vue
+        // locale doit encore compter.
+        var map = viewedLedger.viewedStories(ownerId: viewedLedgerOwnerId)
         for group in storyGroups {
             for story in group.stories where story.isViewed {
-                map[story.id] = story.viewedAt ?? .distantPast
+                let viewedAt = story.viewedAt ?? .distantPast
+                map[story.id] = max(map[story.id] ?? .distantPast, viewedAt)
             }
         }
         return map
+    }
+
+    /// Le compte dont le registre des vues est lu et écrit.
+    var viewedLedgerOwnerId: String { AuthManager.shared.currentUser?.id ?? "" }
+
+    /// #9804 — reporte le registre durable des vues sur un tray venu d'AILLEURS
+    /// que la mémoire : cache relu au démarrage (qu'un autre écrivain a pu
+    /// réécrire avec la version serveur), page delta, événement temps réel.
+    /// Même règle de cession que la garde monotone : une édition du contenu
+    /// POSTÉRIEURE à la vue rallume l'anneau — jamais pour ses propres
+    /// stories, dont le serveur n'enregistre pas la vue.
+    func applyViewedLedger(to groups: [StoryGroup]) -> [StoryGroup] {
+        let viewed = viewedLedger.viewedStories(ownerId: viewedLedgerOwnerId)
+        guard !viewed.isEmpty else { return groups }
+        let selfId = AuthManager.shared.currentUser?.id
+        return groups.map { group in
+            let isOwnGroup = group.id == selfId
+            let stories = group.stories.map { story -> StoryItem in
+                guard !story.isViewed, let viewedAt = viewed[story.id] else { return story }
+                guard isOwnGroup || Self.shouldKeepLocalViewed(
+                    localViewedAt: viewedAt,
+                    contentEditedAt: story.contentEditedAt
+                ) else { return story }
+                var copy = story
+                copy.isViewed = true
+                copy.viewedAt = viewedAt
+                return copy
+            }
+            return group.with(stories: stories)
+        }
     }
 
     /// Résout les données de l'interstitiel, cache-first : profil depuis
@@ -119,6 +153,12 @@ extension StoryViewModel {
         // pas l'adresser, la ligne y pourrit en 500 jusqu'à `.exhausted`.
         // Doctrine complète : `ObjectID`. Ne gouverne QUE l'envoi — l'état
         // « vu » local ci-dessous reste posé.
+        //
+        // #9804 — le registre durable est écrit EN PREMIER et de façon
+        // synchrone : la vue est sur disque avant que l'app puisse être tuée,
+        // et aucun réécrivain de l'instantané du tray ne peut l'effacer.
+        let viewedAt = Date()
+        viewedLedger.record(storyId: storyId, ownerId: viewedLedgerOwnerId, at: viewedAt)
         if ObjectID.isValid(storyId) {
             Task { [markViewedOutboxEnqueuer] in
                 do {
@@ -145,7 +185,7 @@ extension StoryViewModel {
                 var updated = storyGroups[i].stories
                 updated[j].isViewed = true
                 // R11 — horodatage local du vu (DateTime nullable > boolean seul).
-                updated[j].viewedAt = Date()
+                updated[j].viewedAt = viewedAt
                 storyGroups[i] = storyGroups[i].with(stories: updated)
                 persistStoryCache()
                 // R5 — la story vient d'être VUE : garantir sa relecture
