@@ -315,7 +315,10 @@ struct ReelsPlayerView: View {
         // va de N±2 à N±10 selon l'usage, chaque palier prépare ce qu'il
         // mérite (lecteur à N±1, fichier au-delà). Relancé à chaque réel
         // affiché ; un swipe rapide annule la préparation devenue inutile.
-        .task(id: viewModel.currentId) {
+        // Relancé aussi quand la SUITE change sous le même réel (relecture au
+        // démarrage, page de plus à portée) : la fenêtre raisonne sur la liste
+        // que le pager parcourt, pas sur celle du balayage précédent.
+        .task(id: ReelThreadOrder.preloadScope(ids: viewModel.reels.map(\.id), anchorId: viewModel.currentId)) {
             let reels = viewModel.reels
             guard let activeIndex = reels.firstIndex(where: { $0.id == viewModel.currentId }) else { return }
             let window = preloader.enter(index: activeIndex)
