@@ -22,11 +22,17 @@ export const ROGNAGE_HAUT = { iphone: 165, ipad: 60 }
 // - jeu-coffre : le coffre qui s'ouvre, les récompenses qui montent au-dessus et « Coffre du jour » :
 //   x 330…990, y 1950…2480 (×2).
 // - jeu-niveau : l'anneau du niveau et « Niveau 35 » : x 40…820, y 400…800 (×1,7).
+// - jeu-frappe : Mee, la pièce qui se retourne, Meo et « 2 187 points » : x 100…1040, y 500…700.
+// - jeu-badge : la médaille des messages texte qui se rallume, sa ligne et ses paliers : x 90…870, y 660…930.
+// - interaction-emoji : la bulle « Plus que 12 jours » et la réaction qui s'y pose : x 30…670, y 1150…1530.
 // Un autre agent ajoute les entrées iPad et des interactions : AJOUTER une entrée, ne pas réécrire les autres.
 export const CADRAGES = {
   'jeu-rang': { iphone: { x: 120, y: 780, largeur: 420, hauteur: 240 } },
   'jeu-coffre': { iphone: { x: 330, y: 1950, largeur: 660, hauteur: 530 } },
   'jeu-niveau': { iphone: { x: 40, y: 400, largeur: 780, hauteur: 400 } },
+  'jeu-frappe': { iphone: { x: 100, y: 500, largeur: 940, hauteur: 200 } },
+  'jeu-badge': { iphone: { x: 90, y: 660, largeur: 780, hauteur: 270 } },
+  'interaction-emoji': { iphone: { x: 30, y: 1150, largeur: 640, hauteur: 380 } },
 }
 
 export const cadrageDe = ({ scene, appareil, cadrages = CADRAGES }) => cadrages[scene]?.[appareil] ?? null
