@@ -9,14 +9,15 @@
  * Le témoin applique la règle de la RFC 9309 (groupe du robot, sinon `*` ; la
  * règle la plus longue gagne ; à longueur égale, `Allow`) au fichier publié.
  */
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 type Rule = { readonly allow: boolean; readonly path: string };
 type Group = { readonly agents: readonly string[]; readonly rules: readonly Rule[] };
 
-const ROBOTS = readFileSync(join(import.meta.dir, '..', 'public', 'robots.txt'), 'utf8');
+const ROBOTS = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'robots.txt'), 'utf8');
 
 const groups = (text: string): readonly Group[] => {
   const parsed: { agents: string[]; rules: Rule[] }[] = [];
@@ -51,18 +52,20 @@ const allowed = (agent: string, path: string): boolean => {
 const PREVIEW_BOTS = ['Twitterbot', 'LinkedInBot', 'facebookexternalhit', 'Slackbot-LinkExpanding', 'Discordbot', 'TelegramBot', 'WhatsApp'];
 
 describe('robots.txt — les robots d’aperçu déplient une invitation, rien de plus', () => {
-  it.each(PREVIEW_BOTS)('%s peut demander /chat/<lien>', (bot) => {
-    expect(allowed(bot, '/chat/mshy_abc')).toBe(true);
-  });
+  for (const bot of PREVIEW_BOTS) {
+    test(`${bot} peut demander /chat/<lien>`, () => {
+      expect(allowed(bot, '/chat/mshy_abc')).toBe(true);
+    });
 
-  it.each(PREVIEW_BOTS)('%s reste fermé au reste de l’application', (bot) => {
-    for (const path of ['/settings', '/conversations', '/api/v1/conversations', '/u/zoe', '/chat']) {
-      expect(allowed(bot, path)).toBe(false);
-    }
-    expect(allowed(bot, '/about')).toBe(true);
-  });
+    test(`${bot} reste fermé au reste de l’application`, () => {
+      for (const path of ['/settings', '/conversations', '/api/v1/conversations', '/u/zoe', '/chat']) {
+        expect(allowed(bot, path)).toBe(false);
+      }
+      expect(allowed(bot, '/about')).toBe(true);
+    });
+  }
 
-  it('les moteurs de recherche, eux, restent hors de /chat', () => {
+  test('les moteurs de recherche, eux, restent hors de /chat', () => {
     expect(allowed('Googlebot', '/chat/mshy_abc')).toBe(false);
     expect(allowed('Bingbot', '/chat/mshy_abc')).toBe(false);
   });
