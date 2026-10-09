@@ -43,6 +43,8 @@ struct ReelVideoView: View {
     /// iOS 16, le `TabView` du pager monte TOUTES les pages et chacune
     /// téléchargeait son réel entier ; hors de la fenêtre, la page attend.
     var mayDownload: Bool = true
+    /// Le réel de la page — la mesure du passage (#9837) l'attend.
+    var reelId: String = ""
 
     // Plain reference (NOT @ObservedObject): only `player` identity and
     // `activeURL` matter for this page wrapper (backdrop + poster +
@@ -52,6 +54,10 @@ struct ReelVideoView: View {
     private let manager = SharedAVPlayerManager.shared
     @State private var activeURL: String = SharedAVPlayerManager.shared.activeURL
     @State private var player: AVPlayer?
+    /// Le lecteur PRÉPARÉ de ce réel, laissé dans le pool (#9837) : la page
+    /// voisine y attache sa surface, en pause, pour que sa première image soit
+    /// déjà à l'écran quand elle arrive. Le moteur adopte la même instance.
+    @State private var pooledPlayer: AVPlayer?
 
     private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
     /// Le verdict de montage du MOTEUR (#9575), au rôle plein écran.
@@ -66,6 +72,14 @@ struct ReelVideoView: View {
         }
         .onReceive(manager.$activeURL) { activeURL = $0 }
         .onReceive(manager.$player) { player = $0 }
+        .onReceive(NotificationCenter.default.publisher(for: StoryMediaLoader.poolDidChange)) { _ in
+            refreshPooledPlayer()
+        }
+        .onAppear { refreshPooledPlayer() }
+        .adaptiveOnChange(of: mayDownload) { _, _ in refreshPooledPlayer() }
+        .task(id: PlaybackProbe(active: isActive, player: player.map(ObjectIdentifier.init))) {
+            await reportFirstPlayback()
+        }
         // Le réel plein écran REPREND sa vidéo au retour au premier plan : la
         // fenêtre PiP se referme, la lecture continue ici (#9575).
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
@@ -132,8 +146,15 @@ struct ReelVideoView: View {
                 // Tap-to-pause is handled by the page-level tap zone (ReelPageView),
                 // so this surface stays gesture-free to avoid swallowing scrub/rail
                 // touches.
-                if isActive, ready, isShowingThis, let player {
-                    ReelVideoSurface(player: player, videoGravity: .resizeAspect, enablesPip: true)
+                //
+                // UNE seule surface, quel que soit le lecteur affiché (#9837) :
+                // le voisin la monte sur son lecteur préparé, le moteur adopte
+                // cette même instance à l'élection — aucune nouvelle surface,
+                // donc aucune première image à attendre. La page quittée garde
+                // l'image du moteur au lieu de retomber sur le poster.
+                if ready, let shown = displayedPlayer {
+                    ReelVideoSurface(player: shown, videoGravity: .resizeAspect,
+                                     enablesPip: isActive && isShowingThis)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                 } else if isActive, !ready {
@@ -217,6 +238,35 @@ struct ReelVideoView: View {
     /// fonction qu'un témoin peut appeler.
     nonisolated static func consumedLanguage(for media: FeedMedia) -> String? {
         media.transcription?.language
+    }
+
+    /// Le lecteur que la surface affiche — loi `ReelVideoDisplay`.
+    private var displayedPlayer: AVPlayer? {
+        ReelVideoDisplay.player(engineShowsThis: isShowingThis, enginePlayer: player,
+                                pooledPlayer: pooledPlayer)
+    }
+
+    /// Relit le pool : hors de la fenêtre de préchargement, la page ne tient
+    /// aucun lecteur (mémoire et décodeurs bornés par le pool, trois au plus).
+    private func refreshPooledPlayer() {
+        let url = mayDownload ? MeeshyConfig.resolveMediaURL(attachment.fileUrl) : nil
+        let pooled = url.flatMap(StoryMediaLoader.shared.peekCachedPlayer(for:))
+        if pooledPlayer !== pooled { pooledPlayer = pooled }
+    }
+
+    private struct PlaybackProbe: Hashable {
+        let active: Bool
+        let player: ObjectIdentifier?
+    }
+
+    /// Ferme la mesure du passage (#9837) quand le lecteur de ce réel, actif,
+    /// avance vraiment — pas quand `play()` est demandé.
+    private func reportFirstPlayback() async {
+        guard isActive, let player, isShowingThis else { return }
+        for await status in player.publisher(for: \.timeControlStatus).values where status == .playing {
+            ReelSwitchSignpost.mediaStarted(reelId, kind: "video")
+            return
+        }
     }
 
     private func drive(ready: Bool) {
