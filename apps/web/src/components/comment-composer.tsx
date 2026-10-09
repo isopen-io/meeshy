@@ -8,6 +8,7 @@ import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { COMMENT_MAX_LENGTH } from '@/lib/api/publication-comments';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 
+import type { CommentDraft } from '@/lib/comments/comment-draft';
 import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, withCommentPiece, type CommentFilesRefusal } from '@/lib/comments/comment-media';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -144,6 +145,13 @@ export type CommentComposerProps = {
    * bouton sticker (un contrôle sans effet mentirait).
    */
   readonly onSendSticker?: (picked: PickedSticker) => Promise<CommentComposerResult>;
+  /**
+   * **LE BROUILLON** (#9743) — le texte et les pièces repris à l'ouverture, et
+   * rendus à l'hôte à chaque changement : fermer la feuille ne les perd pas.
+   * Lu UNE fois, au montage ; l'hôte remonte le composeur pour en changer.
+   */
+  readonly draft?: CommentDraft;
+  readonly onDraftChange?: (draft: CommentDraft) => void;
   /** Le micro et son horloge — injectés par les témoins ; absent, le micro
    * du navigateur (`useRecorder`), rendu seulement s'il existe. */
   readonly recording?: { readonly engine: RecorderEngine; readonly now?: () => number };
@@ -160,9 +168,19 @@ export function CommentComposer({
   foldOnSend = false,
   onSendSticker,
   recording,
+  draft,
+  onDraftChange,
 }: CommentComposerProps) {
-  const [text, setText] = useState('');
-  const [pending, setPending] = useState<readonly PendingAttachment[]>([]);
+  const [text, setText] = useState(draft?.text ?? '');
+  const [pending, setPending] = useState<readonly PendingAttachment[]>(draft?.pending ?? []);
+  const reportDraft = useRef(onDraftChange);
+  reportDraft.current = onDraftChange;
+  const draftMounted = useRef(false);
+  useEffect(() => {
+    /* Le premier passage ne fait que relire ce que l'hôte vient de donner. */
+    if (draftMounted.current) reportDraft.current?.({ text, pending });
+    draftMounted.current = true;
+  }, [text, pending]);
   const pickerRef = useRef<HTMLInputElement | null>(null);
   const [sending, setSending] = useState(false);
   /* LA MONTÉE DES PIÈCES EN VOL (#9736) — `null` hors téléversement. */

@@ -99,6 +99,10 @@ export type CommentGestureHandlers = {
   readonly failureOf: (commentId: string) => CommentGestureRowFailure | undefined;
   /** Rejoue ce geste-là — l'hôte se souvient duquel il s'agit. */
   readonly onRetryGesture: (commentId: string) => void;
+  /** CE COMMENTAIRE ATTEND SON ENVOI (#9743) — non envoyé, relançable ; `false` : en vol. */
+  readonly unsentOf?: (commentId: string) => boolean;
+  /** Relance l'envoi d'un commentaire non envoyé. */
+  readonly onRetrySend?: (commentId: string) => void;
   /** VRAI tant qu'un geste de cette rangée est EN VOL — l'indisponibilité
    * s'ANNONCE (`CommentRowView.swift:284`, `.disabled(isInFlight)`), elle ne
    * se contente pas d'avaler le second tap (défaut majeur 7). */
@@ -458,6 +462,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
   /* Une rangée EN VOL n'a pas d'adresse chez la passerelle — aucun geste. */
   const actionable = comment.pending !== true ? gestures : undefined;
   const failure = actionable?.failureOf(comment.id);
+  const unsent = comment.pending === true && gestures?.unsentOf?.(comment.id) === true;
 
   /**
    * **LE FOCUS REVIENT D'OÙ IL EST PARTI** (revue-correction #7135, défaut
@@ -572,10 +577,23 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                 style={{ color: 'var(--color-ios-ink)' }}
               />
               <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
-                {comment.pending === true
-                  ? translate(language, 'comments.row.pending')
-                  : shortRelativeTime(new Date(comment.createdAt), now, locale)}
+                {comment.pending !== true
+                  ? shortRelativeTime(new Date(comment.createdAt), now, locale)
+                  : unsent
+                    ? translate(language, 'message.send.failed')
+                    : translate(language, 'comments.row.pending')}
               </span>
+              {unsent && gestures?.onRetrySend !== undefined ? (
+                <button
+                  type="button"
+                  data-comment-send-retry=""
+                  onClick={() => gestures.onRetrySend?.(comment.id)}
+                  className="shrink-0 rounded-chip px-2 text-check font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+                  style={{ minHeight: 44, color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+                >
+                  {translate(language, 'comments.retry')}
+                </button>
+              ) : null}
               {/* LA PASTILLE SE GARDE ELLE-MÊME : `servedLanguage === originalLanguage`
                   ⇒ elle rend `null`. Une rangée non traduite n'annonce donc rien, et
                   aucune condition n'est à tenir ici en double. */}

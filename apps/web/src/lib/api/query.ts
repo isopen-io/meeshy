@@ -13,6 +13,8 @@ import { performCommentGesture, type CommentGestureRequest, type CommentGestureR
 import { repliesInfiniteOptions } from './comment-replies';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
+import type { PendingAttachment } from '@/lib/send/attachments';
+
 import { apiDeps } from './deps';
 import { feedQuery, refreshFeed } from './feed';
 import { forwardMessages, type ForwardResult, type ForwardSource } from './forward';
@@ -538,6 +540,8 @@ export function commentAction(params: {
   readonly media?: readonly PostMediaUploadResult[] | undefined;
   /** Le sticker et son image déjà téléversée (#9080, #9318). */
   readonly sticker?: CommentStickerSend | undefined;
+  /** Les pièces d'origine des médias (#9743) — rendues au brouillon sur un refus au rejeu. */
+  readonly pieces?: readonly PendingAttachment[] | undefined;
 }): Promise<CommentResult> {
   return performComment({
     postId: params.postId,
@@ -547,6 +551,7 @@ export function commentAction(params: {
     ...(params.parentId === undefined ? {} : { parentId: params.parentId }),
     ...(params.media === undefined || params.media.length === 0 ? {} : { media: params.media }),
     ...(params.sticker === undefined ? {} : { sticker: params.sticker }),
+    ...(params.pieces === undefined ? {} : { pieces: params.pieces }),
     deps: { ...apiDeps, queryClient: appQueryClient },
   }).then((result) => {
     /* Un commentaire RETENU (servi, ou gardé en attente) allume l'anneau de
@@ -554,6 +559,15 @@ export function commentAction(params: {
     if (result.ok) notePublicationParticipation(params.postId, 'commented');
     return result;
   });
+}
+
+/**
+ * LE REJEU DES COMMENTAIRES NON ENVOYÉS (#9743) — ceux de CE lecteur sur
+ * CETTE publication ; le module n'est chargé que s'il y a quelque chose à
+ * rejouer (l'appelant lit `unsentComments` d'abord).
+ */
+export function replayCommentsAction(scope: string, postId: string): Promise<number> {
+  return import('./comment-replay').then(({ replayUnsentComments }) => replayUnsentComments({ ...apiDeps, queryClient: appQueryClient }, scope, postId));
 }
 
 /**

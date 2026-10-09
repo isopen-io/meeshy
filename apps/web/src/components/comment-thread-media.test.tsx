@@ -3,7 +3,11 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { apiDeps } from '@/lib/api/deps';
 import { resetFixtureCommentsForTests } from '@/lib/api/fixtures-comments';
+import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
+import { commentDrafts } from '@/lib/comments/comment-draft';
 import type { ApiResult } from '@/lib/api/http';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import { commentsQueryKey, flattenCommentPages, type CommentInfiniteData } from '@/lib/api/publication-comments';
@@ -43,6 +47,8 @@ afterEach(() => {
   act(() => root?.unmount());
   container?.remove();
   appQueryClient.clear();
+  /* Le brouillon (#9743) vit pour la durée du PROCESSUS : un refus le garde, le témoin suivant ne doit pas l'hériter. */
+  commentDrafts.set(`u_${resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? ''}`, 'post-text-rank2', { text: '', pending: [] });
   resetFixtureCommentsForTests();
   resetFixtureStickersForTests();
   resetFixturePacksForTests();

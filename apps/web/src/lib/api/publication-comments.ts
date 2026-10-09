@@ -11,7 +11,9 @@ import type {
 import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
+import { unsentComments } from '@/lib/comments/unsent-comments';
 import { shiftedCount, withCommentCount } from '@/lib/feed/interactions';
+import type { PendingAttachment } from '@/lib/send/attachments';
 
 import { updateCardPost, writeCardCache } from './card-caches';
 import { appendReply, commentRepliesQueryKey, dropReply, settleReply } from './comment-replies';
@@ -382,9 +384,9 @@ const stickerRowOf = (send: CommentStickerSend | undefined, media?: readonly Pos
  *  - texte vide ou trop long : AUCUN appel, aucun optimiste ;
  *  - succès : le servi remplace le provisoire, le compteur reste monté ;
  *  - panne PASSAGÈRE (réseau, 5xx, 408/425/429 — `outcomeOf`) : l'optimiste
- *    RESTE, marqué `pending`, et l'appelant l'ANNONCE. Aucune promesse de
- *    rejeu : la file de reprise est #5868, et promettre ce qu'on ne fait pas
- *    est le défaut que `REACTION_PENDING_MESSAGE` a déjà payé ;
+ *    RESTE, marqué `pending`, l'appelant l'ANNONCE, et le commentaire ATTEND
+ *    dans `unsentComments` avec son corps (ses `attachmentIds` compris) — son
+ *    rejeu est `comment-replay.ts` (#9743) ;
  *  - refus PERMANENT (403 commentaires fermés, 404 hors audience, 401) : le
  *    texte ET le compteur sont défaits.
  */
@@ -400,6 +402,8 @@ export async function performComment(params: {
   readonly sticker?: CommentStickerSend | undefined;
   /** Les photos et vidéos DÉJÀ téléversées (#9167) — elles suffisent aussi. */
   readonly media?: readonly PostMediaUploadResult[] | undefined;
+  /** Les pièces d'ORIGINE de ces médias (#9743) — rendues au brouillon si un rejeu est refusé pour de bon. */
+  readonly pieces?: readonly PendingAttachment[] | undefined;
   readonly deps: CommentDeps & { readonly queryClient: QueryClient };
 }): Promise<CommentResult> {
   const { postId, author, deps } = params;
@@ -433,8 +437,10 @@ export async function performComment(params: {
   };
 
   const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
+  const wait = () => parkUnsent({ tempId, authorId: author.id, postId, body, row: optimistic, pieces: params.pieces });
 
   if (result === null) {
+    wait();
     return { ok: true, notice: readerIsOffline() ? COMMENT_PENDING_MESSAGE : COMMENT_UNCONFIRMED_MESSAGE };
   }
 
@@ -450,7 +456,10 @@ export async function performComment(params: {
   }
 
   /* Un STATUT servi est un fait de PASSERELLE, jamais de réseau. */
-  if (outcomeOf(result) !== 'permanent') return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
+  if (outcomeOf(result) !== 'permanent') {
+    wait();
+    return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
+  }
 
   deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => dropComment(data, tempId));
   shiftCommentCount(deps.queryClient, postId, -1);
@@ -499,6 +508,7 @@ async function performReply(params: {
   readonly originalLanguage?: string | undefined;
   readonly sticker?: CommentStickerSend | undefined;
   readonly media?: readonly PostMediaUploadResult[] | undefined;
+  readonly pieces?: readonly PendingAttachment[] | undefined;
   readonly deps: CommentDeps & { readonly queryClient: QueryClient };
 }): Promise<CommentResult> {
   const { postId, content, parentId, author, deps } = params;
@@ -527,8 +537,10 @@ async function performReply(params: {
     ...stickerBodyOf(params.sticker, params.media),
   };
   const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
+  const wait = () => parkUnsent({ tempId, authorId: author.id, postId, parentId, body, row: optimistic, pieces: params.pieces });
 
   if (result === null) {
+    wait();
     return { ok: true, notice: readerIsOffline() ? COMMENT_PENDING_MESSAGE : COMMENT_UNCONFIRMED_MESSAGE };
   }
 
@@ -541,7 +553,10 @@ async function performReply(params: {
     return { ok: true };
   }
 
-  if (outcomeOf(result) !== 'permanent') return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
+  if (outcomeOf(result) !== 'permanent') {
+    wait();
+    return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
+  }
 
   deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => dropReply(data, tempId));
   shiftReplyCount(deps.queryClient, postId, parentId, -1);
@@ -549,7 +564,21 @@ async function performReply(params: {
   return { ok: false, message: COMMENT_FAILED_MESSAGE };
 }
 
-function sendComment(
+/** LA CRÉATION N'A PAS ABOUTI (#9743) — le commentaire attend son rejeu, sous l'identifiant de CETTE tentative. */
+function parkUnsent(waiting: {
+  readonly tempId: string;
+  readonly authorId: string;
+  readonly postId: string;
+  readonly parentId?: string;
+  readonly body: Readonly<Record<string, unknown>>;
+  readonly row: PostComment;
+  readonly pieces: readonly PendingAttachment[] | undefined;
+}): void {
+  const { authorId, pieces, ...entry } = waiting;
+  unsentComments.getState().park({ ...entry, scope: `u_${authorId}`, clientMutationId: mutationIdOf(entry.tempId), pieces: pieces ?? [], state: 'unsent' });
+}
+
+export function sendComment(
   deps: CommentDeps,
   params: {
     readonly postId: string;

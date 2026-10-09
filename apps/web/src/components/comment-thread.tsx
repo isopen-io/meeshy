@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useStore } from 'zustand/react';
 
 import { CommentComposer, type CommentComposerResult, type CommentUploadReport } from '@/components/comment-composer';
 import { CommentImagePortal } from '@/components/comment-image-sheet-lazy';
@@ -8,12 +9,14 @@ import type { CommentGestureHandlers } from '@/components/comment-row';
 import { findCardPost } from '@/lib/api/card-caches';
 import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/comment-gestures';
 import type { FeedPost } from '@/lib/api/feed-pages';
-import { commentAction, commentGestureAction, loadCommentRepliesAction, reportCommentAction, useComments } from '@/lib/api/query';
+import { commentAction, commentGestureAction, loadCommentRepliesAction, replayCommentsAction, reportCommentAction, useComments } from '@/lib/api/query';
 import type { PickedSticker } from '@/components/composer-sticker-sheet';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import { flattenCommentPages, type CommentInfiniteData, type CommentStickerSend, type PostComment } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
+import { commentDrafts, type CommentDraft } from '@/lib/comments/comment-draft';
 import { browserCommentUpload, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
+import { unsentComments, unsentOf } from '@/lib/comments/unsent-comments';
 import { composingPostOf, postCommentImageable } from '@/lib/export/composed-comment-card';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
@@ -78,9 +81,38 @@ export function CommentThread({
   const viewer = useViewer();
   const query = useComments(postId, { enabled });
 
-  const comments = useMemo(
-    () => flattenCommentPages(query.data as CommentInfiniteData | undefined),
-    [query.data],
+  /**
+   * CE QUI ATTEND SON ENVOI (#9743) — les commentaires de CE lecteur dont la
+   * création n'a pas abouti. Une relecture de la liste efface leur rangée
+   * provisoire du cache : elle est reposée ici, en tête, tant qu'ils attendent.
+   */
+  const scope = viewer.id === null ? null : `u_${viewer.id}`;
+  const held = useStore(unsentComments, (state) => state.entries);
+  const waiting = useMemo(() => (scope === null ? [] : unsentOf({ entries: held }, scope, postId)), [held, scope, postId]);
+  const comments = useMemo(() => {
+    const served = flattenCommentPages(query.data as CommentInfiniteData | undefined);
+    const known = new Set(served.map((comment) => comment.id));
+    const missing = waiting.filter((entry) => entry.parentId === undefined && !known.has(entry.tempId)).map((entry) => entry.row);
+    return missing.length === 0 ? served : [...missing.reverse(), ...served];
+  }, [query.data, waiting]);
+
+  /* LE REJEU part à l'ouverture du fil et au RETOUR du réseau — jamais en
+     boucle sur un échec : la rangée garde alors son « Réessayer ». */
+  const replay = useCallback(() => {
+    if (scope === null) return;
+    if (unsentOf(unsentComments.getState(), scope, postId).some((entry) => entry.state === 'unsent')) void replayCommentsAction(scope, postId);
+  }, [scope, postId]);
+  useEffect(() => {
+    if (online && enabled) replay();
+  }, [online, enabled, replay]);
+
+  /* LE BROUILLON (#9743) — texte et pièces de ce lecteur sur cette publication. */
+  const draft = useMemo(() => (scope === null ? undefined : commentDrafts.get(scope, postId)), [scope, postId]);
+  const keepDraft = useCallback(
+    (next: CommentDraft) => {
+      if (scope !== null) commentDrafts.set(scope, postId, next);
+    },
+    [scope, postId],
   );
 
   /**
@@ -186,13 +218,14 @@ export function CommentThread({
    * stickers, donc la même cible de réponse et le même dépliage.
    */
   const deliver = useCallback(
-    async (outgoing: { readonly content: string; readonly media: readonly PostMediaUploadResult[]; readonly sticker?: CommentStickerSend }): Promise<CommentComposerResult> => {
+    async (outgoing: { readonly content: string; readonly media: readonly PostMediaUploadResult[]; readonly sticker?: CommentStickerSend; readonly pieces?: readonly PendingAttachment[] }): Promise<CommentComposerResult> => {
       const target = replyTarget;
       const sending = commentAction({
         postId,
         content: outgoing.content,
         media: outgoing.media,
         ...(outgoing.sticker === undefined ? {} : { sticker: outgoing.sticker }),
+        ...(outgoing.pieces === undefined ? {} : { pieces: outgoing.pieces }),
         ...(target === null ? {} : { parentId: target.rootId }),
         author: {
           id: viewer.id ?? '',
@@ -224,11 +257,16 @@ export function CommentThread({
       /* LES PIÈCES MONTENT D'ABORD (#9167, miroir `CommentMediaUploader`) :
          `attachmentIds` ne porte que des `PostMedia` déjà téléversés. Une
          seule refusée et rien ne part — le composeur rend texte et pièces. */
+      /* EN VOL, le brouillon est VIDE (#9743) : la feuille fermée puis rouverte
+         pendant la montée ne repropose pas ce qui est en train de partir. Un
+         échec le REND, texte et pièces, que le composeur soit encore là ou non. */
+      keepDraft({ text: '', pending: [] });
       const uploaded = pending.length === 0 ? { ok: true as const, media: [] } : await uploadCommentMedia(pending, uploadMedia, report);
-      if (!uploaded.ok) return { ok: false, message: 'comments.media.upload_failed' };
-      return deliver({ content, media: uploaded.media });
+      const result: CommentComposerResult = uploaded.ok ? await deliver({ content, media: uploaded.media, pieces: pending }) : { ok: false, message: 'comments.media.upload_failed' };
+      if (!result.ok) keepDraft({ text: content, pending });
+      return result;
     },
-    [uploadMedia, deliver],
+    [uploadMedia, deliver, keepDraft],
   );
 
   /**
@@ -339,11 +377,13 @@ export function CommentThread({
               if (failed !== undefined) void runGesture(failed.request);
             },
             busyOf: (commentId) => busy.has(commentId),
+            unsentOf: (commentId) => waiting.some((entry) => entry.tempId === commentId && entry.state === 'unsent'),
+            onRetrySend: replay,
             mentionSource,
           }
         : undefined,
     /* `comments` et le prisme du lecteur : « Imager » cite la racine et lit ses réponses dans CE texte-là, jamais celui d’un rendu passé. */
-    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages, viewer.displayName, composingPost],
+    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages, viewer.displayName, composingPost, waiting, replay],
   );
 
   const renderReplies = useCallback(
@@ -400,6 +440,9 @@ export function CommentThread({
           `registeredUser` (`comments.ts:184-186`). Offrir le champ puis
           refuser en 401 serait un contrôle qui ment (loi 4). */}
       <CommentComposer
+        key={`${scope ?? ''}:${postId}`}
+        {...(draft === undefined ? {} : { draft })}
+        onDraftChange={keepDraft}
         language={language}
         onSend={onSend}
         onSendSticker={onSendSticker}

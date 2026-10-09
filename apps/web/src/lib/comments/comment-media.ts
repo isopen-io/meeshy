@@ -63,17 +63,34 @@ export type CommentMediaUpload = (file: File, onProgress?: (fraction: number) =>
 
 export type CommentMediaUploaded = { readonly ok: true; readonly media: readonly PostMediaUploadResult[] } | { readonly ok: false };
 
+/**
+ * UNE PIÈCE MONTÉE NE REMONTE PAS (#9743) — retenue par son `File` : quand une
+ * pièce suivante échoue (réseau coupé à mi-envoi) ou que l'envoi est repris,
+ * celles déjà sur le serveur sont reprises telles quelles. Bornée dans le
+ * temps : un `PostMedia` jamais rattaché est balayé par la passerelle à 24 h.
+ */
+const UPLOADED_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const uploadedFiles = new WeakMap<File, { readonly media: PostMediaUploadResult; readonly at: number }>();
+
+const alreadyUploaded = (file: File, now: number): PostMediaUploadResult | undefined => {
+  const held = uploadedFiles.get(file);
+  return held !== undefined && now - held.at < UPLOADED_MAX_AGE_MS ? held.media : undefined;
+};
+
 /** UNE pièce après l'autre : la première refusée arrête tout, rien ne part.
  * `report` reçoit la montée de CHAQUE pièce, par son `localId` (#9736). */
 export async function uploadCommentMedia(
   pending: readonly PendingAttachment[],
   upload: CommentMediaUpload,
   report?: (localId: string, fraction: number) => void,
+  now: () => number = Date.now,
 ): Promise<CommentMediaUploaded> {
   let media: readonly PostMediaUploadResult[] = [];
   for (const piece of pending) {
-    const result = await upload(piece.file, report === undefined ? undefined : (fraction) => report(piece.localId, fraction));
+    const held = alreadyUploaded(piece.file, now());
+    const result = held !== undefined ? { ok: true as const, data: held } : await upload(piece.file, report === undefined ? undefined : (fraction) => report(piece.localId, fraction));
     if (!result.ok) return { ok: false };
+    if (held === undefined) uploadedFiles.set(piece.file, { media: result.data, at: now() });
     report?.(piece.localId, 1);
     media = [...media, result.data];
   }
