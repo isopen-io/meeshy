@@ -314,7 +314,15 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // arrêts de chacun des deux dégradés (`first`/`second`, `inner`/`outer`) : les
 // émaux de la gravure, portés À L'IDENTIQUE du web, indépendants du thème de
 // conversation. Valeur MESURÉE le 2026-10-06.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 451;
+//
+// 2026-10-09 — variables inconnues 451 → 453 :
+// - `PublicationViewersSheet.swift` (#9727, 37654709ba) — `Color(hex: post.authorColor)`,
+//   la couleur DÉTERMINISTE de l'auteur du post servie par l'API, passée en
+//   `accentColor` à son avatar : une couleur de donnée, pas une couleur en dur ;
+// - `ReelFeedCard.swift` (#9677, 7484db6cfa) — `Color(hex: accentHex)`, l’accent reçu en
+//   paramètre de la scène d'un réel, même nature que `accentColor`.
+// Valeur MESURÉE le 2026-10-09 (CI 37911128290).
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 453;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
