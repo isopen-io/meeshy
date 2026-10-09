@@ -38,11 +38,11 @@ describe('acceptCommentFiles — photos, vidéos et sons (#9167, #9318)', () => 
     expect(refusal).toEqual({ reason: 'unsupported', name: 'b.pdf' });
   });
 
-  test('#9736 — la même pièce reprise n’entre pas deux fois, et le dit', () => {
+  test('#9736 — la même pièce reprise n’entre pas deux fois', () => {
     const déjà = [pendingAttachmentOf(file('x.jpg', 'image/jpeg'))];
     const { list, refusal } = acceptCommentFiles(déjà, [file('x.jpg', 'image/jpeg'), file('y.jpg', 'image/jpeg'), file('y.jpg', 'image/jpeg')]);
     expect(list.map((piece) => piece.name)).toEqual(['x.jpg', 'y.jpg']);
-    expect(refusal).toEqual({ reason: 'duplicate', name: 'x.jpg' });
+    expect(refusal).toBeUndefined();
   });
 
   test('#9736 — une sélection juste n’annonce aucun écart', () => {

@@ -42,7 +42,6 @@ const frStudioChrome = {
   'story.studio.retouch.cancel': 'Abandonner la retouche',
   'composer.attachment.edit': 'Éditer {name}',
   'composer.attachment.remove': 'Supprimer {name}',
-  'composer.attachment.pending': 'Pièces jointes en attente',
   'story.studio.retouch.failed': 'Le média n’a pas pu être rendu.',
   'story.studio.retouch.exporting': 'Export en cours…',
   'story.studio.timeline.enter': 'Entre ici',

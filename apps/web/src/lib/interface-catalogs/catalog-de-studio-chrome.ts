@@ -39,7 +39,6 @@ const deStudioChrome = {
   'story.studio.retouch.cancel': 'Bearbeitung verwerfen',
   'composer.attachment.edit': '{name} bearbeiten',
   'composer.attachment.remove': '{name} entfernen',
-  'composer.attachment.pending': 'Ausstehende Anhänge',
   'story.studio.retouch.failed': 'Das Medium konnte nicht erstellt werden.',
   'story.studio.retouch.exporting': 'Export läuft…',
   'story.studio.timeline.enter': 'Kommt hier',

@@ -98,7 +98,7 @@ export type CommentUploadReport = (localId: string, fraction: number) => void;
 /** UN FICHIER ÉCARTÉ SE DIT (#9736) — jamais une sélection qui ne produit rien. */
 function refusalText(language: InterfaceLanguage, refusal: CommentFilesRefusal): string {
   if (refusal.reason === 'limit') return translate(language, 'comments.media.limit', { count: String(MAX_POST_MEDIA) });
-  return translate(language, refusal.reason === 'duplicate' ? 'comments.media.duplicate' : 'comments.media.unsupported', { name: refusal.name });
+  return translate(language, 'comments.media.unsupported', { name: refusal.name });
 }
 
 /** LE MICRO QUI NE S'OUVRE PAS SE DIT (#9318) — les libellés du composeur du fil. */

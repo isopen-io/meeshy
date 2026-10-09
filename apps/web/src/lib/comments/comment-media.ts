@@ -23,12 +23,11 @@ const COMMENT_MEDIA_KINDS: ReadonlySet<PendingAttachment['kind']> = new Set(['im
 /**
  * CE QU'UN COMMENTAIRE ACCEPTE, ET CE QU'IL ÉCARTE EN LE DISANT (#9736) — la
  * forme de `acceptPendingFiles` du message : un fichier qui n'est ni photo, ni
- * vidéo, ni son, la même pièce reprise, le surplus au-delà de la borne du
- * serveur. Ce qui est juste entre ; le premier écart est rendu avec sa cause.
+ * vidéo, ni son, et le surplus au-delà de la borne du serveur. Ce qui est
+ * juste entre ; le premier écart est rendu avec sa cause. Une pièce REPRISE
+ * n'entre pas deux fois et ne s'annonce pas : sa vignette est déjà là.
  */
-export type CommentFilesRefusal =
-  | { readonly reason: 'unsupported' | 'duplicate'; readonly name: string }
-  | { readonly reason: 'limit' };
+export type CommentFilesRefusal = { readonly reason: 'unsupported'; readonly name: string } | { readonly reason: 'limit' };
 
 export type CommentFilesAccepted = { readonly list: readonly PendingAttachment[]; readonly refusal?: CommentFilesRefusal };
 
@@ -38,11 +37,11 @@ export function acceptCommentFiles(list: readonly PendingAttachment[], files: re
   const known = new Set(list.map((piece) => fileSignature(piece.file)));
   const sorted = pieces
     .filter((piece) => COMMENT_MEDIA_KINDS.has(piece.kind))
-    .reduce<{ readonly kept: readonly PendingAttachment[]; readonly seen: ReadonlySet<string>; readonly duplicate?: string }>(
+    .reduce<{ readonly kept: readonly PendingAttachment[]; readonly seen: ReadonlySet<string> }>(
       (acc, piece) => {
         const signature = fileSignature(piece.file);
-        if (acc.seen.has(signature)) return { ...acc, duplicate: acc.duplicate ?? piece.name };
-        return { ...acc, kept: [...acc.kept, piece], seen: new Set([...acc.seen, signature]) };
+        if (acc.seen.has(signature)) return acc;
+        return { kept: [...acc.kept, piece], seen: new Set([...acc.seen, signature]) };
       },
       { kept: [], seen: known },
     );
@@ -50,7 +49,6 @@ export function acceptCommentFiles(list: readonly PendingAttachment[], files: re
   const bounded = all.slice(0, Math.max(MAX_POST_MEDIA, list.length));
   if (unsupported !== undefined) return { list: bounded, refusal: { reason: 'unsupported', name: unsupported.name } };
   if (bounded.length < all.length) return { list: bounded, refusal: { reason: 'limit' } };
-  if (sorted.duplicate !== undefined) return { list: bounded, refusal: { reason: 'duplicate', name: sorted.duplicate } };
   return { list: bounded };
 }
 

@@ -19,7 +19,6 @@ const deCommentRow = {
   'comments.media.upload_failed': 'Der Anhang konnte nicht gesendet werden.',
   'comments.media.unsupported': '„{name}“: Ein Kommentar kann nur Fotos, Videos und Audios enthalten.',
   'comments.media.limit': 'Höchstens {count} Anhänge pro Kommentar.',
-  'comments.media.duplicate': '„{name}“ ist diesem Kommentar bereits angehängt.',
   'comments.replies.show': 'Antworten ansehen ({count})',
   'comments.replies.hide': 'Antworten ausblenden',
   'comments.replies.more': 'Weitere Antworten ansehen',

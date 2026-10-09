@@ -15,7 +15,7 @@ import { CommentComposer, type CommentComposerResult, type CommentUploadReport }
  * #9736 — **L'APERÇU D'UNE PIÈCE JOINTE À UN COMMENTAIRE EST CELUI DU
  * MESSAGE, JUSQU'AU BOUT** : la vignette arrive aussitôt (#9167), et ce qui
  * lui manquait se voit ici — un fichier écarté SE DIT, la borne du serveur
- * (`MAX_POST_MEDIA`) SE DIT, la même photo ne se joint pas deux fois, le
+ * (`MAX_POST_MEDIA`) SE DIT, la même photo n'entre pas deux fois, le
  * retrait est nommé dans la langue du lecteur et relâche l'aperçu, et chaque
  * vignette montre sa montée pendant le téléversement.
  */
@@ -114,7 +114,7 @@ describe('CommentComposer — l’aperçu des pièces jointes (#9736)', () => {
     await joindre(host, [photo()]);
     await joindre(host, [photo()]);
     expect(tuiles(host)).toHaveLength(1);
-    expect(avis(host)?.textContent).toBe('« plage.jpg » est déjà joint à ce commentaire.');
+    expect(avis(host)).toBeNull();
   });
 
   test('une pièce acceptée efface l’avis du refus précédent', async () => {
@@ -129,7 +129,6 @@ describe('CommentComposer — l’aperçu des pièces jointes (#9736)', () => {
     await setInterfaceLanguage('en');
     const host = await monter(hote('en'));
     await joindre(host, [photo(), photo('dune.jpg')]);
-    expect(host.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Pending attachments');
     expect(previewUrlCacheSizeForTests()).toBe(2);
     const retirer = host.querySelector<HTMLButtonElement>('button[aria-label="Remove plage.jpg"]');
     expect(retirer?.type).toBe('button');

@@ -19,7 +19,6 @@ const enCommentRow = {
   'comments.media.upload_failed': 'The attachment couldn’t be sent.',
   'comments.media.unsupported': '“{name}”: a comment only carries photos, videos and sounds.',
   'comments.media.limit': 'No more than {count} attachments per comment.',
-  'comments.media.duplicate': '“{name}” is already attached to this comment.',
   'comments.replies.show': 'View replies ({count})',
   'comments.replies.hide': 'Hide replies',
   'comments.replies.more': 'View more replies',

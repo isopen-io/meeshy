@@ -19,7 +19,6 @@ const arCommentRow = {
   'comments.media.upload_failed': 'تعذّر إرسال المرفق.',
   'comments.media.unsupported': '«{name}»: التعليق لا يحمل سوى الصور والفيديوهات والأصوات.',
   'comments.media.limit': 'لا يمكن إرفاق أكثر من {count} مرفقات بالتعليق.',
-  'comments.media.duplicate': '«{name}» مرفق بهذا التعليق من قبل.',
   'comments.replies.show': 'عرض الردود ({count})',
   'comments.replies.hide': 'إخفاء الردود',
   'comments.replies.more': 'عرض المزيد من الردود',

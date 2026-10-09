@@ -19,7 +19,6 @@ const itCommentRow = {
   'comments.media.upload_failed': 'Non è stato possibile inviare l’allegato.',
   'comments.media.unsupported': '«{name}»: un commento può contenere solo foto, video e audio.',
   'comments.media.limit': 'Non più di {count} allegati per commento.',
-  'comments.media.duplicate': '«{name}» è già allegato a questo commento.',
   'comments.replies.show': 'Vedi risposte ({count})',
   'comments.replies.hide': 'Nascondi risposte',
   'comments.replies.more': 'Vedi altre risposte',

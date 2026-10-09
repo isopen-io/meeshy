@@ -19,7 +19,6 @@ const esCommentRow = {
   'comments.media.upload_failed': 'No se pudo enviar el archivo adjunto.',
   'comments.media.unsupported': '«{name}»: un comentario solo admite fotos, vídeos y sonidos.',
   'comments.media.limit': 'No más de {count} archivos adjuntos por comentario.',
-  'comments.media.duplicate': '«{name}» ya está adjunto a este comentario.',
   'comments.replies.show': 'Ver respuestas ({count})',
   'comments.replies.hide': 'Ocultar respuestas',
   'comments.replies.more': 'Ver más respuestas',

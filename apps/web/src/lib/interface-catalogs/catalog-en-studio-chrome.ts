@@ -39,7 +39,6 @@ const enStudioChrome = {
   'story.studio.retouch.cancel': 'Discard the edit',
   'composer.attachment.edit': 'Edit {name}',
   'composer.attachment.remove': 'Remove {name}',
-  'composer.attachment.pending': 'Pending attachments',
   'story.studio.retouch.failed': 'The media could not be rendered.',
   'story.studio.retouch.exporting': 'Exporting…',
   'story.studio.timeline.enter': 'Enters here',

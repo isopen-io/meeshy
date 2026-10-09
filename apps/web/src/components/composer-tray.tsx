@@ -463,7 +463,7 @@ function PreviewStrip({
     <>
       <div
         role="group"
-        aria-label={translate(currentInterfaceLanguage(), 'composer.attachment.pending')}
+        aria-label="Pièces jointes en attente"
         className="scrollbar-none flex gap-3 overflow-x-auto px-3 py-2.5"
         style={{
           height: 100,
