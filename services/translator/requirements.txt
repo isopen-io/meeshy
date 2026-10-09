@@ -59,6 +59,11 @@ numpy>=1.21.0,<1.24.0
 # `uv pip compile requirements.txt` (+ torch==2.6.0 en tête) avant de les élargir.
 accelerate==1.15.0
 datasets==5.0.1
+# pyarrow : tiré par datasets (>=21.0.0) sans borne haute, et il ne déclare pas numpy,
+# donc uv ne voit aucun conflit. 26.0.0 refuse NumPy 1.x à l'IMPORT (« pyarrow requires
+# NumPy 2.0 or newer ») et sklearn l'importe au démarrage → build translator KO (#9817).
+# 25.0.1 = dernière version compatible numpy<1.24. NE PAS bumper tant que numpy<2.
+pyarrow==25.0.1
 # sentencepiece: version gérée par ESPnet (0.1.97 pour espnet 202412). Aucun
 # wheel cp311/cp312 n'existe pour 0.1.97 sur PyPI (toutes plateformes confondues,
 # vérifié via l'API PyPI) : le build compile TOUJOURS depuis les sources sur
