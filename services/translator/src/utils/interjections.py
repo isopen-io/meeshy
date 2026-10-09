@@ -12,8 +12,7 @@ Chaque concept liste, par langue, ses formes reconnues ; la PREMIÈRE est celle 
 l'on sert. Une forme présente dans deux concepts appartient au premier.
 """
 
-import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 LEXICON: List[Dict[str, List[str]]] = [
     {  # bonjour
@@ -124,8 +123,13 @@ LEXICON: List[Dict[str, List[str]]] = [
     },
 ]
 
-_SHAPE = re.compile(r"^([¡¿]*)\s*(.*?)\s*([!?.…؟]*)$", re.DOTALL)
-_TRAILING_COMMA = re.compile(r"[,،]+$")
+# La forme d'une phrase se lit par des `strip`, jamais par une expression à
+# quantificateurs adjacents (`\s*(.*?)\s*([!?.]*)$` coûtait n² sur « !!!…!a ») ;
+# et une phrase plus longue que la plus longue forme du lexique n'en est pas une.
+OPENERS = "¡¿"
+CLOSING_MARKS = "!?.…؟"
+TRAILING_COMMAS = ",،"
+MAX_SENTENCE_LENGTH = 64
 
 
 def _base_language(language: str) -> str:
@@ -133,7 +137,14 @@ def _base_language(language: str) -> str:
 
 
 def _normalize(core: str) -> str:
-    return _TRAILING_COMMA.sub("", core.replace("’", "'").casefold()).strip()
+    return core.replace("’", "'").casefold().rstrip(TRAILING_COMMAS).strip()
+
+
+def _shape(sentence: str) -> Tuple[str, str]:
+    """(cœur, ponctuation finale) d'une phrase, ouvrants espagnols retirés."""
+    body = sentence.strip().lstrip(OPENERS).strip()
+    unpunctuated = body.rstrip(CLOSING_MARKS)
+    return unpunctuated.strip(), body[len(unpunctuated):]
 
 
 def _concept_of(core: str, language: str) -> Optional[Dict[str, List[str]]]:
@@ -168,12 +179,13 @@ def translate_interjection(sentence: str, source_language: str, target_language:
     """La traduction d'une phrase qui n'est qu'une interjection du lexique, sinon None."""
     source = _base_language(source_language)
     target = _base_language(target_language)
-    shape = _SHAPE.match(sentence.strip())
-    if source == target or shape is None or not shape.group(2):
+    if source == target or len(sentence) > MAX_SENTENCE_LENGTH:
         return None
-    core = shape.group(2)
+    core, punctuation = _shape(sentence)
+    if not core:
+        return None
     concept = _concept_of(core, source)
     if concept is None or target not in concept:
         return None
-    punctuation = shape.group(3).replace("؟", "?")
+    punctuation = punctuation.replace("؟", "?")
     return _punctuated(_cased(concept[target][0], core), punctuation, target)

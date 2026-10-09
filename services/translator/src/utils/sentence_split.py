@@ -22,13 +22,17 @@ ABBREVIATIONS = frozenset({
     "mme", "mlle", "mm", "vs", "cf", "ex", "env", "av", "bd", "dept", "approx", "tél", "tel",
 })
 
+# Toutes les expressions restent LINÉAIRES sur un texte hostile (témoin :
+# test_sentence_split_linear_time.py) : un quantificateur ne démarre qu'au DÉBUT
+# d'une suite (`(?<!\s)`, `(?<![…])`), jamais à chacune de ses positions — sans
+# quoi « 5 000 espaces puis une lettre » coûte n² retours arrière. Python 3.10
+# (CI) n'a ni quantificateur possessif ni groupe atomique.
 _GAP = re.compile(r"\s+")
-_CJK_GLUED = re.compile(f"[{CJK_TERMINATORS}]+(?=\\S)")
-_WORD_BEFORE_PERIOD = re.compile(r"(\w+)\.+$")
+_CJK_GLUED = re.compile(f"(?<![{CJK_TERMINATORS}])[{CJK_TERMINATORS}]+(?=[^\\s{CJK_TERMINATORS}])")
 _LEADING_DIALOGUE_DASH = re.compile(r"^[-–—]\s+")
-_SPACE_BEFORE_COMMA_OR_PERIOD = re.compile(r"\s+([,.])")
-_SPACE_BEFORE_EXCLAMATION = re.compile(r"\s+([!?]+)(?=\s|$|[\"'»”)\]])")
-_SPLIT_ENGLISH_CONTRACTION = re.compile(r"\s+('(?:s|re|ll|ve|d|m|t)\b|n't\b)", re.IGNORECASE)
+_SPACE_BEFORE_COMMA_OR_PERIOD = re.compile(r"(?<!\s)\s+([,.])")
+_SPACE_BEFORE_EXCLAMATION = re.compile(r"(?<!\s)\s+((?<![!?])[!?]+)(?=\s|$|[\"'»”)\]])")
+_SPLIT_ENGLISH_CONTRACTION = re.compile(r"(?<!\s)\s+('(?:s|re|ll|ve|d|m|t)\b|n't\b)", re.IGNORECASE)
 
 
 class SentencePiece(NamedTuple):
@@ -41,28 +45,47 @@ def _base_language(language: str) -> str:
     return (language or "").split("-")[0].lower()
 
 
-def _ends_sentence(before: str, after: str) -> bool:
-    tail = before.rstrip(CLOSERS)
-    if not tail:
+def _skip_back(text: str, index: int, floor: int, belongs) -> int:
+    while index > floor and belongs(text[index - 1]):
+        index -= 1
+    return index
+
+
+def _is_word_char(char: str) -> bool:
+    return char.isalnum() or char == "_"
+
+
+def _ends_sentence(text: str, gap_start: int, gap_end: int, floor: int) -> bool:
+    """La suite d'espaces `text[gap_start:gap_end]` clôt-elle une phrase ?
+
+    Lecture en arrière bornée par `floor` (la frontière précédente) : chaque
+    caractère du texte n'est relu qu'une fois sur tout le découpage."""
+    end = _skip_back(text, gap_start, floor, lambda char: char in CLOSERS)
+    if end == floor:
         return False
-    if tail[-1] in STRONG_TERMINATORS:
+    last = text[end - 1]
+    if last in STRONG_TERMINATORS:
         return True
-    if tail[-1] != "." or after[:1].islower():
+    if last != "." or text[gap_end].islower():
         return False
-    word = _WORD_BEFORE_PERIOD.search(tail)
-    if word is None:
+    word_end = _skip_back(text, end, floor, lambda char: char == ".")
+    word_start = _skip_back(text, word_end, floor, _is_word_char)
+    previous = text[word_start:word_end]
+    if not previous:
         return True
-    previous = word.group(1)
     return not (len(previous) == 1 and previous.isalpha()) and previous.lower() not in ABBREVIATIONS
 
 
 def _boundaries(text: str) -> List[tuple]:
-    gaps = [
-        match.span()
-        for match in _GAP.finditer(text)
-        if 0 < match.start() and match.end() < len(text)
-        and ("\n" in match.group() or _ends_sentence(text[:match.start()], text[match.end():]))
-    ]
+    gaps = []
+    floor = 0
+    for match in _GAP.finditer(text):
+        start, end = match.span()
+        if 0 < start and end < len(text) and (
+            "\n" in match.group() or _ends_sentence(text, start, end, floor)
+        ):
+            gaps.append((start, end))
+        floor = end
     glued = [(match.end(), match.end()) for match in _CJK_GLUED.finditer(text)]
     return sorted(gaps + glued)
 
