@@ -73,6 +73,9 @@ extension MeeshyComposerHost {
         // L'aiguillage est un NŒUD (#8387) : l'atelier et ses gestes sortent du
         // type de la pile, évalués dans leur propre cadre.
         surfaceNode
+        #if DEBUG
+        .onAppear { preterLeComposeurALaVitrine() }
+        #endif
         // document : c'est l'ÉVENTAIL (le plateau, en tête), seul sélecteur de
         // mode. Le média qui qualifie fait respirer son offre (`reelGate` lit
         // `documentComposesReel`), et choisir RÉEL/STORY route vers la scène.

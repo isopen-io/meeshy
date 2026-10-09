@@ -17,6 +17,7 @@ nonisolated enum VitrineInteraction: String, CaseIterable, Sendable {
     case emojiPost
     /// Un vocal part en commentaire d'un post, sa transcription puis sa traduction arrivent (`CommentPublisher`).
     case commentaireAudio
+    /// Une scène du composeur reçoit Mee et Meo par la feuille des stickers (`poseStickerChoice`).
     case sticker
 
     /// La célébration du jeu que l'interaction déclenche : la passerelle fictive la prépare.
@@ -35,7 +36,7 @@ extension VitrineScene {
         case .interactionEmoji: .emoji
         case .interactionEmojiPost: .emojiPost
         case .interactionCommentaireAudio: .commentaireAudio
-        case .interactionSticker: nil
+        case .interactionSticker: .sticker
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: nil
         }
     }
@@ -73,13 +74,10 @@ enum VitrineInteractions {
             case .emoji: await reagirAuMessage(scene, f)
             case .emojiPost: await reagirAuPost(scene)
             case .commentaireAudio: await commenterDeVive(scene, f)
-            case .sticker: break
+            case .sticker: await poserUnSticker(scene)
             }
         }
     }
-
-    static func photoDeLaScene(_ f: VitrineFixtures, dossier: URL) -> URL? { nil }
-    static var stickerDeLaScene: StickerSheetChoice? { nil }
 
     /// Le dernier message REÇU et écrit de la conversation : celui auquel on répond d'un émoji.
     static func messageAReagir(_ f: VitrineFixtures, conversationId: String) -> String? {

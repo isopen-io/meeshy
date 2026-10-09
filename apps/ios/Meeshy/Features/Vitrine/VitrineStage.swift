@@ -113,7 +113,9 @@ enum VitrineStage {
             NotificationCenter.default.post(name: Notification.Name("pushNavigateToRoute"), object: "progression")
         case .interactionCommentaireAudio, .interactionEmojiPost:
             VitrineInteractions.ouvrirLePost(f)
-        case .lien, .interactionSticker:
+        case .interactionSticker:
+            VitrineInteractions.ouvrirLeComposeur(f)
+        case .lien:
             break
         }
     }

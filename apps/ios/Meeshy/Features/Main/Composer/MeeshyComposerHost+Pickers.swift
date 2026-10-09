@@ -159,10 +159,29 @@ extension MeeshyComposerHost {
     /// porte vient de poser.
     var stickerPickerSheet: some View {
         MeeshyStickerSheet(destination: StickerSheetDestination(diesCut: false) { choice in
-            presentedPortal = nil
-            poseStickerChoice(choice)
+            choisirDansLesStickers(choice)
         })
+        #if DEBUG
+        .onAppear { VitrineRendu.shared.feuilleDeStickersAffichee(choisir: choisirDansLesStickers) }
+        #endif
     }
+
+    /// Un choix de la feuille : elle se referme, il se pose.
+    func choisirDansLesStickers(_ choice: StickerSheetChoice) {
+        presentedPortal = nil
+        poseStickerChoice(choice)
+    }
+
+    #if DEBUG
+    /// La vitrine (#9810) : sa photo entre comme le choix de la photothèque À L'OUVERTURE — elle fonde la scène, avant
+    /// que la feuille ne s'ouvre d'office —, et la porte du sticker s'ouvre par le rail.
+    func preterLeComposeurALaVitrine() {
+        let photo = VitrineRendu.shared.composeurAffiche { handleRailDoor(.sticker) }
+        guard let photo else { return }
+        openingPickFoundsScenes = true
+        routePickedMedia([ComposerDocumentMediaFactory.media(url: photo, declaredMimeType: "image/jpeg")])
+    }
+    #endif
 
     /// Pose le choix, puis ouvre son édition en place. Un sticker de pack
     /// attend ses octets (cache des images) : la feuille est déjà refermée, la

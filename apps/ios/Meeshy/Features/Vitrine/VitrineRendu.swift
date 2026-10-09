@@ -42,7 +42,7 @@ extension VitrineScene {
         case .progression, .interactionFrappe: return appareil == .ipad ? [.progression, .fil] : [.progression]
         case .lien: return [.lien]
         case .interactionCommentaireAudio: return appareil == .ipad ? [.composeurDeCommentaire, .fil] : [.composeurDeCommentaire]
-        case .interactionSticker: return []
+        case .interactionSticker: return [.composeur]
         case .interactionEmojiPost: return appareil == .ipad ? [.paletteDeReactionsPrete, .fil] : [.paletteDeReactionsPrete]
         case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
             let fiche = VitrineEvenement.fiche(celebration?.concept ?? .level)
@@ -135,12 +135,28 @@ final class VitrineRendu {
         signaler(.paletteDeReactions)
     }
 
+    /// La photo que le composeur reçoit à l'ouverture, comme le choix de la photothèque (#9810). Remise UNE fois.
     var photoDuComposeur: URL?
+    /// La porte du sticker du rail (#9810).
     private(set) var ouvrirLesStickers: (() -> Void)?
+    /// Le choix d'un sticker dans la feuille ouverte (#9810).
     private(set) var choisirUnSticker: ((StickerSheetChoice) -> Void)?
 
-    func composeurAffiche(ouvrirLesStickers: @escaping () -> Void) -> URL? { nil }
-    func feuilleDeStickersAffichee(choisir: @escaping (StickerSheetChoice) -> Void) {}
+    /// Le composeur est monté : il prête sa porte du sticker, et reçoit la photo d'ouverture s'il y en a une.
+    func composeurAffiche(ouvrirLesStickers: @escaping () -> Void) -> URL? {
+        guard actif else { return nil }
+        self.ouvrirLesStickers = ouvrirLesStickers
+        let photo = photoDuComposeur
+        photoDuComposeur = nil
+        signaler(.composeur)
+        return photo
+    }
+
+    func feuilleDeStickersAffichee(choisir: @escaping (StickerSheetChoice) -> Void) {
+        guard actif else { return }
+        choisirUnSticker = choisir
+        signaler(.feuilleDeStickers)
+    }
 
     func attendre(_ attendus: Set<VitrineEvenement>) async {
         guard !attendus.isSubset(of: observes) else { return }
