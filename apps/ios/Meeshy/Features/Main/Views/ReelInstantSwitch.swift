@@ -27,9 +27,14 @@ nonisolated struct ReelPlaybackElection: Equatable {
         self.activeId = activeId
     }
 
-    mutating func majority(_ id: String) {}
+    mutating func majority(_ id: String) {
+        activeId = id
+    }
 
-    mutating func settled(_ id: String?) {}
+    mutating func settled(_ id: String?) {
+        guard let id else { return }
+        activeId = id
+    }
 }
 
 // MARK: - Quelle image : la surface vidéo
@@ -48,7 +53,8 @@ nonisolated enum ReelVideoDisplay {
         enginePlayer: Player?,
         pooledPlayer: Player?
     ) -> Player? {
-        nil
+        guard engineShowsThis, let enginePlayer else { return pooledPlayer }
+        return enginePlayer
     }
 }
 
@@ -67,12 +73,44 @@ enum ReelAudioPrefetch {
     /// son : quelques centaines de Ko, critiques au premier instant. Au-delà, la
     /// bande passante revient aux vidéos proches.
     nonisolated static func prefetches(tier: ReelPreloadWindow.Tier) -> Bool {
-        false
+        switch tier {
+        case .decode, .mount: return true
+        case .play, .prime, .idle: return false
+        }
     }
 
     /// Les adresses audio que la page de `reel` jouera, dans l'ordre du Prisme.
     static func urls(for reel: FeedPost, preferredLanguages: [String]) -> [URL] {
-        []
+        if let media = reel.reelPrincipalAudioMedia {
+            return [playedTrack(of: media, originalLanguage: reel.originalLanguage,
+                                preferredLanguages: preferredLanguages)]
+                .compactMap(MeeshyConfig.resolveMediaURL)
+        }
+        guard let effects = reel.storyEffects else { return [] }
+        let tracks = effects.resolvedForegroundAudioPlayers + [effects.resolvedBackgroundAudio].compactMap { $0 }
+        let media = reel.media
+        let resolver: (String) -> URL? = { id in
+            media.first { $0.id == id }?.url.flatMap(MeeshyConfig.resolveMediaURL)
+        }
+        return tracks
+            .compactMap { StoryAudioSourceResolver.remoteURL(for: $0, preferredLanguages: preferredLanguages, resolver: resolver) }
+            .filter { !$0.isFileURL }
+    }
+
+    /// La piste que `ReelPageView.startActiveAudioIfNeeded` jouera : le TTS de
+    /// la langue que le Prisme élit, sinon l'original — la même résolution que
+    /// `autoSelectPreferredAudioLanguage` + `resolvedAudioUrl(for:)`.
+    private static func playedTrack(of media: FeedMedia, originalLanguage: String?,
+                                    preferredLanguages: [String]) -> String {
+        let elected = ReelAudioLanguageResolver.preferredAudioLanguage(
+            original: media.transcription?.language ?? originalLanguage,
+            preferredLanguages: preferredLanguages,
+            availableLanguages: media.translatedAudios.map(\.targetLanguage)
+        )?.lowercased()
+        let translated = elected.flatMap { lang in
+            media.translatedAudios.first { $0.targetLanguage.lowercased() == lang }
+        }
+        return translated?.url ?? media.toMessageAttachment().fileUrl
     }
 }
 
@@ -87,9 +125,14 @@ nonisolated struct ReelSwitchMeter: Equatable {
     private(set) var pendingId: String?
     private var electedAt: TimeInterval = 0
 
-    mutating func elect(_ id: String, at seconds: TimeInterval) {}
+    mutating func elect(_ id: String, at seconds: TimeInterval) {
+        pendingId = id
+        electedAt = seconds
+    }
 
     mutating func mediaStarted(_ id: String, at seconds: TimeInterval) -> Int? {
-        nil
+        guard pendingId == id else { return nil }
+        pendingId = nil
+        return Int(((seconds - electedAt) * 1000).rounded())
     }
 }

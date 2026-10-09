@@ -309,6 +309,7 @@ public final class StoryMediaLoader {
         guard let player = playerCache[key] else { return nil }
         playerCache.removeValue(forKey: key)
         playerCacheOrder.removeAll { $0 == key }
+        announcePoolChange()
         return player
     }
 
@@ -319,7 +320,7 @@ public final class StoryMediaLoader {
     /// moteur partagé l'adoptera ensuite par `cachedPlayer(for:)` — la même
     /// instance, donc la même surface, sans nouvelle image à attendre.
     public func peekCachedPlayer(for url: URL) -> AVPlayer? {
-        nil
+        playerCache[url.absoluteString]
     }
 
     /// Posté quand le pool gagne ou perd un lecteur : une surface qui affiche
@@ -331,8 +332,10 @@ public final class StoryMediaLoader {
         for (_, player) in playerCache {
             Self.release(player)
         }
+        let hadPlayers = !playerCache.isEmpty
         playerCache.removeAll()
         playerCacheOrder.removeAll()
+        if hadPlayers { announcePoolChange() }
     }
 
     private func insert(_ player: AVPlayer, for key: String) {
@@ -345,6 +348,11 @@ public final class StoryMediaLoader {
                 Self.release(evicted)
             }
         }
+        announcePoolChange()
+    }
+
+    private func announcePoolChange() {
+        NotificationCenter.default.post(name: Self.poolDidChange, object: self)
     }
 
     private static func release(_ player: AVPlayer) {

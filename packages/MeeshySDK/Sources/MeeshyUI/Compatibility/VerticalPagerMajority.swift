@@ -20,6 +20,8 @@ public enum VerticalPagerMajority {
     ///     la page (`GeometryProxy.bounds(of: .scrollView(axis: .vertical))`),
     ///     ou `nil` quand la page n'est dans aucun défilement.
     public nonisolated static func isMajorityVisible(pageHeight: CGFloat, viewport: CGRect?) -> Bool {
-        false
+        guard let viewport, pageHeight > 0 else { return false }
+        let visible = max(0, min(pageHeight, viewport.maxY) - max(0, viewport.minY))
+        return visible * 2 > pageHeight
     }
 }

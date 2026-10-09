@@ -318,7 +318,7 @@ public final class ReaderAudioMixer {
     /// Un moteur qui tourne déjà n'a rien à préparer ; un moteur sans clip non
     /// plus — le préparer allouerait une sortie qui ne jouera rien.
     nonisolated static func shouldPrepareEngine(isRunning: Bool, hasClips: Bool) -> Bool {
-        false
+        !isRunning && hasClips
     }
 
     public func stop() {
