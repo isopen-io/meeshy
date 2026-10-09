@@ -1,4 +1,6 @@
 import Foundation
+import QuartzCore
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -134,5 +136,47 @@ nonisolated struct ReelSwitchMeter: Equatable {
         guard pendingId == id else { return nil }
         pendingId = nil
         return Int(((seconds - electedAt) * 1000).rounded())
+    }
+}
+
+// MARK: - La mesure sur l'appareil
+
+/// **Les signposts du passage de réel à réel** (#9837), à lire dans
+/// Instruments (« Points of Interest » / « os_signpost », sous-système
+/// `me.meeshy.app`, catégorie `ReelSwitch`) ou dans le journal :
+/// `log stream --predicate 'subsystem == "me.meeshy.app" AND category == "reels-perf"'`.
+///
+/// - intervalle `ReelSwitch` : de l'ÉLECTION du réel (mi-page pendant le geste,
+///   geste posé, ou ouverture) à son premier média qui joue — vidéo dont le
+///   lecteur avance, horloge de scène qui avance, piste audio qui joue ;
+/// - événement `ReelSettled` : le paging s'est posé. L'écart avec le début de
+///   l'intervalle est ce que l'élection à mi-page fait gagner.
+@MainActor
+enum ReelSwitchSignpost {
+    private static let signposter = OSSignposter(subsystem: "me.meeshy.app", category: "ReelSwitch")
+    private static let log = Logger(subsystem: "me.meeshy.app", category: "reels-perf")
+    private static var meter = ReelSwitchMeter()
+    private static var interval: OSSignpostIntervalState?
+
+    static func elected(_ id: String, trigger: String) {
+        if let interval {
+            signposter.endInterval("ReelSwitch", interval, "abandoned")
+        }
+        meter.elect(id, at: CACurrentMediaTime())
+        interval = signposter.beginInterval("ReelSwitch", id: signposter.makeSignpostID(),
+                                            "\(trigger, privacy: .public) \(id, privacy: .public)")
+    }
+
+    static func settled(_ id: String) {
+        signposter.emitEvent("ReelSettled", "\(id, privacy: .public)")
+    }
+
+    static func mediaStarted(_ id: String, kind: String) {
+        guard let ms = meter.mediaStarted(id, at: CACurrentMediaTime()) else { return }
+        if let interval {
+            signposter.endInterval("ReelSwitch", interval, "\(kind, privacy: .public) \(ms) ms")
+            self.interval = nil
+        }
+        log.info("reel-switch \(kind, privacy: .public) \(ms, privacy: .public) ms id=\(id, privacy: .public)")
     }
 }

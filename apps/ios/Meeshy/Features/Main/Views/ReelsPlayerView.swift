@@ -79,6 +79,9 @@ struct ReelsPlayerView: View {
     @State private var preloader = ReelPagerPreloader()
     @State private var preloadWindow = ReelPreloadWindow.Window(
         ahead: ReelPreloadWindow.minRadius, behind: ReelPreloadWindow.minRadius)
+    /// Le réel qui JOUE (#9837) : élu dès qu'il passe la moitié de l'écran,
+    /// pendant le geste — `currentId` ne bascule qu'une fois le paging posé.
+    @State private var election = ReelPlaybackElection()
 
     var body: some View {
         ZStack {
@@ -102,6 +105,7 @@ struct ReelsPlayerView: View {
         .offset(x: ReadingDirection.readingDelta(max(0, edgeDrag), layoutDirection: layoutDirection))
         .task {
             viewModel.seed(posts: seedPosts, startId: startId)
+            elect(trigger: "seed") { $0.settled(viewModel.currentId) }
             // Le réel affiché est CONSOMMÉ : ses notifications (nouveau réel,
             // commentaires, réactions) ne doivent plus apparaître non lues, et
             // `activePostId` fait naître consommées celles qui arrivent pendant
@@ -135,6 +139,8 @@ struct ReelsPlayerView: View {
             // Never carry immersive-hidden chrome into the next reel — the scrub
             // bar / action rail / info must reappear when you page.
             if chromeHidden { chromeHidden = false }
+            elect(trigger: "settled") { $0.settled(newId) }
+            if let newId { ReelSwitchSignpost.settled(newId) }
             if newId != nil { HapticFeedback.light() }
             // Consommation des notifications du réel affiché (voir .task) —
             // fermeture conditionnelle à l'identité puis ouverture du suivant.
@@ -288,10 +294,15 @@ struct ReelsPlayerView: View {
 
     private var pager: some View {
         let activeIndex = viewModel.reels.firstIndex { $0.id == viewModel.currentId }
-        return AdaptiveVerticalPager(items: viewModel.reels, currentPageID: $viewModel.currentId) { index, reel in
+        let playingId = election.activeId ?? viewModel.currentId
+        return AdaptiveVerticalPager(
+            items: viewModel.reels,
+            currentPageID: $viewModel.currentId,
+            onMajorityPage: { id in elect(trigger: "majority") { $0.majority(id) } }
+        ) { index, reel in
             ReelPageView(
                 reel: reel,
-                isActive: viewModel.currentId == reel.id,
+                isActive: playingId == reel.id,
                 revealCompleted: revealCompleted,
                 viewModel: viewModel,
                 chromeHidden: $chromeHidden,
@@ -325,6 +336,15 @@ struct ReelsPlayerView: View {
             if preloadWindow != window { preloadWindow = window }
             await preloader.prepare(reels: reels, activeIndex: activeIndex, window: window)
         }
+    }
+
+    /// Applique une élection et ouvre la mesure du passage quand le réel qui
+    /// joue change (#9837).
+    private func elect(trigger: String, _ apply: (inout ReelPlaybackElection) -> Void) {
+        let before = election.activeId
+        apply(&election)
+        guard let id = election.activeId, id != before else { return }
+        ReelSwitchSignpost.elected(id, trigger: trigger)
     }
 
     /// Une page hors de la fenêtre de préchargement ne télécharge pas d'elle-même (#9702).
@@ -702,9 +722,20 @@ struct ReelPageView: View {
         // video engine is left alone — the incoming video reel drives its own).
         // Becoming active (re)starts this reel's audio through the SAME open-
         // autostart gate `ReelVideoView.drive()` uses for the video engine.
+        //
+        // **La page quittée n'arrête que SON moteur** (#9837). L'élection tombe
+        // désormais pendant le geste, et l'ordre des deux `onChange(isActive)`
+        // frères n'est pas garanti : `stopAllAudio()` arrêtait aussi le mixer de
+        // la scène qui ARRIVE (un lecteur externe), quand elle avait repris la
+        // première — le réel suivant restait muet. La vidéo et la scène quittées
+        // se mettent en pause par leur propre `isActive`.
         .adaptiveOnChange(of: isActive) { _, active in
             if active { startActiveAudioIfNeeded() }
-            else { PlaybackCoordinator.shared.stopAllAudio() }
+            else { audioPlayer.stop() }
+        }
+        .onReceive(audioBox.player.$isPlaying.removeDuplicates()) { playing in
+            guard playing, isActive else { return }
+            ReelSwitchSignpost.mediaStarted(reel.id, kind: "audio")
         }
         // The first reel holds on its poster (audio paused) until the liquid
         // reveal completes; start audio when the disc reaches full screen —
@@ -891,7 +922,7 @@ struct ReelPageView: View {
             switch media.type {
             case .video:
                 ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted,
-                              mayDownload: isActive || isWithinPreloadWindow)
+                              mayDownload: isActive || isWithinPreloadWindow, reelId: reel.id)
             case .image:
                 ReelImageView(reel: reel) { visibleCarouselMediaId = $0 }
             case .audio:
