@@ -44,19 +44,25 @@ async function buildApp(prisma: unknown, preValidation: (request: unknown) => Pr
   return app;
 }
 
-function soundPrisma(row: Record<string, unknown> | null) {
+function soundPrisma(initial: Record<string, unknown> | null) {
+  let row = initial;
   return {
     sound: {
-      findUnique: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue(row),
+      findUnique: jest.fn<(args: unknown) => Promise<unknown>>().mockImplementation(async () => row),
       findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([]),
       update: jest.fn<(args: { data: Record<string, unknown> }) => Promise<unknown>>()
         .mockImplementation(async (args) => ({ ...(row ?? {}), ...args.data })),
+      updateMany: jest.fn<(args: { where: Record<string, unknown>; data: Record<string, unknown> }) => Promise<{ count: number }>>()
+        .mockImplementation(async (args) => {
+          if (row && !row['deletedAt']) row = { ...row, ...args.data };
+          return { count: 1 };
+        }),
     },
     soundUsage: {
       findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([
-        { soundId: ID, postId: 'post-public-1' },
-        { soundId: ID, postId: 'post-public-1' },
-        { soundId: ID, postId: 'post-public-2' },
+        { soundId: ID, postId: 'post-public-1', createdAt: new Date('2026-10-03T10:00:00.000Z') },
+        { soundId: ID, postId: 'post-public-1', createdAt: new Date('2026-10-02T10:00:00.000Z') },
+        { soundId: ID, postId: 'post-public-2', createdAt: new Date('2026-10-01T10:00:00.000Z') },
       ]),
     },
     post: {
@@ -77,9 +83,8 @@ describe('DELETE /sounds/:id — autorisation', () => {
       .inject({ method: 'DELETE', url: `/sounds/${ID}` });
 
     expect(res.statusCode).toBe(200);
-    expect(prisma.sound.update).toHaveBeenCalledTimes(1);
-    const call = prisma.sound.update.mock.calls[0][0] as { where: unknown; data: Record<string, unknown> };
-    expect(call.where).toEqual({ id: ID });
+    expect(prisma.sound.updateMany).toHaveBeenCalledTimes(1);
+    const call = prisma.sound.updateMany.mock.calls[0][0] as { data: Record<string, unknown> };
     expect(call.data['deletedAt']).toBeInstanceOf(Date);
     expect(Object.keys(call.data)).toEqual(['deletedAt']);
   });
@@ -89,7 +94,7 @@ describe('DELETE /sounds/:id — autorisation', () => {
     const res = await (await buildApp(prisma, auth('moderation-1', role)))
       .inject({ method: 'DELETE', url: `/sounds/${ID}` });
     expect(res.statusCode).toBe(200);
-    expect(prisma.sound.update).toHaveBeenCalledTimes(1);
+    expect(prisma.sound.updateMany).toHaveBeenCalledTimes(1);
   });
 
   it.each<Role>(['USER', 'MODERATOR', 'AUDIT', 'ANALYST'])(
@@ -101,6 +106,7 @@ describe('DELETE /sounds/:id — autorisation', () => {
       expect(res.statusCode).toBe(403);
       expect(res.json().code).toBe('NOT_SOUND_OWNER');
       expect(prisma.sound.update).not.toHaveBeenCalled();
+      expect(prisma.sound.updateMany).not.toHaveBeenCalled();
     },
   );
 
@@ -167,6 +173,7 @@ describe('DELETE /sounds/:id — autorisation', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data.deletedAt).toBe(first.toISOString());
     expect(prisma.sound.update).not.toHaveBeenCalled();
+    expect(prisma.sound.updateMany).not.toHaveBeenCalled();
   });
 
   it('test_deleteSound_alreadyDeletedByAnother_stillRefusesTheIntruder', async () => {
@@ -235,6 +242,39 @@ describe('Un son retiré quitte les listes et sa page', () => {
     const res = await (await buildApp(prisma, auth('other-1', 'USER')))
       .inject({ method: 'GET', url: `/sounds/${ID}` });
     expect(res.statusCode).toBe(403);
+  });
+
+  /**
+   * Vide, pas 410 : un son INCONNU rend déjà une page vide sur cette route, et
+   * elle ne doit être l'oracle d'existence de rien (#4146).
+   */
+  it('test_soundPostsPage_deletedSound_servesTheEmptyPageOfAnUnknownSound', async () => {
+    const prisma = soundPrisma({ id: ID, deletedAt: new Date() });
+    const res = await (await buildApp(prisma, auth('other-1', 'USER')))
+      .inject({ method: 'GET', url: `/sounds/${ID}/posts` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual([]);
+    expect(res.json().pagination).toEqual({ limit: 20, hasMore: false, nextCursor: null });
+    expect(prisma.soundUsage.findMany).not.toHaveBeenCalled();
+  });
+
+  it('test_soundPostsPage_liveSound_isStillServed', async () => {
+    const prisma = soundPrisma({ id: ID, deletedAt: null });
+    const res = await (await buildApp(prisma, auth('other-1', 'USER')))
+      .inject({ method: 'GET', url: `/sounds/${ID}/posts` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toHaveLength(2);
+  });
+
+  /**
+   * Deux retraits simultanés : le second ne doit pas réécrire la date du
+   * premier. L'écriture est CONDITIONNÉE à l'absence de `deletedAt`.
+   */
+  it('test_deleteSound_writeIsConditionalOnNotAlreadyDeleted', async () => {
+    const prisma = soundPrisma(ownSound);
+    await (await buildApp(prisma, auth('author-1', 'USER'))).inject({ method: 'DELETE', url: `/sounds/${ID}` });
+    const call = (prisma.sound.updateMany.mock.calls[0][0]) as { where: Record<string, unknown> };
+    expect(call.where).toEqual({ id: ID, ...NOT_DELETED });
   });
 
   it('test_patchSound_deletedSound_isRefusedAndWritesNothing', async () => {

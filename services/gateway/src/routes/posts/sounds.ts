@@ -125,6 +125,9 @@ export async function chargerPostsParSon(
   params: { cursor?: string; limit: number },
 ): Promise<SoundPostsFeedResult> {
   const { cursor, limit } = params;
+  if (await sonRetireDeLaBibliotheque(prisma, soundId)) {
+    return { data: [], pagination: { limit, hasMore: false, nextCursor: null } };
+  }
 
   // `SoundUsage.postId` est une chaîne nue, sans relation Prisma vers `Post` :
   // la jointure est impossible, d'où ces deux temps.
@@ -224,6 +227,26 @@ export async function chargerPostsParSon(
     data: page.map((s) => s.post),
     pagination: { limit, hasMore, nextCursor },
   };
+}
+
+/**
+ * La page d'un son RETIRÉ de la bibliothèque (#9848) se vide sur ses DEUX
+ * adresses (`/sounds/:id/posts` et `/social/posts?scope=sound`). Vide, et pas
+ * 410 : un son inconnu y rend déjà une page vide, et cette page ne doit être
+ * l'oracle d'existence de rien (#4146). Les posts eux-mêmes restent lisibles
+ * là où ils vivent.
+ *
+ * Ouvert sur l'échec : cette lecture ne garde aucun secret (la page ne sert que
+ * des posts PUBLICS), elle n'est qu'une cohérence — une base qui ne répond pas
+ * ne doit pas faire tomber la page d'un son vivant.
+ */
+async function sonRetireDeLaBibliotheque(prisma: PrismaClient, soundId: string): Promise<boolean> {
+  try {
+    const sound = await prisma.sound.findUnique({ where: { id: soundId }, select: { deletedAt: true } });
+    return Boolean(sound?.deletedAt);
+  } catch {
+    return false;
+  }
 }
 
 // #4346 — `/sounds/:id/posts` devient un ALIAS déprécié de `scope=sound`. Le
@@ -393,9 +416,16 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
       return sendForbidden(reply, 'Not the sound owner', { code: 'NOT_SOUND_OWNER' });
     }
 
-    const deletedAt = sound.deletedAt ?? (await prisma.sound.update({
-      where: { id: request.params.id }, data: { deletedAt: new Date() }, select: { deletedAt: true },
-    })).deletedAt;
+    // Écriture CONDITIONNÉE à l'absence de `deletedAt` : deux retraits
+    // simultanés ne réécrivent pas la date du premier. On relit ensuite la date
+    // qui a gagné.
+    const deletedAt = sound.deletedAt ?? await (async () => {
+      await prisma.sound.updateMany({
+        where: { id: request.params.id, ...NOT_DELETED_SOUND_WHERE }, data: { deletedAt: new Date() },
+      });
+      const after = await prisma.sound.findUnique({ where: { id: request.params.id }, select: { deletedAt: true } });
+      return after?.deletedAt ?? null;
+    })();
 
     const stats = await loadSoundStats(prisma, [request.params.id]);
     return sendSuccess(reply, {
