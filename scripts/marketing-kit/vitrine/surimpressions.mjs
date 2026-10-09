@@ -1,6 +1,6 @@
 // Les images que le montage pose sur les prises (#9807, #9811), rendues par Chromium HORS RÉSEAU avec le
 // socle du kit (jetons --ios-* générés depuis MeeshyColors.swift, polices du kit, arabe en RTL) :
-// - la LÉGENDE d'un plan : PNG transparent au format de l'aperçu, un voile indigo en tête et le texte ;
+// - le CADRE d'un plan : fond de la marque, bande indigo pleine portant la légende, ombre de l'écran ;
 // - la CARTE DE FIN : logo réel de l'app, devise, mention du compte requis ;
 // - le FOND d'un visuel créatif : dégradé de la marque, titre, sous-titre et cadres des cartes, que
 //   montage.mjs remplit des images clés ou des clips.
@@ -26,15 +26,19 @@ const CSS = `
 html, body { background: transparent; }
 .ap { position: relative; overflow: hidden; color: #fff; font-family: var(--kit-font); }
 [lang='ar'] .ap, .ap[lang='ar'] { font-family: var(--kit-font-arabic), var(--kit-font); }
-.ap-voile { position: absolute; inset: 0 0 auto 0; height: 34%;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--ios-indigo-950) 82%, transparent) 0%,
-    color-mix(in srgb, var(--ios-indigo-950) 52%, transparent) 50%, transparent 100%); }
-.ap-texte { position: absolute; inset-inline: 7%; top: var(--ap-haut); margin: 0; text-align: center;
-  font-size: var(--ap-corps); font-weight: 850; line-height: 1.06; letter-spacing: -0.02em;
-  text-wrap: balance; text-shadow: 0 2px 14px color-mix(in srgb, var(--ios-indigo-950) 55%, transparent); }
-.ap[lang='ar'] .ap-texte, .ap[lang='ar'] .ap-titre { line-height: 1.3; font-weight: 800; letter-spacing: 0; }
-.ap-texte .l1, .ap-titre .l1 { display: block; }
-.ap-texte .l2, .ap-titre .l2 { display: block; color: var(--ios-indigo-100); }
+.ap[lang='ar'] .ap-titre { line-height: 1.3; font-weight: 800; letter-spacing: 0; }
+.ap-titre .l1 { display: block; }
+.ap-titre .l2 { display: block; color: var(--ios-indigo-100); }
+.ap-plan { background: radial-gradient(90% 50% at 50% 100%, color-mix(in srgb, var(--ios-purple-500) 45%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--ios-indigo-700) 0%, var(--ios-indigo-900) 100%); }
+.ap-bande { position: absolute; inset: 0 0 auto 0; display: flex; align-items: center; justify-content: center; padding-inline: 7%;
+  background: var(--ios-indigo-600); box-shadow: 0 1px 0 color-mix(in srgb, white 14%, transparent); }
+.ap-texte-bande { margin: 0; width: 100%; text-align: center; font-weight: 850; line-height: 1.08; letter-spacing: -0.02em; text-wrap: balance; }
+.ap[lang='ar'] .ap-texte-bande { line-height: 1.3; font-weight: 800; letter-spacing: 0; }
+.ap-texte-bande .l1 { display: block; }
+.ap-texte-bande .l2 { display: block; color: var(--ios-indigo-100); }
+.ap-ombre { position: absolute; background: var(--ios-indigo-950);
+  box-shadow: 0 18px 50px color-mix(in srgb, #0f0c29 60%, transparent), 0 0 0 1px color-mix(in srgb, white 16%, transparent); }
 .ap-fin { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4%;
   background: radial-gradient(120% 60% at 50% 0%, color-mix(in srgb, var(--ios-indigo-400) 70%, transparent), transparent 70%),
     linear-gradient(168deg, var(--ios-indigo-500) 0%, var(--ios-indigo-700) 48%, var(--ios-purple-700) 100%); }
@@ -82,16 +86,20 @@ const lignes = (texte, lang) => {
 
 const css = (n) => n / ECHELLE
 
-// La légende d'un plan, au format de l'aperçu (pixels de sortie).
-export const pageLegende = ({ texte, lang, largeur, hauteur }) => {
+// Le cadre d'un plan d'aperçu, opaque, au format de sortie : la BANDE indigo pleine qui porte la légende, le
+// fond de la marque, et l'ombre de l'écran que le montage pose dans `disposition.ecran` (dispositionApercu).
+export const pageCadreApercu = ({ texte, lang, disposition }) => {
+  const { largeur, hauteur, bande, ecran } = disposition
   const l = css(largeur)
   const h = css(hauteur)
-  const corps = Math.round(l * 0.072)
-  const corpsHtml = html`<div class="ap" lang="${lang}" dir="${directionOf(lang)}" style="width:${l}px;height:${h}px;--ap-corps:${corps}px;--ap-haut:${Math.round(h * 0.075)}px">
-    <div class="ap-voile"></div>
-    <h1 class="ap-texte" data-ajuste data-max="${Math.round(h * 0.2)}">${lignes(texte, lang)}</h1>
+  const hb = css(bande)
+  const corpsHtml = html`<div class="ap ap-plan" lang="${lang}" dir="${directionOf(lang)}" style="width:${l}px;height:${h}px">
+    <div class="ap-bande" style="height:${hb}px">
+      <h1 class="ap-texte-bande" data-ajuste data-max="${Math.round(hb * 0.8)}" style="font-size:${Math.round(l * 0.07)}px">${lignes(texte, lang)}</h1>
+    </div>
+    <div class="ap-ombre" style="left:${css(ecran.x)}px;top:${css(ecran.y)}px;width:${css(ecran.largeur)}px;height:${css(ecran.hauteur)}px;border-radius:${css(ecran.rayon)}px"></div>
   </div>`
-  return { html: documentHtml({ lang, corps: corpsHtml, largeur: l, hauteur: h }), largeur, hauteur, transparent: true }
+  return { html: documentHtml({ lang, corps: corpsHtml, largeur: l, hauteur: h }), largeur, hauteur, transparent: false }
 }
 
 // La carte de fin, plein cadre, opaque.
