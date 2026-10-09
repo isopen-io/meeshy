@@ -53,6 +53,10 @@ final class FakeSoundLibraryService: SoundLibraryServiceProviding, @unchecked Se
         return removeResult
     }
 
+    /// Vrai une fois `remove` suspendu sur sa porte — avant, `releaseRemoval()`
+    /// n'aurait rien à relâcher et le témoin resterait suspendu.
+    var isRemovalWaiting: Bool { removalGate != nil }
+
     func releaseRemoval() { removalGate?.resume(); removalGate = nil }
 }
 

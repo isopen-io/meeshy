@@ -45,7 +45,7 @@ final class SoundLibraryRemovalModelTests: XCTestCase {
         model.beginRemove(target)
 
         let task = Task { await model.confirmRemove(target) }
-        while service.removeCalls.isEmpty { await Task.yield() }
+        while !service.isRemovalWaiting { await Task.yield() }
 
         XCTAssertEqual(model.sounds.map(\.id), ["a", "c"], "la ligne part au geste, pas à la réponse")
         XCTAssertNil(model.removing)
