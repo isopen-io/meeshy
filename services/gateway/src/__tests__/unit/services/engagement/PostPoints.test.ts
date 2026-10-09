@@ -215,9 +215,10 @@ describe('le crédit de publication', () => {
   it('qui n’est pas un contenu lourd — donc sans mémoire de reprise — entre dans le cumul', async () => {
     const { db, service } = setup();
 
-    await publish(service, 'friends');
+    // Depuis #9667 toute publication visible est lourde (100 au moins) : l'humeur « amis » (10) ne l'est pas.
+    await service.recordActivity(AUTHOR, 'content.status', { postId: POST, targetId: POST, variant: 'friends' });
 
-    const publication = credited(db, AUTHOR, ['content.post']);
+    const publication = credited(db, AUTHOR, ['content.status']);
     expect(publication).toBeGreaterThan(0);
     expect(publication).toBeLessThan(DEFAULT_ENGAGEMENT_SCALE.abuse.heavyPoints);
     expect(await pointsOf(db, AUTHOR, POST)).toBe(publication);

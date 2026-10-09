@@ -1,14 +1,15 @@
 import type { GameBlock } from '@meeshy/shared/types/game';
 import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
-import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 
 import { formatGameNumber, translateGame, translateGameOrdinal, translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
-import { boundedPercent, levelTierName, pointsLabel, rankLabel } from './game-copy';
+
+import { boundedPercent, levelTierName, pointsLabel, standingLabel, shownRank, type ShownRank } from './game-copy';
 import { leagueName } from './game-copy-v2';
+import { capOpener, shownLevelOf } from '@/lib/game/ladder';
 
 /**
  * LA BANNIÈRE DU JOUEUR (#9494, conception XIII.1) — ce que le bandeau du haut
@@ -29,9 +30,11 @@ export type PlayerBannerLevel = {
   readonly level: number;
   readonly progress: number;
   readonly prestige: number;
-  /** `null` au sommet (niveau 100) : plus rien ne manque. */
+  /** `null` au plafond que le rang ouvre (ou devant un ancien serveur, au niveau 100) : plus rien ne manque. */
   readonly nextLevel: number | null;
   readonly pointsToNext: number | null;
+  /** Le rang qui lève le plafond atteint (#9688) — `null` quand rien ne bloque. */
+  readonly opener: 'ambassadeur' | 'oracle' | null;
 };
 
 export type PlayerBannerModel = {
@@ -42,7 +45,8 @@ export type PlayerBannerModel = {
   /** Le total de points ; `null` quand le joueur n'en a aucun. */
   readonly points: number | null;
   readonly meeshes: number | null;
-  readonly rank: { readonly rank: GloryRankOrMythic; readonly division: GloryDivision | null } | null;
+  /** Le rang servi : la division V..I (ou héritée), la place du Mythe. */
+  readonly rank: ShownRank | null;
   readonly league: { readonly league: LeagueKey; readonly place: number } | null;
   readonly flame: { readonly form: FlameFormKey; readonly days: number } | null;
 };
@@ -60,7 +64,8 @@ const BURNING: ReadonlySet<GameBlock['flame']['status']> = new Set(['lit', 'at-r
  *     ligue ⇒ pas de ligue ; pas de Flamme ⇒ pas de Flamme.
  */
 export function playerBannerModel(game: GameBlock): PlayerBannerModel | null {
-  const { level, glory, treasury, flame, league } = game;
+  const { glory, treasury, flame, league } = game;
+  const level = shownLevelOf(game.level);
   const atTop = level.nextThreshold === null;
   const detailed = level.level > 1 || level.prestige > 0;
   const model: PlayerBannerModel = {
@@ -72,11 +77,12 @@ export function playerBannerModel(game: GameBlock): PlayerBannerModel | null {
           prestige: level.prestige,
           nextLevel: atTop ? null : level.level + 1,
           pointsToNext: atTop ? null : level.pointsToNext,
+          opener: capOpener(level),
         }
       : null,
     points: level.score > 0 ? level.score : null,
     meeshes: treasury.held > 0 ? treasury.held : null,
-    rank: glory.glory > 0 ? { rank: glory.rank, division: glory.division } : null,
+    rank: glory.glory > 0 ? shownRank(glory) : null,
     league: league?.access === 'open' && league.current !== null ? { league: league.current.league, place: league.current.rank } : null,
     flame: BURNING.has(flame.status) && flame.form !== null && flame.days > 0 ? { form: flame.form, days: flame.days } : null,
   };
@@ -104,14 +110,16 @@ export function playerBannerLabel(model: PlayerBannerModel, language: InterfaceL
     level === null
       ? null
       : level.nextLevel === null
-        ? translateGame(language, 'game.banner.top')
+        ? level.opener === null
+          ? translateGame(language, 'game.banner.top')
+          : translateGame(language, 'game.banner.capped', { rank: translateGame(language, `game.rank.${level.opener}`) })
         : translateGame(language, 'game.banner.to_next', {
             percent: count(Math.floor(boundedPercent(level.progress * 100))),
             level: count(level.nextLevel),
           }),
     level !== null || model.points === null ? null : pointsLabel(model.points, language),
     model.meeshes === null ? null : translateGamePlural(language, 'game.meeshes', model.meeshes),
-    model.rank === null ? null : rankLabel(model.rank.rank, model.rank.division, language),
+    model.rank === null ? null : standingLabel(model.rank, language),
     model.league === null
       ? null
       : translateGame(language, 'game.banner.league', { league: leagueName(model.league.league, language), place: leaguePlace(model.league.place, language) }),

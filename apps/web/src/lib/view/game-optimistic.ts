@@ -1,7 +1,8 @@
 import type { GameBlock, GameChestReward, GameMission } from '@meeshy/shared/types/game';
 import { flameBonusPercent, flameForm } from '@meeshy/shared/utils/game/flame';
-import { gloryStanding } from '@meeshy/shared/utils/game/glory';
-import { levelProgress } from '@meeshy/shared/utils/game/levels';
+import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
+import { levelOnTheWire, mintOnTheWire } from '@meeshy/shared/utils/game/level-wire';
+import type { LevelStepFacts } from '@meeshy/shared/utils/game/level-steps';
 import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
 import { previewMint } from '@meeshy/shared/utils/game/mint';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
@@ -23,6 +24,23 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
  * geste est impossible (un témoin d'identité le prouve : rien n'a bougé, donc
  * rien à restaurer ni à repeindre).
  */
+
+/** Le niveau et le record ouverts par le rang (#9688), ou ceux d'hier devant un serveur antérieur. */
+export const shownLevel = (level: GameBlock['level']): number => level.ladder?.level ?? level.level;
+export const recordOf = (level: GameBlock['level']): number => level.ladder?.record ?? level.record;
+
+/**
+ * Les faits des étapes que le serveur a servis (#9706) — les compteurs de `ladder.steps`, sous une Gloire et
+ * un rang donnés (ceux du bloc, ou ceux d'après le geste) ; `null` devant un serveur d'avant les étapes.
+ */
+export const stepFactsOf = (
+  level: GameBlock['level'],
+  glory: Pick<GameBlock['glory'], 'glory' | 'rank'>,
+  counts: Partial<NonNullable<NonNullable<GameBlock['level']['ladder']>['steps']>> = {},
+): LevelStepFacts | null => {
+  const served = level.ladder?.steps;
+  return served == null ? null : { ...served, ...counts, glory: glory.glory, rank: glory.rank };
+};
 
 const onGame = (view: EngagementWithGame, update: (game: GameBlock) => GameBlock): EngagementWithGame =>
   view.game === undefined ? view : { ...view, game: update(view.game) };
@@ -53,31 +71,27 @@ export function afterMint(view: EngagementWithGame): EngagementWithGame {
   const price = game.mint.price;
   const score = Math.max(0, game.level.score - price);
   const debitable = Math.max(0, (view.meesh?.debitablePoints ?? game.level.score) - price);
-  const progress = levelProgress(score);
-  const standing = gloryStanding({ glory: game.glory.glory + game.mint.gloryGained, mythic: game.glory.rank === 'mythe' });
+  const standing = gloryStanding({ glory: game.glory.glory + game.mint.gloryGained, mythic: game.glory.rank === 'mythe', mythicSeat: game.glory.mythic ?? null });
+  // Les niveaux s'ouvrent selon le rang (#9688) : le plafond se relit sur le rang d'APRÈS la frappe.
+  const levelCap = levelCapForRank(standing.rank);
+  // La frappe compte pour les étapes (#9706) : une Meesh de plus, sous la Gloire d'après.
+  const steps = stepFactsOf(game.level, standing, { minted: game.mint.number });
+  const level = levelOnTheWire({ score, levelCap, levelRecord: recordOf(game.level), prestige: game.level.prestige, steps });
   const next = onGame(view, (current) => ({
     ...current,
-    level: {
-      ...current.level,
-      level: progress.level,
-      tier: progress.tier,
-      score: progress.score,
-      floorScore: progress.floorScore,
-      nextThreshold: progress.nextThreshold,
-      pointsToNext: progress.pointsToNext,
-      progress: progress.progress,
-      canPrestige: false,
-    },
+    level,
     glory: {
       glory: standing.glory,
       rank: standing.rank,
       division: standing.division,
+      division5: standing.division5,
       next: standing.next,
       gloryMissing: standing.gloryMissing,
       progress: standing.progress,
+      mythic: standing.mythic,
     },
-    mint: previewMint({ score, mintedLifetime: current.mint.number, debitablePoints: debitable }),
-    boosts: { ...current.boosts, tailwind: tailwindFactor({ level: progress.level, levelRecord: current.level.record }) },
+    mint: mintOnTheWire(previewMint({ score, mintedLifetime: current.mint.number, debitablePoints: debitable, levelCap, steps })),
+    boosts: { ...current.boosts, tailwind: tailwindFactor({ level: shownLevel(level), levelRecord: recordOf(level) }) },
   }));
   const withMeesh = shiftBalance(next, 1);
   return withMeesh.meesh === undefined
@@ -128,24 +142,17 @@ export function afterChestOpening(view: EngagementWithGame): EngagementWithGame 
 
 /** Le contenu servi s'y pose, et le score en poche après le crédit. */
 export function withChestReward(view: EngagementWithGame, reward: GameChestReward, score: number): EngagementWithGame {
-  return onGame(view, (game) => {
-    const progress = levelProgress(score);
-    return {
-      ...game,
-      chest: { ...game.chest, status: 'claimed', reward },
-      level: {
-        ...game.level,
-        level: progress.level,
-        tier: progress.tier,
-        score: progress.score,
-        floorScore: progress.floorScore,
-        nextThreshold: progress.nextThreshold,
-        pointsToNext: progress.pointsToNext,
-        progress: progress.progress,
-        record: Math.max(game.level.record, progress.level),
-      },
-    };
-  });
+  return onGame(view, (game) => ({
+    ...game,
+    chest: { ...game.chest, status: 'claimed', reward },
+    level: levelOnTheWire({
+      score,
+      levelCap: levelCapForRank(game.glory.rank),
+      levelRecord: recordOf(game.level),
+      prestige: game.level.prestige,
+      steps: stepFactsOf(game.level, game.glory),
+    }),
+  }));
 }
 
 export function afterRelight(view: EngagementWithGame): EngagementWithGame {

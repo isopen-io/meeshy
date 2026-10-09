@@ -226,6 +226,23 @@ const f = {
   'admin.monitoring.routes.blind.saturation': 'Ventilation limitée sous saturation',
   'admin.monitoring.routes.blind.saturation.explain': 'Au-delà d’un plafond, les nouvelles ventilations par plateforme et version sont refusées ; les totaux des routes surveillées, eux, restent exacts.',
   'admin.monitoring.routes.blind.other': 'Autre limite signalée',
+
+  'admin.monitoring.backups.title': 'Sauvegardes',
+  'admin.monitoring.backups.hint': 'La production se sauvegarde chaque nuit à minuit, heure de Paris. Un contrôle à 5 h prévient les administrateurs en cas de problème.',
+  'admin.monitoring.backups.state.ok': 'Réussie',
+  'admin.monitoring.backups.state.failed': 'En échec',
+  'admin.monitoring.backups.state.stale': 'Trop ancienne',
+  'admin.monitoring.backups.reason': 'Raison : {reason}',
+  'admin.monitoring.backups.last': 'Dernière sauvegarde réussie',
+  'admin.monitoring.backups.never': 'Aucune',
+  'admin.monitoring.backups.next': 'Prochaine sauvegarde',
+  'admin.monitoring.backups.documents': 'Documents vérifiés',
+  'admin.monitoring.backups.documents.caption': '{collections} collections · {indexes} index · {mismatches} écart(s) à la restauration témoin',
+  'admin.monitoring.backups.archive': 'Archive de la base',
+  'admin.monitoring.backups.archive.caption': 'Sauvegarde complète en {duration}',
+  'admin.monitoring.backups.volumes': 'Médias et données',
+  'admin.monitoring.health.issue.backupFailed': 'La dernière sauvegarde de la production a échoué.',
+  'admin.monitoring.health.issue.backupStale': 'Aucune sauvegarde de la production n’a réussi depuis plus de 26 heures.',
 } as const;
 
 export default f;

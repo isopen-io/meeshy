@@ -50,7 +50,7 @@ export function useCardSources(
   items: readonly MessageCardMediaItem[],
   load: SourcesLoader,
 ): { readonly sources: readonly (CardSource | null)[]; readonly version: number; readonly loading: boolean; readonly failed: readonly string[]; readonly retry: () => void } {
-  const [state, setState] = useState<{ readonly sources: readonly (CardSource | null)[]; readonly version: number; readonly failed: readonly string[] }>({ sources: [], version: 0, failed: [] });
+  const [state, setState] = useState<{ readonly ids: string; readonly sources: readonly (CardSource | null)[]; readonly version: number; readonly failed: readonly string[] }>({ ids: '', sources: [], version: 0, failed: [] });
   const [loading, setLoading] = useState(items.length > 0);
   const [attempt, setAttempt] = useState(0);
   const ids = items.map((item) => item.id).join('|');
@@ -69,12 +69,12 @@ export function useCardSources(
           loaded.dispose();
           return;
         }
-        setState((current) => ({ sources: loaded.sources, version: current.version + 1, failed: loaded.failed }));
+        setState((current) => ({ ids, sources: loaded.sources, version: current.version + 1, failed: loaded.failed }));
       })
       .catch(() => {
         if (!live) return;
         const visual = items.filter((item) => item.card.kind !== 'audio').map((item) => item.id);
-        setState((current) => ({ sources: [], version: current.version + 1, failed: visual }));
+        setState((current) => ({ ids, sources: [], version: current.version + 1, failed: visual }));
       })
       .finally(() => {
         if (live) setLoading(false);
@@ -85,7 +85,15 @@ export function useCardSources(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ids, attempt]);
-  return { ...state, loading, retry: () => setAttempt((current) => current + 1) };
+  /* Les pixels d'AUTRES médias (une composition qui change, #9687) ne se peignent jamais aux places des nouveaux. */
+  const current = state.ids === ids;
+  return {
+    sources: current ? state.sources : [],
+    version: state.version,
+    failed: current ? state.failed : [],
+    loading: loading || (!current && items.length > 0),
+    retry: () => setAttempt((attempted) => attempted + 1),
+  };
 }
 
 /** « Un média n'a pas pu se charger » + « Réessayer » — jamais un cadre vide muet (#8901). */

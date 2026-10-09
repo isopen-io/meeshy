@@ -73,7 +73,7 @@ enum GameGuideCopy {
             let name = GameCopy.tierName(tier)
             return GuideCopy(
                 what: String(localized: "game.guide.moment.new_tier.what", defaultValue: "Tu entres dans \(name) !", bundle: .main),
-                means: String(localized: "game.guide.moment.new_tier.means", defaultValue: "Les paliers jalonnent ta route : dix niveaux chacun.", bundle: .main),
+                means: String(localized: "game.guide.moment.new_tier.means", defaultValue: "Les paliers jalonnent ta route : dix niveaux chacun jusqu’au 100, puis cent.", bundle: .main),
                 next: nextTierLevel.map {
                     String(localized: "game.guide.moment.new_tier.next", defaultValue: "Le palier suivant s’ouvre au niveau \(GameCopy.formatCount($0)).", bundle: .main)
                 } ?? String(localized: "game.guide.moment.new_tier.next_last", defaultValue: "Tu es au dernier palier.", bundle: .main),
@@ -131,7 +131,7 @@ enum GameGuideCopy {
                 action: action
             )
         case .newRank(let rank, let division, _, let gloryMissing):
-            let name = GameCopy.rankLabel(rank, division: division)
+            let name = GameCopy.rankLabel(rank, division5: division)
             return GuideCopy(
                 what: String(localized: "game.guide.moment.new_rank.what", defaultValue: "Nouveau rang : \(name).", bundle: .main),
                 means: String(localized: "game.guide.moment.new_rank.means", defaultValue: "Ta Gloire a passé un seuil, et elle ne redescend pas.", bundle: .main),
@@ -185,12 +185,12 @@ enum GameGuideCopy {
             )
         case .level100(let canPrestige):
             return GuideCopy(
-                what: String(localized: "game.guide.moment.level_100.what", defaultValue: "Niveau 100 : tu es au sommet !", bundle: .main),
-                means: String(localized: "game.guide.moment.level_100.means", defaultValue: "Le Prestige remet ton niveau à 1 et te donne une étoile et un trophée.", bundle: .main),
+                what: String(localized: "game.guide.moment.level_100.what", defaultValue: "Niveau 100 : le Prestige s’ouvre !", bundle: .main),
+                means: String(localized: "game.guide.moment.level_100.means", defaultValue: "Le Prestige remet ton niveau à 1 et te donne une étoile et un trophée. Il est facultatif.", bundle: .main),
                 next: canPrestige
-                    ? String(localized: "game.guide.moment.level_100.next", defaultValue: "Passe en Prestige, ou reste au sommet.", bundle: .main)
-                    : String(localized: "game.guide.moment.level_100.next_stay", defaultValue: "Reste au sommet autant que tu veux.", bundle: .main),
-                short: String(localized: "game.guide.moment.level_100.short", defaultValue: "Tu es au sommet.", bundle: .main),
+                    ? String(localized: "game.guide.moment.level_100.next", defaultValue: "Passe en Prestige, ou continue de monter.", bundle: .main)
+                    : String(localized: "game.guide.moment.level_100.next_stay", defaultValue: "Continue de monter autant que tu veux.", bundle: .main),
+                short: String(localized: "game.guide.moment.level_100.short", defaultValue: "Le Prestige s’ouvre.", bundle: .main),
                 action: action
             )
         }
@@ -220,7 +220,7 @@ enum GameGuideCopy {
                 action: action
             )
         case .levels:
-            let what = String(localized: "game.guide.step.levels.what", defaultValue: "Cent niveaux, dix paliers.", bundle: .main)
+            let what = String(localized: "game.guide.step.levels.what", defaultValue: "Vingt paliers, et des niveaux que ton rang ouvre.", bundle: .main)
             return GuideCopy(
                 what: what,
                 means: String(localized: "game.guide.step.levels.means", defaultValue: "Chaque niveau demande un peu plus de points que le précédent.", bundle: .main),
@@ -280,10 +280,10 @@ enum GameGuideCopy {
         [
             Rule(index: 1,
                  title: String(localized: "game.rules.1.title", defaultValue: "Chaque geste rapporte", bundle: .main),
-                 body: String(localized: "game.rules.1.body", defaultValue: "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points.", bundle: .main)),
+                 body: String(localized: "game.rules.1.body", defaultValue: "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Une publication rapporte selon qui peut la voir : public, communauté ou amis. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte.", bundle: .main)),
             Rule(index: 2,
                  title: String(localized: "game.rules.2.title", defaultValue: "Les points font le niveau", bundle: .main),
-                 body: String(localized: "game.rules.2.body", defaultValue: "100 niveaux en 10 paliers. Chaque niveau demande un peu plus que le précédent.", bundle: .main)),
+                 body: String(localized: "game.rules.2.body", defaultValue: "Un million de points pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.", bundle: .main)),
             Rule(index: 3,
                  title: String(localized: "game.rules.3.title", defaultValue: "On frappe des Meeshes", bundle: .main),
                  body: String(localized: "game.rules.3.body", defaultValue: "À partir de 1 221 points, on frappe une Meesh à la main. Le prix monte avec le nombre de Meeshes déjà frappées.", bundle: .main)),

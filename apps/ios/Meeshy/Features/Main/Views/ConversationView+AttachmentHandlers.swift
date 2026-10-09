@@ -786,14 +786,22 @@ extension ConversationView {
             return
         }
         composerState.selectedPhotoItems.removeAll()
+        // #9683 — ce qui est déjà dans la zone (présélectionné à l'ouverture)
+        // n'est pas une sélection nouvelle : écarté, comme les doublons.
+        let fresh = RecentMediaAttachmentLink.ingestibleIndices(
+            of: items.map(\.itemIdentifier),
+            excluding: Set(composerState.attachedLibraryAssetIds)
+        )
+        guard !fresh.isEmpty else { return }
         HapticFeedback.light()
-        for item in items {
+        for item in fresh.map({ items[$0] }) {
             let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
                 item,
                 context: .message,
                 accentColor: accentColor
             )
             trackPreparation(prep)
+            if let assetId = item.itemIdentifier { composerState.linkLibraryAsset(assetId, to: prep.id) }
         }
     }
 
@@ -1005,7 +1013,8 @@ extension ConversationView {
         HapticFeedback.light()
     }
 
-    func handleCameraVideo(_ url: URL) {
+    @discardableResult
+    func handleCameraVideo(_ url: URL) -> PreparingAttachment {
         let prep = AttachmentPreparationService.shared.prepareVideo(
             sourceURL: url,
             deleteSourceAfterCompression: true,
@@ -1013,6 +1022,7 @@ extension ConversationView {
             accentColor: MeeshyColors.errorHex
         )
         trackPreparation(prep)
+        return prep
     }
 
     func handleCameraCapture(_ image: UIImage) {

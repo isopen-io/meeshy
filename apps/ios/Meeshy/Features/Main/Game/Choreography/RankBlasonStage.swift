@@ -14,7 +14,12 @@ import MeeshyUI
 /// Sous « réduire les animations » : un fondu de l'écu posé.
 struct RankBlasonStage: View {
     let rank: GloryRank
-    let division: GloryDivision?
+    /// V (5) à I (1) — `nil` pour Mythe.
+    let division: GloryDivision5?
+    /// Le niveau gravé dans la pointe de l'écu (#9636).
+    var level: Int? = nil
+    /// La place servie du Mythe : son émission dessine la Signature unique.
+    var mythic: MythicSeatRef? = nil
     let title: String?
     let play: Int
     var accessibilityLabel: String?
@@ -50,7 +55,7 @@ struct RankBlasonStage: View {
     @ViewBuilder
     private func blason(tenants: Bool) -> some View {
         let view = RankBlasonView(
-            rank: rank, division: division, title: title,
+            rank: rank, division5: division, level: level, mythic: mythic, title: title,
             figures: tenants ? .standard : nil, accessibilityLabel: accessibilityLabel
         )
         if rank == .mythe {

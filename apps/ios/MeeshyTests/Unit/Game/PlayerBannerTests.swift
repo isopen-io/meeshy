@@ -92,7 +92,7 @@ final class PlayerBannerTests: XCTestCase {
             GameText.bannerLevel(level: GameCopy.formatCount(banner.level)),
             GameCopy.tierName(banner.tier),
             GameCopy.meeshes(banner.meeshes ?? 0),
-            GameCopy.rankLabel(banner.rank?.rank ?? .murmure, division: banner.rank?.division),
+            GameCopy.rankLabel(banner.rank?.rank ?? .murmure, division5: banner.rank?.division, mythic: banner.rank?.mythic),
             GameText.leagueName(banner.league?.league ?? .quartz),
             GameCopy.days(banner.flame?.days ?? 0),
         ]
@@ -125,12 +125,27 @@ final class PlayerBannerTests: XCTestCase {
         XCTAssertTrue(label.contains(GameCopy.formatCount(banner.score)), "les points gagnés se disent : \(label)")
     }
 
-    func test_atTheTop_theSentenceSaysSo_insteadOfAPercentage() {
-        let base = GameWave2Fixture.atLevel100()
-        let banner = GamePlayerBanner(game: base)
+    func test_atLevel100_theBannerKeepsClimbing_towardLevel101() {
+        let banner = GamePlayerBanner(game: GameWave2Fixture.atLevel100())
+        XCTAssertEqual(banner.level, 100)
+        XCTAssertEqual(banner.nextLevel, 101, "le niveau 100 n'est plus un sommet (#9688)")
+        XCTAssertNil(banner.levelCap)
+    }
+
+    func test_atTheRankCap_theSentenceNamesTheRankThatOpensIt_insteadOfAPercentage() {
+        let banner = GamePlayerBanner(game: GameFixture.game(score: GameLevels.threshold(of: 640)))
+        XCTAssertEqual(banner.level, 499)
+        XCTAssertNil(banner.nextLevel)
+        XCTAssertEqual(banner.levelCap, 499)
+        XCTAssertTrue(PlayerBannerCopy.accessibilityLabel(for: banner).contains(GameCopy.levelTopShort(cap: 499)))
+        XCTAssertNil(PlayerBannerCopy.texts(for: banner).missing, "au plafond, plus rien ne manque")
+    }
+
+    func test_againstAnOlderServer_theBannerReadsTheLegacyFields() {
+        let banner = GamePlayerBanner(game: GameFixture.game(score: GameLevels.threshold(of: 640), servesLadder: false))
+        XCTAssertEqual(banner.level, 100)
         XCTAssertNil(banner.nextLevel)
         XCTAssertTrue(PlayerBannerCopy.accessibilityLabel(for: banner).contains(GameText.bannerTop))
-        XCTAssertNil(PlayerBannerCopy.texts(for: banner).missing, "au sommet, plus rien ne manque")
     }
 
     func test_theShortTexts_carryTheFormattedFigures_andOnlyForWhatExists() {
@@ -246,13 +261,13 @@ final class PlayerBannerTests: XCTestCase {
 
     func test_theCacheIsPaintedFirst_thenTheNetworkCorrectsIt() async {
         let source = FakeSource()
-        source.cachedBlock = GameFixture.game(score: 12_180)
+        source.cachedBlock = GameFixture.game(score: 121_800)
         source.fetchedBlock = GameFixture.game(score: 14_000)
         let sut = store(source)
         XCTAssertNil(sut.banner, "avant toute lecture : rien, jamais un squelette")
 
         await sut.readCache()
-        XCTAssertEqual(sut.banner?.score, 12_180, "le cache, même périmé, se peint tout de suite")
+        XCTAssertEqual(sut.banner?.score, 121_800, "le cache, même périmé, se peint tout de suite")
         XCTAssertEqual(source.fetchCalls, 0)
 
         await sut.revalidate()
@@ -267,11 +282,11 @@ final class PlayerBannerTests: XCTestCase {
 
     func test_aFailedRevalidation_keepsWhatIsShown() async {
         let source = FakeSource()
-        source.cachedBlock = GameFixture.game(score: 12_180)
+        source.cachedBlock = GameFixture.game(score: 121_800)
         let sut = store(source)
         await sut.readCache()
         await sut.revalidate(force: true)
-        XCTAssertEqual(sut.banner?.score, 12_180, "une coupure ne retire rien")
+        XCTAssertEqual(sut.banner?.score, 121_800, "une coupure ne retire rien")
     }
 
     func test_revalidationIsThrottled_exceptWhenForced() async {
@@ -386,7 +401,7 @@ final class PlayerBannerTests: XCTestCase {
                      "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
             let text = try source(root)
             XCTAssertTrue(text.contains("playerBannerHosted:"), "\(root) doit dire à la couche si l'écran porte la bannière")
-            XCTAssertTrue(text.contains("router.openGame(at: .level)"), "\(root) : un toucher ouvre la fiche du niveau, au-dessus de Progression (#9564)")
+            XCTAssertTrue(text.contains("router.openGame(at: .progressionConcept(.level))"), "\(root) : un toucher ouvre la fiche du niveau, au-dessus de Progression (#9564)")
         }
     }
 

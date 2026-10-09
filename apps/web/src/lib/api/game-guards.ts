@@ -18,3 +18,15 @@ export const orNull = (check: (value: unknown) => boolean) => (value: unknown): 
 
 export const shape = (value: unknown, fields: Readonly<Record<string, (field: unknown) => boolean>>): value is Rec =>
   isRec(value) && Object.entries(fields).every(([key, check]) => check(value[key]));
+
+/** Un champ NEUF du fil : absent (ancien serveur) ou conforme — jamais malformé. */
+export const optional = (check: (value: unknown) => boolean) => (value: unknown): boolean => value === undefined || check(value);
+
+/** La division héritée (III, II, I) — la seule qu'un serveur d'avant #9636 sert. */
+export const isDivision = (value: unknown): boolean => value === 1 || value === 2 || value === 3;
+
+/** La division à cinq crans (#9636) : V = 5 … I = 1. */
+export const isDivision5 = (value: unknown): boolean => isInt(value, 1, 5);
+
+/** La place du Mythe (#9636) : la place, 1 à 100, et l'émission dont dérive la Signature unique. */
+export const isMythicSeat = (value: unknown): boolean => shape(value, { number: (n) => isInt(n, 1, 100), edition: (n) => isInt(n, 1) });

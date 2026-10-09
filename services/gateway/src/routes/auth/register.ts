@@ -464,7 +464,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // révocable et visible dans `GET /auth/sessions`, comme tous les autres.
       // Le `sessionToken` est renvoyé pour que le client puisse le présenter
       // (fenêtre glissante), sur la même clé que `POST /login`.
-      const { token, sessionToken } = await openSession(authService, user, requestContext);
+      const { token, sessionToken } = await openSession(authService, user, requestContext, 'registration');
       const permissions = authService.getUserPermissions(user);
       // #8288 — la carte de l'inscription attend son code SUR PLACE : le jeton
       // d'attente (#8083) lui apprend que le lien a été ouvert ailleurs.

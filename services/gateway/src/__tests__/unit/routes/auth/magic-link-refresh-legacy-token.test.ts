@@ -363,3 +363,85 @@ describe('POST /refresh — jeton hérité, sans `sid`', () => {
     await app.close();
   });
 });
+
+// ─── POST /refresh — le relevé du client se tient à jour (#9610) ─────────────
+
+describe('POST /refresh — la session nommée retient ce que le client déclare', () => {
+  beforeEach(() => { mockFindTrustedSession.mockReset().mockResolvedValue(null); });
+
+  const prismaRetenant = () => {
+    const base = makePrisma();
+    const findFirst = jest.fn<any>().mockImplementation(async (args: any) =>
+      args?.select?.appVersion
+        ? { appVersion: '1.4.1', appBuild: '1873', platform: 'ios', deviceName: null, deviceModel: null, osVersion: null }
+        : base.userSession.findFirst(args));
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    return { ...base, userSession: { ...base.userSession, findFirst, updateMany } };
+  };
+
+  const attendreLeRelevé = () => new Promise((resolve) => setImmediate(resolve));
+
+  it('une application mise à jour réécrit sa version et son build sur la session du `sid`, et rien d’autre', async () => {
+    const prisma = prismaRetenant();
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({
+      method: 'POST', url: '/refresh',
+      headers: { 'x-meeshy-version': '1.4.2', 'x-meeshy-build': '1874', 'x-meeshy-platform': 'ios' },
+      payload: { token: 'jwt' },
+    });
+    await attendreLeRelevé();
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.userSession.updateMany).toHaveBeenCalledWith({
+      where: { id: SID_COURANTE, userId: USER_ID, isValid: true },
+      data: { appVersion: '1.4.2', appBuild: '1874' },
+    });
+    await app.close();
+  });
+
+  it('un ancien client qui ne déclare rien ne touche pas la session', async () => {
+    const prisma = prismaRetenant();
+    const app = await buildApp({ prisma });
+
+    await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+    await attendreLeRelevé();
+
+    expect(prisma.userSession.updateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+// ─── GET /sessions — tout ce qui est disponible est servi (#9610, #9609) ─────
+// Logé ici parce que ce harnais monte déjà les routes de `magic-link.ts` avec le
+// VRAI schéma de réponse partagé (`sessionsListResponseSchema`), donc le vrai
+// sérialiseur : un champ non déclaré y serait retiré, et le témoin tomberait.
+
+describe('GET /sessions — la liste sert version, plateforme, appareil, moyen de connexion, fuseau et l’attribution', () => {
+  it('traverse le sérialiseur avec tous les champs disponibles, et jamais de coordonnées', async () => {
+    const authService = makeAuthService({
+      getUserActiveSessions: jest.fn<any>().mockResolvedValue([{
+        ...mockSession,
+        appVersion: '1.4.2', appBuild: '1874', platform: 'ios', deviceName: 'iPhone 15 Pro',
+        loginMethod: 'magic_link', timezone: 'Europe/Paris', city: 'Paris', country: 'FR',
+        isCurrentSession: true, latitude: 48.8, longitude: 2.3,
+      }]),
+    });
+    const app = await buildApp({ authService });
+
+    const res = await app.inject({ method: 'GET', url: '/sessions' });
+    const body = res.json();
+
+    expect(res.statusCode).toBe(200);
+    expect(body.data.sessions[0]).toMatchObject({
+      appVersion: '1.4.2', appBuild: '1874', platform: 'ios', deviceName: 'iPhone 15 Pro',
+      loginMethod: 'magic_link', timezone: 'Europe/Paris', city: 'Paris', country: 'FR',
+      isCurrentSession: true,
+    });
+    expect(body.data.sessions[0]).not.toHaveProperty('latitude');
+    expect(body.data.geolocation).toEqual({
+      provider: 'DB-IP', text: 'IP Geolocation by DB-IP', url: 'https://db-ip.com', license: 'CC-BY-4.0', approximate: true,
+    });
+    await app.close();
+  });
+});

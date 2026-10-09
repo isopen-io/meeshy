@@ -27,6 +27,7 @@ import type { PersonalMissionService } from './PersonalMissionService';
 import { gloryTotalFromLedger } from './GloryService';
 import { MythicSeatService } from './MythicSeatService';
 import { toGameMission, type MissionService } from './MissionService';
+import { countMissionsDone } from './LevelStepFacts';
 
 const log = enhancedLogger.child({ module: 'GameBlockService' });
 
@@ -66,9 +67,11 @@ export class GameBlockService {
     const now = params.now ?? new Date();
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: GAME_USER_SELECT });
-    const [totals, glory, counters] = await Promise.all([
+    const [totals, glory, missionsDone, counters] = await Promise.all([
       meeshTotalsFromLedger(this.prisma, userId),
       gloryTotalFromLedger(this.prisma, userId),
+      // Les missions du jour accomplies à vie, que jugent les étapes des niveaux (#9706).
+      countMissionsDone(this.prisma, userId),
       params.counters ??
         this.prisma.engagementCounter.findMany({ where: { userId }, select: { axisKey: true, count: true, points: true }, take: 100 }),
     ]);
@@ -106,6 +109,8 @@ export class GameBlockService {
       mythic: mythicSeat !== null,
       mythicSeat,
       mintedLifetime: totals.mintedLifetime,
+      missionsDone,
+      flameRecord: facts.longest,
       debitablePoints: plan.debitablePoints,
       balance: totals.balance,
       streak: facts.streak,

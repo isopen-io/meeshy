@@ -6,6 +6,7 @@ import {
   isVideoMimeType,
 } from '@meeshy/shared/types/attachment';
 import { messageTypeForClientAttachments, type AttachmentMessageType } from '@meeshy/shared/utils/attachment-message-type';
+import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
@@ -49,11 +50,24 @@ function kindOfMimeType(mimeType: string): AttachmentMessageType {
   return 'file';
 }
 
+/**
+ * LE FICHIER SOUS LE TYPE DE CE QU'IL EST (#9693) — Firefox et la WebView
+ * Android nomment un WAV `audio/x-wav`, et un MP3 que le système ne connaît
+ * pas arrive SANS type : la pièce devenait un « fichier », refusée d'un
+ * commentaire et montrée sans lecteur. Les octets restent ceux de l'original ;
+ * seul le type déclaré change, et un fichier déjà juste est rendu tel quel.
+ */
+function typedAsItsMedia(file: File): File {
+  const type = canonicalMediaMimeType({ mimeType: file.type, fileName: file.name });
+  return type === file.type ? file : new File([file], file.name, { type, lastModified: file.lastModified });
+}
+
 export function pendingAttachmentOf(
-  file: File,
+  source: File,
   opts?: { readonly durationMs?: number },
 ): PendingAttachment {
   counter += 1;
+  const file = typedAsItsMedia(source);
   return {
     localId: `pending-${counter}`,
     file,

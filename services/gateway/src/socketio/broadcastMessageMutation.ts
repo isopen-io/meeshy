@@ -13,12 +13,18 @@ import {
 } from './emitConversationPreviewUpdate';
 import type { Anonymized, ServerEmitTarget } from './serverEmit';
 import type { QueuedVariantFor } from './queuedEventContract';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
+import { readerSignedPlanForMessageId } from './readerSignedDelivery';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
 // modèles de diverger.
-type MutationPrisma = PreviewPrisma;
+/**
+ * #9646 — l'édition d'un message protégé relit sa protection et ses
+ * destinataires admis (`readerSignedPlanForMessageId`).
+ */
+type MutationPrisma = PreviewPrisma & Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>;
 
 /**
  * The `MeeshySocketIOManager` surface this helper needs, kept structural so it
@@ -289,7 +295,21 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
 
   const sealed = params.eventType === 'edited' ? params.sealedQuoteAudience ?? NO_SEALED_READER : NO_SEALED_READER;
   try {
-    if (params.eventType === 'edited' && sealed.size > 0) {
+    // #9646 — un message protégé qui porte des pièces : par destinataire,
+    // chacun sa variante (scellée ou non) et ses adresses signées.
+    const plan = params.eventType === 'edited'
+      ? await readerSignedPlanForMessageId(params.prisma, {
+          conversationId,
+          messageId,
+          attachments: (params.payload as { readonly attachments?: unknown }).attachments,
+        })
+      : null;
+    const io = manager.getIO();
+    if (plan && params.eventType === 'edited' && io) {
+      for (const target of plan.targets) {
+        io.to(target.room).emit(SERVER_EVENTS.MESSAGE_EDITED, plan.signFor(sealedVariant(params.payload, sealed, target.key), target.participantId));
+      }
+    } else if (params.eventType === 'edited' && sealed.size > 0) {
       emitEditedWithSealedQuote(manager.getIO(), conversationId, params.payload, sealed);
     } else {
       emitToConversationRoom(manager.getIO()?.to(ROOMS.conversation(conversationId)), params);

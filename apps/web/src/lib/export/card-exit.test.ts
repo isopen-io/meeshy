@@ -63,6 +63,12 @@ const PROTECTED_NATURES: readonly (readonly [string, Partial<Message>])[] = [
   ['une pièce à vue unique', { attachments: [photo({ id: 'p-once', isViewOnce: true })] }],
 ];
 
+const QUOTED_NATURES: readonly (readonly [string, Partial<Message>])[] = [
+  ...PROTECTED_NATURES,
+  ['un message flouté', { isBlurred: true }],
+  ['un message chiffré', { isEncrypted: true }],
+];
+
 const cardOf = (target: Message) =>
   messageCardSubjectOf({ message: target, servedText: undefined, viewer: VIEWER, readerLanguages: ['fr'], interfaceLanguage: 'fr', now: NOW });
 
@@ -83,7 +89,13 @@ describe('« Imager » — la carte d’un message', () => {
   });
 });
 
-describe('un message ordinaire qui CITE un contenu qui disparaît ne le fait pas sortir', () => {
+/**
+ * DÉCISION PORTEUR DU 2026-10-08 — une réponse qui cite un contenu protégé
+ * (qui disparaît, voilé, chiffré ou de nature non déclarée) ne s'image PAS :
+ * la carte entière se refuse, plutôt que de peindre la réponse sans ce
+ * qu'elle cite.
+ */
+describe('un message ordinaire qui CITE un contenu protégé ne s’image pas', () => {
   const quoting = (quoted: Message): Message => line('m-reply', 2, { content: 'ma réponse', replyTo: quoted });
 
   test('une citation ordinaire, déclarée, se peint avec son média', () => {
@@ -92,17 +104,13 @@ describe('un message ordinaire qui CITE un contenu qui disparaît ne le fait pas
     expect(subject?.media.map((item) => item.id)).toEqual(['p-q']);
   });
 
-  PROTECTED_NATURES.forEach(([label, nature]) => {
-    test(`${label} citée : la réponse s’image, ni le texte ni le média cités`, () => {
-      const subject = cardOf(quoting(line('m-q', 1, { content: SECRET, attachments: [photo({ id: 'p-q' })], ...nature })));
-      expect(subject?.reply.text).toBe('ma réponse');
-      expect(JSON.stringify(subject)).not.toContain(SECRET);
-      expect(JSON.stringify(subject)).not.toContain('p-q');
-      expect(subject?.media).toEqual([]);
+  QUOTED_NATURES.forEach(([label, nature]) => {
+    test(`citer ${label} : aucune carte`, () => {
+      expect(cardOf(quoting(line('m-q', 1, { content: SECRET, attachments: [photo({ id: 'p-q' })], ...nature })))).toBeNull();
     });
   });
 
-  test('une citation dont la nature N’EST PAS DÉCLARÉE (sans `effectFlags`) est fermée', () => {
+  test('une citation dont la nature N’EST PAS DÉCLARÉE (sans `effectFlags`) : aucune carte', () => {
     const undeclared = message({
       id: 'm-q',
       senderId: 'u-amina',
@@ -114,16 +122,12 @@ describe('un message ordinaire qui CITE un contenu qui disparaît ne le fait pas
       attachments: [photo({ id: 'p-q' })],
     });
     const { effectFlags: _absent, ...bare } = undeclared;
-    const subject = cardOf(quoting(bare as Message));
-    expect(subject?.reply.text).toBe('ma réponse');
-    expect(subject?.quoted).toBeNull();
-    expect(subject?.media).toEqual([]);
+    expect(cardOf(quoting(bare as Message))).toBeNull();
   });
 
-  test('choisir une langue d’export ne rouvre pas la citation', () => {
+  test('choisir une langue d’export ne rouvre pas la carte', () => {
     const flame = line('m-q', 1, { content: SECRET, translations: [translation('m-q', 'en', 'the flame secret')], effectFlags: EPHEMERAL, ephemeralDuration: 60 });
-    const subject = messageCardSubjectOf({ message: quoting(flame), servedText: undefined, viewer: VIEWER, readerLanguages: ['fr'], interfaceLanguage: 'fr', now: NOW, language: 'en' });
-    expect(JSON.stringify(subject)).not.toContain('flame secret');
+    expect(messageCardSubjectOf({ message: quoting(flame), servedText: undefined, viewer: VIEWER, readerLanguages: ['fr'], interfaceLanguage: 'fr', now: NOW, language: 'en' })).toBeNull();
   });
 });
 
@@ -145,4 +149,26 @@ describe('« Imager la discussion »', () => {
       expect(JSON.stringify(subject)).not.toContain('p-x');
     });
   });
+
+  QUOTED_NATURES.forEach(([label, nature]) => {
+    const quoting = (id: string, minute: number): Message =>
+      line(id, minute, { replyTo: line('m-q', 0, { content: SECRET, attachments: [photo({ id: 'p-q' })], ...nature }) });
+
+    test(`choisir une réponse qui cite ${label} ⇒ aucune carte`, () => {
+      expect(discussionOf([line('m1', 1), quoting('m2', 2)], 'm2')).toBeNull();
+    });
+
+    test(`une réponse qui cite ${label} DANS la discussion ⇒ aucune carte`, () => {
+      expect(discussionOf([line('m1', 1), quoting('m2', 2), line('m3', 3)], 'm3')).toBeNull();
+    });
+  });
+
+  test('une réponse qui cite un contenu protégé HORS des huit derniers messages ne ferme pas la discussion', () => {
+    const flame = line('m-q', 0, { content: SECRET, effectFlags: EPHEMERAL, ephemeralDuration: 300 });
+    const older = line('m-old', 1, { replyTo: flame });
+    const recent = Array.from({ length: 8 }, (_, index) => line(`m${index + 2}`, index + 2));
+    const subject = discussionOf([older, ...recent], 'm9');
+    expect(subject?.reply.text).toBe('texte m2');
+  });
 });
+

@@ -1,0 +1,10 @@
+[Unit]
+Description=Sauvegarde de la production Meeshy chaque jour à minuit (heure de Paris)
+
+[Timer]
+OnCalendar=*-*-* 00:00:00 Europe/Paris
+Persistent=true
+Unit=meeshy-nightly-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -41,7 +41,7 @@ const withoutComments = (yaml: string): string =>
 
 const WORKFLOW = withoutComments(readFileSync(WORKFLOW_PATH, 'utf8'));
 
-const SIMULATOR_STEP = 'Provision iOS 18.2 simulator';
+const SIMULATOR_STEP = 'Provision iOS simulator';
 const BUILD_STEP = 'Build for testing';
 const TEST_STEP = 'Run iOS tests (without building)';
 
@@ -68,6 +68,24 @@ const stepNamed = (name: string): Step => {
   if (!found) throw new Error(`Étape introuvable dans ios.yml : « ${name} »`);
   return found;
 };
+
+/**
+ * Le job (bloc à deux espaces d'indentation) qui contient `needle`. Depuis
+ * #9692 la compilation, les tranches de tests et le verdict sont trois jobs :
+ * une étape se juge par le job qui la porte, plus seulement par son `if:`.
+ */
+const jobContaining = (needle: string): string => {
+  const lines = WORKFLOW.split('\n');
+  const starts = lines.flatMap((line, index) => (/^ {2}\S.*:$/.test(line) ? [index] : []));
+  const hit = lines.findIndex((line) => line.includes(needle));
+  if (hit < 0) return '';
+  const start = [...starts].reverse().find((index) => index < hit);
+  if (start === undefined) return '';
+  const end = starts.find((index) => index > start) ?? lines.length;
+  return lines.slice(start, end).join('\n');
+};
+
+const RUN_TESTS_ONLY = /^ {4}if:.*needs\.scope\.outputs\.run_tests == 'true'/m;
 
 /** Bloc `pull_request:` du mapping `on:`, jusqu'à la clé de même niveau suivante. */
 const pullRequestTrigger = (): string => {
@@ -114,12 +132,22 @@ describe('gate iOS de compilation au temps de la PR', () => {
     expect(WORKFLOW).toMatch(/^ {4}needs: scope$/m);
   });
 
+  /**
+   * Depuis #9692 le runtime et les tests vivent dans les TRANCHES, un job à
+   * part dont le `if:` exige la portée « tests ». Une PR sans opt-in n'engage
+   * donc aucune tranche — et le job de compilation, lui, ne doit plus rien
+   * provisionner du tout.
+   */
   it('ne provisionne aucun runtime de simulateur sur une PR (~7 min, réseau)', () => {
-    expect(stepNamed(SIMULATOR_STEP).condition).toContain("env.COMPILE_ONLY != 'true'");
+    expect(jobContaining(`name: ${SIMULATOR_STEP}`)).toMatch(RUN_TESTS_ONLY);
+    const build = jobContaining(`name: ${BUILD_STEP}`);
+    expect(build).not.toContain('downloadPlatform');
+    expect(build).not.toContain('simctl');
   });
 
   it("n'exécute aucun test sur une PR (~8 min) — c'est ce qui saturait la file", () => {
-    expect(stepNamed(TEST_STEP).condition).toContain("env.COMPILE_ONLY != 'true'");
+    expect(jobContaining(`name: ${TEST_STEP}`)).toMatch(RUN_TESTS_ONLY);
+    expect(jobContaining(`name: ${BUILD_STEP}`)).not.toContain('test-without-building');
   });
 
   /**

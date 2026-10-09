@@ -1,4 +1,6 @@
 import XCTest
+import SwiftUI
+import UIKit
 import MeeshySDK
 @testable import Meeshy
 
@@ -270,7 +272,11 @@ final class ImagineWorkshopTests: XCTestCase {
                     "export.card.media.transcript", "export.card.media.timer", "export.card.media.transcriptFont",
                     "export.card.clip.label", "export.card.excerpt.label", "export.card.excerpt.hint",
                     "export.card.part.transcript", "export.card.hint.pinch", "export.card.scale.hint",
-                    "export.card.truncated.media"]
+                    "export.card.truncated.media",
+                    // #9686 — les compositions d'un commentaire de post.
+                    "export.compose.postAndComment", "export.compose.commentAlone", "export.compose.threadToHere",
+                    "export.compose.postRootAndReply", "export.compose.chosenReplies", "export.compose.post",
+                    "export.compose.thread", "export.compose.folded"]
         keys += MessageCardClipLength.allCases.map { "export.card.clip.\($0.rawValue)" }
         keys += MessageCardAspect.allCases.map { "export.card.aspect.\($0.rawValue)" }
         keys += MessageCardHeaderOrientation.allCases.map { "export.card.header.\($0.rawValue)" }
@@ -284,6 +290,25 @@ final class ImagineWorkshopTests: XCTestCase {
             for language in Self.languages {
                 let value = Self.value(strings[key], language)
                 XCTAssertFalse((value ?? "").trimmingCharacters(in: .whitespaces).isEmpty, "\(key) [\(language)]")
+            }
+        }
+    }
+
+    // MARK: - Les puces de composition se LISENT (#9686, recette 2026-10-08)
+
+    /// La puce sélectionnée peignait un texte clair sur un verre teinté pâle — le
+    /// libellé disparaissait. Encre et fond se mesurent en clair ET en sombre,
+    /// le fond composé sur celui de la feuille (AA texte normal : 4,5:1).
+    func test_compositionChip_labelReachesAA_selectedOrNot_lightAndDark() {
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let traits = UITraitCollection(userInterfaceStyle: style)
+            let sheet = Color(uiColor: UIColor.systemBackground.resolvedColor(with: traits))
+            for selected in [true, false] {
+                let ink = Color(uiColor: MessageCardCompositionBar.ink(selected: selected).resolvedColor(with: traits))
+                let fill = Color(uiColor: MessageCardCompositionBar.fill(selected: selected).resolvedColor(with: traits))
+                let ratio = WCAGContrast.ratio(ink, WCAGContrast.composite(fill, over: sheet))
+                XCTAssertGreaterThanOrEqual(ratio, WCAGContrast.aaThreshold,
+                                            "\(style == .dark ? "sombre" : "clair") \(selected ? "sélectionnée" : "libre") : \(WCAGContrast.fmt(ratio))")
             }
         }
     }

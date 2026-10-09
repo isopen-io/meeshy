@@ -392,7 +392,7 @@ export async function meGameWave2Routes(fastify: FastifyInstance, options: GameW
       config: { rateLimit: gameRateLimitConfig('prestige', 5, true) },
       schema: {
         description:
-          'Passe en Prestige au niveau 100 (#9389) : une étoile de plus, score et niveau à 1, +1000 de Gloire, trophée numéroté. ' +
+          'Passe en Prestige au niveau 100 (#9389) : une étoile de plus, score et niveau à 1, +10 000 de Gloire, trophée numéroté. ' +
           'Ferme les ligues et le duo jusqu\'à ce qu\'ils soient rouverts. Idempotent par `requestId`.',
         tags: ['me', 'game'],
         summary: 'Pass to the next Prestige',

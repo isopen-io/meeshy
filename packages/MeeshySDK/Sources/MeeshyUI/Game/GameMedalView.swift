@@ -52,33 +52,97 @@ public nonisolated enum GameMedalFamily: Sendable, Equatable, CaseIterable {
     }
 }
 
-/// Le pictogramme d'axe, dessiné au trait. Neuf glyphes : jamais une bulle.
-public nonisolated enum GameMedalGlyph: Sendable, Equatable, CaseIterable {
-    case text
-    case voice
-    case story
+/// Le pictogramme d'axe, dessiné au trait — UN PAR AXE (#9639) : vingt glyphes, jamais une
+/// bulle, jamais celui de la famille. Liens, partages, invités et amitiés ne se confondent
+/// plus, ni les quatre conversations, ni les cinq outils. Miroir de `MEDAL_PICTOGRAMS`
+/// (`apps/web/src/lib/game/medal.ts`) : `webName` en est le nom, et les tracés sont les mêmes.
+public nonisolated enum GameMedalGlyph: Sendable, Hashable, CaseIterable {
+    case textMessage
+    case audioMessage
     case post
+    case story
     case reel
-    case comment
-    case conversation
-    case tool
-    case social
+    case audioComment
+    case textComment
+    case privateConversation
+    case publicConversation
+    case communityConversation
+    case groupCreated
+    case sticker
+    case inAppEdit
+    case directPublish
+    case reaction
+    case attachment
+    case trackedLink
+    case share
+    case inviteJoined
+    case friendship
 
     /// Le glyphe de chaque axe du catalogue ; le `switch` est exhaustif, un axe ajouté sans
     /// pictogramme ne compile plus.
     public init(axis: EngagementAxisKey) {
         switch axis {
-        case .textMessage: self = .text
-        case .audioMessage, .audioComment: self = .voice
-        case .story: self = .story
+        case .textMessage: self = .textMessage
+        case .audioMessage: self = .audioMessage
         case .post: self = .post
+        case .story: self = .story
         case .reel: self = .reel
-        case .textComment: self = .comment
-        case .privateConversation, .publicConversation, .communityConversation, .groupCreated: self = .conversation
-        case .sticker, .inAppEdit, .directPublish, .reaction, .attachment: self = .tool
-        case .trackedLink, .share, .inviteJoined, .friendship: self = .social
+        case .audioComment: self = .audioComment
+        case .textComment: self = .textComment
+        case .privateConversation: self = .privateConversation
+        case .publicConversation: self = .publicConversation
+        case .communityConversation: self = .communityConversation
+        case .groupCreated: self = .groupCreated
+        case .sticker: self = .sticker
+        case .inAppEdit: self = .inAppEdit
+        case .directPublish: self = .directPublish
+        case .reaction: self = .reaction
+        case .attachment: self = .attachment
+        case .trackedLink: self = .trackedLink
+        case .share: self = .share
+        case .inviteJoined: self = .inviteJoined
+        case .friendship: self = .friendship
         }
     }
+
+    /// Le nom du même glyphe sur le web (`MedalPictogram`).
+    public var webName: String {
+        switch self {
+        case .textMessage: "text"
+        case .audioMessage: "voice"
+        case .post: "post"
+        case .story: "story"
+        case .reel: "reel"
+        case .audioComment: "voice-comment"
+        case .textComment: "comment"
+        case .privateConversation: "private"
+        case .publicConversation: "public"
+        case .communityConversation: "community"
+        case .groupCreated: "group"
+        case .sticker: "sticker"
+        case .inAppEdit: "edit"
+        case .directPublish: "direct-publish"
+        case .reaction: "reaction"
+        case .attachment: "attachment"
+        case .trackedLink: "link"
+        case .share: "share"
+        case .inviteJoined: "invite"
+        case .friendship: "friendship"
+        }
+    }
+
+    @available(*, deprecated, message: "Un glyphe par axe (#9639) : .textMessage")
+    public static let text = GameMedalGlyph.textMessage
+    @available(*, deprecated, message: "Un glyphe par axe (#9639) : .audioMessage ou .audioComment")
+    public static let voice = GameMedalGlyph.audioMessage
+    @available(*, deprecated, message: "Un glyphe par axe (#9639) : .textComment")
+    public static let comment = GameMedalGlyph.textComment
+    @available(*, deprecated, message: "Un glyphe par axe (#9639) : le glyphe de la conversation")
+    public static let conversation = GameMedalGlyph.privateConversation
+    @available(*, deprecated, message: "Un glyphe par axe (#9639) : le glyphe de l'outil")
+    public static let tool = GameMedalGlyph.sticker
+    @available(*, deprecated, message: "Un glyphe par axe (#9639) : le glyphe du lien")
+    public static let social = GameMedalGlyph.trackedLink
 }
 
 extension GameMaterial {
@@ -283,42 +347,83 @@ public struct GameMedalView: View {
 
     // MARK: - Les pictogrammes
 
-    /// Le glyphe, au trait, centré en (50, 50) : « Aa », micro, cercle pointillé, carré,
-    /// lecture, guillemets, deux points reliés, étoile, maillons.
+    /// Le glyphe, au trait, centré en (50, 50) — les mêmes tracés que `Pictogram`
+    /// (`apps/web/src/components/game/medal.tsx`).
     private func drawGlyph(in context: inout GraphicsContext, color: Color, opacity: Double) {
         var inner = context
         inner.opacity = context.opacity * opacity
         inner.translateBy(x: 50, y: 50)
-        let round = StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round)
+        let ink = GraphicsContext.Shading.color(color)
+        func stroke(_ d: String, _ width: CGFloat = 2.4) {
+            inner.stroke(GameSVGPath.make(d), with: ink, style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
+        }
+        func fill(_ d: String) { inner.fill(GameSVGPath.make(d), with: ink) }
+        func dot(_ x: CGFloat, _ y: CGFloat, _ r: CGFloat) {
+            inner.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: ink)
+        }
         switch glyph {
-        case .text:
+        case .textMessage:
             inner.draw(Text("Aa").font(.system(size: 15, weight: .heavy, design: .rounded)).foregroundColor(color),
                        at: .zero, anchor: .center)
-        case .voice:
-            inner.fill(Path(roundedRect: CGRect(x: -4, y: -10, width: 8, height: 13), cornerRadius: 4), with: .color(color))
-            inner.stroke(GameSVGPath.make("M-8 0 A8 8 0 0 0 8 0 M0 8 L0 13"), with: .color(color),
-                         style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+        case .audioMessage:
+            inner.fill(Path(roundedRect: CGRect(x: -4, y: -10, width: 8, height: 13), cornerRadius: 4), with: ink)
+            stroke("M-8 0 A8 8 0 0 0 8 0 M0 8 L0 13", 2.2)
         case .story:
-            inner.stroke(Path(ellipseIn: CGRect(x: -9, y: -9, width: 18, height: 18)), with: .color(color),
+            inner.stroke(Path(ellipseIn: CGRect(x: -9, y: -9, width: 18, height: 18)), with: ink,
                          style: StrokeStyle(lineWidth: 2.4, dash: [4, 3]))
-            inner.fill(Path(ellipseIn: CGRect(x: -3.5, y: -3.5, width: 7, height: 7)), with: .color(color))
+            dot(0, 0, 3.5)
         case .post:
-            inner.stroke(Path(roundedRect: CGRect(x: -9, y: -9, width: 18, height: 18), cornerRadius: 3), with: .color(color), style: round)
-            inner.stroke(GameSVGPath.make("M-4 -2.5 L4 -2.5 M-4 3 L2 3"), with: .color(color),
-                         style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            inner.stroke(Path(roundedRect: CGRect(x: -8, y: -8, width: 16, height: 16), cornerRadius: 3), with: ink,
+                         style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+            stroke("M-4 -2h8M-4 3h5", 2)
         case .reel:
-            inner.fill(GameSVGPath.make("M-5 -8 L9 0 L-5 8 Z"), with: .color(color))
-        case .comment:
-            inner.fill(GameSVGPath.make("M-9 -6h6v6l-3 6h-3l2-6h-2zM2 -6h6v6l-3 6h-3l2-6h-2z"), with: .color(color))
-        case .conversation:
-            inner.fill(Path(ellipseIn: CGRect(x: -10, y: -4, width: 8, height: 8)), with: .color(color))
-            inner.fill(Path(ellipseIn: CGRect(x: 3, y: -4, width: 8, height: 8)), with: .color(color))
-            inner.stroke(GameSVGPath.make("M-2 0 L3 0"), with: .color(color), style: StrokeStyle(lineWidth: 2.6, lineCap: .butt))
-        case .tool:
-            inner.fill(RankBlasonView.star(center: .zero, radius: 10), with: .color(color))
-        case .social:
-            inner.stroke(Path(roundedRect: CGRect(x: -11, y: -4, width: 12, height: 8), cornerRadius: 4), with: .color(color), style: round)
-            inner.stroke(Path(roundedRect: CGRect(x: -1, y: -4, width: 12, height: 8), cornerRadius: 4), with: .color(color), style: round)
+            fill("M-5 -8 L9 0 L-5 8 Z")
+        case .audioComment:
+            stroke("M-8 -3v6M-4 -7v14M0 -10v20M4 -6v12M8 -2v4")
+        case .textComment:
+            fill("M-9 -6h6v6l-3 6h-3l2-6h-2zM2 -6h6v6l-3 6h-3l2-6h-2z")
+        case .privateConversation:
+            dot(-6, 0, 4)
+            dot(7, 0, 4)
+            inner.stroke(GameSVGPath.make("M-2 0h5"), with: ink, style: StrokeStyle(lineWidth: 2.6, lineCap: .butt))
+        case .publicConversation:
+            stroke("M-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M0 -9a4 9 0 0 0 0 18a4 9 0 0 0 0 -18M-9 0h18", 2)
+        case .communityConversation:
+            stroke("M0 -7L-7 5L7 5Z", 2)
+            dot(0, -7, 3.2)
+            dot(-7, 5, 3.2)
+            dot(7, 5, 3.2)
+        case .groupCreated:
+            dot(-6, -3, 3.5)
+            dot(3, -3, 3.5)
+            stroke("M7 4v8M3 8h8")
+        case .sticker:
+            stroke("M-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0", 2.2)
+            dot(-3.2, -2.5, 1.4)
+            dot(3.2, -2.5, 1.4)
+            stroke("M-4.5 2.5a5 5 0 0 0 9 0", 2.2)
+        case .inAppEdit:
+            stroke("M-8 8L3 -3", 2.6)
+            fill("M6 -12L7.4 -7.4L12 -6L7.4 -4.6L6 0L4.6 -4.6L0 -6L4.6 -7.4Z")
+        case .directPublish:
+            fill("M-10 -1L10 -9L3 9L0 2Z")
+        case .reaction:
+            fill("M0 9C-13 0 -9 -11 0 -4C9 -11 13 0 0 9Z")
+        case .attachment:
+            stroke("M4 -5v10a4 4 0 0 1 -8 0v-12a2.5 2.5 0 0 1 5 0v11", 2.2)
+        case .trackedLink:
+            let round = StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round)
+            inner.stroke(Path(roundedRect: CGRect(x: -11, y: -4, width: 12, height: 8), cornerRadius: 4), with: ink, style: round)
+            inner.stroke(Path(roundedRect: CGRect(x: -1, y: -4, width: 12, height: 8), cornerRadius: 4), with: ink, style: round)
+        case .share:
+            stroke("M0 -11v12M-5 -6l5 -5l5 5M-8 -1v9h16v-9")
+        case .inviteJoined:
+            dot(-3, -5, 4)
+            stroke("M-11 10a8 7 0 0 1 16 0M8 -4v8M4 0h8")
+        case .friendship:
+            dot(-5, -5, 3.5)
+            dot(5, -5, 3.5)
+            stroke("M-11 9a6 5 0 0 1 12 0M-1 9a6 5 0 0 1 12 0")
         }
     }
 }

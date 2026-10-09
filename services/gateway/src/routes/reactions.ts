@@ -25,6 +25,8 @@ import { ConflictError } from '../errors/custom-errors.js';
 import { CONVERSATION_CLOSED_EDIT_MESSAGE } from '../services/messaging/messageEditAdmission.js';
 import { notifyReactionAdded, notifyReactionRemoved } from '../services/notifications/reactionNotify.js';
 import { broadcastReactionMutation } from '../socketio/broadcastReactionMutation.js';
+import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility.js';
+import { historyReaderFromAuthContext } from '../services/historyFloor.js';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import {
   reactionSchema,
@@ -530,6 +532,11 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         if (!isParticipant) {
           return sendForbidden(reply, 'Access denied to this conversation');
         }
+      }
+
+      // #9629 — un avis de capture ne se lit par son identifiant que dans son audience.
+      if (await captureNoticeWithheldFrom(prisma, { row: message, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
+        return sendNotFound(reply, 'Message not found');
       }
 
       // Résoudre le participantId courant

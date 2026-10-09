@@ -66,6 +66,8 @@ import {
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { agentSenderIdentity } from './agentSenderIdentity.js';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
+import { emitMessageNew } from '../messageNewEmission';
+import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
 import { admitLoadedMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
@@ -790,7 +792,7 @@ export class MessageHandler {
           authorUserId: message.sender?.userId,
           conversationId: message.conversationId,
           conversation: message.conversation,
-          createdAt: message.createdAt,
+          createdAt: message.createdAt, messageType: message.messageType, metadata: message.metadata,
         },
         onError: (err) => console.error('[MESSAGE_HANDLER] Edit admission lookup failed:', err),
       });
@@ -982,8 +984,11 @@ export class MessageHandler {
         attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
+      // #9646 — un message protégé : par destinataire, adresses signées.
       const room = ROOMS.conversation(message.conversationId);
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+      const editPlan = await readerSignedPlanForMessageId(this.prisma, { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments });
+      if (editPlan) for (const t of editPlan.targets) this.io.to(t.room).emit(SERVER_EVENTS.MESSAGE_EDITED, editPlan.signFor(editedPayload, t.participantId));
+      else this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
 
       // Fan a conversation:updated preview refresh to participants sitting on
       // the conversation list (in user:<id> but not conversation:<id>) so an
@@ -1103,7 +1108,7 @@ export class MessageHandler {
         deleterUserId: userId,
         message: {
           authorUserId: message.sender?.userId,
-          conversationId: message.conversationId,
+          conversationId: message.conversationId, messageType: message.messageType, metadata: message.metadata,
         },
         onError: (err) => handlerLogger.warn('delete admission read failed', { messageId: validated.messageId, error: err }),
       });
@@ -1137,7 +1142,7 @@ export class MessageHandler {
         messageType: message.messageType,
         attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
         content: message.content,
-        metadata: message.metadata,
+        metadata: message.metadata, removedByParticipantId: admission.actorParticipantId ?? null,
       });
 
       const room = ROOMS.conversation(message.conversationId);
@@ -1372,7 +1377,7 @@ export class MessageHandler {
       // `visible ⇔ auteur ET lecteur`, fail-CLOSED si la liste des lecteurs est
       // inconnue — composée avec le scellement de la citation d'un éphémère
       // déjà échu pour un lecteur (#8562) dans `resolvePeerBroadcastSplit`.
-      const { peerPayload, hiddenRooms: forwardSourceHiddenRooms, hiddenKeys, payloadForKey } =
+      const { peerPayload, hiddenKeys, payloadForKey } =
         await resolvePeerBroadcastSplit(this.prisma, {
           senderUserId,
           sharedParticipants,
@@ -1382,61 +1387,25 @@ export class MessageHandler {
           senderKeys: [senderUserId, message.senderId],
         });
 
-      // Opt-in (OFF by default) — flip per-deploy after staging measurement.
-      //
-      // Désactivé d'office dès qu'un lecteur doit être masqué : une règle de
-      // confidentialité ne se subordonne pas à un drapeau d'optimisation de
-      // bande passante, et `_emitMessageNewByLanguage` ne sait pas exclure de
-      // salon utilisateur.
-      const langFilterOn =
-        process.env.SOCKET_LANG_FILTER === 'true' && forwardSourceHiddenRooms.length === 0;
-
-      if (senderUserId) {
-        // Multi-device : send the cid-aware payload to the sender's
-        // user room (catches every iOS / web session of this user)
-        // and the cid-stripped payload to the conversation room
-        // EXCEPT the sender's user room so peers do not receive a
-        // duplicate.
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, peerPayload, { excludeUserId: senderUserId });
-        } else {
-          this.io
-            .to(room)
-            .except([ROOMS.user(senderUserId), ...forwardSourceHiddenRooms])
-            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-        }
-        this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
-      } else if (senderSocket) {
-        // Anonymous sender with an active socket : same single-session
-        // split as before. Multi-device anonymous is undefined.
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, peerPayload, { excludeSocketId: senderSocket.id });
-        } else {
-          const peers = senderSocket.broadcast.to(room);
-          (forwardSourceHiddenRooms.length > 0 ? peers.except(forwardSourceHiddenRooms) : peers)
-            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-        }
-        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
-      } else {
-        // No senderSocket context (REST path or background flush) and
-        // no resolvable user id : fall back to the cid-stripped payload
-        // for the whole room. The sender's other sessions still
-        // reconcile via the REST / socket ACK path which carries the cid.
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, peerPayload, {});
-        } else {
-          const peers = this.io.to(room);
-          (forwardSourceHiddenRooms.length > 0 ? peers.except(forwardSourceHiddenRooms) : peers)
-            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-        }
-      }
-
-      // Les lecteurs exclus ci-dessus : le MÊME message, sans la provenance
-      // refusée ou avec la citation scellée. Émis après l'exclusion, jamais en
-      // plus d'elle — un destinataire reçoit exactement UN `message:new`.
-      for (const key of hiddenKeys) {
-        this.io.to(ROOMS.user(key)).emit(SERVER_EVENTS.MESSAGE_NEW, payloadForKey(key));
-      }
+      // L'émission — diffusion de room, masqués, filtre de langue opt-in
+      // (`SOCKET_LANG_FILTER`) ou, pour un message dont une pièce se lit par
+      // lecteur, remise par destinataire avec ses adresses signées (#9646) —
+      // vit dans `messageNewEmission.ts`, partagée avec le chemin REST/ZMQ.
+      emitMessageNew({
+        io: this.io,
+        room,
+        senderPayload,
+        peerPayload,
+        senderUserId,
+        senderParticipantId: message.senderId,
+        senderSocket,
+        hiddenKeys,
+        payloadForKey,
+        emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
+          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
+          : null,
+        readerSigned: await readerSignedPlan(this.prisma, { conversationId: normalizedId, message, attachments: peerPayload.attachments }),
+      });
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
       // Offline delivery queue — parity with the REST send path

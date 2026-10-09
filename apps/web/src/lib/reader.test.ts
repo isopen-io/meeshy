@@ -40,4 +40,24 @@ describe('resolveReaderLanguages — F6 (#5650)', () => {
     expect(result.length).toBeGreaterThan(0);
     expect(result).toEqual(READER_LANGUAGES);
   });
+
+  /**
+   * L'INVITÉ D'UN LIEN (#9710) — la langue choisie en rejoignant EST son rang 1.
+   * Sans elle, l'invité retombait sur le lecteur provisoire (`'fr'` au rang 1) :
+   * une invitée qui avait choisi l'anglais écrivait sous une pastille « FR » et
+   * sa réponse partait étiquetée française, jamais traduite pour son hôte.
+   */
+  test('gateway + invité ⇒ la langue choisie en rejoignant passe au rang 1, la locale de l’appareil derrière', () => {
+    const result = resolveReaderLanguages({
+      source: 'gateway',
+      session: { status: 'guest', guest: { language: 'en' } },
+      deviceLocale: 'de',
+    });
+    expect(result).toEqual(['en', 'de']);
+  });
+
+  test('gateway + invité restauré d’avant #9710 (sans langue) ⇒ le lecteur provisoire, jamais un tableau vide', () => {
+    const result = resolveReaderLanguages({ source: 'gateway', session: { status: 'guest', guest: {} } });
+    expect(result).toEqual(READER_LANGUAGES);
+  });
 });

@@ -114,12 +114,13 @@ describe('updateEngagementScore — un champ null ne fait plus perdre le point',
     const { prisma, state } = makeMongoLikePrisma(null);
     const service = new EngagementService(prisma);
 
-    await service.recordActivity('u-3', 'content.post');
+    // Trois gestes LÉGERS (#9667 : un post vaut désormais au moins 100, donc un gros poids borné pour un compte non vérifié).
+    await service.recordActivity('u-3', 'content.audio_message');
     await service.recordActivity('u-3', 'comment.text');
     await service.recordActivity('u-3', 'tool.sticker');
 
     expect(state.engagementScore).toBe(
-      poidsParDefaut('content.post') +
+      poidsParDefaut('content.audio_message') +
         poidsParDefaut('comment.text') +
         poidsParDefaut('tool.sticker'),
     );

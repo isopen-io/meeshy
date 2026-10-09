@@ -538,6 +538,17 @@ describe('GET /attachments/file/*', () => {
       });
       expect(res.headers['accept-ranges']).toBe('bytes');
     });
+
+    it.each([
+      ['voix.aac', 'audio/aac'],
+      ['note.wav', 'audio/wav'],
+      ['clip.m4v', 'video/mp4'],
+      ['son.opus', 'audio/ogg'],
+    ])('#9693 — sert %s en %s et répond 206 à une requête Range (Safari et la WebView Android l’exigent)', async (name, type) => {
+      const res = await app.inject({ method: 'GET', url: `/attachments/file/uploads/${name}`, headers: { range: 'bytes=0-1' } });
+      expect(res.statusCode).toBe(206);
+      expect(res.headers['content-type']).toContain(type);
+    });
   });
 
   describe('regular file (non-media)', () => {

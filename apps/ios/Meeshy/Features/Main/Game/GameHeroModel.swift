@@ -3,9 +3,9 @@ import MeeshySDK
 
 /// LE HÉRO DE PROGRESSION (#5841) — ce que la loi dit au héro, avant qu'il le dessine.
 ///
-/// « Comment gagner » ne contient AUCUNE chaîne recopiée : c'est le barème
-/// (`EngagementCatalog.familyWeights`, miroir de `ENGAGEMENT_AXIS_WEIGHTS`) qui fait la liste,
-/// triée par poids décroissant. Régler un poids change ce que le héro énumère sans toucher un
+/// « Comment gagner » ne contient AUCUNE chaîne recopiée : c'est le catalogue
+/// (`EngagementCatalog.familyTopPoints`, miroir de `ENGAGEMENT_FAMILY_TOP_POINTS` — ce qu'un geste
+/// de la famille rapporte AU PLUS, #9667) qui fait la liste, triée par points décroissants. Régler un poids change ce que le héro énumère sans toucher un
 /// mot — c'est exactement ce qui était arrivé à la fixture de démonstration (#5762), dont la
 /// phrase en dur s'était périmée au premier réglage. Miroir de `apps/web/src/routes/progression-hero.tsx`.
 enum GameHero {
@@ -25,7 +25,7 @@ enum GameHero {
 
     /// Une puce par famille, triée par poids décroissant. À poids égal, l'ordre du catalogue
     /// décide : la liste ne danse pas d'un lancement à l'autre (un dictionnaire n'a pas d'ordre).
-    static func earnItems(weights: [EngagementAxisFamily: Int] = EngagementCatalog.familyWeights) -> [EarnItem] {
+    static func earnItems(weights: [EngagementAxisFamily: Int] = EngagementCatalog.familyTopPoints) -> [EarnItem] {
         EngagementAxisFamily.allCases.enumerated()
             .compactMap { index, family in weights[family].map { (index, EarnItem(family: family, weight: $0)) } }
             .sorted { lhs, rhs in lhs.1.weight != rhs.1.weight ? lhs.1.weight > rhs.1.weight : lhs.0 < rhs.0 }

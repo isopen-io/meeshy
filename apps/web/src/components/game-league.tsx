@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 
 import type { GameLeagueBlock, LeagueWeekEntry, LeagueWeekResponse } from '@meeshy/shared/types/game';
-import type { LeagueKey, LeagueZone } from '@meeshy/shared/utils/game/league';
+import { LEAGUE_MIN_LEVEL, type LeagueKey, type LeagueZone } from '@meeshy/shared/utils/game/league';
 
 import { formatCount, gameText, pointsLabel } from '@/lib/view/game-copy';
 import { leagueName, remainingLabel, weekLabel, zoneLabel } from '@/lib/view/game-copy-v2';
@@ -10,7 +10,7 @@ import { gemDetail, playerDetail } from '@/lib/view/game-detail';
 import { CHOSEN_PSEUDONYM_OPEN, GameLeagueConsent, PseudonymField } from './game-league-consent';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GameCard, GameChip } from './game-surface';
 import { LeagueGem } from './game/league-gem';
-import { GameTouch } from './game-touch';
+import { GameRequirementLine, GameTouch } from './game-touch';
 import { Trophy } from './game/trophy';
 
 /**
@@ -131,8 +131,6 @@ export type GameLeagueProps = {
   readonly chosenPseudonym?: boolean;
 };
 
-const MIN_LEVEL = 10;
-
 function LockedCard({ levelRecord }: { readonly levelRecord: number }) {
   return (
     <GameCard id="game-league-locked" labelledBy="game-league-locked-title">
@@ -140,8 +138,9 @@ function LockedCard({ levelRecord }: { readonly levelRecord: number }) {
         {gameText('game.league.title')}
       </h2>
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
-        {gameText('game.league.locked', { level: formatCount(MIN_LEVEL), current: formatCount(levelRecord) })}
+        {gameText('game.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL), current: formatCount(levelRecord) })}
       </p>
+      <GameRequirementLine concept="league" current={levelRecord} required={LEAGUE_MIN_LEVEL} record />
     </GameCard>
   );
 }

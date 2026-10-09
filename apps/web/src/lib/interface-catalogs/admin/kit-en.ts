@@ -294,6 +294,18 @@ const f = {
   'admin.enum.sessionEnd.security_breach': 'Security breach',
   'admin.enum.sessionEnd.security_concern': 'Security concern',
   'admin.enum.sessionEnd.session_limit_exceeded': 'Too many open sessions',
+  'admin.enum.sessionEnd.logout_all_devices': 'All sessions were closed',
+  'admin.enum.sessionPlatform.ios': 'iOS app',
+  'admin.enum.sessionPlatform.web': 'Web browser',
+  'admin.enum.sessionPlatform.pwa': 'Installed web app',
+  'admin.enum.sessionPlatform.android-shell': 'Android app',
+  'admin.enum.loginMethod.password': 'Password',
+  'admin.enum.loginMethod.two_factor': 'Password and second factor',
+  'admin.enum.loginMethod.magic_link': 'Email magic link',
+  'admin.enum.loginMethod.registration': 'Sign-up',
+  'admin.enum.loginMethod.email_verification': 'Email verification',
+  'admin.enum.loginMethod.oauth': 'External account',
+  'admin.enum.loginMethod.anonymous': 'Anonymous access',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

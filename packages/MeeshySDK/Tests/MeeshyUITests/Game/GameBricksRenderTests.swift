@@ -58,11 +58,33 @@ struct GameBricksRenderTests {
         }
     }
 
-    @Test("la division se lit aux chevrons : III et I ne se ressemblent pas")
-    func divisionChevrons() throws {
+    @Test("la division se lit aux encoches : V et IV ne se ressemblent pas, III et I non plus")
+    func divisionNotches() throws {
+        let fifth = try probe(RankBlasonView(rank: .voix, division5: .v, figures: nil), width: 150, height: 138)
+        let fourth = try probe(RankBlasonView(rank: .voix, division5: .iv, figures: nil), width: 150, height: 138)
+        #expect(fifth.distance(to: fourth) > 0.05)
         let third = try probe(RankBlasonView(rank: .voix, division: .iii, figures: nil), width: 150, height: 138)
         let first = try probe(RankBlasonView(rank: .voix, division: .i, figures: nil), width: 150, height: 138)
         #expect(third.distance(to: first) > 0.05)
+    }
+
+    @Test("le niveau se grave dans la pointe ; il se tait sous 60 pt")
+    func levelIsEngraved() throws {
+        let twelve = try probe(RankBlasonView(rank: .conteur, division5: .ii, level: 12, figures: nil), width: 150, height: 138)
+        let ninety = try probe(RankBlasonView(rank: .conteur, division5: .ii, level: 98, figures: nil), width: 150, height: 138)
+        #expect(twelve.distance(to: ninety) > 0.05)
+        let small12 = try probe(RankBlasonView(rank: .conteur, division5: .ii, level: 12, figures: nil), width: 40, height: 37)
+        let small98 = try probe(RankBlasonView(rank: .conteur, division5: .ii, level: 98, figures: nil), width: 40, height: 37)
+        #expect(small12.distance(to: small98) == 0)
+    }
+
+    @Test("deux Mythes d'émissions différentes ne portent jamais le même halo")
+    func mythicHaloFollowsTheEdition() throws {
+        let one = try probe(RankBlasonView(rank: .mythe, division5: nil, mythic: MythicSeatRef(number: 1, edition: 1), figures: nil),
+                            width: 150, height: 138)
+        let other = try probe(RankBlasonView(rank: .mythe, division5: nil, mythic: MythicSeatRef(number: 1, edition: 42), figures: nil),
+                              width: 150, height: 138)
+        #expect(one.distance(to: other) > 0.05)
     }
 
     @Test("la coupe : sa matière et son inscription la distinguent")
@@ -89,7 +111,7 @@ struct GameBricksRenderTests {
 
     // MARK: - Les médailles (#9466)
 
-    private func medal(_ family: GameMedalFamily = .content, glyph: GameMedalGlyph = .text, material: GameMaterial = .gold,
+    private func medal(_ family: GameMedalFamily = .content, glyph: GameMedalGlyph = .textMessage, material: GameMaterial = .gold,
                        state: GameMedalView.State = .lit, progress: Double = 0.5, label: String? = "100") throws -> GameRenderProbe {
         try probe(GameMedalView(family: family, glyph: glyph, material: material, state: state, progress: progress, label: label),
                   width: 100, height: 112)
@@ -117,7 +139,7 @@ struct GameBricksRenderTests {
         }
     }
 
-    @Test("les neuf pictogrammes d'axe se distinguent")
+    @Test("les vingt pictogrammes d'axe se distinguent (#9639)")
     func medalGlyphs() throws {
         let probes = try GameMedalGlyph.allCases.map { try medal(glyph: $0, label: nil) }
         for (index, lhs) in probes.enumerated() {
@@ -241,11 +263,13 @@ struct GameBricksRenderTests {
         #expect(Set(GloryRank.allCases.map(\.material)).count == 7)
     }
 
-    @Test("chaque palier de niveau a sa couleur, Étincelle rouge et Constellation violette")
+    @Test("chaque palier de niveau a sa couleur, des dix d'hier aux dix d'au-delà de 100 (#9688)")
     func tierColors() {
         let colors = LevelTierKey.allCases.map { LevelTierPalette.color(for: $0) }
-        #expect(colors.count == 10)
+        #expect(colors.count == 20)
         #expect(LevelTierPalette.color(for: .etincelle) != LevelTierPalette.color(for: .lueur))
+        #expect(LevelTierPalette.color(for: .nebuleuse) != LevelTierPalette.color(for: .pulsar))
+        #expect(LevelTierPalette.color(for: .singularite) == LevelTierPalette.color(for: .galaxie))
     }
 
     @Test("les huit gemmes de ligue se distinguent, chacune peint une gemme et jamais son cadre")

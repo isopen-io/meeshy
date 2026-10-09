@@ -222,6 +222,23 @@ const f = {
   'admin.monitoring.routes.blind.saturation': 'Desglose limitado por saturación',
   'admin.monitoring.routes.blind.saturation.explain': 'Pasado un tope, se rechazan los nuevos desgloses por plataforma y versión; los totales de las rutas vigiladas siguen siendo exactos.',
   'admin.monitoring.routes.blind.other': 'Otro límite señalado',
+
+  'admin.monitoring.backups.title': 'Copias de seguridad',
+  'admin.monitoring.backups.hint': 'La producción se respalda cada noche a medianoche, hora de París. Un control a las 5 h avisa a los administradores si algo falla.',
+  'admin.monitoring.backups.state.ok': 'Correcta',
+  'admin.monitoring.backups.state.failed': 'Fallida',
+  'admin.monitoring.backups.state.stale': 'Demasiado antigua',
+  'admin.monitoring.backups.reason': 'Motivo: {reason}',
+  'admin.monitoring.backups.last': 'Última copia correcta',
+  'admin.monitoring.backups.never': 'Ninguna',
+  'admin.monitoring.backups.next': 'Próxima copia',
+  'admin.monitoring.backups.documents': 'Documentos verificados',
+  'admin.monitoring.backups.documents.caption': '{collections} colecciones · {indexes} índices · {mismatches} diferencia(s) en la restauración de prueba',
+  'admin.monitoring.backups.archive': 'Archivo de la base de datos',
+  'admin.monitoring.backups.archive.caption': 'Copia completa en {duration}',
+  'admin.monitoring.backups.volumes': 'Medios y datos',
+  'admin.monitoring.health.issue.backupFailed': 'La última copia de seguridad de producción ha fallado.',
+  'admin.monitoring.health.issue.backupStale': 'Ninguna copia de seguridad de producción ha funcionado desde hace más de 26 horas.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

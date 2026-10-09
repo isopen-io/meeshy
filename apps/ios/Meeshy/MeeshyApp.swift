@@ -155,6 +155,13 @@ struct MeeshyApp: App {
                                     PendingLinkNotice(isVisible: deepLinkRouter.pendingDeepLink?.opensAfterSignIn == true)
                                 }
                                 .animation(.easeOut(duration: 0.25), value: deepLinkRouter.pendingDeepLink)
+                                // #9612 — la fermeture prononcée par le serveur s'explique AVANT la reconnexion.
+                                .sheet(item: Binding(
+                                    get: { authManager.sessionRevocationNotice },
+                                    set: { if $0 == nil { authManager.acknowledgeSessionRevocationNotice() } }
+                                )) { notice in
+                                    SessionClosedNoticeView(notice: notice) { authManager.acknowledgeSessionRevocationNotice() }
+                                }
                         }
                     }
                     .opacity(launchSplash.phase == .covering ? 0 : 1)
@@ -580,6 +587,10 @@ struct MeeshyApp: App {
                         await EngagementFlushTrigger.flushNow()
                         EngagementRetryScheduler.shared.startObservingNetworkReconnect()
                     }
+
+                    // #9680 — un envoi long (média, story, publication) se suit
+                    // dans la Dynamic Island et sur l'écran verrouillé.
+                    OutboxLiveActivityCoordinator.shared.start()
 
                     // Session check gates auth and MUST finish before the splash
                     // dismisses. Friendship hydration only powers non-critical

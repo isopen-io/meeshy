@@ -110,6 +110,8 @@ async function guestAuth(req: FastifyRequest): Promise<void> {
 async function buildApp(
   auth: (req: FastifyRequest) => Promise<void> = requiredAuth,
   postRows?: Readonly<Record<string, Record<string, unknown>>>,
+  threadVisibility: string | null = 'PUBLIC',
+  owners: { readonly threadAuthorId?: string; readonly parentAuthorId?: string | null } = {},
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
@@ -117,21 +119,21 @@ async function buildApp(
       findFirst: postRows
         ? jest.fn(({ where }: any) => Promise.resolve(postRows[where.id] ?? null))
         : jest.fn<any>().mockResolvedValue({ id: POST_ID, ...PUBLIC_ACL }),
-      findUnique: jest.fn<any>().mockResolvedValue({
-        authorId: 'author-1',
+      findUnique: jest.fn<any>().mockResolvedValue(threadVisibility === null ? null : {
+        authorId: owners.threadAuthorId ?? 'author-1',
         commentCount: 1,
         type: 'POST',
         content: 'Post content',
         createdAt: new Date(),
         expiresAt: null,
-        visibility: 'PUBLIC',
+        visibility: threadVisibility,
         visibilityUserIds: [],
       }),
       update: jest.fn<any>().mockResolvedValue({}),
     },
     postComment: {
       findFirst: jest.fn<any>().mockResolvedValue({ postId: POST_ID, post: PUBLIC_ACL }),
-      findUnique: jest.fn<any>().mockResolvedValue(null),
+      findUnique: jest.fn<any>().mockResolvedValue(owners.parentAuthorId ? { authorId: owners.parentAuthorId, postId: POST_ID } : null),
     },
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
@@ -164,7 +166,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.text » 
       payload: { content: 'Nice post!' },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-004' });
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-004', variant: 'public', targetOwnerId: 'author-1' });
     await app.close();
   });
 
@@ -200,7 +202,7 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
       payload: { attachmentIds: ['media-audio-003'] },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio', { postId: POST_ID, receipt: 'comment:comment-audio-engagement' });
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio', { postId: POST_ID, receipt: 'comment:comment-audio-engagement', variant: 'public', targetOwnerId: 'author-1' });
     await app.close();
   });
 
@@ -283,7 +285,7 @@ describe('POST /posts/:postId/comments — écrit sous une republication simple,
 
     expect(res.statusCode).toBe(201);
     expect(mockAddComment.mock.calls[0]?.[0]).toBe(REPOST_ID);
-    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: REPOST_ID, receipt: 'comment:comment-through-repost' }]]);
+    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: REPOST_ID, receipt: 'comment:comment-through-repost', variant: 'public', targetOwnerId: 'author-1' }]]);
   });
 
   it('sur l’original lui-même, un seul crédit', async () => {
@@ -293,6 +295,78 @@ describe('POST /posts/:postId/comments — écrit sous une republication simple,
     await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Bravo' } });
     await app.close();
 
-    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-direct' }]]);
+    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-direct', variant: 'public', targetOwnerId: 'author-1' }]]);
+  });
+});
+
+/**
+ * #9667 — un commentaire vaut selon la visibilité du CONTENU COMMENTÉ (la
+ * publication qui porte le fil), lue par le serveur : public 100, communauté
+ * 50, amis 10, audience restreinte 0 ; visibilité inconnue ⇒ amis.
+ */
+describe('POST /posts/:postId/comments — la valeur suit la visibilité du contenu commenté (#9667)', () => {
+  it.each([
+    ['PUBLIC', 'public'],
+    ['COMMUNITY', 'community'],
+    ['FRIENDS', 'friends'],
+    ['EXCEPT', 'other'],
+    ['ONLY', 'other'],
+    ['MYSTERE', 'friends'],
+  ])('un fil %s crédite la variante %s', async (visibility, variant) => {
+    mockAddComment.mockResolvedValue({ id: 'comment-visibility', content: 'Bravo', authorId: USER_ID, media: [] });
+    const app = await buildApp(requiredAuth, undefined, visibility);
+
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Bravo', visibility: 'PUBLIC', variant: 'public' } });
+    await app.close();
+
+    expect(mockRecordActivity.mock.calls).toEqual([[USER_ID, 'comment.text', { postId: POST_ID, receipt: 'comment:comment-visibility', variant, targetOwnerId: 'author-1' }]]);
+  });
+});
+
+/**
+ * #9673 — commenter SON propre contenu ne rapporte rien ; répondre à une AUTRE
+ * personne sous son propre contenu rapporte (un échange réel). Le crédit porte
+ * l'auteur visé (`targetOwnerId`) : celui du commentaire parent pour une
+ * réponse, sinon celui du contenu qui porte le fil — la garde d'auto-interaction
+ * d'`EngagementService` refuse quand c'est soi.
+ */
+describe('POST /posts/:postId/comments — commenter son propre contenu (#9673)', () => {
+  it('un fil illisible (contenu introuvable) ne crédite rien : l’auteur visé est inconnu', async () => {
+    mockAddComment.mockResolvedValue({ id: 'c-unknown', content: 'Merci', authorId: USER_ID, media: [] });
+    const app = await buildApp(requiredAuth, undefined, null);
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Merci' } });
+    await app.close();
+
+    expect(mockRecordActivity).not.toHaveBeenCalled();
+  });
+
+  const comment = (id: string) => mockAddComment.mockResolvedValue({ id, content: 'Merci', authorId: USER_ID, media: [] });
+  const ownerOf = () => (mockRecordActivity.mock.calls[0]?.[2] as { targetOwnerId?: string } | undefined)?.targetOwnerId;
+
+  it('un commentaire de premier niveau sous son propre contenu vise soi-même', async () => {
+    comment('c-self');
+    const app = await buildApp(requiredAuth, undefined, 'PUBLIC', { threadAuthorId: USER_ID });
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Merci' } });
+    await app.close();
+
+    expect(ownerOf()).toBe(USER_ID);
+  });
+
+  it('une réponse à une autre personne sous son propre contenu vise cette personne', async () => {
+    comment('c-reply-other');
+    const app = await buildApp(requiredAuth, undefined, 'PUBLIC', { threadAuthorId: USER_ID, parentAuthorId: 'friend-1' });
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Merci', parentId: '507f1f77bcf86cd799439077' } });
+    await app.close();
+
+    expect(ownerOf()).toBe('friend-1');
+  });
+
+  it('une réponse à son propre commentaire, sous le contenu d’un autre, vise soi-même', async () => {
+    comment('c-reply-self');
+    const app = await buildApp(requiredAuth, undefined, 'PUBLIC', { parentAuthorId: USER_ID });
+    await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'Merci', parentId: '507f1f77bcf86cd799439077' } });
+    await app.close();
+
+    expect(ownerOf()).toBe(USER_ID);
   });
 });

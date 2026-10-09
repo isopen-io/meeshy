@@ -126,6 +126,16 @@ const es = {
   'export.announce.motionUnavailable': 'Este navegador no puede crear esta animación',
   'export.announce.galleryMotion': 'Guardado en la galería',
   'export.announce.sharedMotion': 'Listo para compartir',
+  'export.card.compose': 'Composición',
+  'export.card.compose.postAndComment': 'Publicación + comentario',
+  'export.card.compose.commentAlone': 'Solo el comentario',
+  'export.card.compose.threadToHere': 'Hilo hasta aquí',
+  'export.card.compose.postRootAndReply': 'Publicación + raíz + respuesta',
+  'export.card.compose.chosenReplies': 'Elegir respuestas',
+  'export.card.compose.post': 'Publicación arriba',
+  'export.card.compose.replies': 'Respuestas en la tarjeta',
+  'export.card.compose.thread': 'Hilo de comentarios',
+  'export.card.compose.folded': '+{count} respuestas',
 } satisfies ExportCardCatalog;
 
 export default es;

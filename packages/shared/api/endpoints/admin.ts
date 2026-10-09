@@ -342,7 +342,7 @@ export const usersByUserIdSecurity = (userId: string): string => `/api/v1/admin/
 /** GET /api/v1/admin/users/:userId/security-events */
 export const usersByUserIdSecurityEvents = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/security-events`;
 
-/** GET /api/v1/admin/users/:userId/sessions */
+/** GET · DELETE /api/v1/admin/users/:userId/sessions */
 export const usersByUserIdSessions = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/sessions`;
 
 /** DELETE /api/v1/admin/users/:userId/sessions/:sessionId */

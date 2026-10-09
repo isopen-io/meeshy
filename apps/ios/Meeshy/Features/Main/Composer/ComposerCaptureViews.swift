@@ -241,8 +241,10 @@ struct ComposerCaptureChrome: View {
                         onFlashIntensity: { session.setFlashIntensity($0) },
                         flipping: session.barCapture.flipping,
                         editing: session.phase.isEditing,
-                        rendering: session.isRenderingLook,
-                        onDone: { session.finishEditing() })
+                        rendering: session.isRenderingLook || session.takeSaveState == .saving,
+                        onDone: { session.finishEditing() },
+                        saveState: session.takeSaveState,
+                        onSave: { session.saveTakeToPhotos() })
                     .transition(.opacity)
                 }
                 Spacer(minLength: 0)

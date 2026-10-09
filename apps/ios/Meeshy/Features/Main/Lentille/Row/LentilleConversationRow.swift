@@ -190,10 +190,23 @@ struct LentilleConversationRow: View {
     /// `ThemedConversationRow.conversationAccessibilityLabel` — lue
     /// directement par les témoins via `@testable import`.
     var accessibilityLabel: String {
-        ThemedConversationRow(
+        let base = ThemedConversationRow(
             conversation: conversation,
             preferredContentLanguages: preferredContentLanguages
         ).conversationAccessibilityLabel
+        // L'heure y est déjà ; les points aussi, toujours (#9571) — ce qui
+        // s'efface au repos est VISUEL, jamais ce que VoiceOver lit.
+        guard let points = Self.spokenPoints(
+            ConversationEngagementStore.shared.displayed(for: conversation.id, seed: conversation.viewerEngagement, at: Date())
+        ) else { return base }
+        return base + ", " + points
+    }
+
+    /// La phrase des points d'une conversation : série et cumul, le cumul seul
+    /// sans série, rien pour un cumul nul (`ConversationPointsForm`).
+    static func spokenPoints(_ shown: ConversationEngagementSnapshot?) -> String? {
+        guard let shown, ConversationPointsForm.of(shown) != nil else { return nil }
+        return ConversationEngagementPill.accessibilityText(for: shown)
     }
 
     // MARK: - Avatar — 44 (`.conversationHeaderCollapsed`) + anneau accent
@@ -351,28 +364,34 @@ struct LentilleConversationRow: View {
 
             Spacer(minLength: 0)
 
-            // La série « 🔥4 · 120 » en rouge, juste avant l'heure (#9025) —
-            // masquée sur la rangée en focus pour le moment (directive porteur
-            // 2026-10-01), où la pastille « N (M) » ne se pose plus non plus.
-            if magnification == nil {
-                ConversationStreakMarkHost(
-                    conversationId: conversation.id,
-                    seed: conversation.viewerEngagement
-                )
-            }
+            // L'heure et les points ne paraissent qu'au DÉFILEMENT (#9571,
+            // directive porteur 2026-10-07) : `LentilleRowMetaFade` est la
+            // seule vue qui observe la révélation — la rangée ne se re-rend
+            // pas à son rythme. La rangée en focus garde sa date précise.
+            LentilleRowMetaFade(alwaysVisible: magnification != nil) {
+                HStack(spacing: MeeshySpacing.xs) {
+                    // La série « 🔥4 · 120 » en rouge, ou le cumul seul à
+                    // l'encre de l'heure (#9025, #9571) — masquée sur la rangée
+                    // en focus pour le moment (directive porteur 2026-10-01).
+                    if magnification == nil {
+                        ConversationStreakMarkHost(
+                            conversationId: conversation.id,
+                            seed: conversation.viewerEngagement,
+                            isDark: isDark
+                        )
+                    }
 
-            // Le glyphe d'outbox a quitté cette ligne en amont (amendement
-            // L09 : « l'outbox continue de renvoyer, sans affordance de
-            // liste ») — la magnification ne le rétablit pas. Elle n'ajoute
-            // que de la PRÉCISION à la date, jamais une affordance que le
-            // repos n'a pas.
-            timestampText
-                .font(LentilleMetrics.Time.font)
-                .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
-                .lineLimit(1)
-                .fixedSize()
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+                    // Le glyphe d'outbox a quitté cette ligne en amont
+                    // (amendement L09) — la magnification ne le rétablit pas.
+                    timestampText
+                        .font(LentilleMetrics.Time.font)
+                        .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 // MARK: - Ce que la vague 2 du jeu dit — collection (suite de `GameText`, voir `GameWave2CopyCommon.swift`)
 
@@ -54,7 +55,11 @@ extension GameText {
         String(localized: "game2.season.claim", defaultValue: "Réclamer l’étape \(step)", bundle: .main)
     }
 
-    static var seasonCompleted: String { String(localized: "game2.season.completed", defaultValue: "Parcours terminé : une coupe, un badge daté et 500 de Gloire.", bundle: .main) }
+    /// La Gloire dite est celle que la passerelle verse (`GameGlory.points.season`), jamais un nombre recopié (#9674).
+    static var seasonCompleted: String { seasonCompleted(glory: GameCopy.formatCount(GameGlory.points.season)) }
+    static func seasonCompleted(glory: String) -> String {
+        String(localized: "game2.season.completed", defaultValue: "Parcours terminé : une coupe, un badge daté et \(glory) de Gloire.", bundle: .main)
+    }
 
     static var seasonNone: String { String(localized: "game2.season.none", defaultValue: "Aucune saison n’est ouverte pour l’instant. La prochaine commence bientôt.", bundle: .main) }
 
@@ -69,8 +74,6 @@ extension GameText {
     }
 
     static var seasonSealOwned: String { String(localized: "game2.season.seal.owned", defaultValue: "Tu as le Sceau de cette saison.", bundle: .main) }
-
-    static var seasonSealMissing: String { String(localized: "game2.season.seal.missing", defaultValue: "Il te manque des Meeshes pour le Sceau.", bundle: .main) }
 
     static var seasonSealCosmetic: String { String(localized: "game2.season.seal.cosmetic", defaultValue: "Objet du Sceau", bundle: .main) }
 
@@ -186,7 +189,7 @@ extension GameText {
 
     static var prestigeMax: String { String(localized: "game2.prestige.max", defaultValue: "Tu as les cinq étoiles : le sommet du sommet.", bundle: .main) }
 
-    static var prestigeMee: String { String(localized: "game2.prestige.mee", defaultValue: "Tu es au niveau 100 : le sommet ! Tu peux passer en Prestige.", bundle: .main) }
+    static var prestigeMee: String { String(localized: "game2.prestige.mee", defaultValue: "Tu as atteint le niveau 100 : tu peux passer en Prestige, ou continuer à monter.", bundle: .main) }
 
     static func prestigeMeo(glory: String) -> String {
         String(localized: "game2.prestige.meo", defaultValue: "Ton niveau repart à 1 et tes points en poche à 0. En échange : une étoile sur ton anneau, un trophée numéroté et \(glory) de Gloire. Ton rang ne baisse jamais.", bundle: .main)
@@ -214,7 +217,7 @@ extension GameText {
 
     static var prestigeGo: String { String(localized: "game2.prestige.go", defaultValue: "Passer en Prestige", bundle: .main) }
 
-    static var prestigeStay: String { String(localized: "game2.prestige.stay", defaultValue: "Rester au sommet", bundle: .main) }
+    static var prestigeStay: String { String(localized: "game2.prestige.stay", defaultValue: "Continuer à monter", bundle: .main) }
 
     static func prestigeDone(number: String) -> String {
         String(localized: "game2.prestige.done", defaultValue: "Prestige \(number) ! Une étoile de plus sur ton anneau.", bundle: .main)

@@ -3,9 +3,11 @@ import type { GameAtlasBlock, GameChest, GameFlame, GameGlory, GameLeagueBlock, 
 import type { AchievementEntry } from '@meeshy/shared/utils/achievement-view';
 import { engagementAchievementCondition, engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 import type { EngagementAchievementProgress, EngagementAxisProgress } from '@meeshy/shared/utils/engagement-progress';
+import { badgeGuideOfProgress } from '@meeshy/shared/utils/game/badge-guide';
 import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
-import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
+import type { GloryDivision5, GloryRankOrMythic, MythicSeatRef } from '@meeshy/shared/utils/game/glory';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
+import { levelStepsOf, type LevelStep, type LevelStepKind } from '@meeshy/shared/utils/game/level-steps';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { seasonStepReward } from '@meeshy/shared/utils/game/season';
@@ -14,11 +16,13 @@ import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { GAME_DETAIL_HOW, type GameDetailFact, type GameDetailFamily } from '@/lib/game/detail-families';
 import { earnRules } from '@/lib/game/earn-rules';
+import { shownLevelOf } from '@/lib/game/ladder';
 import type { GameMaterial } from '@/lib/game/materials';
 import { medalOfAxis } from '@/lib/game/medal';
 import { rarityPercent, visibleRarity, type AchievementRarityMap, type RarityEntry } from '@/lib/game/rarity';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { badgeGuideView, type BadgeGuideView } from '@/lib/view/badge-guide-view';
 import {
   boundedPercent,
   daysLabel,
@@ -29,15 +33,20 @@ import {
   formatCount,
   gameText,
   levelTierName,
+  levelTopLine,
   materialName,
   meeshCount,
   missionTitle,
   pointsLabel,
   rankLabel,
+  standingLabel,
   treasuryName,
+  servedDivision,
+  shownRank,
 } from '@/lib/view/game-copy';
 import { awardedDate, dayLabel, languageName, leagueName, rarityName, trophyView, zoneLabel } from '@/lib/view/game-copy-v2';
 import { generatedAchievementLabel } from '@/lib/view/progression';
+import { levelStepLine, levelStepWhat } from '@/lib/view/level-step-copy';
 import { conceptView, flameStateLabel, type ConceptFact, type DetailRef } from '@/lib/view/progression-concepts';
 
 /**
@@ -65,7 +74,14 @@ export type DetailEmblem =
   | { readonly kind: 'seal'; readonly owned: boolean }
   | { readonly kind: 'gem'; readonly league: LeagueKey }
   | { readonly kind: 'ring'; readonly level: number; readonly tier: LevelTierKey; readonly progress: number; readonly prestige: number }
-  | { readonly kind: 'rank'; readonly rank: GloryRankOrMythic; readonly division: GloryDivision | null }
+  | {
+      readonly kind: 'rank';
+      readonly rank: GloryRankOrMythic;
+      readonly division: GloryDivision5 | null;
+      readonly mythic: MythicSeatRef | null;
+      /** Le niveau gravé sur le blason ; `null` quand l'hôte ne le connaît pas. */
+      readonly level: number | null;
+    }
   | { readonly kind: 'flame'; readonly form: FlameFormKey; readonly out: boolean }
   | { readonly kind: 'chest'; readonly open: boolean }
   | { readonly kind: 'coin'; readonly edition: MeeshEdition }
@@ -93,7 +109,11 @@ export type ElementDetail = {
   readonly name: string;
   readonly state: DetailState;
   readonly what: string;
+  /** Le titre de « ce que c'est » quand l'élément en a un plus juste (un badge : « Ce qui compte »). */
+  readonly whatLabel?: string;
   readonly how: { readonly label: 'obtain' | 'gives'; readonly text: string } | null;
+  /** Ce qu'un badge dit de lui-même (#9639) : étoiles, échelle des sept paliers, raison de sa matière. */
+  readonly badge?: BadgeGuideView;
   /** Les lignes en plus : un prix, une récompense, une échéance. */
   readonly facts: readonly Pick<ConceptFact, 'label' | 'value'>[];
   readonly rarity: { readonly name: string; readonly share: string } | null;
@@ -142,21 +162,28 @@ const rarityOf = (entry: RarityEntry | undefined): ElementDetail['rarity'] => {
   return { name: rarityName(rarity, language), share: gameText('game.rarity.share', { percent: rarityPercent(entry, language) }) };
 };
 
-/** UN BADGE : la médaille d'un axe. Sa matière dit la hauteur atteinte ; à zéro, il manque de quoi l'allumer. */
+/**
+ * UN BADGE : la médaille d'un axe (#9639). « Ce qui compte » est la phrase de
+ * SON axe, jamais celle de la famille ; « comment l'obtenir » dit ce qu'il manque
+ * pour la prochaine étoile ; la matière dit pourquoi elle est là, et l'échelle
+ * des sept paliers montre les atteints (datés) et ceux à venir (leur seuil).
+ */
 export function badgeDetail(axis: EngagementAxisProgress): ElementDetail {
   const medal = medalOfAxis(axis);
+  const view = badgeGuideView(badgeGuideOfProgress(axis));
   const name = engagementAxisLabel(currentInterfaceLanguage(), axis.axisKey);
   const lastReached = [...axis.tiers].reverse().find((tier) => tier.reached);
-  const next = medal.nextThreshold;
-  return ofFamily('badge', axis.axisKey, 'badges', {
+  const detail = ofFamily('badge', axis.axisKey, 'badges', {
     emblem: { kind: 'medal', axis },
     name,
     state: medal.material === null ? locked(medal.missing === null ? null : formatCount(medal.missing), axis.progress) : earned(isoDate(lastReached?.reachedAt ?? null)),
+    how: { label: 'obtain', text: view.next },
     facts: present([
       medal.material === null ? null : row(gameText('game.fact.material'), materialName(medal.material)),
-      next === null ? null : row(gameText('game.fact.next_tier'), fraction(medal.value, next)),
+      row(gameText('game.badge.stars_label'), fraction(view.stars.lit, view.stars.max)),
     ]),
   });
+  return { ...detail, what: view.counts, whatLabel: gameText('game.badge.counts_label'), badge: view };
 }
 
 /**
@@ -287,12 +314,13 @@ export function starDetail(prestige: GamePrestigeBlock, index: number): ElementD
   });
 }
 
-/** LE BLASON du rang : le rang, la Gloire, et le rang suivant avec ce qu'il manque. */
-export function rankDetail(glory: GameGlory): ElementDetail {
-  const next = glory.next === null ? null : rankLabel(glory.next.rank, glory.next.division);
+/** LE BLASON du rang : le rang, la Gloire, et le rang suivant avec ce qu'il manque ; le niveau, quand l'hôte le tient, se grave sur l'écu. */
+export function rankDetail(glory: GameGlory, level: number | null = null): ElementDetail {
+  const next = glory.next === null ? null : rankLabel(glory.next.rank, servedDivision(glory.next));
+  const shown = shownRank(glory);
   return ofFamily('rank', glory.rank, 'glory', {
-    emblem: { kind: 'rank', rank: glory.rank, division: glory.division },
-    name: rankLabel(glory.rank, glory.division),
+    emblem: { kind: 'rank', rank: shown.rank, division: shown.division, mythic: shown.mythic, level },
+    name: standingLabel(shown),
     state: value(gameText('game.rank.glory', { glory: formatCount(glory.glory) }), next === null ? null : glory.progress),
     facts: present([
       next === null ? row(gameText('game.fact.next_rank'), gameText('game.rank.top')) : row(gameText('game.fact.next_rank'), next),
@@ -389,13 +417,14 @@ export function coinDetail(view: EngagementWithGame): ElementDetail | null {
 }
 
 /** L'ANNEAU du niveau. */
-export function ringDetail(level: GameLevel): ElementDetail {
+export function ringDetail(served: GameLevel): ElementDetail {
+  const level = shownLevelOf(served);
   const atTop = level.nextThreshold === null;
   return ofFamily('ring', 'level', 'level', {
     emblem: { kind: 'ring', level: level.level, tier: level.tier, progress: level.progress, prestige: level.prestige },
     name: gameText('game.level.title', { level: formatCount(level.level), tier: levelTierName(level.tier) }),
     state: value(
-      atTop ? gameText('game.level.top') : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) }),
+      atTop ? levelTopLine(level) : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) }),
       atTop ? null : level.progress,
     ),
     facts: present([
@@ -404,6 +433,31 @@ export function ringDetail(level: GameLevel): ElementDetail {
     ]),
   });
 }
+
+/** La fiche où se fait chaque sorte d'étape (#9706) : « Voir la fiche » mène au geste. */
+const LEVEL_STEP_CONCEPT: Readonly<Record<LevelStepKind, ProgressionConcept>> = { mint: 'meesh', missions: 'missions', flame: 'flame', rank: 'glory' };
+
+const stepProgress = (step: LevelStep): string =>
+  step.met ? gameText('game.level.step.done') : fraction(Math.min(step.current, step.target), step.target);
+
+/**
+ * L'ÉTAPE des niveaux (#9706) — la prochaine au-dessus du niveau, faite ou à faire ; la fiche qu'elle ouvre
+ * est celle du geste qui la fait. Les dix étapes en lignes, quand le serveur sert leurs compteurs.
+ */
+export function levelStepDetail(game: Pick<GameBlockForStep, 'level' | 'glory'>, step: LevelStep): ElementDetail {
+  const counts = game.level.ladder?.steps ?? null;
+  const all = counts === null ? [] : levelStepsOf({ ...counts, glory: game.glory.glory, rank: game.glory.rank });
+  return ofFamily('levelstep', String(step.level), LEVEL_STEP_CONCEPT[step.kind], {
+    emblem: { kind: 'concept', concept: LEVEL_STEP_CONCEPT[step.kind] },
+    name: levelStepLine(step),
+    state: step.met
+      ? earned(null)
+      : locked(fraction(Math.min(step.current, step.target), step.target), step.target <= 0 ? null : Math.min(1, step.current / step.target)),
+    facts: all.map((entry) => row(gameText('game.banner.level', { level: formatCount(entry.level) }), `${levelStepWhat(entry)} · ${stepProgress(entry)}`)),
+  });
+}
+
+type GameBlockForStep = { readonly level: GameLevel; readonly glory: GameGlory };
 
 /** LE PALIER du trésor. */
 export function treasuryDetail(treasury: GameTreasury): ElementDetail {

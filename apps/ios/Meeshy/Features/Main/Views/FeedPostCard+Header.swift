@@ -55,9 +55,10 @@ extension FeedPostCard {
                     // ensemble faisait lire « 2 h · 🇫🇷 · Impressions » comme une
                     // seule énumération, où la donnée la plus consultée — quand
                     // — se noyait dans la moins consultée.
-                    Text(RelativeTimeFormatter.shortString(for: post.timestamp))
-                        .font(.caption)
-                        .foregroundColor(theme.textMuted)
+                    // Suivie des points que ce post a rapportés (#9571).
+                    PostDateWithPoints(postId: post.id, seed: post.viewerPoints, color: theme.textMuted) {
+                        Text(RelativeTimeFormatter.shortString(for: post.timestamp))
+                    }
 
                     // Attribution de republication, juste après le pseudo :
                     // l'icône, puis l'AUTEUR D'ORIGINE — rien d'autre (directive
@@ -183,7 +184,7 @@ extension FeedPostCard {
                     Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
                 }
                 Button {
-                    if post.primaryReelDisplayMedia != nil {
+                    if canSaveMedia {
                         requestSaveMedia()
                     } else {
                         onBookmark?(post.id)
@@ -191,10 +192,10 @@ extension FeedPostCard {
                     }
                 } label: {
                     Label(
-                        post.primaryReelDisplayMedia != nil
+                        canSaveMedia
                             ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
                             : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                        systemImage: post.primaryReelDisplayMedia != nil ? "arrow.down.to.line" : "bookmark"
+                        systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark"
                     )
                 }
                 if onPin != nil {
@@ -240,5 +241,80 @@ extension FeedPostCard {
             .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
             .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
         }
+    }
+}
+
+// MARK: - Ce que le post a rapporté au lecteur « · ✦+99 » (#9571)
+
+/// La date d'un post, suivie — très discrètement — des points que ce post a
+/// rapportés au lecteur : « 2 h · ✦+99 ». Encre et corps de la date, ni
+/// capsule, ni couleur, ni flamme : plus discret que la marque des
+/// conversations (directive porteur 2026-10-07). Ce n'est pas un bouton.
+/// Champ absent (ancien serveur, invité), `0` : la date seule.
+///
+/// La lecture (`seed`) est notée à chaque nouvelle valeur — la date est
+/// toujours là, donc la note part même quand la marque se tait — et
+/// `engagement:post-updated` fait rouler le nombre (`PostViewerPointsStore`).
+struct PostDateWithPoints<DateLabel: View>: View {
+    let postId: String
+    let seed: Int?
+    let color: Color
+    @ObservedObject var store: PostViewerPointsStore = .shared
+    @ViewBuilder let date: () -> DateLabel
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            date()
+                .font(.caption)
+                .foregroundColor(color)
+            if let points = PostViewerPoints.shown(store.displayed(postId: postId, seed: seed)) {
+                PostPointsMark(points: points, color: color)
+                    .equatable()
+            }
+        }
+        .task(id: seed) { store.noteRead(postId: postId, viewerPoints: seed) }
+    }
+}
+
+/// « · ✦+99 » — feuille PURE, portillon `Equatable` ; le nombre roule vers sa
+/// nouvelle valeur, à la hausse comme à la baisse.
+struct PostPointsMark: View, Equatable {
+    let points: Int
+    let color: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static func == (lhs: PostPointsMark, rhs: PostPointsMark) -> Bool {
+        lhs.points == rhs.points && lhs.color == rhs.color
+    }
+
+    var body: some View {
+        HStack(spacing: 1) {
+            Text(verbatim: "·")
+                .padding(.trailing, 2)
+            Image(systemName: "sparkle")
+                .font(MeeshyFont.relative(MeeshyFont.microSize))
+                .imageScale(.small)
+            Text(verbatim: "+" + CompactCountLabel.text(points))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+        }
+        .font(.caption)
+        .foregroundColor(color)
+        .lineLimit(1)
+        .fixedSize()
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: points)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.accessibilityText(points))
+    }
+
+    /// « Ce post t'a rapporté 99 points ».
+    static func accessibilityText(_ points: Int) -> String {
+        let number = "\(points)"
+        return points == 1
+            ? String(localized: "feed.post.points.a11y.one",
+                     defaultValue: "Ce post t'a rapporté \(number) point", bundle: .main)
+            : String(localized: "feed.post.points.a11y.other",
+                     defaultValue: "Ce post t'a rapporté \(number) points", bundle: .main)
     }
 }

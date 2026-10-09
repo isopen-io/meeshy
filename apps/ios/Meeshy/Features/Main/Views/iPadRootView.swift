@@ -80,7 +80,7 @@ struct iPadRootView: View {
     /// La pile du JEU dans le panneau droit (#9564, amendement n° 4) : une fiche poussée depuis Progression, une
     /// sous-page depuis sa fiche s'empilent AU-DESSUS de la page d'où elles partent — le retour y ramène, et la
     /// première page garde sa position de défilement, comme sur iPhone.
-    @State var rightPanelGameTrail = GamePanelTrail()
+    @StateObject var gameTrail = GamePanelTrailStore()
     /// Mood à republier depuis la bulle (hôte racine) — composer pré-rempli.
     @State private var republishStatusEntry: StatusEntry?
     @State var showStoryViewerFromConv = false
@@ -251,19 +251,19 @@ struct iPadRootView: View {
                 return true
             }
             if let root = rightPanelRoute, GameNavigationMap.stacks(route, over: root) {
-                rightPanelGameTrail.push(route, over: root)
+                gameTrail.trail.push(route, over: root)
                 return true
             }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                rightPanelGameTrail = GamePanelTrail()
+                gameTrail.trail = GamePanelTrail()
                 rightPanelRoute = route
             }
             return true
         }
 
         router.onPopRequested = {
-            if let root = rightPanelRoute, !rightPanelGameTrail.path(over: root).isEmpty {
-                rightPanelGameTrail.pop()
+            if let root = rightPanelRoute, !gameTrail.trail.path(over: root).isEmpty {
+                gameTrail.trail.pop()
                 return
             }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -394,8 +394,8 @@ struct iPadRootView: View {
                 route: route,
                 rightPanelRoute: $rightPanelRoute,
                 gamePath: Binding(
-                    get: { rightPanelGameTrail.path(over: route) },
-                    set: { rightPanelGameTrail = GamePanelTrail(root: route, path: $0) }
+                    get: { gameTrail.trail.path(over: route) },
+                    set: { gameTrail.trail = GamePanelTrail(root: route, path: $0) }
                 ),
                 notificationManager: notifications.manager,
                 onOpenConversation: openConversation,

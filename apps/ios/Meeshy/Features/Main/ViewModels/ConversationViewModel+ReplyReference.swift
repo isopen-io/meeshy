@@ -130,7 +130,7 @@ extension ConversationViewModel {
         let messageIsProtected = quoted.isViewOnce || quoted.isBlurred || quoted.isEncrypted
         let representativeIsProtected = representative.map { $0.isViewOnce || $0.isBlurred } ?? false
         let mediaMayTravel = !messageIsProtected && !representativeIsProtected
-        return ReplyReference(
+        var reference = ReplyReference(
             messageId: quoted.id,
             authorName: quoted.senderName ?? String(localized: "common.unknown_user", defaultValue: "Utilisateur", bundle: .main),
             previewText: messageIsProtected
@@ -155,6 +155,11 @@ extension ConversationViewModel {
             attachmentIsProtected: messageIsProtected ? true : representative.map { $0.isViewOnce || $0.isBlurred },
             attachmentFacts: representative.map { Self.quotedFacts(of: $0, mediaMayTravel: mediaMayTravel) }
         )
+        // #9573 — le cité est en mémoire : sa nature de disparition est CONNUE.
+        // Sans elle, la citation optimiste serait « illisible » et la réponse
+        // perdrait « Imager » jusqu'à l'écho du serveur (décision 2026-10-08).
+        reference.quotedExitNature = quoted.contentExitLaw.nature
+        return reference
     }
 
     /// Le texte que la BULLE du message cité rend en ce moment : sa traduction

@@ -181,6 +181,9 @@ extension PostDetailView {
                 // qui le pose à `SceneShape.aspect` — TOUJOURS 9:16 (#6896,
                 // lot #6904). Un second rapport déclaré ici divergerait du
                 // canvas qu'il rend réellement (#6897).
+                // La trace du son que CET embed joue (#9677) — celui de la
+                // source, la même ligne que le chemin natif.
+                sceneSoundHeader(repost.storyEffects)
                 storyCanvasOrPlaceholder(renderedItem: renderedItem) {
                     StoryReaderRepresentable(
                         repost: repost,

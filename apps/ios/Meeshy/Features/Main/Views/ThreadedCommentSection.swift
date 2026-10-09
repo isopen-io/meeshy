@@ -15,6 +15,8 @@ struct ThreadedCommentSection: View {
     let isExpanded: Bool
     let isLoadingReplies: Bool
     let accentColor: String
+    /// Le post commenté — « Imager » un commentaire le met en tête (#9686).
+    var post: FeedPost? = nil
     let likedIds: Set<String>
     let likeDelta: [String: Int]
     let heartInFlightIds: Set<String>
@@ -102,7 +104,8 @@ struct ThreadedCommentSection: View {
                 moodEmoji: moodEmoji,
                 storyState: storyState,
                 presenceState: presenceState,
-                threadReplies: replies
+                threadReplies: replies,
+                post: post
             )
                 .equatable()
 
@@ -124,7 +127,9 @@ struct ThreadedCommentSection: View {
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil,
-                        threadRoot: comment
+                        threadRoot: comment,
+                        threadReplies: replies,
+                        post: post
                     )
                         .equatable()
                     .padding(.leading, 36)
@@ -164,7 +169,9 @@ struct ThreadedCommentSection: View {
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil,
-                        threadRoot: comment
+                        threadRoot: comment,
+                        threadReplies: replies,
+                        post: post
                     )
                         .equatable()
                     .padding(.leading, 36)

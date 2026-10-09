@@ -96,10 +96,10 @@ describe('LevelRing — l’emblème, le niveau et le palier en chiffres romains
     expect(html.indexOf('data-game-level-text')).toBeGreaterThan(html.indexOf('data-game-emblem'));
   });
 
-  test('le palier s’écrit en chiffres romains, de I à X, dans un cartouche', () => {
+  test('le palier s’écrit en chiffres romains, de I à XX, dans un cartouche', () => {
     const numeral = (tier: (typeof LEVEL_TIER_KEYS)[number]): string =>
       />([IVX]+)<\/text>/.exec(render({ level: 1, tier, progress: 0.2, size: 72 }).split('data-game-tier-numeral')[1] ?? '')?.[1] ?? '';
-    expect(LEVEL_TIER_KEYS.map(numeral)).toEqual(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']);
+    expect(LEVEL_TIER_KEYS.map(numeral)).toEqual(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX']);
     expect(html).toContain('data-game-tier-cartouche');
   });
 
@@ -119,6 +119,13 @@ describe('LevelRing — l’emblème, le niveau et le palier en chiffres romains
     const size = (level: number): number => Number(/data-game-level-text=""[^>]*font-size="([\d.]+)"/.exec(render({ level, tier: 'galaxie', progress: 1, size: 72 }))?.[1] ?? Number.NaN);
     expect(size(100)).toBeLessThan(size(34));
     expect(size(7)).toBe(size(34));
+  });
+
+  test('un niveau à quatre chiffres se réduit encore, et au-delà aussi (#9688)', () => {
+    const size = (level: number): number => Number(/data-game-level-text=""[^>]*font-size="([\d.]+)"/.exec(render({ level, tier: 'singularite', progress: 0.4, size: 72 }))?.[1] ?? Number.NaN);
+    expect(size(1000)).toBeLessThan(size(499));
+    expect(size(12_345)).toBeLessThan(size(1000));
+    expect(size(499)).toBe(size(100));
   });
 });
 
@@ -153,6 +160,7 @@ describe('LevelRing — palier et record', () => {
     expect(dots('etincelle')).toBe(1);
     expect(dots('constellation')).toBe(9);
     expect(dots('galaxie')).toBe(10);
+    expect(dots('singularite')).toBe(20);
   });
 
   test('sans showTier, aucun point de palier', () => {

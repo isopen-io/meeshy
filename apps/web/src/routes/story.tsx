@@ -19,7 +19,6 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { backgroundCss } from '@/lib/canvas/background';
-import { parseCanvasDocument } from '@/lib/canvas/document';
 import { useOnline } from '@/lib/net/online';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
@@ -38,6 +37,7 @@ import {
   currentStoryAt,
   groupForPlayback,
   nextPosition,
+  playedStoryScene,
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
@@ -258,7 +258,8 @@ export default function StoryScreen() {
    * fil (`StorySceneLayer` → `ScenePlayer`, D-79) ; `null` retombe sur le
    * chemin v1 INCHANGÉ (`StoryMediaLayer`).
    */
-  const sceneDocument = useMemo(() => parseCanvasDocument(currentStory?.storyEffects), [currentStory]);
+  const playedScene = useMemo(() => (currentStory === undefined ? null : playedStoryScene(currentStory)), [currentStory]);
+  const sceneDocument = playedScene?.document ?? null;
   const firstScene = sceneDocument?.scenes[0];
 
   /* LE CHOIX DE LANGUE DU LECTEUR (#7114, `use-story-language.ts`) — UNE
@@ -742,7 +743,7 @@ export default function StoryScreen() {
             <Suspense fallback={null}>
               <StorySceneLayer
                 key={currentStory.id}
-                story={currentStory}
+                story={playedScene?.carrierStory ?? currentStory}
                 document={sceneDocument}
                 sceneIndex={0}
                 preferredLanguages={language.prism}
@@ -799,6 +800,9 @@ export default function StoryScreen() {
             onClose={closeViewer}
             onSave={ownerRail.handlers.save}
             onOptionsOpenChange={setOptionsOpen}
+            /* LE CRÉDIT DU SON (#9678, vue `2f`) — lu sur la scène QUI JOUE : celle
+               de la source pour une story repartagée sans effets propres. */
+            soundDocument={sceneDocument}
             /* LA PASTILLE DU PRISME (D-99, #7114) — entre l'heure et la croix,
                comme le fil et les commentaires. */
             prism={

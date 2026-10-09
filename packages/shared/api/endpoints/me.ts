@@ -151,6 +151,9 @@ export const preferencesVideo = '/api/v1/me/preferences/video';
 /** GET /api/v1/me */
 export const root = '/api/v1/me';
 
+/** GET /api/v1/me/security-events */
+export const securityEvents = '/api/v1/me/security-events';
+
 /** GET /api/v1/me/starred-messages */
 export const starredMessages = '/api/v1/me/starred-messages';
 

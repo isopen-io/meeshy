@@ -9,11 +9,18 @@ import {
   UserRoleEnum
 } from '@meeshy/shared/types';
 import { permissionsService } from './permissions.service';
+import { withoutExpiredConnectionTraces } from '../retention/retention-bounds';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 
 export type SanitizeUserOptions = {
   /** La FICHE demande le bloc `adminMetadata` ; une ligne de liste ne le porte pas. */
   readonly withAdminMetadata?: boolean;
+  /**
+   * L'identifiant du LECTEUR (audit A2-4) : l'adresse, le lieu et l'agent de
+   * connexion d'un membre ne se servent qu'à qui le SURCLASSE, ou à lui-même.
+   * Absent, seule la hiérarchie décide.
+   */
+  readonly viewerId?: string;
 };
 
 /**
@@ -73,6 +80,29 @@ export class UserSanitizationService {
     const parts = ip.split('.');
     if (parts.length !== 4) return '***.***.***.***';
     return `${parts[0]}.${parts[1]}.***.***.`;
+  }
+
+  /**
+   * Les traces de connexion d'un membre telles qu'un lecteur peut les voir :
+   * bornées à 12 mois, et masquées à qui ne le surclasse pas (lui-même excepté).
+   */
+  private connectionTracesFor<T extends Parameters<typeof withoutExpiredConnectionTraces>[0]>(
+    user: FullUser,
+    viewerRole: UserRoleEnum,
+    viewerId: string | undefined,
+    traces: T,
+  ): T {
+    const mayRead = viewerId === user.id || permissionsService.canManageUser(viewerRole, user.role as UserRoleEnum);
+    if (mayRead) return withoutExpiredConnectionTraces(traces, new Date());
+    return {
+      ...traces,
+      lastLoginIp: null,
+      lastLoginLocation: null,
+      lastLoginDevice: null,
+      registrationIp: null,
+      registrationLocation: null,
+      registrationDevice: null,
+    };
   }
 
   /**
@@ -143,12 +173,19 @@ export class UserSanitizationService {
         // Le NOMBRE de codes restants, jamais leurs empreintes (#8876) : une
         // empreinte de code à usage unique n'a aucune raison d'atteindre un navigateur.
         twoFactorBackupCodesRemaining: user.twoFactorBackupCodes?.length ?? 0,
-        lastLoginIp: user.lastLoginIp,
-        lastLoginLocation: user.lastLoginLocation,
-        lastLoginDevice: user.lastLoginDevice,
-        registrationIp: user.registrationIp,
-        registrationLocation: user.registrationLocation,
-        registrationDevice: user.registrationDevice,
+        // La borne de la purge, armée ou non (revue « privacy-retention-bypass ») :
+        // une adresse de plus de 12 mois ne se sert plus ; et la HIÉRARCHIE
+        // (audit A2-4) : à qui ne surclasse pas le membre, aucune.
+        ...this.connectionTracesFor(user, viewerRole, options.viewerId, {
+          createdAt: user.createdAt,
+          lastLoginAt: user.lastLoginAt ?? null,
+          lastLoginIp: user.lastLoginIp,
+          lastLoginLocation: user.lastLoginLocation,
+          lastLoginDevice: user.lastLoginDevice,
+          registrationIp: user.registrationIp,
+          registrationLocation: user.registrationLocation,
+          registrationDevice: user.registrationDevice,
+        }),
         registrationCountry: user.registrationCountry,
         deletedAt: user.deletedAt,
         deletedBy: user.deletedBy,
@@ -171,8 +208,8 @@ export class UserSanitizationService {
   /**
    * Sanitize une liste d'utilisateurs
    */
-  sanitizeUsers(users: FullUser[], viewerRole: UserRoleEnum): UserResponse[] {
-    return users.map(user => this.sanitizeUser(user, viewerRole));
+  sanitizeUsers(users: FullUser[], viewerRole: UserRoleEnum, viewerId?: string): UserResponse[] {
+    return users.map(user => this.sanitizeUser(user, viewerRole, { viewerId }));
   }
 
   /**

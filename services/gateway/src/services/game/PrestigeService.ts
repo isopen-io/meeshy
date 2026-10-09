@@ -24,8 +24,10 @@
  * la confirmation : tant que ce n'est pas tranché, la loi est appliquée telle
  * qu'écrite et la confirmation côté client doit le dire.
  *
- * Le score remis à zéro n'est pas répercuté sur les compteurs par axe : les
- * points débitables (Meeshes) ne sont pas touchés par un Prestige.
+ * Le score remis à zéro l'est AUSSI sur les points des compteurs par axe (#9675) :
+ * le score est leur somme, et la frappe les débite. Les laisser intacts laissait
+ * une frappe dépenser des points que le Prestige avait déjà pris, et faisait
+ * passer le score sous zéro. Les ACTIONS comptées (badges) ne bougent pas.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -60,7 +62,7 @@ export class PrestigeService {
   }
 
   private async account(userId: string) {
-    return this.prisma.user.findUnique({ where: { id: userId }, select: { engagementScore: true, prestige: true } });
+    return this.prisma.user.findUnique({ where: { id: userId }, select: { engagementScore: true, prestige: true, levelRecord: true } });
   }
 
   async pass(params: { readonly userId: string; readonly requestId: string; readonly now?: Date }): Promise<PrestigeResponse> {
@@ -77,15 +79,23 @@ export class PrestigeService {
     for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt += 1) {
       const account = await this.account(userId);
       const stars = account?.prestige ?? 0;
-      const verdict = prestigeTransition({ score: account?.engagementScore ?? 0, prestige: stars });
+      const verdict = prestigeTransition({ score: account?.engagementScore ?? 0, prestige: stars, levelRecord: account?.levelRecord ?? null });
       if (verdict.allowed === false) {
         throw new GameRefusal(verdict.reason === 'at-maximum' ? 'PRESTIGE_AT_MAXIMUM' : 'PRESTIGE_LEVEL_TOO_LOW');
       }
 
       if (!(await this.quotas.claim(userId, REQUEST_OPERATION, bucket, 1))) return this.replayed(userId, now);
-      const written = await this.prisma.user.updateMany({
-        where: { id: userId, engagementScore: account?.engagementScore ?? 0, ...(stars === 0 ? NO_PRESTIGE : { prestige: stars }) },
-        data: { prestige: verdict.prestigeAfter, engagementScore: verdict.scoreAfter, levelRecord: verdict.levelRecordAfter },
+      // Le score et les points DÉPENSABLES des compteurs bougent ensemble (#9675) : le score est la somme
+      // des points des compteurs, et la frappe débite ces compteurs. Les remettre à 0 dans la même
+      // transaction empêche qu'une frappe dépense après coup des points que le Prestige a déjà pris.
+      // Les actions comptées (`count`, qui tiennent les badges) ne bougent pas.
+      const written = await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.updateMany({
+          where: { id: userId, engagementScore: account?.engagementScore ?? 0, ...(stars === 0 ? NO_PRESTIGE : { prestige: stars }) },
+          data: { prestige: verdict.prestigeAfter, engagementScore: verdict.scoreAfter, levelRecord: verdict.levelRecordAfter },
+        });
+        if (user.count > 0) await tx.engagementCounter.updateMany({ where: { userId }, data: { points: 0 } });
+        return user;
       });
       if (written.count === 0) {
         // Un crédit ou un autre passage s'est glissé : on rend la demande et on relit.

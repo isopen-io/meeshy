@@ -150,3 +150,94 @@ enum ReelMediaLayout: Equatable {
         }
     }
 }
+
+// MARK: - Enregistrer un réel ou un post (#9681)
+
+/// **Ce que « Sauvegarder » fait d'un réel ou d'un post — UNE règle pour le lecteur
+/// de réels, la carte de réel, la carte de post et le détail** (#9681).
+///
+/// - `renderScene` : une œuvre COMPOSÉE (scène `canvasV3`, effets de story) ou un
+///   réel sans média s'enregistre TELLE QU'ON LA VOIT — rendue en MP4 par le moteur
+///   des stories (`StoryPhotoSaveService.save(post:)`), textes, autocollants et son
+///   de fond compris. Le fichier brut n'en montrerait que le fond.
+/// - `rawFile` : un réel de médias simple garde son fichier (`MediaSaveCoordinator`).
+/// - `unavailable` : rien à enregistrer, ou un portillon de sortie fermé — la loi
+///   de sortie (#9573) gagne sur tout.
+enum PostSaveRoute: Equatable {
+    case renderScene
+    case rawFile(PostSaveMedia)
+    case unavailable
+
+    static func resolve(for post: FeedPost, mayLeave: Bool) -> PostSaveRoute {
+        guard mayLeave else { return .unavailable }
+        if ReelSceneRouting.sceneDocument(for: post) != nil || post.storyEffects != nil { return .renderScene }
+        if let media = post.primaryReelDisplayMedia, let url = media.url, !url.isEmpty {
+            return .rawFile(PostSaveMedia(kind: media.type.attachmentKind, url: url, fileName: media.fileName,
+                                          authorUsername: post.savedWorkAuthorUsername))
+        }
+        let hasText = !post.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return post.isReel && hasText ? .renderScene : .unavailable
+    }
+}
+
+/// Le fichier qu'un réel de médias simple enregistre.
+struct PostSaveMedia: Equatable {
+    let kind: AttachmentKind
+    let url: String
+    let fileName: String?
+    /// L'auteur de l'œuvre, que la marque nomme — jamais celui qui enregistre.
+    var authorUsername: String? = nil
+
+    var request: MediaSaveRequest {
+        MediaSaveRequest(kind: kind, origin: .composed, remoteURLString: url, suggestedFileName: fileName,
+                         authorUsername: authorUsername ?? "")
+    }
+}
+
+extension FeedPost {
+    /// **Qui a fait ce qu'on enregistre** (recette #9681, 2026-10-08) : l'auteur
+    /// du post — sauf pour un repartage nu, dont les médias sont ceux du post
+    /// repartagé. Le filigrane le nomme ; le spectateur qui enregistre, jamais.
+    var savedWorkAuthorUsername: String? {
+        let borrowsTheRepost = media.isEmpty && storyEffects == nil && repost != nil
+        return borrowsTheRepost ? repost?.authorUsername : authorUsername
+    }
+}
+
+extension FeedMediaType {
+    nonisolated var attachmentKind: AttachmentKind {
+        switch self {
+        case .video: return .video
+        case .audio: return .audio
+        case .document: return .document
+        case .image: return .image
+        }
+    }
+}
+
+/// Le SEUL geste « Sauvegarder » d'un réel ou d'un post : la règle décide, l'hôte
+/// fournit son coordinateur (dont le portillon fait foi) — aucun site ne réécrit
+/// l'aiguillage.
+@MainActor
+enum PostSaveAction {
+    static func route(for post: FeedPost, coordinator: MediaSaveCoordinator) -> PostSaveRoute {
+        PostSaveRoute.resolve(for: post, mayLeave: coordinator.mayLeave(nil))
+    }
+
+    @discardableResult
+    static func perform(_ post: FeedPost,
+                        coordinator: MediaSaveCoordinator,
+                        service: StoryPhotoSaveService = .shared) -> Bool {
+        switch route(for: post, coordinator: coordinator) {
+        case .unavailable:
+            return false
+        case .renderScene:
+            HapticFeedback.light()
+            service.save(post: post)
+        case .rawFile(let media):
+            HapticFeedback.light()
+            coordinator.save(media.request)
+        }
+        return true
+    }
+}

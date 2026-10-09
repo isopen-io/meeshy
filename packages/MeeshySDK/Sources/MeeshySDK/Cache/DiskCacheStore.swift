@@ -736,8 +736,12 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// pas de transition de placeholder.
     nonisolated public func warmedImage(for urlString: String) -> UIImage? {
         if let cached = Self.cachedImage(for: urlString) { return cached }
+        // #9685 — réduit À LA SOURCE : jamais l'image pleine (une photo de
+        // 4000 px pèse 64 Mo décodée, et se décodait au premier dessin, sur le
+        // fil principal). Le plafond couvre la hauteur d'un écran : un poster
+        // plein écran (#3871) reste net, une photo d'appareil ne l'est plus en trop.
         guard let fileURL = cachedFileURL(for: urlString),
-              let image = UIImage(contentsOfFile: fileURL.path) else {
+              let image = Self.downsampledImage(fileURL: fileURL, maxPixelSize: Self.warmedPixelCap) else {
             return nil
         }
         // #3897 — `cacheIfWithinBudget`, pas une insertion `setObject`
@@ -765,17 +769,37 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// once, but we won't hold onto it.
     private static let maxCacheableDecodedBytes: Int = 50 * 1024 * 1024 // 50 MB
 
-    private static func downsampledImage(data: Data, maxPixelSize: CGFloat = 1200) -> UIImage? {
-        let options: [CFString: Any] = [
+    /// **Décode à la taille d'affichage, jamais l'image pleine** (#9685) :
+    /// `CGImageSourceCreateThumbnailAtIndex` borne le plus grand côté à
+    /// `maxPixelSize` (taille affichée × échelle, quantifiée par `pixelBucket`),
+    /// et `kCGImageSourceShouldCacheImmediately` force le décodage ICI — hors du
+    /// fil principal sur le chemin asynchrone de l'acteur —, au lieu de le laisser
+    /// au premier dessin.
+    static func downsampledImage(data: Data, maxPixelSize: CGFloat = 1200) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(maxPixelSize))
+        else { return UIImage(data: data) }
+        return UIImage(cgImage: cgImage)
+    }
+
+    /// Même réduction, lue directement depuis le fichier du cache (aucune copie
+    /// des octets en mémoire).
+    static func downsampledImage(fileURL: URL, maxPixelSize: CGFloat) -> UIImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, sourceOptions),
+              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(maxPixelSize))
+        else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+
+    private static func thumbnailOptions(_ maxPixelSize: CGFloat) -> CFDictionary {
+        [
             kCGImageSourceShouldCache: false,
+            kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-        ]
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-        else { return UIImage(data: data) }
-        return UIImage(cgImage: cgImage)
+        ] as CFDictionary
     }
 
     public func image(for urlString: String) async -> UIImage? {
@@ -783,6 +807,10 @@ public actor DiskCacheStore: ReadableCacheStore {
     }
 
     // MARK: - Sized decode buckets
+
+    /// Plafond de la lecture SYNCHRONE `warmedImage` : la hauteur d'un écran en
+    /// pixels, pour qu'un poster plein écran reste net (#3871, #9685).
+    public static let warmedPixelCap: CGFloat = 2048
 
     /// The canonical full-format decode cap. Requests at or above this share
     /// the bare (unsuffixed) NSCache slot — the one `cachedImage(for:)` and

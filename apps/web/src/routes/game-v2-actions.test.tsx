@@ -7,7 +7,7 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { LEAGUE_WEEK_QUERY_KEY } from '@/lib/api/game-v2-queries';
 import { leagueWeekFixture } from '@/lib/api/game-v2-queries-fixture';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
@@ -207,7 +207,7 @@ describe('la vitrine, la visibilité, le Prestige', () => {
   });
 
   test('le Prestige : le niveau repart tout de suite ; refusé, il revient', async () => {
-    const top = seed({ score: levelThreshold(100) + 40, prestige: 1 });
+    const top = seed({ ...ALL_LEVEL_STEPS, score: levelThreshold(100) + 40, prestige: 1, levelRecord: 100 });
     const okRun = await bench(top, () => ok({ status: 'passed', prestige: 2, score: 0, level: 1, gloryGained: 1000, trophyKey: 'trophy.prestige.2' }));
     await act(async () => okRun.actions().prestige.run());
     await settle();

@@ -200,7 +200,7 @@ describe('GET /export — sessions', () => {
     const res = await app.inject({ method: 'GET', url: '/export?types=sessions' });
     expect(res.statusCode).toBe(200);
     const body = res.json().data;
-    expect(body.sessions).toEqual([{ id: 'sess-1' }]);
+    expect(body.sessions).toEqual([{ id: 'sess-1', invalidatedReasonText: null }]);
     expect(body.sessionsHasMore).toBe(false);
     await app.close();
   });

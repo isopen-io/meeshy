@@ -1,4 +1,7 @@
-import { useState, type ReactNode, type Ref } from 'react';
+import { lazy, Suspense, useState, type ReactNode, type Ref } from 'react';
+
+import type { CanvasDocument } from '@/lib/canvas/document';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { yieldingChrome } from '@/lib/view/chrome-yields';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
@@ -9,6 +12,8 @@ import { Avatar } from './avatar';
 import { CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph } from './glyph';
 import { PersonName } from './person-name';
+
+const BackgroundSoundCredit = lazy(() => import('./background-sound-credit'));
 
 /**
  * **LE CHROME COMMUN DES VISIONNEUSES PLEIN ÉCRAN** (#8879, directive porteur
@@ -65,7 +70,29 @@ export type ViewerIdentityModel = {
 };
 
 /** Avatar 32, nom, heure — sur UNE ligne : l'heure qualifie l'auteur, elle n'est pas un sous-titre. */
-export function ViewerIdentity({ identity, nameProbe }: { readonly identity: ViewerIdentityModel; readonly nameProbe?: ViewerProbe }) {
+export function ViewerIdentity({
+  identity,
+  nameProbe,
+  soundDocument,
+}: {
+  readonly identity: ViewerIdentityModel;
+  readonly nameProbe?: ViewerProbe;
+  /** La scène QUI JOUE : son fond sonore s'annonce SOUS le nom (#9678), sa propre
+   * ligne, jamais en concurrence avec le nom. */
+  readonly soundDocument?: CanvasDocument | null | undefined;
+}) {
+  const nameLine = (
+    <div {...nameProbe} className="flex min-w-0 items-baseline gap-2">
+      <PersonName name={identity.name} username={identity.profileUsername} className="viewer-ink-shadow truncate text-body font-semibold">
+        {identity.name}
+      </PersonName>
+      {identity.time === undefined ? null : (
+        <time dateTime={identity.time.iso} className="viewer-ink-muted viewer-ink-shadow shrink-0 text-check">
+          {identity.time.label}
+        </time>
+      )}
+    </div>
+  );
   return (
     <div data-viewer-identity="" className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2" onPointerDown={stop}>
       <Avatar
@@ -76,16 +103,16 @@ export function ViewerIdentity({ identity, nameProbe }: { readonly identity: Vie
         {...(identity.avatarSrc === undefined ? {} : { src: identity.avatarSrc })}
         {...(identity.profileUsername === undefined ? {} : { profileUsername: identity.profileUsername })}
       />
-      <div {...nameProbe} className="flex min-w-0 items-baseline gap-2">
-        <PersonName name={identity.name} username={identity.profileUsername} className="viewer-ink-shadow truncate text-body font-semibold">
-          {identity.name}
-        </PersonName>
-        {identity.time === undefined ? null : (
-          <time dateTime={identity.time.iso} className="viewer-ink-muted viewer-ink-shadow shrink-0 text-check">
-            {identity.time.label}
-          </time>
-        )}
-      </div>
+      {soundDocument === undefined || soundDocument === null ? (
+        nameLine
+      ) : (
+        <div className="flex min-w-0 flex-col">
+          {nameLine}
+          <Suspense fallback={null}>
+            <BackgroundSoundCredit document={soundDocument} language={currentInterfaceLanguage()} surface="media" />
+          </Suspense>
+        </div>
+      )}
     </div>
   );
 }
@@ -284,6 +311,7 @@ export function ViewerActionRail({
 export function ViewerTopBar({
   exit,
   identity,
+  soundDocument,
   trailing,
   above,
   hidden = false,
@@ -293,6 +321,8 @@ export function ViewerTopBar({
   readonly probe?: ViewerProbe;
   readonly exit: ViewerExit;
   readonly identity?: ViewerIdentityModel;
+  /** La scène qui joue, dont le son s'annonce sous le nom (`ViewerIdentity.soundDocument`). */
+  readonly soundDocument?: CanvasDocument | null | undefined;
   /** Menu « … », Enregistrer… — posés entre l'identité et la croix. */
   readonly trailing?: ReactNode;
   /** Ce qui se pose AU-DESSUS de la ligne : les segments de progression d'une story. */
@@ -315,7 +345,7 @@ export function ViewerTopBar({
       {above}
       <div className="flex min-h-11 items-center gap-2">
         {exit.kind === 'back' ? <ViewerExitButton exit={exit} /> : null}
-        {identity === undefined ? <span className="flex-1" /> : <ViewerIdentity identity={identity} />}
+        {identity === undefined ? <span className="flex-1" /> : <ViewerIdentity identity={identity} soundDocument={soundDocument} />}
         {trailing === undefined ? null : (
           <div className="pointer-events-auto flex shrink-0 items-center gap-1" onPointerDown={stop}>
             {trailing}

@@ -251,6 +251,13 @@ export type StoryFeedPost = {
    * en REST, hissée en `trackingLinks` par le socket ; décodée par `trackingLinksOf`. */
   readonly metadata?: unknown;
   readonly trackingLinks?: unknown;
+  /** La SOURCE d'une story repartagée (`repostOfInclude`) : le lecteur joue sa
+   * scène quand l'enveloppe n'a pas d'effets propres (`playedStoryScene`). */
+  readonly repostOf?: {
+    readonly id: string;
+    readonly storyEffects?: unknown;
+    readonly media?: readonly StoryTrayMedia[] | null;
+  } | null;
 };
 
 export async function loadStoryFeed(

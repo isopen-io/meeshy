@@ -7,12 +7,14 @@ import { CommentReplies } from '@/components/comment-replies';
 import type { CommentGestureHandlers } from '@/components/comment-row';
 import { findCardPost } from '@/lib/api/card-caches';
 import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/comment-gestures';
+import type { FeedPost } from '@/lib/api/feed-pages';
 import { commentAction, commentGestureAction, loadCommentRepliesAction, reportCommentAction, useComments } from '@/lib/api/query';
 import type { PickedSticker } from '@/components/composer-sticker-sheet';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import { flattenCommentPages, type CommentInfiniteData, type CommentStickerSend, type PostComment } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
 import { browserCommentUpload, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
+import { composingPostOf, postCommentImageable } from '@/lib/export/composed-comment-card';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -114,9 +116,38 @@ export function CommentThread({
     comment,
     servedText: resolveFeedText({ preferredLanguages: reader.languages, originalLanguage: comment.originalLanguage, translations: comment.translations, content: comment.content }).text,
   });
-  const imageRequestOf = (comment: PostComment, servedText: string): CommentImageRequest => {
-    const root = typeof comment.parentId === 'string' ? comments.find((candidate) => candidate.id === comment.parentId) : undefined;
-    return { comment, servedText, parent: root === undefined ? null : servedOf(root) };
+  const rootOf = (comment: PostComment): PostComment | undefined =>
+    typeof comment.parentId === 'string' ? comments.find((candidate) => candidate.id === comment.parentId) : undefined;
+  /* Un vocal part dans la piste de son texte servi ; la rangée qui montre l'ORIGINAL garde son vocal original (`readerLanguages: null`). */
+  const imageRequestOf = (comment: PostComment, servedText: string, showsOriginal = false): CommentImageRequest => {
+    const root = rootOf(comment);
+    return { comment, servedText, parent: root === undefined ? null : servedOf(root), readerLanguages: showsOriginal ? null : reader.languages };
+  };
+  /**
+   * « IMAGER » UN COMMENTAIRE DE POST (#9687, jumelle de #9686) — l'atelier
+   * s'ouvre TOUT DE SUITE sur la composition par défaut (post + commentaire,
+   * ou le fil jusqu'à la réponse), et le fil reçoit les réponses de la racine
+   * dès qu'elles sont lues (celles de la caisse si le fil est déplié). Une
+   * story ou un statut gardent la carte du commentaire (`composingPostOf`).
+   */
+  /* Lu une fois par lot de commentaires, jamais par rangée : la recherche traverse toutes les caisses de cartes. */
+  const composingPost = useMemo(() => composingPostOf(findCardPost(appQueryClient, postId)), [postId, comments]);
+  const viewerOfCard = { id: viewer.id ?? '', displayName: viewer.displayName };
+  const imageComposed = (post: FeedPost, comment: PostComment, servedText: string, showsOriginal: boolean) => {
+    const root = rootOf(comment);
+    const composition = { post, thread: root === undefined ? [] : [root], readerLanguages: reader.languages, viewer: viewerOfCard };
+    const request: CommentImageRequest = { ...imageRequestOf(comment, servedText, showsOriginal), composition };
+    setImaging(request);
+    if (root === undefined) return;
+    void loadCommentRepliesAction(postId, root.id).then((replies) =>
+      setImaging((current) => (current === request ? { ...request, composition: { ...composition, thread: [root, ...replies] } } : current)),
+    );
+  };
+  const postImageableOf = (comment: PostComment, servedText: string): boolean | null => {
+    const post = composingPost;
+    if (post === null) return null;
+    const root = rootOf(comment);
+    return postCommentImageable({ post, target: comment, targetText: servedText, thread: root === undefined ? [] : [root], readerLanguages: reader.languages, viewer: viewerOfCard });
   };
   /**
    * « IMAGER AVEC LES RÉPONSES » (#8734) — l'atelier s'ouvre TOUT DE SUITE sur
@@ -125,8 +156,8 @@ export function CommentThread({
    * première page. Une lecture ratée laisse la carte sans elles — jamais
    * d'attente muette avant l'atelier.
    */
-  const imageWithReplies = (comment: PostComment, servedText: string) => {
-    const request = imageRequestOf(comment, servedText);
+  const imageWithReplies = (comment: PostComment, servedText: string, showsOriginal: boolean) => {
+    const request = imageRequestOf(comment, servedText, showsOriginal);
     setImaging(request);
     void loadCommentRepliesAction(postId, comment.id).then((replies) =>
       setImaging((current) => (current === request ? { ...request, replies: replies.map(servedOf) } : current)),
@@ -289,8 +320,14 @@ export function CommentThread({
                 ...(parentId === undefined ? {} : { parentId }),
               }),
             onReply: setReplyTarget,
-            onImage: (comment, servedText, options) =>
-              options.withReplies ? imageWithReplies(comment, servedText) : setImaging(imageRequestOf(comment, servedText)),
+            onImage: (comment, servedText, options) => {
+              const post = composingPost;
+              const showsOriginal = options.showsOriginal === true;
+              if (post !== null) imageComposed(post, comment, servedText, showsOriginal);
+              else if (options.withReplies) imageWithReplies(comment, servedText, showsOriginal);
+              else setImaging(imageRequestOf(comment, servedText, showsOriginal));
+            },
+            postImageableOf,
             onCopy: (text) => void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed')),
             onReport: (commentId, reason) =>
               void reportCommentAction(commentId, reason).then((outcome) =>
@@ -306,7 +343,7 @@ export function CommentThread({
           }
         : undefined,
     /* `comments` et le prisme du lecteur : « Imager » cite la racine et lit ses réponses dans CE texte-là, jamais celui d’un rendu passé. */
-    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages],
+    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages, viewer.displayName, composingPost],
   );
 
   const renderReplies = useCallback(

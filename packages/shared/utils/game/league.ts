@@ -339,7 +339,7 @@ export type LeagueOutcome = {
   readonly nextLeague: LeagueKey;
   readonly promoted: boolean;
   readonly relegated: boolean;
-  /** +30 à la montée, +100 de plus pour une coupe ; rien n'en retire à la descente. */
+  /** `GLORY_POINTS.leagueUp` à la montée, `GLORY_POINTS.leagueCup` de plus pour une coupe ; rien n'en retire à la descente. */
   readonly glory: number;
 };
 

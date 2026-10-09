@@ -32,6 +32,19 @@ struct GameIntegrationModelsTests {
         #expect(profile.hasSomethingToShow)
     }
 
+    @Test("le rang d'un autre lit division5 et la place du Mythe quand le serveur les sert")
+    func standingReadsDivision5AndMythicSeat() throws {
+        let profile = try decode(UserGameProfileResponse.self, """
+        {"visible":true,"standing":{"level":42,"tier":"eclat","prestige":2,"flame":null,"rank":"voix","division":3,"division5":4},"treasury":null}
+        """)
+        #expect(profile.standing?.shownDivision == .iv)
+        let mythic = try decode(UserGameProfileResponse.self, """
+        {"visible":true,"standing":{"level":100,"tier":"galaxie","prestige":5,"flame":null,"rank":"mythe","division":null,"mythic":{"number":7,"edition":9}},"treasury":null}
+        """)
+        #expect(mythic.standing?.mythic == MythicSeatRef(number: 7, edition: 9))
+        #expect(mythic.standing?.shownDivision == nil)
+    }
+
     @Test("Mythe n'a pas de division, une Flamme éteinte n'a pas de forme")
     func mythAndExtinguishedFlame() throws {
         let profile = try decode(UserGameProfileResponse.self, """
@@ -53,7 +66,7 @@ struct GameIntegrationModelsTests {
     @Test("un palier inconnu fait tomber le niveau SEUL, le trésor reste lu")
     func anUnknownTierDropsTheStandingOnly() throws {
         let profile = try decode(UserGameProfileResponse.self, """
-        {"visible":true,"standing":{"level":42,"tier":"nebuleuse","prestige":0,"flame":null,"rank":"voix","division":3},"treasury":{"tier":"bourse"}}
+        {"visible":true,"standing":{"level":42,"tier":"hypernova","prestige":0,"flame":null,"rank":"voix","division":3},"treasury":{"tier":"bourse"}}
         """)
         #expect(profile.standing == nil)
         #expect(profile.treasury?.tier == .bourse)

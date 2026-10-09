@@ -126,6 +126,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// sortante est quittée, l'entrante pas encore reprise. La racine y montre
     /// un écran neutre plutôt que la connexion.
     @Published public internal(set) var isSwitchingAccount = false
+    /// #9612 — la fermeture que le serveur vient de prononcer, à EXPLIQUER
+    /// avant la reconnexion (« fermée par l'équipe Meeshy », « depuis un autre
+    /// appareil »…). `nil` dès que l'utilisateur l'a lue.
+    @Published public private(set) var sessionRevocationNotice: SessionRevocationNotice?
     /// #8286 — le choix « Rester connecté sur cet appareil » d'une connexion
     /// en cours, consommé par la session qu'elle ouvre (second facteur compris).
     var pendingKeepSignedIn: Bool?
@@ -620,10 +624,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// existe déjà, aucune UI neuve n'est requise).
     ///
     /// Sans session active, rien à révoquer : on sort.
-    public func handleSessionRevoked() {
+    ///
+    /// Le motif (#9612) est gardé pour l'avis que la racine montre avant la
+    /// reconnexion ; il ne change rien au chemin de fermeture.
+    public func handleSessionRevoked(reason: SessionRevocationReason = .unknown) {
         guard let userId = activeUserId else { return }
-        Logger.auth.warning("Session revoked by server — requiring re-authentication")
+        Logger.auth.warning("Session revoked by server (\(reason.rawValue, privacy: .public)) — requiring re-authentication")
+        sessionRevocationNotice = SessionRevocationNotice(reason: reason)
         requireReauthentication(userId: userId)
+    }
+
+    /// L'utilisateur a lu l'avis de fermeture.
+    public func acknowledgeSessionRevocationNotice() {
+        sessionRevocationNotice = nil
     }
 
     // MARK: - Internal session helpers

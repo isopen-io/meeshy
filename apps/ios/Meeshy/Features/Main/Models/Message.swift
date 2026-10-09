@@ -46,14 +46,27 @@ nonisolated enum MessageExit: String, CaseIterable, Sendable {
 /// | flamme après lecture, vue unique | non | non |
 ///
 /// Un message FLOUTÉ ne laisse rien sortir (#8009) ; un message CHIFFRÉ ne se
-/// publie pas. Le serveur fait foi et refusera ; un bouton que cette projection
-/// n'offre pas n'est pas rendu.
+/// publie pas. Un message qui CITE un contenu protégé ne s'image pas (décision
+/// porteur du 2026-10-08) : citer reste permis, le reste de ses sorties suit sa
+/// propre nature. Le serveur fait foi et refusera ; un bouton que cette
+/// projection n'offre pas n'est pas rendu.
 nonisolated struct MessageExitOffer: Equatable, Sendable {
     let law: ContentExitLaw
     /// Le message ou l'une de ses pièces est flouté.
     let holdsBlur: Bool
     /// Le message ou l'une de ses pièces est chiffré.
     let isEncrypted: Bool
+    /// Le message cite un contenu protégé — flamme, flamme après lecture, vue
+    /// unique, flou, ou citation dont la nature ne se lit pas
+    /// (`MeeshyMessage.quotesProtectedContent`).
+    let quotesProtectedContent: Bool
+
+    init(law: ContentExitLaw, holdsBlur: Bool, isEncrypted: Bool, quotesProtectedContent: Bool = false) {
+        self.law = law
+        self.holdsBlur = holdsBlur
+        self.isEncrypted = isEncrypted
+        self.quotesProtectedContent = quotesProtectedContent
+    }
 
     static let unrestricted = MessageExitOffer(law: .ordinary, holdsBlur: false, isEncrypted: false)
 
@@ -68,7 +81,8 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
         guard !holdsBlur else { return false }
         switch exit {
         case .forward: return law.forward.isAllowed
-        case .copy, .save, .share, .imagine: return law.exportable
+        case .copy, .save, .share: return law.exportable
+        case .imagine: return law.exportable && !quotesProtectedContent
         case .publish: return law.exportable && !isEncrypted
         }
     }
@@ -142,7 +156,8 @@ extension Message {
         MessageExitOffer(
             law: contentExitLaw,
             holdsBlur: holdsBlur,
-            isEncrypted: isEncrypted || attachments.contains { $0.isEncrypted }
+            isEncrypted: isEncrypted || attachments.contains { $0.isEncrypted },
+            quotesProtectedContent: quotesProtectedContent
         )
     }
 

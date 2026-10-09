@@ -47,12 +47,13 @@ describe('les défauts du barème', () => {
 
   it('suivent la liste remplie par le porteur', () => {
     const ops = DEFAULT_ENGAGEMENT_SCALE.operations;
-    expect(ops['content.text_message']).toMatchObject({ points: 3, cap: 300 });
+    expect(ops['content.text_message']).toMatchObject({ points: 4, cap: 300 });
+    expect(ops['content.text_message'].variantPoints).toEqual({ direct: 2, group: 4, public: 6, global: 8, other: 4 });
     expect(ops['content.audio_message']).toMatchObject({ points: 5, cap: 500 });
     expect(ops['tool.reaction']).toMatchObject({ points: 2, cap: 30 });
-    expect(ops['content.reel']).toMatchObject({ points: 199, cap: 10 });
-    expect(ops['content.post'].variantPoints).toEqual({ public: 99, community: 69, friends: 49, other: 0 });
-    expect(ops['content.story'].variantPoints).toEqual({ public: 79, community: 39, friends: 19, other: 0 });
+    expect(ops['content.reel']).toMatchObject({ points: 250, cap: 10 });
+    expect(ops['content.post'].variantPoints).toEqual({ public: 500, community: 200, friends: 100, other: 0 });
+    expect(ops['content.story'].variantPoints).toEqual({ public: 300, community: 200, friends: 100, other: 0 });
     expect(ops['tool.location'].variantPoints).toEqual({ live: 2, static: 1 });
     expect(ops['profile.two_factor']).toMatchObject({ points: 15, multiplied: false });
   });
@@ -189,13 +190,13 @@ describe('pointsForOperation', () => {
         'tool.reaction': { points: 2, multiplied: false, cap: 10, variantPoints: {} },
       },
     };
-    expect(pointsForOperation(scale, 'content.text_message', 3)).toBe(9);
+    expect(pointsForOperation(scale, 'content.text_message', 3)).toBe(12);
     expect(pointsForOperation(scale, 'tool.reaction', 3)).toBe(2);
   });
 
   it('crédite les points de la variante', () => {
-    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 1, 'public')).toBe(99);
-    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 2, 'friends')).toBe(98);
+    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 1, 'public')).toBe(500);
+    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 2, 'friends')).toBe(200);
     expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 5, 'other')).toBe(0);
     expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'tool.location', 1, 'live')).toBe(2);
   });

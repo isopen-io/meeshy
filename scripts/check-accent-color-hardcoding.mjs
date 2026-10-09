@@ -289,7 +289,19 @@
 // `MeeshyColors.indigo950` (la même teinte, `#1E1B4B`) — le littéral a disparu, la
 // garde `DesignLiteralRatchetGuardTests` n'en accepte pas un de plus. Valeur
 // MESURÉE le 2026-10-06.
-const REFERENCE_LITERAL_COLOR_COUNT = 128;
+//
+// 2026-10-08 (#9636, blason des rangs) — littéraux 128 → 136 : l'encre de gravure
+// du blason, une par matière (cuivre, bronze, argent, or, platine, obsidienne, prisme,
+// flamme), dans `MeeshyUI/Game/GameMaterial.swift`, la palette FIXE du jeu qui porte
+// déjà les teintes de chaque matière — ce n'est pas une couleur de conversation, aucun
+// `accentColor` ne peut la remplacer. Valeur MESURÉE le 2026-10-08.
+//
+// 2026-10-08 (#9688, niveaux ouverts par le rang) — littéraux 136 → 145 : les neuf teintes
+// des paliers d'au-delà du niveau 100 (Nébuleuse … Infini ; Singularité reprend le prisme de
+// Galaxie), dans `LevelTierPalette` (`MeeshyUI/Game/GameMaterial.swift`), MIROIR des jetons
+// web `--game-tier-*` (`apps/web/src/styles/game.css`) — la palette fixe des paliers, pas une
+// couleur de conversation. Valeur MESURÉE le 2026-10-08.
+const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // 2026-10-06 (#9516, vague 2 du jeu, iOS) — variables inconnues 444 → 445 :
 // `GameAtlasViews.swift` calcule `Color(hex: $0.colorHex)` depuis
 // `LanguageData.info(for: code)` — la teinte ASSOCIÉE À UNE LANGUE de l'atlas

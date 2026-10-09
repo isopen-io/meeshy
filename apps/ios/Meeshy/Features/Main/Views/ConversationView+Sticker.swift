@@ -57,9 +57,11 @@ extension ConversationView {
     }
 
     /// « Mes stickers » : le PNG collé EST le sticker — aucun gabarit à
-    /// redessiner, donc `sticker: nil` et une image ordinaire.
+    /// redessiner, donc une image ordinaire qui porte seulement l'identifiant
+    /// de bibliothèque (`stickerId`), ce que la passerelle compte pour le défi
+    /// des stickers (#9635). Un identifiant local non synchronisé ne part pas.
     func sendLibrarySticker(_ item: StoryStickerLibraryItem) {
-        sendStickerImage(item.thumbnail, sticker: nil)
+        sendStickerImage(item.thumbnail, sticker: MessageSticker.library(item.id))
     }
 
     /// Le chemin d'envoi d'UNE image, réduit à ce qu'un sticker demande — la

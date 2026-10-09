@@ -23,8 +23,8 @@ import {
 import { estClefNonPersistable } from './souverain';
 
 describe('decodeAdminMonitoring — la santé', () => {
-  test('lit les sept familles : processus, base, Redis, temps réel, traduction, coupe-circuits, présence', () => {
-    expect(decodeAdminMonitoring(servedMonitoring())).toEqual({
+  test('lit les huit familles : processus, base, Redis, temps réel, traduction, coupe-circuits, présence, sauvegardes (#9668, décodées en détail par monitoring-backups.test.ts)', () => {
+    expect(decodeAdminMonitoring(servedMonitoring({ backups: null }))).toEqual({
       generatedAt: '2026-09-30T11:59:00.000Z',
       gateway: { uptimeSeconds: 273_600, memory: { heapUsed: 157_286_400, heapTotal: 209_715_200, rss: 367_001_600 } },
       database: { status: 'up', latencyMs: 12 },
@@ -47,6 +47,7 @@ describe('decodeAdminMonitoring — la santé', () => {
         { name: 'mailer', state: 'HALF_OPEN', failures: 2, successes: 40, lastFailureAt: '2026-09-30T10:00:00.000Z' },
       ],
       presenceUpdates: { totalRequests: 1_200, throttledRequests: 30, throttleRate: 2.5 },
+      backups: null,
     });
   });
 

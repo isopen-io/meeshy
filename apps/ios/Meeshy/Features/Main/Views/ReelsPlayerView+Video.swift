@@ -38,6 +38,11 @@ struct ReelVideoView: View {
     /// visible PAUSED. Subsequent reels (paged to after the reveal) see this as
     /// already `true`, so they play normally.
     let revealCompleted: Bool
+    /// La page a le droit de télécharger sa vidéo d'elle-même (#9702) : vraie
+    /// pour la page active et celles de la fenêtre de préchargement. Sous
+    /// iOS 16, le `TabView` du pager monte TOUTES les pages et chacune
+    /// téléchargeait son réel entier ; hors de la fenêtre, la page attend.
+    var mayDownload: Bool = true
 
     // Plain reference (NOT @ObservedObject): only `player` identity and
     // `activeURL` matter for this page wrapper (backdrop + poster +
@@ -56,7 +61,7 @@ struct ReelVideoView: View {
     }
 
     var body: some View {
-        VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, _ in
+        VideoAvailabilityResolver(attachment: attachment, autoDownload: true, mayAutoStart: mayDownload) { availability, _ in
             content(ready: availability == .ready)
         }
         .onReceive(manager.$activeURL) { activeURL = $0 }

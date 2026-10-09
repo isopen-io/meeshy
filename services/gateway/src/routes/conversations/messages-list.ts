@@ -48,6 +48,7 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { hidingServedTo } from '../../services/messaging/captureNoticeVisibility';
 import {
   backfillCitedAttachments,
   type MessageRattrapable,
@@ -67,6 +68,7 @@ import {
   enrichPostReplyMessagesForList,
   parseLanguageFilterParam
 } from './messages-list-query';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import type { RawMessageRow } from './messages-list-query-types';
 import { loadReaderReactionsByMessage } from './messages-reader-reactions';
 import {
@@ -316,7 +318,14 @@ export function registerMessagesListRoute(
       const historyStartDate: Date | null = participant ? historyFloorFor(participant, shareLink) : null;
 
       t0 = performance.now();
-      const personalHiding = await personalHidingPromise;
+      // #9629 — les avis de capture que ce lecteur ne doit pas voir rejoignent
+      // son masquage : chaque requête de la page (compte, vues, around) les écarte.
+      const personalHiding = await hidingServedTo(prisma, {
+        conversationId,
+        participant,
+        floor: historyStartDate,
+        hiding: await personalHidingPromise,
+      });
       timings.personalHiding = performance.now() - t0;
 
       // #4340 — la SOUS-COLLECTION lue. Résolue APRÈS toutes les portes
@@ -726,6 +735,7 @@ export function registerMessagesListRoute(
         consumptionMap,
         ephemeralDeadlines,
         readerReactions,
+        readerFileUrlSigner: readerFileUrlSignerFromEnv(new Date()),
       }));
 
       // ===== ENRICHIR LES MESSAGES FORWARDÉS =====

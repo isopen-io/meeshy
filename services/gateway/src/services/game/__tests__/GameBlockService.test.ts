@@ -36,24 +36,40 @@ const counter = (db: FakeGameDb, points: number) =>
 describe('GameBlockService.build', () => {
   it('un compte actif sert un bloc qui passe le schéma partagé', async () => {
     const db = fakeGameDb();
-    seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 25, currentStreakDays: 12, lastStreakDate: new Date('2026-10-04T00:00:00Z'), flameFreezes: 1 });
+    seedUser(db, { engagementScore: 100 * 20 * 20, levelRecord: 25, currentStreakDays: 12, longestStreakDays: 12, lastStreakDate: new Date('2026-10-04T00:00:00Z'), flameFreezes: 1 });
     counter(db, 4000);
-    grant(db, 7);
+    grant(db, 6);
+    db.meeshLedger.rows.push({ id: 'm1', userId: USER, delta: 1, reason: 'mint', requestId: 'frappe-0001' });
+    db.dailyMission.rows.push({ id: 'old', userId: USER, dayKey: '2026-09-30', slot: 0, completedAt: new Date('2026-09-30T12:00:00Z') });
     db.gloryLedger.rows.push({ id: 'l1', userId: USER, delta: 2800, reason: 'level', requestId: 'level:2' });
 
     const block = await build(db);
 
     expect(gameBlockSchema.safeParse(block).success).toBe(true);
     expect(block.level).toMatchObject({ level: 20, record: 25 });
+    // Les étapes (#9706) : une Meesh, une mission et Écho ouvrent jusqu'à 39 ; la prochaine est la Flamme de 7 jours, faite.
+    expect(block.level.ladder).toMatchObject({ held: false, steps: { minted: 1, missionsDone: 1, flameRecord: 12 } });
+    expect(block.level.ladder?.step).toEqual({ level: 30, kind: 'rank', target: 2000, current: 2800, met: true, rank: 'echo' });
     expect(block.glory).toMatchObject({ glory: 2800, rank: 'echo', division: 3, division5: 4, mythic: null });
     expect(block.treasury).toMatchObject({ held: 7, tier: 'bourse' });
     expect(block.flame).toMatchObject({ days: 12, freezes: 1, status: 'at-risk' });
     expect(block.boosts.tailwind).toBe(1.25);
   });
 
+  it('les points sont là, l\'étape du 10 manque : le niveau attend à 9 et dit laquelle (#9706)', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 100 * 15 * 15, levelRecord: 9 });
+
+    const block = await build(db);
+
+    expect(block.level).toMatchObject({ level: 9, pointsToNext: 0, progress: 1 });
+    expect(block.level.ladder).toMatchObject({ level: 9, held: true, isMax: false });
+    expect(block.level.ladder?.step).toEqual({ level: 10, kind: 'mint', target: 1, current: 0, met: false, rank: null });
+  });
+
   it('quand la journée de jeu ouverte la veille au soir continue, la Flamme se juge sur le jour CIVIL', async () => {
     const db = fakeGameDb();
-    seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 20, currentStreakDays: 4, lastStreakDate: new Date('2026-10-04T00:00:00Z') });
+    seedUser(db, { engagementScore: 100 * 20 * 20, levelRecord: 20, currentStreakDays: 4, lastStreakDate: new Date('2026-10-04T00:00:00Z') });
     for (const [slot, difficulty] of ['easy', 'medium', 'hard'].entries()) {
       db.dailyMission.rows.push({
         id: `m${slot}`, userId: USER, dayKey: '2026-10-04', slot, templateKey: 'send-texts', difficulty,

@@ -36,10 +36,12 @@ enum GameElementKind: String, CaseIterable, Equatable {
     case levelRing = "ring"
     case treasuryTier = "treasury"
     case elanFamily = "elan"
+    /// Une étape des niveaux (#9706) : de 10 à 100, chaque dizaine en demande une.
+    case levelStep = "levelstep"
     case fact
     case player
 
-    /// Les dix-huit familles du catalogue (tout sauf la donnée et la ligne de classement).
+    /// Les dix-neuf familles du catalogue (tout sauf la donnée et la ligne de classement).
     static let families: [GameElementKind] = allCases.filter { $0 != .fact && $0 != .player }
 
     /// Ce que la seconde phrase d'une famille dit (miroir de `GAME_DETAIL_HOW`) : comment on OBTIENT l'élément,
@@ -53,11 +55,12 @@ enum GameElementKind: String, CaseIterable, Equatable {
         switch self {
         case .flameForm, .mission, .chest, .elanFamily: .gives
         case .badge, .achievement, .challenge, .trophy, .stamp, .seasonStep, .seal, .leagueGem, .prestigeStar, .rank,
-             .freeze, .coin, .levelRing, .treasuryTier, .fact, .player: .obtain
+             .freeze, .coin, .levelRing, .treasuryTier, .levelStep, .fact, .player: .obtain
         }
     }
 
-    /// Le concept dont l'élément relève : c'est sa fiche que « Voir la fiche » ouvre.
+    /// Le concept dont l'élément relève : c'est sa fiche que « Voir la fiche » ouvre. Celui d'une étape des niveaux
+    /// dépend de ce qu'elle demande (`LevelStepKind.concept`) : la famille seule ne le dit pas.
     var concept: ProgressionConcept? {
         switch self {
         case .badge: .badges
@@ -74,7 +77,7 @@ enum GameElementKind: String, CaseIterable, Equatable {
         case .coin, .treasuryTier: .meesh
         case .levelRing: .level
         case .elanFamily: .elans
-        case .fact: nil
+        case .levelStep, .fact: nil
         }
     }
 }
@@ -119,13 +122,20 @@ enum GameDetailFactKey: String, CaseIterable, Equatable {
     case showcaseVisibility = "showcase_visibility"
     case atlasStamps = "atlas_stamps"
     case atlasPending = "atlas_pending"
+    case spendHeld = "spend_held"
+    case spendCost = "spend_cost"
+    case spendAfter = "spend_after"
+    case spendMissing = "spend_missing"
+    case levelNow = "level_now"
+    case levelRequired = "level_required"
 }
 
 /// L'emblème d'un élément — une DONNÉE, que la feuille dessine en grand avec les briques du jeu.
 enum GameElementEmblem: Equatable {
     case concept(ProgressionConcept)
     case tier(LevelTierKey)
-    case rank(GloryRank, GloryDivision?)
+    /// Le rang, sa division V–I (`nil` pour Mythe) et la place servie du Mythe (#9636).
+    case rank(GloryRank, GloryDivision5?, MythicSeatRef?)
     case coin(MeeshEdition)
     case flame(FlameFormKey?)
     case chest(open: Bool)
@@ -133,7 +143,8 @@ enum GameElementEmblem: Equatable {
     case trophy(GameMaterial)
     case stamp(code: String, stamped: Bool)
     case badge(family: GameMedalFamily, glyph: GameMedalGlyph, material: GameMaterial, lit: Bool, progress: Double)
-    case medal(material: GameMaterial, lit: Bool)
+    /// Un succès (médaillon à réunir) ou un défi (losange du record) : la FORME dit le type.
+    case medal(shape: GameBadgeView.Shape, material: GameMaterial, lit: Bool)
     case symbol(String)
 }
 
@@ -162,22 +173,29 @@ struct GameElementDetail: Identifiable, Equatable {
     let concept: ProgressionConcept
     /// La donnée dont une ligne parle, quand elle a sa phrase au catalogue.
     var factKey: GameDetailFactKey?
+    /// Ce qu'un BADGE dit de lui-même (#9640) : ce qui compte pour son axe, sa matière et pourquoi, ses étoiles, ses
+    /// sept paliers, la prochaine étoile. `nil` pour tout autre élément.
+    var badge: GameBadgeGuideModel?
 
     var id: String { kind.rawValue + ":" + key }
 
     /// « C'est quoi » — la phrase de la famille ; pour une donnée, SA phrase, ou à défaut celle de son concept ;
     /// pour une ligne du classement, ce qu'on voit d'un autre joueur.
     var what: String {
-        switch kind {
+        if let badge { return badge.counts }
+        return switch kind {
         case .fact: factKey.map { GameDetailText.fact($0) } ?? ConceptText.why(concept)
         case .player: GameDetailText.playerWhat
         default: GameDetailText.what(kind) ?? ConceptText.why(concept)
         }
     }
 
-    /// « Comment l'obtenir » ou « ce que ça donne » — la seconde phrase de la famille. Une donnée et une ligne de
-    /// classement n'en ont qu'une : `nil`.
-    var how: String? { GameDetailText.how(kind) }
+    /// « Comment l'obtenir » ou « ce que ça donne » — la seconde phrase de la famille ; pour un badge, ce qu'il manque
+    /// pour la prochaine étoile. Une donnée et une ligne de classement n'en ont qu'une : `nil`.
+    var how: String? { badge?.next ?? GameDetailText.how(kind) }
+
+    /// Le titre de la première phrase : « C'est quoi », ou — pour un badge — « Ce qui compte ».
+    var whatTitle: String { badge == nil ? ConceptText.ficheWhat : GameBadgeGuideText.countsLabel }
 
     /// Le titre de la seconde phrase : « Comment l'obtenir » ou « Ce que ça donne ».
     var howTitle: String { kind.how == .gives ? GameDetailText.givesLabel : GameDetailText.obtainLabel }
@@ -231,6 +249,14 @@ enum GameElementDetails {
 
     // MARK: Badge / médaille
 
+    /// Ce que la fiche d'un badge porte en propre (#9640) : son guide, sa matière et ses étoiles en lignes.
+    private static func badgeFacts(_ guide: GameBadgeGuideModel) -> [ProgressionConceptFact] {
+        [
+            guide.material.map { fact(GameBadgeGuideText.materialLabel, GameCopy.materialName($0)) },
+            fact(GameBadgeGuideText.starsLabel, ConceptText.ratio(count(guide.stars), count(guide.starsMax))),
+        ].compactMap { $0 }
+    }
+
     /// Le badge d'un AXE : son plus haut palier atteint, ou — s'il n'en a encore aucun — le premier à décrocher,
     /// verrouillé, avec ce qu'il manque et sa jauge.
     static func badge(for axis: EngagementAxisProgress, progress: EngagementProgress) -> GameElementDetail {
@@ -239,40 +265,37 @@ enum GameElementDetails {
         }
         let target = axis.scale.nextThreshold ?? axis.scale.tiers.first?.threshold ?? 0
         let material = GameBadges.material(forThreshold: target)
+        let guide = GameBadgeGuideModel.make(BadgeGuideResolver.resolve(axis))
         return GameElementDetail(
             kind: .badge, key: axis.axis.rawValue + ":next",
             emblem: .badge(family: GameMedalFamily(axis.family), glyph: GameMedalGlyph(axis: axis.axis), material: material,
                            lit: false, progress: axis.scale.progress),
-            name: ProgressionCopy.title(for: axis.axis) + " · " + GameCopy.materialName(material),
+            name: ProgressionCopy.title(for: axis.axis),
             status: .locked(missing: axis.scale.remainingToNext.map { missing(count($0)) }, progress: axis.scale.progress),
-            facts: [
-                fact(ConceptText.factTier, count(target)),
-                fact(ConceptText.factDone, count(axis.scale.value)),
-            ],
-            concept: .badges
+            facts: badgeFacts(guide),
+            concept: .badges,
+            badge: guide
         )
     }
 
-    /// Un badge : l'axe, la matière de son palier, et — éteint — ce qu'il manque pour le rallumer.
+    /// Un badge : l'axe, la matière de son palier, et — éteint — ce qu'il manque pour le rallumer. Son guide est lu
+    /// dans la progression servie (paliers datés) ; sans elle, dans le seul compteur.
     static func badge(_ item: GameBadgeItem, progress: EngagementProgress? = nil) -> GameElementDetail {
-        let reachedAt = progress?.axes.first { $0.axis == item.axis }?
-            .scale.tiers.first { $0.threshold == item.threshold }?.reachedAt
-        let next: ProgressionConceptFact? = item.nextThreshold.map {
-            fact(ConceptText.factNextStep, GameCopy.materialName(GameBadges.material(forThreshold: $0)) + " · " + count($0))
-        }
+        let axis = progress?.axes.first { $0.axis == item.axis }
+        let reachedAt = axis?.scale.tiers.first { $0.threshold == item.threshold }?.reachedAt
+        let guide = GameBadgeGuideModel.make(
+            axis.map { BadgeGuideResolver.resolve($0) } ?? BadgeGuideResolver.resolve(axis: item.axis, count: item.value, served: [])
+        )
         return GameElementDetail(
             kind: .badge, key: item.id,
             emblem: .badge(family: item.family, glyph: item.glyph, material: item.material, lit: item.lit, progress: item.progress),
-            name: ProgressionCopy.title(for: item.axis) + " · " + GameCopy.materialName(item.material),
+            name: ProgressionCopy.title(for: item.axis),
             status: item.lit
                 ? obtained(on: EngagementProgressResolver.reachedDate(reachedAt))
                 : .locked(missing: missing(count(item.missing)), progress: item.progress),
-            facts: [
-                fact(ConceptText.factTier, count(item.threshold)),
-                fact(ConceptText.factDone, count(item.value)),
-                next,
-            ].compactMap { $0 },
-            concept: .badges
+            facts: badgeFacts(guide),
+            concept: .badges,
+            badge: guide
         )
     }
 
@@ -283,7 +306,7 @@ enum GameElementDetails {
     static func achievement(_ achievement: EngagementAchievementProgress, rarity: GameRarityEntry? = nil) -> GameElementDetail {
         GameElementDetail(
             kind: .achievement, key: achievement.key.rawValue,
-            emblem: .medal(material: .gold, lit: achievement.unlocked),
+            emblem: .medal(shape: .collection(filled: achievement.unlocked ? 1 : 0, total: 1), material: .gold, lit: achievement.unlocked),
             name: ProgressionCopy.title(for: achievement.key),
             status: achievement.unlocked
                 ? obtained(on: EngagementProgressResolver.reachedDate(achievement.reachedAt))
@@ -300,7 +323,7 @@ enum GameElementDetails {
         guard let name = AchievementCopy.label(entry.family, tier: entry.tier) else { return nil }
         return GameElementDetail(
             kind: .challenge, key: entry.key,
-            emblem: .medal(material: .silver, lit: entry.unlocked),
+            emblem: .medal(shape: .record, material: .silver, lit: entry.unlocked),
             name: name,
             status: entry.unlocked ? obtained(on: entry.reachedAt) : .locked(missing: nil, progress: nil),
             facts: [fact(ConceptText.name(.defis), AchievementCopy.sectionTitle(entry.section))],
@@ -449,12 +472,12 @@ enum GameElementDetails {
     static func rank(_ glory: GameBlock.Glory) -> GameElementDetail {
         let missing: String = glory.gloryMissing.map { " · " + ConceptText.chipMissing(count($0)) } ?? ""
         let next: ProgressionConceptFact? = glory.next.map {
-            fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division: $0.division) + missing)
+            fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division5: $0.shownDivision) + missing)
         }
         return GameElementDetail(
-            kind: .rank, key: glory.rank.rawValue + (glory.division.map { ".\($0.rawValue)" } ?? ""),
-            emblem: .rank(glory.rank, glory.division),
-            name: GameCopy.rankLabel(glory.rank, division: glory.division),
+            kind: .rank, key: glory.rank.rawValue + (glory.shownDivision.map { ".\($0.rawValue)" } ?? ""),
+            emblem: .rank(glory.rank, glory.shownDivision, glory.mythicSeat),
+            name: GameCopy.rankLabel(glory),
             status: .value(String(localized: "game.rank.glory", defaultValue: "Gloire \(count(glory.glory))", bundle: .main),
                            progress: glory.next == nil ? nil : glory.progress),
             facts: [next].compactMap { $0 },
@@ -568,20 +591,42 @@ enum GameElementDetails {
 
     // MARK: Niveau
 
-    static func levelRing(_ level: GameBlock.Level) -> GameElementDetail {
+    /// Le niveau se lit sur la VÉRITÉ (`level.shown`, #9688) ; au plafond du rang, le fait dit quel rang ouvre la suite.
+    static func levelRing(_ block: GameBlock.Level) -> GameElementDetail {
+        let level = block.shown
         let record: ProgressionConceptFact? = level.record > level.level
             ? fact(ConceptText.factRecord, GameText.bannerLevel(level: count(level.record))) : nil
         return GameElementDetail(
             kind: .levelRing, key: "\(level.level)",
             emblem: .tier(level.tier),
             name: GameText.bannerLevel(level: count(level.level)) + " · " + GameCopy.tierName(level.tier),
-            status: .value(GameCopy.points(level.score), progress: level.nextThreshold == nil ? nil : level.progress),
+            status: .value(GameCopy.points(block.score), progress: level.nextThreshold == nil ? nil : level.progress),
             facts: [
                 fact(ConceptText.factNextLevel, level.nextThreshold == nil
-                    ? GameText.bannerTop : ConceptText.chipMissing(GameCopy.points(level.pointsToNext))),
+                    ? GameCopy.levelTopShort(cap: level.cap) : ConceptText.chipMissing(GameCopy.points(level.pointsToNext))),
                 record,
             ].compactMap { $0 },
             concept: .level
+        )
+    }
+
+    // MARK: Étape des niveaux (#9706)
+
+    /// Une étape des niveaux : faite, ou à faire avec ce qu'il manque et sa jauge. Quand les faits sont servis, les dix
+    /// étapes en lignes, chacune faite ou à faire. « Voir la fiche » mène au GESTE qui la fait (`LevelStepKind.concept`).
+    static func levelStep(_ step: GameLevelStep, facts: GameLevelStepFacts? = nil) -> GameElementDetail {
+        let all = facts.map { GameLevelSteps.all($0) } ?? []
+        return GameElementDetail(
+            kind: .levelStep, key: "\(step.level)",
+            emblem: .concept(step.kind.concept),
+            name: GameCopy.levelStepLine(step),
+            status: step.met
+                ? .obtained(since: nil)
+                : .locked(missing: GameCopy.levelStepProgress(step), progress: share(step.current, step.target)),
+            facts: all.map {
+                fact(GameText.bannerLevel(level: count($0.level)), GameCopy.levelStepGoal($0) + " · " + GameCopy.levelStepState($0))
+            },
+            concept: step.kind.concept
         )
     }
 
@@ -589,7 +634,7 @@ enum GameElementDetails {
 
     /// Une famille d'élan : active dans la fenêtre servie, ou au repos — et ce qu'un geste de la famille rapporte.
     static func elanFamily(_ family: EngagementAxisFamily, elan: EngagementElanProgress?,
-                           weights: [EngagementAxisFamily: Int] = EngagementCatalog.familyWeights) -> GameElementDetail {
+                           weights: [EngagementAxisFamily: Int] = EngagementCatalog.familyTopPoints) -> GameElementDetail {
         let active = elan?.activeFamilies.contains(family) ?? false
         let window: ProgressionConceptFact? = elan.map { fact(ConceptText.factWindow, GameCopy.days($0.windowDays)) }
         let points: ProgressionConceptFact? = weights[family].map {
@@ -637,6 +682,18 @@ enum GameElementDetails {
         case .league: return game.league.flatMap { leagueGem($0) } ?? fallback
         case .prestige: return game.prestige.map { prestigeStar(min($0.stars + 1, $0.max), in: $0) } ?? fallback
         case .points, .season, .elans, .badges, .defis, .succes, .showcase, .atlas: return fallback
+        }
+    }
+}
+
+extension LevelStepKind {
+    /// La fiche du GESTE qui fait l'étape : la frappe, les missions du jour, la Flamme, la Gloire et son rang.
+    var concept: ProgressionConcept {
+        switch self {
+        case .mint: .meesh
+        case .missions: .missions
+        case .flame: .flame
+        case .rank: .glory
         }
     }
 }

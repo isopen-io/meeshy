@@ -1,6 +1,8 @@
 import type { FeedPost } from '@/lib/api/feed-pages';
 import type { MediaPlaybackStatus } from '@/lib/view/use-media-playback';
 
+import { PRELOAD_MIN_RADIUS, preloadTierOf } from './preload-window';
+
 /**
  * LA LOI DU FIL DES RÉELS (#6457) — PURE. Miroir de `ReelsViewModel.swift`
  * (`seed(posts:startId:)`, `loadMoreIfNeeded`) et du pager vertical de
@@ -17,12 +19,19 @@ import type { MediaPlaybackStatus } from '@/lib/view/use-media-playback';
  * depuis sa donnée la plus récente (`known`) : un geste qui bascule un cache se
  * voit aussitôt, sans réordonner.
  */
-export const REEL_WINDOW_RADIUS = 1;
+export const REEL_WINDOW_RADIUS = PRELOAD_MIN_RADIUS;
 
 /** À trois réels du bout — `index >= reels.count - 3` (`ReelsViewModel.loadMoreIfNeeded`). */
 const LOAD_MORE_DISTANCE = 3;
 
-export type ReelPageMode = 'active' | 'near' | 'far';
+/**
+ * Le PALIER d'une page, lu dans la fenêtre de préchargement (#9702) :
+ * `active` joue, `near` (N±1) monte son élément en `preload="auto"` — sa
+ * première image est décodée avant le balayage —, `warm` (N±2) le monte en
+ * attente de métadonnées, `far` ne porte que son affiche (ses octets de tête
+ * sont amorcés à part, `media-primer.ts`, tant qu'il reste dans la fenêtre).
+ */
+export type ReelPageMode = 'active' | 'near' | 'warm' | 'far';
 
 export type ReelPlaybackIntent = 'play' | 'pause';
 
@@ -83,10 +92,12 @@ export function activeIndexOf(params: { readonly scrollTop: number; readonly pag
   return Math.min(count - 1, Math.max(0, Math.round(scrollTop / pageHeight)));
 }
 
+const MODE_OF_TIER = { play: 'active', decode: 'near', mount: 'warm', prime: 'far', idle: 'far' } as const;
+
+/** Le montage ne dépend que du PLANCHER de la fenêtre (N±2, toujours) : ce
+ * que la fenêtre élargie ajoute au-delà, ce sont des octets, pas des éléments. */
 export function pageModeOf(index: number, activeIndex: number): ReelPageMode {
-  const distance = Math.abs(index - activeIndex);
-  if (distance === 0) return 'active';
-  return distance <= REEL_WINDOW_RADIUS ? 'near' : 'far';
+  return MODE_OF_TIER[preloadTierOf(index - activeIndex, { ahead: REEL_WINDOW_RADIUS, behind: REEL_WINDOW_RADIUS })];
 }
 
 /**

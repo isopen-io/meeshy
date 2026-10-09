@@ -855,6 +855,16 @@ export default defineConfig({
       },
       output: {
         /**
+         * L'EMPREINTE DES MORCEAUX À SEPT CARACTÈRES (#9706). L'entrée porte la
+         * table de préchargement de TOUS les morceaux d'écran — plus de cinq
+         * cents noms, payés à la première peinture de chaque lecteur, et
+         * l'empreinte en est la seule partie que gzip ne comprime pas.
+         * Sept caractères (42 bits) suffisent à distinguer quelques milliers
+         * de fichiers et à invalider le cache ; huit n'achetaient rien de plus
+         * (mesuré : 90,26 → 89,58 Ko ; rolldown refuse six).
+         */
+        chunkFileNames: 'assets/[name]-[hash:7].js',
+        /**
          * Le socle et les ecrans sont separes pour que le gate DESIGNE un
          * coupable quand un poids monte (§ 8.4 de la conception v3), et pour
          * qu'un ecran neuf ne renchérisse pas la premiere peinture.
@@ -942,6 +952,16 @@ export default defineConfig({
            * plafond que ce lot ne doit pas toucher (mesuré : 14,56 Ko contre
            * 14 avant ce renommage). */
           if (id.includes('/socketio-events/event-names')) return 'socket-event-names';
+          /**
+           * LA LOI DU NIVEAU ET DE LA FRAPPE (#9706) — `levels`, `level-steps`,
+           * `level-wire`, `mint` et `rarity` (`@meeshy/shared/utils/game`)
+           * sont lus par les seuls écrans du jeu, et chacun pèse moins d'1 Ko.
+           * Laissés à Rollup, ils faisaient CINQ morceaux, donc cinq noms dans
+           * la table de préchargement que porte l'entrée — mesuré, chaque nom
+           * coûte ~13 octets gzip à la première peinture de tous. Un nom pour
+           * la famille : le même code, chargé par les mêmes écrans.
+           */
+          if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity)\.[jt]s$/.test(id)) return 'game-law';
           return undefined;
         },
       },

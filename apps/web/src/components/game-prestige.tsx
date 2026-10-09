@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 
-import type { GameLevel, GamePrestigeBlock } from '@meeshy/shared/types/game';
+import type { GamePrestigeBlock } from '@meeshy/shared/types/game';
+import { GAME_PRESTIGE_LEVEL } from '@meeshy/shared/utils/game/levels';
+import { prestigeTransition } from '@meeshy/shared/utils/game/prestige';
 
 import type { EffectEnv } from '@/lib/game/gl/effect-runner';
+import type { LevelReading } from '@/lib/game/ladder';
 import type { PlayOptions } from '@/lib/game/play';
-import { formatCount, gameText } from '@/lib/view/game-copy';
+import { formatCount, gameText, pointsLabel } from '@/lib/view/game-copy';
 import { trophyView } from '@/lib/view/game-copy-v2';
 import { starDetail } from '@/lib/view/game-detail';
 
 import { GameBird } from './game/game-bird';
 import { PrestigeScene } from './game/prestige-scene';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GameCard } from './game-surface';
-import { GameTouch } from './game-touch';
+import { GameFactChips, GameRequirementLine, GameTouch, type GameFactChip } from './game-touch';
 
 /**
  * LE PRESTIGE (#9389, conception II.2 et II.9) — la vie après le niveau 100 :
@@ -28,11 +31,17 @@ import { GameTouch } from './game-touch';
  * (le niveau repart tout de suite) avec retour arrière, la loi est celle de la
  * passerelle (`prestigeTransition`).
  *
- * Fermé : sous le niveau 100 il dit où l'on en est ; au maximum (cinq étoiles)
- * il le fête, sans rien proposer.
+ * Fermé : sous le niveau 100 il dit où l'on en est et combien de niveaux
+ * manquent ; au maximum (cinq étoiles) il le fête, sans rien proposer.
+ *
+ * La confirmation donne les VALEURS (#9705), tirées de `prestigeTransition` :
+ * points en poche, niveau et record avant → après, l'étoile posée, la Gloire.
  */
 export type GamePrestigeProps = {
-  readonly level: Pick<GameLevel, 'level' | 'tier' | 'progress'>;
+  /** Le niveau MONTRÉ (la lecture ouverte par le rang, #9688). */
+  readonly level: Pick<LevelReading, 'level' | 'tier' | 'progress' | 'record'>;
+  /** Les points en poche : le Prestige les remet à zéro. */
+  readonly score: number;
   readonly prestige: GamePrestigeBlock;
   readonly online: boolean;
   readonly pending: boolean;
@@ -42,7 +51,27 @@ export type GamePrestigeProps = {
   readonly createEnv?: (host: HTMLElement, canvas: HTMLCanvasElement) => EffectEnv;
 };
 
-export function GamePrestige({ level, prestige, online, pending, error, onPass, playOptions, createEnv }: GamePrestigeProps) {
+const arrow = (before: string, after: string): string => `${before} → ${after}`;
+
+/** Ce que le passage change, valeur par valeur ; vide quand la loi le refuse (le serveur reste juge). */
+function passValues(level: GamePrestigeProps['level'], score: number, prestige: GamePrestigeBlock): readonly GameFactChip[] {
+  const pass = prestigeTransition({ score, prestige: prestige.stars, levelRecord: level.record });
+  if (!pass.allowed) return [];
+  return [
+    { fact: 'score', label: gameText('game.fact.balance'), value: arrow(pointsLabel(score), pointsLabel(pass.scoreAfter)) },
+    { fact: 'level_now', label: gameText('game.mint.row.level'), value: arrow(formatCount(level.level), formatCount(pass.levelAfter)) },
+    { fact: 'level_record', label: gameText('game.fact.record'), value: arrow(formatCount(level.record), formatCount(pass.levelRecordAfter)) },
+    {
+      fact: 'prestige_glory',
+      label: gameText('game.fact.stars'),
+      value: arrow(formatCount(prestige.stars), formatCount(pass.prestigeAfter)),
+      detail: starDetail(prestige, pass.prestigeAfter),
+    },
+    { fact: 'prestige_glory', label: gameText('game.mint.row.glory'), value: gameText('game.fmt.signed', { value: formatCount(pass.gloryGained) }) },
+  ];
+}
+
+export function GamePrestige({ level, score, prestige, online, pending, error, onPass, playOptions, createEnv }: GamePrestigeProps) {
   const [confirming, setConfirming] = useState(false);
   const [playKey, setPlayKey] = useState(0);
   const [passed, setPassed] = useState<number | null>(null);
@@ -90,9 +119,12 @@ export function GamePrestige({ level, prestige, online, pending, error, onPass, 
             {gameText('game.prestige.max')}
           </p>
         ) : !prestige.canPrestige && passed === null ? (
-          <p className="text-center text-caption" style={{ color: GAME_INK_2 }}>
-            {gameText('game.prestige.locked', { level: formatCount(level.level) })}
-          </p>
+          <>
+            <p className="text-center text-caption" style={{ color: GAME_INK_2 }}>
+              {gameText('game.prestige.locked', { level: formatCount(level.level) })}
+            </p>
+            <GameRequirementLine concept="prestige" current={level.level} required={GAME_PRESTIGE_LEVEL} />
+          </>
         ) : null}
       </GameCard>
 
@@ -119,6 +151,7 @@ export function GamePrestige({ level, prestige, online, pending, error, onPass, 
               <h3 id="game-prestige-confirm-title" className="text-body font-bold" style={{ color: GAME_INK }}>
                 {gameText('game.prestige.confirm.title', { number: formatCount(next) })}
               </h3>
+              <GameFactChips concept="prestige" marker="data-game-prestige-values" chips={passValues(level, score, prestige)} />
               <ul className="flex flex-col gap-1.5 text-caption" style={{ color: GAME_INK_2 }}>
                 <li>{gameText('game.prestige.confirm.resets')}</li>
                 <li>{gameText('game.prestige.confirm.keeps')}</li>

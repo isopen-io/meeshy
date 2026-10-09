@@ -14,6 +14,14 @@ final class GameCopyTests: XCTestCase {
         XCTAssertFalse(text.hasPrefix("onboarding."), "\(label) rend une clé brute : \(text)", file: file, line: line)
     }
 
+    // MARK: - La Gloire dite est celle que la passerelle verse (#9674)
+
+    func test_seasonCompleted_saysTheSeasonGloryTheGatewayPays_neverACopiedNumber() {
+        let said = GameText.seasonCompleted
+        XCTAssertTrue(said.contains(GameCopy.formatCount(GameGlory.points.season)), said)
+        XCTAssertFalse(said.contains(" 500 "), said)
+    }
+
     // MARK: - L'accord
 
     func test_zeroIsSingularInFrenchAndPortuguese_notInEnglish() {
@@ -66,9 +74,60 @@ final class GameCopyTests: XCTestCase {
         XCTAssertEqual(Set(LevelTierKey.allCases.map(GameCopy.tierName)).count, LevelTierKey.allCases.count)
     }
 
+    // MARK: - Le plafond du niveau (#9688)
+
+    func test_rankOpening_namesTheRankThatLiftsEachCap_derivedFromTheLaw() {
+        XCTAssertEqual(GameCopy.rankOpening(beyond: GameLevels.capBase), .ambassadeur)
+        XCTAssertEqual(GameCopy.rankOpening(beyond: GameLevels.capAmbassador), .oracle)
+        XCTAssertNil(GameCopy.rankOpening(beyond: nil), "sans limite : aucun rang à attendre")
+    }
+
+    func test_levelTop_atACap_saysTheCapAndTheRankThatOpensIt_insteadOfTheTop() {
+        let base = GameCopy.levelTop(cap: GameLevels.capBase)
+        assertNotRaw(base, "plafond 499")
+        XCTAssertTrue(base.contains(GameCopy.formatCount(499)), base)
+        XCTAssertTrue(base.contains(GameCopy.rankName(.ambassadeur)), base)
+        let ambassador = GameCopy.levelTop(cap: GameLevels.capAmbassador)
+        XCTAssertTrue(ambassador.contains(GameCopy.formatCount(1000)), ambassador)
+        XCTAssertTrue(ambassador.contains(GameCopy.rankName(.oracle)), ambassador)
+        XCTAssertNotEqual(base, GameCopy.levelTop(cap: nil), "au plafond du rang, on n'est pas « au sommet »")
+        XCTAssertTrue(GameCopy.levelTopShort(cap: GameLevels.capBase).contains(GameCopy.rankName(.ambassadeur)))
+        XCTAssertEqual(GameCopy.levelTopShort(cap: nil), GameText.bannerTop, "un serveur antérieur s'arrêtait à 100 : au sommet")
+    }
+
+    func test_theTierOrdinals_reachTheTwentiethTier() {
+        XCTAssertEqual(LevelTierKey.allCases.count, 20)
+        assertNotRaw(GameCopy.tierOrdinal(.singularite), "vingtième palier")
+        assertNotRaw(GameCopy.tierName(.singularite), "Singularité")
+        let text = GameCopy.levelRingAccessibility(level: 1_234, tier: .singularite)
+        XCTAssertTrue(text.contains(GameCopy.formatCount(1_234)), text)
+        XCTAssertTrue(text.contains(GameCopy.tierName(.singularite)), text)
+    }
+
     func test_rankLabel_addsTheRomanDivision_exceptForMyth() {
         XCTAssertEqual(GameCopy.rankLabel(.voix, division: .ii), "\(GameCopy.rankName(.voix)) II")
         XCTAssertEqual(GameCopy.rankLabel(.mythe, division: nil), GameCopy.rankName(.mythe))
+    }
+
+    func test_rankLabel_readsTheFiveDivisions_VToI() {
+        XCTAssertEqual(GameCopy.rankLabel(.echo, division5: .v), "\(GameCopy.rankName(.echo)) V")
+        XCTAssertEqual(GameCopy.rankLabel(.echo, division5: .iv), "\(GameCopy.rankName(.echo)) IV")
+        XCTAssertEqual(GameCopy.rankLabel(.echo, division5: .i), "\(GameCopy.rankName(.echo)) I")
+    }
+
+    func test_rankLabel_ofAServedMyth_saysItsSeatNumber_andAnUnreadableSeatStaysTheName() {
+        let seated = GameCopy.rankLabel(.mythe, division5: nil, mythic: MythicSeatRef(number: 42, edition: 57))
+        XCTAssertTrue(seated.contains(GameCopy.formatCount(42)), seated)
+        XCTAssertNotEqual(seated, GameCopy.rankName(.mythe))
+        assertNotRaw(seated, "Mythe n° 42")
+        XCTAssertEqual(GameCopy.rankLabel(.mythe, division5: nil, mythic: MythicSeatRef(number: 101, edition: 1)), GameCopy.rankName(.mythe))
+    }
+
+    func test_rankLabel_ofTheServedBlock_prefersDivision5_overTheLegacyProjection() {
+        let glory = GameBlock.Glory(glory: 6000, rank: .voix, division: .iii, division5: .v, next: nil, gloryMissing: nil, progress: 0)
+        XCTAssertEqual(GameCopy.rankLabel(glory), "\(GameCopy.rankName(.voix)) V")
+        let legacy = GameBlock.Glory(glory: 6000, rank: .voix, division: .ii, next: nil, gloryMissing: nil, progress: 0)
+        XCTAssertEqual(GameCopy.rankLabel(legacy), "\(GameCopy.rankName(.voix)) II")
     }
 
     // MARK: - Les missions
@@ -158,7 +217,8 @@ final class GameCopyTests: XCTestCase {
         let events: [GuideEvent] = [
             .firstLevel(level: 2, pointsToNext: 50),
             .newTier(tier: .lueur, nextTierLevel: 20),
-            .newTier(tier: .galaxie, nextTierLevel: nil),
+            .newTier(tier: .galaxie, nextTierLevel: 101),
+            .newTier(tier: .singularite, nextTierLevel: nil),
             .missionsUnlocked,
             .firstMintPossible(price: 1221, levelsLost: 2, gloryGain: 100),
             .firstMintPossible(price: 1221, levelsLost: 0, gloryGain: 100),

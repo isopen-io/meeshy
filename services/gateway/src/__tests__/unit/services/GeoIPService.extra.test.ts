@@ -1,6 +1,6 @@
 /**
  * Extended unit tests for GeoIPService utility functions.
- * Covers: extractIpFromRequest (proxy headers, Cloudflare, IPv6 localhost),
+ * Covers: extractIpFromRequest (request.ip only — forged proxy headers ignored, #9608; IPv6 localhost),
  * extractUserAgent, parseUserAgent (real UA strings, null, error fallback).
  *
  * @jest-environment node
@@ -29,35 +29,20 @@ function makeRequest(headers: Record<string, string | string[] | undefined>, ip 
 // ─── extractIpFromRequest ─────────────────────────────────────────────────────
 
 describe('extractIpFromRequest', () => {
-  it('uses cf-connecting-ip (Cloudflare) when present', () => {
-    const req = makeRequest({ 'cf-connecting-ip': '5.6.7.8' });
-    expect(extractIpFromRequest(req)).toBe('5.6.7.8');
+  // #9608 — l'adresse est `request.ip`, résolue par Fastify sous `trustProxy`
+  // borné. Les en-têtes que l'appelant écrit lui-même ne la choisissent plus.
+  it.each([
+    ['cf-connecting-ip', { 'cf-connecting-ip': '5.6.7.8' }],
+    ['x-real-ip', { 'x-real-ip': '9.10.11.12' }],
+    ['x-forwarded-for (premier maillon)', { 'x-forwarded-for': '1.1.1.1, 2.2.2.2, 3.3.3.3' }],
+    ['x-forwarded-for en tableau', { 'x-forwarded-for': ['4.4.4.4, 5.5.5.5', '6.6.6.6'] }],
+    ['les trois à la fois', { 'cf-connecting-ip': '5.6.7.8', 'x-real-ip': '9.10.11.12', 'x-forwarded-for': '1.1.1.1' }],
+  ])('ignore un en-tête forgé — %s', (_nom, headers) => {
+    const req = makeRequest(headers, '8.8.8.8');
+    expect(extractIpFromRequest(req)).toBe('8.8.8.8');
   });
 
-  it('prefers cf-connecting-ip over x-real-ip', () => {
-    const req = makeRequest({
-      'cf-connecting-ip': '5.6.7.8',
-      'x-real-ip': '9.10.11.12',
-    });
-    expect(extractIpFromRequest(req)).toBe('5.6.7.8');
-  });
-
-  it('uses x-real-ip when no cf-connecting-ip', () => {
-    const req = makeRequest({ 'x-real-ip': '9.10.11.12' });
-    expect(extractIpFromRequest(req)).toBe('9.10.11.12');
-  });
-
-  it('takes the first IP from x-forwarded-for comma list', () => {
-    const req = makeRequest({ 'x-forwarded-for': '1.1.1.1, 2.2.2.2, 3.3.3.3' });
-    expect(extractIpFromRequest(req)).toBe('1.1.1.1');
-  });
-
-  it('handles x-forwarded-for as a string array (takes first element)', () => {
-    const req = makeRequest({ 'x-forwarded-for': ['4.4.4.4, 5.5.5.5', '6.6.6.6'] });
-    expect(extractIpFromRequest(req)).toBe('4.4.4.4');
-  });
-
-  it('falls back to request.ip when no proxy headers', () => {
+  it('rend request.ip sans en-tête', () => {
     const req = makeRequest({}, '8.8.8.8');
     expect(extractIpFromRequest(req)).toBe('8.8.8.8');
   });
@@ -70,11 +55,6 @@ describe('extractIpFromRequest', () => {
   it('normalises ::ffff:127.0.0.1 (IPv4-mapped loopback) to 127.0.0.1', () => {
     const req = makeRequest({}, '::ffff:127.0.0.1');
     expect(extractIpFromRequest(req)).toBe('127.0.0.1');
-  });
-
-  it('trims whitespace from x-forwarded-for entries', () => {
-    const req = makeRequest({ 'x-forwarded-for': '  10.0.0.1  , 10.0.0.2' });
-    expect(extractIpFromRequest(req)).toBe('10.0.0.1');
   });
 });
 

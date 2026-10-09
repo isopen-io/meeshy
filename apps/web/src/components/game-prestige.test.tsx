@@ -3,11 +3,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { levelThreshold } from '@meeshy/shared/utils/game/levels';
 
-import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { GamePrestige, type GamePrestigeProps } from './game-prestige';
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
+import { formatCount } from '@/lib/view/game-copy';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click, rerender } = createActMounter();
@@ -26,9 +28,9 @@ const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s
 const quiet = { reducedMotion: true, haptics: false, schedule: () => () => undefined } as const;
 
 const props = (score = levelThreshold(100) + 40, prestige = 1, patch: Partial<GamePrestigeProps> = {}): GamePrestigeProps => {
-  const game = gameBlockWithExtrasFixture({ score, prestige });
+  const game = gameBlockWithExtrasFixture({ ...ALL_LEVEL_STEPS, score, prestige, levelRecord: 100 });
   if (game.prestige === undefined) throw new Error('la fixture porte le Prestige');
-  return { level: game.level, prestige: game.prestige, online: true, pending: false, onPass: () => undefined, playOptions: quiet, ...patch };
+  return { level: game.level, score: game.level.score, prestige: game.prestige, online: true, pending: false, onPass: () => undefined, playOptions: quiet, ...patch };
 };
 
 /**
@@ -41,9 +43,9 @@ describe('la proposition au niveau 100', () => {
 
   test('Mee et Meo expliquent : ce qui repart, ce qu’on gagne', () => {
     const t = text(html);
-    expect(t).toContain('Tu es au niveau 100 : le sommet');
+    expect(t).toContain('tu peux passer en Prestige, ou continuer à monter');
     expect(t).toContain('Ton niveau repart à 1');
-    expect(t).toContain('1 000 de Gloire');
+    expect(t).toContain(`${formatCount(GLORY_POINTS.prestige, 'fr').replace(/\s/g, ' ')} de Gloire`);
     expect(html).toContain('data-game-bird="meeGuide"');
     expect(html).toContain('data-game-bird="meoGuide"');
   });
@@ -74,6 +76,17 @@ describe('la proposition au niveau 100', () => {
     expect(t).toContain('ligue (niveau 10) et ton duo (niveau 20) se referment');
   });
 
+  test('la confirmation donne les VALEURS avant → après : points en poche, niveau, record, étoiles, Gloire (#9705)', async () => {
+    const host = await mount(<GamePrestige {...props()} />);
+    await click(host.querySelector('[data-game-prestige-go]'));
+    const plain = (value: string): string => value.replace(/\s/g, ' ');
+    const rows = plain(text(host.querySelector('[data-game-prestige-values]')?.innerHTML ?? ''));
+    expect(rows).toContain(plain(`En poche ${formatCount(props().score, 'fr')} points → 0 point`));
+    expect(rows).toContain('Niveau 100 → 1');
+    expect(rows).toContain('Étoiles 1 → 2');
+    expect(rows).toContain(plain(`Gloire +${formatCount(GLORY_POINTS.prestige, 'fr')}`));
+  });
+
   test('la confirmation dit que le consentement à la ligue publique reste enregistré', async () => {
     const host = await mount(<GamePrestige {...props()} />);
     await click(host.querySelector('[data-game-prestige-go]'));
@@ -89,7 +102,7 @@ describe('la proposition au niveau 100', () => {
     expect(host.textContent).toContain('Prestige 2 !');
   });
 
-  test('« Rester au sommet » referme la confirmation sans rien envoyer', async () => {
+  test('« Garder mon niveau » referme la confirmation sans rien envoyer', async () => {
     let passes = 0;
     const host = await mount(<GamePrestige {...props(undefined, 1, { onPass: () => (passes += 1) })} />);
     await click(host.querySelector('[data-game-prestige-go]'));
@@ -119,6 +132,8 @@ describe('les états fermés', () => {
   test('sous le niveau 100 : on dit où l’on en est, aucune offre', () => {
     const html = renderToStaticMarkup(<GamePrestige {...props(5_000, 0)} />);
     expect(text(html)).toContain('s’ouvre au niveau 100');
+    expect(text(html)).toContain('Requis 100');
+    expect(text(html)).toMatch(/Il manque \d+ niveaux/);
     expect(html).not.toContain('data-game-prestige-go');
   });
 

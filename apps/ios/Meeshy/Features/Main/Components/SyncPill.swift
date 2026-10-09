@@ -24,22 +24,14 @@ enum SyncPillDotStyle: Equatable, Sendable {
 /// The view layer (`SyncPill`) is agnostic to the entry's origin — it
 /// just rotates through the array, renders the label, and forwards taps
 /// when `source != nil`.
-/// Métriques partagées de la pastille — la hauteur qu'elle occupe et le
-/// décalage vers le haut appliqué par ses points de montage.
+/// Métriques partagées de la pastille — la hauteur qu'elle occupe. Sa POSITION
+/// ne vit pas ici : c'est `SyncPillPlacement` qui la décide, pour tous ses
+/// points de montage (#9680).
 enum SyncPillMetrics {
     /// Hauteur rendue de la capsule : contenu ~12 pt + `padding(.vertical, 5)`
     /// des deux côtés. Constante nommée plutôt que 22 en dur chez l'appelant —
-    /// c'est l'unité dans laquelle le décalage ci-dessous est exprimé.
-    static let height: CGFloat = 22
-
-    /// Remontée demandée : quatre fois la hauteur de la pastille (#4016). La
-    /// pastille naissait trop bas sous le chrome de ses hôtes (72 pt sous le
-    /// haut en conversation) ; elle se lisait comme un élément du contenu au
-    /// lieu d'un bandeau de statut. Bornée à `0` par `liftedTopPadding`, cette
-    /// remontée pose la pastille JUSTE SOUS la Dynamic Island (le point de
-    /// montage `.safeAreaInset(edge: .top)` la garde déjà sous la safe area) —
-    /// remontée d'au moins sa taille par rapport à la valeur précédente.
-    static let topLift: CGFloat = 4 * height
+    /// c'est l'unité dans laquelle la bande de la barre d'état se mesure.
+    nonisolated static let height: CGFloat = 22
 }
 
 struct SyncPillEntry: Identifiable, Equatable, Sendable {

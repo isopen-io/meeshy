@@ -17,6 +17,7 @@ import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
 import { watchIdentityScopedStores } from './identity-scoped-stores';
 import { sendAttachmentReaction } from './attachment-reaction-socket';
 import { setTypingEmitter } from './typing-emit';
+import { keepRealtimeConnection } from './realtime-identity';
 import { sessionStore } from './session';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
 import { typingStore } from './typing-store';
@@ -31,11 +32,12 @@ import { resolveViewer } from './viewer';
  * grossissent.
  *
  * UNE connexion par IDENTITÉ (motif `query-client.ts` § « purge sur
- * changement d'identité ») : `authenticated` OUVRE la connexion, `anonymous`
- * la FERME — jamais un socket par écran. `connectedToken` est la clé
- * d'identité : un `establish()` qui pose un jeton DIFFÉRENT (changement de
- * compte sur le même navigateur, D-6) reconstruit la connexion plutôt que de
- * la réutiliser à tort.
+ * changement d'identité ») : `authenticated` ET `guest` OUVRENT la connexion
+ * (`realtimeIdentityOf`, #9724), `anonymous` la FERME — jamais un socket par
+ * écran. `liveConnection` tient la clé d'identité : un `establish()` qui pose un
+ * jeton DIFFÉRENT (changement de compte sur le même navigateur, D-6), ou la
+ * bascule compte ↔ invité (#8816), reconstruit la connexion plutôt que de la
+ * réutiliser à tort.
  *
  * LE BOUCHON DE FIXTURES N'EST PLUS UNE DÉPENDANCE STATIQUE DE CE MODULE
  * (revue-correction #6171, défaut 1) — `createFixturesSocketClient` et sa
@@ -50,12 +52,28 @@ import { resolveViewer } from './viewer';
  * `gateway` déployé.
  */
 let connection: RealtimeConnection | null = null;
-let connectedToken: string | null = null;
 /** Garde la course : un second `syncConnection()` pendant que le `import()`
  * du bouchon résout ne doit pas ouvrir une SECONDE connexion de fixtures. */
 let fixturesConnecting = false;
 /** Le pont d'appel de la connexion courante (#6382) — refait à chaque connexion. */
 let unbridgeCalls: (() => void) | null = null;
+
+/**
+ * UNE SESSION RÉVOQUÉE DIT POURQUOI (#9613) — le motif est NOTÉ avant que la
+ * session ne finisse, pour que l'écran de connexion l'explique
+ * (`lib/session-end.ts`). Sans motif (jeton expiré), la session finit aussitôt ;
+ * un module qui ne se charge pas ne la retient jamais ouverte.
+ */
+function endWithReason(reason?: string): void {
+  if (reason === undefined) {
+    endRevokedSession(sessionStore);
+    return;
+  }
+  void import('@/lib/session-end')
+    .then(({ sessionEnd }) => sessionEnd.note(reason))
+    .catch(() => undefined)
+    .finally(() => endRevokedSession(sessionStore));
+}
 
 function bridgeCalls(next: RealtimeConnection | null): void {
   unbridgeCalls?.();
@@ -87,6 +105,25 @@ function bridgeCalls(next: RealtimeConnection | null): void {
 function currentViewerId(): string {
   return resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '';
 }
+
+/** La connexion de la passerelle réelle, une par identité (`keepRealtimeConnection`). */
+const liveConnection = keepRealtimeConnection<RealtimeConnection>({
+  open: (auth) =>
+    createRealtimeConnection(auth, {
+      base: apiConfig.base,
+      socketFactory: createSocketIOClient,
+      queryClient: appQueryClient,
+      typing: typingStore,
+      conversationStore,
+      outbox: outboxStore,
+      viewerId: currentViewerId,
+      onClearSession: endWithReason,
+    }),
+  onChange: (next) => {
+    connection = next;
+    bridgeCalls(next);
+  },
+});
 
 function syncConnection(): void {
   /**
@@ -123,36 +160,16 @@ function syncConnection(): void {
     return;
   }
 
-  const session = sessionStore.getState().session;
-  if (session.status !== 'authenticated') {
-    bridgeCalls(null);
-    connection?.destroy();
-    connection = null;
-    connectedToken = null;
-    return;
-  }
-  if (connection !== null && connectedToken === session.token) return;
-  connection?.destroy();
-  connectedToken = session.token;
-  connection = createRealtimeConnection(
-    { token: session.token, sessionToken: session.sessionToken },
-    {
-      base: apiConfig.base,
-      socketFactory: createSocketIOClient,
-      queryClient: appQueryClient,
-      typing: typingStore,
-      conversationStore,
-      outbox: outboxStore,
-      viewerId: currentViewerId,
-      onClearSession: () => endRevokedSession(sessionStore),
-    },
-  );
-  bridgeCalls(connection);
+  liveConnection.sync(sessionStore.getState().session);
 }
 
 /* Les magasins en mémoire d'une identité (outbox, overrides de rangée,
    frappe) se vident dès qu'elle change (#8674, `identity-scoped-stores.ts`). */
 watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore });
+/* LE CLIENT SE DÉCLARE (#9611) — appris après la première peinture, publié
+   pour le flux de connexion (`auth.ts`) ; la socket le relit elle-même. */
+void import('@/lib/net/client-session').then(({ publishClientDeclaration }) => publishClientDeclaration()).catch(() => undefined);
+
 sessionStore.subscribe(syncConnection);
 // La session peut déjà être authentifiée au moment où ce module se charge
 // (restauration `localStorage`, `main.tsx` § « LA SESSION EST TENUE » —

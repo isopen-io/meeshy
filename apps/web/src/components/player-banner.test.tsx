@@ -35,7 +35,7 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-const NEWCOMER: Partial<GameBlockFacts> = { score: 100, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, freezes: 0, lastActiveDay: null, debitablePoints: 100 };
+const NEWCOMER: Partial<GameBlockFacts> = { score: 1000, levelRecord: null, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, freezes: 0, lastActiveDay: null, debitablePoints: 1000 };
 const ZERO: Partial<GameBlockFacts> = { ...NEWCOMER, score: 0, debitablePoints: 0 };
 const modelOf = (game: ReturnType<typeof gameBlockFixture>): PlayerBannerModel => {
   const model = playerBannerModel(game);
@@ -63,7 +63,7 @@ describe('seulement ce qui existe', () => {
 
   const alone: ReadonlyArray<readonly [(typeof PIECES)[number], PlayerBannerModel]> = [
     ['meeshes', { ...newcomer(), meeshes: 1 }],
-    ['rank', { ...newcomer(), rank: { rank: 'murmure', division: 3 } }],
+    ['rank', { ...newcomer(), rank: { rank: 'murmure', division: 3, mythic: null } }],
     ['league', { ...newcomer(), league: { league: 'jade', place: 4 } }],
     ['flame', { ...newcomer(), flame: { form: 'braise', days: 3 } }],
   ];
@@ -231,7 +231,7 @@ describe('le chiffre qui roule et le reflet d’un niveau', () => {
   const at = (level: number, score: number, progress: number, pointsToNext: number): PlayerBannerModel => ({
     ...newcomer(),
     points: score,
-    level: { level, progress, prestige: 0, nextLevel: level + 1, pointsToNext },
+    level: { level, progress, prestige: 0, nextLevel: level + 1, pointsToNext, opener: null },
   });
   const before = (): PlayerBannerModel => at(4, 400, 0.9, 40);
 

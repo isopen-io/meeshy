@@ -6,6 +6,7 @@ import {
   NO_PERSONAL_HIDING,
 } from '../../services/personalHistoryFilter';
 import { applyHistoryFloor } from '../../services/historyFloor';
+import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
 
 /**
  * L'aperçu de ligne de liste POUSSÉ, rendu au masquage personnel de chaque
@@ -155,7 +156,7 @@ export async function resolvePersonalPreviewOverrides<M>(
         const hiding = (reader.userId !== null ? hidingByUser.get(reader.userId) : undefined) ?? NO_PERSONAL_HIDING;
         const replacement = (await prisma.message.findFirst({
           where: applyPersonalHistoryHiding(
-            applyHistoryFloor({ conversationId, deletedAt: null }, reader.historyFloor ?? null),
+            applyHistoryFloor(withoutCaptureNotices({ conversationId, deletedAt: null }), reader.historyFloor ?? null),
             hiding,
           ),
           orderBy: { createdAt: 'desc' },

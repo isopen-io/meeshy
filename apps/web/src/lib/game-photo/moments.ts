@@ -2,18 +2,19 @@ import type { GameBlock } from '@meeshy/shared/types/game';
 import type { EngagementAchievementKey } from '@meeshy/shared/types/engagement';
 import { engagementAchievementTitle } from '@meeshy/shared/utils/engagement-labels';
 import { flameForm, type FlameFormKey } from '@meeshy/shared/utils/game/flame';
-import type { AchievementRarity, GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
+import type { AchievementRarity, GloryDivision5, GloryRankOrMythic, MythicSeatRef } from '@meeshy/shared/utils/game/glory';
 import type { GuideMomentKey } from '@meeshy/shared/utils/game/guide';
 import { photoMomentId, photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
-import { LEVEL_TIER_KEYS, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
+import { LEVEL_TIER_KEYS, levelTierStart, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
+import { levelReading } from '@/lib/game/ladder';
 import { meeshEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { TREASURY_TIERS, type TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { transitionGuideEventsV2 } from '@/lib/game-guide/events-v2';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { editionName, formatCount, levelTierName, rankLabel, treasuryName } from '@/lib/view/game-copy';
+import { editionName, formatCount, levelTierName, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
 import { leagueName, rarityName, trophyView } from '@/lib/view/game-copy-v2';
 import { translateGame } from '@/lib/i18n-game-catalog';
 
@@ -38,7 +39,7 @@ import { translateGame } from '@/lib/i18n-game-catalog';
 
 export type PhotoEmblem =
   | { readonly kind: 'start' }
-  | { readonly kind: 'rank'; readonly rank: GloryRankOrMythic; readonly division: GloryDivision | null }
+  | { readonly kind: 'rank'; readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null; readonly mythic: MythicSeatRef | null }
   | { readonly kind: 'tier'; readonly tier: LevelTierKey; readonly level: number }
   | { readonly kind: 'level-hundred'; readonly prestige: number }
   | { readonly kind: 'meesh'; readonly number: number; readonly edition: MeeshEdition }
@@ -75,7 +76,7 @@ export function momentLines(
     case 'start':
       return { kicker: translateGame(language, 'game.photo.kicker.start'), title: translateGame(language, 'game.photo.title.start') };
     case 'rank':
-      return { kicker: translateGame(language, 'game.photo.kicker.rank'), title: rankLabel(emblem.rank, emblem.division, language) };
+      return { kicker: translateGame(language, 'game.photo.kicker.rank'), title: standingLabel(emblem, language) };
     case 'tier':
       return {
         kicker: translateGame(language, 'game.photo.kicker.tier', { level: formatCount(emblem.level, language) }),
@@ -130,8 +131,8 @@ const moment = (id: string, emblem: PhotoEmblem): PhotoMoment => ({ id, emblem, 
 
 export const startMoment = (): PhotoMoment => moment('start', { kind: 'start' });
 
-export const rankMoment = (params: { readonly rank: GloryRankOrMythic; readonly division: GloryDivision | null }): PhotoMoment =>
-  moment(`rank:${params.rank}:${params.division ?? 0}`, { kind: 'rank', rank: params.rank, division: params.division });
+export const rankMoment = (params: { readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null; readonly mythic?: MythicSeatRef | null }): PhotoMoment =>
+  moment(`rank:${params.rank}:${params.division ?? 0}`, { kind: 'rank', rank: params.rank, division: params.division, mythic: params.mythic ?? null });
 
 export const tierMoment = (params: { readonly tier: LevelTierKey; readonly level: number }): PhotoMoment =>
   moment(`tier:${params.tier}`, { kind: 'tier', tier: params.tier, level: params.level });
@@ -176,15 +177,15 @@ export const flameMoment = (days: number): PhotoMoment => {
   return moment(`flame:${threshold}`, { kind: 'flame', form: flameForm(threshold) ?? 'braise', days: threshold });
 };
 
-const tierLevel = (tier: LevelTierKey): number => LEVEL_TIER_KEYS.indexOf(tier) * 10;
+const tierLevel = (tier: LevelTierKey): number => levelTierStart(tier);
 
 /** Le moment que propose une carte du guide, dans l'état courant du jeu ; `null` si elle ne se photographie pas. */
 export function photoMomentFromCard(key: GuideMomentKey, game: GameBlock): PhotoMoment | null {
   switch (key) {
     case 'new-rank':
-      return rankMoment({ rank: game.glory.rank, division: game.glory.division });
+      return rankMoment(shownRank(game.glory));
     case 'new-tier':
-      return tierMoment({ tier: game.level.tier, level: tierLevel(game.level.tier) });
+      return tierMoment({ tier: levelReading(game.level).tier, level: tierLevel(levelReading(game.level).tier) });
     case 'first-mint': {
       /* `mint.number` est la PROCHAINE pièce : celle qui vient d'être frappée porte le numéro d'avant. */
       const number = Math.max(1, game.mint.number - 1);
@@ -209,9 +210,11 @@ export function photoMomentsOfTransition(previous: EngagementWithGame, next: Eng
 
   const minted = before.mint.number;
   const crossedFlame = FLAME_THRESHOLDS.some((threshold) => before.flame.days < threshold && after.flame.days >= threshold);
+  const shownBefore = shownRank(before.glory);
+  const shownAfter = shownRank(after.glory);
   const rankUp =
-    after.glory.rank !== before.glory.rank ||
-    (after.glory.division !== null && before.glory.division !== null && after.glory.division < before.glory.division);
+    shownAfter.rank !== shownBefore.rank ||
+    (shownAfter.division !== null && shownBefore.division !== null && shownAfter.division < shownBefore.division);
 
   /* La vague 2 : trophée, montée de ligue, saison terminée, Prestige. Le Prestige a sa propre carte (le
      trophée numéroté) : la carte « niveau 100 » de la vague 1 ne la double pas. */
@@ -222,9 +225,9 @@ export function photoMomentsOfTransition(previous: EngagementWithGame, next: Eng
   const prestigeCard = emblemsV2.some((emblem) => emblem.kind === 'prestige');
 
   const moments: (PhotoMoment | null)[] = [
-    rankUp && after.glory.glory > before.glory.glory ? rankMoment({ rank: after.glory.rank, division: after.glory.division }) : null,
-    LEVEL_TIER_KEYS.indexOf(after.level.tier) > LEVEL_TIER_KEYS.indexOf(before.level.tier)
-      ? tierMoment({ tier: after.level.tier, level: tierLevel(after.level.tier) })
+    rankUp && after.glory.glory > before.glory.glory ? rankMoment(shownAfter) : null,
+    LEVEL_TIER_KEYS.indexOf(levelReading(after.level).tier) > LEVEL_TIER_KEYS.indexOf(levelReading(before.level).tier)
+      ? tierMoment({ tier: levelReading(after.level).tier, level: tierLevel(levelReading(after.level).tier) })
       : null,
     after.level.prestige > before.level.prestige && !prestigeCard ? levelHundredMoment(after.level.prestige) : null,
     after.mint.number > before.mint.number && (minted === 1 || minted % 10 === 0)

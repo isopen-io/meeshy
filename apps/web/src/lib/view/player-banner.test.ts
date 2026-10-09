@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { GameBlockFacts } from '@meeshy/shared/utils/game/game-block';
 
-import { gameBlockFixture, gameBlockWithExtrasFixture, gameExtrasFactsFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture, gameExtrasFactsFixture } from '@/lib/api/game-fixture';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
@@ -17,16 +17,17 @@ beforeAll(async () => {
   await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadGameCatalog(language)));
 });
 
-/** Un joueur qui n'a que ses premiers points : niveau 3 (le niveau 1 tient jusqu'à ~50 points). */
+/** Un joueur qui n'a que ses premiers points : niveau 3 (le niveau 1 tient jusqu'à 399 points, #9706). */
 const NEWCOMER: Partial<GameBlockFacts> = {
-  score: 100,
+  score: 1000,
+  levelRecord: null,
   glory: 0,
   balance: 0,
   mintedLifetime: 0,
   streak: 0,
   freezes: 0,
   lastActiveDay: null,
-  debitablePoints: 100,
+  debitablePoints: 1000,
 };
 
 /** Tout à zéro : niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune Flamme. */
@@ -109,10 +110,11 @@ describe('seulement ce qui a du sens (#9536)', () => {
     expect({ level: model.level, points: model.points, meeshes: model.meeshes, rank: model.rank }).toEqual({ level: null, points: null, meeshes: null, rank: null });
   });
 
-  test('au sommet, plus de niveau suivant ni de points manquants', () => {
-    const top = shown({ ...NEWCOMER, score: 50_000_000, debitablePoints: 50_000_000 });
-    expect(top.level?.level).toBe(100);
-    expect({ nextLevel: top.level?.nextLevel, pointsToNext: top.level?.pointsToNext }).toEqual({ nextLevel: null, pointsToNext: null });
+  test('au plafond du rang, plus de niveau suivant ni de points manquants, et le rang qui l’ouvre (#9688)', () => {
+    const top = shown({ ...NEWCOMER, ...ALL_LEVEL_STEPS, score: 50_000_000, debitablePoints: 50_000_000, levelRecord: 499 });
+    expect(top.level?.level).toBe(499);
+    expect({ nextLevel: top.level?.nextLevel, pointsToNext: top.level?.pointsToNext, opener: top.level?.opener }).toEqual({ nextLevel: null, pointsToNext: null, opener: 'ambassadeur' });
+    expect(playerBannerLabel(top, 'fr')).toContain('Ambassadeur ouvre la suite');
   });
 });
 
@@ -130,6 +132,15 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
   test('fr : tout ce qui existe, dans l’ordre de la bannière', () => {
     const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
     expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, 12 Meeshes, [\p{L} ]+, ligue Jade \d+(re|e), Flamme 23 jours$/u);
+  });
+
+  test('le rang : la division V..I et la place du Mythe, dites et dessinées (#9636)', () => {
+    const model = shownExtras({ glory: 620 });
+    expect(model.rank).toEqual({ rank: 'murmure', division: 4, mythic: null });
+    expect(playerBannerLabel(model, 'fr')).toContain('Murmure IV');
+    const mythe = shownExtras({ glory: 1_000_000, mythic: true, mythicSeat: { number: 18, edition: 22 } });
+    expect(mythe.rank).toEqual({ rank: 'mythe', division: null, mythic: { number: 18, edition: 22 } });
+    expect(playerBannerLabel(mythe, 'fr')).toContain('Mythe n° 18');
   });
 
   test('en : l’ordinal anglais de la place', () => {

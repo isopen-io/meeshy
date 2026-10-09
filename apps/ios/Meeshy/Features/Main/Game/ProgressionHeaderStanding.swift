@@ -25,11 +25,11 @@ struct ProgressionHeaderStanding: View {
         if glory != nil || meesh != nil {
             HStack(spacing: MeeshySpacing.xs) {
                 if let glory {
-                    RankBlasonView(rank: glory.rank, division: glory.division)
+                    RankBlasonView(rank: glory.rank, division5: glory.shownDivision, mythic: glory.mythicSeat)
                         .frame(width: Self.blasonSide, height: Self.blasonSide)
                         .frame(minWidth: Self.blasonSide, minHeight: MeeshyControlSize.tapTarget)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(GameCopy.rankLabel(glory.rank, division: glory.division))
+                        .accessibilityLabel(GameCopy.rankLabel(glory))
                         .gameElement(GameElementDetails.rank(glory), identifier: "progression.rank.entry")
                 }
                 if let meesh {

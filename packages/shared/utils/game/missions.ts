@@ -38,7 +38,7 @@ import { EXTRA_ENGAGEMENT_OPERATIONS, type EngagementOperationKey } from '../../
 import { dayNumber, fnv1a, pickIndex, seededRng } from './day-prng.js';
 import { flameBonusPercent } from './flame.js';
 import { gloryForMission } from './glory.js';
-import { GAME_LEVEL_MAX, GAME_LEVEL_MIN } from './levels.js';
+import { GAME_LEVEL_MIN } from './levels.js';
 import {
   MISSION_FACT_SIGNALS,
   MISSION_TEMPLATES,
@@ -131,8 +131,14 @@ export const MISSION_REROLL_PER_DAY = 1;
 export const GOLD_MISSION_MIN_LEVEL = 50;
 export const GOLD_MISSION_MIN_TREASURY = 50;
 
+/**
+ * Le niveau au-delà duquel les missions ne grandissent plus : la bande 10.
+ * Les niveaux s'ouvrent au-delà de 100 (#9688) ; l'effort d'une mission du jour, non.
+ */
+export const MISSION_SCALE_MAX_LEVEL = 100;
+
 const clampLevel = (level: number): number =>
-  Number.isFinite(level) ? Math.min(GAME_LEVEL_MAX, Math.max(GAME_LEVEL_MIN, Math.trunc(level))) : GAME_LEVEL_MIN;
+  Number.isFinite(level) ? Math.min(MISSION_SCALE_MAX_LEVEL, Math.max(GAME_LEVEL_MIN, Math.trunc(level))) : GAME_LEVEL_MIN;
 
 /** bande = ⌊niveau ÷ 10⌋. */
 export const missionBand = (level: number): number => Math.floor(clampLevel(level) / 10);

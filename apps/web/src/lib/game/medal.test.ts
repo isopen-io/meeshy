@@ -91,8 +91,10 @@ describe('l’émail est de la famille, le pictogramme de l’axe', () => {
     }
   });
 
-  test('neuf pictogrammes d’axe, et chaque axe du catalogue en a un', () => {
-    expect([...MEDAL_PICTOGRAMS].sort()).toEqual(['comment', 'conversation', 'post', 'reel', 'social', 'story', 'text', 'tool', 'voice']);
+  test('un pictogramme PAR axe (#9639) : vingt glyphes, deux axes ne partagent jamais le même', () => {
+    expect(MEDAL_PICTOGRAMS).toHaveLength(ENGAGEMENT_AXES.length);
+    const drawn = ENGAGEMENT_AXES.map(pictogramOf);
+    expect(new Set(drawn).size).toBe(ENGAGEMENT_AXES.length);
     for (const key of ENGAGEMENT_AXES) expect(MEDAL_PICTOGRAMS).toContain(pictogramOf(key));
   });
 
@@ -100,12 +102,15 @@ describe('l’émail est de la famille, le pictogramme de l’axe', () => {
     expect(['content.text_message', 'content.audio_message', 'content.story', 'content.post', 'content.reel'].map((key) => pictogramOf(key as never))).toEqual(['text', 'voice', 'story', 'post', 'reel']);
   });
 
-  test('un commentaire est des guillemets, une conversation deux points reliés, un outil une étoile, le lien des maillons', () => {
+  test('les liens, les partages, les invités et les amitiés ne se confondent plus', () => {
+    expect(['social.tracked_link', 'social.share', 'social.invite_joined', 'social.friendship'].map((key) => pictogramOf(key as never))).toEqual(['link', 'share', 'invite', 'friendship']);
+  });
+
+  test('les quatre conversations et les cinq outils ont chacun le leur', () => {
+    expect(['conversation.private', 'conversation.public', 'conversation.community', 'conversation.group_created'].map((key) => pictogramOf(key as never))).toEqual(['private', 'public', 'community', 'group']);
+    expect(['tool.sticker', 'tool.in_app_edit', 'tool.direct_publish', 'tool.reaction', 'tool.attachment'].map((key) => pictogramOf(key as never))).toEqual(['sticker', 'edit', 'direct-publish', 'reaction', 'attachment']);
+    expect(pictogramOf('comment.audio')).toBe('voice-comment');
     expect(pictogramOf('comment.text')).toBe('comment');
-    expect(pictogramOf('comment.audio')).toBe('comment');
-    expect(pictogramOf('conversation.private')).toBe('conversation');
-    expect(pictogramOf('tool.reaction')).toBe('tool');
-    expect(pictogramOf('social.share')).toBe('social');
   });
 
   test('la famille de l’axe est celle du catalogue partagé', () => {

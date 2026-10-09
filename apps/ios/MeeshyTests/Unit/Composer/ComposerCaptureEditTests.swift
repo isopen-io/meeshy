@@ -11,7 +11,7 @@ final class ComposerCaptureEditTests: XCTestCase {
 
     func test_finishEditingPhoto_deliversTheNativeCanvas_withTheTakeExif_andSavesIt() async throws {
         let galerie = MockComposerGallery()
-        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { Self.automatic })
         var remis: CameraResult?
         session.onDeliver = { remis = $0 }
         session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)),
@@ -31,7 +31,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(exif[kCGImagePropertyExifDateTimeOriginal] as? String, "2026:10:04 09:30:00",
                        "le rendu final garde la date de PRISE")
         XCTAssertEqual(lu[kCGImagePropertyOrientation] as? Int, 1)
-        XCTAssertEqual(galerie.saveImageCount, 1, "« Terminé » enregistre le RENDU final en galerie")
+        XCTAssertEqual(galerie.saveImageCount, 1, "en mode automatique, « Terminé » enregistre le RENDU final en galerie")
         XCTAssertEqual(session.phase, .capturing)
         XCTAssertNil(session.editSource)
         XCTAssertFalse(session.isRenderingLook)
@@ -90,7 +90,8 @@ final class ComposerCaptureEditTests: XCTestCase {
     func test_finishEditingVideo_untouched_deliversTheClip_andSavesNothingMore() async {
         let galerie = MockComposerGallery()
         let lecteur = MockComposerLoopPlayer(duration: 3)
-        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, loopPlayerFactory: { _ in lecteur })
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard },
+                                             loopPlayerFactory: { _ in lecteur })
         let url = Self.clip()
         await session.beginEditing(video: url)
         var remis: CameraResult?
@@ -98,7 +99,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         session.finishEditing()
         await ComposerCaptureTakesTests.waitUntil { remis != nil }
         guard case .video(let livree) = remis else { return XCTFail("une vidéo") }
-        XCTAssertEqual(livree, url, "sans effet, sans cadrage, sans découpe : le brut, déjà en galerie")
+        XCTAssertEqual(livree, url, "sans effet, sans cadrage, sans découpe : le brut")
         XCTAssertEqual(galerie.saveVideoCount, 0)
         XCTAssertEqual(lecteur.stopCount, 1, "la boucle s'arrête, une fois")
         XCTAssertEqual(session.phase, .capturing)
@@ -130,7 +131,8 @@ final class ComposerCaptureEditTests: XCTestCase {
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         let galerie = MockComposerGallery()
         let lecteur = MockComposerLoopPlayer(duration: 3)
-        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, loopPlayerFactory: { _ in lecteur })
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { Self.automatic },
+                                             loopPlayerFactory: { _ in lecteur })
         await session.beginEditing(video: url)
         session.look = ComposerPhotoLook(filter: .cool)
         var remis: CameraResult?
@@ -443,6 +445,208 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertFalse(ComposerCaptureCopy.done.isEmpty)
         XCTAssertFalse(ComposerCaptureCopy.cancelEdit.isEmpty)
         XCTAssertFalse(ComposerCaptureCopy.reframe.isEmpty)
+    }
+
+    // MARK: - Ce que la capture écrit dans Photos (#9684)
+
+    static let automatic = CaptureSavePolicy(savesOriginal: false, renderedMode: .automatic)
+
+    func test_savePolicy_byDefault_keepsTheOriginalOut_andSavesTheRenderOnDemand() {
+        let politique = CaptureSavePolicy.stored(in: Self.emptyDefaults())
+        XCTAssertEqual(politique, .standard)
+        XCTAssertFalse(politique.savesOriginal, "par défaut, l'original ne rejoint pas Photos")
+        XCTAssertEqual(politique.renderedMode, .manual, "par défaut, la flèche ⬇︎ enregistre le rendu")
+        XCTAssertFalse(politique.savesRenderOnFinish(alreadySaved: false), "« Terminé » n'enregistre rien de lui-même")
+        XCTAssertTrue(politique.writesUntouchedTake, "une prise sans effet s'écrit : l'original n'y est pas")
+    }
+
+    func test_savePolicy_readsTheUserSettings() {
+        let reglages = Self.emptyDefaults()
+        reglages.set(true, forKey: CaptureSavePolicy.savesOriginalKey)
+        reglages.set(CaptureRenderedSaveMode.automatic.rawValue, forKey: CaptureSavePolicy.renderedModeKey)
+        let politique = CaptureSavePolicy.stored(in: reglages)
+        XCTAssertTrue(politique.savesOriginal)
+        XCTAssertEqual(politique.renderedMode, .automatic)
+        XCTAssertTrue(politique.savesRenderOnFinish(alreadySaved: false))
+        XCTAssertFalse(politique.savesRenderOnFinish(alreadySaved: true), "jamais deux fois la même prise")
+        XCTAssertFalse(politique.writesUntouchedTake, "l'original y est déjà : une prise sans effet ne se double pas")
+    }
+
+    func test_savePolicy_unknownStoredMode_fallsBackToManual() {
+        let reglages = Self.emptyDefaults()
+        reglages.set("plus-tard", forKey: CaptureSavePolicy.renderedModeKey)
+        XCTAssertEqual(CaptureSavePolicy.stored(in: reglages).renderedMode, .manual)
+    }
+
+    func test_session_readsItsPolicyFromItsDefaults() {
+        let reglages = Self.emptyDefaults()
+        reglages.set(true, forKey: CaptureSavePolicy.savesOriginalKey)
+        let session = ComposerCaptureSession(stage: .armed, defaults: reglages, gallery: MockComposerGallery())
+        XCTAssertTrue(session.savePolicy().savesOriginal)
+    }
+
+    func test_finishEditingPhoto_byDefault_deliversWithoutSaving() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard })
+        var remis: CameraResult?
+        session.onDeliver = { remis = $0 }
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 30, height: 40)))
+        session.look = ComposerPhotoLook(filter: .cool)
+        session.finishEditing()
+        await ComposerCaptureTakesTests.waitUntil { remis != nil }
+        XCTAssertNotNil(remis, "la prise part vers la scène : rien ne disparaît")
+        XCTAssertEqual(galerie.saveImageCount, 0, "par défaut, « Terminé » n'écrit rien dans Photos")
+    }
+
+    func test_saveTakeToPhotos_photo_savesTheRenderOnce_andStaysInEditing() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard })
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 30, height: 40)))
+        session.look = ComposerPhotoLook(filter: .warm)
+        session.saveTakeToPhotos()
+        XCTAssertEqual(session.takeSaveState, .saving)
+        session.saveTakeToPhotos()
+        await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
+        session.saveTakeToPhotos()
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(galerie.saveImageCount, 1, "une prise ne s'enregistre qu'une fois")
+        XCTAssertEqual(session.takeSaveState, .saved)
+        XCTAssertEqual(session.phase, .editing(.photo), "la flèche ne quitte pas la retouche")
+    }
+
+    func test_saveTakeToPhotos_thenFinish_inAutomaticMode_neverWritesTwice() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { Self.automatic })
+        var remis = false
+        session.onDeliver = { _ in remis = true }
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 30, height: 40)))
+        session.saveTakeToPhotos()
+        session.finishEditing()
+        XCTAssertFalse(session.isRenderingLook, "« Terminé » attend la fin de l'enregistrement")
+        await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
+        session.finishEditing()
+        await ComposerCaptureTakesTests.waitUntil { remis }
+        XCTAssertEqual(galerie.saveImageCount, 1, "la flèche puis « Terminé » : une seule écriture")
+        XCTAssertEqual(session.takeSaveState, .idle, "la prise suivante repart avec sa flèche")
+    }
+
+    func test_saveTakeToPhotos_refused_offersTheArrowAgain() async {
+        let galerie = MockComposerGallery(imageResult: false)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard })
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 30, height: 40)))
+        session.saveTakeToPhotos()
+        await ComposerCaptureTakesTests.waitUntil { galerie.saveImageCount == 1 && session.takeSaveState != .saving }
+        XCTAssertEqual(session.takeSaveState, .idle, "un refus de Photos laisse la flèche disponible")
+    }
+
+    func test_saveTakeToPhotos_whileCapturing_doesNothing() {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard })
+        session.saveTakeToPhotos()
+        XCTAssertEqual(session.takeSaveState, .idle)
+    }
+
+    func test_saveTakeToPhotos_untouchedVideo_byDefault_writesTheTake() async {
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard },
+                                             loopPlayerFactory: { _ in lecteur })
+        await session.beginEditing(video: Self.clip())
+        session.saveTakeToPhotos()
+        await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
+        XCTAssertEqual(galerie.saveVideoCount, 1, "sans effet ni cadre, l'original rejoint Photos")
+    }
+
+    func test_saveTakeToPhotos_untouchedVideo_originalAlreadySaved_writesNothingMore() async {
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
+                                             savePolicy: { CaptureSavePolicy(savesOriginal: true, renderedMode: .manual) },
+                                             loopPlayerFactory: { _ in lecteur })
+        await session.beginEditing(video: Self.clip())
+        session.saveTakeToPhotos()
+        await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
+        XCTAssertEqual(galerie.saveVideoCount, 0, "l'original y est déjà : la prise est dans Photos")
+    }
+
+    func test_finishEditingVideo_untouched_automatic_withoutOriginal_writesTheTake() async {
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { Self.automatic },
+                                             loopPlayerFactory: { _ in lecteur })
+        await session.beginEditing(video: Self.clip())
+        var remis = false
+        session.onDeliver = { _ in remis = true }
+        session.finishEditing()
+        await ComposerCaptureTakesTests.waitUntil { remis }
+        XCTAssertEqual(galerie.saveVideoCount, 1, "l'original n'étant pas en galerie, la prise s'y écrit")
+    }
+
+    /// #9684 : ✕ pendant l'écriture de la flèche ne la perd pas — elle va au
+    /// bout, se dit par un bandeau, et le fichier ne part qu'après elle.
+    func test_saveTakeToPhotos_video_thenCancel_finishesTheWrite_andSaysIt() async throws {
+        FeedbackToastManager.shared.clearAll()
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard },
+                                             loopPlayerFactory: { _ in lecteur })
+        let url = try Self.writtenClip()
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        await session.beginEditing(video: url)
+        session.saveTakeToPhotos()
+        session.cancelEditing()
+        XCTAssertEqual(session.phase, .capturing, "la croix quitte la retouche aussitôt")
+        await ComposerCaptureTakesTests.waitUntil { galerie.saveVideoCount == 1 && session.takeWrite == nil }
+        XCTAssertEqual(galerie.saveVideoCount, 1, "l'écriture lancée va jusqu'au bout")
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.savedToPhotos,
+                       "la flèche n'est plus là : un bandeau le dit")
+        await ComposerCaptureTakesTests.waitUntil { !FileManager.default.fileExists(atPath: url.path) }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path), "le fichier part après l'écriture")
+    }
+
+    func test_saveTakeToPhotos_renderFails_afterCancel_saysIt() async throws {
+        FeedbackToastManager.shared.clearAll()
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard },
+                                             loopPlayerFactory: { _ in lecteur })
+        let url = try Self.writtenClip()
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        await session.beginEditing(video: url)
+        session.look = ComposerPhotoLook(filter: .cool)
+        session.saveTakeToPhotos()
+        session.cancelEditing()
+        await ComposerCaptureTakesTests.waitUntil(timeout: 30) { session.takeWrite == nil }
+        XCTAssertEqual(galerie.saveVideoCount, 0)
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, ComposerCaptureCopy.saveToPhotosFailed,
+                       "jamais un échec silencieux")
+    }
+
+    /// La caméra n'écrit plus le brut sans que le réglage le demande : chacune de
+    /// ses trois écritures (photo, vidéo, repli du dernier segment) le consulte.
+    func test_cameraModel_writesTheOriginalOnlyWhenThePolicySaysSo() throws {
+        let camera = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let ecritures = camera.components(separatedBy: "PhotoLibraryManager.shared.save").count - 1
+        let gardes = camera.components(separatedBy: "CaptureSavePolicy.stored().savesOriginal").count - 1
+        XCTAssertEqual(ecritures, 3)
+        XCTAssertEqual(gardes, ecritures, "chaque écriture du brut passe par la politique")
+    }
+
+    func test_cameraBar_offersTheSaveArrow_wiredToTheSession() throws {
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("onSave: { session.saveTakeToPhotos() }"))
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertTrue(barre.contains("arrow.down.to.line"))
+        XCTAssertTrue(barre.contains("MeeshyControlSize.tapTarget"))
+        XCTAssertFalse(ComposerCaptureCopy.saveToPhotos.isEmpty)
+        XCTAssertFalse(ComposerCaptureCopy.savingToPhotos.isEmpty)
+    }
+
+    private static func emptyDefaults() -> UserDefaults {
+        let nom = "capture-save-\(UUID().uuidString)"
+        let reglages = UserDefaults(suiteName: nom) ?? .standard
+        reglages.removePersistentDomain(forName: nom)
+        return reglages
     }
 
     private static func clip() -> URL {

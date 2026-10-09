@@ -49,7 +49,7 @@ function makePrisma(params: { type?: string; recentContents?: string[]; findMany
     conversation: {
       update: jest.fn<any>().mockResolvedValue(undefined),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-      findUnique: jest.fn<any>().mockResolvedValue({ type: params.type ?? 'global', communityId: null }),
+      findUnique: jest.fn<any>().mockResolvedValue({ type: params.type ?? 'global', communityId: null, identifier: (params.type ?? 'global') === 'global' ? 'meeshy' : null }),
     },
     message: { findMany },
   } as any;
@@ -100,7 +100,7 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     run({ prisma: makePrisma({ recentContents: ['Bonjour à tous', 'Hola'] }), engagementService });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: expect.any(String) });
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: expect.any(String), variant: 'global' });
   });
 
   it('ne crédite PAS content.text_message pour un texte identique, à la casse, aux espaces et à la ponctuation près', async () => {
@@ -155,7 +155,7 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     await flush();
 
     expect(prisma.message.findMany).not.toHaveBeenCalled();
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: expect.any(String) });
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: expect.any(String), variant: 'public' });
   });
 
   it('ne compare pas un message sans texte (pièce jointe seule) : il reste crédité', async () => {
@@ -166,7 +166,7 @@ describe('Meeshy Global — aucun point pour un texte répété (#7740)', () => 
     await flush();
 
     expect(prisma.message.findMany).not.toHaveBeenCalled();
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: expect.any(String) });
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: expect.any(String), variant: 'global' });
   });
 
   it('ne touche pas au vocal : un audio répété crédite toujours content.audio_message', async () => {

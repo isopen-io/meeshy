@@ -18,6 +18,16 @@
  * Fonctions PURES : la passerelle crédite avec, les clients affichent avec, et
  * l'écran d'administration valide avec — une seule loi.
  *
+ * **LES BORNES COMPTENT DES ACTES, JAMAIS DES POINTS** (porteur, 2026-10-08,
+ * #9667). Plafond d'une opération (`cap`), limites quotidiennes de gestes
+ * (`pathCaps`), plafond par conversation et par jour, visites par créateur :
+ * chacun est un NOMBRE D'ACTES crédités. Un multiplicateur (élan, Vent arrière,
+ * Flamme, événement) multiplie la valeur d'un acte ADMIS et ne consomme aucune
+ * place de plus. Aucun total de points n'est plafonné. Deux bornes restent sur
+ * une VALEUR, jamais sur un total : `maxFactor` (le plafond du MULTIPLICATEUR)
+ * et `abuse.unverifiedMaxPoints` (la valeur d'UN gros acte d'un compte non
+ * vérifié, garde d'abus #8959).
+ *
  * Garde de frontière écrite à la main, sans Zod, pour la même raison que
  * `isEngagementProgressPayload` : ce module entre dans les chunks web.
  */
@@ -49,7 +59,7 @@ export type EngagementOperationRule = {
   /** `true` ⇒ les points sont multipliés par l'élan ; `false` ⇒ toujours crédités tels quels. */
   readonly multiplied: boolean;
   /**
-   * Nombre maximal d'actions créditées dans la PORTÉE de l'opération
+   * Nombre maximal d'ACTES crédités (jamais de points) dans la PORTÉE de l'opération
    * (`ENGAGEMENT_OPERATION_CATALOG[key].capScope` : par conversation et par
    * jour, par jour, par cible). `null` = sans plafond. Sans effet sur une
    * opération sans portée ou unique (par cible, par compte).
@@ -57,7 +67,8 @@ export type EngagementOperationRule = {
   readonly cap: number | null;
   /**
    * Les points de chaque VARIANTE déclarée par le catalogue (visibilité d'un
-   * post ou d'une story, position en direct ou statique). Une variante absente
+   * post ou d'une story, position en direct ou statique, type de la
+   * conversation d'un message texte). Une variante absente
    * crédite `points`.
    */
   readonly variantPoints: Readonly<Record<string, number>>;
@@ -82,7 +93,7 @@ export type EngagementMultiplierRules = {
   readonly highBadgeThreshold: number;
   /** Badges élevés à partir desquels l'assise est acquise. */
   readonly highBadgesForStanding: number;
-  /** Plafond global, sous `ENGAGEMENT_SCALE_FACTOR_CEILING`. */
+  /** Plafond du MULTIPLICATEUR (jamais d'un total de points), sous `ENGAGEMENT_SCALE_FACTOR_CEILING`. */
   readonly maxFactor: number;
   /**
    * Plafond par niveau, trié par `minLevel` croissant. Le plafond d'un compte est
@@ -120,8 +131,9 @@ export type EngagementStreakBonus = {
  * atteignent `heavyPoints` (post, story, reel aux défauts) :
  * - ne crédite qu'une fois par contenu ;
  * - rend ses points si le contenu est supprimé dans les `clawbackHours` ;
- * - est bornée à `unverifiedMaxPoints` pour un compte sans e-mail ni
- *   téléphone vérifié — une ferme de comptes jetables ne publie pas à 199.
+ * - vaut au plus `unverifiedMaxPoints` PAR ACTE pour un compte sans e-mail ni
+ *   téléphone vérifié — une ferme de comptes jetables ne publie pas au prix
+ *   fort. C'est la valeur d'un acte, jamais un total.
  */
 export type EngagementAbuseRules = {
   readonly heavyPoints: number;
@@ -145,11 +157,11 @@ export type EngagementPathFamily = 'comment' | 'reaction';
  * combien de commentaires et de réactions de post elle peut faire, selon
  * qu'ils sont faits sur un original ou sous une republication.
  *
- * Une limite borne le GESTE et ses POINTS à la fois : au-delà, le geste est
- * REFUSÉ jusqu'au lendemain (et ne rapporte donc rien) ; en deçà, il rapporte
- * ce que le barème lui accorde, sans autre plafond quotidien — les opérations
- * qu'elles gouvernent n'en ont pas (`capScope: 'none'`), si bien que gestes et
- * points ne peuvent pas diverger.
+ * Une limite compte des GESTES, jamais des points (porteur, 2026-10-08) : au-delà,
+ * le geste est REFUSÉ jusqu'au lendemain (et ne rapporte donc rien) ; en deçà,
+ * il rapporte ce que le barème lui accorde, multiplicateurs compris, sans aucun
+ * plafond de points — les opérations qu'elles gouvernent n'ont pas de plafond
+ * propre (`capScope: 'none'`).
  *
  * Il n'existe PAS de « sans limite » : chaque valeur est un entier de 0 à
  * `DAILY_GESTURE_LIMIT_CEILING`. Une valeur absente, `null`, négative,

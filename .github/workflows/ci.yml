@@ -549,6 +549,13 @@ jobs:
       - name: Docker prune & deploy-only-on-dev guard
         run: node scripts/check-docker-prune-noninteractive.mjs --self-test && node scripts/check-docker-prune-noninteractive.mjs
 
+      # #9668 — la sauvegarde nocturne publie son verdict (etat.json) en succès
+      # ET en échec, y compris hors de tout `|| fail` ; la dernière réussite
+      # survit à un échec ; ni chemin d'hôte ni secret. `docker`, `df`, `flock`
+      # et `rsync` sont des doubles : aucune base, quelques secondes.
+      - name: Nightly backup verdict witness
+        run: node --test infrastructure/scripts/production-backup/meeshy-nightly-backup.test.mjs
+
       # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
       # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
       # ~15 min et meurt à la première erreur, alors que ce garde les liste

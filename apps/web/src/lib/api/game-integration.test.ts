@@ -68,6 +68,15 @@ describe('le jeu d’un autre', () => {
     expect((await fetchUserGame(transportServing(body), 'u1')).ok).toBe(true);
   });
 
+  test('la division à cinq crans et la place du Mythe sont lues ; un serveur qui ne les sert pas reste lu (#9636)', async () => {
+    const mythe = { visible: true, standing: { ...standing, rank: 'mythe', division: null, division5: null, mythic: { number: 12, edition: 40 } }, treasury: null };
+    expect(await fetchUserGame(transportServing(mythe), 'u1')).toEqual({ ok: true, data: mythe });
+    expect((await fetchUserGame(transportServing({ visible: true, standing: { ...standing, division5: 4 }, treasury: null }), 'u1')).ok).toBe(true);
+    for (const bad of [{ ...standing, division5: 0 }, { ...standing, mythic: { number: 0, edition: 1 } }, { ...standing, mythic: { number: 1 } }]) {
+      expect((await fetchUserGame(transportServing({ visible: true, standing: bad, treasury: null }), 'u1')).ok).toBe(false);
+    }
+  });
+
   test('un niveau hors 1..100, un palier ou un rang inconnu : refusé ENTIER', async () => {
     for (const bad of [{ ...standing, level: 101 }, { ...standing, tier: 'cosmos' }, { ...standing, rank: 'dieu' }, { ...standing, division: 4 }, { ...standing, prestige: 6 }, { ...standing, flame: 'volcan' }]) {
       const result = await fetchUserGame(transportServing({ visible: true, standing: bad, treasury: null }), 'u1');

@@ -19,7 +19,7 @@
 
 **Rétrocompatibilité**: `Message.content` porte un repli lisible — `captureNoticeFallbackText`, la phrase française, l'heure en UTC DITE comme telle (« … à 11:58 (UTC) »), car un repli ne connaît pas le fuseau de son lecteur. Un ancien client web (`systemRowOf`) et iOS (`FocalSystemRows`) rendent le `content` d'un message système dont la métadonnée leur est inconnue : ni bulle vide, ni plantage. La ligne de liste rend `system.generic` (#9627). Un ancien client n'émet pas l'événement : rien ne s'annonce depuis lui.
 
-**Ouvert, au porteur**:
+**Ouvert, au porteur** (TRANCHÉ le 2026-10-08 — `2026-10-08-un-avis-de-capture-ne-se-sert-qu-a-qui-lit-ce-qu-il-nomme-9629.md`) :
 - #9628 — l'avis suit-il la police d'écriture (canal d'annonces, membre muet, mode lent, nouveaux venus) ? Aujourd'hui seule la conversation close refuse.
 - #9629 — avis permanent sur un éphémère détruit ; existence et heure d'un message révélées à un membre dont le plancher d'historique le cache (correctif simple proposé) ; donnée de comportement (agent `conformite-juridique`).
 - #9630 — les avis système et le compteur de non-lus.

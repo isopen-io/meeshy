@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Les entrées des menus qui mènent à l'atelier « Imagine » — libellés,
 /// symboles et le fait qui ouvre « Export rapide ». Un seul site pour tous
@@ -142,6 +143,34 @@ enum MessageCardExportMenu {
         )
     }
 
+    /// **Un commentaire de POST devient une carte composée** (#9686) : le post en
+    /// tête et le commentaire, ou — pour une réponse — le fil jusqu'à elle, le
+    /// post + la racine + elle, ou les réponses choisies. L'atelier ouvre sur le
+    /// mode par défaut et offre les autres au-dessus de l'aperçu. `nil` quand
+    /// rien ne s'image (`PostCommentCardComposition` en tient les gardes).
+    static func request(post: FeedPost, comment: FeedComment, thread: [FeedComment], showOriginal: Bool, accentColor: String,
+                        viewer: MessageCardSubject.Viewer, handle: String?, audioPrism: [String] = []) -> MessageCardExportRequest? {
+        let source = PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal)
+        let served = (thread + [comment]).reduce(into: [String: String]()) { languages, item in
+            guard !(item.id == comment.id && showOriginal) else { return }
+            languages.merge(servedAudioLanguages(of: item, prism: audioPrism)) { own, _ in own }
+        }
+        let composition = MessageCardCommentComposition(source: source, audioLanguages: served)
+        guard let mode = composition.modes.first,
+              let subject = composition.subject(mode: mode, showsPost: mode.showsPostByDefault, chosen: composition.initialChoice)
+        else { return nil }
+        return MessageCardExportRequest(
+            subject: subject,
+            languages: [],
+            subjectIn: { _ in nil },
+            handle: handle,
+            conversationTitle: nil,
+            accentColor: accentColor,
+            quick: false,
+            composition: composition
+        )
+    }
+
     /// La piste servie de chaque son d'un commentaire — même loi que celle d'un message.
     static func servedAudioLanguages(of comment: FeedComment, prism: [String]) -> [String: String] {
         let served = comment.media.compactMap { item -> (String, String)? in
@@ -155,5 +184,54 @@ enum MessageCardExportMenu {
             return (item.id, language)
         }
         return Dictionary(served, uniquingKeysWith: { first, _ in first })
+    }
+}
+
+/// **Les compositions qu'offre un commentaire de post** (#9686) — la source
+/// lue une fois, les modes qu'elle permet, et la carte de chaque choix. Les
+/// règles vivent dans `PostCommentCardComposition` (SDK) ; ici, les mots.
+struct MessageCardCommentComposition {
+    let source: PostCommentCardSource
+    /// La piste servie de chaque son du fil, par identifiant de pièce.
+    let audioLanguages: [String: String]
+    let modes: [PostCommentCardMode]
+    let choosable: [FeedComment]
+    let initialChoice: Set<String>
+    /// « Post en tête » se bascule à part — pour une réponse ; au premier niveau, les deux modes SONT la bascule.
+    let offersPostToggle: Bool
+
+    init(source: PostCommentCardSource, audioLanguages: [String: String]) {
+        self.source = source
+        self.audioLanguages = audioLanguages
+        modes = PostCommentCardComposition.modes(of: source)
+        choosable = PostCommentCardComposition.choosable(of: source)
+        initialChoice = PostCommentCardComposition.initialChoice(of: source)
+        offersPostToggle = source.target.parentId != nil && PostCommentCardComposition.offersPost(source)
+    }
+
+    /// Une barre de composition n'a rien à offrir avec un seul mode et sans bascule.
+    var offersChoice: Bool { modes.count > 1 || offersPostToggle }
+
+    func subject(mode: PostCommentCardMode, showsPost: Bool, chosen: Set<String>) -> MessageCardSubject? {
+        PostCommentCardComposition.subject(
+            of: source, mode: mode, showsPost: showsPost, chosen: chosen,
+            title: MessageCardExportText.text("export.compose.thread", "Fil de commentaires"),
+            foldedLabel: { String(format: MessageCardExportText.text("export.compose.folded", "+%lld réponses"), $0) },
+            audioLanguages: audioLanguages
+        )
+    }
+
+    static func label(of mode: PostCommentCardMode) -> String {
+        switch mode {
+        case .postAndComment: return MessageCardExportText.text("export.compose.postAndComment", "Post + commentaire")
+        case .commentAlone: return MessageCardExportText.text("export.compose.commentAlone", "Commentaire seul")
+        case .threadToHere: return MessageCardExportText.text("export.compose.threadToHere", "Fil jusqu’ici")
+        case .postRootAndReply: return MessageCardExportText.text("export.compose.postRootAndReply", "Post + racine + réponse")
+        case .chosenReplies: return MessageCardExportText.text("export.compose.chosenReplies", "Choisir les réponses")
+        }
+    }
+
+    static var postToggleLabel: String {
+        MessageCardExportText.text("export.compose.post", "Post en tête")
     }
 }

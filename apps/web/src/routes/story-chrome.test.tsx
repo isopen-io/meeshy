@@ -6,6 +6,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { StoryActionRail } from '@/components/story-action-rail';
 import { ViewerExitButton } from '@/components/viewer-chrome';
+import { parseCanvasDocument } from '@/lib/canvas/document';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { resolveStoryActionRailPlan } from '@/lib/stories/action-rail';
 
@@ -185,6 +186,46 @@ describe('la barre haute de la story est la barre commune des plein écrans', ()
     expect(who?.textContent).toContain('Amie Deux');
     expect(who?.querySelector('time')?.textContent).toBe('2 h');
     expect(who?.querySelector('a[href="/u/amie2"]')).not.toBeNull();
+  });
+
+  test('le crédit du son de fond occupe SA ligne, sous le nom et l’heure (#9678, vue `2f`)', async () => {
+    await import('@/components/background-sound-credit');
+    const document = parseCanvasDocument({
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          objects: [
+            {
+              id: 'bgsound',
+              kind: 'audio',
+              anchor: { t: 'free', x: 0.5, y: 0.5 },
+              plane: 'bg',
+              z: 0,
+              transform: { scale: 1, rotation: 0, opacity: 1 },
+              payload: { isBackground: true, soundId: 'snd1', name: 'Pluie', soundAuthorUsername: 'sam', mediaURL: 'a.m4a' },
+            },
+          ],
+        },
+      ],
+    });
+    const el = mount(topBar({ soundDocument: document }));
+    for (let i = 0; i < 20 && el.querySelector('[data-sound-credit]') === null; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    const who = el.querySelector('[data-viewer-identity]');
+    const sound = who?.querySelector('[data-sound-credit="credit"]');
+    const nameLine = who?.querySelector('time')?.parentElement;
+    expect(sound?.textContent).toContain('Pluie · @sam');
+    expect(nameLine?.contains(sound ?? null)).toBe(false);
+    expect(sound?.parentElement).toBe(nameLine?.parentElement ?? null);
+  });
+
+  test('sans scène, l’identité garde sa ligne unique, sans crédit', () => {
+    const el = mount(topBar({ soundDocument: null }));
+    expect(el.querySelector('[data-sound-credit]')).toBeNull();
   });
 
   test('masquée (appui long, feuille ouverte) la barre devient INERTE — jamais une croix invisible mais cliquable (D-90)', () => {

@@ -60,7 +60,10 @@ const USER_ID = '507f1f77bcf86cd799439011';
 const mockUser = { id: USER_ID, password: '$2b$12$hashedpassword' };
 const CURRENT_TOKEN = 'current-session-token';
 
-async function buildApp(compte: { id: string; password: string | null } = mockUser): Promise<FastifyInstance> {
+async function buildApp(
+  compte: { id: string; password: string | null } = mockUser,
+  sessionId?: string
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate('prisma', {
     user: {
@@ -73,6 +76,7 @@ async function buildApp(compte: { id: string; password: string | null } = mockUs
       isAuthenticated: true,
       userId: USER_ID,
       registeredUser: { id: USER_ID, role: 'USER', username: 'alice' },
+      ...(sessionId ? { sessionId } : {}),
     };
     (req as any).user = { userId: USER_ID };
   });
@@ -102,8 +106,9 @@ describe('PATCH /users/me/password — session revocation (#6435)', () => {
 
     expect(res.statusCode).toBe(200);
 
-    expect(mockGetUserSessions).toHaveBeenCalledWith(USER_ID, CURRENT_TOKEN);
-    expect(mockInvalidateAllSessions).toHaveBeenCalledWith(USER_ID, CURRENT_TOKEN, 'password_changed');
+    const parEnTete = { sessionId: null, sessionToken: CURRENT_TOKEN };
+    expect(mockGetUserSessions).toHaveBeenCalledWith(USER_ID, parEnTete);
+    expect(mockInvalidateAllSessions).toHaveBeenCalledWith(USER_ID, parEnTete, 'password_changed');
 
     // Les deux AUTRES sessions sont coupées — jamais la courante.
     const disconnectedSessionIds = mockDisconnectSession.mock.calls.map((call: any[]) => call[0].sessionId);
@@ -114,7 +119,7 @@ describe('PATCH /users/me/password — session revocation (#6435)', () => {
     await app.close();
   });
 
-  it('revokes without excepting anyone when the caller sends no x-session-token', async () => {
+  it('revokes without excepting anyone when nothing names the current session', async () => {
     mockGetUserSessions.mockResolvedValueOnce([
       { id: 'session-only', isCurrentSession: false },
     ]);
@@ -127,8 +132,9 @@ describe('PATCH /users/me/password — session revocation (#6435)', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(mockGetUserSessions).toHaveBeenCalledWith(USER_ID, undefined);
-    expect(mockInvalidateAllSessions).toHaveBeenCalledWith(USER_ID, undefined, 'password_changed');
+    const personne = { sessionId: null, sessionToken: null };
+    expect(mockGetUserSessions).toHaveBeenCalledWith(USER_ID, personne);
+    expect(mockInvalidateAllSessions).toHaveBeenCalledWith(USER_ID, personne, 'password_changed');
     expect(mockDisconnectSession).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-only', userId: USER_ID })
     );
@@ -157,8 +163,36 @@ describe('PATCH /users/me/password — session revocation (#6435)', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(mockInvalidateAllSessions).toHaveBeenCalledWith(USER_ID, CURRENT_TOKEN, 'password_changed');
+    expect(mockInvalidateAllSessions).toHaveBeenCalledWith(
+      USER_ID, { sessionId: null, sessionToken: CURRENT_TOKEN }, 'password_changed'
+    );
     expect(mockDisconnectSession.mock.calls.map((call: any[]) => call[0].sessionId)).toEqual(['session-intruder']);
+
+    await app.close();
+  });
+
+  // #9606 — aucun client inscrit n'envoie `x-session-token` en REST : la
+  // courante se lit sur le `sid` du JWT, posé sur le contexte par le middleware.
+  it('keeps the session named by the JWT `sid` when no header is sent (#9606)', async () => {
+    mockInvalidateAllSessions.mockClear();
+    mockDisconnectSession.mockClear();
+    mockGetUserSessions.mockResolvedValueOnce([
+      { id: 'sid-current', isCurrentSession: true },
+      { id: 'session-other', isCurrentSession: false },
+    ]);
+
+    const app = await buildApp(mockUser, 'sid-current');
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/password',
+      payload: { currentPassword: 'correctpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const parSid = { sessionId: 'sid-current', sessionToken: null };
+    expect(mockGetUserSessions).toHaveBeenCalledWith(USER_ID, parSid);
+    expect(mockInvalidateAllSessions).toHaveBeenCalledWith(USER_ID, parSid, 'password_changed');
+    expect(mockDisconnectSession.mock.calls.map((call: any[]) => call[0].sessionId)).toEqual(['session-other']);
 
     await app.close();
   });

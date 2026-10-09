@@ -1,6 +1,22 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createSocketIOClient } from './socket-io-factory';
+import { readClientSessionAuth } from '@meeshy/shared/utils/client-session';
+
+import { createSocketIOClient, handshakeAuth } from './socket-io-factory';
+
+describe('la poignée de main déclare le client (#9611)', () => {
+  test('`auth.client` porte la déclaration courante, que la passerelle relit sous les mêmes noms', () => {
+    const declared = { appVersion: '2.13.0', platform: 'pwa', timezone: 'Europe/Paris', deviceLocale: 'fr-FR' };
+    const auth = handshakeAuth({ token: 'jwt', sessionToken: 'st' }, declared);
+    expect(auth.token).toBe('jwt');
+    expect(auth.sessionToken).toBe('st');
+    expect(readClientSessionAuth(auth)).toMatchObject(declared);
+  });
+
+  test('une déclaration encore vide n’ajoute pas de clé', () => {
+    expect(handshakeAuth({ token: 'jwt', sessionToken: '' }, {})).toEqual({ token: 'jwt', sessionToken: '' });
+  });
+});
 
 /**
  * `connect()` PENDANT LE BACKOFF TENTE TOUT DE SUITE (#8839) — le vrai

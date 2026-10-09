@@ -8,6 +8,9 @@ import XCTest
 /// vite — plus vite que le reste du chrome —, un toucher le ramène et réarme la
 /// seconde, et un toucher sur le bouton VISIBLE met en pause. En pause, il
 /// reste : c'est la seule façon de reprendre.
+///
+/// Décision porteur 2026-10-08 : le toucher qui ramène le bouton bascule AUSSI
+/// le chrome (comme le web) — il ne s'arrête jamais au bouton.
 final class FullscreenPlayPauseFadeTests: XCTestCase {
 
     private func playing() -> FullscreenPlayPauseFade {
@@ -53,8 +56,7 @@ final class FullscreenPlayPauseFadeTests: XCTestCase {
 
     func test_aTouch_bringsTheButtonBack_andRearmsTheSecond() {
         let faded = playing().fading()
-        XCTAssertEqual(faded.mediaTapEffect, .reveals,
-                       "le toucher qui ramène le bouton ne fait rien d'autre")
+        XCTAssertFalse(faded.isVisible)
 
         let revealed = faded.tappingMedia()
         XCTAssertTrue(revealed.isVisible)
@@ -64,17 +66,41 @@ final class FullscreenPlayPauseFadeTests: XCTestCase {
         XCTAssertFalse(revealed.fading().isVisible)
     }
 
-    func test_aTouchOnTheMedia_whileTheButtonShows_passesThrough_andRearms() {
+    func test_aTouchOnTheMedia_whileTheButtonShows_rearmsTheSecond() {
         let started = playing()
-        XCTAssertEqual(started.mediaTapEffect, .passesThrough)
         XCTAssertNotEqual(started.tappingMedia(), started, "la seconde repart")
         XCTAssertTrue(started.tappingMedia().isVisible)
     }
 
-    func test_aTouchAtRest_passesThrough_andChangesNothing() {
+    func test_aTouchAtRest_changesNothing() {
         let rest = FullscreenPlayPauseFade()
-        XCTAssertEqual(rest.mediaTapEffect, .passesThrough)
         XCTAssertEqual(rest.tappingMedia(), rest)
+    }
+
+    // MARK: - Le toucher garde l'effet de l'hôte (décision porteur 2026-10-08)
+
+    func test_theFullscreenPlayer_aTouchRevealsTheButton_andTogglesTheChrome_inOneGesture() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Fullscreen/
+            .deletingLastPathComponent()   // MeeshyUITests/
+            .deletingLastPathComponent()   // Tests/
+            .deletingLastPathComponent()   // MeeshySDK/
+            .appendingPathComponent("Sources/MeeshyUI/Media/MeeshyVideoPlayer+Renderers.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let renderer = source.range(of: "internal struct _FullscreenRenderer"),
+              let start = source.range(of: "private func handleSurfaceTap() {",
+                                       range: renderer.upperBound..<source.endIndex),
+              let end = source.range(of: "\n    }\n", range: start.upperBound..<source.endIndex)
+        else {
+            return XCTFail("`_FullscreenRenderer.handleSurfaceTap` introuvable")
+        }
+        let body = String(source[start.upperBound..<end.lowerBound])
+        XCTAssertTrue(body.contains("playPauseFade.tappingMedia()"),
+                      "le toucher ramène le bouton central et réarme sa seconde")
+        XCTAssertTrue(body.contains("toggleControls()"),
+                      "le même toucher bascule le chrome")
+        XCTAssertFalse(body.contains("if ") || body.contains("guard ") || body.contains("return"),
+                       "aucune condition : le toucher qui ramène le bouton ne s'arrête jamais au bouton")
     }
 
     func test_theSamePlaybackState_isNotAChange() {

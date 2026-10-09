@@ -38,6 +38,7 @@ import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
 
@@ -840,6 +841,7 @@ export class MessagingService {
         }
       });
 
+      announceConversationLanguageChange({ kind: 'arrival', conversationId, language: recipientLanguage(user, 'fr') });
       logger.info('Auto-created Participant', { conversationId });
       return participant;
     } catch (error) {

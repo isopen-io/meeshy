@@ -165,3 +165,58 @@ describe('PUT /admin/engagement-scale', () => {
     }
   });
 });
+
+// Un message texte vaut selon le type de sa conversation (#9666) : l'administration
+// LIT ses cinq variantes, les GARDE quand elle les règle, et un barème enregistré
+// avant elles se sert aux défauts de la décision.
+describe('les variantes d’un message texte, par type de conversation (#9666)', () => {
+  const DECISION = { direct: 2, group: 4, public: 6, global: 8, other: 4 };
+
+  it('sert les cinq variantes par défaut', async () => {
+    const { res } = await call('ADMIN', 'GET');
+    expect(res.json().data.scale.operations['content.text_message'].variantPoints).toEqual(DECISION);
+  });
+
+  it('garde les variantes réglées, à l’écriture puis à la relecture', async () => {
+    const bundle = makePrisma();
+    const scale = {
+      ...DEFAULT_ENGAGEMENT_SCALE,
+      operations: {
+        ...DEFAULT_ENGAGEMENT_SCALE.operations,
+        'content.text_message': { points: 4, multiplied: true, cap: 300, variantPoints: { ...DECISION, direct: 1, global: 10 } },
+      },
+    };
+
+    const put = await call('ADMIN', 'PUT', { scale }, bundle);
+    const get = await call('ADMIN', 'GET', undefined, bundle);
+
+    const expected = { ...DECISION, direct: 1, global: 10 };
+    expect(put.res.json().data.scale.operations['content.text_message'].variantPoints).toEqual(expected);
+    expect(get.res.json().data.scale.operations['content.text_message'].variantPoints).toEqual(expected);
+  });
+
+  it('sert les défauts de la décision pour un barème enregistré sans ces variantes', async () => {
+    const bundle = makePrisma();
+    const legacy = {
+      ...DEFAULT_ENGAGEMENT_SCALE,
+      operations: {
+        ...DEFAULT_ENGAGEMENT_SCALE.operations,
+        'content.text_message': { points: 3, multiplied: true, cap: 300 },
+      },
+    };
+    (bundle.prisma.engagementScaleConfig.findUnique as unknown as jest.Mock).mockImplementation(async () => ({
+      config: legacy,
+      updatedAt: new Date('2026-09-30T12:00:00.000Z'),
+      updatedById: ADMIN_ID,
+    }));
+
+    const { res } = await call('ADMIN', 'GET', undefined, bundle);
+
+    expect(res.json().data.scale.operations['content.text_message']).toEqual({
+      points: 3,
+      multiplied: true,
+      cap: 300,
+      variantPoints: DECISION,
+    });
+  });
+});

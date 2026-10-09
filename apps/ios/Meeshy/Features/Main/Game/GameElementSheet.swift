@@ -30,8 +30,8 @@ struct GameElementEmblemView: View {
             ProgressionConceptEmblem(concept: concept, game: nil, size: size)
         case .tier(let tier):
             TierEmblemView(tier: tier, knockout: theme.backgroundPrimary)
-        case .rank(let rank, let division):
-            RankBlasonView(rank: rank, division: division, title: GameCopy.rankName(rank))
+        case .rank(let rank, let division, let mythic):
+            RankBlasonView(rank: rank, division5: division, mythic: mythic, title: GameCopy.rankName(rank))
         case .coin(let edition):
             MeeshCoinView(face: .obverse, edition: edition)
         case .flame(let form):
@@ -49,8 +49,8 @@ struct GameElementEmblemView: View {
         case .badge(let family, let glyph, let material, let lit, let progress):
             GameMedalView(family: family, glyph: glyph, material: material, state: lit ? .lit : .imprint, progress: progress,
                           surface: theme.backgroundPrimary, muted: theme.textMuted)
-        case .medal(let material, let lit):
-            GameMedalView(family: .social, glyph: .social, material: material, state: lit ? .lit : .imprint,
+        case .medal(let shape, let material, let lit):
+            GameBadgeView(shape: shape, material: material, state: lit ? .lit : .imprint,
                           surface: theme.backgroundPrimary, muted: theme.textMuted)
         case .symbol(let name):
             Image(systemName: name)
@@ -71,6 +71,8 @@ struct GameElementSheet: View {
     let detail: GameElementDetail
     /// « Voir la fiche » ; `nil` quand la feuille s'ouvre DANS la fiche du concept.
     var onOpenConcept: ((ProgressionConcept) -> Void)?
+    /// « Comprendre les badges » (#9640) — la section badges du carnet des règles ; `nil` : aucun hôte ne sait l'ouvrir.
+    var onOpenBadgesGuide: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -137,10 +139,17 @@ struct GameElementSheet: View {
                     .animation(reduceMotion ? nil : .easeOut(duration: GameTimeline.levelGainDuration), value: entered)
             }
 
-            section(ConceptText.ficheWhat, detail.what)
-            if let how = detail.how {
-                section(detail.howTitle, how)
+            if let badge = detail.badge {
+                GameBadgeStarsView(model: badge)
+                Text(badge.reason)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("game.badge.reason")
             }
+
+            explanation
 
             if !detail.facts.isEmpty {
                 ProgressionCard(tint: tint) {
@@ -155,17 +164,39 @@ struct GameElementSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if let onOpenConcept {
-                ProgressionConceptRow(
-                    title: GameDetailText.seeFiche, subtitle: ConceptText.name(detail.concept), symbol: "arrow.forward.circle",
-                    identifier: "game.detail.sheet", action: { onOpenConcept(detail.concept) }
-                )
-            }
+            links
             GameQuietButton(title: GameDetailText.close, identifier: "game.detail.close") { dismiss() }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.bottom, MeeshySpacing.lg)
+    }
+
+    /// Ce que c'est (pour un badge : ce qui compte pour SON axe), comment l'obtenir, et l'échelle d'un badge.
+    private var explanation: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            section(detail.whatTitle, detail.what)
+            if let how = detail.how {
+                section(detail.howTitle, how)
+            }
+            if let badge = detail.badge {
+                GameBadgeLadderView(model: badge)
+            }
+        }
+    }
+
+    /// « Comprendre les badges » sur la fiche d'un badge, puis « Voir la fiche » hors de la fiche du concept.
+    @ViewBuilder
+    private var links: some View {
+        if detail.badge != nil, let onOpenBadgesGuide {
+            GameBadgeGuideLink(action: onOpenBadgesGuide)
+        }
+        if let onOpenConcept {
+            ProgressionConceptRow(
+                title: GameDetailText.seeFiche, subtitle: ConceptText.name(detail.concept), symbol: "arrow.forward.circle",
+                identifier: "game.detail.sheet", action: { onOpenConcept(detail.concept) }
+            )
+        }
     }
 
     // MARK: - L'état
@@ -268,8 +299,10 @@ extension View {
         modifier(GameElementTouch(detail: detail, identifier: identifier))
     }
 
-    /// Présente les précisions de l'élément touché. `onOpenConcept` : « Voir la fiche », hors de la fiche du concept.
-    func gameElementSheet(_ detail: Binding<GameElementDetail?>, onOpenConcept: ((ProgressionConcept) -> Void)?) -> some View {
+    /// Présente les précisions de l'élément touché. `onOpenConcept` : « Voir la fiche », hors de la fiche du concept ;
+    /// `onOpenBadgesGuide` : « Comprendre les badges », sur la fiche d'un badge. La feuille se ferme avant d'ouvrir.
+    func gameElementSheet(_ detail: Binding<GameElementDetail?>, onOpenConcept: ((ProgressionConcept) -> Void)?,
+                          onOpenBadgesGuide: (() -> Void)? = nil) -> some View {
         sheet(item: detail) { element in
             GameElementSheet(
                 detail: element,
@@ -277,6 +310,12 @@ extension View {
                     { concept in
                         detail.wrappedValue = nil
                         open(concept)
+                    }
+                },
+                onOpenBadgesGuide: onOpenBadgesGuide.map { open in
+                    {
+                        detail.wrappedValue = nil
+                        open()
                     }
                 }
             )

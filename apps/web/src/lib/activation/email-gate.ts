@@ -12,8 +12,10 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
  * suspendue pour toujours. Deux demandes simultanées partagent UNE vue.
  */
 
-/** Pourquoi on demande — la phrase de la vue le dit. */
-export type EmailGateReason = 'publish' | 'invite' | 'link';
+/** Pourquoi on demande — la phrase de la vue le dit. `moreLinks` : la
+ * passerelle a refusé un lien au-delà des cinq actifs qu'elle permet à une
+ * adresse non prouvée (#9713, #9715). */
+export type EmailGateReason = 'publish' | 'invite' | 'link' | 'moreLinks';
 
 export type EmailGateState = { readonly pending: { readonly reason: EmailGateReason } | null };
 

@@ -297,6 +297,18 @@ const f = {
   'admin.enum.sessionEnd.security_breach': 'Faille de sécurité',
   'admin.enum.sessionEnd.security_concern': 'Doute de sécurité',
   'admin.enum.sessionEnd.session_limit_exceeded': 'Trop de sessions ouvertes',
+  'admin.enum.sessionEnd.logout_all_devices': 'Toutes les sessions ont été fermées',
+  'admin.enum.sessionPlatform.ios': 'Application iOS',
+  'admin.enum.sessionPlatform.web': 'Navigateur web',
+  'admin.enum.sessionPlatform.pwa': 'Application web installée',
+  'admin.enum.sessionPlatform.android-shell': 'Application Android',
+  'admin.enum.loginMethod.password': 'Mot de passe',
+  'admin.enum.loginMethod.two_factor': 'Mot de passe et second facteur',
+  'admin.enum.loginMethod.magic_link': 'Lien magique par e-mail',
+  'admin.enum.loginMethod.registration': 'Inscription',
+  'admin.enum.loginMethod.email_verification': 'Vérification de l’e-mail',
+  'admin.enum.loginMethod.oauth': 'Compte externe',
+  'admin.enum.loginMethod.anonymous': 'Accès anonyme',
 } as const;
 
 export default f;

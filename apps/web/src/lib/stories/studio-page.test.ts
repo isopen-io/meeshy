@@ -28,6 +28,7 @@ import {
   selectedTextLayerOf,
   studioDoorAccepts,
   studioFailureKey,
+  studioSoundFileOf,
   type StudioPage,
 } from './studio-page';
 import { IDENTITY_POSE } from './studio-pose';
@@ -312,6 +313,19 @@ describe('studioDoorAccepts — le rôle vient de la PORTE, et un fichier hors d
   test('la porte sonore prend un son, jamais une image', () => {
     expect(studioDoorAccepts('sound', 'audio/mp4')).toBe(true);
     expect(studioDoorAccepts('sound', 'image/png')).toBe(false);
+  });
+  test('#9693 — la porte sonore prend un .mp4 (un son dans un conteneur que le système nomme vidéo)', () => {
+    expect(studioDoorAccepts('sound', 'video/mp4')).toBe(true);
+    expect(studioDoorAccepts('sound', 'video/webm')).toBe(false);
+  });
+  test('#9693 — un .mp4 posé à la porte sonore part comme un son (audio/mp4), octets inchangés', () => {
+    const mp4 = new File([new Uint8Array([1, 2, 3])], 'podcast.mp4', { type: 'video/mp4' });
+    const sound = studioSoundFileOf(mp4);
+    expect(sound.type).toBe('audio/mp4');
+    expect(sound.name).toBe('podcast.mp4');
+    expect(sound.size).toBe(3);
+    const mp3 = new File([new Uint8Array([1])], 'son.mp3', { type: 'audio/mpeg' });
+    expect(studioSoundFileOf(mp3)).toBe(mp3);
   });
   test('un MIME INCONNU du navigateur (chaîne vide) passe : la passerelle juge les OCTETS (tus-handler.ts:384-400)', () => {
     expect(studioDoorAccepts('visual', '')).toBe(true);

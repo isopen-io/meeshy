@@ -197,21 +197,18 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         XCTAssertTrue(
             text.contains("let renderedItem = StoryItem(feedPost: post)"),
             "La conversion StoryItem(feedPost:) doit être hissée en UNE valeur partagée " +
-            "par la porte du bouton et storyCanvasSection (correctif revue #8) — jamais " +
-            "reconstruite par évaluation de body."
+            "par storyCanvasSection et l'embed — jamais reconstruite par évaluation de body."
         )
-        XCTAssertTrue(
-            text.contains("BackgroundSoundBadge.announcement(for: renderedItem.storyEffects)"),
-            "Le détail doit résoudre l'annonce via le MÊME résolveur partagé (E1), sur la " +
-            "valeur HISSÉE — pas une reconstruction locale."
-        )
-        XCTAssertTrue(
-            text.contains("BackgroundSoundBadge.showsMuteButton(for:"),
-            "Le bouton muet du détail doit se monter via le prédicat partagé."
-        )
-        XCTAssertTrue(
+        // #9677 (directive porteur 2026-10-08) : plus de baffle dans la rangée
+        // d'actions — la NOTE du crédit, au-dessus de la scène, coupe le son.
+        XCTAssertFalse(
             text.contains("BackgroundSoundBadge.muteIconName(isMuted: isCanvasMuted)"),
-            "L'icône du bouton doit dire l'état via le helper partagé."
+            "Le baffle du détail est remplacé par la note du crédit."
+        )
+        let canvas = try source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
+        XCTAssertTrue(
+            canvas.contains("announcement: BackgroundSoundBadge.announcement(for: playedEffects)"),
+            "La note se monte sur l'annonce PARTAGÉE (E1), sur les effets que la scène joue."
         )
     }
 
@@ -221,14 +218,14 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// storyEffects (son emprunté, forme dominante E1) n'affiche aucun
     /// canvas nulle part et ne doit donc PAS monter de bouton.
     func test_postDetailView_muteButtonGate_isConjoinedWithCanvasRenderPredicate() throws {
-        let text = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
-        XCTAssertTrue(
-            text.contains("BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem)"),
-            "La porte du bouton doit conjuguer le prédicat de rendu réel du canvas " +
-            "(BackgroundSoundBadge.detailCanvasIsRendered) — pas seulement l'existence de " +
-            "l'annonce, qui peut être vraie sans qu'aucun canvas ne rende (post non-story " +
-            "portant son propre fond)."
-        )
+        // #9677 : le contrôle du son vit DANS les chemins qui rendent un canvas
+        // (en-tête de la scène native et de l'embed de story) — il ne peut donc
+        // jamais paraître sans canvas à piloter.
+        let text = try postDetailUnit()
+        XCTAssertTrue(text.contains("onToggleMute: { isCanvasMuted.toggle() }"),
+                      "La note pilote le muet LOCAL du canvas.")
+        XCTAssertEqual(text.components(separatedBy: "sceneSoundHeader(").count - 1, 3,
+                       "Une définition, deux montages : la scène native et l'embed de story.")
     }
 
     /// Le tap doit RÉELLEMENT contrôler le lecteur local : les DEUX sites qui
@@ -571,14 +568,15 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         let text = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge.showsMuteButton(for: announcement)"),
-            "Le bouton muet du réel doit se monter via le prédicat partagé, sur la MÊME " +
-            "valeur `announcement` que le badge de la ligne meta (E1)."
+            "La ligne du crédit (et sa note qui coupe) existe via le prédicat partagé (E1)."
         )
         XCTAssertTrue(
-            text.contains("BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying)"),
-            "L'icône doit dire l'état RÉEL du lecteur (audioPlayer.isPlaying) — pas un état " +
+            text.contains("isMuted: !audioPlayer.isPlaying"),
+            "La note barrée dit l'état RÉEL du lecteur (audioPlayer.isPlaying) — pas un état " +
             "local séparé qui pourrait diverger du son réellement audible."
         )
+        XCTAssertTrue(text.contains("isMuted: sceneSoundMuted"),
+                      "Réel composé : la note dit le muet du PLAYER de la scène (#6745).")
     }
 
     /// Correctif revue BLOQUANT #1 : le tap doit RÉELLEMENT piloter le
@@ -644,21 +642,15 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// meta auteur, un glyphe de 10pt sans zone de hit élargie ratait un tap
     /// sur deux à l'usage (précédent documenté sur la carte).
     func test_reelsPlayerView_muteButton_hasFortyFourPointHitTarget() throws {
-        let text = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
-        let buttonBlock = block(
-            from: "BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying)",
-            to: "reels.action.unmute",
-            in: text
-        )
-        XCTAssertFalse(buttonBlock.isEmpty, "Bloc du bouton muet du réel introuvable.")
-        XCTAssertTrue(
-            buttonBlock.contains(".frame(minWidth: 44, minHeight: 44)"),
-            "Cible tactile 44x44 (HIG) manquante sur le bouton muet du réel."
-        )
-        XCTAssertTrue(
-            buttonBlock.contains(".contentShape(Rectangle())"),
-            "Zone de hit non élargie au rectangle complet sur le bouton muet du réel."
-        )
+        // #9677 : le contrôle est la NOTE du crédit, `BackgroundSoundMuteControl`,
+        // le même pour le réel et le détail.
+        let text = try source("Meeshy/Features/Main/Components/BackgroundSoundBadge.swift")
+        let control = block(from: "struct BackgroundSoundMuteControl", to: nil, in: text)
+        XCTAssertFalse(control.isEmpty, "Contrôle du son de fond introuvable.")
+        XCTAssertTrue(control.contains(".frame(minHeight: MeeshyControlSize.tapTarget"),
+                      "Cible tactile ≥ 44 pt manquante sur la note qui coupe le son.")
+        XCTAssertTrue(control.contains(".contentShape(Rectangle())"),
+                      "Zone de hit non élargie au rectangle complet.")
     }
 
     // MARK: - Un POST porte une SCÈNE (constat porteur 2026-09-06)

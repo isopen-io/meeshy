@@ -184,6 +184,8 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           conversationId: message.conversationId,
           conversation: message.conversation,
           createdAt: message.createdAt,
+          messageType: message.messageType,
+          metadata: message.metadata,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err as Error),
       });
@@ -494,12 +496,14 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       //     donnait à lire une permission inexistante.
       // Le rôle global se lit désormais en BASE et non dans le jeton : un rôle
       // révoqué depuis l'émission du jeton ne supprime plus.
-      const { admitted: canDelete } = await admitMessageDelete({
+      const { admitted: canDelete, actorParticipantId } = await admitMessageDelete({
         prisma,
         deleterUserId: userId,
         message: {
           authorUserId: message.sender?.userId,
           conversationId: message.conversationId,
+          messageType: message.messageType,
+          metadata: message.metadata,
         },
         onError: (err) => logger.error('delete admission read failed', err as Error),
       });
@@ -559,6 +563,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
         content: message.content,
         metadata: message.metadata,
+        removedByParticipantId: actorParticipantId ?? null,
       });
 
       // Diffuser la suppression via Socket.IO (room + aperçu de liste + file

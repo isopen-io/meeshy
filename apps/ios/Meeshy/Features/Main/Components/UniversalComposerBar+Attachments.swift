@@ -113,7 +113,9 @@ extension UniversalComposerBar {
                     onOpenLibrary: { openFullPhotoLibrary(preselecting: $0) },
                     onSelect: onRecentMediaSelected,
                     onEdit: onRecentMediaEdit,
-                    onSelectionChanged: { recentStripSelectionIds = $0 }
+                    onSelectionChanged: { recentStripSelectionIds = $0 },
+                    onSelectAsset: onRecentLibraryAssetSelected,
+                    attachedAssetIds: recentAttachedAssetIds
                 )
             } else {
                 Spacer(minLength: 0)

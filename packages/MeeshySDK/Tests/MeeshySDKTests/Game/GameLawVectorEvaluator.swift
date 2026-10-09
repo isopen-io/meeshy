@@ -170,8 +170,28 @@ enum GameLawVectorEvaluator {
 
     // MARK: Niveaux
 
+    /// Les faits des étapes d'un vecteur (#9706) : ses compteurs, et le rang lu sur sa Gloire — `nil` sans compteurs.
+    private static func stepFacts(_ counts: GameJSON, glory: Int) -> GameLevelStepFacts? {
+        guard !counts.isNull else { return nil }
+        return GameLevelStepFacts(minted: int(counts, "minted"), missionsDone: int(counts, "missionsDone"),
+                                  flameRecord: int(counts, "flameRecord"), glory: glory,
+                                  rank: GameGlory.standing(glory: glory, mythic: false).rank)
+    }
+
+    private static func stepJSON(_ step: GameLevelStep?) -> GameJSON {
+        guard let step else { return .null }
+        return object([
+            "level": .int(step.level), "kind": .string(step.kind.rawValue), "target": .int(step.target),
+            "current": .int(step.current), "met": .bool(step.met), "rank": .optionalString(step.rank?.rawValue),
+        ])
+    }
+
     private static func level(_ input: GameJSON) -> GameJSON {
-        let p = GameLevels.progress(forScore: int(input, "score"))
+        let glory = int(input, "glory")
+        let steps = stepFacts(input["steps"], glory: glory)
+        let gate = GameLevelSteps.gate(steps)
+        let p = GameLevels.progress(forScore: int(input, "score"), cap: GameGlory.levelCap(forGlory: glory), gate: gate)
+        let legacy = GameLevels.legacyProgress(forScore: int(input, "score"), gate: gate)
         return object([
             "level": .int(p.level),
             "tier": .string(p.tier.rawValue),
@@ -180,6 +200,13 @@ enum GameLawVectorEvaluator {
             "pointsToNext": .int(p.pointsToNext),
             "progress": .number(p.progress),
             "isMax": .bool(p.isMax),
+            "cap": .optionalInt(p.cap),
+            "legacyLevel": .int(legacy.level),
+            "legacyTier": .string(legacy.tier.rawValue),
+            "held": .bool(p.held),
+            "gate": .optionalInt(gate),
+            "step": stepJSON(GameLevelSteps.next(after: p.level, facts: steps)),
+            "unlockLevel": .int(GameLevels.levelForUnlocks(score: int(input, "score"), levelRecord: optionalInt(input, "levelRecord"))),
         ])
     }
 
@@ -207,24 +234,37 @@ enum GameLawVectorEvaluator {
     }
 
     private static func mintPreview(_ input: GameJSON) throws -> GameJSON {
+        let glory = int(input, "glory")
+        let steps = input["steps"].isNull
+            ? nil
+            : stepFacts(object(["minted": .int(0), "missionsDone": input["steps"]["missionsDone"],
+                                "flameRecord": input["steps"]["flameRecord"]]), glory: glory)
         let preview = GameMint.preview(score: int(input, "score"), mintedLifetime: int(input, "mintedLifetime"),
-                                       debitablePoints: int(input, "debitablePoints"))
+                                       debitablePoints: int(input, "debitablePoints"),
+                                       levelCap: GameGlory.levelCap(forGlory: glory), steps: steps)
         return try GameJSON.parse(JSONEncoder().encode(preview))
     }
 
     // MARK: Gloire et trésor
 
     private static func gloryStanding(_ input: GameJSON) -> GameJSON {
-        let s = GameGlory.standing(glory: int(input, "glory"), mythic: input["mythic"].boolValue ?? false)
+        let seatJSON = input["mythicSeat"]
+        let seat = seatJSON.isNull ? nil : MythicSeatRef(number: int(seatJSON, "number"), edition: int(seatJSON, "edition"))
+        let s = GameGlory.standing(glory: int(input, "glory"), mythic: input["mythic"].boolValue ?? false, mythicSeat: seat)
         return object([
             "rank": .string(s.rank.rawValue),
             "division": .optionalInt(s.division?.rawValue),
+            "division5": .optionalInt(s.division5?.rawValue),
             "divisionMinGlory": .optionalInt(s.divisionMinGlory),
             "nextRank": .optionalString(s.next?.rank.rawValue),
             "nextDivision": .optionalInt(s.next?.division.rawValue),
+            "nextDivision5": .optionalInt(s.next?.division5?.rawValue),
             "nextMinGlory": .optionalInt(s.next?.minGlory),
             "gloryMissing": .optionalInt(s.gloryMissing),
             "progress": .number(s.progress),
+            "mythicNumber": .optionalInt(s.mythic?.number),
+            "mythicEdition": .optionalInt(s.mythic?.edition),
+            "levelCap": .optionalInt(GameGlory.levelCap(forRank: s.rank)),
         ])
     }
 
@@ -386,7 +426,7 @@ enum GameLawVectorEvaluator {
         case "price-rises": return .priceRises(nextPrice: int(json, "nextPrice"))
         case "new-rank":
             guard let rank = GloryRank(rawValue: string(json, "rank")) else { throw GameLawVectorError.malformed("rang") }
-            return .newRank(rank: rank, division: optionalInt(json, "division").flatMap(GloryDivision.init(rawValue:)),
+            return .newRank(rank: rank, division: optionalInt(json, "division").flatMap(GloryDivision5.init(rawValue:)),
                             glory: int(json, "glory"), gloryMissing: optionalInt(json, "gloryMissing"))
         case "treasury-tier":
             guard let key = TreasuryTierKey(rawValue: string(json, "tier")) else { throw GameLawVectorError.malformed("trésor") }

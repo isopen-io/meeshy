@@ -93,7 +93,7 @@ const humanizeSegment = (segment: string): string =>
 const SCALE_MULTIPLIER_FIELDS = ['windowDays', 'stepPerExtraFamily', 'standingBonus', 'achievementsForStanding', 'highBadgeThreshold', 'highBadgesForStanding', 'maxFactor'] as const;
 const SCALE_LINK_FIELDS = ['basePoints', 'firstTier', 'stepPerDoubling', 'maxPoints', 'dedupHours', 'dailyCapPerCreator'] as const;
 const SCALE_ABUSE_FIELDS = ['heavyPoints', 'clawbackHours', 'unverifiedMaxPoints'] as const;
-const SCALE_VARIANTS = ['public', 'community', 'friends', 'other', 'live', 'static'] as const;
+const SCALE_VARIANTS = ['public', 'community', 'friends', 'other', 'live', 'static', 'direct', 'group', 'global'] as const;
 
 const among = <T extends string>(list: readonly T[], value: string | undefined): value is T => list.some((item) => item === value);
 

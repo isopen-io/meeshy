@@ -60,7 +60,7 @@ struct GameHeroEarn: View {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
-            Text("+" + GameCopy.formatCount(item.weight))
+            Text(String(localized: "game.hero.earn.chip", defaultValue: "jusqu’à +\(GameCopy.formatCount(item.weight))", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
         }
@@ -74,9 +74,45 @@ struct GameHeroEarn: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(
             localized: "game.hero.earn.a11y",
-            defaultValue: "\(title), \(GameCopy.points(item.weight)) par geste",
+            defaultValue: "\(title), jusqu’à \(GameCopy.points(item.weight)) par geste",
             bundle: .main
         ))
         .gameElement(GameElementDetails.elanFamily(item.family, elan: elan), identifier: "game.hero.earn.\(item.family.rawValue)")
+    }
+}
+
+// MARK: - La prochaine étape des niveaux (#9706)
+
+/// Sous la barre du niveau : la PROCHAINE étape, faite (coche) ou à faire (cercle, et où elle en est). Elle SE TOUCHE
+/// comme tout élément du jeu : elle rebondit et ouvre SES précisions, dont « Voir la fiche » mène au geste qui la fait.
+/// Rien quand le serveur ne sert pas d'étape (au-delà de 100, ou serveur d'avant les étapes).
+struct GameLevelStepRow: View {
+    let step: GameLevelStep
+    /// Les faits des étapes servis : la feuille dit alors les dix étapes.
+    var facts: GameLevelStepFacts?
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xs) {
+            Image(systemName: step.met ? "checkmark.circle.fill" : "circle")
+                .foregroundColor(step.met ? MeeshyColors.success : theme.textMuted)
+                .accessibilityHidden(true)
+            Text(GameCopy.levelStepLine(step))
+                .foregroundColor(theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: MeeshySpacing.xs)
+            Text(GameCopy.levelStepState(step))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
+                .foregroundColor(step.met ? MeeshyColors.success : theme.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(GameChip.minimumScale)
+        }
+        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(GameCopy.levelStepAccessibility(step))
+        .gameElement(GameElementDetails.levelStep(step, facts: facts), identifier: "game.hero.level.step")
     }
 }

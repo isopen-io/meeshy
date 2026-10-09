@@ -38,17 +38,13 @@ extension ConversationMediaGalleryView {
     ///   posée plus haut, elle installerait une transaction animée sur tout
     ///   l'arbre, pager compris.
     func onEnterStage(_ door: StageEntry) {
-        // **Le toucher qui RAMÈNE le bouton pause ne fait rien d'autre** (#9577).
-        // La règle se lit AVANT le transport et le cadrage : sinon le même doigt
-        // ramènerait le bouton et retirerait le plateau qui le porte.
+        // **Le toucher qui RAMÈNE le bouton pause garde AUSSI sa porte** (#9577,
+        // décision porteur 2026-10-08, alignée sur le web) : il réarme la
+        // seconde du bouton central PUIS bascule le plein cadre, en un seul
+        // geste. Aucun retour anticipé ici — le toucher ne s'arrête jamais au
+        // bouton.
         if door == .tap {
-            let revealsOnly = MediaStagePlayPause.tapRevealsOnly(
-                fade: playPauseFade,
-                holdsTrack: currentAttachmentIsActiveTrack,
-                chromeVisible: MediaStageVeil.showsChrome(presentation: stagePresentation,
-                                                          overlays: stageOverlays))
             withAnimation(playPauseFadeAnimation) { playPauseFade = playPauseFade.tappingMedia() }
-            if revealsOnly { return }
         }
 
         let next = stagePresentation.after(door)

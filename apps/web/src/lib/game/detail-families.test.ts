@@ -45,8 +45,8 @@ const sentenceKeys = (): readonly string[] => [
 ];
 
 describe('les familles et les données', () => {
-  test('dix-huit familles, chacune dit si sa seconde phrase est « comment l’obtenir » ou « ce que ça donne »', () => {
-    expect(GAME_DETAIL_FAMILIES).toHaveLength(18);
+  test('dix-neuf familles, chacune dit si sa seconde phrase est « comment l’obtenir » ou « ce que ça donne »', () => {
+    expect(GAME_DETAIL_FAMILIES).toHaveLength(19);
     expect(Object.keys(GAME_DETAIL_HOW).sort()).toEqual([...GAME_DETAIL_FAMILIES].sort());
     expect(new Set(GAME_DETAIL_FACTS).size).toBe(GAME_DETAIL_FACTS.length);
   });

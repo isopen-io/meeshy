@@ -54,6 +54,8 @@ async function patch(payload: Record<string, unknown>) {
   app.decorate('prisma', {
     conversationShareLink: {
       findFirst: jest.fn(async () => ({ id: LINK_DB_ID, linkId: LINK_ID, createdBy: CREATOR, conversation: { participants: [] } })),
+      // #9713 — un lien déjà actif : l'éditer ne le fait pas entrer dans le compte.
+      findUnique: jest.fn(async () => ({ createdBy: CREATOR, isActive: true, expiresAt: null })),
       update,
     },
   } as never);

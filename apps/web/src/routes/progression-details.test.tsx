@@ -1,3 +1,4 @@
+import { standingLabel, shownRank } from '@/lib/view/game-copy';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -25,6 +26,7 @@ import {
   flameDetail,
   freezeDetail,
   gemDetail,
+  levelStepDetail,
   missionDetail,
   playerDetail,
   rankDetail,
@@ -134,6 +136,7 @@ const samples = (): Readonly<Record<GameDetailFamily, ElementDetail>> => {
     ring: ringDetail(game.level),
     treasury: treasuryDetail(game.treasury),
     elan: elanDetail('content', playing.elan),
+    levelstep: levelStepDetail(game, must(game.level.ladder?.step, 'étape des niveaux')),
   };
 };
 
@@ -316,7 +319,7 @@ describe('les sous-pages : chaque élément se touche et ouvre SES précisions',
 
   test('Prestige : les étoiles', async () => {
     const host = await mounter.mount(
-      tree(playing, <GamePrestige level={game.level} prestige={must(game.prestige, 'prestige')} online pending={false} onPass={noop} createEnv={() => ({ reducedMotion: true }) as never} />),
+      tree(playing, <GamePrestige level={game.level} score={game.level.score} prestige={must(game.prestige, 'prestige')} online pending={false} onPass={noop} createEnv={() => ({ reducedMotion: true }) as never} />),
     );
     expect(await sweep(host)).toBeGreaterThanOrEqual(1);
     expect(host.querySelector<HTMLButtonElement>('button[data-detail]')?.dataset.detail).toMatch(/^star:/);
@@ -383,7 +386,7 @@ describe('l’en-tête de la première page', () => {
     expect(items.map((item) => item.dataset.headerItem)).toEqual(['rank', 'meesh']);
     for (const item of items) expect(item.className).toContain('game-press');
     expect(surface.querySelector('[data-header-item="meesh"]')?.textContent).toContain(String(playing.meesh?.balance));
-    expect(surface.querySelector('[data-header-item="rank"]')?.getAttribute('aria-label')).toContain('Écho');
+    expect(surface.querySelector('[data-header-item="rank"]')?.getAttribute('aria-label')).toContain(standingLabel(shownRank(must(playing.game, 'game').glory), 'fr'));
   });
 
   test('rien si la donnée n’est pas servie : ni blason sans le jeu, ni compteur sans solde, ni groupe vide', () => {

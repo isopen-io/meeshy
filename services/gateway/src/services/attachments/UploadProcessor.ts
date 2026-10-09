@@ -28,6 +28,7 @@ import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-p
 import { isExifStrippable, stripExifFromImageBuffer } from './ExifStrip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizedAudioPath } from './audio-normalization.js';
+import { audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from './uploadMimeType.js';
 import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
 import { guardedTimeout } from '../../utils/guarded-timer.js';
 
@@ -380,6 +381,27 @@ export class UploadProcessor {
   }
 
   /**
+   * Écrit le fichier sous le type de ce qu'il EST (#9693) : un `.mp4` n'a
+   * qu'un type système, `video/mp4`, qu'il porte une image ou non. Une fois
+   * écrit, la sonde lit ses pistes ; sans piste vidéo, il est réécrit comme un
+   * son (normalisé en M4A, comme tout audio). Une vraie vidéo n'est écrite
+   * qu'une fois ; une sonde muette ne change rien.
+   */
+  private async saveAdmittedFile(
+    file: FileToUpload,
+    relativePath: string
+  ): Promise<{ saved: { size: number; relativePath: string; mimeType?: string }; declaredMimeType: string }> {
+    const saved = await this.saveFile(file.buffer, relativePath, file.mimeType);
+    if (!mayBeAudioOnlyContainer(file.mimeType)) return { saved, declaredMimeType: file.mimeType };
+    const storedPath = path.join(this.uploadBasePath, saved.relativePath);
+    const streams = await this.metadataManager.probeMediaStreams(storedPath).catch(() => null);
+    const admitted = audioOnlyContainerMimeType(file.mimeType, streams);
+    if (admitted === file.mimeType) return { saved, declaredMimeType: file.mimeType };
+    await fs.unlink(storedPath).catch(() => {});
+    return { saved: await this.saveFile(file.buffer, relativePath, admitted), declaredMimeType: admitted };
+  }
+
+  /**
    * Génère une URL publique pour un fichier
    */
   getAttachmentUrl(filePath: string): string {
@@ -445,11 +467,11 @@ export class UploadProcessor {
       throwUploadValidationError(validation.code, validation.error);
     }
 
-    const saved = await this.saveFile(file.buffer, this.generateFilePath(userId, file.filename), file.mimeType);
+    const { saved, declaredMimeType } = await this.saveAdmittedFile(file, this.generateFilePath(userId, file.filename));
     const filePath = saved.relativePath;
-    const savedMimeType = saved.mimeType ?? file.mimeType;
+    const savedMimeType = saved.mimeType ?? declaredMimeType;
 
-    const attachmentType = getAttachmentType(file.mimeType, file.filename);
+    const attachmentType = getAttachmentType(declaredMimeType, file.filename);
     let metadata = await this.metadataManager.extractMetadata(
       filePath,
       attachmentType,

@@ -6,6 +6,7 @@ import type { EngagementAxisFamily } from '@meeshy/shared/types/engagement';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import type { GameDetailFact, GameDetailFamily } from '@/lib/game/detail-families';
+import { shownLevelOf } from '@/lib/game/ladder';
 import { personalMissionClock } from '@/lib/game/personal-mission-clock';
 import { SUBPAGE_CONCEPT, subpageOf } from '@/lib/game/progression-nav';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
@@ -17,11 +18,15 @@ import {
   flameFormName,
   formatCount,
   gameText,
+  bannerTopLine,
   levelTierName,
   meeshCount,
   pointsLabel,
   rankLabel,
+  standingLabel,
   treasuryName,
+  servedDivision,
+  shownRank,
 } from '@/lib/view/game-copy';
 import { leagueName, remainingLabel, timerLabel, visibilityLabel, zoneLabel } from '@/lib/view/game-copy-v2';
 
@@ -160,14 +165,14 @@ function level(view: EngagementWithGame): Body {
       ]),
     };
   }
-  const { level: served } = game;
+  const served = shownLevelOf(game.level);
   const atTop = served.nextThreshold === null;
   const record = served.record > served.level ? levelValue(served.record) : null;
   return {
     value: levelValue(served.level),
     chips: present([
       chip(levelTierName(served.tier), about('tier')),
-      atTop ? chip(gameText('game.banner.top'), element('ring')) : chip(stillMissing(served.pointsToNext), about('level_next')),
+      atTop ? chip(bannerTopLine(served), element('ring')) : chip(stillMissing(served.pointsToNext), about('level_next')),
       record === null ? null : chip(gameText('game.concept.chip.record', { value: record }), about('level_record')),
     ]),
     gauge: atTop ? null : served.progress,
@@ -253,8 +258,8 @@ function meesh(view: EngagementWithGame): Body {
 function glory(view: EngagementWithGame): Body {
   const served = view.game?.glory;
   if (served === undefined) return EMPTY;
-  const next = served.next === null ? null : rankLabel(served.next.rank, served.next.division);
-  const rank = rankLabel(served.rank, served.division);
+  const next = served.next === null ? null : rankLabel(served.next.rank, servedDivision(served.next));
+  const rank = standingLabel(shownRank(served));
   return {
     value: rank,
     chips: [
@@ -347,7 +352,7 @@ function missions(view: EngagementWithGame, now: Date): Body {
   const chestState = gameText(`game.concept.chip.chest.${chest.status}`);
   const chestFact = fact(gameText('game.chest.title'), chestState, element('chest'));
   if (!served.unlocked) {
-    const locked = gameText('game.missions.locked', { level: formatCount(game.level.level) });
+    const locked = gameText('game.missions.locked', { level: formatCount(shownLevelOf(game.level).level) });
     return {
       value: levelValue(MISSIONS_MIN_LEVEL),
       chips: [chip(gameText('game.door.league.locked', { level: formatCount(MISSIONS_MIN_LEVEL) }), note(locked))],
@@ -379,7 +384,7 @@ function league(view: EngagementWithGame, now: Date): Body {
   const friends = gameText('game.league.rank_line', { rank: formatCount(served.friends.rank), size: formatCount(served.friends.size) });
   const friendsFact = fact(gameText('game.league.friends.title'), friends, about('league_friends'));
   if (served.access === 'locked') {
-    const locked = gameText('game.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL), current: formatCount(game.level.level) });
+    const locked = gameText('game.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL), current: formatCount(shownLevelOf(game.level).level) });
     return {
       value: levelValue(LEAGUE_MIN_LEVEL),
       chips: [chip(gameText('game.door.league.locked', { level: formatCount(LEAGUE_MIN_LEVEL) }), note(locked))],

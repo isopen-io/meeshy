@@ -23,8 +23,9 @@ enum GameGuideEvents {
 
     static let absenceDays = 7
 
+    /// Le palier se lit sur la VÉRITÉ (`level.shown`, #9688) : les champs d'hier s'arrêtent à Galaxie.
     private static func tierIndex(_ game: GameBlock) -> Int {
-        LevelTierKey.allCases.firstIndex(of: game.level.tier) ?? 0
+        LevelTierKey.allCases.firstIndex(of: game.level.shown.tier) ?? 0
     }
 
     private static func treasuryIndex(_ game: GameBlock) -> Int {
@@ -32,9 +33,10 @@ enum GameGuideEvents {
         return TreasuryTierKey.allCases.firstIndex(of: tier) ?? -1
     }
 
-    /// Un ordre total des (rang, division) : une division gagnée est une marche, un rang aussi.
+    /// Un ordre total des (rang, division V–I) : une division gagnée est une marche, un rang aussi —
+    /// V → IV compte, même quand la projection héritée reste à III (#9636).
     static func standingOrder(_ game: GameBlock) -> Int {
-        game.glory.rank.index * 4 + (game.glory.division.map { 3 - $0.rawValue } ?? 3)
+        game.glory.rank.index * 6 + (game.glory.shownDivision.map { 5 - $0.rawValue } ?? 5)
     }
 
     /// Une marche GAGNÉE — jamais la marche retrouvée quand un geste refusé restaure la lecture d'avant.
@@ -42,13 +44,15 @@ enum GameGuideEvents {
         standingOrder(after) > standingOrder(before)
     }
 
-    private static func nextTierLevel(_ game: GameBlock) -> Int? {
-        let next = tierIndex(game) + 1
-        return next >= LevelTierKey.allCases.count ? nil : next * 10
+    /// Le premier niveau du palier suivant — `nil` après Singularité, qui n'a pas de fin (#9688).
+    static func nextTierLevel(after tier: LevelTierKey) -> Int? {
+        let tiers = LevelTierKey.allCases
+        guard let index = tiers.firstIndex(of: tier), tiers.index(after: index) < tiers.endIndex else { return nil }
+        return GameLevels.tierStart(of: tiers[tiers.index(after: index)])
     }
 
     private static func rankEvent(_ game: GameBlock) -> GuideEvent {
-        .newRank(rank: game.glory.rank, division: game.glory.division, glory: game.glory.glory,
+        .newRank(rank: game.glory.rank, division: game.glory.shownDivision, glory: game.glory.glory,
                  gloryMissing: game.glory.gloryMissing)
     }
 
@@ -58,17 +62,18 @@ enum GameGuideEvents {
 
     static func standing(game: GameBlock, seen: Set<String>, daysAway: Int?) -> [GuideEvent] {
         var discoveries: [GuideEvent] = []
-        if game.level.level >= 2 {
-            discoveries.append(.firstLevel(level: game.level.level, pointsToNext: game.level.pointsToNext))
+        let shown = game.level.shown
+        if shown.level >= 2 {
+            discoveries.append(.firstLevel(level: shown.level, pointsToNext: shown.pointsToNext))
         }
         if tierIndex(game) >= 1 {
-            discoveries.append(.newTier(tier: game.level.tier, nextTierLevel: nextTierLevel(game)))
+            discoveries.append(.newTier(tier: shown.tier, nextTierLevel: nextTierLevel(after: shown.tier)))
         }
         if game.missions.unlocked {
             discoveries.append(.missionsUnlocked)
         }
         if game.mint.canMint && game.mint.number == 1 {
-            discoveries.append(.firstMintPossible(price: game.mint.price, levelsLost: game.mint.levelsLost,
+            discoveries.append(.firstMintPossible(price: game.mint.price, levelsLost: game.mint.shownLevels.levelsLost,
                                                   gloryGain: game.mint.gloryGained))
         }
         if game.glory.rank != .murmure {
@@ -77,7 +82,7 @@ enum GameGuideEvents {
         if let tier = game.treasury.tier {
             discoveries.append(.treasuryTier(tier: tier, nextTierMissing: game.treasury.next?.missing))
         }
-        if game.level.level == 100 {
+        if shown.level >= GameLevels.prestigeLevel {
             discoveries.append(.level100(canPrestige: game.level.canPrestige))
         }
 
@@ -99,18 +104,20 @@ enum GameGuideEvents {
     /// c'est lui qui dit « 11 actions pour le rallumer ». Absent (serveur sans points par axe), rien n'est annoncé.
     static func transitions(from before: GameBlock, to after: GameBlock, badgeImpactBefore: MintBadgeImpact? = nil) -> [GuideEvent] {
         var events: [GuideEvent] = []
-        if before.level.level < 2 && after.level.level >= 2 {
-            events.append(.firstLevel(level: after.level.level, pointsToNext: after.level.pointsToNext))
+        let shownBefore = before.level.shown
+        let shownAfter = after.level.shown
+        if shownBefore.level < 2 && shownAfter.level >= 2 {
+            events.append(.firstLevel(level: shownAfter.level, pointsToNext: shownAfter.pointsToNext))
         }
         if tierIndex(after) > tierIndex(before) {
-            events.append(.newTier(tier: after.level.tier, nextTierLevel: nextTierLevel(after)))
+            events.append(.newTier(tier: shownAfter.tier, nextTierLevel: nextTierLevel(after: shownAfter.tier)))
         }
         if !before.missions.unlocked && after.missions.unlocked {
             events.append(.missionsUnlocked)
         }
         if before.mint.number == 1 && after.mint.number == 2 {
-            events.append(.firstMint(levelBefore: before.level.level, levelAfter: after.level.level,
-                                     tailwindUntilLevel: after.level.record))
+            events.append(.firstMint(levelBefore: shownBefore.level, levelAfter: shownAfter.level,
+                                     tailwindUntilLevel: shownAfter.record))
         }
         if after.mint.price > before.mint.price {
             events.append(.priceRises(nextPrice: after.mint.price))
@@ -127,7 +134,7 @@ enum GameGuideEvents {
         if before.flame.status != .out && after.flame.status == .out {
             events.append(flameOutEvent(after))
         }
-        if before.level.level < 100 && after.level.level == 100 {
+        if shownBefore.level < GameLevels.prestigeLevel && shownAfter.level >= GameLevels.prestigeLevel {
             events.append(.level100(canPrestige: after.level.canPrestige))
         }
         return events

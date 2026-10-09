@@ -22,8 +22,8 @@ import { RATE_LIMIT_REFUSAL_MESSAGE } from '@meeshy/shared/types/socketio-events
 
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
-import { noticeBroadcast } from '../../services/conversations/conversationNotice';
 import { recordContentCapture, type ContentCaptureDeps } from '../../services/messaging/contentCaptureNotices';
+import { captureNoticeDeliveryThrough } from '../../socketio/captureNoticeDelivery';
 import { CONVERSATION_CLOSED_EDIT_MESSAGE } from '../../services/messaging/messageEditAdmission';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response.js';
@@ -91,7 +91,7 @@ export function registerMessageCaptureRoutes(
           prisma,
           dedup: options.dedup ?? getCacheStore(),
           limiter: options.limiter ?? getSocketRateLimiter(),
-          broadcast: noticeBroadcast(fastify.socketIOHandler),
+          deliver: captureNoticeDeliveryThrough(fastify.socketIOHandler, prisma),
           mayRead: options.mayRead,
           now: options.now,
         },

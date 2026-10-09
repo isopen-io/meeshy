@@ -440,7 +440,7 @@ describe('SessionService', () => {
 
       mockPrisma.userSession.create.mockResolvedValueOnce(mockSession);
       mockPrisma.userSession.findMany.mockResolvedValueOnce(existingSessions);
-      mockPrisma.userSession.update.mockResolvedValue({ count: 1 });
+      mockPrisma.userSession.updateMany.mockResolvedValue({ count: 1 });
 
       const input: CreateSessionInput = {
         userId: mockUserId,
@@ -465,9 +465,10 @@ describe('SessionService', () => {
 
       // Should have invalidated the oldest session (first one in sorted array)
       // session-0 is the oldest because it has the smallest lastActivityAt
-      expect(mockPrisma.userSession.update).toHaveBeenCalled();
-      const updateCall = mockPrisma.userSession.update.mock.calls[0][0];
-      expect(updateCall.where.id).toBe('session-0');
+      // Audit A2-5 — l'invalidation ne vise qu'une session encore VIVANTE.
+      expect(mockPrisma.userSession.updateMany).toHaveBeenCalled();
+      const updateCall = mockPrisma.userSession.updateMany.mock.calls[0][0];
+      expect(updateCall.where).toEqual({ id: 'session-0', isValid: true });
       expect(updateCall.data.isValid).toBe(false);
       expect(updateCall.data.invalidatedAt).toBeInstanceOf(Date);
       expect(updateCall.data.invalidatedReason).toBe('session_limit_exceeded');
@@ -661,18 +662,13 @@ describe('SessionService', () => {
   describe('Session Management', () => {
     describe('invalidateSession', () => {
       it('should invalidate a specific session by ID', async () => {
-        mockPrisma.userSession.update.mockResolvedValueOnce({
-          ...mockSession,
-          isValid: false,
-          invalidatedAt: new Date(),
-          invalidatedReason: 'user_revoked'
-        });
+        mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 1 });
 
         const result = await invalidateSession(mockSessionId);
 
         expect(result).toBe(true);
-        expect(mockPrisma.userSession.update).toHaveBeenCalledWith({
-          where: { id: mockSessionId },
+        expect(mockPrisma.userSession.updateMany).toHaveBeenCalledWith({
+          where: { id: mockSessionId, isValid: true },
           data: {
             isValid: false,
             invalidatedAt: expect.any(Date),
@@ -682,16 +678,12 @@ describe('SessionService', () => {
       });
 
       it('should use custom reason when provided', async () => {
-        mockPrisma.userSession.update.mockResolvedValueOnce({
-          ...mockSession,
-          isValid: false,
-          invalidatedReason: 'security_concern'
-        });
+        mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 1 });
 
         await invalidateSession(mockSessionId, 'security_concern');
 
-        expect(mockPrisma.userSession.update).toHaveBeenCalledWith({
-          where: { id: mockSessionId },
+        expect(mockPrisma.userSession.updateMany).toHaveBeenCalledWith({
+          where: { id: mockSessionId, isValid: true },
           data: {
             isValid: false,
             invalidatedAt: expect.any(Date),
@@ -701,7 +693,7 @@ describe('SessionService', () => {
       });
 
       it('should return false when session not found', async () => {
-        mockPrisma.userSession.update.mockRejectedValueOnce(new Error('Not found'));
+        mockPrisma.userSession.updateMany.mockRejectedValueOnce(new Error('Not found'));
 
         const result = await invalidateSession('non-existent-session');
 
@@ -720,7 +712,7 @@ describe('SessionService', () => {
           where: {
             userId: mockUserId,
             isValid: true,
-            sessionToken: { not: expect.any(String) }
+            NOT: [{ sessionToken: mockTokenHash }]
           },
           data: {
             isValid: false,
@@ -771,10 +763,7 @@ describe('SessionService', () => {
     describe('revokeSession', () => {
       it('should verify session belongs to user before revocation', async () => {
         mockPrisma.userSession.findFirst.mockResolvedValueOnce(mockSession);
-        mockPrisma.userSession.update.mockResolvedValueOnce({
-          ...mockSession,
-          isValid: false
-        });
+        mockPrisma.userSession.updateMany.mockResolvedValueOnce({ count: 1 });
 
         const result = await revokeSession(mockUserId, mockSessionId);
 
@@ -794,7 +783,7 @@ describe('SessionService', () => {
         const result = await revokeSession(mockUserId, 'other-user-session');
 
         expect(result).toBe(false);
-        expect(mockPrisma.userSession.update).not.toHaveBeenCalled();
+        expect(mockPrisma.userSession.updateMany).not.toHaveBeenCalled();
       });
 
       it('should return false if session is already invalid', async () => {
@@ -1412,7 +1401,7 @@ describe('SessionService', () => {
 
       mockPrisma.userSession.create.mockResolvedValueOnce(mockSession);
       mockPrisma.userSession.findMany.mockResolvedValueOnce(existingSessions);
-      mockPrisma.userSession.update.mockResolvedValue({ count: 1 });
+      mockPrisma.userSession.updateMany.mockResolvedValue({ count: 1 });
 
       const input: CreateSessionInput = {
         userId: mockUserId,
@@ -1436,7 +1425,7 @@ describe('SessionService', () => {
       });
 
       // Should have invalidated the oldest session
-      expect(mockPrisma.userSession.update).toHaveBeenCalled();
+      expect(mockPrisma.userSession.updateMany).toHaveBeenCalled();
     });
 
     it('should correctly distinguish between explicitly invalidated and new sessions in cleanupExpiredSessions', async () => {

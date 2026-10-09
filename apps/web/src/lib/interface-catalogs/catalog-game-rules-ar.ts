@@ -3,9 +3,9 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const ar = {
   'game.rules.1.title': 'كل إجراء له مكافأة',
-  'game.rules.1.body': 'الكتابة والكلام والنشر والتفاعل والدعوة: كل إجراء مفيد يمنحك نقاطًا.',
+  'game.rules.1.body': 'الكتابة والكلام والنشر والتفاعل والدعوة: كل إجراء مفيد يمنحك نقاطًا. يمنح المنشور نقاطًا بحسب من يستطيع رؤيته: العامة أو المجتمع أو الأصدقاء. الحدود تعدّ إجراءاتك، لا نقاطك أبدًا: المكافآت واللهب والفعاليات تزيد ما يمنحه كل إجراء.',
   'game.rules.2.title': 'النقاط تصنع المستوى',
-  'game.rules.2.body': '100 مستوى في 10 مراحل. يتطلّب كل مستوى أكثر قليلًا من الذي قبله.',
+  'game.rules.2.body': 'مليون نقطة للمستوى 100، وخطوة كل عشرة مستويات: من دونها ينتظر المستوى. حتى 499 دون سفير، و1000 من سفير، وبلا حدّ من عرّاف. التميّز عند المستوى 100، اختياري. بعد 100: 1000 من المجد كل عشرة مستويات.',
   'game.rules.3.title': 'نسكّ Meesh',
   'game.rules.3.body': 'ابتداءً من 1٬221 نقطة، تسكّ Meesh يدويًا. يرتفع السعر مع عدد الـ Meesh المسكوكة.',
   'game.rules.4.title': 'السكّ يُنزِلك',
@@ -29,7 +29,7 @@ const ar = {
   'game.rules.atlas.rarities': 'درجات الندرة',
   'game.rules.atlas.obverse': 'الوجه',
   'game.rules.atlas.reverse': 'الظهر',
-  'game.rules.atlas.line.levels': 'مئة مستوى في عشر مراحل: لكل مرحلة شعارها ولونها.',
+  'game.rules.atlas.line.levels': 'عشرون مرحلة: عشر حتى 100، ثم واحدة لكل مئة، والتفرد من 1000.',
   'game.rules.atlas.line.meesh': 'يحمل الوجه التوقيع؛ ويحمل الظهر مي وميو والرقم والسنة. ذهب كل مئة، ومنشور كل ألف.',
   'game.rules.atlas.line.treasury': 'الاحتفاظ بعملات Meesh يملأ الكنز: ست مراحل للصعود.',
   'game.rules.atlas.line.rank': 'إحدى عشرة رتبة. يمنحها المجد، والرتبة لا تنخفض أبدًا.',
@@ -38,7 +38,7 @@ const ar = {
   'game.rules.atlas.line.medals': 'سبعة معادن، من النحاس إلى المنشور: يدل المعدن على المدى الذي بلغته. الوسام المنطفئ يترك أثرًا.',
   'game.rules.atlas.line.trophies': 'تُستلم الكأس في لحظة محددة: كأس دوري، كأس موسم، التميّز، اللهب.',
   'game.rules.atlas.line.rarities': 'خمس درجات ندرة، تُقاس كل ليلة. لا تمنح أيٌّ منها نقاطًا.',
-  'game.rules.atlas.levels': 'المراحل العشر',
+  'game.rules.atlas.levels': 'المراحل العشرون',
   'game.rules.atlas.treasury': 'درجات الخزينة',
   'game.rules.atlas.ranks': 'شارات الرتب',
   'game.rules.atlas.flames': 'اللهبات الخمسة',
@@ -59,7 +59,14 @@ const ar = {
   'game.rules.atlas.share_legendary': 'من ⁦0٫2⁩ إلى ⁦2 %⁩ من الحسابات',
   'game.rules.atlas.share_mythic': 'أقل من ⁦0٫2 %⁩ من الحسابات',
   'game.rules.atlas.rarity_glory': '⁦+{glory}⁩ مجد',
-  'game.rules.atlas.myth': 'أمجد 100 أسطورة',
+  'game.rules.atlas.myth': 'أول 100 يبلغون 1٬000٬000 من المجد',
+  'game.rules.badges.title': 'الشارات',
+  'game.rules.badges.intro': 'كل شارة تحتسب خطوة واحدة محددة: رسالة صوتية، قصة، صداقة جديدة… هناك عشرون شارة، مرتبة في خمس عائلات.',
+  'game.rules.badges.ladder': 'كل شارة ترتقي سبعة مستويات. عند كل عتبة تتجاوزها، تتغير مادتها وتُضاء نجمة أخرى.',
+  'game.rules.badges.ribbon': 'ابتداءً من الذهب، تحمل الميدالية شريطًا؛ وفي المنشور، يتلألأ مينائها.',
+  'game.rules.badges.imprint': 'سكّ Meesh قد يُطفئ شارة: تصبح أثرًا يقول ما ينقص لإعادة إضاءتها.',
+  'game.rules.badges.families': 'الشارات العشرون، حسب العائلة',
+  'game.rules.badges.sheet': 'المس شارة: بطاقتها تقول ما يُحتسب لها، ومادتها ولماذا، وما ينقص للنجمة التالية.',
 } as const satisfies GameRulesCatalog;
 
 export default ar;

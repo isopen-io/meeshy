@@ -144,8 +144,9 @@ class Model {
     return found.slice(0, args.take ?? found.length).map((row) => this.read(row, args.select));
   }
 
-  async count(args: { where?: Where } = {}) {
-    return this.rows.filter((row) => matches(row, args.where ?? {})).length;
+  async count(args: { where?: Where; take?: number } = {}) {
+    const found = this.rows.filter((row) => matches(row, args.where ?? {})).length;
+    return args.take === undefined ? found : Math.min(args.take, found);
   }
 
   async update(args: { where: Where; data: Record<string, unknown>; select?: Record<string, boolean> }) {

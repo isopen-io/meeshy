@@ -9,6 +9,17 @@ import MeeshySDK
 @MainActor
 final class ReceivedMediaAutoSaverTests: XCTestCase {
 
+    /// #9685 — l'image reçue part PAR FICHIER : ni relue en octets, ni décodée.
+    func test_albumWriter_savesTheImageByFile_neverReadsItsBytes() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/ReceivedMediaAutoSaver.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        XCTAssertTrue(code.contains("PhotoLibraryManager.shared.saveImageFile(at: file)"))
+        XCTAssertFalse(code.contains("Data(contentsOf: file)"))
+    }
+
     // MARK: - Fabriques
 
     private func photo(_ id: String = "p1", isBlurred: Bool = false, isViewOnce: Bool = false) -> MessageAttachment {

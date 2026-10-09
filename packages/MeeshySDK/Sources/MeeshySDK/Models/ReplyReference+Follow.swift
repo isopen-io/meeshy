@@ -117,4 +117,33 @@ public extension ReplyReference {
         }
         return quotedExitNature == .ordinary
     }
+
+    /// **La citation porte-t-elle un contenu PROTÉGÉ ?** (#9573, décision
+    /// porteur du 2026-10-08)
+    ///
+    /// Citer un contenu protégé reste permis, et la contagion de protection des
+    /// réponses s'applique ; mais « Imager » — et « Imager la discussion » qui
+    /// contient la réponse — ne s'offre pas : la carte est la seule sortie qui
+    /// peigne la citation. Protégé = ce que `quotedContentMayLeave` refuse
+    /// (flamme, flamme après lecture, vue unique, flou, nature non déclarée),
+    /// FERMÉ PAR DÉFAUT.
+    ///
+    /// Deux citations n'en relèvent pas : celle d'une story ou d'une humeur (elle
+    /// ne cite pas un message), et celle d'un message SUPPRIMÉ, qui ne porte plus
+    /// rien de lui. Une citation scellée parce que le cité ÉPHÉMÈRE a expiré
+    /// (`isQuotedMessageExpired`) reste, elle, celle d'une flamme.
+    func quotesProtectedContent(quotedMessage: MeeshyMessage?) -> Bool {
+        guard !isStoryReply, moodEmoji == nil else { return false }
+        if isQuotedMessageDeleted { return isQuotedMessageExpired }
+        return !quotedContentMayLeave(quotedMessage: quotedMessage)
+    }
+}
+
+public extension MeeshyMessage {
+    /// Le message CITE-t-il un contenu protégé ? — jugé sur ce que la citation
+    /// déclare (`ReplyReference.quotesProtectedContent`). Un message qui ne cite
+    /// rien ne cite rien de protégé.
+    var quotesProtectedContent: Bool {
+        replyTo?.quotesProtectedContent(quotedMessage: nil) ?? false
+    }
 }

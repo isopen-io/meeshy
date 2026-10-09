@@ -153,7 +153,7 @@ public struct DrawnMission: Sendable, Equatable {
     public let target: Int
     /// Points crédités à la validation, bonus de Flamme compris.
     public let reward: Int
-    /// Gloire de la mission : `GameMissions.glory(of:)`, lue dans `GameGlory.points`.
+    /// Gloire de la mission : `GameGlory.missionGlory(_:)`, selon la difficulté.
     public let glory: Int
 
     public init(difficulty: MissionDifficulty, templateKey: String, signal: MissionSignal, prism: Bool,
@@ -233,22 +233,22 @@ public enum GameMissions {
 
     /// Le catalogue (#9635) — MIROIR de `packages/shared/utils/game/mission-catalog.ts`, dans le même ordre.
     public static let templates: [MissionTemplate] = [
-        t("send-texts", .easy, .animate, .axis(.textMessage), base: 5, min: 1, max: 15, unit: 12),
+        t("send-texts", .easy, .animate, .axis(.textMessage), base: 5, min: 1, max: 15, unit: 15),
         t("send-attachments", .easy, .animate, .axis(.attachment), base: 2, min: 1, max: 6, unit: 16),
         t("react-messages", .easy, .animate, .axis(.reaction), base: 5, min: 1, max: 15, unit: 8, requires: [.contacts]),
         t("react-posts", .easy, .animate, .operation("tool.post_reaction"), base: 5, min: 1, max: 15, unit: 6),
         t("use-stickers", .easy, .animate, .axis(.sticker), base: 2, min: 1, max: 6, unit: 6),
-        t("comment-text", .medium, .animate, .commentOthersPost, base: 3, min: 1, max: 6, unit: 12),
-        t("publish-story", .medium, .animate, .axis(.story), base: 1, min: 1, max: 2, unit: 40),
-        t("publish-post", .medium, .animate, .axis(.post), base: 1, min: 1, max: 1, unit: 40),
+        t("comment-text", .medium, .animate, .commentOthersPost, base: 3, min: 1, max: 6, unit: 190),
+        t("publish-story", .medium, .animate, .axis(.story), base: 1, min: 1, max: 2, unit: 560),
+        t("publish-post", .medium, .animate, .axis(.post), base: 1, min: 1, max: 1, unit: 920),
         t("reply-story", .medium, .animate, .storyReply, base: 1, min: 1, max: 3, unit: 15, requires: [.contacts]),
         t("reply-conversations", .medium, .animate, .replyDistinctConversations, base: 3, min: 1, max: 4, unit: 15,
           requires: [.contacts]),
         t("join-community", .medium, .animate, .operation("social.community_joined"), base: 1, min: 1, max: 1, unit: 15),
         t("long-chat", .hard, .animate, .axis(.textMessage), base: 10, min: 3, max: 40, unit: 12),
-        t("publish-posts", .hard, .animate, .axis(.post), base: 2, min: 2, max: 3, unit: 40),
-        t("publish-reel", .hard, .animate, .reelPublished, base: 1, min: 1, max: 1, unit: 250),
-        t("voice-comments", .hard, .animate, .axis(.audioComment), base: 2, min: 1, max: 3, unit: 20),
+        t("publish-posts", .hard, .animate, .axis(.post), base: 2, min: 2, max: 3, unit: 950),
+        t("publish-reel", .hard, .animate, .reelPublished, base: 1, min: 1, max: 1, unit: 1840),
+        t("voice-comments", .hard, .animate, .axis(.audioComment), base: 2, min: 1, max: 3, unit: 150),
         t("reply-conversations-wide", .hard, .animate, .replyDistinctConversations, base: 6, min: 2, max: 8, unit: 15,
           requires: [.activeConversations]),
         t("gold-reply-conversations", .gold, .animate, .replyDistinctConversations, base: 8, min: 3, max: 12, unit: 15,
@@ -261,7 +261,7 @@ public enum GameMissions {
         t("start-conversation", .medium, .courage, .conversationStarted, base: 1, min: 1, max: 2, unit: 25),
         t("community-hello", .medium, .courage, .axis(.communityConversation), base: 1, min: 1, max: 2, unit: 20,
           requires: [.communities]),
-        t("comment-stranger-post", .medium, .courage, .commentStrangerPublicPost, base: 1, min: 1, max: 3, unit: 20),
+        t("comment-stranger-post", .medium, .courage, .commentStrangerPublicPost, base: 1, min: 1, max: 3, unit: 175),
 
         t("prism-foreign-messages", .medium, .languages, .foreignLanguageMessage, base: 2, min: 1, max: 6, unit: 15,
           prism: true, requires: [.multilingual]),
@@ -286,8 +286,11 @@ public enum GameMissions {
             + templates.filter { $0.difficulty == .hard }.map { $0.promoted(to: .gold) }
     }
 
+    /// Le niveau au-delà duquel les missions ne grandissent plus : les niveaux s'ouvrent au-delà de 100 (#9688), l'effort d'une mission du jour non.
+    public static let scaleMaxLevel = 100
+
     private static func clampLevel(_ level: Int) -> Int {
-        min(GameLevels.maxLevel, max(GameLevels.minLevel, level))
+        min(scaleMaxLevel, max(GameLevels.minLevel, level))
     }
 
     /// bande = ⌊niveau ÷ 10⌋.
@@ -321,9 +324,9 @@ public enum GameMissions {
         )
     }
 
-    /// La Gloire d'un défi : l'Or et « faire connaître » en portent ; le montant se lit dans `GameGlory.points`.
+    /// La Gloire d'un défi : celle de sa difficulté (`GameGlory.missionGlory`, 40 / 100 / 250 / 500).
     public static func glory(of template: MissionTemplate) -> Int {
-        template.difficulty == .gold || template.goal == .reach ? GameGlory.points.goldMission : 0
+        GameGlory.missionGlory(template.difficulty)
     }
 
     /// Un tirage pondéré : une valeur du générateur ; à poids égaux, le même indice que `pickIndex`.

@@ -293,26 +293,35 @@ final class DiskCacheStoreTests: XCTestCase {
 
     // MARK: - warmedImage (#3897: cost-aware promotion, not a bare setObject)
 
-    /// `warmedImage`'s disk→NSCache promotion used a BARE `setObject` (cost
-    /// `0`), invisible to `_imageCache.totalCostLimit`'s eviction accounting
-    /// — `cacheIfWithinBudget`'s own doc-comment claimed `warmedImage`
-    /// "already" shared this budget guard, but it never did. Poster images
-    /// (~8 MB decoded, feature "plein écran net" #3871) flow through
-    /// EXACTLY this path via `CacheCoordinator.warmedImage`. Fixed to route
-    /// through `cacheIfWithinBudget`, the same cost-aware insertion every
-    /// other writer already uses — an oversized bitmap is still RETURNED
-    /// (the caller displays it once) but never retained.
-    func test_warmedImage_oversizedFile_isReturnedOnceButNeverPromotedIntoTheCache() async {
+    /// #9685 — `warmedImage` décodait l'image PLEINE (`UIImage(contentsOfFile:)`,
+    /// 4000 px ≈ 61 Mo, au premier dessin sur le fil principal) puis devait la
+    /// refuser au cache. Elle est désormais RÉDUITE À LA SOURCE à la hauteur d'un
+    /// écran (`warmedPixelCap`) : ce qui revient tient dans le budget, et se
+    /// promeut pour la lecture synchrone suivante.
+    func test_warmedImage_aHugeFile_isDecodedDownsampledAtTheSource_andPromoted() async throws {
         let store = makeStore()
-        let image = makeSolidImage(width: 4000, height: 4000) // ~61 MB decoded
-        let key = "https://example.com/warmed-oversized-\(UUID().uuidString).jpg"
-        await store.save(image.pngData()!, for: key)
+        let image = makeSolidImage(width: 4000, height: 3000)
+        let key = "https://example.com/warmed-huge-\(UUID().uuidString).jpg"
+        await store.save(image.jpegData(compressionQuality: 0.8)!, for: key)
 
-        let warmed = store.warmedImage(for: key)
+        let warmed = try XCTUnwrap(store.warmedImage(for: key))
 
-        XCTAssertNotNil(warmed, "the caller still gets the image once, for a single display")
-        XCTAssertNil(DiskCacheStore.cachedImage(for: key),
-                     "an oversized bitmap must not have been promoted into the shared NSCache")
+        let cg = try XCTUnwrap(warmed.cgImage)
+        XCTAssertEqual(max(cg.width, cg.height), Int(DiskCacheStore.warmedPixelCap),
+                       "le plus grand côté est borné au plafond, jamais les 4000 px de la source")
+        XCTAssertNotNil(DiskCacheStore.cachedImage(for: key), "réduite, elle tient dans le budget")
+    }
+
+    /// #9685 — le chemin des listes : une source de 4000 px demandée pour une
+    /// vignette affichée à 128 pt × 2 se décode à 256 px, pas à 4000.
+    func test_downsampledImage_aFourThousandPixelSource_decodesAtTheDisplayedSize() throws {
+        let data = try XCTUnwrap(makeSolidImage(width: 4000, height: 3000).jpegData(compressionQuality: 0.8))
+
+        let image = try XCTUnwrap(DiskCacheStore.downsampledImage(data: data, maxPixelSize: 256))
+
+        let cg = try XCTUnwrap(image.cgImage)
+        XCTAssertEqual(max(cg.width, cg.height), 256)
+        XCTAssertEqual(min(cg.width, cg.height), 192, "le rapport 4:3 est gardé")
     }
 
     /// Symmetric: a reasonably-sized disk hit IS promoted, so the next

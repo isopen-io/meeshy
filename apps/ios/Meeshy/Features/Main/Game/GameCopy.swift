@@ -65,6 +65,11 @@ enum GameCopy {
             : String(localized: "game.actions.other", defaultValue: "\(number) actions", bundle: .main)
     }
 
+    /// « Changer · 1 Meesh » — le prix vient de la loi (`GameMissions.rerollPrice`), jamais du texte (#9705).
+    static var rerollLabel: String {
+        String(localized: "game.mission.reroll", defaultValue: "Changer · \(meeshes(GameMissions.rerollPrice))", bundle: .main)
+    }
+
     static func levels(_ count: Int) -> String {
         let number = formatCount(count)
         return isSingular(count)
@@ -86,6 +91,16 @@ enum GameCopy {
         case .etoile: String(localized: "game.tier.etoile", defaultValue: "Étoile", bundle: .main)
         case .constellation: String(localized: "game.tier.constellation", defaultValue: "Constellation", bundle: .main)
         case .galaxie: String(localized: "game.tier.galaxie", defaultValue: "Galaxie", bundle: .main)
+        case .nebuleuse: String(localized: "game.tier.nebuleuse", defaultValue: "Nébuleuse", bundle: .main)
+        case .pulsar: String(localized: "game.tier.pulsar", defaultValue: "Pulsar", bundle: .main)
+        case .quasar: String(localized: "game.tier.quasar", defaultValue: "Quasar", bundle: .main)
+        case .supernova: String(localized: "game.tier.supernova", defaultValue: "Supernova", bundle: .main)
+        case .magnetar: String(localized: "game.tier.magnetar", defaultValue: "Magnétar", bundle: .main)
+        case .amas: String(localized: "game.tier.amas", defaultValue: "Amas", bundle: .main)
+        case .superamas: String(localized: "game.tier.superamas", defaultValue: "Superamas", bundle: .main)
+        case .cosmos: String(localized: "game.tier.cosmos", defaultValue: "Cosmos", bundle: .main)
+        case .infini: String(localized: "game.tier.infini", defaultValue: "Infini", bundle: .main)
+        case .singularite: String(localized: "game.tier.singularite", defaultValue: "Singularité", bundle: .main)
         }
     }
 
@@ -103,7 +118,49 @@ enum GameCopy {
         case .etoile: String(localized: "game.tier.ordinal.8", defaultValue: "huitième", bundle: .main)
         case .constellation: String(localized: "game.tier.ordinal.9", defaultValue: "neuvième", bundle: .main)
         case .galaxie: String(localized: "game.tier.ordinal.10", defaultValue: "dixième", bundle: .main)
+        case .nebuleuse: String(localized: "game.tier.ordinal.11", defaultValue: "onzième", bundle: .main)
+        case .pulsar: String(localized: "game.tier.ordinal.12", defaultValue: "douzième", bundle: .main)
+        case .quasar: String(localized: "game.tier.ordinal.13", defaultValue: "treizième", bundle: .main)
+        case .supernova: String(localized: "game.tier.ordinal.14", defaultValue: "quatorzième", bundle: .main)
+        case .magnetar: String(localized: "game.tier.ordinal.15", defaultValue: "quinzième", bundle: .main)
+        case .amas: String(localized: "game.tier.ordinal.16", defaultValue: "seizième", bundle: .main)
+        case .superamas: String(localized: "game.tier.ordinal.17", defaultValue: "dix-septième", bundle: .main)
+        case .cosmos: String(localized: "game.tier.ordinal.18", defaultValue: "dix-huitième", bundle: .main)
+        case .infini: String(localized: "game.tier.ordinal.19", defaultValue: "dix-neuvième", bundle: .main)
+        case .singularite: String(localized: "game.tier.ordinal.20", defaultValue: "vingtième", bundle: .main)
         }
+    }
+
+    // MARK: - Le plafond du niveau (#9688)
+
+    /// Le rang qui OUVRE les niveaux au-delà de ce plafond — dérivé de la loi (`GameGlory.levelCap(forRank:)`) :
+    /// le premier rang dont le plafond dépasse celui-ci. Ambassadeur au-delà de 499, Oracle au-delà de 1000 ;
+    /// `nil` sans plafond (sans limite, ou un serveur antérieur qui ne le dit pas).
+    static func rankOpening(beyond cap: Int?) -> GloryRank? {
+        guard let cap else { return nil }
+        return GloryRank.ladder.first { rank in GameGlory.levelCap(forRank: rank).map { $0 > cap } ?? true }
+    }
+
+    /// La phrase d'un niveau qui ne monte plus : au plafond de son rang, elle nomme le rang qui ouvre la suite ;
+    /// sans plafond connu (serveur antérieur, qui s'arrêtait à 100), il est au sommet.
+    static func levelTop(cap: Int?) -> String {
+        guard let cap, let rank = rankOpening(beyond: cap) else {
+            return String(localized: "game.level.top", defaultValue: "Tu es au sommet.", bundle: .main)
+        }
+        let capText = formatCount(cap)
+        let name = rankName(rank)
+        return String(
+            localized: "game.level.cap.reached",
+            defaultValue: "Niveau \(capText) : le plus haut que ton rang ouvre. Le rang \(name) ouvre la suite.",
+            bundle: .main
+        )
+    }
+
+    /// La version courte, pour une puce ou le fait « Prochain niveau » : « s’ouvre au rang Ambassadeur », ou « au sommet ».
+    static func levelTopShort(cap: Int?) -> String {
+        guard let rank = rankOpening(beyond: cap) else { return GameText.bannerTop }
+        let name = rankName(rank)
+        return String(localized: "game.level.cap.short", defaultValue: "s’ouvre au rang \(name)", bundle: .main)
     }
 
     /// Ce que VoiceOver lit sur l'anneau de niveau : « Niveau 34, palier Éclat, quatrième palier ».
@@ -111,6 +168,72 @@ enum GameCopy {
         String(
             localized: "game.level.ring.a11y",
             defaultValue: "Niveau \(formatCount(level)), palier \(tierName(tier)), \(tierOrdinal(tier)) palier",
+            bundle: .main
+        )
+    }
+
+    // MARK: - Les étapes des niveaux (#9706)
+    //
+    // MIROIR des clés `game.level.step.*` et `game.level.held` du web (`catalog-game-concept-<langue>.ts`) : la MÊME
+    // phrase dans les sept langues. Ce qu'une étape demande se dit à l'infinitif, en minuscule : il entre dans une
+    // phrase (« Étape du niveau 10 : frapper ta première Meesh »).
+
+    /// Ce que l'étape demande — le nom du rang vient des noms de rang, jamais reformulé.
+    static func levelStepGoal(_ step: GameLevelStep) -> String {
+        let count = formatCount(step.target)
+        switch step.kind {
+        case .mint:
+            return step.target == 1
+                ? String(localized: "game.level.step.mint_one", defaultValue: "frapper ta première Meesh", bundle: .main)
+                : String(localized: "game.level.step.mint_many", defaultValue: "frapper \(count) Meeshes", bundle: .main)
+        case .missions:
+            return step.target == 1
+                ? String(localized: "game.level.step.missions_one", defaultValue: "accomplir une mission du jour", bundle: .main)
+                : String(localized: "game.level.step.missions_many", defaultValue: "accomplir \(count) missions du jour", bundle: .main)
+        case .flame:
+            return String(localized: "game.level.step.flame", defaultValue: "tenir une Flamme de \(count) jours", bundle: .main)
+        case .rank:
+            let ruled: GloryRank? = GameLevelSteps.rules.first(where: { $0.level == step.level })?.rank
+            let rank = rankName(step.rank ?? ruled ?? .echo)
+            return String(localized: "game.level.step.rank", defaultValue: "atteindre le rang \(rank)", bundle: .main)
+        }
+    }
+
+    /// « Étape du niveau 10 : frapper ta première Meesh ».
+    static func levelStepLine(_ step: GameLevelStep) -> String {
+        let level = formatCount(step.level)
+        let what = levelStepGoal(step)
+        return String(localized: "game.level.step.line", defaultValue: "Étape du niveau \(level) : \(what)", bundle: .main)
+    }
+
+    static var levelStepDone: String {
+        String(localized: "game.level.step.done", defaultValue: "faite", bundle: .main)
+    }
+
+    /// Où en est l'étape : « 0 / 1 » ; pour un rang, la Gloire « Gloire 1 200 / 2 000 ».
+    static func levelStepProgress(_ step: GameLevelStep) -> String {
+        let ratio = ConceptText.ratio(formatCount(min(step.current, step.target)), formatCount(step.target))
+        guard step.kind == .rank else { return ratio }
+        return String(localized: "game.rank.glory", defaultValue: "Gloire \(ratio)", bundle: .main)
+    }
+
+    /// L'état de l'étape en une ligne : « faite », ou où elle en est.
+    static func levelStepState(_ step: GameLevelStep) -> String {
+        step.met ? levelStepDone : levelStepProgress(step)
+    }
+
+    /// Ce que VoiceOver dit de l'étape : la ligne, puis son état.
+    static func levelStepAccessibility(_ step: GameLevelStep) -> String {
+        levelStepLine(step) + ", " + levelStepState(step)
+    }
+
+    /// Pourquoi le niveau attend : les points sont là, l'étape manque.
+    static func levelHeld(_ step: GameLevelStep) -> String {
+        let what = levelStepGoal(step)
+        let level = formatCount(step.level)
+        return String(
+            localized: "game.level.held",
+            defaultValue: "Tes points ouvrent déjà la suite : \(what) pour passer le niveau \(level).",
             bundle: .main
         )
     }
@@ -153,8 +276,31 @@ enum GameCopy {
     }
 
     static func rankLabel(_ rank: GloryRank, division: GloryDivision?) -> String {
-        guard let division else { return rankName(rank) }
-        return "\(rankName(rank)) \(divisionLabel(division))"
+        rankLabel(rank, division5: division.map(GloryDivision5.init(legacy:)))
+    }
+
+    /// Le rang et sa division V–I (#9636) ; le Mythe dit sa PLACE quand le serveur la sert : « Mythe n° 42 ».
+    static func rankLabel(_ rank: GloryRank, division5: GloryDivision5?, mythic: MythicSeatRef? = nil) -> String {
+        if rank == .mythe, let mythic, mythic.isValid {
+            return mythicSeatLabel(seat: mythic.number)
+        }
+        guard let division5 else { return rankName(rank) }
+        return "\(rankName(rank)) \(division5.roman)"
+    }
+
+    /// Le rang servi par le bloc du jeu : division V–I, ou « Mythe n° 42 ».
+    static func rankLabel(_ glory: GameBlock.Glory) -> String {
+        rankLabel(glory.rank, division5: glory.shownDivision, mythic: glory.mythicSeat)
+    }
+
+    /// Le rang d'un autre, tel que son profil le montre.
+    static func rankLabel(_ standing: GameStanding) -> String {
+        rankLabel(standing.rank, division5: standing.shownDivision, mythic: standing.mythic)
+    }
+
+    static func mythicSeatLabel(seat: Int) -> String {
+        let value = formatCount(seat)
+        return String(localized: "game.rank.mythe_seat", defaultValue: "Mythe n° \(value)", bundle: .main)
     }
 
     static func treasuryName(_ tier: TreasuryTierKey) -> String {
@@ -222,12 +368,16 @@ enum GameCopy {
             return one
                 ? String(localized: "game.mission.send_attachments.one", defaultValue: "Envoyer une pièce jointe", bundle: .main)
                 : String(localized: "game.mission.send_attachments.other", defaultValue: "Envoyer \(n) pièces jointes", bundle: .main)
-        case "reply-conversations", "reply-conversations-wide", "gold-reply-conversations", "duo-replies":
+        case "duo-replies":
             return String(localized: "game.mission.reply_conversations", defaultValue: "Répondre dans \(n) conversations différentes", bundle: .main)
+        case "reply-conversations", "reply-conversations-wide", "gold-reply-conversations":
+            return one
+                ? String(localized: "game.mission.write_conversations.one", defaultValue: "Écrire dans une conversation", bundle: .main)
+                : String(localized: "game.mission.write_conversations.other", defaultValue: "Écrire dans \(n) conversations différentes", bundle: .main)
         case "comment-text":
             return one
-                ? String(localized: "game.mission.comment_text.one", defaultValue: "Écrire un commentaire", bundle: .main)
-                : String(localized: "game.mission.comment_text.other", defaultValue: "Écrire \(n) commentaires", bundle: .main)
+                ? String(localized: "game.mission.comment_text.one", defaultValue: "Commenter le post de quelqu’un", bundle: .main)
+                : String(localized: "game.mission.comment_text.other", defaultValue: "Commenter \(n) posts des autres", bundle: .main)
         case "publish-story", "duo-stories":
             return one
                 ? String(localized: "game.mission.publish_story.one", defaultValue: "Publier une story", bundle: .main)
@@ -238,8 +388,8 @@ enum GameCopy {
                 : String(localized: "game.mission.publish_post.other", defaultValue: "Publier \(n) posts", bundle: .main)
         case "share-link":
             return one
-                ? String(localized: "game.mission.share_link.one", defaultValue: "Partager un lien", bundle: .main)
-                : String(localized: "game.mission.share_link.other", defaultValue: "Partager \(n) liens", bundle: .main)
+                ? String(localized: "game.mission.share_link.one", defaultValue: "Partager un post", bundle: .main)
+                : String(localized: "game.mission.share_link.other", defaultValue: "Partager \(n) posts", bundle: .main)
         case "prism-foreign-messages", "duo-prism":
             return one
                 ? String(localized: "game.mission.prism_foreign_messages.one", defaultValue: "Écrire un message dans une autre langue que la tienne", bundle: .main)
@@ -258,6 +408,54 @@ enum GameCopy {
             return String(localized: "game.mission.long_chat", defaultValue: "Envoyer \(n) messages", bundle: .main)
         case "gold-replies-received":
             return String(localized: "game.mission.gold_replies_received", defaultValue: "Recevoir des réponses de \(n) personnes différentes", bundle: .main)
+        case "react-posts":
+            return one
+                ? String(localized: "game.mission.react_posts.one", defaultValue: "Réagir à un post", bundle: .main)
+                : String(localized: "game.mission.react_posts.other", defaultValue: "Réagir à \(n) posts", bundle: .main)
+        case "reply-story":
+            return one
+                ? String(localized: "game.mission.reply_story.one", defaultValue: "Répondre à une story", bundle: .main)
+                : String(localized: "game.mission.reply_story.other", defaultValue: "Répondre à \(n) stories", bundle: .main)
+        case "join-community":
+            return one
+                ? String(localized: "game.mission.join_community.one", defaultValue: "Rejoindre une communauté", bundle: .main)
+                : String(localized: "game.mission.join_community.other", defaultValue: "Rejoindre \(n) communautés", bundle: .main)
+        case "write-someone-new":
+            return one
+                ? String(localized: "game.mission.write_someone_new.one", defaultValue: "Écrire à quelqu’un pour la première fois", bundle: .main)
+                : String(localized: "game.mission.write_someone_new.other", defaultValue: "Écrire à \(n) personnes pour la première fois", bundle: .main)
+        case "start-conversation":
+            return one
+                ? String(localized: "game.mission.start_conversation.one", defaultValue: "Démarrer une conversation", bundle: .main)
+                : String(localized: "game.mission.start_conversation.other", defaultValue: "Démarrer \(n) conversations", bundle: .main)
+        case "community-hello":
+            return one
+                ? String(localized: "game.mission.community_hello.one", defaultValue: "Te présenter dans une communauté", bundle: .main)
+                : String(localized: "game.mission.community_hello.other", defaultValue: "Te présenter dans \(n) communautés", bundle: .main)
+        case "comment-stranger-post":
+            return one
+                ? String(localized: "game.mission.comment_stranger_post.one", defaultValue: "Commenter le post public de quelqu’un que tu ne connais pas", bundle: .main)
+                : String(localized: "game.mission.comment_stranger_post.other", defaultValue: "Commenter \(n) posts publics de personnes que tu ne connais pas", bundle: .main)
+        case "cross-language-chat":
+            return one
+                ? String(localized: "game.mission.cross_language_chat.one", defaultValue: "Échanger avec quelqu’un qui parle une autre langue", bundle: .main)
+                : String(localized: "game.mission.cross_language_chat.other", defaultValue: "Échanger avec \(n) personnes qui parlent une autre langue", bundle: .main)
+        case "reply-their-language":
+            return one
+                ? String(localized: "game.mission.reply_their_language.one", defaultValue: "Répondre à quelqu’un dans sa langue", bundle: .main)
+                : String(localized: "game.mission.reply_their_language.other", defaultValue: "Répondre \(n) fois à quelqu’un dans sa langue", bundle: .main)
+        case "create-invite-link":
+            return one
+                ? String(localized: "game.mission.create_invite_link.one", defaultValue: "Créer ton lien d’invitation", bundle: .main)
+                : String(localized: "game.mission.create_invite_link.other", defaultValue: "Créer \(n) liens d’invitation", bundle: .main)
+        case "invite-contact":
+            return one
+                ? String(localized: "game.mission.invite_contact.one", defaultValue: "Inviter un contact sur Meeshy", bundle: .main)
+                : String(localized: "game.mission.invite_contact.other", defaultValue: "Inviter \(n) contacts sur Meeshy", bundle: .main)
+        case "invite-joined":
+            return one
+                ? String(localized: "game.mission.invite_joined.one", defaultValue: "Faire rejoindre Meeshy à une personne invitée", bundle: .main)
+                : String(localized: "game.mission.invite_joined.other", defaultValue: "Faire rejoindre Meeshy à \(n) personnes invitées", bundle: .main)
         default:
             return String(localized: "game.mission.generic", defaultValue: "Mission du jour", bundle: .main)
         }

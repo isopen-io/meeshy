@@ -6,7 +6,7 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { levelThreshold } from '@meeshy/shared/utils/game/levels';
 
-import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 
 import {
   afterAbandon,
@@ -22,6 +22,7 @@ import {
   withShowcaseOrder,
   withVisibility,
 } from './game-optimistic-v2';
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 
 /**
  * LES MISES À JOUR OPTIMISTES DE LA VAGUE 2 (#9481) — pures : une NOUVELLE valeur,
@@ -148,7 +149,7 @@ describe('la vitrine et la visibilité', () => {
 });
 
 describe('le Prestige', () => {
-  const atTop = (): EngagementWithGame => ({ ...base, game: gameBlockWithExtrasFixture({ score: levelThreshold(100) + 40, prestige: 1 }) });
+  const atTop = (): EngagementWithGame => ({ ...base, game: gameBlockWithExtrasFixture({ ...ALL_LEVEL_STEPS, score: levelThreshold(100) + 40, prestige: 1, levelRecord: 100 }) });
 
   test('le niveau et le score repartent, l’étoile se pose, la Gloire monte, le trophée entre dans la vitrine', () => {
     const before = atTop();
@@ -156,7 +157,7 @@ describe('le Prestige', () => {
     const next = afterPrestige(before);
     expect(next.game?.level).toMatchObject({ level: 1, score: 0, record: 1, prestige: 2, canPrestige: false });
     expect(next.game?.prestige).toMatchObject({ stars: 2, canPrestige: false });
-    expect(next.game?.glory.glory).toBe((before.game?.glory.glory ?? 0) + 1000);
+    expect(next.game?.glory.glory).toBe((before.game?.glory.glory ?? 0) + GLORY_POINTS.prestige);
     expect(next.game?.trophies?.items.map((item) => item.key)).toContain('trophy.prestige.2');
     expect(next.game?.trophies?.order[0]).toBe('trophy.prestige.2');
   });

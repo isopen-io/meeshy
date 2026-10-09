@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { UnifiedAuthRequest, requireEmailVerification } from '../../middleware/auth';
+import { UnifiedAuthRequest, requireShareLinkGrace } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
   errorResponseSchema
@@ -32,6 +32,7 @@ import { performLinkJoin, resolveClientIp } from './link-admission';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
@@ -187,8 +188,8 @@ export function registerSharingRoutes(
     // (auth, rang) pour que l'annonce parte même sur un refus — l'appelant
     // qui échoue est celui qui a le plus besoin de savoir migrer.
     onRequest: [depreciee({ depuis: '2026-08-29', successeur: apiPath('/links') })],
-    // #6437 — même porte que POST /links, dont cet alias délègue à la même mine.
-    preValidation: [requiredAuth, requireEmailVerification]
+    // #9713 — même porte que POST /links, dont cet alias délègue à la même mine.
+    preValidation: [requiredAuth, requireShareLinkGrace]
   }, async (request, reply) => {
     try {
       const { id } = request.params;
@@ -796,6 +797,7 @@ export function registerSharingRoutes(
           displayName: true,
           firstName: true,
           lastName: true,
+          ...RECIPIENT_LANG_SELECT,
           deactivatedAt: true
         }
       });
@@ -843,6 +845,9 @@ export function registerSharingRoutes(
         type: 'user',
         displayName: userToInvite.displayName || userToInvite.username,
         role: 'member',
+        // #9711 — la langue de l'INVITÉ, descendue de son prisme, jamais le
+        // défaut `"en"` du schéma.
+        language: recipientLanguage(userToInvite, 'fr'),
         permissions: { ...NEW_MEMBER_PERMISSIONS }
       };
 
@@ -891,6 +896,7 @@ export function registerSharingRoutes(
       if (entry.outcome === 'rejoin' && entry.participantId) {
         invalidateParticipantLookup(entry.participantId, conversationId);
       }
+      announceConversationLanguageChange({ kind: 'arrival', conversationId, language: invitedMemberFields.language });
 
       // `social.conversation_invite` (#8959) — même crédit que
       // `POST …/participants` : une fois par personne et par conversation.

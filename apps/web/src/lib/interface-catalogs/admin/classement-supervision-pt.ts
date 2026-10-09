@@ -222,6 +222,23 @@ const f = {
   'admin.monitoring.routes.blind.saturation': 'Discriminação limitada por saturação',
   'admin.monitoring.routes.blind.saturation.explain': 'Acima de um teto, as novas discriminações por plataforma e versão são recusadas; os totais das rotas monitoradas continuam exatos.',
   'admin.monitoring.routes.blind.other': 'Outro limite assinalado',
+
+  'admin.monitoring.backups.title': 'Cópias de segurança',
+  'admin.monitoring.backups.hint': 'A produção é copiada todas as noites à meia-noite, horário de Paris. Uma verificação às 5 h avisa os administradores quando algo dá errado.',
+  'admin.monitoring.backups.state.ok': 'Bem-sucedido',
+  'admin.monitoring.backups.state.failed': 'Com falha',
+  'admin.monitoring.backups.state.stale': 'Antigo demais',
+  'admin.monitoring.backups.reason': 'Motivo: {reason}',
+  'admin.monitoring.backups.last': 'Último backup bem-sucedido',
+  'admin.monitoring.backups.never': 'Nenhum',
+  'admin.monitoring.backups.next': 'Próximo backup',
+  'admin.monitoring.backups.documents': 'Documentos verificados',
+  'admin.monitoring.backups.documents.caption': '{collections} coleções · {indexes} índices · {mismatches} divergência(s) na restauração de teste',
+  'admin.monitoring.backups.archive': 'Arquivo do banco de dados',
+  'admin.monitoring.backups.archive.caption': 'Backup completo em {duration}',
+  'admin.monitoring.backups.volumes': 'Mídias e dados',
+  'admin.monitoring.health.issue.backupFailed': 'O último backup da produção falhou.',
+  'admin.monitoring.health.issue.backupStale': 'Nenhum backup da produção foi concluído há mais de 26 horas.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

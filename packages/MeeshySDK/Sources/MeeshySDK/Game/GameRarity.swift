@@ -32,7 +32,7 @@ public enum GameRarity {
     public static let minPopulation = 1000
     /// Sous ce nombre de TITULAIRES, un succès n'affiche pas son pourcentage.
     public static let minDisplayHolders = 20
-    public static let mytheSize = 100
+    public static let mytheSize = GameGlory.mytheSize
 
     public static func border(for rarity: GameGlory.AchievementRarity) -> RarityBorder {
         switch rarity {
@@ -83,15 +83,6 @@ public enum GameRarity {
     /// La Gloire d'un succès au moment où il est obtenu.
     public static func gloryAtEarning(_ measured: GameGlory.AchievementRarity?) -> Int {
         GameGlory.gloryForAchievement(measured ?? .common)
-    }
-
-    /// Les 100 Légendes les plus glorieuses — drapeau servi, jamais calculé par un client.
-    public static func mythicUserIds(_ candidates: [(userId: String, glory: Int)]) -> [String] {
-        let legendStart = GloryRank.legende.minGlory ?? 80_000
-        let ranked = GameOrdering.stableSorted(candidates.filter { $0.glory >= legendStart }) { lhs, rhs in
-            lhs.glory != rhs.glory ? (rhs.glory - lhs.glory < 0 ? -1 : 1) : GameOrdering.compare(lhs.userId, rhs.userId)
-        }
-        return ranked.prefix(mytheSize).map(\.userId)
     }
 }
 

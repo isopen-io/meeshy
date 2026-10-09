@@ -3,9 +3,9 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const it = {
   'game.rules.1.title': 'Ogni gesto conta',
-  'game.rules.1.body': 'Scrivere, parlare, pubblicare, reagire, invitare: ogni azione utile fa guadagnare punti.',
+  'game.rules.1.body': 'Scrivere, parlare, pubblicare, reagire, invitare: ogni azione utile fa guadagnare punti. Un contenuto rende in base a chi può vederlo: pubblico, community o amici. I limiti contano i tuoi gesti, mai i tuoi punti: bonus, Fiamma ed eventi aumentano ciò che ogni gesto fa guadagnare.',
   'game.rules.2.title': 'I punti fanno il livello',
-  'game.rules.2.body': '100 livelli in 10 fasce. Ogni livello richiede un po’ più del precedente.',
+  'game.rules.2.body': 'Un milione di punti per il livello 100 e un passo ogni dieci livelli: senza, il livello aspetta. Fino a 499 sotto Ambasciatore, 1000 da Ambasciatore, senza limite da Oracolo. Prestigio al livello 100, facoltativo. Oltre 100: 1000 di Gloria ogni dieci livelli.',
   'game.rules.3.title': 'Si coniano Meesh',
   'game.rules.3.body': 'A partire da 1.221 punti si conia una Meesh a mano. Il prezzo sale con il numero di Meesh già coniate.',
   'game.rules.4.title': 'Coniare fa scendere',
@@ -29,7 +29,7 @@ const it = {
   'game.rules.atlas.rarities': 'Le rarità',
   'game.rules.atlas.obverse': 'Dritto',
   'game.rules.atlas.reverse': 'Rovescio',
-  'game.rules.atlas.line.levels': 'Cento livelli in dieci fasce: ogni fascia ha il suo emblema e il suo colore.',
+  'game.rules.atlas.line.levels': 'Venti fasce: dieci fino a 100, poi una ogni cento, Singolarità da 1000.',
   'game.rules.atlas.line.meesh': 'Il dritto porta la Firma; il rovescio, Mee e Meo, il numero e l’anno. Oro ogni cento, prisma ogni mille.',
   'game.rules.atlas.line.treasury': 'Tenere le tue Meesh riempie il tesoro: sei fasce da salire.',
   'game.rules.atlas.line.rank': 'Undici ranghi. La Gloria li dà, e un rango non scende mai.',
@@ -38,7 +38,7 @@ const it = {
   'game.rules.atlas.line.medals': 'Sette metalli, dal rame al prisma: il metallo dice fin dove sei arrivato. Un badge che si spegne lascia un’impronta.',
   'game.rules.atlas.line.trophies': 'Un trofeo si riceve in un momento preciso: coppa di lega, di stagione, Prestigio, Fiamma.',
   'game.rules.atlas.line.rarities': 'Cinque rarità, misurate ogni notte. Nessuna porta punti.',
-  'game.rules.atlas.levels': 'I dieci livelli',
+  'game.rules.atlas.levels': 'Le venti fasce',
   'game.rules.atlas.treasury': 'I gradini del tesoro',
   'game.rules.atlas.ranks': 'Gli stemmi dei ranghi',
   'game.rules.atlas.flames': 'Le cinque Fiamme',
@@ -59,7 +59,14 @@ const it = {
   'game.rules.atlas.share_legendary': 'dallo 0,2 al 2 % degli account',
   'game.rules.atlas.share_mythic': 'meno dello 0,2 % degli account',
   'game.rules.atlas.rarity_glory': '+{glory} di Gloria',
-  'game.rules.atlas.myth': 'Le 100 Leggende più gloriose',
+  'game.rules.atlas.myth': 'I primi 100 a raggiungere 1.000.000 di Gloria',
+  'game.rules.badges.title': 'I badge',
+  'game.rules.badges.intro': 'Ogni badge conta UN gesto preciso: un messaggio vocale, una storia, una nuova amicizia… Sono venti, raggruppati in cinque famiglie.',
+  'game.rules.badges.ladder': 'Ogni badge sale su sette livelli. A ogni soglia superata cambia materiale e accende una stella in più.',
+  'game.rules.badges.ribbon': 'Dall’Oro in poi la medaglia porta un nastro; al Prisma il suo smalto diventa iridescente.',
+  'game.rules.badges.imprint': 'Coniare una Meesh può spegnere un badge: diventa un’impronta che dice cosa manca per riaccenderlo.',
+  'game.rules.badges.families': 'I venti badge, per famiglia',
+  'game.rules.badges.sheet': 'Tocca un badge: la sua scheda dice cosa conta per lui, il suo materiale e perché, e cosa manca per la prossima stella.',
 } as const satisfies GameRulesCatalog;
 
 export default it;

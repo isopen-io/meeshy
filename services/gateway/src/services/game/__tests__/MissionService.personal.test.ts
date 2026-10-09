@@ -20,7 +20,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 const DAY = '2026-10-06';
 const STARTS = new Date('2026-10-06T16:00:00Z');
 const ENDS = new Date('2026-10-06T18:00:00Z');
-const LEVEL_20 = 10 * 20 * 20;
+const LEVEL_20 = 100 * 20 * 20;
 
 const setup = () => {
   const db = fakeGameDb();

@@ -78,6 +78,10 @@ struct ConversationComposerState {
     /// fires the selection onChange once — this flag swallows that echo so
     /// items are only ingested when the user actually confirms in the picker.
     var photoPickerPriming = false
+    /// Pièce de la zone → `PHAsset.localIdentifier` dont elle vient (#9683),
+    /// pour les médias venus de la grille ou du sélecteur système. Ne fait
+    /// foi que pour les pièces VIVANTES : lire `attachedLibraryAssetIds`.
+    var libraryAssetLinks: [String: String] = [:]
     
     // Location & Upload
     var isLoadingLocation = false
@@ -129,6 +133,23 @@ extension ConversationComposerState {
     /// navigation se terminer — un focus posé pendant la poussée est perdu.
     static func replyFocusDelay(openingConversation: Bool) -> TimeInterval {
         openingConversation ? 0.45 : 0
+    }
+
+    /// Les pièces de la zone d'attachement, prêtes puis en préparation.
+    var liveAttachmentIds: [String] {
+        pendingAttachments.map(\.id) + preparingAttachments.map(\.id)
+    }
+
+    /// Les assets de la photothèque déjà dans la zone (#9683), DÉRIVÉS d'elle :
+    /// retirer une pièce, la voir échouer ou l'envoyer libère sa tuile.
+    var attachedLibraryAssetIds: [String] {
+        RecentMediaAttachmentLink.attachedAssetIds(links: libraryAssetLinks, liveAttachmentIds: liveAttachmentIds)
+    }
+
+    mutating func linkLibraryAsset(_ assetId: String, to attachmentId: String) {
+        libraryAssetLinks = RecentMediaAttachmentLink.linking(
+            assetId, to: attachmentId, in: libraryAssetLinks, liveAttachmentIds: liveAttachmentIds
+        )
     }
 
     /// Replaces the audio attachment `attachmentId` in place with the freshly

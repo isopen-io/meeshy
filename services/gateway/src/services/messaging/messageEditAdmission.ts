@@ -43,6 +43,7 @@
  * sans écran pour le dire. Voir `tasks/lessons.md`, leçon 88.
  */
 
+import { captureNoticeOf } from './captureNoticeVisibility.js';
 import {
   isConversationClosed,
   type ConversationTerminalStateRow,
@@ -155,6 +156,9 @@ export interface MessageEditAdmissionParams {
      */
     conversation: ConversationTerminalStateRow | null | undefined;
     createdAt: Date | string | null | undefined;
+    /** Le type et la métadonnée — REQUIS : un avis de capture ne s'édite pas par celui qui a capturé (#9641). */
+    messageType: string | null | undefined;
+    metadata: unknown;
   };
   /** Injectable pour les tests ; `Date.now()` en production. */
   now?: number;
@@ -250,6 +254,11 @@ async function decideMessageEdit(
   const { prisma, editorUserId, message, now = Date.now(), onError } = params;
 
   const isAuthor = Boolean(message.authorUserId) && message.authorUserId === editorUserId;
+
+  // #9641 — l'avis porte la capture de son auteur : il ne la réécrit pas.
+  if (isAuthor && captureNoticeOf({ id: '', conversationId: message.conversationId, senderId: '', ...message })) {
+    return REFUSE('not-author');
+  }
 
   if (!isAuthor) {
     const membership = await readActiveMembership(prisma, message.conversationId, editorUserId, onError);

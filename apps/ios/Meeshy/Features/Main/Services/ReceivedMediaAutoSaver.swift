@@ -140,7 +140,7 @@ struct PhotoAlbumReceivedMediaWriter: ReceivedMediaAlbumWriting {
             let file = try await AttachmentMediaSaveResolver().resolveLocalFile(for: request)
             let saved = request.kind == .video
                 ? await PhotoLibraryManager.shared.saveVideo(at: file)
-                : await PhotoLibraryManager.shared.saveImage(try Data(contentsOf: file))
+                : await PhotoLibraryManager.shared.saveImageFile(at: file)
             return saved ? .saved : .failed
         } catch {
             return .failed

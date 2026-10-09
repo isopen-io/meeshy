@@ -34,6 +34,7 @@ const ptActivation = {
   'activation.gate.publish': 'Para publicar, valide seu endereço. Sua publicação fica guardada e será enviada assim que o código for validado.',
   'activation.gate.invite': 'Para convidar por e-mail, valide seu endereço. Seu convite será enviado assim que o código for validado.',
   'activation.gate.link': 'Para criar um link, valide seu endereço. Seu link será criado assim que o código for validado.',
+  'activation.gate.moreLinks': 'Além de 5 links ativos, valide seu endereço para criar outros. Seu link será criado assim que o código for validado.',
 } as const;
 
 export default ptActivation;

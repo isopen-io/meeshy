@@ -1,10 +1,10 @@
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
 
-import { served } from '@/lib/api/prism';
+import { electServedAudio, served } from '@/lib/api/prism';
 import type { Attachment, Message } from '@/lib/api/types';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { contentExitOf, exitOffers, pieceIsOpen, quotedExitOf } from '@/lib/view/content-exit';
+import { messageExitOffers, pieceIsOpen } from '@/lib/view/content-exit';
 import { kindOf, waveformOf } from '@/lib/view/message';
 import { quotedPreviewOf } from '@/lib/view/quoted-preview';
 
@@ -21,12 +21,11 @@ import type { CardMedia } from './message-card-media';
  * sur le message ENTIER, la pièce à vue unique d'un message ordinaire ferme
  * la carte. Une pièce floutée ou chiffrée n'est jamais peinte.
  *
- * LA CITATION EST JUGÉE POUR ELLE-MÊME (`quotedExitOf`) : un message
- * ordinaire qui cite une flamme s'image SANS elle — ni son texte, ni son
- * média. Une citation dont la nature n'est pas déclarée dans la charge reçue
- * est fermée, et une citation voilée (vue unique, flou) ne se peint pas non
- * plus : la carte ne fait confiance à aucun texte servi pour un contenu qui
- * n'a pas le droit de sortir.
+ * UNE RÉPONSE QUI CITE UN CONTENU PROTÉGÉ NE S'IMAGE PAS (décision porteur
+ * du 2026-10-08, `messageExitOffers`) : qu'elle cite une flamme, une vue
+ * unique, un flou, un chiffré ou une citation dont la nature n'est pas
+ * déclarée dans la charge reçue (`quotedExitOf`), la carte se refuse
+ * entière — la réponse peinte sans ce qu'elle cite n'est plus l'échange.
  *
  * LES MOTS SONT CEUX QUE LE LECTEUR VOIT : le texte SERVI (le Prisme, avec la
  * langue que le lecteur a peut-être imposée par « Traduire »), jamais
@@ -140,6 +139,44 @@ export function cardMediaOf(attachments: readonly CardMediaFields[] | null | und
   });
 }
 
+/** Ce qu'il faut d'une pièce pour élire la piste d'un VOCAL — sa transcription et ses pistes traduites. */
+export type CardAudioFields = {
+  readonly transcription?: Attachment['transcription'] | null;
+  readonly translations?: Attachment['translations'] | null;
+  readonly alt?: string | null;
+  readonly originalName?: string | null;
+};
+
+/** Le prisme qui élit la piste d'un vocal — `null` : la piste originale. */
+export type CardAudioPrism = { readonly readerLanguages: readonly string[]; readonly fallbackLanguage: string } | null;
+
+/**
+ * LES MÉDIAS PEIGNABLES, UN VOCAL DANS LA PISTE DE SON TEXTE SERVI (#9687,
+ * parité iOS `MessageCardSubject.paintableMedia(audioLanguages:)`) —
+ * `electServedAudio` (`api/prism.ts`) élit la transcription PUIS reçoit sa langue pour élire la
+ * piste : une seule descente (CLAUDE.md § Prisme, cycle 128). Fichier et durée
+ * de la piste servie voyagent ensemble ; sans piste dans la langue servie,
+ * l'original.
+ */
+export function servedCardMediaOf(pieces: readonly (CardMediaFields & CardAudioFields)[] | null | undefined, prism: CardAudioPrism): readonly MessageCardMediaItem[] {
+  return cardMediaOf(pieces).map((item) => {
+    const piece = pieces?.find((candidate) => candidate.id === item.id);
+    if (prism === null || piece === undefined || item.card.kind !== 'audio') return item;
+    const { track } = electServedAudio({
+      preferredLanguages: prism.readerLanguages,
+      attachment: {
+        fileUrl: piece.fileUrl,
+        originalName: piece.originalName ?? '',
+        ...(piece.transcription == null ? {} : { transcription: piece.transcription }),
+        ...(piece.translations == null ? {} : { translations: piece.translations }),
+        ...(piece.alt == null ? {} : { alt: piece.alt }),
+      },
+      fallbackLanguage: prism.fallbackLanguage,
+    });
+    return track.translated ? { ...item, url: track.url, card: { ...item.card, durationMs: track.durationMs ?? item.card.durationMs } } : item;
+  });
+}
+
 export function messageCardSubjectOf(params: {
   readonly message: Message;
   /** Le texte SERVI du message (`servedOf` du menu). */
@@ -152,7 +189,7 @@ export function messageCardSubjectOf(params: {
   readonly language?: string | null;
 }): MessageCardSubject | null {
   const { message, servedText, viewer } = params;
-  if (!exitOffers(contentExitOf(message, params.now), 'image')) return null;
+  if (!messageExitOffers(message, 'image', params.now)) return null;
   const language = params.language ?? null;
   const chosen =
     language === null
@@ -160,7 +197,7 @@ export function messageCardSubjectOf(params: {
       : served({ preferredLanguages: [language], originalLanguage: message.originalLanguage, translations: message.translations, original: message.content }).text;
   const text = chosen.trim();
   const readerLanguages = language === null ? params.readerLanguages : [language, ...params.readerLanguages];
-  const media = cardMediaOf(message.attachments);
+  const media = servedCardMediaOf(message.attachments, { readerLanguages, fallbackLanguage: message.originalLanguage ?? '' });
   if (text === '' && media.length === 0) return null;
 
   const replyTo = message.replyTo;
@@ -170,13 +207,13 @@ export function messageCardSubjectOf(params: {
   let quotedMedia: readonly MessageCardMediaItem[] = [];
   if (replyTo !== undefined && replyTo !== null) {
     const preview = quotedPreviewOf({ quoted: replyTo, readerLanguages, interfaceLanguage: params.interfaceLanguage });
-    const quotedLeaves = exitOffers(quotedExitOf(replyTo, params.now), 'image') && !preview.isProtected;
+    const quotedLeaves = !preview.isProtected;
     if (quotedLeaves && preview.text.trim() !== '') {
       quoted = { author: cardAuthorOf(replyTo, viewer), text: preview.text, handle: cardHandleOf(replyTo, viewer) };
       quotedAt = replyTo.createdAt === undefined ? null : new Date(replyTo.createdAt);
     }
     const quotedAuthor: CardMediaAuthor = { name: cardAuthorOf(replyTo, viewer), handle: cardHandleOf(replyTo, viewer), quoted: true };
-    quotedMedia = quotedLeaves ? authoredBy(cardMediaOf(replyTo.attachments), quotedAuthor) : [];
+    quotedMedia = quotedLeaves ? authoredBy(servedCardMediaOf(replyTo.attachments, { readerLanguages, fallbackLanguage: replyTo.originalLanguage ?? '' }), quotedAuthor) : [];
   }
   const ownIds = new Set(media.map((item) => item.id));
   return {

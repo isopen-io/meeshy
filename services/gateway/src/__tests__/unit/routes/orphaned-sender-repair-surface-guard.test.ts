@@ -147,6 +147,11 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9646 — relit les CINQ colonnes de protection d'un message édité ou dont
+  // une pièce est enrichie, pour décider de la remise par lecteur. Jamais
+  // `sender`. Absent du garde du masquage personnel : une `findUnique`, hors
+  // de son périmètre (`findMany`/`count`), et elle ne sert aucun contenu.
+  'readerSignedDelivery.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 };
 
 /** `services/` — même règle, troisième racine. */
@@ -173,6 +178,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'attachments/attachmentReadVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9315 — même nature que son voisin : l'état des messages porteurs d'un fichier, sans `sender`.
   'attachments/fileRouteVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9646 — les cinq colonnes de protection des porteurs d'une page de pièces
+  // (galerie, détail), pour signer celles qui disparaissent. Jamais `sender`.
+  'attachments/signServedAttachments.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // Deux `create`/`update` (jamais `find*`) pour le message-résumé d'appel :
   // hors du périmètre `.message.find*` de ce garde, mais nommé ici pour la
   // même raison que #6501 l'a nommé dans l'issue — `sender` y est
@@ -250,6 +258,15 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/attachmentSendAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/copyExitProtection.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9641 — la suppression d'un avis de capture relit l'expéditeur
+  // (`senderId`) du message qu'il nomme, jamais la relation `sender`.
+  'messaging/messageDeleteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9629 — la durée des avis : identité, horloge, métadonnée, échéance.
+  'messaging/captureNoticeRetention.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
+  // #9629 — l'audience d'un avis de capture : `NOTICE_SELECT` et
+  // `CAPTURED_SELECT`, identité, horloge, `senderId` et métadonnée — jamais la
+  // relation `sender`.
+  'messaging/captureNoticeVisibility.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   // #9617 — la capture déclarée relit les messages désignés par
   // `CAPTURED_MESSAGE_SELECT` : identité, horloge, auteur par son seul
   // `senderId` et colonnes de la loi de sortie — jamais la relation `sender`.
@@ -272,6 +289,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `senderId` (pour soustraire les messages du lecteur lui-même), jamais la
   // relation `sender` : un expéditeur disparu n'entre dans aucune de ses branches.
   'unreadCountsCore.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9630 — les candidats avis de capture du compteur unitaire : identité et marque.
+  'unreadCountOfParticipant.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 
   // #6501 — balayage de rétention SANS lecteur, portée GLOBALE par
   // construction (`expiresAt` à travers toute la base, jamais une seule

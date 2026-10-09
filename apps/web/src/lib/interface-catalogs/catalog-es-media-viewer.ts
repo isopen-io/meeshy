@@ -33,6 +33,9 @@ const esMediaViewer = {
   'media.audio.mini.label': 'Reproductor de audio',
   'media.audio.mini.title': 'Mensaje de voz',
   'media.audio.mini.close': 'Cerrar el reproductor',
+  'media.sound.original': 'Sonido original',
+  'media.sound.credit': 'Sonido: {credit}',
+  'media.sound.library': 'Sonido de la biblioteca',
 };
 
 export default esMediaViewer;

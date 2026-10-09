@@ -18,6 +18,9 @@ import type {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { createHash } from 'crypto';
+import { signAttachmentsForReader } from '../../services/attachments/signServedAttachments';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
 import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
@@ -131,24 +134,24 @@ export async function registerMetadataRoutes(
    * d'appel, sinon la route redevient un oracle d'existence de pièce jointe —
    * le défaut que #4150 a fermé sur les impressions.
    */
-  async function attachmentDetailIsVisible(
+  async function attachmentDetailReader(
     request: FastifyRequest,
     attachment: { messageId: string | null; uploadedBy: string | null; isViewOnce?: boolean | null }
-  ): Promise<boolean> {
+  ): Promise<{ readonly readerParticipantId: string | null } | null> {
     const authContext = (request as UnifiedAuthRequest).authContext;
 
     if (!attachment.messageId) {
       // Pas encore rattachée à un message (envoi en cours) : seul le
       // déposant y accède. Même repli que `resolveAttachmentReadVerdict`.
       const caller = authContext.isAnonymous ? authContext.participantId : authContext.userId;
-      return Boolean(caller) && caller === attachment.uploadedBy;
+      return Boolean(caller) && caller === attachment.uploadedBy ? { readerParticipantId: null } : null;
     }
 
     const message = await prisma.message.findUnique({
       where: { id: attachment.messageId },
       select: { id: true, conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT },
     });
-    if (!message) return false;
+    if (!message) return null;
 
     // Même discriminant et même projection que la LISTE ci-dessous : un
     // participant sans ligne `User` (invité de lien) se résout par `id`,
@@ -162,12 +165,12 @@ export async function registerMetadataRoutes(
           select: participantSelect,
         });
 
-    if (!participant || participant.conversationId !== message.conversationId) return false;
+    if (!participant || participant.conversationId !== message.conversationId) return null;
 
     // Les octets suivent la vie du message porteur — rappelé, expiré, ou
     // brûlure de vue unique consommée (cf. `carrierMessageLifecycle.ts`).
     const now = new Date();
-    if (!carrierMessageStillServesBytes(message, now)) return false;
+    if (!carrierMessageStillServesBytes(message, now)) return null;
 
     // #9589 — puis l'échéance de CE lecteur (décompte, consommation après
     // lecture, vue unique ouverte) : même loi que `GET /attachments/:id`.
@@ -178,7 +181,7 @@ export async function registerMetadataRoutes(
       readerParticipantId: participant.id,
       now,
     });
-    if (!readerReads) return false;
+    if (!readerReads) return null;
 
     const [historyFloor, personalHiding] = await Promise.all([
       loadHistoryFloor(prisma, participant),
@@ -198,7 +201,7 @@ export async function registerMetadataRoutes(
       ),
       select: { id: true },
     });
-    return visible !== null;
+    return visible !== null ? { readerParticipantId: participant.id } : null;
   }
 
   /**
@@ -246,7 +249,7 @@ export async function registerMetadataRoutes(
             ...errorResponseSchema
           },
           // #4923 — sert aussi le cas « existe, mais hors de la portée de
-          // l'appelant » : voir `attachmentDetailIsVisible`.
+          // l’appelant » : voir `attachmentDetailReader`.
           404: {
             description: 'Attachment not found (or not visible to this caller)',
             ...errorResponseSchema
@@ -267,17 +270,29 @@ export async function registerMetadataRoutes(
 
         const { attachmentId } = request.params as AttachmentParams;
 
-        const attachment = await attachmentService.getAttachmentWithMetadata(attachmentId);
-        if (!attachment || !(await attachmentDetailIsVisible(request, attachment))) {
+        const stored = await attachmentService.getAttachmentWithMetadata(attachmentId);
+        const reader = stored ? await attachmentDetailReader(request, stored) : null;
+        if (!stored || !reader) {
           return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
-        const etag = `"${attachment.id}-${(attachment as { updatedAt?: Date }).updatedAt?.getTime() ?? 0}"`;
+        // #9646 — les adresses d'une pièce protégée sont celles de CE lecteur.
+        // Signées, elles changent à chaque pas d'échéance : l'ETag les suit et
+        // la réponse se revalide, sans quoi un 304 rendrait une adresse échue.
+        const [attachment] = await signAttachmentsForReader(prisma, {
+          attachments: [stored],
+          readerParticipantId: reader.readerParticipantId,
+          signer: readerFileUrlSignerFromEnv(new Date()),
+        });
+        const signed = attachment !== stored;
+        const etag = signed
+          ? `"${stored.id}-${createHash('sha256').update(String(attachment.fileUrl)).digest('base64url').slice(0, 16)}"`
+          : `"${stored.id}-${(stored as { updatedAt?: Date }).updatedAt?.getTime() ?? 0}"`;
         if (request.headers['if-none-match'] === etag) {
           return reply.code(304).send();
         }
 
-        reply.header('Cache-Control', 'private, max-age=3600, stale-while-revalidate=86400');
+        reply.header('Cache-Control', signed ? 'private, no-cache' : 'private, max-age=3600, stale-while-revalidate=86400');
         reply.header('ETag', etag);
 
         return sendSuccess(reply, { attachment });
@@ -537,6 +552,7 @@ export async function registerMetadataRoutes(
         // pendant que les deux autres appliquent la ligne, soit la règle à
         // deux énoncés que ce bloc s'interdit.
         const participantSelect = {
+          id: true,
           conversationId: true,
           ...HISTORY_FLOOR_PARTICIPANT_SELECT,
         } as const;
@@ -612,7 +628,14 @@ export async function registerMetadataRoutes(
           }
         );
 
-        return sendSuccess(reply, { attachments });
+        // #9646 — la galerie sert les pièces protégées sous les adresses de CE lecteur.
+        const served = await signAttachmentsForReader(prisma, {
+          attachments,
+          readerParticipantId: participant.id,
+          signer: readerFileUrlSignerFromEnv(new Date()),
+        });
+
+        return sendSuccess(reply, { attachments: served });
       } catch (error: unknown) {
         logger.error('error fetching conversation attachments', { conversationId: (request.params as ConversationParams)?.conversationId, error });
         return sendInternalError(reply, error instanceof Error ? error.message : 'Error fetching attachments');

@@ -2,6 +2,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { GameSeasonBlock } from '@meeshy/shared/types/game';
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
+import { formatCount } from '@/lib/view/game-copy';
 
 import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { createActMounter } from '@/test-support/act-mount';
@@ -135,10 +137,19 @@ describe('le Sceau', () => {
     expect(host.querySelector('[data-game-seal-buy]')?.textContent).toContain('10 Meeshes');
   });
 
-  test('pas assez de Meeshes : le bouton se tait en disant pourquoi', async () => {
+  test('pas assez de Meeshes : le bouton se tait en disant combien il manque', async () => {
     const host = await mount(<GameSeason {...props({ held: 3 })} />);
     expect(host.querySelector<HTMLButtonElement>('[data-game-seal-buy]')?.disabled).toBe(true);
-    expect(host.textContent).toContain('Il te manque des Meeshes pour le Sceau');
+    const page = text(host.innerHTML);
+    expect(page).toContain('En poche 3 Meeshes');
+    expect(page).toContain('Coûte 10 Meeshes');
+    expect(page).toContain('Il manque 7 Meeshes');
+  });
+
+  test('avant l’achat : les Meeshes en poche, le prix et ce qui restera (#9705)', () => {
+    const page = text(renderToStaticMarkup(<GameSeason {...props({ held: 12 })} />));
+    expect(page).toContain('En poche 12 Meeshes');
+    expect(page).toContain('Restera 2 Meeshes');
   });
 
   test('déjà possédé : on le dit, plus d’achat', () => {
@@ -151,7 +162,10 @@ describe('le Sceau', () => {
 describe('les autres états', () => {
   test('parcours terminé : la coupe, le badge daté et la Gloire', () => {
     const done = season({ steps: 40, stars: 160, completed: true, starsToNext: 0, progress: 1, claimedSteps: Array.from({ length: 40 }, (_, i) => i + 1), nextReward: null });
-    expect(text(renderToStaticMarkup(<GameSeason {...props({ season: done })} />))).toContain('une coupe, un badge daté et 500 de Gloire');
+    // #9674 — la Gloire dite est celle que le serveur verse (`GLORY_POINTS.season`), jamais un nombre recopié.
+    expect(text(renderToStaticMarkup(<GameSeason {...props({ season: done })} />)).replace(/\s/g, ' ')).toContain(
+      `une coupe, un badge daté et ${formatCount(GLORY_POINTS.season, 'fr').replace(/\s/g, ' ')} de Gloire`,
+    );
   });
 
   test('aucune saison ouverte : on dit que la prochaine arrive', () => {

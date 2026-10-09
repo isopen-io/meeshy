@@ -20,8 +20,8 @@ describe('TierEmblem', () => {
     }
   });
 
-  test('dix emblèmes, dix dessins différents', () => {
-    expect(new Set(LEVEL_TIER_KEYS.map(render)).size).toBe(10);
+  test('vingt emblèmes, vingt dessins différents', () => {
+    expect(new Set(LEVEL_TIER_KEYS.map(render)).size).toBe(20);
   });
 
   test('la couleur est celle du palier — un jeton, jamais un littéral', () => {

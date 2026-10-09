@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import type { EmailGateReason } from '@/lib/activation/email-gate';
 import type { Activation, MyActivation } from '@/lib/api/activation';
 import type { ApiResult } from '@/lib/api/http';
 import type { VerifyEmailData, VerifyEmailRequest } from '@/lib/api/verify-email';
@@ -59,7 +60,7 @@ async function monter({
   served = { ok: true, data: { activation: UNPROVEN, email: 'amina@example.test' } },
   over = {},
 }: {
-  readonly reason?: 'publish' | 'invite' | 'link';
+  readonly reason?: EmailGateReason;
   readonly served?: ApiResult<MyActivation>;
   readonly over?: Partial<ActivationInviteDeps>;
 } = {}) {
@@ -97,6 +98,10 @@ describe('la vue s’ouvre, dit pourquoi, et le code est déjà parti', () => {
     expect(describedText((await monter({ reason: 'invite' })).host)).toContain('Pour inviter par e-mail');
     mounter.unmountAll();
     expect(describedText((await monter({ reason: 'link' })).host)).toContain('Pour créer un lien');
+  });
+
+  test('un lien refusé au plafond dit pourquoi : au-delà de 5 liens actifs, l’adresse doit être validée (#9715)', async () => {
+    expect(describedText((await monter({ reason: 'moreLinks' })).host)).toContain('Au-delà de 5 liens actifs, validez votre adresse');
   });
 
   test('seule l’adresse est demandée : le numéro n’encombre pas la vue', async () => {

@@ -413,6 +413,8 @@ final class ReelsViewModel: ObservableObject {
                     else { try await service.like(postId: id) }
                     restOK = true
                 } catch {
+                    // La limite du jour (#9571) se dit ; le geste se défait.
+                    DailyGestureLimitNotice.surface(error)
                     restOK = false
                 }
                 if !restOK { applyLike(id: id, liked: wasLiked) }

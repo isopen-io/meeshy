@@ -10,7 +10,7 @@ import { describe, it, expect } from '@jest/globals';
 import { PrestigeService } from '../PrestigeService';
 import { fakeGameDb, seedUser, USER, type FakeGameDb } from './fakeGameDb';
 
-const LEVEL_100 = 10 * 100 * 100;
+const LEVEL_100 = 100 * 100 * 100;
 
 const setup = (fields: Record<string, unknown> = {}) => {
   const db = fakeGameDb();
@@ -25,6 +25,10 @@ describe('PrestigeService.pass', () => {
     const low = setup({ engagementScore: 500 });
     await expect(low.service.pass({ userId: USER, requestId: 'prestige-01' })).rejects.toMatchObject({ code: 'PRESTIGE_LEVEL_TOO_LOW' });
     expect(low.db.user.rows[0]!.engagementScore).toBe(500);
+
+    // Le million sans ses dix étapes (#9706) : le record, gravé étape faite, n'a pas passé 99.
+    const unproven = setup({ levelRecord: 99 });
+    await expect(unproven.service.pass({ userId: USER, requestId: 'prestige-01' })).rejects.toMatchObject({ code: 'PRESTIGE_LEVEL_TOO_LOW' });
 
     const max = setup({ prestige: 5 });
     await expect(max.service.pass({ userId: USER, requestId: 'prestige-01' })).rejects.toMatchObject({ code: 'PRESTIGE_AT_MAXIMUM' });

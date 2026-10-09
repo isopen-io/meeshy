@@ -1,12 +1,12 @@
 import SwiftUI
 import MeeshySDK
 
-// MARK: - Les dix emblèmes de palier (#9481)
+// MARK: - Les vingt emblèmes de palier (#9481, #9688)
 //
 // MIROIR de `apps/web/src/lib/game/tier-emblem.ts` — un dessin par palier, Étincelle →
-// Galaxie, que l'anneau de niveau imprime en filigrane dans son disque central. Chaque
+// Galaxie (1–100) puis Nébuleuse → Singularité au-delà, que l'anneau de niveau imprime en filigrane dans son disque central. Chaque
 // emblème est bâti AUTOUR de la Signature (les trois traits de Meeshy au cœur) et prend la
-// couleur spectrale de son palier (`LevelTierPalette`) ; Galaxie est le prisme.
+// couleur spectrale de son palier (`LevelTierPalette`) ; Galaxie et Singularité sont le prisme.
 //
 // Les formes sont celles du web, primitive pour primitive, dans une boîte de 100 centrée sur
 // l'origine : deux sources du même dessin divergeraient à la première retouche. Une forme est
@@ -107,6 +107,20 @@ enum GameTierEmblem {
     private static let spiralArm = "M0 0 C8 -8 22 -6 26 6 C30 22 8 36 -12 30 C-36 22 -40 -8 -22 -28 C-6 -44 24 -46 40 -28"
     private static let spiralArmMirrored = "M0 0 C-8 8 -22 6 -26 -6 C-30 -22 -8 -36 12 -30 C36 -22 40 8 22 28 C6 44 -24 46 -40 28"
 
+    /// Des points posés en amas — les paliers d'au-delà de 100 (#9688).
+    private static func dots(_ points: [(CGFloat, CGFloat, CGFloat)]) -> [Primitive] {
+        points.map { disc($0.2, at: CGPoint(x: $0.0, y: $0.1)) }
+    }
+
+    /// Une ellipse horizontale en tracé, demi-axes `rx` × `ry`.
+    private static func ellipse(_ rx: CGFloat, _ ry: CGFloat, width: CGFloat) -> Primitive {
+        Primitive(path: Path(ellipseIn: CGRect(x: -rx, y: -ry, width: rx * 2, height: ry * 2)), paint: .stroke(width: width))
+    }
+
+    private static let lemniscate = "M0 0 C12 -22 44 -22 44 0 C44 22 12 22 0 0 C-12 -22 -44 -22 -44 0 C-44 22 -12 22 0 0 Z"
+    private static let fieldLine = "M0 -16 C34 -46 34 46 0 16"
+    private static let fieldLineMirrored = "M0 16 C-34 46 -34 -46 0 -16"
+
     // MARK: - La table
 
     private static let designs: [LevelTierKey: Design] = [
@@ -137,13 +151,40 @@ enum GameTierEmblem {
             svg(spiralArmMirrored, .stroke(width: 5)),
             disc(6),
         ], filledCore: false),
+        .nebuleuse: Design(primitives: dots([(0, 0, 20), (-22, -8, 15), (20, -14, 14), (16, 18, 15), (-16, 20, 12)]), filledCore: true),
+        .pulsar: Design(primitives: [
+            disc(16),
+            ring(26, width: 3),
+            line(from: CGPoint(x: 0, y: -32), to: CGPoint(x: 0, y: -48), width: 6),
+            line(from: CGPoint(x: 0, y: 32), to: CGPoint(x: 0, y: 48), width: 6),
+        ], filledCore: true),
+        .quasar: Design(primitives: [
+            disc(15),
+            ellipse(44, 13, width: 4),
+            line(from: CGPoint(x: 16, y: -16), to: CGPoint(x: 36, y: -40), width: 5),
+            line(from: CGPoint(x: -16, y: 16), to: CGPoint(x: -36, y: 40), width: 5),
+        ], filledCore: true),
+        .supernova: Design(primitives: [star(points: 16, outer: 47, inner: 24)], filledCore: true),
+        .magnetar: Design(primitives: [disc(15), svg(fieldLine, .stroke(width: 4)), svg(fieldLineMirrored, .stroke(width: 4))], filledCore: true),
+        .amas: Design(primitives: dots([(0, -30, 8), (-26, -14, 7), (26, -14, 7), (-30, 14, 6), (30, 14, 6), (-12, 32, 7), (12, 32, 7), (0, 6, 5)]),
+                      filledCore: false),
+        .superamas: Design(primitives: [
+            line(from: CGPoint(x: 0, y: -30), to: CGPoint(x: -28, y: 20), width: 2.5),
+            line(from: CGPoint(x: -28, y: 20), to: CGPoint(x: 28, y: 20), width: 2.5),
+            line(from: CGPoint(x: 28, y: 20), to: CGPoint(x: 0, y: -30), width: 2.5),
+        ] + dots([(0, -30, 7), (-8, -40, 4), (8, -40, 4), (-28, 20, 7), (-40, 14, 4), (-36, 30, 4), (28, 20, 7), (40, 14, 4), (36, 30, 4)]),
+                           filledCore: false),
+        .cosmos: Design(primitives: [ring(24, width: 3), ring(40, width: 3)] + dots([(24, 0, 6), (-28, -28, 6), (12, 38, 5)]), filledCore: false),
+        .infini: Design(primitives: [svg(lemniscate, .stroke(width: 7))], filledCore: false),
+        .singularite: Design(primitives: [disc(17), ellipse(42, 15, width: 3.5)] + rays(count: 12, from: 30, to: 47, width: 2.5),
+                             filledCore: true),
     ]
 
     // MARK: - Le dessin
 
-    /// La peinture du palier : une couleur franche, ou le prisme tournant de Galaxie.
+    /// La peinture du palier : une couleur franche, ou le prisme tournant de Galaxie et de Singularité.
     private static func shading(for tier: LevelTierKey) -> GraphicsContext.Shading {
-        tier == .galaxie
+        tier.isSpectral
             ? .conicGradient(Gradient(stops: GamePalette.prismStops), center: .zero, angle: .zero)
             : .color(LevelTierPalette.color(for: tier))
     }

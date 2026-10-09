@@ -5,7 +5,7 @@ import type { MessageCardFormat, MessageCardToggle } from '@/lib/export/message-
 import { CARD_ASPECTS, CARD_AUTHOR_PLACEMENTS, CARD_HEADER_ORIENTATIONS, CARD_TILTS, type CardAspect, type CardAuthorPlacement, type CardHeaderOrientation, type CardTilt } from '@/lib/export/message-card-frame';
 import { CARD_AUDIO_STYLES, type CardAudioStyle } from '@/lib/export/message-card-media';
 import type { CardSource } from '@/lib/export/message-card-paint';
-import { translateExportCard, type ExportCardCatalogKey } from '@/lib/i18n-export-card-catalog';
+import { translateExportCard, type ExportCardCatalogKey, type PlainExportCardKey } from '@/lib/i18n-export-card-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { Group, PRESSED, Pill, REST } from './thread-export-controls';
@@ -32,7 +32,7 @@ import { Group, PRESSED, Pill, REST } from './thread-export-controls';
  */
 
 /** Les libellés sans paramètre — tous ceux de ce panneau. */
-type PlainKey = Exclude<ExportCardCatalogKey, 'export.card.gallery.count' | 'export.card.media.failed.other' | 'export.card.media.featured.item'>;
+type PlainKey = PlainExportCardKey;
 
 export type FrameChoice =
   | { readonly aspect: CardAspect }

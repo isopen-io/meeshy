@@ -64,6 +64,31 @@ export const READER_LANGUAGES: readonly string[] =
  */
 export const READER_LOCALE: string = READER_LANGUAGES[0] ?? 'fr';
 
+type ReaderSession = {
+  readonly status: string;
+  readonly user?: Record<string, unknown>;
+  readonly guest?: { readonly language?: string };
+};
+
+type ReaderProfile = {
+  readonly systemLanguage?: string | null;
+  readonly regionalLanguage?: string | null;
+  readonly customDestinationLanguage?: string | null;
+};
+
+/**
+ * LES RANGS APPLICATIFS DE QUI LIT — ceux du COMPTE, ou, pour l'INVITÉ d'un
+ * lien (#9710), la langue qu'il a choisie en rejoignant, posée au rang 1 :
+ * c'est la seule préférence qu'il ait jamais exprimée, et elle doit gouverner
+ * ce qu'il lit comme ce qu'il écrit. `null` ⇒ personne dont on connaisse une
+ * préférence.
+ */
+function readerProfileOf(session: ReaderSession): ReaderProfile | null {
+  if (session.status === 'authenticated') return session.user === undefined ? null : (session.user as ReaderProfile);
+  if (session.status === 'guest' && session.guest?.language !== undefined) return { systemLanguage: session.guest.language };
+  return null;
+}
+
 /**
  * `resolveReaderLanguages` (#5650, F6) — le Prisme du lecteur RÉEL, une fois
  * une session vivante. `fixtures` garde le lecteur PROVISOIRE ci-dessus
@@ -79,17 +104,12 @@ export const READER_LOCALE: string = READER_LANGUAGES[0] ?? 'fr';
  */
 export function resolveReaderLanguages(params: {
   readonly source: 'fixtures' | 'gateway';
-  readonly session: { readonly status: string; readonly user?: Record<string, unknown> };
+  readonly session: ReaderSession;
   readonly deviceLocale?: string | null;
 }): readonly string[] {
   if (params.source === 'fixtures') return READER_LANGUAGES;
-  if (params.session.status !== 'authenticated' || params.session.user === undefined) return READER_LANGUAGES;
-
-  const user = params.session.user as {
-    readonly systemLanguage?: string | null;
-    readonly regionalLanguage?: string | null;
-    readonly customDestinationLanguage?: string | null;
-  };
+  const user = readerProfileOf(params.session);
+  if (user === null) return READER_LANGUAGES;
   const resolved =
     params.deviceLocale === null || params.deviceLocale === undefined
       ? resolveUserLanguagesOrdered(user)

@@ -365,6 +365,15 @@ struct ReelFeedCard: View, Equatable {
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
             authorRow
+            // Le son de fond, sur SA ligne sous l'auteur (#9677) — la même
+            // annonce que la carte de post et le lecteur de réels. Un réel
+            // republié joue (et annonce) le son de l'original.
+            BackgroundSoundBadge(
+                announcement: BackgroundSoundBadge.announcement(for: post.storyEffects ?? repostedReel?.storyEffects),
+                accentHex: BackgroundSoundBadge.overMediaAccentHex
+            )
+            .equatable()
+            .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             if !displayCaption.isEmpty {
                 // Fond TOUJOURS sombre (vidéo + scrim noir) : on épingle les
                 // variantes `isDark: true` au lieu de suivre le thème de l'app —
@@ -427,6 +436,11 @@ struct ReelFeedCard: View, Equatable {
                         .foregroundColor(.white)
                     authorMetaLine
                 }
+                // Une ombre pour le BLOC, pas une par texte et par icône (#9702) :
+                // posée sur un conteneur, `.shadow` se répète sur chaque feuille,
+                // et chaque passe se recompose au-dessus de la vidéo qui joue.
+                // Les feuilles ne se chevauchent pas : le rendu est le même.
+                .compositingGroup()
                 .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }
         }
@@ -517,7 +531,7 @@ struct ReelFeedCard: View, Equatable {
         } label: {
             Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
         }
-        if media != nil {
+        if canSaveMedia {
             Button {
                 requestSaveMedia()
             } label: {
@@ -560,25 +574,14 @@ struct ReelFeedCard: View, Equatable {
         }
     }
 
-    /// Déclenche le flux unifié « Enregistrer en local » sur le média du réel
-    /// (pas le poste — un réel n'a de sens à « enregistrer » que par son
-    /// image/vidéo). No-op si le réel n'a pas de média résolvable.
+    /// « Sauvegarder » un réel (#9681) — la règle UNIQUE `PostSaveRoute` décide :
+    /// scène rendue comme une story, ou fichier brut d'un réel de médias simple.
     private func requestSaveMedia() {
-        guard let media, let url = media.url, !url.isEmpty else { return }
-        HapticFeedback.light()
-        let attachmentKind: AttachmentKind
-        switch media.type {
-        case .video: attachmentKind = .video
-        case .audio: attachmentKind = .audio
-        case .document: attachmentKind = .document
-        case .image: attachmentKind = .image
-        }
-        mediaSaveCoordinator.save(MediaSaveRequest(
-            kind: attachmentKind,
-            origin: .composed,
-            remoteURLString: url,
-            suggestedFileName: media.fileName
-        ))
+        PostSaveAction.perform(post, coordinator: mediaSaveCoordinator)
+    }
+
+    private var canSaveMedia: Bool {
+        PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable
     }
 
     /// Action glyph that gains an accent-colour BORDER on the glyph itself when

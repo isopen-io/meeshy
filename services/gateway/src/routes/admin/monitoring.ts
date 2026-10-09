@@ -39,6 +39,9 @@
  *   les deux moitiés — la route qui la lit, et le serveur qui la pose.
  * - `translator` est `null` sans gestionnaire Socket.IO : la traduction n'a
  *   alors aucune statistique à lire.
+ * - `backups` (#9668) est `null` quand le verdict de la sauvegarde nocturne est
+ *   absent, illisible ou hors schéma (`services/admin/backup-status.ts`) : la
+ *   passerelle ne voit que ce fichier, jamais les sauvegardes elles-mêmes.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { requireAdminRank, requirePermission } from '../../middleware/authorize';
@@ -49,6 +52,7 @@ import {
   pingCache,
   servedCircuitBreakers,
 } from '../../services/admin/platform-probes';
+import { backupCardOf, backupStatusFile, readBackupVerdict } from '../../services/admin/backup-status';
 import { logError } from '../../utils/logger';
 import { sendInternalError, sendSuccess } from '../../utils/response';
 import {
@@ -173,6 +177,34 @@ const dependencySchema = {
   properties: { status: chaine, latencyMs: nombreNul },
 } as const;
 
+const backupsSchema = {
+  type: 'object',
+  nullable: true,
+  description: 'Le verdict de la sauvegarde nocturne (etat.json, #9668) — null quand il est absent ou illisible',
+  properties: {
+    status: { type: 'string', enum: ['ok', 'failed'] },
+    checkedAt: chaine,
+    reason: chaineNulle,
+    lastSuccessAt: chaineNulle,
+    ageSeconds: nombreNul,
+    stale: { type: 'boolean', description: 'La dernière sauvegarde réussie a plus de 26 h, ou aucune n’a réussi' },
+    nextRunAt: dateServie,
+    lastSuccess: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        documents: nombre,
+        collections: nombre,
+        mismatches: nombre,
+        indexes: nombre,
+        archiveBytes: nombre,
+        durationSeconds: nombre,
+        volumes: { type: 'array', items: { type: 'object', properties: { name: chaine, bytes: nombre } } },
+      },
+    },
+  },
+} as const;
+
 const monitoringSchema = {
   type: 'object',
   properties: {
@@ -236,6 +268,7 @@ const monitoringSchema = {
         failedUpdates: nombre,
       },
     },
+    backups: backupsSchema,
   },
 } as const;
 
@@ -251,7 +284,7 @@ export function registerMonitoringRoutes(fastify: FastifyInstance): void {
       ],
       schema: {
         description:
-          "La santé de la plateforme en une lecture : processus, base, Redis, temps réel, traduction, disjoncteurs, présence. canAccessAdmin + canViewAnalytics + rang d'administration. #8876.",
+          "La santé de la plateforme en une lecture : processus, base, Redis, temps réel, traduction, disjoncteurs, présence, sauvegarde nocturne. canAccessAdmin + canViewAnalytics + rang d'administration. #8876, #9668.",
         tags: ['admin'],
         summary: 'Platform health overview (admin)',
         security: [{ bearerAuth: [] }],
@@ -261,15 +294,17 @@ export function registerMonitoringRoutes(fastify: FastifyInstance): void {
     async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
         const memory = process.memoryUsage();
-        const [databaseLatency, redis, translatorReachable] = await Promise.all([
+        const [databaseLatency, redis, translatorReachable, backupVerdict] = await Promise.all([
           pingBase(fastify.prisma),
           pingCache(),
           probeTranslator(fastify),
+          readBackupVerdict(backupStatusFile()),
         ]);
         const socketStats = readSocketStats(fastify);
 
+        const now = new Date();
         return sendSuccess(reply, {
-          generatedAt: new Date(),
+          generatedAt: now,
           gateway: {
             uptimeSeconds: Math.round(process.uptime()),
             memory: { heapUsed: memory.heapUsed, heapTotal: memory.heapTotal, rss: memory.rss },
@@ -289,6 +324,7 @@ export function registerMonitoringRoutes(fastify: FastifyInstance): void {
             lastFailureAt: lastFailure,
           })),
           presenceUpdates: readPresenceMetrics(fastify),
+          backups: backupCardOf(backupVerdict, now),
         });
       } catch (error) {
         logError(fastify.log, 'Admin monitoring error:', error);

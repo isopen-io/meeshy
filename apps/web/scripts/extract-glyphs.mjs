@@ -214,6 +214,9 @@ const PROGRESSION = [
   'chat-circle-text',
   'globe',
   'users-three',
+  // « Groupes créés » (#9639) : un logo par type — les communautés gardent
+  // `users-three`, un groupe qu'on crée prend ses quatre personnes.
+  'users-four',
   'magic-wand',
   'paper-plane-tilt',
   // La famille SOCIALE (#5766) : lien créé, contenu partagé, invité venu,
@@ -542,7 +545,7 @@ emit({
  * `sparkle` (#9570) : le tres petit glyphe de POINTS qui precede « +99 » dans
  * la ligne de metadonnees d'une carte -- ce que le post a rapporte au lecteur.
  */
-const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash', 'arrow-bend-up-left', 'map-pin', 'sparkle'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash', 'arrow-bend-up-left', 'map-pin', 'sparkle', 'music-note'];
 
 emit({
   ids: FEED,

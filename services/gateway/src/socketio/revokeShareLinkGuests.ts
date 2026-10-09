@@ -101,6 +101,7 @@ import {
 import { invalidateParticipantLookup } from '../utils/participant-lookup-cache';
 import type { DepartedMemberEphemeralState } from './endConversationMembership';
 import type { ConversationRoomEmitter } from './emitToConversationParticipants';
+import { announceConversationLanguageChange } from '../services/message-translation/conversationLanguageChanges';
 
 /**
  * Un socket, réduit aux deux verbes dont cette unité a besoin : celui que
@@ -157,6 +158,7 @@ export async function revokeShareLinkGuests(
   const conversationIds = [...new Set(guests.map(guest => guest.conversationId))];
 
   for (const conversationId of conversationIds) {
+    announceConversationLanguageChange({ kind: 'departure', conversationId });
     const remaining: ReadonlyArray<MemberCountAudienceTarget> = await prisma.participant.findMany({
       where: { conversationId, isActive: true },
       select: { id: true, userId: true, role: true, user: { select: { role: true } } },

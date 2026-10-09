@@ -36,6 +36,8 @@
  * le motif éprouvé du même rangement.
  */
 
+import { refusesContentGesture } from './captureNoticeVisibility';
+
 /** La NATURE du média cité — le seul fait, avec l'ancre, qui a le droit d'être figé. */
 export type AttachmentReplyKind = 'image' | 'video' | 'audio' | 'location' | 'file';
 
@@ -138,8 +140,8 @@ type AttachmentOwnerReader = {
   readonly message: {
     findUnique: (args: {
       where: { id: string };
-      select: { id: true; conversationId: true; deletedAt: true };
-    }) => Promise<{ id: string; conversationId: string; deletedAt: Date | null } | null>;
+      select: { id: true; conversationId: true; deletedAt: true; messageType: true; metadata: true };
+    }) => Promise<{ id: string; conversationId: string; deletedAt: Date | null; messageType: string | null; metadata: unknown } | null>;
   };
 };
 
@@ -191,13 +193,18 @@ export async function admitAttachmentReply(
   if (replyToId.length > 0) {
     const cited = await prisma.message.findUnique({
       where: { id: replyToId },
-      select: { id: true, conversationId: true, deletedAt: true },
+      select: { id: true, conversationId: true, deletedAt: true, messageType: true, metadata: true },
     });
     if (!cited || cited.deletedAt) {
       return { ok: false, reason: 'La lecture n’a pas confirmé le message cité' };
     }
     if (cited.conversationId !== params.conversationId) {
       return { ok: false, reason: 'Le message cité n’appartient pas à cette conversation' };
+    }
+    // #9629 — un avis de capture ne se cite pas : la citation le recopierait
+    // dans la réponse, servie à des lecteurs hors de son audience.
+    if (refusesContentGesture(cited)) {
+      return { ok: false, reason: 'Un avis de capture ne se cite pas' };
     }
   }
 

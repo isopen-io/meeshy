@@ -73,6 +73,7 @@ import { AuthService } from '../../../../services/AuthService';
 import { registerRegistrationRoutes } from '../../../../routes/auth/register';
 import { CURRENT_TERMS_VERSION } from '@meeshy/shared/types/terms';
 import { executeurImmediat } from '../../../helpers/after-response';
+import { resolveTrustProxy } from '../../../../config/trust-proxy';
 
 type LigneCreee = Record<string, unknown>;
 
@@ -114,8 +115,12 @@ const passerelle = (options: { readonly prisPseudos?: readonly string[] } = {}) 
 const monter = async (options: Parameters<typeof passerelle>[0] = {}) => {
   const { prisma, create, update } = passerelle(options);
   const differe = executeurImmediat();
+  // #9608 — l'adresse est `request.ip`, résolue sous le `trustProxy` de
+  // PRODUCTION : l'`x-forwarded-for` des cas ci-dessous est celui que Traefik
+  // pose, cru parce que le maillon de confiance (ici l'injecteur) le porte.
   const app = Fastify({
     logger: false,
+    trustProxy: resolveTrustProxy('1'),
     ajv: { customOptions: { strict: 'log' as const, keywords: ['example'] } },
   });
   app.decorate('prisma', prisma as never);

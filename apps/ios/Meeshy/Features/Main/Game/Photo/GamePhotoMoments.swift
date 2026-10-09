@@ -13,7 +13,7 @@ import MeeshySDK
 /// qu'une division nouvelle est un moment nouveau.
 nonisolated enum PhotoEmblem: Equatable, Codable, Sendable {
     case start
-    case rank(GloryRank, GloryDivision?)
+    case rank(GloryRank, GloryDivision5?)
     case tier(LevelTierKey, level: Int)
     case levelHundred(prestige: Int)
     case meesh(number: Int, edition: MeeshEdition)
@@ -63,12 +63,12 @@ enum GamePhotoMoments {
         )
     }
 
-    static func rank(_ rank: GloryRank, division: GloryDivision?) -> PhotoMoment {
+    static func rank(_ rank: GloryRank, division: GloryDivision5?, mythic: MythicSeatRef? = nil) -> PhotoMoment {
         PhotoMoment(
             id: "rank:\(rank.rawValue):\(division?.rawValue ?? 0)",
             emblem: .rank(rank, division),
             kicker: String(localized: "game.photo.kicker.rank", defaultValue: "Nouveau rang", bundle: .main),
-            title: GameCopy.rankLabel(rank, division: division)
+            title: GameCopy.rankLabel(rank, division5: division, mythic: mythic)
         )
     }
 
@@ -136,17 +136,18 @@ enum GamePhotoMoments {
         )
     }
 
+    /// Le premier niveau du palier, par la loi (`GameLevels.tierStart`) : 10 … 90, puis 101, 200 … 900, et 1000 (#9688).
     private static func tierLevel(_ tier: LevelTierKey) -> Int {
-        (LevelTierKey.allCases.firstIndex(of: tier) ?? 0) * 10
+        GameLevels.tierStart(of: tier)
     }
 
     /// Le moment que propose une carte du guide, dans l'état courant du jeu ; `nil` si elle ne se photographie pas.
     static func fromCard(key: GuideMomentKey, game: GameBlock) -> PhotoMoment? {
         switch key {
         case .newRank:
-            return rank(game.glory.rank, division: game.glory.division)
+            return rank(game.glory.rank, division: game.glory.shownDivision, mythic: game.glory.mythicSeat)
         case .newTier:
-            return tier(game.level.tier, level: tierLevel(game.level.tier))
+            return tier(game.level.shown.tier, level: tierLevel(game.level.shown.tier))
         case .firstMint:
             // `mint.number` est la PROCHAINE pièce : celle qui vient d'être frappée porte le numéro d'avant.
             let number = max(1, game.mint.number - 1)
@@ -171,19 +172,19 @@ enum GamePhotoMoments {
         let minted = before.mint.number
 
         let divisionRose: Bool = {
-            guard let now = after.glory.division, let then = before.glory.division else { return false }
+            guard let now = after.glory.shownDivision, let then = before.glory.shownDivision else { return false }
             return now.rawValue < then.rawValue
         }()
         if (after.glory.rank != before.glory.rank || divisionRose) && after.glory.glory > before.glory.glory {
-            moments.append(rank(after.glory.rank, division: after.glory.division))
+            moments.append(rank(after.glory.rank, division: after.glory.shownDivision, mythic: after.glory.mythicSeat))
         }
         // Le Prestige a sa propre carte (le trophée numéroté) : la carte « niveau 100 » de la vague 1 ne la double pas.
         let wave2 = ofTransitionV2(from: before, to: after)
         let prestigeCard = wave2.contains { if case .prestige = $0.emblem { true } else { false } }
-        let tierBefore = LevelTierKey.allCases.firstIndex(of: before.level.tier) ?? 0
-        let tierAfter = LevelTierKey.allCases.firstIndex(of: after.level.tier) ?? 0
+        let tierBefore = LevelTierKey.allCases.firstIndex(of: before.level.shown.tier) ?? 0
+        let tierAfter = LevelTierKey.allCases.firstIndex(of: after.level.shown.tier) ?? 0
         if tierAfter > tierBefore {
-            moments.append(tier(after.level.tier, level: tierLevel(after.level.tier)))
+            moments.append(tier(after.level.shown.tier, level: tierLevel(after.level.shown.tier)))
         }
         if after.level.prestige > before.level.prestige && !prestigeCard {
             moments.append(levelHundred(prestige: after.level.prestige))

@@ -138,4 +138,32 @@ struct MessageStickerTests {
         #expect(sticker.animation == nil)
         #expect(sticker.slots.isEmpty)
     }
+
+    // MARK: - « Mes stickers » (#9635)
+
+    @Test("un sticker de bibliothèque ne porte que son ObjectId, en minuscules, et voyage sans être rendable")
+    func library_carriesOnlyTheObjectId() throws {
+        let sticker = try #require(MessageSticker.library("65F0A1B2C3D4E5F6A7B8C9D0"))
+        #expect(sticker.stickerId == "65f0a1b2c3d4e5f6a7b8c9d0")
+        #expect(!sticker.isRenderable)
+        #expect(sticker.ifRenderable == nil)
+        #expect(sticker.ifWireWorthy == sticker)
+        let objet = try encodedObject(sticker)
+        #expect(objet.keys.sorted() == ["stickerId"])
+        #expect(MessageSocketManager.stickerSocketPayload(sticker)["stickerId"] as? String == "65f0a1b2c3d4e5f6a7b8c9d0")
+    }
+
+    @Test("un identifiant LOCAL (UUID d'un collage) ne part pas : la passerelle le refuserait")
+    func library_localIdStaysAPlainImage() {
+        #expect(MessageSticker.library(UUID().uuidString) == nil)
+        #expect(MessageSticker.library("") == nil)
+        #expect(MessageSticker().ifWireWorthy == nil)
+    }
+
+    @Test("stickerId fait l'aller-retour du fil")
+    func library_roundTrip() throws {
+        let relu = try decode(#"{"stickerId":"65f0a1b2c3d4e5f6a7b8c9d0"}"#)
+        #expect(relu.stickerId == "65f0a1b2c3d4e5f6a7b8c9d0")
+        #expect(relu == MessageSticker(stickerId: "65f0a1b2c3d4e5f6a7b8c9d0"))
+    }
 }

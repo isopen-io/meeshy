@@ -34,6 +34,7 @@ const arActivation = {
   'activation.gate.publish': 'للنشر، أكّد عنوانك. منشورك محفوظ وسيُنشر فور تأكيد الرمز.',
   'activation.gate.invite': 'للدعوة عبر البريد الإلكتروني، أكّد عنوانك. ستُرسل دعوتك فور تأكيد الرمز.',
   'activation.gate.link': 'لإنشاء رابط، أكّد عنوانك. سيُنشأ رابطك فور تأكيد الرمز.',
+  'activation.gate.moreLinks': 'بعد 5 روابط نشطة، أكّد عنوانك لإنشاء المزيد. سيُنشأ رابطك فور تأكيد الرمز.',
 } as const;
 
 export default arActivation;

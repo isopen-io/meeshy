@@ -2,21 +2,22 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
-/// Le héro de Progression (#5841) : « Comment gagner » se DÉRIVE du barème — régler un poids
+/// Le héro de Progression (#5841, #9667) : « Comment gagner » se DÉRIVE du catalogue (ce qu'un geste
+/// de chaque famille rapporte AU PLUS, `familyTopPoints`) — régler un poids
 /// change ce que le héro énumère, sans toucher une seule chaîne.
 @MainActor
 final class GameHeroModelTests: XCTestCase {
 
     func test_theEarnList_hasOneItemPerFamily_sortedByDescendingWeight() {
         let items = GameHero.earnItems()
-        XCTAssertEqual(items.map(\.family), [.content, .social, .conversation, .comment, .tool])
-        XCTAssertEqual(items.map(\.weight), [9, 7, 5, 3, 1])
+        XCTAssertEqual(items.map(\.family), [.content, .comment, .social, .conversation, .tool])
+        XCTAssertEqual(items.map(\.weight), [1000, 100, 7, 5, 4])
     }
 
     func test_theEarnList_isTheCatalogScale_notACopy() {
         let items = GameHero.earnItems()
         for item in items {
-            XCTAssertEqual(item.weight, EngagementCatalog.familyWeights[item.family], "\(item.family)")
+            XCTAssertEqual(item.weight, EngagementCatalog.familyTopPoints[item.family], "\(item.family)")
         }
         XCTAssertEqual(Set(items.map(\.family)), Set(EngagementAxisFamily.allCases))
     }

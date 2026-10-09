@@ -120,6 +120,8 @@ export const userGameProfileResponse = envelope(
         strict({
           level: { type: 'number' },
           tier: { type: 'string' },
+          // #9688 : le niveau et le palier ouverts par le rang ; `level` / `tier` gardent l'ancienne loi (≤ 100, dix paliers).
+          ladder: strict({ level: { type: 'number' }, tier: { type: 'string' } }),
           prestige: { type: 'number' },
           flame: nullableString,
           rank: { type: 'string' },

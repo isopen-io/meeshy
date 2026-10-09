@@ -198,7 +198,7 @@ struct PostDetailView: View {
                     String(localized: "feed.post.detail.copy_link.success", defaultValue: "Lien copié", bundle: .main)
                 )
             case .presentShareSheet:
-                shareableLink = ShareableLink(url: resolvedUrl)
+                shareableLink = ShareableLink(url: resolvedUrl, fileSource: .post(post))
                 HapticFeedback.light()
             }
         }
@@ -291,9 +291,7 @@ struct PostDetailView: View {
                 method: like ? "POST" : "DELETE"
             )
             return true
-        } catch {
-            return false
-        }
+        } catch { DailyGestureLimitNotice.surface(error); return false }
     }
 
     // MARK: - Bookmark / Repost / Share (post detail)
@@ -327,24 +325,14 @@ struct PostDetailView: View {
     }
 
     /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
-    /// du post (repost-aware via `primaryReelDisplayMedia`). No-op si absent —
-    /// gardé par l'appelant (`displayPost?.primaryReelDisplayMedia != nil`).
+    /// du post, aiguillé par `PostSaveRoute` (#9681) — gardé par `canSaveMedia`.
     private func requestSaveMedia() {
-        guard let media = displayPost?.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
-        HapticFeedback.light()
-        let attachmentKind: AttachmentKind
-        switch media.type {
-        case .video: attachmentKind = .video
-        case .audio: attachmentKind = .audio
-        case .document: attachmentKind = .document
-        case .image: attachmentKind = .image
-        }
-        mediaSaveCoordinator.save(MediaSaveRequest(
-            kind: attachmentKind,
-            origin: .composed,
-            remoteURLString: url,
-            suggestedFileName: media.fileName
-        ))
+        guard let post = displayPost else { return }
+        PostSaveAction.perform(post, coordinator: mediaSaveCoordinator)
+    }
+
+    private var canSaveMedia: Bool {
+        displayPost.map { PostSaveAction.route(for: $0, coordinator: mediaSaveCoordinator) != .unavailable } ?? false
     }
 
     @MainActor
@@ -593,7 +581,7 @@ struct PostDetailView: View {
                 replies: viewModel.repliesFor(comment.id),
                 isExpanded: viewModel.expandedThreads.contains(comment.id),
                 isLoadingReplies: viewModel.loadingReplies.contains(comment.id),
-                accentColor: accentColor,
+                accentColor: accentColor, post: displayPost,
                 // Like de commentaire optimiste + réaction socket cœur, porté par le
                 // ViewModel (miroir de `CommentsSheetView`). L'état est semé depuis
                 // `currentUserReactions` au chargement, donc les commentaires déjà
@@ -1011,7 +999,7 @@ struct PostDetailView: View {
             // Same `meeshy.me/l/<token>` URL that "Copier le lien" copies —
             // the gateway already recorded the share + minted the
             // TrackingLink owned by the current user.
-            ShareSheet(activityItems: [link.url])
+            ShareSheet(activityItems: link.activityItems)
         }
         .postEditCover(post: displayPost, isPresented: $isEditing) {
             if let post = displayPost {
@@ -1160,7 +1148,7 @@ struct PostDetailView: View {
                 Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
             }
             Button {
-                if displayPost?.primaryReelDisplayMedia != nil {
+                if canSaveMedia {
                     requestSaveMedia()
                 } else {
                     toggleDetailBookmark()
@@ -1177,12 +1165,12 @@ struct PostDetailView: View {
                 // étiquette depuis toujours, avec ces deux clés exactes : le
                 // savoir était à trente lignes d'ici.
                 Label(
-                    displayPost?.primaryReelDisplayMedia != nil
+                    canSaveMedia
                         ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
                         : (isPostBookmarked
                             ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
                             : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)),
-                    systemImage: displayPost?.primaryReelDisplayMedia != nil
+                    systemImage: canSaveMedia
                         ? "arrow.down.to.line"
                         : (isPostBookmarked ? "bookmark.fill" : "bookmark")
                 )
@@ -1329,9 +1317,7 @@ struct PostDetailView: View {
                     authorReachLine(post)
 
                     HStack(spacing: MeeshySpacing.xs) {
-                        Text(post.timestamp, style: .relative)
-                            .font(.caption)
-                            .foregroundColor(theme.textMuted)
+                        PostDateWithPoints(postId: post.id, seed: post.viewerPoints, color: theme.textMuted) { Text(post.timestamp, style: .relative) }
 
                         let flags = buildAvailableFlags()
                         if !flags.isEmpty || post.translations?.isEmpty == false {
@@ -1636,32 +1622,8 @@ EngagementGlyph(
                 : String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main))
             .accessibilityHint(String(localized: "a11y.post.bookmark.hint", defaultValue: "Enregistrer cette publication", bundle: .main))
 
-            // Muet du canvas (B3.6, Task E2) — monté SI ET SEULEMENT SI une
-            // piste existe (résolveur partagé E1, sur `renderedItem` HISSÉ par
-            // l'appelant — pas une reconstruction locale, correctif revue
-            // mineur #8) ET si un canvas est RÉELLEMENT rendu quelque part
-            // dans `postDetailContent` (`detailCanvasIsRendered`, correctif
-            // revue majeur #3) : l'annonce seule peut être vraie pour un post
-            // NON-story portant son PROPRE fond (son emprunté, E1) sans
-            // qu'aucun canvas ne rende — le bouton serait alors décoratif.
-            let detailAnnouncement = BackgroundSoundBadge.announcement(for: renderedItem.storyEffects)
-            if BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem),
-               BackgroundSoundBadge.showsMuteButton(for: detailAnnouncement) {
-                Spacer()
-
-                Button {
-                    isCanvasMuted.toggle()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: isCanvasMuted))
-                        .font(.body)
-                        .foregroundColor(theme.textSecondary)
-                }
-                .engagementHitArea()
-                .accessibilityLabel(isCanvasMuted
-                    ? String(localized: "a11y.feed.post.sound.unmute", defaultValue: "Réactiver le son du fond", bundle: .main)
-                    : String(localized: "a11y.feed.post.sound.mute", defaultValue: "Couper le son du fond", bundle: .main))
-            }
+            // Plus de baffle ici (#9677, directive porteur 2026-10-08) : c'est la
+            // NOTE du crédit, au-dessus de la scène, qui coupe le son de fond.
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.smPlus)

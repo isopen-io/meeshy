@@ -66,6 +66,8 @@ jest.mock('../../../services/CacheStore', () => ({
 jest.mock('../../../services/GeoIPService', () => ({
   GeoIPService: jest.fn().mockImplementation(() => ({})),
   cleanGeoCache: jest.fn(() => 0),
+  // #9609 — `startAll()` charge la base géoIP locale au démarrage.
+  warmGeoIpDatabase: jest.fn(() => Promise.resolve('loaded')),
 }));
 
 jest.mock('../../../services/RedisDeliveryQueue', () => ({
@@ -274,6 +276,21 @@ describe('BackgroundJobsManager', () => {
       expect(jobs).toHaveProperty('mutationLogCleanup');
       expect(jobs).toHaveProperty('banExpirySweep');
     });
+  });
+
+  it('arme le contrôle de la sauvegarde nocturne quand BACKUP_STATUS_ALERTS_ENABLED=true, et le désarme à l’arrêt (#9668)', () => {
+    const previous = process.env.BACKUP_STATUS_ALERTS_ENABLED;
+    process.env.BACKUP_STATUS_ALERTS_ENABLED = 'true';
+    try {
+      const mgr = new BackgroundJobsManager(makePrisma(), makeEmailService());
+      mgr.startAll();
+      expect(mgr.getJobs().backupStatusCheck.isArmed()).toBe(true);
+      mgr.stopAll();
+      expect(mgr.getJobs().backupStatusCheck.isArmed()).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.BACKUP_STATUS_ALERTS_ENABLED;
+      else process.env.BACKUP_STATUS_ALERTS_ENABLED = previous;
+    }
   });
 
   // ─── custom deliveryQueue parameter ──────────────────────────────────────

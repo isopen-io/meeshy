@@ -21,7 +21,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 const NOW = new Date('2026-10-05T10:00:00Z');
 const DAY = '2026-10-05';
-const LEVEL_20 = 10 * 20 * 20;
+const LEVEL_20 = 100 * 20 * 20;
 /** Le profil d'un compte sans compteur, sans contact, sans communauté et d'une seule langue — celui de `seedUser`. */
 const NO_PROFILE = { capabilities: [], habits: {} } as const;
 

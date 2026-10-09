@@ -1,6 +1,7 @@
+import type { FeedMedia } from '@/lib/api/feed-pages';
 import type { PostComment } from '@/lib/api/publication-comments';
 
-import { authoredBy, cardMediaOf, maskedByEffects, mediaAuthorOf, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
+import { authoredBy, maskedByEffects, mediaAuthorOf, servedCardMediaOf, type CardAudioPrism, type MessageCardMediaItem, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
 
 /**
  * **UN COMMENTAIRE S'IMAGE COMME UN MESSAGE** (#8693) — même carte, même
@@ -13,6 +14,13 @@ import { authoredBy, cardMediaOf, maskedByEffects, mediaAuthorOf, type MessageCa
  * comme sujet, ni comme citation, ni comme l'une de ses RÉPONSES, qu'on peut
  * joindre à la carte d'une racine (« Imager avec les réponses », #8734).
  */
+
+/**
+ * LES MÉDIAS D'UN COMMENTAIRE SUR SA CARTE (#9687) — la même élection que la
+ * carte d'un message (`servedCardMediaOf`). `prism: null` — la rangée montre
+ * l'original : son vocal original.
+ */
+export const commentCardMediaOf = (media: readonly FeedMedia[] | null | undefined, prism: CardAudioPrism): readonly MessageCardMediaItem[] => servedCardMediaOf(media, prism);
 
 type ServedComment = { readonly comment: PostComment; readonly servedText: string };
 
@@ -34,11 +42,14 @@ export function commentCardSubjectOf(params: {
   readonly parent: ServedComment | null;
   /** Les réponses à joindre sous le commentaire, dans leur ordre — rien par défaut. */
   readonly replies?: readonly ServedComment[];
+  /** Le prisme du lecteur, qui élit la piste d'un vocal — `null` ou absent : la rangée montre l'original, son vocal original. */
+  readonly readerLanguages?: readonly string[] | null;
 }): MessageCardSubject | null {
   const { comment, parent } = params;
   if (comment.pending === true || maskedByEffects(comment.effectFlags)) return null;
   const text = params.servedText.trim();
-  const media = cardMediaOf(comment.media);
+  const readerLanguages = params.readerLanguages ?? null;
+  const media = commentCardMediaOf(comment.media, readerLanguages === null ? null : { readerLanguages, fallbackLanguage: comment.originalLanguage ?? '' });
   if (text === '' && media.length === 0) return null;
   const quotedText = parent === null || maskedByEffects(parent.comment.effectFlags) ? '' : parent.servedText.trim();
   const reply = partOf(comment, text);

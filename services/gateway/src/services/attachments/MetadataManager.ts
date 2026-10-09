@@ -596,6 +596,26 @@ export class MetadataManager {
   }
 
   /**
+   * Les pistes que porte un conteneur (#9693) — `null` quand ffprobe ne
+   * répond pas : l'appelant garde alors ce qu'il savait, il ne conclut rien.
+   * `fullPath` est ABSOLU : la sonde sert aussi un fichier hors du dépôt.
+   */
+  async probeMediaStreams(fullPath: string): Promise<{ video: boolean; audio: boolean } | null> {
+    return new Promise((resolve) => {
+      const timeout = guardedTimeout({ name: 'ffprobe-streams-timeout', afterMs: 10000, logger, run: () => resolve(null) });
+      ffmpeg.ffprobe(fullPath, (err, metadata) => {
+        clearTimeout(timeout);
+        if (err) {
+          resolve(null);
+          return;
+        }
+        const kinds = (metadata.streams ?? []).map((stream) => stream.codec_type);
+        resolve({ video: kinds.includes('video'), audio: kinds.includes('audio') });
+      });
+    });
+  }
+
+  /**
    * Extrait les métadonnées d'un fichier vidéo
    */
   async extractVideoMetadata(videoPath: string): Promise<VideoMetadata> {

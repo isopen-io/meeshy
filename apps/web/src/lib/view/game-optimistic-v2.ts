@@ -1,13 +1,14 @@
 import type { GameBlock, GameDuoBlock, GameLeagueBlock, GameSeasonBlock, GameVisibility } from '@meeshy/shared/types/game';
 import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
-import { gloryStanding } from '@meeshy/shared/utils/game/glory';
-import { levelProgress } from '@meeshy/shared/utils/game/levels';
+import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
+import { levelOnTheWire, mintOnTheWire } from '@meeshy/shared/utils/game/level-wire';
 import { previewMint } from '@meeshy/shared/utils/game/mint';
 import { prestigeTransition } from '@meeshy/shared/utils/game/prestige';
 import { seasonStepReward } from '@meeshy/shared/utils/game/season';
 import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
+import { recordOf, stepFactsOf } from '@/lib/view/game-optimistic';
 
 /**
  * LES MISES À JOUR OPTIMISTES DE LA VAGUE 2 (#9481, #9384 à #9389) — la même
@@ -133,30 +134,20 @@ export const afterPrestige = (view: EngagementWithGame): EngagementWithGame => {
   const game = view.game;
   const prestige = game?.prestige;
   if (game === undefined || prestige === undefined || !prestige.canPrestige) return view;
-  const transition = prestigeTransition({ score: game.level.score, prestige: game.level.prestige });
+  const transition = prestigeTransition({ score: game.level.score, prestige: game.level.prestige, levelRecord: recordOf(game.level) });
   if (!transition.allowed) return view;
 
-  const progress = levelProgress(transition.scoreAfter);
-  const standing = gloryStanding({ glory: game.glory.glory + transition.gloryGained, mythic: game.glory.rank === 'mythe' });
+  const standing = gloryStanding({ glory: game.glory.glory + transition.gloryGained, mythic: game.glory.rank === 'mythe', mythicSeat: game.glory.mythic ?? null });
+  const levelCap = levelCapForRank(standing.rank);
+  const steps = stepFactsOf(game.level, standing);
+  const level = levelOnTheWire({ score: transition.scoreAfter, levelCap, levelRecord: transition.levelRecordAfter, prestige: transition.prestigeAfter, steps });
   const trophies = game.trophies;
   return onGame(view, (current) => ({
     ...current,
-    level: {
-      ...current.level,
-      level: progress.level,
-      tier: progress.tier,
-      score: progress.score,
-      floorScore: progress.floorScore,
-      nextThreshold: progress.nextThreshold,
-      pointsToNext: progress.pointsToNext,
-      progress: progress.progress,
-      record: transition.levelRecordAfter,
-      prestige: transition.prestigeAfter,
-      canPrestige: false,
-    },
-    glory: { glory: standing.glory, rank: standing.rank, division: standing.division, next: standing.next, gloryMissing: standing.gloryMissing, progress: standing.progress },
-    mint: previewMint({ score: transition.scoreAfter, mintedLifetime: current.mint.number, debitablePoints: 0 }),
-    boosts: { ...current.boosts, tailwind: tailwindFactor({ level: progress.level, levelRecord: transition.levelRecordAfter }) },
+    level,
+    glory: { glory: standing.glory, rank: standing.rank, division: standing.division, division5: standing.division5, next: standing.next, gloryMissing: standing.gloryMissing, progress: standing.progress, mythic: standing.mythic },
+    mint: mintOnTheWire(previewMint({ score: transition.scoreAfter, mintedLifetime: current.mint.number, debitablePoints: 0, levelCap, steps })),
+    boosts: { ...current.boosts, tailwind: tailwindFactor({ level: transition.levelAfter, levelRecord: transition.levelRecordAfter }) },
     prestige: { ...prestige, stars: transition.prestigeAfter, canPrestige: false },
     ...(current.league === undefined ? {} : { league: { ...current.league, unlocked: false, access: 'locked' as const, current: null } }),
     ...(current.duo === undefined ? {} : { duo: { ...current.duo, unlocked: false } }),

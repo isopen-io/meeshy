@@ -14,7 +14,7 @@
  */
 
 import { atlasSummary, type AtlasState } from './atlas.js';
-import { canPrestige, GAME_PRESTIGE_MAX, levelFromScore } from './levels.js';
+import { canPrestige, GAME_PRESTIGE_MAX, levelForUnlocks } from './levels.js';
 import { DUO_MIN_LEVEL, duoProgress, duoReward, type DuoMission, type DuoStatus } from './duo.js';
 import { GLORY_POINTS } from './glory.js';
 import {
@@ -116,7 +116,7 @@ export type GameBlockExtras = {
   readonly achievementRarities?: GameAchievementRarities;
 };
 
-const recordOf = (levelRecord: number | null, score: number): number => Math.max(levelRecord ?? 1, levelFromScore(score));
+const recordOf = (levelRecord: number | null, score: number): number => Math.max(levelRecord ?? 1, levelForUnlocks({ score, levelRecord }));
 
 function leagueBlock(facts: GameBlockExtrasFacts, record: number): GameLeagueBlock {
   const moment = { dayKey: facts.today, minuteOfDay: facts.minuteOfDay };
@@ -189,7 +189,7 @@ function duoBlock(facts: GameBlockExtrasFacts, record: number): GameDuoBlock {
     reward:
       progress === null
         ? null
-        : duoReward({ level: levelFromScore(facts.score), flameDays: facts.flameDays, mineDone: progress.mineDone, partnerDone: progress.partnerDone }),
+        : duoReward({ level: levelForUnlocks({ score: facts.score, levelRecord: facts.levelRecord }), flameDays: facts.flameDays, mineDone: progress.mineDone, partnerDone: progress.partnerDone }),
   };
 }
 
@@ -239,7 +239,7 @@ export function buildGameBlockExtras(facts: GameBlockExtrasFacts): GameBlockExtr
     prestige: {
       stars: Math.min(GAME_PRESTIGE_MAX, Math.max(0, Math.trunc(facts.prestige))),
       max: GAME_PRESTIGE_MAX,
-      canPrestige: canPrestige({ level: levelFromScore(facts.score), prestige: facts.prestige }),
+      canPrestige: canPrestige({ level: levelForUnlocks({ score: facts.score, levelRecord: facts.levelRecord }), prestige: facts.prestige }),
       gloryOnPass: GLORY_POINTS.prestige,
     },
     visibility: { ...facts.visibility },

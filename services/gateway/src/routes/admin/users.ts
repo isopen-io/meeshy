@@ -169,7 +169,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
   // Historique de connexion (#6821) : `UserSession` / `SecurityEvent` étaient
   // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
-  registerUserSessionRoutes(fastify, { userAuditService });
+  registerUserSessionRoutes(fastify, { userAuditService, emailService });
   // #8051 — les quatre niveaux de mot de passe proposés AVANT `reset-password`
   // ci-dessous, sous les mêmes gardes : voir `user-password-proposals.ts`.
   registerUserPasswordProposalRoutes(fastify);
@@ -214,7 +214,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Sanitize selon le role du viewer
       const sanitizedUsers = sanitizationService.sanitizeUsers(
         result.users,
-        viewerRole
+        viewerRole,
+        authContext.registeredUser!.id
       );
 
       const paginationMeta = buildPaginationMeta(
@@ -272,7 +273,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       // Sanitize selon le role — la FICHE demande en plus le bloc de métadonnées
       // de compte (#8876), servi aux seuls rôles qui voient les données sensibles.
-      const sanitizedUser = sanitizationService.sanitizeUser(user, viewerRole, { withAdminMetadata: true });
+      const sanitizedUser = sanitizationService.sanitizeUser(user, viewerRole, {
+        withAdminMetadata: true,
+        viewerId: authContext.registeredUser!.id,
+      });
 
       // Log d'audit
       await userAuditService.logViewUser(

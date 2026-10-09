@@ -68,6 +68,7 @@ final class GameElementDetailTests: XCTestCase {
             GameElementDetails.levelRing(game.level),
             GameElementDetails.treasuryTier(game.treasury),
             GameElementDetails.elanFamily(.content, elan: served.elan),
+            GameElementDetails.levelStep(GameLevelStep(level: 10, kind: .mint, target: 1, current: 0, met: false, rank: nil)),
             GameElementDetails.fact(ProgressionConceptFact(label: "Record", value: "12"), of: .level),
             GameElementDetails.player(Self.rival),
         ]
@@ -96,7 +97,7 @@ final class GameElementDetailTests: XCTestCase {
     func test_theFamiliesAndTheFacts_areTheClosedListOfTheSharedCatalog() {
         XCTAssertEqual(GameElementKind.families.map(\.rawValue), [
             "badge", "succes", "defi", "trophy", "stamp", "step", "seal", "gem", "star", "rank", "flame", "freeze",
-            "mission", "chest", "coin", "ring", "treasury", "elan",
+            "mission", "chest", "coin", "ring", "treasury", "elan", "levelstep",
         ])
         XCTAssertEqual(GameElementKind.families.filter { $0.how == .gives }.map(\.rawValue), ["flame", "mission", "chest", "elan"])
         XCTAssertEqual(GameDetailFactKey.allCases.map(\.rawValue), [
@@ -105,8 +106,9 @@ final class GameElementDetailTests: XCTestCase {
             "missions_done", "league_place", "week_points", "league_zone", "league_missing", "league_closes",
             "league_friends", "season", "season_week", "season_steps", "season_stars", "prestige_glory", "elan_families",
             "badges_earned", "defis_earned", "succes_earned", "trophies", "showcase_visibility", "atlas_stamps", "atlas_pending",
+            "spend_held", "spend_cost", "spend_after", "spend_missing", "level_now", "level_required",
         ])
-        XCTAssertEqual(GameElementKind.families.count, 18)
+        XCTAssertEqual(GameElementKind.families.count, 19)
         for kind in GameElementKind.families {
             XCTAssertFalse((GameDetailText.what(kind) ?? "").isEmpty, "\(kind.rawValue) : pas de « c'est quoi »")
             XCTAssertFalse((GameDetailText.how(kind) ?? "").isEmpty, "\(kind.rawValue) : pas de « comment »")
@@ -122,10 +124,10 @@ final class GameElementDetailTests: XCTestCase {
     /// Une ligne de donnée porte SA phrase quand le catalogue en a une ; sinon celle de son concept.
     func test_aDataLine_saysItsOwnSentence_orTheOneOfItsConcept() {
         let served = progress()
-        let facts = ProgressionConceptModel.facts(.level, progress: served, game: game)
-        let tier = facts.first { $0.detail == .tier }
-        XCTAssertNotNil(tier, "la ligne du palier porte sa clé")
-        XCTAssertEqual(tier.map { GameElementDetails.fact($0, of: .level).what }, GameDetailText.fact(.tier))
+        let facts = ProgressionConceptModel.facts(.glory, progress: served, game: game)
+        let glory = facts.first { $0.detail == .glory }
+        XCTAssertNotNil(glory, "la ligne de la Gloire porte sa clé")
+        XCTAssertEqual(glory.map { GameElementDetails.fact($0, of: .glory).what }, GameDetailText.fact(.glory))
 
         let plain = GameElementDetails.fact(ProgressionConceptFact(label: "x", value: "1"), of: .flame)
         XCTAssertEqual(plain.what, ConceptText.why(.flame))
@@ -300,5 +302,211 @@ final class GameElementDetailTests: XCTestCase {
 
         XCTAssertTrue(rendu.identifiers.contains("game.element." + detail.id), "l'élément n'est pas un bouton de précisions : \(rendu.identifiers)")
         XCTAssertTrue(opened.isEmpty, "rien ne s'ouvre sans toucher")
+    }
+
+    // MARK: - Le rang (#9636)
+
+    func test_rank_readsTheFiveDivisions_andTheServedMythSeat() {
+        let voixV = GameBlock.Glory(glory: 6000, rank: .voix, division: .iii, division5: .v,
+                                    next: GloryStep(rank: .voix, division: .iii, division5: .iv, minGlory: 7800),
+                                    gloryMissing: 1800, progress: 0)
+        let detail = GameElementDetails.rank(voixV)
+        XCTAssertEqual(detail.name, "\(GameCopy.rankName(.voix)) V")
+        XCTAssertEqual(detail.emblem, .rank(.voix, .v, nil))
+        XCTAssertEqual(detail.key, "voix.5")
+
+        let seat = MythicSeatRef(number: 42, edition: 57)
+        let myth = GameElementDetails.rank(GameBlock.Glory(glory: 1_000_000, rank: .mythe, division: nil, next: nil,
+                                                           gloryMissing: nil, progress: 1, mythic: seat))
+        XCTAssertEqual(myth.name, GameCopy.mythicSeatLabel(seat: 42))
+        XCTAssertEqual(myth.emblem, .rank(.mythe, nil, seat))
+    }
+
+    // MARK: - Le niveau ouvert par le rang (#9688)
+
+    func test_levelRing_beyond100_readsTheLadder_notYesterdaysFields() {
+        let game = GameFixture.game(score: GameLevels.threshold(of: 345) + 12)
+        let detail = GameElementDetails.levelRing(game.level)
+        XCTAssertEqual(game.level.level, GameLevels.legacyMaxLevel)
+        XCTAssertEqual(detail.key, "345")
+        XCTAssertEqual(detail.emblem, .tier(.quasar))
+        XCTAssertTrue(detail.name.contains(GameCopy.formatCount(345)), detail.name)
+    }
+
+    func test_levelRing_atTheRankCap_saysWhichRankOpensTheNextLevels() {
+        let game = GameFixture.game(score: GameLevels.threshold(of: 700), glory: 100_000)
+        XCTAssertTrue(game.level.shown.isMax)
+        let detail = GameElementDetails.levelRing(game.level)
+        XCTAssertEqual(detail.key, "499")
+        let next = detail.facts.first { $0.label == ConceptText.factNextLevel }
+        XCTAssertEqual(next?.value, GameCopy.levelTopShort(cap: GameLevels.capBase))
+        XCTAssertNotEqual(next?.value, GameText.bannerTop, "au plafond du rang, on n'est pas « au sommet »")
+    }
+
+    func test_levelRing_beforeAServerThatSendsTheLadder_readsYesterdaysFields() {
+        let game = GameFixture.game(score: GameLevels.threshold(of: 100) + 3, servesLadder: false)
+        XCTAssertNil(game.level.ladder)
+        let detail = GameElementDetails.levelRing(game.level)
+        XCTAssertEqual(detail.key, "100")
+        let next = detail.facts.first { $0.label == ConceptText.factNextLevel }
+        XCTAssertEqual(next?.value, GameText.bannerTop)
+    }
+
+    // MARK: - Ce qu'un geste dépense ou exige, avant le geste (#9705)
+
+    func test_theSpendRow_saysWhatIsHeld_whatItCosts_andWhatRemains() {
+        let items = GameSpendRows.spend(GameSpend.preview(held: 5, cost: 3), format: GameCopy.meeshes)
+        XCTAssertEqual(items.map(\.label), [ConceptText.factBalance, ConceptText.factCost, ConceptText.factAfter])
+        XCTAssertEqual(items.map(\.value), [GameCopy.meeshes(5), GameCopy.meeshes(3), GameCopy.meeshes(2)])
+        XCTAssertEqual(items.map(\.detail), [.spendHeld, .spendCost, .spendAfter])
+        XCTAssertFalse(items.contains { $0.short })
+    }
+
+    func test_theSpendRow_saysWhatIsMissing_insteadOfWhatRemains() {
+        let items = GameSpendRows.spend(GameSpend.preview(held: 4, cost: 10), format: GameCopy.meeshes)
+        XCTAssertEqual(items.last?.label, ConceptText.factMissing)
+        XCTAssertEqual(items.last?.value, GameCopy.meeshes(6))
+        XCTAssertEqual(items.last?.short, true)
+        XCTAssertFalse(items.contains { $0.label == ConceptText.factAfter })
+    }
+
+    func test_theMintHero_spendsThePocket_butIsPaidByConvertiblePointsOnly() {
+        let rich = GameMintPreviewView(game: GameFixture.game(score: 5000, debitable: 5000), online: true, minting: false,
+                                       error: nil, celebration: nil, onMint: {})
+        XCTAssertEqual(rich.spend.held, 5000)
+        XCTAssertEqual(rich.spend.after, 5000 - rich.spend.cost)
+        XCTAssertTrue(rich.spend.affordable)
+
+        let locked = GameMintPreviewView(game: GameFixture.game(score: 5000, debitable: 900), online: true, minting: false,
+                                         error: nil, celebration: nil, onMint: {})
+        XCTAssertFalse(locked.spend.affordable, "des points de conversation ne paient pas la frappe")
+        XCTAssertEqual(locked.spend.missing, locked.spend.cost - 900)
+    }
+
+    func test_theRequirementRow_saysTheGap_andFallsSilentOnceMet() {
+        let below = GameSpendRows.requirement(GameSpend.requirement(current: 3, required: GameMissions.minLevel))
+        XCTAssertEqual(below.map(\.label), [ConceptText.name(.level), ConceptText.factRequired, ConceptText.factMissing])
+        XCTAssertEqual(below.last?.value, GameCopy.levels(GameMissions.minLevel - 3))
+
+        let met = GameSpendRows.requirement(GameSpend.requirement(current: 40, required: GameDuo.minLevel), record: true)
+        XCTAssertEqual(met.map(\.label), [ConceptText.factRecord, ConceptText.factRequired])
+    }
+
+    func test_thePrestigeConfirmation_givesTheValuesBeforeAndAfter() throws {
+        let game = GameWave2Fixture.atLevel100(prestige: 1)
+        let values = GamePrestigeScreen.passValues(game: game)
+        XCTAssertEqual(values.map(\.label), [
+            ConceptText.factBalance, ConceptText.name(.level), ConceptText.factRecord, ConceptText.factStars, ConceptText.name(.glory),
+        ])
+        XCTAssertEqual(values.first?.value, "\(GameCopy.points(game.level.score)) → \(GameCopy.points(0))")
+        XCTAssertEqual(values[3].value, "\(GameCopy.formatCount(1)) → \(GameCopy.formatCount(2))")
+        XCTAssertNotNil(values[3].element, "l'étoile ouvre les précisions de l'étoile posée")
+        XCTAssertTrue(GamePrestigeScreen.passValues(game: GameFixture.game(score: 400)).isEmpty, "sous le niveau 100, rien à confirmer")
+    }
+
+    // MARK: - Les étapes des niveaux (#9706)
+
+    private static let noStep = GameLevelStepCounts(minted: 0, missionsDone: 0, flameRecord: 0)
+
+    /// Les points du niveau 15, aucune Meesh frappée : le niveau attend à 9, l'étape du niveau 10 manque.
+    private func heldGame() -> GameBlock {
+        GameFixture.game(score: GameLevels.threshold(of: 15), glory: 0, steps: Self.noStep)
+    }
+
+    func test_aStepToDo_saysWhatItAsks_howFarItIs_andTheTenSteps() throws {
+        let game = heldGame()
+        let step = try XCTUnwrap(game.level.shown.step, "le niveau retenu sert la prochaine étape")
+        XCTAssertEqual(step.level, 10)
+        XCTAssertEqual(step.kind, .mint)
+        XCTAssertFalse(step.met)
+
+        let detail = GameElementDetails.levelStep(step, facts: game.levelStepFacts)
+
+        XCTAssertEqual(detail.kind, .levelStep)
+        XCTAssertEqual(detail.name, GameCopy.levelStepLine(step))
+        XCTAssertTrue(detail.name.contains(GameCopy.levelStepGoal(step)), detail.name)
+        XCTAssertEqual(detail.status, .locked(missing: ConceptText.ratio(GameCopy.formatCount(0), GameCopy.formatCount(1)), progress: 0))
+        XCTAssertEqual(detail.what, GameDetailText.what(.levelStep))
+        XCTAssertEqual(detail.how, GameDetailText.how(.levelStep))
+        XCTAssertEqual(detail.facts.count, GameLevelSteps.rules.count, "les dix étapes, chacune faite ou à faire")
+        XCTAssertEqual(detail.facts.first?.label, GameText.bannerLevel(level: GameCopy.formatCount(10)))
+        XCTAssertNil(GameElementDetails.levelStep(step).facts.first, "sans faits servis, aucune ligne ne s'invente")
+    }
+
+    func test_aStepDone_isObtained_andSaysSo() {
+        let step = GameLevelStep(level: 20, kind: .missions, target: 1, current: 3, met: true, rank: nil)
+        let detail = GameElementDetails.levelStep(step)
+
+        XCTAssertTrue(detail.isObtained)
+        XCTAssertNil(detail.progress, "une étape faite n'a plus de jauge")
+        XCTAssertEqual(GameCopy.levelStepState(step), GameCopy.levelStepDone)
+    }
+
+    func test_aRankStep_namesTheRank_andCountsTheGlory() {
+        let step = GameLevelStep(level: 30, kind: .rank, target: 2000, current: 1200, met: false, rank: .echo)
+        let detail = GameElementDetails.levelStep(step)
+
+        XCTAssertTrue(detail.name.contains(GameCopy.rankName(.echo)), detail.name)
+        XCTAssertTrue(detail.statusLine.contains(GameCopy.formatCount(1200)) && detail.statusLine.contains(GameCopy.formatCount(2000)),
+                      detail.statusLine)
+        XCTAssertEqual(detail.progress ?? 0, 0.6, accuracy: 0.0001)
+    }
+
+    /// « Voir la fiche » mène au GESTE qui fait l'étape : la frappe, les missions du jour, la Flamme, la Gloire.
+    func test_theSheetOfAStep_opensTheConceptOfItsGesture() {
+        let concepts: [LevelStepKind: ProgressionConcept] = [.mint: .meesh, .missions: .missions, .flame: .flame, .rank: .glory]
+        for rule in GameLevelSteps.rules {
+            let step = GameLevelStep(level: rule.level, kind: rule.kind, target: rule.target, current: 0, met: false, rank: rule.rank)
+            XCTAssertEqual(GameElementDetails.levelStep(step).concept, concepts[rule.kind], "étape du niveau \(rule.level)")
+        }
+
+        let detail = GameElementDetails.levelStep(GameLevelStep(level: 40, kind: .flame, target: 7, current: 3, met: false, rank: nil))
+        let rendu = RenderedScreen(GameElementSheet(detail: detail, onOpenConcept: { _ in }), size: CGSize(width: 402, height: 1600))
+        ecran = rendu
+        let identifiants = rendu.identifiers
+        XCTAssertTrue(identifiants.contains("game.detail.locked"), "« à faire » n'est pas dit. Vus : \(identifiants)")
+        XCTAssertTrue(identifiants.contains("game.detail.sheet"), "la feuille offre le chemin vers le geste. Vus : \(identifiants)")
+    }
+
+    /// Retenu par une étape, le héros dit POURQUOI le niveau attend — jamais « encore 0 point ».
+    func test_aHeldLevel_saysWhyItWaits_andShowsTheStepToDo() throws {
+        let game = heldGame()
+        XCTAssertTrue(game.level.shown.held)
+        XCTAssertEqual(game.level.shown.level, 9)
+        let step = try XCTUnwrap(game.level.shown.step)
+        let why = GameCopy.levelHeld(step)
+        XCTAssertTrue(why.contains(GameCopy.levelStepGoal(step)) && why.contains(GameCopy.formatCount(10)), why)
+
+        let rendu = RenderedScreen(GameHeroView(game: game, onOpenGuide: {}), size: CGSize(width: 402, height: 1400))
+        ecran = rendu
+        XCTAssertTrue(rendu.says(why), "le héros ne dit pas pourquoi le niveau attend. Vus : \(rendu.labels)")
+        XCTAssertEqual(rendu.node("game.hero.level.step")?.label, GameCopy.levelStepAccessibility(step))
+    }
+
+    func test_aStepAlreadyDone_isShownDone_aboveTheLevel() throws {
+        let game = GameFixture.game(score: GameLevels.threshold(of: 15), glory: 0,
+                                    steps: GameLevelStepCounts(minted: 1, missionsDone: 1, flameRecord: 0))
+        XCTAssertFalse(game.level.shown.held)
+        let step = try XCTUnwrap(game.level.shown.step)
+        XCTAssertEqual(step.level, 20)
+        XCTAssertTrue(step.met)
+
+        let rendu = RenderedScreen(GameHeroView(game: game, onOpenGuide: {}), size: CGSize(width: 402, height: 1400))
+        ecran = rendu
+        XCTAssertEqual(rendu.node("game.hero.level.step")?.label, GameCopy.levelStepAccessibility(step))
+        XCTAssertTrue(GameCopy.levelStepAccessibility(step).hasSuffix(GameCopy.levelStepDone))
+    }
+
+    func test_noStep_beyond100_orBeforeAServerThatServesThem() {
+        let beyond = GameFixture.game(score: GameLevels.threshold(of: 150), glory: 40_000,
+                                      steps: GameLevelStepCounts(minted: 5, missionsDone: 10, flameRecord: 30))
+        XCTAssertEqual(beyond.level.shown.level, 150)
+        XCTAssertNil(beyond.level.shown.step, "au-delà de 100, plus d'étape")
+        let old = GameFixture.game(score: GameLevels.threshold(of: 15))
+        XCTAssertNil(old.level.shown.step, "un serveur d'avant les étapes n'en sert pas")
+
+        let rendu = RenderedScreen(GameHeroView(game: beyond, onOpenGuide: {}), size: CGSize(width: 402, height: 1400))
+        ecran = rendu
+        XCTAssertFalse(rendu.identifiers.contains("game.hero.level.step"))
     }
 }

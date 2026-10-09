@@ -126,6 +126,16 @@ const ar = {
   'export.announce.motionUnavailable': 'لا يستطيع هذا المتصفح إنشاء هذه الحركة',
   'export.announce.galleryMotion': 'حُفظ في المعرض',
   'export.announce.sharedMotion': 'جاهز للمشاركة',
+  'export.card.compose': 'التركيب',
+  'export.card.compose.postAndComment': 'المنشور + التعليق',
+  'export.card.compose.commentAlone': 'التعليق وحده',
+  'export.card.compose.threadToHere': 'السلسلة حتى هنا',
+  'export.card.compose.postRootAndReply': 'المنشور + الأصل + الرد',
+  'export.card.compose.chosenReplies': 'اختيار الردود',
+  'export.card.compose.post': 'المنشور في الأعلى',
+  'export.card.compose.replies': 'الردود على البطاقة',
+  'export.card.compose.thread': 'سلسلة التعليقات',
+  'export.card.compose.folded': '+{count} ردود',
 } satisfies ExportCardCatalog;
 
 export default ar;

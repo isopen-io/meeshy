@@ -1,6 +1,6 @@
 import type { EngagementAxisFamily } from '@meeshy/shared/types/engagement';
 import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
-import type { GloryDivision, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
+import type { GloryDivision, GloryDivision5, GloryRankOrMythic, MythicSeatRef } from '@meeshy/shared/utils/game/glory';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import type { MissionDifficulty } from '@meeshy/shared/utils/game/missions';
@@ -15,6 +15,7 @@ import {
   type GamePluralBase,
   type TranslateGameArgs,
 } from '@/lib/i18n-game-catalog';
+import { capOpener, type LevelReading } from '@/lib/game/ladder';
 import type { GameMaterial } from '@/lib/game/materials';
 import type { Medal } from '@/lib/game/medal';
 import { tierOrdinal } from '@/lib/game/tier-emblem';
@@ -84,6 +85,16 @@ const TIER_ORDINALS = [
   'game.tier.ordinal.8',
   'game.tier.ordinal.9',
   'game.tier.ordinal.10',
+  'game.tier.ordinal.11',
+  'game.tier.ordinal.12',
+  'game.tier.ordinal.13',
+  'game.tier.ordinal.14',
+  'game.tier.ordinal.15',
+  'game.tier.ordinal.16',
+  'game.tier.ordinal.17',
+  'game.tier.ordinal.18',
+  'game.tier.ordinal.19',
+  'game.tier.ordinal.20',
 ] as const;
 
 /** Ce que lit un lecteur d'écran sur l'anneau de niveau : « Niveau 34, palier Éclat, quatrième palier » (#9481). */
@@ -122,6 +133,18 @@ export function medalLabel(
 export const rankName = (rank: GloryRankOrMythic, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.rank.${rank}`);
 
+/** La ligne d'un niveau qui ne monte plus (#9688) : le rang qui lève son plafond, ou « au sommet » devant un ancien serveur. */
+export const levelTopLine = (level: LevelReading, language: Language = currentInterfaceLanguage()): string => {
+  const opener = capOpener(level);
+  return opener === null ? translateGame(language, 'game.level.top') : translateGame(language, 'game.level.capped', { rank: rankName(opener, language) });
+};
+
+/** La même, en puce courte. */
+export const bannerTopLine = (level: LevelReading, language: Language = currentInterfaceLanguage()): string => {
+  const opener = capOpener(level);
+  return opener === null ? translateGame(language, 'game.banner.top') : translateGame(language, 'game.banner.capped', { rank: rankName(opener, language) });
+};
+
 export const treasuryName = (tier: TreasuryTierKey, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.treasury.${tier}`);
 
@@ -134,12 +157,50 @@ export const difficultyName = (difficulty: MissionDifficulty, language: Language
 export const editionName = (edition: MeeshEdition, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.edition.${edition}`);
 
-const DIVISIONS: Readonly<Record<GloryDivision, string>> = { 3: 'III', 2: 'II', 1: 'I' };
+/* LE RANG SERVI (#9636) — ce que les écrans lisent du bloc `glory` (ou du `standing` d'un autre) pour le
+   DIRE et le DESSINER. Écrit ici, à côté de sa phrase, et non dans un module à part : un module de plus
+   partagé par les écrans du jeu serait nommé dans la table de préchargement de la première peinture. */
 
-export const divisionLabel = (division: GloryDivision): string => DIVISIONS[division];
+/**
+ * La division que le serveur sert : `division5` (V = 5 … I = 1) quand il la
+ * porte, sinon la division héritée (III, II, I) d'un serveur d'avant #9636.
+ */
+export const servedDivision = (glory: { readonly division: GloryDivision | null; readonly division5?: GloryDivision5 | null | undefined }): GloryDivision5 | null =>
+  glory.division5 ?? glory.division;
 
-export const rankLabel = (rank: GloryRankOrMythic, division: GloryDivision | null, language: Language = currentInterfaceLanguage()): string =>
+/** Le rang tel que le serveur le sert (bloc `glory` ou `standing` d'un autre). */
+export type ServedRank = {
+  readonly rank: GloryRankOrMythic;
+  readonly division: GloryDivision | null;
+  readonly division5?: GloryDivision5 | null | undefined;
+  readonly mythic?: MythicSeatRef | null | undefined;
+};
+
+/** Le rang à MONTRER : la division V..I (ou héritée), la place du Mythe quand elle est servie. */
+export type ShownRank = { readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null; readonly mythic: MythicSeatRef | null };
+
+export const shownRank = (served: ServedRank): ShownRank => ({
+  rank: served.rank,
+  division: servedDivision(served),
+  mythic: served.rank === 'mythe' ? (served.mythic ?? null) : null,
+});
+
+const DIVISIONS: Readonly<Record<GloryDivision5, string>> = { 5: 'V', 4: 'IV', 3: 'III', 2: 'II', 1: 'I' };
+
+/** La division en chiffres romains, de V à I (#9636) ; une division héritée (III, II, I) se lit pareil. */
+export const divisionLabel = (division: GloryDivision5): string => DIVISIONS[division];
+
+export const rankLabel = (rank: GloryRankOrMythic, division: GloryDivision5 | null, language: Language = currentInterfaceLanguage()): string =>
   division === null ? rankName(rank, language) : `${rankName(rank, language)} ${divisionLabel(division)}`;
+
+/** Le rang tel qu'on le DIT : « Voix IV », « Mythe n° 42 » quand la place est servie (#9636). */
+export const standingLabel = (
+  standing: { readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null; readonly mythic: MythicSeatRef | null },
+  language: Language = currentInterfaceLanguage(),
+): string =>
+  standing.rank === 'mythe' && standing.mythic !== null
+    ? translateGame(language, 'game.rank.mythe_seat', { number: String(standing.mythic.number) })
+    : rankLabel(standing.rank, standing.division, language);
 
 /** Un gabarit de mission : une phrase qui s'accorde au nombre, ou une phrase unique qui le porte. */
 type SingleMissionKey =

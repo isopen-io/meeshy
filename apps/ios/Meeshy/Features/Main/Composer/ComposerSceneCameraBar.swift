@@ -55,6 +55,10 @@ struct ComposerSceneCameraBar: View {
     /// « Terminé » rend : il attend, et le dit.
     var rendering = false
     var onDone: () -> Void = {}
+    /// **La flèche ⬇︎ de la retouche** (#9684) : la prise, avec ses effets et
+    /// son cadre, rejoint Photos — une fois, puis ✓.
+    var saveState = ComposerTakeSaveState.idle
+    var onSave: (() -> Void)?
 
     /// **Ce que la machine sait du doigt, du zoom et de la lumière** (#8671) —
     /// lu par le bas de la capture (`ComposerCaptureBottomRow`).
@@ -119,6 +123,7 @@ struct ComposerSceneCameraBar: View {
                     .disabled(flipping)
                 flashCluster
             } else {
+                if let onSave { saveButton(onSave) }
                 doneButton
             }
         }
@@ -153,6 +158,50 @@ struct ComposerSceneCameraBar: View {
         .buttonStyle(.plain)
         .disabled(rendering)
         .accessibilityLabel(ComposerCaptureCopy.done)
+    }
+
+    /// **⬇︎ Enregistrer dans Photos**, à gauche de « Terminé » : la flèche, puis
+    /// une roue pendant l'écriture (le rendu d'une vidéo prend du temps), puis ✓.
+    /// Une prise ne s'enregistre qu'une fois ; pendant « Terminé », elle attend.
+    private func saveButton(_ action: @escaping () -> Void) -> some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            ZStack {
+                switch saveState {
+                case .idle:
+                    Image(systemName: "arrow.down.to.line")
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundStyle(.white)
+                case .saving:
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                case .saved:
+                    Image(systemName: "checkmark")
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                        .foregroundStyle(MeeshyColors.success)
+                }
+            }
+            .frame(width: 40, height: 40)
+            .adaptiveLiquidGlass(in: Circle(), interactive: true)
+            .opacity(rendering && saveState.offersSave ? 0.5 : 1)
+            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!saveState.offersSave || rendering)
+        .accessibilityLabel(saveLabel)
+        .accessibilityAddTraits(saveState == .saving ? .updatesFrequently : [])
+    }
+
+    private var saveLabel: String {
+        switch saveState {
+        case .idle: return ComposerCaptureCopy.saveToPhotos
+        case .saving: return ComposerCaptureCopy.savingToPhotos
+        case .saved: return ComposerCaptureCopy.savedToPhotos
+        }
     }
 
     /// **Sur du verre, jamais à nu.** Ces contrôles flottent sur une image que

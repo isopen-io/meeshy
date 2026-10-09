@@ -3,9 +3,9 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const en = {
   'game.rules.1.title': 'Every action pays',
-  'game.rules.1.body': 'Writing, talking, publishing, reacting, inviting: every useful action earns points.',
+  'game.rules.1.body': 'Writing, talking, publishing, reacting, inviting: every useful action earns points. A post earns according to who can see it: public, community or friends. Limits count your actions, never your points: bonuses, the Flame and events raise what each action earns.',
   'game.rules.2.title': 'Points make the level',
-  'game.rules.2.body': '100 levels in 10 tiers. Each level asks for a little more than the one before.',
+  'game.rules.2.body': 'A million points for level 100, and one step every ten levels: without it, the level waits. Up to 499 below Ambassador, 1000 from Ambassador, no limit from Oracle. Prestige at level 100, optional. Beyond 100: 1,000 Glory every ten levels.',
   'game.rules.3.title': 'We mint Meeshes',
   'game.rules.3.body': 'From 1,221 points, you mint a Meesh by hand. The price rises with the number of Meeshes already minted.',
   'game.rules.4.title': 'Minting brings you down',
@@ -29,7 +29,7 @@ const en = {
   'game.rules.atlas.rarities': 'Rarities',
   'game.rules.atlas.obverse': 'Obverse',
   'game.rules.atlas.reverse': 'Reverse',
-  'game.rules.atlas.line.levels': 'A hundred levels in ten tiers: each tier has its own emblem and colour.',
+  'game.rules.atlas.line.levels': 'Twenty tiers: ten up to 100, then one per hundred, Singularity from 1000.',
   'game.rules.atlas.line.meesh': 'The obverse bears the Signature; the reverse, Mee and Meo, the number and the year. Gold every hundredth, prism every thousandth.',
   'game.rules.atlas.line.treasury': 'Keeping your Meeshes fills the treasury: six tiers to climb.',
   'game.rules.atlas.line.rank': 'Eleven ranks. Glory earns them, and a rank never goes down.',
@@ -38,7 +38,7 @@ const en = {
   'game.rules.atlas.line.medals': 'Seven metals, from copper to prism: the metal shows how far you got. A badge that goes out leaves an imprint.',
   'game.rules.atlas.line.trophies': 'A trophy is received at one precise moment: league cup, season cup, Prestige, Flame.',
   'game.rules.atlas.line.rarities': 'Five rarities, measured every night. None of them earns points.',
-  'game.rules.atlas.levels': 'The ten tiers',
+  'game.rules.atlas.levels': 'The twenty tiers',
   'game.rules.atlas.treasury': 'The treasury tiers',
   'game.rules.atlas.ranks': 'The rank crests',
   'game.rules.atlas.flames': 'The five Flames',
@@ -59,7 +59,14 @@ const en = {
   'game.rules.atlas.share_legendary': '0.2 to 2% of accounts',
   'game.rules.atlas.share_mythic': 'under 0.2% of accounts',
   'game.rules.atlas.rarity_glory': '+{glory} Glory',
-  'game.rules.atlas.myth': 'The 100 most glorious Legends',
+  'game.rules.atlas.myth': 'The first 100 to reach 1,000,000 Glory',
+  'game.rules.badges.title': 'Badges',
+  'game.rules.badges.intro': 'Each badge counts ONE specific move: a voice message, a story, a new friendship… There are twenty, grouped into five families.',
+  'game.rules.badges.ladder': 'Each badge climbs seven tiers. Every time you pass a mark, it changes material and lights one more star.',
+  'game.rules.badges.ribbon': 'From Gold on, the medal wears a ribbon; at Prism, its enamel turns iridescent.',
+  'game.rules.badges.imprint': 'Minting a Meesh can put a badge out: it becomes an imprint showing what is missing to light it again.',
+  'game.rules.badges.families': 'The twenty badges, by family',
+  'game.rules.badges.sheet': 'Tap a badge: its card says what counts for it, its material and why, and what is missing for the next star.',
 } as const satisfies GameRulesCatalog;
 
 export default en;

@@ -6,6 +6,7 @@ import {
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { loadMessageReadableByParticipant, type ReaderVisibleMessageRow } from './messageReadAccess';
+import { refusesContentGesture } from './captureNoticeVisibility';
 
 /**
  * Ce qui empêche le transfert de défaire ce que les cycles 92 et 93 ont détruit.
@@ -145,6 +146,8 @@ export interface ForwardSourceReader {
         expiresAt: true;
         attachments: { select: { isViewOnce: true; isBlurred: true; effectFlags: true } };
         _count: { select: { attachments: true } };
+        messageType: true;
+        metadata: true;
       };
     }): Promise<ForwardSourceRow | null>;
   };
@@ -152,6 +155,9 @@ export interface ForwardSourceReader {
 
 /** La projection ENTIÈRE qu'exige la loi de sortie côté serveur, et le compte des pièces. */
 export interface ForwardSourceRow extends ContentExitProjection {
+  /** #9629 — de quoi reconnaître un avis de capture, qui ne se transfère pas. */
+  readonly messageType?: string | null;
+  readonly metadata?: unknown;
   readonly expiresAt: Date | null;
   /** Ce que la copie serveur des pièces jointes pourra donner au transfert. */
   readonly _count?: { readonly attachments: number } | null;
@@ -327,6 +333,8 @@ async function admitReadableSource(
         // Compté par CETTE lecture, pas par une seconde : le chemin nominal
         // (envoi ordinaire) n'y passe même pas, `forwardedFromId` étant absent.
         _count: { select: { attachments: true } },
+        messageType: true,
+        metadata: true,
       },
     });
   } catch {
@@ -335,6 +343,12 @@ async function admitReadableSource(
 
   if (!source) {
     return params.bodyOnlyFromSource ? SOURCE_UNAVAILABLE : DEGRADED_TO_ORDINARY;
+  }
+
+  // #9629 — un avis de capture n'est pas un contenu : il ne quitte pas sa
+  // conversation, ni son audience. Refusé comme une source introuvable.
+  if (refusesContentGesture({ messageType: source.messageType ?? null, metadata: source.metadata })) {
+    return SOURCE_UNAVAILABLE;
   }
 
   // La loi lit la colonne ET le bit, sur le message ET sur chaque pièce : un

@@ -112,3 +112,76 @@ final class ConversationEngagementStore: ObservableObject, ConversationEngagemen
         snapshots = [:]
     }
 }
+
+// MARK: - Ce qu'un post a rapporté au lecteur (#9571)
+
+/// `viewerPoints` par post, pour la marque « · ✦+N » de la carte et de la fiche.
+///
+/// Deux chemins l'alimentent : les LECTURES (`FeedPost.viewerPoints`, semé par
+/// la marque qui l'affiche) et les ANNONCES `engagement:post-updated`. La loi
+/// est `PostViewerPoints.kept` (miroir de `keptViewerPoints`) : l'annonce la
+/// plus récente gagne, une lecture s'applique et garde l'instant connu, un
+/// champ absent ne change rien. Une lecture déjà vue (le même nombre, re-semé
+/// par une carte qui réapparaît) ne défait pas une annonce plus récente.
+///
+/// Ne publie qu'aux ANNONCES : une lecture ne change pas ce que la marque
+/// affiche déjà (elle montre la lecture neuve tant qu'elle n'est pas notée).
+/// Propre au compte connecté : vidé à la déconnexion.
+@MainActor
+final class PostViewerPointsStore: ObservableObject {
+    static let shared = PostViewerPointsStore()
+
+    nonisolated deinit {}
+
+    private var known: [String: KnownViewerPoints] = [:]
+    private var lastRead: [String: Int] = [:]
+    private var cancellables = Set<AnyCancellable>()
+
+    init(
+        announcements: AnyPublisher<PostEngagementSnapshot, Never> = PostEngagementChannel.updates.eraseToAnyPublisher(),
+        authentication: AnyPublisher<Bool, Never> = AuthManager.shared.$isAuthenticated.eraseToAnyPublisher()
+    ) {
+        announcements
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                self?.noteAnnouncement(snapshot)
+            }
+            .store(in: &cancellables)
+
+        authentication
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.reset()
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Les points à montrer pour `postId`, la lecture `seed` comprise ; `nil` : aucune valeur connue.
+    func displayed(postId: String, seed: Int?) -> Int? {
+        if let seed, seed != lastRead[postId] { return seed }
+        return known[postId]?.viewerPoints ?? seed
+    }
+
+    func noteRead(postId: String, viewerPoints: Int?) {
+        guard !postId.isEmpty, let viewerPoints, lastRead[postId] != viewerPoints else { return }
+        lastRead[postId] = viewerPoints
+        known[postId] = PostViewerPoints.kept(known[postId], viewerPoints: viewerPoints, at: nil)
+    }
+
+    func noteAnnouncement(_ snapshot: PostEngagementSnapshot) {
+        let next = PostViewerPoints.kept(known[snapshot.postId], viewerPoints: snapshot.viewerPoints, at: snapshot.at)
+        guard next != known[snapshot.postId] else { return }
+        objectWillChange.send()
+        known[snapshot.postId] = next
+    }
+
+    func reset() {
+        guard !known.isEmpty || !lastRead.isEmpty else { return }
+        objectWillChange.send()
+        known = [:]
+        lastRead = [:]
+    }
+}

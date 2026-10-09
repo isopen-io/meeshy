@@ -16,7 +16,10 @@
  */
 
 import Fastify, { type FastifyInstance } from 'fastify';
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 jest.mock('../../../../utils/logger-enhanced', () => ({
@@ -183,7 +186,7 @@ describe('GET /admin/monitoring — ce qu’il sert', () => {
 
     expect(body.success).toBe(true);
     expect(Object.keys(data).sort()).toEqual(
-      ['circuitBreakers', 'database', 'gateway', 'generatedAt', 'presenceUpdates', 'realtime', 'redis', 'translator'].sort()
+      ['backups', 'circuitBreakers', 'database', 'gateway', 'generatedAt', 'presenceUpdates', 'realtime', 'redis', 'translator'].sort()
     );
     expect(Number.isNaN(Date.parse(data.generatedAt))).toBe(false);
 
@@ -289,6 +292,80 @@ describe('GET /admin/monitoring — ce qu’il sert', () => {
     breakerStats.mockReturnValue({});
     const app = await buildApp();
     expect(JSON.parse((await read(app)).body).data.circuitBreakers).toEqual([]);
+    await app.close();
+  });
+});
+
+/**
+ * La carte des SAUVEGARDES (#9668) — lue d'`etat.json`, monté en lecture seule.
+ * Elle traverse le VRAI sérialiseur : un champ que le schéma de réponse ne
+ * déclare pas serait supprimé en silence, et ces témoins le verraient.
+ */
+describe('GET /admin/monitoring — la carte des sauvegardes', () => {
+  const VERDICT = {
+    generatedAt: '2026-10-08T22:14:03Z',
+    status: 'failed',
+    reason: 'mongodump (voir base/mongodump.log)',
+    lastSuccessAt: '2026-10-07T22:12:40Z',
+    lastSuccess: {
+      documents: 922_366,
+      collections: 61,
+      mismatches: 0,
+      indexes: 519,
+      archiveBytes: 1_234_567_890,
+      durationSeconds: 412,
+      volumes: [{ name: 'meeshy_gateway_uploads', bytes: 19_000_000_000 }],
+    },
+  };
+  let dir: string;
+  const previous = process.env.BACKUP_STATUS_FILE;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    breakerStats.mockReturnValue({});
+    dir = mkdtempSync(path.join(tmpdir(), 'monitoring-backups-'));
+    process.env.BACKUP_STATUS_FILE = path.join(dir, 'etat.json');
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+    if (previous === undefined) delete process.env.BACKUP_STATUS_FILE;
+    else process.env.BACKUP_STATUS_FILE = previous;
+  });
+
+  it('sert le dernier verdict, la dernière réussite, son âge et la prochaine échéance', async () => {
+    writeFileSync(process.env.BACKUP_STATUS_FILE as string, JSON.stringify(VERDICT));
+    const app = await buildApp();
+    const { backups } = JSON.parse((await read(app)).body).data;
+
+    expect(Object.keys(backups).sort()).toEqual(
+      ['ageSeconds', 'checkedAt', 'lastSuccess', 'lastSuccessAt', 'nextRunAt', 'reason', 'stale', 'status'].sort()
+    );
+    expect(backups).toMatchObject({
+      status: 'failed',
+      checkedAt: '2026-10-08T22:14:03Z',
+      reason: 'mongodump (voir base/mongodump.log)',
+      lastSuccessAt: '2026-10-07T22:12:40Z',
+      lastSuccess: VERDICT.lastSuccess,
+    });
+    expect(typeof backups.ageSeconds).toBe('number');
+    expect(typeof backups.stale).toBe('boolean');
+    expect(Number.isNaN(Date.parse(backups.nextRunAt))).toBe(false);
+    await app.close();
+  });
+
+  it('vaut null quand le fichier est absent — « inconnu », la carte ne se dessine pas', async () => {
+    const app = await buildApp();
+    expect(JSON.parse((await read(app)).body).data.backups).toBeNull();
+    await app.close();
+  });
+
+  it('vaut null quand le fichier est hors schéma, et n’en sert rien', async () => {
+    writeFileSync(process.env.BACKUP_STATUS_FILE as string, JSON.stringify({ ...VERDICT, status: 'peut-etre', host: '/opt/meeshy' }));
+    const app = await buildApp();
+    const res = await read(app);
+    expect(JSON.parse(res.body).data.backups).toBeNull();
+    expect(res.body).not.toContain('/opt/meeshy');
     await app.close();
   });
 });

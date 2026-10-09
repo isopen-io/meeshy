@@ -11,8 +11,15 @@ import {
   exportReactions,
   exportMedia,
   exportVoiceProfile,
-  exportSessions,
 } from './export-sections';
+import {
+  exportSecurityEvents,
+  exportSessions,
+  securityEventExportItemSchema,
+  sessionExportItemSchema,
+} from './export-security';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { withoutExpiredConnectionTraces } from '../../services/retention/retention-bounds';
 import { exportGame } from './export-game';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
@@ -30,10 +37,11 @@ type ExportType =
   | 'media'
   | 'voiceProfile'
   | 'sessions'
+  | 'securityEvents'
   | 'game';
 
 const VALID_TYPES: ExportType[] = [
-  'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'game',
+  'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game',
 ];
 
 type ExportFormat = 'json' | 'csv';
@@ -232,31 +240,6 @@ const voiceProfileExportSchema = {
   },
 };
 
-const sessionExportItemSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    deviceType: { type: 'string', nullable: true },
-    deviceVendor: { type: 'string', nullable: true },
-    deviceModel: { type: 'string', nullable: true },
-    osName: { type: 'string', nullable: true },
-    osVersion: { type: 'string', nullable: true },
-    browserName: { type: 'string', nullable: true },
-    browserVersion: { type: 'string', nullable: true },
-    isMobile: { type: 'boolean' },
-    country: { type: 'string', nullable: true },
-    city: { type: 'string', nullable: true },
-    isTrusted: { type: 'boolean' },
-    isCurrentSession: { type: 'boolean' },
-    expiresAt: { type: 'string' },
-    isValid: { type: 'boolean' },
-    invalidatedAt: { type: 'string', nullable: true },
-    invalidatedReason: { type: 'string', nullable: true },
-    createdAt: { type: 'string' },
-    lastActivityAt: { type: 'string' },
-  },
-};
-
 export async function dataExportRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/export',
@@ -273,14 +256,14 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             types: {
               type: 'string',
               description:
-                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,game. ' +
+                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game. ' +
                 'Defaults to all eleven.',
             },
             limit: {
               type: 'string',
               description:
                 'Max rows per list-type section for THIS request (default 500, capped at 2000). ' +
-                'Applies uniformly to posts/stories/comments/reactions/media/sessions — profile and voiceProfile are single rows and ignore it.',
+                'Applies uniformly to posts/stories/comments/reactions/media/sessions/securityEvents — profile and voiceProfile are single rows and ignore it.',
             },
             offset: {
               type: 'string',
@@ -383,6 +366,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                   sessions: { type: 'array', items: sessionExportItemSchema, nullable: true },
                   sessionsCount: { type: 'integer', nullable: true },
                   sessionsHasMore: { type: 'boolean', nullable: true },
+                  securityEvents: { type: 'array', items: securityEventExportItemSchema, nullable: true },
+                  securityEventsCount: { type: 'integer', nullable: true },
+                  securityEventsHasMore: { type: 'boolean', nullable: true },
                   game: gameExportSchema,
                   csv: {
                     type: 'object',
@@ -439,10 +425,19 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               timezone: true,
               createdAt: true,
               lastActiveAt: true,
+              // #9614 — l'adresse et le lieu d'inscription et de dernière
+              // connexion (effacés 12 mois après, #9642).
+              registrationIp: true,
+              registrationLocation: true,
+              registrationCountry: true,
+              lastLoginAt: true,
+              lastLoginIp: true,
+              lastLoginLocation: true,
             },
           });
 
-          exportData.profile = user;
+          // Les adresses de plus de 12 mois ne se servent plus, purge armée ou non.
+          exportData.profile = user ? withoutExpiredConnectionTraces(user, new Date()) : user;
         }
 
         // Calculée UNE fois, réutilisée par `messages` et `reactions` : une
@@ -590,10 +585,24 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('sessions')) {
-          const section = await exportSessions(fastify.prisma, userId, page);
+          // Le cadrage lit les quatre rangs du Prisme sur SA projection, pas sur
+          // celle du middleware d'authentification qu'aucun balayage ne garde (#4642).
+          const reader = await fastify.prisma.user.findUnique({
+            where: { id: userId },
+            select: RECIPIENT_LANG_SELECT,
+          });
+          const language = recipientLanguage(reader, 'en');
+          const section = await exportSessions(fastify.prisma, userId, page, language);
           exportData.sessions = section.items;
           exportData.sessionsCount = section.total;
           exportData.sessionsHasMore = section.hasMore;
+        }
+
+        if (requestedTypes.includes('securityEvents')) {
+          const section = await exportSecurityEvents(fastify.prisma, userId, page);
+          exportData.securityEvents = section.items;
+          exportData.securityEventsCount = section.total;
+          exportData.securityEventsHasMore = section.hasMore;
         }
 
         if (requestedTypes.includes('game')) {
@@ -636,7 +645,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
 
           // Sections plates ajoutées par #3633 : même patron que `messages`
           // ci-dessus, généralisé pour éviter quatre blocs quasi identiques.
-          for (const key of ['posts', 'stories', 'comments', 'sessions'] as const) {
+          for (const key of ['posts', 'stories', 'comments', 'sessions', 'securityEvents'] as const) {
             const rows = exportData[key] as Record<string, unknown>[] | undefined;
             if (rows && rows.length > 0) {
               csvSections[key] = toCsv(Object.keys(rows[0]), rows);

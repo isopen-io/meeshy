@@ -180,14 +180,14 @@ enum ProgressionConceptModel {
     static func value(_ concept: ProgressionConcept, progress: EngagementProgress, game: GameBlock?) -> String {
         switch concept {
         case .level:
-            return GameText.bannerLevel(level: count(game?.level.level ?? progress.level.level))
+            return GameText.bannerLevel(level: count(game?.level.shown.level ?? progress.level.level))
         case .points:
             return GameCopy.points(game?.level.score ?? progress.level.scale.value)
         case .meesh:
             return GameCopy.meeshes(progress.meesh?.balance ?? game?.treasury.held ?? 0)
         case .glory:
             guard let glory = game?.glory else { return "" }
-            return GameCopy.rankLabel(glory.rank, division: glory.division)
+            return GameCopy.rankLabel(glory)
         case .flame:
             return GameCopy.flameDays(game?.flame.days ?? progress.streak.currentDays)
         case .missions:
@@ -271,10 +271,10 @@ enum ProgressionConceptModel {
         let items: [String?]
         switch concept {
         case .level:
-            if let level = game?.level {
+            if let level = game?.level.shown {
                 items = [
                     GameCopy.tierName(level.tier),
-                    level.nextThreshold == nil ? GameText.bannerTop : ConceptText.chipMissing(GameCopy.points(level.pointsToNext)),
+                    level.nextThreshold == nil ? GameCopy.levelTopShort(cap: level.cap) : ConceptText.chipMissing(GameCopy.points(level.pointsToNext)),
                     level.record > level.level ? ConceptText.chipRecordLevel(count(level.record)) : nil,
                 ]
             } else {
@@ -396,7 +396,7 @@ enum ProgressionConceptModel {
     static func gauge(_ concept: ProgressionConcept, progress: EngagementProgress, game: GameBlock?) -> Double? {
         switch concept {
         case .level:
-            if let level = game?.level { return level.nextThreshold == nil ? nil : level.progress }
+            if let level = game?.level.shown { return level.nextThreshold == nil ? nil : level.progress }
             return progress.level.scale.nextThreshold == nil ? nil : progress.level.scale.progress
         case .points, .elans, .showcase, .prestige:
             return nil
@@ -450,16 +450,17 @@ enum ProgressionConceptModel {
         case .level:
             // La pièce (l'anneau du héros de niveau, ou les paliers devant un ancien serveur) dit le niveau, le
             // palier, ce qui manque et le record ; le score est aux Points, les étoiles au Prestige.
-            if let level = game?.level {
+            if let block = game?.level {
+                let level = block.shown
                 rows = [
                     piece ? nil : fact(ConceptText.factTier, GameCopy.tierName(level.tier), .tier),
-                    says(.score, in: .level, served: served) ? fact(ConceptText.name(.points), GameCopy.points(level.score), .score) : nil,
+                    says(.score, in: .level, served: served) ? fact(ConceptText.name(.points), GameCopy.points(block.score), .score) : nil,
                     piece ? nil : fact(ConceptText.factNextLevel, level.nextThreshold == nil
-                        ? GameText.bannerTop : ConceptText.chipMissing(GameCopy.points(level.pointsToNext)), .levelNext),
+                        ? GameCopy.levelTopShort(cap: level.cap) : ConceptText.chipMissing(GameCopy.points(level.pointsToNext)), .levelNext),
                     piece || level.record <= level.level
                         ? nil : fact(ConceptText.factRecord, GameText.bannerLevel(level: count(level.record)), .levelRecord),
-                    level.prestige > 0 && says(.prestigeStars, in: .level, served: served)
-                        ? fact(ConceptText.factStars, count(level.prestige)) : nil,
+                    block.prestige > 0 && says(.prestigeStars, in: .level, served: served)
+                        ? fact(ConceptText.factStars, count(block.prestige)) : nil,
                 ]
             } else {
                 rows = piece ? [] : [
@@ -499,7 +500,7 @@ enum ProgressionConceptModel {
             let missing: String = glory.gloryMissing.map { " · " + ConceptText.chipMissing(count($0)) } ?? ""
             rows = [
                 fact(ConceptText.name(.glory), count(glory.glory), .glory),
-                glory.next.map { fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division: $0.division) + missing, .gloryMissing) },
+                glory.next.map { fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division5: $0.shownDivision) + missing, .gloryMissing) },
             ]
         case .flame:
             // La tête dit la série ; les tuiles de la fiche disent la forme et les gels.

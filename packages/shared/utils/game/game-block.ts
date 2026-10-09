@@ -22,9 +22,10 @@ import {
   flameForm,
   flameStatus,
 } from './flame.js';
-import { gloryStanding, type MythicSeatRef } from './glory.js';
-import { canPrestige, levelProgress, recordLevel } from './levels.js';
+import { gloryStanding, levelCapForRank, type MythicSeatRef } from './glory.js';
+import type { LevelStepFacts } from './level-steps.js';
 import { previewMint } from './mint.js';
+import { levelOnTheWire, mintOnTheWire } from './level-wire.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
 import { personalMissionState } from './personal-mission.js';
 import { treasuryTier } from './treasury.js';
@@ -59,6 +60,10 @@ export type GameBlockFacts = {
   readonly mythic: boolean;
   readonly mythicSeat?: MythicSeatRef | null;
   readonly mintedLifetime: number;
+  /** Missions du jour accomplies à vie, comptées jusqu'à `LEVEL_STEP_MISSIONS_COUNTED` (#9706). */
+  readonly missionsDone: number;
+  /** La plus longue Flamme, en jours — le record que jugent les étapes 40 et 90 (#9706). */
+  readonly flameRecord: number;
   readonly debitablePoints: number;
   /** Meeshes gardées (le trésor). */
   readonly balance: number;
@@ -100,9 +105,17 @@ export type GameBlockFacts = {
 };
 
 export function buildGameBlock(facts: GameBlockFacts): GameBlock {
-  const progress = levelProgress(facts.score);
-  const record = recordLevel({ level: progress.level, previousRecord: facts.levelRecord });
   const standing = gloryStanding({ glory: facts.glory, mythic: facts.mythic, mythicSeat: facts.mythicSeat ?? null });
+  const levelCap = levelCapForRank(standing.rank);
+  const steps: LevelStepFacts = {
+    minted: facts.mintedLifetime,
+    missionsDone: facts.missionsDone,
+    flameRecord: facts.flameRecord,
+    glory: standing.glory,
+    rank: standing.rank,
+  };
+  const level = levelOnTheWire({ score: facts.score, levelCap, levelRecord: facts.levelRecord, prestige: facts.prestige, steps });
+  const record = level.ladder?.record ?? level.record;
   const treasury = treasuryTier(facts.balance);
 
   const flameToday = facts.flameToday ?? facts.today;
@@ -126,18 +139,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
   const chestStatus = facts.chestClaimed ? 'claimed' : allDone ? 'ready' : 'locked';
 
   return {
-    level: {
-      level: progress.level,
-      tier: progress.tier,
-      score: progress.score,
-      floorScore: progress.floorScore,
-      nextThreshold: progress.nextThreshold,
-      pointsToNext: progress.pointsToNext,
-      progress: progress.progress,
-      record,
-      prestige: facts.prestige,
-      canPrestige: canPrestige({ level: progress.level, prestige: facts.prestige }),
-    },
+    level,
     glory: {
       glory: standing.glory,
       rank: standing.rank,
@@ -149,11 +151,15 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       mythic: standing.mythic,
     },
     treasury: { held: treasury.held, tier: treasury.tier, next: treasury.next },
-    mint: previewMint({
-      score: facts.score,
-      mintedLifetime: facts.mintedLifetime,
-      debitablePoints: facts.debitablePoints,
-    }),
+    mint: mintOnTheWire(
+      previewMint({
+        score: facts.score,
+        mintedLifetime: facts.mintedLifetime,
+        debitablePoints: facts.debitablePoints,
+        levelCap,
+        steps,
+      }),
+    ),
     missions: {
       dayKey: facts.today,
       prismDay: isPrismDay({ userId: facts.userId, dayKey: facts.today }),
@@ -197,7 +203,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       canRelight: relight.allowed,
     },
     boosts: {
-      tailwind: tailwindFactor({ level: progress.level, levelRecord: record }),
+      tailwind: tailwindFactor({ level: level.ladder?.level ?? level.level, levelRecord: record }),
       prismHour: { ...prismHourWindow({ userId: facts.userId, dayKey: facts.today }), multiplier: PRISM_HOUR_MULTIPLIER },
     },
     guideSeen: [...facts.guideSeen],

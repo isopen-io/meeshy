@@ -4,6 +4,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { resetFixtureCommentsForTests } from '@/lib/api/fixtures-comments';
+import type { FeedPost } from '@/lib/api/feed-pages';
+import { postQueryKey } from '@/lib/api/publication-detail';
 import { loadCommentRepliesAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
@@ -116,3 +118,38 @@ describe('les réponses à joindre à la carte d’une racine', () => {
     expect(replies.map((reply) => reply.id)).toEqual(['cm-r2-3-a', 'cm-r2-3-b']);
   });
 });
+
+describe('le commentaire d’un POST compose sa carte (#9687)', () => {
+  const seedPost = (type: string) =>
+    appQueryClient.setQueryData<FeedPost>(postQueryKey('post-text-rank2'), {
+      id: 'post-text-rank2',
+      type,
+      createdAt: '2026-09-28T10:00:00.000Z',
+      content: 'Le post',
+      author: { id: 'u-author', username: 'author', displayName: 'Auteur' },
+      media: [],
+    });
+
+  const entriesOf = async (host: HTMLElement, rowId: string) => {
+    await act(async () => host.querySelector<HTMLButtonElement>(`[data-comment-row="${rowId}"] [data-comment-gesture="more"]`)?.click());
+    const found = [...document.querySelectorAll('[data-comment-menu] [role="menuitem"]')].map((element) => element.getAttribute('data-comment-gesture'));
+    await act(async () => host.querySelector<HTMLButtonElement>(`[data-comment-row="${rowId}"] [data-comment-gesture="more"]`)?.click());
+    return found;
+  };
+
+  test('un seul « Imager », qui ouvre l’atelier sur « Post + commentaire »', async () => {
+    seedPost('POST');
+    const host = await mountThread('post-text-rank2');
+    expect(await entriesOf(host, 'cm-r2-3')).toEqual(['copy', 'image', 'report']);
+    await pick(host, 'cm-r2-3', 'image');
+    for (let attempt = 0; attempt < 20 && document.querySelector('[data-export-compose-mode]') === null; attempt += 1) await settle();
+    expect(document.querySelector('[data-export-compose-mode="postAndComment"]')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('une STORY garde la carte du commentaire et « avec les réponses »', async () => {
+    seedPost('STORY');
+    const host = await mountThread('post-text-rank2');
+    expect(await entriesOf(host, 'cm-r2-3')).toEqual(['copy', 'image', 'image-replies', 'report']);
+  });
+});
+

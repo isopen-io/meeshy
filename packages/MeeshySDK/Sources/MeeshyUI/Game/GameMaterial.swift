@@ -53,6 +53,24 @@ public enum GameMaterial: String, CaseIterable, Sendable, Hashable {
         }
     }
 
+    /// La couleur PLEINE d'un trait de la matière (jeton `-1` du web ; obsidienne : `-0`, prisme : `-2`) —
+    /// un dégradé en boîte englobante ne peint pas un trait horizontal (#9636).
+    var lineColor: Color {
+        switch self {
+        case .copper: Color(hex: "a5552b")
+        case .bronze: Color(hex: "8a5a24")
+        case .silver: Color(hex: "8e98a8")
+        case .gold: Color(hex: "b7791f")
+        case .platinum: Color(hex: "5b7c99")
+        case .obsidian: Color(hex: "55527a")
+        case .prism: Color(hex: "34d399")
+        case .flame: Color(hex: "f97316")
+        }
+    }
+
+    /// Les cinq couleurs du prisme, dans l'ordre (jetons `--game-prism-0…4`).
+    static var prismColors: [Color] { GamePalette.prismStops.map(\.color) }
+
     fileprivate var direction: (from: UnitPoint, to: UnitPoint) {
         self == .flame ? (.bottom, .top) : (.topLeading, .bottomTrailing)
     }
@@ -73,7 +91,7 @@ public enum GameMaterial: String, CaseIterable, Sendable, Hashable {
     }
 }
 
-/// Les dix couleurs de palier de la planche, du rouge Étincelle au prisme de Galaxie.
+/// Les vingt couleurs de palier, du rouge Étincelle au prisme de Galaxie, puis le ciel profond jusqu'à Singularité.
 public enum LevelTierPalette {
     public static func color(for tier: LevelTierKey) -> Color {
         switch tier {
@@ -87,12 +105,23 @@ public enum LevelTierPalette {
         case .etoile: Color(hex: "818cf8")
         case .constellation: Color(hex: "a855f7")
         case .galaxie: Color(hex: "a855f7")
+        // Au-delà du niveau 100 (#9688) : les teintes du ciel profond, mêmes valeurs que le web (`--game-tier-*`).
+        case .nebuleuse: Color(hex: "f472b6")
+        case .pulsar: Color(hex: "38bdf8")
+        case .quasar: Color(hex: "818cf8")
+        case .supernova: Color(hex: "fbbf24")
+        case .magnetar: Color(hex: "e879f9")
+        case .amas: Color(hex: "2dd4bf")
+        case .superamas: Color(hex: "60a5fa")
+        case .cosmos: Color(hex: "c084fc")
+        case .infini: Color(hex: "f0abfc")
+        case .singularite: color(for: .galaxie)
         }
     }
 
-    /// Le trait de l'arc : une couleur franche, ou le prisme tournant de Galaxie.
+    /// Le trait de l'arc : une couleur franche, ou le prisme tournant de Galaxie et de Singularité.
     static func style(for tier: LevelTierKey) -> AnyShapeStyle {
-        tier == .galaxie
+        tier.isSpectral
             ? AnyShapeStyle(AngularGradient(stops: GamePalette.prismStops, center: .center))
             : AnyShapeStyle(color(for: tier))
     }

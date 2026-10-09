@@ -8,7 +8,7 @@
  *  - **une étape se réclame une fois** : l'écriture est conditionnelle à
  *    « cette étape n'est pas déjà réclamée », donc deux requêtes concurrentes
  *    ne paient qu'une récompense ; rejouer rend `already-claimed` ;
- *  - **le parcours terminé** (étape 40) règle la saison : coupe, +500 de Gloire,
+ *  - **le parcours terminé** (étape 40) règle la saison : coupe, `GLORY_POINTS.season` de Gloire,
  *    trophée daté — une fois, par la clé de Gloire `season:<n>` ;
  *  - **le Sceau** (10 Meeshes) est la SEULE dépense de la saison, par le registre
  *    des dépenses (`MeeshSpend`) : idempotent, atomique avec son effet. La saison

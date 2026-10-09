@@ -23,6 +23,7 @@ import {
   recipientLanguage,
 } from '../../../utils/recipient-language';
 import type { NotificationBuilderDependencies } from './dependencies';
+import { formatInTimeZone, safeTimeZone } from '../../../utils/time-zone-format';
 
 
 export async function createPasswordChangedNotification(
@@ -86,8 +87,6 @@ export async function createLoginNewDeviceNotification(
       city?: string | null;
       location?: string | null;
       timezone?: string | null;
-      latitude?: number | null;
-      longitude?: number | null;
     } | null;
     revokeToken?: string;
   }
@@ -133,9 +132,11 @@ export async function createLoginNewDeviceNotification(
     location,
     ip: params.ipAddress || null,
     loginTime: new Date(),
-    timezone: geo?.timezone || null,
-    latitude: geo?.latitude ?? null,
-    longitude: geo?.longitude ?? null,
+    timezone: safeTimeZone(geo?.timezone),
+    // #9609 — plus aucune coordonnée : l'e-mail n'affiche plus de carte
+    // chargée chez un tiers à partir d'un lieu tiré de l'adresse IP.
+    latitude: null,
+    longitude: null,
     previousDeviceName,
     previousLocation,
     previousLoginTime,
@@ -159,7 +160,8 @@ export async function createLoginNewDeviceNotification(
   if (deviceName) bodyParts.push(deviceName);
   else if (deviceOS) bodyParts.push(deviceOS);
   const now = new Date();
-  bodyParts.push(now.toLocaleString(locale, { timeZone: geo?.timezone || 'UTC', dateStyle: 'short', timeStyle: 'short' }));
+  // Un fuseau inconnu ne lève plus : la date part en UTC (audit L2-1).
+  bodyParts.push(formatInTimeZone(now, locale, geo?.timezone, { dateStyle: 'short', timeStyle: 'short' }));
   const content = bodyParts.join(' — ');
 
   const title = notificationString(lang, 'login.newDevice.title');

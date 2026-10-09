@@ -25,6 +25,7 @@ import { refreshPersonalConversationPreview } from '../services/messaging/person
 import { invalidateParticipantLookup } from '../utils/participant-lookup-cache';
 import { SERVER_EVENTS, type ConversationRestoredEventData } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
+import { announceConversationLanguageChange } from '../services/message-translation/conversationLanguageChanges';
 // #4332 — la corbeille de conversations (delete-for-me / restore-for-me /
 // deleted-conversations) est réalignée sur le geste que la route CANONIQUE
 // (`/api/v1/conversations/:id/delete-for-me`, ci-dessous importée) écrit
@@ -385,6 +386,7 @@ export default async function userDeletionsRoutes(
           select: {
             id: true,
             deletedForMe: true,
+            language: true,
             conversation: { select: { isActive: true } },
           },
         });
@@ -413,6 +415,7 @@ export default async function userDeletionsRoutes(
         // participant jusqu'à l'expiration de son TTL, alors que la ligne
         // vient d'être réactivée.
         invalidateParticipantLookup(participant.id, conversationId);
+        announceConversationLanguageChange({ kind: 'arrival', conversationId, language: participant.language });
 
         // #4344 — jumeau de l'émission `CONVERSATION_DELETED` que
         // `performConversationDeleteForMe` diffuse après SA persistance

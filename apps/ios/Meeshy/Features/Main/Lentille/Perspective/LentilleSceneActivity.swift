@@ -72,12 +72,99 @@ struct LentilleSceneActivityHost: View {
 
     @ObservedObject var relay: ScrollOffsetRelay
     let scene: LentilleSceneActivity
+    /// L'heure et les points des rangées (#9571) : le même tick les révèle.
+    var metaReveal: LentilleRowMetaReveal = .shared
 
     var body: some View {
         Color.clear
             .allowsHitTesting(false)
             .adaptiveOnChange(of: relay.offset) { _, offset in
                 scene.noteScroll(offset: LentilleFocusBand.offsetFromTop(relayOffset: offset))
+                metaReveal.noteScroll()
             }
+            .onAppear { metaReveal.armOpening() }
+    }
+}
+
+// MARK: - L'heure et les points de la liste ne paraissent qu'au défilement (#9571)
+
+/// Directive porteur 2026-10-07 : « les points de conversation ne doivent
+/// s'afficher que pendant le défilement ; après cela le point et la date du
+/// dernier message disparaissent, comme dans une conversation ». Au repos, une
+/// rangée ne montre ni l'heure ni les points ; un défilement les révèle, ils
+/// s'effacent `ScrollTimePillLaw.lingerMs` après le dernier tick — le délai et
+/// le fondu (0,18 s) de la pilule de jour du fil. À l'ouverture de la liste,
+/// ils se montrent une fois, le temps d'une même fenêtre, dès que la première
+/// rangée est là.
+///
+/// `isRevealed` ne change que DEUX fois par session de défilement, jamais par
+/// tick, et n'est lu que par la feuille qui s'efface (`LentilleRowMetaFade`) :
+/// aucune rangée ne se re-rend au rythme du défilement.
+@MainActor
+final class LentilleRowMetaReveal: ObservableObject {
+    nonisolated deinit {}
+
+    static let shared = LentilleRowMetaReveal()
+
+    static let fadeDuration: Double = 0.18
+    static var lingerSeconds: Double { ScrollTimePillLaw.lingerMs / 1000 }
+
+    @Published private(set) var isRevealed = false
+    private var openingArmed = false
+    private var hideWork: DispatchWorkItem?
+
+    init() {}
+
+    /// Un tick de défilement : révèle (une fois) et réarme l'effacement.
+    func noteScroll() {
+        openingArmed = false
+        reveal()
+    }
+
+    /// La liste s'ouvre : la prochaine rangée posée révélera la méta une fois.
+    func armOpening() {
+        openingArmed = true
+    }
+
+    /// Une rangée vient de se poser : la première après l'ouverture révèle.
+    func noteRowShown() {
+        guard openingArmed else { return }
+        openingArmed = false
+        reveal()
+    }
+
+    func hide() {
+        hideWork?.cancel()
+        hideWork = nil
+        guard isRevealed else { return }
+        isRevealed = false
+    }
+
+    private func reveal() {
+        if !isRevealed { isRevealed = true }
+        hideWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.hide() }
+        hideWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.lingerSeconds, execute: work)
+    }
+}
+
+/// La SEULE vue qui observe `LentilleRowMetaReveal` : l'heure et la marque de
+/// points d'une rangée. Opacité seule — la place reste réservée, aucune rangée
+/// ne se remet en page. Ce qui s'efface est VISUEL : la rangée dit l'heure et
+/// les points à VoiceOver dans sa propre phrase. « Réduire les animations » :
+/// même visibilité, sans fondu.
+struct LentilleRowMetaFade<Content: View>: View {
+    var alwaysVisible: Bool = false
+    @ObservedObject var reveal: LentilleRowMetaReveal = .shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        content()
+            .opacity(alwaysVisible || reveal.isRevealed ? 1 : 0)
+            .animation(reduceMotion ? nil : .easeInOut(duration: LentilleRowMetaReveal.fadeDuration),
+                       value: reveal.isRevealed)
+            .onAppear { reveal.noteRowShown() }
     }
 }

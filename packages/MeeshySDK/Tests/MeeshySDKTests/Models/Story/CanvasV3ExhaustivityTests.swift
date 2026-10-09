@@ -140,6 +140,7 @@ struct CanvasV3ExhaustivityTests {
             keyframes: [StoryKeyframe(id: "kf-au", time: 3, volume: 0.4, easing: .linear)],
             mediaURL: "https://cdn/a.m4a",
             soundId: "snd-9", soundAuthorUsername: "amina",
+            soundCreatedAt: "2026-03-12T09:30:00Z",
             sourceStart: 1, sourceEnd: 7)
         audio.zIndex = 5
         audio.scale = 1.15

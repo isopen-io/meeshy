@@ -223,6 +223,14 @@ struct UniversalComposerBar: View {
     /// and stages the edited result. When nil the action is hidden.
     var onRecentMediaEdit: ((RecentMediaPick) -> Void)? = nil
 
+    /// Hôte à zone d'attachement LIÉE (#9683) : reçoit le média de la grille
+    /// avec son `localIdentifier`, à la place d'`onRecentMediaSelected`.
+    var onRecentLibraryAssetSelected: ((RecentMediaAsset) -> Void)? = nil
+
+    /// Les assets déjà dans la zone d'attachement, dérivés d'elle par l'hôte :
+    /// la grille les marque et refuse de les reprendre (#9683).
+    var recentAttachedAssetIds: Set<String> = []
+
     /// Called when the user opens the full photo library from the recent-media
     /// strip, carrying the asset identifiers already multi-selected there so
     /// the host can preselect them in its PhotosPicker (via

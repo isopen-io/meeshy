@@ -17,6 +17,7 @@ import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsForOrFail } from '..
 import type { ServerEmitIO } from './serverEmit';
 import { withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../services/messaging/readViewOnceConsumption';
+import { withoutCaptureNotices } from '../services/messaging/captureNoticeVisibility';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -287,7 +288,8 @@ export async function emitConversationPreviewUpdate(
       }),
       withOrphanedSenderRepair({ prisma: realPrisma, conversationIds: [conversationId] }, () =>
         prisma.message.findFirst({
-          where: { conversationId, deletedAt: null },
+          // #9630 — un avis de capture n'est jamais l'aperçu poussé.
+          where: withoutCaptureNotices({ conversationId, deletedAt: null }),
           orderBy: { createdAt: 'desc' },
           select: PREVIEW_MESSAGE_SELECT,
         })

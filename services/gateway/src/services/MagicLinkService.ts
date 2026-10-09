@@ -227,9 +227,6 @@ export class MagicLinkService {
           userAgent,
           deviceFingerprint,
           geoLocation: geoData?.location || 'Unknown',
-          geoCoordinates: geoData?.latitude && geoData?.longitude
-            ? `${geoData.latitude},${geoData.longitude}`
-            : null,
           rememberDevice: rememberDevice || false // Store server-side for security
         }
       });
@@ -503,7 +500,8 @@ export class MagicLinkService {
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
-        requestContext
+        requestContext,
+        loginMethod: 'magic_link'
       });
 
       // 10. Signer le JWT, rattaché à la session qui vient de naître
@@ -519,6 +517,7 @@ export class MagicLinkService {
         where: { id: user.id },
         data: {
           lastActiveAt: new Date(),
+          lastLoginAt: new Date(),
           lastLoginIp: requestContext.ip,
           lastLoginLocation: requestContext.geoData?.location || null,
           lastLoginDevice: requestContext.deviceInfo?.type || null

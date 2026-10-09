@@ -1,5 +1,5 @@
 import type { Message } from '@/lib/api/types';
-import { contentExitOf, exitOffers } from '@/lib/view/content-exit';
+import { contentExitOf, exitOffers, messageExitOffers } from '@/lib/view/content-exit';
 
 import { authoredBy, cardAuthorOf, cardHandleOf, cardMediaOf, mediaAuthorOf, type MessageCardMediaItem, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
 
@@ -15,7 +15,10 @@ import { authoredBy, cardAuthorOf, cardHandleOf, cardMediaOf, mediaAuthorOf, typ
  * (`content-exit.ts`, #9573) — un message flouté, à vue unique, supprimé,
  * échu ou qui disparaît ne se peint pas, qu'il soit le message choisi (aucune
  * carte) ou l'un de ceux qui y mènent (sauté) ; une pièce masquée non plus
- * (`cardMediaOf`). Les mots sont ceux que le lecteur
+ * (`cardMediaOf`). UNE RÉPONSE QUI CITE un contenu qui ne sort pas
+ * (`messageExitOffers`, décision porteur du 2026-10-08) ferme la carte
+ * entière dès qu'elle est parmi les messages peints : la discussion qui la
+ * contient ne s'image pas. Les mots sont ceux que le lecteur
  * LIT (`servedOf`, le Prisme du fil).
  *
  * CHAQUE MÉDIA EST ATTRIBUÉ À SON MESSAGE (#9236) : ceux du premier suivent
@@ -39,7 +42,7 @@ const DISCUSSION_CARD_MAX_MEDIA = 4;
 
 type Viewer = { readonly id: string; readonly displayName: string; readonly handle?: string | null };
 
-type Painted = { readonly part: MessageCardSubjectPart; readonly media: readonly MessageCardMediaItem[] };
+type Painted = { readonly message: Message; readonly part: MessageCardSubjectPart; readonly media: readonly MessageCardMediaItem[] };
 
 const createdAtOf = (message: Message): number => new Date(message.createdAt).getTime();
 
@@ -56,16 +59,17 @@ export function discussionCardSubjectOf(params: {
   const anchorIndex = ordered.findIndex((message) => message.id === params.anchorId);
   const anchor = ordered[anchorIndex];
   const paints = (message: Message): boolean => exitOffers(contentExitOf(message, now), 'imageDiscussion');
-  if (anchor === undefined || !paints(anchor)) return null;
+  if (anchor === undefined || !messageExitOffers(anchor, 'imageDiscussion', now)) return null;
 
   const painted = ordered.slice(0, anchorIndex + 1).flatMap((message): Painted[] => {
     if (!paints(message)) return [];
     const text = (params.servedOf(message.id) ?? message.content).trim();
     const media = cardMediaOf(message.attachments);
     if (text === '' && media.length === 0) return [];
-    return [{ part: { author: cardAuthorOf(message, viewer), text, handle: cardHandleOf(message, viewer) }, media }];
+    return [{ message, part: { author: cardAuthorOf(message, viewer), text, handle: cardHandleOf(message, viewer) }, media }];
   });
   const kept = painted.slice(-DISCUSSION_CARD_MAX_MESSAGES);
+  if (!kept.every((entry) => messageExitOffers(entry.message, 'imageDiscussion', now))) return null;
   const [first, ...rest] = kept;
   if (first === undefined) return null;
 

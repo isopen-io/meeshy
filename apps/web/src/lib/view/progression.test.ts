@@ -33,6 +33,11 @@ describe('les tables couvrent le catalogue partagé, sans trou ni vide', () => {
     }
   });
 
+  test('un logo par type (#9639) : deux axes ne partagent jamais la même icône', () => {
+    const glyphs = ENGAGEMENT_AXES.map((key) => AXIS_GLYPHS[key]);
+    expect(new Set(glyphs).size).toBe(ENGAGEMENT_AXES.length);
+  });
+
   test('chaque famille a son titre de section', () => {
     for (const family of ENGAGEMENT_AXIS_FAMILIES) expect(FAMILY_LABELS[family].length).toBeGreaterThan(0);
   });

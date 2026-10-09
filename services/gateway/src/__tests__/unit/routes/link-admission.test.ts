@@ -29,6 +29,10 @@ jest.mock('../../../utils/sanitize', () => ({
 }));
 
 import { registerLinkAdmissionRoutes } from '../../../routes/conversations/link-admission';
+import {
+  subscribeConversationLanguageChanges,
+  type ConversationLanguageChange,
+} from '../../../services/message-translation/conversationLanguageChanges';
 
 const LINK_ID = 'mshy_link_abc123';
 const SHARE_LINK_DB_ID = '507f1f77bcf86cd799439011';
@@ -531,5 +535,58 @@ describe('DELETE /guest-sessions/me', () => {
     expect((app as any).prisma.conversationShareLink.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { currentConcurrentUsers: { decrement: 1 } } })
     );
+  });
+});
+
+// ─── #9708 — l'entrée et la sortie par lien sont annoncées à la composition linguistique ──
+
+describe('#9708 — une porte de lien annonce chaque arrivée et chaque départ', () => {
+  let app: FastifyInstance;
+  let annonces: ConversationLanguageChange[] = [];
+  let desabonner: () => void = () => undefined;
+  beforeAll(async () => {
+    app = await buildApp();
+    desabonner = subscribeConversationLanguageChanges((change) => { annonces.push(change); });
+  });
+  afterAll(async () => { desabonner(); await app.close(); });
+
+  const avec = async (geste: () => Promise<unknown>) => {
+    annonces = [];
+    await geste();
+    return annonces;
+  };
+
+  it('un invité anonyme `en` qui entre est annoncé avec SA langue — le cas de la recette #9707', async () => {
+    const vues = await avec(() => postMembers(app, { nickname: 'Guest', language: 'en' }));
+    expect(vues).toEqual([{ kind: 'arrival', conversationId: CONV_ID, language: 'en' }]);
+  });
+
+  it('un inscrit qui entre par lien est annoncé avec la langue de son compte', async () => {
+    (app as any).prisma.participant.findMany = jest.fn().mockResolvedValue([]);
+    (app as any).prisma.user.findUnique.mockResolvedValueOnce({
+      displayName: 'Ana', username: 'ana', systemLanguage: 'de', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+    });
+    const vues = await avec(() => postMembers(app, {}, asRegistered));
+    expect(vues).toEqual([{ kind: 'arrival', conversationId: CONV_ID, language: 'de' }]);
+  });
+
+  it('un déjà-membre n’annonce rien — aucune écriture, aucune composition changée', async () => {
+    (app as any).prisma.participant.findMany = jest.fn().mockResolvedValue([
+      { id: 'p-here', isActive: true, bannedAt: null, joinedAt: new Date('2026-01-01') },
+    ]);
+    const vues = await avec(() => postMembers(app, {}, asRegistered));
+    expect(vues).toEqual([]);
+    (app as any).prisma.participant.findMany = jest.fn().mockResolvedValue([]);
+  });
+
+  it('un invité qui met fin à sa session est annoncé comme un départ', async () => {
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({
+      id: 'p1', conversationId: CONV_ID, isActive: true,
+      anonymousSession: { shareLinkId: SHARE_LINK_DB_ID, profile: {}, session: {} },
+    });
+    const vues = await avec(() =>
+      app.inject({ method: 'DELETE', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } })
+    );
+    expect(vues).toEqual([{ kind: 'departure', conversationId: CONV_ID }]);
   });
 });

@@ -89,6 +89,8 @@ struct ProgressionConceptPage: View {
                 }
             }
         }
+        // « Comprendre les badges » (#9640) : l'étagère et la feuille d'un badge mènent à la section badges du carnet.
+        .environment(\.gameOpenBadgesGuide, { router.openGame(at: GameNavigationMap.badgesGuide) })
         .task { await viewModel.load() }
         .fullScreenCover(item: $reveal) { palier in
             // `.consultation` : on arrive ici DEPUIS la fiche, la célébration n'a pas à y « mener ».
@@ -203,9 +205,8 @@ struct ProgressionConceptContent: View {
         if hasPiece {
             // UNE pièce, UN héros : l'anneau du niveau, la frappe, le détail de ligue ou les Élans REMPLACENT le
             // héros générique au lieu de s'y ajouter. Elle porte la section « À toi de jouer » qu'une entrée vise.
+            // Aucun identifiant sur l'enveloppe : il recouvrirait celui de la pièce (« game.hero », la frappe…).
             VStack(alignment: .leading, spacing: MeeshySpacing.xl) { gestures }
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("progression.concept.piece")
                 .id(ProgressionConceptSection.act)
         } else {
             ProgressionConceptHero(
@@ -405,7 +406,7 @@ struct ProgressionConceptGestures: View {
         case .elans:
             ProgressionElansHero(progress: progress, isDark: isDark)
         case .badges:
-            GameBadgeShelfView(items: GameBadges.items(for: progress), progress: progress)
+            GameBadgeShelfView(progress: progress)
         case .succes:
             ProgressionLastAchievementHero(progress: progress, isDark: isDark, onReveal: onReveal)
         case .glory, .season, .prestige, .defis, .showcase, .atlas:

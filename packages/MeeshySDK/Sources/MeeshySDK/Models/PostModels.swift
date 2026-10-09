@@ -302,6 +302,10 @@ public struct APIPost: Sendable {
     /// `comment:added`) OR from `metadata.trackingLinks` (REST / feed). `nil`
     /// when the payload predates the feature — renderer falls back to raw URLs.
     public var trackingLinks: [TrackedLink]? = nil
+    /// Les points que CE post a rapportés au lecteur connecté (#9569, #9571).
+    /// Absent (`nil`) : réponse d'écriture, lecteur sans compte, ancien
+    /// serveur — « garde ce que tu sais », jamais zéro (`PostViewerPoints.kept`).
+    public var viewerPoints: Int? = nil
 
     /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when none.
     public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
@@ -317,7 +321,7 @@ extension APIPost: Decodable {
         case audioUrl, audioDuration, storyEffects, translations
         case isLikedByMe, isBookmarkedByMe, isRepostedByMe, isViewedByMe
         case currentUserReactions, mentions, referenceAccess, viaUsername
-        case trackingLinks, metadata
+        case trackingLinks, metadata, viewerPoints
     }
 
     /// Minimal `metadata` envelope to recover `trackingLinks` on REST/feed
@@ -391,6 +395,7 @@ extension APIPost: Decodable {
         }
         referenceAccess = try c.decodeIfPresent(ReferenceAccess.self, forKey: .referenceAccess)
         viaUsername = try c.decodeIfPresent(String.self, forKey: .viaUsername)
+        viewerPoints = (try? c.decodeIfPresent(Int.self, forKey: .viewerPoints)).flatMap { $0 >= 0 ? $0 : nil }
         // Outbound-link tracking: prefer hoisted top-level `trackingLinks`
         // (socket), else recover from the REST `metadata` envelope. Tolerant.
         if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {
@@ -615,6 +620,7 @@ extension APIPost {
         // sur « Public » et un post en ONLY perdrait ses destinataires.
         feedPost.visibility = visibility
         feedPost.visibilityUserIds = visibilityUserIds
+        feedPost.viewerPoints = viewerPoints
         return feedPost
     }
 

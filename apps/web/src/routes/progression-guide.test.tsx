@@ -145,7 +145,7 @@ describe('à l’ouverture', () => {
   });
 
   test('l’intégration finie, une découverte se dit : le premier niveau, en entier', async () => {
-    const b = await bench(view({ guideSeen: ALL_STEPS, score: 45, debitablePoints: 45, glory: 0, balance: 0, mintedLifetime: 0, missions: [] }));
+    const b = await bench(view({ guideSeen: ALL_STEPS, score: 450, levelRecord: null, debitablePoints: 450, glory: 0, balance: 0, mintedLifetime: 0, missions: [] }));
     expect(key(b.guide().card)).toBe('first-level');
     expect(b.guide().card?.presentation).toBe('full');
   });
@@ -258,22 +258,22 @@ describe('ce qui arrive pendant que l’écran est ouvert', () => {
   const seen = [...ALL_STEPS, 'first-level', 'new-tier', 'missions-unlocked', 'new-rank', 'treasury-tier', 'first-mint-possible'];
 
   test('un palier franchi se dit aussitôt', async () => {
-    const b = await bench(view({ guideSeen: seen, score: 10 * 9 * 9 + 5, mintedLifetime: 3 }));
+    const b = await bench(view({ guideSeen: seen, score: 100 * 9 * 9 + 5, levelRecord: 9, mintedLifetime: 3 }));
     expect(b.guide().card).toBeNull();
-    await b.show(view({ guideSeen: seen, score: 10 * 10 * 10, mintedLifetime: 3 }));
+    await b.show(view({ guideSeen: seen, score: 100 * 10 * 10, levelRecord: 9, mintedLifetime: 3 }));
     expect(key(b.guide().card)).toBe('new-tier');
     expect(b.guide().card?.presentation).toBe('short');
   });
 
   test('une transition ne coupe pas la parole à l’intégration', async () => {
-    const b = await bench(view({ guideSeen: [], score: 10 * 9 * 9 + 5 }));
-    await b.show(view({ guideSeen: [], score: 10 * 10 * 10 }));
+    const b = await bench(view({ guideSeen: [], score: 100 * 9 * 9 + 5, levelRecord: 9 }));
+    await b.show(view({ guideSeen: [], score: 100 * 10 * 10, levelRecord: 9 }));
     expect(key(b.guide().card)).toBe('onboarding.welcome');
   });
 
   test('un geste encore en vol ne se célèbre pas : la carte attend la confirmation', async () => {
-    const b = await bench(view({ guideSeen: seen, score: 10 * 9 * 9 + 5, mintedLifetime: 3 }));
-    const optimistic = view({ guideSeen: seen, score: 10 * 10 * 10, mintedLifetime: 3 });
+    const b = await bench(view({ guideSeen: seen, score: 100 * 9 * 9 + 5, levelRecord: 9, mintedLifetime: 3 }));
+    const optimistic = view({ guideSeen: seen, score: 100 * 10 * 10, levelRecord: 9, mintedLifetime: 3 });
     await b.pending(optimistic);
     expect(b.guide().card).toBeNull();
     await b.confirm();
@@ -281,9 +281,9 @@ describe('ce qui arrive pendant que l’écran est ouvert', () => {
   });
 
   test('un geste refusé et restauré ne laisse aucune carte ni aucune clé vue', async () => {
-    const before = view({ guideSeen: seen, score: 10 * 9 * 9 + 5, mintedLifetime: 3 });
+    const before = view({ guideSeen: seen, score: 100 * 9 * 9 + 5, levelRecord: 9, mintedLifetime: 3 });
     const b = await bench(before);
-    await b.pending(view({ guideSeen: seen, score: 10 * 10 * 10, mintedLifetime: 3 }));
+    await b.pending(view({ guideSeen: seen, score: 100 * 10 * 10, levelRecord: 9, mintedLifetime: 3 }));
     await b.confirm(before);
     expect(b.guide().card).toBeNull();
     expect(b.posted()).toEqual([]);
@@ -301,9 +301,9 @@ describe('ce qui arrive pendant que l’écran est ouvert', () => {
 
 describe('les étapes qui attendent leur geste', () => {
   const fresh = (patch: Parameters<typeof gameBlockFixture>[0] = {}) =>
-    view({ score: 0, debitablePoints: 0, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, lastActiveDay: null, missions: [], ...patch }, { isEmpty: true });
+    view({ score: 0, levelRecord: null, debitablePoints: 0, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, lastActiveDay: null, missions: [], ...patch }, { isEmpty: true });
   const firstGesture = (guideSeen: string[]) =>
-    view({ score: 12, debitablePoints: 12, glory: 0, balance: 0, mintedLifetime: 0, streak: 1, missions: [], guideSeen }, { isEmpty: false });
+    view({ score: 12, levelRecord: null, debitablePoints: 12, glory: 0, balance: 0, mintedLifetime: 0, streak: 1, missions: [], guideSeen }, { isEmpty: false });
   const missionsOpen = (done: boolean, guideSeen: string[]) =>
     view({
       score: 800,

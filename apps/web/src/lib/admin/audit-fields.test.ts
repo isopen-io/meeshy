@@ -60,9 +60,10 @@ describe('auditFieldLabel — le champ en mots', () => {
   test('le diff à plat du barème se lit par opération et par réglage, jamais par chemin brut', () => {
     expect(auditFieldLabel('operations.content.text_message.points', 'fr', 'EngagementScaleConfig')).toBe('Points — Envoyer un message texte');
     expect(auditFieldLabel('operations.content.text_message.multiplied', 'fr', 'EngagementScaleConfig')).toBe('Multiplié par l’élan — Envoyer un message texte');
-    expect(auditFieldLabel('operations.content.text_message.cap', 'fr', 'EngagementScaleConfig')).toBe('Plafond — Envoyer un message texte');
+    expect(auditFieldLabel('operations.content.text_message.cap', 'fr', 'EngagementScaleConfig')).toBe('Actes crédités au plus — Envoyer un message texte');
+    expect(auditFieldLabel('operations.content.text_message.variantPoints.global', 'fr', 'EngagementScaleConfig')).toBe('Points (globale) — Envoyer un message texte');
     expect(auditFieldLabel('multiplier.windowDays', 'fr', 'EngagementScaleConfig')).toBe('Multiplicateur › Fenêtre glissante (jours)');
-    expect(auditFieldLabel('multiplier.levelCaps', 'fr', 'EngagementScaleConfig')).toBe('Plafond par niveau');
+    expect(auditFieldLabel('multiplier.levelCaps', 'fr', 'EngagementScaleConfig')).toBe('Multiplicateur maximal par niveau');
     expect(auditFieldLabel('streakBonuses', 'fr', 'EngagementScaleConfig')).toBe(translateAdmin('fr', 'admin.scale.streak.title'));
     expect(auditFieldLabel('abuse.heavyPoints', 'fr', 'EngagementScaleConfig')).toContain(translateAdmin('fr', 'admin.scale.abuse.heavyPoints'));
     expect(auditFieldLabel('linkVisits.basePoints', 'fr', 'EngagementScaleConfig')).toContain(translateAdmin('fr', 'admin.scale.links.basePoints'));

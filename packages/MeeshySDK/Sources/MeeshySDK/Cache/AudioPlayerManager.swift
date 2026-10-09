@@ -273,19 +273,23 @@ public class AudioPlayerManager: ObservableObject {
 
     private func startLocalProgressTimer() {
         timer?.invalidate()
+        // Tire sur le run loop principal : pas de `Task` par tick (#9702).
         timer = Timer.scheduledTimer(withTimeInterval: Self.progressTickInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self = self, let player = self.localPlayer else { return }
-                guard player.isPlaying else { return }
-                let newProgress = player.duration > 0 ? player.currentTime / player.duration : 0
-                if newProgress >= 1.0 {
-                    self.stop()
-                    return
-                }
-                if abs(newProgress - self.progress) >= Self.progressWriteThreshold {
-                    self.progress = newProgress
-                }
+            MainActor.assumeIsolated {
+                self?.publishLocalProgressTick()
             }
+        }
+    }
+
+    private func publishLocalProgressTick() {
+        guard let player = localPlayer, player.isPlaying else { return }
+        let newProgress = player.duration > 0 ? player.currentTime / player.duration : 0
+        if newProgress >= 1.0 {
+            stop()
+            return
+        }
+        if abs(newProgress - progress) >= Self.progressWriteThreshold {
+            progress = newProgress
         }
     }
 }

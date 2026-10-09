@@ -267,6 +267,7 @@ extension PostDetailViewModel {
             comments = snapshotComments
             if let parentId { repliesMap[parentId] = snapshotReplies }
             self.post?.commentCount = snapshotCount
+            guard !DailyGestureLimitNotice.surface(error) else { return }
             FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
         }
     }

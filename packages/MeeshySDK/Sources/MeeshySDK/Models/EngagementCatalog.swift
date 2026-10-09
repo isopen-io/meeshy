@@ -94,6 +94,18 @@ public enum EngagementCatalog {
         .tool: 1,
     ]
 
+    /// « COMMENT GAGNER » (#9667) : ce qu'un geste de chaque famille rapporte AU PLUS,
+    /// avant multiplicateurs — miroir de `ENGAGEMENT_FAMILY_TOP_POINTS` (TS), dérivé du
+    /// catalogue des opérations ; la garde `engagement-family-top-points` compare les cinq
+    /// nombres. Les limites quotidiennes comptent des GESTES, jamais ces points.
+    public static let familyTopPoints: [EngagementAxisFamily: Int] = [
+        .content: 1000,
+        .comment: 100,
+        .social: 7,
+        .conversation: 5,
+        .tool: 4,
+    ]
+
     /// Les cinq paliers d'origine — ce qu'un client qui ignore les deux derniers lit (#9392).
     public static let legacyBadgeThresholds: [Int] = [1, 10, 50, 100, 500]
     /// Sept paliers : 1 000 (Obsidienne) et 5 000 (Prisme) s'ajoutent, rien n'est retiré (#9392).

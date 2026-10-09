@@ -293,3 +293,70 @@ describe('chaque gestionnaire de sortie, appelé en direct, consulte la loi', ()
     }
   });
 });
+
+/**
+ * UNE RÉPONSE QUI CITE UN CONTENU PROTÉGÉ (décision porteur du 2026-10-08,
+ * #9573) — « Imager », « Export rapide » et « Imager la discussion » ne sont
+ * pas rendus, et leur gestionnaire appelé par une autre porte n'ouvre aucun
+ * atelier ; « Imager la discussion » d'un message ordinaire disparaît aussi
+ * quand la discussion peinte CONTIENT une telle réponse. Copier, transférer et
+ * répondre restent offerts.
+ */
+describe('une réponse qui cite un contenu protégé ne s’image pas', () => {
+  const replying = (id: string, quoted: Message, minutes = 4): Message => of(id, { replyTo: quoted, createdAt: minutesAgo(minutes) });
+  const openMenu = (api: () => MenuApi, id: string): void => {
+    const element = document.createElement('div');
+    element.dataset.row = id;
+    const event = { nativeEvent: new Event('contextmenu'), preventDefault: () => {}, currentTarget: element };
+    act(() => api().longPress.onContextMenu(event as never));
+  };
+
+  const QUOTED: readonly (readonly [string, Message])[] = [
+    ['une flamme à durée', timedFlame('q1')],
+    ['une flamme après lecture', afterRead('q1')],
+    ['une vue unique', of('q1', { effectFlags: 0, isViewOnce: true })],
+    ['un message flouté', of('q1', { effectFlags: 0, isBlurred: true })],
+    ['un message chiffré', of('q1', { effectFlags: 0, isEncrypted: true })],
+    ['un message dont la nature n’est pas déclarée', ordinary('q1')],
+  ];
+
+  test('témoin : citer un message ordinaire DÉCLARÉ laisse Imager et Imager la discussion', () => {
+    const declared = of('q1', { effectFlags: 0 });
+    const { api } = mount([declared, replying('r1', declared)]);
+    openMenu(api, 'r1');
+    expect(api().menuData?.items.map((item) => item.id)).toContain('export');
+    expect(api().menuData?.forwardItems.map((item) => item.id)).toEqual(['forward', 'exportDiscussion']);
+    act(() => api().onMenuAction('r1', 'exportDiscussion'));
+    expect(api().exportFor).toEqual({ messageId: 'r1', quick: false, scope: 'discussion' });
+  });
+
+  QUOTED.forEach(([label, quoted]) => {
+    test(`citer ${label} : le menu ne rend ni Imager ni Imager la discussion, Copier et Transférer demeurent`, () => {
+      const { api } = mount([quoted, replying('r1', quoted)]);
+      openMenu(api, 'r1');
+      const items = api().menuData?.items.map((item) => item.id) ?? [];
+      expect(items).not.toContain('export');
+      expect(items).not.toContain('exportQuick');
+      expect(items).toContain('copy');
+      expect(items).toContain('forward');
+      expect(api().menuData?.forwardItems.map((item) => item.id)).toEqual(['forward']);
+    });
+
+    test(`citer ${label} : Imager, Export rapide et Imager la discussion appelés en direct n’ouvrent rien`, () => {
+      const { api } = mount([quoted, replying('r1', quoted)]);
+      (['export', 'exportQuick', 'exportDiscussion'] as const).forEach((id) => act(() => api().onMenuAction('r1', id)));
+      expect(api().exportFor).toBe(null);
+    });
+
+    test(`un message ordinaire dont la discussion contient une réponse qui cite ${label} : Imager seul, sans Imager la discussion`, () => {
+      const { api } = mount([quoted, replying('r1', quoted), of('m2', { createdAt: minutesAgo(3) })]);
+      openMenu(api, 'm2');
+      expect(api().menuData?.items.map((item) => item.id)).toContain('export');
+      expect(api().menuData?.forwardItems.map((item) => item.id)).toEqual(['forward']);
+      act(() => api().onMenuAction('m2', 'exportDiscussion'));
+      expect(api().exportFor).toBe(null);
+      act(() => api().onMenuAction('m2', 'export'));
+      expect(api().exportFor).toEqual({ messageId: 'm2', quick: false });
+    });
+  });
+});

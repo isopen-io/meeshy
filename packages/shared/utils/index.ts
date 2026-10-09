@@ -50,6 +50,7 @@ export {
   messageTypeForClientAttachments,
   deriveMessageTypeForAttachments,
 } from './attachment-message-type.js';
+export { canonicalMediaMimeType } from './media-mime-type.js';
 export {
   generateClientMessageId,
   isValidClientMessageId,

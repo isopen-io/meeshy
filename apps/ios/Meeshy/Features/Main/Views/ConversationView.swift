@@ -1799,15 +1799,10 @@ struct ConversationView: View {
             // est couvert par le point de montage unique de RootView/
             // iPadRootView (cf. showsOwnConnectionBanner ci-dessus).
             if showsOwnConnectionBanner {
-                VStack {
-                    Color.clear.frame(height: ConnectionBanner.liftedTopPadding(
-                        base: composerState.showOptions ? 72 : 56
-                    ))
-                    ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting, activeConversationId: { viewModel.conversationId })
-                    Spacer()
-                }
-                .zIndex(98)
-                .allowsHitTesting(false)
+                ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting, activeConversationId: { viewModel.conversationId })
+                    .inSyncPillBand()
+                    .zIndex(98)
+                    .allowsHitTesting(false)
             }
 
             // Error banner

@@ -545,7 +545,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         socket = manager?.defaultSocket
         setupEventHandlers()
-        socket?.connect()
+        socket?.connect(withPayload: ClientInfoProvider.socketAuthPayload())
         return .armed
     }
 
@@ -839,10 +839,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                 }
                 guard let success = response["success"] as? Bool, success,
                       let data = response["data"] as? [String: Any] else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: PostReactionError.serverError(message))
+                    continuation.resume(throwing: Self.postReactionAckFailure(response))
                     return
                 }
                 continuation.resume(returning: Self.decodePostReactionAck(data, decoder: self.decoder, postId: postId, emoji: emoji, action: "add"))
@@ -860,10 +857,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                 }
                 guard let success = response["success"] as? Bool, success,
                       let data = response["data"] as? [String: Any] else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: PostReactionError.serverError(message))
+                    continuation.resume(throwing: Self.postReactionAckFailure(response))
                     return
                 }
                 continuation.resume(returning: Self.decodePostReactionAck(data, decoder: self.decoder, postId: postId, emoji: emoji, action: "remove"))

@@ -405,6 +405,10 @@ public struct ImageFullscreen: View {
     /// chemin qui puisse l'atteindre.
     @MainActor
     private func saveAsReceived(_ url: URL) async -> Bool {
+        // Le fichier du cache part PAR RÉFÉRENCE : rien n'est relu ni décodé (#9685).
+        if let onDisk = CacheCoordinator.imageLocalFileURL(for: url.absoluteString) {
+            return await PhotoLibraryManager.shared.saveImageFile(at: onDisk)
+        }
         guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
             return false
         }

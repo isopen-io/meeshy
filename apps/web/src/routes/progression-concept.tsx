@@ -11,6 +11,7 @@ import { GameMissions } from '@/components/game-missions';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
 import { GameTouch } from '@/components/game-touch';
 import { ConceptEmblem, ConceptFacts, ConceptGauge, ProgressionRow, RowEmblem } from '@/components/progression-concept';
+import { shownLevelOf } from '@/lib/game/ladder';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { useGamePrefs } from '@/lib/game/preferences';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
@@ -121,6 +122,7 @@ function pieceOf(concept: ProgressionConcept, view: EngagementWithGame, host: Fi
         return (
           <GameMintPreview
             mint={game.mint}
+            held={game.level.score}
             badgesLost={view.mintBadgeLoss}
             online={online}
             minting={actions.pending.mint}
@@ -156,7 +158,7 @@ function gesturesOf(concept: ProgressionConcept, view: EngagementWithGame, host:
           missions={game.missions}
           chest={game.chest}
           held={game.treasury.held}
-          level={game.level.level}
+          level={shownLevelOf(game.level).level}
           prismHour={game.boosts.prismHour}
           online={online}
           pendingRerollId={actions.pending.rerollId}

@@ -8,6 +8,8 @@ import type { ConversationRoomEmitter } from '../../socketio/emitToConversationP
 import type { AfterResponse } from '../../utils/after-response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { differsOrUnset } from '../../utils/prisma-unset';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
 
 const logger = enhancedLogger.child({ module: 'EnsureGlobalConversationMembership' });
 
@@ -28,7 +30,7 @@ export type GlobalMembershipSocketManager = {
 };
 
 export type GlobalMembershipDeps = {
-  readonly prisma: Pick<PrismaClient, 'conversation' | 'participant' | 'message'>;
+  readonly prisma: Pick<PrismaClient, 'conversation' | 'participant' | 'message' | 'user'>;
   /** Résolu à l'appel — jamais capturé à la construction. Absent = pas de socket. */
   readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
   /**
@@ -143,6 +145,10 @@ export async function ensureGlobalConversationMembership(
     return { outcome: 'already-member', participantId: existing.id };
   }
 
+  const account = await deps.prisma.user.findUnique({
+    where: { id: input.userId },
+    select: RECIPIENT_LANG_SELECT,
+  });
   const joinedAt = new Date();
   const created = await deps.prisma.participant.create({
     data: {
@@ -151,11 +157,13 @@ export async function ensureGlobalConversationMembership(
       type: 'user',
       displayName: input.displayName,
       role: input.role ?? 'member',
+      language: recipientLanguage(account, 'fr'),
       permissions: GLOBAL_MEMBER_PERMISSIONS,
       joinedAt,
       isActive: true,
     },
   });
+  announceConversationLanguageChange({ kind: 'arrival', conversationId: globalConversation.id, language: recipientLanguage(account, 'fr') });
 
   const socketManager = deps.resolveSocketManager?.();
 

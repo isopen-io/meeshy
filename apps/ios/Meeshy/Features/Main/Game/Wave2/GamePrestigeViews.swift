@@ -10,8 +10,9 @@ import MeeshyUI
 ///
 /// Aucun passage sans confirmation : l'écran ne propose que « Passer en Prestige » (qui ouvre la confirmation)
 /// et « Rester au sommet ». Le geste est optimiste (le niveau repart tout de suite) avec retour arrière, la
-/// loi est celle de la passerelle (`GamePrestige.transition`). Fermé : sous le niveau 100 il dit où l'on en est ;
-/// au maximum (cinq étoiles) il le fête, sans rien proposer.
+/// loi est celle de la passerelle (`GamePrestige.transition`). Fermé : sous le niveau 100 il dit où l'on en est
+/// et combien de niveaux manquent ; au maximum (cinq étoiles) il le fête, sans rien proposer. La confirmation
+/// donne les VALEURS avant → après (#9705) : points en poche, niveau, record, étoiles, Gloire.
 struct GamePrestigePage: View {
     var body: some View {
         GamePageShell(title: GameText.prestigeTitle, identifier: "game.prestige.page") {
@@ -47,7 +48,7 @@ struct GamePrestigeScreen: View {
     private func summary(_ prestige: GamePrestigeBlock) -> some View {
         GameCard(tint: MeeshyColors.brandPrimary, title: GameText.prestigeTitle) {
             GamePrestigeScene(
-                level: game.level.level, tier: game.level.tier, progress: game.level.progress, stars: prestige.stars,
+                level: game.level.shown.level, tier: game.level.shown.tier, progress: game.level.shown.progress, stars: prestige.stars,
                 plate: GameTrophyPresentation.of(key: GameTrophies.key(of: .prestige(number: max(1, prestige.stars))))?.plate ?? "",
                 playKey: playKey, reduceMotion: reduceMotion
             )
@@ -68,10 +69,36 @@ struct GamePrestigeScreen: View {
             if prestige.stars >= prestige.max {
                 GameNote(text: GameText.prestigeMax)
             } else if !prestige.canPrestige && passed == nil {
-                GameNote(text: GameText.prestigeLocked(level: GameCopy.formatCount(game.level.level)))
+                GameNote(text: GameText.prestigeLocked(level: GameCopy.formatCount(game.level.shown.level)))
+                GameFactChipRow(
+                    concept: .prestige,
+                    items: GameSpendRows.requirement(GameSpend.requirement(current: game.level.shown.level, required: GameLevels.prestigeLevel)),
+                    identifier: "game.prestige.requirement"
+                )
             }
         }
         .accessibilityIdentifier("game.prestige")
+    }
+
+    // MARK: Ce que le passage change, valeur par valeur
+
+    /// Avant → après, lu sur la loi (`GamePrestige.transition`) ; vide quand la loi le refuse — le serveur reste juge.
+    static func passValues(game: GameBlock) -> [GameFactChipItem] {
+        guard let prestige = game.prestige,
+              case let .allowed(pass) = GamePrestige.transition(score: game.level.score, prestige: prestige.stars,
+                                                               levelRecord: game.level.shown.record) else { return [] }
+        let shown = game.level.shown
+        func arrow(_ before: String, _ after: String) -> String { "\(before) → \(after)" }
+        return [
+            GameFactChipItem(label: ConceptText.factBalance, value: arrow(GameCopy.points(game.level.score), GameCopy.points(pass.scoreAfter)), detail: .score),
+            GameFactChipItem(label: ConceptText.name(.level), value: arrow(GameCopy.formatCount(shown.level), GameCopy.formatCount(pass.levelAfter)), detail: .levelNow),
+            GameFactChipItem(label: ConceptText.factRecord, value: arrow(GameCopy.formatCount(shown.record), GameCopy.formatCount(pass.levelRecordAfter)), detail: .levelRecord),
+            GameFactChipItem(
+                label: ConceptText.factStars, value: arrow(GameCopy.formatCount(prestige.stars), GameCopy.formatCount(pass.prestigeAfter)),
+                detail: .prestigeGlory, element: GameElementDetails.prestigeStar(pass.prestigeAfter, in: prestige)
+            ),
+            GameFactChipItem(label: ConceptText.name(.glory), value: "+" + GameCopy.formatCount(pass.gloryGained), detail: .prestigeGlory),
+        ]
     }
 
     // MARK: La proposition
@@ -127,6 +154,7 @@ struct GamePrestigeScreen: View {
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
+            GameFactChipRow(concept: .prestige, items: Self.passValues(game: game), identifier: "game.prestige.values")
             ForEach(GameText.prestigeConfirmationLines, id: \.self) { line in
                 GameNote(text: line)
             }

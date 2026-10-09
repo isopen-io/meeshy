@@ -24,7 +24,7 @@ import { z } from 'zod';
 import { DUO_STATUSES } from '../utils/game/duo.js';
 import { FLAME_FORMS } from '../utils/game/flame.js';
 import { ACHIEVEMENT_RARITIES, GLORY_RANKS } from '../utils/game/glory.js';
-import { LEVEL_TIER_KEYS } from '../utils/game/levels.js';
+import { LEGACY_LEVEL_MAX, LEGACY_LEVEL_TIER_KEYS, LEVEL_TIER_KEYS } from '../utils/game/levels.js';
 import { TREASURY_TIERS } from '../utils/game/treasury.js';
 import { LEAGUE_KEYS, isValidLeaguePseudonym } from '../utils/game/league.js';
 import { SEASON_STEPS } from '../utils/game/season.js';
@@ -273,7 +273,7 @@ export const seasonClaimResponseSchema = z.object({
   reward: seasonRewardSchema,
   /** Le cosmétique de la rangée Sceau, quand elle est possédée et que l'étape en porte un. */
   seal: z.object({ cosmeticKey: z.string().min(1) }).nullable(),
-  /** `true` quand cette étape termine le parcours (coupe, badge daté, +500 de Gloire). */
+  /** `true` quand cette étape termine le parcours (coupe, badge daté, `GLORY_POINTS.season` de Gloire). */
   completed: z.boolean(),
   gloryGained: nonNegativeInt,
   /** Le score en poche après le crédit. */
@@ -350,8 +350,12 @@ export const gameSettingsResponseSchema = z.object({
  * blocs nuls — la MÊME réponse pour un compte qui n'existe pas.
  */
 export const gameStandingSchema = z.object({
-  level: z.number().int().min(1).max(100),
-  tier: enumOf(LEVEL_TIER_KEYS),
+  /** Ancienne loi : borné à 100, la seule forme que les clients publiés décodent — la vraie valeur est `ladder` (#9688). */
+  level: z.number().int().min(1).max(LEGACY_LEVEL_MAX),
+  /** Ancienne loi : l'un des dix premiers paliers. */
+  tier: enumOf(LEGACY_LEVEL_TIER_KEYS),
+  /** Le niveau et le palier ouverts par le rang (#9688) — absents devant un serveur antérieur. */
+  ladder: z.object({ level: z.number().int().min(1), tier: enumOf(LEVEL_TIER_KEYS) }).optional(),
   prestige: z.number().int().min(0).max(5),
   /** `null` : pas de Flamme allumée — ou celle-ci n'est pas à montrer. */
   flame: enumOf(FLAME_FORMS.map((form) => form.key)).nullable(),

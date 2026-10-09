@@ -275,9 +275,9 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localMediaPaths = try c.decodeIfPresent([String].self, forKey: .localMediaPaths) ?? nil
         // Clé absente des lignes écrites avant ce champ → nil, jamais d'échec.
         self.location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
-        // Même tolérance : un sticker non rendable (clé présente mais vide)
-        // vaut absent, comme partout où `MessageSticker` est relu.
-        self.sticker = try c.decodeIfPresent(MessageSticker.self, forKey: .sticker)?.ifRenderable
+        // Même tolérance : un sticker sans rien à porter (clé présente mais vide)
+        // vaut absent ; celui de « Mes stickers » garde son `stickerId` au rejeu (#9635).
+        self.sticker = try c.decodeIfPresent(MessageSticker.self, forKey: .sticker)?.ifWireWorthy
         self.copyAttachmentsFromClientMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromClientMessageId)
         self.copyAttachmentsFromServerMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromServerMessageId)
         self.attachmentReplyTo = try c.decodeIfPresent(String.self, forKey: .attachmentReplyTo)

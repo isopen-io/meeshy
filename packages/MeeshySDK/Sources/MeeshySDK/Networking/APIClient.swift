@@ -731,7 +731,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 lastHTTPResponse = httpResponse
                 lastStatusCode = statusCode
 
-                if endpointAllowsRetry && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
+                // Une limite QUOTIDIENNE de gestes (429 `DAILY_*`, #9571) ne se
+                // rejoue pas : elle tient jusqu'à `resetAt`, des heures plus tard.
+                let dailyLimit = statusCode == 429 ? DailyGestureLimit.fromBody(data) : nil
+                if endpointAllowsRetry && dailyLimit == nil && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
                     continue
                 }
 
@@ -829,6 +832,12 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                         // structured 403 payloads (e.g. consent-required
                         // errors) can decode them without a second request.
                         throw MeeshyError.forbidden(reason: errorMsg, body: data)
+                    }
+
+                    if let dailyLimit {
+                        throw MeeshyError.rejected(APIRejection(
+                            statusCode: 429, code: dailyLimit.gesture.rawValue, message: errorMsg ?? "Limite du jour atteinte",
+                            resetAt: dailyLimit.resetAt, limit: dailyLimit.limit))
                     }
 
                     if statusCode == 429 {

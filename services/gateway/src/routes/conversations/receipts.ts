@@ -116,6 +116,7 @@ export {
   type ReceiptReader,
   type ReceiptContext,
 } from './receipts-contracts';
+import { captureNoticeWithheldFrom } from '../../services/messaging/captureNoticeVisibility';
 
 /**
  * Les collaborateurs, construits UNE fois par enregistrement de plugin — comme
@@ -908,9 +909,11 @@ export function receiptHandlers(ctx: ReceiptContext): ReceiptHandlers {
         const { messageId } = request.params as MessageReadStatusAliasParams;
         const message = await ctx.prisma.message.findUnique({
           where: { id: messageId },
-          select: { id: true, conversationId: true, createdAt: true },
+          select: { id: true, conversationId: true, createdAt: true, senderId: true, messageType: true, metadata: true },
         });
         if (!message) return sendNotFound(reply, 'Message non trouvé');
+        const withheld = await captureNoticeWithheldFrom(ctx.prisma, { row: message, reader: historyReaderFromAuthContext(authContextOf(request)) });
+        if (withheld) return sendNotFound(reply, 'Message non trouvé');
 
         const reader = await resolveReceiptReaderFor(ctx, authContextOf(request), message.conversationId);
         if (reader.ok === false) {

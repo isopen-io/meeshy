@@ -171,9 +171,9 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
         )
         XCTAssertTrue(
             try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
-                .contains("BackgroundSoundBadge.announcement(for: post.storyEffects)"),
-            "L'annonce doit être résolue via le helper partagé sur post.storyEffects — " +
-            "les mêmes champs que le viewer, rien d'inventé."
+                .contains("BackgroundSoundBadge.announcement(for: post)"),
+            "L'annonce doit être résolue via le helper partagé sur les effets que le post " +
+            "JOUE (#9677) — les siens, ou ceux de la story qu'il republie."
         )
     }
 

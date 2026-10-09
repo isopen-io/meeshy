@@ -77,13 +77,18 @@ extension PostDetailView {
     /// pire qu'absente : elle ferait croire que l'autre ne joue rien.
     ///
     /// L'existence est celle du badge (`backgroundTrace(of:)`) : pas de piste
-    /// ⇒ rien, et la scène reprend toute la hauteur.
+    /// ⇒ rien, et la scène reprend toute la hauteur. Montée AUSSI au-dessus
+    /// de l'embed d'une story republiée (#9677), sur les effets que CET embed
+    /// joue — ceux de la source.
     @ViewBuilder
-    func sceneSoundHeader(_ renderedItem: StoryItem) -> some View {
+    func sceneSoundHeader(_ playedEffects: StoryEffects?) -> some View {
         PostSceneSoundHeader(
-            trace: BackgroundSoundBadge.backgroundTrace(of: renderedItem.storyEffects),
+            trace: BackgroundSoundBadge.backgroundTrace(of: playedEffects),
+            announcement: BackgroundSoundBadge.announcement(for: playedEffects),
+            isMuted: isCanvasMuted,
             isPaused: isCanvasPaused,
             accentHex: accentColor,
+            onToggleMute: { isCanvasMuted.toggle() },
             onTogglePlayback: { isCanvasPaused.toggle() }
         )
         .padding(.horizontal, MeeshySpacing.lg)
@@ -97,7 +102,7 @@ extension PostDetailView {
     /// d'un côté sans l'autre (post-revue 2026-07-13).
     @ViewBuilder
     func storyCanvasSection(_ post: FeedPost, renderedItem: StoryItem) -> some View {
-        sceneSoundHeader(renderedItem)
+        sceneSoundHeader(renderedItem.storyEffects)
         // **Les dispositions de scène valent AUSSI sur la page détail**
         // (directive porteur 2026-09-06). Le détail rendait `sceneIndex: 0` par
         // l'hôte reader : un post de dix scènes n'en montrait qu'une, et les

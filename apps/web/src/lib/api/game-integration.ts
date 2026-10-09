@@ -2,11 +2,11 @@ import { GAME_INTEGRATION_ROUTES, GAME_ROUTES, gameUserGamePath } from '@meeshy/
 import type { GamePrivacyResponse, GameSettingsResponse, UserGameProfileResponse } from '@meeshy/shared/types/game';
 import { FLAME_FORMS } from '@meeshy/shared/utils/game/flame';
 import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
-import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
+import { LEGACY_LEVEL_TIER_KEYS, LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 import { SHOWCASE_VISIBILITIES } from '@meeshy/shared/utils/game/trophies';
 
-import { isBool, isInt, isOneOf, orNull, shape } from './game-guards';
+import { isBool, isDivision, isDivision5, isInt, isMythicSeat, isOneOf, optional, orNull, shape } from './game-guards';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -48,11 +48,14 @@ const isPrivacy = (value: unknown): value is GamePrivacyResponse => shape(value,
 const isStanding = (value: unknown): boolean =>
   shape(value, {
     level: (n) => isInt(n, 1, 100),
-    tier: isOneOf(LEVEL_TIER_KEYS),
+    tier: isOneOf(LEGACY_LEVEL_TIER_KEYS),
+    ladder: optional((v) => shape(v, { level: (n) => isInt(n, 1), tier: isOneOf(LEVEL_TIER_KEYS) })),
     prestige: (n) => isInt(n, 0, 5),
     flame: orNull(isOneOf(FLAME_FORMS.map((form) => form.key))),
     rank: isOneOf([...GLORY_RANKS.map((rank) => rank.key), 'mythe']),
-    division: orNull((n) => n === 1 || n === 2 || n === 3),
+    division: orNull(isDivision),
+    division5: optional(orNull(isDivision5)),
+    mythic: optional(orNull(isMythicSeat)),
   });
 
 const isUserGame = (value: unknown): value is UserGameProfileResponse =>

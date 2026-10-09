@@ -462,3 +462,49 @@ describe('createSessionStore — clearSession() (miroir SessionSnapshotStore.wip
     expect(store.getState().session).toEqual({ status: 'anonymous' });
   });
 });
+
+/**
+ * LA LANGUE DE L'INVITÉ (#9710) — celle qu'il a choisie en rejoignant. Elle
+ * voyage avec son identité (rang 1 de son Prisme, donc langue de composition
+ * par défaut) et SURVIT au rechargement ; une entrée d'avant ce lot, qui ne la
+ * porte pas, reste une session valide.
+ */
+describe('createSessionStore — la langue choisie par l’invité (#9710)', () => {
+  test('elle est tenue, persistée, puis restaurée au rechargement', () => {
+    const storage = fakeStorage();
+    createSessionStore({ storage, now: () => FIXED_NOW }).getState().establishGuest({
+      sessionToken: 'anon_abc',
+      guest: { ...GUEST, language: 'en' },
+    });
+
+    const reloaded = createSessionStore({ storage, now: () => FIXED_NOW });
+    reloaded.getState().restoreSession();
+
+    const session = reloaded.getState().session;
+    if (session.status !== 'guest') throw new Error('session d’invité attendue');
+    expect(session.guest.language).toBe('en');
+  });
+
+  test('une entrée d’avant #9710, sans langue, se restaure sans en inventer une', () => {
+    const storage = fakeStorage({
+      'meeshy.session': JSON.stringify({ kind: 'guest', sessionToken: 'anon_abc', guest: GUEST, expiresAt: FIXED_NOW + 1_000 }),
+    });
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+    store.getState().restoreSession();
+
+    const session = store.getState().session;
+    if (session.status !== 'guest') throw new Error('session d’invité attendue');
+    expect('language' in session.guest).toBe(false);
+  });
+
+  test('une langue qui n’est pas une chaîne rend l’entrée corrompue — jamais une session à moitié restaurée', () => {
+    const storage = fakeStorage({
+      'meeshy.session': JSON.stringify({ kind: 'guest', sessionToken: 'anon_abc', guest: { ...GUEST, language: 42 }, expiresAt: FIXED_NOW + 1_000 }),
+    });
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+    store.getState().restoreSession();
+
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+  });
+});
+

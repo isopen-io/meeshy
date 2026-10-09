@@ -29,7 +29,7 @@ export function gameLongArmed(): boolean {
   }
 }
 
-const LONG_SCORE = 94_100;
+const LONG_SCORE = 941_000;
 
 const longMission = (id: string, difficulty: 'easy' | 'medium' | 'hard' | 'gold', templateKey: string, target: number, progress: number, prism: boolean) => ({
   id,
@@ -60,6 +60,9 @@ export const gameBlockLongFixture = (): GameBlock =>
       prestige: 4,
       glory: 20_500,
       mintedLifetime: 1_234,
+      // Les étapes faites jusqu'à 99 (#9706) : dix missions, la Flamme de 999 jours ; le rang Conteur retient sous 100.
+      missionsDone: 10,
+      flameRecord: 999,
       debitablePoints: 3_000,
       balance: 1_234,
       streak: 999,

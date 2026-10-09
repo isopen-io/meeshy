@@ -19,7 +19,6 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendIntern
 import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { disconnectSession } from '../../socketio/disconnectSession';
-import { hashSessionToken } from '../../utils/session-token';
 import {
   legacyTokenRefusal,
   type SessionBoundTokenPayload,
@@ -33,6 +32,9 @@ import { mintPendingTwoFactorChallenge } from '../../services/auth/pending-two-f
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { createVerifyEmailIpRateLimiter, createVerifyEmailAddressRateLimiter } from '../../utils/rate-limiter.js';
 import { openSession } from './open-session';
+import { GEOLOCATION_ATTRIBUTION, readClientSessionHeaders } from '@meeshy/shared/utils/client-session';
+import { recordSessionClientInfo } from '../../services/auth/session-client-info';
+import { currentSessionOf } from '../../services/auth/current-session';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -283,6 +285,18 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // fermeture de fenêtre ne dépendant pas du jeton.
       const newToken = authService.generateToken(user, sid ?? activeSession?.id);
 
+      // #9610 — la version, le build et la plateforme se relèvent à chaque
+      // rafraîchissement, sur la session que le jeton NOMME. Détaché : la
+      // réponse n'attend jamais ce relevé, et il ne lève pas.
+      const sessionNommeeId = sid ?? activeSession?.id;
+      if (sessionNommeeId) {
+        void recordSessionClientInfo(context.prisma, {
+          sessionId: sessionNommeeId,
+          userId: decoded.userId,
+          declared: readClientSessionHeaders(request.headers),
+        }).catch(() => undefined);
+      }
+
       // Sliding window: extend the trusted session another full cycle on every
       // successful refresh and bump lastActiveAt. As long as the user opens the
       // app at least once per session lifetime (365d for mobile), the session
@@ -416,7 +430,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       }
 
       const requestContext = await getRequestContext(request);
-      const opened = await openSession(authService, user, requestContext);
+      const opened = await openSession(authService, user, requestContext, 'email_verification');
 
       logger.info('[AUTH] ✅ Adresse prouvée — session ouverte');
 
@@ -582,7 +596,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       headers: {
         type: 'object',
         properties: {
-          'x-session-token': { type: 'string', description: 'Current session token (optional, to mark current session)' }
+          'x-session-token': { type: 'string', description: 'Current session token (optional, legacy). The current session is read from the JWT `sid` claim.' }
         }
       },
       response: {
@@ -594,11 +608,11 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
-      const currentToken = request.headers['x-session-token'] as string | undefined;
 
       logger.info(`[AUTH] Récupération des sessions pour: ${userId}`);
 
-      const sessions = await authService.getUserActiveSessions(userId, currentToken);
+      // #9606 — la courante se lit sur le `sid` du JWT (l'en-tête reste lu).
+      const sessions = await authService.getUserActiveSessions(userId, currentSessionOf(request));
 
       return sendSuccess(reply, {
         sessions: sessions.map(session => ({
@@ -611,16 +625,24 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           browserName: session.browserName,
           browserVersion: session.browserVersion,
           isMobile: session.isMobile,
+          appVersion: session.appVersion,
+          appBuild: session.appBuild,
+          platform: session.platform,
+          deviceName: session.deviceName,
+          loginMethod: session.loginMethod,
           ipAddress: session.ipAddress,
           country: session.country,
           city: session.city,
           location: session.location,
+          timezone: session.timezone,
           createdAt: session.createdAt,
           lastActivityAt: session.lastActivityAt,
           isCurrentSession: session.isCurrentSession,
           isTrusted: session.isTrusted
         })),
-        totalCount: sessions.length
+        totalCount: sessions.length,
+        // La licence CC-BY 4.0 de DB-IP Lite (#9609) : le lieu affiché porte son attribution.
+        geolocation: GEOLOCATION_ATTRIBUTION
       });
 
     } catch (error) {
@@ -698,6 +720,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         io: fastify.socketIOHandler?.getManager?.()?.getIO(),
         userId,
         sessionId,
+        reason: 'user_revoke',
         onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on session revoke', error),
       });
 
@@ -720,7 +743,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       headers: {
         type: 'object',
         properties: {
-          'x-session-token': { type: 'string', description: 'Current session token to keep active' }
+          'x-session-token': { type: 'string', description: 'Current session token to keep active (optional, legacy). The current session is read from the JWT `sid` claim.' }
         }
       },
       response: {
@@ -744,7 +767,10 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
-      const currentToken = request.headers['x-session-token'] as string | undefined;
+      // #9606 — « cet appareil-ci » se lit sur le `sid` du JWT. Il se lisait sur
+      // `x-session-token`, qu'aucun client inscrit n'envoie en REST : la
+      // révocation des AUTRES révoquait aussi l'appareil qui la demandait.
+      const courante = currentSessionOf(request);
 
       logger.info(`Révocation de toutes les sessions pour userId=${userId} (sauf courante)`);
 
@@ -752,18 +778,11 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // ligne n'est plus « active » et la liste ne la rend plus. Sans eux, on
       // saurait combien de sessions ont été coupées et aucune ne saurait
       // laquelle — donc aucun socket ne pourrait être fermé.
-      const courante = currentToken
-        ? await fastify.prisma.userSession.findFirst({
-            where: { userId, sessionToken: hashSessionToken(currentToken) },
-            select: { id: true },
-          })
-        : null;
+      const aCouper = (await authService.getUserActiveSessions(userId, courante))
+        .filter((session) => !session.isCurrentSession)
+        .map((session) => session.id);
 
-      const aCouper = (await authService.getUserActiveSessions(userId))
-        .map((session) => session.id)
-        .filter((id) => id !== courante?.id);
-
-      const revokedCount = await authService.revokeAllSessionsExceptCurrent(userId, currentToken);
+      const revokedCount = await authService.revokeAllSessionsExceptCurrent(userId, courante);
 
         logger.info(`Sessions révoquées count=${revokedCount}`);
 
@@ -776,6 +795,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           io,
           userId,
           sessionId,
+          reason: 'user_revoke',
           message: 'This device was signed out from another device.',
           onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on revoke-others', error),
         });

@@ -9,12 +9,12 @@ import type {
   MissionRerollResponse,
 } from '@meeshy/shared/types/game';
 import { GLORY_RANKS } from '@meeshy/shared/utils/game/glory';
-import { LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
+import { LEGACY_LEVEL_TIER_KEYS, LEVEL_TIER_KEYS } from '@meeshy/shared/utils/game/levels';
 import { FLAME_FORMS } from '@meeshy/shared/utils/game/flame';
 import { MISSION_DIFFICULTIES } from '@meeshy/shared/utils/game/missions';
 import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 
-import { isBool, isFraction, isInt, isOneOf, isText, orNull, shape } from './game-guards';
+import { isBool, isDivision, isDivision5, isFraction, isInt, isMythicSeat, isOneOf, isText, optional, orNull, shape } from './game-guards';
 import { readGameExtensions, withoutExtensions, type GameBlockV2 } from './game-v2';
 import type { ApiResult, HttpTransport } from './http';
 
@@ -42,17 +42,31 @@ import type { ApiResult, HttpTransport } from './http';
  * intention, jamais par requête — même règle que la frappe, `engagement.ts`).
  */
 
+/** Les champs d'HIER du niveau gardent l'ancienne loi (≤ 100, dix paliers) ; la lecture ouverte par le rang est `ladder` (#9688). */
+const isLegacyTier = isOneOf(LEGACY_LEVEL_TIER_KEYS);
 const isTier = isOneOf(LEVEL_TIER_KEYS);
+
+const isLadder = (value: unknown): boolean =>
+  shape(value, {
+    level: (v) => isInt(v, 1),
+    tier: isTier,
+    floorScore: (v) => isInt(v),
+    nextThreshold: orNull((v) => isInt(v)),
+    pointsToNext: (v) => isInt(v),
+    progress: isFraction,
+    record: (v) => isInt(v, 1),
+    cap: orNull((v) => isInt(v, 1)),
+    isMax: isBool,
+  });
 const isRank = isOneOf([...GLORY_RANKS.map((rank) => rank.key), 'mythe']);
 const isTreasuryKey = isOneOf(TREASURY_TIERS.map((tier) => tier.key));
 const isFlameForm = isOneOf(FLAME_FORMS.map((form) => form.key));
-const isDivision = (value: unknown): boolean => value === 1 || value === 2 || value === 3;
 const isEdition = isOneOf(['silver', 'gold', 'prism']);
 
 const isLevel = (value: unknown): boolean =>
   shape(value, {
     level: (v) => isInt(v, 1, 100),
-    tier: isTier,
+    tier: isLegacyTier,
     score: (v) => isInt(v),
     floorScore: (v) => isInt(v),
     nextThreshold: orNull((v) => isInt(v)),
@@ -61,19 +75,22 @@ const isLevel = (value: unknown): boolean =>
     record: (v) => isInt(v, 1, 100),
     prestige: (v) => isInt(v),
     canPrestige: isBool,
+    ladder: optional(isLadder),
   });
 
 const isGloryStep = (value: unknown): boolean =>
-  shape(value, { rank: isRank, division: isDivision, minGlory: (v) => isInt(v) });
+  shape(value, { rank: isRank, division: isDivision, division5: optional(isDivision5), minGlory: (v) => isInt(v) });
 
 const isGlory = (value: unknown): boolean =>
   shape(value, {
     glory: (v) => isInt(v),
     rank: isRank,
     division: orNull(isDivision),
+    division5: optional(orNull(isDivision5)),
     next: orNull(isGloryStep),
     gloryMissing: orNull((v) => isInt(v)),
     progress: isFraction,
+    mythic: optional(orNull(isMythicSeat)),
   });
 
 const isTreasury = (value: unknown): boolean =>
@@ -94,6 +111,7 @@ const isMint = (value: unknown): boolean =>
     levelAfter: (v) => isInt(v, 1, 100),
     levelsLost: (v) => isInt(v),
     gloryGained: (v) => isInt(v),
+    ladder: optional((v) => shape(v, { levelBefore: (n) => isInt(n, 1), levelAfter: (n) => isInt(n, 1), levelsLost: (n) => isInt(n) })),
   });
 
 export const isGameMission = (value: unknown): value is GameMission =>

@@ -110,6 +110,11 @@ export type OfflineParticipantQueueParams = QueuedEventVariant & {
    * rend le payload à déposer pour LUI. Absent, tout le monde reçoit `payload`.
    */
   resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
+  /**
+   * Les clés de file qui ne reçoivent RIEN — un lecteur dont le plancher
+   * d'historique est postérieur au message (`translationReaders`, #9709).
+   */
+  excludedQueueKeys?: ReadonlySet<string>;
 }
 
 /**
@@ -231,7 +236,7 @@ export async function enqueueForOfflineParticipants(
       const isActor =
         (actorParticipantId != null && p.id === actorParticipantId) ||
         (actorUserId != null && p.userId === actorUserId);
-      if (isActor || connectedUsers.has(queueKey)) continue;
+      if (isActor || connectedUsers.has(queueKey) || params.excludedQueueKeys?.has(queueKey)) continue;
       if (restrictToLanguage !== null) {
         // Échec OUVERT sur prisme vide : un participant dont aucune langue n'est
         // résoluble reçoit l'entrée, exactement comme avant ce filtre. Le pire

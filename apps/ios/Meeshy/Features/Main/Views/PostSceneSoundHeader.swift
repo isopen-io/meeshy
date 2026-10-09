@@ -23,22 +23,14 @@ import MeeshyUI
 /// > gardé — et l'utilisateur n'apprenait ni le titre, ni l'auteur, ni la durée
 /// > de ce qu'il entendait.
 ///
-/// ## Ce qu'elle montre, et pourquoi c'est la MÊME rangée
+/// ## Ce qu'elle montre : l'annonce des AUTRES surfaces de lecture (#9677)
 ///
-/// `ComposerSoundTraceRow` — note · onde · crédit · durée — est le vocabulaire
-/// des traces sonores du dépôt (#5011 : « deux traces, deux coques, un seul
-/// vocabulaire »). Cette vue en est la TROISIÈME coque, la première du côté
-/// LECTURE. En écrire une quatrième forme ici aurait donné deux façons de dire
-/// le même son, et la divergence se serait vue au premier libellé ajouté.
-///
-/// Son préfixe `Composer` cesse d'être vrai le jour où une surface de lecture
-/// la monte ; le renommage est un suivi de #5602, tenu à part parce qu'il
-/// touche quatre gardes de source d'un territoire aujourd'hui rouge (#5599).
-///
-/// Le SPECTRE que le porteur demande est celui de la rangée : le relevé
-/// (`waveformSamples`) quand on l'a, **une sinusoïde sinon** — un son emprunté
-/// et un brouillon restauré arrivent avec un tableau vide, et une bande plate
-/// s'y lirait comme un silence.
+/// Le crédit que la carte, le réel et le lecteur de story montent —
+/// `BackgroundSoundBadge` : la note et la sinusoïde pour un son ORIGINAL,
+/// « ♫ titre · @auteur » qui DÉFILE pour un son de la bibliothèque. La rangée
+/// du composer qu'elle montait avant tronquait le crédit sans le faire défiler,
+/// et peignait une sinusoïde de REPLI sous un son emprunté — la même image que
+/// l'original, donc une provenance dite deux fois différemment selon l'écran.
 ///
 /// ## Pourquoi elle est un BOUTON, et pas une étiquette
 ///
@@ -60,11 +52,20 @@ struct PostSceneSoundHeader: View {
     /// (`BackgroundSoundBadge.backgroundTrace(of:)`), jamais une seconde
     /// condition recopiée qui pourrait diverger.
     let trace: StoryAudioPlayerObject?
+    /// Ce que la ligne DIT de cette piste — la même annonce que le badge des
+    /// autres surfaces (`BackgroundSoundBadge.announcement(for:)`), résolue par
+    /// l'appelant sur les effets que la scène JOUE.
+    let announcement: BackgroundAudioAnnouncement
+    /// Le son de fond est-il COUPÉ ? (#9677, directive porteur 2026-10-08) La
+    /// NOTE du crédit le coupe et se barre — plus de baffle dans la rangée
+    /// d'actions. L'état est `isCanvasMuted`, celui que le baffle pilotait.
+    let isMuted: Bool
     /// La lecture est-elle ARRÊTÉE par le viewer ? Elle vit chez l'hôte : c'est
     /// lui qui la sert aux trois chemins de rendu, et une commande qui n'en
     /// atteindrait qu'un laisserait jouer le canvas d'à côté.
     let isPaused: Bool
     let accentHex: String
+    let onToggleMute: () -> Void
     let onTogglePlayback: () -> Void
 
     /// `Color(hex:)` n'est PAS faillible : sur une chaîne illisible, son
@@ -80,46 +81,38 @@ struct PostSceneSoundHeader: View {
     }
 
     var body: some View {
-        if let trace {
-            Button(action: {
-                HapticFeedback.light()
-                onTogglePlayback()
-            }) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    ComposerSoundTraceRow(
-                        sound: trace,
-                        tint: tint,
-                        // La ligne occupe toute la largeur du couloir : l'onde
-                        // ET le crédit y tiennent, aucun ne chasse l'autre.
-                        // C'est la troisième voie de #5011, et la raison qui
-                        // retire l'onde d'un son emprunté dans une CAPSULE
-                        // (manque de place, #4669) ne s'applique pas ici.
-                        showsWaveformEvenWhenBorrowed: true,
-                        creditMaxWidth: nil
-                    )
-                    Spacer(minLength: 4)
+        if trace != nil {
+            HStack(spacing: MeeshySpacing.sm) {
+                // La NOTE coupe le son de fond (#9677) — le crédit est le contrôle.
+                BackgroundSoundMuteControl(
+                    announcement: announcement,
+                    accentHex: accentHex.isEmpty ? MeeshyColors.indigo400Hex : accentHex,
+                    isMuted: isMuted,
+                    onToggle: onToggleMute
+                )
+                Spacer(minLength: 4)
+                // L'arrêt de la SCÈNE entière (directive 2026-09-06) garde son
+                // propre bouton : couper le son n'arrête pas l'image.
+                Button(action: {
+                    HapticFeedback.light()
+                    onTogglePlayback()
+                }) {
                     Image(systemName: isPaused ? "play.fill" : "pause.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))
                         .foregroundStyle(tint)
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(tint.opacity(0.12)))
+                        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                        .contentShape(Rectangle())
                 }
-                // La cible tactile couvre la rangée ENTIÈRE, pas le seul
-                // glyphe : le porteur demande « quand on touche », et un
-                // toucher qui ne prend que 28 pt sur une ligne pleine largeur
-                // se solde par des touchers qui ne font rien.
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(isPaused
+                    ? String(localized: "feed.detail.sound.resume.hint",
+                             defaultValue: "Reprend la lecture de la scène", bundle: .main)
+                    : String(localized: "feed.detail.sound.pause.hint",
+                             defaultValue: "Arrête la lecture de la scène", bundle: .main)))
             }
-            .buttonStyle(.plain)
-            .frame(minHeight: 44)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(accessibilityLabel(for: trace)))
-            .accessibilityHint(Text(isPaused
-                ? String(localized: "feed.detail.sound.resume.hint",
-                         defaultValue: "Reprend la lecture de la scène", bundle: .main)
-                : String(localized: "feed.detail.sound.pause.hint",
-                         defaultValue: "Arrête la lecture de la scène", bundle: .main)))
-            .accessibilityAddTraits(.isButton)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
         }
     }
 

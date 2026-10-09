@@ -192,13 +192,13 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    # L'API ML n'a AUCUN routage public (#9662, incident du 2026-10-08) : 44
+    # routes sans authentification, dont /api/v1/admin/*, /debug/clear-cache et
+    # la bascule de modèle TTS. Aucun client ne l'appelle par ml.staging : la
+    # passerelle la joint par `translator-staging:8000` et ZMQ, sur le réseau
+    # interne. Sonde : `docker exec meeshy-translator-staging … /health`.
     labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=meeshy_meeshy-network"
-      - "traefik.http.routers.translator-staging.rule=Host(`ml.staging.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.translator-staging.entrypoints=websecure"
-      - "traefik.http.routers.translator-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.services.translator-staging.loadbalancer.server.port=8000"
+      - "traefik.enable=false"
       # unhealthy déclenche un restart (#5610) — voir le service `autoheal`.
       - "autoheal=true"
 
@@ -287,10 +287,32 @@ services:
       # Chiffrement au repos des secrets de configuration (clé d'API LLM de
       # l'agent) — 32 octets base64. Absente : l'écriture d'une clé est refusée.
       - SECRETS_AT_REST_KEY=${SECRETS_AT_REST_KEY}
+      # #9600 — adresses de fichier signées par lecteur. Clé HMAC de 32 octets
+      # base64, PROPRE à cet environnement ; absente : rien n'est signé (l'adresse
+      # d'avant reste servie). La précédente ne sert qu'à vérifier pendant une
+      # rotation. La bascule de refus ne se pose qu'à zéro usage mesuré.
+      - ATTACHMENT_URL_SIGNING_KEY=${ATTACHMENT_URL_SIGNING_KEY:-}
+      - ATTACHMENT_URL_SIGNING_KEY_PREVIOUS=${ATTACHMENT_URL_SIGNING_KEY_PREVIOUS:-}
+      - ATTACHMENT_URL_SIGNATURE_ENFORCE=${ATTACHMENT_URL_SIGNATURE_ENFORCE:-false}
       # E-mails de staging (#8036) — de VRAIS envois, marqués « [STAGING] » au
       # sujet et d'un bandeau dans le corps (`services/email/staging-marker.ts`).
       # Sans BREVO_API_KEY sur l'hôte, rien ne part (la passerelle le journalise).
       - MEESHY_ENV=staging
+      # #9614, #9642 — la purge de conservation (sessions closes 90 j, journaux
+      # 12 mois, adresses d'inscription et de connexion 12 mois). ARMÉE par la
+      # seule valeur exacte true ; sinon elle compte et journalise sans écrire.
+      # Réarmée en staging après le correctif de l'audit A2-1 (ban lu par
+      # unsetOrNull('liftedAt'), témoin sur documents Mongo vert). Production :
+      # toujours désarmée, feu vert du porteur et sauvegarde vérifiée d'abord.
+      - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-true}
+      # #9668 — le verdict de la sauvegarde nocturne (etat.json), lu par la carte
+      # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
+      # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les
+      # ADMIN et BIGBOSS et écrivent au BIGBOSS. Seule la valeur exacte true arme le contrôle.
+      # Staging : aucune sauvegarde n'y tourne ; la recette y POSE un etat.json à la main
+      # et arme le contrôle par BACKUP_STATUS_ALERTS_ENABLED=true dans le .env de l'hôte.
+      - BACKUP_STATUS_FILE=/backup-status/etat.json
+      - BACKUP_STATUS_ALERTS_ENABLED=${BACKUP_STATUS_ALERTS_ENABLED:-false}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@meeshy.me}
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Meeshy Staging}
       - BREVO_API_KEY=${BREVO_API_KEY:-}
@@ -298,6 +320,12 @@ services:
       - gateway_staging_uploads:/app/uploads
       - gateway_staging_sounds:/app/sounds
       - ./secrets/firebase-admin-sdk.json:/app/secrets/firebase-admin-sdk.json:ro
+      # #9609 — base de géolocalisation LOCALE (DB-IP Lite), tenue à jour sur l'hôte
+      # par infrastructure/scripts/geoip-update-dbip.sh ; lecture seule, jamais dans l'image.
+      - ${GEOIP_HOST_DIR:-/opt/meeshy/geoip}:/app/geoip:ro
+      # #9668 — le SEUL dossier du verdict de sauvegarde, en lecture seule : la passerelle
+      # ne voit jamais les sauvegardes elles-mêmes (/opt/meeshy/backups/nightly).
+      - ${BACKUP_STATUS_HOST_DIR:-/opt/meeshy/staging/backup-status}:/backup-status:ro
     depends_on:
       mongo-init-staging:
         condition: service_completed_successfully
@@ -319,6 +347,16 @@ services:
       - "traefik.http.routers.gateway-staging.middlewares=rate-limit@file,compress@file"
       - "traefik.http.routers.gateway-staging.entrypoints=websecure"
       - "traefik.http.routers.gateway-staging.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.gateway-staging.service=gateway-staging"
+      # #9600 — l'adresse signée d'un fichier protégé porte dans son CHEMIN un
+      # jeton qui suffit à lire les octets : son routeur propre (plus spécifique,
+      # donc prioritaire) ne l'écrit pas au journal d'accès du Traefik partagé.
+      - "traefik.http.routers.gateway-staging-signed-files.rule=Host(`gate.staging.${DOMAIN:-meeshy.me}`) && PathPrefix(`/api/v1/attachments/signed/`)"
+      - "traefik.http.routers.gateway-staging-signed-files.middlewares=rate-limit@file,compress@file"
+      - "traefik.http.routers.gateway-staging-signed-files.entrypoints=websecure"
+      - "traefik.http.routers.gateway-staging-signed-files.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.gateway-staging-signed-files.service=gateway-staging"
+      - "traefik.http.routers.gateway-staging-signed-files.observability.accessLogs=false"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
 
   # ===========================================================================

@@ -151,7 +151,7 @@ function buildDeps(overrides: Partial<RealtimeDeps> = {}): {
 
 describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () => {
   test('la poignée de main présente le jeton ET le jeton de session au FACTORY, et se connecte', () => {
-    let seenAuth: { readonly token: string; readonly sessionToken: string } | null = null;
+    let seenAuth: { readonly token?: string; readonly sessionToken: string } | null = null;
     const socket = fakeSocket();
     const socketFactory: SocketFactory = ({ auth }) => {
       seenAuth = auth;
@@ -780,6 +780,16 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
 
     socket.fire(SERVER_EVENTS.AUTH_SESSION_REVOKED, { code: 'session_revoked', message: 'révoqué', reason: 'admin_revoke' });
     expect(cleared).toBe(2);
+  });
+
+  test('le MOTIF d’une révocation accompagne la fin de session — l’écran de connexion l’explique (#9613)', () => {
+    const reasons: unknown[] = [];
+    const { deps, socket } = buildDeps({ onClearSession: (reason) => reasons.push(reason) });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.AUTH_SESSION_REVOKED, { code: 'session_revoked', message: 'révoqué', reason: 'admin_revoke' });
+    socket.fire(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, { code: 'token_expired', message: 'expiré' });
+    expect(reasons).toEqual(['admin_revoke', undefined]);
   });
 
   test('reconnexion : l’évènement `online` relance `connect()` si le socket est déconnecté', () => {

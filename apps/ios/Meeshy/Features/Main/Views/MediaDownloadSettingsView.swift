@@ -16,6 +16,9 @@ struct MediaDownloadSettingsView: View {
     @ObservedObject private var store = MediaDownloadPreferencesStore.shared
     /// #8307 — les images et vidéos reçues rejoignent l'album Meeshy. Actif par défaut.
     @AppStorage(ReceivedMediaAutoSaveUserSetting.key) private var autoSaveToAlbum = true
+    /// #9684 — à la prise de vue : l'original (défaut : non) et la version avec effets et cadre.
+    @AppStorage(CaptureSavePolicy.savesOriginalKey) private var captureSavesOriginal = CaptureSavePolicy.standard.savesOriginal
+    @AppStorage(CaptureSavePolicy.renderedModeKey) private var captureRenderedMode = CaptureSavePolicy.standard.renderedMode
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -40,6 +43,7 @@ struct MediaDownloadSettingsView: View {
         VStack(spacing: MeeshySpacing.xl) {
             infoSection
             autoSaveSection
+            captureSaveSection
             policyPicker(
                 title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: MeeshyColors.brandPrimaryHex,
                 binding: $store.preferences.image
@@ -118,6 +122,53 @@ struct MediaDownloadSettingsView: View {
             .padding(.vertical, MeeshySpacing.smPlus)
             .background(sectionBackground(tint: accentColor))
         }
+    }
+
+    // MARK: - À la prise de vue (#9684)
+
+    private var captureSaveSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "settings.media.capture.header", defaultValue: "À la prise de vue", bundle: .main),
+                          icon: "camera.fill", color: MeeshyColors.indigo600Hex)
+            VStack(spacing: 0) {
+                captureToggle(isOn: $captureSavesOriginal, icon: "photo",
+                              title: String(localized: "settings.media.capture.original.title",
+                                            defaultValue: "Enregistrer l'original", bundle: .main),
+                              subtitle: String(localized: "settings.media.capture.original.subtitle",
+                                               defaultValue: "La photo ou la vidéo brute, sans effet ni cadre, rejoint Photos à chaque prise.",
+                                               bundle: .main))
+                Divider().padding(.leading, 54)
+                captureToggle(isOn: Binding(get: { captureRenderedMode == .automatic },
+                                            set: { captureRenderedMode = $0 ? .automatic : .manual }),
+                              icon: "camera.filters",
+                              title: String(localized: "settings.media.capture.rendered.title",
+                                            defaultValue: "Enregistrer la version avec effets et cadre", bundle: .main),
+                              subtitle: String(localized: "settings.media.capture.rendered.subtitle",
+                                               defaultValue: "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande.",
+                                               bundle: .main))
+            }
+            .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
+        }
+    }
+
+    private func captureToggle(isOn: Binding<Bool>, icon: String, title: String, subtitle: String) -> some View {
+        Toggle(isOn: isOn) {
+            HStack(spacing: MeeshySpacing.md) {
+                fieldIcon(icon, color: MeeshyColors.indigo600Hex)
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(title)
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                    Text(subtitle)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
+                        .foregroundColor(theme.textMuted)
+                        .lineSpacing(2)
+                }
+            }
+        }
+        .tint(Color(hex: accentColor))
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     // MARK: - Policy picker section

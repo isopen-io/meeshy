@@ -102,7 +102,21 @@ public struct MessageCardSubject: Equatable, Sendable {
     /// Le message peut-il partir en image ? La même famille de gardes que « Copier ».
     /// La loi de sortie décide d'abord (#9573) : un contenu qui disparaît — vue
     /// unique, flamme à durée ou après lecture — ne s'image pas, même vivant.
-    public static func isExportable(_ message: MeeshyMessage, now: Date) -> Bool {
+    ///
+    /// **Un message qui CITE un contenu protégé ne s'image pas non plus**
+    /// (décision porteur du 2026-10-08) : la carte entière se refuse plutôt que
+    /// de peindre la réponse sans ce qu'elle cite
+    /// (`ReplyReference.quotesProtectedContent`). Le message cité RÉEL, quand
+    /// l'appelant l'a en mémoire (`quotedMessage`), fait foi sur la citation.
+    public static func isExportable(_ message: MeeshyMessage, quotedMessage: MeeshyMessage? = nil, now: Date) -> Bool {
+        guard holdsExportableContent(message, now: now) else { return false }
+        return !(message.replyTo?.quotesProtectedContent(quotedMessage: quotedMessage) ?? false)
+    }
+
+    /// Le contenu PROPRE du message peut-il partir en image — sans juger ce
+    /// qu'il cite ? C'est la question que pose la peinture des pièces du
+    /// message cité : sa propre citation n'est pas peinte.
+    static func holdsExportableContent(_ message: MeeshyMessage, now: Date) -> Bool {
         guard message.contentExitLaw.exportable else { return false }
         if message.holdsViewOnce || message.isBlurred || message.attachments.contains(where: { $0.isBlurred || $0.isViewOnce }) { return false }
         if message.isDeleted || message.messageSource == .system { return false }
@@ -176,7 +190,7 @@ public struct MessageCardSubject: Equatable, Sendable {
         audioLanguages: [String: String] = [:],
         now: Date
     ) -> MessageCardSubject? {
-        guard isExportable(message, now: now) else { return nil }
+        guard isExportable(message, quotedMessage: quotedMessage, now: now) else { return nil }
         let chosen: String
         if let language {
             chosen = language.lowercased() == message.originalLanguage.lowercased()
@@ -223,7 +237,7 @@ public struct MessageCardSubject: Equatable, Sendable {
               !reference.quotedMediaIsProtected, !reference.isQuotedMessageDeleted else { return [] }
         if let expiresAt = reference.quotedExpiresAt, expiresAt <= now { return [] }
         if let quotedMessage, quotedMessage.id == reference.messageId {
-            return isExportable(quotedMessage, now: now) ? paintableMedia(of: quotedMessage, audioLanguages: audioLanguages) : []
+            return holdsExportableContent(quotedMessage, now: now) ? paintableMedia(of: quotedMessage, audioLanguages: audioLanguages) : []
         }
         guard reference.quotedContentMayLeave(quotedMessage: nil), var attachment = reference.quotedAttachment else { return [] }
         if attachment.type == .audio, let tracks = reference.quotedAudioTracks {
@@ -286,7 +300,12 @@ public struct MessageCardSubject: Equatable, Sendable {
     }
 
     public static func paintableMedia(of comment: FeedComment, audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
-        comment.media.compactMap { item in
+        paintableMedia(of: comment.media, audioLanguages: audioLanguages)
+    }
+
+    /// Les pièces d'un commentaire ou d'un post qu'une carte peut peindre (#9686).
+    static func paintableMedia(of items: [FeedMedia], audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
+        items.compactMap { item in
             let kind: MessageCardMediaKind
             switch item.type {
             case .image: kind = .image
@@ -340,7 +359,7 @@ public struct MessageCardSubject: Equatable, Sendable {
         )
     }
 
-    private static func author(isViewer: Bool, names: [String?], viewer: Viewer) -> String {
+    static func author(isViewer: Bool, names: [String?], viewer: Viewer) -> String {
         let candidates = isViewer ? [viewer.displayName] + names : names
         return candidates.lazy.compactMap { MessageCardText.nonBlank($0) }.first ?? "Meeshy"
     }

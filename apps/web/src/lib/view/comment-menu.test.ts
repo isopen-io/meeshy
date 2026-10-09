@@ -18,7 +18,11 @@ const comment = (overrides: Partial<PostComment> = {}): PostComment => ({
 
 const mine = (overrides: Partial<PostComment> = {}) => comment({ author: { id: VIEWER, username: 'me' }, ...overrides });
 
-const entries = (target: PostComment, servedText = 'C’est où ?', options: { readonly canCopy?: boolean; readonly canImage?: boolean; readonly canReport?: boolean } = {}) =>
+const entries = (
+  target: PostComment,
+  servedText = 'C’est où ?',
+  options: { readonly canCopy?: boolean; readonly canImage?: boolean; readonly canReport?: boolean; readonly postComposition?: { readonly imageable: boolean } } = {},
+) =>
   commentMenuEntries({
     comment: target,
     viewerId: VIEWER,
@@ -26,6 +30,7 @@ const entries = (target: PostComment, servedText = 'C’est où ?', options: { r
     canCopy: options.canCopy ?? true,
     canImage: options.canImage ?? true,
     canReport: options.canReport ?? true,
+    ...(options.postComposition === undefined ? {} : { postComposition: options.postComposition }),
   });
 
 describe('commentMenuEntries — le menu « … » d’un commentaire (#8734, jumelle de #8709)', () => {
@@ -63,5 +68,11 @@ describe('commentMenuEntries — le menu « … » d’un commentaire (#8734, ju
   test('sans hôte de presse-papiers, d’atelier ni de signalement, ces entrées ne se montent pas (loi 4)', () => {
     expect(entries(comment({ replyCount: 1 }), 'x', { canImage: false, canReport: false })).toEqual(['copy']);
     expect(entries(mine(), 'x', { canCopy: false, canImage: false })).toEqual(['edit', 'delete']);
+  });
+
+  test('un commentaire de POST (#9687) : un seul « Imager », qui compose la carte — la composition décide s’il s’offre', () => {
+    expect(entries(comment({ replyCount: 2 }), 'x', { postComposition: { imageable: true } })).toEqual(['copy', 'image', 'report']);
+    expect(entries(comment({ parentId: 'c-0' }), 'x', { postComposition: { imageable: false } })).toEqual(['copy', 'report']);
+    expect(entries(comment(), 'x', { canImage: false, postComposition: { imageable: true } })).toEqual(['copy', 'report']);
   });
 });

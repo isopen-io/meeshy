@@ -16,8 +16,7 @@ import { BRAND, CARD, INK, INK_2, MEESH_TINT, UNLOCKED_TINT } from '@/routes/pro
 
 import { lastAchievement } from '@meeshy/shared/utils/progression-layout';
 import type { EngagementMeeshProgress, EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
-import { ENGAGEMENT_AXIS_WEIGHTS, engagementAxisFamily } from '@meeshy/shared/types/engagement';
-import type { EngagementAxisFamily } from '@meeshy/shared/types/engagement';
+import { earnRules } from '@/lib/game/earn-rules';
 
 /**
  * LES HEROS D'AVANT LE JEU (#5838 à #5842), RANGÉS DANS LES FICHES (#9563).
@@ -117,21 +116,13 @@ export function LastAchievementHero({ progress }: { progress: EngagementProgress
 /**
  * LE HERO DU NIVEAU — pleine largeur, et il ÉNUMÈRE (#5841).
  *
- * Le barème est dérivé de `ENGAGEMENT_AXIS_WEIGHTS`, jamais recopié dans une
+ * Le barème est dérivé du catalogue (`earnRules`, #9667), jamais recopié dans une
  * chaîne : le porteur l'a réglé trois fois le 2026-09-09, et une phrase en dur
  * se serait périmée au premier réglage sans qu'aucun témoin ne rougisse — c'est
  * exactement ce qui est arrivé à la fixture de démonstration (#5762).
  */
 export function LevelHero({ progress, mintCost }: { progress: EngagementProgress; mintCost: number | null }) {
-  const bareme = (Object.keys(FAMILY_LABELS) as EngagementAxisFamily[])
-    .map((famille) => {
-      const axe = (Object.keys(ENGAGEMENT_AXIS_WEIGHTS) as (keyof typeof ENGAGEMENT_AXIS_WEIGHTS)[]).find(
-        (a) => engagementAxisFamily(a) === famille,
-      );
-      return axe === undefined ? null : { famille, poids: ENGAGEMENT_AXIS_WEIGHTS[axe] };
-    })
-    .filter((x): x is { famille: EngagementAxisFamily; poids: number } => x !== null)
-    .sort((a, b) => b.poids - a.poids);
+  const bareme = earnRules().map(({ family, points }) => ({ famille: family, poids: points }));
 
   const manque = progress.level.nextThreshold === null ? null : progress.level.nextThreshold - progress.level.value;
 
@@ -161,7 +152,7 @@ export function LevelHero({ progress, mintCost }: { progress: EngagementProgress
         <ul className="flex flex-wrap gap-x-3 gap-y-1">
           {bareme.map(({ famille, poids }) => (
             <li key={famille} className="text-caption" style={{ color: INK }}>
-              {FAMILY_LABELS[famille]} <span style={{ color: BRAND, fontWeight: 700 }}>+{poids}</span>
+              {FAMILY_LABELS[famille]} <span style={{ color: BRAND, fontWeight: 700 }}>{'jusqu’à\u00a0+'}{poids}</span>
             </li>
           ))}
         </ul>

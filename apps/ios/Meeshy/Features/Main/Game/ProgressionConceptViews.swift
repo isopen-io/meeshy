@@ -29,7 +29,7 @@ struct ProgressionConceptEmblem: View {
     private var drawing: some View {
         switch concept {
         case .level:
-            if let tier = game?.level.tier {
+            if let tier = game?.level.shown.tier {
                 TierEmblemView(tier: tier, knockout: theme.backgroundPrimary)
             } else {
                 signature(.flat, MeeshyColors.brandPrimary)
@@ -40,7 +40,7 @@ struct ProgressionConceptEmblem: View {
             MeeshCoinView(face: .obverse, edition: game?.mint.edition ?? .silver, figures: nil)
         case .glory:
             if let glory = game?.glory {
-                RankBlasonView(rank: glory.rank, division: glory.division)
+                RankBlasonView(rank: glory.rank, division5: glory.shownDivision, level: game?.level.shown.level, mythic: glory.mythicSeat)
             } else {
                 signature(.engraved, MeeshyColors.brandPrimary)
             }
@@ -58,10 +58,11 @@ struct ProgressionConceptEmblem: View {
             ConceptMarkView(kind: .elans)
         case .badges:
             GameBadgeView(material: .gold, surface: theme.backgroundPrimary, muted: theme.textMuted)
+        // La FORME dit le type (#9640, comme le web) : un défi est un losange de record, un succès un médaillon à réunir.
         case .defis:
-            GameMedalView(family: .content, glyph: .text, material: .silver, surface: theme.backgroundPrimary, muted: theme.textMuted)
+            GameBadgeView(shape: .record, material: .silver, surface: theme.backgroundPrimary, muted: theme.textMuted)
         case .succes:
-            GameMedalView(family: .social, glyph: .social, material: .gold, surface: theme.backgroundPrimary, muted: theme.textMuted)
+            GameBadgeView(shape: .collection(filled: 4, total: 6), material: .gold, surface: theme.backgroundPrimary, muted: theme.textMuted)
         case .showcase:
             TrophyView(material: .gold, label: "")
         case .atlas:

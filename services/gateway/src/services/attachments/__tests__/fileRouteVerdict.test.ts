@@ -31,8 +31,25 @@ const after = (ms: number): Date => new Date(FORWARDED_AT.getTime() + ms);
 const DURATION = 30;
 const COPY_FLAGS = MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
 
-type Piece = { id: string; filePath: string; thumbnailPath?: string | null; messageId: string | null; isViewOnce: boolean };
-type Carrier = { id: string; deletedAt: Date | null; expiresAt: Date | null; viewOnceBurnAt: Date | null; isViewOnce: boolean };
+type Piece = {
+  id: string;
+  filePath: string;
+  thumbnailPath?: string | null;
+  messageId: string | null;
+  isViewOnce: boolean;
+  isBlurred: boolean;
+  effectFlags: number;
+};
+type Carrier = {
+  id: string;
+  deletedAt: Date | null;
+  expiresAt: Date | null;
+  viewOnceBurnAt: Date | null;
+  isViewOnce: boolean;
+  isBlurred: boolean;
+  effectFlags: number;
+  ephemeralDuration: number | null;
+};
 
 function prismaWith(pieces: readonly Piece[], carriers: readonly Carrier[]): FileRouteVerdictPrisma {
   const matches = (piece: Piece, where: Record<string, unknown>): boolean => {
@@ -46,20 +63,47 @@ function prismaWith(pieces: readonly Piece[], carriers: readonly Carrier[]): Fil
       }),
     );
   };
+  // Le faux magasin PROJETTE comme le vrai : une colonne absente du `select`
+  // est absente de la ligne rendue — un oubli de `select` en production fait
+  // donc tomber les témoins au lieu de les laisser lire la fixture entière.
+  const project = <T extends object>(row: T, select?: Record<string, boolean>): Partial<T> =>
+    select ? (Object.fromEntries(Object.entries(row).filter(([key]) => select[key])) as Partial<T>) : row;
+  type Query = { where: Record<string, unknown>; select?: Record<string, boolean> };
   return {
     messageAttachment: {
-      findMany: async ({ where }: { where: Record<string, unknown> }) => pieces.filter((piece) => matches(piece, where)),
-      findUnique: async ({ where }: { where: { id: string } }) => pieces.find((piece) => piece.id === where.id) ?? null,
+      findMany: async ({ where, select }: Query) => pieces.filter((piece) => matches(piece, where)).map((p) => project(p, select)),
+      findUnique: async ({ where, select }: Query) => {
+        const found = pieces.find((piece) => piece.id === (where as { id: string }).id);
+        return found ? project(found, select) : null;
+      },
     },
     message: {
-      findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
-        carriers.filter((carrier) => where.id.in.includes(carrier.id)),
+      findMany: async ({ where, select }: Query) =>
+        carriers.filter((carrier) => (where as { id: { in: string[] } }).id.in.includes(carrier.id)).map((c) => project(c, select)),
     },
   } as unknown as FileRouteVerdictPrisma;
 }
 
-const piece = (over: Partial<Piece>): Piece => ({ id: SOURCE_PIECE, filePath: KEY, messageId: SOURCE_MESSAGE, isViewOnce: false, ...over });
-const carrier = (over: Partial<Carrier>): Carrier => ({ id: SOURCE_MESSAGE, deletedAt: null, expiresAt: null, viewOnceBurnAt: null, isViewOnce: false, ...over });
+const piece = (over: Partial<Piece>): Piece => ({
+  id: SOURCE_PIECE,
+  filePath: KEY,
+  messageId: SOURCE_MESSAGE,
+  isViewOnce: false,
+  isBlurred: false,
+  effectFlags: 0,
+  ...over,
+});
+const carrier = (over: Partial<Carrier>): Carrier => ({
+  id: SOURCE_MESSAGE,
+  deletedAt: null,
+  expiresAt: null,
+  viewOnceBurnAt: null,
+  isViewOnce: false,
+  isBlurred: false,
+  effectFlags: 0,
+  ephemeralDuration: null,
+  ...over,
+});
 
 describe('la fenêtre des octets partagés retombe à celle de la copie (#9588)', () => {
   const copyColumns = ephemeralSendFields({
@@ -83,6 +127,7 @@ describe('la fenêtre des octets partagés retombe à celle de la copie (#9588)'
     expect(await resolveFileRouteVerdict(KEY, prisma, after(copyDeath - 1))).toEqual({
       kind: 'serve',
       cacheControl: EPHEMERAL_ATTACHMENT_CACHE,
+      readerBound: true,
     });
   });
 
@@ -122,5 +167,57 @@ describe('une piste dérivée dont la pièce ne résout plus est refusée (#9588
     const prisma = prismaWith([piece({})], [carrier({})]);
 
     expect(await resolveFileRouteVerdict(TRACK, prisma, after(1_000))).toMatchObject({ kind: 'serve' });
+  });
+});
+
+describe('un fichier dont TOUS les porteurs vivants disparaissent se lit par lecteur (#9600)', () => {
+  const at = after(1_000);
+
+  it('ne lie pas au lecteur le fichier d\'un message ordinaire, ni celui d\'un message seulement flouté', async () => {
+    expect(await resolveFileRouteVerdict(KEY, prismaWith([piece({})], [carrier({})]), at)).toMatchObject({ readerBound: false });
+    const blurred = prismaWith([piece({ isBlurred: true })], [carrier({ isBlurred: true, effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED })]);
+    expect(await resolveFileRouteVerdict(KEY, blurred, at)).toMatchObject({ readerBound: false });
+  });
+
+  it.each([
+    ['un message à vue unique', [piece({})], [carrier({ isViewOnce: true })]],
+    ['une pièce à vue unique', [piece({ isViewOnce: true })], [carrier({})]],
+    ['une flamme à durée', [piece({})], [carrier({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 30, expiresAt: after(60_000) })]],
+    ['une flamme après lecture', [piece({})], [carrier({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ, expiresAt: after(60_000) })]],
+  ])('lie au lecteur le fichier d\'%s', async (_label, pieces, carriers) => {
+    expect(await resolveFileRouteVerdict(KEY, prismaWith(pieces, carriers), at)).toMatchObject({ kind: 'serve', readerBound: true });
+  });
+
+  it('lie aussi sa piste traduite et sa miniature', async () => {
+    const prisma = prismaWith([piece({ thumbnailPath: `${KEY}_thumb.webp` })], [carrier({ isViewOnce: true })]);
+    expect(await resolveFileRouteVerdict(TRACK, prisma, at)).toMatchObject({ readerBound: true });
+    expect(await resolveFileRouteVerdict(`${KEY}_thumb.webp`, prisma, at)).toMatchObject({ readerBound: true });
+  });
+
+  it("ne lie pas les octets qu'un porteur ORDINAIRE vivant partage — ses lecteurs ont l'adresse nue", async () => {
+    const prisma = prismaWith(
+      [piece({}), piece({ id: COPY_PIECE, messageId: COPY_MESSAGE, isViewOnce: true })],
+      [carrier({}), carrier({ id: COPY_MESSAGE })],
+    );
+    expect(await resolveFileRouteVerdict(KEY, prisma, at)).toMatchObject({ readerBound: false });
+  });
+
+  it("lie les octets partagés quand le seul porteur ordinaire est MORT", async () => {
+    const prisma = prismaWith(
+      [piece({}), piece({ id: COPY_PIECE, messageId: COPY_MESSAGE, isViewOnce: true })],
+      [carrier({ deletedAt: FORWARDED_AT }), carrier({ id: COPY_MESSAGE })],
+    );
+    expect(await resolveFileRouteVerdict(KEY, prisma, at)).toMatchObject({ readerBound: true });
+  });
+
+  it('ne lie pas un fichier en cours d\'envoi (ligne pas encore rattachée)', async () => {
+    const prisma = prismaWith([piece({ messageId: null }), piece({ id: COPY_PIECE, messageId: COPY_MESSAGE })], [carrier({ id: COPY_MESSAGE, isViewOnce: true })]);
+    expect(await resolveFileRouteVerdict(KEY, prisma, at)).toMatchObject({ readerBound: false });
+  });
+
+  it("lie au lecteur un porteur dont la protection n'a pas été lue — l'absence ne prouve pas l'ordinaire", async () => {
+    const { ephemeralDuration: _dropped, ...partial } = carrier({});
+    const prisma = prismaWith([piece({})], [partial as Carrier]);
+    expect(await resolveFileRouteVerdict(KEY, prisma, at)).toMatchObject({ readerBound: true });
   });
 });

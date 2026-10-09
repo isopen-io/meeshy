@@ -27,6 +27,8 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/locat
 import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
+import { FORWARD_PIECE_PROTECTION_SELECT, FORWARD_SOURCE_PROTECTION_SELECT, forwardPreviewOf, signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
+import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
 import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
 import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import {
@@ -593,6 +595,11 @@ export type MessageRowMappingContext = {
   ephemeralDeadlines?: Map<string, EphemeralReaderResolution>;
   /** #7936 — les emojis que CE lecteur a posés, par message. Absente ⇒ `[]`. */
   readerReactions?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * #9600 — signe, pour `currentParticipantId`, les adresses des pièces
+   * protégées. Absent ou `null` (aucune clé posée) ⇒ l'adresse d'avant.
+   */
+  readerFileUrlSigner?: ReaderFileUrlSigner | null;
 };
 
 /** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
@@ -722,7 +729,13 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
               { onMissingEntry: listMissingEntry },
             );
           })() : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, ctx.consumptionMap),
+          // #9600 — en DERNIER : l'adresse servie d'une pièce protégée est
+          // celle de CE lecteur. La protection se lit sur la ligne BRUTE
+          // (`expiresAt` de la colonne, pas l'échéance servie au lecteur).
+          attachments: signReaderAttachmentsIn(
+            cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, ctx.consumptionMap),
+            { message, readerParticipantId: currentParticipantId, signer: ctx.readerFileUrlSigner },
+          ),
           _count: message._count
         };
 
@@ -849,7 +862,8 @@ export async function enrichForwardedMessagesForList(
                 sender: {
                   select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
                 },
-                attachments: { select: attachmentForwardPreviewSelect, take: 1 }
+                ...FORWARD_SOURCE_PROTECTION_SELECT, // #9646 — `forwardPreviewOf`
+                attachments: { select: { ...attachmentForwardPreviewSelect, ...FORWARD_PIECE_PROTECTION_SELECT }, take: 1 }
               }
             })
         );
@@ -931,7 +945,7 @@ export async function enrichForwardedMessagesForList(
                   displayName: resolveParticipantDisplayName(originalSender),
                   avatar: resolveParticipantAvatar(originalSender),
                 } : null,
-                attachments: original.attachments,
+                attachments: forwardPreviewOf(original),
                 ...(forwardedPlace ? { location: forwardedPlace } : {}),
                 ...(forwardedSticker ? { sticker: forwardedSticker } : {}),
               };

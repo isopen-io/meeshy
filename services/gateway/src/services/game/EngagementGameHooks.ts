@@ -12,8 +12,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
-import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { NO_LEVEL_CAP, levelForUnlocks, levelFromScore } from '@meeshy/shared/utils/game/levels';
 import { DUO_TEMPLATES } from '@meeshy/shared/utils/game/duo';
+import { LEVEL_STEPS } from '@meeshy/shared/utils/game/level-steps';
 import { MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { GameAbuseGuard, quarterPoints, type MessageVerdict } from './GameAbuseGuard';
@@ -40,9 +41,12 @@ const MISSION_AXIS_SIGNALS: ReadonlySet<string> = new Set(
 
 export { quarterPoints };
 
+/** Les records de Flamme que jugent les étapes des niveaux (#9706) : 7 et 30 jours. */
+const FLAME_STEP_DAYS: readonly number[] = LEVEL_STEPS.flatMap((rule) => (rule.kind === 'flame' ? [rule.target] : []));
+
 /** Le Vent arrière : ×1,25 tant que le niveau est sous le niveau record. Entier. */
 export function applyTailwind(points: number, account: { readonly engagementScore: number; readonly levelRecord: number | null }): number {
-  const factor = tailwindFactor({ level: levelFromScore(account.engagementScore), levelRecord: account.levelRecord ?? 0 });
+  const factor = tailwindFactor({ level: levelForUnlocks({ score: account.engagementScore, levelRecord: account.levelRecord }), levelRecord: account.levelRecord ?? 0 });
   return factor > 1 ? Math.round(points * factor) : points;
 }
 
@@ -128,19 +132,30 @@ export class EngagementGameHooks {
     await this.isolated('achievement glory', () => this.glory.creditAchievement(userId, milestoneKey).then(() => undefined));
   }
 
-  /** Le score vient de changer : la Gloire du premier passage de chaque niveau. */
+  /**
+   * Le score vient de changer : la Gloire du premier passage de chaque niveau. Le tri se fait sans
+   * plafond de rang ni étapes (#9688, #9706) : la lecture brute majore la lecture servie, donc un score
+   * qui ne la porte pas au-dessus du record n'a rien ouvert — `creditLevelProgress` applique ensuite le
+   * plafond du rang et le palier des étapes.
+   */
   async onScore(userId: string, score: number, levelRecord: number | null): Promise<void> {
-    if (levelFromScore(score) <= (levelRecord ?? 1)) return;
+    if (levelFromScore(score, NO_LEVEL_CAP) <= (levelRecord ?? 1)) return;
     await this.isolated('level glory', () => this.glory.creditLevelProgress({ userId, score, previousRecord: levelRecord }).then(() => undefined));
   }
 
-  /** La série vient d'être écrite : la Gloire des records de Flamme franchis. */
+  /**
+   * La série vient d'être écrite : la Gloire des records de Flamme franchis — et, quand le record passe
+   * 7 ou 30 jours, l'étape des niveaux 40 ou 90 (#9706) : le niveau qui l'attendait monte d'un coup.
+   */
   async onStreak(userId: string, plan: StreakPlan): Promise<void> {
     if (plan.longest <= plan.previousLongest) return;
     await this.isolated('flame record glory', () =>
       this.glory.creditFlameRecords({ userId, previousLongest: plan.previousLongest, longest: plan.longest }).then(() => undefined),
     );
     await this.isolated('flame trophies', () => this.trophies.awardFlameTrophies({ userId, previousLongest: plan.previousLongest, longest: plan.longest }));
+    if (FLAME_STEP_DAYS.some((days) => plan.previousLongest < days && plan.longest >= days)) {
+      await this.isolated('level step (flame record)', () => this.glory.openLevels(userId).then(() => undefined));
+    }
   }
 
   /** Un message committé : les signaux de mission et les +3 points de la réponse reçue. */

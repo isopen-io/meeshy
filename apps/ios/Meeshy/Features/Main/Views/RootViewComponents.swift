@@ -217,7 +217,7 @@ struct ThemedFeedOverlay: View {
                 method: like ? "POST" : "DELETE"
             )
             return true
-        } catch { return false }
+        } catch { DailyGestureLimitNotice.surface(error); return false }
     }
 
     /// Hydrates `postBookmarkedIds` from the shared "bookmarks" cache so the
@@ -378,8 +378,8 @@ struct ThemedFeedOverlay: View {
             defer { Task { @MainActor in postShareInFlightIds.remove(postId) } }
             if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
                let url = URL(string: shortUrl) {
-                shareableLink = ShareableLink(url: url)
-            } else if let raw = ShareableLink.fallback(forPostId: postId) {
+                shareableLink = ShareableLink(url: url, fileSource: viewModel.posts.first(where: { $0.id == postId }).map(ShareFileSource.post))
+            } else if let raw = ShareableLink.fallback(forPostId: postId, fileSource: viewModel.posts.first(where: { $0.id == postId }).map(ShareFileSource.post)) {
                 shareableLink = raw
             } else {
                 postShareDelta[postId, default: 0] -= 1
@@ -882,7 +882,7 @@ struct ThemedFeedOverlay: View {
         .sheet(item: $shareableLink) { link in
             // Same TrackingLink share sheet as FeedView — every external
             // touchpoint funnels through `meeshy.me/l/<token>`.
-            ShareSheet(activityItems: [link.url])
+            ShareSheet(activityItems: link.activityItems)
         }
         // #6700 — une story ouvre le meuble, un post l'ancien éditeur.
         .postEditCover(item: $editingPost) { post in

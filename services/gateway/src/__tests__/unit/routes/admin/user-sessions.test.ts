@@ -150,10 +150,10 @@ describe('GET /admin/users/:userId/sessions', () => {
   afterAll(() => app.close());
   beforeEach(resetMocks);
 
-  it("404 quand l'utilisateur n'existe pas", async () => {
+  it("403 quand l'utilisateur n'existe pas (requireHierarchy fail-CLOSED, audit L2-7)", async () => {
     mockPrisma.user.findUnique.mockResolvedValue(null);
     const res = await app.inject({ method: 'GET', url: '/admin/users/ghost/sessions' });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(403);
   });
 
   it('rend la page de sessions, toutes valides ou révoquées, triée par activité récente', async () => {
@@ -168,7 +168,7 @@ describe('GET /admin/users/:userId/sessions', () => {
     expect(body.pagination).toEqual({ total: 1, offset: 0, limit: 20, hasMore: false });
 
     const call = mockPrisma.userSession.findMany.mock.calls[0][0];
-    expect(call.where).toEqual({ userId: 'user123' });
+    expect(call.where).toMatchObject({ userId: 'user123', AND: expect.any(Array) });
     expect(call.orderBy).toEqual({ lastActivityAt: 'desc' });
     // Ni le jeton, ni son renouvellement, ni l'empreinte d'appareil ne sortent.
     expect(call.select.sessionToken).toBeUndefined();
@@ -228,7 +228,7 @@ describe('DELETE /admin/users/:userId/sessions/:sessionId', () => {
     // La requête d'appartenance filtre sur LES DEUX colonnes — sinon l'id de
     // session d'un AUTRE compte serait révocable via ce chemin.
     const call = mockPrisma.userSession.findFirst.mock.calls[0][0];
-    expect(call.where).toEqual({ id: 'sess-other', userId: 'user123' });
+    expect(call.where).toEqual({ id: 'sess-other', userId: 'user123', isValid: true });
   });
 
   it('révoque la session, coupe le SEUL socket qui la porte, et journalise REVOKE_SESSION', async () => {
@@ -327,10 +327,10 @@ describe('GET /admin/users/:userId/security-events', () => {
   afterAll(() => app.close());
   beforeEach(resetMocks);
 
-  it("404 quand l'utilisateur n'existe pas", async () => {
+  it("403 quand l'utilisateur n'existe pas (requireHierarchy fail-CLOSED, audit L2-7)", async () => {
     mockPrisma.user.findUnique.mockResolvedValue(null);
     const res = await app.inject({ method: 'GET', url: '/admin/users/ghost/security-events' });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(403);
   });
 
   it('rend la page filtrée par eventType/severity/période', async () => {
@@ -355,10 +355,10 @@ describe('GET /admin/users/:userId/security-events', () => {
     expect(call.orderBy).toEqual({ createdAt: 'desc' });
   });
 
-  it('sans filtre, ne contraint que userId', async () => {
+  it('sans filtre, ne contraint que userId et la borne de conservation (12 mois)', async () => {
     await app.inject({ method: 'GET', url: '/admin/users/user123/security-events' });
     const call = mockPrisma.securityEvent.findMany.mock.calls[0][0];
-    expect(call.where).toEqual({ userId: 'user123' });
+    expect(call.where).toEqual({ userId: 'user123', createdAt: { gte: expect.any(Date) } });
   });
 
   it('403 sans canViewSensitiveData (AUDIT)', async () => {

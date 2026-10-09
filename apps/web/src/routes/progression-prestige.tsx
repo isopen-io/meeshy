@@ -1,5 +1,6 @@
 import { GamePrestige } from '@/components/game-prestige';
 import { GAME_BRAND, GAME_CARD, GAME_INK_2 } from '@/components/game-surface';
+import { shownLevelOf } from '@/lib/game/ladder';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -25,7 +26,8 @@ export function PrestigeBody({ progress, actions, online }: { readonly progress:
   }
   return (
     <GamePrestige
-      level={game.level}
+      level={shownLevelOf(game.level)}
+      score={game.level.score}
       prestige={game.prestige}
       online={online}
       pending={actions.prestige.pending}

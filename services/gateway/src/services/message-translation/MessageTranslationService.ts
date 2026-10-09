@@ -15,7 +15,8 @@ import { isMessageTranslationTarget, translationTargetId } from '../zmq-translat
 import { ZMQSingleton } from '../ZmqSingleton';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { TranslationCache } from './TranslationCache';
-import { LanguageCache } from './LanguageCache';
+import { ConversationLanguages } from './ConversationLanguages';
+import { ArrivalHistoryBackfill } from './ArrivalHistoryBackfill';
 import { TranslationStats, TranslationServiceStats } from './TranslationStats';
 import { EncryptionHelper } from './EncryptionHelper';
 import { ConsentValidationService } from '../ConsentValidationService';
@@ -27,7 +28,7 @@ import { isBlankTranscriptionText } from '../../utils/transcription';
 import { isUrlOnly } from '../../utils/url-content';
 import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
-import { resolveUserLanguagesOrdered, generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
+import { generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { attachmentAudioRichView, type AttachmentAudioRichView } from '../audio/attachmentAudioRichView';
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
@@ -68,7 +69,8 @@ export class MessageTranslationService extends EventEmitter {
 
   // Composition de modules
   private readonly translationCache: TranslationCache;
-  private readonly languageCache: LanguageCache;
+  private readonly conversationLanguages: ConversationLanguages;
+  private readonly arrivalBackfill: ArrivalHistoryBackfill;
   // Sérialise les updates de translations par attachment (évite le lost-update
   // quand plusieurs langues complètent en concurrence sur le même attachment).
   private readonly attachmentTranslationMutex = new KeyedMutex();
@@ -110,7 +112,14 @@ export class MessageTranslationService extends EventEmitter {
     super();
     this.prisma = prisma;
     this.translationCache = new TranslationCache(1000);
-    this.languageCache = new LanguageCache(5 * 60 * 1000, 100);
+    this.conversationLanguages = new ConversationLanguages(prisma);
+    // #9709 — une langue qui arrive reçoit l'historique récent par le pipeline
+    // existant : ZMQ, puis `translationReady`, puis `message:translation` aux
+    // lecteurs autorisés (`translationReaders`).
+    this.arrivalBackfill = new ArrivalHistoryBackfill({
+      prisma,
+      translate: (message, targetLanguage) => this._requestSnapshotTranslation(message, targetLanguage),
+    });
     this.stats = new TranslationStats();
     this.encryptionHelper = new EncryptionHelper(prisma);
 
@@ -399,6 +408,8 @@ export class MessageTranslationService extends EventEmitter {
   }
 
   async close(): Promise<void> {
+    this.conversationLanguages.dispose();
+    this.arrivalBackfill.dispose();
     try {
       await this.zmqClient.close();
     } catch (error) {
@@ -624,6 +635,29 @@ export class MessageTranslationService extends EventEmitter {
 
 
   /**
+   * Traduit l'INSTANTANÉ jugé par le rattrapage d'une arrivée (#9709) — jamais
+   * le document relu plus tard, dont la protection n'aurait pas été rejugée.
+   * Aucune tâche de retraduction n'est enregistrée et aucun cache n'est purgé :
+   * une traduction initiale en vol vers la même langue reste valide, et une
+   * édition postérieure, qui enregistre la sienne, périme celle-ci.
+   */
+  private async _requestSnapshotTranslation(
+    message: { id: string; conversationId: string; content: string; originalLanguage: string },
+    targetLanguage: string
+  ): Promise<void> {
+    if (!this.zmqClient) return;
+    await this.zmqClient.sendTranslationRequest({
+      messageId: message.id,
+      text: message.content,
+      sourceLanguage: this._normalizeSourceLanguage(message.originalLanguage),
+      targetLanguages: [targetLanguage],
+      conversationId: message.conversationId,
+      modelType: message.content.length < 80 ? 'medium' : 'premium',
+    });
+    this.stats.incrementRequestsSent();
+  }
+
+  /**
    * Public entry-point for retranslating an edited message.
    * Fire-and-forget: callers should `.catch()` the returned promise.
    */
@@ -804,124 +838,12 @@ export class MessageTranslationService extends EventEmitter {
   }
 
   /**
-   * Extrait les langues cibles des participants d'une conversation
-   * Inclut les langues des utilisateurs authentifiés ET des participants anonymes
-   * NOTE: Cette méthode retourne TOUTES les langues parlées dans la conversation,
-   * indépendamment des préférences de traduction automatique des utilisateurs.
-   * Le filtrage des langues identiques à la source se fait dans les méthodes de traitement.
-   * 
-   * OPTIMISATION: Les résultats sont mis en cache pendant 5 minutes pour éviter les requêtes répétées
+   * Les langues cibles d'une conversation — la composition vit chez
+   * `ConversationLanguages`, invalidée par les annonces d'arrivée, de départ
+   * et de changement de langue (#9708).
    */
-  private async _extractConversationLanguages(conversationId: string): Promise<string[]> {
-    try {
-      logger.info(`🔍 [LANG-TRACE] Extraction langues pour conversation: ${conversationId}`);
-
-      // OPTIMISATION: Vérifier le cache d'abord
-      const cached = this.languageCache.get(conversationId);
-
-      if (cached) {
-        logger.info(`💾 [LANG-TRACE] Langues depuis cache: [${cached.join(', ')}]`);
-        return cached;
-      }
-
-      const startTime = Date.now();
-      const languages = new Set<string>();
-
-      // Check conversation autoTranslateEnabled alongside participants query
-      const [conversation, participants] = await Promise.all([
-        this.prisma.conversation.findUnique({
-          where: { id: conversationId },
-          select: { autoTranslateEnabled: true }
-        }),
-        this.prisma.participant.findMany({
-          where: {
-            conversationId: conversationId,
-            isActive: true
-          },
-          select: {
-            id: true,
-            displayName: true,
-            type: true,
-            language: true,
-            user: {
-              select: {
-                id: true,
-                username: true,
-                systemLanguage: true,
-                regionalLanguage: true,
-                customDestinationLanguage: true,
-                deviceLocale: true
-              }
-            }
-          }
-        })
-      ]);
-
-      if (conversation?.autoTranslateEnabled === false) {
-        logger.info(`⛔ [LANG-TRACE] autoTranslateEnabled=false pour ${conversationId} — traduction désactivée`);
-        this.languageCache.set(conversationId, []);
-        return [];
-      }
-
-      logger.info(`[LANG-TRACE] Participants: ${participants.length}`);
-
-      for (const participant of participants) {
-        if (participant.type === 'user' && participant.user) {
-          const u = participant.user;
-          logger.debug(
-            `   [LANG-TRACE] Registered: ${u.username} (${u.id}) | ` +
-            `systemLang=${u.systemLanguage} | regionalLang=${u.regionalLanguage} | ` +
-            `customDest=${u.customDestinationLanguage ?? '-'} | deviceLocale=${u.deviceLocale ?? '-'}`
-          );
-
-          // Resolve via the shared 4-level priority helper:
-          //   systemLanguage > regionalLanguage > customDestinationLanguage > deviceLocale
-          // The helper deduplicates lowercase codes so two participants
-          // sharing the same locale only contribute once. deviceLocale is
-          // normalised (`fr-FR` → `fr`, region stripped) — same SSOT canonical form.
-          const codes = resolveUserLanguagesOrdered(u, {
-            deviceLocale: u.deviceLocale ?? undefined,
-          });
-          for (const code of codes) {
-            languages.add(code);
-          }
-        } else {
-          // Anonymous or bot participant — use participant.language
-          logger.debug(
-            `   [LANG-TRACE] ${participant.type}: ${participant.displayName} (${participant.id}) | ` +
-            `language=${participant.language}`
-          );
-
-          // Normalise like the registered branch: an anonymous/bot participant
-          // stores `language` unvalidated (bare `z.string()`): `'EN'`, `'en-US'`,
-          // or out-of-catalog `'fil-PH'`. `normalizeLanguageForDedup` folds casing
-          // AND strips the region even for codes it cannot reduce, so `'fil-PH'`
-          // and `'fil'` count as ONE target, not two duplicates (Prisme rule #1).
-          if (participant.language) {
-            languages.add(normalizeLanguageForDedup(participant.language));
-          }
-        }
-      }
-
-      // Retourner toutes les langues (le filtrage se fera dans les méthodes de traitement)
-      const allLanguages = Array.from(languages);
-
-      // OPTIMISATION: Mettre en cache le résultat
-      this.languageCache.set(conversationId, allLanguages);
-
-      const queryTime = Date.now() - startTime;
-
-      logger.info(
-        `✅ [LANG-TRACE] Langues extraites en ${queryTime}ms: [${allLanguages.join(', ')}] | ` +
-        `Total: ${allLanguages.length} langue(s) unique(s)`
-      );
-
-      return allLanguages;
-      
-    } catch (error) {
-      logger.error(`❌ [TranslationService] Erreur extraction langues: ${error}`);
-      return ['en', 'fr']; // Fallback
-    }
+  private _extractConversationLanguages(conversationId: string): Promise<string[]> {
+    return this.conversationLanguages.of(conversationId);
   }
 
 

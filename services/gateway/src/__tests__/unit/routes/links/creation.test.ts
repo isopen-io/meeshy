@@ -111,8 +111,9 @@ async function buildApp(opts: {
   prisma?: ReturnType<typeof makePrisma>;
   socketIOHandler?: { getManager: jest.Mock<any> } | null;
   emailVerified?: boolean;
+  activation?: { phase: 'quiet' | 'invite' | 'blocked' | 'done'; deadline: string | null; missing: string[] };
 } = {}): Promise<{ app: FastifyInstance; prisma: ReturnType<typeof makePrisma> }> {
-  const { auth = 'registered', role = 'USER', prisma = makePrisma(), socketIOHandler = null, emailVerified = true } = opts;
+  const { auth = 'registered', role = 'USER', prisma = makePrisma(), socketIOHandler = null, emailVerified = true, activation } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
@@ -125,7 +126,7 @@ async function buildApp(opts: {
         isAuthenticated: true,
         isAnonymous: false,
         userId: USER_ID,
-        registeredUser: { ...mockUser, role, emailVerifiedAt: emailVerified ? new Date() : null },
+        registeredUser: { ...mockUser, role, emailVerifiedAt: emailVerified ? new Date() : null, ...(activation ? { activation } : {}) },
         hasFullAccess: true,
       };
     } else if (auth === 'anonymous') {
@@ -167,6 +168,45 @@ describe('POST /links — email not verified', () => {
     const res = await app.inject({ method: 'POST', url: '/links', payload: {} });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await app.close();
+  });
+});
+
+// #9713 — pendant le délai de grâce de l'adresse, au plus cinq liens ACTIFS.
+describe('POST /links — unproven address within its grace (#9713)', () => {
+  const grace = { phase: 'invite' as const, deadline: '2026-10-30T00:00:00.000Z', missing: ['email', 'phone'] };
+
+  it('creates the link while fewer than five links are active', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'moderator' });
+    prisma.conversationShareLink.count = jest.fn<any>().mockResolvedValue(4);
+    const { app } = await buildApp({ prisma, emailVerified: false, activation: grace });
+    const res = await app.inject({ method: 'POST', url: '/links', payload: { conversationId: CONV_ID } });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.conversationShareLink.create).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('refuses the sixth with 403 EMAIL_NOT_VERIFIED and creates nothing', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'moderator' });
+    prisma.conversationShareLink.count = jest.fn<any>().mockResolvedValue(5);
+    const { app } = await buildApp({ prisma, emailVerified: false, activation: grace });
+    const res = await app.inject({ method: 'POST', url: '/links', payload: { conversationId: CONV_ID } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuses once the grace has run out (blocked)', async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.count = jest.fn<any>().mockResolvedValue(0);
+    const { app } = await buildApp({ prisma, emailVerified: false, activation: { ...grace, phase: 'blocked' } });
+    const res = await app.inject({ method: 'POST', url: '/links', payload: { conversationId: CONV_ID } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
     await app.close();
   });
 });

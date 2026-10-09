@@ -39,20 +39,30 @@ public struct GameStanding: Codable, Sendable, Equatable {
     /// La FORME de la Flamme, jamais ses jours. `nil` : pas de Flamme allumée, ou une forme que ce client ne connaît pas.
     public let flame: FlameFormKey?
     public let rank: GloryRank
-    /// `nil` pour Mythe.
+    /// Projection héritée (1–3), `nil` pour Mythe.
     public let division: GloryDivision?
+    /// V (5) à I (1) — absente d'un ancien serveur (#9636).
+    public let division5: GloryDivision5?
+    /// La place du Mythe et son émission (#9636).
+    public let mythic: MythicSeatRef?
+    /// Le niveau et le palier ouverts par le rang (#9688) — `level` / `tier` gardent l'ancienne loi sur le fil.
+    public let ladder: GameStandingLadder?
 
-    public init(level: Int, tier: LevelTierKey, prestige: Int, flame: FlameFormKey?, rank: GloryRank, division: GloryDivision?) {
+    public init(level: Int, tier: LevelTierKey, prestige: Int, flame: FlameFormKey?, rank: GloryRank, division: GloryDivision?,
+                division5: GloryDivision5? = nil, mythic: MythicSeatRef? = nil, ladder: GameStandingLadder? = nil) {
         self.level = level
         self.tier = tier
         self.prestige = prestige
         self.flame = flame
         self.rank = rank
         self.division = division
+        self.division5 = division5
+        self.mythic = mythic
+        self.ladder = ladder
     }
 
     private enum CodingKeys: String, CodingKey {
-        case level, tier, prestige, flame, rank, division
+        case level, tier, prestige, flame, rank, division, division5, mythic, ladder
     }
 
     public init(from decoder: Decoder) throws {
@@ -64,6 +74,19 @@ public struct GameStanding: Codable, Sendable, Equatable {
         flame = (try? container.decodeIfPresent(FlameFormKey.self, forKey: .flame)) ?? nil
         rank = try container.decode(GloryRank.self, forKey: .rank)
         division = (try? container.decodeIfPresent(GloryDivision.self, forKey: .division)) ?? nil
+        division5 = (try? container.decodeIfPresent(GloryDivision5.self, forKey: .division5)) ?? nil
+        mythic = ((try? container.decodeIfPresent(MythicSeatRef.self, forKey: .mythic)) ?? nil).flatMap { $0.isValid ? $0 : nil }
+        ladder = (try? container.decodeIfPresent(GameStandingLadder.self, forKey: .ladder)) ?? nil
+    }
+
+    /// Le niveau que l'écran montre : celui ouvert par le rang, ou celui d'hier devant un serveur antérieur.
+    public var shownLevel: Int { ladder?.level ?? level }
+    /// Le palier que l'écran montre.
+    public var shownTier: LevelTierKey { ladder?.tier ?? tier }
+
+    /// La division à montrer : `division5` servie, sinon la division héritée relue (ancien serveur).
+    public var shownDivision: GloryDivision5? {
+        division5 ?? division.map(GloryDivision5.init(legacy:))
     }
 }
 
@@ -114,5 +137,16 @@ public struct UserGameProfileResponse: Codable, Sendable, Equatable {
     /// `true` quand il y a quelque chose à MONTRER : un refus, ou deux blocs que ce client ne lit pas, ne dessine rien.
     public var hasSomethingToShow: Bool {
         visible && (standing != nil || treasury?.tier != nil)
+    }
+}
+
+/// Le niveau et le palier d'un autre membre, ouverts par le rang (#9688).
+public struct GameStandingLadder: Codable, Sendable, Equatable {
+    public let level: Int
+    public let tier: LevelTierKey
+
+    public init(level: Int, tier: LevelTierKey) {
+        self.level = level
+        self.tier = tier
     }
 }

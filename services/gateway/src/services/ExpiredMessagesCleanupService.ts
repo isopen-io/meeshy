@@ -18,6 +18,7 @@ import {
 } from './messaging/purgeViewOnceContent';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { loadQuoteDescendants } from './messaging/quoteCascade';
+import { backfillCaptureNoticeDeadlines } from './messaging/captureNoticeRetention';
 import { guardedInterval } from '../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'ExpiredMessagesCleanupService' });
@@ -181,7 +182,11 @@ export class ExpiredMessagesCleanupService {
     // Une passe immédiate au démarrage : le passif accumulé pendant que le
     // service était arrêté est précisément celui qui a le plus dépassé son
     // échéance.
-    void this.cleanup().catch((err) => log.warn('initial sweep failed', { err }));
+    // #9629 — les avis de capture écrits avant leur échéance la reçoivent
+    // d'abord : la passe immédiate détruit alors ceux qu'elle a déjà dépassés.
+    void backfillCaptureNoticeDeadlines(this.prisma)
+      .then(() => this.cleanup())
+      .catch((err) => log.warn('initial sweep failed', { err }));
     void this.purgeViewOnce().catch((err) => log.warn('initial view-once purge failed', { err }));
     this.interval = guardedInterval({ name: 'expired-messages-cleanup', everyMs: intervalMs, logger: log, run: () => {
       void this.cleanup().catch((err) => log.warn('scheduled sweep failed', { err }));
@@ -450,6 +455,7 @@ export class ExpiredMessagesCleanupService {
           metadata: message.metadata,
         },
         announcer,
+        { cause: 'expired' },
       );
     } catch (err) {
       // `applyMessageRemovalEffects` est déjà best-effort effet par effet ; ce

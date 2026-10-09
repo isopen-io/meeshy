@@ -24,13 +24,13 @@ jest.mock('../../preferences/privacy-cache', () => ({
 const NOW = new Date('2026-10-06T10:00:00Z');
 const MEMBER = USER;
 const READER = OTHER;
-const SCORE = 10 * 20 * 20;
+const SCORE = 100 * 20 * 20;
 
 const setup = (profile: Record<string, unknown> = {}, member: Record<string, unknown> = {}) => {
   const db: FakeGameDb = fakeGameDb();
   seedUser(
     db,
-    { engagementScore: SCORE, prestige: 1, currentStreakDays: 12, lastStreakDate: new Date('2026-10-05T00:00:00Z'), ...member },
+    { engagementScore: SCORE, levelRecord: 20, prestige: 1, currentStreakDays: 12, lastStreakDate: new Date('2026-10-05T00:00:00Z'), ...member },
     MEMBER,
   );
   seedUser(db, {}, READER);
@@ -107,6 +107,27 @@ describe('ce que les amis voient de plus : points et trophées (#9541)', () => {
     const result = await standing(service, stranger);
     expect(result.standing).not.toHaveProperty('trophyCount');
     expect(result.standing?.points).toBe(SCORE);
+  });
+
+  it('le niveau s\'ouvre selon le rang : les champs d\'hier gardent 100 et Galaxie, la vérité dans ladder (#9688)', async () => {
+    const { db, service } = setup({}, { engagementScore: 100 * 640 * 640, levelRecord: 499 });
+    befriend(db);
+    expect((await standing(service, stranger)).standing).toMatchObject({ level: 100, tier: 'galaxie', ladder: { level: 499, tier: 'supernova' } });
+
+    db.gloryLedger.rows.push({ id: 'g3', userId: MEMBER, delta: 127_000, reason: 'mission', requestId: 'mission:a' });
+    expect((await standing(service, stranger)).standing).toMatchObject({ level: 100, tier: 'galaxie', ladder: { level: 640, tier: 'amas' } });
+  });
+
+  it('sous 100, ladder rend les mêmes valeurs que les champs d\'hier (#9688)', async () => {
+    const { db, service } = setup();
+    befriend(db);
+    expect((await standing(service, stranger)).standing).toMatchObject({ level: 20, tier: 'lumiere', ladder: { level: 20, tier: 'lumiere' } });
+  });
+
+  it('le niveau d\'un membre attend l\'étape que son record n\'a pas franchie : la dizaine qui suit, moins un (#9706)', async () => {
+    const { db, service } = setup({}, { engagementScore: 100 * 35 * 35, levelRecord: 9 });
+    befriend(db);
+    expect((await standing(service, stranger)).standing).toMatchObject({ level: 9, ladder: { level: 9 } });
   });
 
   it('Mythe se lit au rang, avec le numéro de sa place, pour un ami (#9636)', async () => {

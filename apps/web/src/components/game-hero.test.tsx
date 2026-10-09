@@ -1,10 +1,11 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { ENGAGEMENT_AXIS_WEIGHTS } from '@meeshy/shared/types/engagement';
+import { ENGAGEMENT_FAMILY_TOP_POINTS } from '@meeshy/shared/types/engagement-operations';
 import type { GameBlock } from '@meeshy/shared/types/game';
+import { gloryLadder } from '@meeshy/shared/utils/game/glory';
 
-import { gameBlockFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockFixture } from '@/lib/api/game-fixture';
 import { earnRules } from '@/lib/game/earn-rules';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -60,9 +61,32 @@ describe('où j’en suis', () => {
 
   test('le rang : blason, nom et division, Gloire, ancre « game-rank »', () => {
     expect(page).toContain('id="game-rank"');
-    expect(page).toContain('Écho III');
+    expect(page).toContain('Murmure IV');
     expect(page).toContain('Gloire 620');
-    expect(page).toContain('data-game-rank="echo"');
+    expect(page).toContain('data-game-rank="murmure"');
+  });
+
+  const echoIV = gloryLadder().find((step) => step.rank === 'echo' && step.division5 === 4)!;
+
+  test('la division à cinq crans se lit et se compte en encoches ; le niveau est gravé sur le blason (#9636)', () => {
+    const shown = html({ glory: echoIV.minGlory });
+    expect(text(shown)).toContain('Écho IV');
+    expect(shown.match(/data-game-notch="on"/g)).toHaveLength(2);
+    expect(shown).toMatch(/data-game-level-engraving=""[\s\S]*?>11<\/text>/);
+  });
+
+  test('un serveur d’avant #9636, sans division5 : la division héritée (III), trois encoches', () => {
+    const game = gameBlockFixture({ glory: echoIV.minGlory });
+    const { division5: _d5, mythic: _m, ...legacy } = game.glory;
+    const shown = renderToStaticMarkup(<GameHero {...base({ ...game, glory: legacy })} />);
+    expect(text(shown)).toContain('Écho III');
+    expect(shown.match(/data-game-notch="on"/g)).toHaveLength(3);
+  });
+
+  test('un Mythe se dit avec sa place, son halo porte son émission (#9636)', () => {
+    const shown = html({ glory: 1_200_000, mythic: true, mythicSeat: { number: 7, edition: 31 } });
+    expect(text(shown)).toContain('Mythe n° 7');
+    expect(shown).toContain('data-game-mythic-halo="31"');
   });
 
   test('une grande Signature en filigrane, décorative', () => {
@@ -74,12 +98,58 @@ describe('où j’en suis', () => {
     expect(html()).not.toContain('Record :');
   });
 
-  test('au sommet : « Tu es au sommet »', () => {
-    expect(text(html({ score: 10 * 100 * 100 }))).toContain('Tu es au sommet');
+  test('le niveau 100 n’est plus un sommet : la marche continue (#9688)', () => {
+    expect(text(html({ ...ALL_LEVEL_STEPS, score: 100 * 100 * 100, levelRecord: 100 }))).not.toContain('Tu es au sommet');
+    expect(text(html({ ...ALL_LEVEL_STEPS, score: 100 * 100 * 100, levelRecord: 100 }))).toContain('101');
+  });
+
+  test('au plafond du rang : le niveau 499 dit que le rang Ambassadeur ouvre la suite', () => {
+    const page = text(html({ ...ALL_LEVEL_STEPS, score: 100 * 640 * 640, debitablePoints: 100 * 640 * 640, levelRecord: 499 }));
+    expect(page).toContain('Niveau 499');
+    expect(page).toContain('Plafond atteint : le rang Ambassadeur ouvre la suite.');
+  });
+
+  test('au plafond d’Ambassadeur : le niveau 1000 attend Oracle', () => {
+    const page = text(html({ ...ALL_LEVEL_STEPS, score: 100 * 1001 * 1001, debitablePoints: 0, glory: 130_000, levelRecord: 1000 }));
+    expect(page).toMatch(/Niveau 1\s?000 · Singularité/);
+    expect(page).toContain('le rang Oracle ouvre la suite');
   });
 
   test('Galaxie se teinte au prisme, pas d’un jeton absent', () => {
-    expect(html({ score: 10 * 95 * 95 })).toContain('var(--game-prism-3)');
+    expect(html({ ...ALL_LEVEL_STEPS, score: 100 * 95 * 95 })).toContain('var(--game-prism-3)');
+  });
+});
+
+describe('les étapes des niveaux (#9706)', () => {
+  test('la prochaine étape se dit sous la marche, à faire, et se touche', () => {
+    const page = html({ missionsDone: 0 });
+    expect(page).toContain('data-game-level-step="todo"');
+    expect(text(page)).toContain('Étape du niveau 20 : accomplir une mission du jour');
+    expect(page).toContain('data-detail="levelstep:20"');
+  });
+
+  test('une étape déjà faite se coche', () => {
+    const page = html({ missionsDone: 1 });
+    expect(page).toContain('data-game-level-step="done"');
+    expect(text(html({ score: 100 * 25 * 25, levelRecord: 25 }))).toContain('Étape du niveau 30 : atteindre le rang Écho');
+  });
+
+  test('les points sont là, l’étape manque : le niveau attend, et la ligne dit pourquoi au lieu de « encore 0 point »', () => {
+    const page = html({ score: 100 * 15 * 15, mintedLifetime: 0, levelRecord: 9 });
+    expect(page).toContain('data-game-level-held=""');
+    expect(text(page)).toContain('Tes points ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
+    expect(text(page)).not.toContain('Encore 0');
+  });
+
+  test('au-delà de 100, plus d’étape', () => {
+    const page = html({ ...ALL_LEVEL_STEPS, score: 100 * 120 * 120, levelRecord: 120 });
+    expect(page).not.toContain('data-game-level-step');
+  });
+
+  test('un serveur d’avant les étapes (sans ladder.step) : rien ne s’affiche de plus', () => {
+    const game = gameBlockFixture();
+    const old = { ...game, level: { ...game.level, ladder: game.level.ladder === undefined ? undefined : { ...game.level.ladder, step: undefined, held: undefined, steps: undefined } } } as GameBlock;
+    expect(renderToStaticMarkup(<GameHero game={old} />)).not.toContain('data-game-level-step');
   });
 });
 
@@ -89,23 +159,22 @@ describe('comment gagner — dérivé du barème', () => {
   test('une puce par famille, de la plus généreuse à la plus modeste', () => {
     const chips = [...page.matchAll(/data-game-earn-chip="([a-z]+)"/g)].map((m) => m[1]);
     expect(chips).toEqual(earnRules().map((rule) => rule.family));
-    expect(chips).toEqual(['content', 'social', 'conversation', 'comment', 'tool']);
+    expect(chips).toEqual(['content', 'comment', 'social', 'conversation', 'tool']);
   });
 
   test('chaque puce dit son nom et ses points, tirés du barème', () => {
     const body = text(page);
-    for (const rule of earnRules()) expect(body).toContain(`+${rule.points}`);
-    expect(body).toContain('Contenu');
-    expect(body).toContain('+9');
-    expect(ENGAGEMENT_AXIS_WEIGHTS['content.post']).toBe(9);
+    for (const rule of earnRules()) expect(body.replace(/\s/g, '')).toContain(`+${rule.points}`);
+    expect(body).toContain('Contenu jusqu’à +1 000');
+    expect(ENGAGEMENT_FAMILY_TOP_POINTS.content).toBe(1000);
   });
 
   test('régler un poids change ce que le héros énumère, sans toucher une chaîne', () => {
-    const rules = earnRules({ ...ENGAGEMENT_AXIS_WEIGHTS, 'comment.text': 20 });
+    const rules = earnRules({ ...ENGAGEMENT_FAMILY_TOP_POINTS, comment: 5000 });
     const markup = html({}, { rules });
     const chips = [...markup.matchAll(/data-game-earn-chip="([a-z]+)"/g)].map((m) => m[1]);
     expect(chips[0]).toBe('comment');
-    expect(text(markup)).toContain('+20');
+    expect(text(markup)).toContain('+5 000');
   });
 
   /* Les puces menaient au carnet des règles ; depuis #9563 (amendement n° 2) chaque famille se touche et ouvre SES précisions. */
@@ -117,7 +186,7 @@ describe('comment gagner — dérivé du barème', () => {
   });
 
   test('chaque puce se lit en entier et mesure 44 points', () => {
-    expect(text(page)).toContain('Contenu +9');
+    expect(text(page)).toContain('Contenu jusqu’à +1 000');
     expect(page).toMatch(/data-game-earn-chip="content"[^>]*min-height:44px/);
   });
 });

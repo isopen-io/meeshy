@@ -148,12 +148,12 @@ export const ErrorMessages: Record<ErrorCode, { fr: string; en: string }> = {
     en: 'Welcome! New accounts can post one message every 30 s here',
   },
   [ErrorCode.DAILY_COMMENT_LIMIT]: {
-    fr: 'Vous avez atteint votre limite de commentaires pour aujourd’hui. Elle se renouvelle à minuit.',
-    en: 'You have reached today’s comment limit. It renews at midnight.',
+    fr: 'Vous avez fait tous les commentaires permis aujourd’hui. La limite compte vos gestes, jamais vos points : elle se renouvelle à minuit.',
+    en: 'You have made all the comments allowed today. The limit counts your actions, never your points: it renews at midnight.',
   },
   [ErrorCode.DAILY_REACTION_LIMIT]: {
-    fr: 'Vous avez atteint votre limite de réactions pour aujourd’hui. Elle se renouvelle à minuit.',
-    en: 'You have reached today’s reaction limit. It renews at midnight.',
+    fr: 'Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos points : elle se renouvelle à minuit.',
+    en: 'You have made all the reactions allowed today. The limit counts your actions, never your points: it renews at midnight.',
   },
   
   // System

@@ -414,7 +414,16 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `.gameSeasonClaim`, `UsersEndpoint.gameOf`, `.gameShowcaseOf`). `GameRoutesTests`
 // compare les adresses du CATALOGUE à `GAME_ROUTES` et `GAME_INTEGRATION_ROUTES`.
 // Valeur MESURÉE le 2026-10-07.
-const BASELINE_DEAD_ENTRIES = 289;
+// 289 -> 291 (2026-10-08) : deux entrées SANS appelant, chacune pour une raison
+// dite. `AttachmentsEndpoint.signedByTokenByWildcard` (#9600) n'aura JAMAIS
+// d'appelant client : l'adresse signée par lecteur est SERVIE par la passerelle
+// dans les charges (`fileUrl`, vignettes, variantes, pistes) et les clients la
+// consomment telle quelle — c'est ce qui rend le lot rétrocompatible sans
+// toucher aux clients. `MeEndpoint.securityEvents` (65d71ff793, correctif
+// d'audit L2-4) est PRÉMATURÉE : les écrans Sécurité iOS et web ne l'appellent
+// pas encore ; #9651 la branche et fera redescendre la référence d'un cran.
+// Valeur MESURÉE le 2026-10-08.
+const BASELINE_DEAD_ENTRIES = 291;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

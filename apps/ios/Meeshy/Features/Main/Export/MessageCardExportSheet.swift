@@ -19,6 +19,8 @@ struct MessageCardExportRequest {
     let accentColor: String
     /// « Export rapide » : le format par défaut, enregistré dès que la carte est peinte.
     let quick: Bool
+    /// Un commentaire de post (#9686) : les compositions offertes au-dessus de l'aperçu.
+    var composition: MessageCardCommentComposition? = nil
 }
 
 /// **« IMAGINE » — UN MESSAGE OU UN COMMENTAIRE DEVIENT UNE IMAGE, UN GIF OU
@@ -75,6 +77,10 @@ struct MessageCardExportSheet: View {
     @State var pinch: MessageCardPinch?
     /// Le visuel que « une seule » et « en fond » montrent (#9235) — propre à ce contenu.
     @State var featuredMedia: String?
+    /// La composition choisie d'un commentaire de post (#9686) — mode, post en tête, réponses cochées.
+    @State var compositionMode: PostCommentCardMode?
+    @State var showsPost = true
+    @State var chosenReplies: Set<String> = []
 
     struct Rendered {
         let key: String
@@ -94,7 +100,17 @@ struct MessageCardExportSheet: View {
     var accent: Color { Color(hex: request.accentColor) }
 
     var subject: MessageCardSubject {
-        exportLanguage.flatMap(request.subjectIn) ?? request.subject
+        if let composition = request.composition, let compositionMode,
+           let composed = composition.subject(mode: compositionMode, showsPost: showsPost, chosen: chosenReplies) {
+            return composed
+        }
+        return exportLanguage.flatMap(request.subjectIn) ?? request.subject
+    }
+
+    /// Le choix de composition, dans la clé de peinture : changer de mode repeint l'aperçu.
+    var compositionKey: String {
+        guard let compositionMode else { return "" }
+        return "\(compositionMode.rawValue)|\(showsPost)|\(chosenReplies.sorted().joined(separator: ","))"
     }
 
     /// Les médias tels qu'on les peint — chaque son avec l'onde et la durée de
@@ -136,17 +152,18 @@ struct MessageCardExportSheet: View {
         return trimmed
     }
 
-    var renderKey: String { "\(format.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)" }
+    var renderKey: String { "\(format.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)" }
     var ready: Bool { rendered?.key == renderKey }
     private var isDefault: Bool { savedDefault == format }
 
     private var tabs: [MessageCardExportTab] {
-        MessageCardExportTab.offered(hasMedia: !request.subject.media.isEmpty, languageCount: request.languages.count)
+        MessageCardExportTab.offered(hasMedia: !subject.media.isEmpty, languageCount: request.languages.count)
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: MeeshySpacing.md) {
+                compositionBar
                 stage
                 notices
                 AdaptiveGlassContainer(spacing: 12) {
@@ -171,7 +188,7 @@ struct MessageCardExportSheet: View {
         .adaptiveOnChange(of: offeredOutputs) { _, offered in
             if !offered.contains(output) { output = .image }
         }
-        .task(id: "\(loaded)|\(mediaAttempt)|\(soundsKey)") { await loadMedia() }
+        .task(id: "\(loaded)|\(mediaAttempt)|\(soundsKey)|\(compositionKey)") { await loadMedia() }
         .task(id: "\(loaded)|\(renderKey)") { await render() }
         .sheet(isPresented: $galleryOpen) {
             MessageCardExportGallery(
@@ -356,7 +373,7 @@ struct MessageCardExportSheet: View {
     var thumbSource: MessageCardThumbSource {
         var neutral = format
         neutral.template = MessageCardTemplates.defaultID
-        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)"
+        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)"
         let format = format
         return MessageCardThumbSource(
             store: thumbnails,
@@ -394,6 +411,11 @@ struct MessageCardExportSheet: View {
         format = stored ?? .initial
         usage = MessageCardUsage.read(from: store)
         popular = MessageCardUsage.popular(usage, count: Self.popularCount)
+        if let composition = request.composition, let first = composition.modes.first {
+            compositionMode = first
+            showsPost = first.showsPostByDefault
+            chosenReplies = composition.initialChoice
+        }
     }
 
     /// « Un média n'a pas pu se charger » + « Réessayer » (#8901) — jamais un cadre muet.
@@ -430,7 +452,7 @@ struct MessageCardExportSheet: View {
 
     /// Les pixels des médias sont là, et aucun n'a échoué : la carte montre ce qui partira.
     private var mediaArePainted: Bool {
-        request.subject.media.isEmpty || (mediaVersion > 0 && loadedMedia.failed.isEmpty)
+        subject.media.isEmpty || (mediaVersion > 0 && loadedMedia.failed.isEmpty)
     }
 
     private func render() async {

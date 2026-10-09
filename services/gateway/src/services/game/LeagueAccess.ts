@@ -17,7 +17,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isAdult } from '@meeshy/shared/utils/age';
-import { levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { leagueAccess, type LeagueAccess } from '@meeshy/shared/utils/game/league';
 import { loadPrivacyPreferencesCached } from '../preferences/privacy-cache';
 
@@ -49,7 +49,7 @@ type LeagueFactsRow = {
 
 export function leagueFactsOf(row: LeagueFactsRow | null | undefined, now: Date = new Date()): LeagueFacts {
   return {
-    levelRecord: Math.max(levelFromScore(row?.engagementScore ?? 0), row?.levelRecord ?? 0),
+    levelRecord: Math.max(levelForUnlocks({ score: row?.engagementScore ?? 0, levelRecord: row?.levelRecord ?? null }), row?.levelRecord ?? 0),
     adultVerified: adultVerifiedOf(row ?? {}, now),
     consented: row?.publicLeagueConsentAt != null,
     timezone: row?.timezone ?? null,

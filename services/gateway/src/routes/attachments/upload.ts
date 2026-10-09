@@ -26,6 +26,7 @@ import type { UploadedFile, UploadTextBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { classifyAnonymousAttachment } from '../../services/attachments/ContentSignature.js';
 import { normalizeContactCardMimeType } from '@meeshy/shared/utils/vcard';
+import { admittedUploadMimeType } from '../../services/attachments/uploadMimeType';
 
 /**
  * Plafond RÉEL, en OCTETS, du champ `content` de `POST /attachments/upload-
@@ -148,7 +149,14 @@ export async function registerUploadRoutes(
             files.push({
               buffer,
               filename: part.filename,
-              mimeType: normalizeContactCardMimeType(part.mimetype, part.filename),
+              // #9693 — le type ADMIS est celui du média : `audio/x-wav`
+              // devient `audio/wav`, un MP3 sans type devient `audio/mpeg`
+              // quand ses octets le confirment.
+              mimeType: admittedUploadMimeType({
+                declared: normalizeContactCardMimeType(part.mimetype, part.filename),
+                fileName: part.filename,
+                head: buffer,
+              }),
               size: buffer.length,
             });
             fileIndex++;

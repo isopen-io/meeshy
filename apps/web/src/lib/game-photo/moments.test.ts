@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+import { gloryLadder } from '@meeshy/shared/utils/game/glory';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 
 import {
   achievementMoment,
@@ -69,7 +70,7 @@ describe('chaque moment porte son identité, son emblème et ses mots', () => {
   test('un rang, division comprise', () => {
     const moment = rankMoment({ rank: 'voix', division: 2 });
     expect(moment.id).toBe('rank:voix:2');
-    expect(moment.emblem).toEqual({ kind: 'rank', rank: 'voix', division: 2 });
+    expect(moment.emblem).toEqual({ kind: 'rank', rank: 'voix', division: 2, mythic: null });
     expect(moment.kicker).toBe('Nouveau rang');
     expect(moment.title).toBe('Voix II');
   });
@@ -113,7 +114,7 @@ describe('chaque moment porte son identité, son emblème et ses mots', () => {
 });
 
 describe('photoMomentFromCard — la carte du guide sait quel moment elle propose', () => {
-  const game = gameBlockFixture({ glory: 1700, score: 10 * 11 * 11, balance: 12, mintedLifetime: 1 });
+  const game = gameBlockFixture({ glory: 1700, score: 100 * 11 * 11, balance: 12, mintedLifetime: 1 });
 
   test('nouveau rang', () => {
     expect(photoMomentFromCard('new-rank', game)?.id).toBe(`rank:${game.glory.rank}:${game.glory.division}`);
@@ -128,7 +129,7 @@ describe('photoMomentFromCard — la carte du guide sait quel moment elle propos
     expect(photoMomentFromCard('treasury-tier', game)?.id).toBe('treasury:escarcelle');
   });
   test('niveau 100', () => {
-    expect(photoMomentFromCard('level-100', gameBlockFixture({ score: 10 * 100 * 100 }))?.id).toBe('level-100:0');
+    expect(photoMomentFromCard('level-100', gameBlockFixture({ ...ALL_LEVEL_STEPS, score: 100 * 100 * 100, levelRecord: 100 }))?.id).toBe('level-100:0');
   });
   test('un moment qui ne se photographie pas rend null', () => {
     expect(photoMomentFromCard('flame-at-risk', game)).toBeNull();
@@ -154,9 +155,12 @@ describe('photoMomentsOfTransition — ce qui se propose APRÈS la célébration
     expect(photoMomentsOfTransition(view({ streak: 8 }), view({ streak: 9 }))).toEqual([]);
   });
 
+  // Au niveau 8, la première Meesh (l'étape du 10, #9706) ne fait franchir aucun palier : seule la pièce se propose.
+  const AT_8 = 100 * 8 * 8;
+
   test('la première Meesh, la dixième, la centième en or', () => {
     const minted = (n: number) =>
-      photoMomentsOfTransition(view({ mintedLifetime: n - 1 }), view({ mintedLifetime: n })).map((m) => m.id);
+      photoMomentsOfTransition(view({ score: AT_8, mintedLifetime: n - 1 }), view({ score: AT_8, mintedLifetime: n })).map((m) => m.id);
     expect(minted(1)).toEqual(['meesh:1']);
     expect(minted(10)).toEqual(['meesh:10']);
     expect(minted(100)).toEqual(['meesh:100']);
@@ -168,13 +172,22 @@ describe('photoMomentsOfTransition — ce qui se propose APRÈS la célébration
   });
 
   test('un rang gagné, un palier franchi, un palier du trésor', () => {
-    expect(photoMomentsOfTransition(view({ glory: 820 }), view({ glory: 840 })).map((m) => m.kicker)).toContain('Nouveau rang');
-    expect(photoMomentsOfTransition(view({ score: 10 * 9 * 9 + 5 }), view({ score: 10 * 10 * 10 })).map((m) => m.id)).toContain('tier:lueur');
+    const echoIV = gloryLadder().find((step) => step.rank === 'echo' && step.division5 === 4)!.minGlory;
+    const gained = photoMomentsOfTransition(view({ glory: echoIV - 1 }), view({ glory: echoIV }));
+    expect(gained.map((m) => m.kicker)).toContain('Nouveau rang');
+    expect(gained.map((m) => m.title)).toContain('Écho IV');
+    expect(photoMomentsOfTransition(view({ score: 100 * 9 * 9 + 5, levelRecord: 9 }), view({ score: 100 * 10 * 10, levelRecord: 9 })).map((m) => m.id)).toContain('tier:lueur');
     expect(photoMomentsOfTransition(view({ balance: 9 }), view({ balance: 10 })).map((m) => m.id)).toContain('treasury:escarcelle');
   });
 
+  test('le Mythe se photographie avec sa place, et son blason porte son émission (#9636)', () => {
+    const moment = rankMoment({ rank: 'mythe', division: null, mythic: { number: 5, edition: 8 } });
+    expect(moment.title).toBe('Mythe n° 5');
+    expect(moment.emblem).toEqual({ kind: 'rank', rank: 'mythe', division: null, mythic: { number: 5, edition: 8 } });
+  });
+
   test('une baisse ne se photographie pas', () => {
-    expect(photoMomentsOfTransition(view({ score: 10 * 10 * 10 }), view({ score: 10 * 9 * 9 }))).toEqual([]);
+    expect(photoMomentsOfTransition(view({ score: 100 * 10 * 10 }), view({ score: 100 * 9 * 9 }))).toEqual([]);
   });
 
   test('un ancien serveur : rien', () => {

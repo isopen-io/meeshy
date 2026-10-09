@@ -5,6 +5,7 @@ import { prismFor, served, type Served } from '@/lib/api/prism';
 import { reactAction } from '@/lib/api/query';
 import { reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
+import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { readDefaultMessageCardFormat } from '@/lib/export/message-card-format';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -128,6 +129,25 @@ export function useMessageMenu(params: {
     [messageOf, servedOf],
   );
 
+  /**
+   * « IMAGER LA DISCUSSION » A UNE CARTE À PEINDRE (#9039, #9573) — la MÊME
+   * fonction que l'atelier (`discussionCardSubjectOf`) : une discussion qui
+   * contient une réponse citant un contenu protégé se refuse, et le menu ne
+   * rend pas une entrée dont l'atelier n'aurait rien à montrer. Le lecteur n'y
+   * sert qu'à nommer les auteurs, ce que la réponse oui/non ne lit pas.
+   */
+  const discussionImageableOf = useCallback(
+    (messageId: string): boolean =>
+      discussionCardSubjectOf({
+        messages,
+        anchorId: messageId,
+        servedOf: (id) => servedOf(id)?.text,
+        viewer: { id: viewerId, displayName: '' },
+        now: Date.now(),
+      }) !== null,
+    [messages, servedOf, viewerId],
+  );
+
   // LE FOCUS AVANT OUVERTURE — restitué à la fermeture SAUF si Composer ou
   // Sélectionner l'ont pris (miroir `restoreStateAfterLongPressIfNeeded`,
   // `ConversationView+LongPressMenu.swift:92-108`).
@@ -235,6 +255,7 @@ export function useMessageMenu(params: {
       if (id === 'export' || id === 'exportQuick' || id === 'exportDiscussion') {
         const message = messageOf(messageId);
         if (message === undefined || !imageableOf(messageMenuContextOf(message, { now: Date.now() }))) return;
+        if (id === 'exportDiscussion' && !discussionImageableOf(messageId)) return;
         focusTakenRef.current = true;
         setExportFor(id === 'exportDiscussion' ? { messageId, quick: false, scope: 'discussion' } : { messageId, quick: id === 'exportQuick' });
         return;
@@ -242,7 +263,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -379,6 +400,7 @@ export function useMessageMenu(params: {
     const ctx = {
       ...messageMenuContextOf(message, { now: Date.now() }),
       hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
+      discussionImageable: discussionImageableOf(menuTarget.messageId),
     };
     const servedLanguage = servedOf(menuTarget.messageId)?.language ?? '';
     const lang = currentInterfaceLanguage();

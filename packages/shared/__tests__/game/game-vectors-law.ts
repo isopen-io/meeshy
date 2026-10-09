@@ -27,10 +27,21 @@ import {
   gloryForFlameRecords,
   gloryForNewLevels,
   gloryStanding,
+  levelCapForGlory,
+  levelCapForRank,
   type AchievementRarity,
 } from '../../utils/game/glory.js';
 import { guideMoment, type GuideEvent } from '../../utils/game/guide.js';
-import { canPrestige, levelProgress, newLevelsReached, recordLevel } from '../../utils/game/levels.js';
+import {
+  canPrestige,
+  legacyLevelProgress,
+  levelForUnlocks,
+  levelProgress,
+  levelThreshold,
+  newLevelsReached,
+  recordLevel,
+} from '../../utils/game/levels.js';
+import { levelStepGate, nextLevelStep, type LevelStepCounts, type LevelStepFacts } from '../../utils/game/level-steps.js';
 import { meeshEdition, meeshPrice, previewMint } from '../../utils/game/mint.js';
 import {
   drawDailyMissions,
@@ -43,10 +54,25 @@ import { treasuryTier } from '../../utils/game/treasury.js';
 import { GAME_VECTOR_LAWS_V2, buildGameVectorsV2, evaluateGameVectorV2, isGameVectorInputV2, type GameVectorInputV2 } from './game-vectors-law-v2.js';
 
 export type GameVectorInputV1 =
-  | { readonly law: 'level'; readonly score: number }
+  | {
+      readonly law: 'level';
+      readonly score: number;
+      readonly glory: number;
+      /** Les compteurs des étapes (#9706) — absents : sans étapes. */
+      readonly steps?: LevelStepCounts;
+      readonly levelRecord?: number | null;
+    }
   | { readonly law: 'level-record'; readonly level: number; readonly previousRecord: number | null; readonly prestige: number }
   | { readonly law: 'mint-price'; readonly n: number }
-  | { readonly law: 'mint-preview'; readonly score: number; readonly mintedLifetime: number; readonly debitablePoints: number }
+  | {
+      readonly law: 'mint-preview';
+      readonly score: number;
+      readonly mintedLifetime: number;
+      readonly debitablePoints: number;
+      readonly glory: number;
+      /** Missions et record de Flamme des étapes (#9706) — absents : sans étapes. */
+      readonly steps?: { readonly missionsDone: number; readonly flameRecord: number };
+    }
   | { readonly law: 'glory-standing'; readonly glory: number; readonly mythic: boolean; readonly mythicSeat?: { readonly number: number; readonly edition: number } | null }
   | {
       readonly law: 'glory-gain';
@@ -99,6 +125,10 @@ export type GameVectorInput = GameVectorInputV1 | GameVectorInputV2;
 
 const round6 = (value: number): number => Math.round(value * 1e6) / 1e6;
 
+/** Les faits des étapes d'un vecteur : ses compteurs, et le rang lu sur sa Gloire — `null` sans compteurs. */
+const stepFactsOf = (counts: LevelStepCounts | undefined, glory: number): LevelStepFacts | null =>
+  counts === undefined ? null : { ...counts, glory, rank: gloryStanding({ glory }).rank };
+
 /** La sortie de la loi pour une entrée : c'est elle que le fichier fige et qu'iOS rejoue. */
 export function evaluateGameVector(input: GameVectorInput): unknown {
   if (isGameVectorInputV2(input)) return evaluateGameVectorV2(input);
@@ -108,7 +138,10 @@ export function evaluateGameVector(input: GameVectorInput): unknown {
 function evaluateGameVectorV1(input: GameVectorInputV1): unknown {
   switch (input.law) {
     case 'level': {
-      const p = levelProgress(input.score);
+      const steps = stepFactsOf(input.steps, input.glory);
+      const gate = levelStepGate(steps);
+      const p = levelProgress(input.score, levelCapForGlory(input.glory), gate);
+      const legacy = legacyLevelProgress(input.score, gate);
       return {
         level: p.level,
         tier: p.tier,
@@ -117,6 +150,13 @@ function evaluateGameVectorV1(input: GameVectorInputV1): unknown {
         pointsToNext: p.pointsToNext,
         progress: round6(p.progress),
         isMax: p.isMax,
+        cap: p.cap,
+        legacyLevel: legacy.level,
+        legacyTier: legacy.tier,
+        held: p.held,
+        gate,
+        step: nextLevelStep(p.level, steps),
+        unlockLevel: levelForUnlocks({ score: input.score, levelRecord: input.levelRecord ?? null }),
       };
     }
     case 'level-record': {
@@ -132,7 +172,13 @@ function evaluateGameVectorV1(input: GameVectorInputV1): unknown {
     case 'mint-price':
       return { price: meeshPrice(input.n), edition: meeshEdition(input.n) };
     case 'mint-preview':
-      return previewMint(input);
+      return previewMint({
+        score: input.score,
+        mintedLifetime: input.mintedLifetime,
+        debitablePoints: input.debitablePoints,
+        levelCap: levelCapForGlory(input.glory),
+        steps: input.steps === undefined ? null : { ...input.steps, glory: input.glory, rank: gloryStanding({ glory: input.glory }).rank },
+      });
     case 'glory-standing': {
       const s = gloryStanding(input);
       return {
@@ -148,6 +194,7 @@ function evaluateGameVectorV1(input: GameVectorInputV1): unknown {
         progress: round6(s.progress),
         mythicNumber: s.mythic?.number ?? null,
         mythicEdition: s.mythic?.edition ?? null,
+        levelCap: levelCapForRank(s.rank),
       };
     }
     case 'glory-gain':
@@ -209,9 +256,52 @@ const SEEDS: readonly (readonly [string, string])[] = [
 ];
 
 export function buildGameVectors() {
-  const levels = [0, 9, 10, 39, 40, 89, 90, 249, 250, 999, 1000, 12_180, 24_999, 25_000, 56_250, 99_999, 100_000, 400_000].map(
-    (score) => vector(`niveau pour un score de ${score}`, { law: 'level', score }),
-  );
+  const levels = [0, 99, 100, 399, 400, 899, 900, 2499, 2500, 9999, 10_000, 93_730, 121_800, 249_999, 250_000, 562_500, 999_999, 1_000_000, 4_000_000]
+    .map((score) => vector(`niveau pour un score de ${score}`, { law: 'level', score, glory: 0 }))
+    .concat(
+      [
+        [levelThreshold(101), 0],
+        [levelThreshold(200) - 1, 0],
+        [levelThreshold(499), 129_999],
+        [levelThreshold(500), 129_999],
+        [levelThreshold(500), 130_000],
+        [levelThreshold(1000), 379_999],
+        [levelThreshold(1001), 379_999],
+        [levelThreshold(1001), 380_000],
+        [levelThreshold(2000) + 1234, 600_000],
+        [levelThreshold(3000), 1_000_000],
+      ].map(([score, glory]) => vector(`niveau ouvert par le rang : score ${score}, ${glory} de Gloire`, { law: 'level', score: score!, glory: glory! })),
+    )
+    .concat(
+      (
+        [
+          [levelThreshold(15), 0, { minted: 0, missionsDone: 0, flameRecord: 0 }, null],
+          [levelThreshold(15), 0, { minted: 1, missionsDone: 0, flameRecord: 0 }, 9],
+          [levelThreshold(8), 0, { minted: 0, missionsDone: 0, flameRecord: 0 }, null],
+          [levelThreshold(9), 0, { minted: 0, missionsDone: 0, flameRecord: 0 }, 9],
+          [levelThreshold(25), 0, { minted: 1, missionsDone: 3, flameRecord: 2 }, 19],
+          [levelThreshold(35), 1999, { minted: 1, missionsDone: 3, flameRecord: 2 }, 29],
+          [levelThreshold(35), 2000, { minted: 1, missionsDone: 3, flameRecord: 2 }, 29],
+          [levelThreshold(45), 2000, { minted: 1, missionsDone: 3, flameRecord: 6 }, 39],
+          [levelThreshold(55), 6000, { minted: 1, missionsDone: 9, flameRecord: 7 }, 49],
+          [levelThreshold(75), 6000, { minted: 4, missionsDone: 10, flameRecord: 7 }, 69],
+          [levelThreshold(85), 14_999, { minted: 5, missionsDone: 10, flameRecord: 7 }, 79],
+          [levelThreshold(95), 15_000, { minted: 5, missionsDone: 10, flameRecord: 29 }, 89],
+          [levelThreshold(100), 34_999, { minted: 5, missionsDone: 10, flameRecord: 30 }, 99],
+          [levelThreshold(100), 35_000, { minted: 5, missionsDone: 10, flameRecord: 30 }, 99],
+          [levelThreshold(640), 35_000, { minted: 5, missionsDone: 10, flameRecord: 30 }, 100],
+          [levelThreshold(640), 200_000, { minted: 0, missionsDone: 0, flameRecord: 0 }, 640],
+        ] as const
+      ).map(([score, glory, steps, levelRecord]) =>
+        vector(`étapes des niveaux : score ${score}, ${glory} de Gloire, ${steps.minted}/${steps.missionsDone}/${steps.flameRecord}, record ${levelRecord}`, {
+          law: 'level',
+          score,
+          glory,
+          steps,
+          levelRecord,
+        }),
+      ),
+    );
 
   const records = [
     { level: 34, previousRecord: 30, prestige: 0 },
@@ -219,6 +309,8 @@ export function buildGameVectors() {
     { level: 2, previousRecord: null, prestige: 0 },
     { level: 100, previousRecord: 99, prestige: 4 },
     { level: 100, previousRecord: 100, prestige: 5 },
+    { level: 640, previousRecord: 499, prestige: 0 },
+    { level: 1000, previousRecord: 1000, prestige: 2 },
   ].map((c) => vector(`record niveau ${c.level}, ancien ${c.previousRecord}`, { law: 'level-record', ...c }));
 
   const prices = [1, 10, 11, 21, 50, 51, 100, 101, 150, 200, 249, 250, 251, 999, 1000, 2000, 0].map((n) =>
@@ -226,13 +318,28 @@ export function buildGameVectors() {
   );
 
   const previews = [
-    { score: 12_180, mintedLifetime: 12, debitablePoints: 12_180 },
-    { score: 2250, mintedLifetime: 0, debitablePoints: 2250 },
-    { score: 100_000, mintedLifetime: 99, debitablePoints: 100_000 },
+    { score: 121_800, mintedLifetime: 12, debitablePoints: 121_800 },
+    { score: 22_500, mintedLifetime: 0, debitablePoints: 22_500 },
+    { score: 1_000_000, mintedLifetime: 99, debitablePoints: 1_000_000 },
     { score: 2000, mintedLifetime: 0, debitablePoints: 1000 },
     { score: 9000, mintedLifetime: 999, debitablePoints: 9000 },
     { score: 1300, mintedLifetime: 0, debitablePoints: 1300 },
-  ].map((c) => vector(`aperçu de frappe : score ${c.score}, ${c.mintedLifetime} frappées`, { law: 'mint-preview', ...c }));
+  ]
+    .map((c) => ({ ...c, glory: 0 }))
+    .concat([
+      { score: levelThreshold(640), mintedLifetime: 40, debitablePoints: levelThreshold(640), glory: 0 },
+      { score: levelThreshold(640), mintedLifetime: 40, debitablePoints: levelThreshold(640), glory: 200_000 },
+      { score: levelThreshold(1001) + 500, mintedLifetime: 300, debitablePoints: levelThreshold(1001) + 500, glory: 400_000 },
+    ])
+    .map((c) => vector(`aperçu de frappe : score ${c.score}, ${c.mintedLifetime} frappées, ${c.glory} de Gloire`, { law: 'mint-preview', ...c }))
+    .concat(
+      [
+        { score: 15_000, mintedLifetime: 0, debitablePoints: 15_000, glory: 0, steps: { missionsDone: 0, flameRecord: 0 } },
+        { score: levelThreshold(35), mintedLifetime: 3, debitablePoints: levelThreshold(35), glory: 1500, steps: { missionsDone: 1, flameRecord: 0 } },
+        { score: levelThreshold(75), mintedLifetime: 4, debitablePoints: levelThreshold(75), glory: 9000, steps: { missionsDone: 10, flameRecord: 7 } },
+        { score: 12_000, mintedLifetime: 0, debitablePoints: 1000, glory: 0, steps: { missionsDone: 0, flameRecord: 0 } },
+      ].map((c) => vector(`aperçu de frappe qui fait une étape : score ${c.score}, ${c.mintedLifetime} frappées, ${c.glory} de Gloire`, { law: 'mint-preview', ...c })),
+    );
 
   const glories = [
     0, 399, 400, 1999, 2000, 2799, 2800, 3600, 4400, 5199, 5200, 5999, 6000, 14_999, 15_000, 34_999, 35_000, 69_999, 70_000, 129_999,
@@ -252,6 +359,9 @@ export function buildGameVectors() {
     { rarity: 'epic', level: 2, previousRecord: null, previousLongest: 99, longest: 365 },
     { rarity: 'legendary', level: 50, previousRecord: 49, previousLongest: 365, longest: 400 },
     { rarity: 'mythic', level: 100, previousRecord: 98, previousLongest: 0, longest: 0 },
+    { rarity: 'common', level: 120, previousRecord: 98, previousLongest: 0, longest: 0 },
+    { rarity: 'common', level: 1000, previousRecord: 100, previousLongest: 0, longest: 0 },
+    { rarity: 'common', level: 1500, previousRecord: 999, previousLongest: 0, longest: 0 },
   ].map((c) => vector(`gains de Gloire (${c.rarity}, niveau ${c.level}, série ${c.longest})`, { law: 'glory-gain', ...(c as { rarity: AchievementRarity; level: number; previousRecord: number | null; previousLongest: number; longest: number }) }));
 
   const treasuries = [0, 1, 9, 10, 49, 50, 99, 100, 499, 500, 999, 1000, 5000].map((held) =>
@@ -426,7 +536,7 @@ export const GAME_VECTORS_FORMAT = {
   input:
     "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic-seats, mythic-crossing, mythic-signature, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
   expected:
-    'La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax} ; mint-price → {price, edition} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber, mythicEdition} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l\'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.',
+    'La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax, cap (null : sans limite), legacyLevel, legacyTier, held, gate (palier des étapes, null : rien ne retient), step (prochaine étape {level, kind, target, current, met, rank} ou null), unlockLevel (lu sur le score et le record)} — le plafond se lit sur la Gloire (`glory`), les étapes sur `steps` (#9706) ; mint-price → {price, edition} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber, mythicEdition, levelCap (499, 1000 ou null)} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l\'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.',
   provenance:
     "Contrat cross-plateforme de la loi du Jeu Meeshy (#9373, vague 2 #9384 à #9392 : les cas de la vague 2 viennent APRÈS ceux de la vague 1, jamais mêlés). TS le produit (__tests__/game/game-vectors-law.ts) et le rejoue (__tests__/vectors/game.vectors.test.ts) ; iOS le rejoue (GameLawVectorTests). Sur divergence, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui. Régénérer : UPDATE_GAME_VECTORS=1 npx vitest run __tests__/vectors/game.vectors.test.ts.",
 } as const;

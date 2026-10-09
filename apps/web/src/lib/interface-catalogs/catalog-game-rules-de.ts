@@ -3,9 +3,9 @@ import type { GameRulesCatalog } from '@/lib/i18n-game-catalog';
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Mêmes clés et mêmes paramètres que le français. */
 const de = {
   'game.rules.1.title': 'Jede Aktion zählt',
-  'game.rules.1.body': 'Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jede nützliche Aktion bringt Punkte.',
+  'game.rules.1.body': 'Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jede nützliche Aktion bringt Punkte. Ein Beitrag bringt Punkte je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Limits zählen deine Aktionen, nie deine Punkte: Boni, Flamme und Events erhöhen, was jede Aktion bringt.',
   'game.rules.2.title': 'Punkte machen das Level',
-  'game.rules.2.body': '100 Level in 10 Stufen. Jedes Level verlangt etwas mehr als das vorherige.',
+  'game.rules.2.body': 'Eine Million Punkte für Level 100 und ein Schritt je zehn Level: ohne ihn wartet das Level. Bis 499 unter Botschafter, 1000 ab Botschafter, ohne Grenze ab Orakel. Prestige ab Level 100, freiwillig. Über 100: 1.000 Ruhm alle zehn Level.',
   'game.rules.3.title': 'Man prägt Meeshes',
   'game.rules.3.body': 'Ab 1.221 Punkten prägst du eine Meesh von Hand. Der Preis steigt mit der Zahl der bereits geprägten Meeshes.',
   'game.rules.4.title': 'Prägen lässt dich absteigen',
@@ -29,7 +29,7 @@ const de = {
   'game.rules.atlas.rarities': 'Die Seltenheiten',
   'game.rules.atlas.obverse': 'Vorderseite',
   'game.rules.atlas.reverse': 'Rückseite',
-  'game.rules.atlas.line.levels': 'Hundert Level in zehn Stufen: jede Stufe hat ihr eigenes Emblem und ihre Farbe.',
+  'game.rules.atlas.line.levels': 'Zwanzig Stufen: zehn bis 100, dann eine je hundert, Singularität ab 1000.',
   'game.rules.atlas.line.meesh': 'Die Vorderseite trägt die Signatur; die Rückseite Mee und Meo, die Nummer und das Jahr. Gold bei jeder hundertsten, Prisma bei jeder tausendsten.',
   'game.rules.atlas.line.treasury': 'Wer seine Meeshes behält, füllt den Schatz: sechs Stufen zu erklimmen.',
   'game.rules.atlas.line.rank': 'Elf Ränge. Ruhm bringt sie, und ein Rang sinkt nie.',
@@ -38,7 +38,7 @@ const de = {
   'game.rules.atlas.line.medals': 'Sieben Metalle, von Kupfer bis Prisma: das Metall zeigt, wie weit du gekommen bist. Ein erloschenes Abzeichen hinterlässt einen Abdruck.',
   'game.rules.atlas.line.trophies': 'Eine Trophäe erhält man in einem bestimmten Moment: Liga-Pokal, Saison-Pokal, Prestige, Flamme.',
   'game.rules.atlas.line.rarities': 'Fünf Seltenheitsstufen, jede Nacht gemessen. Keine bringt Punkte.',
-  'game.rules.atlas.levels': 'Die zehn Stufen',
+  'game.rules.atlas.levels': 'Die zwanzig Stufen',
   'game.rules.atlas.treasury': 'Die Stufen des Schatzes',
   'game.rules.atlas.ranks': 'Die Wappen der Ränge',
   'game.rules.atlas.flames': 'Die fünf Flammen',
@@ -59,7 +59,14 @@ const de = {
   'game.rules.atlas.share_legendary': '0,2 bis 2 % der Konten',
   'game.rules.atlas.share_mythic': 'unter 0,2 % der Konten',
   'game.rules.atlas.rarity_glory': '+{glory} Ruhm',
-  'game.rules.atlas.myth': 'Die 100 ruhmreichsten Legenden',
+  'game.rules.atlas.myth': 'Die ersten 100, die 1.000.000 Ruhm erreichen',
+  'game.rules.badges.title': 'Die Abzeichen',
+  'game.rules.badges.intro': 'Jedes Abzeichen zählt EINE bestimmte Geste: eine Sprachnachricht, eine Story, eine neue Freundschaft… Es gibt zwanzig, in fünf Familien geordnet.',
+  'game.rules.badges.ladder': 'Jedes Abzeichen steigt über sieben Stufen. Bei jeder überschrittenen Schwelle wechselt es das Material und lässt einen Stern mehr leuchten.',
+  'game.rules.badges.ribbon': 'Ab Gold trägt die Medaille ein Band; bei Prisma schillert ihr Email.',
+  'game.rules.badges.imprint': 'Das Prägen einer Meesh kann ein Abzeichen erlöschen lassen: Es wird zu einem Abdruck, der zeigt, was zum Wiederentzünden fehlt.',
+  'game.rules.badges.families': 'Die zwanzig Abzeichen nach Familie',
+  'game.rules.badges.sheet': 'Tippe auf ein Abzeichen: Seine Karte sagt, was dafür zählt, sein Material und warum, und was bis zum nächsten Stern fehlt.',
 } as const satisfies GameRulesCatalog;
 
 export default de;

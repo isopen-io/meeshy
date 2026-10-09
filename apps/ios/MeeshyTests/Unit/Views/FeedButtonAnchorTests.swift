@@ -3,135 +3,109 @@ import SwiftUI
 @testable import Meeshy
 import MeeshyUI
 
-/// Verrouille `FeedButtonAnchor` — le mapping pur "x,y" persistée → point écran /
-/// UnitPoint qui place le foyer du liquid reveal Reels au centre EXACT du bouton
-/// feed. Doit rester un miroir parfait de `FreeFloatingButton.screenPosition`
-/// (mêmes constantes : buttonSize 52, minEdgePadding 20, topSafeZone 50,
-/// bottomSafeZone 110/50). Si l'un bouge sans l'autre, le disque naît à côté du
-/// bouton — ce test casse alors volontairement.
+/// Verrouille `FeedButtonAnchor` — le centre du bouton Flux d'où naît le
+/// disque des réels. Il se lit dans `FloatingButtonGeometry`, la source que le
+/// conteneur des boutons emploie pour poser le bouton (#9679) : si les deux
+/// divergeaient, le disque naîtrait à côté du bouton.
 @MainActor
 final class FeedButtonAnchorTests: XCTestCase {
 
-    private let screen = CGSize(width: 390, height: 844)
-    private let safeArea = EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
+    private let geometry = FloatingButtonGeometry(
+        screenSize: CGSize(width: 390, height: 844),
+        safeArea: EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
+    )
 
-    // MARK: - parse
+    // MARK: - L'ancre est le centre que le conteneur pose
 
-    func test_parse_validPair_returnsClampedPoint() {
-        XCTAssertEqual(FeedButtonAnchor.parse("0.0,0.0"), CGPoint(x: 0, y: 0))
-        XCTAssertEqual(FeedButtonAnchor.parse("1.0,1.0"), CGPoint(x: 1, y: 1))
-        XCTAssertEqual(FeedButtonAnchor.parse("0.5,0.25"), CGPoint(x: 0.5, y: 0.25))
+    func test_screenPoint_isTheFeedCenterOfTheContainerLayout() {
+        for raw in ["0.0,0.0", "1.0,1.0", "0.0,0.5", "v2,L,0.0000", "v2,R,1.0000", "garbage"] {
+            let layout = geometry.layout(feedStorage: raw, menuStorage: FloatingButtonGeometry.defaultMenuStorage)
+            XCTAssertEqual(FeedButtonAnchor.screenPoint(fromRaw: raw, geometry: geometry), layout.feed, raw)
+        }
     }
 
-    func test_parse_outOfRange_clampsTo01() {
-        XCTAssertEqual(FeedButtonAnchor.parse("2.0,-1.0"), CGPoint(x: 1, y: 0))
-    }
-
-    func test_parse_malformed_defaultsToTopLeft() {
-        XCTAssertEqual(FeedButtonAnchor.parse("garbage"), CGPoint(x: 0, y: 0))
-        XCTAssertEqual(FeedButtonAnchor.parse(""), CGPoint(x: 0, y: 0))
-        XCTAssertEqual(FeedButtonAnchor.parse("1.0"), CGPoint(x: 0, y: 0))
-    }
-
-    // MARK: - screenPoint mirrors FreeFloatingButton math
-
-    func test_screenPoint_topLeft_matchesBoundsMinCorner() {
-        // pos (0,0) → button center = (minX, minY) with search bar visible.
-        let p = FeedButtonAnchor.screenPoint(
-            fromRaw: "0.0,0.0", screenSize: screen, safeArea: safeArea, isSearchBarVisible: true
-        )
-        let half = FeedButtonAnchor.buttonSize / 2
-        let expectedX = safeArea.leading + FeedButtonAnchor.minEdgePadding + half       // 0 + 20 + 26
-        let expectedY = safeArea.top + FeedButtonAnchor.topSafeZone + half               // 59 + 50 + 26
-        XCTAssertEqual(p.x, expectedX, accuracy: 0.001)
-        XCTAssertEqual(p.y, expectedY, accuracy: 0.001)
-    }
-
-    func test_screenPoint_bottomRight_searchVisible_usesLargerBottomSafeZone() {
-        let p = FeedButtonAnchor.screenPoint(
-            fromRaw: "1.0,1.0", screenSize: screen, safeArea: safeArea, isSearchBarVisible: true
-        )
-        let half = FeedButtonAnchor.buttonSize / 2
-        let expectedX = screen.width - safeArea.trailing - FeedButtonAnchor.minEdgePadding - half
-        let expectedY = screen.height - safeArea.bottom - FeedButtonAnchor.bottomSafeZoneWithSearch - half
-        XCTAssertEqual(p.x, expectedX, accuracy: 0.001)
-        XCTAssertEqual(p.y, expectedY, accuracy: 0.001)
-    }
-
-    func test_screenPoint_searchHidden_movesAnchorLower() {
-        // No search bar → smaller bottom safe-zone → the bottom-anchored button
-        // sits LOWER on screen (larger y).
-        let visible = FeedButtonAnchor.screenPoint(
-            fromRaw: "0.0,1.0", screenSize: screen, safeArea: safeArea, isSearchBarVisible: true
-        )
-        let hidden = FeedButtonAnchor.screenPoint(
-            fromRaw: "0.0,1.0", screenSize: screen, safeArea: safeArea, isSearchBarVisible: false
-        )
-        XCTAssertGreaterThan(hidden.y, visible.y)
+    func test_screenPoint_reachesTheTopOfTheScreen() {
+        let p = FeedButtonAnchor.screenPoint(fromRaw: "v2,L,0.0000", geometry: geometry)
+        XCTAssertEqual(p.y, geometry.minY, accuracy: 0.001)
+        XCTAssertLessThan(p.y, 120)
     }
 
     // MARK: - unitPoint
 
     func test_unitPoint_isScreenPointFraction() {
-        let p = FeedButtonAnchor.screenPoint(
-            fromRaw: "0.5,0.5", screenSize: screen, safeArea: safeArea, isSearchBarVisible: true
-        )
+        let p = FeedButtonAnchor.screenPoint(fromRaw: "v2,R,0.5000", geometry: geometry)
         let u = FeedButtonAnchor.unitPoint(
-            fromRaw: "0.5,0.5", screenSize: screen, safeArea: safeArea, isSearchBarVisible: true
+            fromRaw: "v2,R,0.5000", geometry: geometry, in: CGRect(x: 0, y: 0, width: 390, height: 844)
         )
-        XCTAssertEqual(u.x, p.x / screen.width, accuracy: 0.0001)
-        XCTAssertEqual(u.y, p.y / screen.height, accuracy: 0.0001)
+        XCTAssertEqual(u.x, p.x / 390, accuracy: 0.0001)
+        XCTAssertEqual(u.y, p.y / 844, accuracy: 0.0001)
+    }
+
+    /// La vue des réels peut, comme le conteneur des boutons, commencer sous la
+    /// bannière du joueur : le disque naît quand même au centre du bouton.
+    func test_unitPoint_inAFramePushedDownByTheBanner_staysOnTheButton() {
+        let frame = CGRect(x: 0, y: 80, width: 390, height: 764)
+        let p = FeedButtonAnchor.screenPoint(fromRaw: "v3,L,0.500000", geometry: geometry)
+        let u = FeedButtonAnchor.unitPoint(fromRaw: "v3,L,0.500000", geometry: geometry, in: frame)
+        XCTAssertEqual(frame.minY + u.y * frame.height, p.y, accuracy: 0.001)
     }
 
     func test_unitPoint_zeroSize_returnsTopLeading() {
-        let u = FeedButtonAnchor.unitPoint(
-            fromRaw: "0.5,0.5", screenSize: .zero, safeArea: safeArea, isSearchBarVisible: true
-        )
-        XCTAssertEqual(u, .topLeading)
+        XCTAssertEqual(FeedButtonAnchor.unitPoint(fromRaw: "v2,R,0.5000", geometry: geometry, in: .zero), .topLeading)
     }
 
-    // MARK: - D2 — la zone sûre du haut ne dégageait pas l'en-tête
+    // MARK: - #9679 — les boutons passent au-dessus du chrome
 
-    /// **Le défaut mesuré au simulateur (iPhone 16 Pro, 402x874 pt).**
-    /// Position par défaut du bouton Flux (`"0.0,0.0"`, RootView.swift:254) :
-    /// centre relevé à `y = 75.95`, rayon 26 ⇒ le disque commence à **y = 50**,
-    /// c'est-à-dire DANS la Dynamic Island, et il recouvre « Créer une story »
-    /// (cadre 16,74,44x44) sur 40.8 x 28.7 pt — 60 % de sa surface. Même défaut
-    /// à droite : le bouton Menu recouvre « Nouvelle conversation » (334,80)
-    /// sur 40.0 x 22.7 pt. Deux cibles tactiles superposées, livrées PAR DÉFAUT :
-    /// aucune position n'était persistée sur le simulateur, donc c'est bien la
-    /// valeur du code qu'on voit, pas un glisser de l'utilisateur.
-    ///
-    /// **La cause racine est ailleurs, et ce témoin ne la couvre pas.**
-    /// `FreeFloatingButtonsContainer` (FloatingButtons.swift:124-176) lit
-    /// `geometry.safeAreaInsets` dans un `GeometryReader` que le
-    /// `.ignoresSafeArea()` de la ligne 176 étend à tout l'écran : les insets
-    /// retombent donc à ZÉRO. La formule `minY = safeArea.top + topSafeZone
-    /// + half` est juste — c'est son ENTRÉE qui est fausse en production.
-    /// `test_screenPoint_topLeft_matchesBoundsMinCorner` ne l'a jamais vu parce
-    /// qu'il CHOISIT LUI-MÊME `safeArea.top = 59` : il valide la formule sur une
-    /// entrée que l'appelant réel ne fournit pas. Test vert, produit faux.
-    ///
-    /// Ce témoin assied donc la garantie sur l'entrée RÉELLE (`.zero`) : quelle
-    /// que soit la safe area transmise, le disque ne doit pas mordre l'en-tête.
-    func test_screenPoint_topLeft_withRealZeroSafeArea_clearsTheHeader() {
-        // L'entrée que l'appelant fournit VRAIMENT — pas celle que les autres
-        // témoins se donnent.
-        let p = FeedButtonAnchor.screenPoint(
-            fromRaw: "0.0,0.0", screenSize: screen, safeArea: EdgeInsets(), isSearchBarVisible: true
-        )
-        let discTop = p.y - FeedButtonAnchor.buttonSize / 2
+    /// Recette 2026-10-08 : le Flux posé à 96 pt passait SOUS la bannière du
+    /// joueur — invisible, insaisissable, et perdu après relance puisque la
+    /// position persiste. L'ordre des calques est un ordre de CÂBLAGE (un
+    /// `.overlay` ne recouvre que ce qui est chaîné avant lui) : la garde lit la
+    /// source, aucun test unitaire ne monte la racine connectée.
+    func test_floatingButtons_areLayeredAboveTheWholeChrome() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
+        let body = try XCTUnwrap(source.range(of: "var body: some View {")?.lowerBound)
+        let firstLayer = try XCTUnwrap(source.range(of: ".modifier(RootStatusBubbleLayer(", range: body..<source.endIndex)?.lowerBound)
+        let chrome = try XCTUnwrap(source.range(of: ".modifier(RootChromeLayer(", range: body..<source.endIndex)?.lowerBound)
+        let overlay = try XCTUnwrap(source.range(of: ".overlay { floatingChrome }", range: body..<source.endIndex)?.lowerBound,
+                                    "les boutons flottants doivent être posés en overlay de la racine")
+        let next = try XCTUnwrap(source.range(of: ".modifier(RootIntentRoutingLayer(", range: body..<source.endIndex)?.lowerBound)
 
-        // Fin de l'en-tête relevée au simulateur : l'encoche (jusqu'à 62 pt sur
-        // les iPhone à Dynamic Island) plus `CollapsibleHeaderMetrics.expandedHeight`
-        // (64). « Créer une story » y finit à 118.
-        XCTAssertGreaterThanOrEqual(
-            discTop, 118,
-            "Le disque flottant par défaut commence à \(discTop) pt et mord l'en-tête : "
-            + "il recouvre « Créer une story » (jusqu'à y=118) et la Dynamic Island. "
-            + "topSafeZone doit dégager l'en-tête ENTIER, encoche comprise, puisque "
-            + "l'appelant transmet une safe area nulle (FloatingButtons.swift:176)."
-        )
+        XCTAssertGreaterThan(overlay, chrome,
+                             "Chaînés AVANT `RootChromeLayer`, les boutons passent sous la bannière du joueur, la pastille et le mini-lecteur.")
+        XCTAssertLessThan(overlay, next)
+
+        let content = String(source[body..<firstLayer])
+        XCTAssertFalse(content.contains("draggableFloatingButtons"),
+                       "Les boutons ne vivent plus dans la pile du contenu, que la bannière du joueur recouvre.")
+        XCTAssertFalse(content.contains("menuLadder"),
+                       "L'échelle du menu suit ses boutons au-dessus du chrome.")
+    }
+
+    /// Recette 2026-10-08 : posé à 500 pt, le Flux s'est retrouvé à 206 pt sans
+    /// glisser volontaire. Rien dans l'app n'a le droit d'écrire ces deux
+    /// clés : seul le conteneur du SDK, à la fin d'un glisser, les reçoit (par
+    /// le binding `$feedButtonPosition` / `$menuButtonPosition`).
+    func test_noAppCode_writesTheFloatingButtonPositions() throws {
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil))
+        var offenders: [String] = []
+        var declarations = 0
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            for line in code.components(separatedBy: "\n") {
+                if line.range(of: #"(feedButtonPosition|menuButtonPosition)\s*=[^=]"#, options: .regularExpression) != nil {
+                    offenders.append("\(url.lastPathComponent): \(line)")
+                }
+                if line.contains("\"feedButtonPosition\"") || line.contains("\"menuButtonPosition\"") {
+                    declarations += 1
+                }
+            }
+        }
+        XCTAssertEqual(offenders, [], "seule la fin d'un glisser (dans le SDK) écrit une position")
+        XCTAssertEqual(declarations, 2, "les deux clés ne sont nommées que par leurs @AppStorage")
     }
 
     // MARK: - #9363 — les bulles ne recouvrent plus le « + » de la story
@@ -150,13 +124,15 @@ final class FeedButtonAnchorTests: XCTestCase {
         Device(name: "402 17 Pro", size: CGSize(width: 402, height: 874), topInset: 62),
     ]
 
-    /// Le disque d'une bulle à sa position persistée, tel que le conteneur le
-    /// pose — safe area nulle, l'entrée réelle.
+    /// Le disque d'une bulle à sa position persistée PAR DÉFAUT, tel que le
+    /// conteneur le pose — avec la zone sûre réelle de l'appareil (#9679).
     private func disc(_ raw: String, on device: Device) -> CGRect {
-        let center = FeedButtonAnchor.screenPoint(
-            fromRaw: raw, screenSize: device.size, safeArea: EdgeInsets(), isSearchBarVisible: true
+        let geometry = FloatingButtonGeometry(
+            screenSize: device.size,
+            safeArea: EdgeInsets(top: device.topInset, leading: 0, bottom: 0, trailing: 0)
         )
-        let side = FeedButtonAnchor.buttonSize
+        let center = geometry.center(forStorage: raw, default: raw)
+        let side = FloatingButtonGeometry.buttonSize
         return CGRect(x: center.x - side / 2, y: center.y - side / 2, width: side, height: side)
     }
 

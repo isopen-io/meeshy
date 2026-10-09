@@ -29,14 +29,14 @@ enum PlayerBannerCopy {
     static func accessibilityLabel(for banner: GamePlayerBanner) -> String {
         let toNext = banner.nextLevel.map {
             GameText.bannerToNext(percent: GameCopy.formatCount(banner.percent), level: GameCopy.formatCount($0))
-        } ?? GameText.bannerTop
+        } ?? GameCopy.levelTopShort(cap: banner.levelCap)
         // Le détail du niveau ne se dit qu'au-delà du niveau 1 (#9536) ; au niveau 1, ce sont les points gagnés qui parlent.
         let levelParts: [String?] = banner.showsLevel
             ? [GameText.bannerLevel(level: GameCopy.formatCount(banner.level)), GameCopy.tierName(banner.tier), toNext]
             : [banner.showsScore ? GameText.bannerPoints(points: GameCopy.formatCount(banner.score)) : nil]
         let parts: [String?] = levelParts + [
             banner.meeshes.map { GameCopy.meeshes($0) },
-            banner.rank.map { GameCopy.rankLabel($0.rank, division: $0.division) },
+            banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) },
             banner.league.map {
                 GameText.bannerLeague(league: GameText.leagueName($0.league), place: GameText.bannerPlace(count: $0.place))
             },

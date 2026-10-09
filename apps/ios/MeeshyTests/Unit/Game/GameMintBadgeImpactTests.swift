@@ -147,17 +147,22 @@ final class GameBadgeShelfTests: XCTestCase {
         ]))
         func item(_ axis: EngagementAxisKey) -> GameBadgeItem? { items.first { $0.axis == axis } }
         XCTAssertEqual(item(.textMessage)?.family, .content)
-        XCTAssertEqual(item(.textMessage)?.glyph, .text)
+        XCTAssertEqual(item(.textMessage)?.glyph, .textMessage)
         XCTAssertEqual(item(.audioComment)?.family, .comment)
-        XCTAssertEqual(item(.audioComment)?.glyph, .voice)
+        XCTAssertEqual(item(.audioComment)?.glyph, .audioComment)
         XCTAssertEqual(item(.friendship)?.family, .social)
-        XCTAssertEqual(item(.friendship)?.glyph, .social)
+        XCTAssertEqual(item(.friendship)?.glyph, .friendship)
     }
 
     func test_everyAxisOfTheCatalogHasAGlyph_neverABubble() {
         for axis in EngagementAxisKey.allCases {
             XCTAssertTrue(GameMedalGlyph.allCases.contains(GameMedalGlyph(axis: axis)), "\(axis)")
         }
-        XCTAssertEqual(GameMedalGlyph.allCases.count, 9)
+        let glyphs = EngagementAxisKey.allCases.map { GameMedalGlyph(axis: $0) }
+        XCTAssertEqual(Set(glyphs).count, EngagementAxisKey.allCases.count, "un glyphe PAR axe : deux axes ne partagent jamais leur dessin")
+        XCTAssertEqual(GameMedalGlyph.allCases.count, 20, "vingt glyphes, ni plus ni moins que les axes du catalogue")
+        XCTAssertEqual(Set(glyphs), Set(GameMedalGlyph.allCases), "aucun glyphe sans axe")
+        XCTAssertEqual(Set(GameMedalGlyph.allCases.map(\.webName)).count, 20, "chaque glyphe a son nom web, distinct")
+        XCTAssertFalse(GameMedalGlyph.allCases.map(\.webName).contains { $0.contains("bubble") }, "jamais une bulle")
     }
 }

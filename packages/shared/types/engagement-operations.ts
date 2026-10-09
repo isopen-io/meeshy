@@ -15,7 +15,7 @@
  * l'administration.
  */
 
-import { ENGAGEMENT_AXES, type EngagementAxisFamily, type EngagementAxisKey } from './engagement.js';
+import { ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES, type EngagementAxisFamily, type EngagementAxisKey } from './engagement.js';
 
 export const ENGAGEMENT_OPERATION_DOMAINS = [
   'messaging',
@@ -103,13 +103,21 @@ export type VisibilityVariant = (typeof VISIBILITY_VARIANTS)[number];
 
 export const LOCATION_VARIANTS = ['live', 'static'] as const;
 
+/**
+ * Les variantes de points d'un message texte, selon le TYPE de sa conversation
+ * (#9666, décision du porteur du 2026-10-08) : `broadcast` et tout type
+ * inconnu tombent dans `other`.
+ */
+export const CONVERSATION_TYPE_VARIANTS = ['direct', 'group', 'public', 'global', 'other'] as const;
+export type ConversationTypeVariant = (typeof CONVERSATION_TYPE_VARIANTS)[number];
+
 export type EngagementOperationDefinition = {
   readonly domain: EngagementOperationDomain;
   readonly frequency: EngagementOperationFrequency;
   readonly capScope: EngagementCapScope;
   /** La famille qui compte pour l'élan ; `null` ⇒ l'opération n'en ouvre aucune. */
   readonly family: EngagementAxisFamily | null;
-  /** Les variantes possibles (visibilité, position) ; vide ⇒ une seule valeur. */
+  /** Les variantes possibles (visibilité, position, type de conversation) ; vide ⇒ une seule valeur. */
   readonly variants: readonly string[];
   readonly defaults: {
     readonly points: number;
@@ -147,21 +155,36 @@ const perAccount = (domain: EngagementOperationDomain, points: number): Def => (
   defaults: { points, multiplied: false, cap: null },
 });
 
+/**
+ * Un contenu qui vaut selon QUI PEUT LE VOIR (#9667). Sans variante, il vaut la
+ * plus basse des audiences ouvertes (amis), jamais la plus haute ; une audience
+ * restreinte (`other`) ne vaut rien. Le plafond compte des ACTES.
+ */
 const byVisibility = (
   family: EngagementAxisFamily,
-  cap: number,
+  capScope: EngagementCapScope,
+  cap: number | null,
   variantPoints: Readonly<Record<VisibilityVariant, number>>,
 ): Def => ({
   domain: 'publishing',
   frequency: 'repeatable',
-  capScope: 'day',
+  capScope,
   family,
   variants: VISIBILITY_VARIANTS,
+  defaults: { points: variantPoints.friends, multiplied: true, cap, variantPoints },
+});
+
+const byConversationType = (cap: number, variantPoints: Readonly<Record<ConversationTypeVariant, number>>): Def => ({
+  domain: 'messaging',
+  frequency: 'repeatable',
+  capScope: 'conversation-day',
+  family: 'content',
+  variants: CONVERSATION_TYPE_VARIANTS,
   defaults: { points: variantPoints.other, multiplied: true, cap, variantPoints },
 });
 
 export const ENGAGEMENT_OPERATION_CATALOG: Readonly<Record<EngagementOperationKey, EngagementOperationDefinition>> = {
-  'content.text_message': repeat('messaging', 'content', 3, 'conversation-day', 300),
+  'content.text_message': byConversationType(300, { direct: 2, group: 4, public: 6, global: 8, other: 4 }),
   'content.audio_message': repeat('messaging', 'content', 5, 'conversation-day', 500),
   'tool.attachment': repeat('messaging', 'tool', 4, 'conversation-day', 100),
   'tool.sticker': repeat('messaging', 'tool', 1, 'conversation-day', 100),
@@ -195,14 +218,18 @@ export const ENGAGEMENT_OPERATION_CATALOG: Readonly<Record<EngagementOperationKe
   'social.community_created': repeat('communities', 'social', 5, 'day', 1),
   'social.community_joined': perTarget('communities', 'social', 2),
 
-  'content.post': byVisibility('content', 50, { public: 99, community: 69, friends: 49, other: 0 }),
-  'content.story': byVisibility('content', 20, { public: 79, community: 39, friends: 19, other: 0 }),
-  'content.reel': repeat('publishing', 'content', 199, 'day', 10),
-  'content.status': repeat('publishing', 'content', 2, 'day', 3),
+  // La grille des publications, par visibilité public / communauté / amis
+  // (#9667, décision du porteur du 2026-10-08) ; les plafonds comptent des actes.
+  'content.post': byVisibility('content', 'day', 50, { public: 500, community: 200, friends: 100, other: 0 }),
+  'content.story': byVisibility('content', 'day', 20, { public: 300, community: 200, friends: 100, other: 0 }),
+  'content.reel': byVisibility('content', 'day', 10, { public: 1000, community: 500, friends: 250, other: 0 }),
+  'content.status': byVisibility('content', 'day', 3, { public: 50, community: 25, friends: 10, other: 0 }),
   'tool.in_app_edit': repeat('publishing', 'tool', 1, 'none', null),
   'tool.direct_publish': repeat('publishing', 'tool', 1, 'none', null),
-  'comment.text': repeat('publishing', 'comment', 3, 'none', null),
-  'comment.audio': repeat('publishing', 'comment', 3, 'none', null),
+  // Selon la visibilité du CONTENU COMMENTÉ (celle de la publication qui porte le fil) ;
+  // bornés par les limites quotidiennes de gestes (`DEFAULT_PATH_CAPS`), pas par un plafond propre.
+  'comment.text': byVisibility('comment', 'none', null, { public: 100, community: 50, friends: 10, other: 0 }),
+  'comment.audio': byVisibility('comment', 'none', null, { public: 100, community: 50, friends: 10, other: 0 }),
 
   // Ni plafond ni portée propres (#9584) : la limite quotidienne de gestes
   // (`DEFAULT_PATH_CAPS`) borne la réaction ET ses points — un second plafond
@@ -252,6 +279,27 @@ export const ENGAGEMENT_OPERATION_CATALOG: Readonly<Record<EngagementOperationKe
   },
 };
 
+/** Le plus qu'UNE action de l'opération rapporte par défaut, toutes variantes confondues. */
+const topDefaultPoints = (definition: EngagementOperationDefinition): number =>
+  Math.max(definition.defaults.points, ...Object.values(definition.defaults.variantPoints ?? {}));
+
+/**
+ * « COMMENT GAGNER » (#9667) : ce qu'un geste de chaque famille rapporte AU
+ * PLUS, avant multiplicateurs — dérivé du catalogue, jamais recopié. Miroir
+ * Swift : `EngagementCatalog.familyTopPoints`.
+ */
+export const ENGAGEMENT_FAMILY_TOP_POINTS: Readonly<Record<EngagementAxisFamily, number>> = Object.fromEntries(
+  ENGAGEMENT_AXIS_FAMILIES.map((family) => [
+    family,
+    Math.max(
+      0,
+      ...Object.values(ENGAGEMENT_OPERATION_CATALOG)
+        .filter((definition) => definition.family === family)
+        .map(topDefaultPoints),
+    ),
+  ]),
+) as Record<EngagementAxisFamily, number>;
+
 export function engagementOperation(key: EngagementOperationKey): EngagementOperationDefinition {
   return ENGAGEMENT_OPERATION_CATALOG[key];
 }
@@ -262,16 +310,29 @@ export const hasConfigurableCap = (key: EngagementOperationKey): boolean => {
   return operation.frequency === 'repeatable' && operation.capScope !== 'none';
 };
 
-/** Visibilité d'une publication, telle que la base l'écrit, en variante de points. */
+/** Type d'une conversation, tel que la base l'écrit, en variante de points d'un message. */
+export function conversationTypeVariant(type: string | null | undefined): ConversationTypeVariant {
+  const normalized = (type ?? '').toLowerCase();
+  return CONVERSATION_TYPE_VARIANTS.find((variant) => variant !== 'other' && variant === normalized) ?? 'other';
+}
+
+/**
+ * Visibilité d'une publication, telle que la base l'écrit, en variante de points.
+ * Une audience restreinte (`EXCEPT`, `ONLY`, brouillon `PRIVATE`) ⇒ `other` ; une
+ * visibilité inconnue ⇒ `friends`, la plus basse des audiences ouvertes, jamais
+ * la plus haute (#9667).
+ */
 export function visibilityVariant(visibility: string | null | undefined): VisibilityVariant {
   switch ((visibility ?? '').toUpperCase()) {
     case 'PUBLIC':
       return 'public';
     case 'COMMUNITY':
       return 'community';
-    case 'FRIENDS':
-      return 'friends';
-    default:
+    case 'EXCEPT':
+    case 'ONLY':
+    case 'PRIVATE':
       return 'other';
+    default:
+      return 'friends';
   }
 }

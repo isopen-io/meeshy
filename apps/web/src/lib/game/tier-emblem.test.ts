@@ -17,13 +17,13 @@ describe('le rang d’un palier', () => {
     expect(tierOrdinal('galaxie')).toBe(10);
   });
 
-  test('le chiffre romain suit le rang : I à X, un par palier, tous différents', () => {
-    expect(LEVEL_TIER_KEYS.map(tierRoman)).toEqual(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']);
-    expect(new Set(TIER_ROMAN).size).toBe(10);
+  test('le chiffre romain suit le rang : I à XX, un par palier, tous différents', () => {
+    expect(LEVEL_TIER_KEYS.map(tierRoman)).toEqual(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX']);
+    expect(new Set(TIER_ROMAN).size).toBe(20);
   });
 });
 
-describe('les dix emblèmes', () => {
+describe('les vingt emblèmes', () => {
   test('un emblème par palier de la loi partagée, aucun réécrit ici', () => {
     expect(Object.keys(TIER_EMBLEMS).sort()).toEqual([...LEVEL_TIER_KEYS].sort());
   });
@@ -31,7 +31,7 @@ describe('les dix emblèmes', () => {
   test('chaque emblème a des formes, et deux paliers ne partagent jamais le même dessin', () => {
     const drawings = LEVEL_TIER_KEYS.map((tier) => JSON.stringify(TIER_EMBLEMS[tier].shapes));
     for (const tier of LEVEL_TIER_KEYS) expect(TIER_EMBLEMS[tier].shapes.length).toBeGreaterThan(0);
-    expect(new Set(drawings).size).toBe(10);
+    expect(new Set(drawings).size).toBe(LEVEL_TIER_KEYS.length);
   });
 
   test('chaque forme tient dans la boîte de l’emblème (un carré centré sur l’origine)', () => {

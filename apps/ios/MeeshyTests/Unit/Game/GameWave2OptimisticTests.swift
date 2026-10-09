@@ -149,9 +149,21 @@ final class GameWave2OptimisticTests: XCTestCase {
         XCTAssertEqual(next.game.level.prestige, 1)
         XCTAssertFalse(next.game.level.canPrestige)
         XCTAssertEqual(next.game.prestige?.stars, 1)
-        XCTAssertEqual(next.game.glory.glory, state.game.glory.glory + 1000)
+        XCTAssertEqual(next.game.glory.glory, state.game.glory.glory + GameGlory.points.prestige)
         XCTAssertEqual(next.game.trophies?.order.first, "trophy.prestige.1")
         XCTAssertTrue(next.game.trophies?.items.contains { $0.key == "trophy.prestige.1" } ?? false)
+    }
+
+    /// Le passage recompose le niveau comme la passerelle (#9688) : la lecture ouverte repart à 1 elle aussi, et
+    /// l'aperçu de frappe porte sa propre lecture ouverte.
+    func test_afterPrestige_restartsTheOpenedLevelInTheLadderToo() {
+        let state = GameWave2Fixture.state(GameWave2Fixture.atLevel100())
+        XCTAssertEqual(state.game.level.shown.level, 100)
+        let next = GameWave2Optimistic.afterPrestige(state)
+        XCTAssertEqual(next.game.level.ladder?.level, 1)
+        XCTAssertEqual(next.game.level.ladder?.record, 1)
+        XCTAssertEqual(next.game.level.ladder?.cap, GameGlory.levelCap(forRank: next.game.glory.rank))
+        XCTAssertNotNil(next.game.mint.ladder)
     }
 
     func test_afterPrestige_keepsWhatThePassageDoesNotTouch() {
@@ -159,7 +171,9 @@ final class GameWave2OptimisticTests: XCTestCase {
         let next = GameWave2Optimistic.afterPrestige(state)
         XCTAssertEqual(next.game.treasury, state.game.treasury, "le trésor reste")
         XCTAssertEqual(next.game.flame, state.game.flame, "la Flamme reste")
-        XCTAssertEqual(next.game.glory.rank, state.game.glory.rank)
+        let lawful = GameGlory.standing(glory: state.game.glory.glory + GameGlory.points.prestige, mythic: false)
+        XCTAssertEqual(next.game.glory.rank, lawful.rank, "le rang suit la Gloire du Prestige, par la loi (#9636)")
+        XCTAssertEqual(next.game.glory.division5, lawful.division5)
         XCTAssertEqual(next.meesh, state.meesh)
     }
 

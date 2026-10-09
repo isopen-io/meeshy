@@ -5,6 +5,7 @@ import {
   pageWithSound,
   pageWithVisual,
   pageWithVisualAspectRatio,
+  studioSoundFileOf,
   type StudioDoor,
   type StudioPage,
   type StudioUploadState,
@@ -91,7 +92,8 @@ export function studioPlacer({
     pose,
   });
 
-  function place(door: StudioDoor, file: File) {
+  function place(door: StudioDoor, picked: File) {
+    const file = door === 'sound' ? studioSoundFileOf(picked) : picked;
     const draft = latest.current;
     const refusal = studioPlaceRefusal(draft, door, file.type);
     if (refusal !== null) {

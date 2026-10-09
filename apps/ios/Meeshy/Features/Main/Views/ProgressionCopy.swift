@@ -59,6 +59,54 @@ enum ProgressionCopy {
         }
     }
 
+    /// CE QUI COMPTE pour le badge d'un axe (#9640) — le geste précis que son compteur mesure, jamais la phrase de
+    /// la famille. Miroir d'`ENGAGEMENT_AXIS_COUNTS` (`packages/shared/utils/engagement-labels.ts`, #9639) : les
+    /// mêmes phrases, dans les sept langues.
+    static func whatCounts(for axis: EngagementAxisKey) -> String {
+        switch axis {
+        case .audioMessage:
+            return String(localized: "progression.axis.content.audio_message.counts", defaultValue: "Chaque message vocal envoyé dans une conversation.", bundle: .main)
+        case .textMessage:
+            return String(localized: "progression.axis.content.text_message.counts", defaultValue: "Chaque message écrit envoyé dans une conversation.", bundle: .main)
+        case .post:
+            return String(localized: "progression.axis.content.post.counts", defaultValue: "Chaque publication mise en ligne dans le fil, jamais un brouillon.", bundle: .main)
+        case .story:
+            return String(localized: "progression.axis.content.story.counts", defaultValue: "Chaque story publiée.", bundle: .main)
+        case .reel:
+            return String(localized: "progression.axis.content.reel.counts", defaultValue: "Chaque réel publié.", bundle: .main)
+        case .audioComment:
+            return String(localized: "progression.axis.comment.audio.counts", defaultValue: "Chaque commentaire vocal laissé sous une publication.", bundle: .main)
+        case .textComment:
+            return String(localized: "progression.axis.comment.text.counts", defaultValue: "Chaque commentaire écrit laissé sous une publication.", bundle: .main)
+        case .privateConversation:
+            return String(localized: "progression.axis.conversation.private.counts", defaultValue: "Chaque conversation privée distincte où tu écris pour la première fois.", bundle: .main)
+        case .publicConversation:
+            return String(localized: "progression.axis.conversation.public.counts", defaultValue: "Chaque conversation publique distincte où tu prends la parole.", bundle: .main)
+        case .communityConversation:
+            return String(localized: "progression.axis.conversation.community.counts", defaultValue: "Chaque conversation de communauté distincte où tu prends la parole.", bundle: .main)
+        case .groupCreated:
+            return String(localized: "progression.axis.conversation.group_created.counts", defaultValue: "Chaque groupe que tu crées, une seule fois par ensemble de membres.", bundle: .main)
+        case .sticker:
+            return String(localized: "progression.axis.tool.sticker.counts", defaultValue: "Chaque sticker glissé dans un message envoyé.", bundle: .main)
+        case .inAppEdit:
+            return String(localized: "progression.axis.tool.in_app_edit.counts", defaultValue: "Chaque média monté dans l’app avant d’être publié.", bundle: .main)
+        case .directPublish:
+            return String(localized: "progression.axis.tool.direct_publish.counts", defaultValue: "Chaque publication, story ou réel mis en ligne directement, sans montage.", bundle: .main)
+        case .reaction:
+            return String(localized: "progression.axis.tool.reaction.counts", defaultValue: "Chaque réaction posée sur un message.", bundle: .main)
+        case .attachment:
+            return String(localized: "progression.axis.tool.attachment.counts", defaultValue: "Chaque pièce jointe envoyée dans une conversation.", bundle: .main)
+        case .trackedLink:
+            return String(localized: "progression.axis.social.tracked_link.counts", defaultValue: "Chaque lien suivi que tu crées pour ouvrir une porte vers Meeshy.", bundle: .main)
+        case .share:
+            return String(localized: "progression.axis.social.share.counts", defaultValue: "Chaque publication que tu partages.", bundle: .main)
+        case .inviteJoined:
+            return String(localized: "progression.axis.social.invite_joined.counts", defaultValue: "Chaque personne qui rejoint Meeshy grâce à ton invitation.", bundle: .main)
+        case .friendship:
+            return String(localized: "progression.axis.social.friendship.counts", defaultValue: "Chaque amitié acceptée, de ton côté ou du sien.", bundle: .main)
+        }
+    }
+
     /// SF Symbol — le même vocabulaire iconographique que le reste de l'app
     /// (`NotificationModels.systemIcon`, `UserStatsView`).
     static func symbol(for axis: EngagementAxisKey) -> String {

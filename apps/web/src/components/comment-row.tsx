@@ -84,7 +84,13 @@ export type CommentGestureHandlers = {
    * qu'on lit. `withReplies` (#8734) : une racine emporte ses réponses sous
    * elle. Absent ⇒ aucune entrée.
    */
-  readonly onImage?: (comment: PostComment, servedText: string, options: { readonly withReplies: boolean }) => void;
+  readonly onImage?: (comment: PostComment, servedText: string, options: { readonly withReplies: boolean; readonly showsOriginal?: boolean }) => void;
+  /**
+   * LE COMMENTAIRE D'UN POST (#9687) — « Imager » compose la carte (post en
+   * tête, fil jusqu'à une réponse, réponses choisies) : l'hôte dit si un mode
+   * s'offre. `null` ou absent (story) : la carte du commentaire, sa racine en citation.
+   */
+  readonly postImageableOf?: (comment: PostComment, servedText: string) => boolean | null;
   /** « COPIER » (#8734) — le texte AFFICHÉ ; l'hôte annonce l'issue. Absent ⇒ aucune entrée. */
   readonly onCopy?: (text: string) => void;
   /** « SIGNALER » (#8734) — le motif choisi dans la feuille ; aux autres seuls. Absent ⇒ aucune entrée. */
@@ -504,6 +510,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
         : () => onReplyHandler(replyTargetOf(comment, { authorName: name, displayedText: lu.text })),
     [onReplyHandler, editing, comment, name, lu.text],
   );
+  const composed = actionable?.postImageableOf?.(comment, lu.text) ?? null;
   const menuEntries =
     actionable === undefined
       ? []
@@ -514,6 +521,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
           canCopy: actionable.onCopy !== undefined,
           canImage: actionable.onImage !== undefined,
           canReport: actionable.onReport !== undefined,
+          ...(composed === null ? {} : { postComposition: { imageable: composed } }),
         });
   const pick = (choice: CommentMenuPick) => {
     switch (choice.entry) {
@@ -522,7 +530,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
         return;
       case 'image':
       case 'imageWithReplies':
-        actionable?.onImage?.(comment, lu.text, { withReplies: choice.entry === 'imageWithReplies' });
+        actionable?.onImage?.(comment, lu.text, { withReplies: choice.entry === 'imageWithReplies', showsOriginal: showingOriginal });
         return;
       case 'edit':
         setEditing(true);

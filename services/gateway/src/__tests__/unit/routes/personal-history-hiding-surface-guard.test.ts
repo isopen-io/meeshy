@@ -313,7 +313,16 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // 5 → 4 (#7451) : le GEL par message est parti dans
   // `messaging/freezeMessageStatus.ts` (déclaré plus bas). La lecture a changé
   // de fichier, pas de nature — elle ne servait déjà aucun contenu.
-  'MessageReadStatusService.ts': { kind: 'applies', reads: 4, applications: 1 },
+  // 4 → 3 lectures, 1 → 0 application (#9630) : le compteur UNITAIRE
+  // (`getUnreadCount`) est parti, entier, dans `unreadCountOfParticipant.ts`
+  // (déclaré ci-dessous) — ce fichier hors budget ne pouvait plus grandir pour
+  // y écarter les avis de capture. Aucune lecture n'a disparu.
+  'MessageReadStatusService.ts': { kind: 'applies', reads: 3, applications: 0 },
+  // #9630 — le compteur unitaire : le `count` sous `applyPersonalHistoryHiding`
+  // (masquage personnel ET avis de capture non adressés à ce lecteur), plus la
+  // lecture des CANDIDATS avis de la fenêtre (identité et marque, aucun contenu)
+  // dont il tire ce qu'il écarte — d'où une application pour deux lectures.
+  'unreadCountOfParticipant.ts': { kind: 'applies', reads: 2, applications: 1 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
@@ -334,8 +343,13 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   /**
    * #9315 — le verdict de la route par CHEMIN (`GET /attachments/file/*`). Une
    * lecture, qui ne projette que l'ÉTAT des messages porteurs d'un fichier
-   * (`deletedAt`, `expiresAt`, `viewOnceBurnAt`, `isViewOnce`) pour décider si
-   * ses octets peuvent encore partir. Aucun contenu, aucun aperçu, aucun
+   * (`deletedAt`, `expiresAt`, `viewOnceBurnAt`, et le bloc de protection —
+   * `isViewOnce`, `isBlurred`, `effectFlags`, `ephemeralDuration` — dont #9600
+   * lit la nature pour dire si le fichier se lit par lecteur) pour décider si
+   * ses octets peuvent encore partir. L'adresse SIGNÉE (#9600) connaît son
+   * lecteur, mais elle sert le fichier d'un message que la liste lui a déjà
+   * servi : son lecteur est jugé comme celui des routes par identifiant
+   * (`attachmentReadVerdict.ts`, une `findUnique` hors du périmètre de ce garde). Aucun contenu, aucun aperçu, aucun
    * auteur n'est servi par elle : le masquage personnel protège ce qu'un
    * lecteur VOIT dans son historique, et une adresse de fichier n'en est pas
    * une surface (la route ne connaît pas le lecteur, #9315 « aucune
@@ -348,6 +362,19 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "Projette seulement l'état des messages porteurs d'un fichier (supprimé, " +
       'expiré, vue unique consommée) pour décider si ses octets partent encore ; ' +
       "aucun contenu servi, et la route ne connaît pas le lecteur dont l'historique serait masqué.",
+  },
+  /**
+   * #9646 — relit la protection (cinq colonnes) des messages porteurs de pièces
+   * DÉJÀ choisies et filtrées par l'appelant (galerie, détail — plancher et
+   * masquage appliqués là), pour signer les adresses de celles qui
+   * disparaissent. Elle ne choisit aucun message et n'en sert aucun contenu.
+   */
+  'attachments/signServedAttachments.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Relit seulement la protection des porteurs de pièces que l'appelant a déjà choisies sous son " +
+      'plancher et son masquage, pour en signer les adresses ; aucun message choisi, aucun contenu servi.',
   },
   'achievements/GlobalAchievements.ts': {
     kind: 'exempt',
@@ -495,6 +522,26 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "pièces déclarées, pour reconnaître le réessai idempotent du MÊME envoi. " +
       "Elle ne rend aucun contenu ; masquer ici refuserait le réessai d'un " +
       "envoi de l'auteur sous prétexte qu'il a effacé son propre historique.",
+  },
+  'messaging/captureNoticeRetention.ts': {
+    kind: 'exempt',
+    reads: 3,
+    why:
+      "Durée des avis de capture (#9629) : la cascade relit les avis vivants d'une " +
+      "conversation pour avancer leur échéance, le rattrapage relit ceux qui n'en " +
+      "ont pas et l'échéance des messages qu'ils nomment. Aucun contenu n'est " +
+      "servi : ce sont des écritures d'échéance, pour TOUS les lecteurs à la fois.",
+  },
+  'messaging/captureNoticeVisibility.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "Audience des avis de capture (#9629, #9630) : ses deux lectures rendent " +
+      "l'identité, l'auteur et la métadonnée des avis vivants, puis l'horloge et " +
+      "l'auteur des messages qu'ils nomment — aucun contenu. Le masquage du " +
+      "lecteur n'y est pas APPLIQUÉ en `where`, il y est JUGÉ : un avis se sert " +
+      "si le lecteur lit le message capturé (`readableByReader` sur SON plancher " +
+      "et SON masquage), et les ids refusés rejoignent le masquage de la surface.",
   },
   'messaging/contentCaptureNotices.ts': {
     kind: 'exempt',

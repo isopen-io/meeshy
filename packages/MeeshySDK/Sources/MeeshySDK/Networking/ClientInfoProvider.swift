@@ -1,41 +1,36 @@
 import Foundation
-import CoreLocation
 
+/// L'identité que ce client DÉCLARE à chaque requête et à la poignée de main
+/// de la socket — le contrat de `packages/shared/utils/client-session.ts`
+/// (#9610).
+///
+/// **Aucun lieu n'en part (#9612).** Ce fournisseur géocodait la position GPS
+/// à chaque requête et envoyait ville et région : hors de l'usage pour lequel
+/// l'utilisateur avait donné la localisation (partage de position, lieux à
+/// proximité), et sans utilité pour le serveur, qui situe une session par son
+/// adresse dans une base LOCALE (#9609) et ignorait déjà ces en-têtes. Le
+/// relevé GPS et le géocodage inverse ont donc quitté ce fichier, et
+/// CoreLocation avec eux. `X-Meeshy-Country` reste : il vient de la RÉGION
+/// des réglages (`Locale.current.region`), pas d'une position, et la
+/// passerelle en a besoin pour la conformité des appels en Chine
+/// (`deviceCountry.ts`).
 public actor ClientInfoProvider {
     public static let shared = ClientInfoProvider()
 
     private var cachedStaticHeaders: [String: String]?
-    private var cachedCity: String?
-    private var cachedRegion: String?
-    private var geoCacheExpiry: Date = .distantPast
-
-    /// Instance unique et durable, PAS un `CLLocationManager()` jetable créé à
-    /// chaque appel de `enrichWithLocation`. Avant l'octroi de l'autorisation,
-    /// le garde `status == .authorizedWhenInUse` (ci-dessous) sortait toujours
-    /// en amont : ce chemin ne s'exécutait jamais et le défaut restait
-    /// invisible. Dès l'octroi, il se réveille d'un coup sur TOUTES les
-    /// requêtes API — c'est le seul chemin réveillé globalement par l'octroi,
-    /// hors du picker lui-même, ce qui colle exactement au symptôme « crash
-    /// juste après avoir accordé la permission ». CoreLocation attend un
-    /// manager rattaché à une runloop et réutilisé, pas un objet éphémère
-    /// construit/détruit en rafale sur `MainActor.run`.
-    private let geoManager = CLLocationManager()
 
     private init() {}
 
     // MARK: - Public API
 
     public func buildHeaders() async -> [String: String] {
-        var headers = staticHeaders().merging(Self.localeHeaders()) { _, locale in locale }
-        await enrichWithLocation(&headers)
-
-        return headers
+        staticHeaders().merging(Self.localeHeaders()) { _, locale in locale }
     }
 
-    /// **L'identité du client, sans géolocalisation, lisible sans l'acteur.**
+    /// **L'identité du client, lisible sans l'acteur.**
     ///
     /// C'est ce qu'une EXTENSION (NSE) doit envoyer pour être servie comme
-    /// l'app : elle ne peut ni attendre cet acteur ni toucher CoreLocation.
+    /// l'app : elle ne peut pas attendre cet acteur.
     /// Tant qu'elle recopiait ses en-têtes à la main, elle omettait
     /// `X-Canvas-Caps` — la passerelle lui servait la sentinelle « Mets à jour
     /// Meeshy » à la place du canvas, et l'app la peignait au tap de la
@@ -43,6 +38,37 @@ public actor ClientInfoProvider {
     /// il n'existe qu'une orthographe de l'identité cliente.
     public nonisolated static func identityHeaders() -> [String: String] {
         makeStaticHeaders().merging(localeHeaders()) { _, locale in locale }
+    }
+
+    /// La clé de `handshake.auth` sous laquelle la socket remet le relevé
+    /// (`CLIENT_SESSION_AUTH_KEY`).
+    public static let clientSessionAuthKey = "client"
+
+    /// Le champ du relevé (`ClientSessionInfo`) → l'en-tête qui le porte
+    /// (`CLIENT_SESSION_HEADERS`). Une socket ne peut pas porter ces en-têtes
+    /// — la liste CORS de Socket.IO est fermée — : elle remet les MÊMES
+    /// valeurs, sous les noms de champs du contrat.
+    static let clientSessionHeaderNames: [String: String] = [
+        "appVersion": "X-Meeshy-Version",
+        "appBuild": "X-Meeshy-Build",
+        "platform": "X-Meeshy-Platform",
+        "deviceModel": "X-Meeshy-Device",
+        "osVersion": "X-Meeshy-OS",
+        "timezone": "X-Meeshy-Timezone",
+        "deviceLocale": "X-Device-Locale",
+        "deviceName": "X-Meeshy-Device-Name"
+    ]
+
+    /// Ce que la poignée de main de la socket remet dans `handshake.auth` :
+    /// `{ client: { appVersion, appBuild, … } }` — une PROJECTION des en-têtes
+    /// de `identityHeaders()`, jamais une seconde lecture de l'appareil, pour
+    /// que la requête et la socket ne puissent pas déclarer deux appareils.
+    public nonisolated static func socketAuthPayload() -> [String: Any] {
+        let headers = identityHeaders()
+        let fields = clientSessionHeaderNames.reduce(into: [String: String]()) { fields, entry in
+            if let value = headers[entry.value] { fields[entry.key] = value }
+        }
+        return [clientSessionAuthKey: fields]
     }
 
     /// Locale appareil — diffusée via deux headers distincts par convention :
@@ -78,11 +104,12 @@ public actor ClientInfoProvider {
     }
 
     private nonisolated static func makeStaticHeaders() -> [String: String] {
-        [
+        let model = deviceModel()
+        let identity: [String: String] = [
             "X-Meeshy-Version": appVersion(),
             "X-Meeshy-Build": appBuild(),
             "X-Meeshy-Platform": "ios",
-            "X-Meeshy-Device": deviceModel(),
+            "X-Meeshy-Device": model,
             "X-Meeshy-OS": osVersion(),
             // Niveau de canvas que ce binaire sait LIRE (O17). Sans lui, le
             // gateway nous prend pour un client du passé et sert la SENTINELLE
@@ -118,6 +145,11 @@ public actor ClientInfoProvider {
             AppVersionHeader.versionHeaderName: AppVersionHeader.value(),
             AppVersionHeader.platformHeaderName: AppVersionHeader.platformValue
         ]
+        // Le nom LISIBLE, déduit du modèle (#9610) — jamais `UIDevice.name`,
+        // le nom que l'utilisateur a choisi. Absent quand le modèle ne dit rien
+        // de sûr : le serveur garde alors ce qu'il déduit de l'agent.
+        guard let name = DeviceModelName.readable(forIdentifier: model) else { return identity }
+        return identity.merging(["X-Meeshy-Device-Name": name]) { current, _ in current }
     }
 
     // MARK: - Private helpers
@@ -147,56 +179,5 @@ public actor ClientInfoProvider {
             return id + String(UnicodeScalar(UInt8(bitPattern: value)))
         }
         return identifier.isEmpty ? "unknown" : identifier
-    }
-
-    private func enrichWithLocation(_ headers: inout [String: String]) async {
-        // Return cached result if still fresh (1h TTL) — avant tout accès CoreLocation
-        if Date() < geoCacheExpiry, let city = cachedCity {
-            headers["X-Meeshy-City"] = city
-            if let region = cachedRegion { headers["X-Meeshy-Region"] = region }
-            return
-        }
-
-        // Check permission passively via instance property (iOS 14+) — never request.
-        // `geoManager` est une propriété ISOLÉE à cet acteur : on la lit
-        // directement depuis le contexte isolé de l'acteur, sans hop
-        // `MainActor.run`. Le hop précédent capturait `geoManager` (un
-        // `CLLocationManager`, non `Sendable`) dans une fermeture `@Sendable`
-        // pour traverser vers le MainActor — Swift 6 refuse d'envoyer une
-        // valeur isolée à l'acteur vers un autre domaine d'isolation
-        // (« task or actor isolated value cannot be sent »). Lire une
-        // propriété qu'on possède déjà, depuis SON PROPRE acteur, ne traverse
-        // aucune frontière d'isolation : aucun hop n'est nécessaire.
-        let status = geoManager.authorizationStatus
-        let locationResult: CLLocation? = (status == .authorizedWhenInUse || status == .authorizedAlways)
-            ? geoManager.location
-            : nil
-        guard let location = locationResult else {
-            // Cache négatif : sans lui, l'absence de relevé (autorisation tout
-            // juste accordée mais CoreLocation n'a pas encore de position, ou
-            // refusée) relançait le cycle CoreLocation + géocodage complet à
-            // CHAQUE requête API suivante — potentiellement des dizaines de
-            // fois par seconde sur un flux de requêtes en rafale.
-            geoCacheExpiry = Date().addingTimeInterval(300) // 5 min
-            return
-        }
-
-        do {
-            let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
-            if let placemark = placemarks.first {
-                cachedCity   = placemark.locality
-                cachedRegion = placemark.administrativeArea
-                geoCacheExpiry = Date().addingTimeInterval(3600) // 1h
-
-                if let city = cachedCity { headers["X-Meeshy-City"] = city }
-                if let region = cachedRegion { headers["X-Meeshy-Region"] = region }
-            }
-        } catch {
-            // Échec de géocodage (réseau, throttling Apple...) : même cache
-            // négatif que l'absence de relevé, pour la même raison — un échec
-            // silencieux ne doit pas relancer un cycle complet à la requête
-            // suivante.
-            geoCacheExpiry = Date().addingTimeInterval(300) // 5 min
-        }
     }
 }

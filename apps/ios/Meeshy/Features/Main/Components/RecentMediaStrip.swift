@@ -27,6 +27,10 @@ private struct ImageBox: @unchecked Sendable { let image: UIImage? }
 /// resolved for the long-press video preview.
 private struct PlayerItemBox: @unchecked Sendable { let item: AVPlayerItem? }
 
+/// Le gestionnaire PhotoKit, porté dans la fin d'un flux de vignettes pour
+/// annuler sa requête. `cancelImageRequest` est sûr depuis n'importe quel fil.
+private struct ImageManagerBox: @unchecked Sendable { let manager: PHImageManager }
+
 // ============================================================================
 // MARK: - RecentMediaSelection
 // ============================================================================
@@ -48,6 +52,18 @@ nonisolated struct RecentMediaSelection: Equatable {
     mutating func begin(with id: String) {
         isActive = true
         if !ids.contains(id) { ids.append(id) }
+    }
+
+    /// Le bouton « Sélectionner » de la grille : entrer en sélection sans
+    /// rien choisir encore (#9683) — l'appui long n'est plus le seul chemin.
+    mutating func activate() {
+        isActive = true
+    }
+
+    /// Les assets qui ont rejoint la zone d'attachement (par le sélecteur
+    /// système) quittent la sélection : ils ne se choisissent plus.
+    mutating func discard(_ attached: Set<String>) {
+        ids.removeAll { attached.contains($0) }
     }
 
     mutating func toggle(_ id: String) {
@@ -82,7 +98,12 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     @Published private(set) var status: PHAuthorizationStatus =
         PHPhotoLibrary.authorizationStatus(for: .readWrite)
 
-    private let imageManager = PHImageManager.default()
+    /// `PHCachingImageManager` (#9683) : les vignettes de la fenêtre qui va
+    /// défiler sont préparées d'avance (`startCachingImages`) et relâchées à
+    /// sa sortie — une cellule qui apparaît trouve son image déjà prête.
+    private let imageManager = PHCachingImageManager()
+    private var cachedIds: [String] = []
+    private var cachedPixelSide: CGFloat = 0
 
     /// True once a fetch attempt has run, so the view never re-prompts.
     private var didLoad = false
@@ -141,6 +162,8 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         var fetched: [PHAsset] = []
         fetched.reserveCapacity(result.count)
         result.enumerateObjects { asset, _, _ in fetched.append(asset) }
+        imageManager.stopCachingImagesForAllAssets()
+        cachedIds = []
         assets = fetched
         if !isObservingLibrary {
             isObservingLibrary = true
@@ -194,41 +217,80 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     /// photothèque ni contexte d'acteur : c'est le comportement des réglages qui
     /// doit être verrouillé, pas leur présence dans le fichier.
     ///
-    /// `.highQualityFormat` et NON `.fastFormat`. L'invariant que `.fastFormat`
-    /// protégeait est le callback UNIQUE — `withCheckedContinuation` plante si
-    /// on le reprend deux fois — et non la vitesse. Or `.highQualityFormat` est
-    /// mono-callback lui aussi : c'est déjà ce que font `preview(for:)` et
-    /// `resolveImage(_:)` juste en dessous. Seul `.opportunistic` (le défaut)
-    /// rappelle plusieurs fois. `.fastFormat` livrait un rendu dégradé que
-    /// PhotoKit ne remplace JAMAIS par une meilleure version, donc la bande
-    /// restait floue pour toujours — un prix payé pour une sûreté qui ne le
-    /// demandait pas.
+    /// `.opportunistic` (#9683) : une version rapide d'abord — souvent tirée
+    /// du cache préparé par `startCachingImages` —, puis la version nette.
+    /// Jamais `.fastFormat`, qui livrait un rendu dégradé que PhotoKit ne
+    /// remplace JAMAIS : la bande restait floue pour toujours.
+    ///
+    /// Le rappel MULTIPLE d'`.opportunistic` interdisait autrefois ce mode,
+    /// parce que la vignette passait par `withCheckedContinuation`, qui plante
+    /// si on la reprend deux fois. Elle passe désormais par un `AsyncStream`
+    /// (`thumbnails(for:size:)`), fait pour recevoir plusieurs valeurs, et
+    /// dont la fin annule la requête.
     ///
     /// `.exact` et non `.fast` : `.fast` rend une taille seulement « proche de »
     /// la cible, ce qui ajoute un rééchantillonnage par-dessus le rendu.
     nonisolated static func thumbnailRequestOptions() -> PHImageRequestOptions {
         let options = PHImageRequestOptions()
-        options.deliveryMode = .highQualityFormat
+        options.deliveryMode = .opportunistic
         options.resizeMode = .exact
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         return options
     }
 
-    /// Square thumbnail for a cell. La taille demandée est déjà en PIXELS
-    /// (`cell * displayScale`, côté `RecentMediaCell`) : demander des points
-    /// rendrait une image au tiers de la résolution sur un écran 3x.
-    func thumbnail(for asset: PHAsset, size: CGSize) async -> UIImage? {
+    /// Square thumbnails for a cell — the fast version, then the sharp one.
+    /// La taille demandée est déjà en PIXELS (`cell * displayScale`, côté
+    /// `RecentMediaCell`) : demander des points rendrait une image au tiers de
+    /// la résolution sur un écran 3x.
+    ///
+    /// Le flux se termine à la version définitive (non dégradée) ; s'il est
+    /// abandonné avant — la cellule quitte l'écran, sa tâche est annulée —,
+    /// sa fin annule la requête PhotoKit (`cancelImageRequest`).
+    fileprivate func thumbnails(for asset: PHAsset, size: CGSize) -> AsyncStream<ImageBox> {
         let options = Self.thumbnailRequestOptions()
-        return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
-            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
-                continuation.resume(returning: ImageBox(image: image))
+        let box = ImageManagerBox(manager: imageManager)
+        return AsyncStream { continuation in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, info in
+                let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+                if let image { continuation.yield(ImageBox(image: image)) }
+                if !isDegraded { continuation.finish() }
             }
-            imageManager.requestImage(
+            let requestId = imageManager.requestImage(
                 for: asset, targetSize: size, contentMode: .aspectFill, options: options,
                 resultHandler: completion
             )
-        }.image
+            let cancel: @Sendable (AsyncStream<ImageBox>.Continuation.Termination) -> Void = { _ in
+                box.manager.cancelImageRequest(requestId)
+            }
+            continuation.onTermination = cancel
+        }
+    }
+
+    /// Fait glisser la fenêtre préparée autour de la cellule qui vient
+    /// d'apparaître : ce qui y entre est mis en cache, ce qui en sort relâché.
+    func cacheThumbnails(around assetId: String, pixelSide: CGFloat) {
+        guard pixelSide > 0 else { return }
+        if pixelSide != cachedPixelSide {
+            imageManager.stopCachingImagesForAllAssets()
+            cachedIds = []
+            cachedPixelSide = pixelSide
+        }
+        let ids = assets.map(\.localIdentifier)
+        let window = RecentMediaCachingWindow.ids(around: assetId, in: ids, columns: RecentMediaStrip.columnCount)
+        let delta = RecentMediaCachingWindow.delta(from: cachedIds, to: window)
+        cachedIds = window
+        let byId = Dictionary(assets.map { ($0.localIdentifier, $0) }, uniquingKeysWith: { first, _ in first })
+        let size = CGSize(width: pixelSide, height: pixelSide)
+        let options = Self.thumbnailRequestOptions()
+        let started = delta.start.compactMap { byId[$0] }
+        let stopped = delta.stop.compactMap { byId[$0] }
+        if !started.isEmpty {
+            imageManager.startCachingImages(for: started, targetSize: size, contentMode: .aspectFill, options: options)
+        }
+        if !stopped.isEmpty {
+            imageManager.stopCachingImages(for: stopped, targetSize: size, contentMode: .aspectFill, options: options)
+        }
     }
 
     /// Larger aspect-fit image for the long-press quick-look preview. Reuses
@@ -277,6 +339,30 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
             return await resolveVideo(asset)
         }
         return await resolveImage(asset)
+    }
+
+    /// Résout un asset pour la zone d'attachement liée (#9683) : il garde son
+    /// `localIdentifier`, et une photo part en OCTETS d'origine — aucune
+    /// `UIImage` 2048 n'est décodée ici, la préparation compresse depuis les
+    /// octets, comme pour le sélecteur système.
+    func resolveForAttachment(_ asset: PHAsset) async -> RecentMediaAsset? {
+        let assetId = asset.localIdentifier
+        if asset.mediaType == .video {
+            guard case .video(let url)? = await resolveVideo(asset) else { return nil }
+            return RecentMediaAsset(assetId: assetId, payload: .video(url))
+        }
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.version = .current
+        options.isNetworkAccessAllowed = true
+        options.isSynchronous = false
+        let data: Data? = await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
+            let completion: @Sendable (Data?, String?, CGImagePropertyOrientation, [AnyHashable: Any]?) -> Void = { data, _, _, _ in
+                continuation.resume(returning: data)
+            }
+            imageManager.requestImageDataAndOrientation(for: asset, options: options, resultHandler: completion)
+        }
+        return data.map { RecentMediaAsset(assetId: assetId, payload: .imageData($0)) }
     }
 
     private func resolveImage(_ asset: PHAsset) async -> RecentMediaPick? {
@@ -353,13 +439,21 @@ struct RecentMediaStrip: View {
     /// same assets — same invariant as `onOpenLibrary`: leaving the strip for
     /// the picker must never lose the user's picks.
     var onSelectionChanged: (([String]) -> Void)? = nil
+    /// Hôte à zone d'attachement LIÉE (#9683) : reçoit le média avec son
+    /// `localIdentifier` (photo en octets d'origine) à la place d'`onSelect`.
+    var onSelectAsset: ((RecentMediaAsset) -> Void)? = nil
+    /// Les assets déjà dans la zone d'attachement, DÉRIVÉS d'elle par l'hôte
+    /// (`RecentMediaAttachmentLink`) : leur tuile est marquée et refuse d'être
+    /// reprise ; retirer la pièce de la zone libère la tuile.
+    var attachedAssetIds: Set<String> = []
 
     @StateObject private var model = RecentMediaStripModel()
     @State private var resolvingId: String?
     @State private var selection = RecentMediaSelection()
     @State private var isBatchResolving = false
 
-    private let columns = 4
+    nonisolated static let columnCount = 4
+    private let columns = RecentMediaStrip.columnCount
     private let spacing: CGFloat = 8
     private let hPadding: CGFloat = 12
 
@@ -386,6 +480,9 @@ struct RecentMediaStrip: View {
             if selection.isActive {
                 selectionBar
                     .transition(.move(edge: .top).combined(with: .opacity))
+            } else if !model.needsAuthorization && !model.assets.isEmpty {
+                selectButtonRow
+                    .transition(.opacity)
             }
             Group {
                 if model.needsAuthorization {
@@ -398,6 +495,35 @@ struct RecentMediaStrip: View {
         }
         .task { model.load() }
         .adaptiveOnChange(of: selection.ids) { _, ids in onSelectionChanged?(ids) }
+        .adaptiveOnChange(of: attachedAssetIds) { _, attached in selection.discard(attached) }
+    }
+
+    /// La sélection multiple se voit (#9683) : un « Sélectionner » à droite,
+    /// au-dessus de la grille — l'appui long n'en est plus le seul chemin.
+    private var selectButtonRow: some View {
+        HStack {
+            Spacer()
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { selection.activate() }
+            } label: {
+                Label(
+                    String(localized: "composer.recent.select", defaultValue: "Sélectionner", bundle: .main),
+                    systemImage: "checkmark.circle"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundColor(Color(hex: accentColor))
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.xsPlus)
+                .frame(minHeight: 32)
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .adaptiveGlass(in: Capsule(), interactive: true)
+        }
+        .padding(.horizontal, hPadding)
+        .padding(.top, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xxs)
     }
 
     /// Remplace la grille tant que la photothèque n'est pas accessible.
@@ -523,6 +649,7 @@ struct RecentMediaStrip: View {
             cell: size,
             accentColor: accentColor,
             isResolving: resolvingId == asset.localIdentifier,
+            isAttached: attachedAssetIds.contains(asset.localIdentifier),
             isSelecting: selection.isActive,
             selectionIndex: selection.index(of: asset.localIdentifier),
             canEdit: onEdit != nil,
@@ -536,6 +663,10 @@ struct RecentMediaStrip: View {
     /// Plain tap: stages the media in normal mode, toggles membership while
     /// multi-selecting.
     private func tap(_ asset: PHAsset) {
+        if attachedAssetIds.contains(asset.localIdentifier) {
+            refuseAttached()
+            return
+        }
         if selection.isActive {
             HapticFeedback.light()
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
@@ -565,21 +696,46 @@ struct RecentMediaStrip: View {
         )
     }
 
-    /// Resolves the asset and hands it to the host — the "Ajouter" path.
+    /// Une tuile déjà jointe REFUSE d'être reprise, et ne retire rien (#9683) :
+    /// la pièce de la zone peut avoir été retouchée, et un toucher sur la
+    /// grille ne doit jamais défaire ce travail en silence. On la retire
+    /// depuis la zone d'attachement — le geste qui existe déjà —, ce qui
+    /// libère la tuile.
+    private func refuseAttached() {
+        HapticFeedback.warning()
+    }
+
+    /// Resolves the asset and hands it to the host. A linked host
+    /// (`onSelectAsset`) receives it with its identifier, photo as original
+    /// bytes; the others keep the decoded `RecentMediaPick`.
+    private func deliver(_ asset: PHAsset) async -> Bool {
+        if let onSelectAsset {
+            guard let resolved = await model.resolveForAttachment(asset) else { return false }
+            onSelectAsset(resolved)
+            return true
+        }
+        guard let pick = await model.resolve(asset) else { return false }
+        onSelect(pick)
+        return true
+    }
+
+    /// The "Ajouter" path.
     private func addSingle(_ asset: PHAsset) {
-        guard resolvingId == nil, !isBatchResolving else { return }
+        guard resolvingId == nil, !isBatchResolving,
+              !attachedAssetIds.contains(asset.localIdentifier) else { return }
         HapticFeedback.light()
         resolvingId = asset.localIdentifier
         Task {
-            let pick = await model.resolve(asset)
+            let delivered = await deliver(asset)
             resolvingId = nil
-            if let pick { onSelect(pick) } else { announceResolutionFailure() }
+            if !delivered { announceResolutionFailure() }
         }
     }
 
     /// "Sélectionner" from the context menu: enters (or extends) the
     /// multi-selection with this asset; toggles it off when already selected.
     private func toggleSelection(_ asset: PHAsset) {
+        guard !attachedAssetIds.contains(asset.localIdentifier) else { return refuseAttached() }
         HapticFeedback.medium()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             if selection.isActive {
@@ -603,13 +759,14 @@ struct RecentMediaStrip: View {
         guard !selection.isEmpty, !isBatchResolving else { return }
         HapticFeedback.medium()
         isBatchResolving = true
-        let ids = selection.ids
+        let ids = RecentMediaAttachmentLink.fresh(selection.ids, excluding: attachedAssetIds)
         Task {
             var failures = 0
             for id in ids {
                 guard let asset = model.assets.first(where: { $0.localIdentifier == id }) else { continue }
                 resolvingId = id
-                if let pick = await model.resolve(asset) { onSelect(pick) } else { failures += 1 }
+                let delivered = await deliver(asset)
+                if !delivered { failures += 1 }
             }
             resolvingId = nil
             isBatchResolving = false
@@ -669,6 +826,7 @@ private struct RecentMediaCell: View {
     let cell: CGFloat
     let accentColor: String
     let isResolving: Bool
+    let isAttached: Bool
     let isSelecting: Bool
     let selectionIndex: Int?
     let canEdit: Bool
@@ -713,7 +871,9 @@ private struct RecentMediaCell: View {
                     }
                 }
 
-                if isSelecting {
+                if isAttached {
+                    attachedBadge
+                } else if isSelecting {
                     selectionBadge
                 }
 
@@ -724,6 +884,7 @@ private struct RecentMediaCell: View {
                 }
             }
             .frame(width: cell, height: cell)
+            .opacity(isAttached ? 0.45 : 1)
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
@@ -734,9 +895,7 @@ private struct RecentMediaCell: View {
         .accessibilityLabel(asset.mediaType == .video
             ? String(localized: "composer.a11y.recentVideo", defaultValue: "Vidéo récente", bundle: .main)
             : String(localized: "composer.a11y.recentPhoto", defaultValue: "Photo récente", bundle: .main))
-        .accessibilityValue(selectionIndex != nil
-            ? String(localized: "composer.a11y.selectedState", defaultValue: "Sélectionné", bundle: .main)
-            : "")
+        .accessibilityValue(accessibilityState)
         .contextMenu {
             // `.compactMenu` (iOS 16.4+) renders the three actions as the
             // system horizontal medium-size row (the Messages/Photos pattern);
@@ -750,10 +909,40 @@ private struct RecentMediaCell: View {
         } preview: {
             RecentMediaPreview(asset: asset, model: model)
         }
+        // La tâche est annulée quand la cellule quitte l'écran : le flux se
+        // termine et annule sa requête PhotoKit (#9683).
         .task(id: asset.localIdentifier) {
             let px = cell * displayScale
-            thumbnail = await model.thumbnail(for: asset, size: CGSize(width: px, height: px))
+            for await box in model.thumbnails(for: asset, size: CGSize(width: px, height: px)) {
+                thumbnail = box.image
+            }
         }
+        .onAppear { model.cacheThumbnails(around: asset.localIdentifier, pixelSide: cell * displayScale) }
+    }
+
+    private var accessibilityState: String {
+        if isAttached {
+            return String(localized: "composer.recent.alreadyAttached", defaultValue: "Déjà dans les pièces jointes", bundle: .main)
+        }
+        return selectionIndex != nil
+            ? String(localized: "composer.a11y.selectedState", defaultValue: "Sélectionné", bundle: .main)
+            : ""
+    }
+
+    /// Une coche pleine, en haut à droite, sur une vignette voilée : la pièce
+    /// est déjà dans la zone d'attachement.
+    private var attachedBadge: some View {
+        VStack {
+            HStack {
+                Spacer()
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white, Color(hex: accentColor))
+                    .padding(MeeshySpacing.xs)
+            }
+            Spacer()
+        }
+        .accessibilityHidden(true)
     }
 
     /// The three context-menu actions: Ajouter / Sélectionner / Éditer.
@@ -765,12 +954,14 @@ private struct RecentMediaCell: View {
                 systemImage: "plus.circle"
             )
         }
+        .disabled(isAttached)
         Button(action: onToggleSelect) {
             Label(
                 String(localized: "composer.recent.select", defaultValue: "Sélectionner", bundle: .main),
                 systemImage: selectionIndex != nil ? "checkmark.circle.fill" : "checkmark.circle"
             )
         }
+        .disabled(isAttached)
         if canEdit {
             Button(action: onEditTap) {
                 Label(

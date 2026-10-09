@@ -168,7 +168,7 @@ struct ContentCaptureTests {
             APIResponse<ContentCaptureService.Noticed>.self,
             from: Data(#"{"success":true,"data":{"noticedMessageIds":["\#(Self.flameId)"]}}"#.utf8)
         )
-        api.stub("/api/v1/conversations/conv-1/messages/capture", result: response)
+        api.stub("/conversations/conv-1/messages/capture", result: response)
         let service = ContentCaptureService(api: api, socket: { _ in throw ContentCaptureRefusal(code: "NO_SOCKET") })
         let report = ContentCaptureReport(conversationId: "conv-1", messageIds: [Self.flameId], kind: .screenshot, captureId: "cap_0123456789")
         let noticed = try await service.sendContentCapture(report)

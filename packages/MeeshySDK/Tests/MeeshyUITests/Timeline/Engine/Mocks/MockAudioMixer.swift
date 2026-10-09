@@ -12,6 +12,8 @@ final class MockAudioMixer: AudioMixerProviding {
     private(set) var configureCallCount = 0
     private(set) var lastConfiguredAudioCount = 0
     private(set) var playCallCount = 0
+    private(set) var lastPlayTimelineTime: Float?
+    private(set) var lastPlayHostTime: UInt64?
     private(set) var pauseCallCount = 0
     private(set) var seekCallCount = 0
     private(set) var lastSeekTime: Float = 0
@@ -29,8 +31,10 @@ final class MockAudioMixer: AudioMixerProviding {
         if let err = configureError { throw err }
     }
 
-    func play() throws {
+    func play(from timelineTime: Float, atHostTime hostTime: UInt64) throws {
         playCallCount += 1
+        lastPlayTimelineTime = timelineTime
+        lastPlayHostTime = hostTime
         if let err = playError { throw err }
     }
 
@@ -60,6 +64,8 @@ final class MockAudioMixer: AudioMixerProviding {
         configureCallCount = 0
         lastConfiguredAudioCount = 0
         playCallCount = 0
+        lastPlayTimelineTime = nil
+        lastPlayHostTime = nil
         pauseCallCount = 0
         seekCallCount = 0
         lastSeekTime = 0

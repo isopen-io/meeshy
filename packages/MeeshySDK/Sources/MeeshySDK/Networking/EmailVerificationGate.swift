@@ -2,11 +2,14 @@ import Foundation
 import os
 
 /// Pourquoi une action attend une adresse prouvée (#8365) — la vue de
-/// validation le DIT (« Pour publier, validez votre adresse »).
+/// validation le DIT (« Pour publier, validez votre adresse »). `moreLinks` :
+/// la passerelle a refusé un lien au-delà des cinq actifs qu'elle permet à une
+/// adresse non prouvée (#9713, #9715).
 public enum EmailGateReason: String, Sendable, Identifiable {
     case publish
     case invite
     case link
+    case moreLinks
 
     public var id: String { rawValue }
 }
@@ -24,11 +27,12 @@ public protocol EmailVerificationGating: AnyObject, Sendable {
 }
 
 /// **UN REFUS `EMAIL_NOT_VERIFIED` MÈNE À LA VALIDATION, PUIS L'ACTION REPART**
-/// (#8365). La passerelle garde `/invitations/email`, `/links` et
-/// `/conversations/:id/new-link` derrière une adresse prouvée
-/// (`EMAIL_VERIFICATION_GATED_ROUTES`), et `POST /posts`,
+/// (#8365). La passerelle garde `/invitations/email` derrière une adresse
+/// prouvée (`EMAIL_VERIFICATION_GATED_ROUTES`), `POST /posts` et
 /// `/posts/from-attachment` derrière le délai de grâce de l'adresse
-/// (`requirePublishingGrace`, #8476) — `services/gateway/src/middleware/auth.ts`.
+/// (`requirePublishingGrace`, #8476), `/links` et `/conversations/:id/new-link`
+/// derrière ce même délai, au plus cinq liens actifs (`requireShareLinkGrace`,
+/// #9713) — `services/gateway/src/middleware/verification-gates.ts`.
 ///
 /// `APIClient` est le SEUL site par lequel ces cinq routes passent : c'est donc
 /// là — une fois, pour tous les écrans et toutes les files (story, outbox,
@@ -36,15 +40,25 @@ public protocol EmailVerificationGating: AnyObject, Sendable {
 /// corps : le brouillon n'est jamais perdu, et l'appelant reçoit la réponse de
 /// la requête rejouée.
 ///
-/// Prévenir plutôt que guérir : quand l'adresse est connue non prouvée, la
-/// validation s'ouvre AVANT l'envoi ; fermée, le refus est rendu sans
-/// aller-retour. PUBLIER n'est jamais retenu d'avance : la passerelle le
-/// permet tant que le délai de grâce court (#8476) — seul son refus, une fois
-/// le délai échu, ouvre la validation.
+/// Prévenir plutôt que guérir — pour INVITER seulement : quand l'adresse est
+/// connue non prouvée, la validation s'ouvre AVANT l'envoi ; fermée, le refus
+/// est rendu sans aller-retour. PUBLIER et CRÉER UN LIEN ne sont jamais retenus
+/// d'avance : la passerelle les permet tant que le délai de grâce court
+/// (#8476), au plus cinq liens actifs (#9713) — seul son refus ouvre la
+/// validation (#9715). Le refus au plafond se reconnaît à son texte `error` :
+/// la vue dit alors qu'au-delà de cinq liens actifs, l'adresse doit être
+/// prouvée. Une passerelle d'avant #9713, qui refuse tout lien, rend le texte
+/// générique : la vue dit « pour créer un lien », comme avant.
 ///
 /// Miroir web : `apps/web/src/lib/activation/email-gated-transport.ts`.
 public enum EmailVerificationGate {
     public static let refusalCode = "EMAIL_NOT_VERIFIED"
+
+    /// Le texte du refus au plafond de liens actifs (`sendShareLinkGraceRefusal`,
+    /// `services/gateway/src/middleware/verification-gates.ts`).
+    public static let shareLinkCapRefusal = "Email verification required to create more share links"
+
+    private static let heldBack: Set<EmailGateReason> = [.invite]
 
     private static let registry = OSAllocatedUnfairLock<(any EmailVerificationGating)?>(initialState: nil)
 
@@ -102,6 +116,20 @@ public enum EmailVerificationGate {
         StoryPublishRetryPolicy.rejectionCode(error) == refusalCode
     }
 
+    /// La raison que la vue dit après un refus : un lien refusé au plafond
+    /// devient `moreLinks`, toute autre raison reste la sienne.
+    public static func reason(for reason: EmailGateReason, refusedBy error: Error) -> EmailGateReason {
+        guard reason == .link, refusalText(error) == shareLinkCapRefusal else { return reason }
+        return .moreLinks
+    }
+
+    private struct RefusalBody: Decodable { let error: String? }
+
+    private static func refusalText(_ error: Error) -> String? {
+        guard case .forbidden(_, let body)? = error as? MeeshyError, let body else { return nil }
+        return (try? JSONDecoder().decode(RefusalBody.self, from: body))?.error
+    }
+
     /// La règle, sans réseau : `perform` est la requête, rejouable telle quelle.
     public static func run<T>(
         method: String,
@@ -111,13 +139,13 @@ public enum EmailVerificationGate {
         perform: () async throws -> T
     ) async throws -> T {
         guard let gate, let reason = reason(method: method, path: path) else { return try await perform() }
-        if reason != .publish, await gate.emailKnownUnproven(), !(await gate.verifyEmail(for: reason)) {
+        if heldBack.contains(reason), await gate.emailKnownUnproven(), !(await gate.verifyEmail(for: reason)) {
             throw localRefusal()
         }
         do {
             return try await perform()
         } catch where isRefusal(error) {
-            guard await gate.verifyEmail(for: reason) else { throw error }
+            guard await gate.verifyEmail(for: Self.reason(for: reason, refusedBy: error)) else { throw error }
             return try await perform()
         }
     }

@@ -18,6 +18,30 @@ export const ROUTE = {
   pending: adminEndpoints.ranking,
 } as const;
 
+/** La carte des sauvegardes (#9668), telle que `backupCardOf` la sert : une nuit réussie, 13 h 45 avant la mesure. */
+export const servedBackups = (overrides: Served = {}): Served => ({
+  status: 'ok',
+  checkedAt: '2026-09-29T22:14:03Z',
+  reason: null,
+  lastSuccessAt: '2026-09-29T22:14:03Z',
+  ageSeconds: 49_497,
+  stale: false,
+  nextRunAt: '2026-09-30T22:00:00.000Z',
+  lastSuccess: {
+    documents: 922_366,
+    collections: 61,
+    mismatches: 0,
+    indexes: 519,
+    archiveBytes: 1_288_490_189,
+    durationSeconds: 412,
+    volumes: [
+      { name: 'meeshy_gateway_uploads', bytes: 19_327_352_832 },
+      { name: 'meeshy_redis_data', bytes: 4_096 },
+    ],
+  },
+  ...overrides,
+});
+
 export const servedMonitoring = (overrides: Served = {}): Served => ({
   generatedAt: '2026-09-30T11:59:00.000Z',
   gateway: {
@@ -45,6 +69,7 @@ export const servedMonitoring = (overrides: Served = {}): Served => ({
     { name: 'mailer', state: 'HALF_OPEN', failures: 2, successes: 40, totalRequests: 42, lastFailureAt: '2026-09-30T10:00:00.000Z' },
   ],
   presenceUpdates: { totalRequests: 1_200, throttledRequests: 30, throttleRate: 2.5, successfulUpdates: 1_170, failedUpdates: 0 },
+  backups: servedBackups(),
   ...overrides,
 });
 

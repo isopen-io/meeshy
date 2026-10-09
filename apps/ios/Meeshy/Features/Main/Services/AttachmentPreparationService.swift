@@ -150,6 +150,21 @@ final class AttachmentPreparationService {
         return prep
     }
 
+    // MARK: Image bytes (original file data — recent-media grid, #9683)
+
+    /// Une photo de la photothèque remise en OCTETS d'origine : même chemin
+    /// que le sélecteur système, sans `UIImage` 2048 décodée en amont.
+    func prepareImageData(_ data: Data,
+                          context: MediaContext = .message,
+                          accentColor: String = MeeshyColors.brandPrimaryHex) -> PreparingAttachment {
+        let prep = PreparingAttachment(kind: .image, accentColor: accentColor)
+        prep.stage = .loading
+        Task { [weak self] in
+            await self?.runPickedImageData(data, prep: prep, context: context)
+        }
+        return prep
+    }
+
     // MARK: Video (URL on disk — camera or already-extracted picker payload)
 
     func prepareVideo(sourceURL: URL,
@@ -332,23 +347,32 @@ final class AttachmentPreparationService {
                                  prep: PreparingAttachment,
                                  context: MediaContext) async {
         do {
-            guard let data = try await item.loadTransferable(type: Data.self),
-                  let fullImage = UIImage(data: data) else {
+            guard let data = try await item.loadTransferable(type: Data.self) else {
                 prep.fail("Image illisible")
                 return
             }
-            // Pose immédiatement un aperçu léger (downsampling ImageIO, faible
-            // empreinte mémoire) pour que l'image sélectionnée apparaisse
-            // « directement » dans la zone d'attachement. La décompression
-            // pleine résolution + le ThumbHash restent réservés au pipeline de
-            // traitement en arrière-plan ci-dessous.
-            prep.thumbnail = Self.downsampledPreview(from: data) ?? fullImage
-            prep.stage = .compressing
-            await runImageDataPreparation(prep: prep, data: data, image: fullImage, context: context)
+            await runPickedImageData(data, prep: prep, context: context)
         } catch {
             log.error("picker image load failed: \(error.localizedDescription)")
             prep.fail("Échec du chargement de l'image")
         }
+    }
+
+    private func runPickedImageData(_ data: Data,
+                                    prep: PreparingAttachment,
+                                    context: MediaContext) async {
+        guard let fullImage = UIImage(data: data) else {
+            prep.fail("Image illisible")
+            return
+        }
+        // Pose immédiatement un aperçu léger (downsampling ImageIO, faible
+        // empreinte mémoire) pour que l'image sélectionnée apparaisse
+        // « directement » dans la zone d'attachement. La décompression
+        // pleine résolution + le ThumbHash restent réservés au pipeline de
+        // traitement en arrière-plan ci-dessous.
+        prep.thumbnail = Self.downsampledPreview(from: data) ?? fullImage
+        prep.stage = .compressing
+        await runImageDataPreparation(prep: prep, data: data, image: fullImage, context: context)
     }
 
     private func loadPickerVideo(item: PhotosPickerItem,

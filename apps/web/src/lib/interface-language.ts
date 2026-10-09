@@ -82,6 +82,17 @@ export async function setInterfaceLanguage(language: InterfaceLanguage): Promise
   notify();
 }
 
+/**
+ * La langue d'interface qu'un code de langue DÉSIGNE, ou `null` quand le
+ * produit n'a pas d'interface dans cette langue (#9710). Le code de base
+ * suffit (`'pt-BR'` → `'pt'`) : une langue de CONTENU peut porter une région
+ * que l'interface ne distingue pas.
+ */
+export function interfaceLanguageOf(code: string): InterfaceLanguage | null {
+  const base = code.trim().toLowerCase().split(/[-_]/u)[0] ?? '';
+  return isSupported(base) ? base : null;
+}
+
 const listeners = new Set<() => void>();
 
 function notify(): void {

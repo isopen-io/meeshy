@@ -77,6 +77,7 @@ import { participantListUserSelect } from '../conversations/utils/participant-pr
 import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conversation-metadata';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger.js';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import {
   conversationConfigurationSuccess,
   conversationMemberRoleSuccess,
@@ -395,6 +396,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
       const leftAt = new Date();
       await fastify.prisma.participant.update({ where: { id: participant.id }, data: { isActive: false, leftAt } });
       invalidateParticipantLookup(participant.id, conversationId);
+      announceConversationLanguageChange({ kind: 'departure', conversationId });
 
       const { manager, io: serveur } = io(fastify);
       if (serveur) {

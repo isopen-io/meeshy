@@ -145,6 +145,8 @@ export interface FullUser {
   lockedReason: string | null;
   twoFactorEnabledAt: Date | null;
   twoFactorBackupCodes: string[];
+  /** Date de la dernière connexion (#9642) — l'horloge de la conservation des traces ci-dessous. */
+  lastLoginAt?: Date | null;
   lastLoginIp: string | null;
   lastLoginLocation: string | null;
   lastLoginDevice: string | null;
@@ -273,6 +275,8 @@ export interface AdminUser extends PublicUser {
    * porte.
    */
   twoFactorBackupCodesRemaining: number;
+  /** Date de la dernière connexion (#9642). Adresse, lieu et agent ci-dessous sont masqués 12 mois après elle. */
+  lastLoginAt?: Date | null;
   lastLoginIp: string | null;
   lastLoginLocation: string | null;
   lastLoginDevice: string | null;

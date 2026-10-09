@@ -25,7 +25,7 @@ const view = (patch: Parameters<typeof gameBlockFixture>[0] = {}, base: Engageme
 });
 
 const noPoints = (patch: Parameters<typeof gameBlockFixture>[0] = {}): EngagementWithGame =>
-  view({ score: 0, debitablePoints: 0, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, lastActiveDay: null, missions: [], ...patch }, { ...empty, isEmpty: true });
+  view({ score: 0, levelRecord: null, debitablePoints: 0, glory: 0, balance: 0, mintedLifetime: 0, streak: 0, lastActiveDay: null, missions: [], ...patch }, { ...empty, isEmpty: true });
 
 const missionsDone = (done: boolean) =>
   view({

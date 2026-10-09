@@ -4,7 +4,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { INTERFACE_LANGUAGE_KEY } from './inline-interface-language-bootstrap.js';
 import { translate } from './i18n-catalog';
-import { currentInterfaceLanguage, followBrowserInterfaceLanguage, setInterfaceLanguage } from './interface-language';
+import { currentInterfaceLanguage, followBrowserInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage } from './interface-language';
 
 /**
  * `currentInterfaceLanguage`/`setInterfaceLanguage` (#6206) — même patron que
@@ -90,5 +90,15 @@ describe('le sens de lecture suit la langue d’interface (#8803)', () => {
     expect(document.documentElement.dir).toBe('rtl');
     await followBrowserInterfaceLanguage(['en-US']);
     expect(document.documentElement.dir).toBe('ltr');
+  });
+});
+
+describe('interfaceLanguageOf — la langue d’interface qu’un code désigne (#9710)', () => {
+  test('une langue du produit se reconnaît, région et casse comprises ; une autre n’en désigne aucune', () => {
+    expect(interfaceLanguageOf('en')).toBe('en');
+    expect(interfaceLanguageOf('pt-BR')).toBe('pt');
+    expect(interfaceLanguageOf('AR')).toBe('ar');
+    expect(interfaceLanguageOf('ja')).toBeNull();
+    expect(interfaceLanguageOf('')).toBeNull();
   });
 });

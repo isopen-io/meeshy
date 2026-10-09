@@ -5,11 +5,13 @@ import type { EngagementElanProgress } from '@meeshy/shared/utils/engagement-pro
 
 import { GameBird, LevelRing, RankBlason, Signature, useChoreography } from '@/components/game';
 import { earnRules, type EarnRule } from '@/lib/game/earn-rules';
+import { levelReading, shownLevelOf } from '@/lib/game/ladder';
 import { enamelToken } from '@/lib/game/medal';
 import { tierTint } from '@/lib/game/tier-emblem';
-import { familyName, formatCount, gameText, levelTierName, pointsLabel, rankLabel, rankName } from '@/lib/view/game-copy';
+import { familyName, formatCount, gameText, levelTierName, levelTopLine, pointsLabel, rankName, standingLabel, shownRank } from '@/lib/view/game-copy';
+import { levelHeldLine, levelStepLine } from '@/lib/view/level-step-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
-import { elanDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
+import { elanDetail, levelStepDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
 
 import { GAME_CARD, GAME_INK, GAME_INK_2, GameChip } from './game-surface';
 import { GameTouch } from './game-touch';
@@ -22,7 +24,7 @@ import { GameTouch } from './game-touch';
  *                         filigrane), le palier et le record, le blason et sa
  *                         division ;
  *   2. comment je gagne — UNE puce par famille du barème, triée par poids
- *                         (`earnRules`, dérivée de `ENGAGEMENT_AXIS_WEIGHTS` :
+ *                         (`earnRules`, dérivée de `ENGAGEMENT_FAMILY_TOP_POINTS` :
  *                         régler un poids change le héros sans toucher une
  *                         chaîne) ; un toucher ouvre le carnet des règles à la
  *                         ligne des gains.
@@ -78,8 +80,31 @@ function MeeCorner({ line }: { readonly line: string }) {
   );
 }
 
+/**
+ * L'ÉTAPE du prochain palier (#9706) — faite ou à faire ; elle se touche et ouvre ses précisions, dont la
+ * fiche du geste qui la fait. Rien au-delà de 100, ni devant un serveur d'avant les étapes.
+ */
+function LevelStepChip({ game }: { readonly game: GameBlock }) {
+  const step = game.level.ladder?.step ?? null;
+  if (step === null) return null;
+  return (
+    <GameTouch
+      detail={levelStepDetail(game, step)}
+      marker={{ 'data-game-level-step': step.met ? 'done' : 'todo' }}
+      className="flex max-w-full items-center gap-1.5 self-start rounded-card text-caption font-semibold"
+      style={{ minHeight: 44, color: GAME_INK }}
+    >
+      <span aria-hidden="true" style={{ color: step.met ? 'var(--color-success)' : GAME_INK_2 }}>
+        {step.met ? '✓' : '○'}
+      </span>
+      <span className="min-w-0">{levelStepLine(step)}</span>
+    </GameTouch>
+  );
+}
+
 function WhereIAm({ game }: { readonly game: GameBlock }) {
-  const { level, glory, boosts } = game;
+  const { glory, boosts } = game;
+  const level = shownLevelOf(game.level);
   const ring = useChoreography<HTMLDivElement>();
   const previousLevel = useRef(level.level);
   useEffect(() => {
@@ -88,19 +113,22 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
     previousLevel.current = level.level;
   }, [level.level, ring.play]);
 
+  const shown = shownRank(glory);
   const blason = useChoreography<HTMLSpanElement>();
-  const previousRank = useRef(`${glory.rank}/${glory.division ?? 0}`);
+  const previousRank = useRef(`${shown.rank}/${shown.division ?? 0}`);
   useEffect(() => {
-    const now = `${glory.rank}/${glory.division ?? 0}`;
+    const now = `${shown.rank}/${shown.division ?? 0}`;
     if (now === previousRank.current) return;
     blason.play('rank');
     previousRank.current = now;
-  }, [glory.rank, glory.division, blason.play]);
+  }, [shown.rank, shown.division, blason.play]);
 
   const atTop = level.nextThreshold === null;
+  const step = game.level.ladder?.step ?? null;
+  const held = game.level.ladder?.held === true && step !== null;
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <GameTouch detail={ringDetail(level)} named className="shrink-0 rounded-full">
+      <GameTouch detail={ringDetail(game.level)} named className="shrink-0 rounded-full">
       <div ref={ring.ref}>
         <LevelRing
           level={level.level}
@@ -118,9 +146,14 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
         <h2 id="game-hero-title" className="text-title font-bold" style={{ color: GAME_INK }}>
           {gameText('game.level.title', { level: formatCount(level.level), tier: levelTierName(level.tier) })}
         </h2>
-        <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {atTop ? gameText('game.level.top') : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) })}
+        <p className="text-caption" style={{ color: GAME_INK_2 }} {...(held ? { 'data-game-level-held': '' } : {})}>
+          {held && step !== null
+            ? levelHeldLine(step)
+            : atTop
+              ? levelTopLine(level)
+              : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) })}
         </p>
+        <LevelStepChip game={game} />
         {level.record > level.level ? (
           <span className="mt-1 self-start">
             <GameChip tint="var(--color-warn)">
@@ -130,13 +163,13 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
           </span>
         ) : null}
       </div>
-      <GameTouch detail={rankDetail(glory)} className="flex shrink-0 flex-col items-center gap-0.5 rounded-card text-center">
+      <GameTouch detail={rankDetail(glory, level.level)} className="flex shrink-0 flex-col items-center gap-0.5 rounded-card text-center">
         <span id="game-rank" className="flex flex-col items-center gap-0.5">
           <span ref={blason.ref}>
-            <RankBlason rank={glory.rank} division={glory.division} size={80} label={rankName(glory.rank)} />
+            <RankBlason rank={shown.rank} division={shown.division} mythic={shown.mythic} level={level.level} size={80} label={rankName(shown.rank)} />
           </span>
           <span className="text-caption font-bold" style={{ color: GAME_INK }}>
-            {rankLabel(glory.rank, glory.division)}
+            {standingLabel(shown)}
           </span>
           <span className="text-check" style={{ color: GAME_INK_2 }}>
             {gameText('game.rank.glory', { glory: formatCount(glory.glory) })}
@@ -180,11 +213,12 @@ function HowToEarn({ rules, elan }: { readonly rules: readonly EarnRule[]; reado
 }
 
 export function GameHero({ game, guideLine = null, rules, elan }: GameHeroProps) {
-  const tint = tierTint(game.level.tier);
+  const tier = levelReading(game.level).tier;
+  const tint = tierTint(tier);
   return (
     <section
       id="game-level"
-      data-game-hero={game.level.tier}
+      data-game-hero={tier}
       aria-labelledby="game-hero-title"
       className="relative flex min-w-0 flex-col gap-4 overflow-hidden rounded-card px-4 py-4"
       style={{

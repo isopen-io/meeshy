@@ -439,6 +439,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   //     réel (pas l'ObjectId de l'attachment), anti-path-traversal vérifié ---
   { method: 'GET', url: '/api/v1/attachments/file/*', why: 'noms de fichiers UUIDv4 non énumérables + garde anti path-traversal, CDN de fichiers publics par design' },
   { method: 'GET', url: '/api/attachments/file/*', why: 'même route, montage legacy sans /v1' },
+  { method: 'GET', url: '/api/v1/attachments/signed/:token/*', why: "adresse SIGNÉE par lecteur (#9600) : l'autorisation EST le jeton — HMAC-SHA-256 sur la clé de stockage, la pièce, le participant lecteur et l'échéance, comparé en temps constant ; puis la pièce vivante et l'état du lecteur (membre actif, message vivant, échéance, vue unique non ouverte). Tout refus rend 404, jamais 401/403, pour ne rien révéler de l'existence du fichier." },
 ];
 
 // ---------------------------------------------------------------------------

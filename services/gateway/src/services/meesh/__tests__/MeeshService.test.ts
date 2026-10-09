@@ -118,10 +118,17 @@ function fausseBase(params: {
       }),
       updateMany: async () => ({ count: 0 }),
     },
+    // Les missions du jour accomplies, que jugent les étapes des niveaux (#9706) : aucune ici.
+    dailyMission: { count: async () => 0 },
     gloryLedger: {
       create: async (args: { data: LigneRegistre }) => {
         gloire.push({ ...args.data });
         return args.data;
+      },
+      // Le plafond de niveau se lit sur la Gloire gravée (#9688).
+      aggregate: async (args: { where: { userId: string } }) => {
+        const lignes = gloire.filter((l) => l.userId === args.where.userId);
+        return { _sum: { delta: lignes.length === 0 ? null : lignes.reduce((s, l) => s + l.delta, 0) } };
       },
     },
     meeshLedger: {

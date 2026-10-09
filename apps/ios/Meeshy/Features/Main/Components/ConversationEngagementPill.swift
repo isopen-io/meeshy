@@ -2,25 +2,29 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - La pastille « 🔥 série · total » (#8906, #9044)
+// MARK: - La pastille « 🔥 série · total » (#8906, #9044, #9571)
 
-/// Ce que le lecteur a gagné dans une conversation : la flamme, sa série de
-/// jours, un point central, puis le total des points depuis toujours, abrégé
-/// (« 1,2 k », « 3 M », `CompactCountLabel`). Sans série EN COURS, rien : ni
-/// flamme ni points. Les points du jour vivent sous l'avatar replié
-/// (`HeaderFlameDecoration`). Même rendu qu'elle, sans capsule ni fond : la
-/// flamme en dégradé, puis « série · total » en chiffres rouges cerclés de
-/// blanc (`HeaderFlameCount`). Feuille PURE : primitives seulement, portillon
-/// `Equatable`.
+/// Ce que le lecteur a gagné dans une conversation, en TROIS formes
+/// (`ConversationPointsForm`, miroir de `engagementPillModel` du web) :
+/// - une série COURT : la flamme, la série de jours, un point central, puis le
+///   total des points depuis toujours, abrégé (« 1,2 k », `CompactCountLabel`),
+///   en chiffres rouges cerclés de blanc (`HeaderFlameCount`) ;
+/// - aucune série : le cumul SEUL, sans flamme, à l'encre tertiaire — le rouge
+///   reste la couleur de la série (directive porteur 2026-10-07) ;
+/// - cumul nul : rien.
+/// Les points du jour vivent sous l'avatar replié (`HeaderFlameDecoration`),
+/// qui ne paraît que si une série court. Feuille PURE : primitives seulement,
+/// portillon `Equatable`.
 struct ConversationEngagementPill: View, Equatable {
+    /// 0 : la forme « cumul seul ».
     let streakDays: Int
     let totalText: String
     let accessibilityText: String
 
     init?(snapshot: ConversationEngagementSnapshot, accentColor: String, locale: Locale = .current) {
-        guard snapshot.streakDays > 0 else { return nil }
-        self.streakDays = snapshot.streakDays
-        self.totalText = CompactCountLabel.text(snapshot.totalPoints, locale: locale)
+        guard let form = ConversationPointsForm.of(snapshot) else { return nil }
+        self.streakDays = form.streakDays
+        self.totalText = CompactCountLabel.text(form.totalPoints, locale: locale)
         self.accessibilityText = Self.accessibilityText(for: snapshot)
     }
 
@@ -30,28 +34,45 @@ struct ConversationEngagementPill: View, Equatable {
             && lhs.accessibilityText == rhs.accessibilityText
     }
 
-    /// « série · total » — ce que la pastille écrit à côté de la flamme.
-    var text: String { "\(streakDays) · \(totalText)" }
+    /// « série · total » à côté de la flamme ; le cumul seul sans série.
+    var text: String { streakDays > 0 ? "\(streakDays) · \(totalText)" : totalText }
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 2) {
-            HeaderFlameGlyph()
-            HeaderFlameCount(text: text)
+        Group {
+            if streakDays > 0 {
+                HStack(spacing: 2) {
+                    HeaderFlameGlyph()
+                    HeaderFlameCount(text: text)
+                }
+            } else {
+                Text(verbatim: totalText)
+                    .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold, design: .rounded).monospacedDigit())
+                    .foregroundColor(MeeshyColors.textMuted(isDark: colorScheme == .dark))
+                    .lineLimit(1)
+            }
         }
         .fixedSize()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
     }
 
+    /// « 120 points gagnés dans cette conversation » — la phrase du cumul seul (#9571).
+    static func totalAccessibilityText(_ total: Int) -> String {
+        let number = "\(total)"
+        return total == 1
+            ? String(localized: "conversation.engagement.a11y.total.one",
+                     defaultValue: "\(number) point gagné dans cette conversation", bundle: .main)
+            : String(localized: "conversation.engagement.a11y.total.other",
+                     defaultValue: "\(number) points gagnés dans cette conversation", bundle: .main)
+    }
+
     static func accessibilityText(for snapshot: ConversationEngagementSnapshot) -> String {
         let total = snapshot.totalPoints
         let today = snapshot.todayPoints
         guard snapshot.streakDays > 0 else {
-            return String(
-                localized: "conversation.engagement.a11y.points",
-                defaultValue: "Points : \(total) · Aujourd'hui : \(today)",
-                bundle: .main
-            )
+            return totalAccessibilityText(total)
         }
         let streak = snapshot.streakDays
         return String(
@@ -86,33 +107,40 @@ struct ConversationEngagementBadge: View {
     }
 }
 
-// MARK: - La série dans la liste « 🔥4 · 120 » (#9025, total abrégé #9044)
+// MARK: - La marque dans la liste « 🔥4 · 120 » / « 120 » (#9025, #9044, #9571)
 
-/// À côté de l'heure de la rangée au repos : la série en jours et le total des
-/// points, en ROUGE, sans capsule (directive porteur 2026-10-01). Se tait tant
-/// qu'aucune série ne court. Feuille PURE, portillon `Equatable`.
+/// À côté de l'heure de la rangée : tant qu'une série court, la série en jours
+/// et le total des points, en ROUGE, sans capsule (directive porteur
+/// 2026-10-01) ; sans série, le cumul SEUL, sans flamme, à l'encre tertiaire de
+/// l'heure ; cumul nul : rien (`ConversationPointsForm`). Feuille PURE,
+/// portillon `Equatable`.
 struct ConversationStreakMark: View, Equatable {
+    /// 0 : la forme « cumul seul ».
     let streakDays: Int
     let totalText: String
     let accessibilityText: String
+    var isDark: Bool = false
 
-    init?(snapshot: ConversationEngagementSnapshot?, locale: Locale = .current) {
-        guard let snapshot, snapshot.streakDays > 0 else { return nil }
-        self.streakDays = snapshot.streakDays
-        self.totalText = CompactCountLabel.text(snapshot.totalPoints, locale: locale)
+    init?(snapshot: ConversationEngagementSnapshot?, locale: Locale = .current, isDark: Bool = false) {
+        guard let snapshot, let form = ConversationPointsForm.of(snapshot) else { return nil }
+        self.streakDays = form.streakDays
+        self.totalText = CompactCountLabel.text(form.totalPoints, locale: locale)
         self.accessibilityText = ConversationEngagementPill.accessibilityText(for: snapshot)
+        self.isDark = isDark
     }
 
     var body: some View {
         HStack(spacing: 2) {
-            Image(systemName: "flame.fill")
-                .imageScale(.small)
-            Text(verbatim: "\(streakDays)")
-            Text(verbatim: "·")
+            if streakDays > 0 {
+                Image(systemName: "flame.fill")
+                    .imageScale(.small)
+                Text(verbatim: "\(streakDays)")
+                Text(verbatim: "·")
+            }
             Text(verbatim: totalText)
         }
         .font(LentilleMetrics.Time.font.monospacedDigit())
-        .foregroundColor(MeeshyColors.error)
+        .foregroundColor(streakDays > 0 ? MeeshyColors.error : MeeshyColors.textMuted(isDark: isDark))
         .lineLimit(1)
         .fixedSize()
         .accessibilityElement(children: .ignore)
@@ -127,10 +155,12 @@ struct ConversationStreakMark: View, Equatable {
 struct ConversationStreakMarkHost: View {
     let conversationId: String
     let seed: ConversationEngagementSnapshot?
+    var isDark: Bool = false
     @ObservedObject var store: ConversationEngagementStore = .shared
 
     var body: some View {
-        if let mark = ConversationStreakMark(snapshot: store.displayed(for: conversationId, seed: seed, at: Date())) {
+        if let mark = ConversationStreakMark(snapshot: store.displayed(for: conversationId, seed: seed, at: Date()),
+                                             isDark: isDark) {
             mark.equatable()
         }
     }

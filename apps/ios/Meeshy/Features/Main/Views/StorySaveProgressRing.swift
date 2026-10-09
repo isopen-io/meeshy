@@ -119,3 +119,33 @@ struct StorySaveProgressRing: View {
         .frame(width: diameter, height: diameter)
     }
 }
+
+// MARK: - SceneSaveProgressButton
+
+/// **L'anneau d'un enregistrement de scène en vol, tappable pour l'annuler** (#9681)
+/// — monté par les surfaces de réel et de post. Feuille isolée : c'est ELLE, et
+/// non l'écran hôte, qui observe le service ; un tour de progression ne republie
+/// qu'elle. Rien ne s'affiche tant qu'aucun job n'existe pour `jobKey`.
+struct SceneSaveProgressButton: View {
+    let jobKey: String
+    var tint: Color = MeeshyColors.indigo400
+    var diameter: CGFloat = MeeshyControlSize.compact
+    @ObservedObject private var service = StoryPhotoSaveService.shared
+
+    var body: some View {
+        if let progress = service.progress(for: jobKey) {
+            let cancellable = service.isCancellable(storyId: jobKey)
+            Button {
+                HapticFeedback.light()
+                service.cancel(storyId: jobKey)
+            } label: {
+                StorySaveProgressRing(progress: progress, tint: tint, diameter: diameter, isCancellable: cancellable)
+            }
+            .buttonStyle(.plain)
+            .disabled(!cancellable)
+            .accessibilityLabel(String(localized: "feed.reel.save_progress.cancel",
+                                       defaultValue: "Enregistrement en cours, toucher pour annuler", bundle: .main))
+            .transition(.opacity)
+        }
+    }
+}

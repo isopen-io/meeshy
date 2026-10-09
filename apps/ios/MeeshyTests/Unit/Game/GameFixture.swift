@@ -21,7 +21,7 @@ enum GameFixture {
     }
 
     static func game(
-        score: Int = 12_180,
+        score: Int = 121_800,
         levelRecord: Int? = nil,
         glory: Int = 1_730,
         mythic: Bool = false,
@@ -36,37 +36,49 @@ enum GameFixture {
         rerollAvailable: Bool = true,
         chestStatus: GameBlock.Chest.Status = .locked,
         chestReward: DailyChest? = nil,
-        guideSeen: [String] = []
+        guideSeen: [String] = [],
+        servesLadder: Bool = true,
+        steps: GameLevelStepCounts? = nil
     ) -> GameBlock {
-        let levelState = GameLevels.progress(forScore: score)
-        let record = max(levelRecord ?? levelState.level, levelState.level)
         let standing = GameGlory.standing(glory: glory, mythic: mythic)
+        // Le niveau et la frappe tels que la passerelle les sert (#9688) : champs d'hier sous l'ancienne loi, la
+        // lecture ouverte par le rang dans `ladder` — ou, `servesLadder: false`, tels qu'un serveur antérieur.
+        let levelCap = GameGlory.levelCap(forRank: standing.rank)
+        // Les étapes des niveaux (#9706), jugées avec la Gloire et le rang du témoin ; `nil` : un serveur d'avant les étapes.
+        let stepFacts = steps.map { GameLevelStepFacts(counts: $0, glory: standing.glory, rank: standing.rank) }
+        let served = GameLevelWire.level(score: score, levelCap: levelCap, levelRecord: levelRecord, prestige: 0, steps: stepFacts)
+        let level = servesLadder ? served : served.replacing(ladder: .some(nil))
+        let shown = level.shown
+        let wireMint = GameLevelWire.mint(
+            GameMint.preview(score: score, mintedLifetime: minted, debitablePoints: debitable ?? score, levelCap: levelCap)
+        )
+        let mint = servesLadder ? wireMint : GameMintPreview(
+            number: wireMint.number, price: wireMint.price, edition: wireMint.edition, canMint: wireMint.canMint,
+            missingPoints: wireMint.missingPoints, levelBefore: wireMint.levelBefore, levelAfter: wireMint.levelAfter,
+            levelsLost: wireMint.levelsLost, gloryGained: wireMint.gloryGained
+        )
         let items = missions ?? [mission(id: "m1"), mission(id: "m2", templateKey: "reply-conversations", difficulty: .medium, target: 3, reward: 60), mission(id: "m3", templateKey: "publish-post", difficulty: .hard, target: 2, reward: 120)]
         return GameBlock(
-            level: GameBlock.Level(
-                level: levelState.level, tier: levelState.tier, score: levelState.score, floorScore: levelState.floorScore,
-                nextThreshold: levelState.nextThreshold, pointsToNext: levelState.pointsToNext, progress: levelState.progress,
-                record: record, prestige: 0, canPrestige: GameLevels.canPrestige(level: levelState.level, prestige: 0)
-            ),
+            level: level,
             glory: GameBlock.Glory(
-                glory: standing.glory, rank: standing.rank, division: standing.division, next: standing.next,
-                gloryMissing: standing.gloryMissing, progress: standing.progress
+                glory: standing.glory, rank: standing.rank, division: standing.division, division5: standing.division5,
+                next: standing.next, gloryMissing: standing.gloryMissing, progress: standing.progress
             ),
             treasury: GameTreasury.standing(held: held),
-            mint: GameMint.preview(score: score, mintedLifetime: minted, debitablePoints: debitable ?? score),
-            missions: GameBlock.Missions(dayKey: "2026-10-05", prismDay: false, unlocked: levelState.level >= 5, items: items, rerollAvailable: rerollAvailable),
+            mint: mint,
+            missions: GameBlock.Missions(dayKey: "2026-10-05", prismDay: false, unlocked: shown.level >= 5, items: items, rerollAvailable: rerollAvailable),
             chest: GameBlock.Chest(status: chestStatus, odds: GameChest.odds, reward: chestReward),
             flame: GameBlock.Flame(
                 days: flameDays, form: GameFlame.form(forDays: flameDays), bonusPercent: GameFlame.bonusPercent(forDays: flameDays),
                 freezes: freezes, maxFreezes: 2, freezePrice: 1, relightPrice: 3, status: flameStatus, canRelight: canRelight
             ),
-            boosts: GameBlock.Boosts(tailwind: GameBoosts.tailwind(level: levelState.level, levelRecord: record), prismHour: nil),
+            boosts: GameBlock.Boosts(tailwind: GameBoosts.tailwind(level: shown.level, levelRecord: shown.record), prismHour: nil),
             guideSeen: guideSeen
         )
     }
 
     /// Le solde, lu à l'endroit où l'écran le lit en second.
-    static func meesh(balance: Int = 9, minted: Int = 12, debitable: Int = 12_180, cost: Int? = nil) -> APIEngagementProgress.Meesh {
+    static func meesh(balance: Int = 9, minted: Int = 12, debitable: Int = 121_800, cost: Int? = nil) -> APIEngagementProgress.Meesh {
         let price = cost ?? GameMint.price(forNumber: minted + 1)
         return APIEngagementProgress.Meesh(
             balance: balance, mintedLifetime: minted, debitablePoints: debitable, floorPoints: 0,

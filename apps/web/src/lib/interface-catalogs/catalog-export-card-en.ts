@@ -126,6 +126,16 @@ const en = {
   'export.announce.motionUnavailable': 'This browser can’t create this animation',
   'export.announce.galleryMotion': 'Saved to your gallery',
   'export.announce.sharedMotion': 'Ready to share',
+  'export.card.compose': 'Layout',
+  'export.card.compose.postAndComment': 'Post + comment',
+  'export.card.compose.commentAlone': 'Comment only',
+  'export.card.compose.threadToHere': 'Thread so far',
+  'export.card.compose.postRootAndReply': 'Post + first comment + reply',
+  'export.card.compose.chosenReplies': 'Choose replies',
+  'export.card.compose.post': 'Post on top',
+  'export.card.compose.replies': 'Replies on the card',
+  'export.card.compose.thread': 'Comment thread',
+  'export.card.compose.folded': '+{count} replies',
 } satisfies ExportCardCatalog;
 
 export default en;

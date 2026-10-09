@@ -7,6 +7,8 @@ import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { GameMintPreview } from './game-mint-preview';
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
+import { formatCount } from '@/lib/view/game-copy';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click } = createActMounter();
@@ -25,6 +27,7 @@ const props = (patch: Parameters<typeof gameBlockFixture>[0] = {}, extra: Partia
   const game = gameBlockFixture(patch);
   return {
     mint: game.mint,
+    held: game.level.score,
     badgesLost: 2,
     online: true,
     minting: false,
@@ -63,7 +66,7 @@ describe('une frappe possible', () => {
     const impact = /data-game-mint-impact=""[^>]*>([\s\S]*?)<\/ul>/.exec(html)?.[1] ?? '';
     const lines = Array.from(impact.matchAll(/<li[^>]*>([^<]*)<\/li>/g)).map((m) => m[1]);
     expect(lines.some((line) => /niveaux?/.test(line ?? ''))).toBe(true);
-    expect(lines).toContain('+100 Gloire');
+    expect(lines).toContain(`+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`);
     expect(lines).toContain('2 badges redescendent');
   });
 
@@ -118,6 +121,21 @@ describe('une frappe possible', () => {
   });
 });
 
+describe('avant le geste, ce que la frappe dépense (#9705)', () => {
+  test('les points en poche, le prix, et ce qui restera', () => {
+    const page = text(renderToStaticMarkup(<GameMintPreview {...props({ score: 5000, debitablePoints: 5000 })} />));
+    expect(page).toContain('En poche 5 000 points');
+    expect(page).toContain('Coûte 1 221 points');
+    expect(page).toContain('Restera 3 779 points');
+  });
+
+  test('des points en poche qui ne sont pas convertibles ne paient pas la frappe : le manque se dit en convertibles', () => {
+    const page = text(renderToStaticMarkup(<GameMintPreview {...props({ score: 5000, debitablePoints: 900 })} />));
+    expect(page).toContain('En poche 5 000 points');
+    expect(page).toContain('Il manque 321 points convertibles');
+  });
+});
+
 describe('une frappe pas encore possible : pas de bouton grisé', () => {
   const html = renderToStaticMarkup(<GameMintPreview {...props({ score: 600, debitablePoints: 600 })} />);
 
@@ -126,7 +144,8 @@ describe('une frappe pas encore possible : pas de bouton grisé', () => {
   });
 
   test('ce qu’il manque, en une ligne, et le prix de la prochaine', () => {
-    expect(text(html)).toContain('Encore 621 points convertibles');
+    expect(text(html)).toContain('Il manque 621 points convertibles');
+    expect(text(html)).not.toContain('Restera');
     expect(html).toMatch(/data-game-mint-price=""[^>]*>1\s221\spoints</);
   });
 

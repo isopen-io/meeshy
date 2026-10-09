@@ -11,14 +11,16 @@ import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
 import { MutationLogCleanupJob } from './mutation-log-cleanup';
 import { BanExpirySweepJob } from './ban-expiry-sweep';
 import { sweepExpiredSessions } from './session-expiry-sweep';
+import { retentionPurgeArmed, sweepRetention } from './retention-sweep';
 import { GameLeagueJob } from './game-league';
 import { GameNightlyJob } from './game-nightly';
 import { GameMissionWindowJob } from './game-mission-window';
+import { BackupStatusCheckJob } from './backup-status-check';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
 import { getCacheStore } from '../services/CacheStore';
-import { GeoIPService, cleanGeoCache } from '../services/GeoIPService';
+import { GeoIPService, cleanGeoCache, warmGeoIpDatabase } from '../services/GeoIPService';
 import { BanService } from '../services/admin/ban.service';
 import { UserAuditService } from '../services/admin/user-audit.service';
 import { UserManagementService } from '../services/admin/user-management.service';
@@ -37,6 +39,8 @@ export class BackgroundJobsManager {
   private gameLeagueJob: GameLeagueJob;
   private gameNightlyJob: GameNightlyJob;
   private gameMissionWindowJob: GameMissionWindowJob;
+  /** Le contrôle de la sauvegarde nocturne, chaque jour à 5 h heure de Paris (#9668). */
+  private backupStatusCheckJob: BackupStatusCheckJob;
   /**
    * Le balayage des sessions expirées n'a pas de classe à lui : c'est UNE
    * requête, sans état ni dépendance. Une classe n'ajouterait qu'un emballage
@@ -50,6 +54,8 @@ export class BackgroundJobsManager {
    * raisonnement que le balayage des sessions ci-dessus (#5712).
    */
   private geoCacheInterval: NodeJS.Timeout | null = null;
+  /** La conservation (#9614, #9642) : une passe par jour, sans état propre. */
+  private retentionInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
 
   private prismaClient: PrismaClient;
@@ -73,6 +79,7 @@ export class BackgroundJobsManager {
     this.gameLeagueJob = new GameLeagueJob(prisma);
     this.gameNightlyJob = new GameNightlyJob(prisma);
     this.gameMissionWindowJob = new GameMissionWindowJob(prisma);
+    this.backupStatusCheckJob = new BackupStatusCheckJob({ prisma, emailService });
   }
 
   /**
@@ -95,6 +102,7 @@ export class BackgroundJobsManager {
     this.gameLeagueJob.start();
     this.gameNightlyJob.start();
     this.gameMissionWindowJob.start();
+    this.backupStatusCheckJob.start();
 
     // Toutes les six heures : une session dont l'échéance est passée cesse de
     // se déclarer valide. Sans ce balayage, `isValid` ment à tout ce qui le lit
@@ -136,8 +144,35 @@ export class BackgroundJobsManager {
       }
     };
     purgerLeCacheGeo();
+
+    /* LA BASE GÉOIP LOCALE SE CHARGE AU DÉMARRAGE (#9609), et son ABSENCE
+       se dit en ERREUR : sans elle, le pays de chaque connexion est inconnu
+       et le critère « pays » de l'alerte de nouvelle connexion s'éteint. Un
+       déploiement sans le fichier ne doit pas se dégrader en silence ; l'état
+       est aussi servi par `/health` (`services.geoip`). */
+    warmGeoIpDatabase()
+      .then((status) => {
+        if (status === 'loaded') logger.info('GeoIP database ready (DB-IP Lite, local)');
+        else logger.error(`GeoIP database ${status} — country and city of sessions stay unknown; mount the DB-IP Lite file (GEOIP_DATABASE_PATH)`);
+      })
+      .catch((err) => logger.error('GeoIP database warm-up failed', err));
+
     this.geoCacheInterval = guardedInterval({ name: 'geo-cache-purge', everyMs: 10 * 60 * 1000, logger, run: purgerLeCacheGeo });
     this.geoCacheInterval.unref();
+
+    /* LA CONSERVATION (#9614, #9642) — une passe par jour. ARMÉE seulement par
+       `RETENTION_PURGE_ENABLED=true` (staging) ; désarmée (production, en
+       attendant le feu vert du porteur), elle compte et journalise ce qu'elle
+       effacerait, sans rien écrire. */
+    const passerLaConservation = () => {
+      const apply = retentionPurgeArmed();
+      sweepRetention(this.prismaClient, { apply })
+        .then((report) => logger.info(apply ? 'Retention sweep applied' : 'Retention sweep (dry run — RETENTION_PURGE_ENABLED is not true): would purge', report))
+        .catch((err) => logger.error('Retention sweep failed', err));
+    };
+    passerLaConservation();
+    this.retentionInterval = guardedInterval({ name: 'retention-sweep', everyMs: 24 * 60 * 60 * 1000, logger, run: passerLaConservation });
+    this.retentionInterval.unref();
 
     this.isRunning = true;
     logger.info('All background jobs started successfully');
@@ -163,6 +198,7 @@ export class BackgroundJobsManager {
     this.gameLeagueJob.stop();
     this.gameNightlyJob.stop();
     this.gameMissionWindowJob.stop();
+    this.backupStatusCheckJob.stop();
 
     if (this.sessionSweepInterval) {
       clearInterval(this.sessionSweepInterval);
@@ -172,6 +208,11 @@ export class BackgroundJobsManager {
     if (this.geoCacheInterval) {
       clearInterval(this.geoCacheInterval);
       this.geoCacheInterval = null;
+    }
+
+    if (this.retentionInterval) {
+      clearInterval(this.retentionInterval);
+      this.retentionInterval = null;
     }
 
     this.isRunning = false;
@@ -207,6 +248,7 @@ export class BackgroundJobsManager {
       banExpirySweep: this.banExpirySweepJob,
       gameLeague: this.gameLeagueJob,
       gameNightly: this.gameNightlyJob,
+      backupStatusCheck: this.backupStatusCheckJob,
     };
   }
 

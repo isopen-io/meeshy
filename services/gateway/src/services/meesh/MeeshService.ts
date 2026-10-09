@@ -30,12 +30,13 @@ import {
   type EngagementAxisKey,
 } from '@meeshy/shared/types/engagement';
 import { computeMeeshMintPlan, type MeeshMintPlan } from '@meeshy/shared/utils/meesh';
-import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
-import { levelFromScore } from '@meeshy/shared/utils/game/levels';
-import { meeshEdition, meeshPrice, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
+import { GLORY_POINTS, levelCapForRank } from '@meeshy/shared/utils/game/glory';
+import { legacyLevel } from '@meeshy/shared/utils/game/levels';
+import { meeshEdition, meeshPrice, previewMint, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withRetry } from '../MessageMediaConsumptionService';
-import { GloryService } from '../game/GloryService';
+import { GloryService, gloryTotalFromLedger } from '../game/GloryService';
+import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from '../game/LevelStepFacts';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
 
@@ -93,6 +94,20 @@ export function receiptFromMeta(meta: unknown): MintReceipt | null {
 }
 
 /**
+ * Le reçu tel qu'il part sur le fil (#9688) : `levelBefore` / `levelAfter` gardent l'ancienne loi (bornés à
+ * 100, la seule forme que les clients publiés décodent) ; les niveaux ouverts par le rang voyagent dans
+ * `ladder`. Le registre, lui, garde la vérité.
+ */
+export function receiptOnTheWire(receipt: MintReceipt) {
+  return {
+    ...receipt,
+    levelBefore: legacyLevel(receipt.levelBefore),
+    levelAfter: legacyLevel(receipt.levelAfter),
+    ladder: { levelBefore: receipt.levelBefore, levelAfter: receipt.levelAfter },
+  };
+}
+
+/**
  * LE SOLDE SE LIT AU REGISTRE (#6428) — `User.meeshBalance == Σ(delta)`, et
  * cette fonction est le seul endroit qui calcule les deux totaux.
  *
@@ -117,6 +132,14 @@ export async function meeshTotalsFromLedger(
   // changent le solde sans être des frappes.
   const frappes = await db.meeshLedger.count({ where: { userId, reason: 'mint' } });
   return { balance: somme._sum.delta ?? 0, mintedLifetime: frappes };
+}
+
+/** Une frappe qui ferait passer le score sous zéro (#9675) : annulée en bloc, rendue comme insuffisante. */
+class ScoreWouldGoNegative extends Error {
+  constructor() {
+    super('mint would take the score below zero');
+    this.name = 'ScoreWouldGoNegative';
+  }
 }
 
 export class MeeshService {
@@ -186,7 +209,7 @@ export class MeeshService {
     // atteints se grave pendant que le score les porte encore.
     const compteAvant = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { engagementScore: true, levelRecord: true },
+      select: { engagementScore: true, levelRecord: true, ...LEVEL_STEP_USER_SELECT },
     });
     const scoreAvant = compteAvant?.engagementScore ?? 0;
     await new GloryService(this.prisma).creditLevelProgress({
@@ -195,9 +218,18 @@ export class MeeshService {
       previousRecord: compteAvant?.levelRecord ?? null,
     });
     // Le niveau d'APRÈS est celui que `previewMint` montrait : le score moins le
-    // prix, lu au même instant que le record.
-    const levelBefore = levelFromScore(scoreAvant);
-    const levelAfter = levelFromScore(Math.max(0, scoreAvant - price));
+    // prix, lu au même instant que le record. Le niveau s'ouvre selon le rang
+    // (#9688) et les étapes (#9706) : la frappe en fait une (une Meesh, cinq
+    // Meeshes, ou un rang par sa Gloire), le niveau d'après peut donc MONTER.
+    const [missionsDone, gloryAvant] = await Promise.all([countMissionsDone(this.prisma, userId), gloryTotalFromLedger(this.prisma, userId)]);
+    const steps = levelStepFactsOf({ row: { ...compteAvant, meeshMintedLifetime: avant.mintedLifetime }, missionsDone, glory: gloryAvant });
+    const { levelBefore, levelAfter } = previewMint({
+      score: scoreAvant,
+      mintedLifetime: avant.mintedLifetime,
+      debitablePoints: plan.debitablePoints,
+      levelCap: levelCapForRank(steps.rank),
+      steps,
+    });
     const edition = meeshEdition(number);
 
     try {
@@ -272,6 +304,9 @@ export class MeeshService {
           },
           select: { engagementScore: true },
         });
+        // Le score ne descend JAMAIS sous zéro (#9675) : des compteurs qui couvrent le prix quand le score
+        // ne le couvre pas trahissent un écart entre les deux sources ; la frappe s'annule en bloc.
+        if ((compte.engagementScore ?? 0) < 0) throw new ScoreWouldGoNegative();
 
         // La Gloire dans la MÊME transaction : une frappe qui débite sans la
         // graver est impossible, et inversement.
@@ -299,6 +334,9 @@ export class MeeshService {
         return apres;
       });
 
+      // La frappe a pu faire une étape des niveaux (#9706) : le niveau qui attendait monte d'un coup.
+      await new GloryService(this.prisma).openLevels(userId);
+
       log.info('Meesh frappée', {
         userId,
         cost: price,
@@ -313,6 +351,7 @@ export class MeeshService {
         receipt: { number, edition, price, gloryGained: GLORY_POINTS.mint, levelBefore, levelAfter },
       };
     } catch (err) {
+      if (err instanceof ScoreWouldGoNegative) return { status: 'insufficient', plan };
       // P2002 sur `(userId, requestId)` : deux frappes concurrentes portant le
       // même identifiant — l'index unique a fait son office, la première a
       // gagné. On rend son résultat plutôt qu'une erreur.

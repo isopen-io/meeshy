@@ -31,6 +31,8 @@ const baseFacts = (): GameBlockFacts => ({
   glory: 2000,
   mythic: false,
   mintedLifetime: 12,
+  missionsDone: 3,
+  flameRecord: 23,
   debitablePoints: 12_180,
   balance: 14,
   streak: 12,

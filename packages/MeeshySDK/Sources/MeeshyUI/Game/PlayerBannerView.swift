@@ -265,7 +265,7 @@ public struct PlayerBannerView: View {
             piece(text: meeshes) { MeeshCoinView(face: .obverse, edition: .silver, figures: nil).frame(width: 22, height: 22) }
         }
         if let rank = model.rank {
-            RankBlasonView(rank: rank.rank, division: rank.division, figures: nil)
+            RankBlasonView(rank: rank.rank, division5: rank.division, mythic: rank.mythic, figures: nil)
                 .frame(width: 34)
         }
         if let league = model.league {

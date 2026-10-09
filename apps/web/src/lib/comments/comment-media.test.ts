@@ -37,6 +37,11 @@ describe('acceptCommentFiles — photos, vidéos et sons (#9167, #9318)', () => 
     expect(accepted.map((piece) => piece.kind)).toEqual(['image', 'video', 'audio', 'image']);
   });
 
+  test('#9693 — garde un .wav nommé audio/x-wav et un .mp3 sans type', () => {
+    const accepted = acceptCommentFiles([], [file('note.wav', 'audio/x-wav'), file('chanson.mp3', '')]);
+    expect(accepted.map((piece) => piece.kind)).toEqual(['audio', 'audio']);
+  });
+
   test('s’ajoute à la sélection, jamais au-delà de MAX_POST_MEDIA', () => {
     const déjà = [pendingAttachmentOf(file('x.jpg', 'image/jpeg'))];
     const many = Array.from({ length: MAX_POST_MEDIA + 3 }, (_, i) => file(`p${i}.jpg`, 'image/jpeg'));

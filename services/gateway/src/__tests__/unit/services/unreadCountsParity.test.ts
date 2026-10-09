@@ -205,7 +205,7 @@ describe('unread counts — parité getUnreadCountsForParticipants / getUnreadCo
     expect(counts.get(CONVERSATION_ID)).toBe(2);
     expect(mockPrisma.message.findMany).toHaveBeenCalledWith({
       where: { conversationId: CONVERSATION_ID, deletedAt: null, createdAt: { gt: lastReadMessageCreatedAt } },
-      select: { createdAt: true, senderId: true },
+      select: { id: true, createdAt: true, senderId: true, messageSource: true, messageType: true, expiresAt: true },
       orderBy: { createdAt: 'asc' },
     });
   });

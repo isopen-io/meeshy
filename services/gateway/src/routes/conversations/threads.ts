@@ -24,6 +24,9 @@ import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedS
 import { loadQuotedEphemeralReaders, type EphemeralReaderResolution } from './ephemeralReaderDeadlines';
 import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
 import { readerParticipantIdOf } from './readerParticipant';
+import { signMessagesAttachmentsForReader } from '../../services/attachments/signServedAttachments';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
+import { captureNoticeWithheldFrom } from '../../services/messaging/captureNoticeVisibility';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -323,6 +326,9 @@ export function registerThreadsRoutes(
       if (!parent) {
         return sendNotFound(reply, 'Message not found');
       }
+      if (await captureNoticeWithheldFrom(prisma, { row: parent, reader: historyReaderFromAuthContext(authContext) })) {
+        return sendNotFound(reply, 'Message not found');
+      }
 
       const collected = await collectThreadReplies(prisma, conversationId, messageId, hiding, historyFloor);
 
@@ -349,9 +355,15 @@ export function registerThreadsRoutes(
         served(parent),
         ...replies.map(served),
       ]);
+      // #9646 — les pièces d'un message protégé du fil, signées pour CE lecteur.
+      const [signedParent, ...signedReplies] = await signMessagesAttachmentsForReader(prisma, {
+        messages: [servedParent, ...servedReplies],
+        readerParticipantId,
+        signer: readerFileUrlSignerFromEnv(new Date()),
+      });
       return sendSuccess(reply, {
-        parent: servedParent,
-        replies: servedReplies,
+        parent: signedParent,
+        replies: signedReplies,
         totalCount: replies.length
       });
     } catch (error) {

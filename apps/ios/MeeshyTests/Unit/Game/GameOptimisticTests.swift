@@ -10,14 +10,14 @@ final class GameOptimisticTests: XCTestCase {
     // MARK: - Frappe
 
     func test_afterMint_dropsTheLevelByTheLawAndRaisesTheTreasuryByOne() {
-        let state = GameFixture.state(GameFixture.game(score: 12_180, held: 9), meesh: GameFixture.meesh(balance: 9, minted: 12))
+        let state = GameFixture.state(GameFixture.game(score: 121_800, held: 9), meesh: GameFixture.meesh(balance: 9, minted: 12))
         let price = state.game.mint.price
 
         let next = GameOptimistic.afterMint(state)
 
-        XCTAssertEqual(next.game.level.score, 12_180 - price)
-        XCTAssertEqual(next.game.level.level, GameLevels.level(forScore: 12_180 - price))
-        XCTAssertLessThan(next.game.level.level, state.game.level.level)
+        XCTAssertEqual(next.game.level.score, 121_800 - price)
+        XCTAssertEqual(next.game.level.shown.level, GameLevels.level(forScore: 121_800 - price, cap: GameLevels.capBase))
+        XCTAssertLessThan(next.game.level.shown.level, state.game.level.shown.level)
         XCTAssertEqual(next.game.treasury.held, 10)
         XCTAssertEqual(next.meesh?.balance, 10)
         XCTAssertEqual(next.meesh?.mintedLifetime, 13)
@@ -47,6 +47,57 @@ final class GameOptimisticTests: XCTestCase {
         XCTAssertFalse(poor.mint.canMint)
         let state = GameFixture.state(poor, meesh: GameFixture.meesh(balance: 0, minted: 0, debitable: 400))
         XCTAssertEqual(GameOptimistic.afterMint(state), state)
+    }
+
+    // MARK: - Frappe au-delà du niveau 100 (#9688)
+
+    func test_afterMint_beyondLevel100_servesTheOpenedLevelInTheLadder_andKeepsYesterdaysFieldsAt100() {
+        let score = GameLevels.threshold(of: 250) + 40
+        let state = GameFixture.state(GameFixture.game(score: score), meesh: GameFixture.meesh(debitable: score))
+        let price = state.game.mint.price
+
+        let next = GameOptimistic.afterMint(state)
+
+        XCTAssertEqual(next.game.level.shown.level, GameLevels.level(forScore: score - price, cap: GameLevels.capBase))
+        XCTAssertGreaterThan(next.game.level.shown.level, GameLevels.legacyMaxLevel)
+        XCTAssertEqual(next.game.level.shown.tier, GameLevels.tier(of: next.game.level.shown.level))
+        XCTAssertEqual(next.game.level.shown.cap, GameLevels.capBase)
+        XCTAssertEqual(next.game.level.level, GameLevels.legacyMaxLevel, "les champs d'hier restent sous l'ancienne loi")
+        XCTAssertEqual(next.game.level.tier, .galaxie, "les champs d'hier ne portent que les dix premiers paliers")
+        XCTAssertEqual(next.game.level.shown.record, state.game.level.shown.record, "le record ouvert ne redescend jamais")
+        XCTAssertEqual(next.game.mint.shownLevels.levelBefore, next.game.level.shown.level)
+        XCTAssertLessThanOrEqual(next.game.mint.levelBefore, GameLevels.legacyMaxLevel)
+    }
+
+    func test_afterMint_whenItsGloryReachesAmbassador_theCapRisesTo1000() {
+        let score = GameLevels.threshold(of: 600)
+        let state = GameFixture.state(
+            GameFixture.game(score: score, glory: 129_500), meesh: GameFixture.meesh(debitable: score)
+        )
+        XCTAssertEqual(state.game.level.shown.level, GameLevels.capBase)
+        XCTAssertTrue(state.game.level.shown.isMax)
+        let price = state.game.mint.price
+
+        let next = GameOptimistic.afterMint(state)
+
+        XCTAssertEqual(next.game.glory.rank, .ambassadeur)
+        XCTAssertEqual(next.game.level.shown.cap, GameLevels.capAmbassador)
+        XCTAssertEqual(next.game.level.shown.level, GameLevels.level(forScore: score - price, cap: GameLevels.capAmbassador))
+        XCTAssertGreaterThan(next.game.level.shown.level, GameLevels.capBase, "le rang d'APRÈS la frappe ouvre les niveaux")
+        XCTAssertFalse(next.game.level.shown.isMax)
+    }
+
+    func test_withChestReward_beyondLevel100_recomposesTheLadderUnderTheRankCap() {
+        let state = GameFixture.state(GameFixture.game(score: GameLevels.threshold(of: 140), chestStatus: .ready))
+        let score = GameLevels.threshold(of: 141) + 7
+
+        let next = GameOptimistic.withChestReward(state, reward: DailyChest(points: 90, fragment: false, freeze: false), score: score)
+
+        XCTAssertEqual(next.game.level.shown.level, 141)
+        XCTAssertEqual(next.game.level.shown.tier, .nebuleuse)
+        XCTAssertEqual(next.game.level.shown.record, 141)
+        XCTAssertEqual(next.game.level.level, GameLevels.legacyMaxLevel)
+        XCTAssertEqual(next.game.level.record, GameLevels.legacyMaxLevel)
     }
 
     // MARK: - Gel
@@ -109,14 +160,14 @@ final class GameOptimisticTests: XCTestCase {
     }
 
     func test_withChestReward_laysTheServedContentAndCreditsTheScore() {
-        let state = GameFixture.state(GameFixture.game(score: 12_180, chestStatus: .ready))
+        let state = GameFixture.state(GameFixture.game(score: 121_800, chestStatus: .ready))
         let reward = DailyChest(points: 90, fragment: true, freeze: false)
 
-        let next = GameOptimistic.withChestReward(state, reward: reward, score: 12_270)
+        let next = GameOptimistic.withChestReward(state, reward: reward, score: 121_890)
 
         XCTAssertEqual(next.game.chest.reward, reward)
         XCTAssertEqual(next.game.chest.status, .claimed)
-        XCTAssertEqual(next.game.level.score, 12_270)
+        XCTAssertEqual(next.game.level.score, 121_890)
     }
 
     // MARK: - Rallumage

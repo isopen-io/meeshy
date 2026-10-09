@@ -476,3 +476,73 @@ describe('révoquer une session (#8876)', () => {
     expect(document.querySelector('[data-admin-confirm]')).not.toBeNull();
   });
 });
+
+describe('tout ce que la session dit, et « Tout fermer » (#9613)', () => {
+  const fullRow = (id: string, isValid: boolean) => ({
+    id,
+    deviceName: 'Pixel 7',
+    browserName: 'Chrome',
+    osName: 'Android',
+    userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7)',
+    appVersion: '2.13.0',
+    appBuild: '1874',
+    platform: 'android-shell',
+    loginMethod: 'magic_link',
+    timezone: 'Africa/Dakar',
+    ipAddress: '196.0.0.1',
+    city: 'Dakar',
+    country: 'SN',
+    isValid,
+    createdAt: '2026-09-29T12:00:00.000Z',
+    lastActivityAt: '2026-09-30T11:00:00.000Z',
+  });
+  const GEO = { provider: 'DB-IP', text: 'IP Geolocation by DB-IP', url: 'https://db-ip.com', license: 'CC-BY-4.0', approximate: true };
+  const sessionsWith = (rows: () => readonly unknown[], meta: unknown = { geolocation: GEO }): RoutedReply => (request) =>
+    request.method === 'GET' && pathOf(request) === `/api/v1/admin/users/${USER}/sessions`
+      ? { ok: true, data: rows(), pagination: { total: rows().length, offset: 0, limit: 20, hasMore: false }, meta: meta as Readonly<Record<string, unknown>> }
+      : undefined;
+  const noEvents = at('/security-events', page([]));
+  const security = (deps: AdminDeps) => <AdminUserSecurityTab userId={USER} language="fr" deps={deps} now={() => NOW} onAnnounce={() => undefined} />;
+
+  test('version et build, plateforme, moyen, lieu approximatif, fuseau, nom d’appareil, agent — et l’attribution DB-IP', async () => {
+    const { host } = await openAs(BIGBOSS, security, sessionsWith(() => [fullRow('s1', true)]), noEvents);
+    const row = textOf(host.querySelector('[data-admin-session="s1"]'));
+    for (const part of ['Pixel 7', '2.13.0 (1874)', 'Application Android', 'Lien magique par e-mail', 'Dakar, SN · approximatif', 'Africa/Dakar', 'Mozilla/5.0']) {
+      expect({ part, shown: row.includes(part) }).toEqual({ part, shown: true });
+    }
+    const link = host.querySelector<HTMLAnchorElement>('[data-admin-geolocation] a');
+    expect(link?.getAttribute('href')).toBe('https://db-ip.com');
+    expect(link?.textContent).toBe('IP Geolocation by DB-IP');
+  });
+
+  test('un serveur qui ne sert pas l’attribution : aucune n’est inventée, le lieu n’est pas qualifié', async () => {
+    const { host } = await openAs(BIGBOSS, security, sessionsWith(() => [fullRow('s1', true)], {}), noEvents);
+    expect(host.querySelector('[data-admin-geolocation]')).toBeNull();
+    expect(textOf(host.querySelector('[data-admin-session="s1"]'))).not.toContain('approximatif');
+  });
+
+  test('« Tout fermer » : confirmation qui dit que le membre est informé sans nommer l’administrateur, DELETE sur toutes ses sessions', async () => {
+    let rows: readonly unknown[] = [fullRow('s1', true), fullRow('s2', true)];
+    const closeAll: RoutedReply = (request) => {
+      if (request.method !== 'DELETE' || pathOf(request) !== `/api/v1/admin/users/${USER}/sessions`) return undefined;
+      rows = rows.map((row) => ({ ...(row as Record<string, unknown>), isValid: false, invalidatedReason: 'admin_revoke' }));
+      return { ok: true, data: { revokedCount: 2 } };
+    };
+    const { host, calls } = await openAs(BIGBOSS, security, sessionsWith(() => rows), closeAll, noEvents);
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="revoke-all-sessions"]')?.click());
+    const sheet = textOf(document.querySelector('[data-admin-confirm]'));
+    expect(sheet).toContain('l’équipe Meeshy');
+    expect(sheet).toContain('sans que vous soyez nommé');
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]')?.click());
+    await mounter.settle();
+    await mounter.settle();
+    expect(calls().filter((call) => call.method === 'DELETE').map((call) => pathOf(call))).toEqual([`/api/v1/admin/users/${USER}/sessions`]);
+    expect(host.querySelectorAll('[data-admin-session-state="valid"]')).toHaveLength(0);
+    expect(host.querySelector('[data-admin-action="revoke-all-sessions"]')).toBeNull();
+  });
+
+  test('sans le rang d’administration, « Tout fermer » n’est pas offert', async () => {
+    const { host } = await openAs(adminIdentityFixture({ role: 'MODERATOR' }), security, sessionsWith(() => [fullRow('s1', true)]), noEvents);
+    expect(host.querySelector('[data-admin-action="revoke-all-sessions"]')).toBeNull();
+  });
+});

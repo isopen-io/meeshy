@@ -16,7 +16,7 @@
  * sans aucun avantage de jeu.
  *
  * Terminer le parcours (étape 40) rend la coupe de saison, un badge daté et
- * +500 de Gloire — c'est ce que `seasonSettlement` dit, une fois.
+ * `GLORY_POINTS.season` de Gloire — c'est ce que `seasonSettlement` dit, une fois.
  */
 
 import { addDays, dayDiff } from './day-prng.js';
@@ -175,7 +175,7 @@ export function claimSeasonStep(params: {
 
 export type SeasonSettlement = {
   readonly completed: boolean;
-  /** +500 au parcours terminé. */
+  /** `GLORY_POINTS.season` au parcours terminé. */
   readonly glory: number;
   readonly cup: boolean;
   /** Le badge daté : `season.<n>`, `null` sans parcours terminé. */

@@ -18,6 +18,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import { hashSessionToken } from '../../../utils/session-token';
+import { SessionActivitySampler } from '../../../services/auth/session-activity';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -737,21 +738,27 @@ describe('AuthMiddleware — StatusService integration', () => {
     expect(statusService.updateAnonymousLastSeen).toHaveBeenCalledWith(participant.id);
   });
 
-  it('calls userSession.update when sessionToken provided and JWT is not expired', async () => {
+  it("ne réécrit plus la session de l'en-tête à chaque requête : la dernière activité suit le `sid`, échantillonnée (#9607)", async () => {
     const user = createTestUser();
     const prisma = createMockPrisma({
       userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
     });
-    const sessionUpdateMock = (jest.fn() as jest.Mock<any>).mockReturnValue({ catch: jest.fn() });
+    const sessionUpdateMock = jest.fn() as jest.Mock<any>;
+    const sessionUpdateManyMock = (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 1 });
     (prisma as any).userSession.update = sessionUpdateMock;
+    (prisma as any).userSession.updateMany = sessionUpdateManyMock;
 
-    const middleware = new AuthMiddleware(prisma as never);
+    const middleware = new AuthMiddleware(prisma as never, undefined, { sessionActivity: new SessionActivitySampler() });
     const token = signJwt(user.id);
 
     await middleware.createAuthContext(`Bearer ${token}`, 'some-raw-session-token');
+    await middleware.createAuthContext(`Bearer ${token}`, 'some-raw-session-token');
 
-    expect(sessionUpdateMock).toHaveBeenCalledWith(
+    expect(sessionUpdateMock).not.toHaveBeenCalled();
+    expect(sessionUpdateManyMock).toHaveBeenCalledTimes(1);
+    expect(sessionUpdateManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: 'test-session', userId: user.id, isValid: true }),
         data: expect.objectContaining({ lastActivityAt: expect.any(Date) }),
       })
     );
@@ -803,24 +810,24 @@ describe('AuthMiddleware — fire-and-forget catch callbacks', () => {
   // describe('AuthMiddleware — JWT expired with sessionToken') ci-dessus) —
   // il n'y a donc plus rien à observer ici pour ce cas.
 
-  it('triggers non-expired sessionToken update .catch callback when update fails', async () => {
+  it("une écriture d'activité REJETÉE est rattrapée, et la requête est admise (#9607)", async () => {
     const user = createTestUser();
-    const sessionUpdateMock = (jest.fn() as jest.Mock<any>).mockReturnValue(
-      Promise.reject(new Error('update failed'))
+    const sessionUpdateManyMock = (jest.fn() as jest.Mock<any>).mockImplementation(
+      () => Promise.reject(new Error('update failed'))
     );
     const prisma = createMockPrisma({
       userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
     });
-    (prisma as any).userSession.update = sessionUpdateMock;
+    (prisma as any).userSession.updateMany = sessionUpdateManyMock;
 
-    const middleware = new AuthMiddleware(prisma as never);
+    const middleware = new AuthMiddleware(prisma as never, undefined, { sessionActivity: new SessionActivitySampler() });
     const token = signJwt(user.id);
 
     const ctx = await middleware.createAuthContext(`Bearer ${token}`, 'raw-session-xyz');
 
     await new Promise(r => setImmediate(r));
     expect(ctx.isAuthenticated).toBe(true);
-    expect(sessionUpdateMock).toHaveBeenCalled();
+    expect(sessionUpdateManyMock).toHaveBeenCalled();
   });
 });
 

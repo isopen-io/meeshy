@@ -1,9 +1,9 @@
 /** LE CARNET DES RÈGLES ET SON ATLAS (#9542) — `game.rules.*`. Chargé avec la seule page « Comment ça marche ». Le français est la SOURCE des clés ; les six autres langues portent exactement les mêmes. */
 const fr = {
   'game.rules.1.title': 'Chaque geste rapporte',
-  'game.rules.1.body': 'Écrire, parler, publier, réagir, inviter : chaque action utile donne des points.',
+  'game.rules.1.body': 'Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Une publication rapporte selon qui peut la voir : public, communauté ou amis. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte.',
   'game.rules.2.title': 'Les points font le niveau',
-  'game.rules.2.body': '100 niveaux en 10 paliers. Chaque niveau demande un peu plus que le précédent.',
+  'game.rules.2.body': 'Un million de points pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Jusqu’à 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle. Prestige au niveau 100, facultatif. Au-delà de 100 : 1 000 de Gloire par dizaine.',
   'game.rules.3.title': 'On frappe des Meeshes',
   'game.rules.3.body': 'À partir de 1 221 points, on frappe une Meesh à la main. Le prix monte avec le nombre de Meeshes déjà frappées.',
   'game.rules.4.title': 'Frapper fait redescendre',
@@ -27,7 +27,7 @@ const fr = {
   'game.rules.atlas.rarities': 'Les raretés',
   'game.rules.atlas.obverse': 'Avers',
   'game.rules.atlas.reverse': 'Revers',
-  'game.rules.atlas.line.levels': 'Cent niveaux en dix paliers : chaque palier a son emblème et sa couleur.',
+  'game.rules.atlas.line.levels': 'Vingt paliers : dix jusqu’à 100, puis un par centaine, Singularité dès 1000.',
   'game.rules.atlas.line.meesh': 'L’avers porte la Signature ; le revers, Mee et Meo, le numéro et l’année. Or tous les cent, prisme tous les mille.',
   'game.rules.atlas.line.treasury': 'Garder ses Meeshes remplit le trésor : six paliers à gravir.',
   'game.rules.atlas.line.rank': 'Onze rangs. La Gloire les donne, et le rang ne baisse jamais.',
@@ -36,7 +36,7 @@ const fr = {
   'game.rules.atlas.line.medals': 'Sept matières, du cuivre au prisme : le métal dit la hauteur atteinte. Un badge éteint laisse une empreinte.',
   'game.rules.atlas.line.trophies': 'Un trophée se reçoit à un moment précis : coupe de ligue, de saison, Prestige, Flamme.',
   'game.rules.atlas.line.rarities': 'Cinq raretés, mesurées chaque nuit. Aucune ne rapporte de points.',
-  'game.rules.atlas.levels': 'Les dix paliers',
+  'game.rules.atlas.levels': 'Les vingt paliers',
   'game.rules.atlas.treasury': 'Les paliers du trésor',
   'game.rules.atlas.ranks': 'Les blasons des rangs',
   'game.rules.atlas.flames': 'Les cinq Flammes',
@@ -57,7 +57,14 @@ const fr = {
   'game.rules.atlas.share_legendary': '0,2 à 2 % des comptes',
   'game.rules.atlas.share_mythic': 'moins de 0,2 % des comptes',
   'game.rules.atlas.rarity_glory': '+{glory} de Gloire',
-  'game.rules.atlas.myth': 'Les 100 Légendes les plus glorieuses',
+  'game.rules.atlas.myth': 'Les 100 premiers à atteindre 1 000 000 de Gloire',
+  'game.rules.badges.title': 'Les badges',
+  'game.rules.badges.intro': 'Chaque badge compte UN geste précis : un message vocal, une story, une amitié nouée… Il y en a vingt, rangés en cinq familles.',
+  'game.rules.badges.ladder': 'Chaque badge monte sur sept paliers. À chaque seuil franchi, il change de matière et allume une étoile de plus.',
+  'game.rules.badges.ribbon': 'Dès l’Or, la médaille porte un ruban ; au Prisme, son émail s’irise.',
+  'game.rules.badges.imprint': 'Frapper une Meesh peut éteindre un badge : il devient une empreinte qui dit ce qu’il manque pour le rallumer.',
+  'game.rules.badges.families': 'Les vingt badges, par famille',
+  'game.rules.badges.sheet': 'Touche un badge : sa fiche dit ce qui compte pour lui, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile.',
 } as const;
 
 export default fr;

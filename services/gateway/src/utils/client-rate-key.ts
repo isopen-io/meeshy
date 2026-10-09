@@ -5,10 +5,12 @@ import type { FastifyRequest } from 'fastify';
  *
  * ## Pourquoi `request.ip`, et surtout pourquoi PAS les en-têtes
  *
- * Le dépôt contient `extractIpFromRequest` (`services/GeoIPService.ts:64`), qui
- * lit `cf-connecting-ip` → `x-real-ip` → premier saut de `x-forwarded-for` →
- * `request.ip`. Elle est juste pour son usage — la GÉOLOCALISATION, où se
- * tromper coûte un drapeau de pays — et serait un **contresens** ici.
+ * `extractIpFromRequest` (`services/GeoIPService.ts`) lisait `cf-connecting-ip`
+ * → `x-real-ip` → premier saut de `x-forwarded-for` → `request.ip`, au motif
+ * que la GÉOLOCALISATION ne coûte qu'un drapeau de pays. Faux : cette adresse
+ * est enregistrée sur la session et décide du lieu de l'alerte « nouvelle
+ * connexion ». Elle rend désormais `request.ip`, comme cette clé (#9608) — une
+ * seule adresse par requête dans toute la passerelle.
  *
  * Ces en-têtes sont écrits par l'APPELANT. Les prendre pour clé de débit
  * laisserait n'importe qui choisir son propre seau : un en-tête différent à

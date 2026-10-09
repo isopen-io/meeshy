@@ -3,13 +3,16 @@ import { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from '../conversations/utils/message-sender-select';
 import { serializeAttachmentForSocket } from '../../socketio/serializeAttachmentForSocket';
+import { signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
+import { readerFileUrlSignerFromEnv, type ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { messageAttachmentSchema, messageTranslationSchema, sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import { MESSAGE_PROTECTION_SELECT } from '../conversations/messages-list-query';
 import { logger } from '../../utils/logger';
-import { loadPersonalHistoryHidingByConversation } from '../../services/personalHistoryFilter';
+import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
+import { mayBeCaptureNotice, unservedCaptureNoticeIdsAmong } from '../../services/messaging/captureNoticeVisibility';
 import type { CursorKey, SyncCursor } from './cursor';
 import { encodeSyncCursor } from './cursor';
 import type { SyncIdentity } from './identity';
@@ -171,7 +174,10 @@ export const SYNC_MESSAGE_SERVED_FIELDS = Object.keys(syncMessageSelect) as read
  *   `delete-for-me`) se résout par conversation. Une garde qui dépendrait d'un
  *   paramètre d'appelant n'en serait plus une : l'omettre lèverait le masquage.
  */
-const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt'] as const;
+// `messageSource`, `messageType`, `expiresAt` : la marque d'un avis de capture
+// (#9629), lue pour le CLASSER, jamais servie hors projection — sans elle, toute
+// ligne projetée partirait au classement.
+const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt', 'messageSource', 'messageType', 'expiresAt'] as const;
 
 /**
  * Les SIX colonnes de `MESSAGE_PROTECTION_SELECT`, relevées mécaniquement
@@ -200,6 +206,11 @@ export const syncMessagePlan: ColumnPlan<typeof syncMessageSelect> = {
   pinned: [...SYNC_MESSAGE_PINNED],
   columns: {
     content: ['content', ...PROTECTION_KEYS],
+    // #9600 — une pièce servie se signe sur la nature de son message : sans le
+    // bloc chargé, `?fields=messages.attachments` signerait toute pièce,
+    // ordinaire comprise (fail-closed), et ses caches clients changeraient
+    // d'adresse à chaque pas.
+    attachments: ['attachments', ...PROTECTION_KEYS],
   },
 };
 
@@ -254,6 +265,7 @@ function servedPinnedFor(fields: FieldSet): readonly string[] {
 function serializeSyncMessage(
   message: SyncMessage,
   readerParticipantId: string | undefined,
+  signer: ReaderFileUrlSigner | null,
 ): Record<string, unknown> {
   // `translations` et `attachments` sont des colonnes PROJETABLES depuis
   // #4173 : une projection qui ne les nomme pas les laisse absentes de la
@@ -274,8 +286,10 @@ function serializeSyncMessage(
     ...(brut.attachments === undefined
       ? {}
       : {
-          attachments: brut.attachments.map((attachment) =>
-            serializeAttachmentForSocket(attachment, readerParticipantId),
+          // #9600 — l'adresse d'une pièce protégée est celle de CE lecteur.
+          attachments: signReaderAttachmentsIn(
+            brut.attachments.map((attachment) => serializeAttachmentForSocket(attachment, readerParticipantId)),
+            { message: brut, readerParticipantId, signer },
           ),
         }),
   };
@@ -509,7 +523,7 @@ export async function syncMessages(opts: {
     userId: identity.kind === 'user' ? identity.userId : null,
     conversationIds,
   });
-  const visible = hidingByConversation.size === 0
+  const unhidden = hidingByConversation.size === 0
     ? changedPage
     : changedPage.filter((m) => {
         const hiding = hidingByConversation.get(m.conversationId);
@@ -517,6 +531,24 @@ export async function syncMessages(opts: {
         if (hiding.hiddenMessageIds.includes(m.id)) return false;
         return hiding.clearHistoryBefore === null || m.createdAt >= hiding.clearHistoryBefore;
       });
+
+  // #9629 — un avis de capture ne se rattrape que chez qui lit le message qu'il
+  // nomme. APRÈS le keyset, comme le masquage : le curseur ne recule pas.
+  const membershipByConversation = new Map(membership.memberships.map((m) => [m.conversationId, m] as const));
+  const unservedNotices = await unservedCaptureNoticeIdsAmong(prisma, {
+    ids: unhidden.filter(mayBeCaptureNotice).map((m) => m.id),
+    viewerOf: (conversationId) => {
+      const member = membershipByConversation.get(conversationId);
+      if (!member) return null;
+      return {
+        participantId: member.id,
+        conversationRole: member.role ?? null,
+        floor: membership.floors.get(conversationId) ?? null,
+        hiding: hidingByConversation.get(conversationId) ?? NO_PERSONAL_HIDING,
+      };
+    },
+  });
+  const visible = unservedNotices.size === 0 ? unhidden : unhidden.filter((m) => !unservedNotices.has(m.id));
 
   // La sérialisation s'applique APRÈS le masquage et APRÈS le budget, sur les
   // seules lignes réellement LIVRÉES.
@@ -558,13 +590,14 @@ export async function syncMessages(opts: {
   // #7950 — la citation d'une story RETIRÉE par son auteur sort expurgée de
   // `metadata.postReplyTo` : UNE requête pour la page.
   const withdrawnCitations = await loadWithdrawnCitations(prisma, visible);
+  const fileUrlSigner = readerFileUrlSignerFromEnv(new Date());
   const serialize = (m: SyncMessage): Record<string, unknown> =>
     projectViewOnceForReader(
       servePostReplyCitation(hoistLocationOnto(
         withReaderReactions(
           m,
           restrictFields(
-            serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId)),
+            serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId), fileUrlSigner),
             fields,
             servedPinned,
           ),

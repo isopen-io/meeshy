@@ -5,7 +5,7 @@ import MeeshySDK
 //
 // MIROIR des clés `game.detail.*` du catalogue du web
 // (`apps/web/src/lib/interface-catalogs/catalog-game-concept-<langue>.ts`, #9563) : la MÊME phrase, dans les sept
-// langues, sur les deux plateformes. Dix-huit familles d'élément ont deux phrases (`game.detail.<famille>.what` et
+// langues, sur les deux plateformes. Dix-neuf familles d'élément ont deux phrases (`game.detail.<famille>.what` et
 // `.how`), trente-sept données en ont une (`game.detail.fact.<donnée>`). Chaque accesseur est une CLÉ LITTÉRALE, que
 // la garde du catalogue sait lire ; aucun texte n'est écrit de ce côté. Les noms déjà au catalogue (rangs, paliers,
 // formes, ligues) sont réutilisés par le modèle, jamais reformulés ici.
@@ -56,7 +56,7 @@ enum GameDetailText {
 
     /// « 10 points par geste » — ce qu'un geste de la famille rapporte.
     static func elanPoints(_ points: String) -> String {
-        String(localized: "game.detail.elan.points", defaultValue: "\(points) par geste", bundle: .main)
+        String(localized: "game.detail.elan.points", defaultValue: "jusqu’à \(points) par geste", bundle: .main)
     }
 
 
@@ -89,6 +89,7 @@ enum GameDetailText {
         case .levelRing: String(localized: "game.detail.ring.what", defaultValue: "L’anneau montre ton niveau : il se remplit avec tes points.", bundle: .main)
         case .treasuryTier: String(localized: "game.detail.treasury.what", defaultValue: "Ton trésor grandit avec les Meeshes que tu gardes.", bundle: .main)
         case .elanFamily: String(localized: "game.detail.elan.what", defaultValue: "Une famille regroupe des gestes qui se ressemblent.", bundle: .main)
+        case .levelStep: String(localized: "game.detail.levelstep.what", defaultValue: "De 10 à 100, chaque dizaine de niveaux demande une étape simple.", bundle: .main)
         case .fact, .player: nil
         }
     }
@@ -116,6 +117,7 @@ enum GameDetailText {
         case .levelRing: String(localized: "game.detail.ring.how", defaultValue: "Gagne des points : quand l’anneau est plein, tu montes d’un niveau.", bundle: .main)
         case .treasuryTier: String(localized: "game.detail.treasury.how", defaultValue: "Garde tes Meeshes au lieu de les dépenser pour atteindre le palier suivant.", bundle: .main)
         case .elanFamily: String(localized: "game.detail.elan.how", defaultValue: "Chaque geste rapporte des points. Plusieurs familles actives déclenchent un élan.", bundle: .main)
+        case .levelStep: String(localized: "game.detail.levelstep.how", defaultValue: "Fais l’étape : si tes points y sont déjà, le niveau monte d’un coup.", bundle: .main)
         case .fact, .player: nil
         }
     }
@@ -162,8 +164,130 @@ enum GameDetailText {
         case .showcaseVisibility: String(localized: "game.detail.fact.showcase_visibility", defaultValue: "Tu choisis qui voit ta vitrine : tout le monde, tes amis, ou toi seul.", bundle: .main)
         case .atlasStamps: String(localized: "game.detail.fact.atlas_stamps", defaultValue: "Ce sont les langues où tu as un tampon, sur toutes celles de l’Atlas.", bundle: .main)
         case .atlasPending: String(localized: "game.detail.fact.atlas_pending", defaultValue: "Ce sont les langues où il manque encore un message, envoyé ou reçu.", bundle: .main)
+        case .spendHeld: String(localized: "game.detail.fact.spend_held", defaultValue: "C’est ce que tu as avant ce geste.", bundle: .main)
+        case .spendCost: String(localized: "game.detail.fact.spend_cost", defaultValue: "C’est ce que ce geste te prend.", bundle: .main)
+        case .spendAfter: String(localized: "game.detail.fact.spend_after", defaultValue: "C’est ce qu’il te restera après ce geste.", bundle: .main)
+        case .spendMissing: String(localized: "game.detail.fact.spend_missing", defaultValue: "C’est ce qu’il te manque pour faire ce geste.", bundle: .main)
+        case .levelNow: String(localized: "game.detail.fact.level_now", defaultValue: "C’est ton niveau en ce moment.", bundle: .main)
+        case .levelRequired: String(localized: "game.detail.fact.level_required", defaultValue: "C’est le niveau qu’il faut atteindre pour l’ouvrir.", bundle: .main)
         }
     }
 
     static var close: String { String(localized: "common.close", defaultValue: "Fermer", bundle: .main) }
+}
+
+// MARK: - Ce qu'un badge dit de lui-même (#9640, jumelle de #9639)
+//
+// MIROIR des clés `game.badge.*` et `game.rules.badges.*` du web (`catalog-game-concept-<langue>.ts`,
+// `catalog-game-rules-<langue>.ts`) : la MÊME phrase, dans les sept langues. Les phrases à nombre reçoivent le nombre
+// déjà FORMATÉ (`GameCopy.formatCount`) — jamais un entier nu dans un trou de chaîne.
+enum GameBadgeGuideText {
+
+    /// Le titre de la phrase de l'axe — « Ce qui compte ».
+    static var countsLabel: String { String(localized: "game.badge.counts_label", defaultValue: "Ce qui compte", bundle: .main) }
+
+    static var starsLabel: String { String(localized: "game.badge.stars_label", defaultValue: "Étoiles", bundle: .main) }
+
+    static var materialLabel: String { String(localized: "game.badge.material_label", defaultValue: "Matière", bundle: .main) }
+
+    static var ladderTitle: String { String(localized: "game.badge.ladder_title", defaultValue: "Les sept paliers", bundle: .main) }
+
+    static var upcomingTitle: String { String(localized: "game.badge.upcoming_title", defaultValue: "À venir", bundle: .main) }
+
+    static var guideLink: String { String(localized: "game.badge.guide_link", defaultValue: "Comprendre les badges", bundle: .main) }
+
+    static var complete: String {
+        String(localized: "game.badge.complete", defaultValue: "Les sept étoiles sont allumées : ce badge est au Prisme.", bundle: .main)
+    }
+
+    // MARK: Pourquoi cette matière
+
+    static var reasonNone: String {
+        String(localized: "game.badge.reason.none", defaultValue: "Aucune étoile pour l’instant : le premier geste allume le cuivre.", bundle: .main)
+    }
+
+    static func reasonCrossed(material: String, threshold: String, count: String) -> String {
+        String(localized: "game.badge.reason.crossed",
+               defaultValue: "\(material), parce que tu as franchi le seuil de \(threshold) : tu en es à \(count).", bundle: .main)
+    }
+
+    static func reasonServed(material: String, threshold: String) -> String {
+        String(localized: "game.badge.reason.served", defaultValue: "\(material), gagné quand tu as franchi le seuil de \(threshold).", bundle: .main)
+    }
+
+    /// Ce qu'il manque pour la prochaine étoile.
+    static func next(missing: String, material: String, threshold: String) -> String {
+        String(localized: "game.badge.next",
+               defaultValue: "Encore \(missing) pour la prochaine étoile : \(material), au seuil de \(threshold).", bundle: .main)
+    }
+
+    // MARK: Un palier de l'échelle
+
+    static func rungUpcoming(threshold: String) -> String {
+        String(localized: "game.badge.rung.upcoming", defaultValue: "À \(threshold)", bundle: .main)
+    }
+
+    static func rungNext(missing: String) -> String {
+        String(localized: "game.badge.rung.next", defaultValue: "Prochaine étoile · encore \(missing)", bundle: .main)
+    }
+
+    // MARK: VoiceOver — un palier, un badge : une phrase
+
+    static func rungReachedA11y(material: String, threshold: String) -> String {
+        String(localized: "game.badge.rung.a11y.reached", defaultValue: "\(material), seuil de \(threshold), atteint", bundle: .main)
+    }
+
+    static func rungReachedOnA11y(material: String, threshold: String, date: String) -> String {
+        String(localized: "game.badge.rung.a11y.reached_on", defaultValue: "\(material), seuil de \(threshold), atteint le \(date)", bundle: .main)
+    }
+
+    static func rungNextA11y(material: String, threshold: String, missing: String) -> String {
+        String(localized: "game.badge.rung.a11y.next",
+               defaultValue: "\(material), seuil de \(threshold), prochaine étoile : encore \(missing)", bundle: .main)
+    }
+
+    static func rungUpcomingA11y(material: String, threshold: String) -> String {
+        String(localized: "game.badge.rung.a11y.upcoming", defaultValue: "\(material), seuil de \(threshold), à venir", bundle: .main)
+    }
+
+    /// « Étoiles : 2 sur 7 » — sans pluriel à accorder.
+    static func starsA11y(lit: String, max: String) -> String {
+        String(localized: "game.badge.a11y.stars", defaultValue: "Étoiles : \(lit) sur \(max)", bundle: .main)
+    }
+
+    // MARK: La section badges du carnet des règles
+
+    static var rulesTitle: String { String(localized: "game.rules.badges.title", defaultValue: "Les badges", bundle: .main) }
+
+    static var rulesIntro: String {
+        String(localized: "game.rules.badges.intro",
+               defaultValue: "Chaque badge compte UN geste précis : un message vocal, une story, une amitié nouée… Il y en a vingt, rangés en cinq familles.",
+               bundle: .main)
+    }
+
+    static var rulesLadder: String {
+        String(localized: "game.rules.badges.ladder",
+               defaultValue: "Chaque badge monte sur sept paliers. À chaque seuil franchi, il change de matière et allume une étoile de plus.",
+               bundle: .main)
+    }
+
+    static var rulesRibbon: String {
+        String(localized: "game.rules.badges.ribbon", defaultValue: "Dès l’Or, la médaille porte un ruban ; au Prisme, son émail s’irise.", bundle: .main)
+    }
+
+    static var rulesImprint: String {
+        String(localized: "game.rules.badges.imprint",
+               defaultValue: "Frapper une Meesh peut éteindre un badge : il devient une empreinte qui dit ce qu’il manque pour le rallumer.",
+               bundle: .main)
+    }
+
+    static var rulesFamilies: String {
+        String(localized: "game.rules.badges.families", defaultValue: "Les vingt badges, par famille", bundle: .main)
+    }
+
+    static var rulesSheet: String {
+        String(localized: "game.rules.badges.sheet",
+               defaultValue: "Touche un badge : sa fiche dit ce qui compte pour lui, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile.",
+               bundle: .main)
+    }
 }

@@ -25,6 +25,9 @@ type Placeholders<S extends string> = S extends `${string}{${infer Name}}${infer
   ? Name | Placeholders<Rest>
   : never;
 
+/** Les clés sans paramètre — celles qu'on traduit d'un seul argument. */
+export type PlainExportCardKey = { [K in ExportCardCatalogKey]: [Placeholders<FrenchExportCardCatalog[K]>] extends [never] ? K : never }[ExportCardCatalogKey];
+
 type TranslateExportCardArgs<K extends ExportCardCatalogKey> = [Placeholders<FrenchExportCardCatalog[K]>] extends [never]
   ? []
   : [params: Readonly<Record<Placeholders<FrenchExportCardCatalog[K]>, string>>];

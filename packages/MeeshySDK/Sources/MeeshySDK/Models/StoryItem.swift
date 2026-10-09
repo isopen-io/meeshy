@@ -305,7 +305,8 @@ extension Array where Element == APIPost {
             // politique de fallback, post-revue 2026-07-13).
             let repostSource = post.repostOf
             let ownMedia = post.media ?? []
-            let hasOwnContent = !ownMedia.isEmpty || post.storyEffects != nil
+            let hasOwnContent = StoryEffects.republicationHasOwnContent(own: post.storyEffects,
+                                                                        ownMediaIsEmpty: ownMedia.isEmpty)
             // Un repost peut avoir son propre snapshot `media` (nouveaux ids,
             // parfois des URLs relatives cassées) alors que son `storyEffects`
             // OWN référence encore les `postMediaId` ORIGINAUX de `repostOf.media`
@@ -343,7 +344,9 @@ extension Array where Element == APIPost {
                 ?? post.createdAt.addingTimeInterval(StoryItem.defaultExpiryInterval)
             let totalReactions = post.reactionSummary?.values.reduce(0, +) ?? 0
             let item = StoryItem(id: post.id, content: post.content, media: media,
-                                 storyEffects: hasOwnContent ? post.storyEffects : repostSource?.storyEffects,
+                                 storyEffects: StoryEffects.played(own: post.storyEffects,
+                                                                   ownMediaIsEmpty: ownMedia.isEmpty,
+                                                                   source: repostSource?.storyEffects),
                                  createdAt: post.createdAt, expiresAt: effectiveExpiresAt,
                                  repostOfId: post.repostOf?.id,
                                  originalRepostOfId: post.originalRepostOfId,
@@ -391,5 +394,40 @@ extension Array where Element == APIPost {
             return (a.latestStory?.createdAt ?? .distantPast) > (b.latestStory?.createdAt ?? .distantPast)
         }
         return groups
+    }
+}
+
+// MARK: - Republication : ce que l'enveloppe JOUE (#9677)
+
+public extension StoryEffects {
+    /// **Une republication a-t-elle un contenu PROPRE ?** Un média ou des effets
+    /// à elle. Sans rien, elle joue la story qu'elle republie — médias ET effets
+    /// d'un seul tenant, jamais mêlés (leurs `postMediaId` se répondent).
+    static func republicationHasOwnContent(own: StoryEffects?, ownMediaIsEmpty: Bool) -> Bool {
+        !ownMediaIsEmpty || own != nil
+    }
+
+    /// **Les effets qu'une publication JOUE** — les siens, ou ceux de sa source
+    /// quand l'enveloppe est vide. Site UNIQUE de ce repli : le lecteur de story
+    /// (`toStoryGroups`), le pont du détail (`StoryItem(feedPost:)`) et la carte
+    /// du fil (`FeedPost.playedStoryEffects`) le lisent ici, de sorte que le son
+    /// annoncé est celui qui joue, partout.
+    static func played(own: StoryEffects?, ownMediaIsEmpty: Bool, source: StoryEffects?) -> StoryEffects? {
+        republicationHasOwnContent(own: own, ownMediaIsEmpty: ownMediaIsEmpty) ? own : source
+    }
+}
+
+public extension FeedPost {
+    /// La story que ce post republie, quand c'en est une.
+    var republishedStory: RepostContent? {
+        guard let repost, (repost.type ?? "").uppercased() == "STORY" else { return nil }
+        return repost
+    }
+
+    /// Les effets que ce post JOUE (`StoryEffects.played`) — ceux qu'annonce
+    /// la carte du fil, comme le détail et le lecteur.
+    var playedStoryEffects: StoryEffects? {
+        StoryEffects.played(own: storyEffects, ownMediaIsEmpty: media.isEmpty,
+                            source: republishedStory?.storyEffects)
     }
 }

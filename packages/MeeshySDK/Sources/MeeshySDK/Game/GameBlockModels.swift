@@ -27,9 +27,13 @@ public struct GameBlock: Codable, Sendable, Equatable {
         public let record: Int
         public let prestige: Int
         public let canPrestige: Bool
+        /// La lecture ouverte par le rang (#9688) — `nil` devant un serveur antérieur. Les champs voisins
+        /// gardent l'ANCIENNE loi sur le fil (niveau borné à 100, dix paliers) pour les clients publiés.
+        public let ladder: Ladder?
 
         public init(level: Int, tier: LevelTierKey, score: Int, floorScore: Int, nextThreshold: Int?,
-                    pointsToNext: Int, progress: Double, record: Int, prestige: Int, canPrestige: Bool) {
+                    pointsToNext: Int, progress: Double, record: Int, prestige: Int, canPrestige: Bool,
+                    ladder: Ladder? = nil) {
             self.level = level
             self.tier = tier
             self.score = score
@@ -40,26 +44,129 @@ public struct GameBlock: Codable, Sendable, Equatable {
             self.record = record
             self.prestige = prestige
             self.canPrestige = canPrestige
+            self.ladder = ladder
+        }
+
+        /// Le niveau ouvert par le rang : la vérité que le serveur à jour sert à côté des champs d'hier.
+        public struct Ladder: Codable, Sendable, Equatable {
+            public let level: Int
+            public let tier: LevelTierKey
+            public let floorScore: Int
+            public let nextThreshold: Int?
+            public let pointsToNext: Int
+            public let progress: Double
+            public let record: Int
+            /// Le plafond que le rang ouvre : 499, 1000, ou `nil` (sans limite, à partir d'Oracle).
+            public let cap: Int?
+            /// Le niveau est au plafond : il monte dès que le rang l'ouvre.
+            public let isMax: Bool
+            /// Les points sont là, une étape manque : le niveau attend au palier précédent (#9706).
+            public let held: Bool
+            /// La prochaine étape au-dessus du niveau, faite ou à faire — `nil` au-delà de 100 ou devant un
+            /// serveur d'avant les étapes (#9706).
+            public let step: GameLevelStep?
+            /// Les compteurs que jugent les étapes, pour que l'optimiste rejoue la loi (#9706).
+            public let steps: GameLevelStepCounts?
+
+            public init(level: Int, tier: LevelTierKey, floorScore: Int, nextThreshold: Int?, pointsToNext: Int,
+                        progress: Double, record: Int, cap: Int?, isMax: Bool, held: Bool = false,
+                        step: GameLevelStep? = nil, steps: GameLevelStepCounts? = nil) {
+                self.level = level
+                self.tier = tier
+                self.floorScore = floorScore
+                self.nextThreshold = nextThreshold
+                self.pointsToNext = pointsToNext
+                self.progress = progress
+                self.record = record
+                self.cap = cap
+                self.isMax = isMax
+                self.held = held
+                self.step = step
+                self.steps = steps
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case level, tier, floorScore, nextThreshold, pointsToNext, progress, record, cap, isMax, held, step, steps
+            }
+
+            /// Les trois champs des étapes (#9706) sont OPTIONNELS et tolérés : illisibles (une sorte d'étape
+            /// ajoutée avant la mise à jour de l'app), ils se taisent sans faire tomber le bloc du jeu.
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                level = try container.decode(Int.self, forKey: .level)
+                tier = try container.decode(LevelTierKey.self, forKey: .tier)
+                floorScore = try container.decode(Int.self, forKey: .floorScore)
+                nextThreshold = try container.decodeIfPresent(Int.self, forKey: .nextThreshold)
+                pointsToNext = try container.decode(Int.self, forKey: .pointsToNext)
+                progress = try container.decode(Double.self, forKey: .progress)
+                record = try container.decode(Int.self, forKey: .record)
+                cap = try container.decodeIfPresent(Int.self, forKey: .cap)
+                isMax = try container.decode(Bool.self, forKey: .isMax)
+                held = ((try? container.decodeIfPresent(Bool.self, forKey: .held)) ?? nil) ?? false
+                step = (try? container.decodeIfPresent(GameLevelStep.self, forKey: .step)) ?? nil
+                steps = (try? container.decodeIfPresent(GameLevelStepCounts.self, forKey: .steps)) ?? nil
+            }
+        }
+
+        /// Ce que l'écran montre : la lecture ouverte par le rang, ou les champs d'hier devant un serveur antérieur.
+        public var shown: Ladder {
+            ladder ?? Ladder(level: level, tier: tier, floorScore: floorScore, nextThreshold: nextThreshold,
+                             pointsToNext: pointsToNext, progress: progress, record: record, cap: nil,
+                             isMax: nextThreshold == nil)
         }
     }
 
     public struct Glory: Codable, Sendable, Equatable {
         public let glory: Int
         public let rank: GloryRank
-        /// `nil` pour Mythe.
+        /// Projection héritée (1–3), `nil` pour Mythe — la seule que lisent les clients publiés.
         public let division: GloryDivision?
+        /// V (5) à I (1), `nil` pour Mythe ou devant un ancien serveur (#9636).
+        public let division5: GloryDivision5?
         public let next: GloryStep?
         public let gloryMissing: Int?
         public let progress: Double
+        /// La place du Mythe et son émission, quand le serveur les sert (#9636).
+        public let mythic: MythicSeatRef?
 
-        public init(glory: Int, rank: GloryRank, division: GloryDivision?, next: GloryStep?,
-                    gloryMissing: Int?, progress: Double) {
+        public init(glory: Int, rank: GloryRank, division: GloryDivision?, division5: GloryDivision5? = nil,
+                    next: GloryStep?, gloryMissing: Int?, progress: Double, mythic: MythicSeatRef? = nil) {
             self.glory = glory
             self.rank = rank
             self.division = division
+            self.division5 = division5
             self.next = next
             self.gloryMissing = gloryMissing
             self.progress = progress
+            self.mythic = mythic
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case glory, rank, division, division5, next, gloryMissing, progress, mythic
+        }
+
+        /// Les deux champs neufs (#9636) sont OPTIONNELS et tolérés : illisibles, ils se taisent
+        /// (division héritée, pas de place) sans faire tomber le bloc du jeu.
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            glory = try container.decode(Int.self, forKey: .glory)
+            rank = try container.decode(GloryRank.self, forKey: .rank)
+            division = try container.decodeIfPresent(GloryDivision.self, forKey: .division)
+            division5 = (try? container.decodeIfPresent(GloryDivision5.self, forKey: .division5)) ?? nil
+            next = try container.decodeIfPresent(GloryStep.self, forKey: .next)
+            gloryMissing = try container.decodeIfPresent(Int.self, forKey: .gloryMissing)
+            progress = try container.decode(Double.self, forKey: .progress)
+            mythic = ((try? container.decodeIfPresent(MythicSeatRef.self, forKey: .mythic)) ?? nil).flatMap { $0.isValid ? $0 : nil }
+        }
+
+        /// La division à montrer : `division5` servie, sinon la division héritée relue (ancien serveur).
+        public var shownDivision: GloryDivision5? {
+            division5 ?? division.map(GloryDivision5.init(legacy:))
+        }
+
+        /// La place du Mythe, seulement quand le rang servi EST le Mythe et la place lisible.
+        public var mythicSeat: MythicSeatRef? {
+            rank == .mythe ? mythic.flatMap { $0.isValid ? $0 : nil } : nil
         }
     }
 

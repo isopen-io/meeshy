@@ -93,12 +93,15 @@ export function systemRowOf(message: Pick<Message, 'messageType' | 'messageSourc
   const joinNotice = parseJoinNotice(metadata);
   if (joinNotice !== null) {
     /* `JoinNoticePresentation.init` (`BubbleSystemViews.swift:159-173`) : le
-       nom DONNÉ au formulaire prime, le pseudo `ano_…` descend en handle —
-       omis s'il répète le nom retenu. */
+       nom DONNÉ au formulaire prime, le pseudo descend en handle — omis s'il
+       répète le nom retenu. Celui d'un participant SANS COMPTE (`ano_…`) est
+       un identifiant technique, jamais montré (#9710) : la pastille « sans
+       compte » dit déjà qui il est. Décidé par `isAnonymous`, pas par le
+       préfixe — un compte peut s'appeler `ano_bob`. */
     const givenName = joinNotice.givenName !== undefined && joinNotice.givenName.trim() !== '' ? joinNotice.givenName : undefined;
     const primaryName = givenName ?? joinNotice.displayName;
     const username = joinNotice.username !== undefined && joinNotice.username.trim() !== '' ? joinNotice.username : undefined;
-    const handle = username !== undefined && username !== primaryName ? `@${username}` : null;
+    const handle = !joinNotice.isAnonymous && username !== undefined && username !== primaryName ? `@${username}` : null;
     return {
       kind: 'join',
       displayName: primaryName,

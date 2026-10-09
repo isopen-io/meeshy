@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
@@ -34,6 +34,8 @@ import {
   DataSection,
   LogoutButton,
   NotificationsSection,
+  SECURITY_PANEL,
+  SECURITY_PANEL_PARAM,
   PrivacySection,
   ProfileCard,
   SettingsHeaderBar,
@@ -65,6 +67,19 @@ import {
  * rouvrir l'écran les peint au premier rendu, et le squelette n'existe que
  * pour un cache vide. Le thème et la langue ne dépendent d'aucun réseau.
  */
+
+/**
+ * LE VOLET SÉCURITÉ (#6720) — chargé à la demande, AVEC son catalogue : l'écran
+ * des sessions ne pèse rien tant qu'on ne l'ouvre pas, ni sur la première
+ * peinture, ni sur l'écran des réglages.
+ */
+const SettingsSecurity = lazy(() =>
+  import('@/routes/settings-security').then(async (module) => {
+    const language = currentInterfaceLanguage();
+    await module.prepareSecurityScreen(language);
+    return { default: () => <module.SettingsSecurityScreen language={language} /> };
+  }),
+);
 
 const THEME_MODE: Readonly<Record<ThemePreference, ThemeMode>> = { system: 'auto', light: 'light', dark: 'dark' };
 
@@ -98,7 +113,28 @@ function useGalleryToggle(): GalleryToggle | undefined {
   };
 }
 
+/**
+ * Le volet demandé, lu sur l'adresse à chaque rendu — le routeur rend l'écran
+ * à nouveau à chaque changement de requête (`router.tsx`, `<Screen key>` hors
+ * mémo). Lu ici plutôt que par `useSearch` : l'import du routeur ajoutait son
+ * chunk à la liste que l'entrée précharge pour cet écran (première peinture,
+ * mesurée le 2026-10-08).
+ */
+const securityPanelOpen = (): boolean =>
+  typeof location === 'object' && new URLSearchParams(location.search).get(SECURITY_PANEL_PARAM) === SECURITY_PANEL;
+
 export default function SettingsScreen() {
+  if (securityPanelOpen()) {
+    return (
+      <Suspense fallback={null}>
+        <SettingsSecurity />
+      </Suspense>
+    );
+  }
+  return <SettingsHome />;
+}
+
+function SettingsHome() {
   const language = currentInterfaceLanguage();
 
   /**

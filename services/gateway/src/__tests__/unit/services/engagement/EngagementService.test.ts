@@ -726,7 +726,8 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(poids(SOCIAL_ENGAGEMENT_AXES[3]!)).toBeGreaterThan(poids('conversation.private'));
     expect(poids('conversation.private')).toBeGreaterThan(poids('content.text_message'));
     expect(poids('content.text_message')).toBeGreaterThan(poids('tool.sticker'));
-    expect(poids('comment.text')).toBe(poids('content.text_message'));
+    expect(poids('content.audio_message')).toBeGreaterThan(poids('content.text_message'));
+    expect(poids('comment.text')).toBeGreaterThan(poids('tool.sticker'));
   });
 
   it('weighs a tool axis at 1, distinct from a content axis at 3', async () => {

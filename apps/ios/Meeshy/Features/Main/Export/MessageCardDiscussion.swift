@@ -21,16 +21,33 @@ import MeeshySDK
 /// lecture, même vivante : la loi de sortie, #9573 — n'entre pas dans la
 /// fenêtre, ni son texte, ni ses médias. Les mots sont ceux que le lecteur lit : le
 /// texte servi par le Prisme, sinon l'original.
+///
+/// UNE RÉPONSE QUI CITE UN CONTENU PROTÉGÉ ferme la discussion entière
+/// (décision porteur du 2026-10-08, #9573, comme le web) : si elle tombe dans
+/// la portée de la fenêtre, aucune carte — la sauter peindrait une discussion
+/// trouée à l'endroit de ce qu'elle citait.
 enum MessageCardDiscussion {
 
     static let maxMessages = 12
     static let maxMedia = 4
 
-    /// Les messages imagés, dans l'ordre du fil.
+    /// Les messages imagés, dans l'ordre du fil — vide quand la portée de la
+    /// fenêtre contient une réponse qui cite un contenu protégé.
     static func window(of messages: [Message], endingAt messageId: String, now: Date) -> [Message] {
         guard let end = messages.firstIndex(where: { $0.id == messageId }) else { return [] }
-        let exportable = messages[...end].filter { MessageCardSubject.isExportable($0, now: now) }
-        return Array(exportable.suffix(maxMessages))
+        let exportable = Array(messages[...end].filter { MessageCardSubject.isExportable($0, now: now) }.suffix(maxMessages))
+        guard let first = exportable.first,
+              let start = messages[...end].firstIndex(where: { $0.id == first.id }),
+              !messages[start...end].contains(where: \.quotesProtectedContent)
+        else { return [] }
+        return exportable
+    }
+
+    /// « Imager la discussion » s'offre-t-il jusqu'à ce message ? — la fenêtre
+    /// a quelque chose à peindre. Un bouton qui n'ouvrirait qu'une erreur n'est
+    /// pas rendu.
+    static func offers(messages: [Message], endingAt messageId: String, now: Date = Date()) -> Bool {
+        !window(of: messages, endingAt: messageId, now: now).isEmpty
     }
 
     static func subject(of messages: [Message], servedText: (Message) -> String?, viewer: MessageCardSubject.Viewer,

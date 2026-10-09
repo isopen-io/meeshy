@@ -18,7 +18,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendUnauthorized, sendError, sendInternalError } from '../../utils/response.js';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError } from '../../utils/logger';
-import { MeeshService } from '../../services/meesh/MeeshService';
+import { MeeshService, receiptOnTheWire } from '../../services/meesh/MeeshService';
 
 /**
  * Débit par COMPTE, strict — la frappe ÉCRIT, et elle est irréversible. Un
@@ -78,8 +78,13 @@ const mintResponseSchema = {
         edition: { type: 'string', enum: ['silver', 'gold', 'prism'] },
         price: { type: 'number' },
         gloryGained: { type: 'number' },
+        // Ancienne loi : bornés à 100 pour les clients publiés ; les niveaux ouverts par le rang dans `ladder` (#9688).
         levelBefore: { type: 'number' },
         levelAfter: { type: 'number' },
+        ladder: {
+          type: 'object',
+          properties: { levelBefore: { type: 'number' }, levelAfter: { type: 'number' } },
+        },
       },
     },
   },
@@ -144,7 +149,7 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
           status: outcome.status,
           balance: outcome.balance,
           mintedLifetime: outcome.mintedLifetime,
-          ...(outcome.receipt ?? {}),
+          ...(outcome.receipt === null ? {} : receiptOnTheWire(outcome.receipt)),
         });
       } catch (error) {
         logError(fastify.log, 'Error minting a Meesh', error);

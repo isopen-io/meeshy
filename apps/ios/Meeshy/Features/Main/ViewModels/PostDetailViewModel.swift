@@ -597,7 +597,7 @@ class PostDetailViewModel: ObservableObject {
             for await event in stream {
                 if case .exhausted = event {
                     rollback()
-                    FeedbackToastManager.shared.showError(toast)
+                    FeedbackToastManager.shared.showError(DailyGestureLimitNotice.exhaustedText(clientMutationId: cmid) ?? toast)
                 }
             }
         }

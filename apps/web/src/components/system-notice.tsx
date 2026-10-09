@@ -3,7 +3,7 @@ import { lazy, Suspense, useState } from 'react';
 import { callActions } from '@/lib/calls/call-actions';
 import { callIdentityOf, type CallNoticeTarget } from '@/lib/calls/call-notice';
 import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import type { SystemRow } from '@/lib/view/message-badges';
 import { systemRowText } from '@/lib/view/message-badges';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
@@ -34,6 +34,7 @@ export function SystemNotice({
   surface,
   callTarget = null,
   languages = [],
+  language = currentInterfaceLanguage(),
 }: {
   readonly row: SystemRow;
   readonly timeString: string;
@@ -41,10 +42,12 @@ export function SystemNotice({
   readonly callTarget?: CallNoticeTarget | null;
   /** Le prisme du lecteur — la piste et la transcription de l'enregistrement d'appel s'y résolvent (#8064). */
   readonly languages?: readonly string[];
+  /** La langue d'INTERFACE de la rangée — celle du document par défaut. */
+  readonly language?: InterfaceLanguage;
 }) {
-  const label = systemRowText(row);
+  const label = systemRowText(row, language);
   const action = row.kind === 'call' && callTarget !== null ? <CallNoticeAction target={callTarget} languages={languages} /> : null;
-  const content = <SystemNoticeContent row={row} />;
+  const content = <SystemNoticeContent row={row} language={language} />;
   /* LA TEINTE (revue-correction #5936, défaut majeur 5) — `--color-ios-ink-2`
      à `META_TEXT_OPACITY` (0,55), le cran MÉTA déjà dérivé et déjà tenu pour
      AA ailleurs dans le fil (`.focal-meta`, `EditedMark`), JAMAIS
@@ -101,7 +104,7 @@ export function SystemNotice({
 }
 
 /** Le contenu visuel — glyphe (appel, avis d'arrivée, arrivées regroupées) puis texte. */
-function SystemNoticeContent({ row }: { readonly row: SystemRow }) {
+function SystemNoticeContent({ row, language }: { readonly row: SystemRow; readonly language: InterfaceLanguage }) {
   if (row.kind === 'call') {
     return (
       <>
@@ -122,15 +125,27 @@ function SystemNoticeContent({ row }: { readonly row: SystemRow }) {
         ) : (
           <GlyphSvg glyph={THREAD_STATES_GLYPHS.userPlus} size={13} />
         )}
-        <span>{systemRowText(row)}</span>
-        {row.handle !== null ? <span style={{ opacity: 0.85 }}>{row.handle}</span> : null}
+        <span>{systemRowText(row, language)}</span>
+        {/* L'ESPACE EST ÉCRITE (#9710) : sur la peau `row`, ces morceaux ne
+            vivent pas dans une boîte flexible, et rien d'autre ne les sépare —
+            « joined the conversation@ano_Emma ». Dans la capsule flexible, une
+            espace seule entre deux éléments n'est pas rendue. */}
+        {row.handle !== null ? (
+          <>
+            {' '}
+            <span style={{ opacity: 0.85 }}>{row.handle}</span>
+          </>
+        ) : null}
         {row.isAnonymous ? (
-          <span
-            className="rounded-chip px-1.5 py-0.5 text-[10.5px] font-semibold"
-            style={{ color: 'var(--ios-purple-500)', backgroundColor: 'color-mix(in srgb, var(--ios-purple-500) 12%, transparent)' }}
-          >
-            sans compte
-          </span>
+          <>
+            {' '}
+            <span
+              className="rounded-chip px-1.5 py-0.5 text-[10.5px] font-semibold"
+              style={{ color: 'var(--ios-purple-500)', backgroundColor: 'color-mix(in srgb, var(--ios-purple-500) 12%, transparent)' }}
+            >
+              {translate(language, 'message.join.noAccount')}
+            </span>
+          </>
         ) : null}
       </>
     );
@@ -145,7 +160,7 @@ function SystemNoticeContent({ row }: { readonly row: SystemRow }) {
             <GlyphSvg glyph={THREAD_IDENTITY_GLYPHS.maskHappy} size={13} style={{ color: 'var(--ios-purple-500)' }} />
           </span>
         ) : null}
-        <span>{systemRowText(row)}</span>
+        <span>{systemRowText(row, language)}</span>
       </>
     );
   }
@@ -153,11 +168,11 @@ function SystemNoticeContent({ row }: { readonly row: SystemRow }) {
     return (
       <>
         <GlyphSvg glyph={THREAD_STATES_GLYPHS.userPlus} size={13} />
-        <span>{systemRowText(row)}</span>
+        <span>{systemRowText(row, language)}</span>
       </>
     );
   }
-  return <span>{systemRowText(row)}</span>;
+  return <span>{systemRowText(row, language)}</span>;
 }
 
 /**

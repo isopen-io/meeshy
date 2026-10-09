@@ -10,6 +10,7 @@
 
 import { createHash, randomBytes } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
 import { RequestContext } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
@@ -66,10 +67,19 @@ export interface SessionData {
   browserName: string | null;
   browserVersion: string | null;
   isMobile: boolean;
+  /** Ce que le client a déclaré (#9610) — `null` pour un client qui n'en dit rien. */
+  appVersion: string | null;
+  appBuild: string | null;
+  platform: string | null;
+  deviceName: string | null;
+  /** Posé par le serveur à l'ouverture (#9610). */
+  loginMethod: string | null;
   ipAddress: string | null;
   country: string | null;
+  /** Approximative : tirée de l'adresse IP par la base locale (#9609). */
   city: string | null;
   location: string | null;
+  timezone: string | null;
   createdAt: Date;
   lastActivityAt: Date;
   isCurrentSession: boolean;
@@ -80,6 +90,8 @@ export interface CreateSessionInput {
   userId: string;
   token: string;
   requestContext: RequestContext;
+  /** Le moyen par lequel la session s'ouvre (#9610) ; absent, il reste inconnu. */
+  loginMethod?: SessionLoginMethod;
 }
 
 /**
@@ -131,7 +143,7 @@ function getSessionExpiryDays(deviceInfo: RequestContext['deviceInfo']): number 
 export async function createSession(input: CreateSessionInput): Promise<SessionData> {
   const db = getPrisma();
   const { userId, token, requestContext } = input;
-  const { ip, geoData, deviceInfo } = requestContext;
+  const { ip, geoData, deviceInfo, client } = requestContext;
 
   // Hash the token for storage
   const sessionToken = hashToken(token);
@@ -157,13 +169,17 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
       browserVersion: deviceInfo?.browserVersion || null,
       isMobile: deviceInfo?.isMobile || false,
       userAgent: deviceInfo?.rawUserAgent || null,
+      // Ce que le client déclare, et le moyen de connexion (#9610)
+      appVersion: client?.appVersion ?? null,
+      appBuild: client?.appBuild ?? null,
+      platform: client?.platform ?? null,
+      deviceName: client?.deviceName ?? null,
+      loginMethod: input.loginMethod ?? null,
       // Geo info
       ipAddress: ip,
       country: geoData?.country || null,
       city: geoData?.city || null,
       location: geoData?.location || null,
-      latitude: geoData?.latitude || null,
-      longitude: geoData?.longitude || null,
       timezone: geoData?.timezone || null,
       // Flags
       isValid: true,
@@ -209,14 +225,51 @@ export async function validateSession(token: string): Promise<SessionData | null
 }
 
 /**
- * Get all active sessions for a user
+ * **La session courante — « cet appareil-ci » — se nomme de DEUX façons**
+ * (#9606), et l'une suffit :
+ *
+ *  - `sessionId` : le claim `sid` du JWT VÉRIFIÉ (`UnifiedAuthContext.sessionId`).
+ *    C'est la voie nominale : tout jeton d'un inscrit le porte depuis #4264, et
+ *    la porte REST refuse ceux qui ne le portent pas.
+ *  - `sessionToken` : l'en-tête `x-session-token`, en clair, haché ici. Gardé
+ *    pour la rétrocompatibilité — aucun client inscrit ne l'envoie en REST,
+ *    mais un client qui le ferait continue d'être compris.
+ *
+ * Quand les deux sont fournis et nomment deux sessions, les DEUX sont
+ * « courantes » : le porteur détient les deux justificatifs, donc les deux
+ * appareils. Une chaîne seule reste acceptée et vaut `{ sessionToken }` — la
+ * forme d'avant, que des appelants passent encore.
+ */
+export type CurrentSessionRef = {
+  readonly sessionId?: string | null;
+  readonly sessionToken?: string | null;
+};
+
+type CurrentSessionClause = { readonly id: string } | { readonly sessionToken: string };
+
+function currentSessionClauses(current: string | CurrentSessionRef | undefined): CurrentSessionClause[] {
+  const ref: CurrentSessionRef = typeof current === 'string' ? { sessionToken: current } : current ?? {};
+  const byId: CurrentSessionClause[] = ref.sessionId ? [{ id: ref.sessionId }] : [];
+  const byToken: CurrentSessionClause[] = ref.sessionToken ? [{ sessionToken: hashToken(ref.sessionToken) }] : [];
+  return [...byId, ...byToken];
+}
+
+function isNamedBy(session: { id: string; sessionToken: string }, clauses: readonly CurrentSessionClause[]): boolean {
+  return clauses.some((clause) =>
+    'id' in clause ? session.id === clause.id : session.sessionToken === clause.sessionToken
+  );
+}
+
+/**
+ * Get all active sessions for a user — `isCurrentSession` marks the session(s)
+ * named by `current` (see {@link CurrentSessionRef}).
  */
 export async function getUserSessions(
   userId: string,
-  currentToken?: string
+  current?: string | CurrentSessionRef
 ): Promise<SessionData[]> {
   const db = getPrisma();
-  const currentTokenHash = currentToken ? hashToken(currentToken) : null;
+  const clauses = currentSessionClauses(current);
 
   const sessions = await db.userSession.findMany({
     where: {
@@ -228,9 +281,7 @@ export async function getUserSessions(
     orderBy: { lastActivityAt: 'desc' },
   });
 
-  return sessions.map((session) =>
-    mapSessionToData(session, session.sessionToken === currentTokenHash)
-  );
+  return sessions.map((session) => mapSessionToData(session, isNamedBy(session, clauses)));
 }
 
 /**
@@ -242,36 +293,43 @@ export async function invalidateSession(
 ): Promise<boolean> {
   const db = getPrisma();
   try {
-    await db.userSession.update({
-      where: { id: sessionId },
+    // Une session DÉJÀ close ne se réécrit pas (audit A2-5) : son motif
+    // d'origine resterait écrasé, et un `invalidatedAt` relancé prolongerait sa
+    // conservation. `false` : rien n'a été fermé.
+    const { count } = await db.userSession.updateMany({
+      where: { id: sessionId, isValid: true },
       data: {
         isValid: false,
         invalidatedAt: new Date(),
         invalidatedReason: reason,
       },
     });
-    return true;
+    return count > 0;
   } catch {
     return false;
   }
 }
 
 /**
- * Invalidate all sessions for a user except the current one
+ * Invalidate all sessions for a user except the current one(s) — see
+ * {@link CurrentSessionRef}. With NOTHING naming the current session, every
+ * session is invalidated: that is the deliberate « sign out everywhere » of
+ * `POST /auth/revoke-all-sessions` (the e-mail link), and the only safe
+ * reading of an anonymous caller — keeping nothing alive that should not be.
  */
 export async function invalidateAllSessions(
   userId: string,
-  exceptToken?: string,
+  except?: string | CurrentSessionRef,
   reason: string = 'user_revoked_all'
 ): Promise<number> {
   const db = getPrisma();
-  const exceptTokenHash = exceptToken ? hashToken(exceptToken) : null;
+  const clauses = currentSessionClauses(except);
 
   const result = await db.userSession.updateMany({
     where: {
       userId,
       isValid: true,
-      ...(exceptTokenHash ? { sessionToken: { not: exceptTokenHash } } : {}),
+      ...(clauses.length > 0 ? { NOT: clauses } : {}),
     },
     data: {
       isValid: false,
@@ -327,6 +385,32 @@ export async function logout(token: string): Promise<boolean> {
   });
 
   return result.count > 0;
+}
+
+/**
+ * Close the CURRENT session(s) of a user — the ones named by `current` (#9606).
+ * `POST /auth/logout` used to close only the session named by the
+ * `x-session-token` header, which no signed-in client sends in REST: logging
+ * out left the session valid. Scoped by `userId`, so a reference can never
+ * close another account's session. Returns how many sessions were closed.
+ */
+export async function endCurrentSession(
+  userId: string,
+  current: CurrentSessionRef,
+  reason: string = 'logout'
+): Promise<number> {
+  const clauses = currentSessionClauses(current);
+  if (clauses.length === 0) return 0;
+
+  const result = await getPrisma().userSession.updateMany({
+    where: { userId, isValid: true, OR: clauses },
+    data: {
+      isValid: false,
+      invalidatedAt: new Date(),
+      invalidatedReason: reason,
+    },
+  });
+  return result.count;
 }
 
 /**
@@ -562,10 +646,16 @@ function mapSessionToData(session: any, isCurrentSession: boolean): SessionData 
     browserName: session.browserName,
     browserVersion: session.browserVersion,
     isMobile: session.isMobile,
+    appVersion: session.appVersion ?? null,
+    appBuild: session.appBuild ?? null,
+    platform: session.platform ?? null,
+    deviceName: session.deviceName ?? null,
+    loginMethod: session.loginMethod ?? null,
     ipAddress: session.ipAddress,
     country: session.country,
     city: session.city,
     location: session.location,
+    timezone: session.timezone ?? null,
     createdAt: session.createdAt,
     lastActivityAt: session.lastActivityAt,
     isCurrentSession,

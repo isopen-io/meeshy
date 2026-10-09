@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { RulesBody } from './progression-rules';
 import { RulesAtlas } from './progression-rules-atlas';
+import { gloryForAchievement } from '@meeshy/shared/utils/game/glory';
+import { formatCount } from '@/lib/view/game-copy';
 
 const atlas = renderToStaticMarkup(<RulesAtlas />);
 const count = (needle: RegExp, html = atlas): number => html.match(needle)?.length ?? 0;
@@ -27,12 +29,15 @@ describe('les neuf familles sont dessinées', () => {
     }
   });
 
-  test('les dix paliers : dix anneaux et leur niveau d’entrée', () => {
+  test('les vingt paliers : vingt anneaux et leur niveau d’entrée (#9688)', () => {
     const html = section('levels');
-    expect(count(/data-game-ring-sweep=/g, html)).toBe(10);
+    expect(count(/data-game-ring-sweep=/g, html)).toBe(20);
     expect(html).toContain('Étincelle');
     expect(html).toContain('Galaxie');
     expect(html).toContain('Niveau 90');
+    expect(html).toContain('Nébuleuse');
+    expect(html).toContain('Niveau 101');
+    expect(html).toContain('Singularité');
   });
 
   test('la Meesh : avers, revers, éditions or et prisme', () => {
@@ -57,7 +62,7 @@ describe('les neuf familles sont dessinées', () => {
     expect(count(/data-game-rank=/g, html)).toBe(11);
     expect(html).toContain('Murmure');
     expect(html).toContain('Mythe');
-    expect(html).toContain('Les 100 Légendes les plus glorieuses');
+    expect(html).toContain('Les 100 premiers à atteindre 1 000 000 de Gloire');
   });
 
   test('les cinq formes de la Flamme', () => {
@@ -91,7 +96,7 @@ describe('les neuf familles sont dessinées', () => {
     expect(count(/data-game-rarity=/g, html)).toBe(5);
     expect(html).toContain('Mythique');
     expect(html).toContain('moins de 0,2 % des comptes');
-    expect(html).toContain('+400 de Gloire');
+    expect(html).toContain(`+${formatCount(gloryForAchievement('epic'), 'fr')} de Gloire`);
   });
 });
 

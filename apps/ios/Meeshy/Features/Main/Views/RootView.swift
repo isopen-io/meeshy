@@ -131,9 +131,15 @@ struct RootView: View {
     /// (preview sheet + underlying navigation).
     @State private var suppressToastTap = false
 
-    // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
-    @AppStorage("feedButtonPosition") private var feedButtonPosition: String = "0.0,0.0"  // Top-left default
-    @AppStorage("menuButtonPosition") private var menuButtonPosition: String = "1.0,0.0" // Top-right default
+    // Positions des boutons flottants (#9679) — lues par `FloatingButtonGeometry`.
+    @AppStorage("feedButtonPosition") private var feedButtonPosition: String = FloatingButtonGeometry.defaultFeedStorage
+    @AppStorage("menuButtonPosition") private var menuButtonPosition: String = FloatingButtonGeometry.defaultMenuStorage
+    /// La géométrie mesurée par le conteneur des boutons : l'échelle du menu et
+    /// l'ancre des réels lisent la même.
+    @State private var floatingGeometry: FloatingButtonGeometry?
+    /// L'onboarding recouvre le chrome ; les boutons flottants, posés au-dessus
+    /// du chrome, s'effacent tant qu'il est là.
+    @ObservedObject private var onboardingPresence = OnboardingPresenceSignal.shared
 
     // Scroll visibility state (passed from ConversationListView)
     @State private var isScrollingDown = false
@@ -152,17 +158,6 @@ struct RootView: View {
     /// démarrage), une porte qui ne se referme pas. `iPadRootView` porte le
     /// jumeau : l'iPad a sa racine PROPRE et n'hérite rien d'ici.
     @StateObject private var upgradeGate = UpgradeGateController()
-
-    // Helper to get ButtonPosition for menu ladder alignment
-    private var menuButtonPos: ButtonPosition {
-        let parts = menuButtonPosition.split(separator: ",")
-        guard parts.count == 2,
-              let x = Double(parts[0]),
-              let y = Double(parts[1]) else {
-            return .topRight
-        }
-        return ButtonPosition(x: CGFloat(x), y: CGFloat(y))
-    }
 
     var body: some View {
         ZStack {
@@ -227,7 +222,7 @@ struct RootView: View {
                     revealProgress: reelsRevealProgress,
                     applyMask: reelsRevealMasked,
                     feedButtonPositionRaw: feedButtonPosition,
-                    isSearchBarVisible: !isScrollingDown,
+                    floatingGeometry: floatingGeometry,
                     reduceMotion: reduceMotionEnabled,
                     content: { safeArea in
                         if let failure = launch.failure, let postId = launch.startId {
@@ -277,27 +272,8 @@ struct RootView: View {
                 .onAppear { openReels() }
             }
 
-            // 4. Draggable Floating buttons (hidden while a reel is open so they
-            // don't float over the immersive player)
-            if !router.isDeepRoute && reelsPresenter.launch == nil {
-                draggableFloatingButtons
-            }
-
-            // 5. Menu dismiss overlay
-            if showMenu {
-                Color.clear
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
-                    }
-                    .zIndex(99)
-            }
-
-            // 6. Menu ladder
-            if !router.isDeepRoute && reelsPresenter.launch == nil {
-                menuLadder
-            }
+            // 4-6. Les boutons flottants et leur menu vivent AU-DESSUS du chrome
+            // (`floatingChrome`, posé après `RootChromeLayer`) — plus ici.
 
             // 7. Offline state — surfaced as a discreet inline chip inside
             // `ConnectionBanner` (the safe-area inset at the top of every
@@ -370,6 +346,13 @@ struct RootView: View {
             showFeed: showFeed,
             showMenu: showMenu
         ))
+        // Les boutons flottants passent AU-DESSUS de tout le chrome (#9679) :
+        // la bannière du joueur, la pastille de synchronisation, le mini-lecteur
+        // et la bannière d'appel. Montés dans la pile du contenu, ils passaient
+        // SOUS la bannière : posé à 96 pt, le Flux devenait invisible et
+        // insaisissable, et le restait après relance. Seul l'onboarding, qui doit
+        // recouvrir le chrome, les masque.
+        .overlay { floatingChrome }
         .modifier(RootIntentRoutingLayer(
             router: router,
             storyViewModel: storyViewModel,
@@ -1372,6 +1355,29 @@ struct RootView: View {
         }
     }
 
+    // MARK: - Floating chrome (boutons + menu), au-dessus du chrome global
+
+    @ViewBuilder
+    private var floatingChrome: some View {
+        if !router.isDeepRoute && reelsPresenter.launch == nil && !onboardingPresence.isPresented {
+            ZStack {
+                draggableFloatingButtons
+
+                if showMenu {
+                    Color.clear
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
+                        }
+                        .zIndex(99)
+                }
+
+                menuLadder
+            }
+        }
+    }
+
     // MARK: - Draggable Floating Buttons (Free Position)
     private var draggableFloatingButtons: some View {
         FreeFloatingButtonsContainer(
@@ -1433,7 +1439,6 @@ struct RootView: View {
                 }
                 router.push(.profile)
             },
-            isSearchBarVisible: !isScrollingDown,
             // L'appui long lance les Réels : un geste que rien ne signale à l'écran
             // doit au moins être annoncé à VoiceOver, sinon il n'existe pas pour qui
             // ne peut pas le découvrir par tâtonnement.
@@ -1496,41 +1501,29 @@ struct RootView: View {
                 }
             }
         )
+        .onPreferenceChange(FloatingButtonGeometryKey.self) { measured in
+            if let measured, measured.isMeasured { floatingGeometry = measured }
+        }
         .zIndex(100)
     }
 
     // MARK: - Menu Ladder (positioned relative to menu button)
     private var menuLadder: some View {
-        GeometryReader { geometry in
-            let safeArea = geometry.safeAreaInsets
-            let size = geometry.size
-            let pos = menuButtonPos
-
-            // Calculate button position on screen
-            let minEdgePadding: CGFloat = MeeshySpacing.xl
-            let topSafeZone: CGFloat = FloatingButtonSafeZone.top
-            let bottomSafeZone: CGFloat = isScrollingDown ? 50 : 110
-            let buttonSize: CGFloat = 52
-            let halfButton = buttonSize / 2
-
-            let minX = safeArea.leading + minEdgePadding + halfButton
-            let maxX = size.width - safeArea.trailing - minEdgePadding - halfButton
-            let minY = safeArea.top + topSafeZone + halfButton
-            let maxY = size.height - safeArea.bottom - bottomSafeZone - halfButton
-
-            let buttonX = minX + (maxX - minX) * pos.x
-            let buttonY = minY + (maxY - minY) * pos.y
-
-            // Menu items configuration
+        GeometryReader { proxy in
+            let frame = proxy.frame(in: .global)
+            let geometry = floatingGeometry
+                ?? FloatingButtonGeometry.measured(container: frame, safeRegion: frame, reported: proxy.safeAreaInsets)
+            let globalCenter = geometry.layout(feedStorage: feedButtonPosition, menuStorage: menuButtonPosition).menu
+            let menuCenter = CGPoint(x: globalCenter.x - frame.minX, y: globalCenter.y - frame.minY)
+            let halfButton = FloatingButtonGeometry.buttonSize / 2
             let menuItemSize: CGFloat = 46
             let menuSpacing: CGFloat = MeeshySpacing.md
-
-            // Determine if menu should expand up or down
-            let expandDown = pos.y < 0.5
-
-            // Calculate menu position
-            let menuX = pos.isLeft ? buttonX : buttonX
-            let menuStartY = expandDown ? buttonY + halfButton + menuSpacing + menuItemSize / 2 : buttonY - halfButton - menuSpacing - menuItemSize / 2
+            let ladderExtent = CGFloat(RootMenuLadderEntry.allCases.count) * (menuItemSize + menuSpacing)
+            let expandDown = geometry.menuOpensDownward(from: globalCenter, ladderExtent: ladderExtent)
+            let menuX = menuCenter.x
+            let menuStartY = expandDown
+                ? menuCenter.y + halfButton + menuSpacing + menuItemSize / 2
+                : menuCenter.y - halfButton - menuSpacing - menuItemSize / 2
 
             // Contenu de l'échelle : `RootMenuLadderEntry` (descripteurs purs).
             ForEach(Array(RootMenuLadderEntry.allCases.enumerated()), id: \.offset) { index, entry in
@@ -1592,157 +1585,23 @@ extension View {
     }
 }
 
-// MARK: - Reels Liquid Reveal Container
-
-/// Masks the immersive reels view with a `LiquidRevealShape` (water-wave
-/// circular reveal) born at the feed button's exact on-screen position. The
-/// REAL first reel is visible inside the disc from the small-disc state onward
-/// (we mask the live view, not a placeholder). Under Reduce Motion the wavy
-/// mask is swapped for a plain cross-fade — still roughly honoring the origin.
-///
-/// Inlined alongside `RootView` so the file stays self-contained (no
-/// project.pbxproj entry for a separate component file).
-private struct ReelsRevealContainer<Content: View>: View {
-    let revealProgress: Double
-    /// When `false`, the mask is dropped entirely so the live `AVPlayer` surface
-    /// renders (a persistent mask over an AVPlayer layer freezes it on the poster).
-    /// RootView flips it off once the disc reaches full screen.
-    let applyMask: Bool
-    /// Raw "x,y" (0-1 normalized) feed button position as persisted by RootView.
-    let feedButtonPositionRaw: String
-    /// Mirrors the floating-button container's search-bar flag — it selects the
-    /// bottom safe-zone used to place the button (and thus the reveal focus).
-    let isSearchBarVisible: Bool
-    let reduceMotion: Bool
-    /// Receives the REAL safe-area insets (read before `.ignoresSafeArea()`) so
-    /// the reels chrome (back button, scrub bar) can clear the Dynamic Island /
-    /// home indicator while the media stays full-bleed.
-    @ViewBuilder let content: (EdgeInsets) -> Content
-
-    /// A continuously flowing phase so the liquid edge "ripples" while expanding.
-    @State private var wavePhase: Double = 0
-
-    var body: some View {
-        GeometryReader { geo in
-            let center = FeedButtonAnchor.unitPoint(
-                fromRaw: feedButtonPositionRaw,
-                screenSize: geo.size,
-                safeArea: geo.safeAreaInsets,
-                isSearchBarVisible: isSearchBarVisible
-            )
-
-            content(geo.safeAreaInsets)
-                .ignoresSafeArea()
-                .modifier(
-                    ReelsRevealMaskModifier(
-                        revealProgress: revealProgress,
-                        applyMask: applyMask,
-                        center: center,
-                        wavePhase: wavePhase,
-                        reduceMotion: reduceMotion
-                    )
-                )
-        }
-        .ignoresSafeArea()
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) {
-                wavePhase = 2 * .pi
-            }
-        }
-    }
-}
-
-/// Applies the reveal mask. Split out so the wavy-vs-fade branch reads cleanly.
-/// Once `applyMask` is false (disc full screen) the content renders untouched so
-/// the AVPlayer surface is live.
-private struct ReelsRevealMaskModifier: ViewModifier {
-    let revealProgress: Double
-    let applyMask: Bool
-    let center: UnitPoint
-    let wavePhase: Double
-    let reduceMotion: Bool
-
-    func body(content: Content) -> some View {
-        if !applyMask {
-            content
-        } else if reduceMotion {
-            // Plain cross-fade honoring the origin loosely (no wavy edge).
-            content.opacity(revealProgress)
-        } else {
-            content.mask(
-                LiquidRevealShape(
-                    center: center,
-                    progress: revealProgress,
-                    baseRadius: 26,           // feed button radius (52pt circle)
-                    amplitude: 16,
-                    frequency: 9,
-                    phase: wavePhase
-                )
-                .ignoresSafeArea()
-            )
-        }
-    }
-}
-
 // MARK: - Feed Button Anchor (pure mapping)
 
-/// Pure mapping from the persisted feed-button position ("x,y", 0-1 normalized)
-/// to a `UnitPoint` (0-1 fraction of the full screen rect) for the reveal focus.
-///
-/// Mirrors `FreeFloatingButton.screenPosition(for:)` EXACTLY (same constants:
-/// buttonSize 52, minEdgePadding 20, topSafeZone `FloatingButtonSafeZone.top`,
-/// bottomSafeZone 110/50) so
-/// the disc is born at the button's true center, not a naive linear corner map.
-/// Kept as a standalone helper so the math is unit-testable without SwiftUI.
+/// Le centre du bouton Flux, d'où naît le disque des réels : lu dans
+/// `FloatingButtonGeometry.layout`, la source que le conteneur des boutons
+/// emploie pour le poser (#9679) — le disque naît au centre EXACT du bouton.
 enum FeedButtonAnchor {
-    static let buttonSize: CGFloat = 52
-    static let minEdgePadding: CGFloat = 20
-    static let topSafeZone: CGFloat = FloatingButtonSafeZone.top
-    static let bottomSafeZoneWithSearch: CGFloat = 110
-    static let bottomSafeZoneNoSearch: CGFloat = 50
-
-    /// Returns the button center as a screen point in the given geometry.
-    static func screenPoint(
-        fromRaw raw: String,
-        screenSize: CGSize,
-        safeArea: EdgeInsets,
-        isSearchBarVisible: Bool
-    ) -> CGPoint {
-        let pos = parse(raw)
-        let half = buttonSize / 2
-        let bottomSafeZone = isSearchBarVisible ? bottomSafeZoneWithSearch : bottomSafeZoneNoSearch
-        let minX = safeArea.leading + minEdgePadding + half
-        let maxX = screenSize.width - safeArea.trailing - minEdgePadding - half
-        let minY = safeArea.top + topSafeZone + half
-        let maxY = screenSize.height - safeArea.bottom - bottomSafeZone - half
-        let x = minX + (maxX - minX) * pos.x
-        let y = minY + (maxY - minY) * pos.y
-        return CGPoint(x: x, y: y)
+    static func screenPoint(fromRaw raw: String, geometry: FloatingButtonGeometry) -> CGPoint {
+        geometry.center(forStorage: raw, default: FloatingButtonGeometry.defaultFeedStorage)
     }
 
-    /// Returns the button center as a `UnitPoint` (0-1 fraction of the full rect).
-    static func unitPoint(
-        fromRaw raw: String,
-        screenSize: CGSize,
-        safeArea: EdgeInsets,
-        isSearchBarVisible: Bool
-    ) -> UnitPoint {
-        guard screenSize.width > 0, screenSize.height > 0 else { return .topLeading }
-        let p = screenPoint(fromRaw: raw, screenSize: screenSize, safeArea: safeArea, isSearchBarVisible: isSearchBarVisible)
-        return UnitPoint(x: p.x / screenSize.width, y: p.y / screenSize.height)
-    }
-
-    /// Parses "x,y" (0-1) → clamped CGPoint. Defaults to top-left (0,0) — the
-    /// same default RootView persists for the feed button.
-    static func parse(_ raw: String) -> CGPoint {
-        let parts = raw.split(separator: ",")
-        guard parts.count == 2,
-              let x = Double(parts[0]),
-              let y = Double(parts[1]) else {
-            return CGPoint(x: 0, y: 0)
-        }
-        return CGPoint(x: min(max(x, 0), 1), y: min(max(y, 0), 1))
+    /// Le centre du bouton (global) en fraction du cadre GLOBAL `frame` de la
+    /// vue qui révèle les réels — qui peut, comme le conteneur des boutons, ne
+    /// pas commencer en haut de l'écran (bannière du joueur).
+    static func unitPoint(fromRaw raw: String, geometry: FloatingButtonGeometry, in frame: CGRect) -> UnitPoint {
+        guard frame.width > 0, frame.height > 0 else { return .topLeading }
+        let p = screenPoint(fromRaw: raw, geometry: geometry)
+        return UnitPoint(x: (p.x - frame.minX) / frame.width, y: (p.y - frame.minY) / frame.height)
     }
 }
 
