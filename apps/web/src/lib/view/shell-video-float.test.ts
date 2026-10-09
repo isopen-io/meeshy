@@ -14,21 +14,28 @@ import { shellVideoFloat, type FloatableVideo } from './shell-video-float';
 
 type Appel = { readonly plugin: string; readonly methode: string };
 
-function coque(methodes: readonly string[], reponse: unknown = { floated: true }): CoqueNative & { readonly appels: Appel[] } {
+function coque(
+  methodes: readonly string[],
+  reponse: unknown = { floated: true },
+): CoqueNative & { readonly appels: Appel[]; readonly options: object[] } {
   const appels: Appel[] = [];
+  const options: object[] = [];
   return {
     appels,
+    options,
     getPlatform: () => 'android',
     PluginHeaders: [{ name: 'MeeshyPlayback', methods: methodes.map((name) => ({ name })) }],
-    nativePromise: (plugin, methode) => {
+    nativePromise: (plugin, methode, recues) => {
       appels.push({ plugin, methode });
+      options.push(recues);
       return Promise.resolve(reponse);
     },
   };
 }
 
-function video(issue: 'resout' | 'rejette' = 'resout'): FloatableVideo & { pleinEcran: number } {
+function video(issue: 'resout' | 'rejette' = 'resout', taille = { videoWidth: 1080, videoHeight: 1920 }): FloatableVideo & { pleinEcran: number } {
   const v = {
+    ...taille,
     pleinEcran: 0,
     requestFullscreen: () => {
       v.pleinEcran += 1;
@@ -87,5 +94,12 @@ describe('la vidéo qui flotte d’un appui dans la coque Android (#9410)', () =
     await laisserFiler();
     expect(hote.appels).toEqual([]);
     expect(doc.sorties).toBe(0);
+  });
+
+  test('la coque reçoit la taille de la vidéo, pour flotter à sa forme comme dans Chrome (#9845)', async () => {
+    const hote = coque(['floatVideo']);
+    shellVideoFloat(hote, documentSortant())!(video('resout', { videoWidth: 1080, videoHeight: 1920 }));
+    await laisserFiler();
+    expect(hote.options).toEqual([{ width: 1080, height: 1920 }]);
   });
 });
