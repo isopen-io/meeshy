@@ -90,11 +90,27 @@ public enum CommentOwnership {
             && (payload.uploadedMedia ?? []).isEmpty
     }
 
-    /// Ce que `ownerId` a le droit de VOIR et de relancer dans sa base : ses
-    /// propres lignes, et les lignes de texte héritées sans auteur. Jamais la
-    /// ligne d'un autre compte, jamais rien sans compte connecté.
-    public static func mayHandle(_ payload: CreateCommentPayload, ownerId: String?) -> Bool {
-        guard identity(ownerId) != nil else { return false }
+    /// **La PREUVE que la base ouverte est celle de `ownerId`.**
+    ///
+    /// « Un compte est connecté » ne prouve rien sur la base lue : la file est
+    /// rebranchée après une bascule de compte par une tâche non attendue, et
+    /// pendant cette fenêtre le compte B lit encore la base de A. Le nom d'une
+    /// base de compte EST l'empreinte de son compte
+    /// (`MessageStoreAccountKey.databaseFileName`) : on recalcule celle de
+    /// `ownerId` et on la compare au fichier réellement ouvert. Chemin absent,
+    /// base en mémoire, base héritée non cloisonnée, autre compte : NON.
+    public static func baseBelongs(toOwner ownerId: String?, databasePath: String?, serverOrigin: String) -> Bool {
+        guard let owner = identity(ownerId), let path = databasePath, !path.isEmpty,
+              let key = MessageStoreAccountKey(userId: owner, serverOrigin: serverOrigin) else { return false }
+        return (path as NSString).lastPathComponent == key.databaseFileName
+    }
+
+    /// Ce que `ownerId` a le droit de VOIR et de relancer : ses propres
+    /// lignes, et — SI `baseIsHis` est prouvé — les lignes de texte héritées
+    /// sans auteur de SA base. Jamais la ligne d'un autre compte, jamais rien
+    /// sans compte, jamais une ligne héritée lue dans la base d'un autre.
+    public static func mayHandle(_ payload: CreateCommentPayload, ownerId: String?, baseIsHis: Bool) -> Bool {
+        guard baseIsHis, identity(ownerId) != nil else { return false }
         return owns(payload, currentUserId: ownerId) || isUnattributedText(payload)
     }
 
@@ -266,6 +282,8 @@ extension OfflineQueue {
             throw CommentOwnership.Refusal.notTheAuthor
         }
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
+        // La ligne et ses pièces ne s'écrivent que dans la base de leur auteur.
+        guard Self.proves(pool, belongsTo: ownerId) else { throw CommentOwnership.Refusal.notTheAuthor }
         let cmid = comment.clientMutationId
         // **Un même identifiant client ne s'enfile qu'une fois.** Une ligne
         // déjà là garde SES fichiers : les recopier puis échouer à l'insertion
@@ -343,6 +361,8 @@ extension OfflineQueue {
     /// ne se montrent jamais.
     public func unsentComments(postId: String, ownerId: String?) async -> [UnsentComment] {
         guard let pool = outboxPool else { return [] }
+        let baseIsHis = Self.proves(pool, belongsTo: ownerId)
+        guard baseIsHis else { return [] }
         let records: [OutboxRecord]
         do {
             records = try await pool.read { db in
@@ -360,7 +380,7 @@ extension OfflineQueue {
             // ne posent pas la même ancre sur la ligne.
             guard let payload = try? decoder.decode(CreateCommentPayload.self, from: record.payload),
                   payload.postId == postId,
-                  CommentOwnership.mayHandle(payload, ownerId: ownerId) else { return nil }
+                  CommentOwnership.mayHandle(payload, ownerId: ownerId, baseIsHis: baseIsHis) else { return nil }
             guard let owned = CommentOwnership.ownedMediaPaths(payload) else { return nil }
             let urls = owned.map { URL(fileURLWithPath: Self.absoluteMediaPath(forStored: $0)) }
             return UnsentComment(payload: payload,
@@ -373,11 +393,18 @@ extension OfflineQueue {
     /// Le commentaire de cet identifiant client, s'il est encore dans la file.
     public func unsentComment(clientMutationId cmid: String, ownerId: String?) async -> UnsentComment? {
         guard let pool = outboxPool else { return nil }
+        return await unsentComment(clientMutationId: cmid, ownerId: ownerId, in: pool)
+    }
+
+    /// La même lecture, dans UNE base désignée : celle dont l'appelant tient
+    /// déjà la référence, pour que la preuve et la lecture portent sur la même.
+    private func unsentComment(clientMutationId cmid: String, ownerId: String?,
+                               in pool: any DatabaseWriter) async -> UnsentComment? {
         let outboxId = "ofqm_\(cmid)"
         guard let record = try? await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
               record.kind == .createComment,
               let payload = try? decoder.decode(CreateCommentPayload.self, from: record.payload),
-              CommentOwnership.mayHandle(payload, ownerId: ownerId),
+              CommentOwnership.mayHandle(payload, ownerId: ownerId, baseIsHis: Self.proves(pool, belongsTo: ownerId)),
               let owned = CommentOwnership.ownedMediaPaths(payload) else { return nil }
         return UnsentComment(
             payload: payload,
@@ -398,7 +425,8 @@ extension OfflineQueue {
             guard let record = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
                   record.kind == .createComment else { return false }
             let payload = try decoder.decode(CreateCommentPayload.self, from: record.payload)
-            guard CommentOwnership.mayHandle(payload, ownerId: ownerId) else { return false }
+            guard CommentOwnership.mayHandle(payload, ownerId: ownerId,
+                                             baseIsHis: Self.proves(pool, belongsTo: ownerId)) else { return false }
             // Seuls les fichiers du dossier de l'auteur se suppriment.
             let owned = CommentOwnership.ownedMediaPaths(payload) ?? []
             removePendingCommentFiles(owned)
@@ -419,21 +447,77 @@ extension OfflineQueue {
     /// le compte connecté, dans sa propre base, déclare vouloir l'envoyer —
     /// elle prend `ownerId` pour auteur, puis rejoue comme toute autre, sous
     /// le jeton de ce compte.
+    ///
+    /// L'adoption exige la PREUVE que la base lue est celle de `ownerId`, et
+    /// elle est atomique : l'auteur n'est écrit que si la ligne est encore
+    /// celle qu'on a lue (comparaison des octets dans la transaction), puis
+    /// la ligne est RELUE et doit appartenir à `ownerId` avant d'être réarmée.
+    /// `CommentPublisher` revérifie ensuite, comme pour toute ligne.
     public func retryCreateComment(clientMutationId cmid: String, ownerId: String?) async throws {
+        // La base est saisie UNE fois : preuve, lecture, écriture et relecture
+        // portent sur la même, même si la file est rebranchée entre-temps.
         guard let pool = outboxPool,
               let owner = CommentOwnership.identity(ownerId),
-              let unsent = await unsentComment(clientMutationId: cmid, ownerId: owner) else {
+              Self.proves(pool, belongsTo: owner) else {
             throw CommentOwnership.Refusal.notTheAuthor
         }
         let outboxId = "ofqm_\(cmid)"
-        if unsent.needsAdoption {
-            let adopted = try encoder.encode(unsent.payload.adopting(authorId: owner))
-            try await pool.write { db in
+        guard let record = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
+              record.kind == .createComment else {
+            throw CommentOwnership.Refusal.notTheAuthor
+        }
+        // Les octets LUS sont ceux qu'on exigera de retrouver à l'écriture.
+        let raw = record.payload
+        let payload = try decoder.decode(CreateCommentPayload.self, from: raw)
+        guard CommentOwnership.mayHandle(payload, ownerId: owner, baseIsHis: true),
+              CommentOwnership.ownedMediaPaths(payload) != nil else {
+            throw CommentOwnership.Refusal.notTheAuthor
+        }
+        if CommentOwnership.isUnattributedText(payload) {
+            let adopted = try encoder.encode(payload.adopting(authorId: owner))
+            let written = try await pool.write { db -> Bool in
+                guard let current = try OutboxRecord.fetchOne(db, key: outboxId),
+                      current.kind == .createComment, current.payload == raw else { return false }
                 try db.execute(sql: "UPDATE outbox SET payload = ?, updatedAt = ? WHERE id = ?",
                                arguments: [adopted, Date(), outboxId])
+                return true
+            }
+            guard written,
+                  let reread = await unsentComment(clientMutationId: cmid, ownerId: owner, in: pool),
+                  CommentOwnership.owns(reread.payload, currentUserId: owner) else {
+                throw CommentOwnership.Refusal.notTheAuthor
             }
         }
+        // Réarmée dans la base PROUVÉE — pas dans celle que la file tiendrait
+        // maintenant si elle venait d'être rebranchée.
+        guard outboxPool.map({ Self.databasePath(of: $0) }) == Self.databasePath(of: pool) else {
+            throw CommentOwnership.Refusal.notTheAuthor
+        }
         try await retryItem(outboxId)
+    }
+
+    /// Confie à la file un commentaire de TEXTE — dans la base de son auteur,
+    /// et dans aucune autre : même garde que pour un commentaire avec pièces.
+    @discardableResult
+    public func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String {
+        guard CommentOwnership.owns(comment, currentUserId: ownerId),
+              let pool = outboxPool, Self.proves(pool, belongsTo: ownerId) else {
+            throw CommentOwnership.Refusal.notTheAuthor
+        }
+        return try await enqueue(.createComment, payload: comment, conversationId: comment.postId)
+    }
+
+    /// Le fichier d'une base — `nil` pour une base sans fichier.
+    nonisolated static func databasePath(of reader: any DatabaseReader) -> String? {
+        let path = (reader as? DatabasePool)?.path ?? (reader as? DatabaseQueue)?.path
+        guard let path, !path.isEmpty, path != ":memory:" else { return nil }
+        return path
+    }
+
+    /// La base `reader` est-elle PROUVÉE être celle de `ownerId` ?
+    nonisolated static func proves(_ reader: any DatabaseReader, belongsTo ownerId: String?) -> Bool {
+        CommentOwnership.baseBelongs(toOwner: ownerId, databasePath: databasePath(of: reader),
+                                     serverOrigin: MeeshyConfig.shared.persistedServerOrigin)
     }
 
     /// **Un dossier de pièces sans ligne dans la file est supprimé** (audit,
@@ -441,7 +525,10 @@ extension OfflineQueue {
     /// nettoyage a échoué, une copie interrompue : rien ne reste sur le disque
     /// sans une ligne qui le rejouera. `reader` est la base du compte `ownerId`.
     public nonisolated static func sweepOrphanCommentMedia(ownerId: String?, reader: any DatabaseReader) async {
-        guard let folder = CommentOwnership.mediaDirectoryName(ownerId: ownerId) else { return }
+        // On ne balaie le dossier d'un compte que contre SA base : contre une
+        // autre, toutes ses pièces vivantes paraîtraient orphelines.
+        guard proves(reader, belongsTo: ownerId),
+              let folder = CommentOwnership.mediaDirectoryName(ownerId: ownerId) else { return }
         let root = absoluteMediaPath(forStored: "\(pendingMediaDirectoryName)/\(folder)")
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: root), !entries.isEmpty else { return }
         // Fail-closed à l'envers : si la base ne se lit pas, on ne supprime RIEN.

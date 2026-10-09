@@ -81,7 +81,7 @@ enum CommentMediaDelivery {
         // de ses pièces. La file revérifie à l'écriture et au rejeu.
         let owner = try confirmAuthor(payload)
         guard !medias.isEmpty else {
-            try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: payload.postId)
+            try await OfflineQueue.shared.enqueueComment(payload, ownerId: owner)
             return
         }
         try await OfflineQueue.shared.enqueueCommentMedia(

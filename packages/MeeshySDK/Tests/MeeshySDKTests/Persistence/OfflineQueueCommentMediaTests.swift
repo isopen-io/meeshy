@@ -15,14 +15,19 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
     private var pool: DatabaseQueue!
     private var scratch: URL!
 
+    /// La base ouverte est celle d'ALICE : son fichier porte l'empreinte de
+    /// son compte, comme en production. C'est ce que la file exige de prouver
+    /// avant de montrer ou d'adopter quoi que ce soit.
     override func setUp() async throws {
-        pool = try DatabaseQueue()
-        try MessageDatabaseMigrations.runAll(on: pool)
-        await OfflineQueue.shared.configure(pool: pool)
-        await queue.clearAll()
         scratch = FileManager.default.temporaryDirectory
             .appendingPathComponent("comment-media-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let key = try XCTUnwrap(MessageStoreAccountKey(
+            userId: alice, serverOrigin: MeeshyConfig.shared.persistedServerOrigin))
+        pool = try DatabaseQueue(path: scratch.appendingPathComponent(key.databaseFileName).path)
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+        await queue.clearAll()
     }
 
     override func tearDown() async throws {
@@ -400,12 +405,12 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
     func test_onlyTextIsAdoptable_neverPiecesWithoutAnOwner() {
         let text = comment("c", author: nil)
         XCTAssertTrue(CommentOwnership.isUnattributedText(text))
-        XCTAssertTrue(CommentOwnership.mayHandle(text, ownerId: alice))
-        XCTAssertFalse(CommentOwnership.mayHandle(text, ownerId: nil))
+        XCTAssertTrue(CommentOwnership.mayHandle(text, ownerId: alice, baseIsHis: true))
+        XCTAssertFalse(CommentOwnership.mayHandle(text, ownerId: nil, baseIsHis: true))
         let withPieces = text.withMedia(localMediaPaths: ["pending-media/x/0.jpg"], localMediaMimeTypes: nil, uploadedMedia: nil)
         XCTAssertFalse(CommentOwnership.isUnattributedText(withPieces))
-        XCTAssertFalse(CommentOwnership.mayHandle(withPieces, ownerId: alice), "Des pièces sans propriétaire ne s'adoptent pas.")
-        XCTAssertFalse(CommentOwnership.mayHandle(comment("c"), ownerId: bob), "La ligne d'Alice n'est pas à Bob.")
+        XCTAssertFalse(CommentOwnership.mayHandle(withPieces, ownerId: alice, baseIsHis: true), "Des pièces sans propriétaire ne s'adoptent pas.")
+        XCTAssertFalse(CommentOwnership.mayHandle(comment("c"), ownerId: bob, baseIsHis: true), "La ligne d'Alice n'est pas à Bob.")
     }
 
     func test_anInheritedRow_canBeDiscardedByTheSignedInAccount() async throws {
@@ -415,6 +420,96 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         XCTAssertFalse(refused)
         let removed = await queue.cancelCreateComment(clientMutationId: cmid, ownerId: alice)
         XCTAssertTrue(removed)
+    }
+
+    // MARK: - La base d'A ouverte, le jeton de B
+
+    /// **La fenêtre de bascule** : B est connecté, la file lit encore la base
+    /// de A. « Un compte est connecté » ne suffit pas — il faut la PREUVE que
+    /// la base est la sienne.
+    func test_baseOfA_tokenOfB_theInheritedRowIsNeitherListed_norAdoptable_norDiscardable() async throws {
+        let cmid = "cmid_inherited_window_1"
+        let outboxId = try await enqueueInheritedText(cmid)
+
+        let listed = await queue.unsentComments(postId: "post-1", ownerId: bob)
+        XCTAssertTrue(listed.isEmpty, "La ligne de la base d'Alice ne se montre pas à Bob.")
+        let one = await queue.unsentComment(clientMutationId: cmid, ownerId: bob)
+        XCTAssertNil(one)
+
+        do {
+            try await queue.retryCreateComment(clientMutationId: cmid, ownerId: bob)
+            XCTFail("Bob n'adopte pas une ligne de la base d'Alice.")
+        } catch {
+            XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+        }
+        XCTAssertNil(try payload(outboxId).authorId, "Aucun auteur n'a été écrit sur la ligne.")
+
+        let discarded = await queue.cancelCreateComment(clientMutationId: cmid, ownerId: bob)
+        XCTAssertFalse(discarded)
+        XCTAssertNotNil(try pool.read { db in try OutboxRecord.fetchOne(db, key: outboxId) })
+    }
+
+    func test_baseOfA_tokenOfB_bobsOwnCommentIsNotWrittenIntoAlicesBase() async throws {
+        do {
+            _ = try await queue.enqueueCommentMedia(
+                comment("cmid_window_2", author: bob), sourceMediaURLs: [try source("a.jpg", "photo")],
+                sourceMediaMimeTypes: nil, ownerId: bob)
+            XCTFail("La ligne et ses pièces ne s'écrivent que dans la base de leur auteur.")
+        } catch {
+            XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+        }
+        let rows = try await pool.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(rows, 0)
+    }
+
+    func test_enqueueComment_writesATextCommentOnlyIntoItsAuthorsBase() async throws {
+        let outboxId = try await queue.enqueueComment(comment("cmid_text_1"), ownerId: alice)
+        XCTAssertEqual(try payload(outboxId).authorId, alice)
+        for (payload, owner) in [(comment("cmid_text_2", author: bob), Optional(bob)),   // base de A, compte B
+                                 (comment("cmid_text_3"), Optional(bob)),
+                                 (comment("cmid_text_4", author: nil), Optional(alice)),
+                                 (comment("cmid_text_5"), String?.none)] {
+            do {
+                _ = try await queue.enqueueComment(payload, ownerId: owner)
+                XCTFail("refus attendu")
+            } catch {
+                XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+            }
+        }
+        let rows = try await pool.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(rows, 1)
+    }
+
+    func test_baseBelongs_needsTheAccountsOwnFile() throws {
+        let origin = "https://gate.meeshy.me"
+        let aliceFile = try XCTUnwrap(MessageStoreAccountKey(userId: alice, serverOrigin: origin)).databaseFileName
+        XCTAssertTrue(CommentOwnership.baseBelongs(toOwner: alice, databasePath: "/x/\(aliceFile)", serverOrigin: origin))
+        XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: bob, databasePath: "/x/\(aliceFile)", serverOrigin: origin),
+                       "base de A, compte B")
+        XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: alice, databasePath: "/x/\(aliceFile)",
+                                                    serverOrigin: "https://staging.meeshy.me"), "même compte, autre environnement")
+        XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: alice, databasePath: nil, serverOrigin: origin), "base sans fichier")
+        XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: alice, databasePath: "", serverOrigin: origin))
+        XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: alice, databasePath: "/x/meeshy_messages.sqlite", serverOrigin: origin),
+                       "base héritée non cloisonnée")
+        XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: nil, databasePath: "/x/\(aliceFile)", serverOrigin: origin))
+        XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: "", databasePath: "/x/\(aliceFile)", serverOrigin: origin))
+    }
+
+    func test_mayHandle_withoutTheProof_handlesNothing_notEvenOnesOwnRow() {
+        XCTAssertFalse(CommentOwnership.mayHandle(comment("c", author: nil), ownerId: alice, baseIsHis: false))
+        XCTAssertFalse(CommentOwnership.mayHandle(comment("c"), ownerId: alice, baseIsHis: false))
+        XCTAssertTrue(CommentOwnership.mayHandle(comment("c"), ownerId: alice, baseIsHis: true))
+    }
+
+    func test_anInMemoryBase_provesNothing() async throws {
+        let memory = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: memory)
+        await OfflineQueue.shared.configure(pool: memory)
+        _ = try await queue.enqueue(.createComment, payload: comment("cmid_memory_1", author: nil), conversationId: "post-1")
+        let listed = await queue.unsentComments(postId: "post-1", ownerId: alice)
+        XCTAssertTrue(listed.isEmpty, "Sans fichier, rien ne prouve à qui est la base.")
+        await OfflineQueue.shared.configure(pool: pool)
     }
 
     // MARK: - Annuler et relancer : l'auteur seul

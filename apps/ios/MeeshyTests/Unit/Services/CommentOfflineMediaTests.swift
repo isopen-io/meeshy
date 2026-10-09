@@ -328,7 +328,7 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
     func test_entrusting_recordsTheVerifiedAccount_once_forTheRowAndItsFolder() throws {
         let code = try source("Features/Main/Views/CommentComposerMedia.swift")
         let entrust = try XCTUnwrap(code.range(of: "static func entrust("))
-        let enqueue = try XCTUnwrap(code.range(of: "OfflineQueue.shared.enqueue(", range: entrust.upperBound..<code.endIndex))
+        let enqueue = try XCTUnwrap(code.range(of: "OfflineQueue.shared.enqueueComment(payload, ownerId: owner)", range: entrust.upperBound..<code.endIndex))
         XCTAssertTrue(code[entrust.upperBound..<enqueue.lowerBound].contains("let owner = try confirmAuthor(payload)"),
                       "L'enfilement arrive après une attente réseau : le compte a pu changer.")
         XCTAssertTrue(code.contains("ownerId: owner"), "Le dossier des pièces doit être celui du compte vérifié, pas une seconde lecture.")
@@ -347,6 +347,41 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
         XCTAssertTrue(sheet.contains(".unsentComments(restore:"))
         XCTAssertTrue(try source("Features/Main/Views/FeedCommentsSheet+Attachments.swift")
             .contains("unsentComments(postId: post.id, ownerId: CommentPublisher.currentAccountId())"))
+    }
+
+    /// **Le fil, le détail et la story n'ont qu'UNE porte vers les lignes en
+    /// attente** : la file, qui exige la preuve que la base ouverte est celle
+    /// du compte du jeton (`OfflineQueueCommentMediaTests`, « base de A,
+    /// jeton de B »). Aucun écran ne lit, ne relance ni ne supprime une ligne
+    /// sans lui remettre le compte que le JETON désigne.
+    func test_everyScreen_handsTheTokensAccount_toTheQueue_andReadsNoRowItself() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let files = (FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL } ?? []).filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(files.count, 500)
+        let doors = ["unsentComments(postId:", "unsentComment(clientMutationId:",
+                     "retryCreateComment(clientMutationId:", "cancelCreateComment("]
+        var calls = 0
+        var offenders: [String] = []
+        for file in files {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: file, encoding: .utf8))
+            for line in code.components(separatedBy: "\n") where doors.contains(where: { line.contains($0) }) {
+                calls += 1
+            }
+            // Chaque appel tient sur deux lignes au plus : on juge la fenêtre.
+            let lines = code.components(separatedBy: "\n")
+            for (index, line) in lines.enumerated() where doors.contains(where: { line.contains($0) }) {
+                let window = lines[index...min(index + 1, lines.count - 1)].joined(separator: " ")
+                if !window.contains("ownerId: CommentPublisher.currentAccountId()") {
+                    offenders.append("\(file.lastPathComponent):\(index + 1)")
+                }
+            }
+        }
+        XCTAssertGreaterThanOrEqual(calls, 4, "les portes de la file ne sont plus trouvées — ce témoin ne garderait rien")
+        XCTAssertEqual(offenders, [], "Une ligne en attente se lit ou se relance sans le compte du jeton.")
     }
 
     func test_removingAnAccount_removesItsPendingPieces() throws {
