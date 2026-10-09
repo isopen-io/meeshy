@@ -279,6 +279,7 @@ final class StoryInteractionServiceTests: XCTestCase {
 /// `viewerListAccess` côté passerelle : l'auteur d'une story ou d'un statut ;
 /// ADMIN/BIGBOSS pour tout contenu ; l'auteur d'un post ou d'un réel n'en voit
 /// que les nombres.
+@MainActor
 final class PublicationViewersAccessTests: XCTestCase {
 
     func test_mayList_authorOfPostOrReel_notAdmin_isRefused() {
