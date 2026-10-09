@@ -38,6 +38,8 @@ const arStudioChrome = {
   'story.studio.retouch.done': 'تم',
   'story.studio.retouch.cancel': 'تجاهل التعديل',
   'composer.attachment.edit': 'تعديل {name}',
+  'composer.attachment.remove': 'إزالة {name}',
+  'composer.attachment.pending': 'المرفقات قيد الانتظار',
   'story.studio.retouch.failed': 'تعذّر إنشاء الوسائط.',
   'story.studio.retouch.exporting': 'جارٍ التصدير…',
   'story.studio.timeline.enter': 'يدخل هنا',

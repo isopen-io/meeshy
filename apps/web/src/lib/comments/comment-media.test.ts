@@ -26,7 +26,7 @@ describe('acceptCommentFiles — photos, vidéos et sons (#9167, #9318)', () => 
   });
 
   test('garde images, GIF, vidéos et sons, écarte le reste', () => {
-    const accepted = acceptCommentFiles([], [
+    const { list: accepted, refusal } = acceptCommentFiles([], [
       file('a.jpg', 'image/jpeg'),
       file('b.pdf', 'application/pdf'),
       file('c.mp4', 'video/mp4'),
@@ -35,19 +35,32 @@ describe('acceptCommentFiles — photos, vidéos et sons (#9167, #9318)', () => 
     ]);
     expect(accepted.map((piece) => piece.name)).toEqual(['a.jpg', 'c.mp4', 'd.mp3', 'e.gif']);
     expect(accepted.map((piece) => piece.kind)).toEqual(['image', 'video', 'audio', 'image']);
+    expect(refusal).toEqual({ reason: 'unsupported', name: 'b.pdf' });
+  });
+
+  test('#9736 — la même pièce reprise n’entre pas deux fois, et le dit', () => {
+    const déjà = [pendingAttachmentOf(file('x.jpg', 'image/jpeg'))];
+    const { list, refusal } = acceptCommentFiles(déjà, [file('x.jpg', 'image/jpeg'), file('y.jpg', 'image/jpeg'), file('y.jpg', 'image/jpeg')]);
+    expect(list.map((piece) => piece.name)).toEqual(['x.jpg', 'y.jpg']);
+    expect(refusal).toEqual({ reason: 'duplicate', name: 'x.jpg' });
+  });
+
+  test('#9736 — une sélection juste n’annonce aucun écart', () => {
+    expect(acceptCommentFiles([], [file('a.jpg', 'image/jpeg')]).refusal).toBeUndefined();
   });
 
   test('#9693 — garde un .wav nommé audio/x-wav et un .mp3 sans type', () => {
-    const accepted = acceptCommentFiles([], [file('note.wav', 'audio/x-wav'), file('chanson.mp3', '')]);
+    const { list: accepted } = acceptCommentFiles([], [file('note.wav', 'audio/x-wav'), file('chanson.mp3', '')]);
     expect(accepted.map((piece) => piece.kind)).toEqual(['audio', 'audio']);
   });
 
   test('s’ajoute à la sélection, jamais au-delà de MAX_POST_MEDIA', () => {
     const déjà = [pendingAttachmentOf(file('x.jpg', 'image/jpeg'))];
     const many = Array.from({ length: MAX_POST_MEDIA + 3 }, (_, i) => file(`p${i}.jpg`, 'image/jpeg'));
-    const accepted = acceptCommentFiles(déjà, many);
+    const { list: accepted, refusal } = acceptCommentFiles(déjà, many);
     expect(accepted).toHaveLength(MAX_POST_MEDIA);
     expect(accepted[0]).toBe(déjà[0]);
+    expect(refusal).toEqual({ reason: 'limit' });
   });
 });
 
@@ -84,6 +97,18 @@ describe('uploadCommentMedia — chaque pièce en contexte « comment »', () =>
         { postMediaId: 'pm-b.mp4', fileUrl: '/u/b.mp4', mimeType: 'video/mp4' },
       ],
     });
+  });
+
+  test('#9736 — rapporte la montée de chaque pièce par son `localId`, et la clôt à 1', async () => {
+    const upload = async (f: File, onProgress?: (fraction: number) => void): Promise<ApiResult<PostMediaUploadResult>> => {
+      onProgress?.(0.5);
+      return { ok: true, status: 201, data: { postMediaId: `pm-${f.name}`, fileUrl: `/u/${f.name}`, mimeType: f.type } };
+    };
+    const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg')), pendingAttachmentOf(file('b.mp4', 'video/mp4'))];
+    const seen: [string, number][] = [];
+    await uploadCommentMedia(pending, upload, (localId, fraction) => seen.push([localId, fraction]));
+    const [a, b] = pending.map((piece) => piece.localId);
+    expect(seen).toEqual([[a, 0.5], [a, 1], [b, 0.5], [b, 1]] as [string, number][]);
   });
 
   test('une seule pièce refusée : rien ne part, et les suivantes ne montent pas', async () => {

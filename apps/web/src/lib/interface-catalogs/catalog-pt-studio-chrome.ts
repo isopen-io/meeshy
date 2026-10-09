@@ -38,6 +38,8 @@ const ptStudioChrome = {
   'story.studio.retouch.done': 'Concluído',
   'story.studio.retouch.cancel': 'Descartar a edição',
   'composer.attachment.edit': 'Editar {name}',
+  'composer.attachment.remove': 'Remover {name}',
+  'composer.attachment.pending': 'Anexos pendentes',
   'story.studio.retouch.failed': 'Não foi possível gerar o conteúdo.',
   'story.studio.retouch.exporting': 'Exportando…',
   'story.studio.timeline.enter': 'Entra aqui',

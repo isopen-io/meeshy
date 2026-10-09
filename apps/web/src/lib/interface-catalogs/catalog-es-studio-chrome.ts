@@ -38,6 +38,8 @@ const esStudioChrome = {
   'story.studio.retouch.done': 'Listo',
   'story.studio.retouch.cancel': 'Descartar la edición',
   'composer.attachment.edit': 'Editar {name}',
+  'composer.attachment.remove': 'Quitar {name}',
+  'composer.attachment.pending': 'Archivos adjuntos pendientes',
   'story.studio.retouch.failed': 'No se pudo generar el contenido.',
   'story.studio.retouch.exporting': 'Exportando…',
   'story.studio.timeline.enter': 'Entra aquí',

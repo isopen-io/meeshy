@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import { CommentComposer, type CommentComposerResult } from '@/components/comment-composer';
+import { CommentComposer, type CommentComposerResult, type CommentUploadReport } from '@/components/comment-composer';
 import { CommentImagePortal } from '@/components/comment-image-sheet-lazy';
 import { CommentList } from '@/components/comment-list';
 import { CommentReplies } from '@/components/comment-replies';
@@ -220,11 +220,11 @@ export function CommentThread({
   );
 
   const onSend = useCallback(
-    async (content: string, pending: readonly PendingAttachment[]): Promise<CommentComposerResult> => {
+    async (content: string, pending: readonly PendingAttachment[], report: CommentUploadReport): Promise<CommentComposerResult> => {
       /* LES PIÈCES MONTENT D'ABORD (#9167, miroir `CommentMediaUploader`) :
          `attachmentIds` ne porte que des `PostMedia` déjà téléversés. Une
          seule refusée et rien ne part — le composeur rend texte et pièces. */
-      const uploaded = pending.length === 0 ? { ok: true as const, media: [] } : await uploadCommentMedia(pending, uploadMedia);
+      const uploaded = pending.length === 0 ? { ok: true as const, media: [] } : await uploadCommentMedia(pending, uploadMedia, report);
       if (!uploaded.ok) return { ok: false, message: 'comments.media.upload_failed' };
       return deliver({ content, media: uploaded.media });
     },

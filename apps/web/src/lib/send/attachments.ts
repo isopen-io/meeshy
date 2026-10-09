@@ -159,11 +159,11 @@ export function acceptPendingFiles(params: {
     readonly doublon?: string;
   }>(
     (acc, file) => {
-      const signature = signatureDeFichier(file);
+      const signature = fileSignature(file);
       if (acc.vues.has(signature)) return { ...acc, doublon: acc.doublon ?? file.name };
       return { ...acc, retenus: [...acc.retenus, file], vues: new Set([...acc.vues, signature]) };
     },
-    { retenus: [], vues: new Set(params.current.map((piece) => signatureDeFichier(piece.file))) },
+    { retenus: [], vues: new Set(params.current.map((piece) => fileSignature(piece.file))) },
   );
 
   const list = tri.retenus.reduce(
@@ -193,7 +193,7 @@ export function acceptPendingFiles(params: {
  * Le séparateur est un octet NUL parce qu'aucun nom de fichier n'en contient :
  * « a.jpg » + 12 et « a.jpg1 » + 2 se confondraient sur une simple concaténation.
  */
-function signatureDeFichier(file: File): string {
+export function fileSignature(file: File): string {
   return `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
 }
 

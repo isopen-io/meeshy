@@ -103,6 +103,22 @@ describe('le fil envoie un commentaire avec sa photo (#9167)', () => {
     expect(host.querySelectorAll('[data-composer-edit]')).toHaveLength(0);
   });
 
+  test('#9736 — pendant que la photo monte, sa vignette montre la part déjà partie', async () => {
+    let finir: ((result: ApiResult<PostMediaUploadResult>) => void) | undefined;
+    const upload: CommentMediaUpload = (_file, onProgress) => {
+      onProgress?.(0.5);
+      return new Promise((resolve) => {
+        finir = resolve;
+      });
+    };
+    const host = await mountThread(upload);
+    await joindreEtEnvoyer(host, '');
+    expect(host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('50');
+    await act(async () => finir?.({ ok: true, status: 201, data: { postMediaId: 'fx-pm-photo', fileUrl: 'https://cdn.example/plage.jpg', mimeType: 'image/jpeg' } }));
+    await settle();
+    expect(host.querySelector('[data-pending-tile]')).toBeNull();
+  });
+
   test('un téléversement refusé : rien ne part, texte et vignette restent, le refus se dit', async () => {
     const upload: CommentMediaUpload = async () => ({ ok: false, status: 413, error: 'trop gros' });
     const host = await mountThread(upload);

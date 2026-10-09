@@ -6,9 +6,12 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { COMMENT_MAX_LENGTH } from '@/lib/api/publication-comments';
-import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, withCommentPiece } from '@/lib/comments/comment-media';
+import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
+
+import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, withCommentPiece, type CommentFilesRefusal } from '@/lib/comments/comment-media';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
 import { removePendingAttachment, replacePendingAttachment, type PendingAttachment } from '@/lib/send/attachments';
 import { withReplyMention, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import type { MentionSource } from '@/lib/view/mention-source';
@@ -88,6 +91,16 @@ export type CommentComposerResult = { readonly ok: boolean; readonly message?: I
  * texte (il est rendu au champ) ; `unconfirmed` l'a posé sans confirmation. */
 type ComposerNotice = { readonly text: string; readonly issue: 'refused' | 'unconfirmed' };
 
+/** LA MONTÉE D'UNE PIÈCE (#9736) — l'hôte qui téléverse la rapporte par
+ * `localId`, de 0 à 1 ; la vignette du plateau la montre. */
+export type CommentUploadReport = (localId: string, fraction: number) => void;
+
+/** UN FICHIER ÉCARTÉ SE DIT (#9736) — jamais une sélection qui ne produit rien. */
+function refusalText(language: InterfaceLanguage, refusal: CommentFilesRefusal): string {
+  if (refusal.reason === 'limit') return translate(language, 'comments.media.limit', { count: String(MAX_POST_MEDIA) });
+  return translate(language, refusal.reason === 'duplicate' ? 'comments.media.duplicate' : 'comments.media.unsupported', { name: refusal.name });
+}
+
 /** LE MICRO QUI NE S'OUVRE PAS SE DIT (#9318) — les libellés du composeur du fil. */
 const MIC_NOTICE: Readonly<Partial<Record<RecorderStatus, InterfaceCatalogKey>>> = {
   refused: 'composer.mic.refused',
@@ -98,7 +111,7 @@ export type CommentComposerProps = {
   readonly language: InterfaceLanguage;
   /** Le texte, et les photos, GIF, vidéos et sons joints — vocal compris (#9167, #9318) — l'hôte les téléverse
    * (`uploadContext: comment`) avant de les envoyer dans `attachmentIds`. */
-  readonly onSend: (content: string, pending: readonly PendingAttachment[]) => Promise<CommentComposerResult>;
+  readonly onSend: (content: string, pending: readonly PendingAttachment[], report: CommentUploadReport) => Promise<CommentComposerResult>;
   /** Absent ⇒ le composeur laisse place à une invitation à se connecter :
    * `POST /posts/:postId/comments` exige un `registeredUser` (`comments.ts:184`),
    * donc un champ offert à un visiteur anonyme serait un contrôle qui ment. */
@@ -152,6 +165,8 @@ export function CommentComposer({
   const [pending, setPending] = useState<readonly PendingAttachment[]>([]);
   const pickerRef = useRef<HTMLInputElement | null>(null);
   const [sending, setSending] = useState(false);
+  /* LA MONTÉE DES PIÈCES EN VOL (#9736) — `null` hors téléversement. */
+  const [uploading, setUploading] = useState<ReadonlyMap<string, number> | null>(null);
   const [notice, setNotice] = useState<ComposerNotice | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const fieldId = useId();
@@ -219,10 +234,16 @@ export function CommentComposer({
        jointes montent d'abord (#9167) : l'optimiste n'existe qu'après elles,
        donc le brouillon RESTE, en vol, jusqu'à l'issue. */
     if (pieces.length === 0) setText('');
-    const result = await onSend(content, pieces);
+    else setUploading(new Map(pieces.map((piece) => [piece.localId, 0])));
+    const result = await onSend(content, pieces, (localId, fraction) =>
+      setUploading((current) => (current === null ? current : new Map(current).set(localId, Math.min(1, Math.max(0, fraction))))),
+    );
+    setUploading(null);
     if (result.ok) {
       setText((current) => (pieces.length > 0 && current === text ? '' : current));
       setPending((current) => (current === base ? [] : current));
+      /* Parties : la rangée du fil lit l'adresse du serveur, l'aperçu local ne sert plus. */
+      pieces.forEach((piece) => releasePreviewUrl(piece.localId));
     }
     setSending(false);
     if (result.message !== undefined) {
@@ -359,15 +380,22 @@ export function CommentComposer({
         <div
           data-comment-tray=""
           aria-busy={sending}
-          className={sending ? 'pointer-events-none opacity-60' : undefined}
+          className={sending ? 'pointer-events-none' : undefined}
           style={{ ['--accent' as string]: 'var(--color-ios-brand)' }}
         >
           <Suspense fallback={null}>
             <ComposerTray
               variant="above"
               pending={pending}
-              onRemove={(localId) => setPending((current) => removePendingAttachment(current, localId))}
-              onReplace={(localId, file) => setPending((current) => replacePendingAttachment(current, localId, file))}
+              onRemove={(localId) => {
+                releasePreviewUrl(localId);
+                setPending((current) => removePendingAttachment(current, localId));
+              }}
+              onReplace={(localId, file) => {
+                releasePreviewUrl(localId);
+                setPending((current) => replacePendingAttachment(current, localId, file));
+              }}
+              {...(uploading === null ? {} : { uploading })}
               notice={null}
               place={null}
               onRemovePlace={() => undefined}
@@ -402,7 +430,10 @@ export function CommentComposer({
         onChange={(e) => {
           const files = Array.from(e.currentTarget.files ?? []);
           e.currentTarget.value = '';
-          if (files.length > 0) setPending((current) => acceptCommentFiles(current, files));
+          if (files.length === 0) return;
+          const accepted = acceptCommentFiles(pending, files);
+          setPending(accepted.list);
+          setNotice(accepted.refusal === undefined ? null : { text: refusalText(language, accepted.refusal), issue: 'refused' });
         }}
       />
       <label className="sr-only" htmlFor={fieldId}>
