@@ -891,7 +891,7 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Init
 
-    public init(slide: StorySlide, mode: RenderMode = .edit) {
+    public init(slide: StorySlide, mode: RenderMode = .edit, startsPaused: Bool = false) {
         self.slide = slide
         self.mode = mode
         self.backgroundMediaObjectId = slide.effects.mediaObjects?
