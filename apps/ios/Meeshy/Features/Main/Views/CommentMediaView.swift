@@ -84,7 +84,7 @@ private struct CommentAttachmentTile: View {
             label: attachment.name,
             tapAccessibilityLabel: tapLabel,
             removeAccessibilityLabel: String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(attachment.name)", bundle: .main),
-            onTap: { edit?() },
+            onTap: edit,
             onRemove: onRemove
         )
         .contextMenu {
@@ -116,10 +116,10 @@ private struct CommentAttachmentTile: View {
         return nil
     }
 
+    /// Une pièce que la scène n'ouvre pas (son, GIF, pièce en lecture) se lit
+    /// par son nom : elle ne promet ni aperçu ni édition.
     private var tapLabel: String {
-        guard edit != nil else {
-            return String(localized: "conversation.composer.attachment.preview", defaultValue: "Aperçu \(attachment.name)", bundle: .main)
-        }
+        guard edit != nil else { return attachment.name }
         return String(localized: "conversation.composer.attachment.edit", defaultValue: "Éditer \(attachment.name)", bundle: .main)
     }
 }

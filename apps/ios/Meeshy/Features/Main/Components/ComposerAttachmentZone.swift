@@ -66,7 +66,9 @@ struct ComposerAttachmentTile: View {
     let label: String
     let tapAccessibilityLabel: String
     let removeAccessibilityLabel: String
-    let onTap: () -> Void
+    /// `nil` ⇒ toucher la tuile ne fait rien, et elle ne se rend pas en
+    /// bouton : un contrôle sans effet n'est pas annoncé (loi 4).
+    let onTap: (() -> Void)?
     let onRemove: () -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -74,25 +76,19 @@ struct ComposerAttachmentTile: View {
     var body: some View {
         VStack(spacing: MeeshySpacing.xs) {
             ZStack(alignment: .topTrailing) {
-                Button {
-                    HapticFeedback.light()
-                    onTap()
-                } label: {
-                    ZStack {
-                        face
-                        if let centerGlyph {
-                            Image(systemName: centerGlyph)
-                                // Doctrine 86i : glyphe borné par la tuile fixe 56×56 → figé ; le bouton porte le libellé.
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(MeeshyColors.mediaChromeForeground)
-                                .frame(width: 26, height: 26)
-                                .background(Circle().fill(MeeshyColors.mediaChromeFill))
-                                .accessibilityHidden(true)
-                        }
+                if let onTap {
+                    Button {
+                        HapticFeedback.light()
+                        onTap()
+                    } label: {
+                        tile
                     }
-                    .frame(width: Self.side, height: Self.side)
+                    .accessibilityLabel(tapAccessibilityLabel)
+                } else {
+                    tile
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(tapAccessibilityLabel)
                 }
-                .accessibilityLabel(tapAccessibilityLabel)
 
                 ComposerAttachmentRemoveBadge(accessibilityLabel: removeAccessibilityLabel, action: onRemove)
             }
@@ -103,6 +99,22 @@ struct ComposerAttachmentTile: View {
                 .lineLimit(1)
                 .frame(width: Self.labelWidth)
         }
+    }
+
+    private var tile: some View {
+        ZStack {
+            face
+            if let centerGlyph {
+                Image(systemName: centerGlyph)
+                    // Doctrine 86i : glyphe borné par la tuile fixe 56×56 → figé ; le bouton porte le libellé.
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(MeeshyColors.mediaChromeForeground)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(MeeshyColors.mediaChromeFill))
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(width: Self.side, height: Self.side)
     }
 
     @ViewBuilder
