@@ -128,6 +128,18 @@ final class ConversationComposerStateTests: XCTestCase {
         XCTAssertEqual(state.pendingAttachments.first?.width, 1080)
     }
 
+    /// #9775 — rognée dans la scène, une prise de la caméra reste une prise :
+    /// la vidéo qui la remplace garde sa provenance.
+    func test_applyEditedVideo_capture_gardeSaProvenance() {
+        var state = makeStateWithVideo()
+        state.pendingAttachments[0].capturedInApp = true
+
+        _ = state.applyEditedVideo(attachmentId: "video-1",
+                                   result: editResult(url: URL(fileURLWithPath: "/tmp/rognee.mp4"), didEdit: true))
+
+        XCTAssertEqual(state.pendingAttachments.first?.capturedInApp, true)
+    }
+
     func test_applyEditedVideo_nonEditee_gardeLOriginal() {
         let original = URL(fileURLWithPath: "/tmp/original.mp4")
         var state = makeStateWithVideo(originalURL: original)

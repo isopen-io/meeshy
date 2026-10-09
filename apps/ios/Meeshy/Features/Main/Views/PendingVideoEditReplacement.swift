@@ -37,6 +37,7 @@ nonisolated enum PendingVideoEditReplacement {
                 mimeType: "video/mp4",
                 fileSize: taille ?? ancienne.fileSize,
                 fileUrl: result.url.absoluteString,
+                capturedInApp: ancienne.capturedInApp,
                 width: ancienne.width,
                 height: ancienne.height,
                 duration: result.duration > 0 ? Int(result.duration * 1000) : ancienne.duration,
