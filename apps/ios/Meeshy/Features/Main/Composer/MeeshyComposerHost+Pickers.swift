@@ -159,10 +159,35 @@ extension MeeshyComposerHost {
     /// porte vient de poser.
     var stickerPickerSheet: some View {
         MeeshyStickerSheet(destination: StickerSheetDestination(diesCut: false) { choice in
-            presentedPortal = nil
-            poseStickerChoice(choice)
+            choisirDansLesStickers(choice)
         })
+        #if DEBUG
+        .onAppear { VitrineRendu.shared.feuilleDeStickersAffichee { choisirDansLesStickers($0) } }
+        #endif
     }
+
+    /// Un choix de la feuille : elle se referme, il se pose.
+    func choisirDansLesStickers(_ choice: StickerSheetChoice) {
+        presentedPortal = nil
+        poseStickerChoice(choice)
+    }
+
+    #if DEBUG
+    /// La vitrine (#9810) : son média entre comme le choix de la photothèque À L'OUVERTURE — il fonde la scène, avant
+    /// que la feuille ne s'ouvre d'office —, la porte du sticker s'ouvre par le rail, et la flèche publie comme l'auteur
+    /// qui arme un format au chevron puis touche « Publier » (#9820).
+    func preterLeComposeurALaVitrine() {
+        let media = VitrineRendu.shared.composeurAffiche { handleRailDoor(.sticker) }
+        VitrineRendu.shared.composeurPretAPublier(armer: { chooseArmedPublish($0) }, publier: { requestSoclePublish($0) })
+        guard let media else { return }
+        openingPickFoundsScenes = true
+        // La durée se mesure comme à l'ingestion de la photothèque : sans elle, un réel n'est jamais qualifié.
+        Task {
+            let duree = await ComposerMediaProbe.durationMs(forURL: media.url, mime: media.mimeType)
+            routePickedMedia([ComposerDocumentMediaFactory.media(url: media.url, declaredMimeType: media.mimeType, durationMs: duree)])
+        }
+    }
+    #endif
 
     /// Pose le choix, puis ouvre son édition en place. Un sticker de pack
     /// attend ses octets (cache des images) : la feuille est déjà refermée, la

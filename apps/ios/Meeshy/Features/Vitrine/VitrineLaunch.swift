@@ -16,6 +16,17 @@ nonisolated enum VitrineScene: String, CaseIterable, Sendable {
     case lien
     case progression
     case imagine
+    case jeuRang = "jeu-rang"
+    case jeuCoffre = "jeu-coffre"
+    case jeuFrappe = "jeu-frappe"
+    case jeuNiveau = "jeu-niveau"
+    case jeuBadge = "jeu-badge"
+    case interactionFrappe = "interaction-frappe"
+    case interactionEmoji = "interaction-emoji"
+    case interactionEmojiPost = "interaction-emoji-post"
+    case interactionCommentaireAudio = "interaction-commentaire-audio"
+    case interactionSticker = "interaction-sticker"
+    case interactionReel = "interaction-reel"
 
     /// La scène « lien » montre ce que voit un invité SANS compte.
     var ouvreUneSession: Bool { self != .lien }
@@ -43,5 +54,12 @@ nonisolated enum VitrineLaunch {
     static var dossierMedias: URL { dossier.appendingPathComponent("medias", isDirectory: true) }
 
     static var marqueurPret: URL { dossier.appendingPathComponent("pret.txt") }
+
+    /// Une scène du jeu (#9805) : la célébration démarre, puis elle est finie — le script de tournage filme entre les deux.
+    static var marqueurCelebrationDebut: URL { dossier.appendingPathComponent("celebration-debut.txt") }
+    static var marqueurCelebrationFin: URL { dossier.appendingPathComponent("celebration-fin.txt") }
+
+    /// Le clap (#9810) : le script de tournage le dépose quand l'enregistreur tourne ; l'action attend ce fichier.
+    static var marqueurGo: URL { dossier.appendingPathComponent("go.txt") }
 }
 #endif

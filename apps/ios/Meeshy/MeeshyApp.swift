@@ -592,6 +592,11 @@ struct MeeshyApp: App {
                     // dans la Dynamic Island et sur l'écran verrouillé.
                     OutboxLiveActivityCoordinator.shared.start()
 
+                    // #9782 · #9783 · #9784 — l'appel, le vocal en lecture et
+                    // l'enregistrement se pilotent depuis l'îlot : les boutons
+                    // de leurs activités reviennent ici.
+                    LiveActivityCommandBinding.shared.install()
+
                     // Session check gates auth and MUST finish before the splash
                     // dismisses. Friendship hydration only powers non-critical
                     // friend-status badges, yet it fetches ALL sent + received

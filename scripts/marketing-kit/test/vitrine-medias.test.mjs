@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import {
-  DOSSIER_PHOTOS, RACINE_MEDIAS, choisirVoix, dimensionsJpeg, dureeDepuisAfinfo, fichierVoix, lireVoix, photoMedia, segmenter, vocalMedia,
+  DOSSIER_PHOTOS, RACINE_MEDIAS, VIDEOS, VIDEO_DU_REEL, argumentsExtrait, choisirVoix, dimensionsJpeg, dureeDepuisAfinfo, empreinte,
+  fichierSourceVideo, fichierVideo, fichierVoix, lireVoix, photoMedia, preparerVideo, segmenter, videoMedia, vocalMedia,
 } from '../vitrine/medias.mjs'
 
 describe('médias de la vitrine (#8855)', () => {
@@ -67,3 +69,60 @@ describe('médias de la vitrine (#8855)', () => {
     expect(fichierVoix({ texte: 'Bonjour', lang: 'it' })).not.toBe(a)
   })
 })
+
+describe('la vidéo du réel (#9820)', () => {
+  test('elle vient de Pexels, sous sa licence, sans personne à l’image, et sa source est épinglée par son empreinte', () => {
+    const v = VIDEOS[VIDEO_DU_REEL]
+    expect(v.licence).toBe('https://www.pexels.com/license/')
+    expect(v.page).toMatch(/^https:\/\/www\.pexels\.com\/video\//)
+    expect(v.source).toMatch(/^https:\/\/videos\.pexels\.com\/video-files\//)
+    expect(v.auteur).toBeTruthy()
+    expect(v.personnes).toBe(0)
+    expect(v.sha256).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  test('elle devient un média relatif, vertical, au format de la scène', () => {
+    expect(videoMedia(VIDEO_DU_REEL)).toEqual({
+      url: `${RACINE_MEDIAS}/reel-coucher-ocean.mp4`, fichier: 'reel-coucher-ocean.mp4', genre: 'video', video: VIDEO_DU_REEL,
+      width: 720, height: 1280, dureeMs: 6000,
+    })
+    expect(() => videoMedia('inconnue')).toThrow('vidéo inconnue')
+  })
+
+  test('l’extrait est rogné, sans son, en H.264 lisible partout, l’index en tête', () => {
+    const args = argumentsExtrait({ source: '/s.mp4', sortie: '/o.mp4', video: VIDEO_DU_REEL })
+    expect(args.slice(args.indexOf('-ss'), args.indexOf('-ss') + 6)).toEqual(['-ss', '2', '-t', '6', '-i', '/s.mp4'])
+    expect(args).toContain('-an')
+    expect(args[args.indexOf('-vf') + 1]).toBe('scale=720:1280,fps=30')
+    expect(args[args.indexOf('-c:v') + 1]).toBe('libx264')
+    expect(args[args.indexOf('-movflags') + 1]).toBe('+faststart')
+    expect(args.at(-1)).toBe('/o.mp4')
+  })
+
+  test('une source qui n’est pas celle du kit est refusée, effacée, et rien n’est extrait', () => {
+    const dossier = mkdtempSync(join(tmpdir(), 'vitrine-video-'))
+    let extrait = false
+    const telecharger = (_url, chemin) => writeFileSync(chemin, 'pas la vidéo du kit')
+    expect(() => preparerVideo(VIDEO_DU_REEL, { dossier, telecharger, extraire: () => { extrait = true } })).toThrow('n’est pas celle du kit')
+    expect(existsSync(fichierSourceVideo(VIDEO_DU_REEL, dossier))).toBe(false)
+    expect(extrait).toBe(false)
+  })
+
+  test('la bonne source est extraite une fois ; ensuite l’extrait est resservi sans réseau', () => {
+    const dossier = mkdtempSync(join(tmpdir(), 'vitrine-video-'))
+    const octets = Buffer.from('octets de la vidéo')
+    const video = { ...VIDEOS[VIDEO_DU_REEL] }
+    VIDEOS.essai = { ...video, fichier: 'essai.mp4', sha256: empreinte(octets) }
+    try {
+      let telechargements = 0
+      const telecharger = (_url, chemin) => { telechargements += 1; writeFileSync(chemin, octets) }
+      const extraire = (args) => writeFileSync(args.at(-1), 'extrait')
+      expect(preparerVideo('essai', { dossier, telecharger, extraire })).toBe(fichierVideo('essai', dossier))
+      expect(preparerVideo('essai', { dossier, telecharger, extraire: () => { throw new Error('déjà extrait') } })).toBe(fichierVideo('essai', dossier))
+      expect(telechargements).toBe(1)
+    } finally {
+      delete VIDEOS.essai
+    }
+  })
+})
+

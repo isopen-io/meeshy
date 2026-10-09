@@ -659,71 +659,8 @@ extension StoryViewerView {
 
     // MARK: - Timer
 
-    /// State-driven pause: the timer checks ALL active UI states each tick
-    /// instead of relying on paired pauseTimer/resumeTimer event calls.
-    ///
-    /// - `isPaused` : pauses du timer pour sheets, drag-to-dismiss, etc.
-    ///   (timer-only — le canvas continue à jouer).
-    /// - `isLongPressPaused` : toggle long-press utilisateur (timer + canvas
-    ///   gelés ensemble via `.storyPlayerPause`).
-    /// Internal car lu depuis `StoryViewerView.swift` (cross-file extension) :
-    /// le helper `storyCard(geometry:)` passe cette valeur à `StoryCardView`
-    /// pour propager la pause au canvas via `StoryReaderRepresentable.isPaused`.
-    /// Composers + pickers + transitions pause the slide timer. Comments
-    /// overlay does NOT (the user wants to read comments while the story
-    /// keeps playing/looping behind). Focus on the comment composer engages
-    /// `isComposerEngaged` which DOES pause — that's the intended trigger,
-    /// not the overlay visibility alone (user spec 2026-05-28).
-    var shouldPauseTimer: Bool {
-        // Un peek Notification Center / Control Center (aperçu app-switcher,
-        // scenePhase devenant transitoirement inactif) n'apparaît DÉLIBÉRÉMENT
-        // PAS dans cet agrégat : la lecture doit continuer sans coupure pendant
-        // ce genre de peek, comme une vidéo en PIP ou une app de musique en
-        // arrière-plan (directive user 2026-07-14, qui annule une tentative
-        // précédente de gate sur la phase de scène — celle-ci coupait l'audio
-        // de fond et le faisait recommencer à 0 au retour). Le vrai
-        // `.background` (dismiss complet du viewer) reste géré séparément via
-        // `.adaptiveOnChange(of: scenePhase)` plus haut dans ce fichier.
-        isPaused
-        || isLongPressPaused
-        || isComposerEngaged
-        || hasComposerContent
-        || showEmojiStrip
-        || showFullEmojiPicker
-        || showTextEmojiPicker
-        || showLanguageOptions
-        || showFullLanguagePicker
-        // Scrub du rail + vol de réaction : la lecture attend la fin du geste et
-        // de l'animation (spec scrub 2026-08-11).
-        || isScrubbingRail
-        || reactionFlight != nil
-        // L'overlay commentaires ouvert met la story en pause : lire / répondre à
-        // un commentaire ne doit pas laisser la slide auto-avancer sous l'overlay
-        // (bug 2026-06-01 — l'utilisateur lit les commentaires et la story passe
-        // à la slide suivante). Parité Instagram : ouvrir les commentaires gèle
-        // la lecture (timer + médias via `isCanvasPlaybackPaused`).
-        || showCommentsOverlay
-        || isTransitioning
-        || isDismissing
-        // Interstitiel d'identité inter-groupes : la lecture (timer + canvas +
-        // audio) attend la fin des ~2,2 s (ou le tap skip) — reprise sans saut.
-        || showGroupIntro
-        // Drag du lecteur en cours (axe décidé). ÉTAT-DIRIGÉ et non
-        // événementiel : le drag ne pose plus de `pauseTimer()` à la décision
-        // d'axe, car son `resumeTimer()` symétrique n'arrive jamais quand un
-        // recognizer concurrent (un `UIScrollView` de surface, typiquement)
-        // emporte la séquence et que SwiftUI saute le `onEnded` — la story
-        // restait alors gelée pour de bon. Adossée à `gestureAxis`, la reprise
-        // est automatique dès que l'axe retombe à 0 : le cas dégénéré se
-        // rattrape tout seul au geste suivant.
-        || gestureAxis != 0
-        // Légende dépliée : lire un texte plein écran pendant que la slide
-        // avance dessous n'a aucun sens. Cause PROPRE dans l'agrégat, jamais un
-        // `isPaused = true` — ce drapeau appartient déjà à d'autres causes, et
-        // le relâcher au repli relâcherait la leur (#4474).
-        || isCaptionExpanded
-    }
-
+    /// L'agrégat de pause (`shouldPauseTimer`) et la boucle vivent dans
+    /// `StoryViewerView+PlaybackHold.swift` (#9821).
     func startTimer() {
         progress = 0
         isContentReady = false
@@ -835,11 +772,9 @@ extension StoryViewerView {
         computedStoryDuration = renderable.computedTotalDuration()
     }
 
-    /// Manual pause — sheets, drag-to-dismiss, composer engaged, etc.
-    /// **Timer-only** : le canvas (vidéo BG, audios, effets) continue à
-    /// jouer. Cela évite un blip audible au cycle pause/resume rapide
-    /// d'un drag de transition. Le toggle long-press passe par
-    /// `isLongPressPaused` (qui, lui, freeze le canvas via notification).
+    /// Un écran PLEIN recouvre la story (composeur, citer ou republier en post,
+    /// lieu plein écran) : elle se fige, rien ne joue derrière (#9821). Les
+    /// feuilles posées SUR la story ne l'appellent pas — elles la font boucler.
     func pauseTimer() { isPaused = true }
 
     /// Manual resume — symétrique de `pauseTimer()`. N'inverse pas le
@@ -868,13 +803,11 @@ extension StoryViewerView {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showCommentsOverlay = true
                 }
-                pauseTimer()
                 if storyComments.isEmpty {
                     loadStoryComments()
                 }
             case .showViewersSheet:
                 showViewersSheet = true
-                pauseTimer()
             }
         }
     }

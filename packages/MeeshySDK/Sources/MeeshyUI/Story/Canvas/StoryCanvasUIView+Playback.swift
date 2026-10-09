@@ -114,6 +114,9 @@ extension StoryCanvasUIView {
             // foreground et audio repartent en phase. `pushSlidePlayheadToLayers`
             // rafraîchit la cible timeline ; comme le playhead n'a pas bougé
             // pendant la pause, la dérive est ~0 → aucun seek (pas de hoquet).
+            // Reprendre, c'est devenir LE canvas qui joue : c'est ici, et non à
+            // la naissance en pause, qu'il préempte les autres (#9827).
+            registerAsActiveAndPreemptOthers()
             displayLink?.isPaused = false
             playheadTickClock.reset()
             pushSlidePlayheadToLayers()

@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import { KIT_LANGS } from '../lib/locales.mjs'
 import { CREDITS } from '../lib/photos.mjs'
 import { DEMO, lecteurDe, partenaireDe, profilDe } from '../textes/demo.mjs'
-import { photoMedia, segmenter, vocalMedia } from './medias.mjs'
+import { VIDEO_DU_REEL, photoMedia, segmenter, videoMedia, vocalMedia } from './medias.mjs'
 
 export const VERSION_FIXTURES = 2
 
@@ -14,6 +14,7 @@ export const oid = (graine) => createHash('sha1').update(graine).digest('hex').s
 
 export const ID_GLOBAL = oid('conv:global')
 export const ID_DEBAT = oid('conv:debat')
+export const ID_NOVA = oid('conv:nova')
 export const LIEN_LISBOA = 'lisboa-2026'
 export const idAmour = (lang) => oid(`conv:amour:${lecteurDe(lang).pseudo}`)
 
@@ -166,14 +167,27 @@ const mediasDuVocal = (lang) => {
   }
 }
 
+// Une pièce vocale telle que la passerelle la sert : sa transcription, et une piste traduite par langue.
+const pieceVocale = ({ son, pistes, texte, langue, messageId, auteur, maintenant, minutes, mesures }) => {
+  const mesure = (media) => mesures[media.url] ?? MESURE_PAR_DEFAUT
+  const duree = mesure(son).dureeMs
+  return {
+    ...piece({ media: { ...son, taille: mesure(son).taille }, messageId, auteur, maintenant, minutes }),
+    duration: duree,
+    transcription: { text: texte, language: langue, confidence: 0.97, durationMs: duree, segments: segmenter(texte, duree) },
+    translations: Object.fromEntries(pistes.map((p) => {
+      const d = mesure(p).dureeMs
+      return [p.lang, { type: 'audio', url: p.url, transcription: p.texte, durationMs: d, format: 'm4a', cloned: true, quality: 0.93, ttsModel: 'chatterbox', segments: segmenter(p.texte, d) }]
+    })),
+  }
+}
+
 const vocal = ({ lang, maintenant, mesures, minutes }) => {
   const conversationId = idAmour(lang)
   const partenaire = partenaireDe(lang)
   const original = DEMO.amour.vocalRecu[partenaire.lang]
   const id = oid(`msg:${conversationId}:amour.vocal.recu`)
   const { original: son, pistes } = mediasDuVocal(lang)
-  const mesure = (media) => mesures[media.url] ?? MESURE_PAR_DEFAUT
-  const duree = mesure(son).dureeMs
   return {
     id,
     conversationId,
@@ -183,15 +197,40 @@ const vocal = ({ lang, maintenant, mesures, minutes }) => {
     content: '',
     originalLanguage: original.lang,
     messageType: 'audio',
-    attachments: [{
-      ...piece({ media: { ...son, taille: mesure(son).taille }, messageId: id, auteur: partenaire, maintenant, minutes }),
-      duration: duree,
-      transcription: { text: original.text, language: original.lang, confidence: 0.97, durationMs: duree, segments: segmenter(original.text, duree) },
-      translations: Object.fromEntries(pistes.map((p) => {
-        const d = mesure(p).dureeMs
-        return [p.lang, { type: 'audio', url: p.url, transcription: p.texte, durationMs: d, format: 'm4a', cloned: true, quality: 0.93, ttsModel: 'chatterbox', segments: segmenter(p.texte, d) }]
-      })),
-    }],
+    attachments: [pieceVocale({ son, pistes, texte: original.text, langue: original.lang, messageId: id, auteur: partenaire, maintenant, minutes, mesures })],
+  }
+}
+
+// Le vocal que la scène `interaction-commentaire-audio` envoie sous le post d'Aiko (#9820) : le lecteur y répond dans SA
+// langue, et la passerelle le traduit dans celle d'Aiko et en anglais (en français pour un lecteur anglophone).
+export const languesDuCommentaireVocal = (lang) => [...new Set([profilDe('aiko.t').lang, lang === 'en' ? 'fr' : 'en'])].filter((l) => l !== lang)
+
+const mediasDuCommentaireVocal = (lang) => {
+  const lecteur = lecteurDe(lang)
+  const cle = (l) => `commentaire-${lecteur.pseudo}-${l}`
+  return {
+    original: vocalMedia({ cle: cle(lang), texte: DEMO.commentaireVocal[lang], lang }),
+    pistes: languesDuCommentaireVocal(lang).map((l) => vocalMedia({ cle: cle(l), texte: DEMO.commentaireVocal[l], lang: l })),
+  }
+}
+
+// Il vit dans « Nova », un groupe de la liste qu'aucune scène n'ouvre : sa ligne garde son dernier message, plus récent
+// (160 min), et le vocal reste plus jeune que le plus ancien message montré (185 min) — la garde de minuit n'y perd rien.
+const commentaireVocal = ({ lang, maintenant, mesures }) => {
+  const lecteur = lecteurDe(lang)
+  const minutes = 170
+  const id = oid(`msg:${ID_NOVA}:commentaire.vocal:${lecteur.pseudo}`)
+  const { original: son, pistes } = mediasDuCommentaireVocal(lang)
+  return {
+    id,
+    conversationId: ID_NOVA,
+    senderId: idParticipant(ID_NOVA, lecteur),
+    createdAt: iso(maintenant, minutes),
+    sender: expediteur(ID_NOVA, lecteur),
+    content: '',
+    originalLanguage: lang,
+    messageType: 'audio',
+    attachments: [pieceVocale({ son, pistes, texte: DEMO.commentaireVocal[lang], langue: lang, messageId: id, auteur: lecteur, maintenant, minutes, mesures })],
   }
 }
 
@@ -316,7 +355,7 @@ const conversations = (lang, maintenant, fils) => {
     ...ligne,
   })
   const idDrole = oid('conv:drole')
-  const idNova = oid('conv:nova')
+  const idNova = ID_NOVA
   const decalage = DEMO.groupe.find((m) => m.id === 'nova.decalage')
   const dernierGlobal = DEMO.global.at(-1)
   return [
@@ -381,17 +420,21 @@ const mediasDe = ({ lang, fils, lesPosts }) => {
     ...lesPosts.flatMap((p) => p.media),
   ]
   const { original, pistes } = mediasDuVocal(lang)
-  return [...new Set(images.map((a) => a.fileName))].map((fichier) => photoMedia(photoDuFichier(fichier))).concat([original, ...pistes])
+  const commentaire = mediasDuCommentaireVocal(lang)
+  return [...new Set(images.map((a) => a.fileName))].map((fichier) => photoMedia(photoDuFichier(fichier)))
+    .concat([original, ...pistes, commentaire.original, ...commentaire.pistes, videoMedia(VIDEO_DU_REEL)])
 }
 
 // Ce que chaque scène ouvre (spec § 3) : sa conversation, et le message ou la pièce qu'elle met en avant.
 const scenes = (lang, fils) => {
   const leVocal = fils[idAmour(lang)].at(-1)
+  const leCommentaire = fils[ID_NOVA].at(-1)
   return {
     global: { conversationId: ID_GLOBAL },
     amour: { conversationId: idAmour(lang), messageId: leVocal.id, attachmentId: leVocal.attachments[0].id },
     groupe: { conversationId: ID_DEBAT, messageId: messageOriginal(lang) },
     imagine: { conversationId: idAmour(lang), messageId: oid(`msg:${idAmour(lang)}:amour.vue`) },
+    'interaction-commentaire-audio': { conversationId: ID_NOVA, messageId: leCommentaire.id, attachmentId: leCommentaire.attachments[0].id },
   }
 }
 
@@ -470,6 +513,7 @@ export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
     [ID_GLOBAL]: messagesGlobal(maintenant),
     [idAmour(lang)]: messagesAmour(lang, maintenant, mesures),
     [ID_DEBAT]: messagesDebat(lang, maintenant),
+    [ID_NOVA]: [commentaireVocal({ lang, maintenant, mesures })],
   }
   const lesPosts = posts(maintenant)
   return {

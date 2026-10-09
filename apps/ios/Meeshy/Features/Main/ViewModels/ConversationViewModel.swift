@@ -210,8 +210,9 @@ class ConversationViewModel: ObservableObject {
               context.messageId == messageId,
               let (message, attachment) = findAudioAttachment(id: context.attachmentId)
         else { return }
+        let track = queuedAudio(for: attachment, message: message)
         audioCoordinator.syncActiveTrack(
-            urlString: effectiveAudioTrackUrl(for: attachment, message: message)
+            urlString: track.fileUrl, language: track.trackLanguage, isTranslated: track.isTranslatedTrack
         )
     }
 
@@ -822,65 +823,10 @@ class ConversationViewModel: ObservableObject {
             .senderName
     }
 
-    /// Kicks off conversation-wide audio playback starting at `attachmentId`.
-    ///
-    /// Resolves the message/attachment in the current `messages` snapshot,
-    /// asks `AudioQueueBuilder` for the unlistened, non-self tail of audios
-    /// strictly after this one, then routes the whole queue through the app
-    /// coordinator (which gates on CallKit + auth and exposes the mini-player
-    /// state to the rest of the app).
-    func playAudio(attachmentId: String) {
-        guard let (message, attachment) = findAudioAttachment(id: attachmentId),
-              attachment.type == .audio,
-              authManager.currentUser?.id != nil else { return }
-
-        let current = QueuedAudio(
-            attachmentId: attachment.id,
-            messageId: message.id,
-            conversationId: message.conversationId,
-            // La piste EFFECTIVE, pas l'original en dur : le drapeau-toggle
-            // et le Prisme décident (user 2026-08-18 — le widget affichait
-            // la piste traduite pendant que le coordinateur rejouait
-            // l'original).
-            fileUrl: effectiveAudioTrackUrl(for: attachment, message: message),
-            durationMs: attachment.duration ?? 0,
-            senderName: message.senderName ?? "",
-            senderAvatarURL: message.senderAvatarURL,
-            receivedAt: message.createdAt
-        )
-
-        let tail = audioQueueTail(after: attachment.id)
-
-        audioCoordinator.play(
-            current: current,
-            tail: tail,
-            conversationName: currentConversationName,
-            conversationArtworkURL: currentConversationArtworkURL
-        )
-    }
-
-    /// File des vocaux non écoutés strictement APRÈS `attachmentId` — partagée
-    /// entre `playAudio` et le plein écran (`AudioFullscreenSource.queueTailProvider`).
-    func audioQueueTail(after attachmentId: String) -> [QueuedAudio] {
-        guard let currentUserId = authManager.currentUser?.id else { return [] }
-        return AudioQueueBuilder.build(
-            from: messages,
-            startingAfterAttachmentId: attachmentId,
-            currentUserId: currentUserId,
-            listenedAttachmentIds: listenedAttachmentIds,
-            // L'auto-avance joue la piste EFFECTIVE de chaque vocal — sans
-            // ce résolveur, le 2e vocal sortait en V.O. pendant que sa bulle
-            // affichait le karaoké traduit (revue adversariale 2026-08-18).
-            trackUrlResolver: { [weak self] message, attachment in
-                self?.effectiveAudioTrackUrl(for: attachment, message: message) ?? attachment.fileUrl
-            }
-        )
-    }
-
     /// O(n) scan over `messages` for the message that owns `attachmentId`.
     /// `messages` rarely exceeds a few hundred rows in memory; an index would
     /// have to invalidate on every attachment update for negligible gain.
-    private func findAudioAttachment(id: String) -> (Message, MessageAttachment)? {
+    func findAudioAttachment(id: String) -> (Message, MessageAttachment)? {
         for message in messages {
             if let att = message.attachments.first(where: { $0.id == id && $0.type == .audio }) {
                 return (message, att)
@@ -996,17 +942,8 @@ class ConversationViewModel: ObservableObject {
             for attachment in message.attachments
                 where attachment.type == .audio
                 && !listenedAttachmentIds.contains(attachment.id) {
-                audioCoordinator.appendUpcoming(QueuedAudio(
-                    attachmentId: attachment.id,
-                    messageId: message.id,
-                    conversationId: message.conversationId,
-                    // Piste EFFECTIVE — même loi que playAudio/la tail.
-                    fileUrl: effectiveAudioTrackUrl(for: attachment, message: message),
-                    durationMs: attachment.duration ?? 0,
-                    senderName: message.senderName ?? "",
-                    senderAvatarURL: message.senderAvatarURL,
-                    receivedAt: message.createdAt
-                ))
+                // Piste EFFECTIVE — même loi que playAudio/la tail.
+                audioCoordinator.appendUpcoming(queuedAudio(for: attachment, message: message))
             }
         }
     }

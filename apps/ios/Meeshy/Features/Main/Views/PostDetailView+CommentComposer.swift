@@ -81,6 +81,9 @@ extension PostDetailView {
             externalAttachments: commentAttachments,
             focusTrigger: $composerFocusTrigger
         )
+        #if DEBUG
+        .onAppear { preterLEnvoiDuVocalALaVitrine() }
+        #endif
         // **Le plafond du choix est celui de l'envoi** (#6578). Il valait 1 —
         // un contrôle qui ment, puisque le bandeau affiche un TABLEAU — et vaut
         // désormais `MAX_POST_MEDIA`, la MÊME constante que le schéma du
@@ -231,8 +234,13 @@ extension PostDetailView {
         }
         let duration = audioRecorder.duration
         guard let url = audioRecorder.stopRecording() else { return false }
-        return !CommentAttachmentIntake.admit(
-            [CommentComposerStaging.voiceAttachment(duration: duration, url: url)], into: &commentAttachments
+        return stagerLeVocal(url, duree: duration)
+    }
+
+    /// Un vocal terminé rejoint la zone de commentaire.
+    private func stagerLeVocal(_ url: URL, duree: TimeInterval) -> Bool {
+        !CommentAttachmentIntake.admit(
+            [CommentComposerStaging.voiceAttachment(duration: duree, url: url)], into: &commentAttachments
         ).isEmpty
     }
 
@@ -240,4 +248,14 @@ extension PostDetailView {
         guard stopCommentRecordingToAttachment() else { return }
         submitComment(text: "", attachments: commentAttachments)
     }
+
+    #if DEBUG
+    /// La vitrine (#9810) : le micro ne se simule pas, un vocal FOURNI prend le chemin d'un enregistrement envoyé.
+    private func preterLEnvoiDuVocalALaVitrine() {
+        VitrineRendu.shared.composeurDeCommentaireAffiche { url, duree in
+            guard stagerLeVocal(url, duree: duree) else { return }
+            submitComment(text: "", attachments: commentAttachments)
+        }
+    }
+    #endif
 }

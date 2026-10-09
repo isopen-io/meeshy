@@ -658,7 +658,6 @@ struct StoryActionSidebarView: View {
                 outlineTint: outlineTint(.forward)
             ) {
                 HapticFeedback.light()
-                pauseTimer()
                 if let story = currentStory, let group = currentGroup {
                     EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
                     sharedContentWrapper = SharedContentWrapper(content: .story(item: story, authorName: group.username))
@@ -714,7 +713,6 @@ struct StoryActionSidebarView: View {
                     label: storyViewCount > 0 ? "\(storyViewCount)" : String(localized: "story.viewer.action.views", defaultValue: "Vues", bundle: .main)
                 ) {
                     HapticFeedback.light()
-                    pauseTimer()
                     showViewersSheet = true
                 }
             }
@@ -774,10 +772,7 @@ struct StoryActionSidebarView: View {
                     label: String(localized: "story.viewer.action.share", defaultValue: "Partager", bundle: .main)
                 ) {
                     HapticFeedback.light()
-                    // Sheet MODALE : on pause tout de suite (comme Envoyer /
-                    // Vues / Éditer-et-republier) — `resumeTimer()` est déjà
-                    // câblé sur `onDismiss` de cette sheet (StoryViewerView).
-                    pauseTimer()
+                    // Feuille posée SUR la story : elle boucle (#9821).
                     showExportShareSheet = true
                 }
             }

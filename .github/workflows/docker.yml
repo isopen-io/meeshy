@@ -498,7 +498,11 @@ jobs:
     # un service dont le build a échoué garde simplement son image, sans
     # bruit. Déployer après un build PARTIEL ne livre donc jamais un échec —
     # ça livre ce qui a réussi.
-    if: github.ref == 'refs/heads/dev' && needs.detect.outputs.has_changes == 'true' && needs.build.result != 'skipped' && needs.build.result != 'cancelled'
+    #
+    # `!cancelled()` est INDISPENSABLE (#9817) : un `if:` sans fonction de statut
+    # reçoit un `success()` implicite, et le job était SKIPPÉ dès qu'un build de
+    # la matrice échouait — la clause ci-dessous n'était jamais évaluée.
+    if: ${{ !cancelled() && github.ref == 'refs/heads/dev' && needs.detect.outputs.has_changes == 'true' && needs.build.result != 'skipped' && needs.build.result != 'cancelled' }}
     steps:
       # Requis par l'étape de test de fumée plus bas — elle exécute le script
       # depuis CE commit (celui qui vient d'être construit et déployé), pas

@@ -63,6 +63,10 @@ struct StoryComposerBarView: View {
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
     @State private var pendingPlace: SharedPlace? = nil
+    /// Ce que la barre dit de SON contenu (texte, enregistrement).
+    @State private var barHasContent: Bool = false
+    /// Le panneau « + » de la barre est ouvert (#9821).
+    @State private var attachmentPanelOpen: Bool = false
     /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
     /// (au curseur quand le champ a le focus, sinon à la fin via `emojiToInject`).
     @State private var composerIsFocused: Bool = false
@@ -91,6 +95,17 @@ struct StoryComposerBarView: View {
     /// d'envoi rend un dégradé hybride accent → indigo.
     private var composerSecondaryColor: String {
         DynamicColorGenerator.hueShiftedHex(composerAccent, degrees: 30)
+    }
+
+    /// La story BOUCLE tant qu'une pièce se compose (#9821) : le lecteur ne
+    /// lit qu'UN drapeau, `hasComposerContent`, et c'est ici qu'il se compose.
+    private var holdsStory: Bool {
+        StoryComposerHold.holds(
+            barHasContent: barHasContent,
+            zoneHasPieces: !commentAttachments.isEmpty || pendingPlace != nil,
+            attachmentPanelOpen: attachmentPanelOpen,
+            pickerPresented: showCommentPhotoPicker || showCommentFilePicker || showCommentLocationPicker
+        )
     }
 
     var body: some View {
@@ -131,7 +146,9 @@ struct StoryComposerBarView: View {
                     }
                 }
             },
-            onSendMessage: { text, attachments, _ in submitStoryComment(text: text, attachments: attachments) },
+            // La ZONE de la story fait foi, jamais la copie interne de la barre,
+            // qui reste vide : la photo partait sans elle (#9743).
+            onSendMessage: { text, _, _ in submitStoryComment(text: text) },
             onLocationRequest: { showCommentLocationPicker = true },
             textBinding: $commentText,
             replyBanner: replyingToStoryComment.map { reply in
@@ -194,7 +211,7 @@ struct StoryComposerBarView: View {
             },
             onStartRecording: { audioRecorder.startRecording(); HapticFeedback.medium() },
             onStopRecordingToAttachment: { stopRecordingToAttachment() },
-            onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "", attachments: commentAttachments) } },
+            onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "") } },
             onCancelRecording: { audioRecorder.cancelRecording() },
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
@@ -203,6 +220,7 @@ struct StoryComposerBarView: View {
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onShowAttachments: {
+                attachmentPanelOpen = true
                 // Attachment carousel opening → dismiss the emoji panel so the
                 // two bottom surfaces never stack.
                 if showTextEmojiPicker {
@@ -211,6 +229,7 @@ struct StoryComposerBarView: View {
                     }
                 }
             },
+            onAttachmentsVisibilityChange: { open in attachmentPanelOpen = open },
             onRequestTextEmoji: {
                 isComposerEngaged = true
                 // Dismiss keyboard first, then show emoji panel
@@ -227,6 +246,7 @@ struct StoryComposerBarView: View {
             injectedEmoji: $emojiToInject,
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
+            externalAttachments: commentAttachments,
             storyId: storyId,
             onSaveDraft: { storyId, text, attachments in
                 if text.isEmpty && attachments.isEmpty {
@@ -240,7 +260,7 @@ struct StoryComposerBarView: View {
                 return (text: draft.text, attachments: draft.attachments)
             },
             onAnyInteraction: {
-                // No-op: shouldPauseTimer handles all pause logic based on UI state
+                // No-op : `playbackCauses` range chaque état de l'UI (#9821)
             },
             focusTrigger: $composerFocusTrigger,
             // #6587 — `onRecordingChange` RETIRÉ : déclaré, affecté, jamais
@@ -248,9 +268,10 @@ struct StoryComposerBarView: View {
             // à false en fin d'enregistrement et relâcherait une pause posée
             // par le focus ; la pause passe déjà par `onHasContentChange`.
             onHasContentChange: { hasContent in
-                hasComposerContent = hasContent
+                barHasContent = hasContent
             }
         )
+        .adaptiveOnChange(of: holdsStory) { _, holds in hasComposerContent = holds }
         .photosPicker(
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
@@ -293,8 +314,8 @@ struct StoryComposerBarView: View {
 
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`). Un dépôt
     /// est une interaction utilisateur : il engage le composer
-    /// (`isComposerEngaged`), ce qui met le minuteur de story en pause via
-    /// `shouldPauseTimer` — exactement comme la saisie le fait déjà par le
+    /// (`isComposerEngaged`), ce qui fait boucler la story via
+    /// `playbackCauses` — exactement comme la saisie le fait déjà par le
     /// focus ; le tap sur la story (`dismissComposer`) le relâche. Textes
     /// fusionnés en UNE insertion (au curseur si focus ; sinon en fin de champ
     /// via le canal `injectedEmoji` — cette surface n'a pas de binding texte),
@@ -324,13 +345,28 @@ struct StoryComposerBarView: View {
     /// Une réponse à une story part comme un message : elle porte donc le lieu
     /// choisi exactement comme n'importe quel autre message (une story est un
     /// post de type STORY côté gateway — même route `/posts/:id/comments`).
-    private func submitStoryComment(text: String, attachments: [ComposerAttachment]) {
-        let media = CommentComposerStaging.firstPendingMedia(in: attachments)
-        commentAttachments = CommentAttachmentIntake.stillLoading(commentAttachments)
+    ///
+    /// **La zone fait foi, et la décision précède le vidage** (#9743) — le
+    /// modèle de la feuille du fil : une pièce qui se prépare garde tout.
+    private func submitStoryComment(text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let staged = commentAttachments
+        switch CommentSendGate.decide(text: trimmed, zone: staged, hasPlace: pendingPlace != nil) {
+        case .keepWhilePreparing(let loading):
+            CommentSendTrace.log("story : \(loading) pièce(s) en préparation — rien ne part, composeur intact")
+            HapticFeedback.warning()
+            keepRefusedText(trimmed)
+            return
+        case .nothing:
+            return
+        case .send:
+            break
+        }
+        let media = CommentComposerStaging.firstPendingMedia(in: staged)
+        commentAttachments = []
+        CommentSendTrace.log("story : envoi, texte=\(!trimmed.isEmpty), pièce=\(media != nil)/\(staged.count)")
         let place = pendingPlace
         pendingPlace = nil
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || media != nil || place != nil else { return }
         let effects = commentEffects
         let blur = commentBlurEnabled
         commentEffects = .none
@@ -344,6 +380,13 @@ struct StoryComposerBarView: View {
         let parentId = replyingToStoryComment?.parentId ?? replyingToStoryComment?.id
         replyingToStoryComment = nil
         sendComment(trimmed, effectFlags, parentId, media, place)
+    }
+
+    /// La barre a vidé son champ : le texte d'un envoi refusé y revient.
+    private func keepRefusedText(_ text: String) {
+        guard !text.isEmpty else { return }
+        commentText = ""
+        DispatchQueue.main.async { commentText = CommentUnsent.resuming(text, into: commentText) }
     }
 
     @discardableResult
@@ -361,3 +404,15 @@ struct StoryComposerBarView: View {
     }
 }
 
+// MARK: - La story boucle pendant qu'une pièce se compose
+
+/// **Joindre une pièce ne laisse pas la story filer** (#9821). Panneau « + »
+/// ouvert, sélecteur présenté ou pièce posée dans la zone : la story joue EN
+/// BOUCLE (`StoryPlaybackHold.loop`) — elle ne passe pas à la suivante et ne
+/// se ferme pas, sans quoi la photo choisie était perdue.
+enum StoryComposerHold {
+    static func holds(barHasContent: Bool, zoneHasPieces: Bool,
+                      attachmentPanelOpen: Bool, pickerPresented: Bool) -> Bool {
+        barHasContent || zoneHasPieces || attachmentPanelOpen || pickerPresented
+    }
+}

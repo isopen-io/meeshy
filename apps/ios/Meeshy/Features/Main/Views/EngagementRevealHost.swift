@@ -88,6 +88,11 @@ struct EngagementRevealHost: ViewModifier {
             .onReceive(OnboardingPresenceSignal.shared.$isPresented.removeDuplicates()) { présent in
                 file.suspends(présent)
             }
+            // #9821 — la célébration à l'écran se DÉCLARE : un `fullScreenCover`
+            // ne prévient pas l'écran qu'il recouvre (la story s'y fige).
+            .adaptiveOnChange(of: file.enCours != nil, initial: true) { _, présent in
+                GameMomentPresence.shared.update(isPresented: présent)
+            }
             // La rareté se lit AVANT que la célébration ne se présente, dès qu'un palier est en tête de file.
             .task(id: file.enCours.map { RevealItem(reveal: $0).id }) { @MainActor in
                 guard file.enCours != nil else { return }

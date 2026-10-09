@@ -26,6 +26,19 @@ final class VitrineSeederTests: XCTestCase {
         XCTAssertEqual(cibles.cleProgression, "engagement:\(f.lecteur.id)")
     }
 
+    /// Une scène du jeu (#9805) range l'état d'AVANT sa célébration, sous la clé que la fiche lit : elle s'ouvre au repos.
+    func test_remplir_aGameScene_storesTheStateBeforeItsCelebration() async throws {
+        let f = try fixtures()
+        let cibles = CiblesEnregistreuses()
+        let avant = VitrineJeuScenarios.pour(.coffre, base: f.progression).avant
+
+        try await VitrineSeeder.remplir(f, progression: avant, dans: cibles)
+
+        XCTAssertEqual(cibles.progression, avant)
+        XCTAssertEqual(cibles.progression?.game?.chest.status, .ready)
+        XCTAssertEqual(cibles.cleProgression, "engagement:\(f.lecteur.id)")
+    }
+
     func test_remplir_kitSample_fixeLeModeScriptPourMeeshyGlobal() async throws {
         let f = try fixtures()
         let cibles = CiblesEnregistreuses()
@@ -63,6 +76,30 @@ final class VitrineSeederTests: XCTestCase {
         XCTAssertEqual(cibles.medias.map(\.cle), f.medias.map { MessageCardMediaLoader.resolved($0.url) })
         XCTAssertEqual(cibles.medias.map(\.genre), f.medias.map(\.genre))
         XCTAssertTrue(cibles.medias.contains { $0.genre == .audio })
+    }
+
+    /// La vidéo du réel (#9820) se range comme les autres médias, dans le cache vidéo.
+    func test_remplirLesCaches_storesTheReelVideo() async throws {
+        let f = try fixtures()
+        let cibles = CiblesEnregistreuses()
+        try await VitrineSeeder.remplirLesCaches(f, medias: try Self.dossierDeMedias(f), dans: cibles)
+        XCTAssertTrue(cibles.medias.contains { $0.genre == .video })
+    }
+
+    /// Un genre qu'un kit plus récent émet ne fait tomber ni le décodage ni la vitrine : le média seul est ignoré.
+    func test_unknownMediaGenre_isIgnored_neverFatal() async throws {
+        let json = try XCTUnwrap(String(data: Data(contentsOf: echantillon), encoding: .utf8))
+            .replacingOccurrences(of: "\"genre\": \"video\"", with: "\"genre\": \"hologramme\"")
+        let f = try VitrineFixtures.decoder(Data(json.utf8))
+        let inconnu = try XCTUnwrap(f.medias.first { $0.genre == .inconnu })
+        let dossier = try Self.dossierDeMedias(f)
+        try FileManager.default.removeItem(at: dossier.appendingPathComponent(inconnu.fichier))
+        let cibles = CiblesEnregistreuses()
+
+        try await VitrineSeeder.remplirLesCaches(f, medias: dossier, dans: cibles)
+
+        XCTAssertEqual(cibles.medias.count, f.medias.count - 1)
+        XCTAssertFalse(cibles.medias.contains { $0.genre == .inconnu })
     }
 
     func test_remplirLesCaches_missingMedia_failsNamingIt() async throws {
@@ -153,6 +190,7 @@ private final class CiblesEnregistreuses: VitrineSeedTargets {
     private(set) var conversations: [MeeshyConversation] = []
     private(set) var languesParLot: [[String]] = []
     private(set) var cleProgression: String?
+    private(set) var progression: APIEngagementProgress?
     private(set) var modes: [String: ReadingModeOrchestrator.ConversationReadingMode] = [:]
     private(set) var modesUserId: String?
     private(set) var medias: [MediaRange] = []
@@ -161,7 +199,10 @@ private final class CiblesEnregistreuses: VitrineSeedTargets {
 
     func enregistrerConversations(_ conversations: [MeeshyConversation]) async throws { self.conversations = conversations }
     func enregistrerMessages(_ messages: [APIMessage], langues: [String]) async throws { languesParLot.append(langues) }
-    func enregistrerProgression(_ progression: APIEngagementProgress, cle: String) async throws { cleProgression = cle }
+    func enregistrerProgression(_ progression: APIEngagementProgress, cle: String) async throws {
+        cleProgression = cle
+        self.progression = progression
+    }
     func fixerModeDeLecture(_ mode: ReadingModeOrchestrator.ConversationReadingMode, conversationId: String, userId: String) {
         modes[conversationId] = mode
         modesUserId = userId

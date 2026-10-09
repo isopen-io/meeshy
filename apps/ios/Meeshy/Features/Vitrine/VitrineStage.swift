@@ -1,6 +1,7 @@
 #if DEBUG
 import Combine
 import Foundation
+import GRDB
 import MeeshySDK
 import MeeshyUI
 import UIKit
@@ -31,6 +32,7 @@ enum VitrineStage {
             MeeshyConfig.debugWebOriginOverride = originePublique
             fixtures = f
             try? FileManager.default.removeItem(at: VitrineLaunch.marqueurPret)
+            VitrineTournage.effacerLesMarqueurs()
             servir(f.lienInvitation)
             if scene.ouvreUneSession {
                 try VitrineSession.poser(f.lecteur)
@@ -53,6 +55,7 @@ enum VitrineStage {
     /// d'écrire), et les racines lisent le fil et les médias dès leur montage (#8922).
     static func remplirLesCaches() async {
         guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
+        await repartirANeuf()
         do {
             try await VitrineSeeder.remplirLesCaches(f, medias: VitrineLaunch.dossierMedias, dans: VitrineSeedTargetsReels())
         } catch {
@@ -60,11 +63,27 @@ enum VitrineStage {
         }
     }
 
+    /// Une prise précédente a pu laisser une publication dans la file durable et un brouillon au composeur : rejoués, ils
+    /// ajouteraient un réel fantôme au fil et des scènes au composeur, d'une prise à l'autre (#9820). Le compte de la
+    /// vitrine — le seul que la vitrine accepte, `VitrineSession.verifierProprietaire` — repart donc à neuf, avant que la
+    /// file ne se vide au démarrage.
+    private static func repartirANeuf() async {
+        ComposerAutosaveStore.shared.deleteAll()
+        do {
+            _ = try await DependencyContainer.shared.dbPool.write { db in try OutboxRecord.deleteAll(db) }
+        } catch {
+            fatalError("Vitrine : la file durable d'une prise précédente n'a pas pu être vidée — \(error)")
+        }
+    }
+
     /// Une fois la session restaurée, avant le préchargement de la liste.
     static func remplir() async {
         guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
         do {
-            try await VitrineSeeder.remplir(f, dans: VitrineSeedTargetsReels())
+            // Une scène du jeu (ou l'interaction qui en déclenche une) range la charge d'AVANT : la fiche s'ouvre au repos.
+            let progression = scene.jeuServi.map { VitrineJeu.preparer($0, base: f.progression) }
+            try await VitrineSeeder.remplir(f, progression: progression, dans: VitrineSeedTargetsReels())
+            try await VitrineInteractions.remplir(scene, f)
         } catch {
             fatalError("Vitrine « \(scene.rawValue) » : remplissage impossible — \(error)")
         }
@@ -76,11 +95,14 @@ enum VitrineStage {
         guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
         Task {
             guard await attendreLaRacine(voile.values) else { return }
-            let destination = f.destination(scene)
+            let destination = f.destination(scene.sceneDuKit)
             montrer(scene, destination, f)
+            await ouvrirLaFiche(scene)
             await VitrineRendu.shared.attendre(scene.rendusAttendus(conversationId: destination?.conversationId, appareil: appareil))
             await achever(scene, destination, f)
             await annoncer(scene)
+            await VitrineJeu.celebrer(scene)
+            await VitrineInteractions.jouer(scene, f)
         }
     }
 
@@ -97,16 +119,32 @@ enum VitrineStage {
 
     private static func montrer(_ scene: VitrineScene, _ destination: VitrineFixtures.Destination?, _ f: VitrineFixtures) {
         switch scene {
-        case .global, .amour, .groupe, .imagine:
+        case .global, .amour, .groupe, .imagine, .interactionEmoji:
             guard let conversation = f.conversationsServies().first(where: { $0.id == destination?.conversationId }) else {
                 fatalError("Vitrine « \(scene.rawValue) » : sa conversation manque aux fixtures")
             }
             NotificationCenter.default.post(name: .navigateToConversation, object: conversation)
-        case .progression:
+        case .progression, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe:
             NotificationCenter.default.post(name: Notification.Name("pushNavigateToRoute"), object: "progression")
+        case .interactionCommentaireAudio, .interactionEmojiPost:
+            VitrineInteractions.ouvrirLePost(f)
+        case .interactionSticker:
+            VitrineInteractions.ouvrirLeComposeur(f)
+        case .interactionReel:
+            VitrineInteractions.ouvrirLeFilPuisLeComposeur(f)
         case .lien:
             break
         }
+    }
+
+    /// Une scène du jeu passe par Progression, puis ouvre la fiche de sa célébration comme un toucher sur sa carte.
+    private static func ouvrirLaFiche(_ scene: VitrineScene) async {
+        guard let celebration = scene.celebration else { return }
+        await VitrineRendu.shared.attendre([.progression])
+        guard let ouvrir = VitrineRendu.shared.ouvrirLeJeu else {
+            fatalError("Vitrine « \(scene.rawValue) » : l'écran Progression n'a pas prêté son routeur")
+        }
+        ouvrir(.progressionConcept(celebration.concept, section: celebration.section))
     }
 
     /// Ce que la scène FAIT une fois sa conversation affichée — le geste qu'y ferait le lecteur.
@@ -115,7 +153,7 @@ enum VitrineStage {
         case .amour: await faireEntendre(destination)
         case .groupe: rouvrirSurLOriginal(destination)
         case .imagine: await imaginer(destination, f)
-        case .global, .progression, .lien: break
+        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker, .interactionReel: break
         }
     }
 

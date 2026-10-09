@@ -111,7 +111,16 @@ struct CommentPublisher {
 
 extension CommentPublisher {
 
-    static let live = CommentPublisher(
+    /// Le publieur de l'application : le réseau réel — sauf, en DEBUG, le temps d'une scène de vitrine (#9810) qui
+    /// filme un commentaire sans serveur.
+    static var live: CommentPublisher {
+        #if DEBUG
+        if let vitrine = VitrineCommentaire.publieur { return vitrine }
+        #endif
+        return reseau
+    }
+
+    static let reseau = CommentPublisher(
         prepare: {
             guard AuthManager.isTokenExpired(APIClient.shared.authToken, now: Date()) else { return }
             _ = try? await AuthManager.shared.refreshSession()

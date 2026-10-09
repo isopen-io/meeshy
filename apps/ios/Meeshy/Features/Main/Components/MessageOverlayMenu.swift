@@ -527,11 +527,7 @@ struct MessageOverlayMenu: View {
             style: .dark,
             scrollable: true,
             chrome: .none,
-            onReact: { emoji in
-                EmojiUsageTracker.recordUsage(emoji: emoji)
-                onReact?(emoji)
-                dismiss()
-            },
+            onReact: { reagirDepuisLaBande($0) },
             onExpandFullPicker: {
                 HapticFeedback.light()
                 onExpandFullPicker?()
@@ -543,7 +539,16 @@ struct MessageOverlayMenu: View {
             if cachedTopEmojis == nil {
                 cachedTopEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: Self.defaultEmojis)
             }
+            #if DEBUG
+            VitrineRendu.shared.menuDeReactionsAffiche { reagirDepuisLaBande($0) }
+            #endif
         }
+    }
+
+    private func reagirDepuisLaBande(_ emoji: String) {
+        EmojiUsageTracker.recordUsage(emoji: emoji)
+        onReact?(emoji)
+        dismiss()
     }
 
     // MARK: - Dismiss Background (dim only, no full-screen blur → glass stays vibrant)

@@ -226,8 +226,11 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "l'hôte doit alimenter ThemedMessageBubble.activeAudioLanguage — canal resté mort depuis sa pose (audit 2026-08-18)"
         )
         let vmCode = try stripped("Meeshy/Features/Main/ViewModels/ConversationViewModel.swift")
+        let queueCode = try stripped("Meeshy/Features/Main/ViewModels/ConversationViewModel+AudioQueue.swift")
         XCTAssertTrue(
-            vmCode.contains("fileUrl: effectiveAudioTrackUrl(for: attachment, message: message)"),
+            queueCode.contains("let served = servedAudioTrack(for: attachment, message: message)")
+                && queueCode.contains("fileUrl: served.url")
+                && queueCode.contains("current: queuedAudio(for: attachment, message: message)"),
             "playAudio doit jouer la piste EFFECTIVE (résolveur partagé) — pas attachment.fileUrl en dur"
         )
         let mediaView = try stripped("Meeshy/Features/Main/Views/ConversationMediaViews.swift")
@@ -245,7 +248,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "la bascule du drapeau route par syncActiveTrack — playVariant direct ne couvrait pas la PAUSE (reprise dans l'ancienne langue sous un karaoké basculé)"
         )
         XCTAssertTrue(
-            vmCode.contains("trackUrlResolver:"),
+            queueCode.contains("trackUrlResolver:"),
             "la FILE d'auto-avance (audioQueueTail) doit enfiler la piste EFFECTIVE — sans le résolveur, le 2e vocal sortait en V.O. sous un karaoké traduit"
         )
     }

@@ -154,6 +154,9 @@ struct StoryViewerView: View {
     /// and the centered loading spinner.
     @State var isContentReady: Bool = false // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
+    @State var storyLoopPass = 0 // tours de boucle de la story courante (#9821)
+    @State var isCallInterrupting = false // un appel sonne ou se tient (#9821)
+    @State var isGameMomentShown = false // un événement du jeu passe devant (#9821)
     /// Légende dépliée. Vit ici parce que déplier SUSPEND la lecture : la carte
     /// de contenu porte la vue, le lecteur porte l'horloge.
     @State var isCaptionExpanded = false // internal for cross-file extension access
@@ -235,7 +238,7 @@ struct StoryViewerView: View {
 
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access
-    @State private var selectedProfileUser: ProfileSheetUser?
+    @State var selectedProfileUser: ProfileSheetUser? // internal : cause de boucle (#9821)
     // Deferred profile open from the viewers sheet: set when a viewer row is
     // tapped, consumed in the viewers sheet's `onDismiss` so the profile sheet
     // presents cleanly after the viewers sheet closes (avoids stacking two
@@ -625,9 +628,7 @@ struct StoryViewerView: View {
             }
         }
         // Long-press toggle UNIQUEMENT — pas les autres pauses du timer.
-        //
-        // Sheets, drag-to-dismiss, composer engaged… mutent `isPaused`
-        // (timer-only). Si on postait `.storyPlayerPause` dessus, chaque
+        // Si on postait `.storyPlayerPause` sur les autres causes, chaque
         // ouverture/fermeture de sheet ferait un cycle pause/play sur
         // l'audio mixer et la vidéo BG — blip audible. Le canvas ne se
         // freeze comme une vidéo que quand l'utilisateur le demande
@@ -638,9 +639,8 @@ struct StoryViewerView: View {
                 object: nil
             )
         }
-        // Toutes les pauses UI (sheets, composer engaged, pickers, overlay
-        // commentaires, transitions, dismiss, long-press) convergent vers le
-        // timer gated — ex-gate par-tick `guard !shouldPauseTimer` du proxy.
+        // Seule une PAUSE arrête le timer gated ; une boucle le laisse courir (#9821).
+        .storyPlaybackInterruptions(callInterrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown)
         .adaptiveOnChange(of: shouldPauseTimer) { _, paused in
             slideTimer.setPaused(paused)
         }
@@ -1037,7 +1037,7 @@ struct StoryViewerView: View {
             }
         }
         t.onCompletion = { [self] in
-            goToNext()
+            storyDidReachItsEnd()
         }
     }
 
@@ -1378,7 +1378,7 @@ struct StoryViewerView: View {
     /// scrub, or full-screen picker). Drives the heart-button bounce in the
     /// sidebar.
     @State private var heartBouncePulse: Int = 0
-    @State private var sharedContentWrapper: SharedContentWrapper?
+    @State var sharedContentWrapper: SharedContentWrapper? // internal : cause de boucle (#9821)
     @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
     /// Republication d'une story d'AUTRUI dans une story à soi — ouvre le
     /// composeur prérempli (« Phase C » annoncée depuis l'écriture de
@@ -1543,7 +1543,7 @@ struct StoryViewerView: View {
             chromeVisible: $chromeVisible,
             isFullscreenStorySession: $isFullscreenStorySession,
             isLongPressPaused: $isLongPressPaused,
-            isCanvasPlaybackPaused: shouldPauseTimer,
+            isCanvasPlaybackPaused: shouldPauseTimer, loopPass: storyLoopPass,
             gestureResetToken: gestureResetToken,
             readerFeatureConsumedByTouch: $readerFeatureConsumedByTouch,
             reactionStripOwnsDrag: $reactionStripOwnsDrag,
@@ -1978,7 +1978,7 @@ struct StoryViewerView: View {
 
     /// Used by `StoryHeaderView`'s report sheet — owned here so the sheet
     /// presentation survives header re-renders.
-    @State private var showReportSheet = false
+    @State var showReportSheet = false // internal : cause de boucle (#9821)
 
     // MARK: - Content, Gestures, Navigation, Timer & Actions (see StoryViewerView+Content.swift)
 }

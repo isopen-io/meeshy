@@ -193,6 +193,12 @@ struct UniversalComposerBar: View {
     /// stack on top of each other.
     var onShowAttachments: (() -> Void)? = nil
 
+    /// Le panneau des pièces s'ouvre ET se ferme, quelle que soit la cause
+    /// (frappe, focus, envoi). Un hôte qui suspend quelque chose pendant
+    /// qu'une pièce se compose — la lecture d'une story (#9821) — le relâche
+    /// ici ; `onShowAttachments` ne dit que l'ouverture.
+    var onAttachmentsVisibilityChange: ((Bool) -> Void)? = nil
+
     /// Called when user taps emoji icon in ladder — parent should show EmojiFullPickerSheet
     var onRequestTextEmoji: (() -> Void)? = nil
 

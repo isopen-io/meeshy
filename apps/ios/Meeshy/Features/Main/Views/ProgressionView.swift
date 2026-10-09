@@ -62,7 +62,10 @@ struct ProgressionView: View {
         .task {
             await viewModel.load()
             #if DEBUG
-            if viewModel.progress != nil { VitrineRendu.shared.signaler(.progression) }
+            if viewModel.progress != nil {
+                let router = self.router
+                VitrineRendu.shared.progressionAffichee { router.openGame(at: $0) }
+            }
             #endif
         }
     }

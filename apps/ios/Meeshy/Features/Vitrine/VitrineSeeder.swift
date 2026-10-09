@@ -44,6 +44,8 @@ struct VitrineSeedTargetsReels: VitrineSeedTargets {
         switch genre {
         case .image: await VitrineSeeder.remplacer(fichier, dans: CacheCoordinator.shared.images, cle: cle)
         case .audio: await VitrineSeeder.remplacer(fichier, dans: CacheCoordinator.shared.audio, cle: cle)
+        case .video: await VitrineSeeder.remplacer(fichier, dans: CacheCoordinator.shared.video, cle: cle)
+        case .inconnu: break
         }
     }
 
@@ -73,7 +75,7 @@ enum VitrineSeeder {
     /// médias et le fil de l'iPad (#8922). Un média manquant arrête la vitrine : l'écran irait le
     /// chercher sur l'hôte mort et montrerait une vignette vide.
     static func remplirLesCaches(_ fixtures: VitrineFixtures, medias dossier: URL, dans cibles: some VitrineSeedTargets) async throws {
-        for media in fixtures.medias {
+        for media in fixtures.medias where media.genre != .inconnu {
             let fichier = dossier.appendingPathComponent(media.fichier)
             guard FileManager.default.fileExists(atPath: fichier.path) else { throw VitrineSeederErreur.mediaAbsent(media.fichier) }
             await cibles.enregistrerMedia(fichier, genre: media.genre, cle: cleDeCache(media.url))
@@ -82,13 +84,14 @@ enum VitrineSeeder {
         try await cibles.enregistrerFil(fixtures.posts.map { $0.toFeedPost(preferredLanguages: langues) }, cle: cleDuFil)
     }
 
-    static func remplir(_ fixtures: VitrineFixtures, dans cibles: some VitrineSeedTargets) async throws {
+    /// `progression` remplace celle du kit : une scène du jeu y range l'état d'avant sa célébration (#9805).
+    static func remplir(_ fixtures: VitrineFixtures, progression: APIEngagementProgress? = nil, dans cibles: some VitrineSeedTargets) async throws {
         let userId = fixtures.lecteur.id
         try await cibles.enregistrerConversations(fixtures.conversationsServies())
         for conversationId in fixtures.messages.keys.sorted() {
             try await cibles.enregistrerMessages(fixtures.messages[conversationId] ?? [], langues: [fixtures.lang])
         }
-        try await cibles.enregistrerProgression(fixtures.progression, cle: "engagement:\(userId)")
+        try await cibles.enregistrerProgression(progression ?? fixtures.progression, cle: "engagement:\(userId)")
         for (conversationId, brut) in fixtures.modesDeLecture.sorted(by: { $0.key < $1.key }) {
             guard let mode = ReadingModeOrchestrator.ConversationReadingMode(rawValue: brut) else { continue }
             cibles.fixerModeDeLecture(mode, conversationId: conversationId, userId: userId)
