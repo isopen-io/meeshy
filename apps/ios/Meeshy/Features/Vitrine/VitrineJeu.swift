@@ -270,12 +270,10 @@ actor VitrineJeuServeur: EngagementProgressProviding, GameServiceProviding {
     func relightFlame(requestId: String) async throws -> FlameRelightResponse { throw VitrineJeuRefus.horsScene }
 }
 
-/// Le déroulé d'une scène du jeu : la fiche s'ouvre sur l'état d'avant, attend un délai FIXE, puis la célébration
-/// se joue sans geste, encadrée par deux marqueurs que le script de tournage attend.
+/// Le déroulé d'une scène du jeu : la fiche s'ouvre sur l'état d'avant, attend le clap du tournage (`VitrineTournage`),
+/// puis la célébration se joue sans geste, encadrée par deux marqueurs que le script de tournage attend.
 @MainActor
 enum VitrineJeu {
-    /// Le repos de la fiche à l'image, après « prêt » et avant la célébration.
-    static let delai: Duration = .milliseconds(1500)
     /// `ChoreographyClock` s'arrête 50 ms après la fin ; « fin » tombe une fois l'horloge posée.
     static let finDeChoregraphie: Duration = .milliseconds(100)
 
@@ -311,28 +309,17 @@ enum VitrineJeu {
         }
     }
 
-    /// Après « prêt » : le délai, « celebration-debut », la célébration, puis « celebration-fin » une fois sa durée passée.
+    /// Après « prêt » : le clap, « celebration-debut », la célébration, puis « celebration-fin » une fois sa durée passée.
     static func celebrer(_ scene: VitrineScene) async {
         guard let celebration = scene.celebration else { return }
         guard let enCours, let fiche else {
             fatalError("Vitrine « \(scene.rawValue) » : la fiche \(celebration.concept.rawValue) n'a pas reçu le modèle de la scène")
         }
-        try? await Task.sleep(for: delai)
-        let depart = ContinuousClock.now
-        marquer(VitrineLaunch.marqueurCelebrationDebut, scene)
-        await jouer(celebration, sur: fiche, serveur: enCours.serveur)
-        try? await Task.sleep(until: depart + .seconds(celebration.duree) + finDeChoregraphie, clock: .continuous)
-        marquer(VitrineLaunch.marqueurCelebrationFin, scene)
-    }
-
-    static func effacerLesMarqueurs() {
-        try? FileManager.default.removeItem(at: VitrineLaunch.marqueurCelebrationDebut)
-        try? FileManager.default.removeItem(at: VitrineLaunch.marqueurCelebrationFin)
-    }
-
-    private static func marquer(_ marqueur: URL, _ scene: VitrineScene) {
-        try? FileManager.default.createDirectory(at: VitrineLaunch.dossier, withIntermediateDirectories: true)
-        try? Data(scene.rawValue.utf8).write(to: marqueur)
+        await VitrineTournage.tourner(scene) {
+            let depart = ContinuousClock.now
+            await jouer(celebration, sur: fiche, serveur: enCours.serveur)
+            try? await Task.sleep(until: depart + .seconds(celebration.duree) + finDeChoregraphie, clock: .continuous)
+        }
     }
 }
 #endif

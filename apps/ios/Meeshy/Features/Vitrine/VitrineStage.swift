@@ -31,7 +31,7 @@ enum VitrineStage {
             MeeshyConfig.debugWebOriginOverride = originePublique
             fixtures = f
             try? FileManager.default.removeItem(at: VitrineLaunch.marqueurPret)
-            VitrineJeu.effacerLesMarqueurs()
+            VitrineTournage.effacerLesMarqueurs()
             servir(f.lienInvitation)
             if scene.ouvreUneSession {
                 try VitrineSession.poser(f.lecteur)
