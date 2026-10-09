@@ -74,10 +74,15 @@ enum CommentMediaUploader {
 
     /// Téléverse toutes les pièces d'un commentaire, dans l'ordre de la zone
     /// (#9736). Lève `Interrupted` avec ce qui a déjà été monté.
-    static func uploadAll(_ medias: [PendingCommentMedia]) async throws -> [UploadedCommentMedia] {
+    ///
+    /// `authorId` est le compte relevé À LA COMPOSITION : il est revérifié
+    /// avant chaque montée ET une dernière fois au retour — l'appelant crée le
+    /// commentaire juste après, et ne doit pas le faire sous un autre compte.
+    static func uploadAll(_ medias: [PendingCommentMedia], authorId: String?) async throws -> [UploadedCommentMedia] {
         var acquired: [UploadedCommentMedia] = []
         for (index, media) in medias.enumerated() {
             do {
+                try CommentMediaDelivery.confirmAuthor(authorId)
                 let id = try await upload(media)
                 acquired.append(UploadedCommentMedia(sourceIndex: index, id: id,
                                                      uploadedAt: Date().timeIntervalSince1970))
@@ -85,6 +90,7 @@ enum CommentMediaUploader {
                 throw Interrupted(acquired: acquired, underlying: error)
             }
         }
+        try CommentMediaDelivery.confirmAuthor(authorId)
         return acquired
     }
 
@@ -110,11 +116,23 @@ enum CommentMediaDelivery {
         (error as? CommentMediaUploader.Interrupted)?.acquired ?? known
     }
 
+    /// **Le compte courant est-il encore l'auteur ?** L'envoi d'un commentaire
+    /// traverse des attentes réseau ; si le compte a changé entre-temps, ni
+    /// l'appel direct ni la file ne doivent partir sous le jeton du suivant.
+    /// `authorId` est celui qui a été relevé À LA COMPOSITION.
+    static func confirmAuthor(_ authorId: String?) throws {
+        guard let authorId, !authorId.isEmpty, authorId == AuthManager.shared.currentUser?.id else {
+            throw CommentOwnership.Refusal.notTheAuthor
+        }
+    }
+
     /// Confie le commentaire à la file. Sans pièce, c'est l'enfilement
     /// ordinaire ; avec, les fichiers sont copiés dans un dossier durable et
-    /// la ligne les rejoue.
+    /// la ligne les rejoue. Refusé si le compte courant n'est pas l'auteur
+    /// déclaré par la charge.
     static func entrust(_ payload: CreateCommentPayload, medias: [PendingCommentMedia],
                         acquired: [UploadedCommentMedia]) async throws {
+        try confirmAuthor(payload.authorId)
         guard !medias.isEmpty else {
             try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: payload.postId)
             return
@@ -123,7 +141,8 @@ enum CommentMediaDelivery {
             payload,
             sourceMediaURLs: medias.map(\.fileURL),
             sourceMediaMimeTypes: medias.map(\.mimeType),
-            acquired: acquired
+            acquired: acquired,
+            ownerId: AuthManager.shared.currentUser?.id
         )
         // Les fichiers d'origine restent : la ligne optimiste les affiche
         // encore. La file tient SA copie, durable.

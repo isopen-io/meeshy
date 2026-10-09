@@ -1337,7 +1337,7 @@ struct CommentsSheetView: View {
         Task {
             var acquired: [UploadedCommentMedia] = []
             do {
-                acquired = try await CommentMediaUploader.uploadAll(media)
+                acquired = try await CommentMediaUploader.uploadAll(media, authorId: me?.id)
                 let apiComment = try await PostService.shared.addComment(
                     postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
                     attachmentIds: CommentMediaUploader.attachmentIds(acquired), mobileTranscription: media.first?.mobileTranscription,
@@ -1393,7 +1393,7 @@ struct CommentsSheetView: View {
                         parentCommentId: parentId, content: trimmed,
                         originalLanguage: lang,
                         location: place, effectFlags: effectFlags,
-                        mobileTranscription: media.first?.mobileTranscription
+                        mobileTranscription: media.first?.mobileTranscription, authorId: me?.id
                     )
                     try await CommentMediaDelivery.entrust(payload, medias: media,
                                                            acquired: CommentMediaDelivery.acquired(from: error, known: acquired))

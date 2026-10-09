@@ -37,9 +37,13 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         return url
     }
 
-    private func comment(_ cmid: String, post: String = "post-1", content: String = "regarde") -> CreateCommentPayload {
+    private let alice = "66f0a1b2c3d4e5f6000000a1"
+    private let bob = "66f0a1b2c3d4e5f6000000b0"
+
+    private func comment(_ cmid: String, post: String = "post-1", content: String = "regarde",
+                         author: String? = "66f0a1b2c3d4e5f6000000a1") -> CreateCommentPayload {
         CreateCommentPayload(clientMutationId: cmid, postId: post, parentCommentId: nil,
-                             content: content, originalLanguage: "fr")
+                             content: content, originalLanguage: "fr", authorId: author)
     }
 
     private func payload(_ outboxId: String) throws -> CreateCommentPayload {
@@ -55,7 +59,8 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
             comment(cmid),
             sourceMediaURLs: [try source("a.jpg", "photo"), try source("b.m4a", "voix")],
             sourceMediaMimeTypes: ["image/jpeg", "audio/mp4"],
-            acquired: acquired
+            acquired: acquired,
+            ownerId: alice
         )
     }
 
@@ -70,7 +75,10 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         let result = try await enqueueTwoPieces(cmid)
 
         let stored = try payload(result.outboxId)
-        XCTAssertEqual(stored.localMediaPaths, ["pending-media/\(cmid)/0.jpg", "pending-media/\(cmid)/1.m4a"])
+        let folder = "pending-media/comments-\(alice)/\(cmid)"
+        XCTAssertEqual(stored.localMediaPaths, ["\(folder)/0.jpg", "\(folder)/1.m4a"],
+                       "Les pièces en attente sont rangées sous le compte qui les a écrites.")
+        XCTAssertEqual(stored.authorId, alice)
         XCTAssertEqual(stored.localMediaMimeTypes, ["image/jpeg", "audio/mp4"])
         XCTAssertEqual(stored.content, "regarde")
         for relative in try XCTUnwrap(stored.localMediaPaths) {
@@ -168,7 +176,7 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
                            arguments: [OutboxStatus.exhausted.rawValue, "hors ligne", result.outboxId])
         }
 
-        let failedList = await queue.unsentComments(postId: "post-1")
+        let failedList = await queue.unsentComments(postId: "post-1", ownerId: alice)
         let failed = try XCTUnwrap(failedList.first)
         XCTAssertTrue(failed.isFailed)
         XCTAssertEqual(failed.clientMutationId, cmid)
@@ -178,7 +186,7 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
 
         try await queue.retryItem(result.outboxId)
 
-        let rearmedList = await queue.unsentComments(postId: "post-1")
+        let rearmedList = await queue.unsentComments(postId: "post-1", ownerId: alice)
         let rearmed = try XCTUnwrap(rearmedList.first)
         XCTAssertFalse(rearmed.isFailed)
         XCTAssertEqual(rearmed.payload.localMediaPaths?.count, 2)
@@ -188,7 +196,7 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
     func test_unsentComments_areScopedToTheirPost() async throws {
         let cmid = "cmid_comment_media_6"
         _ = try await enqueueTwoPieces(cmid)
-        let other = await queue.unsentComments(postId: "post-2")
+        let other = await queue.unsentComments(postId: "post-2", ownerId: alice)
         XCTAssertTrue(other.isEmpty)
         await cleanup(cmid)
     }
@@ -203,7 +211,7 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         // file sur la même base, sans rien lui redonner d'autre.
         await OfflineQueue.shared.configure(pool: pool)
 
-        let survivorList = await queue.unsentComments(postId: "post-1")
+        let survivorList = await queue.unsentComments(postId: "post-1", ownerId: alice)
         let survivor = try XCTUnwrap(survivorList.first)
         XCTAssertEqual(survivor.payload.content, "regarde")
         XCTAssertEqual(survivor.localMediaURLs.map(\.lastPathComponent), ["0.jpg", "1.m4a"])
@@ -218,9 +226,101 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
 
         await queue.cancelCreateComment(clientMutationId: cmid)
 
-        let remaining = await queue.unsentComments(postId: "post-1")
+        let remaining = await queue.unsentComments(postId: "post-1", ownerId: alice)
         XCTAssertTrue(remaining.isEmpty)
         XCTAssertTrue(paths.allSatisfy { !FileManager.default.fileExists(atPath: OfflineQueue.absoluteMediaPath(forStored: $0)) })
+    }
+
+    // MARK: - Un commentaire en attente appartient à son auteur
+
+    func test_enqueueCommentMedia_isRefused_whenTheCurrentAccountIsNotTheAuthor() async throws {
+        let cmid = "cmid_comment_owner_1"
+        do {
+            _ = try await queue.enqueueCommentMedia(
+                comment(cmid), sourceMediaURLs: [try source("a.jpg", "photo")],
+                sourceMediaMimeTypes: nil, ownerId: bob)
+            XCTFail("Un commentaire écrit par A ne s'enfile pas sous B.")
+        } catch {
+            XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+        }
+        let rows = try await pool.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(rows, 0)
+        let folder = OfflineQueue.absoluteMediaPath(forStored: "pending-media/comments-\(bob)/\(cmid)")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder + "/0.jpg"), "Rien n'est copié pour un autre compte.")
+    }
+
+    func test_enqueueCommentMedia_isRefused_withoutADeclaredAuthor_orWithoutAnAccount() async throws {
+        for (payload, owner) in [(comment("cmid_comment_owner_2", author: nil), Optional(alice)),
+                                 (comment("cmid_comment_owner_3"), String?.none),
+                                 (comment("cmid_comment_owner_4", author: ""), Optional(""))] {
+            do {
+                _ = try await queue.enqueueCommentMedia(payload, sourceMediaURLs: [try source("a.jpg", "photo")],
+                                                        sourceMediaMimeTypes: nil, ownerId: owner)
+                XCTFail("Sans auteur lisible, on n'enfile pas.")
+            } catch {
+                XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+            }
+        }
+    }
+
+    func test_aCommentWrittenByA_isNeverShownUnderB_andComesBackForA() async throws {
+        let cmid = "cmid_comment_owner_5"
+        _ = try await enqueueTwoPieces(cmid)
+
+        let underBob = await queue.unsentComments(postId: "post-1", ownerId: bob)
+        XCTAssertTrue(underBob.isEmpty)
+        let oneUnderBob = await queue.unsentComment(clientMutationId: cmid, ownerId: bob)
+        XCTAssertNil(oneUnderBob)
+        let signedOut = await queue.unsentComments(postId: "post-1", ownerId: nil)
+        XCTAssertTrue(signedOut.isEmpty)
+
+        let underAlice = await queue.unsentComments(postId: "post-1", ownerId: alice)
+        XCTAssertEqual(underAlice.map(\.clientMutationId), [cmid])
+        await cleanup(cmid)
+    }
+
+    func test_mayReplay_onlyUnderTheAuthor() {
+        let written = comment("cmid_replay_1").withMedia(localMediaPaths: ["p/0.jpg"], localMediaMimeTypes: nil, uploadedMedia: nil)
+        XCTAssertTrue(CommentOwnership.mayReplay(written, currentUserId: alice))
+        XCTAssertFalse(CommentOwnership.mayReplay(written, currentUserId: bob), "Une entrée écrite par A ne se rejoue jamais sous B.")
+        XCTAssertFalse(CommentOwnership.mayReplay(written, currentUserId: nil))
+        XCTAssertFalse(CommentOwnership.mayReplay(written, currentUserId: ""))
+    }
+
+    func test_mayReplay_aRowWithoutAuthor_neverCarriesPieces() {
+        let legacyText = comment("cmid_replay_2", author: nil)
+        XCTAssertTrue(CommentOwnership.mayReplay(legacyText, currentUserId: alice),
+                      "Une ligne de texte gravée avant le champ rejoue comme avant, dans la base de son compte.")
+        let orphanWithMedia = legacyText.withMedia(localMediaPaths: ["p/0.jpg"], localMediaMimeTypes: nil, uploadedMedia: nil)
+        XCTAssertFalse(CommentOwnership.mayReplay(orphanWithMedia, currentUserId: alice),
+                       "Des pièces sans propriétaire lisible ne s'envoient pas.")
+        let orphanUploaded = legacyText.withMedia(
+            localMediaPaths: nil, localMediaMimeTypes: nil,
+            uploadedMedia: [UploadedCommentMedia(sourceIndex: 0, id: "m", uploadedAt: 0)])
+        XCTAssertFalse(CommentOwnership.mayReplay(orphanUploaded, currentUserId: alice))
+        XCTAssertFalse(CommentOwnership.mayReplay(comment("cmid_replay_3", author: ""), currentUserId: alice))
+    }
+
+    func test_purgePendingCommentMedia_removesOnlyThatAccountsPieces() async throws {
+        let mine = "cmid_comment_owner_6"
+        let result = try await enqueueTwoPieces(mine)
+        let aliceFile = OfflineQueue.absoluteMediaPath(forStored: try XCTUnwrap(result.localMediaPaths.first))
+        let bobFolder = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(
+            forStored: "pending-media/\(CommentOwnership.mediaDirectoryName(ownerId: bob))/cmid_b"), isDirectory: true)
+        try FileManager.default.createDirectory(at: bobFolder, withIntermediateDirectories: true)
+        let bobFile = bobFolder.appendingPathComponent("0.jpg")
+        try Data("b".utf8).write(to: bobFile)
+
+        OfflineQueue.purgePendingCommentMedia(ownerId: alice)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: aliceFile), "À la déconnexion, les pièces du compte quittent le disque.")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: bobFile.path), "Celles d'un autre compte ne sont pas touchées.")
+        OfflineQueue.purgePendingCommentMedia(ownerId: bob)
+        await cleanup(mine)
+    }
+
+    func test_mediaDirectoryName_cannotEscapeItsFolder() {
+        XCTAssertEqual(CommentOwnership.mediaDirectoryName(ownerId: "../../etc"), "comments-etc")
     }
 
     // MARK: - Une file gravée avant ce lot se relit
@@ -230,5 +330,6 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         let decoded = try JSONDecoder().decode(CreateCommentPayload.self, from: legacy)
         XCTAssertNil(decoded.localMediaPaths)
         XCTAssertNil(decoded.uploadedMedia)
+        XCTAssertNil(decoded.authorId)
     }
 }

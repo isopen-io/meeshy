@@ -446,6 +446,10 @@ final class DependencyContainer {
                         }
                         // grdb-01 — purge feed indépendante : un échec d'un côté
                         // ne doit pas empêcher l'autre purge.
+                        // #9743 — les pièces de commentaire en attente du compte
+                        // quitté partent avec sa file : rien ne reste sur le
+                        // disque pour le compte suivant.
+                        if let ownerId = session.key?.userId { OfflineQueue.purgePendingCommentMedia(ownerId: ownerId) }
                         do {
                             try await feed.clearAllForLogout()
                         } catch {

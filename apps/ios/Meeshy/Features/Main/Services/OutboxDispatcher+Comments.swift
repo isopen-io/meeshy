@@ -16,6 +16,15 @@ extension OutboxDispatcher {
 
     func dispatchCreateComment(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: CreateCommentPayload.self)
+        // **Un commentaire ne part que sous le compte qui l'a écrit.** La file
+        // est un singleton rebranché à chaque bascule de compte : une ligne
+        // arrivée dans la base d'un autre que son auteur ne se téléverse pas,
+        // ne se publie pas, et quitte le disque avec ses pièces.
+        guard CommentOwnership.mayReplay(payload, currentUserId: AuthManager.shared.currentUser?.id) else {
+            await OfflineQueue.shared.cancelCreateComment(clientMutationId: payload.clientMutationId)
+            logger.error("createComment refusé : le compte courant n'est pas l'auteur de \(payload.clientMutationId, privacy: .public)")
+            throw MeeshyError.server(statusCode: 403, message: "Comment \(payload.clientMutationId) belongs to another account")
+        }
         let uploaded = try await uploadedCommentMedia(for: payload, outboxId: record.id)
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             PostsEndpoint.byPostIdComments(postId: payload.postId),

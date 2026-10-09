@@ -135,7 +135,7 @@ extension CommentsSheetView {
     /// Les commentaires de ce post encore dans la file reviennent à l'écran :
     /// ils survivent à la fermeture de la feuille et au redémarrage de l'app.
     func restoreUnsentComments() async {
-        let unsent = await OfflineQueue.shared.unsentComments(postId: post.id)
+        let unsent = await OfflineQueue.shared.unsentComments(postId: post.id, ownerId: AuthManager.shared.currentUser?.id)
             .map { CommentUnsent.row(for: $0, author: AuthManager.shared.currentUser) }
         guard !unsent.isEmpty else { return }
         liveComments = CommentUnsent.merging(unsent.filter { $0.parentId == nil }, into: liveComments ?? post.comments)

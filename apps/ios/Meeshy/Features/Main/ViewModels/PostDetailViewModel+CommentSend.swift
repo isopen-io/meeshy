@@ -231,7 +231,7 @@ extension PostDetailViewModel {
 
         var acquired: [UploadedCommentMedia] = []
         do {
-            acquired = try await CommentMediaUploader.uploadAll(pendingMedia)
+            acquired = try await CommentMediaUploader.uploadAll(pendingMedia, authorId: me?.id)
             let apiComment = try await postService.addComment(
                 postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
                 attachmentIds: CommentMediaUploader.attachmentIds(acquired), mobileTranscription: pendingMedia.first?.mobileTranscription,
@@ -283,7 +283,7 @@ extension PostDetailViewModel {
                         content: content, originalLanguage: originalLanguage,
                         location: location, effectFlags: effectFlags,
                         quotedPostMediaId: quoted?.postMediaId,
-                        mobileTranscription: pendingMedia.first?.mobileTranscription),
+                        mobileTranscription: pendingMedia.first?.mobileTranscription, authorId: me?.id),
                     medias: pendingMedia,
                     acquired: CommentMediaDelivery.acquired(from: error, known: acquired))
             } catch {

@@ -960,7 +960,7 @@ extension StoryViewerView {
             let medias = [pendingMedia].compactMap { $0 }
             var acquired: [UploadedCommentMedia] = []
             do {
-                acquired = try await CommentMediaUploader.uploadAll(medias)
+                acquired = try await CommentMediaUploader.uploadAll(medias, authorId: authorId)
                 let attachmentIds = CommentMediaUploader.attachmentIds(acquired)
                 try await StoryInteractionService().postComment(
                     storyId: story.id,
@@ -993,7 +993,7 @@ extension StoryViewerView {
                             parentCommentId: parentId, content: text,
                             originalLanguage: language,
                             location: location, effectFlags: effectFlags,
-                            mobileTranscription: pendingMedia?.mobileTranscription
+                            mobileTranscription: pendingMedia?.mobileTranscription, authorId: authorId
                         ),
                         medias: medias, acquired: CommentMediaDelivery.acquired(from: error, known: acquired)
                     )

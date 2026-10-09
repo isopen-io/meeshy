@@ -96,7 +96,7 @@ struct CommentUnsentBadge: View {
     /// L'état se lit d'abord dans la ligne (un commentaire abandonné avant
     /// l'ouverture de l'écran), puis se suit au fil de la file.
     private func watch() async {
-        if let unsent = await OfflineQueue.shared.unsentComment(clientMutationId: commentId), unsent.isFailed {
+        if let unsent = await OfflineQueue.shared.unsentComment(clientMutationId: commentId, ownerId: AuthManager.shared.currentUser?.id), unsent.isFailed {
             markFailed()
         }
         let outcomes = await OfflineQueue.shared.outcomeStream(for: commentId)

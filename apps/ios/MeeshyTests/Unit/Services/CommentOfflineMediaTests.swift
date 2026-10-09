@@ -123,6 +123,58 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
         XCTAssertTrue(code.contains("CommentMediaReplay.plan("))
     }
 
+    /// **Contrôle d'accès** : une entrée écrite par A n'est ni rejouée, ni
+    /// enfilée, ni montrée sous B. La règle est dans le SDK
+    /// (`CommentOwnership`, témoins `OfflineQueueCommentMediaTests`) ; ces
+    /// gardes tiennent ses QUATRE points de passage côté app.
+    func test_theReplay_isClosedToAnyAccountButTheAuthor_beforeAnythingIsSent() throws {
+        let code = try source("Services/OutboxDispatcher+Comments.swift")
+        let gate = try XCTUnwrap(code.range(of: "guard CommentOwnership.mayReplay(payload, currentUserId: AuthManager.shared.currentUser?.id) else {"),
+                                 "Le rejeu ne compare plus l'auteur de la ligne au compte courant.")
+        let upload = try XCTUnwrap(code.range(of: "uploadedCommentMedia(for: payload"))
+        let post = try XCTUnwrap(code.range(of: "requestWithHeaders("))
+        XCTAssertLessThan(gate.lowerBound, upload.lowerBound, "La garde doit précéder le téléversement.")
+        XCTAssertLessThan(gate.lowerBound, post.lowerBound, "La garde doit précéder la création.")
+        XCTAssertTrue(code.contains("cancelCreateComment(clientMutationId: payload.clientMutationId)"),
+                      "Une ligne étrangère doit quitter le disque avec ses pièces, pas attendre un autre rejeu.")
+    }
+
+    func test_entrusting_andUploading_recheckTheAuthorRecordedAtCompose() throws {
+        let code = try source("Views/CommentComposerMedia.swift")
+        let entrust = try XCTUnwrap(code.range(of: "static func entrust("))
+        let enqueue = try XCTUnwrap(code.range(of: "OfflineQueue.shared.enqueue(", range: entrust.upperBound..<code.endIndex))
+        XCTAssertTrue(code[entrust.upperBound..<enqueue.lowerBound].contains("try confirmAuthor(payload.authorId)"),
+                      "L'enfilement arrive après une attente réseau : le compte a pu changer.")
+        XCTAssertTrue(code.contains("ownerId: AuthManager.shared.currentUser?.id"))
+        XCTAssertEqual(code.components(separatedBy: "try CommentMediaDelivery.confirmAuthor(authorId)").count - 1, 2,
+                       "L'auteur se revérifie avant chaque montée ET avant de rendre la main à la création.")
+    }
+
+    func test_everyHost_declaresTheAuthorItRecordedBeforeAwaiting() throws {
+        for (host, direct, queued) in [
+            ("Views/FeedCommentsSheet.swift", "uploadAll(media, authorId: me?.id)", "mobileTranscription, authorId: me?.id"),
+            ("ViewModels/PostDetailViewModel+CommentSend.swift", "uploadAll(pendingMedia, authorId: me?.id)", "mobileTranscription, authorId: me?.id"),
+            ("Views/StoryViewerView+Content.swift", "uploadAll(medias, authorId: authorId)", "mobileTranscription, authorId: authorId"),
+        ] {
+            let code = try source(host)
+            XCTAssertTrue(code.contains(direct), "\(host) : l'envoi direct ne revérifie pas l'auteur relevé à la composition.")
+            XCTAssertTrue(code.contains(queued), "\(host) : la charge confiée à la file ne déclare pas son auteur.")
+        }
+    }
+
+    func test_whatIsShown_andWhatIsPurged_followTheAccount() throws {
+        XCTAssertTrue(try source("Views/CommentUnsentBadge.swift").contains("ownerId: AuthManager.shared.currentUser?.id"))
+        XCTAssertTrue(try source("Views/FeedCommentsSheet+Attachments.swift")
+            .contains("unsentComments(postId: post.id, ownerId: AuthManager.shared.currentUser?.id)"))
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let container = AppSourceGuard.stripComments(try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Core/DependencyContainer.swift"), encoding: .utf8))
+        XCTAssertTrue(container.contains("OfflineQueue.purgePendingCommentMedia(ownerId: ownerId)"),
+                      "La déconnexion laisse sur le disque des pièces que le compte suivant pourrait lire.")
+    }
+
     func test_aDirectUpload_doesNotDeleteTheFileBeforeTheCommentExists() throws {
         let code = try source("Views/CommentComposerMedia.swift")
         let upload = try XCTUnwrap(code.range(of: "static func upload(_ media: PendingCommentMedia)"))

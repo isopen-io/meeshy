@@ -707,6 +707,14 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     public let uploadedMedia: [UploadedCommentMedia]?
     /// Transcription produite sur l'appareil pour une pièce audio.
     public let mobileTranscription: MobileTranscriptionPayload?
+    /// **Le compte qui a ÉCRIT ce commentaire** (#9743). La ligne vit dans la
+    /// base de son compte, mais l'enfilement d'un envoi qui échoue arrive
+    /// APRÈS une attente réseau : entre-temps le compte a pu changer, et la
+    /// file — un singleton rebranché à la bascule — aurait rejoué le
+    /// commentaire, pièces comprises, sous le jeton du compte SUIVANT.
+    /// L'auteur voyage donc DANS la charge, et le rejeu le compare au compte
+    /// courant. `nil` pour une ligne gravée avant le champ.
+    public let authorId: String?
 
     public init(
         clientMutationId: String,
@@ -720,7 +728,8 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         localMediaPaths: [String]? = nil,
         localMediaMimeTypes: [String]? = nil,
         uploadedMedia: [UploadedCommentMedia]? = nil,
-        mobileTranscription: MobileTranscriptionPayload? = nil
+        mobileTranscription: MobileTranscriptionPayload? = nil,
+        authorId: String? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.postId = postId
@@ -734,11 +743,13 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         self.localMediaMimeTypes = localMediaMimeTypes
         self.uploadedMedia = uploadedMedia
         self.mobileTranscription = mobileTranscription
+        self.authorId = authorId
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         clientMutationId = try c.decode(String.self, forKey: .clientMutationId)
+        authorId = try c.decodeIfPresent(String.self, forKey: .authorId)
         postId = try c.decode(String.self, forKey: .postId)
         parentCommentId = try c.decodeIfPresent(String.self, forKey: .parentCommentId)
         content = try c.decode(String.self, forKey: .content)
