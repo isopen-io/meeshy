@@ -3,7 +3,8 @@ import XCTest
 
 /// Le clap du tournage (#9810) : « prêt » posé, l'app ATTEND que le script dise que l'enregistreur tourne (`go.txt`)
 /// avant de jouer l'action — l'enregistreur du simulateur démarre 0,4 à 2 s après « prêt ». Sans tournage (simple
-/// capture), aucun clap ne vient : l'action part après un repli de 3 s.
+/// capture), aucun clap ne vient : l'action part après un repli de 8 s — le script dépose `go.txt` jusqu'à 4,5 s
+/// après « prêt » (démarrage de l'enregistreur + 2,5 s d'avance), le repli doit donc venir après.
 @MainActor
 final class VitrineTournageTests: XCTestCase {
     private func dossier() throws -> URL {
@@ -18,8 +19,8 @@ final class VitrineTournageTests: XCTestCase {
         XCTAssertEqual(VitrineLaunch.marqueurGo.deletingLastPathComponent(), VitrineLaunch.marqueurPret.deletingLastPathComponent())
     }
 
-    func test_repli_isThreeSeconds() {
-        XCTAssertEqual(VitrineTournage.repli, .seconds(3))
+    func test_repli_comesAfterTheLatestClap() {
+        XCTAssertEqual(VitrineTournage.repli, .seconds(8))
     }
 
     func test_attendreLeClap_returnsAsSoonAsGoIsDropped() async throws {

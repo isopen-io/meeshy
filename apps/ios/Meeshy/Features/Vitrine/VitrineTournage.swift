@@ -12,10 +12,11 @@ nonisolated enum VitrineClap: Equatable, Sendable {
 /// Le clap du tournage (#9810). L'enregistreur du simulateur démarre 0,4 à 2 s après « prêt » : un délai fixe laissait
 /// partir l'action hors du film. Après « prêt », la scène ATTEND donc que le script dépose `go.txt` — il le fait une fois
 /// l'enregistrement lancé — puis encadre son action par « celebration-debut » et « celebration-fin ». Sans tournage,
-/// aucun clap ne vient : l'action part après le repli.
+/// aucun clap ne vient : l'action part après le repli. Le script dépose `go.txt` jusqu'à 4,5 s après « prêt » :
+/// un repli plus court partirait avant le clap et rendrait la poignée de main inutile.
 @MainActor
 enum VitrineTournage {
-    static let repli: Duration = .seconds(3)
+    static let repli: Duration = .seconds(8)
     static let pas: Duration = .milliseconds(50)
 
     static func attendreLeClap(_ go: URL = VitrineLaunch.marqueurGo, repli: Duration = VitrineTournage.repli) async -> VitrineClap {

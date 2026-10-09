@@ -15,7 +15,7 @@
 //
 // Les durées du jeu sont celles de `GameTimeline` (apps/ios/Meeshy/Features/Main/Game/Choreography).
 //
-// Le CLAP (#9810) : après « prêt », l'app attend `go.txt` avant d'agir (repli 3 s sans tournage). Le
+// Le CLAP (#9810) : après « prêt », l'app attend `go.txt` avant d'agir (repli 8 s sans tournage). Le
 // script le dépose comme dernier geste, AVANCE_MS après le démarrage de l'enregistreur — qui part
 // 0,4 à 2 s après « prêt » : l'action ne commence jamais hors du film.
 
