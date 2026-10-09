@@ -65,10 +65,12 @@ public class MeeshyPlaybackPlugin extends Plugin {
      */
     @PluginMethod
     public void floatVideo(PluginCall call) {
+        int width = call.getInt("width", 0);
+        int height = call.getInt("height", 0);
         getActivity()
             .runOnUiThread(() -> {
                 JSObject result = new JSObject();
-                result.put("floated", getActivity() instanceof MainActivity && ((MainActivity) getActivity()).floatVideo());
+                result.put("floated", getActivity() instanceof MainActivity && ((MainActivity) getActivity()).floatVideo(width, height));
                 call.resolve(result);
             });
     }

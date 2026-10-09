@@ -8,6 +8,7 @@ import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.RenderProcessGoneDetail;
@@ -63,6 +64,9 @@ public class MainActivity extends BridgeActivity {
     /** #9410 — le plein ecran demande pour flotter : il flotte des qu'il est montre. */
     private boolean floatOnFullscreen;
 
+    /** #9845 — la forme de la video que la page a fait flotter, tant que son plein ecran dure. */
+    private Rational floatAspect;
+
     static boolean isInForeground() {
         return inForeground;
     }
@@ -100,7 +104,7 @@ public class MainActivity extends BridgeActivity {
             }
             boolean supported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
             if (FullscreenPictureInPicture.floats(Build.VERSION.SDK_INT, fullscreenView != null, supported)) {
-                enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+                enterPictureInPictureMode(floatParams());
             }
         } catch (IllegalStateException refused) {
             // PiP coupee pour Meeshy dans les reglages : l'appel ou la video continue en arriere-plan.
@@ -112,18 +116,27 @@ public class MainActivity extends BridgeActivity {
      * n'offre pas : la page a passe la video en plein ecran, l'activite flotte
      * maintenant, ou des que la vue plein ecran lui est confiee.
      */
-    boolean floatVideo() {
+    boolean floatVideo(int width, int height) {
         boolean supported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
         if (!FullscreenPictureInPicture.floats(Build.VERSION.SDK_INT, true, supported)) return false;
+        int[] aspect = FullscreenPictureInPicture.aspect(width, height);
+        floatAspect = aspect == null ? null : new Rational(aspect[0], aspect[1]);
         if (fullscreenView != null) return enterFloat();
         floatOnFullscreen = true;
         return true;
     }
 
     @SuppressLint("NewApi")
+    private PictureInPictureParams floatParams() {
+        PictureInPictureParams.Builder params = new PictureInPictureParams.Builder();
+        if (floatAspect != null) params.setAspectRatio(floatAspect);
+        return params.build();
+    }
+
+    @SuppressLint("NewApi")
     private boolean enterFloat() {
         try {
-            return enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+            return enterPictureInPictureMode(floatParams());
         } catch (IllegalStateException refused) {
             return false;
         }
@@ -197,6 +210,7 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onHideCustomView() {
                 floatOnFullscreen = false;
+                floatAspect = null;
                 if (fullscreenView == null) {
                     return;
                 }

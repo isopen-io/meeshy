@@ -9,8 +9,15 @@ import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native
  * (#9242, `MainActivity`) : l'appui passe donc la vidéo en plein écran, puis
  * demande à la coque de flotter. Un système qui refuse (API < 26, PiP coupée
  * dans les réglages) rend la vidéo à la page.
+ *
+ * La coque reçoit la taille de la vidéo (#9845) : la fenêtre flottante prend sa
+ * forme, comme dans Chrome Android, au lieu du paysage par défaut du système.
  */
-export type FloatableVideo = { readonly requestFullscreen: () => Promise<void> };
+export type FloatableVideo = {
+  readonly requestFullscreen: () => Promise<void>;
+  readonly videoWidth: number;
+  readonly videoHeight: number;
+};
 
 export type FullscreenExit = { readonly exitFullscreen?: () => Promise<void> };
 
@@ -26,7 +33,7 @@ export function shellVideoFloat(
     void video
       .requestFullscreen()
       .then(() =>
-        flotter({}).then((reponse) => {
+        flotter({ width: video.videoWidth, height: video.videoHeight }).then((reponse) => {
           if ((reponse as { readonly floated?: unknown } | null)?.floated !== true) return doc?.exitFullscreen?.();
           return undefined;
         }),
