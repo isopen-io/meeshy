@@ -20,32 +20,43 @@ const remplir = (largeur, hauteur) =>
 
 const image = (chemin, images) => ['-loop', '1', '-framerate', String(FPS), '-t', s(images + FPS), '-i', chemin]
 
-// `segments` : le plan de montage (apercus.mjs) où chaque clip a reçu `surimpression` (PNG de sa légende),
-// éventuellement `camera` (le mouvement vers son cadrage, cadrages.mjs — sinon plein cadre),
+// `segments` : le plan de montage (apercus.mjs) où chaque clip a reçu `cadre` (PNG opaque : bande de légende,
+// fond, ombre de l'écran — surimpressions.mjs), `masque` (coins arrondis de l'écran), `voile` s'il est cadré
+// (bords fondus dans le fond de l'app), `rognageHaut` (barre d'état, px du clip) et éventuellement `camera` (cadrages.mjs) ; l'écran se pose
+// dans `disposition.ecran` (dispositionApercu),
 // et la fin son `carte` (PNG plein cadre). `audio` : { wav, fondu? } (tout fichier que lit ffmpeg, complété
 // de silence s'il est court, fondu d'entrée et de sortie si `fondu`) ou { silence: true }.
-export const argumentsApercu = ({ segments, largeur, hauteur, audio, sortie, preset = 'slow', fondu = FONDU_IMAGES }) => {
+export const argumentsApercu = ({ segments, disposition, audio, sortie, preset = 'slow', fondu = FONDU_IMAGES }) => {
+  const { largeur, hauteur, ecran } = disposition
   const entrees = []
   const filtres = []
   const ajouter = (args) => {
     entrees.push(...args)
     return entrees.filter((a) => a === '-i').length - 1
   }
+  const fin = (n) => `trim=end_frame=${n},setpts=PTS-STARTPTS`
   segments.forEach((seg, i) => {
     const etiquette = `[s${i}]`
     if (seg.type === 'clip') {
       const v = ajouter(['-i', seg.chemin])
-      const l = ajouter(image(seg.surimpression, seg.images))
+      const c = ajouter(image(seg.cadre, seg.images))
+      const m = ajouter(image(seg.masque, seg.images))
+      const w = seg.voile ? ajouter(image(seg.voile, seg.images)) : null
       const maintien = s(seg.images - seg.imagesClip + FPS)
+      const rogne = seg.rognageHaut ? `crop=iw:ih-${seg.rognageHaut}:0:${seg.rognageHaut},` : ''
+      const brut = seg.voile ? `[r${i}]` : `[v${i}]`
       filtres.push(
-        `[${v}:v]fps=${FPS},${seg.camera ? `${seg.camera},` : ''}${remplir(largeur, hauteur)},tpad=stop_mode=clone:stop_duration=${maintien},trim=end_frame=${seg.images},setpts=PTS-STARTPTS[v${i}]`,
-        `[${l}:v]format=rgba,fade=t=in:st=0.25:d=0.35:alpha=1,setpts=PTS-STARTPTS[l${i}]`,
-        `[v${i}][l${i}]overlay=0:0:format=auto,format=yuv420p,trim=end_frame=${seg.images},setpts=PTS-STARTPTS,settb=1/${FPS},fps=${FPS}${etiquette}`,
+        `[${v}:v]fps=${FPS},${rogne}${seg.camera ? `${seg.camera},` : ''}scale=${ecran.largeur}:${ecran.hauteur}:flags=lanczos,setsar=1,tpad=stop_mode=clone:stop_duration=${maintien},${fin(seg.images)},format=rgba${brut}`,
+        ...(seg.voile ? [`[${w}:v]format=rgba,${fin(seg.images)}[w${i}]`, `[r${i}][w${i}]overlay=0:0:format=auto,format=rgba[v${i}]`] : []),
+        `[${m}:v]format=gray,scale=${ecran.largeur}:${ecran.hauteur},${fin(seg.images)}[m${i}]`,
+        `[v${i}][m${i}]alphamerge[e${i}]`,
+        `[${c}:v]fps=${FPS},${remplir(largeur, hauteur)},${fin(seg.images)}[c${i}]`,
+        `[c${i}][e${i}]overlay=${ecran.x}:${ecran.y}:format=auto,format=yuv420p,${fin(seg.images)},settb=1/${FPS},fps=${FPS}${etiquette}`,
       )
       return
     }
     const c = ajouter(image(seg.carte, seg.images))
-    filtres.push(`[${c}:v]fps=${FPS},${remplir(largeur, hauteur)},format=yuv420p,trim=end_frame=${seg.images},setpts=PTS-STARTPTS,settb=1/${FPS},fps=${FPS}${etiquette}`)
+    filtres.push(`[${c}:v]fps=${FPS},${remplir(largeur, hauteur)},format=yuv420p,${fin(seg.images)},settb=1/${FPS},fps=${FPS}${etiquette}`)
   })
   let courant = '[s0]'
   let longueur = segments[0].images
@@ -72,7 +83,7 @@ export const argumentsApercu = ({ segments, largeur, hauteur, audio, sortie, pre
   }
 }
 
-// Masque d'une carte aux coins arrondis (niveaux de gris, antialiasé), calculé une fois par taille.
+// Masque d'un écran aux coins arrondis (niveaux de gris, antialiasé), calculé une fois par taille.
 export const argumentsMasque = ({ largeur, hauteur, rayon, sortie }) => {
   const r = rayon
   const dx = `max(max(${r}-X\\,X-(W-1-${r}))\\,0)`
@@ -81,10 +92,23 @@ export const argumentsMasque = ({ largeur, hauteur, rayon, sortie }) => {
     '-vf', `geq=lum=255*clip(${r}+0.5-hypot(${dx}\\,${dy})\\,0\\,1)`, '-frames:v', '1', sortie]
 }
 
+// Voile de bord d'un écran ZOOMÉ : la couleur de fond de l'app (#F2F2F7, systemGroupedBackground clair), opaque
+// au bord et nulle à `fondu` px vers l'intérieur. Le texte que la fenêtre tranche s'estompe dans le fond de
+// l'app ; le cadre, lui, reste net.
+export const COULEUR_FOND_APP = [242, 242, 247]
+export const argumentsVoile = ({ largeur, hauteur, fondu, sortie, couleur = COULEUR_FOND_APP }) => {
+  const [r, g, b] = couleur
+  const bord = `min(min(X\\,W-1-X)\\,min(Y\\,H-1-Y))`
+  return ['-y', '-v', 'error', '-f', 'lavfi', '-i', `color=c=black:s=${largeur}x${hauteur},format=rgba`,
+    '-vf', `geq=r=${r}:g=${g}:b=${b}:a=255*(1-clip(${bord}/${fondu}\\,0\\,1))`, '-frames:v', '1', sortie]
+}
+
 // Un visuel créatif : le fond (PNG opaque : dégradé, titre, cadres des cartes) et, dans chaque carte, une
 // image clé (image fixe) ou un clip (vidéo). En vidéo, chaque carte entre et sort en fondu sur le fond : la
-// première et la dernière image sont le fond seul, la boucle d'Apple ne saute pas. Une carte dont la scène a
-// un cadrage reçoit `recadrage` (fenêtre fixe sur l'action) à la place du remplissage plein écran.
+// première et la dernière image sont le fond seul, la boucle d'Apple ne saute pas. Chaque carte montre l'écran
+// ENTIER à la même échelle ; `decalage` (px de la carte) le fait défiler vers le haut (apercus.decalageCarte),
+// `debutClipS` saute le début d'un clip (une capture qui démarre sur l'écran d'avant).
+const defiler = (c) => (c.decalage ? `,crop=${c.largeur}:${c.hauteur - c.decalage}:0:${c.decalage},pad=${c.largeur}:${c.hauteur}:0:0` : '')
 export const argumentsCreatif = ({ fond, largeur, hauteur, cartes, video = null, sortie, preset = 'slow' }) => {
   const total = video ? Math.round(video.dureeS * FPS) : 1
   const entrees = video ? image(fond, total) : ['-i', fond]
@@ -94,7 +118,7 @@ export const argumentsCreatif = ({ fond, largeur, hauteur, cartes, video = null,
     const source = n
     const masque = n + 1
     n += 2
-    if (video && c.clip) entrees.push('-i', c.clip)
+    if (video && c.clip) entrees.push(...(c.debutClipS ? ['-ss', c.debutClipS.toFixed(3)] : []), '-i', c.clip)
     else entrees.push(...(video ? image(c.image, total) : ['-i', c.image]))
     entrees.push(...(video ? image(c.masque, total) : ['-i', c.masque]))
     const tenue = video && c.clip
@@ -103,7 +127,7 @@ export const argumentsCreatif = ({ fond, largeur, hauteur, cartes, video = null,
     const temps = video ? `,fps=${FPS}${tenue},trim=end_frame=${total},setpts=PTS-STARTPTS` : ''
     const fondus = video ? `,fade=t=in:st=0:d=0.5:alpha=1,fade=t=out:st=${(video.dureeS - 0.6).toFixed(3)}:d=0.6:alpha=1` : ''
     filtres.push(
-      `[${source}:v]${c.recadrage ?? remplir(c.largeur, c.hauteur)}${temps},format=rgba[c${i}]`,
+      `[${source}:v]${remplir(c.largeur, c.hauteur)}${defiler(c)}${temps},format=rgba[c${i}]`,
       `[${masque}:v]format=gray,scale=${c.largeur}:${c.hauteur}${video ? `,trim=end_frame=${total},setpts=PTS-STARTPTS` : ''}[m${i}]`,
       `[c${i}][m${i}]alphamerge${fondus}[a${i}]`,
       `[b${i}][a${i}]overlay=${c.x}:${c.y}:format=auto[b${i + 1}]`,

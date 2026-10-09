@@ -65,7 +65,7 @@ describe.skipIf(!ffmpegPresent)('montage de bout en bout sur des prises synthét
     expect(imagesDuClip(clips['jeu-frappe'].chemin)).toBe(81)
   })
 
-  test('aperçu « le jeu » iPhone : 886×1920, H.264 30 i/s, musique stéréo, durée dans [15, 30] s — conforme', async () => {
+  test('aperçu « le jeu » iPhone : 886×1920, H.264 30 i/s, musique stéréo, durée dans [15, 30] s — conforme ; la bande de légende ne montre jamais l’app', async () => {
     const s = await monterApercu({ apercu: apercuDe('jeu'), appareil: 'iphone', lang: 'fr', source, racine, rendre: rendreSansNavigateur, preset: 'ultrafast' })
     sorties.push(s)
     expect(s.statut).toBe('pret')
@@ -80,6 +80,13 @@ describe.skipIf(!ffmpegPresent)('montage de bout en bout sur des prises synthét
     expect(sonde.audios).toHaveLength(1)
     expect(sonde.audios[0]).toMatchObject({ codec: 'aac', canaux: 2, frequence: 48000 })
     expect(controler(s.chemin, 'apercu-iphone')).toMatchObject({ conforme: true, erreurs: [] })
+    const { dispositionApercu } = await import('../vitrine/apercus.mjs')
+    const d = dispositionApercu({ appareil: 'iphone', natif: [264, 574], rognageHaut: 34 })
+    const pixel = (x, y) => [...execFileSync('ffmpeg', ['-v', 'error', '-ss', '1.5', '-i', s.chemin, '-vf', `format=rgb24,crop=1:1:${x}:${y}`, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])]
+    const proche = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 12)
+    const CADRE = [0x4f, 0x46, 0xe5]
+    expect(proche(pixel(443, Math.round(d.bande / 2)), CADRE)).toBe(true)
+    expect(proche(pixel(443, d.ecran.y + Math.round(d.ecran.hauteur / 2)), CADRE)).toBe(false)
   }, LENT)
 
   test('aperçu « les interactions » iPad en silence stéréo : 1200×1600, conforme, le réel absent est écarté', async () => {
@@ -98,16 +105,16 @@ describe.skipIf(!ffmpegPresent)('montage de bout en bout sur des prises synthét
   })
 
   test('les cartes créatives prennent les images clés iPhone ; la conversation retombe sur la réaction filmée', () => {
-    const { cartes, manquants } = cartesTournees({ lang: 'fr', source })
+    const { cartes, manquants } = cartesTournees({ lang: 'fr', source, racineCaptures: dossier })
     expect(manquants).toEqual([])
     expect(cartes.map((c) => c.id)).toEqual(['conversation', 'frappe', 'coffre', 'rang'])
     expect(cartes[0].image.endsWith('/interaction/iphone/fr/interaction-emoji/reaction.png')).toBe(true)
     expect(cartes[0].clip.endsWith('/interaction-emoji.mp4')).toBe(true)
-    expect(cartesTournees({ lang: 'ar', source }).manquants).toEqual(['jeu-coffre/recompenses.png', 'jeu-rang/rang-revele.png'])
+    expect(cartesTournees({ lang: 'ar', source, racineCaptures: dossier }).manquants).toEqual(['jeu-coffre/recompenses.png', 'jeu-rang/rang-revele.png'])
   })
 
   test('en-tête image (tirée des IMAGES CLÉS, pas des clips) et vidéo, visuel de recherche : aux tailles Apple, RVB, vidéo en boucle — conformes', async () => {
-    const creatifs = await monterCreatifs({ lang: 'fr', source, racine, rendre: rendreSansNavigateur, preset: 'ultrafast' })
+    const creatifs = await monterCreatifs({ lang: 'fr', source, racine, rendre: rendreSansNavigateur, preset: 'ultrafast', racineCaptures: dossier })
     sorties.push(...creatifs)
     expect(creatifs.map((c) => [c.spec, c.statut])).toEqual([['entete-image', 'pret'], ['entete-video', 'pret'], ['recherche-image', 'pret']])
     const image = pngInfo(readFileSync(creatifs[0].chemin))
@@ -125,6 +132,21 @@ describe.skipIf(!ffmpegPresent)('montage de bout en bout sur des prises synthét
     const boucle = (instant) => execFileSync('ffmpeg', ['-v', 'error', '-ss', instant, '-i', creatifs[1].chemin, '-frames:v', '1', '-vf', 'scale=96:41', '-f', 'rawvideo', '-pix_fmt', 'gray', '-'])
     const ecart = (a, b) => a.reduce((s, v, i) => s + Math.abs(v - b[i]), 0) / a.length
     expect(ecart(boucle('0'), boucle(String(video.dureeS - 1 / 30)))).toBeLessThan(4)
+  }, LENT)
+
+  test('la conversation des créatifs vient de la vraie capture filmée quand elle existe (amour.mov), tirée plein cadre', async () => {
+    const captures = join(dossier, 'captures')
+    const capture = join(captures, 'Marketing/02-captures/iphone/fr/amour.mov')
+    mkdirSync(dirname(capture), { recursive: true })
+    execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=green:s=264x574:r=30:d=12', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', capture])
+    const { cartes } = cartesTournees({ lang: 'fr', source, racineCaptures: captures })
+    expect(cartes[0]).toMatchObject({ id: 'conversation', clip: capture, instantS: 10, debutClipS: 8.5 })
+    const creatifs = await monterCreatifs({ lang: 'fr', source, racine: join(dossier, 'as-capture'), rendre: rendreSansNavigateur, preset: 'ultrafast', racineCaptures: captures })
+    const { dispositionCreatif } = await import('../vitrine/apercus.mjs')
+    const carte = dispositionCreatif({ format: 'entete', nombre: 4 }).cartes[0]
+    const [r, g, b] = execFileSync('ffmpeg', ['-v', 'error', '-i', creatifs[0].chemin, '-vf', `crop=1:1:${carte.x + carte.largeur / 2}:${carte.y + 300}`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
+    expect(g > 100 && r < 40 && b < 40).toBe(true)
+    for (const c of creatifs) expect(controler(c.chemin, c.spec)).toMatchObject({ conforme: true })
   }, LENT)
 
   test('--deposer copie chaque fichier à sa place andp, nommé pour l’ordre, et rien d’autre', () => {
@@ -175,8 +197,9 @@ const PRISES_REELLES = join(import.meta.dir, '../out/jeu/iphone/fr')
 const priseReelle = ['jeu-frappe', 'jeu-coffre', 'jeu-rang'].every((s) => existsSync(join(PRISES_REELLES, `${s}.mp4`)))
 
 describe.skipIf(!ffmpegPresent || !priseReelle)('montage sur les prises réelles françaises (iPhone)', () => {
-  test('le jeu se monte conforme, et la caméra finit sur le cadrage du rang', async () => {
-    const { cadrageDe, fenetreCible, largeurMinimale } = await import('../vitrine/cadrages.mjs')
+  test('le jeu se monte conforme, l’écran sous sa bande, et la caméra finit sur le cadrage du rang', async () => {
+    const { ROGNAGE_HAUT, cadrageDe, fenetreCible, largeurMinimale, rectAuClip } = await import('../vitrine/cadrages.mjs')
+    const { dispositionApercu } = await import('../vitrine/apercus.mjs')
     const { cpSync } = await import('node:fs')
     const dossier = mkdtempSync(join(tmpdir(), 'monter-reel-'))
     try {
@@ -191,13 +214,18 @@ describe.skipIf(!ffmpegPresent || !priseReelle)('montage sur les prises réelles
       const debutRang = s.plans.slice(0, rang).reduce((t, p) => t + p.secondes - 0.4, 0)
       const instant = (debutRang + s.plans[rang].secondes - 0.5).toFixed(3)
       const gris = (args) => execFileSync('ffmpeg', ['-v', 'error', ...args, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'gray', '-'], { maxBuffer: 1 << 24 })
-      const basMonte = gris(['-ss', instant, '-i', s.chemin, '-vf', 'scale=44:96,crop=44:56:0:40'])
+      const { ecran } = dispositionApercu({ appareil: 'iphone', natif: [1320, 2868], rognageHaut: ROGNAGE_HAUT.iphone })
+      const interieur = 'scale=40:82,crop=32:60:4:12'
+      const basMonte = gris(['-ss', instant, '-i', s.chemin, '-vf', `crop=${ecran.largeur}:${ecran.hauteur}:${ecran.x}:${ecran.y},${interieur}`])
       const clip = join(source, 'jeu/iphone/fr/jeu-rang.mp4')
-      const f = fenetreCible({ rect: cadrageDe({ scene: 'jeu-rang', appareil: 'iphone' }), natif: [1320, 2868], rapport: 1320 / 2868, largeurMin: largeurMinimale({ appareil: 'iphone', largeurClip: 1320, largeurSortie: 886 }) })
+      const natif = [1320, 2868 - ROGNAGE_HAUT.iphone]
+      const rect = rectAuClip({ rect: cadrageDe({ scene: 'jeu-rang', appareil: 'iphone' }), appareil: 'iphone', largeurClip: 1320, rognageHaut: ROGNAGE_HAUT.iphone })
+      const f = fenetreCible({ rect, natif, rapport: natif[0] / natif[1], largeurMin: largeurMinimale({ largeurClip: 1320 }) })
+      const rogne = `crop=1320:${natif[1]}:0:${ROGNAGE_HAUT.iphone},`
       const fenetre = `crop=${Math.round(f.largeur)}:${Math.round(f.hauteur)}:${Math.round(f.x)}:${Math.round(f.y)},`
       const dernier = ['-sseof', '-0.1', '-i', clip]
-      const attenduZoom = gris([...dernier, '-vf', `${fenetre}scale=44:96,crop=44:56:0:40`])
-      const pleinCadre = gris([...dernier, '-vf', 'scale=44:96,crop=44:56:0:40'])
+      const attenduZoom = gris([...dernier, '-vf', `${rogne}${fenetre}${interieur}`])
+      const pleinCadre = gris([...dernier, '-vf', `${rogne}${interieur}`])
       const ecart = (a, b) => a.reduce((t, v, i) => t + Math.abs(v - b[i]), 0) / a.length
       expect(ecart(basMonte, attenduZoom)).toBeLessThan(ecart(basMonte, pleinCadre) / 2)
     } finally {
@@ -212,11 +240,11 @@ const KIT = join(import.meta.dir, '..')
 const SCRIPT_RENDU = `
 import { chromium } from '@playwright/test'
 import { pngInfo } from '${KIT}/lib/png.mjs'
-import { dispositionCreatif } from '${KIT}/vitrine/apercus.mjs'
-import { pageFin, pageFondCreatif, pageLegende, rendrePage } from '${KIT}/vitrine/surimpressions.mjs'
+import { dispositionApercu, dispositionCreatif } from '${KIT}/vitrine/apercus.mjs'
+import { pageCadreApercu, pageFin, pageFondCreatif, rendrePage } from '${KIT}/vitrine/surimpressions.mjs'
 const pages = {
-  'legende-fr': pageLegende({ texte: 'Monte en rang. Il ne baisse jamais.', lang: 'fr', largeur: 886, hauteur: 1920 }),
-  'legende-ar': pageLegende({ texte: 'ارتقِ في الرتبة. لا تنخفض أبدًا.', lang: 'ar', largeur: 1200, hauteur: 1600 }),
+  'cadre-fr': pageCadreApercu({ texte: 'Monte en rang. Il ne baisse jamais.', lang: 'fr', disposition: dispositionApercu({ appareil: 'iphone', natif: [1320, 2868], rognageHaut: 165 }) }),
+  'cadre-ar': pageCadreApercu({ texte: 'ارتقِ في الرتبة. لا تنخفض أبدًا.', lang: 'ar', disposition: dispositionApercu({ appareil: 'ipad', natif: [2064, 2752], rognageHaut: 60 }) }),
   fin: pageFin({ devise: 'Chacun sa langue. Tous se comprennent.', mention: 'Compte Meeshy requis.', lang: 'fr', largeur: 886, hauteur: 1920 }),
   fond: pageFondCreatif({ titre: 'Chacun sa langue. Tous se comprennent.', sousTitre: 'x', lang: 'ar', disposition: dispositionCreatif({ format: 'recherche', nombre: 4, dir: 'rtl' }) }),
 }
@@ -228,7 +256,7 @@ console.log(JSON.stringify(sortie))
 `
 
 describe.skipIf(!chromiumPresent)('surimpressions rendues par Chromium, hors réseau', () => {
-  test('légende TRANSPARENTE au format de l’aperçu (arabe en RTL) ; carte de fin et fond créatif OPAQUES', () => {
+  test('cadre de plan (bande de légende, arabe en RTL), carte de fin et fond créatif : OPAQUES, au format', () => {
     const script = join(KIT, `.rendu-test-${process.pid}.mjs`)
     writeFileSync(script, SCRIPT_RENDU)
     const rendus = (() => {
@@ -238,8 +266,8 @@ describe.skipIf(!chromiumPresent)('surimpressions rendues par Chromium, hors ré
         rmSync(script, { force: true })
       }
     })()
-    expect(rendus['legende-fr']).toMatchObject({ width: 886, height: 1920, colorType: 6, rtl: false })
-    expect(rendus['legende-ar']).toMatchObject({ width: 1200, height: 1600, colorType: 6, rtl: true })
+    expect(rendus['cadre-fr']).toMatchObject({ width: 886, height: 1920, colorType: 2, rtl: false })
+    expect(rendus['cadre-ar']).toMatchObject({ width: 1200, height: 1600, colorType: 2, rtl: true })
     expect(rendus.fin).toMatchObject({ width: 886, height: 1920, colorType: 2 })
     expect(rendus.fond).toMatchObject({ width: 3840, height: 2560, colorType: 2, rtl: true })
   }, LENT)

@@ -68,10 +68,10 @@ describe('plan de montage', () => {
     expect(dureeImages([{ images: 90 }])).toBe(90)
   })
 
-  test('le jeu complet tient dans [15, 30] s, cinq plans puis la carte de fin', () => {
+  test('le jeu complet tient dans [15, 30] s, cinq plans — le niveau AVANT le rang — puis la carte de fin', () => {
     const plan = planDeMontage({ apercu: apercuDe('jeu'), lang: 'fr', clips: clips(RUSHES_JEU) })
     expect(plan.statut).toBe('pret')
-    expect(plan.segments.map((s) => s.scene ?? s.type)).toEqual(['jeu-frappe', 'jeu-coffre', 'jeu-rang', 'jeu-niveau', 'jeu-badge', 'fin'])
+    expect(plan.segments.map((s) => s.scene ?? s.type)).toEqual(['jeu-frappe', 'jeu-coffre', 'jeu-niveau', 'jeu-rang', 'jeu-badge', 'fin'])
     expect(plan.images).toBeGreaterThanOrEqual(BORNES_APERCU.cibleMinImages)
     expect(plan.images).toBeLessThanOrEqual(BORNES_APERCU.cibleMaxImages)
     expect(plan.dureeS).toBe(plan.images / FPS)
@@ -187,26 +187,26 @@ describe('textes : aucune promesse que l’app ne tient pas', () => {
 })
 
 describe('cadrage : la caméra va où l’action se joue', async () => {
-  const { AGRANDISSEMENT_MAX, CADRAGES, cadrageDe, fenetreCible, filtreCamera, largeurMinimale, rectAuClip } = await import('../vitrine/cadrages.mjs')
+  const { CADRAGES, ROGNAGE_HAUT, ZOOM_MAX, cadrageDe, fenetreCible, filtreCamera, largeurMinimale, rectAuClip } = await import('../vitrine/cadrages.mjs')
   const IPHONE = [1320, 2868]
   const RAPPORT = 1320 / 2868
-  const minIphone = largeurMinimale({ appareil: 'iphone', largeurClip: 1320, largeurSortie: 886 })
+  const minIphone = largeurMinimale({ largeurClip: 1320 })
 
-  test('jeu-rang et jeu-coffre iPhone ont leur rectangle ; ailleurs, plein cadre', () => {
+  test('jeu-rang, jeu-coffre et jeu-niveau iPhone ont leur rectangle ; ailleurs, plein cadre', () => {
     expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone' })).toEqual(CADRAGES['jeu-rang'].iphone)
+    expect(cadrageDe({ scene: 'jeu-niveau', appareil: 'iphone' })).toEqual(CADRAGES['jeu-niveau'].iphone)
     expect(cadrageDe({ scene: 'jeu-coffre', appareil: 'iphone' })).toEqual(CADRAGES['jeu-coffre'].iphone)
     expect(cadrageDe({ scene: 'jeu-rang', appareil: 'ipad' })).toBeNull()
     expect(cadrageDe({ scene: 'jeu-badge', appareil: 'iphone' })).toBeNull()
   })
 
-  test('jamais plus étroit que 600 px natifs pour 886 px de sortie ; la borne suit la taille du clip', () => {
-    expect(AGRANDISSEMENT_MAX).toBeCloseTo(886 / 600, 9)
+  test('zoom borné à ×2,2 : 600 px natifs sur un iPhone de 1320 ; la borne suit la taille du clip', () => {
+    expect(ZOOM_MAX).toBe(2.2)
     expect(minIphone).toBeCloseTo(600, 9)
-    expect(largeurMinimale({ appareil: 'iphone', largeurClip: 660, largeurSortie: 886 })).toBeCloseTo(300, 9)
-    expect(largeurMinimale({ appareil: 'ipad', largeurClip: 2064, largeurSortie: 1200 })).toBeCloseTo(1200 * 600 / 886, 9)
+    expect(largeurMinimale({ largeurClip: 660 })).toBeCloseTo(300, 9)
   })
 
-  for (const scene of ['jeu-rang', 'jeu-coffre']) {
+  for (const scene of ['jeu-rang', 'jeu-coffre', 'jeu-niveau']) {
     test(`${scene} : la fenêtre CONTIENT le rectangle, au rapport de l’image, dans l’image, agrandie ×1,6 au moins`, () => {
       const rect = CADRAGES[scene].iphone
       const f = fenetreCible({ rect, natif: IPHONE, rapport: RAPPORT, largeurMin: minIphone })
@@ -218,8 +218,19 @@ describe('cadrage : la caméra va où l’action se joue', async () => {
       expect(f.x).toBeGreaterThanOrEqual(0)
       expect(f.y + f.hauteur).toBeLessThanOrEqual(2868 + 1e-9)
       expect(1320 / f.largeur).toBeGreaterThan(1.6)
+      expect(1320 / f.largeur).toBeLessThanOrEqual(ZOOM_MAX + 1e-9)
     })
   }
+
+  test('le rang se resserre sur l’écusson et « Écho V » au zoom maximal', () => {
+    const f = fenetreCible({ rect: CADRAGES['jeu-rang'].iphone, natif: IPHONE, rapport: RAPPORT, largeurMin: minIphone })
+    expect(1320 / f.largeur).toBeCloseTo(ZOOM_MAX, 6)
+  })
+
+  test('la barre d’état est rognée : 165 px natifs sur iPhone, et le rectangle remonte d’autant', () => {
+    expect(ROGNAGE_HAUT.iphone).toBe(165)
+    expect(rectAuClip({ rect: { x: 0, y: 465, largeur: 10, hauteur: 10 }, appareil: 'iphone', largeurClip: 1320, rognageHaut: 165 }).y).toBe(300)
+  })
 
   test('un écusson minuscule ne fait pas zoomer au-delà de la borne', () => {
     const f = fenetreCible({ rect: { x: 600, y: 900, largeur: 120, hauteur: 120 }, natif: IPHONE, rapport: RAPPORT, largeurMin: minIphone })
@@ -245,5 +256,28 @@ describe('cadrage : la caméra va où l’action se joue', async () => {
     expect(filtre).toContain('clip((in/30-0.6)/0.9\\,0\\,1)')
     expect(filtre).toContain('0.5-0.5*cos(PI*')
     expect(filtre).toMatch(/interpolation=cubic:eval=frame$/)
+  })
+})
+
+describe('mise en page d’un plan : la légende a sa bande, l’écran se pose dessous', async () => {
+  const { dispositionApercu, decalageCarte } = await import('../vitrine/apercus.mjs')
+
+  for (const [appareil, natif, rognage] of [['iphone', [1320, 2868], 165], ['ipad', [2064, 2752], 60]]) {
+    test(`${appareil} : bande de 16 %, écran entier sous elle, centré, au rapport de la prise rognée`, () => {
+      const d = dispositionApercu({ appareil, natif, rognageHaut: rognage })
+      expect(d.bande).toBe(Math.round(d.hauteur * 0.16))
+      expect(d.ecran.y).toBeGreaterThan(d.bande)
+      expect(d.ecran.y + d.ecran.hauteur).toBeLessThanOrEqual(d.hauteur)
+      expect(Math.abs(d.ecran.x - (d.largeur - d.ecran.x - d.ecran.largeur))).toBeLessThanOrEqual(2)
+      expect(d.ecran.largeur / d.ecran.hauteur).toBeCloseTo(natif[0] / (natif[1] - rognage), 2)
+      for (const v of [d.ecran.x, d.ecran.largeur, d.ecran.hauteur]) expect(v % 2).toBe(0)
+    })
+  }
+
+  test('carte créative : un écran ancré en bas défile de ce qui dépasse le visuel ; sinon il ne bouge pas', () => {
+    const carte = { y: 680, hauteur: 1200 }
+    expect(decalageCarte({ carte, hauteurVisuel: 1646, ancre: 'bas' })).toBe(234)
+    expect(decalageCarte({ carte, hauteurVisuel: 1646, ancre: 'haut' })).toBe(0)
+    expect(decalageCarte({ carte, hauteurVisuel: 2560, ancre: 'bas' })).toBe(0)
   })
 })
