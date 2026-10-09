@@ -8,7 +8,7 @@ import { notePublicationParticipation } from '@/lib/view/publication-participati
 import type { RowActionId } from '@/lib/view/row-actions';
 
 import { cachedCardSeed } from './card-caches';
-import { ApiError } from './client';
+import { ApiError, currentOwnerCredential } from './client';
 import { performCommentGesture, type CommentGestureRequest, type CommentGestureResult } from './comment-gestures';
 import { repliesInfiniteOptions } from './comment-replies';
 import { performRowAction } from './conversation-actions';
@@ -16,7 +16,6 @@ import { conversationQuery, conversationsQuery, refreshConversations } from './c
 import type { PendingAttachment } from '@/lib/send/attachments';
 
 import { apiDeps } from './deps';
-import { currentOwnerCredential } from './owner-session';
 import { feedQuery, refreshFeed } from './feed';
 import { forwardMessages, type ForwardResult, type ForwardSource } from './forward';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';

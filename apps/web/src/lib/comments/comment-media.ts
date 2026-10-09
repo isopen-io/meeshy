@@ -115,7 +115,7 @@ export const browserCommentUploadFor =
     const [{ uploadPostMedia }, { postMediaUploadDeps }, { currentOwnerCredential }] = await Promise.all([
       import('@/lib/api/post-media-upload'),
       import('@/lib/api/deps'),
-      import('@/lib/api/owner-session'),
+      import('@/lib/api/client'),
     ]);
     return uploadPostMedia({
       ...postMediaUploadDeps,
