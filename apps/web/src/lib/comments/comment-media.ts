@@ -78,6 +78,11 @@ const alreadyUploaded = (file: File, now: number, owner: string | undefined): Po
   return owner !== undefined && held !== undefined && held.owner === owner && now - held.at < UPLOADED_MAX_AGE_MS ? held.media : undefined;
 };
 
+/** UN LOT REFUSÉ POUR DE BON (#9743) — ses pièces ne sont plus tenues pour montées. */
+export function forgetUploadedCommentMedia(pieces: readonly PendingAttachment[]): void {
+  pieces.forEach((piece) => uploadedFiles.delete(piece.file));
+}
+
 export type CommentUploadOptions = {
   /** La montée de CHAQUE pièce, par son `localId` (#9736). */
   readonly report?: (localId: string, fraction: number) => void;

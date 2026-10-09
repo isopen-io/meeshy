@@ -15,7 +15,7 @@ import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import { flattenCommentPages, type CommentInfiniteData, type CommentStickerSend, type PostComment } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
 import { commentDrafts, type CommentDraft } from '@/lib/comments/comment-draft';
-import { browserCommentUploadFor, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
+import { browserCommentUploadFor, forgetUploadedCommentMedia, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { unsentComments, unsentOf } from '@/lib/comments/unsent-comments';
 import { composingPostOf, postCommentImageable } from '@/lib/export/composed-comment-card';
 import { resolveFeedText } from '@/lib/feed/text';
@@ -269,6 +269,8 @@ export function CommentThread({
       keepDraft({ text: '', pending: [] });
       const uploaded = pending.length === 0 ? { ok: true as const, media: [] } : await uploadCommentMedia(pending, uploadMedia, { report, ...(scope === null ? {} : { owner: scope }) });
       const result: CommentComposerResult = uploaded.ok ? await deliver({ content, media: uploaded.media, pieces: pending }) : { ok: false, message: 'comments.media.upload_failed' };
+      /* Montées puis REFUSÉES pour de bon : ces pièces ne sont plus tenues pour « déjà sur le serveur ». */
+      if (!result.ok && uploaded.ok) forgetUploadedCommentMedia(pending);
       if (!result.ok) keepDraft({ text: content, pending });
       return result;
     },

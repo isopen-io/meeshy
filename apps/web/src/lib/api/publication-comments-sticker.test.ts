@@ -10,6 +10,7 @@ import {
   type CommentInfiniteData,
   type PostComment,
 } from './publication-comments';
+import { ownerPresent } from '@/test-support/comment-owner';
 
 /**
  * ENVOYER UN COMMENTAIRE-STICKER (#9080) — la MÊME forme que le sticker d'un
@@ -61,7 +62,7 @@ describe('performComment — un sticker', () => {
       content: '',
       author,
       sticker: { sticker: MEE, picture: PICTURE },
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
     await Promise.resolve();
     expect(calls[0]?.body).toEqual({ content: '', sticker: MEE, attachmentIds: [PICTURE.postMediaId] });
@@ -82,7 +83,7 @@ describe('performComment — un sticker', () => {
       content: ' pour toi ',
       author,
       sticker: { sticker: { emoji: '🔥' } },
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
     await Promise.resolve();
     expect(calls[0]?.body).toEqual({ content: 'pour toi', sticker: { emoji: '🔥' } });
@@ -99,7 +100,7 @@ describe('performComment — un sticker', () => {
       author,
       parentId: 'c-root',
       sticker: { sticker: MEE, picture: PICTURE },
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
     await Promise.resolve();
     expect(calls[0]?.body).toEqual({ content: '', parentId: 'c-root', sticker: MEE, attachmentIds: [PICTURE.postMediaId] });
@@ -116,7 +117,7 @@ describe('performComment — un sticker', () => {
       postId: 'p1',
       content: '  ',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
     expect(result.ok).toBe(false);
     expect(calls).toHaveLength(0);

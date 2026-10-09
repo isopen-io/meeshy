@@ -1,4 +1,6 @@
 import type { PendingAttachment } from '@/lib/send/attachments';
+import { currentOwnerCredential } from '@/lib/api/client';
+import type { OwnerCredential } from '@/lib/api/owner-session';
 import { draftStore, type DraftStore } from '@/lib/send/draft-store';
 
 /**
@@ -24,7 +26,12 @@ const NO_PIECES: readonly PendingAttachment[] = [];
 const textKey = (postId: string): string => `comment.${postId}`;
 const piecesKey = (scope: string, postId: string): string => `${scope}\u0000${postId}`;
 
-export function createCommentDrafts(texts: DraftStore = draftStore): CommentDrafts {
+/**
+ * `owner` — UN BROUILLON NE S'ÉCRIT QUE POUR SON LECTEUR CONNECTÉ (#9743) : un
+ * envoi encore en vol au moment d'une déconnexion ne repose rien sous la
+ * portée que la purge vient de vider. Effacer reste toujours permis.
+ */
+export function createCommentDrafts(texts: DraftStore = draftStore, owner: OwnerCredential = () => null): CommentDrafts {
   const pieces = new Map<string, readonly PendingAttachment[]>();
   return {
     get: (scope, postId) => ({
@@ -32,6 +39,8 @@ export function createCommentDrafts(texts: DraftStore = draftStore): CommentDraf
       pending: pieces.get(piecesKey(scope, postId)) ?? NO_PIECES,
     }),
     set: (scope, postId, draft) => {
+      const empty = draft.text.trim() === '' && draft.pending.length === 0;
+      if (!empty && owner(scope) === null) return;
       texts.setDraft(scope, textKey(postId), { text: draft.text, language: '', protection: {} });
       if (draft.pending.length === 0) pieces.delete(piecesKey(scope, postId));
       else pieces.set(piecesKey(scope, postId), draft.pending);
@@ -42,4 +51,4 @@ export function createCommentDrafts(texts: DraftStore = draftStore): CommentDraf
   };
 }
 
-export const commentDrafts: CommentDrafts = createCommentDrafts();
+export const commentDrafts: CommentDrafts = createCommentDrafts(draftStore, currentOwnerCredential);

@@ -9,7 +9,8 @@ import type { ApiResult } from '@/lib/api/http';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import { pendingAttachmentOf } from '@/lib/send/attachments';
 
-import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, uploadCommentMedia, withCommentPiece } from './comment-media';
+import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, forgetUploadedCommentMedia, uploadCommentMedia, withCommentPiece } from './comment-media';
+import { ownerPresent } from '@/test-support/comment-owner';
 
 /**
  * #9167 — UN COMMENTAIRE WEB JOINT UNE PHOTO OU UNE VIDÉO, par le MÊME contrat
@@ -143,6 +144,19 @@ describe('uploadCommentMedia — chaque pièce en contexte « comment »', () =>
     expect(seen).toHaveLength(3);
   });
 
+  test('A4 (#9743) — un lot oublié remonte à l’envoi suivant', async () => {
+    const seen: string[] = [];
+    const upload = async (f: File): Promise<ApiResult<PostMediaUploadResult>> => {
+      seen.push(f.name);
+      return { ok: true, status: 201, data: { postMediaId: `pm-${seen.length}`, fileUrl: `/u/${f.name}`, mimeType: f.type } };
+    };
+    const pending = [pendingAttachmentOf(file('a.jpg', 'image/jpeg'))];
+    await uploadCommentMedia(pending, upload, { owner: 'u_a' });
+    forgetUploadedCommentMedia(pending);
+    await uploadCommentMedia(pending, upload, { owner: 'u_a' });
+    expect(seen).toHaveLength(2);
+  });
+
   test('une seule pièce refusée : rien ne part, et les suivantes ne montent pas', async () => {
     const seen: string[] = [];
     const upload = async (f: File): Promise<ApiResult<PostMediaUploadResult>> => {
@@ -171,7 +185,7 @@ describe('performComment — les médias joints', () => {
     const queryClient = fresh();
     const calls: { body?: unknown }[] = [];
     const transport = { request: (request: { body?: unknown }) => (calls.push(request), new Promise<never>(() => undefined)) };
-    void performComment({ postId: 'p1', content: '', author, media: [PHOTO, VIDEO], deps: { source: 'gateway', transport: transport as never, queryClient } });
+    void performComment({ postId: 'p1', content: '', author, media: [PHOTO, VIDEO], deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent } });
     await Promise.resolve();
     expect(calls[0]?.body).toEqual({ content: '', attachmentIds: [PHOTO.postMediaId, VIDEO.postMediaId] });
     const [optimistic] = flattenCommentPages(queryClient.getQueryData<CommentInfiniteData>(commentsQueryKey('p1')));
@@ -182,7 +196,7 @@ describe('performComment — les médias joints', () => {
     const queryClient = fresh();
     const calls: unknown[] = [];
     const transport = { request: (request: unknown) => (calls.push(request), new Promise<never>(() => undefined)) };
-    const result = await performComment({ postId: 'p1', content: '  ', author, media: [], deps: { source: 'gateway', transport: transport as never, queryClient } });
+    const result = await performComment({ postId: 'p1', content: '  ', author, media: [], deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent } });
     expect(result.ok).toBe(false);
     expect(calls).toHaveLength(0);
   });

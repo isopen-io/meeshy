@@ -20,7 +20,7 @@ import { appendReply, commentRepliesQueryKey, dropReply, settleReply } from './c
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import type { FeedAuthor, FeedMedia } from './feed-pages';
-import type { ApiResult, Credential, HttpTransport } from './http';
+import type { ApiFailure, ApiResult, Credential, HttpTransport } from './http';
 import type { OwnerCredential } from './owner-session';
 import type { PostMediaUploadResult } from './post-media-upload';
 import { outcomeOf } from './outcome';
@@ -379,12 +379,24 @@ const stickerRowOf = (send: CommentStickerSend | undefined, media?: readonly Pos
 };
 
 /**
- * `owner` — LA SESSION DE L'AUTEUR, lue dans le tour de la requête (#9743,
- * `owner-session.ts`) : fourni (le site de production, `commentAction`), un
- * envoi dont l'auteur n'est plus le lecteur connecté ne part pas, et la
- * requête porte SON jeton, jamais celui que le transport relirait plus tard.
+ * `owner` — LA SESSION DE L'AUTEUR, OBLIGATOIRE (#9743, `owner-session.ts`) :
+ * lue dans le tour de la requête, qui porte SON jeton ; relue au retour, avant
+ * toute écriture — le cache est celui du lecteur COURANT, et rien ne se range
+ * sous la portée d'un auteur parti. Absente ou muette : rien ne part.
  */
-export type CommentSendDeps = CommentDeps & { readonly queryClient: QueryClient; readonly owner?: OwnerCredential };
+export type CommentSendDeps = CommentDeps & { readonly queryClient: QueryClient; readonly owner: OwnerCredential };
+
+const ownerOf = (deps: CommentSendDeps, authorId: string): Credential | null =>
+  typeof deps.owner === 'function' ? deps.owner(`u_${authorId}`) : null;
+
+/** 409 `MUTATION_IN_FLIGHT` — la première tentative est EN COURS sur la passerelle : attendre, jamais défaire. */
+export const commentStillInFlight = (failure: ApiFailure): boolean => failure.status === 409 && failure.code === 'MUTATION_IN_FLIGHT';
+
+const passing = (failure: ApiFailure): boolean => outcomeOf(failure) !== 'permanent' || commentStillInFlight(failure);
+
+/** L'auteur n'est plus le lecteur connecté au retour : on rend l'issue sans rien écrire. */
+const afterOwnerLeft = (result: ApiResult<PostComment> | null): CommentResult =>
+  result !== null && result.ok ? { ok: true } : { ok: false, message: COMMENT_FAILED_MESSAGE };
 
 /**
  * L'ENVOI — optimiste, puis l'issue, exactement la forme de
@@ -423,7 +435,7 @@ export async function performComment(params: {
   }
   const parentId = typeof params.parentId === 'string' && params.parentId !== '' ? params.parentId : undefined;
   if (parentId !== undefined) return performReply({ ...params, content, parentId });
-  const credential = deps.owner?.(`u_${author.id}`);
+  const credential = ownerOf(deps, author.id);
   if (credential === null) return { ok: false, message: COMMENT_FAILED_MESSAGE };
 
   const tempId = newClientMessageId();
@@ -447,7 +459,8 @@ export async function performComment(params: {
     ...stickerBodyOf(params.sticker, params.media),
   };
 
-  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId), ...(credential === undefined ? {} : { credential }) }).catch(() => null);
+  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId), credential }).catch(() => null);
+  if (ownerOf(deps, author.id) === null) return afterOwnerLeft(result);
   const wait = () => parkUnsent({ tempId, authorId: author.id, postId, body, row: optimistic, pieces: params.pieces });
 
   if (result === null) {
@@ -467,7 +480,7 @@ export async function performComment(params: {
   }
 
   /* Un STATUT servi est un fait de PASSERELLE, jamais de réseau. */
-  if (outcomeOf(result) !== 'permanent') {
+  if (passing(result)) {
     wait();
     return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
   }
@@ -523,7 +536,7 @@ async function performReply(params: {
   readonly deps: CommentSendDeps;
 }): Promise<CommentResult> {
   const { postId, content, parentId, author, deps } = params;
-  const credential = deps.owner?.(`u_${author.id}`);
+  const credential = ownerOf(deps, author.id);
   if (credential === null) return { ok: false, message: COMMENT_FAILED_MESSAGE };
   const tempId = newClientMessageId();
   const optimistic: PostComment = {
@@ -549,7 +562,8 @@ async function performReply(params: {
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
     ...stickerBodyOf(params.sticker, params.media),
   };
-  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId), ...(credential === undefined ? {} : { credential }) }).catch(() => null);
+  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId), credential }).catch(() => null);
+  if (ownerOf(deps, author.id) === null) return afterOwnerLeft(result);
   const wait = () => parkUnsent({ tempId, authorId: author.id, postId, parentId, body, row: optimistic, pieces: params.pieces });
 
   if (result === null) {
@@ -566,7 +580,7 @@ async function performReply(params: {
     return { ok: true };
   }
 
-  if (outcomeOf(result) !== 'permanent') {
+  if (passing(result)) {
     wait();
     return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
   }

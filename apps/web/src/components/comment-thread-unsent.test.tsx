@@ -77,6 +77,11 @@ async function settle(): Promise<void> {
   });
 }
 
+/** Attendre un FAIT, pas une durée : sous charge, un rejeu prend plus que deux tours. */
+async function jusquà(predicate: () => boolean): Promise<void> {
+  for (let tour = 0; tour < 200 && !predicate(); tour += 1) await settle();
+}
+
 const okUpload: CommentMediaUpload = async (): Promise<ApiResult<PostMediaUploadResult>> => ({
   ok: true,
   status: 201,
@@ -208,8 +213,7 @@ describe('un commentaire non envoyé reste dans le fil, relançable (#9743)', ()
     attendre('cid_attente-2');
     const host = await mountThread();
     await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-send-retry]')?.click());
-    await settle();
-    await settle();
+    await jusquà(() => unsentComments.getState().entries.length === 0 && host.querySelector('[data-comment-pending]') === null);
     expect(unsentComments.getState().entries).toHaveLength(0);
     expect(host.querySelector('[data-comment-pending]')).toBeNull();
     expect(host.textContent).toContain('Parti hors ligne');
@@ -221,8 +225,7 @@ describe('un commentaire non envoyé reste dans le fil, relançable (#9743)', ()
     const host = await mountThread();
     expect(unsentComments.getState().entries).toHaveLength(1);
     await act(async () => setOnline(true));
-    await settle();
-    await settle();
+    await jusquà(() => unsentComments.getState().entries.length === 0 && host.querySelector('[data-comment-pending]') === null);
     expect(unsentComments.getState().entries).toHaveLength(0);
     expect(host.querySelector('[data-comment-pending]')).toBeNull();
   });
@@ -230,7 +233,7 @@ describe('un commentaire non envoyé reste dans le fil, relançable (#9743)', ()
   test('à l’OUVERTURE du fil en ligne, il repart seul', async () => {
     attendre('cid_attente-4');
     const host = await mountThread();
-    await settle();
+    await jusquà(() => unsentComments.getState().entries.length === 0);
     expect(unsentComments.getState().entries).toHaveLength(0);
     expect(host.textContent).toContain('Parti hors ligne');
   });

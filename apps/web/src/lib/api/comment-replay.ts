@@ -1,12 +1,14 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { commentDrafts } from '@/lib/comments/comment-draft';
+import { forgetUploadedCommentMedia } from '@/lib/comments/comment-media';
 import { unsentComments, unsentOf, type UnsentComment } from '@/lib/comments/unsent-comments';
 
 import { commentRepliesQueryKey, dropReply, settleReply } from './comment-replies';
 import { outcomeOf } from './outcome';
 import type { OwnerCredential } from './owner-session';
 import {
+  commentStillInFlight,
   commentsQueryKey,
   dropComment,
   insertComment,
@@ -77,6 +79,8 @@ function undo(queryClient: QueryClient, entry: UnsentComment): void {
 }
 
 function giveBack(entry: UnsentComment): void {
+  /* Refusé pour de bon : ces pièces ne sont plus « déjà montées » — un nouvel envoi les retéléverse. */
+  forgetUploadedCommentMedia(entry.pieces);
   const draft = commentDrafts.get(entry.scope, entry.postId);
   if (draft.text.trim() !== '' || draft.pending.length > 0) return;
   commentDrafts.set(entry.scope, entry.postId, { text: entry.row.content, pending: entry.pieces });
@@ -114,10 +118,14 @@ export async function replayUnsentComment(deps: ReplayDeps, tempId: string): Pro
     }
     return 'sent';
   }
-  if (result !== null && outcomeOf(result) === 'permanent') {
-    if (stillOwner) undo(deps.queryClient, entry);
+  /* 409 `MUTATION_IN_FLIGHT` : la première tentative se crée encore — elle attend, rien n'est défait. */
+  if (result !== null && outcomeOf(result) === 'permanent' && !commentStillInFlight(result)) {
     store.remove(tempId);
-    giveBack(entry);
+    /* L'auteur parti, rien ne se réécrit : ni le cache du lecteur courant, ni un brouillon sous sa portée. */
+    if (stillOwner) {
+      undo(deps.queryClient, entry);
+      giveBack(entry);
+    }
     return 'refused';
   }
   store.mark(tempId, 'unsent');
