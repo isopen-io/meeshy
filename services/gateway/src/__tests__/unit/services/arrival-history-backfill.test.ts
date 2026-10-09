@@ -65,6 +65,8 @@ function monde(options: {
   allowViewHistory?: boolean;
   conversation?: MongoDocument | null;
   linkGrantsFail?: boolean;
+  clearHistoryBefore?: Date;
+  hiddenMessageIds?: string[];
 }) {
   const traduits: Array<{ id: string; langue: string }> = [];
   const prisma = {
@@ -75,6 +77,12 @@ function monde(options: {
     },
     participant: {
       findMany: jest.fn(async () => options.participants ?? [hote, invite()]),
+    },
+    userConversationPreferences: {
+      findFirst: jest.fn(async () => (options.clearHistoryBefore ? { clearHistoryBefore: options.clearHistoryBefore } : null)),
+    },
+    userMessageDeletion: {
+      findMany: jest.fn(async () => (options.hiddenMessageIds ?? []).map((messageId) => ({ messageId }))),
     },
     conversationShareLink: {
       findMany: jest.fn(async () => {
@@ -98,8 +106,8 @@ function monde(options: {
   return { prisma, deps, traduits, ids: () => traduits.map((t) => t.id) };
 }
 
-const rattraper = (deps: ArrivalBackfillDeps, language = 'en') =>
-  backfillHistoryForArrival(deps, { conversationId: CONV, language, arrivedAt: ARRIVEE });
+const rattraper = (deps: ArrivalBackfillDeps, language = 'en', readerUserId: string | null = null) =>
+  backfillHistoryForArrival(deps, { conversationId: CONV, language, arrivedAt: ARRIVEE, readerUserId });
 
 describe('#9709 — la langue qui arrive reçoit l’historique récent traduit', () => {
   it('traduit vers elle les messages écrits AVANT l’arrivée', async () => {
@@ -216,6 +224,33 @@ describe('#9709 — FAIL-CLOSED : un message protégé ne part vers aucune langu
   });
 });
 
+describe('#9709 — le rattrapage respecte ce que le lecteur qui revient a masqué de SA vue', () => {
+  it('ni l’historique qu’il a effacé, ni les messages qu’il a supprimés pour lui', async () => {
+    const m = monde({
+      messages: [
+        message('avant-effacement', { createdAt: minutesAvant(40) }),
+        message('supprime-pour-lui', { createdAt: minutesAvant(10) }),
+        message('visible', { createdAt: minutesAvant(5) }),
+      ],
+      clearHistoryBefore: minutesAvant(30),
+      hiddenMessageIds: ['supprime-pour-lui'],
+    });
+
+    await rattraper(m.deps, 'en', 'u-revenant');
+
+    expect(m.ids()).toEqual(['visible']);
+  });
+
+  it('un invité sans compte n’a rien à masquer — aucune lecture de masquage', async () => {
+    const m = monde({ messages: [message('m1')] });
+
+    await rattraper(m.deps);
+
+    expect(m.prisma.userConversationPreferences.findFirst).not.toHaveBeenCalled();
+    expect(m.ids()).toEqual(['m1']);
+  });
+});
+
 describe('#9709 — la traduction se diffuse à la ROOM : aucun membre ne reçoit ce qu’il n’a pas le droit de lire', () => {
   it('un invité SANS historique a pour plancher son arrivée : rien n’est rattrapé, rien n’est même lu', async () => {
     const m = monde({ messages: [message('m1'), message('m2')], allowViewHistory: false });
@@ -274,9 +309,9 @@ describe('#9709 — l’arrivée annoncée déclenche le rattrapage, une fois pa
     const backfill = new ArrivalHistoryBackfill(m.deps, () => ARRIVEE);
     ouverts.push(backfill);
 
-    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'EN-us' });
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'EN-us', readerUserId: null });
     await flush();
-    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en' });
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en', readerUserId: null });
     await flush();
 
     expect(m.traduits).toEqual([{ id: 'm1', langue: 'en' }]);
@@ -288,7 +323,7 @@ describe('#9709 — l’arrivée annoncée déclenche le rattrapage, une fois pa
     ouverts.push(backfill);
 
     for (const language of ['en', 'es', 'de', 'it']) {
-      announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language });
+      announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language, readerUserId: null });
       await flush();
     }
 
@@ -300,10 +335,10 @@ describe('#9709 — l’arrivée annoncée déclenche le rattrapage, une fois pa
     const backfill = new ArrivalHistoryBackfill(m.deps, () => ARRIVEE);
     ouverts.push(backfill);
 
-    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en' });
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en', readerUserId: null });
     await flush();
     m.prisma.conversationShareLink.findMany.mockImplementation(async () => [{ id: 'lnk', allowViewHistory: true }]);
-    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en' });
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en', readerUserId: null });
     await flush();
 
     expect(m.ids()).toEqual(['m1']);
@@ -317,7 +352,7 @@ describe('#9709 — l’arrivée annoncée déclenche le rattrapage, une fois pa
     const sendTranslationRequest = jest.fn(async (_request: unknown) => 'task-1');
     (svc as unknown as { zmqClient: unknown }).zmqClient = { sendTranslationRequest, close: jest.fn(async () => undefined) };
 
-    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en' });
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en', readerUserId: null });
     for (let i = 0; i < 10; i += 1) await flush();
 
     expect(sendTranslationRequest).toHaveBeenCalledWith(

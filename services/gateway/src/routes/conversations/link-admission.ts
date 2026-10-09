@@ -307,7 +307,7 @@ async function joinAsGuest(
       },
     },
   });
-  announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: profile.language });
+  announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: profile.language, readerUserId: null });
 
   await postJoinSystemMessage(
     { prisma, broadcast },
@@ -413,7 +413,7 @@ async function joinAsRegistered(
       },
     });
   }
-  announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: linkMemberFields.language });
+  announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: linkMemberFields.language, readerUserId: userId });
 
   await postJoinSystemMessage(
     { prisma, broadcast },

@@ -323,6 +323,10 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // lecture des CANDIDATS avis de la fenêtre (identité et marque, aucun contenu)
   // dont il tire ce qu'il écarte — d'où une application pour deux lectures.
   'unreadCountOfParticipant.ts': { kind: 'applies', reads: 2, applications: 1 },
+  // #9709 — le rattrapage traduit l'historique pour le lecteur qui ARRIVE : ce
+  // qu'il a masqué de sa vue (historique effacé, messages supprimés pour lui)
+  // ne lui est pas retraduit. Un invité sans compte n'a rien à masquer.
+  'message-translation/ArrivalHistoryBackfill.ts': { kind: 'applies', reads: 1, applications: 1 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes

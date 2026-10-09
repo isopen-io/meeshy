@@ -896,7 +896,7 @@ export function registerSharingRoutes(
       if (entry.outcome === 'rejoin' && entry.participantId) {
         invalidateParticipantLookup(entry.participantId, conversationId);
       }
-      announceConversationLanguageChange({ kind: 'arrival', conversationId, language: invitedMemberFields.language });
+      announceConversationLanguageChange({ kind: 'arrival', conversationId, language: invitedMemberFields.language, readerUserId: userId });
 
       // `social.conversation_invite` (#8959) — même crédit que
       // `POST …/participants` : une fois par personne et par conversation.

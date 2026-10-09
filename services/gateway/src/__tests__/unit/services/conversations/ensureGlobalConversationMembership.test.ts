@@ -448,6 +448,6 @@ describe('#9708 — l’entrée au salon global est annoncée à la composition 
       desabonner();
     }
 
-    expect(annonces).toEqual([{ kind: 'arrival', conversationId: GLOBAL_CONV.id, language: 'es' }]);
+    expect(annonces).toEqual([{ kind: 'arrival', conversationId: GLOBAL_CONV.id, language: 'es', readerUserId: USER_ID }]);
   });
 });

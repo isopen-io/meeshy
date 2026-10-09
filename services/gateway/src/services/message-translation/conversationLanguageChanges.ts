@@ -28,7 +28,13 @@ const logger = enhancedLogger.child({ module: 'ConversationLanguageChanges' });
  * Redis pub/sub se branche.
  */
 export type ConversationLanguageChange =
-  | { readonly kind: 'arrival'; readonly conversationId: string; readonly language: string }
+  | {
+      readonly kind: 'arrival';
+      readonly conversationId: string;
+      readonly language: string;
+      /** Le compte qui arrive — `null` pour un invité sans ligne `User`. Son masquage personnel borne le rattrapage. */
+      readonly readerUserId: string | null;
+    }
   | { readonly kind: 'departure'; readonly conversationId: string }
   | { readonly kind: 'reader-languages'; readonly userId: string };
 

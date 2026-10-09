@@ -356,7 +356,7 @@ export async function leverBannissementDeParticipant(
   })
   invalidateParticipantLookup(targetParticipant.id, id)
   if (unban.membershipRestored) {
-    announceConversationLanguageChange({ kind: 'arrival', conversationId: id, language: targetParticipant.language })
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: id, language: targetParticipant.language, readerUserId: targetParticipant.userId })
   }
 
   const manager = socketIO?.getManager()

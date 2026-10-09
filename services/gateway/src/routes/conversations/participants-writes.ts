@@ -323,7 +323,7 @@ export function registerParticipantWriteRoutes(
       }).catch(() => undefined);
     }
 
-    announceConversationLanguageChange({ kind: 'arrival', conversationId, language: addedMemberFields.language });
+    announceConversationLanguageChange({ kind: 'arrival', conversationId, language: addedMemberFields.language, readerUserId: userId });
 
     // Annoncer l'arrivée — quatrième et dernière porte, même loi. Une entrée
     // qui ne se voit pas dans le fil est une entrée que les présents

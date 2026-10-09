@@ -143,7 +143,12 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   'emitConversationPreviewUpdate.ts': { kind: 'applies', reads: 1, applications: 1 },
 
   'handlers/ReactionHandler.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
-  'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 7, why: DOES_NOT_SELECT_SENDER },
+  // 7 → 6 (#9709) : la livraison d'une traduction texte est partie, entière,
+  // dans `deliverTextTranslation.ts` (déclaré juste en dessous) — sa lecture
+  // (`conversationId`, `senderId` scalaire, `createdAt`) a changé de fichier,
+  // pas de nature.
+  'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 6, why: DOES_NOT_SELECT_SENDER },
+  'deliverTextTranslation.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -190,6 +195,10 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // par exhaustivité avec #6516, qui l'énumérait explicitement.)
   'message-translation/EncryptionHelper.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'message-translation/MessageTranslationService.ts': { kind: 'exempt', reads: 8, why: DOES_NOT_SELECT_SENDER },
+  // #9709 — le rattrapage d'une langue qui arrive lit le contenu, la langue,
+  // les traductions et les colonnes de protection ; `senderId` est le SCALAIRE,
+  // jamais la relation `sender`.
+  'message-translation/ArrivalHistoryBackfill.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // 12 → 11 (#7199) : le calcul de non-lu a QUITTÉ ce fichier pour
   // `unreadCountsCore.ts` (déclaré plus bas), afin que la liste et le push
   // temps réel comptent par la même implémentation. Aucune lecture n'a
