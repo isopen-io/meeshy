@@ -14,9 +14,15 @@
 //               { type: 'attendre', ms } · { type: 'fichier', nom } (dépose un fichier dans Documents/vitrine)
 //
 // Les durées du jeu sont celles de `GameTimeline` (apps/ios/Meeshy/Features/Main/Game/Choreography).
+//
+// Le CLAP (#9810) : après « prêt », l'app attend `go.txt` avant d'agir (repli 3 s sans tournage). Le
+// script le dépose comme dernier geste, AVANCE_MS après le démarrage de l'enregistreur — qui part
+// 0,4 à 2 s après « prêt » : l'action ne commence jamais hors du film.
 
 const CELEBRATION = { debut: { marqueur: 'celebration-debut.txt' }, fin: { marqueur: 'celebration-fin.txt' } }
 const MARGES_JEU = { avantMs: 600, apresMs: 900 }
+const CLAP = { type: 'fichier', nom: 'go.txt' }
+const GESTES_CLAP = { iphone: [CLAP], ipad: [CLAP] }
 
 const jeu = (scene, { dureeMs, mouvement, imagesCles }) => ({
   scene,
@@ -28,7 +34,7 @@ const jeu = (scene, { dureeMs, mouvement, imagesCles }) => ({
   marges: MARGES_JEU,
   mouvement,
   imagesCles,
-  gestes: { iphone: [], ipad: [] },
+  gestes: GESTES_CLAP,
 })
 
 export const SCENES_FILMEES = {

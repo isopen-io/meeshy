@@ -27,6 +27,16 @@ describe('plan de prise (#9806)', () => {
     }
   })
 
+  test('chaque scène filmée donne le clap go.txt sur les deux appareils : l’app n’agit qu’une fois l’enregistreur lancé', () => {
+    for (const scene of Object.keys(SCENES_FILMEES)) {
+      for (const appareil of APPAREILS) {
+        const { gestes } = planDePrise({ scene, appareil })
+        expect(gestes.filter((g) => g.type === 'fichier' && g.nom === 'go.txt')).toHaveLength(1)
+        expect(gestes.at(-1)).toEqual({ type: 'fichier', nom: 'go.txt' })
+      }
+    }
+  })
+
   test('les durées sont celles de GameTimeline', () => {
     const durees = Object.fromEntries(JEU.map((s) => [s, SCENES_FILMEES[s].dureeMs]))
     expect(durees).toEqual({ 'jeu-rang': 1600, 'jeu-coffre': 1400, 'jeu-frappe': 1200, 'jeu-niveau': 600, 'jeu-badge': 700 })
