@@ -13,7 +13,7 @@ import SwiftUI
 // grande détente. Clavier, panneau, zone d'aperçu, bandeau de réponse — tout
 // ce qui grandit le composeur est couvert par la même mesure.
 
-enum CommentSheetFit {
+nonisolated enum CommentSheetFit {
     /// L'espace de coordonnées de la zone de contenu de la feuille : son
     /// origine est le BAS de l'en-tête.
     static let space = "comment-sheet-content"
