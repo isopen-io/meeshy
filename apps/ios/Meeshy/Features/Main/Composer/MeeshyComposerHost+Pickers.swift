@@ -178,13 +178,14 @@ extension MeeshyComposerHost {
     /// qui arme un format au chevron puis touche « Publier » (#9820).
     func preterLeComposeurALaVitrine() {
         let media = VitrineRendu.shared.composeurAffiche { handleRailDoor(.sticker) }
-        VitrineRendu.shared.composeurPretAPublier { choix in
-            chooseArmedPublish(choix)
-            requestSoclePublish(choix)
-        }
+        VitrineRendu.shared.composeurPretAPublier(armer: { chooseArmedPublish($0) }, publier: { requestSoclePublish($0) })
         guard let media else { return }
         openingPickFoundsScenes = true
-        routePickedMedia([ComposerDocumentMediaFactory.media(url: media.url, declaredMimeType: media.mimeType)])
+        // La durée se mesure comme à l'ingestion de la photothèque : sans elle, un réel n'est jamais qualifié.
+        Task {
+            let duree = await ComposerMediaProbe.durationMs(forURL: media.url, mime: media.mimeType)
+            routePickedMedia([ComposerDocumentMediaFactory.media(url: media.url, declaredMimeType: media.mimeType, durationMs: duree)])
+        }
     }
     #endif
 

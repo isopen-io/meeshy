@@ -101,10 +101,12 @@ enum VitrineInteractions {
         }
         appuyer(messageId)
         await VitrineRendu.shared.attendre([.menuDeReactions])
+        VitrineTournage.etape("menu")
         try? await Task.sleep(for: tenueDuMenu)
         guard let reagir = VitrineRendu.shared.reagirAuMenu else {
             fatalError("Vitrine « \(scene.rawValue) » : la bande du menu n'a pas prêté son geste")
         }
+        VitrineTournage.etape("choix")
         reagir(emojiDuMessage)
         try? await Task.sleep(for: tenueDeLaReaction)
     }
@@ -117,7 +119,9 @@ enum VitrineInteractions {
         }
         ouvrir(.progressionConcept(concept))
         await VitrineRendu.shared.attendre([.fiche(concept)])
+        VitrineTournage.etape("fiche")
         try? await Task.sleep(for: VitrineStage.pose)
+        VitrineTournage.etape("frappe")
         await VitrineJeu.jouerSurLaFiche(scene)
     }
 }

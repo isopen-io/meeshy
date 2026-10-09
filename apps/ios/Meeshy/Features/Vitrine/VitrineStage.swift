@@ -1,6 +1,7 @@
 #if DEBUG
 import Combine
 import Foundation
+import GRDB
 import MeeshySDK
 import MeeshyUI
 import UIKit
@@ -54,10 +55,24 @@ enum VitrineStage {
     /// d'écrire), et les racines lisent le fil et les médias dès leur montage (#8922).
     static func remplirLesCaches() async {
         guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
+        await repartirANeuf()
         do {
             try await VitrineSeeder.remplirLesCaches(f, medias: VitrineLaunch.dossierMedias, dans: VitrineSeedTargetsReels())
         } catch {
             fatalError("Vitrine « \(scene.rawValue) » : fil et médias impossibles à ranger — \(error)")
+        }
+    }
+
+    /// Une prise précédente a pu laisser une publication dans la file durable et un brouillon au composeur : rejoués, ils
+    /// ajouteraient un réel fantôme au fil et des scènes au composeur, d'une prise à l'autre (#9820). Le compte de la
+    /// vitrine — le seul que la vitrine accepte, `VitrineSession.verifierProprietaire` — repart donc à neuf, avant que la
+    /// file ne se vide au démarrage.
+    private static func repartirANeuf() async {
+        ComposerAutosaveStore.shared.deleteAll()
+        do {
+            _ = try await DependencyContainer.shared.dbPool.write { db in try OutboxRecord.deleteAll(db) }
+        } catch {
+            fatalError("Vitrine : la file durable d'une prise précédente n'a pas pu être vidée — \(error)")
         }
     }
 

@@ -61,7 +61,13 @@ extension OutboxDispatcher {
                     userInfo: [NSLocalizedDescriptionKey: "No baseURL or auth token to upload post media"]
                 )
             }
+            #if DEBUG
+            // La vitrine (#9820) : le VRAI téléverseur, servi par le serveur TUS de la vitrine — aucune requête ne part.
+            let sessionDeLaVitrine = await VitrineReel.sessionDeTeleversement
+            let uploader = TusUploadManager(baseURL: baseURL, urlSession: sessionDeLaVitrine ?? .shared)
+            #else
             let uploader = TusUploadManager(baseURL: baseURL)
+            #endif
             // **Ce qu'une tentative PRÉCÉDENTE a déjà monté** (#5830), relu
             // depuis la ligne elle-même. Sans cette carte, chaque rejeu
             // repartait de l'index 0 et jetait tout ce que le précédent avait
@@ -280,13 +286,24 @@ extension OutboxDispatcher {
             // le serveur ne l'apprenait jamais.
             allowSoundExtraction: payload.allowSoundExtraction
         )
-        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            PostsEndpoint.root,
-            method: "POST",
-            body: try JSONEncoder().encode(body),
-            queryItems: nil,
-            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
-        )
+        #if DEBUG
+        // La vitrine (#9820) : elle crée le post et l'annonce au fil quand elle est installée ; sinon la requête part.
+        let televerses = zip(uploadedSourceIndexes, zip(uploadedIds, uploadedUrls)).map { index, piece in
+            VitrineTeleverse(id: piece.0, url: piece.1, mimeType: payload.declaredMimeType(at: index) ?? "application/octet-stream")
+        }
+        let dejaServi = try await VitrineReel.creerSiInstallee(body, televerses: televerses) != nil
+        #else
+        let dejaServi = false
+        #endif
+        if !dejaServi {
+            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+                PostsEndpoint.root,
+                method: "POST",
+                body: try JSONEncoder().encode(body),
+                queryItems: nil,
+                headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+            )
+        }
         for path in uploadedLocalPaths {
             do { try FileManager.default.removeItem(atPath: path) } catch {
                 logger.warning("createPost: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
