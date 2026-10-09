@@ -124,8 +124,15 @@ final class ComposerReturnMediaTests: XCTestCase {
                        "La prise ne passe plus par la scène (#9295).")
         XCTAssertTrue(code.contains("ComposerViewfinder {"),
                       "La caméra de la barre ouvre le viseur plein écran.")
-        XCTAssertTrue(code.contains("stageSceneMedia(ComposerReturnedMedia(capture: result))"),
-                      "La prise rejoint le message par le chemin de pose d'une scène terminée.")
+        let compact = code.components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(compact.contains("ComposerViewfinder{resultinstageCapture(result)}"),
+                      "La prise rejoint le message par le chemin de pose d'une capture (#9775).")
+        XCTAssertTrue(compact.contains("funcstageCapture(_capture:CameraResult){switchComposerReturnedMedia(capture:capture)"),
+                      "La prise se pose comme un média retouché, image ou vidéo.")
+        XCTAssertTrue(compact.contains("handleCameraCapture(image,capturedInApp:true)"),
+                      "Une photo du viseur de la barre part déclarée capturée dans l'app (#9775).")
+        XCTAssertTrue(compact.contains("handleCameraVideo(url,capturedInApp:true)"),
+                      "Une vidéo du viseur de la barre part déclarée capturée dans l'app (#9775).")
     }
 
     @MainActor
