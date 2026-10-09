@@ -66,7 +66,7 @@ export const SCENES_FILMEES = {
   // Couvercle 0–0,4 s, récompenses à 0,5 / 0,8 / 1,1 s (0,3 s chacune).
   'jeu-coffre': jeu('jeu-coffre', {
     dureeMs: 1400,
-    mouvement: [[40, 340], [530, 1360]],
+    mouvement: [[40, 340], [600, 1150]],
     imagesCles: [{ nom: 'coffre-ouvert', instantMs: 450 }, { nom: 'recompenses', instantMs: 1500 }],
   }),
   // Plaque 0–0,3 s, marteau jusqu'à l'impact 0,45 s, retournement 0,55–1,2 s.
