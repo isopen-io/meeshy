@@ -72,10 +72,13 @@ extension VitrineInteractions {
             fatalError("Vitrine « \(scene.rawValue) » : aucun vocal à envoyer, ou le composeur n'a pas prêté son envoi")
         }
         envoyer(copie, vocal.duree)
-        let cree = await serveur.attendreLaCreation()
+        _ = await serveur.attendreLaCreation()
         VitrineTournage.etape("creation")
         try? await Task.sleep(for: avantLeDefilement)
-        VitrineRendu.shared.montrerUnCommentaire?(cree.id)
+        guard let montrer = VitrineRendu.shared.montrerLesCommentaires else {
+            fatalError("Vitrine « \(scene.rawValue) » : le détail du post n'a pas prêté son défilement")
+        }
+        montrer()
         try? await Task.sleep(for: avantLaTranscription)
         VitrineTournage.etape("transcription")
         if let transcription = serveur.transcriptionArrivee() { SocialSocketManager.shared.commentMediaUpdated.send(transcription) }
