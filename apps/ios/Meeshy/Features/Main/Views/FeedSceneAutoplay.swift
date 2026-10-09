@@ -333,14 +333,15 @@ struct ReelCardSceneBackdrop: View, Equatable {
             sceneIndex: .constant(0),
             isPlaying: .constant(isActive),
             accentColorHex: accentColor,
-            carrier: StoryItem(id: post.id,
-                               content: post.content,
-                               media: post.media,
-                               storyEffects: post.storyEffects,
-                               createdAt: post.timestamp),
+            carrier: post.reelPlayedSceneCarrier,
             preferredContentLanguages: preferredContentLanguages
         )
         .aspectRatio(SceneShape.aspect, contentMode: .fill)
+        // **Le SOL de la scène.** Le canvas ne peint un fond que si la scène
+        // en déclare un (couleur, dégradé, média) ; sans lui il est
+        // transparent, et le texte de la scène se lisait à même le fil. Le
+        // lecteur de réels pose la même scène sur du noir : la carte aussi.
+        .background(Color.black)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

@@ -194,16 +194,27 @@ struct ReelFeedCard: View, Equatable {
     /// La scène que la carte REJOUE à la place du spectre (#9737) : le réel
     /// est composé, sans image ni vidéo, et son seul fichier est un son — de
     /// fond ou posé, ce son n'est pas son visuel. Le spectre reste le visuel du
-    /// réel audio SANS scène (`FeedPost.reelPrincipalAudioMedia`).
+    /// réel audio SANS scène (`FeedPost.reelPrincipalAudioMedia`). Un réel
+    /// composé REPUBLIÉ rejoue la scène de sa source (`StoryEffects.played`).
     private var soundSceneDocument: CanvasV3? {
-        guard media?.type == .audio, audioCover == nil else { return nil }
-        return post.reelSceneDocument
+        guard let document = post.reelPlayedSceneDocument,
+              Self.showsScene(mediaType: media?.type, hasCover: audioCover != nil) else { return nil }
+        return document
+    }
+
+    /// Un réel composé se montre par sa scène dès qu'il n'a NI vidéo NI image
+    /// à montrer : son seul fichier est un son, ou il n'en porte aucun (son de
+    /// bibliothèque) — sans quoi la carte restait un aplat de couleur.
+    nonisolated static func showsScene(mediaType: FeedMediaType?, hasCover: Bool) -> Bool {
+        guard !hasCover else { return false }
+        return mediaType == nil || mediaType == .audio
     }
 
     private var kind: ReelMediaKind {
         switch media?.type {
         case .video: return .video
         case .audio: return soundSceneDocument == nil ? .audio : .scene
+        case .none: return soundSceneDocument == nil ? .imageOnly : .scene
         default: return .imageOnly
         }
     }
