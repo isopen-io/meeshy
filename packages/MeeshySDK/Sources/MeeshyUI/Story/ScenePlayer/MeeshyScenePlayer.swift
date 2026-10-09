@@ -51,6 +51,12 @@ public struct MeeshyScenePlayer: View {
     private let servesLetterboxFill: Bool
     /// Le pont du parcours au doigt (#7878) — descend tel quel à l'hôte canvas.
     private let scrubber: ScenePlaybackScrubber?
+    /// Les pastilles des sons de premier plan se posent PAR le player (#9737).
+    /// `false` pour l'hôte qui les pose lui-même au-dessus de sa couche de
+    /// gestes — le lecteur de story.
+    private let stagesSoundChips: Bool
+    /// L'horloge des pastilles de CETTE surface.
+    @StateObject private var chipClock = SceneSoundChipClock()
     @Binding private var sceneIndex: Int
     @Binding private var isPlaying: Bool
     /// `startsPaused` réalisé : la commande de lecture n'est honorée qu'À PARTIR
@@ -80,6 +86,7 @@ public struct MeeshyScenePlayer: View {
                 startAt: Double = 0,
                 servesLetterboxFill: Bool = true,
                 scrubber: ScenePlaybackScrubber? = nil,
+                stagesSoundChips: Bool = true,
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
@@ -98,6 +105,7 @@ public struct MeeshyScenePlayer: View {
         self.startAt = startAt
         self.servesLetterboxFill = servesLetterboxFill
         self.scrubber = scrubber
+        self.stagesSoundChips = stagesSoundChips
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
@@ -226,6 +234,57 @@ public struct MeeshyScenePlayer: View {
 
     public var body: some View {
         host.onAppear { hasAppeared = true }
+            .overlay { soundChips }
+    }
+
+    /// La scène jouée pose-t-elle un son ? Lecture bon marché du document,
+    /// avant toute conversion : la plupart des scènes n'en portent aucun.
+    nonisolated static func sceneCarriesSound(in document: CanvasV3, sceneIndex: Int) -> Bool {
+        guard document.scenes.indices.contains(sceneIndex) else { return false }
+        return document.scenes[sceneIndex].objects.contains { $0.kind == .audio }
+    }
+
+    /// Les sons de la scène jouée, tels que l'hôte les lit.
+    var sceneAudios: [StoryAudioPlayerObject] {
+        guard Self.sceneCarriesSound(in: document, sceneIndex: sceneIndex) else { return [] }
+        return StoryEffects(rendering: document, sceneIndex: sceneIndex).audioPlayerObjects ?? []
+    }
+
+    /// **Les pastilles des sons de PREMIER PLAN** (#9737), sur toute surface
+    /// qui rejoue une scène. Un mode à chrome (lecteur, réel) les fenêtre sur
+    /// SON fil de position et laisse le toucher couper la piste ; la carte et
+    /// l'aperçu, muets par construction et sans fil de position, les montrent
+    /// toutes, muettes, sans prendre le toucher.
+    @ViewBuilder
+    private var soundChips: some View {
+        if stagesSoundChips {
+            let audios = sceneAudios
+            if !SceneAudioStageRule.stagedAudios(in: audios).isEmpty {
+                if config.showsChrome {
+                    ClockedSceneSoundChips(
+                        clock: chipClock,
+                        audios: audios,
+                        slideDuration: storyItem.toRenderableSlide(preferredLanguages: languages)
+                            .computedTotalDuration(),
+                        isHostMuted: Self.hostMute(config: config, requestedMute: requestedMute))
+                } else {
+                    SceneSoundChipLayer(audios: audios, isInteractive: false, isHostMuted: true)
+                }
+            }
+        }
+    }
+
+    /// Le fil de position servi à l'hôte : celui de la chrome, précédé du tic
+    /// de l'horloge des pastilles. Armé pour les seuls modes à chrome.
+    private var playbackRelay: ((Double) -> Void)? {
+        guard config.showsChrome else { return nil }
+        guard stagesSoundChips else { return playbackTimeHandler }
+        let clock = chipClock
+        let chrome = playbackTimeHandler
+        return { seconds in
+            clock.tick(seconds)
+            chrome?(seconds)
+        }
     }
 
     var host: StoryReaderRepresentable {
@@ -263,7 +322,7 @@ public struct MeeshyScenePlayer: View {
                                  onCompletion: loopHandler,
                                  onContentReady: contentReadyHandler,
                                  onContentProgress: contentProgressHandler,
-                                 onPlaybackTime: config.showsChrome ? playbackTimeHandler : nil,
+                                 onPlaybackTime: playbackRelay,
                                  onPlaybackProgressing: playbackProgressingHandler)
     }
 

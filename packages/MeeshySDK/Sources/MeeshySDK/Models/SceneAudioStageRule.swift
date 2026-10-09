@@ -14,19 +14,31 @@ public enum SceneAudioStagePresence: Equatable, Sendable {
     case chip(SceneAudioChipPose)
 }
 
+/// La forme d'une pastille de son. Le composeur n'en propose AUCUNE à ce
+/// jour et le fil n'en persiste pas : toute pastille est une capsule. Le type
+/// existe pour que la règle sache la porter le jour où le choix est tranché
+/// (#9739) — rien ne le lit dans le modèle.
+public enum SceneAudioChipShape: String, Equatable, Sendable {
+    case capsule
+}
+
 /// La pose d'une pastille de son, telle que le composeur l'a écrite : centre
-/// normalisé 0–1, échelle et rotation avec les défauts du fil (`1`, `0`).
+/// normalisé 0–1, échelle et rotation (en degrés) avec les défauts du fil
+/// (`1`, `0`).
 public struct SceneAudioChipPose: Equatable, Sendable {
     public let x: CGFloat
     public let y: CGFloat
     public let scale: Double
     public let rotation: Double
+    public let shape: SceneAudioChipShape
 
-    public init(x: CGFloat, y: CGFloat, scale: Double, rotation: Double) {
+    public init(x: CGFloat, y: CGFloat, scale: Double, rotation: Double,
+                shape: SceneAudioChipShape = .capsule) {
         self.x = x
         self.y = y
         self.scale = scale
         self.rotation = rotation
+        self.shape = shape
     }
 }
 
@@ -69,5 +81,32 @@ public extension FeedPost {
         guard reelSceneDocument == nil,
               let media = primaryReelDisplayMedia, media.type == .audio else { return nil }
         return media
+    }
+
+    /// Les effets que la carte d'un réel JOUE : les siens, ou ceux du réel
+    /// qu'il republie quand l'enveloppe est vide — le repli de
+    /// `StoryEffects.played` (#9677), étendu à la republication d'un réel.
+    var reelPlayedStoryEffects: StoryEffects? {
+        StoryEffects.played(own: storyEffects, ownMediaIsEmpty: media.isEmpty,
+                            source: repost?.storyEffects)
+    }
+
+    /// La scène que la carte du fil rejoue, republication comprise.
+    var reelPlayedSceneDocument: CanvasV3? {
+        guard let document = reelPlayedStoryEffects?.canvasV3, !document.scenes.isEmpty else { return nil }
+        return document
+    }
+
+    /// Le porteur de cette scène : médias ET effets d'un seul tenant — ceux du
+    /// post, ou ceux de sa source, jamais mêlés (leurs `postMediaId` se
+    /// répondent). L'identité reste celle du post CONTENANT.
+    var reelPlayedSceneCarrier: StoryItem {
+        let hasOwnContent = StoryEffects.republicationHasOwnContent(own: storyEffects,
+                                                                    ownMediaIsEmpty: media.isEmpty)
+        return StoryItem(id: id,
+                         content: hasOwnContent ? content : (repost?.content ?? content),
+                         media: hasOwnContent ? media : (repost?.media ?? []),
+                         storyEffects: reelPlayedStoryEffects,
+                         createdAt: timestamp)
     }
 }

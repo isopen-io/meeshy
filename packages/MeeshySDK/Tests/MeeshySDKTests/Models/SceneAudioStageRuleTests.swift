@@ -106,6 +106,58 @@ struct SceneAudioStageRuleTests {
         #expect(post.reelPrincipalAudioMedia?.id == "m-audio")
     }
 
+    // MARK: - La forme (aucune n'est proposée au composeur : capsule)
+
+    @Test("toute pastille est une capsule tant qu'aucune forme n'est choisie au composeur")
+    func everyChipIsACapsule() {
+        guard case .chip(let pose) = SceneAudioStageRule.presence(of: StoryAudioPlayerObject(id: "fg")) else {
+            Issue.record("un son de premier plan est une pastille")
+            return
+        }
+        #expect(pose.shape == .capsule)
+    }
+
+    // MARK: - Un réel composé REPUBLIÉ rejoue la scène de sa source
+
+    private func republished(own: StoryEffects? = nil, ownMedia: [FeedMedia] = []) -> FeedPost {
+        var effects = StoryEffects()
+        effects.audioPlayerObjects = [background()]
+        effects.canvasV3 = CanvasV3(scenes: [SceneV3(id: "s1", objects: [])])
+        let source = RepostContent(id: "source", author: "origine", content: "légende d'origine",
+                                   type: "REEL", storyEffects: effects, media: [sound])
+        var post = FeedPost(id: "enveloppe", author: "relais", authorId: "u2", type: "REEL", content: "",
+                            repost: source, media: ownMedia)
+        post.storyEffects = own
+        return post
+    }
+
+    @Test("une enveloppe vide joue la scène du réel qu'elle republie, médias et effets d'un seul tenant")
+    func anEmptyEnvelopePlaysTheSourceScene() {
+        let post = republished()
+
+        #expect(post.reelPlayedSceneDocument?.scenes.count == 1)
+        #expect(post.reelPlayedSceneCarrier.id == "enveloppe")
+        #expect(post.reelPlayedSceneCarrier.media.map(\.id) == ["m-audio"])
+        #expect(post.reelPlayedSceneCarrier.storyEffects?.canvasV3 != nil)
+        #expect(post.reelPlayedSceneCarrier.content == "légende d'origine")
+    }
+
+    @Test("une republication qui porte son propre média ne joue pas la scène de sa source")
+    func anEnvelopeWithItsOwnContentKeepsIt() {
+        let post = republished(ownMedia: [FeedMedia(id: "mine", type: .image, url: "/i.jpg")])
+
+        #expect(post.reelPlayedSceneDocument == nil)
+        #expect(post.reelPlayedSceneCarrier.media.map(\.id) == ["mine"])
+    }
+
+    @Test("un réel composé joue sa propre scène, avec ses propres médias")
+    func aComposedReelPlaysItsOwnScene() {
+        let post = reel(media: [sound], scenes: [SceneV3(id: "s1", objects: [])])
+
+        #expect(post.reelPlayedSceneDocument == post.reelSceneDocument)
+        #expect(post.reelPlayedSceneCarrier.media.map(\.id) == ["m-audio"])
+    }
+
     @Test("un réel vidéo n'a pas de son principal")
     func aVideoReelHasNoPrincipalAudio() {
         let post = reel(media: [FeedMedia(id: "v", type: .video, url: "/v.mp4"), sound], scenes: nil)

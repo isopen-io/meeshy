@@ -207,6 +207,13 @@ extension PostDetailView {
         return trackingDetailScene(
             reader
                 .aspectRatio(ratio, contentMode: .fit)
+                // Les sons de PREMIER PLAN de la scène, en pastille (#9737) —
+                // le son de fond se dit par l'en-tête au-dessus, jamais ici.
+                .overlay {
+                    SceneSoundChipLayer(audios: renderedItem.storyEffects?.audioPlayerObjects ?? [],
+                                        isInteractive: true,
+                                        isHostMuted: isCanvasMuted)
+                }
                 .frame(maxWidth: taille?.width ?? PostDetailSceneFraming.maxWidth)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         )
