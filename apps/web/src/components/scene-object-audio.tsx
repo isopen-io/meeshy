@@ -109,63 +109,49 @@ export function SceneObjectAudio({
   );
 }
 
-/** Le référentiel de design : 1080 de large (`cqw`, `lib/canvas/units.ts`). */
-const CHIP = { height: 84, padding: 28, gap: 14, font: 34, bar: 5, barGap: 5, maxBars: 24, wave: 96 } as const;
-const design = (value: number): string => cqw(value / 1080);
-
-/** Au plus `maxBars` barres, prises à pas régulier sur les échantillons gravés. */
-function chipBars(samples: readonly number[]): readonly number[] {
-  if (samples.length <= CHIP.maxBars) return samples;
-  return Array.from({ length: CHIP.maxBars }, (_, i) => samples[Math.round((i * (samples.length - 1)) / (CHIP.maxBars - 1))] ?? 0);
-}
+/** L'onde d'un enregistrement dont les échantillons manquent : jamais une pastille vide. */
+const RESTING_WAVE = [0.35, 0.7, 1, 0.5, 0.85, 0.4, 0.65] as const;
 
 /**
  * LA PASTILLE D'UN SON DE PREMIER PLAN (#9737, miroir `AudioForegroundChip`) —
  * sur la scène, à la place, l'échelle et la rotation de l'objet (le cadre les
  * pose), dans la forme de sa provenance (`sceneAudioChipForm`) : la note et
  * l'onde d'un enregistrement, la note et « titre · @auteur » d'un emprunt.
- * Immobile : aucune image n'est recalculée pendant la lecture. Un son de FOND
- * n'arrive jamais ici (`SceneCanvas` l'écarte, `sceneAudioPresence`).
+ * Cotes au référentiel 1080 (`cqw`). Immobile : aucune image n'est recalculée
+ * pendant la lecture. Un son de FOND n'arrive jamais ici (`SceneCanvas`
+ * l'écarte, `sceneAudioPresence`).
  */
 function SceneAudioChip({ object }: { readonly object: CanvasObject }) {
   const form = sceneAudioChipForm(object);
-  const bars = form.kind === 'recording' ? chipBars(form.samples) : [];
+  const recording = form.kind === 'recording';
   return (
     <span
       data-scene-audio-chip={form.kind}
-      {...(form.kind === 'recording' ? { 'aria-hidden': 'true' as const } : {})}
-      className="flex items-center whitespace-nowrap"
+      aria-hidden={recording ? true : undefined}
+      className="flex items-center whitespace-nowrap rounded-full font-semibold leading-none"
       style={{
-        height: design(CHIP.height),
-        gap: design(CHIP.gap),
-        padding: `0 ${design(CHIP.padding)}`,
-        borderRadius: 9999,
-        fontSize: design(CHIP.font),
-        lineHeight: 1,
-        fontWeight: 600,
+        height: cqw(84 / 1080),
+        gap: cqw(14 / 1080),
+        padding: `0 ${cqw(28 / 1080)}`,
+        fontSize: cqw(34 / 1080),
         backgroundColor: 'var(--color-scrim)',
         color: 'var(--color-on-media)',
       }}
     >
-      <span data-scene-audio-note="" aria-hidden="true" className="inline-grid shrink-0">
-        <GlyphSvg glyph={FEED_GLYPHS.musicNote} style={{ width: '1.1em', height: '1.1em' }} />
-      </span>
-      {form.kind === 'borrowed' ? (
-        form.label
-      ) : bars.length > 0 ? (
-        <span aria-hidden="true" className="flex items-center" style={{ gap: design(CHIP.barGap), height: '55%' }}>
-          {bars.map((level, i) => (
+      <GlyphSvg glyph={FEED_GLYPHS.musicNote} style={{ width: '1.1em', height: '1.1em' }} />
+      {recording ? (
+        <span className="flex items-center" style={{ gap: '.15em', width: '4em', height: '55%' }}>
+          {(form.samples.length > 0 ? form.samples : RESTING_WAVE).map((level, i) => (
             <span
               key={i}
-              data-scene-audio-bar=""
-              style={{ width: design(CHIP.bar), height: `${Math.round(Math.min(1, Math.max(0.12, level)) * 100)}%`, borderRadius: 9999, backgroundColor: 'currentColor' }}
+              {...(form.samples.length > 0 ? { 'data-scene-audio-bar': '' } : {})}
+              className="flex-1 rounded-full bg-current"
+              style={{ height: `${Math.round(Math.min(1, Math.max(0.12, level)) * 100)}%` }}
             />
           ))}
         </span>
       ) : (
-        <svg data-scene-audio-wave="" aria-hidden="true" viewBox="0 0 22 10" fill="none" style={{ width: design(CHIP.wave), height: '45%' }}>
-          <path d="M1 5 Q3.5 0 6 5 T11 5 T16 5 T21 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
+        form.label
       )}
     </span>
   );

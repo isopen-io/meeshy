@@ -227,15 +227,15 @@ describe('SceneObjectAudio — la pastille du son de premier plan (#9737)', () =
     const el = render(posed({ waveformSamples: [0.1, 0.5, 1, 0.3] }));
     const chip = el.querySelector('[data-scene-audio-chip="recording"]');
     expect(chip).not.toBeNull();
-    expect(chip?.querySelector('[data-scene-audio-note]')).not.toBeNull();
+    expect(chip?.querySelector('svg')).not.toBeNull();
     expect(chip?.querySelectorAll('[data-scene-audio-bar]').length).toBe(4);
     expect(chip?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  test('un enregistrement sans échantillons ⇒ la sinusoïde de repli, jamais une pastille vide', () => {
+  test('un enregistrement sans échantillons ⇒ l’onde de repos, jamais une pastille vide ni des barres qui se diraient les siennes', () => {
     const el = render(posed({}));
     const chip = el.querySelector('[data-scene-audio-chip="recording"]');
-    expect(chip?.querySelector('[data-scene-audio-wave]')).not.toBeNull();
+    expect(chip?.lastElementChild?.childElementCount).toBe(7);
     expect(chip?.querySelectorAll('[data-scene-audio-bar]').length).toBe(0);
   });
 
@@ -244,7 +244,7 @@ describe('SceneObjectAudio — la pastille du son de premier plan (#9737)', () =
     const chip = el.querySelector('[data-scene-audio-chip="borrowed"]');
     expect(chip?.textContent).toBe('Pluie · @sam');
     expect(chip?.querySelector('[data-scene-audio-bar]')).toBeNull();
-    expect(chip?.querySelector('[data-scene-audio-wave]')).toBeNull();
+    expect(chip?.getAttribute('aria-hidden')).toBeNull();
   });
 
   test('une piste que rien n’adresse ⇒ ni balise ni pastille : rien à annoncer', () => {

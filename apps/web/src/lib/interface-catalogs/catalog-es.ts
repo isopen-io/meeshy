@@ -87,7 +87,6 @@ const es = {
   'reels.sound.off': 'Silenciar',
   'reels.play': 'Reproducir el reel',
   'reels.pause': 'Pausar el reel',
-  'reels.media.error': 'No se puede reproducir — Reintentar',
   'reels.image': 'Imagen {index} de {count}',
 
   'stories.title': 'Historias',

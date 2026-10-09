@@ -37,7 +37,7 @@ const arMediaViewer = {
   'media.sound.credit': 'الصوت: {credit}',
   'media.sound.library': 'صوت من المكتبة',
   'media.sound.mute': 'كتم صوت الخلفية',
-  'media.sound.unmute': 'إعادة تشغيل صوت الخلفية',
+  'media.sound.unmute': 'تشغيل صوت الخلفية',
 };
 
 export default arMediaViewer;

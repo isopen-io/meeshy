@@ -36,8 +36,8 @@ const itMediaViewer = {
   'media.sound.original': 'Audio originale',
   'media.sound.credit': 'Audio: {credit}',
   'media.sound.library': 'Audio della libreria',
-  'media.sound.mute': 'Disattiva l’audio di sottofondo',
-  'media.sound.unmute': 'Riattiva l’audio di sottofondo',
+  'media.sound.mute': 'Disattiva il sottofondo',
+  'media.sound.unmute': 'Riattiva il sottofondo',
 };
 
 export default itMediaViewer;

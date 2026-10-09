@@ -100,7 +100,6 @@ const fr = {
   'reels.sound.off': 'Couper le son',
   'reels.play': 'Lire le réel',
   'reels.pause': 'Mettre le réel en pause',
-  'reels.media.error': 'Lecture impossible — Réessayer',
   'reels.image': 'Image {index} sur {count}',
 
   /* TOUTES LES STORIES (#6547) — `routes/stories.tsx`, même patron que le Flux. */

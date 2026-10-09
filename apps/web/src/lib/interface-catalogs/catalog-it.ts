@@ -87,7 +87,6 @@ const it = {
   'reels.sound.off': 'Disattiva l’audio',
   'reels.play': 'Riproduci il reel',
   'reels.pause': 'Metti in pausa il reel',
-  'reels.media.error': 'Riproduzione impossibile — Riprova',
   'reels.image': 'Immagine {index} di {count}',
 
   'stories.title': 'Storie',

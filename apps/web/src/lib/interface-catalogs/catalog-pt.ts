@@ -91,7 +91,6 @@ const pt = {
   'reels.sound.off': 'Silenciar',
   'reels.play': 'Reproduzir o reel',
   'reels.pause': 'Pausar o reel',
-  'reels.media.error': 'Não foi possível reproduzir — Tentar novamente',
   'reels.image': 'Imagem {index} de {count}',
 
   'stories.title': 'Stories',
