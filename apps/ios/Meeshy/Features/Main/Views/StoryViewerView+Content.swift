@@ -993,7 +993,7 @@ extension StoryViewerView {
                     // L'outbox elle-même a refusé la ligne : là, il n'y a plus
                     // de recours, on annule l'insert optimiste.
                     rollbackOptimisticComment(id: tempCommentId, parentId: parentId)
-                    HapticFeedback.error()
+                    returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
                 }
             }
         }

@@ -99,32 +99,6 @@ public protocol PostServiceProviding: Sendable {
     func removeBookmark(postId: String) async throws
     func getPost(postId: String) async throws -> APIPost
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?) async throws -> APIPostComment
-    /// Variante qui transporte un lieu partagé (`SharedPlace`) — même contrat
-    /// que le message et le post (Task 9 gateway). Requirement séparée (et non
-    /// un paramètre par défaut sur la précédente) pour que les conformeurs
-    /// existants (mocks) restent valides via le défaut ci-dessous, qui ignore
-    /// simplement `location` s'il n'est pas surchargé.
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment
-    /// Variante complète ET idempotente — envoie `clientMutationId` en header
-    /// `X-Client-Mutation-Id` pour que le gateway dédoublonne les rejeux et
-    /// ré-émette le cmid dans l'écho `comment:added` (réconciliation de la
-    /// ligne optimiste par l'émetteur). Requirement séparée pour que les
-    /// conformeurs existants restent valides via le défaut ci-dessous.
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?, location: SharedPlace?, clientMutationId: String?) async throws -> APIPostComment
-    /// Variante qui CITE un média du post commenté (#6578) — on n'envoie que
-    /// l'ANCRE, la nature étant dérivée du MIME par le serveur. Requirement
-    /// séparée, comme `location` et `clientMutationId` avant elle : les
-    /// conformeurs existants (mocks) restent valides par le défaut ci-dessous,
-    /// qui ignore simplement la citation.
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?, location: SharedPlace?, clientMutationId: String?, quotedPostMediaId: String?) async throws -> APIPostComment
-    /// Idempotent text-only variant — sends `clientMutationId` as the
-    /// `X-Client-Mutation-Id` header so the gateway `MutationLog` replays the
-    /// recorded result instead of duplicating the comment on retry (offline
-    /// outbox flush, notification quick-comment). A default implementation
-    /// forwards to the full `addComment` so existing conformers stay
-    /// source-compatible.
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, clientMutationId: String?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
     func unlikeComment(postId: String, commentId: String) async throws
     func deleteComment(postId: String, commentId: String) async throws
@@ -366,71 +340,12 @@ public extension PostServiceProviding {
         try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions)
     }
 
-    /// Convenience texte-seul (attachements = nil). Préserve les appels existants
-    /// depuis que `addComment` porte `attachmentIds` / `mobileTranscription` /
-    /// `originalLanguage` (les protocoles Swift ne supportent pas les valeurs par défaut).
-    func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
-        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
-                             attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
-    }
-
-    /// Défaut : un conformeur qui n'implémente que la signature sans
-    /// `location` (mocks existants) reste valide — la position est
-    /// simplement ignorée tant que le type ne surcharge pas cette méthode.
-    /// `PostService` la surcharge réellement plus bas.
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
-                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
-                    originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment {
-        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
-                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
-                             originalLanguage: originalLanguage)
-    }
-
-    /// Default for the idempotent variant: drop the mutation id and fall
-    /// through to the full `addComment`. `PostService` overrides this to send
-    /// the `X-Client-Mutation-Id` header; mocks may override to record it.
-    func addComment(
-        postId: String,
-        content: String,
-        parentId: String?,
-        effectFlags: Int?,
-        clientMutationId: String?
-    ) async throws -> APIPostComment {
-        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
-                             attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
-    }
-
     /// Défaut : les conformeurs existants (mocks) restent valides — un mock qui
     /// n'observe pas l'édition n'a pas à l'implémenter, et un test qui
     /// l'exercerait sans surcharge échoue explicitement.
     func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?, originalLanguage: String?) async throws -> APIPostComment {
         throw NSError(domain: "PostServiceProviding", code: -1,
                       userInfo: [NSLocalizedDescriptionKey: "updateComment not implemented by this conformer"])
-    }
-
-    /// Défaut de la variante complète idempotente : ignore le cmid et retombe
-    /// sur la variante complète — les mocks existants restent valides tant
-    /// qu'ils n'ont pas besoin d'observer le cmid.
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
-                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
-                    originalLanguage: String?, location: SharedPlace?, clientMutationId: String?) async throws -> APIPostComment {
-        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
-                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
-                             originalLanguage: originalLanguage, location: location)
-    }
-
-    /// Défaut de la variante CITANTE : laisse tomber l'ancre et retombe sur la
-    /// variante complète. `PostService` la surcharge réellement ; un double de
-    /// test peut la surcharger pour OBSERVER l'ancre — ce que le défaut, qui la
-    /// jette, ne permet pas.
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
-                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
-                    originalLanguage: String?, location: SharedPlace?, clientMutationId: String?,
-                    quotedPostMediaId: String?) async throws -> APIPostComment {
-        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
-                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
-                             originalLanguage: originalLanguage, location: location,
-                             clientMutationId: clientMutationId)
     }
 
     /// Défaut de la variante idempotente du repost : laisse tomber le jeton et
@@ -551,7 +466,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdBookmark(postId: postId), method: "POST")
     }
 
-    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
                            attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
                            originalLanguage: String?) async throws -> APIPostComment {
         try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
@@ -563,7 +478,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     /// commentaire d'un post ET la réponse/commentaire d'une story empruntent
     /// tous deux `POST /posts/:id/comments` (une story est un post de type
     /// STORY), donc ce chemin unique couvre les deux surfaces.
-    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
                            attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
                            originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment {
         try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
@@ -574,7 +489,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     /// Surcharge porteuse du cmid : envoyé en header `X-Client-Mutation-Id`,
     /// le gateway dédoublonne les rejeux (MutationLog) et ré-émet le cmid dans
     /// l'écho `comment:added` pour la réconciliation optimiste de l'émetteur.
-    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
                            attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
                            originalLanguage: String?, location: SharedPlace?, clientMutationId: String?) async throws -> APIPostComment {
         try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
@@ -587,7 +502,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     /// Les trois surcharges au-dessus y mènent — un second site qui composerait
     /// son propre `CreateCommentRequest` retiendrait en silence chaque champ
     /// ajouté ici, ce qui est arrivé ligne pour ligne aux médias joints.
-    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
                            attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
                            originalLanguage: String?, location: SharedPlace?, clientMutationId: String?,
                            quotedPostMediaId: String?) async throws -> APIPostComment {
@@ -609,7 +524,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         return response.data
     }
 
-    public func addComment(
+    func addComment(
         postId: String,
         content: String,
         parentId: String? = nil,

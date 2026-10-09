@@ -284,6 +284,11 @@ struct StoryComposerBarView: View {
         // pas — le composeur s'engage d'abord, ce qui tient le minuteur.
         .commentCamera(attachments: $commentAttachments, limit: Self.mediaLimit,
                        onOpen: { isComposerEngaged = true })
+        // #9743, M1 — un commentaire refusé par la file revient avec sa pièce.
+        .adaptiveOnChange(of: storyDrafts[storyId ?? ""]?.refusedAt) { _, refused in
+            guard refused != nil, let id = storyId, let draft = storyDrafts[id], commentAttachments.isEmpty else { return }
+            commentAttachments = draft.attachments
+        }
     }
 
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`). Un dépôt

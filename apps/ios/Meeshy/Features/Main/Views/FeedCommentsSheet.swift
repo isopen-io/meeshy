@@ -1399,6 +1399,17 @@ struct CommentsSheetView: View {
                 onCommentSent?(post.id)
             } catch {
                 CommentSendTrace.log("direct : échec — \(String(describing: error))")
+                // Un refus permanent ou la limite du jour : la file ne ferait
+                // que le répéter — il revient au composeur, avec sa raison.
+                guard !CommentMediaDelivery.isPermanentRefusal(error) else {
+                    rollbackOptimisticComment(tempId: tempId, parentId: parentId)
+                    if !DailyGestureLimitNotice.surface(CommentMediaDelivery.cause(of: error)) {
+                        FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
+                    }
+                    CommentSendTrace.log("direct : refus permanent — rendu au composeur, non enfilé")
+                    restoreRefusedComment(text: trimmed, attachments: staged, place: place)
+                    return
+                }
                 // REST failed — most commonly because the device is offline.
                 // Durably enqueue via the existing `.createComment` outbox
                 // kind (same one `FeedViewModel`/`PostDetailViewModel.sendComment`

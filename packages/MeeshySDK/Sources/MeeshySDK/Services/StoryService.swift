@@ -10,7 +10,6 @@ public protocol StoryServiceProviding: Sendable {
     func markViewed(storyId: String) async throws
     func delete(storyId: String) async throws
     func react(storyId: String, emoji: String) async throws
-    func comment(storyId: String, content: String) async throws -> APIPostComment
     func repost(storyId: String) async throws
     func cachedPost(id: String) -> APIPost?
     func fetchPost(id: String) async throws -> APIPost
@@ -100,7 +99,8 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: String]> = try await api.post(PostsEndpoint.byPostIdLike(postId: storyId), body: body)
     }
 
-    public func comment(storyId: String, content: String) async throws -> APIPostComment {
+    /// Interne au module : un commentaire se crée par `CommentPublisher` (#9743).
+    func comment(storyId: String, content: String) async throws -> APIPostComment {
         let body = CreateCommentRequest(content: content)
         let response: APIResponse<APIPostComment> = try await api.post(PostsEndpoint.byPostIdComments(postId: storyId), body: body)
         return response.data

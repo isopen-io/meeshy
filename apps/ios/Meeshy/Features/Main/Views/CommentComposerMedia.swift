@@ -65,6 +65,25 @@ enum CommentSendTrace {
 /// ses pièces** (#9743) — site unique des trois hôtes de commentaire.
 enum CommentMediaDelivery {
 
+    /// La cause réelle d'un envoi direct qui a échoué.
+    static func cause(of error: Error) -> Error {
+        (error as? CommentPublisher.Interrupted)?.underlying ?? error
+    }
+
+    /// **Un refus que la file ne ferait que répéter** : la limite du jour, ou
+    /// un refus permanent du serveur (contenu invalide, accès refusé,
+    /// publication disparue). Le confier à la file ne sert à rien — le
+    /// commentaire revient au composeur, avec sa raison.
+    static func isPermanentRefusal(_ error: Error) -> Bool {
+        let cause = cause(of: error)
+        if DailyGestureLimit.from(cause) != nil { return true }
+        switch cause {
+        case MeeshyError.forbidden, MeeshyError.rejected: return true
+        case MeeshyError.server(let status, _): return [400, 403, 404, 413, 422].contains(status)
+        default: return false
+        }
+    }
+
     /// Ce que la tentative directe avait déjà monté quand elle s'est arrêtée.
     static func acquired(from error: Error) -> [UploadedCommentMedia] {
         (error as? CommentPublisher.Interrupted)?.acquired ?? []
@@ -168,6 +187,19 @@ enum CommentComposerStaging {
     /// qu'un (la réponse à une story).
     static func firstPendingMedia(in attachments: [ComposerAttachment]) -> PendingCommentMedia? {
         attachments.lazy.compactMap { pendingMedia(from: $0) }.first
+    }
+
+    /// La pièce de zone qui correspond à un média en partance — pour la rendre
+    /// au composeur quand l'envoi n'a pas pu être gardé.
+    static func attachment(from media: PendingCommentMedia) -> ComposerAttachment {
+        let type: ComposerAttachmentType
+        switch media.optimistic.type {
+        case .video: type = .video
+        case .audio: type = .voice
+        case .image, .document: type = .image
+        }
+        return ComposerAttachment(id: media.id, type: type, name: media.optimistic.fileName ?? media.fileURL.lastPathComponent,
+                                  url: media.fileURL, thumbnailColor: media.optimistic.thumbnailColor)
     }
 
     /// Pièce jointe voix portant un VRAI fichier audio (issu d'`AudioRecorderManager`).

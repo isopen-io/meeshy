@@ -164,7 +164,7 @@ final class CommentReplayDispatchTests: XCTestCase {
     /// La relance MANUELLE lui donne pour auteur le compte connecté
     /// (`OfflineQueue.retryCreateComment`, témoin du SDK) : le rejeu qui suit
     /// crée UNE fois, sous le jeton de ce compte.
-    func test_onceAdoptedByItsAccount_theInheritedRow_isCreatedOnce_underThatAccount() async throws {
+    func test_aRowWithAnAuthor_isCreatedOnce_underThatAccountsToken() async throws {
         let adopted = try makeRow(pieces: 0, author: alice)
         let aliceToken = TestSessionToken.make(userId: alice)
         let spy = CommentPublisherSpy(token: aliceToken)
@@ -580,5 +580,58 @@ final class AccountStoreRegistryAdmissionTests: XCTestCase {
         let code = AppSourceGuard.stripComments(try String(
             contentsOf: root.appendingPathComponent("Meeshy/Core/MessageStoreSession.swift"), encoding: .utf8))
         XCTAssertTrue(code.contains("if let key, AccountStoreRegistry.admits(databasePath: pool.path, for: key) {"))
+    }
+}
+
+/// Un refus que la file ne ferait que répéter n'est pas enfilé (#9743).
+@MainActor
+final class CommentPermanentRefusalTests: XCTestCase {
+    func test_permanentRefusals_andTheDailyLimit_areNotQueued() {
+        XCTAssertTrue(CommentMediaDelivery.isPermanentRefusal(MeeshyError.server(statusCode: 404, message: "")))
+        XCTAssertTrue(CommentMediaDelivery.isPermanentRefusal(MeeshyError.forbidden(reason: nil, body: nil)))
+        XCTAssertTrue(CommentMediaDelivery.isPermanentRefusal(
+            CommentPublisher.Interrupted(acquired: [], underlying: MeeshyError.server(statusCode: 422, message: ""))))
+    }
+
+    func test_transientFailures_areQueued() {
+        XCTAssertFalse(CommentMediaDelivery.isPermanentRefusal(URLError(.cannotConnectToHost)))
+        XCTAssertFalse(CommentMediaDelivery.isPermanentRefusal(MeeshyError.server(statusCode: 503, message: "")))
+        XCTAssertFalse(CommentMediaDelivery.isPermanentRefusal(
+            CommentPublisher.Interrupted(acquired: [], underlying: URLError(.timedOut))))
+        XCTAssertFalse(CommentMediaDelivery.isPermanentRefusal(MeeshyError.auth(.sessionExpired)))
+    }
+}
+
+/// #9743, M1 — un commentaire de story que la file refuse revient dans le
+/// brouillon de SA story, texte et pièce, et le composeur se rouvre.
+@MainActor
+final class StoryRefusedCommentTests: XCTestCase {
+    func test_theDraft_carriesTheTextAndThePiece_andIsMarkedRefused() {
+        let url = URL(fileURLWithPath: "/tmp/voix.m4a")
+        let media = PendingCommentMedia(fileURL: url, mimeType: "audio/mp4",
+                                        optimistic: FeedMedia(type: .audio, url: url.absoluteString, fileName: "Vocal"))
+        let when = Date(timeIntervalSince1970: 42)
+
+        let draft = StoryRefusedComment.draft(text: "bravo", medias: [media], at: when)
+
+        XCTAssertEqual(draft.text, "bravo")
+        XCTAssertEqual(draft.attachments.map(\.type), [.voice])
+        XCTAssertEqual(draft.attachments.first?.url, url)
+        XCTAssertEqual(draft.refusedAt, when)
+    }
+
+    func test_theStory_givesARefusedCommentBack_andTheBarTakesItsPieceBack() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        func code(_ path: String) throws -> String {
+            AppSourceGuard.stripComments(try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Views/\(path)"), encoding: .utf8))
+        }
+        XCTAssertTrue(try code("StoryViewerView+Content.swift")
+            .contains("returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)"))
+        let back = try code("StoryViewerView+RefusedComment.swift")
+        XCTAssertTrue(back.contains("isComposerEngaged = true"))
+        XCTAssertTrue(back.contains("storyDrafts[storyId] = StoryRefusedComment.draft("))
+        XCTAssertTrue(try code("StoryViewerView+CanvasComposerBar.swift").contains("storyDrafts[storyId ?? \"\"]?.refusedAt"))
     }
 }

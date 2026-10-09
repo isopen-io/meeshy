@@ -80,9 +80,10 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         let result = try await enqueueTwoPieces(cmid)
 
         let stored = try payload(result.outboxId)
-        let folder = "pending-media/comments-\(alice)/\(cmid)"
+        let key = try XCTUnwrap(MessageStoreAccountKey(userId: alice, serverOrigin: MeeshyConfig.shared.persistedServerOrigin))
+        let folder = "pending-media/comments-\(alice)/\(key.fingerprint)/\(cmid)"
         XCTAssertEqual(stored.localMediaPaths, ["\(folder)/0.jpg", "\(folder)/1.m4a"],
-                       "Les pièces en attente sont rangées sous le compte qui les a écrites.")
+                       "Les pièces en attente sont rangées sous le compte qui les a écrites, puis sous sa clé complète.")
         XCTAssertEqual(stored.authorId, alice)
         XCTAssertEqual(stored.localMediaMimeTypes, ["image/jpeg", "audio/mp4"])
         XCTAssertEqual(stored.content, "regarde")
@@ -357,8 +358,19 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
     /// générique en frappe un autre quand il est mal formé, et la ligne ne se
     /// retrouverait plus par celui que porte sa charge.
     private func enqueueInheritedText(_ cmid: String) async throws -> String {
-        try await queue.enqueue(.createComment, payload: comment(cmid, content: "écrit avant", author: nil),
-                                conversationId: "post-1")
+        try await insertLegacyRow(comment(cmid, content: "écrit avant", author: nil), into: pool)
+    }
+
+    /// L'entrée générique refuse désormais un commentaire : une ligne
+    /// ancienne s'écrit donc directement, comme une version antérieure l'a fait.
+    private func insertLegacyRow(_ payload: CreateCommentPayload, into base: DatabaseQueue) async throws -> String {
+        let outboxId = "ofqm_\(payload.clientMutationId)"
+        let data = try JSONEncoder().encode(payload)
+        try await base.write { db in
+            try OutboxRecord(id: outboxId, kind: .createComment, conversationId: payload.postId,
+                             clientMessageId: payload.clientMutationId, payload: data).insert(db)
+        }
+        return outboxId
     }
 
     private func rowCount() throws -> Int {
@@ -615,6 +627,61 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         XCTAssertFalse(CommentOwnership.baseBelongs(toOwner: "", databasePath: "/x/\(aliceFile)", serverOrigin: origin))
     }
 
+    // MARK: - Les entrées génériques ne servent plus un commentaire (M3)
+
+    func test_theGenericEnqueue_refusesAComment() async throws {
+        do {
+            _ = try await queue.enqueue(.createComment, payload: comment("cmid_generic_1"), conversationId: "post-1")
+            XCTFail("Un commentaire n'entre que par enqueueComment, qui prouve sa base et son auteur.")
+        } catch {
+            XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+        }
+        XCTAssertEqual(try rowCount(), 0)
+    }
+
+    private func sessionToken(_ userId: String?) -> String {
+        var claims: [String: Any] = ["exp": 4_000_000_000]
+        if let userId { claims["userId"] = userId }
+        let body = try! JSONSerialization.data(withJSONObject: claims).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "e30.\(body).sig"
+    }
+
+    /// La relance GÉNÉRIQUE d'une ligne de commentaire passe par sa porte :
+    /// sous le compte du jeton seulement.
+    func test_theGenericRetry_ofACommentRow_obeysTheCommentDoor() async throws {
+        let saved = APIClient.shared.authToken
+        defer { APIClient.shared.authToken = saved }
+        let cmid = ClientMutationId.generate()
+        let outboxId = try await queue.enqueueComment(comment(cmid), ownerId: alice)
+        try await pool.write { db in
+            try db.execute(sql: "UPDATE outbox SET status = ? WHERE id = ?", arguments: [OutboxStatus.exhausted.rawValue, outboxId])
+        }
+
+        APIClient.shared.authToken = sessionToken(bob)
+        do {
+            try await queue.retryItem(outboxId)
+            XCTFail("Sous le jeton de Bob, la ligne d'Alice ne se réarme pas.")
+        } catch {
+            XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+        }
+        APIClient.shared.authToken = nil
+        do {
+            try await queue.retryItem(outboxId)
+            XCTFail("Sans jeton, rien ne se réarme.")
+        } catch {
+            XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+        }
+        var status = try await pool.read { db in try OutboxRecord.fetchOne(db, key: outboxId)?.status }
+        XCTAssertEqual(status, .exhausted)
+
+        APIClient.shared.authToken = sessionToken(alice)
+        try await queue.retryItem(outboxId)
+        status = try await pool.read { db in try OutboxRecord.fetchOne(db, key: outboxId)?.status }
+        XCTAssertEqual(status, .pending)
+    }
+
     // MARK: - Le registre refuse
 
     /// Le fichier porte l'empreinte d'Alice, mais il a été OUVERT pour Bob :
@@ -646,7 +713,7 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         let memory = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: memory)
         await OfflineQueue.shared.configure(pool: memory)
-        _ = try await queue.enqueue(.createComment, payload: comment("cmid_memory_1", author: nil), conversationId: "post-1")
+        _ = try await insertLegacyRow(comment("cmid_memory_1", author: nil), into: memory)
         let listed = await queue.unsentComments(postId: "post-1", ownerId: alice)
         XCTAssertTrue(listed.isEmpty, "Sans fichier, rien ne prouve à qui est la base.")
         await OfflineQueue.shared.configure(pool: pool)
@@ -682,7 +749,7 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         let living = "cmid_comment_sweep_1"
         let result = try await enqueueTwoPieces(living)
         let orphan = URL(fileURLWithPath: OfflineQueue.absoluteMediaPath(
-            forStored: "pending-media/comments-\(alice)/cmid_comment_sweep_orphan"), isDirectory: true)
+            forStored: "pending-media/comments-\(alice)/\(try XCTUnwrap(MessageStoreAccountKey(userId: alice, serverOrigin: MeeshyConfig.shared.persistedServerOrigin)).fingerprint)/cmid_comment_sweep_orphan"), isDirectory: true)
         try FileManager.default.createDirectory(at: orphan, withIntermediateDirectories: true)
         try Data("x".utf8).write(to: orphan.appendingPathComponent("0.jpg"))
 

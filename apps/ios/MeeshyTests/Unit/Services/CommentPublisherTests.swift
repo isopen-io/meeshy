@@ -275,6 +275,7 @@ final class CommentPublisherIsTheOnlyDoorGuardTests: XCTestCase {
             ".postComment(",                     // l'ancien envoi de story
             "PostsEndpoint.byPostIdComments(",   // la route de création
             "uploadContext: \"comment\"",        // une pièce de commentaire
+            ".comment(storyId:",                 // l'ancien envoi de StoryService
         ]
         /// Les LECTURES de la même route (liste paginée) ne créent rien.
         let readers: Set<String> = []

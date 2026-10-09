@@ -166,6 +166,16 @@ public enum CommentOwnership {
         return owned ? paths : nil
     }
 
+    /// La clé COMPLÈTE (utilisateur + environnement) de la base `path` : celle
+    /// inscrite à son ouverture, sinon celle de l'environnement courant.
+    public static func accountKey(ownerId: String, databasePath: String?, serverOrigin: String) -> MessageStoreAccountKey? {
+        if let path = databasePath, let registered = AccountStoreRegistry.key(ofDatabaseAt: path),
+           registered.userId == ownerId {
+            return registered
+        }
+        return MessageStoreAccountKey(userId: ownerId, serverOrigin: serverOrigin)
+    }
+
     /// Le dossier des pièces en attente d'UN compte, sous `pending-media/` :
     /// cloisonné, et purgé d'un bloc à sa déconnexion. `nil` sans identifiant
     /// utilisable — on ne range rien dans un dossier sans propriétaire.
@@ -216,7 +226,11 @@ public enum AccountStoreRegistry {
     }
 
     public static func owner(ofDatabaseAt path: String) -> String? {
-        owners.withLock { $0[normalized(path)]?.userId }
+        key(ofDatabaseAt: path)?.userId
+    }
+
+    public static func key(ofDatabaseAt path: String) -> MessageStoreAccountKey? {
+        owners.withLock { $0[normalized(path)] }
     }
 
     /// Une base ne s'inscrit que si son fichier EST celui de la clé : une
@@ -443,9 +457,15 @@ extension OfflineQueue {
         guard CommentMediaQuota.admits(incoming: incoming, alreadyStored: stored) else {
             throw CommentMediaQuota.Exceeded(limit: CommentMediaQuota.byteCeilingPerAccount)
         }
+        // Scindé par clé COMPLÈTE : un même compte sur deux environnements a
+        // deux files, donc deux dossiers.
+        guard let key = CommentOwnership.accountKey(ownerId: context.ownerId, databasePath: context.pool.path,
+                                                    serverOrigin: context.serverOrigin) else {
+            throw CommentOwnership.Refusal.notTheAuthor
+        }
         let relativePaths: [String] = try sourceMediaURLs.indices.map { index in
             try Self.pendingMediaRelativePath(
-                for: "\(folder)/\(cmid)",
+                for: "\(folder)/\(key.fingerprint)/\(cmid)",
                 index: index, ext: sourceMediaURLs[index].pathExtension)
         }
         Self.excludeFromBackup(relativePath: "\(Self.pendingMediaDirectoryName)/\(folder)")
@@ -650,8 +670,12 @@ extension OfflineQueue {
     public nonisolated static func sweepOrphanCommentMedia(ownerId: String?, reader: any DatabaseWriter) async {
         guard let owner = CommentOwnership.identity(ownerId),
               let folder = CommentOwnership.mediaDirectoryName(ownerId: owner) else { return }
-        let context = CommentContext(ownerId: owner, serverOrigin: MeeshyConfig.shared.persistedServerOrigin, pool: reader)
-        let root = absoluteMediaPath(forStored: "\(pendingMediaDirectoryName)/\(folder)")
+        let origin = MeeshyConfig.shared.persistedServerOrigin
+        let context = CommentContext(ownerId: owner, serverOrigin: origin, pool: reader)
+        guard let key = CommentOwnership.accountKey(ownerId: owner, databasePath: reader.path, serverOrigin: origin) else { return }
+        // Le dossier de CETTE base seulement : celui d'un autre environnement
+        // est jugé contre la sienne.
+        let root = absoluteMediaPath(forStored: "\(pendingMediaDirectoryName)/\(folder)/\(key.fingerprint)")
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: root), !entries.isEmpty else { return }
         // Si la base ne se lit pas ou n'est pas la sienne, on ne supprime RIEN.
         let living: [String]?? = try? await reader.read { db -> [String]? in

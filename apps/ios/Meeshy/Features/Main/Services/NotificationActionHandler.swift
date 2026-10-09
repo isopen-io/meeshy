@@ -131,6 +131,9 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// Le seul chemin réseau d'un commentaire (#9743) — il lie la requête au
     /// compte de l'auteur.
     private let commentPublisher: CommentPublisher
+    /// Une réponse rapide à un commentaire n'a pu ni partir ni rejoindre la
+    /// file : l'utilisateur, hors de l'app, l'apprend par une notification.
+    private let notifyUnsentComment: @MainActor () -> Void
     private let friendService: FriendServiceProviding
     private let replyQueue: NotificationReplyQueueing
     private let injectedPersistence: OptimisticMessagePersisting?
@@ -188,6 +191,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         conversationService: ConversationServiceProviding = ConversationService.shared,
         postService: PostServiceProviding = PostService.shared,
         commentPublisher: CommentPublisher = .live,
+        notifyUnsentComment: @escaping @MainActor () -> Void = { NotificationReplyFailure.post() },
         friendService: FriendServiceProviding = FriendService.shared,
         replyQueue: NotificationReplyQueueing = OfflineQueue.shared,
         messagePersistence: OptimisticMessagePersisting? = nil,
@@ -247,6 +251,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.conversationService = conversationService
         self.postService = postService
         self.commentPublisher = commentPublisher
+        self.notifyUnsentComment = notifyUnsentComment
         self.friendService = friendService
         self.replyQueue = replyQueue
         self.injectedPersistence = messagePersistence
@@ -600,8 +605,13 @@ final class NotificationActionHandler: NotificationActionHandling {
             notifiedCommentId: userInfo["commentId"] as? String
         )
         let clientMutationId = ClientMutationId.generate()
-        // La charge est bâtie UNE fois, avec son auteur relevé ICI, avant
-        // toute attente : la file et l'envoi direct portent la même (#9743).
+        // #9743, M2 — l'auteur est le compte que le JETON désigne, et la
+        // notification doit s'adresser à lui.
+        guard let owner = NotificationReplyFailure.author(token: authTokenProvider(), userInfo: userInfo) else {
+            CommentSendTrace.log("notification : réponse refusée — le jeton ne désigne pas le destinataire")
+            notifyUnsentComment()
+            return
+        }
         let comment = CreateCommentPayload(
                     clientMutationId: clientMutationId,
                     postId: postId,
@@ -614,21 +624,28 @@ final class NotificationActionHandler: NotificationActionHandling {
                     // chemins partagent le même cmid et doivent donner le même
                     // commentaire, quel que soit celui qui atterrit le premier.
                     originalLanguage: nil,
-                    authorId: currentUserId()
+                    authorId: owner
         )
 
         await prepareReplyQueue()
+        var kept = false
         do {
-            try await replyQueue.enqueueComment(comment, ownerId: currentUserId())
+            try await replyQueue.enqueueComment(comment, ownerId: owner)
+            kept = true
         } catch {
-            logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .private)")
         }
 
         do {
             try await commentPublisher.publish(comment, pieces: [])
-            logger.info("notification comment sent for post \(postId, privacy: .public)")
+            kept = true
+            logger.info("notification comment sent")
         } catch {
-            logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .public)")
+            logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .private)")
+        }
+        if !kept {
+            CommentSendTrace.log("notification : ni envoyée ni gardée — l'utilisateur est prévenu")
+            notifyUnsentComment()
         }
 
         // #6999 — commenter, c'est consommer : la notification commentée passe
