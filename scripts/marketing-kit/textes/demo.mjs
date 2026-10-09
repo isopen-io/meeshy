@@ -240,6 +240,19 @@ const story = [
   }) },
 ]
 
+// Le commentaire VOCAL du lecteur sous le post d'Aiko (#9820) — « Montrez-moi celui de votre ville ! » : il répond dans
+// SA langue, et la passerelle le transcrit puis le traduit dans celle d'Aiko.
+const commentaireVocal = {
+  fr: 'Voilà le mien : le soleil qui se couche sur la mer, on dirait de l’or liquide !',
+  en: 'Here’s mine: the sun setting over the sea, it looks like liquid gold!',
+  es: 'Aquí va el mío: el sol poniéndose sobre el mar, ¡parece oro líquido!',
+  de: 'Hier ist meiner: die Sonne geht über dem Meer unter, wie flüssiges Gold!',
+  it: 'Ecco il mio: il sole che tramonta sul mare, sembra oro liquido!',
+  pt: 'Aqui está o meu: o sol se pondo no mar, parece ouro líquido!',
+  ar: 'هذا غروبي: الشمس تغيب فوق البحر، كأنها ذهب سائل!',
+  ja: 'これが私の夕日：海に沈む太陽、まるで溶けた金みたい！',
+}
+
 const appel = contenu('appel.minjun', 'ko', '거기 비 와? 서울은 벌써 추워 🥶', {
   fr: 'Il pleut chez toi ? À Séoul il fait déjà froid 🥶', en: 'Is it raining there? It’s already cold in Seoul 🥶',
   es: '¿Llueve ahí? En Seúl ya hace frío 🥶', de: 'Regnet’s bei dir? In Seoul ist es schon kalt 🥶',
@@ -353,6 +366,7 @@ export const DEMO = {
   posts,
   story,
   appel,
+  commentaireVocal,
   bios,
   progression,
   lienInvitation,

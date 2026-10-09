@@ -29,7 +29,7 @@ extension VitrineInteractions {
         guard let photo = photoDeLaScene(f, dossier: VitrineLaunch.dossierMedias), let copie = copierPourLeComposeur(photo) else {
             fatalError("Vitrine « \(VitrineScene.interactionSticker.rawValue) » : aucune photo du kit pour la scène")
         }
-        VitrineRendu.shared.photoDuComposeur = copie
+        VitrineRendu.shared.mediaDuComposeur = VitrineMediaDOuverture(url: copie, mimeType: "image/jpeg")
         NotificationCenter.default.post(name: .openStoryComposer, object: nil)
     }
 
@@ -40,18 +40,20 @@ extension VitrineInteractions {
         }
         ouvrir()
         await VitrineRendu.shared.attendre([.feuilleDeStickers])
+        VitrineTournage.etape("feuille")
         try? await Task.sleep(for: tenueDeLaFeuille)
         guard let choisir = VitrineRendu.shared.choisirUnSticker else {
             fatalError("Vitrine « \(scene.rawValue) » : la feuille des stickers n'a pas prêté son choix")
         }
+        VitrineTournage.etape("choix")
         choisir(sticker)
         try? await Task.sleep(for: tenueDuSticker)
     }
 
     /// Le composeur range ses médias dans ses propres fichiers : il reçoit une COPIE, jamais la photo du kit.
-    private static func copierPourLeComposeur(_ fichier: URL) -> URL? {
+    static func copierPourLeComposeur(_ fichier: URL, prefixe: String = "composer_photo") -> URL? {
         let copie = FileManager.default.temporaryDirectory
-            .appendingPathComponent("composer_photo_\(UUID().uuidString).\(fichier.pathExtension)")
+            .appendingPathComponent("\(prefixe)_\(UUID().uuidString).\(fichier.pathExtension)")
         return (try? FileManager.default.copyItem(at: fichier, to: copie)).map { copie }
     }
 }

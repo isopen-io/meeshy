@@ -1,6 +1,7 @@
 #if DEBUG
 import Combine
 import Foundation
+import GRDB
 import MeeshySDK
 import MeeshyUI
 import UIKit
@@ -54,10 +55,24 @@ enum VitrineStage {
     /// d'écrire), et les racines lisent le fil et les médias dès leur montage (#8922).
     static func remplirLesCaches() async {
         guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
+        await repartirANeuf()
         do {
             try await VitrineSeeder.remplirLesCaches(f, medias: VitrineLaunch.dossierMedias, dans: VitrineSeedTargetsReels())
         } catch {
             fatalError("Vitrine « \(scene.rawValue) » : fil et médias impossibles à ranger — \(error)")
+        }
+    }
+
+    /// Une prise précédente a pu laisser une publication dans la file durable et un brouillon au composeur : rejoués, ils
+    /// ajouteraient un réel fantôme au fil et des scènes au composeur, d'une prise à l'autre (#9820). Le compte de la
+    /// vitrine — le seul que la vitrine accepte, `VitrineSession.verifierProprietaire` — repart donc à neuf, avant que la
+    /// file ne se vide au démarrage.
+    private static func repartirANeuf() async {
+        ComposerAutosaveStore.shared.deleteAll()
+        do {
+            _ = try await DependencyContainer.shared.dbPool.write { db in try OutboxRecord.deleteAll(db) }
+        } catch {
+            fatalError("Vitrine : la file durable d'une prise précédente n'a pas pu être vidée — \(error)")
         }
     }
 
@@ -115,6 +130,8 @@ enum VitrineStage {
             VitrineInteractions.ouvrirLePost(f)
         case .interactionSticker:
             VitrineInteractions.ouvrirLeComposeur(f)
+        case .interactionReel:
+            VitrineInteractions.ouvrirLeFilPuisLeComposeur(f)
         case .lien:
             break
         }
@@ -127,7 +144,7 @@ enum VitrineStage {
         guard let ouvrir = VitrineRendu.shared.ouvrirLeJeu else {
             fatalError("Vitrine « \(scene.rawValue) » : l'écran Progression n'a pas prêté son routeur")
         }
-        ouvrir(.progressionConcept(celebration.concept))
+        ouvrir(.progressionConcept(celebration.concept, section: celebration.section))
     }
 
     /// Ce que la scène FAIT une fois sa conversation affichée — le geste qu'y ferait le lecteur.
@@ -136,7 +153,7 @@ enum VitrineStage {
         case .amour: await faireEntendre(destination)
         case .groupe: rouvrirSurLOriginal(destination)
         case .imagine: await imaginer(destination, f)
-        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker: break
+        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker, .interactionReel: break
         }
     }
 

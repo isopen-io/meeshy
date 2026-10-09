@@ -7,8 +7,10 @@
 //   fin    { marqueur: 'y.txt' }   l'app pose ce fichier quand l'action est finie
 //          null                    sinon : début + dureeMs
 //   mouvement   fenêtres [début, fin] en ms depuis le début de l'action, où une image répétée est une
-//               image perdue — hors des repos que la chorégraphie prévoit (fins d'easing, tenues)
-//   imagesCles  { nom, instantMs } depuis le début de l'action
+//               image perdue — hors des repos que la chorégraphie prévoit (fins d'easing, tenues) ; ou
+//               { etape, de, a } en ms depuis une ÉTAPE que l'app date (`etape-<nom>.txt`), quand l'instant de
+//               l'animation dépend du rendu d'un écran
+//   imagesCles  { nom, instantMs } depuis le début de l'action, ou { nom, etape, instantMs } depuis une étape
 //   gestes      { iphone: [...], ipad: [...] } — en POINTS entiers, joués dans l'ordre :
 //               { type: 'tap', x, y } · { type: 'swipe', de: [x, y], a: [x, y], dureeS }
 //               { type: 'attendre', ms } · { type: 'fichier', nom } (dépose un fichier dans Documents/vitrine)
@@ -66,7 +68,7 @@ export const SCENES_FILMEES = {
   // Couvercle 0–0,4 s, récompenses à 0,5 / 0,8 / 1,1 s (0,3 s chacune).
   'jeu-coffre': jeu('jeu-coffre', {
     dureeMs: 1400,
-    mouvement: [[40, 340], [530, 1360]],
+    mouvement: [[40, 340], [600, 1150]],
     imagesCles: [{ nom: 'coffre-ouvert', instantMs: 450 }, { nom: 'recompenses', instantMs: 1500 }],
   }),
   // Plaque 0–0,3 s, marteau jusqu'à l'impact 0,45 s, retournement 0,55–1,2 s.
@@ -80,34 +82,37 @@ export const SCENES_FILMEES = {
     mouvement: [[40, 520]],
     imagesCles: [{ nom: 'niveau-monte', instantMs: 700 }],
   }),
+  // La médaille se rallume quand la lecture servie arrive à la fiche (étape « servi », 0,2 s après le signal : l'étagère
+  // se recalcule) ; la matière remonte en 0,7 s.
   'jeu-badge': jeu('jeu-badge', {
     dureeMs: 700,
-    mouvement: [[40, 620]],
-    imagesCles: [{ nom: 'badge-gagne', instantMs: 800 }],
+    mouvement: [{ etape: 'servi', de: 220, a: 640 }],
+    imagesCles: [{ nom: 'badge-gagne', etape: 'servi', instantMs: 750 }],
   }),
-  // Le toucher du compteur pousse la fiche des Meeshes (0–0,35 s) ; la fiche lue et posée (0,8 s), Mee et Meo
-  // frappent (1,2 s, vers 1,2–2,5 s).
+  // Le toucher du compteur pousse la fiche des Meeshes : la poussée paraît 0,2 à 0,35 s après, le temps que la fiche se
+  // bâtisse — aucune fenêtre n'y est posée. La fiche lue et posée (étape « frappe »), Mee et Meo frappent : la
+  // chorégraphie de jeu-frappe, ancrée sur l'étape.
   'interaction-frappe': interaction('interaction-frappe', {
     montreUnFil: false,
     dureeMs: 2600,
-    mouvement: [[40, 330], [1400, 2300]],
-    imagesCles: [{ nom: 'fiche', instantMs: 1000 }, { nom: 'piece-retournee', instantMs: 2700 }],
+    mouvement: [{ etape: 'frappe', de: 100, a: 1140 }],
+    imagesCles: [{ nom: 'fiche', etape: 'fiche', instantMs: 300 }, { nom: 'piece-retournee', etape: 'frappe', instantMs: 1300 }],
   }),
-  // Appui long : la bulle remonte au centre (0,3 s), le menu unifié s'ouvre (ressort 0,42 s), tenu 1,1 s, puis
-  // 🥰 se pose — le menu se replie (0,32 s) et la réaction paraît sous la bulle.
+  // Appui long : le menu unifié s'ouvre (étape « menu », ressort 0,42 s), tenu 1,1 s, puis 🥰 se pose (étape « choix »)
+  // — le toucher coûte quelques images à l'app, puis le menu se replie (0,32 s) et la réaction paraît sous la bulle.
   'interaction-emoji': interaction('interaction-emoji', {
     montreUnFil: true,
     dureeMs: 2800,
-    mouvement: [[320, 700], [1420, 1700]],
-    imagesCles: [{ nom: 'menu', instantMs: 1200 }, { nom: 'reaction', instantMs: 2800 }],
+    mouvement: [{ etape: 'menu', de: 100, a: 420 }, { etape: 'choix', de: 150, a: 270 }],
+    imagesCles: [{ nom: 'menu', etape: 'choix', instantMs: -150 }, { nom: 'reaction', etape: 'choix', instantMs: 1300 }],
   }),
   // Appui long sur le cœur : la palette s'ouvre (ressort 0,3 s), tenue 1,1 s, puis ❤️ — la palette se referme
   // (0,3 s) et le cœur se remplit, compteur compris.
   'interaction-emoji-post': interaction('interaction-emoji-post', {
     montreUnFil: false,
     dureeMs: 2500,
-    mouvement: [[40, 280], [1120, 1350]],
-    imagesCles: [{ nom: 'palette', instantMs: 900 }, { nom: 'coeur', instantMs: 2500 }],
+    mouvement: [[40, 280], { etape: 'choix', de: 120, a: 450 }],
+    imagesCles: [{ nom: 'palette', etape: 'choix', instantMs: -200 }, { nom: 'coeur', etape: 'choix', instantMs: 1300 }],
   }),
   // Le vocal part (montée 0,9 s), la transcription arrive 1,3 s après sa création, la traduction 1,6 s plus tard,
   // tenue 1,8 s. Aucune fenêtre de mouvement tant que les apparitions n'ont pas été mesurées au simulateur.
@@ -115,14 +120,31 @@ export const SCENES_FILMEES = {
     montreUnFil: false,
     dureeMs: 5700,
     mouvement: [],
-    imagesCles: [{ nom: 'envoi', instantMs: 500 }, { nom: 'transcription', instantMs: 2700 }, { nom: 'traduction', instantMs: 4600 }],
+    imagesCles: [
+      { nom: 'envoi', etape: 'creation', instantMs: 0 },
+      { nom: 'transcription', etape: 'transcription', instantMs: 700 },
+      { nom: 'traduction', etape: 'traduction', instantMs: 1200 },
+    ],
   }),
   // La porte du sticker s'ouvre par le rail : la feuille monte (0,35 s), tenue 1,3 s, puis Mee et Meo se posent sur la
   // scène — la feuille redescend (0,3 s) et le sticker s'ouvre en édition.
   'interaction-sticker': interaction('interaction-sticker', {
     montreUnFil: false,
     dureeMs: 3100,
-    mouvement: [[40, 330]],
-    imagesCles: [{ nom: 'feuille', instantMs: 1100 }, { nom: 'sticker-pose', instantMs: 3100 }],
+    mouvement: [{ etape: 'feuille', de: 40, a: 330 }, { etape: 'choix', de: 250, a: 650 }],
+    imagesCles: [{ nom: 'feuille', etape: 'choix', instantMs: -200 }, { nom: 'sticker-pose', etape: 'choix', instantMs: 1700 }],
+  }),
+  // Le réel (#9820) : le composeur s'ouvre sur la vidéo du kit, qui joue sur la scène (tenue 1,5 s) ; « Publier le réel »
+  // referme le composeur, la vidéo monte (0,8 s), le réel arrive en tête du fil et y joue (tenue 3,5 s). Aucune fenêtre
+  // de mouvement tant que les apparitions n'ont pas été mesurées au simulateur.
+  'interaction-reel': interaction('interaction-reel', {
+    montreUnFil: true,
+    dureeMs: 7500,
+    mouvement: [],
+    imagesCles: [
+      { nom: 'composeur', etape: 'armement', instantMs: 600 },
+      { nom: 'publication', etape: 'publication', instantMs: 500 },
+      { nom: 'reel-au-fil', etape: 'reel', instantMs: 1500 },
+    ],
   }),
 }

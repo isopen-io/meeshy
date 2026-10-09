@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import { KIT_LANGS } from '../lib/locales.mjs'
 import {
   APPAREILS, FPS, TAILLES_APPSTORE, argumentsAppStore, argumentsClip, argumentsEmpreintes, argumentsImage, bornesDeLaPrise,
-  cheminsDePrise, commandeDeGeste, filtreCadenceFixe, imagesFigees, lireEmpreintes, marqueursDe, planDePrise, selectionner,
+  cheminsDePrise, commandeDeGeste, etapesDe, fenetresDeMouvement, instantDeLImage, filtreCadenceFixe, imagesFigees, lireEmpreintes, marqueursDe,
+  planDePrise, selectionner,
 } from '../vitrine/filmer.mjs'
 import { SCENES_FILMEES } from '../vitrine/scenes-filmees.mjs'
 
@@ -22,7 +23,7 @@ describe('plan de prise (#9806)', () => {
         expect(marqueursDe(plan)).toEqual(['celebration-debut.txt', 'celebration-fin.txt'])
         expect(plan.montreUnFil).toBe(false)
         expect(plan.imagesCles.length).toBeGreaterThan(0)
-        for (const [debut, fin] of plan.mouvement) expect(fin).toBeLessThanOrEqual(plan.dureeMs)
+        for (const [, fin] of plan.mouvement.filter(Array.isArray)) expect(fin).toBeLessThanOrEqual(plan.dureeMs)
       }
     }
   })
@@ -38,14 +39,14 @@ describe('plan de prise (#9806)', () => {
   })
 
   test('les interactions sont filmables, jouées par l’app au clap et bornées par ses marqueurs (#9810)', () => {
-    for (const scene of ['interaction-frappe', 'interaction-emoji', 'interaction-emoji-post', 'interaction-commentaire-audio', 'interaction-sticker']) {
+    for (const scene of ['interaction-frappe', 'interaction-emoji', 'interaction-emoji-post', 'interaction-commentaire-audio', 'interaction-sticker', 'interaction-reel']) {
       for (const appareil of APPAREILS) {
         const plan = planDePrise({ scene, appareil })
         expect(plan.famille).toBe('interaction')
         expect(marqueursDe(plan)).toEqual(['celebration-debut.txt', 'celebration-fin.txt'])
         expect(plan.gestes).toEqual([{ type: 'fichier', nom: 'go.txt' }])
         expect(plan.imagesCles.length).toBeGreaterThan(0)
-        for (const [, fin] of plan.mouvement) expect(fin).toBeLessThanOrEqual(plan.dureeMs)
+        for (const [, fin] of plan.mouvement.filter(Array.isArray)) expect(fin).toBeLessThanOrEqual(plan.dureeMs)
       }
     }
     expect(SCENES_FILMEES['interaction-emoji'].montreUnFil).toBe(true)
@@ -84,6 +85,43 @@ describe('plan de prise (#9806)', () => {
 
   test('une scène inconnue est nommée avec la liste des connues', () => {
     expect(() => planDePrise({ scene: 'jeu-dragon', appareil: 'iphone' })).toThrow('jeu-dragon')
+  })
+})
+
+describe('fenêtres ancrées sur une étape de l’app (#9810)', () => {
+  test('une fenêtre ancrée se décale de l’instant où l’app a daté son étape ; une fenêtre fixe reste en ms d’action', () => {
+    const fenetres = fenetresDeMouvement({
+      mouvement: [[40, 300], { etape: 'choix', de: 150, a: 420 }],
+      etapesMs: { choix: 11_380 },
+      debutActionMs: 10_000,
+    })
+    expect(fenetres).toEqual([[40, 300], [1530, 1800]])
+  })
+
+  test('une étape que l’app n’a pas datée fait échouer la prise en la nommant', () => {
+    expect(() => fenetresDeMouvement({ mouvement: [{ etape: 'choix', de: 0, a: 100 }], etapesMs: {}, debutActionMs: 0 }))
+      .toThrow('etape-choix.txt')
+  })
+
+  test('les étapes d’un plan sont celles que ses fenêtres et ses images clés nomment, une fois chacune', () => {
+    const plan = {
+      mouvement: [[0, 10], { etape: 'choix', de: 0, a: 5 }, { etape: 'choix', de: 6, a: 9 }, { etape: 'menu', de: 0, a: 1 }],
+      imagesCles: [{ nom: 'a', instantMs: 0 }, { nom: 'b', etape: 'reel', instantMs: 900 }],
+    }
+    expect(etapesDe(plan)).toEqual(['choix', 'menu', 'reel'])
+  })
+
+  test('une image clé ancrée se tire à son étape + son décalage ; sans étape, depuis le début de l’action', () => {
+    expect(instantDeLImage({ image: { nom: 'a', instantMs: 800 }, etapes: {} })).toBe(800)
+    expect(instantDeLImage({ image: { nom: 'b', etape: 'choix', instantMs: 900 }, etapes: { choix: 1350 } })).toBe(2250)
+    expect(() => instantDeLImage({ image: { nom: 'b', etape: 'choix', instantMs: 0 }, etapes: {} })).toThrow('choix')
+  })
+
+  test('une fenêtre ancrée sans étape, ou vide, est refusée', () => {
+    const sansEtape = { s: { ...SCENES_FILMEES['jeu-rang'], scene: 's', mouvement: [{ de: 0, a: 10 }] } }
+    expect(() => planDePrise({ scene: 's', appareil: 'iphone', scenes: sansEtape })).toThrow('étape')
+    const vide = { s: { ...SCENES_FILMEES['jeu-rang'], scene: 's', mouvement: [{ etape: 'x', de: 10, a: 10 }] } }
+    expect(() => planDePrise({ scene: 's', appareil: 'iphone', scenes: vide })).toThrow('vide')
   })
 })
 

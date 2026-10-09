@@ -69,6 +69,30 @@ final class VitrineTournageTests: XCTestCase {
         }
     }
 
+    /// Une étape de l'action (le choix d'un émoji, la feuille montée) se date par un fichier : le script y ancre ses
+    /// fenêtres de mouvement, car l'instant d'un geste dépend du rendu de l'écran qui le précède.
+    func test_etape_dropsANamedMarker_besideTheBounds() throws {
+        let racine = try dossier()
+
+        VitrineTournage.etape("choix", dans: racine)
+
+        XCTAssertEqual(try String(contentsOf: racine.appendingPathComponent("etape-choix.txt"), encoding: .utf8), "choix")
+    }
+
+    /// Une étape d'une prise précédente daterait la suivante : la préparation l'efface avec les bornes.
+    func test_effacer_removesTheSteps() throws {
+        let racine = try dossier()
+        VitrineTournage.etape("choix", dans: racine)
+        VitrineTournage.etape("feuille", dans: racine)
+        let autre = racine.appendingPathComponent("fixtures.json")
+        try Data("{}".utf8).write(to: autre)
+
+        VitrineTournage.effacerLesMarqueurs(dans: racine)
+
+        let restants = try FileManager.default.contentsOfDirectory(atPath: racine.path)
+        XCTAssertEqual(restants, ["fixtures.json"], "seules les étapes et les bornes partent")
+    }
+
     /// Clap, « début », l'action, « fin » : dans cet ordre, et la fin seulement une fois l'action rendue.
     func test_tourner_waitsForTheClap_thenBoundsTheAction() async throws {
         let racine = try dossier()

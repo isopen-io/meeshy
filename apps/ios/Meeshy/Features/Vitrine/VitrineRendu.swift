@@ -25,6 +25,14 @@ nonisolated enum VitrineEvenement: Hashable, Sendable {
     case composeur
     /// La feuille des stickers du composeur, ouverte (#9810).
     case feuilleDeStickers
+    /// Le réel publié par la passerelle de la vitrine, annoncé au fil (#9820).
+    case reelPublie
+}
+
+/// Le média que le composeur reçoit à l'ouverture, comme le choix de la photothèque (#9810, #9820).
+nonisolated struct VitrineMediaDOuverture: Equatable, Sendable {
+    let url: URL
+    let mimeType: String
 }
 
 nonisolated enum VitrineAppareil: Sendable {
@@ -43,6 +51,7 @@ extension VitrineScene {
         case .lien: return [.lien]
         case .interactionCommentaireAudio: return appareil == .ipad ? [.composeurDeCommentaire, .fil] : [.composeurDeCommentaire]
         case .interactionSticker: return [.composeur]
+        case .interactionReel: return [.fil, .composeur]
         case .interactionEmojiPost: return appareil == .ipad ? [.paletteDeReactionsPrete, .fil] : [.paletteDeReactionsPrete]
         case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
             let fiche = VitrineEvenement.fiche(celebration?.concept ?? .level)
@@ -135,21 +144,40 @@ final class VitrineRendu {
         signaler(.paletteDeReactions)
     }
 
-    /// La photo que le composeur reçoit à l'ouverture, comme le choix de la photothèque (#9810). Remise UNE fois.
-    var photoDuComposeur: URL?
+    /// Le média que le composeur reçoit à l'ouverture, comme le choix de la photothèque (#9810). Remis UNE fois.
+    var mediaDuComposeur: VitrineMediaDOuverture?
     /// La porte du sticker du rail (#9810).
     private(set) var ouvrirLesStickers: (() -> Void)?
     /// Le choix d'un sticker dans la feuille ouverte (#9810).
     private(set) var choisirUnSticker: ((StickerSheetChoice) -> Void)?
 
-    /// Le composeur est monté : il prête sa porte du sticker, et reçoit la photo d'ouverture s'il y en a une.
-    func composeurAffiche(ouvrirLesStickers: @escaping () -> Void) -> URL? {
+    /// Le composeur est monté : il prête sa porte du sticker, et reçoit le média d'ouverture s'il y en a un.
+    func composeurAffiche(ouvrirLesStickers: @escaping () -> Void) -> VitrineMediaDOuverture? {
         guard actif else { return nil }
         self.ouvrirLesStickers = ouvrirLesStickers
-        let photo = photoDuComposeur
-        photoDuComposeur = nil
+        let media = mediaDuComposeur
+        mediaDuComposeur = nil
         signaler(.composeur)
-        return photo
+        return media
+    }
+
+    /// Le chevron du socle (#9820) : l'auteur y arme « Réel ».
+    private(set) var armerDepuisLeComposeur: ((ComposerPublishChoice) -> Void)?
+    /// La flèche du socle, pressée une fois le choix armé et relu : « Publier ».
+    private(set) var publierDepuisLeComposeur: ((ComposerPublishChoice) -> Void)?
+
+    func composeurPretAPublier(armer: @escaping (ComposerPublishChoice) -> Void, publier: @escaping (ComposerPublishChoice) -> Void) {
+        guard actif else { return }
+        armerDepuisLeComposeur = armer
+        publierDepuisLeComposeur = publier
+    }
+
+    /// Révèle le fil sur iPhone, comme l'accès rapide de la liste (#9820). Sur iPad, le fil occupe déjà la colonne gauche.
+    private(set) var montrerLeFil: (() -> Void)?
+
+    func racineAffichee(montrerLeFil: @escaping () -> Void) {
+        guard actif else { return }
+        self.montrerLeFil = montrerLeFil
     }
 
     func feuilleDeStickersAffichee(choisir: @escaping (StickerSheetChoice) -> Void) {

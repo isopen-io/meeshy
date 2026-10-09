@@ -30,6 +30,15 @@ nonisolated enum VitrineCelebration: String, CaseIterable, Sendable {
         }
     }
 
+    /// La section où la fiche s'ouvre : le coffre vit sous la liste des missions, l'étagère des badges sous trois sections
+    /// — tous deux hors de l'écran à l'ouverture.
+    var section: ProgressionConceptSection? {
+        switch self {
+        case .coffre, .badge: .act
+        case .rang, .niveau, .frappe: nil
+        }
+    }
+
     /// La durée de la chorégraphie, lue sur la planche des durées : le script filme entre les deux marqueurs.
     var duree: TimeInterval {
         switch self {
@@ -50,7 +59,7 @@ extension VitrineScene {
         case .jeuFrappe: .frappe
         case .jeuNiveau: .niveau
         case .jeuBadge: .badge
-        case .amour, .groupe, .global, .lien, .progression, .imagine, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker: nil
+        case .amour, .groupe, .global, .lien, .progression, .imagine, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker, .interactionReel: nil
         }
     }
 }
@@ -66,62 +75,88 @@ nonisolated struct VitrineJeuScenario: Sendable {
 /// Les deux états de chaque célébration, BÂTIS PAR LA LOI (`GameLevelWire`, `GameGlory`, `GameMint`, `GameOptimistic`) :
 /// aucun chiffre n'est écrit à la main, sinon un réglage de la loi ferait mentir la vitrine sans que rien ne rougisse.
 /// Le profil est celui du kit (compteurs, jalons, Flamme) ; le jeu s'y greffe.
+///
+/// **Un seul fil** : le montage « Le jeu » enchaîne les scènes dans `ordreDuMontage`, et chacune part de l'état où la
+/// précédente arrive — points, niveau, Gloire, rang, Meeshes en poche. Des scénarios bâtis chacun de son côté faisaient
+/// redescendre le joueur d'un plan à l'autre.
 enum VitrineJeuScenarios {
+    /// L'ordre des scènes dans l'aperçu « Le jeu » : la frappe, le coffre, le niveau, le rang, le badge.
+    static let ordreDuMontage: [VitrineCelebration] = [.frappe, .coffre, .niveau, .rang, .badge]
+
     private static let score = 121_800
     private static let gloire = 1_730
     /// La prochaine pièce est la n° 100 : une édition Or.
     private static let frappees = 99
     private static let enPoche = 23
-    /// À quelques points du palier suivant : l'écran dit « encore 30 points », puis la marche se franchit.
-    private static let ecartAvant = 30
+    /// Après la montée, le joueur dépasse le palier de quelques points.
     private static let ecartApres = 90
+    /// À quelques points de la division suivante : l'écu attend, puis la marche se franchit.
+    private static let ecartDuRang = 25
+    private static let gainDuRang = 60
     private static let recompense = DailyChest(points: 140, fragment: true, freeze: false)
     /// Le compteur d'avant éteint la médaille Argent (50) des messages texte : « −4 ».
     private static let axeDuBadge = EngagementAxisKey.textMessage
     private static let compteurEteint = 46
 
-    static func pour(_ celebration: VitrineCelebration, base: APIEngagementProgress) -> VitrineJeuScenario {
-        switch celebration {
-        case .rang: rang(base)
-        case .niveau: niveau(base)
-        case .coffre: coffre(base)
-        case .frappe: frappe(base)
-        case .badge: badge(base)
+    /// L'état du joueur entre deux scènes.
+    private struct Etat {
+        let score: Int
+        let gloire: Int
+        let frappees: Int
+        let enPoche: Int
+
+        init(score: Int, gloire: Int, frappees: Int, enPoche: Int) {
+            self.score = score
+            self.gloire = gloire
+            self.frappees = frappees
+            self.enPoche = enPoche
+        }
+
+        init(_ jeu: GameBlock) {
+            self.init(score: jeu.level.score, gloire: jeu.glory.glory, frappees: jeu.mint.number - 1, enPoche: jeu.treasury.held)
         }
     }
 
-    private static func rang(_ base: APIEngagementProgress) -> VitrineJeuScenario {
-        let manque = GameGlory.standing(glory: gloire, mythic: false).gloryMissing ?? 0
-        let avant = gloire + manque - 25
-        return VitrineJeuScenario(
-            avant: charge(base, jeu: bloc(base, score: score, gloire: avant)),
-            apres: charge(base, jeu: bloc(base, score: score, gloire: avant + 60)),
-            coffre: nil, frappe: nil
-        )
+    static func pour(_ celebration: VitrineCelebration, base: APIEngagementProgress) -> VitrineJeuScenario {
+        guard let scenario = fil(base)[celebration] else {
+            fatalError("Vitrine : la célébration « \(celebration.rawValue) » n'est pas dans le montage")
+        }
+        return scenario
     }
 
-    private static func niveau(_ base: APIEngagementProgress) -> VitrineJeuScenario {
-        let seuil = bloc(base, score: score, gloire: gloire).level.shown.nextThreshold ?? score
-        return VitrineJeuScenario(
-            avant: charge(base, jeu: bloc(base, score: seuil - ecartAvant, gloire: gloire)),
-            apres: charge(base, jeu: bloc(base, score: seuil + ecartApres, gloire: gloire)),
-            coffre: nil, frappe: nil
-        )
+    /// Les cinq scénarios, bâtis à la suite : chaque scène reçoit l'état d'arrivée de la précédente.
+    private static func fil(_ base: APIEngagementProgress) -> [VitrineCelebration: VitrineJeuScenario] {
+        var etat = depart(base)
+        var scenarios: [VitrineCelebration: VitrineJeuScenario] = [:]
+        for celebration in ordreDuMontage {
+            let scenario = scene(celebration, base, depuis: etat)
+            scenarios[celebration] = scenario
+            etat = scenario.apres.game.map(Etat.init) ?? etat
+        }
+        return scenarios
     }
 
-    private static func coffre(_ base: APIEngagementProgress) -> VitrineJeuScenario {
-        let pret = bloc(base, score: score, gloire: gloire, missionsFaites: true)
-        let avant = charge(base, jeu: pret)
-        let reponse = ChestClaimResponse(status: "claimed", reward: recompense, score: score + recompense.points)
-        let ouvert = GameOptimistic.withChestReward(
-            GameOptimistic.afterChestOpening(GameState(game: pret, meesh: avant.meesh)),
-            reward: reponse.reward, score: reponse.score
-        )
-        return VitrineJeuScenario(avant: avant, apres: avant.replacing(game: ouvert.game, meesh: ouvert.meesh), coffre: reponse, frappe: nil)
+    /// Le départ de la frappe : la pièce Or apporte sa Gloire, et le rang, deux scènes plus loin, doit partir à quelques
+    /// points d'une division — la Gloire de départ se lit donc à rebours depuis là.
+    private static func depart(_ base: APIEngagementProgress) -> Etat {
+        let gain = bloc(base, Etat(score: score, gloire: gloire, frappees: frappees, enPoche: enPoche)).mint.gloryGained
+        let arrivee = gloire + gain
+        let manque = GameGlory.standing(glory: arrivee, mythic: false).gloryMissing ?? 0
+        return Etat(score: score, gloire: arrivee + manque - ecartDuRang - gain, frappees: frappees, enPoche: enPoche)
     }
 
-    private static func frappe(_ base: APIEngagementProgress) -> VitrineJeuScenario {
-        let jeu = bloc(base, score: score, gloire: gloire)
+    private static func scene(_ celebration: VitrineCelebration, _ base: APIEngagementProgress, depuis etat: Etat) -> VitrineJeuScenario {
+        switch celebration {
+        case .frappe: frappe(base, etat)
+        case .coffre: coffre(base, etat)
+        case .niveau: niveau(base, etat)
+        case .rang: rang(base, etat)
+        case .badge: badge(base, etat)
+        }
+    }
+
+    private static func frappe(_ base: APIEngagementProgress, _ etat: Etat) -> VitrineJeuScenario {
+        let jeu = bloc(base, etat)
         let avant = charge(base, jeu: jeu)
         let frappee = GameOptimistic.afterMint(GameState(game: jeu, meesh: avant.meesh))
         let reponse = APIMeeshMintResult(
@@ -132,8 +167,40 @@ enum VitrineJeuScenarios {
         return VitrineJeuScenario(avant: avant, apres: avant.replacing(game: frappee.game, meesh: frappee.meesh), coffre: nil, frappe: reponse)
     }
 
-    private static func badge(_ base: APIEngagementProgress) -> VitrineJeuScenario {
-        let jeu = bloc(base, score: score, gloire: gloire)
+    private static func coffre(_ base: APIEngagementProgress, _ etat: Etat) -> VitrineJeuScenario {
+        let pret = bloc(base, etat, missionsFaites: true)
+        let avant = charge(base, jeu: pret)
+        let reponse = ChestClaimResponse(status: "claimed", reward: recompense, score: etat.score + recompense.points)
+        let ouvert = GameOptimistic.withChestReward(
+            GameOptimistic.afterChestOpening(GameState(game: pret, meesh: avant.meesh)),
+            reward: reponse.reward, score: reponse.score
+        )
+        return VitrineJeuScenario(avant: avant, apres: avant.replacing(game: ouvert.game, meesh: ouvert.meesh), coffre: reponse, frappe: nil)
+    }
+
+    /// Les points du coffre posés, le joueur franchit le palier suivant.
+    private static func niveau(_ base: APIEngagementProgress, _ etat: Etat) -> VitrineJeuScenario {
+        let avant = bloc(base, etat, missionsFaites: true)
+        let seuil = avant.level.shown.nextThreshold ?? etat.score
+        let apres = Etat(score: seuil + ecartApres, gloire: etat.gloire, frappees: etat.frappees, enPoche: etat.enPoche)
+        return VitrineJeuScenario(
+            avant: charge(base, jeu: avant),
+            apres: charge(base, jeu: bloc(base, apres, missionsFaites: true)),
+            coffre: nil, frappe: nil
+        )
+    }
+
+    private static func rang(_ base: APIEngagementProgress, _ etat: Etat) -> VitrineJeuScenario {
+        let apres = Etat(score: etat.score, gloire: etat.gloire + gainDuRang, frappees: etat.frappees, enPoche: etat.enPoche)
+        return VitrineJeuScenario(
+            avant: charge(base, jeu: bloc(base, etat, missionsFaites: true)),
+            apres: charge(base, jeu: bloc(base, apres, missionsFaites: true)),
+            coffre: nil, frappe: nil
+        )
+    }
+
+    private static func badge(_ base: APIEngagementProgress, _ etat: Etat) -> VitrineJeuScenario {
+        let jeu = bloc(base, etat, missionsFaites: true)
         let eteint = base.counters.map { compteur in
             compteur.axisKey == axeDuBadge.rawValue
                 ? APIEngagementProgress.Counter(axisKey: compteur.axisKey, count: compteurEteint, points: compteur.points)
@@ -148,8 +215,9 @@ enum VitrineJeuScenarios {
 
     // MARK: - Le bloc `game`, tel que la passerelle le sert
 
-    private static func bloc(_ base: APIEngagementProgress, score: Int, gloire: Int, missionsFaites: Bool = false) -> GameBlock {
-        let standing = GameGlory.standing(glory: gloire, mythic: false)
+    private static func bloc(_ base: APIEngagementProgress, _ etat: Etat, missionsFaites: Bool = false) -> GameBlock {
+        let score = etat.score
+        let standing = GameGlory.standing(glory: etat.gloire, mythic: false)
         let plafond = GameGlory.levelCap(forRank: standing.rank)
         let niveau = GameLevelWire.level(score: score, levelCap: plafond, levelRecord: nil, prestige: 0)
         let jours = max(1, base.streak.currentStreakDays)
@@ -159,8 +227,8 @@ enum VitrineJeuScenarios {
                 glory: standing.glory, rank: standing.rank, division: standing.division, division5: standing.division5,
                 next: standing.next, gloryMissing: standing.gloryMissing, progress: standing.progress
             ),
-            treasury: GameTreasury.standing(held: enPoche),
-            mint: GameLevelWire.mint(GameMint.preview(score: score, mintedLifetime: frappees, debitablePoints: score, levelCap: plafond)),
+            treasury: GameTreasury.standing(held: etat.enPoche),
+            mint: GameLevelWire.mint(GameMint.preview(score: score, mintedLifetime: etat.frappees, debitablePoints: score, levelCap: plafond)),
             missions: GameBlock.Missions(
                 dayKey: jourDuJour(), prismDay: false, unlocked: niveau.shown.level >= 5,
                 items: missions(faites: missionsFaites), rerollAvailable: !missionsFaites
@@ -195,7 +263,7 @@ enum VitrineJeuScenarios {
     /// La charge du kit, avec le jeu greffé et un solde de Meeshes qui DIT le même trésor que le bloc.
     private static func charge(_ base: APIEngagementProgress, jeu: GameBlock, compteurs: [APIEngagementProgress.Counter]? = nil) -> APIEngagementProgress {
         let solde = APIEngagementProgress.Meesh(
-            balance: jeu.treasury.held, mintedLifetime: frappees, debitablePoints: jeu.level.score, floorPoints: 0,
+            balance: jeu.treasury.held, mintedLifetime: jeu.mint.number - 1, debitablePoints: jeu.level.score, floorPoints: 0,
             missingPoints: jeu.mint.missingPoints, mintCost: jeu.mint.price,
             firstMintedAt: base.meesh?.firstMintedAt, lastMintedAt: base.meesh?.lastMintedAt
         )
@@ -321,9 +389,10 @@ enum VitrineJeu {
         guard let enCours, let fiche else {
             fatalError("Vitrine « \(scene.rawValue) » : la fiche n'a pas reçu le modèle de la scène")
         }
-        let depart = ContinuousClock.now
         await jouer(enCours.celebration, sur: fiche, serveur: enCours.serveur)
-        try? await Task.sleep(until: depart + .seconds(enCours.celebration.duree) + finDeChoregraphie, clock: .continuous)
+        // La chorégraphie part quand l'état servi arrive à la fiche — la lecture ou la réponse du geste —, pas au signal.
+        VitrineTournage.etape("servi")
+        try? await Task.sleep(until: .now + .seconds(enCours.celebration.duree) + finDeChoregraphie, clock: .continuous)
     }
 }
 #endif

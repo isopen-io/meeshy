@@ -36,7 +36,12 @@ extension VitrineInteractions {
     /// Une fois la session restaurée : le post et son fil sous les clés que le détail lit (`loadPost`, `loadComments`),
     /// frais — aucun appel réseau —, et pour le commentaire vocal, la passerelle des commentaires.
     static func remplir(_ scene: VitrineScene, _ f: VitrineFixtures) async throws {
-        guard let interaction = scene.interaction, [.commentaireAudio, .emojiPost].contains(interaction) else { return }
+        guard let interaction = scene.interaction else { return }
+        if interaction == .reel {
+            VitrineReel.installer(lecteur: f.lecteur)
+            return
+        }
+        guard [.commentaireAudio, .emojiPost].contains(interaction) else { return }
         guard let post = postCommente(f) else { throw VitrineInteractionsErreur.aucunPost }
         try await CacheCoordinator.shared.feed.save([post], for: post.id)
         try await CacheCoordinator.shared.comments.save([], for: "post-\(post.id)")
@@ -66,9 +71,12 @@ extension VitrineInteractions {
         }
         envoyer(copie, vocal.duree)
         _ = await serveur.attendreLaCreation()
+        VitrineTournage.etape("creation")
         try? await Task.sleep(for: avantLaTranscription)
+        VitrineTournage.etape("transcription")
         if let transcription = serveur.transcriptionArrivee() { SocialSocketManager.shared.commentMediaUpdated.send(transcription) }
         try? await Task.sleep(for: avantLaTraduction)
+        VitrineTournage.etape("traduction")
         if let traduction = serveur.traductionArrivee() { SocialSocketManager.shared.commentMediaUpdated.send(traduction) }
         try? await Task.sleep(for: tenueDeLaTraduction)
     }
@@ -80,10 +88,12 @@ extension VitrineInteractions {
         }
         ouvrir()
         await VitrineRendu.shared.attendre([.paletteDeReactions])
+        VitrineTournage.etape("palette")
         try? await Task.sleep(for: tenueDeLaPalette)
         guard let choisir = VitrineRendu.shared.choisirDansLaPalette else {
             fatalError("Vitrine « \(scene.rawValue) » : la palette n'a pas prêté son geste")
         }
+        VitrineTournage.etape("choix")
         choisir(emojiDuPost)
         try? await Task.sleep(for: tenueDeLaReaction)
     }

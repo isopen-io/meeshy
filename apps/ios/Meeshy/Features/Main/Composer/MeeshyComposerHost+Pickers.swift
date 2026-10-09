@@ -173,13 +173,19 @@ extension MeeshyComposerHost {
     }
 
     #if DEBUG
-    /// La vitrine (#9810) : sa photo entre comme le choix de la photothèque À L'OUVERTURE — elle fonde la scène, avant
-    /// que la feuille ne s'ouvre d'office —, et la porte du sticker s'ouvre par le rail.
+    /// La vitrine (#9810) : son média entre comme le choix de la photothèque À L'OUVERTURE — il fonde la scène, avant
+    /// que la feuille ne s'ouvre d'office —, la porte du sticker s'ouvre par le rail, et la flèche publie comme l'auteur
+    /// qui arme un format au chevron puis touche « Publier » (#9820).
     func preterLeComposeurALaVitrine() {
-        let photo = VitrineRendu.shared.composeurAffiche { handleRailDoor(.sticker) }
-        guard let photo else { return }
+        let media = VitrineRendu.shared.composeurAffiche { handleRailDoor(.sticker) }
+        VitrineRendu.shared.composeurPretAPublier(armer: { chooseArmedPublish($0) }, publier: { requestSoclePublish($0) })
+        guard let media else { return }
         openingPickFoundsScenes = true
-        routePickedMedia([ComposerDocumentMediaFactory.media(url: photo, declaredMimeType: "image/jpeg")])
+        // La durée se mesure comme à l'ingestion de la photothèque : sans elle, un réel n'est jamais qualifié.
+        Task {
+            let duree = await ComposerMediaProbe.durationMs(forURL: media.url, mime: media.mimeType)
+            routePickedMedia([ComposerDocumentMediaFactory.media(url: media.url, declaredMimeType: media.mimeType, durationMs: duree)])
+        }
     }
     #endif
 
