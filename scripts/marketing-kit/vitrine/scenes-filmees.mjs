@@ -101,4 +101,20 @@ export const SCENES_FILMEES = {
     mouvement: [[320, 700], [1420, 1700]],
     imagesCles: [{ nom: 'menu', instantMs: 1200 }, { nom: 'reaction', instantMs: 2800 }],
   }),
+  // Appui long sur le cœur : la palette s'ouvre (ressort 0,3 s), tenue 1,1 s, puis ❤️ — la palette se referme
+  // (0,3 s) et le cœur se remplit, compteur compris.
+  'interaction-emoji-post': interaction('interaction-emoji-post', {
+    montreUnFil: false,
+    dureeMs: 2500,
+    mouvement: [[40, 280], [1120, 1350]],
+    imagesCles: [{ nom: 'palette', instantMs: 900 }, { nom: 'coeur', instantMs: 2500 }],
+  }),
+  // Le vocal part (montée 0,9 s), la transcription arrive 1,3 s après sa création, la traduction 1,6 s plus tard,
+  // tenue 1,8 s. Aucune fenêtre de mouvement tant que les apparitions n'ont pas été mesurées au simulateur.
+  'interaction-commentaire-audio': interaction('interaction-commentaire-audio', {
+    montreUnFil: false,
+    dureeMs: 5700,
+    mouvement: [],
+    imagesCles: [{ nom: 'envoi', instantMs: 500 }, { nom: 'transcription', instantMs: 2700 }, { nom: 'traduction', instantMs: 4600 }],
+  }),
 }

@@ -38,7 +38,7 @@ describe('plan de prise (#9806)', () => {
   })
 
   test('les interactions sont filmables, jouées par l’app au clap et bornées par ses marqueurs (#9810)', () => {
-    for (const scene of ['interaction-frappe', 'interaction-emoji']) {
+    for (const scene of ['interaction-frappe', 'interaction-emoji', 'interaction-emoji-post', 'interaction-commentaire-audio']) {
       for (const appareil of APPAREILS) {
         const plan = planDePrise({ scene, appareil })
         expect(plan.famille).toBe('interaction')
