@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
-import { attachmentMediaSelect } from '../../../services/attachments/attachmentIncludes';
+import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../../../services/attachments/attachmentIncludes';
 import { applyHistoryFloor } from '../../../services/historyFloor';
 import { withOrphanedSenderRepair } from '../../../services/messaging/withOrphanedSenderRepair';
 
@@ -314,7 +314,7 @@ export async function getConversationMessagesWithDetails(
     skip: offset,
     include: {
       sender: senderInclude,
-      attachments: { select: attachmentMediaSelect },
+      attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
       replyTo: {
         include: {
           sender: senderInclude

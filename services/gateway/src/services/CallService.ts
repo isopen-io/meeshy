@@ -12,6 +12,7 @@
 
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
+import { MESSAGE_ATTACHMENT_ORDER } from './attachments/attachmentIncludes';
 import { CALL_ERROR_CODES, type CallEndedEvent, type CallParticipantLeftEvent } from '@meeshy/shared/types/video-call';
 import {
   CALL_BACKGROUND_HEARTBEAT_TIMEOUT_MS,
@@ -106,7 +107,7 @@ export const CALL_SUMMARY_MESSAGE_INCLUDE = {
       }
     }
   },
-  attachments: true
+  attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER }
 } as const satisfies Prisma.MessageInclude;
 
 // Type for CallSession with populated participants

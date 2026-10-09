@@ -3,6 +3,8 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import { copyAttachmentsFromMessage } from '../copyAttachments';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../attachments/attachmentIncludes';
+import { makeAttachmentStore } from '../../../__tests__/unit/services/attachment-order-store';
 
 function makePrisma(overrides: any = {}) {
   return {
@@ -109,5 +111,24 @@ describe('copyAttachmentsFromMessage', () => {
       sourceMessageId: 'src', targetMessageId: 'dst', requesterParticipantId: 'me',
     })).rejects.toThrow(/empty-source/);
     expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('copyAttachmentsFromMessage — l’ordre du message source (#9776)', () => {
+  it('la copie garde l’ordre de la source, quelle que soit l’heure de création des copies', async () => {
+    const at = (s: number) => new Date(Date.UTC(2026, 9, 9, 12, 0, s));
+    const store = makeAttachmentStore([
+      { id: 'a', messageId: 'src', rank: 2, createdAt: at(1), fileUrl: 'u/a' },
+      { id: 'b', messageId: 'src', rank: 0, createdAt: at(3), fileUrl: 'u/b' },
+      { id: 'c', messageId: 'src', rank: 1, createdAt: at(2), fileUrl: 'u/c' },
+    ]);
+    const prisma = makePrisma({ messageAttachment: store.prisma.messageAttachment });
+
+    await copyAttachmentsFromMessage(prisma, {
+      sourceMessageId: 'src', targetMessageId: 'dst', requesterParticipantId: 'me',
+    });
+
+    const served = store.findMany({ where: { messageId: 'dst' }, orderBy: MESSAGE_ATTACHMENT_ORDER });
+    expect(served.map((row) => row.fileUrl)).toEqual(['u/b', 'u/c', 'u/a']);
   });
 });

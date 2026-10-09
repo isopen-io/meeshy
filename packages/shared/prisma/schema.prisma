@@ -1154,6 +1154,16 @@ model MessageAttachment {
   capturedInApp             Boolean @default(false)
 
   // =====================================================
+  // ORDRE DANS LE MESSAGE (#9776)
+  // =====================================================
+  /// Rang de la pièce dans son message, fixé par l'ordre de `attachmentIds`
+  /// à la création (l'ordre du composeur). `createdAt` est l'heure de FIN d'un
+  /// téléversement — parallèles, ils finissent dans le désordre. OPTIONNEL :
+  /// un message d'avant #9776 n'en porte pas, et se lit alors par
+  /// `createdAt` puis `id` (`MESSAGE_ATTACHMENT_ORDER`, gateway).
+  rank                      Int?
+
+  // =====================================================
   // SECRET / VIEW-ONCE / BLUR FIELDS
   // =====================================================
   /// View-once attachment (disappears after user views it)

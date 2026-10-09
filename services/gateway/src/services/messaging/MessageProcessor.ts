@@ -25,7 +25,7 @@ import { MessageTranslationService } from '../message-translation/MessageTransla
 import { AttachmentService } from '../attachments';
 import { copyAttachmentsFromMessage } from './copyAttachments';
 import { deriveMessageTypeForAttachments } from './attachmentMessageType';
-import { attachmentFullSelect, attachmentSocketSelect } from '../attachments/attachmentIncludes';
+import { attachmentFullSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
 import {
@@ -496,7 +496,7 @@ export class MessageProcessor {
                 }
               }
             },
-            attachments: true,
+            attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER },
             replyTo: {
               include: {
                 sender: {
@@ -522,7 +522,7 @@ export class MessageProcessor {
                 // Parité avec le chemin REST (messages.ts) : le snapshot du
                 // message cité doit porter ses pièces jointes, sinon l'aperçu
                 // de citation n'affiche rien sur les messages reçus en socket.
-                attachments: { select: attachmentFullSelect, take: 4 }
+                attachments: { select: attachmentFullSelect, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 4 }
               }
             }
           }
@@ -606,7 +606,7 @@ export class MessageProcessor {
       const refreshedAttachments = await performanceLogger.withTiming(
         'messaging.refreshAttachments',
         () => this.prisma.messageAttachment.findMany({
-          where: { messageId: message.id }, select: attachmentSocketSelect // #7070 — repart TELLE QUELLE sur message:new/edited REST/ZMQ
+          where: { messageId: message.id }, select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER // #7070 — repart TELLE QUELLE sur message:new/edited REST/ZMQ
         }),
         corrWithMsg
       );
@@ -742,17 +742,17 @@ export class MessageProcessor {
   private async copyForwardedAttachments(originalMessageId: string, newMessageId: string, senderId: string): Promise<void> {
     try {
       const originalAttachments = await this.prisma.messageAttachment.findMany({
-        where: { messageId: originalMessageId }
+        where: { messageId: originalMessageId }, orderBy: MESSAGE_ATTACHMENT_ORDER
       });
 
       if (originalAttachments.length === 0) return;
 
       const createdAttachments = await Promise.all(
-        originalAttachments.map(att =>
+        originalAttachments.map((att, rank) =>
           this.prisma.messageAttachment.create({
             data: {
               ...copiedAttachmentFields(att),
-              messageId: newMessageId,
+              messageId: newMessageId, rank,
               forwardedFromAttachmentId: att.id,
               isForwarded: true,
               uploadedBy: senderId,

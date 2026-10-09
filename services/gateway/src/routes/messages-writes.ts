@@ -6,7 +6,7 @@
  */
 import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
-import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
+import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import {
@@ -157,7 +157,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes sur une lecture déjà là : aucun aller-retour de plus.
               conversation: { select: { isActive: true, closedAt: true } },
-              attachments: { select: attachmentMediaSelect }
+              attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER }
             }
           })
       );

@@ -9,7 +9,7 @@ import {
 } from '../../services/personalHistoryFilter';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { applyHistoryFloor, historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
-import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -82,7 +82,7 @@ const threadMessageSelect = {
       }
     }
   },
-  attachments: { select: attachmentMediaSelect },
+  attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
   replyTo: {
     select: {
       id: true,
@@ -129,6 +129,7 @@ const threadMessageSelect = {
         }
       },
       attachments: {
+        orderBy: MESSAGE_ATTACHMENT_ORDER,
         select: {
           id: true,
           fileName: true,

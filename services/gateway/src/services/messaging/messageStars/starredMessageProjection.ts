@@ -19,7 +19,7 @@ import type {
   StarredMessageTranslation,
 } from '@meeshy/shared/types/message-star';
 
-import { attachmentForwardPreviewSelect, attachmentProtectionSelect } from '../../attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect, attachmentProtectionSelect, MESSAGE_ATTACHMENT_ORDER } from '../../attachments/attachmentIncludes';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../../utils/translation-transformer';
 import type { StarredMessageVerdict } from './starredMessageVerdict';
 
@@ -57,7 +57,7 @@ export const STARRED_MESSAGE_SELECT = Prisma.validator<Prisma.MessageSelect>()({
   },
   attachments: {
     select: { ...attachmentForwardPreviewSelect, ...attachmentProtectionSelect },
-    orderBy: { createdAt: 'asc' },
+    orderBy: MESSAGE_ATTACHMENT_ORDER,
     take: STARRED_MESSAGE_ATTACHMENT_PREVIEW_COUNT,
   },
 });

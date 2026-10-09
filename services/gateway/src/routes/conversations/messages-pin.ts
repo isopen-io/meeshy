@@ -23,7 +23,7 @@ import {
 } from '../../services/historyFloor';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
-import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding
@@ -504,7 +504,7 @@ export function registerMessagePinRoutes(
           // que `attachmentForwardPreviewSelect` documente — « the user taps
           // through to the full message for playback » — et une forme NOMMÉE,
           // jamais une copie locale qui dériverait (`attachmentIncludes.ts`).
-          attachments: { select: attachmentForwardPreviewSelect },
+          attachments: { select: attachmentForwardPreviewSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
           _count: { select: { reactions: true, replies: true } }
         }
       }));
