@@ -15,6 +15,12 @@ nonisolated enum VitrineEvenement: Hashable, Sendable {
     case fiche(ProgressionConcept)
     /// La bande d'émojis du menu unifié, montée (#9810).
     case menuDeReactions
+    /// Le composeur de commentaire du détail d'un post, monté (#9810).
+    case composeurDeCommentaire
+    /// Le cœur du détail d'un post, qui ouvre la palette d'émojis, monté (#9810).
+    case paletteDeReactionsPrete
+    /// La palette d'émojis d'un post, ouverte (#9810).
+    case paletteDeReactions
 }
 
 nonisolated enum VitrineAppareil: Sendable {
@@ -31,6 +37,8 @@ extension VitrineScene {
         case .global, .amour, .groupe, .imagine, .interactionEmoji: return [.conversation(conversationId ?? "")]
         case .progression, .interactionFrappe: return appareil == .ipad ? [.progression, .fil] : [.progression]
         case .lien: return [.lien]
+        case .interactionCommentaireAudio: return appareil == .ipad ? [.composeurDeCommentaire, .fil] : [.composeurDeCommentaire]
+        case .interactionEmojiPost: return appareil == .ipad ? [.paletteDeReactionsPrete, .fil] : [.paletteDeReactionsPrete]
         case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
             let fiche = VitrineEvenement.fiche(celebration?.concept ?? .level)
             return appareil == .ipad ? [fiche, .fil] : [fiche]
@@ -96,6 +104,14 @@ final class VitrineRendu {
         reagirAuMenu = reagir
         signaler(.menuDeReactions)
     }
+
+    private(set) var envoyerUnVocal: ((URL, TimeInterval) -> Void)?
+    private(set) var ouvrirLaPalette: (() -> Void)?
+    private(set) var choisirDansLaPalette: ((String) -> Void)?
+
+    func composeurDeCommentaireAffiche(envoyerUnVocal: @escaping (URL, TimeInterval) -> Void) {}
+    func paletteDeReactionsPrete(ouvrir: @escaping () -> Void) {}
+    func paletteDeReactionsAffichee(choisir: @escaping (String) -> Void) {}
 
     func attendre(_ attendus: Set<VitrineEvenement>) async {
         guard !attendus.isSubset(of: observes) else { return }

@@ -13,12 +13,14 @@ nonisolated enum VitrineInteraction: String, CaseIterable, Sendable {
     case frappe
     /// Le menu unifié d'un message reçu s'ouvre, un émoji s'y pose (`ConversationViewModel.toggleReaction`).
     case emoji
+    case emojiPost
+    case commentaireAudio
 
     /// La célébration du jeu que l'interaction déclenche : la passerelle fictive la prépare.
     var celebration: VitrineCelebration? {
         switch self {
         case .frappe: .frappe
-        case .emoji: nil
+        case .emoji, .emojiPost, .commentaireAudio: nil
         }
     }
 }
@@ -28,6 +30,8 @@ extension VitrineScene {
         switch self {
         case .interactionFrappe: .frappe
         case .interactionEmoji: .emoji
+        case .interactionEmojiPost: .emojiPost
+        case .interactionCommentaireAudio: .commentaireAudio
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: nil
         }
     }
@@ -38,7 +42,7 @@ extension VitrineScene {
         switch self {
         case .interactionEmoji: .amour
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge,
-             .interactionFrappe: self
+             .interactionFrappe, .interactionEmojiPost, .interactionCommentaireAudio: self
         }
     }
 
@@ -63,9 +67,12 @@ enum VitrineInteractions {
             switch interaction {
             case .frappe: await frapperDepuisLeCompteur(scene)
             case .emoji: await reagirAuMessage(scene, f)
+            case .emojiPost, .commentaireAudio: break
             }
         }
     }
+
+    static func postCommente(_ f: VitrineFixtures) -> FeedPost? { nil }
 
     /// Le dernier message REÇU et écrit de la conversation : celui auquel on répond d'un émoji.
     static func messageAReagir(_ f: VitrineFixtures, conversationId: String) -> String? {
