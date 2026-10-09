@@ -9,6 +9,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import {
   BOOKMARKS_DISCLOSED_SINCE,
+  REPOSTS_INSPECTED_PER_PAGE,
   engagementOf,
   mayReadViewerInteractions,
   readViewerInteractions,
@@ -283,6 +284,31 @@ describe("ce que le lecteur a le droit de voir de l'activité d'autrui (revue de
     );
     expect(result?.viewers.map((v) => v.id)).toEqual([ANNA, BRUNO]);
     expect(result?.viewers.every((v) => v.reaction === null && !('bookmarked' in v) && !('reactions' in v))).toBe(true);
+  });
+
+  it("les republications inspectées sont BORNÉES : une personne qui en publie des centaines ne fixe pas le coût de la page", async () => {
+    const prisma = makePrisma();
+    await read(prisma);
+    expect(prisma.post.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: REPOSTS_INSPECTED_PER_PAGE, orderBy: { createdAt: 'desc' } }),
+    );
+    expect(REPOSTS_INSPECTED_PER_PAGE).toBeLessThanOrEqual(100);
+  });
+
+  it("une garde de republication qui échoue ne retire QUE les republications, le reste de la page est servi", async () => {
+    const gates: ViewerEngagementGates = {
+      consumablePostIds: jest.fn(async () => {
+        throw new Error('trop de lectures');
+      }) as ViewerEngagementGates['consumablePostIds'],
+      blockRelatedIds: jest.fn(async () => new Set<string>()) as ViewerEngagementGates['blockRelatedIds'],
+    };
+    const result = await read(
+      makePrisma({ reactions: [{ userId: ANNA, emoji: '❤️' }], reposts: [{ id: 'rp-1', authorId: ANNA }] }),
+      { id: AUTHOR },
+      gates,
+    );
+    expect(result?.viewers[0]).toEqual(expect.objectContaining({ reaction: '❤️', reactions: ['❤️'] }));
+    expect(result?.viewers[0]).not.toHaveProperty('repostCount');
   });
 
   it('les gardes par défaut lisent le blocage dans les DEUX sens', async () => {

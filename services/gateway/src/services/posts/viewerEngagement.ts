@@ -76,6 +76,16 @@ export function viewerEngagementGates(prisma: ViewerEngagementPrisma): ViewerEng
  * d'effet rétroactif, RGPD art. 5(1)(a) et 13(3)). Seuls les favoris posés
  * depuis la mise en service de la liste enrichie le sont.
  */
+/**
+ * Combien de republications au plus une page inspecte (#9727, revue de
+ * sécurité). Chacune passe par la loi de consommation — une lecture d'ACL par
+ * republication — et rien n'empêche un compte d'en publier des centaines d'un
+ * même contenu : sans borne, une seule personne de la page fixait le coût de la
+ * requête de l'auteur, et pouvait la faire échouer. Au-delà, le compteur d'une
+ * personne est un PLANCHER (les plus récentes d'abord), jamais un excès.
+ */
+export const REPOSTS_INSPECTED_PER_PAGE = 100;
+
 export const BOOKMARKS_DISCLOSED_SINCE = new Date('2026-10-10T00:00:00.000Z');
 
 /** Qui demande la liste : son identifiant et son rôle GLOBAL. */
@@ -177,6 +187,8 @@ export async function loadViewerEngagement(
     prisma.post.findMany({
       where: { repostOfId: postId, authorId: { in: ids }, deletedAt: NOT_DELETED },
       select: { id: true, authorId: true },
+      orderBy: { createdAt: 'desc' },
+      take: REPOSTS_INSPECTED_PER_PAGE,
     }),
     prisma.postComment.groupBy({
       by: ['authorId'],
@@ -208,7 +220,14 @@ export async function loadViewerEngagement(
     new Map(),
   );
   const shares = countsBy(shareRows, 'createdBy');
-  const visibleReposts = await gates.consumablePostIds(repostRows.map((row) => row.id), readerId);
+  // Une garde de republication qui ne conclut pas retire les republications,
+  // et elles seules : le reste de la page n'a pas à payer pour elles.
+  const visibleReposts = await gates
+    .consumablePostIds(repostRows.map((row) => row.id), readerId)
+    .catch((error: unknown) => {
+      logger.warn('[viewerEngagement] visibilité des republications non conclue — non comptées', { postId, error });
+      return new Set<string>();
+    });
   const reposts = repostRows
     .filter((row) => visibleReposts.has(row.id))
     .reduce<ReadonlyMap<string, number>>(
