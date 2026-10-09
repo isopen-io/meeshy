@@ -192,7 +192,7 @@ struct PublicationViewersSheet: View {
 
                     let marks = viewer.engagement.marks
                     if !marks.isEmpty {
-                        ViewerEngagementStrip(marks: marks, accentColor: accentColor)
+                        ViewerEngagementStrip(marks: marks)
                     }
                 }
             }
@@ -250,7 +250,6 @@ struct PublicationViewersSheet: View {
 /// porte la phrase complète (`ViewerEngagementWording`).
 private struct ViewerEngagementStrip: View {
     let marks: [PostViewerEngagement.Mark]
-    let accentColor: Color
 
     var body: some View {
         HStack(spacing: MeeshySpacing.sm) {
@@ -259,10 +258,6 @@ private struct ViewerEngagementStrip: View {
                 case .reactions(let emojis):
                     Text(emojis.joined(separator: " "))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                case .bookmarked:
-                    Image(systemName: ViewerEngagementWording.symbol(for: mark))
-                        .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                        .foregroundColor(accentColor)
                 case .comments(let count), .replies(let count), .reposts(let count), .shares(let count):
                     HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: ViewerEngagementWording.symbol(for: mark))
@@ -361,7 +356,6 @@ enum ViewerEngagementWording {
         case .replies: return "arrowshape.turn.up.left"
         case .reposts: return "arrow.2.squarepath"
         case .shares: return "square.and.arrow.up"
-        case .bookmarked: return "bookmark.fill"
         }
     }
 
@@ -372,8 +366,6 @@ enum ViewerEngagementWording {
                 format: String(localized: "viewer.engagement.reactions", defaultValue: "Réactions : %@", bundle: .main),
                 emojis.joined(separator: " ")
             )
-        case .bookmarked:
-            return String(localized: "viewer.engagement.bookmarked", defaultValue: "Enregistré dans ses favoris", bundle: .main)
         case .comments(let count):
             return counted(count,
                            one: String(localized: "viewer.engagement.comments.one", defaultValue: "%d commentaire", bundle: .main),

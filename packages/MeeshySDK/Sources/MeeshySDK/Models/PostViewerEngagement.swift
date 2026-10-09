@@ -8,32 +8,33 @@ import Foundation
 /// Chaque champ est ABSENT du fil quand il vaut zéro : il se décode à zéro, et
 /// `marks` ne produit jamais « 0 commentaire ». Un serveur d'avant #9727 ne
 /// sert que `reaction` (la plus récente) : elle devient la seule réaction.
+///
+/// Le FAVORI n'y figure jamais (décision porteur 2026-10-09) : mettre un
+/// contenu de côté reste un geste privé. Une passerelle plus ancienne qui
+/// servirait encore `bookmarked` voit la clé ignorée au décodage.
 public struct PostViewerEngagement: Decodable, Equatable, Hashable, Sendable {
     public let reactions: [String]
     public let shareCount: Int
     public let repostCount: Int
     public let commentCount: Int
     public let replyCount: Int
-    public let bookmarked: Bool
 
     public init(
         reactions: [String] = [],
         shareCount: Int = 0,
         repostCount: Int = 0,
         commentCount: Int = 0,
-        replyCount: Int = 0,
-        bookmarked: Bool = false
+        replyCount: Int = 0
     ) {
         self.reactions = reactions
         self.shareCount = shareCount
         self.repostCount = repostCount
         self.commentCount = commentCount
         self.replyCount = replyCount
-        self.bookmarked = bookmarked
     }
 
     private enum CodingKeys: String, CodingKey {
-        case reaction, reactions, shareCount, repostCount, commentCount, replyCount, bookmarked
+        case reaction, reactions, shareCount, repostCount, commentCount, replyCount
     }
 
     /// Se décode depuis la LIGNE de la liste elle-même (mêmes clés que
@@ -48,7 +49,6 @@ public struct PostViewerEngagement: Decodable, Equatable, Hashable, Sendable {
         repostCount = Self.count(container, .repostCount)
         commentCount = Self.count(container, .commentCount)
         replyCount = Self.count(container, .replyCount)
-        bookmarked = (try? container.decodeIfPresent(Bool.self, forKey: .bookmarked)) ?? false
     }
 
     private static func count(_ container: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Int {
@@ -56,14 +56,13 @@ public struct PostViewerEngagement: Decodable, Equatable, Hashable, Sendable {
     }
 
     /// Une marque à dessiner, dans l'ordre de la feuille : réactions,
-    /// commentaires, réponses, republications, partages, favori.
+    /// commentaires, réponses, republications, partages.
     public enum Mark: Equatable, Hashable, Sendable {
         case reactions([String])
         case comments(Int)
         case replies(Int)
         case reposts(Int)
         case shares(Int)
-        case bookmarked
     }
 
     /// Les marques non nulles — un compteur à zéro n'en produit aucune.
@@ -74,7 +73,6 @@ public struct PostViewerEngagement: Decodable, Equatable, Hashable, Sendable {
         if replyCount > 0 { result.append(.replies(replyCount)) }
         if repostCount > 0 { result.append(.reposts(repostCount)) }
         if shareCount > 0 { result.append(.shares(shareCount)) }
-        if bookmarked { result.append(.bookmarked) }
         return result
     }
 

@@ -255,7 +255,7 @@ final class StoryInteractionServiceTests: XCTestCase {
 
         XCTAssertEqual(result?.first?.reactionEmoji, "😂")
         XCTAssertEqual(result?.first?.engagement.marks, [
-            .reactions(["❤️", "😂"]), .comments(3), .replies(4), .reposts(2), .shares(1), .bookmarked
+            .reactions(["❤️", "😂"]), .comments(3), .replies(4), .reposts(2), .shares(1)
         ])
     }
 
