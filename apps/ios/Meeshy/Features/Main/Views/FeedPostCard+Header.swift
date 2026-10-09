@@ -141,21 +141,27 @@ extension FeedPostCard {
                     // post's author, after the meta row (private analytics).
                     if isAuthor {
                         MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
-                        HStack(spacing: MeeshySpacing.xxs) {
-                            ReachMetricLabel(
-                                icon: "chart.bar.fill",
-                                count: post.impressionCount,
-                                label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
-                                tint: theme.textMuted
-                            )
-                            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
-                            ReachMetricLabel(
-                                icon: "eye.fill",
-                                count: post.viewCount,
-                                label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
-                                tint: theme.textMuted
-                            )
+                        // Toucher la portée ouvre « Vues » : qui a vu, et ce que
+                        // chacun a fait (#9727).
+                        Button { showViewersSheet = true } label: {
+                            HStack(spacing: MeeshySpacing.xxs) {
+                                ReachMetricLabel(
+                                    icon: "chart.bar.fill",
+                                    count: post.impressionCount,
+                                    label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
+                                    tint: theme.textMuted
+                                )
+                                MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+                                ReachMetricLabel(
+                                    icon: "eye.fill",
+                                    count: post.viewCount,
+                                    label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
+                                    tint: theme.textMuted
+                                )
+                            }
                         }
+                        .buttonStyle(GameBounceButtonStyle())
+                        .accessibilityHint(String(localized: "viewer.engagement.openList.hint", defaultValue: "Ouvre la liste des personnes qui ont vu ce contenu", bundle: .main))
                     }
                 }
             }
@@ -197,6 +203,9 @@ extension FeedPostCard {
                             : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
                         systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark"
                     )
+                }
+                if isAuthor {
+                    PublicationViewersMenuButton { showViewersSheet = true }
                 }
                 if onPin != nil {
                     Button {
@@ -240,6 +249,9 @@ extension FeedPostCard {
             }
             .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
             .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
+        }
+        .publicationViewersSheet(isPresented: $showViewersSheet, post: post, moodLookup: moodLookup) { viewer in
+            selectedProfileUser = ProfileSheetUser(username: viewer.username)
         }
     }
 }

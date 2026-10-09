@@ -122,8 +122,9 @@ final class StoryInteractionService {
         }
     }
 
-    /// Fetches the list of viewers (with their optional reaction emoji)
-    /// for a story. Unlike the 3 fire-and-forget methods above, this one
+    /// Fetches the list of viewers (with what each of them did on it —
+    /// reactions, comments, replies, reposts, shares, bookmark, #9727)
+    /// for a story, a post or a reel (`storyId` is any post id). Unlike the 3 fire-and-forget methods above, this one
     /// returns data the view layer actually renders — the silent-swallow
     /// pattern would just give the user an empty viewer list with no
     /// recourse, so we surface the error to the caller via the optional
@@ -145,7 +146,8 @@ final class StoryInteractionService {
                     displayName: wire.displayName ?? wire.username,
                     avatarUrl: wire.avatarUrl,
                     viewedAt: wire.viewedAt ?? Date(),
-                    reactionEmoji: wire.reaction
+                    reactionEmoji: wire.engagement.latestReaction ?? wire.reaction,
+                    engagement: wire.engagement
                 )
             }
         } catch {
@@ -224,6 +226,9 @@ struct StoryViewerSnapshot: Equatable, Identifiable {
     let avatarUrl: String?
     let viewedAt: Date
     let reactionEmoji: String?
+    /// Ce que la personne a fait sur ce contenu (#9727) — réactions,
+    /// commentaires, réponses, republications, partages, favori.
+    let engagement: PostViewerEngagement
 }
 
 /// Wire shape returned by `GET /posts/{id}/interactions`.
@@ -233,6 +238,11 @@ struct StoryViewerSnapshot: Equatable, Identifiable {
 /// NOT use this type directly — consume `StoryViewerSnapshot` instead.
 /// (The view boundary is enforced by convention, not by access level,
 /// because Swift doesn't have a "test-only public" visibility.)
+///
+/// Story, post ou réel : la même route, la même forme (#9727). Chaque ligne
+/// porte, à côté de l'identité, ce que la personne a fait sur ce contenu —
+/// décodé par `PostViewerEngagement` depuis la MÊME ligne, tolérant à tout
+/// champ absent (un serveur d'avant #9727 ne sert que `reaction`).
 struct StoryViewersWireResponse: Decodable {
     struct Viewer: Decodable {
         let id: String
@@ -241,6 +251,22 @@ struct StoryViewersWireResponse: Decodable {
         let avatarUrl: String?
         let viewedAt: Date?
         let reaction: String?
+        let engagement: PostViewerEngagement
+
+        private enum CodingKeys: String, CodingKey {
+            case id, username, displayName, avatarUrl, viewedAt, reaction
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            username = try container.decode(String.self, forKey: .username)
+            displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+            avatarUrl = try container.decodeIfPresent(String.self, forKey: .avatarUrl)
+            viewedAt = try container.decodeIfPresent(Date.self, forKey: .viewedAt)
+            reaction = try container.decodeIfPresent(String.self, forKey: .reaction)
+            engagement = try PostViewerEngagement(from: decoder)
+        }
     }
     let viewers: [Viewer]
 }

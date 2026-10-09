@@ -454,6 +454,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/EmojiPickerSheet.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Views/IncomingCallView.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift",  // 15
+        // #9727 — la feuille « Vues » quitte l'hôte ci-dessus et naît certifiée :
+        // ce que chaque personne a fait, sept locales, `defaultValue` alignés sur le `fr`.
+        "apps/ios/Meeshy/Features/Main/Views/PublicationViewersSheet.swift",  // 22
         // #8582 — la ligne de commentaire de story a QUITTÉ l'hôte ci-dessus
         // avec ses quatre clés : le cliquet suit le code (leçon 578).
         "apps/ios/Meeshy/Features/Main/Views/StoryCommentRowView.swift",  // 7
