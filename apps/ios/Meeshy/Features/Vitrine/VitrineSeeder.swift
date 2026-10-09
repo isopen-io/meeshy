@@ -82,13 +82,14 @@ enum VitrineSeeder {
         try await cibles.enregistrerFil(fixtures.posts.map { $0.toFeedPost(preferredLanguages: langues) }, cle: cleDuFil)
     }
 
-    static func remplir(_ fixtures: VitrineFixtures, dans cibles: some VitrineSeedTargets) async throws {
+    /// `progression` remplace celle du kit : une scène du jeu y range l'état d'avant sa célébration (#9805).
+    static func remplir(_ fixtures: VitrineFixtures, progression: APIEngagementProgress? = nil, dans cibles: some VitrineSeedTargets) async throws {
         let userId = fixtures.lecteur.id
         try await cibles.enregistrerConversations(fixtures.conversationsServies())
         for conversationId in fixtures.messages.keys.sorted() {
             try await cibles.enregistrerMessages(fixtures.messages[conversationId] ?? [], langues: [fixtures.lang])
         }
-        try await cibles.enregistrerProgression(fixtures.progression, cle: "engagement:\(userId)")
+        try await cibles.enregistrerProgression(progression ?? fixtures.progression, cle: "engagement:\(userId)")
         for (conversationId, brut) in fixtures.modesDeLecture.sorted(by: { $0.key < $1.key }) {
             guard let mode = ReadingModeOrchestrator.ConversationReadingMode(rawValue: brut) else { continue }
             cibles.fixerModeDeLecture(mode, conversationId: conversationId, userId: userId)

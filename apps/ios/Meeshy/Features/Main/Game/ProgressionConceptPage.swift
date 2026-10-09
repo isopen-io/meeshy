@@ -38,7 +38,14 @@ struct ProgressionConceptPage: View {
     init(concept: ProgressionConcept, section: ProgressionConceptSection? = nil, viewModel: ProgressionViewModel? = nil) {
         self.concept = concept
         self.section = section
-        _viewModel = StateObject(wrappedValue: viewModel ?? ProgressionViewModel())
+        _viewModel = StateObject(wrappedValue: viewModel ?? Self.ficheModel(for: concept))
+    }
+
+    private static func ficheModel(for concept: ProgressionConcept) -> ProgressionViewModel {
+        #if DEBUG
+        if let vitrine = VitrineJeu.modele(pour: concept) { return vitrine }
+        #endif
+        return ProgressionViewModel()
     }
 
     var body: some View {
@@ -91,7 +98,12 @@ struct ProgressionConceptPage: View {
         }
         // « Comprendre les badges » (#9640) : l'étagère et la feuille d'un badge mènent à la section badges du carnet.
         .environment(\.gameOpenBadgesGuide, { router.openGame(at: GameNavigationMap.badgesGuide) })
-        .task { await viewModel.load() }
+        .task {
+            await viewModel.load()
+            #if DEBUG
+            if viewModel.progress != nil { VitrineRendu.shared.signaler(.fiche(concept)) }
+            #endif
+        }
         .fullScreenCover(item: $reveal) { palier in
             // `.consultation` : on arrive ici DEPUIS la fiche, la célébration n'a pas à y « mener ».
             AchievementRevealView(

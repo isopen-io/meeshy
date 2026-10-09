@@ -29,7 +29,9 @@ extension VitrineScene {
         case .global, .amour, .groupe, .imagine: return [.conversation(conversationId ?? "")]
         case .progression: return appareil == .ipad ? [.progression, .fil] : [.progression]
         case .lien: return [.lien]
-        case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: return []
+        case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
+            let fiche = VitrineEvenement.fiche(celebration?.concept ?? .level)
+            return appareil == .ipad ? [fiche, .fil] : [fiche]
         }
     }
 }
@@ -43,6 +45,8 @@ final class VitrineRendu {
     private(set) var observes: Set<VitrineEvenement> = []
     /// La conversation affichée : la scène y fait le geste du lecteur.
     private(set) weak var conversation: ConversationViewModel?
+    /// Ouvre une page du jeu par le routeur de l'écran Progression rendu (#9805) — comme le toucher d'une carte.
+    private(set) var ouvrirLeJeu: ((Route) -> Void)?
     private var attentes: [(attendus: Set<VitrineEvenement>, suite: CheckedContinuation<Void, Never>)] = []
 
     init(actif: Bool) {
@@ -58,6 +62,13 @@ final class VitrineRendu {
         let comblees = attentes.filter { $0.attendus.isSubset(of: observes) }
         attentes.removeAll { $0.attendus.isSubset(of: observes) }
         comblees.forEach { $0.suite.resume() }
+    }
+
+    /// L'écran Progression est rendu : il prête son routeur, la scène du jeu y pousse sa fiche.
+    func progressionAffichee(ouvrir: @escaping (Route) -> Void) {
+        guard actif else { return }
+        ouvrirLeJeu = ouvrir
+        signaler(.progression)
     }
 
     func conversationAffichee(_ viewModel: ConversationViewModel, visibles: [String]) {

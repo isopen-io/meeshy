@@ -26,6 +26,19 @@ final class VitrineSeederTests: XCTestCase {
         XCTAssertEqual(cibles.cleProgression, "engagement:\(f.lecteur.id)")
     }
 
+    /// Une scène du jeu (#9805) range l'état d'AVANT sa célébration, sous la clé que la fiche lit : elle s'ouvre au repos.
+    func test_remplir_aGameScene_storesTheStateBeforeItsCelebration() async throws {
+        let f = try fixtures()
+        let cibles = CiblesEnregistreuses()
+        let avant = VitrineJeuScenarios.pour(.coffre, base: f.progression).avant
+
+        try await VitrineSeeder.remplir(f, progression: avant, dans: cibles)
+
+        XCTAssertEqual(cibles.progression, avant)
+        XCTAssertEqual(cibles.progression?.game?.chest.status, .ready)
+        XCTAssertEqual(cibles.cleProgression, "engagement:\(f.lecteur.id)")
+    }
+
     func test_remplir_kitSample_fixeLeModeScriptPourMeeshyGlobal() async throws {
         let f = try fixtures()
         let cibles = CiblesEnregistreuses()
@@ -153,6 +166,7 @@ private final class CiblesEnregistreuses: VitrineSeedTargets {
     private(set) var conversations: [MeeshyConversation] = []
     private(set) var languesParLot: [[String]] = []
     private(set) var cleProgression: String?
+    private(set) var progression: APIEngagementProgress?
     private(set) var modes: [String: ReadingModeOrchestrator.ConversationReadingMode] = [:]
     private(set) var modesUserId: String?
     private(set) var medias: [MediaRange] = []
@@ -161,7 +175,10 @@ private final class CiblesEnregistreuses: VitrineSeedTargets {
 
     func enregistrerConversations(_ conversations: [MeeshyConversation]) async throws { self.conversations = conversations }
     func enregistrerMessages(_ messages: [APIMessage], langues: [String]) async throws { languesParLot.append(langues) }
-    func enregistrerProgression(_ progression: APIEngagementProgress, cle: String) async throws { cleProgression = cle }
+    func enregistrerProgression(_ progression: APIEngagementProgress, cle: String) async throws {
+        cleProgression = cle
+        self.progression = progression
+    }
     func fixerModeDeLecture(_ mode: ReadingModeOrchestrator.ConversationReadingMode, conversationId: String, userId: String) {
         modes[conversationId] = mode
         modesUserId = userId

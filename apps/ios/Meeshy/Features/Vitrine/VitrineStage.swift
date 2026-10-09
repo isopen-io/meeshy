@@ -31,6 +31,7 @@ enum VitrineStage {
             MeeshyConfig.debugWebOriginOverride = originePublique
             fixtures = f
             try? FileManager.default.removeItem(at: VitrineLaunch.marqueurPret)
+            VitrineJeu.effacerLesMarqueurs()
             servir(f.lienInvitation)
             if scene.ouvreUneSession {
                 try VitrineSession.poser(f.lecteur)
@@ -64,7 +65,9 @@ enum VitrineStage {
     static func remplir() async {
         guard let scene = VitrineLaunch.scene(), scene.ouvreUneSession, let f = fixtures else { return }
         do {
-            try await VitrineSeeder.remplir(f, dans: VitrineSeedTargetsReels())
+            // Une scène du jeu range la charge d'AVANT sa célébration : la fiche s'ouvre au repos.
+            let progression = scene.celebration.map { VitrineJeu.preparer($0, base: f.progression) }
+            try await VitrineSeeder.remplir(f, progression: progression, dans: VitrineSeedTargetsReels())
         } catch {
             fatalError("Vitrine « \(scene.rawValue) » : remplissage impossible — \(error)")
         }
@@ -78,9 +81,11 @@ enum VitrineStage {
             guard await attendreLaRacine(voile.values) else { return }
             let destination = f.destination(scene)
             montrer(scene, destination, f)
+            await ouvrirLaFiche(scene)
             await VitrineRendu.shared.attendre(scene.rendusAttendus(conversationId: destination?.conversationId, appareil: appareil))
             await achever(scene, destination, f)
             await annoncer(scene)
+            await VitrineJeu.celebrer(scene)
         }
     }
 
@@ -102,11 +107,21 @@ enum VitrineStage {
                 fatalError("Vitrine « \(scene.rawValue) » : sa conversation manque aux fixtures")
             }
             NotificationCenter.default.post(name: .navigateToConversation, object: conversation)
-        case .progression:
+        case .progression, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
             NotificationCenter.default.post(name: Notification.Name("pushNavigateToRoute"), object: "progression")
-        case .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
+        case .lien:
             break
         }
+    }
+
+    /// Une scène du jeu passe par Progression, puis ouvre la fiche de sa célébration comme un toucher sur sa carte.
+    private static func ouvrirLaFiche(_ scene: VitrineScene) async {
+        guard let celebration = scene.celebration else { return }
+        await VitrineRendu.shared.attendre([.progression])
+        guard let ouvrir = VitrineRendu.shared.ouvrirLeJeu else {
+            fatalError("Vitrine « \(scene.rawValue) » : l'écran Progression n'a pas prêté son routeur")
+        }
+        ouvrir(.progressionConcept(celebration.concept))
     }
 
     /// Ce que la scène FAIT une fois sa conversation affichée — le geste qu'y ferait le lecteur.
