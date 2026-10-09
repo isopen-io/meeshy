@@ -271,6 +271,11 @@ services:
       # `:-` : l'hôte désarme sans nouvelle image en posant la variable VIDE,
       # ou déplace la bascule en posant une autre date ISO 8601.
       - EXACT_READ_TRACKING_SINCE=${EXACT_READ_TRACKING_SINCE-2026-09-22T00:00:00.000Z}
+      # Liste des vues enrichie (#9727) : un post ou un réel ne montre à son
+      # auteur que les vues et les partages par lien postérieurs à cette date
+      # (les stories gardent tout leur historique). La fixer à la date de
+      # PROMOTION EN PRODUCTION. Illisible => rien du passé n'est montré.
+      - VIEWER_ACTIVITY_DISCLOSED_SINCE=${VIEWER_ACTIVITY_DISCLOSED_SINCE:-2026-10-10T00:00:00.000Z}
       # Variables d'initialisation des utilisateurs
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD absente sur l hote. Vide, le compte ADMIN naitrait avec le mot de passe public admin123}
@@ -378,15 +383,16 @@ services:
       # X…) qui déplient /chat/<lien> reçoivent la page d'aperçu de la passerelle
       # (GET /api/v1/links/<lien>/og) : la coquille de l'application ne porte aucune
       # balise Open Graph et un robot n'exécute pas de JavaScript. Les humains, dont
-      # aucun navigateur ne s'annonce ainsi, restent sur le routeur de l'application.
+      # aucun navigateur ne s'annonce ainsi, restent sur le routeur de l'application ;
+      # `open=1` (le lien du corps de la page) en sort qui s'y serait trouvé pris.
       # `$$` : un dollar littéral pour Compose (les regex et `$$1`).
-      - "traefik.http.routers.frontend-unfurl.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && PathRegexp(`^/chat/[A-Za-z0-9_.-]+/?$$`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot)`)"
+      - "traefik.http.routers.frontend-unfurl.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && PathRegexp(`^/chat/[A-Za-z0-9_.-]{1,100}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
       - "traefik.http.routers.frontend-unfurl.priority=100"
       - "traefik.http.routers.frontend-unfurl.entrypoints=websecure"
       - "traefik.http.routers.frontend-unfurl.tls.certresolver=letsencrypt"
       - "traefik.http.routers.frontend-unfurl.middlewares=chat-unfurl-path,rate-limit@file,compress@file"
       - "traefik.http.routers.frontend-unfurl.service=gateway"
-      - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.regex=^/chat/([A-Za-z0-9_.-]+)/?$$"
+      - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.regex=^/chat/([A-Za-z0-9_.-]{1,100})/?$$"
       - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.replacement=/api/v1/links/$$1/og"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 

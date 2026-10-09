@@ -26,13 +26,23 @@ export const LINK_UNFURL_IMAGE = {
   type: 'image/png'
 } as const;
 
+/**
+ * Le lien du corps, pour un HUMAIN que son agent ferait prendre pour un robot :
+ * Traefik ne route jamais vers cette page une adresse qui porte `open=1`
+ * (`!Query`, routeurs `*-unfurl`) — sans lui, le lien ramènerait à la même page.
+ */
+export const LINK_UNFURL_OPEN_QUERY = 'open=1';
+
 const TITLE_MAX = 80;
 const HOST_MAX = 40;
 const DEFAULT_LANGUAGE: UnfurlLanguage = 'fr';
 
-const UNFURLABLE_IDENTIFIER = /^[A-Za-z0-9_.-]{1,128}$/;
+const UNFURLABLE_IDENTIFIER = /^[A-Za-z0-9_.-]{1,100}$/;
 
-/** Un identifiant de lien plausible : `linkId` (`mshy_…`), slug ou id de base. Tout le reste est inconnu. */
+/**
+ * Un identifiant de lien plausible : `linkId` (`mshy_…`), slug ou id de base. Tout le reste est inconnu.
+ * Cent caractères au plus : au-delà, Fastify refuse le paramètre (`maxParamLength`) avant la route.
+ */
 export function isUnfurlableIdentifier(identifier: string): boolean {
   return UNFURLABLE_IDENTIFIER.test(identifier);
 }
@@ -90,23 +100,33 @@ export type LinkUnfurl = {
   readonly title: string;
   readonly description: string;
   readonly url: string;
+  readonly openUrl: string;
   readonly imageUrl: string;
   readonly imageAlt: string;
   readonly linkLabel: string;
 };
 
 const LINE_BREAKS = /[\t\n\r\f\v\u2028\u2029]+/g;
-const INVISIBLE = /[\u0000-\u001F\u007F-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
+const INVISIBLE_CONTROLS = /[\p{Cc}\u115F\u1160\u3164\uFFA0]/gu;
+const FORMAT_CHARACTERS = /\p{Cf}/gu;
+const ZERO_WIDTH_JOINER = '\u200D';
 
 /**
  * Un texte saisi par un utilisateur, prêt à entrer dans une balise : sans
- * caractère de contrôle ni marque de direction (qui retourneraient l'affichage
- * de l'aperçu entier), espaces resserrés, tronqué. L'échappement HTML vient
- * APRÈS, au rendu.
+ * caractère de contrôle, de format (marques et isolats de direction, qui
+ * retourneraient l'affichage de l'aperçu entier, espaces de largeur nulle,
+ * étiquettes) ni remplisseur invisible, espaces resserrés, tronqué. Seul le
+ * liant de largeur nulle survit, qui compose les émojis — et un texte qui n'est
+ * fait que de lui ne nomme rien. L'échappement HTML vient APRÈS, au rendu.
  */
 function cleanUserText(text: string | null | undefined, max: number): string | null {
-  const cleaned = (text ?? '').replace(LINE_BREAKS, ' ').replace(INVISIBLE, '').replace(/\s+/g, ' ').trim();
-  if (cleaned.length === 0) return null;
+  const cleaned = (text ?? '')
+    .replace(LINE_BREAKS, ' ')
+    .replace(INVISIBLE_CONTROLS, '')
+    .replace(FORMAT_CHARACTERS, (character) => (character === ZERO_WIDTH_JOINER ? character : ''))
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned.split(ZERO_WIDTH_JOINER).join('').trim().length === 0) return null;
   const codePoints = Array.from(cleaned);
   return codePoints.length <= max ? cleaned : `${codePoints.slice(0, max - 1).join('').trimEnd()}…`;
 }
@@ -141,9 +161,15 @@ function unfurlLanguage(creator: LinkUnfurlSource['creator'], acceptLanguage: st
 const isOpen = (source: LinkUnfurlSource, now: Date): boolean =>
   isShareLinkOpen(source, now) && !isConversationClosed(source.conversation);
 
+/** L'hôte que l'invitation NOMME : un compte actif, non supprimé, dont le nom (sinon le pseudo) se lit une fois nettoyé. */
 function nameableHost(creator: LinkUnfurlSource['creator']): string | null {
   if (!creator || creator.deletedAt) return null;
-  return cleanUserText(shareLinkInviterOf(creator)?.displayName, HOST_MAX);
+  const inviter = shareLinkInviterOf({
+    ...creator,
+    displayName: cleanUserText(creator.displayName, HOST_MAX),
+    username: cleanUserText(creator.username, HOST_MAX)
+  });
+  return inviter?.displayName ?? null;
 }
 
 function invitationTitle(copy: UnfurlCopy, host: string | null, title: string | null): string {
@@ -162,7 +188,8 @@ export function composeLinkUnfurl(params: {
 }): LinkUnfurl {
   const { source, identifier, acceptLanguage, origin, now } = params;
   const live = source !== null && isUnfurlableIdentifier(identifier) && isOpen(source, now) ? source : null;
-  const lang = unfurlLanguage(live?.creator ?? null, acceptLanguage);
+  const host = live ? nameableHost(live.creator) : null;
+  const lang = unfurlLanguage(host ? live?.creator ?? null : null, acceptLanguage);
   const copy = UNFURL_COPY[lang];
   const shared = {
     lang,
@@ -173,15 +200,16 @@ export function composeLinkUnfurl(params: {
   };
 
   if (!live) {
-    return { ...shared, title: copy.genericTitle, description: copy.genericPromise, url: `${origin}/`, linkLabel: copy.openMeeshy };
+    return { ...shared, title: copy.genericTitle, description: copy.genericPromise, url: `${origin}/`, openUrl: `${origin}/`, linkLabel: copy.openMeeshy };
   }
 
   const title = cleanUserText(live.conversation.title, TITLE_MAX) ?? cleanUserText(live.name, TITLE_MAX);
   return {
     ...shared,
-    title: invitationTitle(copy, nameableHost(live.creator), title),
+    title: invitationTitle(copy, host, title),
     description: copy.invitationPromise,
     url: `${origin}/chat/${encodeURIComponent(identifier)}`,
+    openUrl: `${origin}/chat/${encodeURIComponent(identifier)}?${LINK_UNFURL_OPEN_QUERY}`,
     linkLabel: copy.openInvitation
   };
 }
@@ -222,7 +250,7 @@ export function renderLinkUnfurlPage(unfurl: LinkUnfurl): string {
     '<body style="font-family:system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;line-height:1.5">',
     `<h1>${escapeHtml(unfurl.title)}</h1>`,
     `<p>${escapeHtml(unfurl.description)}</p>`,
-    `<p><a href="${escapeHtml(unfurl.url)}">${escapeHtml(unfurl.linkLabel)}</a></p>`,
+    `<p><a href="${escapeHtml(unfurl.openUrl)}">${escapeHtml(unfurl.linkLabel)}</a></p>`,
     '</body>',
     '</html>',
     ''

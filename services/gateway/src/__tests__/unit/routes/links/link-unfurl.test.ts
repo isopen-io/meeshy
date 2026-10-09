@@ -172,6 +172,13 @@ describe('Un lien vivant se déplie en invitation', () => {
     expect(meta(html, 'twitter:image:alt')).toBe(meta(html, 'og:image:alt'));
   });
 
+  it("offre à un humain pris pour un robot un lien qui sort de cette page", async () => {
+    const html = (await page()).body;
+
+    expect(html).toContain(`<a href="${ORIGIN}/chat/${LINK_ID}?open=1">`);
+    expect(meta(html, 'og:url')).toBe(`${ORIGIN}/chat/${LINK_ID}`);
+  });
+
   it("garde la page hors des index et lui interdit tout script", async () => {
     const reponse = await page();
 
@@ -239,6 +246,19 @@ describe('Chaque valeur saisie par un utilisateur est échappée', () => {
     expect(decode(meta(html, 'og:title'))).toBe(fr('Alice t’invite à « Équipedlrow cachée »'));
   });
 
+  it("un nom fait de seuls caractères invisibles ne nomme personne — l'hôte se lit par son pseudo", async () => {
+    for (const invisible of ['\u200B\u200B', '\u3164', '\u200D', '\u00AD\u061C']) {
+      const html = (await page(lien({ hote: { displayName: invisible } }))).body;
+      expect(decode(meta(html, 'og:title'))).toBe(fr('alice t’invite à « Les bêta-testeurs »'));
+    }
+  });
+
+  it("retire les marques et caractères de format, mais garde le liant des émojis", async () => {
+    const html = (await page(lien({ title: 'Fa\u00ADmi\u061Clle\u{E0041} 👨\u200D👩', hote: { displayName: 'Ali\u2060ce' } }))).body;
+
+    expect(decode(meta(html, 'og:title'))).toBe(fr('Alice t’invite à « Famille 👨\u200D👩 »'));
+  });
+
   it("tronque un titre démesuré au lieu de le servir entier", async () => {
     const title = (decode(meta((await page(lien({ title: 'a'.repeat(500) }))).body, 'og:title')) ?? '');
 
@@ -267,6 +287,13 @@ describe("La langue de l'aperçu est celle de l'HÔTE — sa langue de cadrage",
 
     expect(html).toMatch(/<html lang="ar" dir="rtl">/);
     expect(meta(html, 'og:locale')).toBe('ar_AR');
+  });
+
+  it("ne prend pas la langue d'un hôte qu'elle ne nomme pas", async () => {
+    const html = (await page(lien({ hote: { systemLanguage: 'de', deletedAt: new Date('2026-09-01') } }))).body;
+
+    expect(html).toMatch(/<html lang="fr" dir="ltr">/);
+    expect(decode(meta(html, 'og:title'))).toBe(fr('Rejoins « Les bêta-testeurs » sur Meeshy'));
   });
 
   it("ignore la langue du robot quand celle de l'hôte est connue", async () => {
@@ -311,6 +338,21 @@ describe("Un lien mort ou inconnu rend l'aperçu GÉNÉRIQUE, sans dire s'il a e
     expect(new Set(corps).size).toBe(1);
   });
 
+  it("ne trahit pas un lien mort par la langue de son hôte — quelle que soit la langue demandée", async () => {
+    const hoteAllemand = { systemLanguage: 'de', deviceLocale: 'de-DE' };
+    const mortsAllemands: readonly Ligne[] = [
+      lien({ isActive: false, hote: hoteAllemand }),
+      lien({ expiresAt: new Date('2020-01-01'), hote: hoteAllemand }),
+      lien({ closedAt: new Date('2026-09-01'), hote: hoteAllemand }),
+    ];
+    for (const acceptLanguage of [undefined, 'en-US,en;q=0.9']) {
+      const inconnu = (await page(null, { acceptLanguage })).body;
+      for (const ligne of mortsAllemands) {
+        expect((await page(ligne, { acceptLanguage })).body).toBe(inconnu);
+      }
+    }
+  });
+
   it("un identifiant malformé rend le générique sans même interroger la base", async () => {
     const { app, findFirst } = await monter();
     const reponse = await app.inject({ method: 'GET', url: `/links/${encodeURIComponent('<x>"')}/og` });
@@ -320,6 +362,13 @@ describe("Un lien mort ou inconnu rend l'aperçu GÉNÉRIQUE, sans dire s'il a e
     expect(decode(meta(reponse.body, 'og:title'))).toBe('Meeshy — la messagerie qui traduit');
     expect(reponse.body).not.toContain('<x>');
     expect(findFirst).not.toHaveBeenCalled();
+  });
+
+  it("un identifiant de cent caractères est encore une page, jamais une erreur", async () => {
+    const reponse = await page(null, { identifier: 'a'.repeat(100) });
+
+    expect(reponse.statusCode).toBe(200);
+    expect(decode(meta(reponse.body, 'og:title'))).toBe('Meeshy — la messagerie qui traduit');
   });
 
   it("une base en panne rend aussi le générique, jamais une page d'erreur", async () => {

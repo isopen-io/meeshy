@@ -18,6 +18,8 @@
 import fs from 'fs';
 import path from 'path';
 
+import { LINK_UNFURL_OPEN_QUERY } from '../../../services/linkUnfurl/page';
+
 const REPO = path.resolve(__dirname, '..', '..', '..', '..', '..', '..');
 const COMPOSE_DIR = path.join(REPO, 'infrastructure', 'docker', 'compose');
 
@@ -104,6 +106,17 @@ describe.each(DEPLOIEMENTS)('$compose — les robots d’aperçu de /chat/<lien>
   it('laisse les humains sur l’application — navigateurs et navigateurs intégrés compris', () => {
     const agent = goRegex(rule.match(/HeaderRegexp\(`User-Agent`, `([^`]+)`\)/)?.[1] ?? '$^');
     expect(HUMAINS.filter((ua) => agent.test(ua))).toEqual([]);
+  });
+
+  it('laisse sortir l’humain que le lien du corps de la page porte (`open=1`)', () => {
+    const [key, val] = LINK_UNFURL_OPEN_QUERY.split('=');
+    expect(rule).toContain(`!Query(\`${key}\`, \`${val}\`)`);
+  });
+
+  it('ne capte pas un identifiant que la passerelle refuserait (plus de cent caractères)', () => {
+    const pathPattern = goRegex(rule.match(/PathRegexp\(`([^`]+)`\)/)?.[1] ?? '$^');
+    expect(pathPattern.test(`/chat/${'a'.repeat(100)}`)).toBe(true);
+    expect(pathPattern.test(`/chat/${'a'.repeat(101)}`)).toBe(false);
   });
 
   it('passe devant le routeur de l’application', () => {
