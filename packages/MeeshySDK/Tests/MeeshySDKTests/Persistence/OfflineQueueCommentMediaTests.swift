@@ -190,7 +190,9 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         XCTAssertTrue(failed.localMediaURLs.allSatisfy { FileManager.default.fileExists(atPath: $0.path) },
                       "Un commentaire abandonné par la file garde ses pièces.")
 
-        try await queue.retryItem(result.outboxId)
+        // La relance d'une ligne de commentaire passe par SA porte, sous son
+        // auteur (la relance générique lit le compte dans le jeton, absent ici).
+        try await queue.retryCreateComment(clientMutationId: cmid, ownerId: alice)
 
         let rearmedList = await queue.unsentComments(postId: "post-1", ownerId: alice)
         let rearmed = try XCTUnwrap(rearmedList.first)
