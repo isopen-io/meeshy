@@ -3,9 +3,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { REPO_ROOT } from '../lib/catalog.mjs'
 import { KIT_LANGS } from '../lib/locales.mjs'
-import { DEMO, lecteurDe, partenaireDe } from '../textes/demo.mjs'
-import { ID_DEBAT, ID_GLOBAL, LIEN_LISBOA, MESURE_PAR_DEFAUT, exporterVitrine, idAmour, oid } from '../vitrine/fixtures.mjs'
-import { RACINE_MEDIAS } from '../vitrine/medias.mjs'
+import { DEMO, lecteurDe, partenaireDe, profilDe } from '../textes/demo.mjs'
+import { ID_DEBAT, ID_GLOBAL, ID_NOVA, LIEN_LISBOA, MESURE_PAR_DEFAUT, exporterVitrine, idAmour, languesDuCommentaireVocal, oid } from '../vitrine/fixtures.mjs'
+import { RACINE_MEDIAS, VIDEO_DU_REEL, videoMedia } from '../vitrine/medias.mjs'
 
 const MAINTENANT = new Date('2026-09-30T12:00:00.000Z')
 const ECHANTILLON = resolve(REPO_ROOT, 'apps/ios/MeeshyTests/Resources/VitrineFixtures-fr.json')
@@ -209,5 +209,42 @@ describe('fixtures de la vitrine, lot 2 : ce que la capture montre (#8855)', () 
   test.each(KIT_LANGS)('%s : le message rouvert sur son original est parmi les quatre derniers du fil — visible sur l’écran de l’iPhone', (lang) => {
     const f = exporterVitrine({ lang, maintenant: MAINTENANT })
     expect(f.messages[ID_DEBAT].slice(-4).map((m) => m.id)).toContain(f.scenes.groupe.messageId)
+  })
+})
+
+describe('fixtures de la vitrine : le réel et le commentaire vocal (#9820)', () => {
+  test.each(KIT_LANGS)('%s : la vidéo du réel est livrée avec les autres médias', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    expect(f.medias.filter((m) => m.genre === 'video')).toEqual([videoMedia(VIDEO_DU_REEL)])
+  })
+
+  test.each(KIT_LANGS)('%s : le commentaire vocal est celui du lecteur, dans SA langue, en réponse au post d’Aiko — transcrit et traduit', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    const { conversationId, messageId, attachmentId } = f.scenes['interaction-commentaire-audio']
+    expect(f.posts[0].author.username).toBe('aiko.t')
+    expect(f.conversations.map((c) => c.id)).toContain(conversationId)
+    const message = f.messages[conversationId].find((m) => m.id === messageId)
+    expect(message.sender.userId).toBe(f.lecteur.id)
+    expect(message.messageType).toBe('audio')
+    expect(message.originalLanguage).toBe(lang)
+    const piece = message.attachments.find((a) => a.id === attachmentId)
+    expect(piece.transcription).toMatchObject({ text: DEMO.commentaireVocal[lang], language: lang })
+    expect(Object.keys(piece.translations).sort()).toEqual([...languesDuCommentaireVocal(lang)].sort())
+    expect(Object.keys(piece.translations)).toContain(profilDe('aiko.t').lang)
+    for (const [cible, piste] of Object.entries(piece.translations)) {
+      expect(piste.transcription).toBe(DEMO.commentaireVocal[cible])
+      expect(piste.segments.at(-1).endMs).toBe(piste.durationMs)
+    }
+    expect(piece.fileUrl).not.toBe(f.messages[idAmour(lang)].at(-1).attachments[0].fileUrl)
+  })
+
+  test.each(KIT_LANGS)('%s : le vocal du commentaire ne change ni la ligne de « Nova » ni la garde de minuit', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    const nova = f.conversations.find((c) => c.id === ID_NOVA)
+    const vocal = f.messages[ID_NOVA].at(-1)
+    expect(nova.lastMessage.id).not.toBe(vocal.id)
+    expect(vocal.createdAt < nova.lastMessageAt).toBe(true)
+    const plusAncienMontre = [...f.messages[idAmour(lang)], ...f.messages[ID_DEBAT], ...f.messages[ID_GLOBAL]].map((m) => m.createdAt).sort()[0]
+    expect(vocal.createdAt > plusAncienMontre).toBe(true)
   })
 })

@@ -26,6 +26,7 @@ nonisolated enum VitrineScene: String, CaseIterable, Sendable {
     case interactionEmojiPost = "interaction-emoji-post"
     case interactionCommentaireAudio = "interaction-commentaire-audio"
     case interactionSticker = "interaction-sticker"
+    case interactionReel = "interaction-reel"
 
     /// La scène « lien » montre ce que voit un invité SANS compte.
     var ouvreUneSession: Bool { self != .lien }

@@ -125,4 +125,13 @@ export const SCENES_FILMEES = {
     mouvement: [[40, 330]],
     imagesCles: [{ nom: 'feuille', instantMs: 1100 }, { nom: 'sticker-pose', instantMs: 3100 }],
   }),
+  // Le réel (#9820) : le composeur s'ouvre sur la vidéo du kit, qui joue sur la scène (tenue 1,5 s) ; « Publier le réel »
+  // referme le composeur, la vidéo monte (0,8 s), le réel arrive en tête du fil et y joue (tenue 3,5 s). Aucune fenêtre
+  // de mouvement tant que les apparitions n'ont pas été mesurées au simulateur.
+  'interaction-reel': interaction('interaction-reel', {
+    montreUnFil: true,
+    dureeMs: 6500,
+    mouvement: [],
+    imagesCles: [{ nom: 'composeur', instantMs: 800 }, { nom: 'publication', instantMs: 2200 }, { nom: 'reel-au-fil', instantMs: 5800 }],
+  }),
 }

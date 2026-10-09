@@ -17,6 +17,15 @@ nonisolated struct VitrineFixtures: Decodable, Sendable {
         nonisolated enum Genre: String, Decodable, Sendable {
             case image
             case audio
+            /// La vidéo du réel que la scène `interaction-reel` publie (#9820).
+            case video
+            /// Un genre qu'un kit plus récent émet et que cette app ne connaît pas encore : le média est ignoré, jamais
+            /// la vitrine entière — une valeur inconnue faisait tomber le décodage, donc TOUTES les scènes.
+            case inconnu
+
+            init(from decoder: Decoder) throws {
+                self = Genre(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .inconnu
+            }
         }
 
         let url: String

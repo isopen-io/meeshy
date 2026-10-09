@@ -293,6 +293,14 @@ struct RootSheetsLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            #if DEBUG
+            // La vitrine (#9820) : le réel se publie sous les yeux du fil, révélé comme par l'accès rapide.
+            .onAppear {
+                VitrineRendu.shared.racineAffichee {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showFeed = true }
+                }
+            }
+            #endif
             // La fiche d'un visiteur SANS COMPTE — son identité vit dans une
             // conversation, pas sur un profil.
             .sheet(item: $router.participantProfileTarget) { target in

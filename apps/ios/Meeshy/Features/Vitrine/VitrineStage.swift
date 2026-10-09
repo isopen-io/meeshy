@@ -115,6 +115,8 @@ enum VitrineStage {
             VitrineInteractions.ouvrirLePost(f)
         case .interactionSticker:
             VitrineInteractions.ouvrirLeComposeur(f)
+        case .interactionReel:
+            VitrineInteractions.ouvrirLeFilPuisLeComposeur(f)
         case .lien:
             break
         }
@@ -136,7 +138,7 @@ enum VitrineStage {
         case .amour: await faireEntendre(destination)
         case .groupe: rouvrirSurLOriginal(destination)
         case .imagine: await imaginer(destination, f)
-        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker: break
+        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker, .interactionReel: break
         }
     }
 

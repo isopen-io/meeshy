@@ -1,4 +1,4 @@
-// Les médias de la vitrine (#8855) : les photos du kit et des vocaux synthétisés. L'app les range
+// Les médias de la vitrine (#8855) : les photos du kit, des vocaux synthétisés et la vidéo du réel (#9820). L'app les range
 // dans ses caches sous l'URL EXACTE que portent leurs messages et leurs posts : face à l'hôte
 // injoignable (127.0.0.1), `MeeshyConfig.resolveMediaURL` ne résout rien, et cette URL relative
 // est la clé que lisent les vues. Aucun média ne part vers le réseau.
@@ -12,6 +12,7 @@ import { CREDITS } from '../lib/photos.mjs'
 export const RACINE_MEDIAS = '/api/v1/attachments/file/vitrine'
 export const DOSSIER_PHOTOS = resolve(REPO_ROOT, 'scripts/marketing-kit/photos')
 export const CACHE_VOIX = resolve(REPO_ROOT, 'scripts/marketing-kit/out/vitrine/voix')
+export const CACHE_VIDEOS = resolve(REPO_ROOT, 'scripts/marketing-kit/out/vitrine/videos')
 
 export const urlMedia = (fichier) => `${RACINE_MEDIAS}/${fichier}`
 
@@ -95,4 +96,69 @@ export const synthetiser = (media, voix) => {
     rmSync(aiff)
   }
   return { dureeMs: dureeDepuisAfinfo(execFileSync('afinfo', [sortie], { encoding: 'utf8' })), taille: statSync(sortie).size }
+}
+
+// Les vidéos du kit (#9820) : Pexels, libres pour un usage commercial et modifiables, sans attribution exigée
+// (https://www.pexels.com/license/), sans personne à l'image. La source pèse 21 Mo : elle n'est PAS versionnée. Elle
+// se télécharge une fois, se vérifie par son empreinte — un fichier changé sous la même adresse refuse de servir —, puis
+// ffmpeg en tire l'extrait vertical que l'app reçoit (720×1280, 30 i/s, sans piste son, ~3 Mo).
+export const VIDEOS = {
+  'coucher-ocean': {
+    fichier: 'reel-coucher-ocean.mp4',
+    sujet: 'Le soleil se couche sur la mer, reflets d’or sur les vagues — le réel que publie le lecteur',
+    titre: 'Beautiful Sunset Over Calm Ocean Waves',
+    auteur: 'Efrem Efre',
+    page: 'https://www.pexels.com/video/beautiful-sunset-over-calm-ocean-waves-32523863/',
+    source: 'https://videos.pexels.com/video-files/32523863/13869625_1080_1920_25fps.mp4',
+    sha256: 'dbab64282ccb06906ab64086870ff3e3a23f0070289d827339b9d1eba3a11d39',
+    licence: 'https://www.pexels.com/license/',
+    personnes: 0,
+    extrait: { debutS: 2, dureeS: 6 },
+    width: 720,
+    height: 1280,
+  },
+}
+
+// La vidéo que publie la scène `interaction-reel`.
+export const VIDEO_DU_REEL = 'coucher-ocean'
+
+export const videoMedia = (video) => {
+  const v = VIDEOS[video]
+  if (!v) throw new Error(`vidéo inconnue : ${video}`)
+  return { url: urlMedia(v.fichier), fichier: v.fichier, genre: 'video', video, width: v.width, height: v.height, dureeMs: v.extrait.dureeS * 1000 }
+}
+
+export const empreinte = (octets) => createHash('sha256').update(octets).digest('hex')
+
+// L'extrait que l'app reçoit : rogné, ramené au format de la scène, en H.264 lisible partout, l'index en tête.
+export const argumentsExtrait = ({ source, sortie, video }) => {
+  const { extrait, width, height } = VIDEOS[video]
+  return [
+    '-v', 'error', '-y', '-ss', String(extrait.debutS), '-t', String(extrait.dureeS), '-i', source, '-an',
+    '-vf', `scale=${width}:${height},fps=30`, '-c:v', 'libx264', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
+    '-crf', '26', '-preset', 'slow', '-movflags', '+faststart', sortie,
+  ]
+}
+
+export const fichierVideo = (video, dossier = CACHE_VIDEOS) => resolve(dossier, VIDEOS[video].fichier)
+export const fichierSourceVideo = (video, dossier = CACHE_VIDEOS) => resolve(dossier, `${video}.source.mp4`)
+
+const curl = (url, chemin) => execFileSync('curl', ['-fsSL', '--retry', '2', '-o', chemin, url])
+
+// La source téléchargée une fois, vérifiée, puis l'extrait tiré une fois : les prises suivantes resservent le fichier.
+export const preparerVideo = (video, { telecharger = curl, extraire = (args) => execFileSync('ffmpeg', args), dossier = CACHE_VIDEOS } = {}) => {
+  const v = VIDEOS[video]
+  if (!v) throw new Error(`vidéo inconnue : ${video}`)
+  const sortie = fichierVideo(video, dossier)
+  if (existsSync(sortie)) return sortie
+  mkdirSync(dossier, { recursive: true })
+  const source = fichierSourceVideo(video, dossier)
+  if (!existsSync(source)) telecharger(v.source, source)
+  const recue = empreinte(readFileSync(source))
+  if (recue !== v.sha256) {
+    rmSync(source, { force: true })
+    throw new Error(`${video} : la source téléchargée n’est pas celle du kit (empreinte ${recue}, attendue ${v.sha256})`)
+  }
+  extraire(argumentsExtrait({ source, sortie, video }))
+  return sortie
 }

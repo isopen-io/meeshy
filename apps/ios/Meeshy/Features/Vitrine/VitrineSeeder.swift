@@ -44,6 +44,8 @@ struct VitrineSeedTargetsReels: VitrineSeedTargets {
         switch genre {
         case .image: await VitrineSeeder.remplacer(fichier, dans: CacheCoordinator.shared.images, cle: cle)
         case .audio: await VitrineSeeder.remplacer(fichier, dans: CacheCoordinator.shared.audio, cle: cle)
+        case .video: await VitrineSeeder.remplacer(fichier, dans: CacheCoordinator.shared.video, cle: cle)
+        case .inconnu: break
         }
     }
 
@@ -73,7 +75,7 @@ enum VitrineSeeder {
     /// médias et le fil de l'iPad (#8922). Un média manquant arrête la vitrine : l'écran irait le
     /// chercher sur l'hôte mort et montrerait une vignette vide.
     static func remplirLesCaches(_ fixtures: VitrineFixtures, medias dossier: URL, dans cibles: some VitrineSeedTargets) async throws {
-        for media in fixtures.medias {
+        for media in fixtures.medias where media.genre != .inconnu {
             let fichier = dossier.appendingPathComponent(media.fichier)
             guard FileManager.default.fileExists(atPath: fichier.path) else { throw VitrineSeederErreur.mediaAbsent(media.fichier) }
             await cibles.enregistrerMedia(fichier, genre: media.genre, cle: cleDeCache(media.url))

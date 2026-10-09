@@ -78,6 +78,30 @@ final class VitrineSeederTests: XCTestCase {
         XCTAssertTrue(cibles.medias.contains { $0.genre == .audio })
     }
 
+    /// La vidéo du réel (#9820) se range comme les autres médias, dans le cache vidéo.
+    func test_remplirLesCaches_storesTheReelVideo() async throws {
+        let f = try fixtures()
+        let cibles = CiblesEnregistreuses()
+        try await VitrineSeeder.remplirLesCaches(f, medias: try Self.dossierDeMedias(f), dans: cibles)
+        XCTAssertTrue(cibles.medias.contains { $0.genre == .video })
+    }
+
+    /// Un genre qu'un kit plus récent émet ne fait tomber ni le décodage ni la vitrine : le média seul est ignoré.
+    func test_unknownMediaGenre_isIgnored_neverFatal() async throws {
+        let json = try XCTUnwrap(String(data: Data(contentsOf: echantillon), encoding: .utf8))
+            .replacingOccurrences(of: "\"genre\": \"video\"", with: "\"genre\": \"hologramme\"")
+        let f = try VitrineFixtures.decoder(Data(json.utf8))
+        let inconnu = try XCTUnwrap(f.medias.first { $0.genre == .inconnu })
+        let dossier = try Self.dossierDeMedias(f)
+        try FileManager.default.removeItem(at: dossier.appendingPathComponent(inconnu.fichier))
+        let cibles = CiblesEnregistreuses()
+
+        try await VitrineSeeder.remplirLesCaches(f, medias: dossier, dans: cibles)
+
+        XCTAssertEqual(cibles.medias.count, f.medias.count - 1)
+        XCTAssertFalse(cibles.medias.contains { $0.genre == .inconnu })
+    }
+
     func test_remplirLesCaches_missingMedia_failsNamingIt() async throws {
         let f = try fixtures()
         let vide = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

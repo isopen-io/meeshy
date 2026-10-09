@@ -47,10 +47,15 @@ describe('capture des vrais écrans (#8855)', () => {
     expect(['lien', 'progression'].some(montreUnFil)).toBe(false)
   })
 
-  test('chaque média a sa source sur le Mac : la photo du kit ou le vocal synthétisé', () => {
+  test('chaque média a sa source sur le Mac : la photo du kit, la vidéo du réel préparée, ou le vocal synthétisé', () => {
     const f = exporterVitrine({ lang: 'fr', maintenant: new Date('2026-09-30T12:00:00.000Z') })
     for (const media of f.medias.filter((m) => m.genre === 'image')) expect(existsSync(sourceDuMedia(media))).toBe(true)
     for (const media of f.medias.filter((m) => m.genre === 'audio')) expect(sourceDuMedia(media)).toMatch(/out\/vitrine\/voix\/[0-9a-f]{16}\.m4a$/)
+    const preparees = []
+    for (const media of f.medias.filter((m) => m.genre === 'video')) {
+      expect(sourceDuMedia(media, { video: (nom) => { preparees.push(nom); return `/videos/${nom}.mp4` } })).toBe(`/videos/${media.video}.mp4`)
+    }
+    expect(preparees).toEqual(['coucher-ocean'])
   })
 
   test('les captures natives ont déjà la taille App Store', () => {

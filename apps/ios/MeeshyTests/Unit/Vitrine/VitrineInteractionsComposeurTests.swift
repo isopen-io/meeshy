@@ -66,7 +66,7 @@ final class VitrineInteractionsComposeurTests: XCTestCase {
 
     func test_rendu_relaysTheComposerGestures_andHandsThePhotoOnce() {
         let rendu = VitrineRendu(actif: true)
-        rendu.photoDuComposeur = URL(fileURLWithPath: "/p.jpg")
+        rendu.mediaDuComposeur = VitrineMediaDOuverture(url: URL(fileURLWithPath: "/p.jpg"), mimeType: "image/jpeg")
         var ouverte = false
         var choisi: StickerSheetChoice?
 
@@ -76,7 +76,7 @@ final class VitrineInteractionsComposeurTests: XCTestCase {
         rendu.ouvrirLesStickers?()
         rendu.choisirUnSticker?(.emoji("🔥"))
 
-        XCTAssertEqual(photo, URL(fileURLWithPath: "/p.jpg"))
+        XCTAssertEqual(photo, VitrineMediaDOuverture(url: URL(fileURLWithPath: "/p.jpg"), mimeType: "image/jpeg"))
         XCTAssertNil(seconde, "la photo d'ouverture n'entre qu'une fois")
         XCTAssertTrue(ouverte)
         guard case .emoji("🔥") = choisi else { return XCTFail("le choix relayé") }

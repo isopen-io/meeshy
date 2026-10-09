@@ -2458,6 +2458,239 @@
     "messageType": "text",
     "translations": []
    }
+  ],
+  "cbf409287826cb1890ad69f7": [
+   {
+    "id": "218ec1f8829769d5dc330ed9",
+    "conversationId": "cbf409287826cb1890ad69f7",
+    "senderId": "e0ad5b8a3d63b3b09f09e92b",
+    "createdAt": "2026-09-30T09:10:00.000Z",
+    "sender": {
+     "id": "e0ad5b8a3d63b3b09f09e92b",
+     "username": "lea.mtn",
+     "displayName": "Léa Martin",
+     "firstName": "Léa",
+     "lastName": "Martin",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "type": "user"
+    },
+    "content": "",
+    "originalLanguage": "fr",
+    "messageType": "audio",
+    "attachments": [
+     {
+      "id": "f78df06ab4d29794c78ace72",
+      "messageId": "218ec1f8829769d5dc330ed9",
+      "fileName": "commentaire-lea.mtn-fr.m4a",
+      "originalName": "commentaire-lea.mtn-fr.m4a",
+      "mimeType": "audio/mp4",
+      "fileSize": 36000,
+      "fileUrl": "/api/v1/attachments/file/vitrine/commentaire-lea.mtn-fr.m4a",
+      "uploadedBy": "0cdc3a1317dfaf952cb35b8d",
+      "createdAt": "2026-09-30T09:10:00.000Z",
+      "duration": 9000,
+      "transcription": {
+       "text": "Voilà le mien : le soleil qui se couche sur la mer, on dirait de l’or liquide !",
+       "language": "fr",
+       "confidence": 0.97,
+       "durationMs": 9000,
+       "segments": [
+        {
+         "text": "Voilà",
+         "startMs": 0,
+         "endMs": 726
+        },
+        {
+         "text": "le",
+         "startMs": 726,
+         "endMs": 1016
+        },
+        {
+         "text": "mien",
+         "startMs": 1016,
+         "endMs": 1597
+        },
+        {
+         "text": ":",
+         "startMs": 1597,
+         "endMs": 1742
+        },
+        {
+         "text": "le",
+         "startMs": 1742,
+         "endMs": 2032
+        },
+        {
+         "text": "soleil",
+         "startMs": 2032,
+         "endMs": 2903
+        },
+        {
+         "text": "qui",
+         "startMs": 2903,
+         "endMs": 3339
+        },
+        {
+         "text": "se",
+         "startMs": 3339,
+         "endMs": 3629
+        },
+        {
+         "text": "couche",
+         "startMs": 3629,
+         "endMs": 4500
+        },
+        {
+         "text": "sur",
+         "startMs": 4500,
+         "endMs": 4935
+        },
+        {
+         "text": "la",
+         "startMs": 4935,
+         "endMs": 5226
+        },
+        {
+         "text": "mer,",
+         "startMs": 5226,
+         "endMs": 5806
+        },
+        {
+         "text": "on",
+         "startMs": 5806,
+         "endMs": 6097
+        },
+        {
+         "text": "dirait",
+         "startMs": 6097,
+         "endMs": 6968
+        },
+        {
+         "text": "de",
+         "startMs": 6968,
+         "endMs": 7258
+        },
+        {
+         "text": "l’or",
+         "startMs": 7258,
+         "endMs": 7839
+        },
+        {
+         "text": "liquide",
+         "startMs": 7839,
+         "endMs": 8855
+        },
+        {
+         "text": "!",
+         "startMs": 8855,
+         "endMs": 9000
+        }
+       ]
+      },
+      "translations": {
+       "ja": {
+        "type": "audio",
+        "url": "/api/v1/attachments/file/vitrine/commentaire-lea.mtn-ja.m4a",
+        "transcription": "これが私の夕日：海に沈む太陽、まるで溶けた金みたい！",
+        "durationMs": 9000,
+        "format": "m4a",
+        "cloned": true,
+        "quality": 0.93,
+        "ttsModel": "chatterbox",
+        "segments": [
+         {
+          "text": "これが私の夕日：海に沈む太陽、",
+          "startMs": 0,
+          "endMs": 5192
+         },
+         {
+          "text": "まるで溶けた金みたい！",
+          "startMs": 5192,
+          "endMs": 9000
+         }
+        ]
+       },
+       "en": {
+        "type": "audio",
+        "url": "/api/v1/attachments/file/vitrine/commentaire-lea.mtn-en.m4a",
+        "transcription": "Here’s mine: the sun setting over the sea, it looks like liquid gold!",
+        "durationMs": 9000,
+        "format": "m4a",
+        "cloned": true,
+        "quality": 0.93,
+        "ttsModel": "chatterbox",
+        "segments": [
+         {
+          "text": "Here’s",
+          "startMs": 0,
+          "endMs": 947
+         },
+         {
+          "text": "mine:",
+          "startMs": 947,
+          "endMs": 1737
+         },
+         {
+          "text": "the",
+          "startMs": 1737,
+          "endMs": 2211
+         },
+         {
+          "text": "sun",
+          "startMs": 2211,
+          "endMs": 2684
+         },
+         {
+          "text": "setting",
+          "startMs": 2684,
+          "endMs": 3789
+         },
+         {
+          "text": "over",
+          "startMs": 3789,
+          "endMs": 4421
+         },
+         {
+          "text": "the",
+          "startMs": 4421,
+          "endMs": 4895
+         },
+         {
+          "text": "sea,",
+          "startMs": 4895,
+          "endMs": 5526
+         },
+         {
+          "text": "it",
+          "startMs": 5526,
+          "endMs": 5842
+         },
+         {
+          "text": "looks",
+          "startMs": 5842,
+          "endMs": 6632
+         },
+         {
+          "text": "like",
+          "startMs": 6632,
+          "endMs": 7263
+         },
+         {
+          "text": "liquid",
+          "startMs": 7263,
+          "endMs": 8211
+         },
+         {
+          "text": "gold!",
+          "startMs": 8211,
+          "endMs": 9000
+         }
+        ]
+       }
+      }
+     }
+    ]
+   }
   ]
  },
  "progression": {
@@ -2741,6 +2974,36 @@
    "genre": "audio",
    "texte": "All day long, I wanted to hear your voice. Tonight, watching the city lights from my window, I could only think of you and everything we’ll do together. In 12 days, I’ll be waiting for you at the airport.",
    "lang": "en"
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/commentaire-lea.mtn-fr.m4a",
+   "fichier": "commentaire-lea.mtn-fr.m4a",
+   "genre": "audio",
+   "texte": "Voilà le mien : le soleil qui se couche sur la mer, on dirait de l’or liquide !",
+   "lang": "fr"
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/commentaire-lea.mtn-ja.m4a",
+   "fichier": "commentaire-lea.mtn-ja.m4a",
+   "genre": "audio",
+   "texte": "これが私の夕日：海に沈む太陽、まるで溶けた金みたい！",
+   "lang": "ja"
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/commentaire-lea.mtn-en.m4a",
+   "fichier": "commentaire-lea.mtn-en.m4a",
+   "genre": "audio",
+   "texte": "Here’s mine: the sun setting over the sea, it looks like liquid gold!",
+   "lang": "en"
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/reel-coucher-ocean.mp4",
+   "fichier": "reel-coucher-ocean.mp4",
+   "genre": "video",
+   "video": "coucher-ocean",
+   "width": 720,
+   "height": 1280,
+   "dureeMs": 6000
   }
  ],
  "posts": [
@@ -2868,6 +3131,11 @@
   "imagine": {
    "conversationId": "ca4fa0732bd34cb8c64b7ed7",
    "messageId": "da935151abb6615f2c736a05"
+  },
+  "interaction-commentaire-audio": {
+   "conversationId": "cbf409287826cb1890ad69f7",
+   "messageId": "218ec1f8829769d5dc330ed9",
+   "attachmentId": "f78df06ab4d29794c78ace72"
   }
  }
 }
