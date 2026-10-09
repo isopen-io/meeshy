@@ -676,7 +676,7 @@ public struct AudioForegroundReaderOverlay: View {
                                      elapsed: TimeInterval,
                                      slideDuration: TimeInterval) -> [StoryAudioPlayerObject] {
         audios.filter { audio in
-            guard audio.isBackground != true else { return false }
+            guard SceneAudioStageRule.isStaged(audio) else { return false }
             let start = Double(audio.startTime ?? 0)
             let end = audio.duration.map { start + Double($0) } ?? slideDuration
             return elapsed >= start && elapsed <= end

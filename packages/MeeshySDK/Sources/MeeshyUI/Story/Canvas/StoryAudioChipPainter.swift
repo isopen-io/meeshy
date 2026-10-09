@@ -116,7 +116,7 @@ public final class StoryAudioChipPainter {
         let visibles = respectingWindow
             ? AudioForegroundReaderOverlay.visibleAudios(in: audios, elapsed: seconds,
                                                          slideDuration: slide.computedTotalDuration())
-            : audios.filter { $0.isBackground != true }
+            : SceneAudioStageRule.stagedAudios(in: audios)
         let size = geometry.renderSize
         return visibles.map { audio in
             StoryAudioChipPlacement(

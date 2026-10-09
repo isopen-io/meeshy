@@ -184,10 +184,26 @@ struct ReelFeedCard: View, Equatable {
                                             captions: post.media.map(\.caption)) ?? ""
     }
 
+    /// La couverture d'un réel dont le média joué est un son, s'il en porte une.
+    private var audioCover: FeedMedia? {
+        guard let cover = backgroundMedia,
+              cover.thumbnailUrl != nil || cover.url != nil || cover.thumbHash != nil else { return nil }
+        return cover
+    }
+
+    /// La scène que la carte REJOUE à la place du spectre (#9737) : le réel
+    /// est composé, sans image ni vidéo, et son seul fichier est un son — de
+    /// fond ou posé, ce son n'est pas son visuel. Le spectre reste le visuel du
+    /// réel audio SANS scène (`FeedPost.reelPrincipalAudioMedia`).
+    private var soundSceneDocument: CanvasV3? {
+        guard media?.type == .audio, audioCover == nil else { return nil }
+        return post.reelSceneDocument
+    }
+
     private var kind: ReelMediaKind {
         switch media?.type {
         case .video: return .video
-        case .audio: return .audio
+        case .audio: return soundSceneDocument == nil ? .audio : .scene
         default: return .imageOnly
         }
     }
@@ -254,8 +270,7 @@ struct ReelFeedCard: View, Equatable {
         case .audio:
             // Un réel audio avec image de couverture montre sa couverture ; le
             // dégradé animé n'est le repli que lorsqu'il n'y a aucun visuel.
-            if let cover = backgroundMedia,
-               cover.thumbnailUrl != nil || cover.url != nil || cover.thumbHash != nil {
+            if let cover = audioCover {
                 ProgressiveCachedImage(
                     thumbHash: cover.thumbHash,
                     thumbnailUrl: cover.thumbnailUrl,
@@ -271,12 +286,25 @@ struct ReelFeedCard: View, Equatable {
             } else {
                 ReelAudioBackdrop(accentHex: accentHex, isActive: isActive)
             }
-        // `.scene` tombe ici sans jamais y arriver : `kind` est dérivé de
-        // `media?.type`, qui ne produit que vidéo / audio / image. Le cas est
-        // nommé pour que l'exhaustivité du `switch` reste une VÉRIFICATION —
-        // un `default:` accueillerait en silence la prochaine famille de
-        // surface, exactement ce qu'un `switch` exhaustif existe pour refuser.
-        case .imageOnly, .scene:
+        // Un réel composé dont le seul fichier est un son montre sa SCÈNE
+        // (#9737) : le spectre est le visuel du réel audio SANS scène, jamais
+        // celui d'un son de fond.
+        case .scene:
+            if let document = soundSceneDocument {
+                ReelCardSceneBackdrop(
+                    post: post,
+                    document: document,
+                    isActive: isActive,
+                    accentColor: accentHex,
+                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                )
+                .equatable()
+                .frame(width: width, height: height)
+                .clipped()
+            } else {
+                Color(hex: accentHex).opacity(MeeshyOpacity.strong)
+            }
+        case .imageOnly:
             if let media, media.thumbnailUrl != nil || media.url != nil || media.thumbHash != nil {
                 ProgressiveCachedImage(
                     thumbHash: media.thumbHash,

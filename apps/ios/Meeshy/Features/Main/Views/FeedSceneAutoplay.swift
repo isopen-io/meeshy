@@ -301,6 +301,51 @@ struct PostSceneSurface: View {
     }
 }
 
+// MARK: - Scène d'un réel dont le seul fichier est un son (#9737)
+
+/// Le fond de la carte d'un RÉEL composé dont le seul fichier est un son : sa
+/// scène, rejouée muette (`.card`) et recadrée comme la vidéo d'un réel. Le son
+/// de fond n'y produit aucun pixel — il se dit par le crédit de la carte ; un
+/// son posé y garde sa place d'objet.
+///
+/// Elle ne rapporte PAS sa frame : `ReelFeedCard`, qui la monte, la rapporte
+/// déjà sous l'id du post et se déclare alors `.scene`. Deux rapports pour une
+/// carte feraient deux candidats à l'élection.
+struct ReelCardSceneBackdrop: View, Equatable {
+    let post: FeedPost
+    let document: CanvasV3
+    let isActive: Bool
+    let accentColor: String
+    let preferredContentLanguages: [String]
+
+    nonisolated static func == (lhs: ReelCardSceneBackdrop, rhs: ReelCardSceneBackdrop) -> Bool {
+        lhs.post.id == rhs.post.id
+            && lhs.isActive == rhs.isActive
+            && lhs.accentColor == rhs.accentColor
+            && lhs.preferredContentLanguages == rhs.preferredContentLanguages
+            && lhs.document == rhs.document
+    }
+
+    var body: some View {
+        MeeshyScenePlayer(
+            document: document,
+            mode: .card,
+            sceneIndex: .constant(0),
+            isPlaying: .constant(isActive),
+            accentColorHex: accentColor,
+            carrier: StoryItem(id: post.id,
+                               content: post.content,
+                               media: post.media,
+                               storyEffects: post.storyEffects,
+                               createdAt: post.timestamp),
+            preferredContentLanguages: preferredContentLanguages
+        )
+        .aspectRatio(SceneShape.aspect, contentMode: .fill)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Mosaïque et carrousel d'un post à plusieurs scènes
 
 /// Observe le coordinateur et pilote la lecture de la MOSAÏQUE d'un post —

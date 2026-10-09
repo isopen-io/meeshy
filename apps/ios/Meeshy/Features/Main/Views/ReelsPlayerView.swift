@@ -555,10 +555,10 @@ struct ReelPageView: View {
 
     /// The audio media for an audio reel, else `nil`. Drives the immersive
     /// transcript hero + the audio control + audio-language flag strip.
-    var audioMedia: FeedMedia? {
-        guard let media = reel.primaryReelDisplayMedia, media.type == .audio else { return nil }
-        return media
-    }
+    /// `nil` pour un réel COMPOSÉ (#9737) : le son d'une scène est joué par la
+    /// scène — la commande audio posée dessus en peignait le spectre et le
+    /// faisait jouer une seconde fois par le moteur de la page.
+    var audioMedia: FeedMedia? { reel.reelPrincipalAudioMedia }
 
     /// Piste « son EMPRUNTÉ à la bibliothèque » d'un réel SANS scène ni média :
     /// la page la joue elle-même. Un réel composé en est exclu — sa scène joue

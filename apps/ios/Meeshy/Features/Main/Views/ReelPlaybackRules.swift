@@ -58,8 +58,7 @@ enum ReelWatchAttachmentPolicy {
 enum ReelSceneRouting {
     /// Le document que le réel rejoue, ou `nil` pour un réel de médias.
     static func sceneDocument(for reel: FeedPost) -> CanvasV3? {
-        guard let document = reel.storyEffects?.canvasV3, !document.scenes.isEmpty else { return nil }
-        return document
+        reel.reelSceneDocument
     }
 
     /// La piste de fond que la PAGE joue elle-même : seulement pour un réel
