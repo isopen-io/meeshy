@@ -274,12 +274,12 @@ final class ComposerCaptureEditTests: XCTestCase {
 
     func test_editArea_liesBetweenTheTopRowAndTheTools_insideTheSafeArea() {
         let ecran = CGSize(width: 402, height: 874)
-        let zone = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panel: .none)
+        let zone = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: [])
         XCTAssertEqual(zone.minY, 62 + ComposerEditScene.topBand)
-        XCTAssertEqual(zone.maxY, 874 - 34 - ComposerEditScene.bottomReserve(.none))
+        XCTAssertEqual(zone.maxY, 874 - 34 - ComposerEditScene.bottomReserve([]))
         XCTAssertEqual(zone.minX, ComposerEditScene.margin)
         XCTAssertEqual(zone.width, 402 - ComposerEditScene.margin * 2)
-        let avecBande = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panel: .band)
+        let avecBande = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: [.band])
         XCTAssertLessThan(avecBande.height, zone.height, "un panneau ouvert prend sa place sous la scène")
         XCTAssertEqual(avecBande.minY, zone.minY)
     }
@@ -296,14 +296,21 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(ComposerEditScene.rect(aspect: 0, in: zone), zone, "des proportions absurdes rendent la zone")
     }
 
-    func test_editPanel_theBandThenTheOpenTool_andNothingByDefault() {
-        XCTAssertEqual(ComposerEditTools.panel(familyOpen: true, tool: .trim), .band)
-        XCTAssertEqual(ComposerEditTools.panel(familyOpen: false, tool: .crop), .presets)
-        XCTAssertEqual(ComposerEditTools.panel(familyOpen: false, tool: .trim), .trim)
-        XCTAssertEqual(ComposerEditTools.panel(familyOpen: false, tool: .sound), .sound)
-        XCTAssertEqual(ComposerEditTools.panel(familyOpen: false, tool: nil), .none,
-                       "rien n'est ouvert à l'entrée : l'écran respire (#9754)")
-        XCTAssertGreaterThan(ComposerEditScene.bottomReserve(.band), ComposerEditScene.bottomReserve(.none))
+    func test_editPanels_stackTheirHeights_andTheBandFoldsThem() {
+        XCTAssertEqual(ComposerEditScene.bottomReserve([]), ComposerEditScene.toolsRow + ComposerEditScene.gap * 2)
+        let tous: [ComposerEditPanel] = [.presets, .sound, .trim]
+        let attendu = ComposerEditScene.toolsRow + ComposerEditScene.gap * 2
+            + tous.map { ComposerEditScene.panelHeight($0) + ComposerEditScene.gap }.reduce(0, +)
+        XCTAssertEqual(ComposerEditScene.bottomReserve(tous), attendu, "chaque panneau montré prend sa place")
+        XCTAssertGreaterThan(ComposerEditScene.bottomReserve([.band]), ComposerEditScene.bottomReserve([]))
+    }
+
+    /// Les trois outils d'une vidéo ouverts ensemble laissent encore une scène
+    /// qu'on recadre, même sur le plus petit écran servi (iPhone SE).
+    func test_everyToolOpen_onTheSmallestScreen_stillLeavesACroppableScene() {
+        let zone = ComposerEditScene.area(container: CGSize(width: 375, height: 667), top: 20, bottom: 0,
+                                          panels: [.presets, .sound, .trim])
+        XCTAssertGreaterThanOrEqual(zone.height, ComposerEditScene.minimumSide * 2)
     }
 
     /// Un crochet tiré déplace SON angle ; l'angle opposé ne bouge pas, et la
@@ -359,29 +366,25 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertNil(session.editAspect, "hors retouche, rien ne se recadre")
     }
 
-    func test_cropPresets_andTheBand_neverOpenTogether_andCloseWithTheEdit() {
+    func test_cropPresets_foldUnderTheBand_withoutLosingTheBrackets_andCloseWithTheEdit() {
         let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
         session.toggleEditTool(.crop)
-        XCTAssertNil(session.editTool, "hors retouche, pas de recadrage")
+        XCTAssertEqual(session.activeEditTools, [], "hors retouche, pas de recadrage")
         session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
-        XCTAssertEqual(session.editPanel, .none)
-        XCTAssertFalse(session.showsCropBrackets, "les équerres attendent l'outil Crop (#9754)")
-        session.toggleEditTool(.crop)
-        XCTAssertEqual(session.editTool, .crop)
-        XCTAssertEqual(session.editPanel, .presets)
+        XCTAssertEqual(session.editPanels, [.presets], "Crop d'office sur une photo (#9754)")
         XCTAssertTrue(session.showsCropBrackets)
         session.toggleFamily(.filters)
-        XCTAssertNil(session.editTool, "ouvrir une bande replie l'outil")
-        XCTAssertEqual(session.editPanel, .band)
-        XCTAssertFalse(session.showsCropBrackets)
+        XCTAssertEqual(session.activeEditTools, [.crop], "ouvrir une bande n'éteint pas l'outil")
+        XCTAssertEqual(session.editPanels, [.band], "elle replie seulement les proportions")
+        XCTAssertTrue(session.showsCropBrackets, "les équerres restent sur la scène")
         session.toggleEditTool(.crop)
-        XCTAssertNil(session.openFamily, "et l'inverse")
+        XCTAssertFalse(session.showsCropBrackets, "toucher Crop retire les équerres")
+        XCTAssertEqual(session.openFamily, .filters, "et laisse la bande")
         session.toggleEditTool(.crop)
-        XCTAssertNil(session.editTool, "retoucher Crop masque les équerres")
-        XCTAssertFalse(session.showsCropBrackets)
-        session.toggleEditTool(.crop)
+        XCTAssertNil(session.openFamily, "rallumer Crop replie la bande pour montrer ses proportions")
+        XCTAssertEqual(session.editPanels, [.presets])
         session.cancelEditing()
-        XCTAssertNil(session.editTool)
+        XCTAssertEqual(session.activeEditTools, [])
     }
 
     func test_setEditAspect_whileTheRenderRuns_changesNothing() {

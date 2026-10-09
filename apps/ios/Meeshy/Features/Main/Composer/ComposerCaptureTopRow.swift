@@ -90,12 +90,14 @@ nonisolated enum ComposerCaptureTopRow {
 /// **(x) ne jette jamais une prise en silence** (#9753, porteur 2026-10-09 :
 /// « toucher (x) pendant un enregistrement demande CONFIRMATION avant de perdre
 /// l'enregistrement ») — ni celle qui tourne, ni des segments qui attendent
-/// leur ✓ (#9351). Hors de ces deux cas, (x) garde son comportement : il ferme,
-/// ou abandonne la retouche.
+/// leur ✓ (#9351), ni la prise qu'on retouche (#9781 : une vidéo de 32 s jetée
+/// sans un mot à la recette #9755). Une prise en retouche n'est pas encore
+/// envoyée ; seule la flèche ⬇︎ l'a pu mettre à l'abri, dans Photos. Hors de ces
+/// cas, (x) garde son comportement : il ferme, ou quitte la retouche.
 nonisolated enum ComposerCaptureDiscardRule {
     static func asksBeforeClosing(stage: ComposerSceneCameraStage, editing: Bool,
-                                  segments: [ComposerCaptureSegment]) -> Bool {
-        guard !editing else { return false }
+                                  segments: [ComposerCaptureSegment], takeSave: ComposerTakeSaveState) -> Bool {
+        guard !editing else { return takeSave != .saved }
         return stage == .recording || ComposerCaptureSegments.asksBeforeClosing(segments)
     }
 }

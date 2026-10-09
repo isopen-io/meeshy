@@ -17,10 +17,11 @@ import MeeshyUI
 /// **En édition, les outils seuls, sous la scène posée sur le sol** (#9352,
 /// porteur 2026-10-07, #9567, 2026-10-09 #9754) : « Filtres », « Cadres »,
 /// « Recadrer » et, pour une vidéo, « Couper » et « Son », en rangée ; au-dessus
-/// d'eux UN panneau, celui de l'outil ouvert — la bande (ses miniatures se
-/// peignent sur le média retouché), les proportions, la piste de découpe
-/// (#9353) ou le spectre du son. Ni miniature seule, ni zoom, ni phrase
-/// du geste ; « Terminé » est en haut, aligné sur la croix.
+/// d'eux les panneaux des outils ACTIFS, tous ensemble à l'entrée — les
+/// proportions, le spectre du son, la piste de découpe (#9353) —, ou la bande
+/// ouverte (ses miniatures se peignent sur le média retouché), qui les replie.
+/// Ni miniature seule, ni zoom, ni phrase du geste ; « Terminé » est en haut,
+/// aligné sur la croix.
 struct ComposerCaptureBottomRow: View {
     @ObservedObject var session: ComposerCaptureSession
     let context: ComposerCaptureGestureContext
@@ -82,7 +83,7 @@ struct ComposerCaptureBottomRow: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ComposerCaptureGesture.offersRail(context))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.openFamily)
-        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editPanel)
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editPanels)
     }
 
     private var captureRow: some View {
@@ -125,33 +126,38 @@ struct ComposerCaptureBottomRow: View {
         }
     }
 
-    /// **Sous la scène de retouche : un panneau, puis les outils** (#9567,
-    /// #9754) — la piste de découpe ou le spectre du son d'une vidéo, flanqués
-    /// à DROITE du bouton muet ; la bande ouverte ; ou les proportions. Puis
-    /// « Filtres », « Cadres », « Recadrer », « Couper », « Son » : chaque outil
-    /// affiche ou masque sa surface.
+    /// **Sous la scène de retouche : les panneaux, puis les outils** (#9567,
+    /// #9754) — un panneau par outil ACTIF, empilés : les proportions, le
+    /// spectre du son, la piste de découpe, le bouton muet à DROITE d'une piste
+    /// du temps ; ou la bande ouverte, qui les replie. Puis « Filtres »,
+    /// « Cadres », « Recadrer », « Couper », « Son » : chaque outil se retire ou
+    /// revient d'un toucher, sans fermer les autres.
     private var editTools: some View {
         VStack(spacing: ComposerEditScene.gap) {
-            switch session.editPanel {
-            case .trim:
-                if let trimClip {
-                    mediaTrack { ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration) }
+            ForEach(session.editPanels, id: \.self) { panneau in
+                switch panneau {
+                case .trim:
+                    if let trimClip {
+                        mediaTrack(.trim) {
+                            ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
+                        }
+                    }
+                case .sound:
+                    if let trimClip {
+                        mediaTrack(.sound) { ComposerSoundTrack(session: session, url: trimClip.url) }
+                    }
+                case .band:
+                    ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
+                        .transition(.opacity)
+                case .presets:
+                    ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
+                        .transition(.opacity)
+                case .none:
+                    EmptyView()
                 }
-            case .sound:
-                if let trimClip {
-                    mediaTrack { ComposerSoundTrack(session: session, url: trimClip.url) }
-                }
-            case .band:
-                ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
-                    .transition(.opacity)
-            case .presets:
-                ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
-                    .transition(.opacity)
-            case .none:
-                EmptyView()
             }
             ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
-                             openTool: session.editTool, onTool: { session.toggleEditTool($0) }) { famille in
+                             shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) { famille in
                 session.toggleFamily(famille)
             }
             .frame(height: ComposerEditScene.toolsRow)
@@ -159,13 +165,21 @@ struct ComposerCaptureBottomRow: View {
         .padding(.bottom, ComposerEditScene.gap)
     }
 
-    /// Une piste de la prise, et le bouton muet à sa DROITE quand elle a un son.
-    private func mediaTrack<Track: View>(@ViewBuilder _ track: () -> Track) -> some View {
-        HStack(spacing: MeeshySpacing.xs) {
+    /// Une piste du temps, et le bouton muet à sa DROITE quand elle le porte ;
+    /// l'autre piste réserve sa place, et leurs instants s'alignent.
+    private func mediaTrack<Track: View>(_ panneau: ComposerEditPanel, @ViewBuilder _ track: () -> Track) -> some View {
+        let panneaux = session.editPanels
+        let son = session.takeHasAudio
+        return HStack(spacing: MeeshySpacing.xs) {
             track()
-            if ComposerEditTools.offersMuteSwitch(panel: session.editPanel, hasAudio: session.takeHasAudio) {
+            if ComposerEditTools.muteHost(panels: panneaux, hasAudio: son) == panneau {
                 ComposerTakeMuteButton(muted: session.takeSound.muted) { session.toggleTakeMute() }
                     .padding(.trailing, MeeshySpacing.sm)
+            } else if ComposerEditTools.reservesMuteColumn(panneau, panels: panneaux, hasAudio: son) {
+                Color.clear
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                    .padding(.trailing, MeeshySpacing.sm)
+                    .accessibilityHidden(true)
             }
         }
         .environment(\.layoutDirection, .leftToRight)

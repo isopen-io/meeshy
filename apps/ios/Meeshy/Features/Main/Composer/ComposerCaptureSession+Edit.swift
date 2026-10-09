@@ -21,7 +21,7 @@ extension ComposerCaptureSession {
         editSource = ComposerStillSource(debout)
         framing = .identity
         openFamily = nil
-        editTool = nil
+        activeEditTools = ComposerEditTools.initial(.photo)
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.photo)
         camera.pauseRunning()
@@ -48,7 +48,7 @@ extension ComposerCaptureSession {
         trim = ComposerTrimRule.initialRange(duration: lecteur.duration)
         loopedTrim = trim
         openFamily = nil
-        editTool = nil
+        activeEditTools = ComposerEditTools.initial(.video(hasAudio: lecteur.hasAudio))
         takeSound = ComposerTakeSound()
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.video(url))
@@ -235,7 +235,7 @@ extension ComposerCaptureSession {
         editSource = nil
         framing = .identity
         editAspect = nil
-        editTool = nil
+        activeEditTools = []
         takeSound = ComposerTakeSound()
         trimScrubbing = false
         takeSaveState = .idle
@@ -303,33 +303,50 @@ extension ComposerCaptureSession {
 
     // MARK: - Les outils de la retouche (#9567, #9754)
 
-    /// Ce qui s'ouvre sous la scène de retouche.
-    var editPanel: ComposerEditPanel {
-        guard phase.isEditing else { return .none }
-        return ComposerEditTools.panel(familyOpen: openFamily != nil, tool: editTool)
+    /// La prise en retouche, vue par ses outils ; `nil` hors retouche.
+    var editTake: ComposerEditTake? {
+        switch phase {
+        case .capturing: return nil
+        case .editing(.photo): return .photo
+        case .editing(.video): return .video(hasAudio: takeHasAudio)
+        }
+    }
+
+    /// Ce qui s'ouvre sous la scène de retouche, de haut en bas.
+    var editPanels: [ComposerEditPanel] {
+        guard phase.isEditing else { return [] }
+        return ComposerEditTools.panels(familyOpen: openFamily != nil, active: activeEditTools)
     }
 
     /// Les outils que la prise offre, après Filtres et Cadres.
     var editTools: [ComposerEditTool] {
-        guard phase.isEditing else { return [] }
-        return ComposerEditTools.offered(isVideo: loopPlayer != nil, hasAudio: takeHasAudio)
+        editTake.map(ComposerEditTools.offered) ?? []
+    }
+
+    /// Les outils dont la surface est à l'écran — ce que le rail allume.
+    var shownEditTools: Set<ComposerEditTool> {
+        let familleOuverte = openFamily != nil
+        return activeEditTools.filter {
+            ComposerEditTools.isShown($0, active: activeEditTools, familyOpen: familleOuverte)
+        }
     }
 
     /// La vidéo en retouche porte-t-elle un son ?
     var takeHasAudio: Bool { loopPlayer?.hasAudio ?? false }
 
-    /// Les équerres autour de l'image : Crop ouvert seulement.
+    /// Les équerres autour de l'image : Crop actif.
     var showsCropBrackets: Bool {
-        phase.isEditing && ComposerEditTools.showsBrackets(tool: editTool, familyOpen: openFamily != nil)
+        phase.isEditing && ComposerEditTools.showsBrackets(active: activeEditTools)
     }
 
-    /// **Toucher un outil l'ouvre, le retoucher le referme** ; il replie la
-    /// bande ouverte. Un outil que la prise n'offre pas ne s'ouvre pas, et
-    /// pendant le rendu de « Terminé » plus rien ne bouge.
+    /// **Toucher un outil ne touche que lui** (#9754) : montré, il se retire ;
+    /// sinon il se montre, et replie la bande ouverte pour montrer son panneau.
+    /// Un outil que la prise n'offre pas ne bouge pas, et pendant le rendu de
+    /// « Terminé » plus rien ne bouge.
     func toggleEditTool(_ tool: ComposerEditTool) {
         guard phase.isEditing, !isRenderingLook, editTools.contains(tool) else { return }
-        editTool = ComposerEditTools.toggled(editTool, tapping: tool)
-        if editTool != nil { openFamily = nil }
+        activeEditTools = ComposerEditTools.toggled(activeEditTools, tapping: tool, familyOpen: openFamily != nil)
+        if activeEditTools.contains(tool) { openFamily = nil }
         HapticFeedback.light()
     }
 

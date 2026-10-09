@@ -67,7 +67,7 @@ struct ComposerCaptureMount<Content: View>: View {
                                     aspect: aspect,
                                     in: ComposerEditScene.area(container: proxy.size, top: marges.safeAreaInsets.top,
                                                                bottom: marges.safeAreaInsets.bottom,
-                                                               panel: session.editPanel)), taille)
+                                                               panels: session.editPanels)), taille)
                             } else {
                                 // **Le sol en BLANC brillant** (#8653) : l'écran est
                                 // le flash, autour de la SCÈNE seulement — son
@@ -86,7 +86,7 @@ struct ComposerCaptureMount<Content: View>: View {
                     .ignoresSafeArea()
                     .animation(Self.growth, value: taille)
                     .animation(Self.growth, value: session.editAspect)
-                    .animation(Self.growth, value: session.editPanel)
+                    .animation(Self.growth, value: session.editPanels)
                 }
             }
             .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in

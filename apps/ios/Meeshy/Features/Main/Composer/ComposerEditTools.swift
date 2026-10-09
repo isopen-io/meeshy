@@ -12,53 +12,99 @@ nonisolated enum ComposerEditTool: Equatable, Hashable, Sendable, CaseIterable {
     case sound
 }
 
-/// **Les outils du mode édition — chacun affiche ou masque SA surface**
-/// (#9754, directive porteur 2026-10-09).
+/// Ce que la retouche retouche, vu par ses outils.
+nonisolated enum ComposerEditTake: Equatable, Sendable {
+    case photo
+    case video(hasAudio: Bool)
+    /// Une prise sans image : elle se coupe et son son se règle.
+    case audio
+}
+
+/// **Les outils du mode édition — COMPOSABLES et actifs d'office** (#9754,
+/// directives porteur 2026-10-09).
 ///
-/// > « Crop : un outil qui fait apparaître ou disparaître les équerres autour de
-/// > l'image. Mute : fait apparaître en couleur le spectre vocal et une ligne de
-/// > volume […] plus un bouton à DROITE de la barre de trim pour couper
-/// > totalement le son ou le réactiver. Trim : affiche ou masque la barre de
-/// > coupure de la prise. »
+/// > « Pour la vidéo, permettre la barre de coupe avec la gestion du volume
+/// > activée, le crop aussi — certaines fonctions sont composites si on ne les
+/// > désactive pas. »
 ///
-/// Un outil à la fois, et une famille de looks ouverte replie l'outil : un
-/// seul panneau vit sous la scène. Rien n'est ouvert à l'entrée en retouche —
-/// l'écran respire, et le premier toucher dit ce qu'on veut régler.
+/// À l'entrée en retouche, chaque outil que la prise offre est ACTIF : une
+/// vidéo montre ensemble ses équerres, son spectre et sa barre de coupe ; une
+/// photo ses équerres blanches ; un son sa coupe et son spectre. Un toucher
+/// retire UN outil sans fermer les autres, le suivant le rend.
+///
+/// Une famille de looks ouverte replie les PANNEAUX sous la scène sans éteindre
+/// leurs outils — la bande prend leur place, et ils reviennent quand elle se
+/// replie. Les équerres, posées sur la scène, ne coûtent aucune place : elles
+/// restent.
 nonisolated enum ComposerEditTools {
 
     /// Ce qu'une prise offre : la photo se recadre ; la vidéo se recadre et se
-    /// coupe ; son son se règle si elle en a un.
-    static func offered(isVideo: Bool, hasAudio: Bool) -> [ComposerEditTool] {
-        guard isVideo else { return [.crop] }
-        return hasAudio ? [.crop, .trim, .sound] : [.crop, .trim]
+    /// coupe, et son son se règle si elle en a un ; un son se coupe et se règle.
+    static func offered(_ take: ComposerEditTake) -> [ComposerEditTool] {
+        switch take {
+        case .photo: return [.crop]
+        case .video(let son): return son ? [.crop, .trim, .sound] : [.crop, .trim]
+        case .audio: return [.trim, .sound]
+        }
     }
 
-    /// Toucher un outil l'ouvre ; toucher l'outil ouvert le referme.
-    static func toggled(_ open: ComposerEditTool?, tapping tool: ComposerEditTool) -> ComposerEditTool? {
-        open == tool ? nil : tool
+    /// Tout ce qui est offert est actif à l'entrée.
+    static func initial(_ take: ComposerEditTake) -> Set<ComposerEditTool> {
+        Set(offered(take))
     }
 
-    /// Le panneau sous la scène : la bande d'une famille ouverte, sinon celui de
-    /// l'outil ouvert.
-    static func panel(familyOpen: Bool, tool: ComposerEditTool?) -> ComposerEditPanel {
-        if familyOpen { return .band }
+    /// Ce qu'un outil actif montre : les équerres restent sur la scène sous une
+    /// bande, les pistes s'y replient.
+    static func isShown(_ tool: ComposerEditTool, active: Set<ComposerEditTool>, familyOpen: Bool) -> Bool {
+        guard active.contains(tool) else { return false }
+        return tool == .crop || !familyOpen
+    }
+
+    /// **Toucher un outil ne touche que lui** : montré, il se retire ; replié
+    /// sous une bande ou éteint, il se montre. Les autres ne bougent pas.
+    static func toggled(_ active: Set<ComposerEditTool>, tapping tool: ComposerEditTool,
+                        familyOpen: Bool) -> Set<ComposerEditTool> {
+        isShown(tool, active: active, familyOpen: familyOpen) ? active.subtracting([tool]) : active.union([tool])
+    }
+
+    /// L'ordre des panneaux sous la scène, de haut en bas : les proportions, le
+    /// spectre, puis la coupe, au plus près des outils.
+    static let panelOrder: [ComposerEditTool] = [.crop, .sound, .trim]
+
+    /// Les panneaux sous la scène : la bande d'une famille ouverte, sinon un par
+    /// outil actif.
+    static func panels(familyOpen: Bool, active: Set<ComposerEditTool>) -> [ComposerEditPanel] {
+        guard !familyOpen else { return [.band] }
+        return panelOrder.filter(active.contains).map(panel(for:))
+    }
+
+    static func panel(for tool: ComposerEditTool) -> ComposerEditPanel {
         switch tool {
         case .crop: return .presets
         case .trim: return .trim
         case .sound: return .sound
-        case nil: return .none
         }
     }
 
-    /// Les équerres n'existent que Crop ouvert.
-    static func showsBrackets(tool: ComposerEditTool?, familyOpen: Bool) -> Bool {
-        tool == .crop && !familyOpen
+    /// Les équerres suivent Crop, et lui seul.
+    static func showsBrackets(active: Set<ComposerEditTool>) -> Bool {
+        active.contains(.crop)
     }
 
-    /// Le bouton muet se pose à DROITE de la piste — celle de la coupe comme
-    /// celle du son — dès que la prise a un son.
-    static func offersMuteSwitch(panel: ComposerEditPanel, hasAudio: Bool) -> Bool {
-        hasAudio && (panel == .trim || panel == .sound)
+    /// **Le bouton muet se pose à DROITE d'UNE piste** : celle du spectre si
+    /// elle est montrée, sinon celle de la coupe — dès que la prise a un son.
+    static func muteHost(panels: [ComposerEditPanel], hasAudio: Bool) -> ComposerEditPanel? {
+        guard hasAudio else { return nil }
+        return panels.first { $0 == .sound } ?? panels.first { $0 == .trim }
+    }
+
+    /// Les deux pistes du temps gardent la même largeur : celle qui ne porte pas
+    /// le bouton muet réserve sa place, et leurs instants s'alignent.
+    static func reservesMuteColumn(_ panel: ComposerEditPanel, panels: [ComposerEditPanel], hasAudio: Bool) -> Bool {
+        guard panel == .trim || panel == .sound, let hote = muteHost(panels: panels, hasAudio: hasAudio) else {
+            return false
+        }
+        return hote != panel
     }
 }
 

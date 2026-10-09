@@ -152,6 +152,10 @@ struct ComposerCaptureChrome: View {
     /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
     @State private var focusMark: ComposerCaptureFocusMark?
     @State private var confirmsDiscard = false
+    /// Ce que la confirmation abandonne, fixé à la question : la prise en
+    /// retouche, ou le viseur (#9781).
+    @State private var discardsTake = false
+    @State private var discardsPhoto = false
     /// Retombe tout seul quand le pincement finit — y compris annulé par le
     /// système, qui n'appelle pas `onEnded`.
     @GestureState private var pinchActive = false
@@ -216,14 +220,14 @@ struct ComposerCaptureChrome: View {
             }
             if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
                 GeometryReader { proxy in
-                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panel: session.editPanel)
+                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels)
                     ComposerCropBrackets(scene: ComposerEditScene.rect(aspect: aspect, in: zone), area: zone) { cadre in
                         guard cadre.height > 0 else { return }
                         session.setEditAspect(cadre.width / cadre.height)
                     }
                 }
                 .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
-                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanel)
+                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)
                 .transition(.opacity)
             }
             VStack(spacing: 0) {
@@ -265,22 +269,36 @@ struct ComposerCaptureChrome: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
-        .alert(ComposerSceneCameraCopy.discardTitle, isPresented: $confirmsDiscard) {
-            Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) { onDisarm() }
+        .alert(ComposerSceneCameraCopy.discardTitle(photo: discardsPhoto), isPresented: $confirmsDiscard) {
+            Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) { confirmDiscard() }
             Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) {}
         }
     }
 
     /// La croix et le glissé de rangement passent par ici : un enregistrement
-    /// en cours ou des segments en attente demandent confirmation (#9753), sinon
-    /// le viseur se range tout de suite. En édition, la croix abandonne la
-    /// retouche : on revient viser.
+    /// en cours, des segments en attente (#9753) ou une prise en retouche qui
+    /// n'est pas dans Photos (#9781) demandent confirmation ; sinon le viseur se
+    /// range — ou, en retouche, on revient viser — tout de suite.
     private func requestDisarm() {
-        guard !session.phase.isEditing else { return session.cancelEditing() }
-        guard ComposerCaptureDiscardRule.asksBeforeClosing(stage: session.stage, editing: session.phase.isEditing,
-                                                           segments: session.segments) else { return onDisarm() }
+        let retouche = session.phase.isEditing
+        guard ComposerCaptureDiscardRule.asksBeforeClosing(stage: session.stage, editing: retouche,
+                                                           segments: session.segments,
+                                                           takeSave: session.takeSaveState) else {
+            return retouche ? session.cancelEditing() : onDisarm()
+        }
         HapticFeedback.warning()
+        discardsTake = session.phase.isEditing
+        discardsPhoto = session.phase == .editing(.photo)
         confirmsDiscard = true
+    }
+
+    /// L'abandon confirmé : la retouche, si c'est elle qu'on a demandé de
+    /// quitter et qu'elle est encore là — une remise survenue entre-temps ne
+    /// ferme pas le viseur ; sinon le viseur.
+    private func confirmDiscard() {
+        guard discardsTake else { return onDisarm() }
+        guard session.phase.isEditing else { return }
+        session.cancelEditing()
     }
 
     /// Un geste sur la scène, décidé par la table.

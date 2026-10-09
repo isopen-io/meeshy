@@ -3,9 +3,9 @@ import XCTest
 import UIKit
 @testable import Meeshy
 
-/// **Les outils du mode édition d'une prise** (#9754, directive porteur
-/// 2026-10-09) : Crop, Trim, Son — chacun affiche ou masque sa surface — et la
-/// frame exacte sous la règle.
+/// **Les outils du mode édition d'une prise** (#9754, directives porteur
+/// 2026-10-09) : Crop, Trim, Son — COMPOSABLES et actifs d'office, chacun se
+/// retire d'un toucher sans fermer les autres — et la frame exacte sous la règle.
 @MainActor
 final class ComposerEditToolsTests: XCTestCase {
 
@@ -20,27 +20,61 @@ final class ComposerEditToolsTests: XCTestCase {
         return (session, lecteur)
     }
 
-    // MARK: - Ce que chaque prise offre
+    // MARK: - Ce que chaque prise offre, ACTIF D'OFFICE (porteur 2026-10-09)
 
-    func test_offered_photoCrops_videoCropsAndTrims_andItsSoundOnlyWithAudio() {
-        XCTAssertEqual(ComposerEditTools.offered(isVideo: false, hasAudio: false), [.crop])
-        XCTAssertEqual(ComposerEditTools.offered(isVideo: true, hasAudio: false), [.crop, .trim])
-        XCTAssertEqual(ComposerEditTools.offered(isVideo: true, hasAudio: true), [.crop, .trim, .sound])
+    func test_offered_photoCrops_videoCropsTrimsAndSounds_audioTrimsAndSounds() {
+        XCTAssertEqual(ComposerEditTools.offered(.photo), [.crop])
+        XCTAssertEqual(ComposerEditTools.offered(.video(hasAudio: false)), [.crop, .trim])
+        XCTAssertEqual(ComposerEditTools.offered(.video(hasAudio: true)), [.crop, .trim, .sound])
+        XCTAssertEqual(ComposerEditTools.offered(.audio), [.trim, .sound], "un son ne se recadre pas")
     }
 
-    func test_toggled_opensThenHides_andSwitchesBetweenTools() {
-        XCTAssertEqual(ComposerEditTools.toggled(nil, tapping: .trim), .trim)
-        XCTAssertNil(ComposerEditTools.toggled(.trim, tapping: .trim), "retoucher l'outil le masque")
-        XCTAssertEqual(ComposerEditTools.toggled(.trim, tapping: .sound), .sound)
+    func test_initial_everyOfferedToolIsActiveOnEntry() {
+        XCTAssertEqual(ComposerEditTools.initial(.photo), [.crop], "les équerres blanches d'office sur une photo")
+        XCTAssertEqual(ComposerEditTools.initial(.video(hasAudio: true)), [.crop, .trim, .sound],
+                       "Couper, Son et Crop ENSEMBLE à l'entrée d'une vidéo")
+        XCTAssertEqual(ComposerEditTools.initial(.audio), [.trim, .sound])
+    }
+
+    func test_toggled_onlyTheTouchedTool_neverTheOthers() {
+        let tout: Set<ComposerEditTool> = [.crop, .trim, .sound]
+        XCTAssertEqual(ComposerEditTools.toggled(tout, tapping: .trim, familyOpen: false), [.crop, .sound],
+                       "désactiver Couper ne ferme ni Crop ni Son")
+        XCTAssertEqual(ComposerEditTools.toggled([.crop, .sound], tapping: .trim, familyOpen: false), tout,
+                       "le retoucher le réactive")
+        XCTAssertEqual(ComposerEditTools.toggled([], tapping: .crop, familyOpen: false), [.crop])
+    }
+
+    func test_toggled_withABandOpen_revealsAFoldedTool_insteadOfDroppingIt() {
+        XCTAssertEqual(ComposerEditTools.toggled([.crop, .trim], tapping: .trim, familyOpen: true), [.crop, .trim],
+                       "Couper replié sous la bande : le toucher le MONTRE")
+        XCTAssertEqual(ComposerEditTools.toggled([.crop, .trim], tapping: .crop, familyOpen: true), [.trim],
+                       "les équerres restent visibles sous une bande : toucher Crop les retire")
+    }
+
+    func test_panels_stackEveryActiveTool_fromTheProportionsDownToTheCut() {
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.trim, .sound, .crop]),
+                       [.presets, .sound, .trim], "la coupe se pose au plus près des outils")
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.crop]), [.presets])
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: []), [])
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: true, active: [.crop, .trim, .sound]), [.band],
+                       "une bande ouverte replie les panneaux, sans désactiver leurs outils")
+    }
+
+    func test_shown_cropStaysOnTheSceneUnderABand_theTracksFold() {
+        XCTAssertTrue(ComposerEditTools.isShown(.crop, active: [.crop], familyOpen: true))
+        XCTAssertFalse(ComposerEditTools.isShown(.trim, active: [.trim], familyOpen: true))
+        XCTAssertTrue(ComposerEditTools.isShown(.trim, active: [.trim], familyOpen: false))
+        XCTAssertFalse(ComposerEditTools.isShown(.sound, active: [.trim], familyOpen: false))
     }
 
     // MARK: - (1) Crop fait paraître et disparaître les équerres
 
-    func test_brackets_existOnlyWhileCropIsOpen() {
-        XCTAssertTrue(ComposerEditTools.showsBrackets(tool: .crop, familyOpen: false))
-        XCTAssertFalse(ComposerEditTools.showsBrackets(tool: nil, familyOpen: false))
-        XCTAssertFalse(ComposerEditTools.showsBrackets(tool: .trim, familyOpen: false))
-        XCTAssertFalse(ComposerEditTools.showsBrackets(tool: .crop, familyOpen: true))
+    func test_brackets_followTheCropTool_alone() {
+        XCTAssertTrue(ComposerEditTools.showsBrackets(active: [.crop]))
+        XCTAssertTrue(ComposerEditTools.showsBrackets(active: [.crop, .trim]))
+        XCTAssertFalse(ComposerEditTools.showsBrackets(active: [.trim, .sound]))
+        XCTAssertFalse(ComposerEditTools.showsBrackets(active: []))
     }
 
     func test_theBrackets_areMountedBehindTheCropTool() throws {
@@ -48,41 +82,70 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(chrome.contains("session.showsCropBrackets, let aspect = session.editAspect"))
     }
 
-    // MARK: - (3) Trim affiche ou masque la barre de coupe
-
-    func test_trim_showsAndHidesTheCuttingBar_andAPhotoHasNone() async {
-        let (session, _) = await videoSession()
-        XCTAssertEqual(session.editPanel, .none, "masquée à l'entrée")
-        session.toggleEditTool(.trim)
-        XCTAssertEqual(session.editPanel, .trim)
-        session.toggleEditTool(.trim)
-        XCTAssertEqual(session.editPanel, .none)
-
+    func test_aPhoto_opensWithItsWhiteBrackets_andHidesThemWithOneTouch() {
         let photo = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
         photo.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        XCTAssertTrue(photo.showsCropBrackets, "après une photo, les équerres blanches sont là sans rien toucher")
+        XCTAssertEqual(photo.editPanels, [.presets])
+        photo.toggleEditTool(.crop)
+        XCTAssertFalse(photo.showsCropBrackets)
+        XCTAssertEqual(photo.editPanels, [])
         photo.toggleEditTool(.trim)
-        XCTAssertNil(photo.editTool, "une photo ne se coupe pas")
+        XCTAssertEqual(photo.activeEditTools, [], "une photo ne se coupe pas")
         XCTAssertEqual(photo.editTools, [.crop])
+    }
+
+    // MARK: - (3) Les outils d'une vidéo, ensemble et chacun pour soi
+
+    func test_aVideo_opensWithCutSoundAndCropTogether_andEachLeavesAlone() async {
+        let (session, _) = await videoSession()
+        XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound])
+        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim])
+        XCTAssertTrue(session.showsCropBrackets)
+        session.toggleEditTool(.trim)
+        XCTAssertEqual(session.editPanels, [.presets, .sound], "Couper se retire seul")
+        XCTAssertTrue(session.showsCropBrackets, "les équerres restent")
+        session.toggleEditTool(.trim)
+        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim])
+        session.toggleFamily(.filters)
+        XCTAssertEqual(session.editPanels, [.band])
+        XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound], "la bande replie les panneaux, rien ne s'éteint")
+        session.toggleFamily(.filters)
+        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim], "la bande repliée, ils reviennent")
+        session.cancelEditing()
+        XCTAssertEqual(session.activeEditTools, [])
+        XCTAssertEqual(session.editPanels, [])
+    }
+
+    func test_tappingAFoldedTool_closesTheBand_andShowsIt() async {
+        let (session, _) = await videoSession()
+        session.toggleFamily(.frames)
+        session.toggleEditTool(.sound)
+        XCTAssertNil(session.openFamily, "le toucher d'un outil replie la bande")
+        XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound])
+        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim])
     }
 
     // MARK: - (2) Son : spectre, ligne de volume, bouton muet
 
-    func test_sound_opensTheSpectrum_withTheMuteSwitchRightOfTheTrack() async {
-        let (session, _) = await videoSession()
-        session.toggleEditTool(.sound)
-        XCTAssertEqual(session.editPanel, .sound)
-        XCTAssertTrue(ComposerEditTools.offersMuteSwitch(panel: .sound, hasAudio: true))
-        XCTAssertTrue(ComposerEditTools.offersMuteSwitch(panel: .trim, hasAudio: true),
-                      "le bouton muet se pose à DROITE de la barre de trim")
-        XCTAssertFalse(ComposerEditTools.offersMuteSwitch(panel: .trim, hasAudio: false), "un clip muet n'en a pas")
-        XCTAssertFalse(ComposerEditTools.offersMuteSwitch(panel: .presets, hasAudio: true))
+    func test_theMuteSwitch_sitsRightOfOneTrack_theSpectrumFirst() {
+        XCTAssertEqual(ComposerEditTools.muteHost(panels: [.presets, .sound, .trim], hasAudio: true), .sound)
+        XCTAssertEqual(ComposerEditTools.muteHost(panels: [.trim], hasAudio: true), .trim,
+                       "le bouton muet se pose à DROITE de la barre de trim quand le spectre est retiré")
+        XCTAssertNil(ComposerEditTools.muteHost(panels: [.trim], hasAudio: false), "un clip muet n'en a pas")
+        XCTAssertNil(ComposerEditTools.muteHost(panels: [.presets], hasAudio: true))
+        XCTAssertTrue(ComposerEditTools.reservesMuteColumn(.trim, panels: [.sound, .trim], hasAudio: true),
+                      "la coupe sous le spectre garde la place du bouton : les deux pistes du temps s'alignent")
+        XCTAssertFalse(ComposerEditTools.reservesMuteColumn(.sound, panels: [.sound, .trim], hasAudio: true))
+        XCTAssertFalse(ComposerEditTools.reservesMuteColumn(.trim, panels: [.trim], hasAudio: true))
     }
 
     func test_aSilentClip_offersNoSoundTool() async {
         let (session, _) = await videoSession(hasAudio: false)
         XCTAssertEqual(session.editTools, [.crop, .trim])
+        XCTAssertEqual(session.activeEditTools, [.crop, .trim])
         session.toggleEditTool(.sound)
-        XCTAssertNil(session.editTool)
+        XCTAssertEqual(session.activeEditTools, [.crop, .trim], "un outil que la prise n'offre pas ne s'active pas")
     }
 
     func test_takeSound_gainFollowsTheLine_andMuteRemembersTheGain() {
@@ -170,6 +233,7 @@ final class ComposerEditToolsTests: XCTestCase {
     func test_theRail_listsTheTakeTools_andEveryEditControlBounces() throws {
         let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("editTools: session.editTools"))
+        XCTAssertTrue(bas.contains("ForEach(session.editPanels, id: \\.self)"), "chaque outil actif a son panneau")
         XCTAssertTrue(bas.contains("ComposerTakeMuteButton("), "le bouton muet")
         XCTAssertTrue(bas.contains("ComposerSoundTrack("), "le spectre en couleur")
         let rail = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")

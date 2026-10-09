@@ -3,7 +3,7 @@ import Foundation
 import MeeshySDK
 
 /// Ce qui s'ouvre sous la scène de retouche, au-dessus des outils.
-nonisolated enum ComposerEditPanel: Equatable, Sendable {
+nonisolated enum ComposerEditPanel: Hashable, Sendable {
     case none
     /// La piste de découpe d'une vidéo.
     case trim
@@ -63,17 +63,18 @@ nonisolated enum ComposerEditScene {
         }
     }
 
-    /// Ce que le bas retient sous la scène : les outils, et le panneau ouvert.
-    static func bottomReserve(_ panel: ComposerEditPanel) -> CGFloat {
-        let panneau = panelHeight(panel)
-        return toolsRow + (panneau > 0 ? panneau + gap : 0) + gap * 2
+    /// Ce que le bas retient sous la scène : les outils, et chaque panneau
+    /// montré — les outils composent (#9754), leurs panneaux s'empilent.
+    static func bottomReserve(_ panels: [ComposerEditPanel]) -> CGFloat {
+        let montes = panels.map(panelHeight).filter { $0 > 0 }
+        return toolsRow + montes.map { $0 + gap }.reduce(0, +) + gap * 2
     }
 
     /// La zone où la scène tient, dans un conteneur dont `top` et `bottom`
     /// sont les marges système (nulles pour une couche qui les respecte déjà).
-    static func area(container: CGSize, top: CGFloat, bottom: CGFloat, panel: ComposerEditPanel) -> CGRect {
+    static func area(container: CGSize, top: CGFloat, bottom: CGFloat, panels: [ComposerEditPanel]) -> CGRect {
         let haut = top + topBand
-        let bas = container.height - bottom - bottomReserve(panel)
+        let bas = container.height - bottom - bottomReserve(panels)
         return CGRect(x: margin, y: haut, width: max(0, container.width - margin * 2), height: max(0, bas - haut))
     }
 

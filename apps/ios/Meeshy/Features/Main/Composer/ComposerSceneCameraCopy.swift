@@ -73,11 +73,15 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Poser dans la scène", bundle: .main)
     }
 
-    /// **Des segments attendent leur `✓`** : fermer le viseur les jetterait.
-    /// La question dit ce qui se perd ; les deux choix, ce qu'ils font.
-    static var discardTitle: String {
-        String(localized: "composer.camera.discard.title",
-               defaultValue: "Abandonner la vidéo ?", bundle: .main)
+    /// **Une prise se perdrait** — un enregistrement, des segments qui attendent
+    /// leur `✓`, ou la prise qu'on retouche (#9781). La question dit ce qui se
+    /// perd ; les deux choix, ce qu'ils font.
+    static func discardTitle(photo: Bool) -> String {
+        photo
+            ? String(localized: "composer.camera.discard.photo.title",
+                     defaultValue: "Abandonner la photo ?", bundle: .main)
+            : String(localized: "composer.camera.discard.title",
+                     defaultValue: "Abandonner la vidéo ?", bundle: .main)
     }
 
     static var discardConfirm: String {

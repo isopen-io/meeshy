@@ -78,7 +78,8 @@ struct ComposerLookRail: View {
     /// Les outils de la retouche, après les familles (#9754) — vide pendant la
     /// capture : ils n'existent qu'en retouche.
     var editTools: [ComposerEditTool] = []
-    var openTool: ComposerEditTool?
+    /// Les outils dont la surface est à l'écran : ils s'allument, ensemble.
+    var shownTools: Set<ComposerEditTool> = []
     var onTool: (ComposerEditTool) -> Void = { _ in }
     let onSelect: (ComposerLookFamily) -> Void
 
@@ -93,7 +94,7 @@ struct ComposerLookRail: View {
             }
             ForEach(editTools, id: \.self) { outil in
                 tool(symbol: ComposerCaptureCopy.editToolSymbol(outil), name: ComposerCaptureCopy.editToolName(outil),
-                     selected: openTool == outil) { onTool(outil) }
+                     selected: shownTools.contains(outil)) { onTool(outil) }
             }
         }
     }

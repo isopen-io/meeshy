@@ -79,19 +79,52 @@ final class ComposerCaptureTopRowTests: XCTestCase {
     // MARK: - (5) (x) pendant un enregistrement demande confirmation
 
     func test_closingWhileRecording_asksFirst_evenWithoutSegments() {
-        XCTAssertTrue(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .recording, editing: false, segments: []))
+        XCTAssertTrue(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .recording, editing: false, segments: [],
+                                                                  takeSave: .idle))
     }
 
     func test_closingWithPendingSegments_stillAsks() {
         XCTAssertTrue(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .armed, editing: false,
-                                                                  segments: [Self.segment()]))
+                                                                  segments: [Self.segment()], takeSave: .idle))
     }
 
     func test_closingOutsideARecording_keepsItsBehaviour() {
-        XCTAssertFalse(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .armed, editing: false, segments: []),
+        XCTAssertFalse(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .armed, editing: false, segments: [],
+                                                                   takeSave: .idle),
                        "rien à perdre : la croix ferme tout de suite")
-        XCTAssertFalse(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .armed, editing: true, segments: []),
-                       "en retouche, la croix abandonne la retouche, comme avant")
+    }
+
+    // MARK: - (x) en RETOUCHE ne jette pas une prise en silence (#9781)
+
+    /// Recette #9755 : une vidéo de 32 s, deux segments validés, jetée par la
+    /// croix de la retouche sans un mot. Une prise en retouche n'est encore ni
+    /// envoyée ni — sauf par la flèche — enregistrée : la perdre se confirme.
+    func test_closingTheRetouch_ofATakeNotSaved_asksFirst() {
+        XCTAssertTrue(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .armed, editing: true, segments: [],
+                                                                  takeSave: .idle))
+        XCTAssertTrue(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .armed, editing: true, segments: [],
+                                                                  takeSave: .saving),
+                      "un enregistrement en vol peut encore échouer")
+    }
+
+    func test_closingTheRetouch_ofATakeAlreadyInPhotos_leavesAtOnce() {
+        XCTAssertFalse(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .armed, editing: true, segments: [],
+                                                                   takeSave: .saved),
+                       "la prise est dans Photos : la croix ne perd rien")
+    }
+
+    func test_theQuestion_namesWhatIsLost() {
+        XCTAssertNotEqual(ComposerSceneCameraCopy.discardTitle(photo: true), ComposerSceneCameraCopy.discardTitle(photo: false))
+        XCTAssertFalse(ComposerSceneCameraCopy.discardTitle(photo: true).isEmpty)
+    }
+
+    func test_theRetouchCross_goesThroughTheRule_andAConfirmedDiscardLeavesTheRetouchOnly() throws {
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertFalse(chrome.contains("guard !session.phase.isEditing else { return session.cancelEditing() }"),
+                       "la croix de la retouche ne jette plus rien sans demander")
+        XCTAssertTrue(chrome.contains("takeSave: session.takeSaveState"))
+        XCTAssertTrue(chrome.contains("discardsTake = session.phase.isEditing"),
+                      "ce que la confirmation abandonne se fixe à la question : une remise entre-temps ne ferme pas le viseur")
     }
 
     func test_theCross_goesThroughTheDiscardRule_andTheBarStaysWhileRecording() throws {

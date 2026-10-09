@@ -72,8 +72,9 @@ final class ComposerCaptureSession: ObservableObject {
     /// Les proportions de la scène de retouche (#9567) — ce qui partira ;
     /// `nil` hors retouche.
     @Published var editAspect: CGFloat?
-    /// L'outil de retouche ouvert — Crop, Trim ou Son (#9754) ; `nil` : aucun.
-    @Published var editTool: ComposerEditTool?
+    /// Les outils de retouche actifs — Crop, Trim, Son, ensemble (#9754) ;
+    /// vide hors retouche.
+    @Published var activeEditTools: Set<ComposerEditTool> = []
     /// Le son de la prise en retouche : gain et muet (#9754).
     @Published var takeSound = ComposerTakeSound()
     /// Un glissé de la règle montre la frame sous elle : la boucle est suspendue
