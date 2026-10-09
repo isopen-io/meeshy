@@ -192,12 +192,16 @@ describe('cadrage : la caméra va où l’action se joue', async () => {
   const RAPPORT = 1320 / 2868
   const minIphone = largeurMinimale({ largeurClip: 1320 })
 
-  test('jeu-rang, jeu-coffre et jeu-niveau iPhone ont leur rectangle ; ailleurs, plein cadre', () => {
+  test('les scènes cadrées sur iPhone ont leur rectangle ; ailleurs, plein cadre', () => {
     expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone' })).toEqual(CADRAGES['jeu-rang'].iphone)
     expect(cadrageDe({ scene: 'jeu-niveau', appareil: 'iphone' })).toEqual(CADRAGES['jeu-niveau'].iphone)
     expect(cadrageDe({ scene: 'jeu-coffre', appareil: 'iphone' })).toEqual(CADRAGES['jeu-coffre'].iphone)
     expect(cadrageDe({ scene: 'jeu-rang', appareil: 'ipad' })).toBeNull()
-    expect(cadrageDe({ scene: 'jeu-badge', appareil: 'iphone' })).toBeNull()
+    expect(cadrageDe({ scene: 'jeu-badge', appareil: 'iphone' })).toEqual(CADRAGES['jeu-badge'].iphone)
+    expect(cadrageDe({ scene: 'interaction-sticker', appareil: 'iphone' })).toBeNull()
+    for (const [scene, { iphone }] of Object.entries(CADRAGES)) {
+      if (iphone) expect({ scene, dansLEcran: iphone.x >= 0 && iphone.y >= 0 && iphone.x + iphone.largeur <= 1320 && iphone.y + iphone.hauteur <= 2868 }).toEqual({ scene, dansLEcran: true })
+    }
   })
 
   test('zoom borné à ×2,2 : 600 px natifs sur un iPhone de 1320 ; la borne suit la taille du clip', () => {
