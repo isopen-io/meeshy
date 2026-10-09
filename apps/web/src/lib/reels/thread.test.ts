@@ -7,6 +7,7 @@ import {
   activeIndexOf,
   composeReelThread,
   entryReelIds,
+  holdReelThread,
   neighborIndex,
   pageModeOf,
   playbackIntentOf,
@@ -75,6 +76,59 @@ describe('composeReelThread — l’ordre ne bouge jamais sous le doigt', () => 
   test('un POST servi par erreur ne se glisse jamais dans le fil des réels', () => {
     const thread = composeReelThread({ entryIds: [], known: known(), served: [post('p1'), reel('r1')] });
     expect(thread.map((r) => r.id)).toEqual(['r1']);
+  });
+});
+
+/**
+ * Recette du 2026-10-09 (#9702) — jumelle de `ReelThreadOrder.refreshed`
+ * (`ReelThreadOrderTests.swift`). La passerelle reclasse sa page à chaque
+ * lecture (les réels vus coulent) : une relecture ne déplace ni le réel
+ * regardé ni ce qui le précède.
+ */
+describe('holdReelThread — une relecture ne déplace pas le réel regardé', () => {
+  const ids = (thread: readonly FeedPost[]): readonly string[] => thread.map((r) => r.id);
+
+  test('le réel d’ouverture garde la tête quand la passerelle le reclasse en queue', () => {
+    const held = holdReelThread({
+      heldIds: ['r14', 'r13', 'r12'],
+      activeId: 'r14',
+      composed: [reel('r13'), reel('r12'), reel('r11'), reel('image'), reel('video'), reel('r14')],
+    });
+    expect(ids(held)).toEqual(['r14', 'r13', 'r12', 'r11', 'image', 'video']);
+  });
+
+  test('ce qui PRÉCÈDE le réel regardé ne bouge pas, ce qui le SUIT prend l’ordre composé', () => {
+    const held = holdReelThread({
+      heldIds: ['a', 'b', 'c', 'd', 'e'],
+      activeId: 'c',
+      composed: [reel('e'), reel('c'), reel('a'), reel('f'), reel('d'), reel('b')],
+    });
+    expect(ids(held)).toEqual(['a', 'b', 'c', 'e', 'f', 'd']);
+  });
+
+  test('chaque réel tenu est peint depuis sa donnée composée, la plus récente', () => {
+    const held = holdReelThread({
+      heldIds: ['a', 'b'],
+      activeId: 'a',
+      composed: [reel('b', { likeCount: 7 }), reel('a', { likeCount: 9 })],
+    });
+    expect(held.map((r) => r.likeCount)).toEqual([9, 7]);
+  });
+
+  test('un réel tenu que la composition ne porte plus (supprimé) quitte le fil', () => {
+    const held = holdReelThread({ heldIds: ['a', 'b', 'c'], activeId: 'c', composed: [reel('c'), reel('a'), reel('d')] });
+    expect(ids(held)).toEqual(['a', 'c', 'd']);
+  });
+
+  test('sans réel regardé connu (premier rendu), l’ordre composé s’applique tel quel', () => {
+    const composed = [reel('b'), reel('a')];
+    expect(holdReelThread({ heldIds: [], activeId: '', composed })).toBe(composed);
+    expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'zz', composed })).toBe(composed);
+  });
+
+  test('un ordre inchangé rend la composition elle-même', () => {
+    const composed = [reel('a'), reel('b'), reel('c')];
+    expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'b', composed })).toBe(composed);
   });
 });
 

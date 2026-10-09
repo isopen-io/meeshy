@@ -86,6 +86,39 @@ export function composeReelThread(params: {
   });
 }
 
+/**
+ * **UNE RELECTURE NE DÉPLACE PAS LE RÉEL REGARDÉ** (#9702) — PURE, jumelle de
+ * `ReelThreadOrder.refreshed` (`packages/MeeshySDK/.../Media/ReelThreadOrder.swift`).
+ *
+ * `composeReelThread` gèle l'ENTRÉE ; la suite servie, elle, suit l'ordre de
+ * la passerelle — qui RECLASSE sa page à chaque lecture (les réels déjà vus
+ * coulent, `PostFeedService.getReels`). Un fil rouvert depuis sa caisse se
+ * relit en fond : sans cette tenue, le réel regardé changeait de place et
+ * l'écran, qui lit le réel visible sur la POSITION (`activeIndexOf`), en
+ * peignait un autre sous le doigt.
+ *
+ * Le réel regardé et ce qui le PRÉCÈDE gardent l'ordre tenu ; ce qui le SUIT
+ * prend l'ordre composé. La donnée vient toujours de la composition : un réel
+ * tenu qu'elle ne porte plus (supprimé) quitte le fil.
+ */
+export function holdReelThread(params: {
+  readonly heldIds: readonly string[];
+  readonly activeId: string;
+  readonly composed: readonly FeedPost[];
+}): readonly FeedPost[] {
+  const { heldIds, activeId, composed } = params;
+  const activeAt = heldIds.indexOf(activeId);
+  if (activeAt < 0) return composed;
+  const byId = new Map(composed.map((post) => [post.id, post] as const));
+  const head = heldIds.slice(0, activeAt + 1).flatMap((id) => {
+    const post = byId.get(id);
+    return post !== undefined ? [post] : [];
+  });
+  const kept = new Set(head.map((post) => post.id));
+  const thread = [...head, ...composed.filter((post) => !kept.has(post.id))];
+  return thread.every((post, index) => post === composed[index]) ? composed : thread;
+}
+
 export function activeIndexOf(params: { readonly scrollTop: number; readonly pageHeight: number; readonly count: number }): number {
   const { scrollTop, pageHeight, count } = params;
   if (pageHeight <= 0 || count <= 0) return 0;
