@@ -47,7 +47,9 @@ const retirerLesFichiersGeres = (dossier) => {
 export const deposer = ({ sorties, langs, appareils, apercus = APERCUS, creatifs = true, entete = 'video', metadata = FASTLANE_METADATA, controle = controler }) => {
   const manques = manquesAuDepot({ sorties, langs, appareils, apercus, creatifs, entete })
   if (manques.length) throw new Error(`dépôt refusé : ${manques.length} fichier(s) requis absent(s) — ${manques.join(', ')}`)
-  const choisis = sorties.filter((s) => s.statut === 'pret' && (s.type !== 'entete' || s.forme === entete))
+  const ids = new Set(apercus.map((a) => a.id))
+  const retenue = (s) => (s.type === 'apercu' ? appareils.includes(s.appareil) && ids.has(s.apercu) : creatifs && (s.type !== 'entete' || s.forme === entete))
+  const choisis = sorties.filter((s) => s.statut === 'pret' && langs.includes(s.lang) && retenue(s))
   const controles = choisis.map((s) => ({ sortie: s, ...controle(s.chemin, s.spec) }))
   const fautifs = controles.filter((c) => !c.conforme)
   if (fautifs.length) {
