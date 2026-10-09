@@ -2189,6 +2189,9 @@
 		BABFDCF282784CC371E465B2 /* VitrineStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FA5218572F58C02DA8FC67B /* VitrineStage.swift */; };
 		99F9EBBA06F30C57B69B8CCD /* VitrineJeu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25D8A924AA4BFDD1B0A8B93F /* VitrineJeu.swift */; };
 		359F6C12C73BBC11553462FD /* VitrineInteractionsComposeur.swift in Sources */ = {isa = PBXBuildFile; fileRef = 878DBEF456E7513FBE4B48F4 /* VitrineInteractionsComposeur.swift */; };
+		A66D65AFCB81635BFD631253 /* VitrineInteractionsReel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBF4EEC8A6C8A1D03D2EA78C /* VitrineInteractionsReel.swift */; };
+		150F093C93E3C085032D3338 /* VitrineReel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C14C603AF9656C653652DEF /* VitrineReel.swift */; };
+		16EC0AE34CDBCFADA38DE36E /* VitrineTeleversement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F63EFBFC1FFD66B5CBDACA8 /* VitrineTeleversement.swift */; };
 		74A293E40CC1F0DEA5C0F42C /* VitrineInteractionsPost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F9A4AF604F14BC318CB3B58 /* VitrineInteractionsPost.swift */; };
 		D2B74D4F0662A3D06134F535 /* VitrineCommentaire.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F85FC269E329F753B650FA8 /* VitrineCommentaire.swift */; };
 		876963DDF861883E2EE1D939 /* VitrineInteractions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DFA6257D8FB20BDF7B1498 /* VitrineInteractions.swift */; };
@@ -2798,6 +2801,7 @@
 		EBFB1520C0381A51B120D11E /* VitrineStageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A63867EA9878A73079EABC53 /* VitrineStageTests.swift */; };
 		BD2A81DBF732B9C3F964D52A /* VitrineJeuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D292AE8AEAC7647648FAC7C /* VitrineJeuTests.swift */; };
 		FF326528DCD9DA01804F97A0 /* VitrineInteractionsComposeurTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4866C9B69F94D2F5B622F654 /* VitrineInteractionsComposeurTests.swift */; };
+		588F1084DC6689DAA7A04605 /* VitrineReelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39FC8EA95E0ADF1750DDF59A /* VitrineReelTests.swift */; };
 		7A3232923ECF5CBE45429F69 /* VitrineInteractionsPostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6765EEE9474500B08340581 /* VitrineInteractionsPostTests.swift */; };
 		84C5D1563D28CCD6E36A27F4 /* VitrineInteractionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24123C6F0223AD6A34C6F7A9 /* VitrineInteractionsTests.swift */; };
 		660347A3A414E2AA5AD48107 /* VitrineTournageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3891668A0867C54B4B70370 /* VitrineTournageTests.swift */; };
@@ -5044,6 +5048,9 @@
 		9FA5218572F58C02DA8FC67B /* VitrineStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineStage.swift; sourceTree = "<group>"; };
 		25D8A924AA4BFDD1B0A8B93F /* VitrineJeu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineJeu.swift; sourceTree = "<group>"; };
 		878DBEF456E7513FBE4B48F4 /* VitrineInteractionsComposeur.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractionsComposeur.swift; sourceTree = "<group>"; };
+		DBF4EEC8A6C8A1D03D2EA78C /* VitrineInteractionsReel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractionsReel.swift; sourceTree = "<group>"; };
+		8C14C603AF9656C653652DEF /* VitrineReel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineReel.swift; sourceTree = "<group>"; };
+		8F63EFBFC1FFD66B5CBDACA8 /* VitrineTeleversement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineTeleversement.swift; sourceTree = "<group>"; };
 		7F9A4AF604F14BC318CB3B58 /* VitrineInteractionsPost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractionsPost.swift; sourceTree = "<group>"; };
 		2F85FC269E329F753B650FA8 /* VitrineCommentaire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineCommentaire.swift; sourceTree = "<group>"; };
 		D3DFA6257D8FB20BDF7B1498 /* VitrineInteractions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractions.swift; sourceTree = "<group>"; };
@@ -5125,6 +5132,7 @@
 		A63867EA9878A73079EABC53 /* VitrineStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineStageTests.swift; sourceTree = "<group>"; };
 		8D292AE8AEAC7647648FAC7C /* VitrineJeuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineJeuTests.swift; sourceTree = "<group>"; };
 		4866C9B69F94D2F5B622F654 /* VitrineInteractionsComposeurTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractionsComposeurTests.swift; sourceTree = "<group>"; };
+		39FC8EA95E0ADF1750DDF59A /* VitrineReelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineReelTests.swift; sourceTree = "<group>"; };
 		D6765EEE9474500B08340581 /* VitrineInteractionsPostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractionsPostTests.swift; sourceTree = "<group>"; };
 		24123C6F0223AD6A34C6F7A9 /* VitrineInteractionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractionsTests.swift; sourceTree = "<group>"; };
 		B3891668A0867C54B4B70370 /* VitrineTournageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineTournageTests.swift; sourceTree = "<group>"; };
@@ -6969,6 +6977,7 @@
 				A63867EA9878A73079EABC53 /* VitrineStageTests.swift */,
 				8D292AE8AEAC7647648FAC7C /* VitrineJeuTests.swift */,
 				4866C9B69F94D2F5B622F654 /* VitrineInteractionsComposeurTests.swift */,
+				39FC8EA95E0ADF1750DDF59A /* VitrineReelTests.swift */,
 				D6765EEE9474500B08340581 /* VitrineInteractionsPostTests.swift */,
 				24123C6F0223AD6A34C6F7A9 /* VitrineInteractionsTests.swift */,
 				B3891668A0867C54B4B70370 /* VitrineTournageTests.swift */,
@@ -9509,6 +9518,9 @@
 				9FA5218572F58C02DA8FC67B /* VitrineStage.swift */,
 				25D8A924AA4BFDD1B0A8B93F /* VitrineJeu.swift */,
 				878DBEF456E7513FBE4B48F4 /* VitrineInteractionsComposeur.swift */,
+				DBF4EEC8A6C8A1D03D2EA78C /* VitrineInteractionsReel.swift */,
+				8C14C603AF9656C653652DEF /* VitrineReel.swift */,
+				8F63EFBFC1FFD66B5CBDACA8 /* VitrineTeleversement.swift */,
 				7F9A4AF604F14BC318CB3B58 /* VitrineInteractionsPost.swift */,
 				2F85FC269E329F753B650FA8 /* VitrineCommentaire.swift */,
 				D3DFA6257D8FB20BDF7B1498 /* VitrineInteractions.swift */,
@@ -11980,6 +11992,9 @@
 				BABFDCF282784CC371E465B2 /* VitrineStage.swift in Sources */,
 				99F9EBBA06F30C57B69B8CCD /* VitrineJeu.swift in Sources */,
 				359F6C12C73BBC11553462FD /* VitrineInteractionsComposeur.swift in Sources */,
+				A66D65AFCB81635BFD631253 /* VitrineInteractionsReel.swift in Sources */,
+				150F093C93E3C085032D3338 /* VitrineReel.swift in Sources */,
+				16EC0AE34CDBCFADA38DE36E /* VitrineTeleversement.swift in Sources */,
 				74A293E40CC1F0DEA5C0F42C /* VitrineInteractionsPost.swift in Sources */,
 				D2B74D4F0662A3D06134F535 /* VitrineCommentaire.swift in Sources */,
 				876963DDF861883E2EE1D939 /* VitrineInteractions.swift in Sources */,
@@ -13434,6 +13449,7 @@
 				EBFB1520C0381A51B120D11E /* VitrineStageTests.swift in Sources */,
 				BD2A81DBF732B9C3F964D52A /* VitrineJeuTests.swift in Sources */,
 				FF326528DCD9DA01804F97A0 /* VitrineInteractionsComposeurTests.swift in Sources */,
+				588F1084DC6689DAA7A04605 /* VitrineReelTests.swift in Sources */,
 				7A3232923ECF5CBE45429F69 /* VitrineInteractionsPostTests.swift in Sources */,
 				84C5D1563D28CCD6E36A27F4 /* VitrineInteractionsTests.swift in Sources */,
 				660347A3A414E2AA5AD48107 /* VitrineTournageTests.swift in Sources */,

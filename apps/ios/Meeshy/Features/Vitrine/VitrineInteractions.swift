@@ -19,12 +19,14 @@ nonisolated enum VitrineInteraction: String, CaseIterable, Sendable {
     case commentaireAudio
     /// Une scène du composeur reçoit Mee et Meo par la feuille des stickers (`poseStickerChoice`).
     case sticker
+    /// Une vraie vidéo part en réel depuis le composeur et arrive en tête du fil (`requestSoclePublish`, #9820).
+    case reel
 
     /// La célébration du jeu que l'interaction déclenche : la passerelle fictive la prépare.
     var celebration: VitrineCelebration? {
         switch self {
         case .frappe: .frappe
-        case .emoji, .emojiPost, .commentaireAudio, .sticker: nil
+        case .emoji, .emojiPost, .commentaireAudio, .sticker, .reel: nil
         }
     }
 }
@@ -37,6 +39,7 @@ extension VitrineScene {
         case .interactionEmojiPost: .emojiPost
         case .interactionCommentaireAudio: .commentaireAudio
         case .interactionSticker: .sticker
+        case .interactionReel: .reel
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: nil
         }
     }
@@ -47,7 +50,7 @@ extension VitrineScene {
         switch self {
         case .interactionEmoji: .amour
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge,
-             .interactionFrappe, .interactionEmojiPost, .interactionCommentaireAudio, .interactionSticker: self
+             .interactionFrappe, .interactionEmojiPost, .interactionCommentaireAudio, .interactionSticker, .interactionReel: self
         }
     }
 
@@ -75,6 +78,7 @@ enum VitrineInteractions {
             case .emojiPost: await reagirAuPost(scene)
             case .commentaireAudio: await commenterDeVive(scene, f)
             case .sticker: await poserUnSticker(scene)
+            case .reel: await publierLeReel(scene)
             }
         }
     }

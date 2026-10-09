@@ -81,15 +81,27 @@ final class VitrineInteractionsPostTests: XCTestCase {
 
     // MARK: - Le vocal
 
-    /// Sans vocal propre à la scène dans le kit, celui de la scène « amour » : un vrai fichier, sa transcription, ses pistes.
-    func test_vocal_fallsBackToTheLoveSceneVoiceNote() throws {
+    /// Le vocal propre à la scène (#9820) : la réponse du lecteur au post d'Aiko, dans SA langue, traduite dans celle
+    /// d'Aiko — jamais plus le vocal coréen de la scène « amour ».
+    func test_vocal_isTheReadersOwnReplyToThePost() throws {
         let f = try fixtures()
         let vocal = try XCTUnwrap(VitrineCommentaireVocal.depuis(f, dossier: URL(fileURLWithPath: "/medias")))
-        XCTAssertTrue(vocal.urlServie.hasSuffix("vocal-minjun.p-ko.m4a"))
-        XCTAssertEqual(vocal.fichier, URL(fileURLWithPath: "/medias/vocal-minjun.p-ko.m4a"))
+        let lecteur = f.lecteur.username
+        XCTAssertTrue(vocal.urlServie.hasSuffix("commentaire-\(lecteur)-fr.m4a"))
+        XCTAssertEqual(vocal.fichier, URL(fileURLWithPath: "/medias/commentaire-\(lecteur)-fr.m4a"))
         XCTAssertEqual(vocal.duree, 9, accuracy: 0.01)
-        XCTAssertEqual(vocal.transcription?.language, "ko")
-        XCTAssertNotNil(vocal.traductions?["fr"])
+        XCTAssertEqual(vocal.transcription?.language, "fr")
+        XCTAssertTrue(vocal.transcription?.text.contains("soleil") ?? false, "il répond au coucher de soleil du post")
+        XCTAssertNotNil(vocal.traductions?["ja"], "traduit dans la langue d'Aiko, l'autrice du post")
+        XCTAssertNil(vocal.traductions?["fr"])
+    }
+
+    /// Sans destination propre dans le kit, aucun vocal : la scène s'arrête en le nommant plutôt que d'en emprunter un.
+    func test_vocal_withoutItsOwnDestination_isAbsent() throws {
+        let json = try XCTUnwrap(String(data: Data(contentsOf: echantillon), encoding: .utf8))
+            .replacingOccurrences(of: "\"interaction-commentaire-audio\"", with: "\"autre-scene\"")
+        let f = try VitrineFixtures.decoder(Data(json.utf8))
+        XCTAssertNil(VitrineCommentaireVocal.depuis(f, dossier: URL(fileURLWithPath: "/medias")))
     }
 
     // MARK: - La passerelle fictive, derrière le VRAI publieur
@@ -137,7 +149,7 @@ final class VitrineInteractionsPostTests: XCTestCase {
         XCTAssertEqual(transcription.commentId, commentaire.id)
         XCTAssertEqual(transcription.comment.media?.first?.transcription?.text, vocal.transcription?.text)
         XCTAssertNil(transcription.comment.media?.first?.translations)
-        XCTAssertEqual(traduction.comment.media?.first?.translations?["fr"]?.transcription, vocal.traductions?["fr"]?.transcription)
+        XCTAssertEqual(traduction.comment.media?.first?.translations?["ja"]?.transcription, vocal.traductions?["ja"]?.transcription)
         XCTAssertNotNil(traduction.comment.media?.first?.transcription)
     }
 

@@ -5,9 +5,10 @@ import MeeshySDK
 /// Le vocal que la scène `interaction-commentaire-audio` envoie en commentaire (#9810). Le micro ne se simule pas : le
 /// vocal est FOURNI par le kit, et emprunte ensuite le chemin d'un enregistrement terminé.
 ///
-/// Il vient de la destination de la scène si le kit en décrit une (`scenes["interaction-commentaire-audio"]`, une pièce
-/// audio d'un message), sinon de la pièce de la scène « amour » : un vrai fichier rangé dans le cache audio, sa
-/// transcription et ses pistes traduites, telles que le pipeline audio les sert.
+/// Il vient de la destination de la scène (`scenes["interaction-commentaire-audio"]`, #9820) : la réponse vocale du
+/// lecteur au post d'Aiko, dans SA langue — un vrai fichier rangé dans le cache audio, sa transcription et ses pistes
+/// traduites dans la langue d'Aiko, telles que le pipeline audio les sert. Plus de repli sur le vocal de la scène
+/// « amour » : un message coréen de Min-jun sous un coucher de soleil d'Osaka n'avait rien d'une réponse.
 nonisolated struct VitrineCommentaireVocal: Sendable {
     /// Le fichier déposé par le kit dans `Documents/vitrine/medias/`.
     let fichier: URL
@@ -18,8 +19,7 @@ nonisolated struct VitrineCommentaireVocal: Sendable {
     let traductions: [String: APIAttachmentTranslation]?
 
     static func depuis(_ f: VitrineFixtures, dossier: URL) -> VitrineCommentaireVocal? {
-        let destination = f.destination(.interactionCommentaireAudio) ?? f.destination(.amour)
-        guard let destination, let attachmentId = destination.attachmentId,
+        guard let destination = f.destination(.interactionCommentaireAudio), let attachmentId = destination.attachmentId,
               let piece = f.messages[destination.conversationId]?.flatMap({ $0.attachments ?? [] }).first(where: { $0.id == attachmentId }),
               let url = piece.fileUrl,
               let media = f.medias.first(where: { $0.url == url && $0.genre == .audio }) else { return nil }
