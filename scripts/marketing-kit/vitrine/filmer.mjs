@@ -47,7 +47,11 @@ export const planDePrise = ({ scene, appareil, scenes = SCENES_FILMEES }) => {
   if (!APPAREILS.includes(appareil)) throw new Error(`appareil inconnu « ${appareil} »`)
   if (!decl.debut?.marqueur && !Number.isFinite(decl.debut?.apresGestesMs)) throw new Error(`${scene} : le début se déclare par un marqueur ou par apresGestesMs`)
   if (!decl.fin?.marqueur && !(decl.dureeMs > 0)) throw new Error(`${scene} : sans marqueur de fin, la durée (dureeMs) borne l'action`)
-  for (const [debut, fin] of decl.mouvement) {
+  for (const fenetre of decl.mouvement) {
+    const [debut, fin] = Array.isArray(fenetre) ? fenetre : [fenetre.de, fenetre.a]
+    if (!Array.isArray(fenetre) && !(typeof fenetre.etape === 'string' && fenetre.etape)) {
+      throw new Error(`${scene} : une fenêtre ancrée nomme son étape ({ etape, de, a })`)
+    }
     if (!(debut < fin)) throw new Error(`${scene} : fenêtre de mouvement vide [${debut}, ${fin}]`)
   }
   const gestes = decl.gestes?.[appareil] ?? []
@@ -56,6 +60,30 @@ export const planDePrise = ({ scene, appareil, scenes = SCENES_FILMEES }) => {
 }
 
 export const marqueursDe = (plan) => [plan.debut.marqueur, plan.fin?.marqueur].filter(Boolean)
+
+// Les étapes que l'app date en cours d'action (`etape-<nom>.txt`, #9810) : une fenêtre de mouvement s'y ancre quand
+// l'instant de son animation dépend du rendu d'un écran — le choix d'un émoji une fois le menu montré, par exemple.
+export const ETAPE = (nom) => `etape-${nom}.txt`
+export const etapesDe = (plan) => [...new Set([
+  ...plan.mouvement.filter((f) => !Array.isArray(f)).map((f) => f.etape),
+  ...plan.imagesCles.filter((i) => i.etape).map((i) => i.etape),
+])]
+
+// L'instant d'une image clé en ms d'action : depuis le début de l'action, ou depuis son étape (`etapes` en ms d'action).
+export const instantDeLImage = ({ image, etapes }) => {
+  if (!image.etape) return image.instantMs
+  if (!Number.isFinite(etapes[image.etape])) throw new Error(`l'app n'a pas daté l'étape « ${image.etape} » de l'image clé ${image.nom}`)
+  return etapes[image.etape] + image.instantMs
+}
+
+// Les fenêtres en ms depuis le début de l'action : une fenêtre ancrée se décale de l'instant de son étape.
+export const fenetresDeMouvement = ({ mouvement, etapesMs, debutActionMs }) => mouvement.map((fenetre) => {
+  if (Array.isArray(fenetre)) return fenetre
+  const instant = etapesMs[fenetre.etape]
+  if (!Number.isFinite(instant)) throw new Error(`l'app n'a pas daté l'étape « ${fenetre.etape} » (${ETAPE(fenetre.etape)})`)
+  const decalage = Math.round(instant - debutActionMs)
+  return [decalage + fenetre.de, decalage + fenetre.a]
+})
 
 export const commandeDeGeste = ({ geste, udid }) => {
   switch (geste.type) {
@@ -214,7 +242,7 @@ const jouerGeste = async ({ geste, udid, dossier }) => {
 
 const tourner = async ({ udid, appareil, langue, plan, voix, chemins, etiquette }) => {
   const dossier = preparerScene({ udid, lang: langue, scene: plan.scene, theme: plan.theme, voix, etiquette, fil: plan.montreUnFil })
-  for (const nom of marqueursDe(plan)) rmSync(resolve(dossier, nom), { force: true })
+  for (const nom of [...marqueursDe(plan), ...etapesDe(plan).map(ETAPE)]) rmSync(resolve(dossier, nom), { force: true })
   simctl('launch', udid, BUNDLE, ...argumentsDeLancement({ scene: plan.scene, lang: langue }))
   await attendreLeSignal({ existe: () => existsSync(resolve(dossier, 'pret.txt')), pasMs: 100, etiquette })
   const enregistreur = await demarrerEnregistrement({ udid, sortie: chemins.source })
@@ -228,24 +256,29 @@ const tourner = async ({ udid, appareil, langue, plan, voix, chemins, etiquette 
       ? await attendreMarqueur({ dossier, nom: plan.fin.marqueur, delaiMs: (plan.dureeMs ?? 0) + 30_000, etiquette })
       : debutActionMs + plan.dureeMs
     await pause(finActionMs + plan.marges.apresMs + 300 - Date.now())
-    return { debutEnregistrementMs: enregistreur.debutMs, debutActionMs, finActionMs }
+    const etapesMs = Object.fromEntries(etapesDe(plan)
+      .map((nom) => [nom, resolve(dossier, ETAPE(nom))])
+      .filter(([, chemin]) => existsSync(chemin))
+      .map(([nom, chemin]) => [nom, statSync(chemin).mtimeMs]))
+    return { debutEnregistrementMs: enregistreur.debutMs, debutActionMs, finActionMs, etapesMs }
   } finally {
     await enregistreur.arreter()
     arreter(udid)
   }
 }
 
-const livrer = ({ appareil, plan, chemins, bornes, formats }) => {
+const livrer = ({ appareil, plan, chemins, bornes, formats, etapes }) => {
   mkdirSync(chemins.images, { recursive: true })
   ffmpeg(argumentsClip({ source: chemins.source, rognage: bornes.rognage, sortie: chemins.clip }))
   const clip = sonde(chemins.clip)
   const [w, h] = TAILLES_NATIVES[appareil]
   if (clip.width !== w || clip.height !== h) throw new Error(`clip ${clip.width}×${clip.height}, attendu ${w}×${h}`)
-  const images = plan.imagesCles.map(({ nom, instantMs }) => {
-    const sortie = chemins.image(nom)
+  const images = plan.imagesCles.map((image) => {
+    const sortie = chemins.image(image.nom)
+    const instantMs = instantDeLImage({ image, etapes })
     ffmpeg(argumentsImage({ source: chemins.source, instantS: bornes.action.debutS + instantMs / 1000, sortie }))
     const { width, height } = pngInfo(readFileSync(sortie))
-    if (width !== w || height !== h) throw new Error(`image clé ${nom} : ${width}×${height}, attendu ${w}×${h}`)
+    if (width !== w || height !== h) throw new Error(`image clé ${image.nom} : ${width}×${height}, attendu ${w}×${h}`)
     return sortie
   })
   if (formats.includes('appstore')) ffmpeg(argumentsAppStore({ clip: chemins.clip, appareil, sortie: chemins.appstore }))
@@ -263,18 +296,20 @@ export const filmer = async ({ udid, appareil, langue, scene, voix, essais = 3, 
   }
   for (let essai = 1; essai <= essais; essai += 1) {
     const etiquette = `${appareil}/${langue}/${scene} (prise ${essai})`
-    const horloges = await tourner({ udid, appareil, langue, plan, voix, chemins, etiquette })
+    const { etapesMs, ...horloges } = await tourner({ udid, appareil, langue, plan, voix, chemins, etiquette })
     const bornes = bornesDeLaPrise({ ...horloges, marges: plan.marges })
+    const fenetres = fenetresDeMouvement({ mouvement: plan.mouvement, etapesMs, debutActionMs: horloges.debutActionMs })
+    const etapes = Object.fromEntries(Object.entries(etapesMs).map(([nom, ms]) => [nom, Math.round(ms - horloges.debutActionMs)]))
     const empreintes = lireEmpreintes(ffmpeg(argumentsEmpreintes({ source: chemins.source, rognage: bornes.rognage })))
     const origineMs = Math.round((bornes.action.debutS - bornes.rognage.debutS) * 1000)
-    const figees = imagesFigees({ empreintes, origineMs, fenetres: plan.mouvement })
-    const mesure = { essai, horloges, bornes, images: empreintes.length, dureeActionMs: Math.round(horloges.finActionMs - horloges.debutActionMs), figees }
+    const figees = imagesFigees({ empreintes, origineMs, fenetres })
+    const mesure = { essai, horloges, bornes, etapes, fenetres, images: empreintes.length, dureeActionMs: Math.round(horloges.finActionMs - horloges.debutActionMs), figees }
     if (figees.length) {
       consigner({ ...mesure, statut: 'refaite' })
       console.log(`↻ ${etiquette} : ${figees.reduce((n, f) => n + f.images, 0)} image(s) perdue(s) — prise refaite`)
       continue
     }
-    const livraison = livrer({ appareil, plan, chemins, bornes, formats })
+    const livraison = livrer({ appareil, plan, chemins, bornes, formats, etapes })
     consigner({ ...mesure, statut: 'livree', ...livraison })
     return livraison
   }
