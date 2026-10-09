@@ -37,6 +37,21 @@ describe('plan de prise (#9806)', () => {
     }
   })
 
+  test('les interactions sont filmables, jouées par l’app au clap et bornées par ses marqueurs (#9810)', () => {
+    for (const scene of ['interaction-frappe', 'interaction-emoji']) {
+      for (const appareil of APPAREILS) {
+        const plan = planDePrise({ scene, appareil })
+        expect(plan.famille).toBe('interaction')
+        expect(marqueursDe(plan)).toEqual(['celebration-debut.txt', 'celebration-fin.txt'])
+        expect(plan.gestes).toEqual([{ type: 'fichier', nom: 'go.txt' }])
+        expect(plan.imagesCles.length).toBeGreaterThan(0)
+        for (const [, fin] of plan.mouvement) expect(fin).toBeLessThanOrEqual(plan.dureeMs)
+      }
+    }
+    expect(SCENES_FILMEES['interaction-emoji'].montreUnFil).toBe(true)
+    expect(SCENES_FILMEES['interaction-frappe'].montreUnFil).toBe(false)
+  })
+
   test('les durées sont celles de GameTimeline', () => {
     const durees = Object.fromEntries(JEU.map((s) => [s, SCENES_FILMEES[s].dureeMs]))
     expect(durees).toEqual({ 'jeu-rang': 1600, 'jeu-coffre': 1400, 'jeu-frappe': 1200, 'jeu-niveau': 600, 'jeu-badge': 700 })

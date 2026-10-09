@@ -37,6 +37,25 @@ const jeu = (scene, { dureeMs, mouvement, imagesCles }) => ({
   gestes: GESTES_CLAP,
 })
 
+// Les interactions (#9810) : l'app les joue elle-même au clap, par le chemin du geste (aucun toucher simulé —
+// leurs coordonnées changeraient avec l'appareil, la langue et la longueur des textes), et les borne par les
+// mêmes marqueurs. `dureeMs` est la durée ATTENDUE (délai de garde de la fin) ; les fenêtres de mouvement ne
+// couvrent que les animations dont l'instant ne dépend pas du rendu d'un écran.
+const MARGES_INTERACTION = { avantMs: 600, apresMs: 1200 }
+
+const interaction = (scene, { montreUnFil, dureeMs, mouvement, imagesCles }) => ({
+  scene,
+  famille: 'interaction',
+  theme: 'light',
+  montreUnFil,
+  ...CELEBRATION,
+  dureeMs,
+  marges: MARGES_INTERACTION,
+  mouvement,
+  imagesCles,
+  gestes: GESTES_CLAP,
+})
+
 export const SCENES_FILMEES = {
   // Montée 0–0,5 s, trois traits à 0,55 / 0,8 / 1,05 s (0,3 s chacun), tenants 1,15–1,6 s.
   'jeu-rang': jeu('jeu-rang', {
@@ -65,5 +84,21 @@ export const SCENES_FILMEES = {
     dureeMs: 700,
     mouvement: [[40, 620]],
     imagesCles: [{ nom: 'badge-gagne', instantMs: 800 }],
+  }),
+  // Le toucher du compteur pousse la fiche des Meeshes (0–0,35 s) ; la fiche lue et posée (0,8 s), Mee et Meo
+  // frappent (1,2 s, vers 1,2–2,5 s).
+  'interaction-frappe': interaction('interaction-frappe', {
+    montreUnFil: false,
+    dureeMs: 2600,
+    mouvement: [[40, 330], [1400, 2300]],
+    imagesCles: [{ nom: 'fiche', instantMs: 1000 }, { nom: 'piece-retournee', instantMs: 2700 }],
+  }),
+  // Appui long : la bulle remonte au centre (0,3 s), le menu unifié s'ouvre (ressort 0,42 s), tenu 1,1 s, puis
+  // 🥰 se pose — le menu se replie (0,32 s) et la réaction paraît sous la bulle.
+  'interaction-emoji': interaction('interaction-emoji', {
+    montreUnFil: true,
+    dureeMs: 2800,
+    mouvement: [[320, 700], [1420, 1700]],
+    imagesCles: [{ nom: 'menu', instantMs: 1200 }, { nom: 'reaction', instantMs: 2800 }],
   }),
 }
