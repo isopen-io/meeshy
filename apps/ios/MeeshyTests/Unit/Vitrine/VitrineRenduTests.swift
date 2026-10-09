@@ -29,14 +29,14 @@ final class VitrineRenduTests: XCTestCase {
     /// sa transcription et sa traduction restaient sous le pli, le film ne montrant que « Léa Martin · maintenant ».
     func test_commentairesAffiches_relaysTheScroll_onlyInsideTheVitrine() {
         let rendu = VitrineRendu(actif: true)
-        var montre: String?
-        rendu.commentairesAffiches { montre = $0 }
-        rendu.montrerUnCommentaire?("c1")
-        XCTAssertEqual(montre, "c1")
+        var montre = false
+        rendu.commentairesAffiches { montre = true }
+        rendu.montrerLesCommentaires?()
+        XCTAssertTrue(montre)
 
         let horsVitrine = VitrineRendu(actif: false)
-        horsVitrine.commentairesAffiches { _ in }
-        XCTAssertNil(horsVitrine.montrerUnCommentaire)
+        horsVitrine.commentairesAffiches {}
+        XCTAssertNil(horsVitrine.montrerLesCommentaires)
     }
 
     func test_signaler_outsideTheVitrine_observesNothing() {

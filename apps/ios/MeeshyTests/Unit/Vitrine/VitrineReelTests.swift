@@ -241,7 +241,7 @@ final class VitrineReelTests: XCTestCase {
     /// a une image à montrer avant la première frame.
     func test_postServi_aVideo_carriesItsPosterSizeAndDuration() throws {
         let f = try fixtures()
-        let affiche = VitrineAffiche(url: "file:///tmp/affiche.jpg", largeur: 1080, hauteur: 1920, dureeS: 6)
+        let affiche = VitrineAffiche(url: "file:///tmp/affiche.jpg", largeur: 1080, hauteur: 1920, dureeMs: 6000)
         let piece = VitrineTeleverse(id: "m1", url: "file:///tmp/m1.mp4", mimeType: "video/mp4", affiche: affiche)
 
         let post = try VitrinePostServi.post(corps(), auteur: f.lecteur, televerses: [piece])
@@ -250,7 +250,24 @@ final class VitrineReelTests: XCTestCase {
         XCTAssertEqual(media.thumbnailUrl, "file:///tmp/affiche.jpg")
         XCTAssertEqual(media.width, 1080)
         XCTAssertEqual(media.height, 1920)
-        XCTAssertEqual(media.duration, 6)
+        XCTAssertEqual(media.duration, 6000)
+    }
+
+    /// La file durable efface le fichier envoyé une fois le post créé : la vitrine sert une COPIE locale, qui survit.
+    func test_copieServie_copiesTheSentFile_beforeTheQueueDeletesIt() throws {
+        let dossier = FileManager.default.temporaryDirectory.appendingPathComponent("vitrine-servi-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dossier, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dossier) }
+        let envoye = dossier.appendingPathComponent("envoye.mp4")
+        try Data("video".utf8).write(to: envoye)
+        let piece = VitrineTeleverse(id: "m1", url: "\(VitrineTus.racine)/m1.mp4", mimeType: "video/mp4", fichierLocal: envoye)
+
+        let servie = VitrineReel.copieServie(piece, dossier: dossier)
+        try FileManager.default.removeItem(at: envoye)
+
+        let copie = try XCTUnwrap(URL(string: servie.url))
+        XCTAssertTrue(copie.isFileURL)
+        XCTAssertEqual(try Data(contentsOf: copie), Data("video".utf8))
     }
 
     /// Les médias du post sont ceux que la publication RATTACHE (`mediaIds`), dans son ordre.

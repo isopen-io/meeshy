@@ -35,7 +35,7 @@ enum VitrineReel {
         guard let lecteur else { return nil }
         try? await Task.sleep(for: delai)
         var servis: [VitrineTeleverse] = []
-        for piece in televerses.map(copieEnCache) {
+        for piece in televerses.map({ copieServie($0) }) {
             servis.append(await avecSonAffiche(piece))
         }
         let post = try VitrinePostServi.post(corps, auteur: lecteur, televerses: servis)
@@ -47,8 +47,17 @@ enum VitrineReel {
 
 extension VitrineReel {
     /// Face à l'hôte mort, une adresse relative ne se résout pas (`MeeshyConfig.resolveMediaURL` refuse 127.0.0.1) : le
-    /// lecteur chercherait la vidéo sur la passerelle. La pièce est servie à la COPIE que le téléverseur a rangée dans le
-    /// cache sous son adresse — ce que le lecteur jouerait sur un cache chaud.
+    /// lecteur chercherait la vidéo sur la passerelle. La pièce est servie à une COPIE locale du fichier envoyé — la file
+    /// durable efface le sien une fois le post créé —, à défaut à celle que le téléverseur a rangée dans le cache.
+    nonisolated static func copieServie(_ piece: VitrineTeleverse,
+                                        dossier: URL = FileManager.default.temporaryDirectory) -> VitrineTeleverse {
+        guard let source = piece.fichierLocal, FileManager.default.fileExists(atPath: source.path) else { return copieEnCache(piece) }
+        let copie = dossier.appendingPathComponent("vitrine-servi-\(piece.id).\(source.pathExtension)")
+        try? FileManager.default.removeItem(at: copie)
+        guard (try? FileManager.default.copyItem(at: source, to: copie)) != nil else { return copieEnCache(piece) }
+        return VitrineTeleverse(id: piece.id, url: copie.absoluteString, mimeType: piece.mimeType)
+    }
+
     nonisolated static func copieEnCache(_ piece: VitrineTeleverse) -> VitrineTeleverse {
         let copie = piece.mimeType.hasPrefix("video/") ? CacheCoordinator.videoLocalFileURL(for: piece.url)
             : piece.mimeType.hasPrefix("image/") ? CacheCoordinator.imageLocalFileURL(for: piece.url)
@@ -71,7 +80,8 @@ nonisolated struct VitrineAffiche: Equatable, Sendable {
     let url: String
     let largeur: Int
     let hauteur: Int
-    let dureeS: Int
+    /// En millisecondes, comme la passerelle (`toFeedMedia` divise par 1000).
+    let dureeMs: Int
 
     static func tirer(de video: URL, dossier: URL = FileManager.default.temporaryDirectory) async -> VitrineAffiche? {
         let asset = AVURLAsset(url: video)
@@ -86,7 +96,7 @@ nonisolated struct VitrineAffiche: Equatable, Sendable {
         guard (try? jpeg.write(to: fichier)) != nil else { return nil }
         let cadre = CGRect(origin: .zero, size: geometrie.0).applying(geometrie.1)
         return VitrineAffiche(url: fichier.absoluteString, largeur: Int(abs(cadre.width)), hauteur: Int(abs(cadre.height)),
-                              dureeS: max(1, Int(duree.seconds.rounded())))
+                              dureeMs: max(1, Int((duree.seconds * 1000).rounded())))
     }
 }
 
@@ -96,6 +106,8 @@ nonisolated struct VitrineTeleverse: Equatable, Sendable {
     let url: String
     let mimeType: String
     var affiche: VitrineAffiche? = nil
+    /// Le fichier que la file durable vient d'envoyer : elle l'efface une fois le post créé.
+    var fichierLocal: URL? = nil
 }
 
 /// Le post tel que la passerelle le sert (`POST /posts`), décodé par le décodeur de PRODUCTION.
@@ -149,7 +161,7 @@ nonisolated enum VitrinePostServi {
                 ]
                 guard let affiche = piece.affiche else { return media }
                 return media.merging([
-                    "thumbnailUrl": affiche.url, "width": affiche.largeur, "height": affiche.hauteur, "duration": affiche.dureeS,
+                    "thumbnailUrl": affiche.url, "width": affiche.largeur, "height": affiche.hauteur, "duration": affiche.dureeMs,
                 ]) { _, nouveau in nouveau }
             }
     }
