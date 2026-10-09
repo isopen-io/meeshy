@@ -559,8 +559,9 @@ private struct AudioFullscreenPage: View {
     private func playThroughCoordinator(urlString: String) {
         let coordinator = ConversationAudioCoordinator.sharedForTesting
         if coordinator.isActive(attachmentId: attachment.id) {
+            let translated = urlString != attachment.fileUrl
             if urlString != player.currentUrl {
-                coordinator.playVariant(urlString: urlString)
+                coordinator.playVariant(urlString: urlString, language: translated ? selectedLanguage : item.originalLanguage, isTranslated: translated)
             }
             return
         }

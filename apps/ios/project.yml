@@ -218,6 +218,15 @@ targets:
       # (ActivityKit décode en silence un état qui ne correspond pas).
       # Foundation + ActivityKit ; garde : `OutboxActivityLawTests`.
       - path: MeeshyWidgets/OutboxActivityAttributes.swift
+      # #9782 · #9783 · #9784 — l'appel, le vocal en lecture et l'enregistrement
+      # dans l'îlot : mêmes raisons que ci-dessus. L'intention des boutons
+      # (`LiveActivityIntent`) est déclarée dans les DEUX cibles et s'exécute
+      # dans l'app. Gardes : `CallActivityLawTests`,
+      # `VoicePlaybackActivityLawTests`, `VoiceRecordingActivityLawTests`.
+      - path: MeeshyWidgets/CallActivityAttributes.swift
+      - path: MeeshyWidgets/VoicePlaybackActivityAttributes.swift
+      - path: MeeshyWidgets/VoiceRecordingActivityAttributes.swift
+      - path: MeeshyWidgets/LiveActivityCommandIntent.swift
     settings:
       INFOPLIST_FILE: Meeshy/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app
