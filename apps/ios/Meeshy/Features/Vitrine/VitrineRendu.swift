@@ -105,13 +105,30 @@ final class VitrineRendu {
         signaler(.menuDeReactions)
     }
 
+    /// La fin d'un enregistrement envoyé, dans le composeur de commentaire d'un post (#9810).
     private(set) var envoyerUnVocal: ((URL, TimeInterval) -> Void)?
+    /// L'appui long sur le cœur d'un post, qui ouvre la palette (#9810).
     private(set) var ouvrirLaPalette: (() -> Void)?
+    /// Le toucher d'un émoji de la palette ouverte (#9810).
     private(set) var choisirDansLaPalette: ((String) -> Void)?
 
-    func composeurDeCommentaireAffiche(envoyerUnVocal: @escaping (URL, TimeInterval) -> Void) {}
-    func paletteDeReactionsPrete(ouvrir: @escaping () -> Void) {}
-    func paletteDeReactionsAffichee(choisir: @escaping (String) -> Void) {}
+    func composeurDeCommentaireAffiche(envoyerUnVocal: @escaping (URL, TimeInterval) -> Void) {
+        guard actif else { return }
+        self.envoyerUnVocal = envoyerUnVocal
+        signaler(.composeurDeCommentaire)
+    }
+
+    func paletteDeReactionsPrete(ouvrir: @escaping () -> Void) {
+        guard actif else { return }
+        ouvrirLaPalette = ouvrir
+        signaler(.paletteDeReactionsPrete)
+    }
+
+    func paletteDeReactionsAffichee(choisir: @escaping (String) -> Void) {
+        guard actif else { return }
+        choisirDansLaPalette = choisir
+        signaler(.paletteDeReactions)
+    }
 
     func attendre(_ attendus: Set<VitrineEvenement>) async {
         guard !attendus.isSubset(of: observes) else { return }

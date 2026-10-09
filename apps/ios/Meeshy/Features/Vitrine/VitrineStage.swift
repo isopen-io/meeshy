@@ -68,6 +68,7 @@ enum VitrineStage {
             // Une scène du jeu (ou l'interaction qui en déclenche une) range la charge d'AVANT : la fiche s'ouvre au repos.
             let progression = scene.jeuServi.map { VitrineJeu.preparer($0, base: f.progression) }
             try await VitrineSeeder.remplir(f, progression: progression, dans: VitrineSeedTargetsReels())
+            try await VitrineInteractions.remplir(scene, f)
         } catch {
             fatalError("Vitrine « \(scene.rawValue) » : remplissage impossible — \(error)")
         }
@@ -110,7 +111,9 @@ enum VitrineStage {
             NotificationCenter.default.post(name: .navigateToConversation, object: conversation)
         case .progression, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe:
             NotificationCenter.default.post(name: Notification.Name("pushNavigateToRoute"), object: "progression")
-        case .lien, .interactionCommentaireAudio, .interactionEmojiPost:
+        case .interactionCommentaireAudio, .interactionEmojiPost:
+            VitrineInteractions.ouvrirLePost(f)
+        case .lien:
             break
         }
     }

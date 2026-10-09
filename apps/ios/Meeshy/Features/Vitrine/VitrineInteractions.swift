@@ -13,7 +13,9 @@ nonisolated enum VitrineInteraction: String, CaseIterable, Sendable {
     case frappe
     /// Le menu unifié d'un message reçu s'ouvre, un émoji s'y pose (`ConversationViewModel.toggleReaction`).
     case emoji
+    /// La palette du cœur d'un post s'ouvre, un émoji s'y choisit (`PostDetailView.sendDetailReaction`).
     case emojiPost
+    /// Un vocal part en commentaire d'un post, sa transcription puis sa traduction arrivent (`CommentPublisher`).
     case commentaireAudio
 
     /// La célébration du jeu que l'interaction déclenche : la passerelle fictive la prépare.
@@ -67,12 +69,11 @@ enum VitrineInteractions {
             switch interaction {
             case .frappe: await frapperDepuisLeCompteur(scene)
             case .emoji: await reagirAuMessage(scene, f)
-            case .emojiPost, .commentaireAudio: break
+            case .emojiPost: await reagirAuPost(scene)
+            case .commentaireAudio: await commenterDeVive(scene, f)
             }
         }
     }
-
-    static func postCommente(_ f: VitrineFixtures) -> FeedPost? { nil }
 
     /// Le dernier message REÇU et écrit de la conversation : celui auquel on répond d'un émoji.
     static func messageAReagir(_ f: VitrineFixtures, conversationId: String) -> String? {
