@@ -118,8 +118,6 @@ final class StoryInteractionService {
                     engagement: wire.engagement
                 )
             })
-        } catch MeeshyError.forbidden(_, _) {
-            return .forbidden
         } catch {
             Self.logger.error("Failed to load viewers for \(postId, privacy: .public): \(error.localizedDescription)")
             return .failed

@@ -31,7 +31,7 @@ enum PublicationViewersAccess {
     }
 
     static func mayList(postType: String?, isAuthor: Bool, viewerRole: String?) -> Bool {
-        if isAuthor, authorListedTypes.contains((postType ?? "").uppercased()) { return true }
+        if isAuthor { return true }
         return isAdministrator(role: viewerRole)
     }
 }
