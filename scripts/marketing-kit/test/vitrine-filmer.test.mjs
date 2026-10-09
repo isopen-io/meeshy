@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { KIT_LANGS } from '../lib/locales.mjs'
 import {
   APPAREILS, FPS, TAILLES_APPSTORE, argumentsAppStore, argumentsClip, argumentsEmpreintes, argumentsImage, bornesDeLaPrise,
-  cheminsDePrise, commandeDeGeste, etapesDe, fenetresDeMouvement, instantDeLImage, filtreCadenceFixe, imagesFigees, lireEmpreintes, marqueursDe,
+  MOUVEMENT, ancreSurLeMouvement, cheminsDePrise, commandeDeGeste, etapesDe, fenetresDeMouvement, instantDeLImage, premierMouvement, filtreCadenceFixe, imagesFigees, lireEmpreintes, marqueursDe,
   planDePrise, selectionner,
 } from '../vitrine/filmer.mjs'
 import { SCENES_FILMEES } from '../vitrine/scenes-filmees.mjs'
@@ -122,6 +122,26 @@ describe('fenêtres ancrées sur une étape de l’app (#9810)', () => {
     expect(() => planDePrise({ scene: 's', appareil: 'iphone', scenes: sansEtape })).toThrow('étape')
     const vide = { s: { ...SCENES_FILMEES['jeu-rang'], scene: 's', mouvement: [{ etape: 'x', de: 10, a: 10 }] } }
     expect(() => planDePrise({ scene: 's', appareil: 'iphone', scenes: vide })).toThrow('vide')
+  })
+})
+
+describe('le premier mouvement, lu dans le film', () => {
+  test('la première image qui change après le début de l’action, en ms d’action', () => {
+    const e = ['a', 'a', 'a', 'a', 'a', 'a', 'b', 'c', 'c']
+    // 30 i/s : image 6 à 200 ms du clip ; l’action commence à 100 ms ⇒ 100 ms d’action.
+    expect(premierMouvement({ empreintes: e, origineMs: 100 })).toBe(100)
+  })
+
+  test('un changement AVANT l’action ne compte pas ; aucun changement ⇒ null', () => {
+    expect(premierMouvement({ empreintes: ['a', 'b', 'b', 'b', 'c'], origineMs: 100 })).toBe(33)
+    expect(premierMouvement({ empreintes: ['a', 'a', 'a'], origineMs: 0 })).toBeNull()
+  })
+
+  test('« mouvement » est une étape virtuelle : aucun fichier n’est attendu de l’app', () => {
+    const plan = { mouvement: [{ etape: MOUVEMENT, de: 20, a: 400 }], imagesCles: [{ nom: 'x', etape: 'servi', instantMs: 0 }] }
+    expect(etapesDe(plan)).toEqual(['servi'])
+    expect(ancreSurLeMouvement(plan)).toBe(true)
+    expect(() => fenetresDeMouvement({ mouvement: plan.mouvement, etapesMs: {}, debutActionMs: 0 })).toThrow('aucune image ne bouge')
   })
 })
 
