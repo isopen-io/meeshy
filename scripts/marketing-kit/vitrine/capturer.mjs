@@ -86,17 +86,17 @@ const deposer = (fixtures, dossier) => {
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms))
 
-export const attendreLeSignal = async ({ existe, delaiMs = 120_000, pasMs = 500, maintenant = Date.now, dormir = pause, etiquette }) => {
+export const attendreLeSignal = async ({ existe, delaiMs = 120_000, pasMs = 500, maintenant = Date.now, dormir = pause, etiquette, signal = 'prêt' }) => {
   const limite = maintenant() + delaiMs
   while (!existe()) {
-    if (maintenant() > limite) throw new Error(`${etiquette} : aucun signal « prêt » en ${delaiMs / 1000} s — l’app a-t-elle planté ?`)
+    if (maintenant() > limite) throw new Error(`${etiquette} : aucun signal « ${signal} » en ${delaiMs / 1000} s — l’app a-t-elle planté ?`)
     await dormir(pasMs)
   }
 }
 
-const simctl = (...args) => execFileSync('xcrun', ['simctl', ...args], { encoding: 'utf8' })
+export const simctl = (...args) => execFileSync('xcrun', ['simctl', ...args], { encoding: 'utf8' })
 
-const arreter = (udid) => {
+export const arreter = (udid) => {
   try {
     simctl('terminate', udid, BUNDLE)
   } catch {
@@ -104,7 +104,7 @@ const arreter = (udid) => {
   }
 }
 
-const construire = (udid) => {
+export const construire = (udid) => {
   const r = spawnSync('./meeshy.sh', ['build'], {
     cwd: resolve(REPO_ROOT, 'apps/ios'),
     env: { ...process.env, MEESHY_DEVICE_ID: udid, MEESHY_DERIVED_DATA: DERIVED_DATA },
@@ -114,9 +114,9 @@ const construire = (udid) => {
   return resolve(DERIVED_DATA, 'Products/Debug-iphonesimulator/Meeshy.app')
 }
 
-const capturer = async ({ udid, appareil, lang, capture, voix }) => {
-  const { scene, theme } = capture
-  const etiquette = `${appareil}/${lang}/${scene}`
+// Prépare une scène : thème, app arrêtée, fixtures de la langue déposées, signal « prêt » effacé.
+// Rend le dossier vitrine du conteneur, où l'app pose ses marqueurs.
+export const preparerScene = ({ udid, lang, scene, theme, voix, etiquette, fil = montreUnFil(scene) }) => {
   simctl('ui', udid, 'appearance', theme === 'dark' ? 'dark' : 'light')
   arreter(udid)
   const dossier = resolve(simctl('get_app_container', udid, BUNDLE, 'data').trim(), 'Documents/vitrine')
@@ -124,7 +124,7 @@ const capturer = async ({ udid, appareil, lang, capture, voix }) => {
   rmSync(resolve(dossier, 'pret.txt'), { force: true })
   const maintenant = new Date()
   const fixtures = fixturesMesurees({ lang, maintenant, mesurer: (media) => synthetiser(media, voix) })
-  const veille = montreUnFil(scene) ? veilleMontree(fixtures, maintenant) : null
+  const veille = fil ? veilleMontree(fixtures, maintenant) : null
   if (veille) {
     const minuit = new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate())
     const des = new Date(minuit.getTime() + (maintenant - veille) + 60_000)
@@ -133,6 +133,13 @@ const capturer = async ({ udid, appareil, lang, capture, voix }) => {
   const court = scene === 'amour' ? vocalTropCourt(fixtures, lang) : null
   if (court) throw new Error(`${etiquette} : la piste ${court.lang} dure ${court.dureeMs} ms — elle serait finie avant la photo (minimum ${DUREE_MIN_VOCAL_MS} ms)`)
   deposer(fixtures, dossier)
+  return dossier
+}
+
+const capturer = async ({ udid, appareil, lang, capture, voix }) => {
+  const { scene, theme } = capture
+  const etiquette = `${appareil}/${lang}/${scene}`
+  const dossier = preparerScene({ udid, lang, scene, theme, voix, etiquette })
   simctl('launch', udid, BUNDLE, ...argumentsDeLancement({ scene, lang }))
   await attendreLeSignal({ existe: () => existsSync(resolve(dossier, 'pret.txt')), etiquette })
   await pause(1500)
