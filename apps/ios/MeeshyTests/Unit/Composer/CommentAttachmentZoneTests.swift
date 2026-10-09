@@ -347,3 +347,51 @@ final class CommentSheetFitTests: XCTestCase {
                       "Une détente que rien ne lie ne peut pas grandir.")
     }
 }
+
+// MARK: - La caméra des commentaires
+
+/// **La caméra s'offre à droite, dans les trois composeurs de commentaire**
+/// (#9736, décision porteur 2026-10-09) — par la porte de la barre du message,
+/// pas par une copie, et sa prise retombe dans la zone d'aperçu.
+final class CommentCameraDoorMountingGuardTests: XCTestCase {
+
+    private func source(_ relative: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return AppSourceGuard.stripComments(try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Main/\(relative)"), encoding: .utf8))
+    }
+
+    func test_everyCommentHost_offersTheCamera() throws {
+        for host in ["Views/FeedCommentsSheet.swift",
+                     "Views/PostDetailView+CommentComposer.swift",
+                     "Views/StoryViewerView+CanvasComposerBar.swift"] {
+            XCTAssertTrue(try source(host).contains(".commentCamera(attachments: $commentAttachments"),
+                          "\(host) n'offre pas la caméra à son composeur de commentaire.")
+        }
+    }
+
+    func test_theStory_keepsItsSinglePieceCeiling_forACapture() throws {
+        XCTAssertTrue(try source("Views/StoryViewerView+CanvasComposerBar.swift")
+            .contains(".commentCamera(attachments: $commentAttachments, limit: Self.mediaLimit"))
+    }
+
+    func test_theDoor_isTheMessageBarsOwn_notACopy() throws {
+        let toolbar = try source("Components/UniversalComposerBar+Toolbar.swift")
+        XCTAssertTrue(toolbar.contains("offersCamera: resolvedOnCamera != nil"),
+                      "La porte caméra de la barre ne lit plus ce que l'hôte lui confie par l'environnement.")
+        XCTAssertTrue(toolbar.contains("if let openCamera = resolvedOnCamera"))
+        XCTAssertTrue(toolbar.contains("\"composer.attach.camera\""), "La porte se nomme « Caméra » pour VoiceOver.")
+        XCTAssertTrue(try source("Components/UniversalComposerBar.swift")
+            .contains("onCamera ?? environmentCameraDoor?.open"))
+    }
+
+    func test_theCapture_opensTheComposerViewfinder_andLandsInTheZone() throws {
+        let door = try source("Components/CommentCameraDoor.swift")
+        XCTAssertTrue(door.contains("ComposerViewfinder {"),
+                      "Le viseur est celui du composeur — le même que le message, qui obéit à la politique d'enregistrement.")
+        XCTAssertTrue(door.contains("CommentAttachmentIntake.stage(capture:"),
+                      "La prise doit entrer par l'entrée commune : aperçu immédiat et plafond des pièces.")
+    }
+}

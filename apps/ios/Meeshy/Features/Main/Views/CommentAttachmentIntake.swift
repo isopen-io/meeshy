@@ -202,6 +202,26 @@ enum CommentAttachmentIntake {
         }
     }
 
+    /// La prise du viseur rejoint la zone (#9736) : une vidéo par son fichier,
+    /// une photo dès la prise, son fichier écrit ensuite.
+    static func stage(capture: CameraResult, into attachments: Binding<[ComposerAttachment]>,
+                      limit: Int = MAX_POST_MEDIA) {
+        switch ComposerReturnedMedia(capture: capture) {
+        case .video(let url):
+            var piece = placeholder(isVideo: true)
+            piece.url = url
+            admit([piece], into: &attachments.wrappedValue, limit: limit)
+        case .image(let image):
+            guard let data = image.jpegData(compressionQuality: 0.9),
+                  let piece = admit([placeholder(isVideo: false)], into: &attachments.wrappedValue, limit: limit).first else {
+                return
+            }
+            Task { @MainActor in
+                fill(piece.id, with: await write(data, isVideo: false), in: attachments)
+            }
+        }
+    }
+
     static func placeholder(isVideo: Bool) -> ComposerAttachment {
         isVideo
             ? ComposerAttachment(id: "video-\(UUID().uuidString)", type: .video,

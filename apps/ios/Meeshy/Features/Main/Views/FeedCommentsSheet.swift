@@ -1176,6 +1176,7 @@ struct CommentsSheetView: View {
         .commentRecentMediaScene(image: $commentRecentImageToEdit, video: $commentRecentVideoToEdit,
                                  onDone: { pick in ingestCommentRecentMedia(pick) })
         .commentSceneRetouch(attachments: $commentAttachments)
+        .commentCamera(attachments: $commentAttachments)
     }
 
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes

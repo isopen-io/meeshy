@@ -84,7 +84,7 @@ extension UniversalComposerBar {
             // Construites ICI, sur le fil principal : le `ForEach` ne fait que
             // les relire (#9456, `AsyncRenderRow`).
             ForEach(ComposerGlassDoors.trailing(offersLibrary: onPhotoLibrary != nil,
-                                                offersCamera: onCamera != nil,
+                                                offersCamera: resolvedOnCamera != nil,
                                                 offersFold: resolvedFoldControl != nil)
                         .map { AsyncRenderRow(id: $0, content: trailingGlassDoor($0)) },
                     content: asyncRenderRowContent)
@@ -102,7 +102,7 @@ extension UniversalComposerBar {
                     action: openLibrary)
             }
         case .camera:
-            if let openCamera = onCamera {
+            if let openCamera = resolvedOnCamera {
                 glassDoorButton(
                     symbol: "camera.fill",
                     label: String(localized: "composer.attach.camera", defaultValue: "Caméra", bundle: .main),

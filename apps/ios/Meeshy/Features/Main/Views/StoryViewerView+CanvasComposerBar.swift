@@ -280,6 +280,10 @@ struct StoryComposerBarView: View {
         // « Éditer » une pièce jointe : la scène du composeur (#9127). Le
         // minuteur reste en pause — la pièce en attente compte comme contenu.
         .commentSceneRetouch(attachments: $commentAttachments)
+        // La caméra (#9736) : le viseur RECOUVRE le lecteur, qui ne le sait
+        // pas — le composeur s'engage d'abord, ce qui tient le minuteur.
+        .commentCamera(attachments: $commentAttachments, limit: Self.mediaLimit,
+                       onOpen: { isComposerEngaged = true })
     }
 
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`). Un dépôt
