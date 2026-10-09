@@ -232,6 +232,44 @@ final class StoryInteractionServiceTests: XCTestCase {
         XCTAssertNil(result?[1].reactionEmoji)
     }
 
+    func test_loadViewers_enrichedRow_carriesWhatThePersonDid() async {
+        let (sut, api) = makeSUT()
+        let endpoint = "/posts/\(Self.storyId)/interactions"
+        let response: APIResponse<StoryViewersWireResponse> = JSONStub.decode("""
+        {
+          "success": true,
+          "data": { "viewers": [
+            {
+              "id":"viewer-0", "username":"noor", "displayName":"Noor", "avatarUrl":null,
+              "viewedAt":"2026-10-10T12:00:00.000Z",
+              "reaction":"😂", "reactions":["❤️","😂"],
+              "shareCount":1, "repostCount":2, "commentCount":3, "replyCount":4, "bookmarked":true
+            }
+          ] },
+          "error": null
+        }
+        """)
+        api.stub(endpoint, result: response)
+
+        let result = await sut.loadViewers(storyId: Self.storyId)
+
+        XCTAssertEqual(result?.first?.reactionEmoji, "😂")
+        XCTAssertEqual(result?.first?.engagement.marks, [
+            .reactions(["❤️", "😂"]), .comments(3), .replies(4), .reposts(2), .shares(1), .bookmarked
+        ])
+    }
+
+    func test_loadViewers_rowWithoutCounters_drawsNoMark() async {
+        let (sut, api) = makeSUT()
+        let endpoint = "/posts/\(Self.storyId)/interactions"
+        api.stub(endpoint, result: makeViewersResponse(count: 2))
+
+        let result = await sut.loadViewers(storyId: Self.storyId)
+
+        XCTAssertEqual(result?[0].engagement.marks, [.reactions(["🔥"])])
+        XCTAssertEqual(result?[1].engagement.marks, [])
+    }
+
     func test_loadViewers_apiFailure_returnsNil() async {
         let (sut, api) = makeSUT()
         api.errorToThrow = NSError(domain: "TestNetwork", code: 500)

@@ -138,6 +138,8 @@ struct ReelFeedCard: View, Equatable {
     private var accentHex: String { post.authorColor }
     /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
     @State private var reelCardFullscreenPlace: BubbleFullscreenPlace?
+    /// La feuille « Vues » de l'auteur — qui a vu, et ce que chacun a fait (#9727).
+    @State private var showViewersSheet = false
     /// Flux « Enregistrer en local » du menu « … » : pour un réel, Enregistrer
     /// télécharge le MÉDIA (image/vidéo) dans Photos — distinct du bouton
     /// favori dédié (bookmark) qui, lui, enregistre le poste dans l'app.
@@ -215,6 +217,7 @@ struct ReelFeedCard: View, Equatable {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "feed.reel.card.a11y", defaultValue: "Réel de \(displayAuthor)", bundle: .main))
         .onReceive(ReelFeedSoundIntent.shared.$audioTrackPresence) { soundTrackPresence = $0 }
+        .publicationViewersSheet(isPresented: $showViewersSheet, post: post) { onTapAuthor($0.id) }
         .fullScreenCover(item: $reelCardFullscreenPlace) { item in
             LocationFullscreenView(
                 latitude: item.place.latitude,
@@ -537,6 +540,9 @@ struct ReelFeedCard: View, Equatable {
             } label: {
                 Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
             }
+        }
+        if isAuthor {
+            PublicationViewersMenuButton { showViewersSheet = true }
         }
         if let onPin {
             Button {
