@@ -175,12 +175,12 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.text » 
       id: 'comment-005',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-audio-002', mimeType: 'audio/mpeg', fileUrl: '/uploads/audio.mp3' }],
+      media: [{ id: '88dc44651140c5ef21a6d9e6', mimeType: 'audio/mpeg', fileUrl: '/uploads/audio.mp3' }],
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-audio-002'] },
+      payload: { attachmentIds: ['88dc44651140c5ef21a6d9e6'] },
     });
     expect(res.statusCode).toBe(201);
     expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.text', expect.anything());
@@ -194,12 +194,12 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
       id: 'comment-audio-engagement',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-audio-003', mimeType: 'audio/mpeg', fileUrl: '/uploads/audio2.mp3' }],
+      media: [{ id: '665696183138c99feac27bf0', mimeType: 'audio/mpeg', fileUrl: '/uploads/audio2.mp3' }],
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-audio-003'] },
+      payload: { attachmentIds: ['665696183138c99feac27bf0'] },
     });
     expect(res.statusCode).toBe(201);
     expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'comment.audio', { postId: POST_ID, receipt: 'comment:comment-audio-engagement', variant: 'public', targetOwnerId: 'author-1' });
@@ -227,12 +227,12 @@ describe('POST /posts/:postId/comments — axe d\'engagement « comment.audio »
       id: 'comment-image',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-image-001', mimeType: 'image/png', fileUrl: '/uploads/pic.png' }],
+      media: [{ id: '04ff1c5adb6775066c5edf80', mimeType: 'image/png', fileUrl: '/uploads/pic.png' }],
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-image-001'] },
+      payload: { attachmentIds: ['04ff1c5adb6775066c5edf80'] },
     });
     expect(res.statusCode).toBe(201);
     expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'comment.audio', expect.anything());

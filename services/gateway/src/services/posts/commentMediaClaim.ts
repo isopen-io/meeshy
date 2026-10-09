@@ -1,4 +1,6 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
+import type { MobileTranscription } from '../../routes/posts/types';
+import { attachmentTranscriptionFromMobile } from './mobile-transcription';
 import { claimableMediaWhere, describeClaimShortfall } from './mediaOwnership';
 
 /**
@@ -48,4 +50,27 @@ export async function claimCommentMedia(
   if (describeClaimShortfall(params.mediaIds, claimed.count)) {
     throw new Error(COMMENT_MEDIA_NOT_AVAILABLE);
   }
+}
+
+/**
+ * La transcription mobile décrit UNE piste : elle se pose sur le média AUDIO
+ * effectivement rattaché — pas sur « le premier », qui peut être une photo dès
+ * que le commentaire en porte plusieurs. La charge du fil ne se persiste pas
+ * telle quelle : `attachmentTranscriptionFromMobile` en est le seul traducteur.
+ */
+export async function transcribeCommentAudio(
+  client: MediaClient,
+  commentId: string,
+  mobileTranscription: MobileTranscription | undefined,
+): Promise<void> {
+  if (!mobileTranscription) return;
+  const piste = await client.postMedia.findFirst({
+    where: { commentId, mimeType: { startsWith: 'audio/' } },
+    select: { id: true },
+  });
+  if (!piste) return;
+  await client.postMedia.update({
+    where: { id: piste.id },
+    data: { transcription: attachmentTranscriptionFromMobile(mobileTranscription) as Prisma.InputJsonValue },
+  });
 }

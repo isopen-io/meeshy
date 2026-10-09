@@ -500,7 +500,11 @@ export const CreateCommentSchema = z.object({
   /// ment — il montrait N pièces pour n'en envoyer qu'une. Le plafond RÉUTILISE
   /// celui des médias d'un post : deux plafonds seraient deux vérités, et la
   /// seconde dériverait au premier ajustement.
-  attachmentIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
+  ///
+  /// Chaque id est un ObjectId (#9745), comme `attachmentIds` du socket
+  /// (`socket-event-schemas.ts`) : la colonne en est une, et une autre chaîne
+  /// faisait lever la requête d'admission — 500 au lieu d'un refus lisible.
+  attachmentIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(MAX_POST_MEDIA).optional(),
   /// Le média du POST COMMENTÉ que ce commentaire cite (#6578) — voie
   /// `metadata.quotedPostMedia`, AUCUNE colonne. `z.unknown()` parce que la
   /// forme est tranchée par `admitQuotedPostMedia`, seul site de la règle : la

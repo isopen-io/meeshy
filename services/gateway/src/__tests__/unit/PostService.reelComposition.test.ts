@@ -63,7 +63,7 @@ function createMockPrisma() {
 function makePost(overrides: Record<string, unknown> = {}) {
   return {
     id: 'post-1',
-    authorId: 'user-1',
+    authorId: '0a0a0a0a0a0a0a0a0a0a0a01',
     type: 'POST',
     visibility: 'PUBLIC',
     content: null,
@@ -96,7 +96,7 @@ describe('PostService — règle de composition REEL', () => {
       prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 5000 }]);
       prisma.post.create.mockResolvedValue(makePost({ type: 'REEL' }));
 
-      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, 'user-1');
+      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
@@ -107,7 +107,7 @@ describe('PostService — règle de composition REEL', () => {
         where: { id: { in: string[] }; uploaderId: string };
       };
       expect(readArg.where.id).toEqual({ in: ['m1'] });
-      expect(readArg.where.uploaderId).toBe('user-1');
+      expect(readArg.where.uploaderId).toBe('0a0a0a0a0a0a0a0a0a0a0a01');
     });
 
     it('keeps REEL for two images', async () => {
@@ -117,7 +117,7 @@ describe('PostService — règle de composition REEL', () => {
       ]);
       prisma.post.create.mockResolvedValue(makePost({ type: 'REEL' }));
 
-      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1', 'm2'] }, 'user-1');
+      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1', 'm2'] }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
@@ -128,7 +128,7 @@ describe('PostService — règle de composition REEL', () => {
       prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'image/jpeg' }]);
       prisma.post.create.mockResolvedValue(makePost());
 
-      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, 'user-1');
+      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.POST }) }),
@@ -138,7 +138,7 @@ describe('PostService — règle de composition REEL', () => {
     it('degrades a REEL without any mediaId to POST without reading media', async () => {
       prisma.post.create.mockResolvedValue(makePost());
 
-      await service.createPost({ ...baseCreate, type: PostType.REEL, content: undefined, moodEmoji: '🎬' }, 'user-1');
+      await service.createPost({ ...baseCreate, type: PostType.REEL, content: undefined, moodEmoji: '🎬' }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.postMedia.findMany).not.toHaveBeenCalled();
       expect(prisma.post.create).toHaveBeenCalledWith(
@@ -149,7 +149,7 @@ describe('PostService — règle de composition REEL', () => {
     it('never classifies a non-REEL create', async () => {
       prisma.post.create.mockResolvedValue(makePost());
 
-      await service.createPost({ ...baseCreate, type: PostType.POST, mediaIds: ['m1'] }, 'user-1');
+      await service.createPost({ ...baseCreate, type: PostType.POST, mediaIds: ['m1'] }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       // La capture de la bibliothèque de sons lit désormais les médias
       // ATTACHÉS (`where: { postId }`) sur tout post avec `mediaIds` — c'est
@@ -167,7 +167,7 @@ describe('PostService — règle de composition REEL', () => {
       prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 2000 }]);
       prisma.post.create.mockResolvedValue(makePost());
 
-      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, 'user-1');
+      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.POST }) }),
@@ -178,7 +178,7 @@ describe('PostService — règle de composition REEL', () => {
       prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 3000 }]);
       prisma.post.create.mockResolvedValue(makePost({ type: 'REEL' }));
 
-      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, 'user-1');
+      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
@@ -192,7 +192,7 @@ describe('PostService — règle de composition REEL', () => {
         type: 'POST', media: [{ id: 'm1', mimeType: 'image/jpeg' }],
       }));
 
-      await expect(service.updatePost('post-1', 'user-1', { type: PostType.REEL }))
+      await expect(service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { type: PostType.REEL }))
         .rejects.toMatchObject({ statusCode: 422 });
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
@@ -204,7 +204,7 @@ describe('PostService — règle de composition REEL', () => {
       }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
 
-      await service.updatePost('post-1', 'user-1', { type: PostType.REEL });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { type: PostType.REEL });
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
@@ -217,7 +217,7 @@ describe('PostService — règle de composition REEL', () => {
         media: [{ id: 'm1', mimeType: 'image/jpeg' }, { id: 'm2', mimeType: 'image/png' }],
       }));
 
-      await expect(service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'] }))
+      await expect(service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { removeMediaIds: ['m1'] }))
         .rejects.toMatchObject({ statusCode: 422 });
       expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
       expect(prisma.post.update).not.toHaveBeenCalled();
@@ -229,7 +229,7 @@ describe('PostService — règle de composition REEL', () => {
       }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
 
-      await service.updatePost('post-1', 'user-1', { content: 'nouveau texte' });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { content: 'nouveau texte' });
 
       expect(prisma.post.update).toHaveBeenCalled();
     });
@@ -239,13 +239,13 @@ describe('PostService — règle de composition REEL', () => {
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
       prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 5000 }]);
 
-      await service.updatePost('post-1', 'user-1', { type: PostType.REEL, mediaIds: ['new-m1'] });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { type: PostType.REEL, mediaIds: ['new-m1'] });
 
       const readArg = prisma.postMedia.findMany.mock.calls[0][0] as {
         where: { id: { in: string[] }; uploaderId: string };
       };
       expect(readArg.where.id).toEqual({ in: ['new-m1'] });
-      expect(readArg.where.uploaderId).toBe('user-1');
+      expect(readArg.where.uploaderId).toBe('0a0a0a0a0a0a0a0a0a0a0a01');
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
       );
@@ -255,7 +255,7 @@ describe('PostService — règle de composition REEL', () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ type: 'POST', media: [] }));
       prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 2000 }]);
 
-      await expect(service.updatePost('post-1', 'user-1', { type: PostType.REEL, mediaIds: ['new-m1'] }))
+      await expect(service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { type: PostType.REEL, mediaIds: ['new-m1'] }))
         .rejects.toMatchObject({ statusCode: 422 });
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
@@ -265,7 +265,7 @@ describe('PostService — règle de composition REEL', () => {
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
       prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 3000 }]);
 
-      await service.updatePost('post-1', 'user-1', { type: PostType.REEL, mediaIds: ['new-m1'] });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { type: PostType.REEL, mediaIds: ['new-m1'] });
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),

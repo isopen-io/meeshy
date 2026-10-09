@@ -7,7 +7,7 @@ import { syncCommentTrackingLinks } from './posts/publicationTrackingLinks';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace } from './location/sharedPlace';
 import { parseMessageSticker } from './stickers/messageSticker';
-import { assertCommentMediaClaimable, claimCommentMedia } from './posts/commentMediaClaim';
+import { assertCommentMediaClaimable, claimCommentMedia, transcribeCommentAudio } from './posts/commentMediaClaim';
 import { applyCommentMediaOrder } from './posts/mediaOrder';
 import type { QuotedPostMedia } from './posts/quotedPostMediaSnapshot';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -15,7 +15,6 @@ import { getSharedNotificationService } from './notifications/notification-servi
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { retractCommentNotifications } from './posts/retractCommentNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
-import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { EngagementService } from './engagement/EngagementService';
 import { creditPostEngagement, creditSource, reclaimContentCredits, removalReclaimsAuthorCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
@@ -171,69 +170,42 @@ export class PostCommentService {
       },
       select: CREATED_COMMENT_SELECT,
     };
-    // Création et réclamation dans UNE transaction dès qu'il y a des médias :
-    // un média pris entre l'admission et la réclamation annule la création.
+    // UNE transaction dès qu'il y a des médias, et elle porte TOUT ce qui fait
+    // le commentaire : la ligne, ses pièces réclamées, leur rang, la
+    // transcription, et leur relecture. Un média pris entre l'admission et la
+    // réclamation — ou n'importe laquelle de ces écritures qui échoue — annule
+    // l'ensemble : rien n'est né, le rejeu repart de zéro.
     // Sans média, une seule écriture — aucune transaction à ouvrir.
-    const comment = demandes.length === 0
-      ? await this.prisma.postComment.create(creation)
+    const { comment, media } = demandes.length === 0
+      ? { comment: await this.prisma.postComment.create(creation), media: [] }
       : await this.prisma.$transaction(async (tx) => {
           const created = await tx.postComment.create(creation);
           await claimCommentMedia(tx, { commentId: created.id, authorId, mediaIds: demandes });
-          return created;
+          // Le RANG suit l'ordre de la requête — le seul endroit qui porte
+          // l'ordre voulu par l'utilisateur (`applyMediaOrder` côté post).
+          await applyCommentMediaOrder(tx, created.id, demandes);
+          await transcribeCommentAudio(tx, created.id, mobileTranscription);
+          // Renvoyés top-level (`media: [PostMedia]`) — même forme que les posts.
+          const attached = await tx.postMedia.findMany({ where: { commentId: created.id }, ...commentMediaInclude });
+          return { comment: created, media: attached };
         });
 
-    if (demandes.length > 0) {
-      // Le RANG suit l'ordre de la requête — c'est le seul endroit qui porte
-      // l'ordre voulu par l'utilisateur. Même raison, et même garde, que
-      // `applyMediaOrder` côté post : sans lui, `orderBy: { order: 'asc' }`
-      // rendrait l'ordre d'ACHÈVEMENT des téléversements.
-      await applyCommentMediaOrder(this.prisma, comment.id, demandes);
-
-      // La transcription mobile décrit UNE piste. Elle se pose sur le média
-      // AUDIO effectivement rattaché — pas sur « le premier », qui peut être
-      // une photo dès que le commentaire en porte plusieurs.
-      if (mobileTranscription) {
-        const piste = await this.prisma.postMedia.findFirst({
-          where: { commentId: comment.id, mimeType: { startsWith: 'audio/' } },
-          select: { id: true },
-        });
-        if (piste) {
-          await this.prisma.postMedia.update({
-            where: { id: piste.id },
-            data: {
-              // La charge du fil ne se persiste pas telle quelle : le document
-              // a sa propre graphie, et un seul site la produit
-              // (`attachmentTranscriptionFromMobile`).
-              transcription: attachmentTranscriptionFromMobile(
-                mobileTranscription,
-              ) as Prisma.InputJsonValue,
-            },
-          });
-        }
-      }
-    }
-
-    // Increment counters
-    await this.prisma.post.update({
+    // À partir d'ici le commentaire EXISTE (#9745). Plus rien ne peut échouer
+    // la création : un échec rendrait 500 pour un commentaire publié, la ligne
+    // de journal de la mutation serait libérée, et le rejeu sous le même
+    // identifiant trouverait ses médias déjà pris (400) — ou, sans média,
+    // publierait un doublon. Les compteurs sont dénormalisés : un écart se
+    // journalise et se rattrape, un commentaire né ne se renie pas.
+    await this.afterBirth('post.commentCount', comment.id, () => this.prisma.post.update({
       where: { id: postId },
       data: { commentCount: { increment: 1 } },
-    });
-
+    }));
     if (parentId) {
-      await this.prisma.postComment.update({
+      await this.afterBirth('parent.replyCount', comment.id, () => this.prisma.postComment.update({
         where: { id: parentId },
         data: { replyCount: { increment: 1 } },
-      });
+      }));
     }
-
-    // Le média lié est renvoyé top-level (`media: [PostMedia]`) — même forme que les
-    // posts, décodé identiquement par les clients (viewers inline + plein écran).
-    const media = demandes.length > 0
-      ? await this.prisma.postMedia.findMany({
-          where: { commentId: comment.id },
-          ...commentMediaInclude,
-        })
-      : [];
 
     // Carte `metadata.trackingLinks` (#9073) : corps + légende de son média,
     // mapping `url → token` SANS réécrire le contenu. Jamais bloquant.
@@ -243,6 +215,14 @@ export class PostCommentService {
     if (trackingMetadata !== undefined) return { ...comment, metadata: trackingMetadata, media };
 
     return { ...comment, media };
+  }
+
+  private async afterBirth(step: string, commentId: string, work: () => Promise<unknown>): Promise<void> {
+    try {
+      await work();
+    } catch (err) {
+      log.warn('addComment: post-commit step failed, comment kept', { step, commentId, err });
+    }
   }
 
   /**
