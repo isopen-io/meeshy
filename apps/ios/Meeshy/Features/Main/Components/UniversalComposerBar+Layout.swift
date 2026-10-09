@@ -285,6 +285,7 @@ extension UniversalComposerBar {
         )
         .adaptiveOnChange(of: attachments.count) { _, _ in notifyContentChange() }
         .adaptiveOnChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
+        .adaptiveOnChange(of: showAttachOptions) { _, open in onAttachmentsVisibilityChange?(open) }
         .onAppear {
             currentLanguage = selectedLanguage
             // Load initial draft if available
