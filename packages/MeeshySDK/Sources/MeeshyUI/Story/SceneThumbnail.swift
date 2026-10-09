@@ -183,7 +183,7 @@ public enum SceneThumbnailRenderer {
                                      reductions: reductions)
         let composite = StorySlideRenderer.renderComposite(slide: slide, bgImage: fond, loadedImages: reduites,
                                                            size: size, scale: scale)
-        let pastilles = (slide.effects.audioPlayerObjects ?? []).filter { $0.isBackground != true }
+        let pastilles = SceneAudioStageRule.stagedAudios(in: slide.effects.audioPlayerObjects ?? [])
         guard !pastilles.isEmpty else {
             return composite ?? UIGraphicsImageRenderer(size: size, format: format).image { _ in }
         }

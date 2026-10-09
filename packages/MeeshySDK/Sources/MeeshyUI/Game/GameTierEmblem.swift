@@ -183,10 +183,14 @@ enum GameTierEmblem {
     // MARK: - Le dessin
 
     /// La peinture du palier : une couleur franche, ou le prisme tournant de Galaxie et de Singularité.
-    private static func shading(for tier: LevelTierKey) -> GraphicsContext.Shading {
+    /// L'opacité d'un filigrane voyage dans la couleur de chaque tracé.
+    private static func shading(for tier: LevelTierKey, opacity: Double) -> GraphicsContext.Shading {
         tier.isSpectral
-            ? .conicGradient(Gradient(stops: GamePalette.prismStops), center: .zero, angle: .zero)
-            : .color(LevelTierPalette.color(for: tier))
+            ? .conicGradient(
+                Gradient(stops: GamePalette.prismStops.map { .init(color: $0.color.opacity(opacity), location: $0.location) }),
+                center: .zero, angle: .zero
+            )
+            : .color(LevelTierPalette.color(for: tier).opacity(opacity))
     }
 
     /// Dessine l'emblème centré en `center`, dans un carré de `side` (les unités du contexte).
@@ -195,11 +199,10 @@ enum GameTierEmblem {
     static func draw(in context: inout GraphicsContext, tier: LevelTierKey, center: CGPoint, side: CGFloat,
                      knockout: Color, opacity: Double = 1) {
         var inner = context
-        inner.opacity = context.opacity * opacity
         inner.translateBy(x: center.x, y: center.y)
         inner.scaleBy(x: side / box, y: side / box)
         let design = design(for: tier)
-        let shading = shading(for: tier)
+        let shading = shading(for: tier, opacity: opacity)
         for primitive in design.primitives {
             switch primitive.paint {
             case .fill:
@@ -209,7 +212,7 @@ enum GameTierEmblem {
             }
         }
         GameSignature.draw(in: &inner, center: .zero, side: signatureSide,
-                           color: design.filledCore ? knockout : LevelTierPalette.color(for: tier),
+                           color: (design.filledCore ? knockout : LevelTierPalette.color(for: tier)).opacity(opacity),
                            style: .flat, strokeWidth: 120)
     }
 }
@@ -225,7 +228,8 @@ public struct TierEmblemView: View {
     ///   - tier: le palier de nom — il fixe le dessin et la couleur spectrale.
     ///   - knockout: la couleur du fond sur lequel l'emblème se pose (la Signature s'y creuse
     ///     quand le cœur est plein).
-    ///   - opacity: 1 plein ; vers 0,18, un filigrane.
+    ///   - opacity: 1 plein ; vers 0,18, un filigrane. Elle est portée par les couleurs du dessin
+    ///     (`GameTierEmblem.draw`).
     ///   - accessibilityLabel: `nil` ⇒ décoratif ; l'hôte dit « palier Éclat ».
     public init(tier: LevelTierKey, knockout: Color = .white, opacity: Double = 1, accessibilityLabel: String? = nil) {
         self.tier = tier

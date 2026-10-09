@@ -87,7 +87,6 @@ const ar = {
   'reels.sound.off': 'كتم الصوت',
   'reels.play': 'تشغيل الريل',
   'reels.pause': 'إيقاف الريل مؤقتًا',
-  'reels.media.error': 'تعذّر التشغيل — إعادة المحاولة',
   'reels.image': 'صورة {index} من {count}',
 
   'stories.title': 'القصص',

@@ -87,6 +87,14 @@ export const OPS_ONLY_ROUTES: readonly OpsOnlyRoute[] = [
       "`requireAdmin`), mais déclenche un VRAI job de traduction sur le pipeline ML : un " +
       "point de santé du pipeline, jamais un écran d'app.",
   },
+  {
+    method: 'GET',
+    path: '/api/v1/links/:identifier/og',
+    reason:
+      "`services/gateway/src/routes/links/unfurl.ts` (#9712) — page HTML d'aperçu que Traefik " +
+      "sert aux ROBOTS d'aperçu des messageries quand ils déplient `/chat/<lien>` : aucun écran " +
+      "d'app ne l'appelle, l'app lit l'invitation par `GET /anonymous/link/:identifier`.",
+  },
 ];
 
 function routeKey(method: string, path: string): string {

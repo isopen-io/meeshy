@@ -841,7 +841,7 @@ export class MessagingService {
         }
       });
 
-      announceConversationLanguageChange({ kind: 'arrival', conversationId, language: recipientLanguage(user, 'fr') });
+      announceConversationLanguageChange({ kind: 'arrival', conversationId, language: recipientLanguage(user, 'fr'), readerUserId: user.id });
       logger.info('Auto-created Participant', { conversationId });
       return participant;
     } catch (error) {

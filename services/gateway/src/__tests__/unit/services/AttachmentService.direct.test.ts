@@ -312,15 +312,19 @@ describe('AttachmentService — direct-access methods', () => {
   // ─── associateAttachmentsToMessage ───────────────────────────────────────
 
   describe('associateAttachmentsToMessage', () => {
-    it('calls updateMany with the attachment ids and messageId', async () => {
+    it('calls updateMany for each attachment id with the messageId and its rank', async () => {
       const prisma = makePrisma();
       const svc = new AttachmentService(prisma as PrismaClient);
 
       await svc.associateAttachmentsToMessage([ATTACH_ID, 'att-2'], MSG_ID);
 
       expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: [ATTACH_ID, 'att-2'] }, OR: [{ messageId: null }, { messageId: { isSet: false } }] },
-        data: { messageId: MSG_ID },
+        where: { id: { in: [ATTACH_ID] }, OR: [{ messageId: null }, { messageId: { isSet: false } }] },
+        data: { messageId: MSG_ID, rank: 0 },
+      });
+      expect(prisma.messageAttachment.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['att-2'] }, OR: [{ messageId: null }, { messageId: { isSet: false } }] },
+        data: { messageId: MSG_ID, rank: 1 },
       });
     });
   });

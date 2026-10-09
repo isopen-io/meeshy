@@ -17,6 +17,8 @@ const deCommentRow = {
   'comments.composer.attach': 'Foto, Video oder Ton anhängen',
   'comments.composer.voice': 'Sprachkommentar aufnehmen',
   'comments.media.upload_failed': 'Der Anhang konnte nicht gesendet werden.',
+  'comments.media.unsupported': '„{name}“: Ein Kommentar kann nur Fotos, Videos und Audios enthalten.',
+  'comments.media.limit': 'Höchstens {count} Anhänge pro Kommentar.',
   'comments.replies.show': 'Antworten ansehen ({count})',
   'comments.replies.hide': 'Antworten ausblenden',
   'comments.replies.more': 'Weitere Antworten ansehen',

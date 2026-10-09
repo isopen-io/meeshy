@@ -17,7 +17,7 @@ import { CAPTION_SCRIM } from './feed-media-mosaic';
 import { ViewerCaption } from './viewer-caption';
 import { PrismPastille } from './message-blocks';
 import { PostPointsMark } from './publication-points-mark';
-import { feedCardBody, type FeedCardMedia, type FeedCardModel, type FeedCardText } from '@/lib/feed/card-model';
+import { feedCardBody, reelPosterOf, type FeedCardMedia, type FeedCardModel, type FeedCardText } from '@/lib/feed/card-model';
 import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
 import { SCENE_ASPECT, cardAspect, clampedCardAspect } from '@/lib/feed/scene-framing';
 import { useIsActiveScene } from '@/lib/feed/use-feed-autoplay';
@@ -325,7 +325,7 @@ function CardMenu({ model, isDetail, tone, hosts }: { readonly model: FeedCardMo
 }
 
 function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
-  const poster = model.media[0];
+  const poster = reelPosterOf(model);
   const ratio = poster?.ratio ?? 1.25;
   const language = currentInterfaceLanguage();
 

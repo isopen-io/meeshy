@@ -768,3 +768,6 @@ export * from './contact-card.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';
+
+// ===== CE QUE CHAQUE PERSONNE DE LA LISTE DES VUES A FAIT (#9727) =====
+export type { PostViewerEngagement, PostViewerRow } from './publication-viewers.js';

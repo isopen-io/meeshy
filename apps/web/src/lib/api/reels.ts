@@ -96,11 +96,21 @@ export async function loadReelsPage(
   return { ok: true, data: { posts: servedReels(result.data), pagination: servedPagination(result.pagination) } };
 }
 
-/** Spreadable dans `useInfiniteQuery`, SANS `select` — motif `feedInfiniteOptions`. */
+/**
+ * Spreadable dans `useInfiniteQuery`, SANS `select` — motif `feedInfiniteOptions`.
+ *
+ * **Ni au focus ni à la reconnexion** (D-66, #9702) : la passerelle RECLASSE
+ * sa page à chaque lecture (les réels vus coulent). Relire le fil pendant
+ * qu'on le regarde le réordonne sous le lecteur et démonte ses voisins déjà
+ * préparés. Il se relit à l'ouverture, où `holdReelThread` tient le réel
+ * regardé à sa place.
+ */
 export function reelsInfiniteOptions(deps: ReelsDeps, seed?: string) {
   return {
     queryKey: reelsQueryKey(seed),
     structuralSharing: holdViewerPoints,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async ({ pageParam, signal }: { readonly pageParam?: FeedPageParam; readonly signal?: AbortSignal }) =>
       unwrap(
         await loadReelsPage({

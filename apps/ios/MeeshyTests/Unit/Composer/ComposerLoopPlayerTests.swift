@@ -203,11 +203,17 @@ final class MockComposerLoopPlayer: ComposerLoopPlayerProviding, @unchecked Send
     private(set) var stopCount = 0
     private(set) var ranges: [ClosedRange<TimeInterval>] = []
     private(set) var seeks: [TimeInterval] = []
+    private(set) var scrubs: [TimeInterval] = []
+    private(set) var volumes: [Float] = []
+    let hasAudio: Bool
     var currentTime: TimeInterval = 0
 
     nonisolated deinit {}
 
-    init(duration: TimeInterval) { self.duration = duration }
+    init(duration: TimeInterval, hasAudio: Bool = true) {
+        self.duration = duration
+        self.hasAudio = hasAudio
+    }
 
     nonisolated func latestImage() -> CIImage? {
         CIImage(color: .gray).cropped(to: CGRect(origin: .zero, size: uprightSize))
@@ -221,4 +227,6 @@ final class MockComposerLoopPlayer: ComposerLoopPlayerProviding, @unchecked Send
     func stop() { stopCount += 1 }
     func setRange(_ range: ClosedRange<TimeInterval>) { ranges.append(range) }
     func seek(to time: TimeInterval) { seeks.append(time) }
+    func scrub(to time: TimeInterval) { scrubs.append(time) }
+    func setVolume(_ gain: Float) { volumes.append(gain) }
 }

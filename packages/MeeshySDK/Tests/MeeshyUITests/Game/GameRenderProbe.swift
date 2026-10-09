@@ -36,7 +36,18 @@ struct GameRenderProbe {
         return Double(opaque) / Double(width * height)
     }
 
-    /// L'écart moyen par octet avec `other`, de 0 (identiques) à 255.
+    /// L'encre posée : l'écart moyen par octet avec un rendu entièrement transparent, de 0 (rien
+    /// n'est peint) à 255. CALCULÉE, jamais rendue : sous iOS 26.1, `ImageRenderer` rend une vue qui
+    /// ne peint rien (`Color.clear`) avec les octets PÉRIMÉS d'un rendu précédent — mesuré sur le
+    /// run 37919335160 : 230 400 octets non nuls sur 230 400, maximum 255. Une référence « vide »
+    /// rendue n'est donc pas vide, et `distance(to:)` contre elle peut tomber à 0 sur une vue peinte.
+    var ink: Double {
+        guard !rgba.isEmpty else { return 0 }
+        return Double(rgba.reduce(0) { $0 + Int($1) }) / Double(rgba.count)
+    }
+
+    /// L'écart moyen par octet avec `other`, de 0 (identiques) à 255. `other` doit PEINDRE quelque
+    /// chose : contre « rien », lire `ink`.
     func distance(to other: GameRenderProbe) -> Double {
         guard rgba.count == other.rgba.count, !rgba.isEmpty else { return .infinity }
         let total = zip(rgba, other.rgba).reduce(0) { $0 + abs(Int($1.0) - Int($1.1)) }

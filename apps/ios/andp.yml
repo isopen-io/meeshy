@@ -1,0 +1,157 @@
+# ANDP — configuration déclarative de l'app iOS Meeshy.
+#
+# Ce fichier décrit CE QU'ON CONSTRUIT ; `project.yml` (XcodeGen) décrit le
+# projet Xcode lui-même. Les deux sont complémentaires.
+#
+# Il ne contient aucun secret. Tout ce qu'ANDP produit ou lit sans jamais le
+# committer (logs, archives, .xcresult, credentials) vit dans .andp/.
+#
+#   andp targets                 ce qui peut être construit, avec les destinations
+#   andp build dev               compiler l'app pour le simulateur
+#   andp run dev --logs          lancer sur simulateur et suivre les logs
+#   andp test dev                exécuter MeeshyTests
+#   andp build prod --archive    archive + export vers .andp/build/exported/
+
+targets:
+  defaults:
+    scheme: Meeshy
+    platform: iOS
+    configuration: Debug
+
+  # --- développement -------------------------------------------------------
+
+  # iOS 18.2 : le runtime installé le plus proche des appareils réels
+  # (deploymentTarget du projet : 16.0).
+  dev:
+    destination: "iPhone 16 Pro"
+    os: "18.2"
+
+  # Simulateur dédié au projet, sur le runtime le plus récent.
+  dev-26:
+    destination: "Meeshy-iOS26"
+
+  # Le plus petit écran encore supporté — là où les régressions de mise en
+  # page apparaissent en premier.
+  dev-se:
+    destination: "iPhone SE (3rd generation)"
+    os: "18.2"
+
+  # --- extensions et paquets ----------------------------------------------
+
+  widgets:
+    scheme: MeeshyWidgets
+  notifications:
+    scheme: MeeshyNotificationExtension
+  share:
+    scheme: MeeshyShareExtension
+  sdk:
+    scheme: MeeshySDK
+  ui:
+    scheme: MeeshyUI
+
+  # --- distribution --------------------------------------------------------
+
+  # `generic` est requis pour l'archivage : archiver pour un simulateur ne
+  # produit rien d'installable.
+  prod:
+    destination: generic
+    configuration: Release
+
+# --- conformité à l'export -------------------------------------------------
+#
+# Reflète ITSAppUsesNonExemptEncryption = false (Meeshy/Info.plist) ; la
+# machine de release d'ANDP le pose sur chaque build. La justesse de cette
+# valeur pour le chiffrement de bout en bout est une question ouverte (#9752).
+
+compliance:
+  uses_non_exempt_encryption: false
+
+# --- fiche App Store ------------------------------------------------------
+#
+# Ce que l'App Store Connect affiche et ce que l'App Review exige, déclaré ici
+# et dans fastlane/metadata/ (format deliver : <langue>/name.txt, subtitle.txt,
+# privacy_url.txt, description.txt, keywords.txt, release_notes.txt,
+# promotional_text.txt, support_url.txt, marketing_url.txt ; copyright.txt,
+# primary_category.txt, secondary_category.txt, review_information/notes.txt).
+# andp.yml l'emporte sur les fichiers, champ par champ.
+#
+#   andp store plan me.meeshy.app     diff en lecture seule, n'écrit rien
+#   andp store apply me.meeshy.app    écrit ce diff (accord du porteur requis)
+#
+# Le dépôt est PUBLIC : aucun secret ni donnée personnelle ici. Le compte démo
+# vient de fastlane/.env (gitignoré) ; le contact App Review (nom, téléphone,
+# e-mail) reste celui saisi dans App Store Connect et n'est pas géré ici.
+
+store:
+  platform: IOS
+  metadata_dir: fastlane/metadata
+  env_file: fastlane/.env
+
+  app:
+    primary_locale: fr-FR
+    # Les aperçus de liens affichent titres et vignettes de sites tiers
+    # (LinkPreviewFetcher, vignettes YouTube) : l'app MONTRE du contenu tiers.
+    content_rights: USES_THIRD_PARTY_CONTENT
+
+  version:
+    release_type: MANUAL
+    downloadable: true
+    phased_release: false
+
+  review:
+    demo_account_required: true
+    demo_account_name_env: DEMO_USER
+    demo_account_password_env: DEMO_PASSWORD
+
+  pricing:
+    base_territory: USA
+    price: free
+
+  eula: standard
+
+  # Questionnaire d'âge 2025-2026 (API 4.5.1), répondu d'après le produit :
+  # messagerie entre inconnus (annuaire, liens d'invitation sans compte),
+  # contenu des utilisateurs public par défaut et modéré a posteriori
+  # (signalement, blocage, modération), fil / stories / réels diffusés
+  # largement. Aucune publicité, aucun achat, aucun contrôle parental, aucune
+  # vérification d'âge (pas de Declared Age Range) : socialMediaAgeRestricted
+  # reste faux. Le coffre quotidien du jeu est gratuit, sans valeur
+  # monétaire : ce n'est pas une loot box payante.
+  age_rating:
+    messagingAndChat: true
+    userGeneratedContent: true
+    socialMedia: true
+    socialMediaAgeRestricted: false
+    advertising: false
+    parentalControls: false
+    ageAssurance: false
+    healthOrWellnessTopics: false
+    lootBox: false
+    gambling: false
+    unrestrictedWebAccess: false
+    alcoholTobaccoOrDrugUseOrReferences: NONE
+    contests: NONE
+    gamblingSimulated: NONE
+    gunsOrOtherWeapons: NONE
+    horrorOrFearThemes: NONE
+    matureOrSuggestiveThemes: NONE
+    medicalOrTreatmentInformation: NONE
+    profanityOrCrudeHumor: NONE
+    sexualContentGraphicAndNudity: NONE
+    sexualContentOrNudity: NONE
+    violenceCartoonOrFantasy: NONE
+    violenceRealistic: NONE
+    violenceRealisticProlongedGraphicOrSadistic: NONE
+    ageRatingOverrideV2: NONE
+    koreaAgeRatingOverride: NONE
+
+  # Accessibility Nutrition Labels : seul ce qui est vérifié dans apps/ios.
+  # Mode sombre : choix système clair/sombre suivi partout (ThemeManager).
+  # Non déclarés faute de preuve suffisante (voir l'issue isopen-io/meeshy#9752) :
+  # VoiceOver, Voice Control, Larger Text, Reduced Motion, Sufficient
+  # Contrast, Differentiate Without Color Alone, Captions, Audio Descriptions.
+  accessibility:
+    IPHONE:
+      dark_interface: true
+    IPAD:
+      dark_interface: true

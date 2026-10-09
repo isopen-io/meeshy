@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { CommentComposerTools } from '@/components/comment-composer-tools';
 import type { PickedSticker } from '@/components/composer-sticker-sheet';
@@ -6,11 +7,17 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { COMMENT_MAX_LENGTH } from '@/lib/api/publication-comments';
-import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, withCommentPiece } from '@/lib/comments/comment-media';
+import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
+
+import type { CommentDraft } from '@/lib/comments/comment-draft';
+import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, withCommentPiece, type CommentFilesRefusal } from '@/lib/comments/comment-media';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
 import { removePendingAttachment, replacePendingAttachment, type PendingAttachment } from '@/lib/send/attachments';
 import { withReplyMention, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
+import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
+import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
 import { recordingSupported, useRecorder, type RecorderEngine, type RecorderStatus } from '@/lib/view/use-recorder';
@@ -42,6 +49,9 @@ import { recordingSupported, useRecorder, type RecorderEngine, type RecorderStat
  * première pièce jointe : ses vignettes portent « Éditer » et ouvrent la MÊME
  * retouche en série (`composer-retouch.tsx`). */
 const ComposerTray = lazy(() => import('@/components/composer-tray'));
+
+/** LA CAMÉRA (#9736) — le studio de capture du composeur de message, chargé au premier appui. */
+const ComposerCapture = lazy(() => import('@/components/composer-retouch').then((m) => ({ default: m.ComposerCapture })));
 
 /** La cible du ⌄ : 44 px, la taille minimale d'un contrôle au doigt. */
 const FOLD_TARGET_PX = 44;
@@ -88,6 +98,16 @@ export type CommentComposerResult = { readonly ok: boolean; readonly message?: I
  * texte (il est rendu au champ) ; `unconfirmed` l'a posé sans confirmation. */
 type ComposerNotice = { readonly text: string; readonly issue: 'refused' | 'unconfirmed' };
 
+/** LA MONTÉE D'UNE PIÈCE (#9736) — l'hôte qui téléverse la rapporte par
+ * `localId`, de 0 à 1 ; la vignette du plateau la montre. */
+export type CommentUploadReport = (localId: string, fraction: number) => void;
+
+/** UN FICHIER ÉCARTÉ SE DIT (#9736) — jamais une sélection qui ne produit rien. */
+function refusalText(language: InterfaceLanguage, refusal: CommentFilesRefusal): string {
+  if (refusal.reason === 'limit') return translate(language, 'comments.media.limit', { count: String(MAX_POST_MEDIA) });
+  return translate(language, 'comments.media.unsupported', { name: refusal.name });
+}
+
 /** LE MICRO QUI NE S'OUVRE PAS SE DIT (#9318) — les libellés du composeur du fil. */
 const MIC_NOTICE: Readonly<Partial<Record<RecorderStatus, InterfaceCatalogKey>>> = {
   refused: 'composer.mic.refused',
@@ -98,7 +118,7 @@ export type CommentComposerProps = {
   readonly language: InterfaceLanguage;
   /** Le texte, et les photos, GIF, vidéos et sons joints — vocal compris (#9167, #9318) — l'hôte les téléverse
    * (`uploadContext: comment`) avant de les envoyer dans `attachmentIds`. */
-  readonly onSend: (content: string, pending: readonly PendingAttachment[]) => Promise<CommentComposerResult>;
+  readonly onSend: (content: string, pending: readonly PendingAttachment[], report: CommentUploadReport) => Promise<CommentComposerResult>;
   /** Absent ⇒ le composeur laisse place à une invitation à se connecter :
    * `POST /posts/:postId/comments` exige un `registeredUser` (`comments.ts:184`),
    * donc un champ offert à un visiteur anonyme serait un contrôle qui ment. */
@@ -131,6 +151,15 @@ export type CommentComposerProps = {
    * bouton sticker (un contrôle sans effet mentirait).
    */
   readonly onSendSticker?: (picked: PickedSticker) => Promise<CommentComposerResult>;
+  /**
+   * **LE BROUILLON** (#9743) — le texte et les pièces repris à l'ouverture, et
+   * rendus à l'hôte à chaque changement : fermer la feuille ne les perd pas.
+   * Lu UNE fois, au montage ; l'hôte remonte le composeur pour en changer.
+   */
+  readonly draft?: CommentDraft;
+  readonly onDraftChange?: (draft: CommentDraft) => void;
+  /** L'objectif et le rendu du studio de capture — injectés par les témoins. */
+  readonly capture?: { readonly camera?: CameraEngine; readonly render?: StudioRetouchDeps };
   /** Le micro et son horloge — injectés par les témoins ; absent, le micro
    * du navigateur (`useRecorder`), rendu seulement s'il existe. */
   readonly recording?: { readonly engine: RecorderEngine; readonly now?: () => number };
@@ -147,11 +176,25 @@ export function CommentComposer({
   foldOnSend = false,
   onSendSticker,
   recording,
+  capture,
+  draft,
+  onDraftChange,
 }: CommentComposerProps) {
-  const [text, setText] = useState('');
-  const [pending, setPending] = useState<readonly PendingAttachment[]>([]);
+  const [capturing, setCapturing] = useState(false);
+  const [text, setText] = useState(draft?.text ?? '');
+  const [pending, setPending] = useState<readonly PendingAttachment[]>(draft?.pending ?? []);
+  const reportDraft = useRef(onDraftChange);
+  reportDraft.current = onDraftChange;
+  const draftMounted = useRef(false);
+  useEffect(() => {
+    /* Le premier passage ne fait que relire ce que l'hôte vient de donner. */
+    if (draftMounted.current) reportDraft.current?.({ text, pending });
+    draftMounted.current = true;
+  }, [text, pending]);
   const pickerRef = useRef<HTMLInputElement | null>(null);
   const [sending, setSending] = useState(false);
+  /* LA MONTÉE DES PIÈCES EN VOL (#9736) — `null` hors téléversement. */
+  const [uploading, setUploading] = useState<ReadonlyMap<string, number> | null>(null);
   const [notice, setNotice] = useState<ComposerNotice | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const fieldId = useId();
@@ -219,10 +262,16 @@ export function CommentComposer({
        jointes montent d'abord (#9167) : l'optimiste n'existe qu'après elles,
        donc le brouillon RESTE, en vol, jusqu'à l'issue. */
     if (pieces.length === 0) setText('');
-    const result = await onSend(content, pieces);
+    else setUploading(new Map(pieces.map((piece) => [piece.localId, 0])));
+    const result = await onSend(content, pieces, (localId, fraction) =>
+      setUploading((current) => (current === null ? current : new Map(current).set(localId, Math.min(1, Math.max(0, fraction))))),
+    );
+    setUploading(null);
     if (result.ok) {
       setText((current) => (pieces.length > 0 && current === text ? '' : current));
       setPending((current) => (current === base ? [] : current));
+      /* Parties : la rangée du fil lit l'adresse du serveur, l'aperçu local ne sert plus. */
+      pieces.forEach((piece) => releasePreviewUrl(piece.localId));
     }
     setSending(false);
     if (result.message !== undefined) {
@@ -275,6 +324,13 @@ export function CommentComposer({
   const sendRecordingNow = useCallback(() => {
     void recorder.stop().then((piece) => submit(piece));
   }, [recorder, submit]);
+
+  /** CE QUI ENTRE AU PLATEAU — la photothèque et la caméra passent par la même borne et le même refus dit. */
+  const addFiles = (files: readonly File[]) => {
+    const accepted = acceptCommentFiles(pending, files);
+    setPending(accepted.list);
+    setNotice(accepted.refusal === undefined ? null : { text: refusalText(language, accepted.refusal), issue: 'refused' });
+  };
 
   if (!canWrite) {
     return (
@@ -359,15 +415,22 @@ export function CommentComposer({
         <div
           data-comment-tray=""
           aria-busy={sending}
-          className={sending ? 'pointer-events-none opacity-60' : undefined}
+          className={sending ? 'pointer-events-none' : undefined}
           style={{ ['--accent' as string]: 'var(--color-ios-brand)' }}
         >
           <Suspense fallback={null}>
             <ComposerTray
               variant="above"
               pending={pending}
-              onRemove={(localId) => setPending((current) => removePendingAttachment(current, localId))}
-              onReplace={(localId, file) => setPending((current) => replacePendingAttachment(current, localId, file))}
+              onRemove={(localId) => {
+                releasePreviewUrl(localId);
+                setPending((current) => removePendingAttachment(current, localId));
+              }}
+              onReplace={(localId, file) => {
+                releasePreviewUrl(localId);
+                setPending((current) => replacePendingAttachment(current, localId, file));
+              }}
+              {...(uploading === null ? {} : { uploading })}
               notice={null}
               place={null}
               onRemovePlace={() => undefined}
@@ -402,7 +465,7 @@ export function CommentComposer({
         onChange={(e) => {
           const files = Array.from(e.currentTarget.files ?? []);
           e.currentTarget.value = '';
-          if (files.length > 0) setPending((current) => acceptCommentFiles(current, files));
+          if (files.length > 0) addFiles(files);
         }}
       />
       <label className="sr-only" htmlFor={fieldId}>
@@ -495,8 +558,25 @@ export function CommentComposer({
           recordBusy={recorder.state.status === 'requesting'}
           onEmoji={insertEmoji}
           onSticker={onSendSticker === undefined ? undefined : (picked) => void sendSticker(picked)}
+          onCamera={() => setCapturing(true)}
         />
       )}
+      {capturing
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ComposerCapture
+                onCancel={() => setCapturing(false)}
+                onDone={(file) => {
+                  setCapturing(false);
+                  addFiles([file]);
+                }}
+                {...(capture?.camera === undefined ? {} : { camera: capture.camera })}
+                {...(capture?.render === undefined ? {} : { render: capture.render })}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
       {/**
        * L'ANNONCE — `performComment` distingue « parti » de « posé mais non
        * confirmé » ; sans ce texte, le second serait indiscernable du

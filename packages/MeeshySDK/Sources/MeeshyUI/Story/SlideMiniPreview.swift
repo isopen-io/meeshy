@@ -381,7 +381,7 @@ public struct SlideMiniPreview: View {
     /// note le dit — la vignette du texte approxime déjà pour la même raison.
     @ViewBuilder
     private func audioLayer(in size: CGSize) -> some View {
-        let pastilles = effects.audioPlayerObjects ?? []
+        let pastilles = SceneAudioStageRule.stagedAudios(in: effects.audioPlayerObjects ?? [])
         ForEach(pastilles) { audio in
             let côté = max(4, size.width * 0.16)
             Image(systemName: "music.note")

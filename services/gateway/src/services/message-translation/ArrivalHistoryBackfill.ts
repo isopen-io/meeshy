@@ -5,6 +5,7 @@ import { SUPPORTED_LANGUAGE_CODES } from '@meeshy/shared/utils/language-codes';
 import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, applyHistoryFloor, loadHistoryFloorsFor } from '../historyFloor';
+import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../personalHistoryFilter';
 import { subscribeConversationLanguageChanges } from './conversationLanguageChanges';
 
 const logger = enhancedLogger.child({ module: 'ArrivalHistoryBackfill' });
@@ -93,7 +94,7 @@ type Candidate = BackfillMessage & ProtectionFlags & {
 };
 
 export type ArrivalBackfillDeps = {
-  readonly prisma: Pick<PrismaClient, 'conversation' | 'participant' | 'message' | 'conversationShareLink'>;
+  readonly prisma: PrismaClient;
   /** Le pipeline EXISTANT (ZMQ → traducteur → `translationReady` → `message:translation`). */
   readonly translate: (message: BackfillMessage, targetLanguage: string) => Promise<unknown>;
 };
@@ -103,6 +104,11 @@ export type ArrivalBackfillInput = {
   readonly language: string;
   /** Les messages écrits APRÈS l'arrivée partent déjà vers la langue par le chemin d'envoi. */
   readonly arrivedAt: Date;
+  /**
+   * Le compte qui arrive (`null` pour un invité) : ce qu'il a masqué de SA vue
+   * (historique effacé, messages supprimés pour lui) ne lui est pas retraduit.
+   */
+  readonly readerUserId: string | null;
 };
 
 const isBlurred = (carrier: ProtectionFlags): boolean =>
@@ -186,8 +192,13 @@ export async function backfillHistoryForArrival(
   if (floor === undefined) return [];
   if (floor !== null && floor >= input.arrivedAt) return [];
 
+  const hiding = await loadPersonalHistoryHiding(deps.prisma, {
+    userId: input.readerUserId,
+    conversationId: input.conversationId,
+  });
+
   const recent = (await deps.prisma.message.findMany({
-    where: applyHistoryFloor(
+    where: applyPersonalHistoryHiding(applyHistoryFloor(
       {
         conversationId: input.conversationId,
         messageType: 'text',
@@ -206,7 +217,7 @@ export async function backfillHistoryForArrival(
         ],
       },
       floor,
-    ),
+    ), hiding),
     orderBy: { createdAt: 'desc' },
     take: ARRIVAL_BACKFILL_DEPTH,
     select: CANDIDATE_SELECT,
@@ -257,7 +268,7 @@ export class ArrivalHistoryBackfill {
     private readonly now: () => Date = () => new Date(),
   ) {
     this.unsubscribe = subscribeConversationLanguageChanges((change) => {
-      if (change.kind === 'arrival') this.schedule(change.conversationId, change.language);
+      if (change.kind === 'arrival') this.schedule(change.conversationId, change.language, change.readerUserId);
     });
   }
 
@@ -265,7 +276,7 @@ export class ArrivalHistoryBackfill {
     this.unsubscribe();
   }
 
-  private schedule(conversationId: string, rawLanguage: string | null | undefined): void {
+  private schedule(conversationId: string, rawLanguage: string | null | undefined, readerUserId: string | null): void {
     const language = catalogLanguage(rawLanguage);
     if (!language) return;
 
@@ -279,7 +290,7 @@ export class ArrivalHistoryBackfill {
     }
     this.remember(key, arrivedAt.getTime());
 
-    backfillHistoryForArrival(this.deps, { conversationId, language, arrivedAt }).catch((error: unknown) => {
+    backfillHistoryForArrival(this.deps, { conversationId, language, arrivedAt, readerUserId }).catch((error: unknown) => {
       this.recent.delete(key);
       logger.warn('arrival backfill failed — nothing translated', { conversationId, language, error });
     });

@@ -39,6 +39,7 @@ import {
   type SocialEventsDeps,
 } from '../social/events';
 import { registerShareRoutes } from './share';
+import { viewerListRequest, viewerListRefused } from './viewerListRequest';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -637,7 +638,8 @@ export function registerInteractionRoutes(
     }
   });
 
-  // GET /posts/:postId/views — Story/post seen-by list (author only)
+  // GET /posts/:postId/views — l'ancienne liste « Vu par », sous la porte de la liste enrichie
+  // (`viewerListAccess` : auteur d'une story ; ADMIN/BIGBOSS pour tout contenu, lecture tracée)
   fastify.get('/posts/:postId/views', {
     schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
@@ -654,7 +656,8 @@ export function registerInteractionRoutes(
       // unbounded client `limit` into Prisma `take`), and treats `limit=0` as 1.
       const { limit, offset } = validatePagination(query.offset, query.limit, { defaultLimit: 50, maxLimit: 100 });
 
-      const result = await postService.getPostViews(postId, authContext.registeredUser.id, limit, offset);
+      const asked = viewerListRequest(request, authContext.registeredUser.role);
+      const result = await postService.getPostViews(postId, authContext.registeredUser.id, limit, offset, asked);
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
@@ -663,15 +666,16 @@ export function registerInteractionRoutes(
         pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
       });
     } catch (error) {
-      if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return sendForbidden(reply, 'Only the author can view this list', { code: 'FORBIDDEN' });
-      }
+      if (viewerListRefused(reply, error)) return;
       enhancedLogger.error('[GET /posts/:postId/views]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
-  // GET /posts/:postId/interactions — Story viewers enriched with reactions & replies (author only)
+  // GET /posts/:postId/interactions — la liste des vues d'un contenu, chaque personne avec ce qu'elle
+  // y a fait (#9727) — l'auteur d'une story ; pour un post ou un réel, ADMIN/BIGBOSS seuls (l'auteur
+  // n'en voit que les nombres), chaque lecture administrateur tracée (#9733) ;
+  // `engagement: 'unavailable'` dit que le détail n'a pas pu être établi
   fastify.get('/posts/:postId/interactions', {
     schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
@@ -688,18 +692,19 @@ export function registerInteractionRoutes(
       // unbounded client `limit` into Prisma `take`), and treats `limit=0` as 1.
       const { limit, offset } = validatePagination(query.offset, query.limit, { defaultLimit: 50, maxLimit: 100 });
 
-      const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset);
+      const asked = viewerListRequest(request, authContext.registeredUser.role);
+      const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset, asked);
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      return sendSuccess(reply, { viewers: result.viewers }, {
-        pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
-      });
+      return sendSuccess(
+        reply,
+        { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}) },
+        { pagination: { total: result.total, offset, limit, hasMore: result.hasMore } },
+      );
     } catch (error) {
-      if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return sendForbidden(reply, 'Only the author can view interactions', { code: 'FORBIDDEN' });
-      }
+      if (viewerListRefused(reply, error)) return;
       enhancedLogger.error('[GET /posts/:postId/interactions]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }

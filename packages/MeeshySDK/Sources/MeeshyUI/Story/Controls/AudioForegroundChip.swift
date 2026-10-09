@@ -238,6 +238,7 @@ public struct AudioForegroundChip: View {
             // mettrait la coordonnée elle-même à l'échelle — une puce à droite
             // de la scène partirait hors cadre en grandissant.
             .scaleEffect(renderedScale)
+            .rotationEffect(.degrees(audioObject.rotation ?? 0))
             .position(
                 x: max(0, min(canvasSize.width, audioObject.x * canvasSize.width)) + dragOffset.width,
                 y: max(0, min(canvasSize.height, audioObject.y * canvasSize.height)) + dragOffset.height
@@ -676,7 +677,7 @@ public struct AudioForegroundReaderOverlay: View {
                                      elapsed: TimeInterval,
                                      slideDuration: TimeInterval) -> [StoryAudioPlayerObject] {
         audios.filter { audio in
-            guard audio.isBackground != true else { return false }
+            guard SceneAudioStageRule.isStaged(audio) else { return false }
             let start = Double(audio.startTime ?? 0)
             let end = audio.duration.map { start + Double($0) } ?? slideDuration
             return elapsed >= start && elapsed <= end

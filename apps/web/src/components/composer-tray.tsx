@@ -67,6 +67,10 @@ export type ComposerTrayProps =
        * (`composer.chip.kind.location`). */
       readonly place: SharedPlace | null;
       readonly onRemovePlace: () => void;
+      /** LA MONTÉE DE CHAQUE PIÈCE (#9736), par `localId`, de 0 à 1 — l'hôte
+       * qui garde le plateau ouvert pendant l'envoi (un commentaire) la
+       * donne ; une pièce qui monte ne s'édite ni ne se retire. */
+      readonly uploading?: ReadonlyMap<string, number>;
     }
   | ({ readonly variant: 'panel' } & ComposerAttachmentPanelProps);
 
@@ -269,9 +273,12 @@ function PreviewTile({
   attachment,
   onRemove,
   onEdit,
+  progress,
 }: {
   readonly attachment: PendingAttachment;
   readonly onRemove: () => void;
+  /** Présent ⇒ la pièce MONTE (#9736) : sa part, de 0 à 1. */
+  readonly progress?: number;
   /** « Éditer » (#8416, #9119) — toucher la vignette d'une image, d'une
    * vidéo ou d'un audio l'ÉDITE ; son centre le dit (`pendingTileGlyph`). */
   readonly onEdit?: () => void;
@@ -291,7 +298,9 @@ function PreviewTile({
     () => (attachment.kind === 'image' || attachment.kind === 'video' ? previewUrlFor(attachment.localId, attachment.file) : undefined),
     [attachment.localId, attachment.file, attachment.kind],
   );
-  const glyph = onEdit === undefined ? null : pendingTileGlyph({ kind: attachment.kind, mimeType: attachment.file.type });
+  const mounting = progress !== undefined;
+  const glyph = onEdit === undefined || mounting ? null : pendingTileGlyph({ kind: attachment.kind, mimeType: attachment.file.type });
+  const language = currentInterfaceLanguage();
 
   const face = (
     <div
@@ -300,10 +309,34 @@ function PreviewTile({
     >
       {previewUrl !== undefined && attachment.kind === 'image' ? <img src={previewUrl} alt="" className="size-full object-cover" /> : null}
       {previewUrl !== undefined && attachment.kind === 'video' ? (
-        <video src={previewUrl} muted playsInline preload="metadata" className="size-full object-cover" aria-hidden />
+        /* `#t` — sans lui, Safari et la WebView ne peignent AUCUNE image d'une
+           vidéo qui n'a pas joué : la vignette restait un carré vide (#9736). */
+        <video src={`${previewUrl}#t=0.001`} muted playsInline preload="metadata" className="size-full object-cover" aria-hidden />
       ) : null}
-      {previewUrl === undefined && glyph === null ? (
-        <Glyph name={attachment.kind === 'audio' ? 'microphone' : 'file'} size={22} style={{ color: 'var(--accent)' }} />
+      {/* UN SON OU UN FICHIER SE RECONNAÎT (#9736) — son glyphe reste quand la
+          vignette s'édite : au centre sans crayon, au coin avec lui. */}
+      {previewUrl === undefined ? (
+        <span
+          data-pending-kind={attachment.kind}
+          className={glyph === null ? 'grid' : 'absolute grid'}
+          style={glyph === null ? undefined : { insetInlineStart: 4, bottom: 4 }}
+          aria-hidden
+        >
+          <Glyph name={attachment.kind === 'audio' ? 'microphone' : 'file'} size={glyph === null ? 22 : 14} style={{ color: 'var(--accent)' }} />
+        </span>
+      ) : null}
+      {mounting ? (
+        <span
+          role="progressbar"
+          aria-label={attachment.name}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+          className="absolute inset-0 flex items-end"
+          style={{ backgroundColor: 'rgb(0 0 0 / 0.35)' }}
+        >
+          <span className="block" style={{ height: 4, width: `${Math.round(progress * 100)}%`, backgroundColor: 'var(--accent)' }} />
+        </span>
       ) : null}
       {glyph === 'edit' ? (
         <span data-pending-glyph="edit" className="absolute inset-0 grid place-items-center" aria-hidden>
@@ -318,7 +351,7 @@ function PreviewTile({
   );
 
   return (
-    <div className="relative shrink-0" style={{ width: 56 }}>
+    <div data-pending-tile={attachment.localId} className="relative shrink-0" style={{ width: 56 }}>
       {/* « ÉDITER » (#9119) — TOUTE la vignette est le geste, le crayon en
           son centre le nomme (miroir de la tuile iOS). */}
       {glyph === 'edit' && onEdit !== undefined ? (
@@ -326,7 +359,7 @@ function PreviewTile({
           type="button"
           data-composer-edit
           onClick={onEdit}
-          aria-label={translate(currentInterfaceLanguage(), 'composer.attachment.edit', { name: attachment.name })}
+          aria-label={translate(language, 'composer.attachment.edit', { name: attachment.name })}
           className="block rounded-[10px]"
         >
           {face}
@@ -337,20 +370,23 @@ function PreviewTile({
       {/* « Supprimer » — cible de 32 px au coin, AU-DESSUS de la vignette :
           elle ne couvre plus le centre, qui appartient à « Éditer » (une
           cible de 44 px y débordait jusqu'au milieu d'une vignette de 56). */}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="absolute -right-2 -top-2 z-10 grid size-8 place-items-center"
-        aria-label={`Supprimer ${attachment.name}`}
-      >
-        <span
-          className="grid size-[18px] place-items-center rounded-full text-white"
-          style={{ backgroundColor: 'var(--color-error)' }}
-          aria-hidden
+      {mounting ? null : (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="absolute -top-2 z-10 grid size-8 place-items-center"
+          style={{ insetInlineEnd: -8 }}
+          aria-label={translate(language, 'composer.attachment.remove', { name: attachment.name })}
         >
-          <Glyph name="x" size={10} />
-        </span>
-      </button>
+          <span
+            className="grid size-[18px] place-items-center rounded-full text-white"
+            style={{ backgroundColor: 'var(--color-error)' }}
+            aria-hidden
+          >
+            <Glyph name="x" size={10} />
+          </span>
+        </button>
+      )}
       <span className="mt-1 block truncate text-check" style={{ width: 60 }}>
         {attachment.name}
       </span>
@@ -397,10 +433,12 @@ function PreviewStrip({
   pending,
   onRemove,
   onReplace,
+  uploading,
 }: {
   readonly pending: readonly PendingAttachment[];
   readonly onRemove: (localId: string) => void;
   readonly onReplace?: (localId: string, file: File) => void;
+  readonly uploading?: ReadonlyMap<string, number>;
 }) {
   /** L'image en RETOUCHE (#8416) — la couche vit en PORTAIL sur `body` : le
    * plateau peut être posé dans un conteneur qui romprait `position: fixed`. */
@@ -437,12 +475,14 @@ function PreviewStrip({
       >
         {pending.map((attachment) => {
           const onEdit = editOf(attachment);
+          const progress = uploading?.get(attachment.localId);
           return (
             <PreviewTile
               key={attachment.localId}
               attachment={attachment}
               onRemove={() => onRemove(attachment.localId)}
               {...(onEdit !== undefined ? { onEdit } : {})}
+              {...(progress !== undefined ? { progress } : {})}
             />
           );
         })}
@@ -594,7 +634,12 @@ export default function ComposerTray(props: ComposerTrayProps) {
   return (
     <>
       {props.pending.length > 0 ? (
-        <PreviewStrip pending={props.pending} onRemove={props.onRemove} {...(props.onReplace !== undefined ? { onReplace: props.onReplace } : {})} />
+        <PreviewStrip
+          pending={props.pending}
+          onRemove={props.onRemove}
+          {...(props.onReplace !== undefined ? { onReplace: props.onReplace } : {})}
+          {...(props.uploading !== undefined ? { uploading: props.uploading } : {})}
+        />
       ) : null}
       {props.place !== null ? <PlaceChip place={props.place} onRemove={props.onRemovePlace} /> : null}
       {props.notice !== null ? <NoticeBanner notice={props.notice} /> : null}

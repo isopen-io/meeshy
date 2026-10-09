@@ -1,4 +1,4 @@
-import type { CanvasDocument, CanvasObject, CanvasScene } from '@/lib/canvas/document';
+import { isBackgroundAudio, type CanvasDocument, type CanvasObject, type CanvasScene } from '@/lib/canvas/document';
 import { authoredDuration } from '@/lib/canvas/pose';
 
 /**
@@ -55,4 +55,14 @@ export function isDocumentCinematic(document: CanvasDocument): boolean {
 export function isDocumentAudible(document: CanvasDocument): boolean {
   if (document.sound !== undefined) return true;
   return document.scenes.some((scene) => scene.objects.some(objectSounds));
+}
+
+/**
+ * CE QUI SONNE SUR LA SCÈNE (#9737) — un son de premier plan, une vidéo non
+ * muette. Le son de FOND n'en est pas : il ne produit aucun pixel sur la
+ * scène, donc ni pastille « son coupé » ni bouton posé dessus ; son crédit,
+ * hors scène, le dit et le coupe.
+ */
+export function documentSoundsOnStage(document: CanvasDocument): boolean {
+  return document.scenes.some((scene) => scene.objects.some((object) => objectSounds(object) && !isBackgroundAudio(object)));
 }

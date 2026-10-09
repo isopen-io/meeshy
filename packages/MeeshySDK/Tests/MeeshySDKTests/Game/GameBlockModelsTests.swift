@@ -13,7 +13,7 @@ struct GameBlockModelsTests {
         #expect(block.level.level == 34)
         #expect(block.level.tier == .eclat)
         #expect(block.level.record == 36)
-        #expect(block.level.nextThreshold == 12_250)
+        #expect(block.level.nextThreshold == 122_500)
         #expect(block.glory.rank == .voix)
         #expect(block.glory.division == .iii)
         #expect(block.glory.division5 == .v)

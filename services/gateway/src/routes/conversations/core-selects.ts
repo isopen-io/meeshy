@@ -5,6 +5,7 @@
  * `select`/`include` et leurs doc-comments d'origine, déplacés verbatim.
  */
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { PREVIEW_ATTACHMENT_SUMMARY_LIMIT } from './utils/last-message-nature';
 import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
@@ -145,6 +146,7 @@ export const conversationLastMessagePreviewSelect = {
     // 1,4 Mo ») lit toutes les pièces jointes ; la liste n'en SERT que la
     // première (`core-list.ts`). Même borne que le socket.
     take: PREVIEW_ATTACHMENT_SUMMARY_LIMIT,
+    orderBy: MESSAGE_ATTACHMENT_ORDER,
     select: {
       id: true,
       mimeType: true,

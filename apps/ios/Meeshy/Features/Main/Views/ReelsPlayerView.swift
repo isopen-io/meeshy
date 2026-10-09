@@ -315,7 +315,10 @@ struct ReelsPlayerView: View {
         // va de N±2 à N±10 selon l'usage, chaque palier prépare ce qu'il
         // mérite (lecteur à N±1, fichier au-delà). Relancé à chaque réel
         // affiché ; un swipe rapide annule la préparation devenue inutile.
-        .task(id: viewModel.currentId) {
+        // Relancé aussi quand la SUITE change sous le même réel (relecture au
+        // démarrage, page de plus à portée) : la fenêtre raisonne sur la liste
+        // que le pager parcourt, pas sur celle du balayage précédent.
+        .task(id: ReelThreadOrder.preloadScope(ids: viewModel.reels.map(\.id), anchorId: viewModel.currentId)) {
             let reels = viewModel.reels
             guard let activeIndex = reels.firstIndex(where: { $0.id == viewModel.currentId }) else { return }
             let window = preloader.enter(index: activeIndex)
@@ -552,10 +555,10 @@ struct ReelPageView: View {
 
     /// The audio media for an audio reel, else `nil`. Drives the immersive
     /// transcript hero + the audio control + audio-language flag strip.
-    var audioMedia: FeedMedia? {
-        guard let media = reel.primaryReelDisplayMedia, media.type == .audio else { return nil }
-        return media
-    }
+    /// `nil` pour un réel COMPOSÉ (#9737) : le son d'une scène est joué par la
+    /// scène — la commande audio posée dessus en peignait le spectre et le
+    /// faisait jouer une seconde fois par le moteur de la page.
+    var audioMedia: FeedMedia? { reel.reelPrincipalAudioMedia }
 
     /// Piste « son EMPRUNTÉ à la bibliothèque » d'un réel SANS scène ni média :
     /// la page la joue elle-même. Un réel composé en est exclu — sa scène joue

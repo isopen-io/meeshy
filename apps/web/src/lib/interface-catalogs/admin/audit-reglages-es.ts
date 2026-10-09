@@ -146,6 +146,8 @@ const f = {
   'admin.audit.action.ADMIN_COMMUNITY_UPDATED.explain': 'Un administrador cambió la activación o la visibilidad de una comunidad.',
   'admin.audit.action.DELETE_POST': 'Publicación retirada',
   'admin.audit.action.DELETE_POST.explain': 'Un tercero autorizado, y no su autor, retiró un contenido: es un gesto de moderación.',
+  'admin.audit.action.ADMIN_POST_VIEWERS_VIEWED': 'Lista de vistas de un contenido leída',
+  'admin.audit.action.ADMIN_POST_VIEWERS_VIEWED.explain': 'Lectura soberana de quién vio un contenido y de lo que cada persona hizo en él: el autor de una publicación o de un reel solo ve los números.',
   'admin.audit.action.CREATE_BROADCAST': 'Difusión creada',
   'admin.audit.action.CREATE_BROADCAST.explain': 'Se creó el borrador de una difusión.',
   'admin.audit.action.SEND_BROADCAST': 'Difusión enviada por correo',

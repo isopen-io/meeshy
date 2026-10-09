@@ -142,6 +142,96 @@ describe('BackgroundSoundCredit', () => {
     await act(async () => root.render(<BackgroundSoundCredit document={sceneWith({ soundId: 'snd1' })} language="fr" surface="card" measure={fitting} />));
     const badge = container.querySelector('[data-sound-credit="credit"]');
     expect(spoken(badge).trim()).toBe('Son de la bibliothèque');
-    expect(badge?.textContent).toContain('♫ —');
+    expect(badge?.textContent).toContain('—');
+    expect(badge?.textContent).not.toContain('♫');
+  });
+});
+
+/**
+ * LA NOTE EST LE CONTRÔLE (#9698, directive porteur 2026-10-08, miroir
+ * `BackgroundSoundNote`) — elle précède TOUJOURS le crédit ; quand l'hôte a un
+ * son à couper, elle devient le bouton qui le coupe et se BARRE.
+ */
+describe('BackgroundSoundCredit — la note', () => {
+  const borrowed = () => sceneWith({ soundId: 'snd1', name: 'Pluie en forêt', soundAuthorUsername: 'sam' });
+  const toggle = () => container.querySelector<HTMLButtonElement>('[data-sound-toggle]');
+
+  test('la note précède le crédit comme la sinusoïde, et n’est pas un bouton sans contrôle', async () => {
+    await act(async () => root.render(<BackgroundSoundCredit document={borrowed()} language="fr" surface="card" measure={fitting} />));
+    const badge = container.querySelector('[data-sound-credit="credit"]');
+    expect(badge?.firstElementChild?.getAttribute('data-sound-note')).toBe('plain');
+    expect(toggle()).toBeNull();
+    await act(async () => root.render(<BackgroundSoundCredit document={sceneWith({})} language="fr" surface="card" />));
+    expect(container.querySelector('[data-sound-credit="original"] [data-sound-note="plain"]')).not.toBeNull();
+    expect(toggle()).toBeNull();
+  });
+
+  test('avec un contrôle, la note est un bouton « Couper le son de fond » non enfoncé, et le toucher appelle l’hôte sans remonter au plateau', async () => {
+    let toggles = 0;
+    let bubbled = 0;
+    await act(async () =>
+      root.render(
+        <div onClick={() => (bubbled += 1)}>
+          <BackgroundSoundCredit document={borrowed()} language="fr" surface="media" measure={fitting} control={{ muted: false, onToggle: () => (toggles += 1) }} />
+        </div>,
+      ),
+    );
+    const button = toggle();
+    expect(button?.tagName).toBe('BUTTON');
+    expect(button?.getAttribute('type')).toBe('button');
+    expect(button?.getAttribute('aria-pressed')).toBe('false');
+    expect(button?.getAttribute('aria-label')).toBe('Couper le son de fond');
+    expect(button?.querySelector('[data-sound-note="plain"]')).not.toBeNull();
+    await act(async () => button?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(toggles).toBe(1);
+    expect(bubbled).toBe(0);
+    expect(spoken(container.querySelector('[data-sound-credit="credit"]'))).toContain('Son : Pluie en forêt · @sam');
+  });
+
+  test('coupé ⇒ la note est BARRÉE, le bouton enfoncé se nomme « Réactiver le son de fond », le crédit se fige', async () => {
+    await act(async () =>
+      root.render(
+        <BackgroundSoundCredit
+          document={borrowed()}
+          language="fr"
+          surface="media"
+          measure={overflowing}
+          reducedMotion={() => false}
+          control={{ muted: true, onToggle: () => undefined }}
+        />,
+      ),
+    );
+    const button = toggle();
+    expect(button?.getAttribute('aria-pressed')).toBe('true');
+    expect(button?.getAttribute('aria-label')).toBe('Réactiver le son de fond');
+    expect(button?.querySelector('[data-sound-note="barred"] [data-sound-bar]')).not.toBeNull();
+    const badge = container.querySelector('[data-sound-credit="credit"]');
+    expect(badge?.getAttribute('data-sound-marquee')).toBe('static');
+    expect(badge?.querySelectorAll('[data-sound-copy]').length).toBe(1);
+  });
+
+  test('la piste originale porte le même bouton, et reste nommée « Son original »', async () => {
+    await act(async () =>
+      root.render(<BackgroundSoundCredit document={sceneWith({})} language="fr" surface="media" control={{ muted: true, onToggle: () => undefined }} />),
+    );
+    const badge = container.querySelector('[data-sound-credit="original"]');
+    expect(badge?.getAttribute('role')).toBeNull();
+    expect(badge?.querySelector('[data-sound-toggle]')?.getAttribute('aria-label')).toBe('Réactiver le son de fond');
+    expect(badge?.querySelector('[data-sound-note="barred"]')).not.toBeNull();
+    expect(badge?.textContent).toContain('Son original');
+  });
+
+  test('sans titre, le crédit dit la date du son dans la langue du lecteur', async () => {
+    await act(async () =>
+      root.render(
+        <BackgroundSoundCredit
+          document={sceneWith({ soundId: 'snd1', soundAuthorUsername: 'sam', soundCreatedAt: '2026-03-12T12:00:00.000Z' })}
+          language="fr"
+          surface="card"
+          measure={fitting}
+        />,
+      ),
+    );
+    expect(container.querySelector('[data-sound-copy]')?.textContent).toBe('@sam · 12 mars 2026');
   });
 });

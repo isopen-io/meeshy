@@ -54,7 +54,7 @@ extension PostDetailView {
                     if !commentAttachments.isEmpty || pendingPlace != nil {
                         CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
                             commentAttachments.removeAll { $0.id == id }
-                        }, place: pendingPlace, onRemovePlace: { pendingPlace = nil })
+                        }, place: pendingPlace, onRemovePlace: { pendingPlace = nil }, accentColor: accentColor)
                     }
                 }
             ),
@@ -95,10 +95,10 @@ extension PostDetailView {
         .fileImporter(
             isPresented: $showCommentFilePicker,
             allowedContentTypes: [.item],
-            allowsMultipleSelection: false
+            allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
-                commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
+                CommentAttachmentIntake.admit(CommentComposerStaging.fileAttachments(from: urls), into: &commentAttachments)
             }
         }
         .sheet(isPresented: $showCommentLocationPicker) {
@@ -115,14 +115,19 @@ extension PostDetailView {
             guard apres != nil, avant != apres else { return }
             composerFocusTrigger = true
         }
+        // Ce qu'on choisit REJOINT la zone, aussitôt (#9736) : il remplaçait
+        // ce qui s'y trouvait, et n'apparaissait qu'une fois son fichier lu.
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
-            Task {
-                commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
-                await MainActor.run { commentPhotoItems = [] }
-            }
+            guard !items.isEmpty else { return }
+            commentPhotoItems = []
+            CommentAttachmentIntake.stage(items, into: $commentAttachments)
         }
         // « Éditer » une pièce jointe : la scène du composeur (#9127).
         .commentSceneRetouch(attachments: $commentAttachments)
+        // La caméra, à droite de « Photos » comme dans un message (#9736).
+        .commentCamera(attachments: $commentAttachments)
+        // #9743 — un commentaire non envoyé auquel l'auteur renonce quitte la liste.
+        .unsentComments(restore: {}, discard: { viewModel.discardUnsentComment($0) }, draft: $composerText)
     }
 
     // MARK: - Reply targeting
@@ -165,9 +170,7 @@ extension PostDetailView {
             CommentComposerIngestion.files(from: ingests),
             accentColor: accentColor
         ) { staged in
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                commentAttachments.append(contentsOf: staged)
-            }
+            CommentAttachmentIntake.admit(staged, into: &commentAttachments)
         }
     }
 
@@ -177,8 +180,9 @@ extension PostDetailView {
             return
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let media = CommentComposerStaging.firstPendingMedia(in: attachments)
-        commentAttachments.removeAll()
+        let media = CommentComposerStaging.pendingMedia(in: attachments)
+        let staged = commentAttachments
+        commentAttachments = CommentAttachmentIntake.stillLoading(commentAttachments)
         let place = pendingPlace
         pendingPlace = nil
         // **La citation se LIT puis s'EFFACE, dans le même geste** (#6578) :
@@ -186,7 +190,7 @@ extension PostDetailView {
         // un réglage collant, alors qu'elle décrit UNE phrase.
         let citation = CommentQuotationStore.shared.quotation(for: postId)
         CommentQuotationStore.shared.clear(for: postId)
-        guard !trimmed.isEmpty || media != nil || place != nil || citation != nil else { return }
+        guard !trimmed.isEmpty || !media.isEmpty || place != nil || citation != nil else { return }
         let flags = commentEffects.flags.rawValue | (commentBlurEnabled ? MessageEffectFlags.blurred.rawValue : 0)
         commentEffects = .none
         commentBlurEnabled = false
@@ -196,13 +200,21 @@ extension PostDetailView {
         // #6587 — la pastille DÉCLARE la langue ; sans ce relais, le serveur la devine.
         let lang = composerLanguage
         Task {
-            if let media {
-                await viewModel.submitCommentWithMedia(trimmed, originalLanguage: lang, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place, quoted: citation)
+            let sent: Bool
+            if !media.isEmpty {
+                sent = await viewModel.submitCommentWithMedia(trimmed, originalLanguage: lang, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place, quoted: citation)
             } else if parentId != nil {
-                await viewModel.sendReply(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place, quoted: citation)
+                sent = await viewModel.sendReply(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place, quoted: citation)
             } else {
-                await viewModel.sendComment(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place, quoted: citation)
+                sent = await viewModel.sendComment(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place, quoted: citation)
             }
+            // **Rien n'a pu partir ni rejoindre la file** (#9743) : le
+            // commentaire revient dans le composeur, texte, pièces et lieu
+            // compris, pour être renvoyé d'un toucher.
+            guard !sent else { return }
+            if composerText.isEmpty { composerText = trimmed }
+            if commentAttachments.isEmpty { commentAttachments = staged }
+            if pendingPlace == nil { pendingPlace = place }
         }
     }
 
@@ -219,8 +231,9 @@ extension PostDetailView {
         }
         let duration = audioRecorder.duration
         guard let url = audioRecorder.stopRecording() else { return false }
-        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
-        return true
+        return !CommentAttachmentIntake.admit(
+            [CommentComposerStaging.voiceAttachment(duration: duration, url: url)], into: &commentAttachments
+        ).isEmpty
     }
 
     private func stopAndSendCommentRecording() {

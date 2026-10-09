@@ -206,9 +206,9 @@ struct GameBricksRenderTests {
     func emblemWatermarkIsTransparent() throws {
         let full = try probe(TierEmblemView(tier: .etoile))
         let watermark = try probe(TierEmblemView(tier: .etoile, opacity: 0.18))
-        let empty = try probe(Color.clear)
-        #expect(watermark.distance(to: empty) < full.distance(to: empty))
-        #expect(watermark.distance(to: empty) > 0)
+        #expect(watermark.ink < full.ink)
+        #expect(watermark.ink > 0)
+        #expect(watermark.coverage > 0.05)
     }
 
     @Test("l'anneau porte l'emblème du palier : deux paliers de même niveau ne se confondent pas, et le disque central est peint")

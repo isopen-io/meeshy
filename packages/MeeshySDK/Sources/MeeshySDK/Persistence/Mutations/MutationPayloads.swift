@@ -693,6 +693,29 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     /// la relecture ferait disparaître SANS ERREUR toute la file gravée avant la
     /// mise à jour de l'app.
     public let quotedPostMediaId: String?
+    /// **Les pièces du commentaire, encore sur le disque** (#9743) — chemins
+    /// relatifs sous `Documents/pending-media/<cmid>/`, résolus par
+    /// `OfflineQueue.absoluteMediaPath(forStored:)`. Le dispatcher les
+    /// téléverse au rejeu puis crée le commentaire avec leurs ids : sans ce
+    /// champ, un commentaire envoyé hors ligne arrivait SANS son média. Même
+    /// mécanisme que `CreatePostPayload.localMediaPaths`. `nil` pour un
+    /// commentaire sans pièce, et pour toute ligne gravée avant le champ.
+    public let localMediaPaths: [String]?
+    /// Le MIME DÉCLARÉ de chaque pièce, aligné par index sur `localMediaPaths`.
+    public let localMediaMimeTypes: [String]?
+    /// Ce qu'une tentative précédente a déjà monté, par index d'origine.
+    public let uploadedMedia: [UploadedCommentMedia]?
+    /// Transcription produite sur l'appareil pour une pièce audio.
+    public let mobileTranscription: MobileTranscriptionPayload?
+    /// **Le compte qui a ÉCRIT ce commentaire** (#9743). La ligne vit dans la
+    /// base de son compte, mais l'enfilement d'un envoi qui échoue arrive
+    /// APRÈS une attente réseau : entre-temps le compte a pu changer, et la
+    /// file — un singleton rebranché à la bascule — aurait rejoué le
+    /// commentaire, pièces comprises, sous le jeton du compte SUIVANT.
+    /// L'auteur voyage donc DANS la charge, et le rejeu le compare au compte
+    /// courant. `nil` pour une ligne gravée avant le champ — qui, faute
+    /// d'auteur lisible, ne se rejoue JAMAIS (fail-closed).
+    public let authorId: String?
 
     public init(
         clientMutationId: String,
@@ -700,9 +723,16 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         parentCommentId: String?,
         content: String,
         originalLanguage: String?,
+        /// REQUIS, sans défaut : c'est le compilateur qui impose à chaque
+        /// site d'envoi de dire QUI écrit. Une charge sans auteur ne part pas.
+        authorId: String?,
         location: SharedPlace? = nil,
         effectFlags: Int? = nil,
-        quotedPostMediaId: String? = nil
+        quotedPostMediaId: String? = nil,
+        localMediaPaths: [String]? = nil,
+        localMediaMimeTypes: [String]? = nil,
+        uploadedMedia: [UploadedCommentMedia]? = nil,
+        mobileTranscription: MobileTranscriptionPayload? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.postId = postId
@@ -712,11 +742,17 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         self.location = location
         self.effectFlags = effectFlags
         self.quotedPostMediaId = quotedPostMediaId
+        self.localMediaPaths = localMediaPaths
+        self.localMediaMimeTypes = localMediaMimeTypes
+        self.uploadedMedia = uploadedMedia
+        self.mobileTranscription = mobileTranscription
+        self.authorId = authorId
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         clientMutationId = try c.decode(String.self, forKey: .clientMutationId)
+        authorId = try c.decodeIfPresent(String.self, forKey: .authorId)
         postId = try c.decode(String.self, forKey: .postId)
         parentCommentId = try c.decodeIfPresent(String.self, forKey: .parentCommentId)
         content = try c.decode(String.self, forKey: .content)
@@ -724,6 +760,10 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         effectFlags = try c.decodeIfPresent(Int.self, forKey: .effectFlags)
         quotedPostMediaId = try c.decodeIfPresent(String.self, forKey: .quotedPostMediaId)
+        localMediaPaths = try c.decodeIfPresent([String].self, forKey: .localMediaPaths)
+        localMediaMimeTypes = try c.decodeIfPresent([String].self, forKey: .localMediaMimeTypes)
+        uploadedMedia = try c.decodeIfPresent([UploadedCommentMedia].self, forKey: .uploadedMedia)
+        mobileTranscription = try c.decodeIfPresent(MobileTranscriptionPayload.self, forKey: .mobileTranscription)
     }
 }
 

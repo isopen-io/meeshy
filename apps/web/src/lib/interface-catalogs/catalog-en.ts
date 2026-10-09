@@ -87,7 +87,6 @@ const en = {
   'reels.sound.off': 'Mute',
   'reels.play': 'Play reel',
   'reels.pause': 'Pause reel',
-  'reels.media.error': 'Can’t play — Try again',
   'reels.image': 'Image {index} of {count}',
 
   'stories.title': 'Stories',

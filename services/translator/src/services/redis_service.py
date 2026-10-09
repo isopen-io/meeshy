@@ -344,8 +344,12 @@ class TranslationCacheService:
         self.redis = redis_service
         self.settings = settings
 
-        # Pattern de clé - basé uniquement sur le hash du contenu
-        self.key_pattern = "translation:text:{hash}"
+        # Pattern de clé - basé uniquement sur le hash du contenu. Le segment de
+        # révision change quand le PIPELINE change ce qu'il rend pour un même texte :
+        # `v2` = traduction phrase par phrase (#9723). Les entrées `translation:text:`
+        # écrites d'un seul tenant (phrases perdues) ne sont plus jamais resservies
+        # et expirent d'elles-mêmes (TTL 30 jours).
+        self.key_pattern = "translation:text:v2:{hash}"
 
         # TTL = 1 mois (30 jours = 2592000 secondes)
         # Le texte lui-même sert d'indicateur de modification

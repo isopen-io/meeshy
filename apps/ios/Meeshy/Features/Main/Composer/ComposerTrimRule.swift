@@ -52,6 +52,12 @@ nonisolated enum ComposerTrimRule {
             .time(pattern: .minuteSecond(padMinuteToLength: 0, fractionalSecondsLength: 3)).locale(locale))
     }
 
+    /// L'instant que la règle montre pendant qu'une poignée bouge : SA borne
+    /// (#9754) — jamais la tête de lecture, qui continuerait sa boucle.
+    static func scrubTime(handle: ComposerTrimHandle, range: ClosedRange<TimeInterval>) -> TimeInterval {
+        handle == .start ? range.lowerBound : range.upperBound
+    }
+
     /// La tête de lecture ne sort jamais de la plage gardée.
     static func playhead(_ time: TimeInterval, in range: ClosedRange<TimeInterval>) -> TimeInterval {
         min(range.upperBound, max(range.lowerBound, time))

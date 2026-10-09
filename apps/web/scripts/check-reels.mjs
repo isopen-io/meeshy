@@ -901,13 +901,14 @@ try {
       );
 
       const soundLabel = await scenePage.getAttribute('[data-reel-index="0"] [data-reel-gesture="sound"]', 'aria-label');
-      check(soundLabel === 'Activer le son', `${label} : sans activation, le son du réel composé démarre coupé`);
+      // #9698 — le son de fond se coupe par la NOTE du crédit, qui porte la prise du rail.
+      check(soundLabel === 'Réactiver le son de fond', `${label} : sans activation, le son du réel composé démarre coupé (${soundLabel})`);
 
       // Revue-correction #6903 — LE MUET SE DIT UNE FOIS : la pastille du
       // moteur doublait le bouton son du rail et se posait MESURÉ sur le
       // compteur de partages.
       const badges = await scenePage.$$eval('[data-reel-index="0"] [data-scene-sound="muted"]', (els) => els.length);
-      check(badges === 0, `${label} : le muet d'un réel composé se dit UNE fois, sur le rail — aucune pastille de moteur (${badges})`);
+      check(badges === 0, `${label} : le muet d'un réel composé se dit UNE fois, sur la note du crédit — aucune pastille de moteur (${badges})`);
 
       // Revue-correction #6903 — LE TAP ET LA BARRE SONT SUR LA PAGE, pas
       // dans la boîte 9:16 : une scène ajustée laisse des bandes où le tap
@@ -1027,7 +1028,7 @@ try {
         label: document.querySelector('[data-reel-index="0"] [data-reel-gesture="sound"]')?.getAttribute('aria-label') ?? null,
         fond: document.querySelector('[data-reel-index="0"] [data-scene-player] video')?.muted ?? null,
       }));
-      check(unmuted && afterSound.label === 'Couper le son', `${label} : le bouton son d'un réel composé OUVRE sa piste de fond (${JSON.stringify(afterSound)})`);
+      check(unmuted && afterSound.label === 'Couper le son de fond', `${label} : le bouton son d'un réel composé OUVRE sa piste de fond (${JSON.stringify(afterSound)})`);
       check(afterSound.fond === true, `${label} : le fond vidéo que l'AUTEUR a coupé reste muet, son ouvert (${afterSound.fond})`);
 
       await scenePage.click('[data-reels-back]');

@@ -1165,11 +1165,11 @@ class FeedViewModel: ObservableObject {
         let payload = CreateCommentPayload(
             clientMutationId: cmid, postId: postId,
             parentCommentId: parentId, content: content,
-            originalLanguage: originalLanguage,
+            originalLanguage: originalLanguage, authorId: currentUser?.id,
             location: location, effectFlags: effectFlags
         )
         do {
-            try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: postId)
+            try await offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())
 
             // R7 — roll back the optimistic comment if the outbox exhausts its
             // retry budget (server permanently rejects). The synchronous catch

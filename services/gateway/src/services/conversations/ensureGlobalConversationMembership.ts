@@ -163,7 +163,7 @@ export async function ensureGlobalConversationMembership(
       isActive: true,
     },
   });
-  announceConversationLanguageChange({ kind: 'arrival', conversationId: globalConversation.id, language: recipientLanguage(account, 'fr') });
+  announceConversationLanguageChange({ kind: 'arrival', conversationId: globalConversation.id, language: recipientLanguage(account, 'fr'), readerUserId: input.userId });
 
   const socketManager = deps.resolveSocketManager?.();
 

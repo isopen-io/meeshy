@@ -415,7 +415,7 @@ export default async function userDeletionsRoutes(
         // participant jusqu'à l'expiration de son TTL, alors que la ligne
         // vient d'être réactivée.
         invalidateParticipantLookup(participant.id, conversationId);
-        announceConversationLanguageChange({ kind: 'arrival', conversationId, language: participant.language });
+        announceConversationLanguageChange({ kind: 'arrival', conversationId, language: participant.language, readerUserId: userId });
 
         // #4344 — jumeau de l'émission `CONVERSATION_DELETED` que
         // `performConversationDeleteForMe` diffuse après SA persistance

@@ -88,12 +88,16 @@ struct CommentsSheetView: View {
     /// location / voice). Surfaced to `UniversalComposerBar` as
     /// `externalAttachments` and previewed via `commentAttachmentsPreview`.
     @State var commentAttachments: [ComposerAttachment] = []
-    @State private var showCommentPhotoPicker: Bool = false
-    @State private var commentPhotoItems: [PhotosPickerItem] = []
+    /// Le lien grille ↔ zone (#9697) : ce qui est joint ne se reprend pas.
+    @State var commentLibrary = CommentLibraryLink()
+    /// La détente de la feuille : elle grandit quand le composeur déborde (`CommentSheetFit`).
+    @State var sheetDetent: PresentationDetent = .medium
+    @State var showCommentPhotoPicker: Bool = false
+    @State var commentPhotoItems: [PhotosPickerItem] = []
     /// True while `commentPhotoItems` is being primed with the recent-media
     /// strip's multi-selection before presenting the PhotosPicker — swallows
     /// the priming onChange echo so only a user confirmation ingests items.
-    @State private var commentPhotoPickerPriming: Bool = false
+    @State var commentPhotoPickerPriming: Bool = false
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
     /// Lieu choisi via le picker, en attente d'envoi (Task 11/12, 2026-07-29).
@@ -102,8 +106,8 @@ struct CommentsSheetView: View {
     @State var commentPendingPlace: SharedPlace? = nil
     /// "Éditer" from the recent-media strip — the editor opens before staging;
     /// the edited output is ingested, never the original.
-    @State private var commentRecentImageToEdit: UIImage? = nil
-    @State private var commentRecentVideoToEdit: URL? = nil
+    @State var commentRecentImageToEdit: UIImage? = nil
+    @State var commentRecentVideoToEdit: URL? = nil
 
     /// Enregistreur vocal parent-managed — MÊME composant que les conversations
     /// (`ConversationView`). Produit un vrai fichier audio (pas un timer) déposé
@@ -314,7 +318,7 @@ struct CommentsSheetView: View {
     /// count / the sheet's total count) — shared by the synchronous
     /// enqueue-refusal `catch` and the async `.exhausted` outbox observer,
     /// both of which restore the identical pre-send snapshot.
-    private func rollbackOptimisticComment(tempId: String, parentId: String?) {
+    func rollbackOptimisticComment(tempId: String, parentId: String?) {
         if let parentId {
             var existing = repliesMap[parentId] ?? []
             existing.removeAll { $0.id == tempId }
@@ -330,25 +334,6 @@ struct CommentsSheetView: View {
             liveComments = current
         }
         liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
-    }
-
-    /// Subscribes to `OfflineQueue.shared.outcomeStream(for: cmid)` and rolls
-    /// back the optimistic comment if the row is escalated to `.exhausted`
-    /// (retry budget spent — the server permanently rejected it). `.applied`
-    /// is a no-op — the `comment:added` socket echo already reconciled the
-    /// temp row in place.
-    private func observeCreateCommentOutcome(cmid: String, tempId: String, parentId: String?) {
-        Task { @MainActor in
-            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
-            for await event in stream {
-                if case .exhausted = event {
-                    rollbackOptimisticComment(tempId: tempId, parentId: parentId)
-                    FeedbackToastManager.shared.showError(DailyGestureLimitNotice.exhaustedText(clientMutationId: cmid)
-                        ?? String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main)
-                    )
-                }
-            }
-        }
     }
 
     var body: some View {
@@ -461,9 +446,11 @@ struct CommentsSheetView: View {
                         }
                         commentComposer.foldableComment(isReplying: replyingTo != nil)
                     }
+                    .keepsComposerBelowSheetHeader(detent: $sheetDetent)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
                 }
             }
+            .commentSheetContent()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -488,7 +475,7 @@ struct CommentsSheetView: View {
                 }
             }
         }
-        .presentationDetents([.large, .medium])
+        .presentationDetents([.large, .medium], selection: $sheetDetent)
         .presentationDragIndicator(.visible)
         .adaptiveWideSheet()
         .modifier(TranslucentSheetBackground())
@@ -517,6 +504,7 @@ struct CommentsSheetView: View {
                 beginReply(to: initialReplyTarget)
             }
         }
+        .unsentComments(restore: { await restoreUnsentComments() }, discard: { discardUnsentComment($0) }, draft: $composerText)
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
             // Ne relâcher QUE ce que la feuille a revendiqué : présentée
@@ -1145,10 +1133,13 @@ struct CommentsSheetView: View {
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
             externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || commentPendingPlace != nil,
-            onPhotoLibrary: { showCommentPhotoPicker = true },
+            onPhotoLibrary: { openCommentLibraryPreselecting([]) },
             onFilePicker: { showCommentFilePicker = true },
+            onShowAttachments: { growSheetForComposer() },
             onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
             onRecentMediaEdit: { pick in editCommentRecentMedia(pick) },
+            onRecentLibraryAssetSelected: { asset in ingestCommentLibraryAsset(asset) },
+            recentAttachedAssetIds: Set(attachedCommentAssetIds),
             onPhotoLibraryPreselecting: { ids in openCommentLibraryPreselecting(ids) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
@@ -1161,7 +1152,7 @@ struct CommentsSheetView: View {
         .photosPicker(
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
-            maxSelectionCount: 10,
+            maxSelectionCount: MAX_POST_MEDIA,
             matching: .any(of: [.images, .videos]),
             photoLibrary: .shared()
         )
@@ -1186,97 +1177,8 @@ struct CommentsSheetView: View {
         .commentRecentMediaScene(image: $commentRecentImageToEdit, video: $commentRecentVideoToEdit,
                                  onDone: { pick in ingestCommentRecentMedia(pick) })
         .commentSceneRetouch(attachments: $commentAttachments)
-    }
-
-    // MARK: - Comment Attachments Preview (custom chips with remove)
-
-    private var commentAttachmentsPreview: some View {
-        CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
-            commentAttachments.removeAll { $0.id == id }
-        }, place: commentPendingPlace, onRemovePlace: { commentPendingPlace = nil })
-    }
-
-    // MARK: - Comment Attachment Pickers
-
-    /// Opens the full photo library with the strip's multi-selection already
-    /// checked (identifier-based priming — see `commentPhotoPickerPriming`).
-    /// Capped at the picker's `maxSelectionCount` (10); with no strip
-    /// selection, stale primed items from a cancelled run are dropped.
-    private func openCommentLibraryPreselecting(_ assetIds: [String]) {
-        if !assetIds.isEmpty {
-            let primed = assetIds.prefix(10).map { PhotosPickerItem(itemIdentifier: $0) }
-            // Arm the echo-swallow ONLY when priming actually mutates the
-            // binding — an unchanged binding fires no onChange, and a stale
-            // armed flag would swallow the user's real confirmation instead.
-            commentPhotoPickerPriming = primed != commentPhotoItems
-            commentPhotoItems = primed
-        } else {
-            commentPhotoItems = []
-        }
-        showCommentPhotoPicker = true
-    }
-
-    private func handleCommentPhotoSelection(_ items: [PhotosPickerItem]) {
-        guard !items.isEmpty else { return }
-        // Priming echo (strip multi-selection injected before presenting the
-        // picker) — not a user confirmation, nothing to ingest yet.
-        if commentPhotoPickerPriming {
-            commentPhotoPickerPriming = false
-            return
-        }
-        Task {
-            for item in items {
-                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-                // **L'extension se lit dans les OCTETS** (#4925) — la même règle
-                // que `CommentComposerStaging.photoAttachments`, dont ce bloc est
-                // la jumelle. Un GIF écrit sous un nom `.jpg` a perdu son
-                // animation avant d'être envoyé : le mimeType se dérive ensuite
-                // de l'extension.
-                let ext = isVideo ? "mov" : await CommentComposerStaging.imageFileExtension(for: data)
-                let url = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("comment_\(UUID().uuidString).\(ext)")
-                guard (try? data.write(to: url)) != nil else { continue }
-                let attachment: ComposerAttachment = isVideo
-                    ? ComposerAttachment(
-                        id: "video-\(UUID().uuidString)", type: .video,
-                        name: MediaKindLabel.name(.video),
-                        url: url, size: data.count, thumbnailColor: MeeshyColors.tileCoralHex)
-                    : ComposerAttachment.image(url: url)
-                await MainActor.run { commentAttachments.append(attachment) }
-            }
-            await MainActor.run { commentPhotoItems = [] }
-        }
-    }
-
-    /// "Éditer" from the strip's long-press menu: opens the media editor on the
-    /// resolved pick; the edited result is ingested like a strip tap.
-    private func editCommentRecentMedia(_ pick: RecentMediaPick) {
-        switch pick {
-        case .image(let image): commentRecentImageToEdit = image
-        case .video(let url): commentRecentVideoToEdit = url
-        }
-    }
-
-    /// Ingests a photo/video tapped in the inline recent-media strip into the
-    /// staged comment attachments.
-    private func ingestCommentRecentMedia(_ pick: RecentMediaPick) {
-        switch pick {
-        case .image(let image):
-            guard let data = image.jpegData(compressionQuality: 0.9) else { return }
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("comment_\(UUID().uuidString).jpg")
-            guard (try? data.write(to: url)) != nil else { return }
-            commentAttachments.append(ComposerAttachment.image(url: url))
-        case .video(let url):
-            commentAttachments.append(
-                ComposerAttachment(
-                    id: "video-\(UUID().uuidString)", type: .video,
-                    name: MediaKindLabel.name(.video),
-                    url: url, thumbnailColor: "FF6B6B"
-                )
-            )
-        }
+        .commentCamera(attachments: $commentAttachments)
+        .adaptiveOnChange(of: commentAttachments.isEmpty) { _, isEmpty in if !isEmpty { growSheetForComposer() } }
     }
 
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes
@@ -1292,26 +1194,7 @@ struct CommentsSheetView: View {
         CommentComposerIngestion.stageFiles(
             CommentComposerIngestion.files(from: ingests),
             accentColor: accentColor
-        ) { staged in
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                commentAttachments.append(contentsOf: staged)
-            }
-        }
-    }
-
-    private func handleCommentFileImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result else { return }
-        for url in urls {
-            let didAccess = url.startAccessingSecurityScopedResource()
-            defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
-            let dest = FileManager.default.temporaryDirectory
-                .appendingPathComponent("comment_\(UUID().uuidString)_\(url.lastPathComponent)")
-            try? FileManager.default.copyItem(at: url, to: dest)
-            let size = (try? FileManager.default.attributesOfItem(atPath: dest.path))?[.size] as? Int
-            commentAttachments.append(
-                ComposerAttachment.file(url: dest, name: url.lastPathComponent, size: size)
-            )
-        }
+        ) { staged in stageCommentAttachments(staged) }
     }
 
     // MARK: - Comment Voice Recording (real capture — parity with conversations)
@@ -1332,8 +1215,7 @@ struct CommentsSheetView: View {
         }
         let duration = audioRecorder.duration
         guard let url = audioRecorder.stopRecording() else { return false }
-        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
-        return true
+        return !stageCommentAttachments([CommentComposerStaging.voiceAttachment(duration: duration, url: url)]).isEmpty
     }
 
     /// Stoppe et envoie le commentaire vocal immédiatement (raw).
@@ -1372,8 +1254,8 @@ struct CommentsSheetView: View {
 
     // MARK: - Comment Send (optimistic, with single media)
 
-    /// Poste un commentaire de façon optimiste, avec optionnellement UN média
-    /// (image/vidéo/audio — un commentaire ne porte qu'un seul média) ET/OU un
+    /// Poste un commentaire de façon optimiste, avec ses médias (image/vidéo/
+    /// audio, `MAX_POST_MEDIA` au plus — le plafond du serveur, #9736) ET/OU un
     /// lieu partagé. Le texte suit le flux reconcile/rollback existant ; le
     /// média est uploadé via TUS (`uploadContext: "comment"` → PostMedia) puis
     /// lié via `addComment(attachmentIds:)` ; le lieu transite par
@@ -1388,17 +1270,29 @@ struct CommentsSheetView: View {
             return
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Un seul média par commentaire : on prend le premier image/vidéo/audio valide.
-        let media: PendingCommentMedia? = CommentComposerStaging.firstPendingMedia(in: attachments)
-        commentAttachments.removeAll()
-        // Lieu partagé en attente — capturé puis effacé AVANT le guard (comme
-        // `PostDetailView.submitComment`) : la chip ne doit pas ré-apparaître
-        // sur le commentaire suivant, qu'il parte ou soit rejeté par le guard.
+        // **La zone de la feuille fait foi**, pas la copie remise par la barre :
+        // et la décision se prend AVANT de vider quoi que ce soit (#9743).
+        let staged = commentAttachments
+        switch CommentSendGate.decide(text: trimmed, zone: staged, hasPlace: commentPendingPlace != nil) {
+        case .keepWhilePreparing(let loading):
+            CommentSendTrace.log("envoi : \(loading) pièce(s) en préparation — rien ne part, composeur intact")
+            HapticFeedback.warning()
+            keepRefusedText(trimmed)
+            return
+        case .nothing:
+            CommentSendTrace.log("envoi : rien à envoyer")
+            return
+        case .send:
+            break
+        }
+        let media = CommentComposerStaging.pendingMedia(in: staged)
+        commentAttachments = []
+        // La SOURCE du champ se vide avec la barre : si l'envoi échoue, la
+        // remettre la change, et la barre ré-affiche le texte (#9743).
+        composerText = ""
+        CommentSendTrace.log("envoi : texte=\(!trimmed.isEmpty), pièces=\(media.count)/\(staged.count)")
         let place = commentPendingPlace
         commentPendingPlace = nil
-
-        // Rien à envoyer (ni texte, ni média, ni lieu exploitable).
-        guard !trimmed.isEmpty || media != nil || place != nil else { return }
 
         // Réponse plate à 2 niveaux : répondre à une réponse rattache la nouvelle
         // réponse au MÊME parent racine (`replyingTo.parentId`) pour qu'elle reste
@@ -1436,7 +1330,7 @@ struct CommentsSheetView: View {
             content: trimmed, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            originalLanguage: lang, media: media.map { [$0.optimistic] } ?? []
+            originalLanguage: lang, media: media.map(\.optimistic)
         )
         if let parentId {
             var existing = repliesMap[parentId] ?? []
@@ -1455,19 +1349,25 @@ struct CommentsSheetView: View {
         }
         liveCommentCount = (liveCommentCount ?? post.commentCount) + 1
 
+        // La charge est bâtie UNE fois, avec son auteur relevé ICI, avant toute
+        // attente : l'envoi direct et la file portent la même, sous le même cmid.
+        let payload = CreateCommentPayload(
+            clientMutationId: tempId, postId: post.id,
+            parentCommentId: parentId, content: trimmed,
+            originalLanguage: lang, authorId: me?.id,
+            location: place, effectFlags: effectFlags,
+            mobileTranscription: media.first?.mobileTranscription
+        )
         Task {
             do {
-                let attachmentIds: [String]?
-                if let media {
-                    attachmentIds = [try await CommentMediaUploader.upload(media)]
-                } else {
-                    attachmentIds = nil
+                guard let apiComment = try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(media)) else {
+                    CommentSendTrace.log("direct : confirmé sans description (rejeu dédoublonné)")
+                    CommentMediaUploader.discardLocalFiles(media)
+                    onCommentSent?(post.id)
+                    return
                 }
-                let apiComment = try await PostService.shared.addComment(
-                    postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
-                    attachmentIds: attachmentIds, mobileTranscription: media?.mobileTranscription,
-                    originalLanguage: lang, location: place, clientMutationId: tempId
-                )
+                CommentSendTrace.log("direct : créé")
+                CommentMediaUploader.discardLocalFiles(media)
                 let feedComment = FeedComment(
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                     authorAvatarURL: apiComment.author.avatar,
@@ -1498,43 +1398,43 @@ struct CommentsSheetView: View {
                 }
                 onCommentSent?(post.id)
             } catch {
+                CommentSendTrace.log("direct : échec — \(String(describing: error))")
+                // Un refus permanent ou la limite du jour : la file ne ferait
+                // que le répéter — il revient au composeur, avec sa raison.
+                guard !CommentMediaDelivery.isPermanentRefusal(error) else {
+                    rollbackOptimisticComment(tempId: tempId, parentId: parentId)
+                    if !DailyGestureLimitNotice.surface(CommentMediaDelivery.cause(of: error)) {
+                        FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
+                    }
+                    CommentSendTrace.log("direct : refus permanent — rendu au composeur, non enfilé")
+                    restoreRefusedComment(text: trimmed, attachments: staged, place: place)
+                    return
+                }
                 // REST failed — most commonly because the device is offline.
                 // Durably enqueue via the existing `.createComment` outbox
                 // kind (same one `FeedViewModel`/`PostDetailViewModel.sendComment`
                 // already use) instead of unconditionally losing the comment.
                 // The optimistic `tempId` row is reconciled by the already-wired
                 // `comment:added` socket handler once the outbox replay lands.
-                // NOTE: `CreateCommentPayload` carries `effectFlags`, the
-                // authored language (#6587) and the shared place, but not
-                // `attachmentIds` (SDK schema gap) — attached media on a comment
-                // sent while offline is dropped on replay; the comment text, its
-                // declared language and its visual effects survive.
+                // #9743 — les PIÈCES partent avec lui : la file garde leurs
+                // fichiers et les rejoue, sans re-monter ce qui l'est déjà.
                 do {
-                    // MÊME cmid que la tentative REST : si le POST a abouti côté
-                    // serveur mais que sa réponse s'est perdue, le rejeu outbox
-                    // est dédoublonné par le MutationLog au lieu de créer un
-                    // second commentaire.
-                    let cmid = tempId
-                    let payload = CreateCommentPayload(
-                        clientMutationId: cmid, postId: post.id,
-                        parentCommentId: parentId, content: trimmed,
-                        originalLanguage: lang,
-                        location: place, effectFlags: effectFlags
-                    )
-                    try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
+                    // MÊME charge, donc MÊME cmid que la tentative directe : un
+                    // envoi abouti dont la réponse s'est perdue est dédoublonné
+                    // au rejeu par le MutationLog.
+                    try await CommentMediaDelivery.entrust(payload, medias: media,
+                                                           acquired: CommentMediaDelivery.acquired(from: error))
                     onCommentSent?(post.id)
-
-                    // Roll back the optimistic comment if the outbox exhausts
-                    // its retry budget (server permanently rejects). Without
-                    // this a permanently-failing comment stays in the sheet
-                    // forever: the `comment:added` echo it's waiting on will
-                    // never arrive for a mutation the outbox gave up on.
-                    observeCreateCommentOutcome(cmid: cmid, tempId: tempId, parentId: parentId)
+                    // Si la file renonce, la ligne RESTE, marquée « non
+                    // envoyé » et relançable (`CommentUnsentBadge`, #9743).
                 } catch {
                     // Roll back the optimistic row + counts — the outbox
                     // itself refused the row.
                     rollbackOptimisticComment(tempId: tempId, parentId: parentId)
                     FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
+                    // Ni envoyé ni confié à la file : il revient au composeur (#9743).
+                    CommentSendTrace.log("composeur : restitution du texte et de \(staged.count) pièce(s)")
+                    restoreRefusedComment(text: trimmed, attachments: staged, place: place)
                 }
             }
         }

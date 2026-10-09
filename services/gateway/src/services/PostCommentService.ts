@@ -7,7 +7,7 @@ import { syncCommentTrackingLinks } from './posts/publicationTrackingLinks';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace } from './location/sharedPlace';
 import { parseMessageSticker } from './stickers/messageSticker';
-import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { assertCommentMediaClaimable, claimCommentMedia, transcribeCommentAudio } from './posts/commentMediaClaim';
 import { applyCommentMediaOrder } from './posts/mediaOrder';
 import type { QuotedPostMedia } from './posts/quotedPostMediaSnapshot';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -15,7 +15,6 @@ import { getSharedNotificationService } from './notifications/notification-servi
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { retractCommentNotifications } from './posts/retractCommentNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
-import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { EngagementService } from './engagement/EngagementService';
 import { creditPostEngagement, creditSource, reclaimContentCredits, removalReclaimsAuthorCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
@@ -127,20 +126,11 @@ export class PostCommentService {
       if (!parent) throw new Error('PARENT_NOT_FOUND');
     }
 
-    // Verify the pending media belongs to no post/comment yet (anti-hijack) before linking.
+    // Chaque média demandé doit être LIBRE et téléversé par l'auteur de la
+    // requête, AVANT toute création (#9745) — `posts/commentMediaClaim.ts`.
     // Un SEUL média indisponible refuse tout le lot : publier un commentaire
-    // amputé d'une de ses photos, en silence, est pire que le refus — c'est la
-    // même règle que `describeClaimShortfall` rend visible plus bas.
-    if (demandes.length > 0) {
-      const libres = await this.prisma.postMedia.findMany({
-        where: { id: { in: demandes } },
-        select: { id: true, postId: true, commentId: true },
-      });
-      const disponibles = libres.filter((m) => !m.postId && !m.commentId);
-      if (disponibles.length !== demandes.length) {
-        throw new Error('MEDIA_NOT_AVAILABLE');
-      }
-    }
+    // amputé d'une de ses pièces, en silence, est pire que le refus.
+    await assertCommentMediaClaimable(this.prisma, { authorId, mediaIds: demandes });
 
     // Lieu partagé : validation stricte côté serveur (bornes, rejet
     // NaN/Infinity, bornage des chaînes). Chiffrement : stockage EN CLAIR
@@ -149,7 +139,7 @@ export class PostCommentService {
     const sharedPlace = parseSharedPlace(location);
     const stickerDescriptor = parseMessageSticker(sticker);
 
-    const comment = await this.prisma.postComment.create({
+    const creation = {
       data: {
         postId,
         authorId,
@@ -179,83 +169,43 @@ export class PostCommentService {
           : {}),
       },
       select: CREATED_COMMENT_SELECT,
-    });
-
-    // Lier le média pending au commentaire + persister la transcription mobile éventuelle.
-    //
-    // La pré-vérification anti-hijack plus haut couvre « le média est déjà
-    // pris ». Elle ne couvre PAS deux choses : à qui il appartient, et le fait
-    // qu'elle vérifie puis agit en deux temps — entre le `findUnique` et cet
-    // écrit, un autre commentaire peut avoir réclamé le même média.
-    //
-    // Porter la condition dans le `where` de l'écriture règle les deux : la
-    // base tranche en une opération. `updateMany` est obligatoire pour ça —
-    // `update` n'accepte qu'un critère unique, pas une clause composée.
-    if (demandes.length > 0) {
-      const linked = await this.prisma.postMedia.updateMany({
-        where: { id: { in: demandes }, ...claimableMediaWhere(authorId) },
-        data: { commentId: comment.id },
-      });
-      const shortfall = describeClaimShortfall(demandes, linked.count);
-      if (shortfall) {
-        // Le commentaire existe déjà et reste publié : refuser le média sans
-        // trace donnerait un commentaire vide inexplicable.
-        enhancedLogger.warn(`[PostCommentService] createComment: ${shortfall}`, {
-          commentId: comment.id, authorId, mediaIds: demandes,
+    };
+    // UNE transaction dès qu'il y a des médias, et elle porte TOUT ce qui fait
+    // le commentaire : la ligne, ses pièces réclamées, leur rang, la
+    // transcription, et leur relecture. Un média pris entre l'admission et la
+    // réclamation — ou n'importe laquelle de ces écritures qui échoue — annule
+    // l'ensemble : rien n'est né, le rejeu repart de zéro.
+    // Sans média, une seule écriture — aucune transaction à ouvrir.
+    const { comment, media } = demandes.length === 0
+      ? { comment: await this.prisma.postComment.create(creation), media: [] }
+      : await this.prisma.$transaction(async (tx) => {
+          const created = await tx.postComment.create(creation);
+          await claimCommentMedia(tx, { commentId: created.id, authorId, mediaIds: demandes });
+          // Le RANG suit l'ordre de la requête — le seul endroit qui porte
+          // l'ordre voulu par l'utilisateur (`applyMediaOrder` côté post).
+          await applyCommentMediaOrder(tx, created.id, demandes);
+          await transcribeCommentAudio(tx, created.id, mobileTranscription);
+          // Renvoyés top-level (`media: [PostMedia]`) — même forme que les posts.
+          const attached = await tx.postMedia.findMany({ where: { commentId: created.id }, ...commentMediaInclude });
+          return { comment: created, media: attached };
         });
-      }
 
-      // Le RANG suit l'ordre de la requête — c'est le seul endroit qui porte
-      // l'ordre voulu par l'utilisateur. Même raison, et même garde, que
-      // `applyMediaOrder` côté post : sans lui, `orderBy: { order: 'asc' }`
-      // rendrait l'ordre d'ACHÈVEMENT des téléversements.
-      await applyCommentMediaOrder(this.prisma, comment.id, demandes);
-
-      // La transcription mobile décrit UNE piste. Elle se pose sur le média
-      // AUDIO effectivement rattaché — pas sur « le premier », qui peut être
-      // une photo dès que le commentaire en porte plusieurs.
-      if (mobileTranscription) {
-        const piste = await this.prisma.postMedia.findFirst({
-          where: { commentId: comment.id, mimeType: { startsWith: 'audio/' } },
-          select: { id: true },
-        });
-        if (piste) {
-          await this.prisma.postMedia.update({
-            where: { id: piste.id },
-            data: {
-              // La charge du fil ne se persiste pas telle quelle : le document
-              // a sa propre graphie, et un seul site la produit
-              // (`attachmentTranscriptionFromMobile`).
-              transcription: attachmentTranscriptionFromMobile(
-                mobileTranscription,
-              ) as Prisma.InputJsonValue,
-            },
-          });
-        }
-      }
-    }
-
-    // Increment counters
-    await this.prisma.post.update({
+    // À partir d'ici le commentaire EXISTE (#9745). Plus rien ne peut échouer
+    // la création : un échec rendrait 500 pour un commentaire publié, la ligne
+    // de journal de la mutation serait libérée, et le rejeu sous le même
+    // identifiant trouverait ses médias déjà pris (400) — ou, sans média,
+    // publierait un doublon. Les compteurs sont dénormalisés : un écart se
+    // journalise et se rattrape, un commentaire né ne se renie pas.
+    await this.afterBirth('post.commentCount', comment.id, () => this.prisma.post.update({
       where: { id: postId },
       data: { commentCount: { increment: 1 } },
-    });
-
+    }));
     if (parentId) {
-      await this.prisma.postComment.update({
+      await this.afterBirth('parent.replyCount', comment.id, () => this.prisma.postComment.update({
         where: { id: parentId },
         data: { replyCount: { increment: 1 } },
-      });
+      }));
     }
-
-    // Le média lié est renvoyé top-level (`media: [PostMedia]`) — même forme que les
-    // posts, décodé identiquement par les clients (viewers inline + plein écran).
-    const media = demandes.length > 0
-      ? await this.prisma.postMedia.findMany({
-          where: { commentId: comment.id },
-          ...commentMediaInclude,
-        })
-      : [];
 
     // Carte `metadata.trackingLinks` (#9073) : corps + légende de son média,
     // mapping `url → token` SANS réécrire le contenu. Jamais bloquant.
@@ -265,6 +215,14 @@ export class PostCommentService {
     if (trackingMetadata !== undefined) return { ...comment, metadata: trackingMetadata, media };
 
     return { ...comment, media };
+  }
+
+  private async afterBirth(step: string, commentId: string, work: () => Promise<unknown>): Promise<void> {
+    try {
+      await work();
+    } catch (err) {
+      log.warn('addComment: post-commit step failed, comment kept', { step, commentId, err });
+    }
   }
 
   /**

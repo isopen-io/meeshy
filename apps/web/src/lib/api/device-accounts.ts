@@ -1,5 +1,7 @@
 import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
 
+import { commentDrafts } from '../comments/comment-draft';
+import { unsentComments } from '../comments/unsent-comments';
 import { draftStore } from '../send/draft-store';
 import { safeLocalStorage } from '../storage';
 
@@ -35,6 +37,8 @@ function storedKeys(): readonly string[] {
  */
 function forgetAccountLocally(userId: string): void {
   draftStore.forgetScope(`u_${userId}`);
+  commentDrafts.forgetScope(`u_${userId}`);
+  unsentComments.getState().forgetScope(`u_${userId}`);
   purgeAccountLocalData({ storage: safeLocalStorage(), userId, keys: storedKeys() });
   forgetAccountCaches({ userId });
 }

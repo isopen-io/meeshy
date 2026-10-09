@@ -187,7 +187,7 @@ struct StoryComposerBarView: View {
                 ? nil
                 : AnyView(CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
                     commentAttachments.removeAll { $0.id == id }
-                  }, place: pendingPlace, onRemovePlace: { pendingPlace = nil })),
+                  }, place: pendingPlace, onRemovePlace: { pendingPlace = nil }, accentColor: accentColor)),
             onTextChange: { text in
                 mentionController.retarget(mentionContext)
                 mentionController.handleQuery(in: text)
@@ -263,7 +263,7 @@ struct StoryComposerBarView: View {
             allowsMultipleSelection: false
         ) { result in
             if case .success(let urls) = result {
-                commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
+                CommentAttachmentIntake.admit(CommentComposerStaging.fileAttachments(from: urls), into: &commentAttachments, limit: Self.mediaLimit)
             }
         }
         .sheet(isPresented: $showCommentLocationPicker) {
@@ -273,14 +273,22 @@ struct StoryComposerBarView: View {
             }
         }
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
-            Task {
-                commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
-                await MainActor.run { commentPhotoItems = [] }
-            }
+            guard !items.isEmpty else { return }
+            commentPhotoItems = []
+            CommentAttachmentIntake.stage(items, into: $commentAttachments, limit: Self.mediaLimit)
         }
         // « Éditer » une pièce jointe : la scène du composeur (#9127). Le
         // minuteur reste en pause — la pièce en attente compte comme contenu.
         .commentSceneRetouch(attachments: $commentAttachments)
+        // La caméra (#9736) : le viseur RECOUVRE le lecteur, qui ne le sait
+        // pas — le composeur s'engage d'abord, ce qui tient le minuteur.
+        .commentCamera(attachments: $commentAttachments, limit: Self.mediaLimit,
+                       onOpen: { isComposerEngaged = true })
+        // #9743, M1 — un commentaire refusé par la file revient avec sa pièce.
+        .adaptiveOnChange(of: storyDrafts[storyId ?? ""]?.refusedAt) { _, refused in
+            guard refused != nil, let id = storyId, let draft = storyDrafts[id], commentAttachments.isEmpty else { return }
+            commentAttachments = draft.attachments
+        }
     }
 
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`). Un dépôt
@@ -302,11 +310,14 @@ struct StoryComposerBarView: View {
             CommentComposerIngestion.files(from: ingests),
             accentColor: accentColor
         ) { staged in
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                commentAttachments.append(contentsOf: staged)
-            }
+            CommentAttachmentIntake.admit(staged, into: &commentAttachments, limit: Self.mediaLimit)
         }
     }
+
+    /// **Une réponse à une story porte UN média** (#9736) : son envoi n'en
+    /// transmet qu'un. La zone le dit — la dernière pièce choisie remplace la
+    /// précédente, au lieu d'en montrer deux pour n'en envoyer qu'une.
+    static let mediaLimit = 1
 
     /// Construit le média éventuel (un seul) + appelle le `sendComment` injecté avec
     /// le pendingMedia. Capture `parentId` AVANT de clear le reply context.
@@ -315,7 +326,7 @@ struct StoryComposerBarView: View {
     /// post de type STORY côté gateway — même route `/posts/:id/comments`).
     private func submitStoryComment(text: String, attachments: [ComposerAttachment]) {
         let media = CommentComposerStaging.firstPendingMedia(in: attachments)
-        commentAttachments.removeAll()
+        commentAttachments = CommentAttachmentIntake.stillLoading(commentAttachments)
         let place = pendingPlace
         pendingPlace = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -343,8 +354,10 @@ struct StoryComposerBarView: View {
         }
         let duration = audioRecorder.duration
         guard let url = audioRecorder.stopRecording() else { return false }
-        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
-        return true
+        return !CommentAttachmentIntake.admit(
+            [CommentComposerStaging.voiceAttachment(duration: duration, url: url)],
+            into: &commentAttachments, limit: Self.mediaLimit
+        ).isEmpty
     }
 }
 

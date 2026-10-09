@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react';
 
 import { hostMute, playerConfig, type ScenePlayerMode } from '@/lib/canvas/config';
-import type { CanvasDocument, CanvasScene } from '@/lib/canvas/document';
+import { sceneAudioPresence, type CanvasDocument, type CanvasScene } from '@/lib/canvas/document';
 import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import { backgroundBackdrop, backgroundFraming } from '@/lib/canvas/background';
 import { sceneRatio } from '@/lib/canvas/fit';
 import { backgroundPlaceholderHash } from '@/lib/canvas/scene-placeholder';
 import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
-import { isDocumentAudible } from '@/lib/feed/scene-motion';
+import { documentSoundsOnStage } from '@/lib/feed/scene-motion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { letterboxFill, letterboxHashes } from '@/lib/stories/letterbox';
@@ -170,8 +170,10 @@ function SceneCanvas({
   // ci-dessous, le second par l'hôte (`story-scene-layer.tsx`,
   // `story-compose.tsx`). Rendre une couche pour l'objet `audio` qui porte
   // `isBackground` jouait la MÊME piste deux fois, en écho (T-E12).
+  // Et le son de fond ne produit AUCUN pixel sur la scène (#9737,
+  // `sceneAudioPresence`) : il se dit par le crédit, hors scène.
   const foreground = scene.objects
-    .filter((o) => o.id !== background?.id && !(o.kind === 'audio' && o.payload.isBackground === true))
+    .filter((o) => o.id !== background?.id && sceneAudioPresence(o) !== 'offstage')
     .sort((a, b) => a.z - b.z);
   return (
     <span className="absolute inset-0 block" style={{ containerType: 'inline-size' }}>
@@ -249,7 +251,7 @@ export default function ScenePlayer({
   const scene = document.scenes[sceneIndex];
   const config = playerConfig(mode);
   const language = currentInterfaceLanguage();
-  const audible = playing && isDocumentAudible(document);
+  const audible = playing && documentSoundsOnStage(document);
   const callbacks = useLatest<SceneCallbacks>({ onContentReady, onDurationKnown, onPlaybackBlocked });
   const isMuted = hostMute({ config, requestedMute: muted });
   const timed = scene !== undefined && hasTimedObjects(scene);
@@ -316,7 +318,9 @@ export default function ScenePlayer({
           {canvas}
         </span>
       )}
-      {/* `isMuted` — le muet RÉSOLU (`hostMute`), pas celui que le mode
+      {/* CE QUI SONNE SUR LA SCÈNE (#9737, `documentSoundsOnStage`) — un son de
+          fond seul ne pose pas cette pastille : il ne produit aucun pixel ici.
+          `isMuted` — le muet RÉSOLU (`hostMute`), pas celui que le mode
           PROPOSE : un lecteur de story qui tient son muet viewant
           (`muted: true` sur un mode sonore) coupait bien le son et
           n'affichait AUCUNE pastille pour le dire (revue-correction #6901).

@@ -558,7 +558,7 @@ describe('#9708 — une porte de lien annonce chaque arrivée et chaque départ'
 
   it('un invité anonyme `en` qui entre est annoncé avec SA langue — le cas de la recette #9707', async () => {
     const vues = await avec(() => postMembers(app, { nickname: 'Guest', language: 'en' }));
-    expect(vues).toEqual([{ kind: 'arrival', conversationId: CONV_ID, language: 'en' }]);
+    expect(vues).toEqual([{ kind: 'arrival', conversationId: CONV_ID, language: 'en', readerUserId: null }]);
   });
 
   it('un inscrit qui entre par lien est annoncé avec la langue de son compte', async () => {
@@ -567,7 +567,7 @@ describe('#9708 — une porte de lien annonce chaque arrivée et chaque départ'
       displayName: 'Ana', username: 'ana', systemLanguage: 'de', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
     });
     const vues = await avec(() => postMembers(app, {}, asRegistered));
-    expect(vues).toEqual([{ kind: 'arrival', conversationId: CONV_ID, language: 'de' }]);
+    expect(vues).toEqual([{ kind: 'arrival', conversationId: CONV_ID, language: 'de', readerUserId: REGISTERED_USER_ID }]);
   });
 
   it('un déjà-membre n’annonce rien — aucune écriture, aucune composition changée', async () => {

@@ -168,6 +168,11 @@ public actor MessagePersistenceActor {
         Task { [weak self] in
             do {
                 try await self?.purgeExhaustedOlderThan()
+                // Les pièces de commentaire dont la ligne vient de partir (ou
+                // n'existe plus) quittent le disque avec elle (#9743).
+                if let self {
+                    await OfflineQueue.sweepOrphanCommentMedia(ownerId: await self.currentUserId, reader: self.dbWriter)
+                }
             } catch {
                 Logger.messages.error("Outbox GC skipped this boot, stale terminal rows kept: \(error.localizedDescription, privacy: .public)")
             }

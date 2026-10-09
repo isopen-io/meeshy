@@ -12,8 +12,8 @@ import Foundation
 /// depuis ses octets, comme une photo venue du sélecteur système. Une vidéo
 /// voyage en fichier, copié dans le répertoire temporaire.
 ///
-/// `RecentMediaPick` reste la forme des hôtes qui n'ont pas de zone liée
-/// (commentaires) et de l'éditeur, qui travaille sur une image décodée.
+/// `RecentMediaPick` reste la forme de l'éditeur, qui travaille sur une image
+/// décodée, et des hôtes sans zone liée.
 nonisolated struct RecentMediaAsset {
     nonisolated enum Payload {
         case imageData(Data)
@@ -79,6 +79,29 @@ nonisolated enum RecentMediaAttachmentLink {
     /// sélection courante de la grille, sans doublon, plafonnée.
     static func pickerPreselection(attached: [String], selection: [String], limit: Int) -> [String] {
         Array(unique(attached + selection).prefix(max(0, limit)))
+    }
+
+    /// Les assets JOINTS parmi ceux que le sélecteur reçoit cochés : eux seuls
+    /// peuvent être DÉCOCHÉS — le reste de la présélection n'est pas encore
+    /// dans la zone.
+    static func preselectedAttached(attached: [String], preselection: [String]) -> [String] {
+        let primed = Set(preselection)
+        return unique(attached).filter(primed.contains)
+    }
+
+    /// Les pièces à retirer de la zone au retour du sélecteur système (#9697) :
+    /// celles dont l'asset y était coché à l'ouverture et n'en revient pas. Un
+    /// élément rendu sans identifiant ne permet de rien conclure : rien ne se
+    /// retire.
+    static func deselectedAttachmentIds(
+        links: [String: String],
+        liveAttachmentIds: [String],
+        preselected: [String],
+        returned: [String?]
+    ) -> [String] {
+        guard !preselected.isEmpty, !returned.contains(where: { $0 == nil }) else { return [] }
+        let gone = Set(preselected).subtracting(returned.compactMap { $0 })
+        return liveAttachmentIds.filter { links[$0].map(gone.contains) ?? false }
     }
 
     private static func unique(_ ids: [String]) -> [String] {

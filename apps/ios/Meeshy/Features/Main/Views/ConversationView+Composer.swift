@@ -259,7 +259,7 @@ extension ConversationView {
         // la pièce posée (#9126).
         .conversationCover(isPresented: $composerState.showCamera) {
             ComposerViewfinder { result in
-                stageSceneMedia(ComposerReturnedMedia(capture: result))
+                stageCapture(result)
             }
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
@@ -424,11 +424,7 @@ extension ConversationView {
     /// comme une sélection nouvelle — `handlePhotoSelection` écarte, à
     /// l'ingestion, tout identifiant déjà dans la zone.
     func openPhotoLibraryPreselecting(_ assetIds: [String]) {
-        let preselection = RecentMediaAttachmentLink.pickerPreselection(
-            attached: composerState.attachedLibraryAssetIds,
-            selection: assetIds,
-            limit: ConversationComposerState.maxMediaSelection
-        )
+        let preselection = composerState.primePickerPreselection(selection: assetIds)
         if !preselection.isEmpty {
             let primed = preselection.map { PhotosPickerItem(itemIdentifier: $0) }
             // Arm the echo-swallow ONLY when priming actually mutates the

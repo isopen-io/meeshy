@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { GlyphSvg, Glyph } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
@@ -21,7 +21,7 @@ import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { reelPrimeSourceOf } from '@/lib/reels/scene';
 import { useReelPreload } from '@/lib/reels/use-reel-preload';
-import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels } from '@/lib/reels/thread';
+import { activeIndexOf, composeReelThread, entryReelIds, holdReelThread, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
 import { chromeYields } from '@/lib/view/chrome-yields';
 import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
@@ -237,7 +237,21 @@ export default function ReelsScreen() {
     () => new Map([...feedPosts, ...(seedPost.data !== undefined ? [seedPost.data] : [])].map((post) => [post.id, post] as const)),
     [feedPosts, seedPost.data],
   );
-  const thread = useMemo(() => composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }), [entryIds, known, reels.data]);
+  /* LE RÉEL REGARDÉ NE CHANGE PAS DE PLACE (#9702) : le fil rouvert depuis sa
+     caisse se relit en fond, et la passerelle reclasse sa page à chaque
+     lecture. Ce qui est tenu — l'ordre peint et le réel visible — est relu au
+     moment de composer, jamais une dépendance : une relecture réordonne la
+     suite, pas ce qu'on regarde. */
+  const held = useRef<{ readonly ids: readonly string[]; readonly activeId: string }>({ ids: [], activeId: '' });
+  const thread = useMemo(
+    () =>
+      holdReelThread({
+        heldIds: held.current.ids,
+        activeId: held.current.activeId,
+        composed: composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }),
+      }),
+    [entryIds, known, reels.data],
+  );
   /* UN MODÈLE PAR PUBLICATION, GARDÉ tant que la publication, la langue et la
      minute ne changent pas (#9277) : une page de réels de plus ne recompose
      pas les modèles déjà peints — `ReelPage` (mémoïsée) ne se re-rend donc pas.
@@ -261,6 +275,9 @@ export default function ReelsScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const active = Math.min(activeIndex, Math.max(0, count - 1));
   const activeId = models[active]?.id ?? '';
+  useLayoutEffect(() => {
+    held.current = { ids: thread.map((post) => post.id), activeId };
+  }, [thread, activeId]);
   /* LA FENÊTRE ÉLARGIE (#9702) : au-delà de N±2, les têtes des réels se
      téléchargent selon la cadence du lecteur, jusqu'à N±10. */
   const primeSources = useMemo(() => models.map(reelPrimeSourceOf), [models]);

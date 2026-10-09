@@ -42,12 +42,14 @@ extension ConversationView {
                 return
             }
             let ancien = composerState.pendingMediaFiles[id]
+            // Retouchée, une prise reste une prise : personne ne l'a vue (#9775).
+            let captured = composerState.pendingAttachments[idx].capturedInApp
             composerState.pendingThumbnails[id] = image
             composerState.pendingMediaFiles[id] = ecrit.url
             composerState.pendingAttachments[idx] = MessageAttachment(
                 id: id, fileName: ecrit.fileName, originalName: ecrit.fileName,
                 mimeType: ecrit.mimeType, fileSize: ecrit.byteCount,
-                fileUrl: ecrit.url.absoluteString,
+                fileUrl: ecrit.url.absoluteString, capturedInApp: captured,
                 width: Int(image.size.width * image.scale),
                 height: Int(image.size.height * image.scale),
                 thumbnailColor: accentColor
@@ -64,12 +66,24 @@ extension ConversationView {
         }
     }
 
-    /// Une prise de la caméra ou un média de la bande des récents : il se pose
-    /// par les mêmes chemins de préparation qu'un fichier choisi.
+    /// Un média de la bande des récents, retouché : il se pose par les mêmes
+    /// chemins de préparation qu'un fichier choisi. Il vient de la galerie —
+    /// ce n'est PAS une capture.
     func stageSceneMedia(_ media: ComposerReturnedMedia) {
         switch media {
         case .image(let image): handleCameraCapture(image)
         case .video(let url): handleCameraVideo(url)
+        }
+    }
+
+    /// La prise du viseur de la barre (#9295) : elle se pose comme un média
+    /// retouché, et se DÉCLARE capturée dans l'application (#9775) — c'est ce
+    /// qui fera demander confirmation avant de la publier au-delà de la
+    /// conversation (`PublicationTargetRule.needsCaptureConfirmation`).
+    func stageCapture(_ capture: CameraResult) {
+        switch ComposerReturnedMedia(capture: capture) {
+        case .image(let image): handleCameraCapture(image, capturedInApp: true)
+        case .video(let url): handleCameraVideo(url, capturedInApp: true)
         }
     }
 }

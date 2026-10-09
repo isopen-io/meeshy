@@ -229,19 +229,13 @@ final class ComposerCaptureEditTests: XCTestCase {
     func test_theTopRow_whileEditing_hidesFlashFlipAndExposure_andTheCrossCancels() throws {
         let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
         XCTAssertTrue(barre.contains("var editing = false"))
-        XCTAssertTrue(barre.contains("ComposerFlashIntensity.showsSlider(flash: flashMode) && !editing"),
+        XCTAssertTrue(barre.contains("trailingItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode)"),
                       "le curseur du flash ne règle que l'objectif qui vise")
         XCTAssertFalse(barre.contains("editing: false"), "l'édition n'est plus niée en dur")
-        guard let debut = barre.range(of: "private var topControls: some View {"),
-              let fin = barre.range(of: "private var flashCluster", range: debut.upperBound..<barre.endIndex)
-        else { return XCTFail("la rangée haute a changé de forme") }
-        let rangee = String(barre[debut.upperBound..<fin.lowerBound])
-        let porte = try XCTUnwrap(rangee.range(of: "if !editing {"))
-        let bascule = try XCTUnwrap(rangee.range(of: "arrow.triangle.2.circlepath.camera"))
-        let flash = try XCTUnwrap(rangee.range(of: "flashCluster"))
-        XCTAssertLessThan(porte.lowerBound, bascule.lowerBound, "le retournement s'efface en édition")
-        XCTAssertLessThan(porte.lowerBound, flash.lowerBound, "le flash aussi")
-        XCTAssertTrue(rangee.contains("ComposerCaptureCopy.cancelEdit"), "la croix dit ce qu'elle fait en édition")
+        let retouche = ComposerCaptureTopRow.trailing(ComposerCaptureTopRow.Input(stage: .armed, editing: true))
+        XCTAssertFalse(retouche.contains(.flip), "le retournement s'efface en édition")
+        XCTAssertFalse(retouche.contains(.flash), "le flash aussi")
+        XCTAssertTrue(barre.contains("ComposerCaptureCopy.cancelEdit"), "la croix dit ce qu'elle fait en édition")
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("editing: session.phase.isEditing"))
         XCTAssertTrue(chrome.contains("guard !session.phase.isEditing else { return session.cancelEditing() }"),
@@ -266,15 +260,9 @@ final class ComposerCaptureEditTests: XCTestCase {
     /// jamais sur la scène.
     func test_done_sitsTopRight_alignedWithTheCross_andNoLongerAtTheBottom() throws {
         let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
-        guard let debut = barre.range(of: "private var topControls: some View {"),
-              let fin = barre.range(of: "private var flashCluster", range: debut.upperBound..<barre.endIndex)
-        else { return XCTFail("la rangée haute a changé de forme") }
-        let rangee = String(barre[debut.upperBound..<fin.lowerBound])
-        let croix = try XCTUnwrap(rangee.range(of: "symbol: \"xmark\""))
-        let espace = try XCTUnwrap(rangee.range(of: "Spacer(minLength: 0)"))
-        let termine = try XCTUnwrap(rangee.range(of: "doneButton"))
-        XCTAssertLessThan(croix.lowerBound, espace.lowerBound)
-        XCTAssertLessThan(espace.lowerBound, termine.lowerBound, "« Terminé » ferme la rangée, à droite")
+        let retouche = ComposerCaptureTopRow.Input(stage: .armed, editing: true, offersSave: true)
+        XCTAssertEqual(ComposerCaptureTopRow.leading(retouche), [.close])
+        XCTAssertEqual(ComposerCaptureTopRow.trailing(retouche).last, .done, "« Terminé » ferme la rangée, à droite")
         XCTAssertTrue(barre.contains("ComposerCaptureCopy.done"))
         XCTAssertTrue(barre.contains(".disabled(rendering)"), "un second toucher pendant le rendu ne remet rien")
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
@@ -286,12 +274,12 @@ final class ComposerCaptureEditTests: XCTestCase {
 
     func test_editArea_liesBetweenTheTopRowAndTheTools_insideTheSafeArea() {
         let ecran = CGSize(width: 402, height: 874)
-        let zone = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panel: .none)
+        let zone = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: [])
         XCTAssertEqual(zone.minY, 62 + ComposerEditScene.topBand)
-        XCTAssertEqual(zone.maxY, 874 - 34 - ComposerEditScene.bottomReserve(.none))
+        XCTAssertEqual(zone.maxY, 874 - 34 - ComposerEditScene.bottomReserve([]))
         XCTAssertEqual(zone.minX, ComposerEditScene.margin)
         XCTAssertEqual(zone.width, 402 - ComposerEditScene.margin * 2)
-        let avecBande = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panel: .band)
+        let avecBande = ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: [.band])
         XCTAssertLessThan(avecBande.height, zone.height, "un panneau ouvert prend sa place sous la scène")
         XCTAssertEqual(avecBande.minY, zone.minY)
     }
@@ -308,12 +296,21 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(ComposerEditScene.rect(aspect: 0, in: zone), zone, "des proportions absurdes rendent la zone")
     }
 
-    func test_editPanel_theBandThenThePresetsThenTheTrimTrack() {
-        XCTAssertEqual(ComposerEditScene.panel(isVideo: true, familyOpen: true, presetsOpen: false), .band)
-        XCTAssertEqual(ComposerEditScene.panel(isVideo: true, familyOpen: false, presetsOpen: true), .presets)
-        XCTAssertEqual(ComposerEditScene.panel(isVideo: true, familyOpen: false, presetsOpen: false), .trim)
-        XCTAssertEqual(ComposerEditScene.panel(isVideo: false, familyOpen: false, presetsOpen: false), .none)
-        XCTAssertGreaterThan(ComposerEditScene.bottomReserve(.band), ComposerEditScene.bottomReserve(.none))
+    func test_editPanels_stackTheirHeights_andTheBandFoldsThem() {
+        XCTAssertEqual(ComposerEditScene.bottomReserve([]), ComposerEditScene.toolsRow + ComposerEditScene.gap * 2)
+        let tous: [ComposerEditPanel] = [.presets, .sound, .trim]
+        let attendu = ComposerEditScene.toolsRow + ComposerEditScene.gap * 2
+            + tous.map { ComposerEditScene.panelHeight($0) + ComposerEditScene.gap }.reduce(0, +)
+        XCTAssertEqual(ComposerEditScene.bottomReserve(tous), attendu, "chaque panneau montré prend sa place")
+        XCTAssertGreaterThan(ComposerEditScene.bottomReserve([.band]), ComposerEditScene.bottomReserve([]))
+    }
+
+    /// Les trois outils d'une vidéo ouverts ensemble laissent encore une scène
+    /// qu'on recadre, même sur le plus petit écran servi (iPhone SE).
+    func test_everyToolOpen_onTheSmallestScreen_stillLeavesACroppableScene() {
+        let zone = ComposerEditScene.area(container: CGSize(width: 375, height: 667), top: 20, bottom: 0,
+                                          panels: [.presets, .sound, .trim])
+        XCTAssertGreaterThanOrEqual(zone.height, ComposerEditScene.minimumSide * 2)
     }
 
     /// Un crochet tiré déplace SON angle ; l'angle opposé ne bouge pas, et la
@@ -369,22 +366,25 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertNil(session.editAspect, "hors retouche, rien ne se recadre")
     }
 
-    func test_cropPresets_andTheBand_neverOpenTogether_andCloseWithTheEdit() {
+    func test_cropPresets_foldUnderTheBand_withoutLosingTheBrackets_andCloseWithTheEdit() {
         let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
-        session.toggleCropPresets()
-        XCTAssertFalse(session.cropPresetsOpen, "hors retouche, pas de recadrage")
+        session.toggleEditTool(.crop)
+        XCTAssertEqual(session.activeEditTools, [], "hors retouche, pas de recadrage")
         session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
-        XCTAssertEqual(session.editPanel, .none)
-        session.toggleCropPresets()
-        XCTAssertTrue(session.cropPresetsOpen)
-        XCTAssertEqual(session.editPanel, .presets)
+        XCTAssertEqual(session.editPanels, [.presets], "Crop d'office sur une photo (#9754)")
+        XCTAssertTrue(session.showsCropBrackets)
         session.toggleFamily(.filters)
-        XCTAssertFalse(session.cropPresetsOpen, "ouvrir une bande replie les proportions")
-        XCTAssertEqual(session.editPanel, .band)
-        session.toggleCropPresets()
-        XCTAssertNil(session.openFamily, "et l'inverse")
+        XCTAssertEqual(session.activeEditTools, [.crop], "ouvrir une bande n'éteint pas l'outil")
+        XCTAssertEqual(session.editPanels, [.band], "elle replie seulement les proportions")
+        XCTAssertTrue(session.showsCropBrackets, "les équerres restent sur la scène")
+        session.toggleEditTool(.crop)
+        XCTAssertFalse(session.showsCropBrackets, "toucher Crop retire les équerres")
+        XCTAssertEqual(session.openFamily, .filters, "et laisse la bande")
+        session.toggleEditTool(.crop)
+        XCTAssertNil(session.openFamily, "rallumer Crop replie la bande pour montrer ses proportions")
+        XCTAssertEqual(session.editPanels, [.presets])
         session.cancelEditing()
-        XCTAssertFalse(session.cropPresetsOpen)
+        XCTAssertEqual(session.activeEditTools, [])
     }
 
     func test_setEditAspect_whileTheRenderRuns_changesNothing() {
@@ -411,7 +411,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertTrue(crochets.contains("lineCap: .round"), "des crochets arrondis")
         let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("ComposerCropPresetBar("), "les proportions par presets, après les cadres")
-        XCTAssertTrue(bas.contains("onCrop: { session.toggleCropPresets() }"))
+        XCTAssertTrue(bas.contains("onTool: { session.toggleEditTool($0) }"))
         let apercu = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(apercu.contains("ComposerCapturePlacement.radius(for: size, editing: session.phase.isEditing)"),
                       "la scène de retouche a des coins arrondis")

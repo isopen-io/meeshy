@@ -71,6 +71,10 @@ nonisolated protocol NotificationReplyQueueing {
         payload: P,
         conversationId: String?
     ) async throws -> String
+    /// La seule entrée d'un commentaire dans la file (#9743) : dans la base
+    /// PROUVÉE de son auteur, et dans aucune autre.
+    @discardableResult
+    func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String
 }
 
 extension OfflineQueue: NotificationReplyQueueing {}
@@ -124,6 +128,12 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let messageService: MessageServiceProviding
     private let conversationService: ConversationServiceProviding
     private let postService: PostServiceProviding
+    /// Le seul chemin réseau d'un commentaire (#9743) — il lie la requête au
+    /// compte de l'auteur.
+    private let commentPublisher: CommentPublisher
+    /// Une réponse rapide à un commentaire n'a pu ni partir ni rejoindre la
+    /// file : l'utilisateur, hors de l'app, l'apprend par une notification.
+    private let notifyUnsentComment: @MainActor () -> Void
     private let friendService: FriendServiceProviding
     private let replyQueue: NotificationReplyQueueing
     private let injectedPersistence: OptimisticMessagePersisting?
@@ -180,6 +190,8 @@ final class NotificationActionHandler: NotificationActionHandling {
         messageService: MessageServiceProviding = MessageService.shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
         postService: PostServiceProviding = PostService.shared,
+        commentPublisher: CommentPublisher = .live,
+        notifyUnsentComment: @escaping @MainActor () -> Void = { NotificationReplyFailure.post() },
         friendService: FriendServiceProviding = FriendService.shared,
         replyQueue: NotificationReplyQueueing = OfflineQueue.shared,
         messagePersistence: OptimisticMessagePersisting? = nil,
@@ -238,6 +250,8 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.messageService = messageService
         self.conversationService = conversationService
         self.postService = postService
+        self.commentPublisher = commentPublisher
+        self.notifyUnsentComment = notifyUnsentComment
         self.friendService = friendService
         self.replyQueue = replyQueue
         self.injectedPersistence = messagePersistence
@@ -591,12 +605,14 @@ final class NotificationActionHandler: NotificationActionHandling {
             notifiedCommentId: userInfo["commentId"] as? String
         )
         let clientMutationId = ClientMutationId.generate()
-
-        await prepareReplyQueue()
-        do {
-            try await replyQueue.enqueue(
-                .createComment,
-                payload: CreateCommentPayload(
+        // #9743, M2 — l'auteur est le compte que le JETON désigne, et la
+        // notification doit s'adresser à lui.
+        guard let owner = NotificationReplyFailure.author(token: authTokenProvider(), userInfo: userInfo) else {
+            CommentSendTrace.log("notification : réponse refusée — le jeton ne désigne pas le destinataire")
+            notifyUnsentComment()
+            return
+        }
+        let comment = CreateCommentPayload(
                     clientMutationId: clientMutationId,
                     postId: postId,
                     parentCommentId: parentId,
@@ -607,25 +623,29 @@ final class NotificationActionHandler: NotificationActionHandling {
                     // comme sur la tentative REST jumelle ci-dessous — les deux
                     // chemins partagent le même cmid et doivent donner le même
                     // commentaire, quel que soit celui qui atterrit le premier.
-                    originalLanguage: nil
-                ),
-                conversationId: nil
-            )
+                    originalLanguage: nil,
+                    authorId: owner
+        )
+
+        await prepareReplyQueue()
+        var kept = false
+        do {
+            try await replyQueue.enqueueComment(comment, ownerId: owner)
+            kept = true
         } catch {
-            logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .private)")
         }
 
         do {
-            _ = try await postService.addComment(
-                postId: postId,
-                content: text,
-                parentId: parentId,
-                effectFlags: nil,
-                clientMutationId: clientMutationId
-            )
-            logger.info("notification comment sent for post \(postId, privacy: .public)")
+            try await commentPublisher.publish(comment, pieces: [])
+            kept = true
+            logger.info("notification comment sent")
         } catch {
-            logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .public)")
+            logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .private)")
+        }
+        if !kept {
+            CommentSendTrace.log("notification : ni envoyée ni gardée — l'utilisateur est prévenu")
+            notifyUnsentComment()
         }
 
         // #6999 — commenter, c'est consommer : la notification commentée passe

@@ -26,6 +26,21 @@ nonisolated enum ComposerCameraSwitchRule {
         !isSwitching
     }
 
+    /// **La trame qui couvre la bascule** (#9778) : celle que le guetteur retient
+    /// déjà, sans attendre ; sinon la prochaine de l'objectif en place, attendue
+    /// au plus `frameWait` — une caméra avant en faible lumière en sert une
+    /// toutes les 66 ms.
+    static func coverFrame(latest: CIImage?, hold: () -> CIImage?) -> CIImage? {
+        latest ?? hold()
+    }
+
+    /// La validation peut rendre l'objectif à son format, et son zoom à ×1 de
+    /// l'appareil — l'ultra grand-angle d'une caméra virtuelle. Ré-affirmer
+    /// l'ouverture ne coûte que si elle a bougé.
+    static func needsZoomReassert(current: CGFloat, target: CGFloat) -> Bool {
+        abs(current - target) > 0.001
+    }
+
     /// La trame, réduite puis floutée, sans bord sombre (étendue avant le flou).
     static func cover(from frame: CIImage) -> CGImage? {
         let cadre = frame.extent
@@ -43,5 +58,11 @@ nonisolated enum ComposerCameraSwitchRule {
     /// La couverture voyage de la file de la session au fil principal.
     struct Cover: @unchecked Sendable {
         let image: CGImage
+    }
+
+    /// La trame retenue voyage de la file de la session à celle du flou —
+    /// une `CIImage` est immuable.
+    struct Frame: @unchecked Sendable {
+        let image: CIImage
     }
 }

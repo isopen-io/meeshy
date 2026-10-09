@@ -38,6 +38,7 @@ const itStudioChrome = {
   'story.studio.retouch.done': 'Fine',
   'story.studio.retouch.cancel': 'Annulla la modifica',
   'composer.attachment.edit': 'Modifica {name}',
+  'composer.attachment.remove': 'Rimuovi {name}',
   'story.studio.retouch.failed': 'Impossibile generare il contenuto.',
   'story.studio.retouch.exporting': 'Esportazione in corso…',
   'story.studio.timeline.enter': 'Entra qui',

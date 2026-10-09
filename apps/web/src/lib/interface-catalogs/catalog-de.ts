@@ -87,7 +87,6 @@ const de = {
   'reels.sound.off': 'Stummschalten',
   'reels.play': 'Reel abspielen',
   'reels.pause': 'Reel pausieren',
-  'reels.media.error': 'Wiedergabe nicht möglich — Erneut versuchen',
   'reels.image': 'Bild {index} von {count}',
 
   'stories.title': 'Storys',

@@ -548,7 +548,7 @@ export default defineConfig({
             manifest: {
               name: 'Meeshy',
               short_name: 'Meeshy',
-              description: 'Messagerie multilingue temps reel',
+              description: 'Messagerie multilingue en temps réel',
               lang: 'fr',
               start_url: '/',
               scope: '/',

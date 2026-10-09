@@ -112,6 +112,15 @@ function makePrisma(opts: {
       update: jest.fn<any>().mockResolvedValue(opts.postUpdate ?? defaultPost),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       count: jest.fn<any>().mockResolvedValue(opts.postCount ?? 0),
+      groupBy: jest.fn<any>().mockResolvedValue([]),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    user: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+    },
+    postComment: {
+      groupBy: jest.fn<any>().mockResolvedValue([]),
     },
     postBookmark: {
       create: jest.fn<any>().mockResolvedValue(
@@ -121,6 +130,7 @@ function makePrisma(opts: {
         ? jest.fn<any>().mockRejectedValue(opts.bookmarkDeleteErr)
         : jest.fn<any>().mockResolvedValue({}),
       findFirst: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     postReaction: {
       findMany: jest.fn<any>().mockResolvedValue(opts.reactionFindMany ?? []),
@@ -137,6 +147,7 @@ function makePrisma(opts: {
       findUnique: jest.fn<any>().mockResolvedValue(opts.trackingLinkFindUnique ?? null),
       create: jest.fn<any>().mockResolvedValue(txLink),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      groupBy: jest.fn<any>().mockResolvedValue([]),
     },
     postMedia: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
@@ -771,7 +782,14 @@ describe('getPostViews', () => {
   });
 
   it('throws FORBIDDEN when user is not the author', async () => {
-    const prisma = makePrisma({ postFindFirst: makePost({ authorId: 'other' }) });
+    const prisma = makePrisma({ postFindFirst: makePost({ authorId: 'other', type: 'STORY' }) });
+    const { sut } = makeSut(prisma);
+
+    await expect(sut.getPostViews('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
+  });
+
+  it('throws FORBIDDEN to the author of a POST — he only sees the counts (decision 2026-10-09)', async () => {
+    const prisma = makePrisma({ postFindFirst: makePost({ type: 'POST' }) });
     const { sut } = makeSut(prisma);
 
     await expect(sut.getPostViews('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
@@ -779,7 +797,7 @@ describe('getPostViews', () => {
 
   it('returns paginated views with total and hasMore', async () => {
     const view = { user: { id: 'v1', username: 'viewer', displayName: 'Viewer', avatar: null }, viewedAt: new Date() };
-    const prisma = makePrisma({ viewFindMany: [view], viewCount: 1 });
+    const prisma = makePrisma({ postFindFirst: makePost({ type: 'STORY' }), viewFindMany: [view], viewCount: 1 });
     const { sut } = makeSut(prisma);
 
     const result = await sut.getPostViews('post-1', 'user-1', 10, 0) as any;
@@ -790,7 +808,7 @@ describe('getPostViews', () => {
   });
 
   it('computes hasMore correctly when total exceeds offset+limit', async () => {
-    const prisma = makePrisma({ viewFindMany: [], viewCount: 25 });
+    const prisma = makePrisma({ postFindFirst: makePost({ type: 'STORY' }), viewFindMany: [], viewCount: 25 });
     const { sut } = makeSut(prisma);
 
     const result = await sut.getPostViews('post-1', 'user-1', 10, 0) as any;
@@ -810,7 +828,14 @@ describe('getPostInteractions', () => {
   });
 
   it('throws FORBIDDEN when user is not the author', async () => {
-    const prisma = makePrisma({ postFindFirst: makePost({ authorId: 'other' }) });
+    const prisma = makePrisma({ postFindFirst: makePost({ authorId: 'other', type: 'STORY' }) });
+    const { sut } = makeSut(prisma);
+
+    await expect(sut.getPostInteractions('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
+  });
+
+  it('throws FORBIDDEN to the author of a POST — he only sees the counts (decision 2026-10-09)', async () => {
+    const prisma = makePrisma({ postFindFirst: makePost({ type: 'POST' }) });
     const { sut } = makeSut(prisma);
 
     await expect(sut.getPostInteractions('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
@@ -823,6 +848,7 @@ describe('getPostInteractions', () => {
   it('merges viewer reactions into the interactions response', async () => {
     const view = { user: { id: 'viewer-1', username: 'v', displayName: 'V', avatar: null }, viewedAt: new Date() };
     const prisma = makePrisma({
+      postFindFirst: makePost({ type: 'STORY' }),
       reactionFindMany: [{ userId: 'viewer-1', emoji: '👏' }],
       viewFindMany: [view],
       viewCount: 1,
@@ -837,7 +863,7 @@ describe('getPostInteractions', () => {
 
   it('returns null reaction for viewers with no reaction', async () => {
     const view = { user: { id: 'v2', username: 'v2', displayName: 'V2', avatar: null }, viewedAt: new Date() };
-    const prisma = makePrisma({ viewFindMany: [view], viewCount: 1 });
+    const prisma = makePrisma({ postFindFirst: makePost({ type: 'STORY' }), viewFindMany: [view], viewCount: 1 });
     const { sut } = makeSut(prisma);
 
     const result = await sut.getPostInteractions('post-1', 'user-1', 10, 0) as any;

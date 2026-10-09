@@ -373,7 +373,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, clientMutationId: String?) async throws -> APIPostComment {
         lastAddCommentClientMutationId = clientMutationId
-        return try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags)
+        return try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                                    attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
     }
 
     func likeComment(postId: String, commentId: String) async throws {

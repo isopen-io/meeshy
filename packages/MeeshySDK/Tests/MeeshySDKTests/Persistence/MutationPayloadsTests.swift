@@ -509,7 +509,7 @@ final class MutationPayloadsTests: XCTestCase {
             postId: "post-1",
             parentCommentId: nil,
             content: "Great post!",
-            originalLanguage: "en"
+            originalLanguage: "en", authorId: "user-1"
         )
         let data = try encoder.encode(original)
         let decoded = try decoder.decode(CreateCommentPayload.self, from: data)
@@ -522,7 +522,7 @@ final class MutationPayloadsTests: XCTestCase {
             postId: "post-1",
             parentCommentId: "comment-parent",
             content: "Agreed",
-            originalLanguage: "en"
+            originalLanguage: "en", authorId: "user-1"
         )
         let data = try encoder.encode(original)
         let decoded = try decoder.decode(CreateCommentPayload.self, from: data)
@@ -535,7 +535,7 @@ final class MutationPayloadsTests: XCTestCase {
             postId: "post-1",
             parentCommentId: "comment-parent",
             content: "Sparkles",
-            originalLanguage: "en",
+            originalLanguage: "en", authorId: "user-1",
             effectFlags: 5
         )
         let data = try encoder.encode(original)

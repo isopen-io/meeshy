@@ -1650,7 +1650,7 @@ extension StoryComposerView {
     var foregroundAudioBindings: [Binding<StoryAudioPlayerObject>] {
         let audios = viewModel.currentEffects.audioPlayerObjects ?? []
         return audios.enumerated().compactMap { idx, obj -> Binding<StoryAudioPlayerObject>? in
-            guard obj.isBackground != true else { return nil }
+            guard SceneAudioStageRule.isStaged(obj) else { return nil }
             return Binding<StoryAudioPlayerObject>(
                 get: {
                     let list = viewModel.currentEffects.audioPlayerObjects ?? []

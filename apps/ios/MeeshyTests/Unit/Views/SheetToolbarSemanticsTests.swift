@@ -142,7 +142,9 @@ final class SheetToolbarSemanticsTests: XCTestCase {
             "MagicLinkView.swift",
             "MyStoriesView.swift",
             "SecurityVerificationView.swift",
-            "StoryViewerView+Content.swift",
+            // #9727 — `StoryViewerView+Content.swift` en sort : sa feuille « Vues »
+            // a quitté l'hôte (`PublicationViewersSheet.swift`) et y ferme par
+            // `.cancellationAction`.
             "VoiceProfileManageView.swift",
         ]
         XCTAssertEqual(

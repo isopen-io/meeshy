@@ -354,8 +354,8 @@ struct ConversationView: View {
     private func persistDraftAttachmentsForBackground() {
         guard let userId = AuthManager.shared.currentUser?.id else { return }
         let refs = MessageDraftMediaStore.persist(
-            attachments: composerState.pendingAttachments,
-            files: composerState.pendingMediaFiles,
+            attachments: composerState.pendingAttachments, files: composerState.pendingMediaFiles,
+            assetLinks: composerState.libraryAssetLinks,
             userId: userId,
             conversationId: viewModel.conversationId
         )
@@ -1094,8 +1094,8 @@ struct ConversationView: View {
                             userId: userId,
                             conversationId: viewModel.conversationId
                         )
-                        composerState.pendingAttachments = restored.attachments
-                        composerState.pendingMediaFiles = restored.files
+                        composerState.adoptRestoredDraft(attachments: restored.attachments, files: restored.files,
+                                                         assetLinks: MessageDraftMediaStore.assetLinks(of: refs, restored: restored.attachments.map(\.id)))
                         Task { await restoreDraftThumbnails(attachments: restored.attachments, files: restored.files) }
                     }
                 }

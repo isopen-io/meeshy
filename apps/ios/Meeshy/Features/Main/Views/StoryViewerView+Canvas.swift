@@ -1050,7 +1050,7 @@ struct StoryCardView: View {
                               carrier: outgoing,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isOutgoing: true,
-                              servesLetterboxFill: false,
+                              servesLetterboxFill: false, stagesSoundChips: false,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs)
@@ -1109,7 +1109,7 @@ struct StoryCardView: View {
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isMuted: isGlobalMuted,
                               servesLetterboxFill: false,
-                              scrubber: sceneScrubber,
+                              scrubber: sceneScrubber, stagesSoundChips: false,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs,

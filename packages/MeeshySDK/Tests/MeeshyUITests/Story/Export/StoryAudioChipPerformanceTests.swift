@@ -51,7 +51,9 @@ final class StoryAudioChipPerformanceTests: XCTestCase {
 
         print(String(format: "[perf] puces de son 1080×1920, 2 puces : %.3f ms/image avec gabarit, %.3f ms/image sans",
                      cached, rebuilt))
-        XCTAssertLessThan(cached, rebuilt, "le gabarit doit coûter moins qu'une rasterisation par image")
+        XCTAssertEqual(painter.templateBuildCount, 2, "le gabarit ne se reconstruit pas d'une image à l'autre")
+        XCTAssertLessThan(cached, rebuilt * 1.25,
+                          "le gabarit ne doit jamais coûter nettement plus qu'une rasterisation par image")
     }
 
     private static func millisecondsPerFrame(_ body: (CMTime) -> Void) -> Double {

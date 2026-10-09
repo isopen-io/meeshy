@@ -21,6 +21,9 @@ const VIEWERS_OF_ST_MIENNE: readonly PostViewerRow[] = [
     avatarUrl: null,
     viewedAt: minutesAgo(4).toISOString(),
     reaction: '❤️',
+    reactions: ['🔥', '❤️'],
+    commentCount: 1,
+    replyCount: 2,
   },
   {
     id: 'u-viewer-elan',
@@ -51,13 +54,17 @@ const STORY_AUTHOR_OF: Readonly<Record<string, string>> = {
      dans `fixtures-stories.ts`) : elle éprouve l'état VIDE de la feuille sans
      confondre « pas encore vue » et « je ne suis pas l'auteur » (403). */
   'st-mienne-sans-vue': VIEWER_ID,
+  /* UNE de MES stories dont la passerelle n'a pas pu établir le détail
+     (`engagement: 'unavailable'`) — id de test seulement : les lignes arrivent
+     NUES, et la feuille doit dire pourquoi plutôt que « sans autre interaction ». */
+  'st-mienne-detail-indisponible': VIEWER_ID,
   'st-amie-1': 'u-ines',
   'st-amie-2': 'u-ines',
   'st-video': 'u-ines',
 };
 
 export type FixtureInteractionsResult =
-  | { readonly ok: true; readonly viewers: readonly PostViewerRow[] }
+  | { readonly ok: true; readonly viewers: readonly PostViewerRow[]; readonly engagement?: 'unavailable' }
   | { readonly ok: false; readonly status: 403 | 404 };
 
 /**
@@ -70,5 +77,8 @@ export function fixturePostInteractions(postId: string): FixtureInteractionsResu
   const author = STORY_AUTHOR_OF[postId];
   if (author === undefined) return { ok: false, status: 404 };
   if (author !== VIEWER_ID) return { ok: false, status: 403 };
+  if (postId === 'st-mienne-detail-indisponible') {
+    return { ok: true, viewers: VIEWERS_OF_ST_MIENNE.slice(1), engagement: 'unavailable' };
+  }
   return { ok: true, viewers: postId === 'st-mienne' ? VIEWERS_OF_ST_MIENNE : [] };
 }

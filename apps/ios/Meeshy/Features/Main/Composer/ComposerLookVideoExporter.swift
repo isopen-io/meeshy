@@ -27,12 +27,14 @@ nonisolated enum ComposerLookVideoExporter {
     /// cube y lit la vidéo comme il y lisait l'aperçu.
     /// `timeRange` : la plage gardée par la découpe (#9353) — elle seule part,
     /// image et son ; `nil` ⇒ le clip entier.
+    /// `audioGain` : le son réglé en retouche (#9754), de 0 (muet) à 1 (intact).
     @concurrent
     static func export(_ url: URL, look: ComposerPhotoLook, framing: ComposerFraming = .identity,
                        timeRange: CMTimeRange? = nil, aspect: CGFloat = ComposerLookPainter.designAspect,
                        person: CallFramePerson, date: Date,
-                       declaredSpaceName: String? = nil) async -> URL? {
-        guard ComposerLiveLookRule.rendersLive(look) || !framing.isIdentity || timeRange != nil else { return url }
+                       declaredSpaceName: String? = nil, audioGain: Float = 1) async -> URL? {
+        guard ComposerLiveLookRule.rendersLive(look) || !framing.isIdentity || timeRange != nil
+                || audioGain != 1 else { return url }
         let asset = AVURLAsset(url: url)
         do {
             guard let track = try await asset.loadTracks(withMediaType: .video).first else { return nil }
@@ -53,7 +55,8 @@ nonisolated enum ComposerLookVideoExporter {
             composition.colorPrimaries = AVVideoColorPrimaries_P3_D65
             composition.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
             composition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
-            return await write(asset, composition: composition, timeRange: timeRange)
+            let mixage = await audioMix(asset, gain: audioGain)
+            return await write(asset, composition: composition, audioMix: mixage, timeRange: timeRange)
         } catch {
             Logger.media.error("Live look video export failed: \(error.localizedDescription, privacy: .public)")
             return nil
@@ -62,7 +65,22 @@ nonisolated enum ComposerLookVideoExporter {
 
     private struct UnpaintedFrame: Error {}
 
-    private static func write(_ asset: AVAsset, composition: AVVideoComposition,
+    /// **Le son réglé part dans le rendu** (#9754) : chaque piste de son porte
+    /// le gain de la retouche ; intact, aucun mixage n'est posé.
+    static func audioMix(_ asset: AVAsset, gain: Float) async -> AVAudioMix? {
+        guard gain != 1, let pistes = try? await asset.loadTracks(withMediaType: .audio), !pistes.isEmpty else {
+            return nil
+        }
+        let mixage = AVMutableAudioMix()
+        mixage.inputParameters = pistes.map { piste in
+            let reglage = AVMutableAudioMixInputParameters(track: piste)
+            reglage.setVolume(max(0, min(1, gain)), at: .zero)
+            return reglage
+        }
+        return mixage
+    }
+
+    private static func write(_ asset: AVAsset, composition: AVVideoComposition, audioMix: AVAudioMix?,
                               timeRange: CMTimeRange?) async -> URL? {
         guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
             return nil
@@ -72,6 +90,7 @@ nonisolated enum ComposerLookVideoExporter {
         session.outputURL = sortie
         session.outputFileType = .mov
         session.videoComposition = composition
+        session.audioMix = audioMix
         // La date de création et le lieu de la prise suivent la vidéo rendue.
         session.metadata = (try? await asset.load(.metadata)) ?? []
         if let timeRange { session.timeRange = timeRange }

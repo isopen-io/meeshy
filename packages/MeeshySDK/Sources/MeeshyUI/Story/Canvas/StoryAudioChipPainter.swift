@@ -18,6 +18,8 @@ public struct StoryAudioChipPlacement: Equatable {
     /// comprise).
     public let unit: CGFloat
     public let display: AudioChipDisplay
+    /// Rotation de la puce autour de son centre, en degrés, sens horaire.
+    public let rotation: Double
     public let muted: Bool
     /// Secondes écoulées depuis l'apparition de la puce — l'horloge de l'onde
     /// et du défilement du crédit.
@@ -89,7 +91,7 @@ public final class StoryAudioChipPainter {
 
     /// La largeur de scène pour laquelle `AudioForegroundChip` est dessinée —
     /// celle d'un iPhone en portrait.
-    public static let referenceCanvasWidth: CGFloat = 390
+    public nonisolated static let referenceCanvasWidth: CGFloat = 390
 
     /// Nombre de gabarits rasterisés depuis la création du peintre.
     public private(set) var templateBuildCount = 0
@@ -116,7 +118,7 @@ public final class StoryAudioChipPainter {
         let visibles = respectingWindow
             ? AudioForegroundReaderOverlay.visibleAudios(in: audios, elapsed: seconds,
                                                          slideDuration: slide.computedTotalDuration())
-            : audios.filter { $0.isBackground != true }
+            : SceneAudioStageRule.stagedAudios(in: audios)
         let size = geometry.renderSize
         return visibles.map { audio in
             StoryAudioChipPlacement(
@@ -131,6 +133,7 @@ public final class StoryAudioChipPainter {
                     libraryUsername: audio.soundAuthorUsername,
                     libraryDuration: nil,
                     libraryReleasedAt: audio.soundReleaseDate)),
+                rotation: audio.rotation ?? 0,
                 muted: audio.isMuted,
                 elapsed: max(0, seconds - Double(audio.startTime ?? 0)))
         }
@@ -168,10 +171,22 @@ public final class StoryAudioChipPainter {
         let capsule = CGPath(roundedRect: frame, cornerWidth: frame.height / 2,
                              cornerHeight: frame.height / 2, transform: nil)
 
+        // La puce tourne autour de son centre, comme à l'écran. Tournée, elle
+        // prend sa teinte pleine : le fond dépoli se prélève dans l'axe du
+        // tampon, pas dans celui de la puce.
+        let isRotated = placement.rotation != 0
+        context.saveGState()
+        defer { context.restoreGState() }
+        if isRotated {
+            context.translateBy(x: placement.center.x, y: placement.center.y)
+            context.rotate(by: Self.radians(placement.rotation))
+            context.translateBy(x: -placement.center.x, y: -placement.center.y)
+        }
+
         context.saveGState()
         context.addPath(capsule)
         context.clip()
-        let frosted = samplesBackdrop
+        let frosted = samplesBackdrop && !isRotated
             ? StoryAudioChipGlass.frostedBackdrop(under: frame, unit: placement.unit, in: context)
             : nil
         if let frosted {
@@ -198,6 +213,11 @@ public final class StoryAudioChipPainter {
             }
         }
         context.restoreGState()
+    }
+
+    /// Degrés → radians, dans le sens horaire d'un contexte en repère UIKit.
+    public nonisolated static func radians(_ degrees: Double) -> CGFloat {
+        CGFloat(degrees * .pi / 180)
     }
 
     private func template(for placement: StoryAudioChipPlacement,

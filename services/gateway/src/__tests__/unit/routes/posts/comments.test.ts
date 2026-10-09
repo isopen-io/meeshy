@@ -366,7 +366,7 @@ describe('POST /posts/:postId/comments — MEDIA_NOT_AVAILABLE error', () => {
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-001'] },
+      payload: { attachmentIds: ['f0796f644a4ca7c7b0d3bce5'] },
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('MEDIA_NOT_AVAILABLE');
@@ -457,12 +457,12 @@ describe('POST /posts/:postId/comments — attachment only (no text)', () => {
       id: 'comment-002',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-001', mimeType: 'image/jpeg', fileUrl: '/uploads/img.jpg' }],
+      media: [{ id: 'f0796f644a4ca7c7b0d3bce5', mimeType: 'image/jpeg', fileUrl: '/uploads/img.jpg' }],
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-001'] },
+      payload: { attachmentIds: ['f0796f644a4ca7c7b0d3bce5'] },
     });
     expect(res.statusCode).toBe(201);
     await app.close();
@@ -475,12 +475,12 @@ describe('POST /posts/:postId/comments — audio attachment triggers PostAudioSe
       id: 'comment-003',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-audio-001', mimeType: 'audio/mpeg', fileUrl: '/uploads/audio.mp3' }],
+      media: [{ id: '517d71c794bd1f0428f8bca6', mimeType: 'audio/mpeg', fileUrl: '/uploads/audio.mp3' }],
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-audio-001'] },
+      payload: { attachmentIds: ['517d71c794bd1f0428f8bca6'] },
     });
     expect(res.statusCode).toBe(201);
     await app.close();
@@ -1010,12 +1010,12 @@ describe('POST /posts/:postId/comments — processPostAudio rejects (line 291)',
       id: 'comment-audio-rej',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-rej', mimeType: 'audio/mpeg', fileUrl: '/uploads/rej.mp3' }],
+      media: [{ id: '8c1865d638dcfbda67e4d7c7', mimeType: 'audio/mpeg', fileUrl: '/uploads/rej.mp3' }],
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-rej'] },
+      payload: { attachmentIds: ['8c1865d638dcfbda67e4d7c7'] },
     });
     expect(res.statusCode).toBe(201);
     await new Promise((resolve) => setImmediate(resolve));
@@ -1529,12 +1529,12 @@ describe('POST /posts/:postId/comments — audio media without fileUrl falls bac
       id: 'comment-audio-nourl',
       content: '',
       authorId: USER_ID,
-      media: [{ id: 'media-audio-no-url', mimeType: 'audio/mpeg' }], // no fileUrl
+      media: [{ id: 'f23ba38a26eafa69c614e917', mimeType: 'audio/mpeg' }], // no fileUrl
     });
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments`,
-      payload: { attachmentIds: ['media-audio-no-url'] },
+      payload: { attachmentIds: ['f23ba38a26eafa69c614e917'] },
     });
     expect(res.statusCode).toBe(201);
     await app.close();

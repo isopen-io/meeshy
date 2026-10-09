@@ -21,6 +21,8 @@ const frCommentRow = {
   'comments.composer.attach': 'Joindre une photo, une vidéo ou un son',
   'comments.composer.voice': 'Enregistrer un commentaire vocal',
   'comments.media.upload_failed': 'La pièce jointe n’a pas pu être envoyée.',
+  'comments.media.unsupported': '« {name} » : un commentaire ne porte que des photos, des vidéos et des sons.',
+  'comments.media.limit': 'Pas plus de {count} pièces jointes par commentaire.',
   'comments.replies.show': 'Voir les réponses ({count})',
   'comments.replies.hide': 'Masquer les réponses',
   'comments.replies.more': 'Voir plus de réponses',

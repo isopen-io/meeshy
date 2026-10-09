@@ -144,6 +144,10 @@ export class AttachmentService {
    * portée par un message y reste. Et il n'AJOUTE que de la protection — un
    * `false` ou un zéro du message n'efface rien de ce que la pièce porte, les
    * bits se composent par OU.
+   *
+   * LE LIEN FIXE LE RANG (#9776). L'ordre de `attachmentIds` est l'ordre du
+   * composeur ; chaque pièce reçoit le sien en `rank`, que toute lecture trie
+   * par `MESSAGE_ATTACHMENT_ORDER`. Un id répété garde sa première place.
    */
   async associateAttachmentsToMessage(
     attachmentIds: readonly string[],
@@ -155,31 +159,31 @@ export class AttachmentService {
       readonly maxViewOnceCount?: number | null;
     }
   ): Promise<void> {
-    const unattached = { id: { in: [...attachmentIds] }, ...unsetOrNull('messageId') };
+    const orderedIds = [...new Set(attachmentIds)];
     const added = {
       messageId,
       ...(protection?.isViewOnce === true ? { isViewOnce: true } : {}),
       ...(protection?.isBlurred === true ? { isBlurred: true } : {}),
     };
     const addedFlags = protection?.effectFlags ?? 0;
-    if (addedFlags === 0) {
-      await this.prisma.messageAttachment.updateMany({ where: unattached, data: added });
-      return;
-    }
-
-    const free = await this.prisma.messageAttachment.findMany({
-      where: unattached,
-      select: { id: true, effectFlags: true },
+    const carriedFlags = addedFlags === 0
+      ? null
+      : new Map(
+          (await this.prisma.messageAttachment.findMany({
+            where: { id: { in: orderedIds }, ...unsetOrNull('messageId') },
+            select: { id: true, effectFlags: true },
+          })).map((row) => [row.id, row.effectFlags ?? 0] as const),
+        );
+    const writes = orderedIds.flatMap((id, rank) => {
+      if (carriedFlags === null) return [{ id, data: { ...added, rank } }];
+      const carried = carriedFlags.get(id);
+      return carried === undefined ? [] : [{ id, data: { ...added, rank, effectFlags: carried | addedFlags } }];
     });
-    const idsByFlags = free.reduce(
-      (groups, row) => groups.set(row.effectFlags ?? 0, [...(groups.get(row.effectFlags ?? 0) ?? []), row.id]),
-      new Map<number, readonly string[]>(),
-    );
     await Promise.all(
-      [...idsByFlags].map(([carried, ids]) =>
+      writes.map(({ id, data }) =>
         this.prisma.messageAttachment.updateMany({
-          where: { id: { in: [...ids] }, ...unsetOrNull('messageId') },
-          data: { ...added, effectFlags: carried | addedFlags },
+          where: { id: { in: [id] }, ...unsetOrNull('messageId') },
+          data,
         }),
       ),
     );

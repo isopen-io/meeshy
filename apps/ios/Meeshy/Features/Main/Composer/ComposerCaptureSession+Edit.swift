@@ -21,6 +21,7 @@ extension ComposerCaptureSession {
         editSource = ComposerStillSource(debout)
         framing = .identity
         openFamily = nil
+        activeEditTools = ComposerEditTools.initial(.photo)
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.photo)
         camera.pauseRunning()
@@ -47,6 +48,8 @@ extension ComposerCaptureSession {
         trim = ComposerTrimRule.initialRange(duration: lecteur.duration)
         loopedTrim = trim
         openFamily = nil
+        activeEditTools = ComposerEditTools.initial(.video(hasAudio: lecteur.hasAudio))
+        takeSound = ComposerTakeSound()
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.video(url))
         camera.pauseRunning()
@@ -182,8 +185,9 @@ extension ComposerCaptureSession {
         }
     }
 
-    /// Le rendu de la vidéo retouchée — look, cadrage, découpe, lus dans l'espace
-    /// où la boucle la lisait. « Terminé » et la flèche ⬇︎ exportent par lui.
+    /// Le rendu de la vidéo retouchée — look, cadrage, découpe et son (#9754),
+    /// lus dans l'espace où la boucle la lisait. « Terminé » et la flèche ⬇︎
+    /// exportent par lui : une seule recette.
     private func videoRender(_ url: URL) -> @MainActor () async -> URL? {
         let regard = look
         let cadrage = framing
@@ -192,10 +196,11 @@ extension ComposerCaptureSession {
         let espace = loopPlayer?.declaredSpace?.name as String?
         let plage = ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)
         let proportions = canvasAspect
+        let gain = takeSound.effectiveGain
         return { @MainActor in
             await ComposerLookVideoExporter.export(url, look: regard, framing: cadrage, timeRange: plage,
                                                    aspect: proportions, person: auteur, date: date,
-                                                   declaredSpaceName: espace)
+                                                   declaredSpaceName: espace, audioGain: gain)
         }
     }
 
@@ -230,7 +235,9 @@ extension ComposerCaptureSession {
         editSource = nil
         framing = .identity
         editAspect = nil
-        cropPresetsOpen = false
+        activeEditTools = []
+        takeSound = ComposerTakeSound()
+        trimScrubbing = false
         takeSaveState = .idle
     }
 
@@ -294,14 +301,73 @@ extension ComposerCaptureSession {
         UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.savedToPhotos)
     }
 
-    // MARK: - Le recadrage (#9567)
+    // MARK: - Les outils de la retouche (#9567, #9754)
 
-    /// Ce qui s'ouvre sous la scène de retouche.
-    var editPanel: ComposerEditPanel {
-        guard phase.isEditing else { return .none }
-        return ComposerEditScene.panel(isVideo: loopPlayer != nil, familyOpen: openFamily != nil,
-                                       presetsOpen: cropPresetsOpen)
+    /// La prise en retouche, vue par ses outils ; `nil` hors retouche.
+    var editTake: ComposerEditTake? {
+        switch phase {
+        case .capturing: return nil
+        case .editing(.photo): return .photo
+        case .editing(.video): return .video(hasAudio: takeHasAudio)
+        }
     }
+
+    /// Ce qui s'ouvre sous la scène de retouche, de haut en bas.
+    var editPanels: [ComposerEditPanel] {
+        guard phase.isEditing else { return [] }
+        return ComposerEditTools.panels(familyOpen: openFamily != nil, active: activeEditTools)
+    }
+
+    /// Les outils que la prise offre, après Filtres et Cadres.
+    var editTools: [ComposerEditTool] {
+        editTake.map(ComposerEditTools.offered) ?? []
+    }
+
+    /// Les outils dont la surface est à l'écran — ce que le rail allume.
+    var shownEditTools: Set<ComposerEditTool> {
+        let familleOuverte = openFamily != nil
+        return activeEditTools.filter {
+            ComposerEditTools.isShown($0, active: activeEditTools, familyOpen: familleOuverte)
+        }
+    }
+
+    /// La vidéo en retouche porte-t-elle un son ?
+    var takeHasAudio: Bool { loopPlayer?.hasAudio ?? false }
+
+    /// Les équerres autour de l'image : Crop actif.
+    var showsCropBrackets: Bool {
+        phase.isEditing && ComposerEditTools.showsBrackets(active: activeEditTools)
+    }
+
+    /// **Toucher un outil ne touche que lui** (#9754) : montré, il se retire ;
+    /// sinon il se montre, et replie la bande ouverte pour montrer son panneau.
+    /// Un outil que la prise n'offre pas ne bouge pas, et pendant le rendu de
+    /// « Terminé » plus rien ne bouge.
+    func toggleEditTool(_ tool: ComposerEditTool) {
+        guard phase.isEditing, !isRenderingLook, editTools.contains(tool) else { return }
+        activeEditTools = ComposerEditTools.toggled(activeEditTools, tapping: tool, familyOpen: openFamily != nil)
+        if activeEditTools.contains(tool) { openFamily = nil }
+        HapticFeedback.light()
+    }
+
+    // MARK: - Le son (#9754)
+
+    /// La ligne de volume règle le gain ; l'aperçu l'entend aussitôt.
+    func setTakeGain(_ gain: Double) {
+        guard phase.isEditing, !isRenderingLook, takeHasAudio else { return }
+        takeSound.gain = ComposerTakeSound.clamped(gain)
+        loopPlayer?.setVolume(takeSound.effectiveGain)
+    }
+
+    /// Le bouton à droite de la piste coupe tout le son, ou le réactive au gain d'avant.
+    func toggleTakeMute() {
+        guard phase.isEditing, !isRenderingLook, takeHasAudio else { return }
+        takeSound.muted.toggle()
+        loopPlayer?.setVolume(takeSound.effectiveGain)
+        HapticFeedback.light()
+    }
+
+    // MARK: - Le recadrage (#9567)
 
     /// **La scène prend ces proportions** — par un crochet tiré ou par un
     /// preset ; ce qui part les garde. Pendant le rendu de « Terminé », plus
@@ -320,14 +386,6 @@ extension ComposerCaptureSession {
         editAspect.flatMap { ComposerCropPreset.matching($0, source: editExtent?.size ?? .zero) }
     }
 
-    /// Les proportions s'ouvrent à la place de la bande, jamais avec elle.
-    func toggleCropPresets() {
-        guard phase.isEditing, !isRenderingLook else { return }
-        cropPresetsOpen.toggle()
-        if cropPresetsOpen { openFamily = nil }
-        HapticFeedback.light()
-    }
-
     // MARK: - La découpe (#9353)
 
     /// **La plage gardée suit le geste ; la boucle ne repart qu'à sa fin.**
@@ -337,9 +395,19 @@ extension ComposerCaptureSession {
     func setTrim(_ range: ClosedRange<TimeInterval>, committed: Bool) {
         guard !isRenderingLook, let lecteur = loopPlayer else { return }
         trim = range
-        guard committed, loopedTrim != range else { return }
+        guard committed, loopedTrim != range || trimScrubbing else { return }
         loopedTrim = range
+        trimScrubbing = false
         lecteur.setRange(range)
+    }
+
+    /// **La frame EXACTE sous la règle** (#9754) : pendant qu'une poignée bouge,
+    /// la boucle se suspend et l'aperçu montre l'image de son instant, cherchée
+    /// sans tolérance ; la fin du geste relance la boucle sur la plage gardée.
+    func scrubTrim(to time: TimeInterval) {
+        guard !isRenderingLook, let lecteur = loopPlayer else { return }
+        trimScrubbing = true
+        lecteur.scrub(to: min(max(0, time), lecteur.duration))
     }
 
     /// Toucher la piste y place la tête, dans la plage gardée ; la boucle repart

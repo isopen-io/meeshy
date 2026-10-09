@@ -42,14 +42,22 @@ final class StoryMediaLoaderPlayerPoolTests: XCTestCase {
     /// Le fichier du réel est déjà sur disque (registre partagé) : préparer le
     /// lecteur sur l'URL distante le faisait jouer en streaming et télécharger
     /// une seconde fois, alors que la surface n'attend QUE le fichier local.
+    ///
+    /// Le témoin juge la SOURCE que `preloadVideoPlayer` lit — le registre du
+    /// cache, puis `prerollSource` — et non l'item du lecteur : un fichier de
+    /// test n'est pas une vidéo décodable, son item échoue aussitôt et
+    /// `AVQueuePlayer` le retire de sa file, si bien que `currentItem` vaut
+    /// `nil` avant toute assertion (runtime 26.1 de la CI).
     func test_preloadVideoPlayer_whenTheFileIsOnDisk_buildsTheItemFromTheLocalFile() async {
         let url = remoteURL()
         await CacheCoordinator.shared.video.store(Data(repeating: 0, count: 64), for: url.absoluteString)
         defer { Task { await CacheCoordinator.shared.video.remove(for: url.absoluteString) } }
 
-        let player = await StoryMediaLoader.shared.preloadVideoPlayer(url: url)
+        let localFile = CacheCoordinator.videoLocalFileURL(for: url.absoluteString)
+        let source = StoryMediaLoader.prerollSource(remote: url, localFile: localFile)
 
-        XCTAssertEqual(assetURL(of: player)?.isFileURL, true,
+        XCTAssertEqual(localFile?.isFileURL, true, "le registre partagé doit rendre le fichier déjà sur disque")
+        XCTAssertEqual(source.isFileURL, true,
                        "le lecteur préparé doit lire le fichier local, pas l'URL distante")
     }
 

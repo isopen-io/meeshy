@@ -75,7 +75,7 @@ describe('PostService', () => {
       prisma.post.create.mockResolvedValue(post);
       prisma.postMedia.findFirst.mockResolvedValue(null);
 
-      await service.createPost({ ...basePostData, mediaIds: ['media-1', 'media-2'] }, 'user-1');
+      await service.createPost({ ...basePostData, mediaIds: ['media-1', 'media-2'] }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       // Garde de rattachement : le média doit être LIBRE (ni post ni
       // commentaire) ET appartenir à l'auteur — un tiers ne peut plus
@@ -89,7 +89,7 @@ describe('PostService', () => {
         { OR: [{ postId: null }, { postId: { isSet: false } }] },
         { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
       ]);
-      expect(claim.where.uploaderId).toBe('user-1');
+      expect(claim.where.uploaderId).toBe('0a0a0a0a0a0a0a0a0a0a0a01');
       expect(claim.data).toEqual({ postId: 'post-1' });
       // findFirst is called to detect audio media for Whisper processing
       expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
@@ -110,7 +110,7 @@ describe('PostService', () => {
       prisma.post.create.mockResolvedValue(makePost());
       prisma.postMedia.findFirst.mockResolvedValue(null);
 
-      await service.createPost({ ...basePostData, mediaIds: ['media-1', 'media-2'] }, 'user-1');
+      await service.createPost({ ...basePostData, mediaIds: ['media-1', 'media-2'] }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       const orderWrites = prisma.postMedia.updateMany.mock.calls
         .map((call: any[]) => call[0])
@@ -124,7 +124,7 @@ describe('PostService', () => {
     it('does not query postMedia when no mediaIds are provided', async () => {
       prisma.post.create.mockResolvedValue(makePost());
 
-      await service.createPost(basePostData, 'user-1');
+      await service.createPost(basePostData, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.postMedia.updateMany).not.toHaveBeenCalled();
       expect(prisma.postMedia.findFirst).not.toHaveBeenCalled();
@@ -148,7 +148,7 @@ describe('PostService', () => {
 
       await service.createPost(
         { ...basePostData, mediaIds: ['media-audio', 'media-img'], mobileTranscription },
-        'user-1',
+        '0a0a0a0a0a0a0a0a0a0a0a01',
       );
 
       expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
@@ -189,7 +189,7 @@ describe('PostService', () => {
 
       await service.createPost(
         { ...basePostData, mediaIds: ['media-img'], mobileTranscription },
-        'user-1',
+        '0a0a0a0a0a0a0a0a0a0a0a01',
       );
 
       expect(prisma.postMedia.findFirst).toHaveBeenCalled();
@@ -202,7 +202,7 @@ describe('PostService', () => {
 
       await service.createPost(
         { ...basePostData, mediaIds: ['media-img'] },
-        'user-1',
+        '0a0a0a0a0a0a0a0a0a0a0a01',
       );
 
       // findFirst is always called to detect audio media (for Whisper fire-and-forget)
@@ -225,7 +225,7 @@ describe('PostService', () => {
           mediaIds: ['media-1', 'media-2'],
           mediaAlt: { 'media-1': 'A cat on a windowsill', 'media-foreign': 'not requested' },
         },
-        'user-1',
+        '0a0a0a0a0a0a0a0a0a0a0a01',
       );
 
       expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
@@ -255,7 +255,7 @@ describe('PostService', () => {
           mediaIds: ['media-1', 'media-2'],
           mediaCaption: { 'media-1': 'Coucher de soleil à Dakar', 'media-foreign': 'jamais demandé' },
         },
-        'user-1',
+        '0a0a0a0a0a0a0a0a0a0a0a01',
       );
 
       expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
@@ -280,7 +280,7 @@ describe('PostService', () => {
 
       await service.createPost(
         { ...basePostData, mediaIds: ['media-1'], mediaCaption: { 'media-1': 'Coucher de soleil <script>alert(1)</script>' } },
-        'user-1',
+        '0a0a0a0a0a0a0a0a0a0a0a01',
       );
 
       const written = prisma.postMedia.updateMany.mock.calls
@@ -294,7 +294,7 @@ describe('PostService', () => {
       prisma.post.create.mockResolvedValue(makePost());
       prisma.postMedia.findFirst.mockResolvedValue(null);
 
-      await service.createPost({ ...basePostData, mediaIds: ['media-1'] }, 'user-1');
+      await service.createPost({ ...basePostData, mediaIds: ['media-1'] }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       const captionWrites = prisma.postMedia.updateMany.mock.calls
         .map((call: any[]) => call[0])
@@ -317,7 +317,7 @@ describe('PostService', () => {
           mediaAlt: { 'media-1': 'texte alternatif' },
           mediaCaption: { 'media-1': 'légende' },
         },
-        'user-1',
+        '0a0a0a0a0a0a0a0a0a0a0a01',
       );
 
       const writes = prisma.postMedia.updateMany.mock.calls
@@ -336,7 +336,7 @@ describe('PostService', () => {
       prisma.post.create.mockResolvedValue(makePost());
       prisma.postMedia.findFirst.mockResolvedValue(null);
 
-      await service.createPost({ ...basePostData, mediaIds: ['media-1'] }, 'user-1');
+      await service.createPost({ ...basePostData, mediaIds: ['media-1'] }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       // Le COMPTE d'appels ne dit plus « alt » depuis que la réclamation est
       // suivie du RANG (`applyMediaOrder`) : c'est l'absence d'écriture
@@ -360,7 +360,7 @@ describe('PostService', () => {
         type: PostType.POST,
         visibility: PostVisibility.PUBLIC,
         commentsDisabled: true,
-      }, 'user-1');
+      }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.post.create.mock.calls[0][0].data.commentsDisabled).toBe(true);
     });
@@ -371,7 +371,7 @@ describe('PostService', () => {
       await service.createPost({
         type: PostType.POST,
         visibility: PostVisibility.PUBLIC,
-      }, 'user-1');
+      }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.post.create.mock.calls[0][0].data.commentsDisabled).toBe(false);
     });
@@ -392,7 +392,7 @@ describe('PostService', () => {
         visibility: PostVisibility.PUBLIC,
         content: 'hi',
         repostOfId: 'orig-1',
-      }, 'user-1');
+      }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       const createCall = prisma.post.create.mock.calls[0][0];
       expect(createCall.data.repostOfId).toBe('orig-1');
@@ -408,7 +408,7 @@ describe('PostService', () => {
         type: PostType.STORY,
         visibility: PostVisibility.PUBLIC,
         repostOfId: 'inter-1',
-      }, 'user-1');
+      }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       const createCall = prisma.post.create.mock.calls[0][0];
       expect(createCall.data.originalRepostOfId).toBe('root-1');
@@ -421,7 +421,7 @@ describe('PostService', () => {
         type: PostType.POST,
         visibility: PostVisibility.PUBLIC,
         content: 'normal post',
-      }, 'user-1');
+      }, '0a0a0a0a0a0a0a0a0a0a0a01');
 
       const createCall = prisma.post.create.mock.calls[0][0];
       expect(createCall.data.repostOfId).toBeUndefined();
@@ -438,7 +438,7 @@ describe('PostService', () => {
       (mockReactionService.addReaction as ReturnType<typeof jest.fn>)
         .mockRejectedValue(new Error('Post not found'));
 
-      const result = await service.likePost('000000000000000000000001', 'user-1');
+      const result = await service.likePost('000000000000000000000001', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
@@ -486,7 +486,7 @@ describe('PostService', () => {
       (mockReactionService.addReaction as ReturnType<typeof jest.fn>)
         .mockRejectedValue(new Error('Post has been deleted'));
 
-      const result = await service.likePost('000000000000000000000001', 'user-1');
+      const result = await service.likePost('000000000000000000000001', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
@@ -495,7 +495,7 @@ describe('PostService', () => {
       (mockReactionService.addReaction as ReturnType<typeof jest.fn>)
         .mockRejectedValue(new Error('DB connection lost'));
 
-      await expect(service.likePost('post-1', 'user-1')).rejects.toThrow('DB connection lost');
+      await expect(service.likePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01')).rejects.toThrow('DB connection lost');
     });
   });
 
@@ -508,7 +508,7 @@ describe('PostService', () => {
       prisma.postReaction.findMany.mockResolvedValue([]);
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.unlikePost('000000000000000000000001', 'user-1');
+      const result = await service.unlikePost('000000000000000000000001', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
     });
 
@@ -540,7 +540,7 @@ describe('PostService', () => {
       prisma.post.findFirst.mockResolvedValue(post);
       prisma.postReaction.findMany.mockResolvedValue([]);
 
-      const result = await service.unlikePost('post-1', 'user-1');
+      const result = await service.unlikePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(mockReactionService.removeReaction).not.toHaveBeenCalled();
       expect(prisma.post.update).not.toHaveBeenCalled();
@@ -557,7 +557,7 @@ describe('PostService', () => {
     it('returns null when the post does not exist', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.sharePost('missing', 'user-1');
+      const result = await service.sharePost('missing', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
@@ -567,7 +567,7 @@ describe('PostService', () => {
       const updatedPost = makePost({ shareCount: 1 });
       prisma.post.update.mockResolvedValue(updatedPost);
 
-      const result = await service.sharePost('post-1', 'user-1', 'twitter');
+      const result = await service.sharePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', 'twitter');
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -587,23 +587,23 @@ describe('PostService', () => {
     it('returns null when the post does not exist', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.pinPost('missing', 'user-1');
+      const result = await service.pinPost('missing', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
     });
 
     it('throws FORBIDDEN when the user is not the author', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other-user' }));
 
-      await expect(service.pinPost('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
+      await expect(service.pinPost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01')).rejects.toThrow('FORBIDDEN');
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
     it('sets isPinned to true for the author', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1' }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01' }));
       const pinnedPost = makePost({ isPinned: true });
       prisma.post.update.mockResolvedValue(pinnedPost);
 
-      const result = await service.pinPost('post-1', 'user-1');
+      const result = await service.pinPost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -623,23 +623,23 @@ describe('PostService', () => {
     it('returns null when the post does not exist', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.unpinPost('missing', 'user-1');
+      const result = await service.unpinPost('missing', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
     });
 
     it('throws FORBIDDEN when the user is not the author', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other-user' }));
 
-      await expect(service.unpinPost('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
+      await expect(service.unpinPost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01')).rejects.toThrow('FORBIDDEN');
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
     it('sets isPinned to false for the author', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', isPinned: true }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', isPinned: true }));
       const unpinnedPost = makePost({ isPinned: false });
       prisma.post.update.mockResolvedValue(unpinnedPost);
 
-      const result = await service.unpinPost('post-1', 'user-1');
+      const result = await service.unpinPost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -659,18 +659,25 @@ describe('PostService', () => {
     it('returns null when the post does not exist', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.getPostViews('missing', 'user-1');
+      const result = await service.getPostViews('missing', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
     });
 
     it('throws FORBIDDEN when the user is not the author', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other-user' }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other-user', type: 'STORY' }));
 
-      await expect(service.getPostViews('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
+      await expect(service.getPostViews('post-1', '0a0a0a0a0a0a0a0a0a0a0a01')).rejects.toThrow('FORBIDDEN');
+    });
+
+    it('throws FORBIDDEN to the author of a POST: he only sees the counts (decision 2026-10-09)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST' }));
+
+      await expect(service.getPostViews('post-1', '0a0a0a0a0a0a0a0a0a0a0a01')).rejects.toThrow('FORBIDDEN');
+      expect(prisma.postView.findMany).not.toHaveBeenCalled();
     });
 
     it('returns paginated views with hasMore=true when more items exist', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1' }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY' }));
 
       const viewItems = [
         { id: 'v1', userId: 'u1', postId: 'post-1', viewedAt: new Date() },
@@ -679,7 +686,7 @@ describe('PostService', () => {
       prisma.postView.findMany.mockResolvedValue(viewItems);
       prisma.postView.count.mockResolvedValue(10);
 
-      const result = await service.getPostViews('post-1', 'user-1', 2, 0);
+      const result = await service.getPostViews('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', 2, 0);
 
       expect(result).toEqual({
         items: viewItems,
@@ -689,13 +696,13 @@ describe('PostService', () => {
     });
 
     it('returns hasMore=false when all items are fetched', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1' }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY' }));
       prisma.postView.findMany.mockResolvedValue([
         { id: 'v1', userId: 'u1', postId: 'post-1', viewedAt: new Date() },
       ]);
       prisma.postView.count.mockResolvedValue(1);
 
-      const result = await service.getPostViews('post-1', 'user-1', 50, 0);
+      const result = await service.getPostViews('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', 50, 0);
 
       expect(result).toEqual({
         items: expect.any(Array),
@@ -705,11 +712,11 @@ describe('PostService', () => {
     });
 
     it('uses default limit and offset values', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1' }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY' }));
       prisma.postView.findMany.mockResolvedValue([]);
       prisma.postView.count.mockResolvedValue(0);
 
-      await service.getPostViews('post-1', 'user-1');
+      await service.getPostViews('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.postView.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ take: 50, skip: 0 }),
@@ -725,7 +732,7 @@ describe('PostService', () => {
     it('returns null when the original post does not exist', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.repostPost('missing', 'user-1');
+      const result = await service.repostPost('missing', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
       expect(prisma.post.create).not.toHaveBeenCalled();
     });
@@ -1120,7 +1127,7 @@ describe('PostService', () => {
       prisma.post.create.mockRejectedValue(new Error('DB constraint violation'));
 
       await expect(
-        service.repostPost('story-x', 'user-1', { targetType: PostType.POST })
+        service.repostPost('story-x', '0a0a0a0a0a0a0a0a0a0a0a01', { targetType: PostType.POST })
       ).rejects.toThrow();
 
       expect(deleteSpy).toHaveBeenCalledWith('/api/v1/attachments/file/new-m1.jpg');
@@ -1134,7 +1141,7 @@ describe('PostService', () => {
       prisma.post.update.mockResolvedValue(original);
 
       const before = Date.now();
-      await service.repostPost('src-1', 'user-1', { targetType: PostType.STORY });
+      await service.repostPost('src-1', '0a0a0a0a0a0a0a0a0a0a0a01', { targetType: PostType.STORY });
       const after = Date.now();
 
       const createCall = prisma.post.create.mock.calls[0][0];
@@ -1152,7 +1159,7 @@ describe('PostService', () => {
       prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'r-2', ...args.data }));
       prisma.post.update.mockResolvedValue(original);
 
-      await service.repostPost('src-2', 'user-1', { targetType: PostType.STATUS });
+      await service.repostPost('src-2', '0a0a0a0a0a0a0a0a0a0a0a01', { targetType: PostType.STATUS });
 
       const createCall = prisma.post.create.mock.calls[0][0];
       expect(createCall.data.expiresAt).toBeInstanceOf(Date);
@@ -1164,7 +1171,7 @@ describe('PostService', () => {
       prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'r-3', ...args.data }));
       prisma.post.update.mockResolvedValue(original);
 
-      await service.repostPost('src-3', 'user-1', { targetType: PostType.POST });
+      await service.repostPost('src-3', '0a0a0a0a0a0a0a0a0a0a0a01', { targetType: PostType.POST });
 
       const createCall = prisma.post.create.mock.calls[0][0];
       expect(createCall.data.expiresAt).toBeUndefined();
@@ -1410,7 +1417,7 @@ describe('PostService', () => {
       prisma.post.findFirst.mockResolvedValue(null);
       prisma.friendRequest.findMany.mockResolvedValue([]);
 
-      const result = await service.getPostById('missing', 'user-1');
+      const result = await service.getPostById('missing', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
     });
 
@@ -1420,7 +1427,7 @@ describe('PostService', () => {
       prisma.friendRequest.findMany.mockResolvedValue([]);
       prisma.postReaction.findMany.mockResolvedValue([]);
 
-      const result = await service.getPostById('post-1', 'user-1');
+      const result = await service.getPostById('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(result).not.toBeNull();
       expect((result as any).currentUserReactions).toEqual([]);
@@ -1432,7 +1439,7 @@ describe('PostService', () => {
       prisma.friendRequest.findMany.mockResolvedValue([]);
       prisma.postReaction.findMany.mockResolvedValue([{ postId: 'post-1', emoji: '❤️' }]);
 
-      const result = await service.getPostById('post-1', 'user-1');
+      const result = await service.getPostById('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect((result as any).currentUserReactions).toEqual(['❤️']);
     });
@@ -1446,7 +1453,7 @@ describe('PostService', () => {
         { postId: 'post-1', emoji: '🔥' },
       ]);
 
-      const result = await service.getPostById('post-1', 'user-1');
+      const result = await service.getPostById('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect((result as any).currentUserReactions).toEqual(['❤️', '🔥']);
     });
@@ -1475,7 +1482,7 @@ describe('PostService', () => {
       prisma.postBookmark.findFirst.mockResolvedValue({ postId: 'post-1' });
       prisma.post.count.mockResolvedValue(0);
 
-      const result = await service.getPostById('post-1', 'user-1');
+      const result = await service.getPostById('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect((result as any).isBookmarkedByMe).toBe(true);
       expect((result as any).isRepostedByMe).toBe(false);
@@ -1489,7 +1496,7 @@ describe('PostService', () => {
       prisma.postBookmark.findFirst.mockResolvedValue(null);
       prisma.post.count.mockResolvedValue(0);
 
-      const result = await service.getPostById('post-1', 'user-1');
+      const result = await service.getPostById('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect((result as any).isBookmarkedByMe).toBe(false);
     });
@@ -1502,7 +1509,7 @@ describe('PostService', () => {
       prisma.postBookmark.findFirst.mockResolvedValue(null);
       prisma.post.count.mockResolvedValue(1);
 
-      const result = await service.getPostById('post-1', 'user-1');
+      const result = await service.getPostById('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect((result as any).isRepostedByMe).toBe(true);
     });
@@ -1534,10 +1541,10 @@ describe('PostService', () => {
       prisma.postBookmark.findFirst.mockResolvedValue(null);
       prisma.post.count.mockResolvedValue(0);
 
-      const result = await service.getPostById('repost-1', 'user-1');
+      const result = await service.getPostById('repost-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1', postId: 'root-1' },
+        where: { userId: '0a0a0a0a0a0a0a0a0a0a0a01', postId: 'root-1' },
         select: { postId: true, emoji: true },
       });
       expect((result as any).currentUserReactions).toEqual(['❤️']);
@@ -1552,10 +1559,10 @@ describe('PostService', () => {
       prisma.postBookmark.findFirst.mockResolvedValue(null);
       prisma.post.count.mockResolvedValue(0);
 
-      await service.getPostById('repost-2', 'user-1');
+      await service.getPostById('repost-2', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1', postId: 'root-1' },
+        where: { userId: '0a0a0a0a0a0a0a0a0a0a0a01', postId: 'root-1' },
         select: { postId: true, emoji: true },
       });
     });
@@ -1568,10 +1575,10 @@ describe('PostService', () => {
       prisma.postBookmark.findFirst.mockResolvedValue(null);
       prisma.post.count.mockResolvedValue(0);
 
-      await service.getPostById('quote-1', 'user-1');
+      await service.getPostById('quote-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1', postId: 'quote-1' },
+        where: { userId: '0a0a0a0a0a0a0a0a0a0a0a01', postId: 'quote-1' },
         select: { postId: true, emoji: true },
       });
     });
@@ -1595,10 +1602,10 @@ describe('PostService', () => {
       prisma.postBookmark.findFirst.mockResolvedValue(null);
       prisma.post.count.mockResolvedValue(0);
 
-      const result = await service.getPostById('repost-story-1', 'user-1');
+      const result = await service.getPostById('repost-story-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1', postId: 'repost-story-1' },
+        where: { userId: '0a0a0a0a0a0a0a0a0a0a0a01', postId: 'repost-story-1' },
         select: { postId: true, emoji: true },
       });
       expect((result as any).currentUserReactions).toEqual(['❤️']);
@@ -1619,10 +1626,10 @@ describe('PostService', () => {
       prisma.postBookmark.findFirst.mockResolvedValue(null);
       prisma.post.count.mockResolvedValue(0);
 
-      await service.getPostById('repost-status-1', 'user-1');
+      await service.getPostById('repost-status-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.postReaction.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1', postId: 'repost-status-1' },
+        where: { userId: '0a0a0a0a0a0a0a0a0a0a0a01', postId: 'repost-status-1' },
         select: { postId: true, emoji: true },
       });
     });
@@ -1636,7 +1643,7 @@ describe('PostService', () => {
     it('returns null when the post does not exist', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.deletePost('missing', 'user-1', { actorRole: 'USER' });
+      const result = await service.deletePost('missing', '0a0a0a0a0a0a0a0a0a0a0a01', { actorRole: 'USER' });
       expect(result).toBeNull();
     });
 
@@ -1647,17 +1654,17 @@ describe('PostService', () => {
       // Le droit de retrait n'est ouvert qu'à MODERATOR / ADMIN / BIGBOSS
       // (cf. posts-delete-moderator.test.ts).
       await expect(
-        service.deletePost('post-1', 'user-1', { actorRole: 'USER' }),
+        service.deletePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { actorRole: 'USER' }),
       ).rejects.toThrow('FORBIDDEN');
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
     it('soft-deletes the post by setting deletedAt', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1' }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01' }));
       const deletedPost = makePost({ deletedAt: new Date() });
       prisma.post.update.mockResolvedValue(deletedPost);
 
-      const result = await service.deletePost('post-1', 'user-1', { actorRole: 'USER' });
+      const result = await service.deletePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { actorRole: 'USER' });
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1674,22 +1681,22 @@ describe('PostService', () => {
   describe('updatePost', () => {
     it('returns null when the post does not exist', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
-      const result = await service.updatePost('missing', 'user-1', { content: 'x' });
+      const result = await service.updatePost('missing', '0a0a0a0a0a0a0a0a0a0a0a01', { content: 'x' });
       expect(result).toBeNull();
     });
 
     it('throws FORBIDDEN when the user is not the author', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other', media: [] }));
-      await expect(service.updatePost('post-1', 'user-1', { content: 'x' })).rejects.toThrow('FORBIDDEN');
+      await expect(service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { content: 'x' })).rejects.toThrow('FORBIDDEN');
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
     it('switches a POST to a REEL when it carries a qualifying composition (video)', async () => {
       // Règle produit 2026-08-02 : video (>=3s) || audio (>=3s) || >= 2 images.
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1', mimeType: 'video/mp4', duration: 5000 }] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [{ id: 'm1', mimeType: 'video/mp4', duration: 5000 }] }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
 
-      await service.updatePost('post-1', 'user-1', { type: PostType.REEL });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { type: PostType.REEL });
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
@@ -1697,10 +1704,10 @@ describe('PostService', () => {
     });
 
     it('removes only media that belongs to the post (ignores foreign ids)', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1' }, { id: 'm2' }] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [{ id: 'm1' }, { id: 'm2' }] }));
       prisma.post.update.mockResolvedValue(makePost());
 
-      await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1', 'foreign-media'] });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { removeMediaIds: ['m1', 'foreign-media'] });
 
       expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({
         where: { id: { in: ['m1'] }, postId: 'post-1' },
@@ -1709,10 +1716,10 @@ describe('PostService', () => {
     });
 
     it('does not delete media when removeMediaIds is omitted', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1' }] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [{ id: 'm1' }] }));
       prisma.post.update.mockResolvedValue(makePost());
 
-      await service.updatePost('post-1', 'user-1', { content: 'x' });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { content: 'x' });
 
       expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
     });
@@ -1721,13 +1728,13 @@ describe('PostService', () => {
       // Le lieu à l'édition passe par le MÊME contrat qu'à la création :
       // écrit dans metadata.location, sans clobber postReplyTo/trackingLinks.
       prisma.post.findFirst.mockResolvedValue(makePost({
-        authorId: 'user-1', type: 'POST', media: [],
+        authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [],
         metadata: { postReplyTo: { id: 'other' } },
       }));
       prisma.post.update.mockResolvedValue(makePost());
       const place = { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null, category: null };
 
-      await service.updatePost('post-1', 'user-1', { location: place });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { location: place });
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1740,7 +1747,7 @@ describe('PostService', () => {
 
     it('removes metadata.location when location is null, keeping the other blocks', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({
-        authorId: 'user-1', type: 'POST', media: [],
+        authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [],
         metadata: {
           postReplyTo: { id: 'other' },
           location: { latitude: 1, longitude: 2, name: null, address: null, category: null },
@@ -1748,7 +1755,7 @@ describe('PostService', () => {
       }));
       prisma.post.update.mockResolvedValue(makePost());
 
-      await service.updatePost('post-1', 'user-1', { location: null });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { location: null });
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1761,21 +1768,21 @@ describe('PostService', () => {
 
     it('leaves metadata untouched when location is absent from the edit', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({
-        authorId: 'user-1', type: 'POST', media: [],
+        authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [],
         metadata: { location: { latitude: 1, longitude: 2, name: null, address: null, category: null } },
       }));
       prisma.post.update.mockResolvedValue(makePost());
 
-      await service.updatePost('post-1', 'user-1', { content: 'x' });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { content: 'x' });
 
       const updateArg = prisma.post.update.mock.calls[0][0];
       expect(updateArg.data.metadata).toBeUndefined();
     });
 
     it('rejects removing the last media of a REEL (422) and deletes nothing', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'REEL', media: [{ id: 'm1' }] }));
 
-      await expect(service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'] }))
+      await expect(service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { removeMediaIds: ['m1'] }))
         .rejects.toMatchObject({ statusCode: 422 });
       expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
       expect(prisma.post.update).not.toHaveBeenCalled();
@@ -1783,10 +1790,10 @@ describe('PostService', () => {
 
     it('allows removing media from a REEL whose remaining composition still qualifies', async () => {
       // Retirer l'image laisse la vidéo — la composition reste qualifiante.
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1', mimeType: 'image/jpeg' }, { id: 'm2', mimeType: 'video/mp4', duration: 5000 }] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'REEL', media: [{ id: 'm1', mimeType: 'image/jpeg' }, { id: 'm2', mimeType: 'video/mp4', duration: 5000 }] }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
 
-      await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'] });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { removeMediaIds: ['m1'] });
 
       expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({
         where: { id: { in: ['m1'] }, postId: 'post-1' },
@@ -1794,36 +1801,36 @@ describe('PostService', () => {
     });
 
     it('rejects switching to REEL without media (422)', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [] }));
-      await expect(service.updatePost('post-1', 'user-1', { type: PostType.REEL }))
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [] }));
+      await expect(service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { type: PostType.REEL }))
         .rejects.toMatchObject({ statusCode: 422 });
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
     it('rejects a STORY -> POST type change (422)', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [{ id: 'm1' }] }));
-      await expect(service.updatePost('post-1', 'user-1', { type: PostType.POST }))
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [{ id: 'm1' }] }));
+      await expect(service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { type: PostType.POST }))
         .rejects.toMatchObject({ statusCode: 422 });
     });
 
     it('rejects a type change on a repost (422)', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', repostOfId: 'orig-1', media: [{ id: 'm1' }] }));
-      await expect(service.updatePost('post-1', 'user-1', { type: PostType.REEL }))
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', repostOfId: 'orig-1', media: [{ id: 'm1' }] }));
+      await expect(service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { type: PostType.REEL }))
         .rejects.toMatchObject({ statusCode: 422 });
     });
 
     it('does not write type when it is unchanged', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [] }));
       prisma.post.update.mockResolvedValue(makePost());
-      await service.updatePost('post-1', 'user-1', { type: PostType.POST });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { type: PostType.POST });
       expect(prisma.post.update.mock.calls[0][0].data.type).toBeUndefined();
     });
 
     it('updates originalLanguage and clears stale translations on language change', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', originalLanguage: 'en', content: 'hello', media: [] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', originalLanguage: 'en', content: 'hello', media: [] }));
       prisma.post.update.mockResolvedValue(makePost());
 
-      await service.updatePost('post-1', 'user-1', { originalLanguage: 'fr' });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { originalLanguage: 'fr' });
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1833,9 +1840,9 @@ describe('PostService', () => {
     });
 
     it('does not touch originalLanguage/translations when language is unchanged', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', originalLanguage: 'en', media: [] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', originalLanguage: 'en', media: [] }));
       prisma.post.update.mockResolvedValue(makePost());
-      await service.updatePost('post-1', 'user-1', { originalLanguage: 'en', content: 'updated' });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { originalLanguage: 'en', content: 'updated' });
       const call = prisma.post.update.mock.calls[0][0];
       expect(call.data.originalLanguage).toBeUndefined();
       expect(call.data.translations).toBeUndefined();
@@ -1845,18 +1852,18 @@ describe('PostService', () => {
     // treated as a language change — otherwise it wipes valid translations and
     // relaunches ZMQ jobs for nothing.
     it('does not re-translate a regional variant of the stored language (fr-FR vs fr)', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', originalLanguage: 'fr', content: 'bonjour', media: [] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', originalLanguage: 'fr', content: 'bonjour', media: [] }));
       prisma.post.update.mockResolvedValue(makePost());
-      await service.updatePost('post-1', 'user-1', { originalLanguage: 'fr-FR' });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { originalLanguage: 'fr-FR' });
       const call = prisma.post.update.mock.calls[0][0];
       expect(call.data.originalLanguage).toBeUndefined();
       expect(call.data.translations).toBeUndefined();
     });
 
     it('canonicalizes a genuine language change before persisting (en_US -> en)', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', originalLanguage: 'fr', content: 'hello', media: [] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', originalLanguage: 'fr', content: 'hello', media: [] }));
       prisma.post.update.mockResolvedValue(makePost());
-      await service.updatePost('post-1', 'user-1', { originalLanguage: 'en_US' });
+      await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { originalLanguage: 'en_US' });
       const call = prisma.post.update.mock.calls[0][0];
       expect(call.data.originalLanguage).toBe('en');
       expect(call.data.translations).toEqual({});
@@ -1873,10 +1880,10 @@ describe('PostService', () => {
 
     describe('STORY content edit — engagement reset', () => {
       it('wipes views, reactions and impressions when storyEffects change', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
-        await service.updatePost('post-1', 'user-1', { storyEffects: { background: { kind: 'color' } } });
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { storyEffects: { background: { kind: 'color' } } });
 
         expect(prisma.postView.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
         expect(prisma.postReaction.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
@@ -1899,10 +1906,10 @@ describe('PostService', () => {
       });
 
       it('wipes stale translations on a content edit even without language change', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', originalLanguage: 'fr', media: [] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', originalLanguage: 'fr', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
-        await service.updatePost('post-1', 'user-1', { content: 'nouveau texte' });
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { content: 'nouveau texte' });
 
         expect(prisma.post.update).toHaveBeenCalledWith(
           expect.objectContaining({ data: expect.objectContaining({ translations: {} }) }),
@@ -1910,10 +1917,10 @@ describe('PostService', () => {
       });
 
       it('never touches createdAt or expiresAt (publication date is immutable)', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
-        await service.updatePost('post-1', 'user-1', { content: 'edited', storyEffects: {} });
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { content: 'edited', storyEffects: {} });
 
         const dataArg = prisma.post.update.mock.calls[0][0].data;
         expect(dataArg).not.toHaveProperty('createdAt');
@@ -1921,10 +1928,10 @@ describe('PostService', () => {
       });
 
       it('does NOT reset engagement on a visibility-only STORY update', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
-        await service.updatePost('post-1', 'user-1', { visibility: PostVisibility.FRIENDS, visibilityUserIds: [] });
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { visibility: PostVisibility.FRIENDS, visibilityUserIds: [] });
 
         expect(prisma.postView.deleteMany).not.toHaveBeenCalled();
         expect(prisma.postReaction.deleteMany).not.toHaveBeenCalled();
@@ -1936,10 +1943,10 @@ describe('PostService', () => {
       });
 
       it('does NOT reset engagement when a non-STORY post is edited', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST', media: [] }));
         prisma.post.update.mockResolvedValue(makePost());
 
-        await service.updatePost('post-1', 'user-1', { content: 'edited post' });
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { content: 'edited post' });
 
         expect(prisma.postView.deleteMany).not.toHaveBeenCalled();
         expect(prisma.postReaction.deleteMany).not.toHaveBeenCalled();
@@ -1950,10 +1957,10 @@ describe('PostService', () => {
 
     describe('mediaIds — attach pre-uploaded media on update', () => {
       it('attaches only PENDING media (postId null) to the post', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
-        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1', 'new-m2'] });
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { mediaIds: ['new-m1', 'new-m2'] });
 
         // Libre ET à l'auteur : `postId: null` seul laissait un tiers
         // s'approprier le média en attente de quelqu'un d'autre.
@@ -1965,15 +1972,15 @@ describe('PostService', () => {
           { OR: [{ postId: null }, { postId: { isSet: false } }] },
           { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
         ]);
-        expect(claim.where.uploaderId).toBe('user-1');
+        expect(claim.where.uploaderId).toBe('0a0a0a0a0a0a0a0a0a0a0a01');
         expect(claim.data).toEqual({ postId: 'post-1' });
       });
 
       it('grave le RANG des médias ajoutés par une édition', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
-        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1', 'new-m2'] });
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { mediaIds: ['new-m1', 'new-m2'] });
 
         const orderWrites = prisma.postMedia.updateMany.mock.calls
           .map((call: any[]) => call[0])
@@ -1985,47 +1992,47 @@ describe('PostService', () => {
       });
 
       it('adding media to a STORY counts as a content edit (engagement reset)', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
-        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1'] });
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { mediaIds: ['new-m1'] });
 
         expect(prisma.postView.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
       });
 
       it('never writes mediaIds as a scalar field on the post', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
-        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1'] });
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { mediaIds: ['new-m1'] });
 
         expect(prisma.post.update.mock.calls[0][0].data).not.toHaveProperty('mediaIds');
       });
 
       it('REEL: newly added media counts toward the composition rule', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1', mimeType: 'video/mp4', duration: 5000 }] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'REEL', media: [{ id: 'm1', mimeType: 'video/mp4', duration: 5000 }] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
         // Le média fraîchement téléversé est matérialisé (mimeType/duration)
         // pour la règle de composition : la vidéo ajoutée garde le REEL
         // qualifiant.
         prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/quicktime', duration: 5000 }]);
 
-        await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'], mediaIds: ['new-m1'] });
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { removeMediaIds: ['m1'], mediaIds: ['new-m1'] });
 
         expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({
           where: { id: { in: ['m1'] }, postId: 'post-1' },
         });
         const claim = prisma.postMedia.updateMany.mock.calls[0][0];
         expect(claim.where.id).toEqual({ in: ['new-m1'] });
-        expect(claim.where.uploaderId).toBe('user-1');
+        expect(claim.where.uploaderId).toBe('0a0a0a0a0a0a0a0a0a0a0a01');
         expect(claim.data).toEqual({ postId: 'post-1' });
       });
 
       it('writes alt text for a newly attached media id', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
-        await service.updatePost('post-1', 'user-1', {
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', {
           mediaIds: ['new-m1'],
           mediaAlt: { 'new-m1': 'A sunset over the bay' },
         });
@@ -2037,10 +2044,10 @@ describe('PostService', () => {
       });
 
       it('ignores mediaAlt entries for ids not in this mediaIds request (already-attached media)', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [{ id: 'already-attached' }] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [{ id: 'already-attached' }] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
 
-        await service.updatePost('post-1', 'user-1', {
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', {
           mediaIds: ['new-m1'],
           mediaAlt: { 'already-attached': 'sneaky rewrite', 'new-m1': 'ok' },
         });
@@ -2061,7 +2068,7 @@ describe('PostService', () => {
 
     it('canonicalizes a region-tagged claim before persisting (fr-FR -> fr)', async () => {
       prisma.post.create.mockResolvedValue(makePost());
-      await service.createPost({ ...base, content: 'Bonjour', originalLanguage: 'fr-FR' }, 'user-1');
+      await service.createPost({ ...base, content: 'Bonjour', originalLanguage: 'fr-FR' }, '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'fr' }) }),
       );
@@ -2069,7 +2076,7 @@ describe('PostService', () => {
 
     it('canonicalizes an underscore locale claim (en_US -> en)', async () => {
       prisma.post.create.mockResolvedValue(makePost());
-      await service.createPost({ ...base, content: 'Hi', originalLanguage: 'en_US' }, 'user-1');
+      await service.createPost({ ...base, content: 'Hi', originalLanguage: 'en_US' }, '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'en' }) }),
       );
@@ -2077,7 +2084,7 @@ describe('PostService', () => {
 
     it('keeps an irreducible ISO 639-3 claim verbatim (bas)', async () => {
       prisma.post.create.mockResolvedValue(makePost());
-      await service.createPost({ ...base, content: 'mbolo', originalLanguage: 'bas' }, 'user-1');
+      await service.createPost({ ...base, content: 'mbolo', originalLanguage: 'bas' }, '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(prisma.post.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'bas' }) }),
       );
@@ -2107,7 +2114,7 @@ describe('PostCommentService', () => {
     it('returns null when the post does not exist', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.addComment('missing', 'user-1', 'Hello');
+      const result = await service.addComment('missing', '0a0a0a0a0a0a0a0a0a0a0a01', 'Hello');
       expect(result).toBeNull();
       expect(prisma.postComment.create).not.toHaveBeenCalled();
     });
@@ -2119,13 +2126,13 @@ describe('PostCommentService', () => {
       prisma.postComment.create.mockResolvedValue(createdComment);
       prisma.post.update.mockResolvedValue(makePost({ commentCount: 6 }));
 
-      const result = await service.addComment('post-1', 'user-1', 'Great post!');
+      const result = await service.addComment('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', 'Great post!');
 
       expect(prisma.postComment.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             postId: 'post-1',
-            authorId: 'user-1',
+            authorId: '0a0a0a0a0a0a0a0a0a0a0a01',
             content: 'Great post!',
           }),
         }),
@@ -2145,7 +2152,7 @@ describe('PostCommentService', () => {
       prisma.postComment.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.addComment('post-1', 'user-1', 'Reply', { parentId: 'bad-parent' }),
+        service.addComment('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', 'Reply', { parentId: 'bad-parent' }),
       ).rejects.toThrow('PARENT_NOT_FOUND');
 
       expect(prisma.postComment.create).not.toHaveBeenCalled();
@@ -2161,7 +2168,7 @@ describe('PostCommentService', () => {
       prisma.post.update.mockResolvedValue(makePost());
       prisma.postComment.update.mockResolvedValue(parentComment);
 
-      const result = await service.addComment('post-1', 'user-1', 'Nice!', { parentId: 'parent-1' });
+      const result = await service.addComment('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', 'Nice!', { parentId: 'parent-1' });
 
       expect(prisma.postComment.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2192,7 +2199,7 @@ describe('PostCommentService', () => {
       prisma.postComment.create.mockResolvedValue(makeComment({ id: 'c-fr' }));
       prisma.post.update.mockResolvedValue(makePost());
 
-      await service.addComment('post-1', 'user-1', 'Bonjour', { originalLanguage: 'fr-FR' });
+      await service.addComment('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', 'Bonjour', { originalLanguage: 'fr-FR' });
 
       expect(prisma.postComment.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'fr' }) }),
@@ -2204,7 +2211,7 @@ describe('PostCommentService', () => {
       prisma.postComment.create.mockResolvedValue(makeComment({ id: 'c-bas' }));
       prisma.post.update.mockResolvedValue(makePost());
 
-      await service.addComment('post-1', 'user-1', 'mbolo', { originalLanguage: 'bas' });
+      await service.addComment('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', 'mbolo', { originalLanguage: 'bas' });
 
       expect(prisma.postComment.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'bas' }) }),
@@ -2216,7 +2223,7 @@ describe('PostCommentService', () => {
       prisma.postComment.create.mockResolvedValue(makeComment({ id: 'c-null' }));
       prisma.post.update.mockResolvedValue(makePost());
 
-      await service.addComment('post-1', 'user-1', 'Hello');
+      await service.addComment('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', 'Hello');
 
       expect(prisma.postComment.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ originalLanguage: null }) }),
@@ -2232,27 +2239,27 @@ describe('PostCommentService', () => {
     it('returns null when the comment does not exist', async () => {
       prisma.postComment.findFirst.mockResolvedValue(null);
 
-      const result = await service.deleteComment('missing', 'user-1');
+      const result = await service.deleteComment('missing', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
     });
 
     it('throws FORBIDDEN when the user is not the author', async () => {
       prisma.postComment.findFirst.mockResolvedValue(makeComment({ authorId: 'other-user' }));
 
-      await expect(service.deleteComment('comment-1', 'user-1')).rejects.toThrow('FORBIDDEN');
+      await expect(service.deleteComment('comment-1', '0a0a0a0a0a0a0a0a0a0a0a01')).rejects.toThrow('FORBIDDEN');
       expect(prisma.postComment.update).not.toHaveBeenCalled();
     });
 
     it('soft-deletes the comment (subtree) and decrements commentCount', async () => {
       prisma.postComment.findFirst.mockResolvedValue(
-        makeComment({ authorId: 'user-1', parentId: null }),
+        makeComment({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', parentId: null }),
       );
       // No descendant replies → BFS returns empty on the first pass.
       prisma.postComment.findMany.mockResolvedValue([]);
       prisma.postComment.updateMany.mockResolvedValue({ count: 1 });
       prisma.post.update.mockResolvedValue({});
 
-      const result = await service.deleteComment('comment-1', 'user-1');
+      const result = await service.deleteComment('comment-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       expect(prisma.postComment.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2271,7 +2278,7 @@ describe('PostCommentService', () => {
 
     it('cascades to surviving replies and decrements commentCount by 1 + reply count', async () => {
       prisma.postComment.findFirst.mockResolvedValue(
-        makeComment({ authorId: 'user-1', parentId: null }),
+        makeComment({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', parentId: null }),
       );
       // First BFS pass returns two direct replies; second pass (their ids) returns none.
       prisma.postComment.findMany
@@ -2280,7 +2287,7 @@ describe('PostCommentService', () => {
       prisma.postComment.updateMany.mockResolvedValue({ count: 3 });
       prisma.post.update.mockResolvedValue({});
 
-      await service.deleteComment('comment-1', 'user-1');
+      await service.deleteComment('comment-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       const softDeleted = prisma.postComment.updateMany.mock.calls[0][0].where.id.in;
       expect([...softDeleted].sort()).toEqual(['comment-1', 'reply-1', 'reply-2']);
@@ -2291,14 +2298,14 @@ describe('PostCommentService', () => {
 
     it('decrements parent replyCount when deleting a reply', async () => {
       prisma.postComment.findFirst.mockResolvedValue(
-        makeComment({ authorId: 'user-1', parentId: 'parent-1' }),
+        makeComment({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', parentId: 'parent-1' }),
       );
       prisma.postComment.findMany.mockResolvedValue([]);
       prisma.postComment.updateMany.mockResolvedValue({ count: 1 });
       prisma.postComment.update.mockResolvedValue({});
       prisma.post.update.mockResolvedValue({});
 
-      await service.deleteComment('comment-1', 'user-1');
+      await service.deleteComment('comment-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       // The subtree soft-delete goes through updateMany …
       expect(prisma.postComment.updateMany).toHaveBeenCalledWith(
@@ -2318,13 +2325,13 @@ describe('PostCommentService', () => {
 
     it('does not decrement parent replyCount for a top-level comment', async () => {
       prisma.postComment.findFirst.mockResolvedValue(
-        makeComment({ authorId: 'user-1', parentId: null }),
+        makeComment({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', parentId: null }),
       );
       prisma.postComment.findMany.mockResolvedValue([]);
       prisma.postComment.updateMany.mockResolvedValue({ count: 1 });
       prisma.post.update.mockResolvedValue({});
 
-      await service.deleteComment('comment-1', 'user-1');
+      await service.deleteComment('comment-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       // Top-level delete: no parent replyCount update (the soft-delete uses updateMany).
       expect(prisma.postComment.update).not.toHaveBeenCalled();
@@ -2339,7 +2346,7 @@ describe('PostCommentService', () => {
     it('returns null when the comment does not exist', async () => {
       prisma.postComment.findFirst.mockResolvedValue(null);
 
-      const result = await service.likeComment('missing', 'user-1');
+      const result = await service.likeComment('missing', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
     });
 
@@ -2351,13 +2358,13 @@ describe('PostCommentService', () => {
       const updatedComment = makeComment({ likeCount: 4, reactionCount: 4, reactionSummary: { '❤️': 4 } });
       prisma.postComment.update.mockResolvedValue(updatedComment);
 
-      const result = await service.likeComment('comment-1', 'user-1');
+      const result = await service.likeComment('comment-1', '0a0a0a0a0a0a0a0a0a0a0a01');
 
       // Idempotent : un seul like par (commentId,userId,emoji) via la contrainte unique.
       expect(prisma.commentReaction.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { comment_user_reaction_unique: { commentId: 'comment-1', userId: 'user-1', emoji: '❤️' } },
-          create: { commentId: 'comment-1', userId: 'user-1', emoji: '❤️' },
+          where: { comment_user_reaction_unique: { commentId: 'comment-1', userId: '0a0a0a0a0a0a0a0a0a0a0a01', emoji: '❤️' } },
+          create: { commentId: 'comment-1', userId: '0a0a0a0a0a0a0a0a0a0a0a01', emoji: '❤️' },
           update: {},
         }),
       );
@@ -2380,7 +2387,7 @@ describe('PostCommentService', () => {
       ]);
       prisma.postComment.update.mockResolvedValue(makeComment());
 
-      await service.likeComment('comment-1', 'user-1', '🔥');
+      await service.likeComment('comment-1', '0a0a0a0a0a0a0a0a0a0a0a01', '🔥');
 
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2398,7 +2405,7 @@ describe('PostCommentService', () => {
     it('returns null when the comment does not exist', async () => {
       prisma.postComment.findFirst.mockResolvedValue(null);
 
-      const result = await service.unlikeComment('missing', 'user-1');
+      const result = await service.unlikeComment('missing', '0a0a0a0a0a0a0a0a0a0a0a01');
       expect(result).toBeNull();
     });
 
@@ -2413,10 +2420,10 @@ describe('PostCommentService', () => {
       const updatedComment = makeComment({ likeCount: 1, reactionCount: 1, reactionSummary: { '❤️': 1 } });
       prisma.postComment.update.mockResolvedValue(updatedComment);
 
-      const result = await service.unlikeComment('comment-1', 'user-1', '❤️');
+      const result = await service.unlikeComment('comment-1', '0a0a0a0a0a0a0a0a0a0a0a01', '❤️');
 
       expect(prisma.commentReaction.deleteMany).toHaveBeenCalledWith({
-        where: { commentId: 'comment-1', userId: 'user-1', emoji: '❤️' },
+        where: { commentId: 'comment-1', userId: '0a0a0a0a0a0a0a0a0a0a0a01', emoji: '❤️' },
       });
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2436,7 +2443,7 @@ describe('PostCommentService', () => {
       prisma.commentReaction.groupBy.mockResolvedValue([]);
       prisma.postComment.update.mockResolvedValue(makeComment());
 
-      await service.unlikeComment('comment-1', 'user-1', '❤️');
+      await service.unlikeComment('comment-1', '0a0a0a0a0a0a0a0a0a0a0a01', '❤️');
 
       expect(prisma.postComment.update).toHaveBeenCalledWith(
         expect.objectContaining({

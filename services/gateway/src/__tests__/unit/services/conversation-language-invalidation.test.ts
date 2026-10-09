@@ -69,7 +69,7 @@ describe('#9708 — la composition linguistique d’une conversation n’est plu
 
     expect(await m.langues(CONV)).toEqual(['fr']);
     m.devient([hote, invite]);
-    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en' });
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en', readerUserId: null });
 
     expect(await m.langues(CONV)).toEqual(['fr', 'en']);
   });
@@ -102,7 +102,7 @@ describe('#9708 — la composition linguistique d’une conversation n’est plu
 
     await m.langues(CONV);
     await m.langues(AUTRE_CONV);
-    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en' });
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en', readerUserId: null });
     await m.langues(AUTRE_CONV);
 
     expect(m.lecturesDeComposition()).toBe(2);
@@ -126,7 +126,7 @@ describe('#9708 — la composition linguistique d’une conversation n’est plu
     ouverts.push(m.svc);
 
     const enCours = m.langues(CONV);
-    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en' });
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en', readerUserId: null });
     await enCours;
     m.devient([hote, invite]);
 
@@ -139,7 +139,7 @@ describe('#9708 — la composition linguistique d’une conversation n’est plu
     await m.svc.close();
 
     m.devient([hote, invite]);
-    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en' });
+    announceConversationLanguageChange({ kind: 'arrival', conversationId: CONV, language: 'en', readerUserId: null });
 
     expect(await m.langues(CONV)).toEqual(['fr']);
   });

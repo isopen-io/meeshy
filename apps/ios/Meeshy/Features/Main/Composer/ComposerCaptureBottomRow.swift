@@ -15,16 +15,20 @@ import MeeshyUI
 /// revient dès que les segments sont supprimés.
 ///
 /// **En édition, les outils seuls, sous la scène posée sur le sol** (#9352,
-/// porteur 2026-10-07, #9567) : « Filtres », « Cadres », « Recadrer », en
-/// rangée, et au-dessus d'eux UN panneau — la bande ouverte (ses miniatures se
-/// peignent sur le média retouché), les proportions par presets, ou, pour une
-/// vidéo, sa piste de découpe (#9353). Ni miniature seule, ni zoom, ni phrase
-/// du geste ; « Terminé » est en haut, aligné sur la croix.
+/// porteur 2026-10-07, #9567, 2026-10-09 #9754) : « Filtres », « Cadres »,
+/// « Recadrer » et, pour une vidéo, « Couper » et « Son », en rangée ; au-dessus
+/// d'eux les panneaux des outils ACTIFS, tous ensemble à l'entrée — les
+/// proportions, le spectre du son, la piste de découpe (#9353) —, ou la bande
+/// ouverte (ses miniatures se peignent sur le média retouché), qui les replie.
+/// Ni miniature seule, ni zoom, ni phrase du geste ; « Terminé » est en haut,
+/// aligné sur la croix.
 struct ComposerCaptureBottomRow: View {
     @ObservedObject var session: ComposerCaptureSession
     let context: ComposerCaptureGestureContext
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Le cadenas qui se ferme, élastique, avant de partir (#9753).
+    @State private var lockSeal = ComposerLockSeal()
 
     private var capture: ComposerSceneCameraBar.Capture { session.barCapture }
 
@@ -39,6 +43,10 @@ struct ComposerCaptureBottomRow: View {
 
     private var showsLock: Bool {
         ComposerCaptureHold.showsLock(stage: session.stage, holding: capture.holding, locked: capture.locked)
+    }
+
+    private var showsLockTrack: Bool {
+        ComposerLockSeal.showsTrack(showsLock: showsLock, seal: lockSeal)
     }
 
     /// La vidéo en retouche et la durée de sa boucle ; `nil` ⇒ pas de piste.
@@ -58,12 +66,24 @@ struct ComposerCaptureBottomRow: View {
         Group {
             if editing { editTools } else { captureRow }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsLock)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsLockTrack)
+        .adaptiveOnChange(of: capture.locked) { avant, apres in
+            let affiche = ComposerCaptureHold.showsLock(stage: session.stage, holding: capture.holding, locked: false)
+            lockSeal.lockChanged(from: avant, to: apres, wasShowing: affiche)
+        }
+        .task(id: lockSeal.generation) { @MainActor in
+            guard lockSeal.sealing else { return }
+            let scellement = lockSeal.generation
+            let duree = ComposerLockSeal.holdDuration(reduceMotion: reduceMotion)
+            try? await Task.sleep(nanoseconds: UInt64(duree * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            lockSeal.finish(scellement)
+        }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: recording)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ComposerCaptureGesture.offersRail(context))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.openFamily)
-        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editPanel)
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editPanels)
     }
 
     private var captureRow: some View {
@@ -74,8 +94,9 @@ struct ComposerCaptureBottomRow: View {
                                   recordingTime: session.camera.recordingDuration)
                 HStack {
                     Spacer(minLength: 0)
-                    if showsLock {
-                        ComposerCaptureLockTrack(progress: capture.lockProgress)
+                    if showsLockTrack {
+                        ComposerCaptureLockTrack(progress: lockSeal.sealing ? 1 : capture.lockProgress,
+                                                 sealed: lockSeal.sealing)
                             .padding(.trailing, MeeshySpacing.mdPlus)
                     }
                 }
@@ -105,41 +126,71 @@ struct ComposerCaptureBottomRow: View {
         }
     }
 
-    /// **Sous la scène de retouche : un panneau, puis les outils** (#9567) —
-    /// la piste de découpe d'une vidéo, la bande ouverte ou les proportions ;
-    /// puis « Filtres », « Cadres », « Recadrer », et rien d'autre.
+    /// **Sous la scène de retouche : les panneaux, puis les outils** (#9567,
+    /// #9754) — un panneau par outil ACTIF, empilés : les proportions, le
+    /// spectre du son, la piste de découpe, le bouton muet à DROITE d'une piste
+    /// du temps ; ou la bande ouverte, qui les replie. Puis « Filtres »,
+    /// « Cadres », « Recadrer », « Couper », « Son » : chaque outil se retire ou
+    /// revient d'un toucher, sans fermer les autres.
     private var editTools: some View {
         VStack(spacing: ComposerEditScene.gap) {
-            switch session.editPanel {
-            case .trim:
-                if let trimClip {
-                    ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
+            ForEach(session.editPanels, id: \.self) { panneau in
+                switch panneau {
+                case .trim:
+                    if let trimClip {
+                        mediaTrack(.trim) {
+                            ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
+                        }
+                    }
+                case .sound:
+                    if let trimClip {
+                        mediaTrack(.sound) { ComposerSoundTrack(session: session, url: trimClip.url) }
+                    }
+                case .band:
+                    ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
                         .transition(.opacity)
+                case .presets:
+                    ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
+                        .transition(.opacity)
+                case .none:
+                    EmptyView()
                 }
-            case .band:
-                ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
-                    .transition(.opacity)
-            case .presets:
-                ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
-                    .transition(.opacity)
-            case .none:
-                EmptyView()
             }
-            ComposerLookRail(open: session.openFamily, axis: .horizontal, cropOpen: session.cropPresetsOpen,
-                             onCrop: { session.toggleCropPresets() }) { famille in session.toggleFamily(famille) }
-                .frame(height: ComposerEditScene.toolsRow)
+            ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
+                             shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) { famille in
+                session.toggleFamily(famille)
+            }
+            .frame(height: ComposerEditScene.toolsRow)
         }
         .padding(.bottom, ComposerEditScene.gap)
     }
 
-    /// Les crans sont ceux de l'OBJECTIF.
-    @ViewBuilder
-    private var zoom: some View {
-        if capture.zoomPresets.count > 1 {
-            ComposerCaptureZoomPresets(factor: capture.zoomFactor, presets: capture.zoomPresets,
-                                       onSelect: { session.controls.setZoom($0) })
-        } else if ComposerCaptureZoom.showsBadge(capture.zoomFactor) {
-            ComposerCaptureZoomChip(factor: capture.zoomFactor, onStep: { session.stepZoom(up: $0) })
+    /// Une piste du temps, et le bouton muet à sa DROITE quand elle le porte ;
+    /// l'autre piste réserve sa place, et leurs instants s'alignent.
+    private func mediaTrack<Track: View>(_ panneau: ComposerEditPanel, @ViewBuilder _ track: () -> Track) -> some View {
+        let panneaux = session.editPanels
+        let son = session.takeHasAudio
+        return HStack(spacing: MeeshySpacing.xs) {
+            track()
+            if ComposerEditTools.muteHost(panels: panneaux, hasAudio: son) == panneau {
+                ComposerTakeMuteButton(muted: session.takeSound.muted) { session.toggleTakeMute() }
+                    .padding(.trailing, MeeshySpacing.sm)
+            } else if ComposerEditTools.reservesMuteColumn(panneau, panels: panneaux, hasAudio: son) {
+                Color.clear
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                    .padding(.trailing, MeeshySpacing.sm)
+                    .accessibilityHidden(true)
+            }
         }
+        .environment(\.layoutDirection, .leftToRight)
+        .transition(.opacity)
+    }
+
+    /// Les crans sont ceux de l'OBJECTIF ; pendant sa bascule, ils morphent (#9753).
+    private var zoom: some View {
+        ComposerCaptureZoomBar(factor: capture.zoomFactor, presets: capture.zoomPresets,
+                               switching: capture.switchingCamera,
+                               onSelect: { session.controls.setZoom($0) },
+                               onStep: { session.stepZoom(up: $0) })
     }
 }

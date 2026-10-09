@@ -19,6 +19,10 @@
 
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 import { ACTIVATION_SELECT, mayPublish, resolveAccountActivation } from './account-activation';
+import { guardedTimeout } from '../../utils/guarded-timer';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'ShareLinkGrace' });
 
 export const UNVERIFIED_ACTIVE_SHARE_LINK_CAP = 5;
 
@@ -106,7 +110,7 @@ export async function takeShareLinkTurn(userId: string): Promise<() => void> {
   clearTimeout(waitTimer);
 
   let released = false;
-  const holdTimer = setTimeout(() => release(), SHARE_LINK_TURN_TTL_MS);
+  const holdTimer = guardedTimeout({ name: 'share-link-turn-hold', afterMs: SHARE_LINK_TURN_TTL_MS, logger, run: () => release() });
   holdTimer.unref?.();
   function release(): void {
     if (released) return;

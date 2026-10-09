@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import AVFoundation
 import os
+import QuartzCore
 import MeeshySDK
 import MeeshyUI
 
@@ -56,6 +57,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// **La file UNIQUE de la session** (#9464) : configuration, lancement et
     /// arrêt, dans l'ordre. Ce qu'elle installe est publié ensuite ici.
     nonisolated let sessionQueue = ComposerCaptureSessionQueue()
+    /// L'entrée de l'autre objectif, prête avant la bascule (#9753).
+    nonisolated let preparedInputs = ComposerCameraPreparedInputs<AVCaptureDeviceInput>()
     nonisolated let liveFeed = ComposerCameraFeed()
     #if DEBUG
     /// La caméra de recette (#9351) — `nil` hors simulateur ou sans `-MeeshyCaptureFixture`.
@@ -100,6 +103,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     @Published private(set) var isSwitchingCamera = false
     /// La dernière trame de l'ancien objectif, floutée, qui couvre la bascule.
     @Published private(set) var switchCover: CGImage?
+    /// La bascule en cours : une couverture peinte après la sienne ne se pose pas.
+    private var switchGeneration = 0
     private var recordingTimer: Timer?
     /// Le guet de la scène après un toucher (#9295) — `nil` hors session.
     /// `nonisolated(unsafe)` : la deinit, non isolée, le retire ; il n'est
@@ -180,7 +185,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             self.frameOutput.alwaysDiscardsLateVideoFrames = true
             self.frameOutput.setSampleBufferDelegate(self.liveFeed, queue: self.liveFeed.queue)
             if self.session.canAddOutput(self.frameOutput) { self.session.addOutput(self.frameOutput) }
-            let installe = Self.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs)
+            let installe = Self.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs,
+                                                  prepared: self.preparedInputs)
             let micro = armeLeMicro && Self.addAudioInput(to: self.session)
             self.session.commitConfiguration()
             DispatchQueue.main.async {
@@ -191,6 +197,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             }
         }
         sessionQueue.setRunning(true, session)
+        sessionQueue.perform { [weak self] in
+            self?.preparedInputs.prepare(.front) { Self.videoInput(position: .front) }
+        }
     }
 
     /// Demande le micro et branche l'entrée audio, au premier passage en mode
@@ -250,37 +259,69 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         let device: AVCaptureDevice
         let position: AVCaptureDevice.Position
         let zoomScale: ComposerCaptureZoomScale
+        /// L'instant où la reconfiguration a été validée (#9778).
+        let committedAt: CFTimeInterval
     }
 
     /// **La nouvelle entrée naît AVANT que l'ancienne parte** (#9464) : un
     /// objectif qui ne s'ouvre pas, ou que la session refuse, laisse l'ancien
     /// en place — l'aperçu ne noircit pas et `currentPosition` reste vrai.
+    /// **UNE reconfiguration** (#9778) : les connexions s'orientent et l'objectif
+    /// s'ouvre DANS la transaction de la bascule ; après sa validation, seul le
+    /// zoom se ré-affirme, et seulement si elle l'a remis à zéro.
     /// Sur la file de la session ; `nil` ⇒ rien n'a changé.
     nonisolated private static func installVideoInput(
         in session: AVCaptureSession, position: AVCaptureDevice.Position,
-        outputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)]
+        outputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)],
+        prepared: ComposerCameraPreparedInputs<AVCaptureDeviceInput>
     ) -> InstalledCamera? {
         let ancienne = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
-        let nouvelle = videoInput(position: position)
-        let issue = ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle)
-        if let objectif = ComposerCameraInputSwap.orientedPosition(after: issue, new: position,
-                                                                   old: ancienne?.device.position) {
-            orient(outputs, for: objectif)
+        let nouvelle = prepared.take(position) ?? videoInput(position: position)
+        let echelle = nouvelle.map { zoomScale(of: $0.device) }
+        let resultat = ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle) { issue in
+            if let objectif = ComposerCameraInputSwap.orientedPosition(after: issue, new: position,
+                                                                       old: ancienne?.device.position) {
+                orient(outputs, for: objectif)
+            }
+            guard issue == .swapped, let device = nouvelle?.device, let echelle else { return }
+            openLens(device, opening: echelle.opening)
         }
-        guard issue == .swapped, let device = nouvelle?.device else { return nil }
-        let echelle = zoomScale(of: device)
+        let validee = CACurrentMediaTime()
+        prepared.keep(after: resultat, removed: ancienne, at: ancienne?.device.position)
+        guard resultat == .swapped, let device = nouvelle?.device, let echelle else { return nil }
+        let ouverture = openingZoom(of: device, echelle.opening)
+        if ComposerCameraSwitchRule.needsZoomReassert(current: device.videoZoomFactor, target: ouverture) {
+            reassertZoom(ouverture, on: device)
+        }
+        return InstalledCamera(device: device, position: position, zoomScale: echelle, committedAt: validee)
+    }
+
+    /// L'objectif s'ouvre en UN verrou : ×1 affiché, une lumière neutre — celle
+    /// réglée sur l'autre objectif ne le suit pas —, la netteté continue.
+    nonisolated private static func openLens(_ device: AVCaptureDevice, opening: CGFloat) {
         do {
             try device.lockForConfiguration()
-            device.videoZoomFactor = min(device.maxAvailableVideoZoomFactor,
-                                         max(device.minAvailableVideoZoomFactor, echelle.opening))
-            // La luminosité réglée sur un objectif ne suit pas sur l'autre.
+            defer { device.unlockForConfiguration() }
+            device.videoZoomFactor = openingZoom(of: device, opening)
             device.setExposureTargetBias(0, completionHandler: nil)
+            configure(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), on: device)
+        } catch {
+            Logger.media.error("Lens opening failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    nonisolated private static func openingZoom(of device: AVCaptureDevice, _ opening: CGFloat) -> CGFloat {
+        min(device.maxAvailableVideoZoomFactor, max(device.minAvailableVideoZoomFactor, opening))
+    }
+
+    nonisolated private static func reassertZoom(_ factor: CGFloat, on device: AVCaptureDevice) {
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = factor
             device.unlockForConfiguration()
         } catch {
             Logger.media.error("Zoom opening failed: \(error.localizedDescription, privacy: .public)")
         }
-        apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
-        return InstalledCamera(device: device, position: position, zoomScale: echelle)
     }
 
     /// Les sorties dont chaque entrée neuve redresse et miroite la connexion.
@@ -359,29 +400,63 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
 
     /// La bascule se fait sur la file ; `then` passe sur le fil principal une
-    /// fois l'objectif publié.
+    /// fois l'objectif publié. La trame de couverture est celle déjà retenue,
+    /// et son flou se peint À CÔTÉ de la bascule, jamais devant elle (#9778).
     private func performCameraSwitch(to position: AVCaptureDevice.Position,
                                      then: @escaping @MainActor @Sendable () -> Void = {}) {
+        let debut = CACurrentMediaTime()
+        switchGeneration += 1
+        let generation = switchGeneration
+        let quitte = currentPosition
         sessionQueue.perform { [weak self] in
             guard let self else { return }
-            let couverture = self.liveFeed.holdNextFrame(timeout: ComposerCameraSwitchRule.frameWait)
-                .flatMap(ComposerCameraSwitchRule.cover(from:))
-                .map(ComposerCameraSwitchRule.Cover.init(image:))
-            if let couverture {
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated { self.switchCover = couverture.image }
-                }
+            let file = CACurrentMediaTime()
+            let trame = ComposerCameraSwitchRule.coverFrame(latest: self.liveFeed.latestImage()) {
+                self.liveFeed.holdNextFrame(timeout: ComposerCameraSwitchRule.frameWait)
             }
-            let installe = Self.installVideoInput(in: self.session, position: position, outputs: self.orientedOutputs)
+            let couverte = CACurrentMediaTime()
+            if let trame {
+                self.paintCover(ComposerCameraSwitchRule.Frame(image: trame), generation: generation, leaving: quitte)
+            }
+            let installe = Self.installVideoInput(in: self.session, position: position, outputs: self.orientedOutputs,
+                                                  prepared: self.preparedInputs)
+            let posee = CACurrentMediaTime()
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
+                    func ms(_ a: CFTimeInterval, _ b: CFTimeInterval) -> Int {
+                        ComposerCameraSwitchTiming.milliseconds(from: a, to: b)
+                    }
+                    let fin = CACurrentMediaTime()
+                    let validee = installe?.committedAt ?? posee
+                    let phases = ComposerCameraSwitchPhases(queue: ms(debut, file), frame: ms(file, couverte),
+                                                            commit: ms(couverte, validee), settle: ms(validee, posee),
+                                                            main: ms(posee, fin))
+                    let rapport = ComposerCameraSwitchTiming.report(to: position, total: ms(debut, fin), phases: phases)
+                    Logger.media.info("\(rapport, privacy: .public)")
                     self.endSwitch()
                     then()
                 }
             }
         }
         HapticFeedback.light()
+    }
+
+    /// Le flou de la couverture, hors de la file de la session ; il ne se pose
+    /// que si sa bascule dure encore et que l'ancien objectif est toujours là.
+    nonisolated private func paintCover(_ trame: ComposerCameraSwitchRule.Frame, generation: Int,
+                                        leaving ancien: AVCaptureDevice.Position) {
+        DispatchQueue.global(qos: .userInteractive).async { [weak self] in
+            guard let self, let couverture = ComposerCameraSwitchRule.cover(from: trame.image)
+                .map(ComposerCameraSwitchRule.Cover.init(image:)) else { return }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard self.isSwitchingCamera, self.switchGeneration == generation,
+                          self.currentPosition == ancien else { return }
+                    self.switchCover = couverture.image
+                }
+            }
+        }
     }
 
     /// La couverture reste le temps que le nouvel objectif serve, puis s'efface.
@@ -576,37 +651,41 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             continuousAutoExposure: device.isExposureModeSupported(.continuousAutoExposure))
     }
 
-    /// Le POINT se pose AVANT le mode : c'est le changement de mode qui lance
-    /// la mesure — l'inverse viserait l'ancien point.
     nonisolated private static func apply(_ plan: ComposerCaptureFocus.Plan, to device: AVCaptureDevice) {
         do {
             try device.lockForConfiguration()
             defer { device.unlockForConfiguration() }
-            switch plan.focus {
-            case .continuous?:
-                if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = ComposerCaptureFocus.center }
-                device.focusMode = .continuousAutoFocus
-            case .once(let point)?:
-                device.focusPointOfInterest = point
-                device.focusMode = .autoFocus
-            case nil:
-                break
-            }
-            switch plan.exposure {
-            case .continuous?:
-                if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = ComposerCaptureFocus.center }
-                device.exposureMode = .continuousAutoExposure
-            case .once(let point)?:
-                device.exposurePointOfInterest = point
-                device.exposureMode = .autoExpose
-            case nil:
-                break
-            }
-            device.isSubjectAreaChangeMonitoringEnabled = plan.watchesSubjectArea
-            if device.isSmoothAutoFocusSupported { device.isSmoothAutoFocusEnabled = plan.smoothFocus }
+            configure(plan, on: device)
         } catch {
             Logger.media.error("Focus configuration failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Le POINT se pose AVANT le mode : c'est le changement de mode qui lance
+    /// la mesure — l'inverse viserait l'ancien point. Sous le verrou de l'appelant.
+    nonisolated private static func configure(_ plan: ComposerCaptureFocus.Plan, on device: AVCaptureDevice) {
+        switch plan.focus {
+        case .continuous?:
+            if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = ComposerCaptureFocus.center }
+            device.focusMode = .continuousAutoFocus
+        case .once(let point)?:
+            device.focusPointOfInterest = point
+            device.focusMode = .autoFocus
+        case nil:
+            break
+        }
+        switch plan.exposure {
+        case .continuous?:
+            if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = ComposerCaptureFocus.center }
+            device.exposureMode = .continuousAutoExposure
+        case .once(let point)?:
+            device.exposurePointOfInterest = point
+            device.exposureMode = .autoExpose
+        case nil:
+            break
+        }
+        device.isSubjectAreaChangeMonitoringEnabled = plan.watchesSubjectArea
+        if device.isSmoothAutoFocusSupported { device.isSmoothAutoFocusEnabled = plan.smoothFocus }
     }
 
     /// Un observateur par objectif : changer d'objectif remplace le guet.

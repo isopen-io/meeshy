@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 import {
   maskedAttachment,
   protectedPreview,
@@ -415,6 +416,7 @@ export async function notifyMessageRecipients(params: {
     // attache le média en natif (waveform audio, preview image, thumb vidéo).
     const attachments = await prisma.messageAttachment.findMany({
       where: { messageId: message.id },
+      orderBy: MESSAGE_ATTACHMENT_ORDER,
       select: {
         mimeType: true, fileName: true, originalName: true, fileSize: true, duration: true,
         width: true, height: true, fileUrl: true, transcription: true,

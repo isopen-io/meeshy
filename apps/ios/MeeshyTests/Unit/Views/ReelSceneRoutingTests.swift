@@ -44,6 +44,140 @@ final class ReelSceneRoutingTests: XCTestCase {
         XCTAssertEqual(track.soundId, "sound-1")
     }
 
+    // MARK: - Le son de fond n'est pas le visuel du réel (#9737)
+
+    /// Le réel de recette `6ac7e549d58b95844b6e6552` : une scène dont le seul
+    /// objet est un son de FOND, et dont le seul fichier est ce son. La carte
+    /// du fil y peignait le spectre du réel audio, le lecteur sa commande audio.
+    func test_aComposedReelWhoseOnlyFileIsItsBackgroundSound_isShownByItsScene() throws {
+        let reel = Self.backgroundSoundSceneReel()
+        let background = try XCTUnwrap(reel.storyEffects?.resolvedBackgroundAudio)
+
+        XCTAssertEqual(background.waveformSamples.count, 80)
+        XCTAssertEqual(reel.primaryReelDisplayMedia?.type, .audio)
+        XCTAssertNotNil(ReelSceneRouting.sceneDocument(for: reel))
+        XCTAssertNil(reel.reelPrincipalAudioMedia, "ce son appartient à la scène : ni spectre, ni commande audio")
+        XCTAssertTrue(SceneAudioStageRule.stagedAudios(in: reel.storyEffects?.audioPlayerObjects ?? []).isEmpty,
+                      "le son de fond ne pose rien sur la scène")
+        XCTAssertNil(ReelSceneRouting.borrowedSoundTrack(for: reel), "la scène le joue, la page ne le rejoue pas")
+    }
+
+    func test_aPureAudioReelWithoutScene_keepsItsSpectrumAndItsAudioControl() {
+        XCTAssertEqual(Self.pureAudioReel().reelPrincipalAudioMedia?.id, Self.audioId)
+        XCTAssertNil(ReelSceneRouting.sceneDocument(for: Self.pureAudioReel()))
+    }
+
+    /// La carte du fil : la scène à la place du spectre, élue comme une scène.
+    func test_theFeedCard_mountsTheScene_notTheSpectrum_forASoundOfAScene() throws {
+        let card = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ReelFeedCard.swift")
+
+        XCTAssertTrue(card.contains("guard let document = post.reelPlayedSceneDocument,"))
+        XCTAssertTrue(card.contains("case .audio: return soundSceneDocument == nil ? .audio : .scene"))
+        XCTAssertTrue(card.contains("ReelCardSceneBackdrop("))
+        XCTAssertEqual(card.components(separatedBy: "ReelAudioBackdrop(").count - 1, 1,
+                       "le spectre n'a qu'un montage : le réel audio sans scène ni couverture")
+        XCTAssertTrue(card.contains(".reportReelFrame(id: post.id, kind: kind)"),
+                      "la carte rapporte seule sa frame — le fond de scène n'en rapporte pas une seconde")
+    }
+
+    func test_theFeedCardScene_playsMutedInCardMode_andLetsTheCardTakeTheTap() throws {
+        let autoplay = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/FeedSceneAutoplay.swift")
+        let start = try XCTUnwrap(autoplay.range(of: "struct ReelCardSceneBackdrop: View, Equatable {"))
+        let end = try XCTUnwrap(autoplay.range(of: "struct PostSceneMosaicContainer: View {"))
+        let backdrop = String(autoplay[start.upperBound..<end.lowerBound])
+
+        XCTAssertTrue(backdrop.contains("mode: .card"), "la carte du fil est muette par construction")
+        XCTAssertTrue(backdrop.contains("isPlaying: .constant(isActive)"))
+        XCTAssertTrue(backdrop.contains("carrier: post.reelPlayedSceneCarrier"))
+        XCTAssertTrue(backdrop.contains(".allowsHitTesting(false)"))
+        XCTAssertFalse(backdrop.contains(".reportReelFrame("))
+    }
+
+    /// Recette 2026-10-09 : le texte blanc de la scène se lisait sur le fil. Le
+    /// canvas ne peint un fond que si la scène en déclare un ; la carte pose
+    /// donc le sol du lecteur de réels sous la scène, et aucun accent derrière.
+    func test_theFeedCardScene_standsOnTheBlackFloorOfTheReelPlayer_neverOnTheAccent() throws {
+        let autoplay = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/FeedSceneAutoplay.swift")
+        let start = try XCTUnwrap(autoplay.range(of: "struct ReelCardSceneBackdrop: View, Equatable {"))
+        let end = try XCTUnwrap(autoplay.range(of: "struct PostSceneMosaicContainer: View {"))
+        let backdrop = String(autoplay[start.upperBound..<end.lowerBound])
+
+        XCTAssertTrue(backdrop.contains(".background(Color.black)"))
+        XCTAssertFalse(backdrop.contains("Color(hex:"), "aucun dégradé d'accent ne transparaît derrière la scène")
+        XCTAssertFalse(backdrop.contains("LinearGradient("))
+    }
+
+    /// Un réel composé sans vidéo ni image se montre par sa scène — que son
+    /// fichier soit un son, ou qu'il n'en porte aucun (son de bibliothèque,
+    /// réel `6ac7e567…6561` : la carte restait un aplat de couleur).
+    func test_theFeedCard_showsTheScene_wheneverTheReelHasNoPictureToShow() {
+        XCTAssertTrue(ReelFeedCard.showsScene(mediaType: .audio, hasCover: false))
+        XCTAssertTrue(ReelFeedCard.showsScene(mediaType: nil, hasCover: false))
+        XCTAssertFalse(ReelFeedCard.showsScene(mediaType: .audio, hasCover: true), "la couverture reste le visuel")
+        XCTAssertFalse(ReelFeedCard.showsScene(mediaType: .video, hasCover: false), "la vidéo garde sa surface")
+        XCTAssertFalse(ReelFeedCard.showsScene(mediaType: .image, hasCover: false))
+    }
+
+    /// Le lecteur de réels : la commande audio (et le moteur de la page) ne
+    /// servent que le réel dont le son EST le média.
+    func test_theReelPlayer_audioControl_isForThePrincipalAudioOnly() throws {
+        let player = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+
+        XCTAssertTrue(player.contains("var audioMedia: FeedMedia? { reel.reelPrincipalAudioMedia }"))
+        XCTAssertFalse(player.contains("guard let media = reel.primaryReelDisplayMedia, media.type == .audio"))
+    }
+
+    // MARK: - Un réel composé REPUBLIÉ rejoue sa scène dans le fil (#9737)
+
+    func test_aRepublishedComposedReel_isShownByTheSceneOfItsSource_inTheFeed() throws {
+        let source = Self.backgroundSoundSceneReel()
+        var envelope = Self.textOnly(type: "REEL")
+        envelope.content = ""
+        envelope.repost = RepostContent(id: source.id, author: source.author, content: source.content,
+                                        type: "REEL", storyEffects: source.storyEffects, media: source.media)
+
+        XCTAssertEqual(envelope.primaryReelDisplayMedia?.type, .audio)
+        XCTAssertEqual(envelope.reelPlayedSceneDocument?.scenes.count, 1, "plus de spectre : la scène de la source")
+        XCTAssertEqual(envelope.reelPlayedSceneCarrier.id, envelope.id, "l'élection reste celle du post contenant")
+        XCTAssertEqual(envelope.reelPlayedSceneCarrier.media.map(\.id), [Self.audioId])
+    }
+
+    // MARK: - La pastille d'un son de PREMIER PLAN, surface par surface (#9737)
+
+    private func view(_ name: String) throws -> String {
+        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/\(name)")
+    }
+
+    /// Le lecteur de réels, la carte de scène du fil, la mosaïque et la galerie
+    /// montent `MeeshyScenePlayer`, qui pose les pastilles lui-même : aucun ne
+    /// les refuse.
+    func test_everyScenePlayerSurface_letsThePlayerPoseItsSoundChips() throws {
+        for surface in ["ReelsPlayerView+Scene.swift", "FeedSceneAutoplay.swift", "PostSceneMosaic.swift",
+                        "ConversationMediaGalleryView+ScenePage.swift"] {
+            let code = try view(surface)
+            XCTAssertTrue(code.contains("MeeshyScenePlayer("), "\(surface) ne monte plus le player")
+            XCTAssertFalse(code.contains("stagesSoundChips: false"),
+                           "\(surface) refuse les pastilles : un son posé s'y entendrait sans se voir")
+        }
+    }
+
+    /// Le détail de post monte l'hôte canvas nu : il pose la couche lui-même.
+    func test_thePostDetail_posesTheChipLayer_overItsCanvas() throws {
+        XCTAssertTrue(try view("PostDetailView+Canvas.swift")
+            .contains("SceneSoundChipLayer(audios: renderedItem.storyEffects?.audioPlayerObjects ?? [],"))
+    }
+
+    /// Le lecteur de story pose ses pastilles au-dessus de sa couche de gestes :
+    /// ses deux montages du player les refusent, sans quoi chacune paraîtrait
+    /// deux fois.
+    func test_theStoryViewer_posesItsOwnChips_once() throws {
+        let viewer = try view("StoryViewerView+Canvas.swift")
+
+        XCTAssertTrue(viewer.contains("AudioForegroundReaderOverlay("))
+        XCTAssertEqual(viewer.components(separatedBy: "MeeshyScenePlayer(").count - 1,
+                       viewer.components(separatedBy: "stagesSoundChips: false").count - 1)
+    }
+
     // MARK: - La timeline de la scène (caractérisation de la loi du SDK)
 
     /// Le son (19,9 s) est plus long que la vidéo (3 s, en boucle) : la scène
@@ -289,6 +423,40 @@ final class ReelSceneRoutingTests: XCTestCase {
                        "duration":19.902,"mediaURL":"/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a",
                        "soundId":"6a9a7b41e19ad1985081de32","isBackground":true}}
          ]}]}}
+        """)
+        return post.toFeedPost(preferredLanguages: [])
+    }
+
+    private static let audioId = "6ac7e549d58b95844b6e6550"
+
+    private static let audioMedia = """
+    {"id":"\(audioId)","fileName":"son.m4a","originalName":"son.m4a",
+     "mimeType":"audio/mp4","fileSize":204800,"duration":8000,"order":0}
+    """
+
+    private static func backgroundSoundSceneReel() -> FeedPost {
+        let samples = Array(repeating: "0.5", count: 80).joined(separator: ",")
+        let post: APIPost = JSONStub.decode("""
+        {"id":"6ac7e549d58b95844b6e6552","type":"REEL","content":"Recette 9677 · réel à son ORIGINAL",
+         "createdAt":"2026-10-08T10:00:00.000Z",
+         "author":{"id":"68f33afa8ae497b2054c84d7","username":"auteur"},
+         "media":[\(audioMedia)],
+         "storyEffects":{"v":3,"scenes":[{"id":"s1","objects":[
+           {"id":"A1","kind":"audio","plane":"content","z":0,
+            "anchor":{"t":"free","x":0.5,"y":0.5},
+            "transform":{"rotation":0,"opacity":1,"scale":1},
+            "payload":{"placement":"background","postMediaId":"\(audioId)","duration":8,
+                       "waveformSamples":[\(samples)],"isBackground":true}}
+         ]}]}}
+        """)
+        return post.toFeedPost(preferredLanguages: [])
+    }
+
+    private static func pureAudioReel() -> FeedPost {
+        let post: APIPost = JSONStub.decode("""
+        {"id":"6ac7e549d58b95844b6e6553","type":"REEL","content":"","createdAt":"2026-10-08T10:00:00.000Z",
+         "author":{"id":"68f33afa8ae497b2054c84d7","username":"auteur"},
+         "media":[\(audioMedia)]}
         """)
         return post.toFeedPost(preferredLanguages: [])
     }

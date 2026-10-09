@@ -36,7 +36,15 @@ struct ComposerAttachment: Identifiable, Equatable {
     var duration: TimeInterval?
     var thumbnailColor: String = "808080"
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    /// **Égales seulement si ELLES SONT les mêmes** (#9743). Comparer le seul
+    /// identifiant faisait tenir pour inchangée une pièce dont le fichier
+    /// venait d'arriver : SwiftUI sautait le rendu de la zone et de la barre,
+    /// la tuile tournait sans fin, et l'envoi lisait une pièce « en
+    /// préparation » qui ne l'était plus.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id && lhs.url == rhs.url && lhs.size == rhs.size
+            && lhs.duration == rhs.duration && lhs.type == rhs.type && lhs.name == rhs.name
+    }
 
     // Convenience factories
     static func voice(duration: TimeInterval) -> ComposerAttachment {

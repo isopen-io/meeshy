@@ -957,22 +957,20 @@ extension StoryViewerView {
         let language = composerLanguage
         let tempCommentId = optimisticComment.id
         Task {
+            let medias = [pendingMedia].compactMap { $0 }
+            // La charge est bâtie UNE fois, avec son auteur relevé avant toute
+            // attente : l'envoi direct et la file portent la même (#9743).
+            let payload = CreateCommentPayload(
+                clientMutationId: tempCommentId, postId: story.id,
+                parentCommentId: parentId, content: text,
+                originalLanguage: language, authorId: authorId,
+                location: location, effectFlags: effectFlags,
+                mobileTranscription: pendingMedia?.mobileTranscription
+            )
+            StoryInteractionService().noteComment(storyId: story.id)
             do {
-                var attachmentIds: [String]? = nil
-                if let pendingMedia {
-                    attachmentIds = [try await CommentMediaUploader.upload(pendingMedia)]
-                }
-                try await StoryInteractionService().postComment(
-                    storyId: story.id,
-                    content: text,
-                    originalLanguage: language,
-                    effectFlags: effectFlags,
-                    parentId: parentId,
-                    attachmentIds: attachmentIds,
-                    mobileTranscription: pendingMedia?.mobileTranscription,
-                    location: location,
-                    clientMutationId: tempCommentId
-                )
+                try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(medias))
+                CommentMediaUploader.discardLocalFiles(medias)
             } catch {
                 // Le POST direct a échoué — le plus souvent parce qu'on est
                 // hors-ligne. Perdre un commentaire que l'utilisateur vient de
@@ -981,25 +979,13 @@ extension StoryViewerView {
                 // (`FeedCommentsSheet`), même kind `.createComment` : la ligne
                 // optimiste `temp_` est réconciliée par le handler socket
                 // `comment:added` déjà câblé quand le rejeu aboutit.
-                //
-                // LIMITE ASSUMÉE, identique au feed : `CreateCommentPayload` ne
-                // porte pas `attachmentIds` (lacune du schéma SDK). Un média
-                // joint à un commentaire envoyé hors-ligne est perdu au rejeu ;
-                // le TEXTE, sa LANGUE déclarée (#6587) et ses effets survivent.
+                // #9743 — le MÉDIA part avec lui : la file garde son fichier.
                 do {
                     // MÊME cmid que la tentative REST : un POST abouti dont la
                     // réponse s'est perdue est dédoublonné au rejeu (MutationLog).
                     let cmid = tempCommentId
-                    try await OfflineQueue.shared.enqueue(
-                        .createComment,
-                        payload: CreateCommentPayload(
-                            clientMutationId: cmid, postId: story.id,
-                            parentCommentId: parentId, content: text,
-                            originalLanguage: language,
-                            location: location, effectFlags: effectFlags
-                        ),
-                        conversationId: story.id
-                    )
+                    try await CommentMediaDelivery.entrust(payload, medias: medias,
+                                                           acquired: CommentMediaDelivery.acquired(from: error))
                     observeStoryCommentOutcome(cmid: cmid,
                                                tempId: tempCommentId,
                                                parentId: parentId)
@@ -1007,7 +993,7 @@ extension StoryViewerView {
                     // L'outbox elle-même a refusé la ligne : là, il n'y a plus
                     // de recours, on annule l'insert optimiste.
                     rollbackOptimisticComment(id: tempCommentId, parentId: parentId)
-                    HapticFeedback.error()
+                    returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
                 }
             }
         }
@@ -1194,6 +1180,7 @@ extension StoryViewerView {
             for await event in stream {
                 if case .exhausted = event {
                     rollbackOptimisticComment(id: tempId, parentId: parentId)
+                    await OfflineQueue.shared.cancelCreateComment(clientMutationId: cmid, ownerId: CommentPublisher.currentAccountId())
                     FeedbackToastManager.shared.showError(
                         // Clé du feed réutilisée : message identique, et le
                         // catalogue est verrouillé à 100 % de couverture — une
@@ -1332,209 +1319,7 @@ extension StoryViewerView {
     }
 }
 
-// MARK: - Story Viewers Sheet
-
-struct StoryViewerItem: Identifiable {
-    let id: String
-    let username: String
-    let displayName: String
-    let avatarUrl: String?
-    let viewedAt: Date
-    let reactionEmoji: String?
-    let replyContent: String?
-    let hasReshared: Bool
-}
-
-struct StoryViewersSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    let story: StoryItem
-    let accentColor: Color
-    /// Mood resolution (local-first). Passed explicitly rather than via
-    /// `@EnvironmentObject` so it survives the sheet boundary.
-    @ObservedObject var statusViewModel: StatusViewModel
-    /// Opens the tapped viewer's profile. Owned by the presenter
-    /// (`StoryViewerView` holds the `Router`) so the sheet never reaches a
-    /// `Router` `@EnvironmentObject` across its boundary.
-    let onOpenProfile: (StoryViewerItem) -> Void
-
-    private var isDark: Bool { colorScheme == .dark }
-
-    @State private var viewers: [StoryViewerItem] = []
-    @State private var isLoading = true
-    // Coalescing anti-course pour le re-fetch temps réel : une rafale de
-    // `story:viewed` ne doit pas lancer N fetches `/interactions` concurrents
-    // (ils peuvent se terminer dans le désordre → liste momentanément périmée).
-    // `isRefreshing` = un seul fetch en vol ; `refreshQueued` = un événement est
-    // arrivé pendant le fetch → on relance EXACTEMENT une fois à la fin.
-    @State private var isRefreshing = false
-    @State private var refreshQueued = false
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                isDark ? Color.black.ignoresSafeArea() : Color(UIColor.systemGroupedBackground).ignoresSafeArea()
-
-                if isLoading {
-                    ProgressView("Chargement des vues...")
-                        .tint(accentColor)
-                } else if viewers.isEmpty {
-                    EmptyStateView(
-                        icon: "eye.slash",
-                        title: "Aucune vue pour le moment",
-                        subtitle: "Les personnes qui regardent votre story apparaîtront ici."
-                    )
-                } else {
-                    List {
-                        // C4 + C1 : en-tête = viewCount AUTORITATIF (dénormalisé, la même
-                        // valeur que le bouton « Vues » ; élimine le « bouton dit 3 / sheet
-                        // dit 2 » où la sheet montrait la longueur de /interactions) + les
-                        // impressions (author-only), pour la parité avec le détail/réel.
-                        // Nouvelle clé de localisation (pas de traduction existante à casser).
-                        Section(header: Text(String(localized: "story.viewer.viewsAndImpressions", defaultValue: "\(story.viewCount ?? viewers.count) Vues · \(story.impressionCount ?? 0) impressions", bundle: .main))
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                            .textCase(nil)
-                        ) {
-                            ForEach(viewers) { viewer in
-                                viewerRow(viewer)
-                            }
-                        }
-                    }
-                    .listStyle(.insetGrouped)
-                    .scrollContentBackground(.hidden)
-                }
-            }
-            .navigationTitle(String(localized: "story.viewer.views.title", defaultValue: "Vues", bundle: .main))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
-                        dismiss()
-                    }
-                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
-                    .foregroundColor(accentColor)
-                }
-            }
-            .task {
-                await loadViewers()
-            }
-            // Temps réel : chaque `story:viewed` de CETTE story (émis par le
-            // gateway vers la feed room de l'auteur) re-fetch la liste enrichie
-            // via `/posts/:id/interactions`. Sans ça, la feuille chargeait une
-            // seule fois (`.task`) et un nouveau viewer n'apparaissait jamais tant
-            // qu'elle restait ouverte — le cœur du « la remontée des vues ne se
-            // fait pas en temps réel ». Le re-fetch est silencieux (pas de spinner :
-            // `loadViewers` ne repasse pas `isLoading` à true).
-            .onReceive(SocialSocketManager.shared.storyViewed) { viewedData in
-                guard viewedData.storyId == story.id else { return }
-                Task { await loadViewers() }
-            }
-        }
-    }
-
-    private func viewerRow(_ viewer: StoryViewerItem) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            // Local-first mood (StatusViewModel) + presence (PresenceManager
-            // live store). `onViewProfile` + row tap open the viewer's profile.
-            MeeshyAvatar(
-                name: viewer.displayName,
-                context: .storyViewerRow,
-                avatarURL: viewer.avatarUrl,
-                moodEmoji: statusViewModel.statusForUser(userId: viewer.id)?.moodEmoji,
-                presenceState: PresenceManager.shared.resolvedState(userId: viewer.id, isOnline: nil),
-                onViewProfile: { onOpenProfile(viewer) },
-                onMoodTap: statusViewModel.moodTapHandler(for: viewer.id)
-            )
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                HStack {
-                    Text(viewer.displayName)
-                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                        .foregroundColor(.primary)
-
-                    if viewer.hasReshared {
-                        Image(systemName: "arrow.2.squarepath")
-                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))
-                            .foregroundColor(accentColor)
-                    }
-
-                    Spacer()
-
-                    Text(viewer.viewedAt, style: .time)
-                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(.secondary)
-                }
-
-                if let reply = viewer.replyContent {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        Image(systemName: "arrowshape.turn.up.left.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                        Text(reply)
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                            .lineLimit(1)
-                    }
-                    .foregroundColor(.secondary)
-                } else if let reaction = viewer.reactionEmoji {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        Image(systemName: "heart.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                            .foregroundColor(MeeshyColors.error)
-                        Text(reaction)
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    }
-                }
-            }
-        }
-        .padding(.vertical, MeeshySpacing.xs)
-        .contentShape(Rectangle())
-        .onTapGesture { onOpenProfile(viewer) }
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-        .listRowBackground(isDark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white)
-    }
-
-    private func loadViewers() async {
-        // Un seul fetch en vol : si un autre tourne déjà, on note qu'un refresh
-        // est dû (`refreshQueued`) et on sort — le fetch courant le rejouera.
-        let shouldStart = await MainActor.run { () -> Bool in
-            if isRefreshing { refreshQueued = true; return false }
-            isRefreshing = true
-            return true
-        }
-        guard shouldStart else { return }
-
-        // Boucle jusqu'à ce qu'aucun événement n'ait été mis en file pendant le
-        // dernier fetch — au plus un refresh de rattrapage, jamais N concurrents.
-        repeat {
-            await MainActor.run { refreshQueued = false }
-            // M1 follow-up: the wire-shape decoding + nullable-field
-            // defaulting now lives in StoryInteractionService.loadViewers.
-            // A nil result here means "couldn't load" (logged at fault level
-            // in the service) — we leave the previous list alone, matching
-            // the prior swallow-and-show-empty behaviour.
-            let snapshots = await StoryInteractionService().loadViewers(storyId: story.id)
-            await MainActor.run {
-                if let snapshots {
-                    self.viewers = snapshots.map { s in
-                        StoryViewerItem(
-                            id: s.id,
-                            username: s.username,
-                            displayName: s.displayName,
-                            avatarUrl: s.avatarUrl,
-                            viewedAt: s.viewedAt,
-                            reactionEmoji: s.reactionEmoji,
-                            replyContent: nil,
-                            hasReshared: false
-                        )
-                    }
-                }
-                self.isLoading = false
-            }
-        } while await MainActor.run(body: { refreshQueued })
-
-        await MainActor.run { isRefreshing = false }
-    }
-}
+// `StoryViewersSheet` et `StoryViewerItem` vivent dans `PublicationViewersSheet.swift` (#9727).
 
 // MARK: - Story Comments Overlay (live-chat style with replies)
 

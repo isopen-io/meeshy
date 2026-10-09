@@ -14,6 +14,7 @@ import { FEED_GLYPHS } from './glyphs-feed';
 import { LINKS_GLYPHS } from './glyphs-links';
 import { NOTIFICATIONS_GLYPHS } from './glyphs-notifications';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
+import { PublicationViewersSheetLazy } from './publication-viewers-sheet-lazy';
 import { ReportSheet } from './report-sheet';
 
 /**
@@ -22,6 +23,7 @@ import { ReportSheet } from './report-sheet';
  * son chunk (`publication_edit_sheet`, `budgets.json`) n'arrive qu'au tap.
  */
 const PublicationEditSheet = lazy(() => import('./publication-edit-sheet').then((m) => ({ default: m.PublicationEditSheet })));
+
 
 /**
  * **LE PANNEAU DU MENU « ⋯ », CHARGÉ À LA DEMANDE** (#7533) — même discipline
@@ -58,6 +60,8 @@ export type PostMenuPanelProps = {
   readonly setReporting: (value: boolean) => void;
   readonly editing: boolean;
   readonly setEditing: (value: boolean) => void;
+  readonly viewing: boolean;
+  readonly setViewing: (value: boolean) => void;
 };
 
 export function PostMenuPanel(props: PostMenuPanelProps) {
@@ -85,6 +89,8 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
     setReporting,
     editing,
     setEditing,
+    viewing,
+    setViewing,
   } = props;
   const language = currentInterfaceLanguage();
 
@@ -104,6 +110,8 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
             icon: <GlyphSvg glyph={bookmarked ? FEED_GLYPHS.bookmarkFill : FEED_GLYPHS.bookmark} size={16} />,
             run: () => onGesture?.(postId, 'bookmark'),
           };
+        case 'views':
+          return { id, label: translate(language, 'story.action.views'), icon: <Glyph name="eye" size={16} />, run: () => setViewing(true) };
         case 'pin':
           return { id, label: translate(language, 'feed.post.menu.pin'), icon: <Glyph name="pushPin" size={16} />, run: () => menu.onPin(postId) };
         case 'edit':
@@ -178,6 +186,19 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
             menu.onReport(postId, reason);
           }}
           onClose={() => setReporting(false)}
+        />
+      ) : null}
+
+      {/* « VUES » (#9727) — la feuille des stories ; son chunk n'arrive qu'au tap. */}
+      {viewing ? (
+        <PublicationViewersSheetLazy
+          postId={postId}
+          viewCount={undefined}
+          subject="publication"
+          onClose={() => {
+            setViewing(false);
+            closeAndFocusButton();
+          }}
         />
       ) : null}
 

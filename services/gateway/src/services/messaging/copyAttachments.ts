@@ -58,6 +58,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 
 import { copiedAttachmentFields, type SourceAttachment } from './copiedAttachmentFields';
+import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 
 export type { SourceAttachment };
 
@@ -75,7 +76,7 @@ export interface CopyAttachmentsPrisma {
     }): Promise<{ id: string; userId: string | null } | null>;
   };
   messageAttachment: {
-    findMany(args: { where: { messageId: string } }): Promise<readonly SourceAttachment[]>;
+    findMany(args: { where: { messageId: string }; orderBy: typeof MESSAGE_ATTACHMENT_ORDER }): Promise<readonly SourceAttachment[]>;
     create(args: { data: Record<string, unknown> }): Promise<{ id: string }>;
   };
 }
@@ -125,6 +126,7 @@ export async function copyAttachmentsFromMessage(
 
   const sourceAttachments = await prisma.messageAttachment.findMany({
     where: { messageId: params.sourceMessageId },
+    orderBy: MESSAGE_ATTACHMENT_ORDER,
   });
 
   if (sourceAttachments.length === 0) {
@@ -132,11 +134,12 @@ export async function copyAttachmentsFromMessage(
   }
 
   const created = await Promise.all(
-    sourceAttachments.map((att) =>
+    sourceAttachments.map((att, rank) =>
       prisma.messageAttachment.create({
         data: {
           ...copiedAttachmentFields(att),
           messageId: params.targetMessageId,
+          rank,
           uploadedBy: params.requesterParticipantId,
         },
       })

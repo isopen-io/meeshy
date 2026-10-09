@@ -72,8 +72,14 @@ final class ComposerCaptureSession: ObservableObject {
     /// Les proportions de la scène de retouche (#9567) — ce qui partira ;
     /// `nil` hors retouche.
     @Published var editAspect: CGFloat?
-    /// Les proportions par presets sont ouvertes sous la scène.
-    @Published var cropPresetsOpen = false
+    /// Les outils de retouche actifs — Crop, Trim, Son, ensemble (#9754) ;
+    /// vide hors retouche.
+    @Published var activeEditTools: Set<ComposerEditTool> = []
+    /// Le son de la prise en retouche : gain et muet (#9754).
+    @Published var takeSound = ComposerTakeSound()
+    /// Un glissé de la règle montre la frame sous elle : la boucle est suspendue
+    /// et doit repartir à la fin du geste, même sur une plage inchangée (#9754).
+    var trimScrubbing = false
     /// La photo figée de l'édition, debout.
     var editPhoto: CGImage?
     /// Les octets de la prise : leur EXIF suit le rendu final.
@@ -214,6 +220,7 @@ final class ComposerCaptureSession: ObservableObject {
             zoomFactor: camera.zoomFactor,
             zoomPresets: ComposerCaptureZoomScale.presets(in: camera.zoomRange),
             flipping: camera.isSwitchingCamera || camera.recordingIsPending,
+            switchingCamera: camera.isSwitchingCamera,
             flashIntensity: flashIntensity)
     }
 

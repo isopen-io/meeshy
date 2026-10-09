@@ -16,9 +16,11 @@ import MeeshyUI
 /// scène et la miniature choisie, en bas, prennent la photo et la vidéo ; le
 /// rail, en bas à gauche, ouvre les filtres et les cadres.
 ///
-/// **La croix en haut à GAUCHE, le flash en haut à DROITE, et sous lui — flash
-/// actif seulement — le curseur vertical de son intensité** (décision porteur
-/// 2026-10-05, précisée le 2026-10-07, #9566 : aucun curseur permanent).
+/// **La croix en haut à GAUCHE, suivie de la puce du chrono ; à DROITE les
+/// contrôleurs de segment, le flash et, au bord, le retournement ; sous le
+/// flash — allumé, et 2 s après la dernière interaction — le curseur vertical
+/// de son intensité** (porteur 2026-10-05, 2026-10-07 #9566, 2026-10-09 #9753 —
+/// la disposition est la loi `ComposerCaptureTopRow`).
 struct ComposerSceneCameraBar: View {
 
     let stage: ComposerSceneCameraStage
@@ -70,67 +72,110 @@ struct ComposerSceneCameraBar: View {
         /// Les crans du zoom que l'objectif sert (#9350) — vide sans zoom.
         var zoomPresets: [CGFloat] = []
         var flipping = false
+        /// L'objectif bascule — la barre des zooms morphe (#9753).
+        var switchingCamera = false
         var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
     }
 
     /// **Reduce Motion coupe le battement, jamais le témoin** : le point rouge
     /// PLEIN dit déjà « ça enregistre ».
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     @State private var recordingBlink: Double = 1
+    /// Le curseur du flash paraît à l'interaction et s'efface 2 s après (#9753).
+    @State private var sliderTimer = ComposerFlashSliderTimer()
+
+    private var row: ComposerCaptureTopRow.Input {
+        ComposerCaptureTopRow.Input(stage: stage, editing: editing, pendingSegments: segments.count,
+                                    offersSizeToggle: offersSizeToggle, offersSave: onSave != nil)
+    }
+
+    private var trailingItems: [ComposerCaptureTopItem] { ComposerCaptureTopRow.trailing(row) }
+
+    private var showsFlashSlider: Bool {
+        trailingItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode) && sliderTimer.visible
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             topControls
-            if !segments.isEmpty, !editing { segmentStrip }
-            if ComposerFlashIntensity.showsSlider(flash: flashMode) && !editing {
+            if !segments.isEmpty, !editing { segmentBar }
+            if showsFlashSlider {
                 HStack {
                     Spacer(minLength: 0)
-                    ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity)
+                    ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity,
+                                                 onInteraction: { sliderTimer.hold($0) })
                 }
+                .padding(.trailing, ComposerCaptureTopRow.flashSliderTrailingInset(
+                    trailingItems, tapTarget: MeeshyControlSize.tapTarget))
                 .padding(.top, MeeshySpacing.sm)
                 .transition(.opacity)
             }
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.top, MeeshySpacing.md)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.2),
-                   value: ComposerFlashIntensity.showsSlider(flash: flashMode))
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsFlashSlider)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: trailingItems)
+        .adaptiveOnChange(of: flashMode) { _, mode in
+            guard ComposerFlashIntensity.showsSlider(flash: mode) else { return sliderTimer.hide() }
+            sliderTimer.touch()
+        }
+        .task(id: sliderTimer.generation) { @MainActor in
+            let echeance = sliderTimer.generation
+            try? await Task.sleep(nanoseconds: UInt64(ComposerFlashSliderTimer.lifetime * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            sliderTimer.expire(echeance, voiceOver: voiceOverEnabled)
+        }
     }
 
     // MARK: - En tête de la carte
 
+    /// **La rangée haute, disposée par sa loi** (#9753) : (x) puis le chrono à
+    /// gauche ; à droite `[ ]`, les contrôleurs de segment, le flash et, au
+    /// bord, le retournement. **La croix est TOUJOURS là** (#8653 : « permettre
+    /// de quitter à tout moment »), pendant l'enregistrement compris.
     private var topControls: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            // **La croix est TOUJOURS là** (#8653 : « permettre de quitter à
-            // tout moment »), en haut à gauche (porteur 2026-10-05).
-            glassControl(symbol: "xmark",
-                         label: editing ? ComposerCaptureCopy.cancelEdit : ComposerSceneCameraCopy.disarmLabel,
-                         tint: .white,
-                         action: onDisarm)
+        HStack(spacing: ComposerCaptureTopRow.spacing) {
+            ForEach(ComposerCaptureTopRow.leading(row), id: \.self) { control($0) }
             Spacer(minLength: 0)
-            if offersSizeToggle {
-                glassControl(symbol: size.toggleSymbol,
-                             label: ComposerSceneCameraCopy.sizeLabel(size),
-                             tint: .white,
-                             action: onToggleSize)
-            }
-            if !editing {
-                glassControl(symbol: "arrow.triangle.2.circlepath.camera",
-                             label: ComposerSceneCameraCopy.flipLabel,
-                             tint: .white,
-                             action: onFlipCamera)
-                    .disabled(flipping)
-                flashCluster
-            } else {
-                if let onSave { saveButton(onSave) }
-                doneButton
-            }
+            ForEach(trailingItems, id: \.self) { control($0) }
         }
     }
 
-    /// **Le flash, au bord droit** (#8671). Allumé, son curseur d'intensité
-    /// paraît SOUS lui, vertical (#9566).
+    @ViewBuilder
+    private func control(_ item: ComposerCaptureTopItem) -> some View {
+        switch item {
+        case .close:
+            glassControl(symbol: "xmark",
+                         label: editing ? ComposerCaptureCopy.cancelEdit : ComposerSceneCameraCopy.disarmLabel,
+                         tint: .white, action: onDisarm)
+        case .chrono:
+            chronoChip
+        case .size:
+            glassControl(symbol: size.toggleSymbol, label: ComposerSceneCameraCopy.sizeLabel(size),
+                         tint: .white, action: onToggleSize)
+        case .dropSegment:
+            glassControl(symbol: "delete.left", label: ComposerSceneCameraCopy.dropSegmentLabel,
+                         tint: .white.opacity(0.9), action: onDropLastSegment)
+        case .validate:
+            glassControl(symbol: "checkmark", label: ComposerSceneCameraCopy.validateLabel,
+                         tint: .white, action: onValidateSegments)
+        case .flash:
+            flashCluster
+        case .flip:
+            glassControl(symbol: "arrow.triangle.2.circlepath.camera", label: ComposerSceneCameraCopy.flipLabel,
+                         tint: .white, action: onFlipCamera)
+                .disabled(flipping)
+        case .save:
+            if let onSave { saveButton(onSave) }
+        case .done:
+            doneButton
+        }
+    }
+
+    /// **Le flash.** Le toucher change son mode et, allumé, fait paraître le
+    /// curseur d'intensité SOUS lui (#9566) pour 2 s (#9753).
     private var flashCluster: some View {
         glassControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
                      label: ComposerCameraFlash.label(for: flashMode),
@@ -155,7 +200,7 @@ struct ComposerSceneCameraBar: View {
                 .opacity(rendering ? 0.5 : 1)
                 .frame(minHeight: MeeshyControlSize.tapTarget)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ComposerBounceButtonStyle())
         .disabled(rendering)
         .accessibilityLabel(ComposerCaptureCopy.done)
     }
@@ -190,7 +235,7 @@ struct ComposerSceneCameraBar: View {
             .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
             .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ComposerBounceButtonStyle())
         .disabled(!saveState.offersSave || rendering)
         .accessibilityLabel(saveLabel)
         .accessibilityAddTraits(saveState == .saving ? .updatesFrequently : [])
@@ -224,82 +269,67 @@ struct ComposerSceneCameraBar: View {
                 .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ComposerBounceButtonStyle())
         .accessibilityLabel(label)
     }
 
-    // MARK: - La bande des segments (#4099, vue `4b`)
+    // MARK: - La bande des segments (#4099, vue `4b`) et la puce du chrono (#9753)
 
-    private var segmentStrip: some View {
-        VStack(spacing: MeeshySpacing.xsPlus) {
-            GeometryReader { geo in
-                HStack(spacing: MeeshySpacing.xxs) {
-                    ForEach(Array(zip(segments, ComposerCaptureSegments.shares(segments))),
-                            id: \.0.id) { segment, part in
-                        Capsule()
-                            .fill(segment.id == segments.last?.id
-                                  ? MeeshyColors.error : Color.white.opacity(0.8))
-                            .frame(width: max(2, geo.size.width * part - 2))
-                    }
-                }
-            }
-            .frame(height: 3)
-
-            HStack(spacing: MeeshySpacing.sm) {
-                HStack(spacing: MeeshySpacing.xs) {
-                    // **Le témoin d'enregistrement BAT.** Un point rouge fixe
-                    // ne distingue pas « ça tourne » de « il y a des segments »
-                    // — et c'est précisément la confusion que le chrono figé
-                    // entretenait.
-                    Circle()
-                        .fill(MeeshyColors.error)
-                        .frame(width: 6, height: 6)
-                        .opacity(stage == .recording && !reduceMotion ? recordingBlink : 1)
-                        .animation(stage == .recording && !reduceMotion
-                                   ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
-                                   : .default,
-                                   value: recordingBlink)
-                        .onAppear { if !reduceMotion { recordingBlink = 0.25 } }
-                    Text(LocalizedNumber.duration(
-                        seconds: ComposerCaptureSegments.elapsed(
-                            segments: segments,
-                            live: liveDuration,
-                            recording: stage == .recording)))
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, MeeshySpacing.sm)
-                .frame(height: 24)
-                .adaptiveLiquidGlass(in: Capsule())
-                // VoiceOver lit « 0:12 » comme une heure : la minuterie se DIT
-                // en mots (#9125 — elle remplace celle de l'ancienne vue).
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(LocalizedNumber.spokenDuration(
-                    seconds: ComposerCaptureSegments.elapsed(
-                        segments: segments,
-                        live: liveDuration,
-                        recording: stage == .recording)))
-                .accessibilityAddTraits(.updatesFrequently)
-
-                Text(ComposerSceneCameraCopy.segmentCount(segments.count))
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.85))
-
-                Spacer(minLength: 4)
-
-                glassControl(symbol: "delete.left",
-                             label: ComposerSceneCameraCopy.dropSegmentLabel,
-                             tint: .white.opacity(0.9),
-                             action: onDropLastSegment)
-                if ComposerCaptureSegments.canValidate(segments) {
-                    glassControl(symbol: "checkmark",
-                                 label: ComposerSceneCameraCopy.validateLabel,
-                                 tint: .white,
-                                 action: onValidateSegments)
+    /// La part de chaque segment, sous la rangée haute ; le dernier en rouge.
+    private var segmentBar: some View {
+        GeometryReader { geo in
+            HStack(spacing: MeeshySpacing.xxs) {
+                ForEach(Array(zip(segments, ComposerCaptureSegments.shares(segments))),
+                        id: \.0.id) { segment, part in
+                    Capsule()
+                        .fill(segment.id == segments.last?.id
+                              ? MeeshyColors.error : Color.white.opacity(0.8))
+                        .frame(width: max(2, geo.size.width * part - 2))
                 }
             }
         }
+        .frame(height: 3)
         .padding(.top, MeeshySpacing.smPlus)
+        .accessibilityHidden(true)
+    }
+
+    private var elapsed: TimeInterval {
+        ComposerCaptureSegments.elapsed(segments: segments, live: liveDuration, recording: stage == .recording)
+    }
+
+    /// **La puce du chrono et de l'indicateur de segment, à DROITE de (x)**
+    /// (#9753). **Le témoin d'enregistrement BAT** : un point rouge fixe ne
+    /// distingue pas « ça tourne » de « il y a des segments ».
+    private var chronoChip: some View {
+        let compte = ComposerCaptureTopRow.segmentCount(pending: segments.count, recording: stage == .recording)
+        return HStack(spacing: MeeshySpacing.xs) {
+            Circle()
+                .fill(MeeshyColors.error)
+                .frame(width: 6, height: 6)
+                .opacity(stage == .recording && !reduceMotion ? recordingBlink : 1)
+                .animation(stage == .recording && !reduceMotion
+                           ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
+                           : .default,
+                           value: recordingBlink)
+                .onAppear { if !reduceMotion { recordingBlink = 0.25 } }
+            Text(LocalizedNumber.duration(seconds: elapsed))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white)
+            Text(ComposerSceneCameraCopy.segmentCount(compte))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .frame(height: 32)
+        .adaptiveLiquidGlass(in: Capsule())
+        .frame(minHeight: MeeshyControlSize.tapTarget)
+        // VoiceOver lit « 0:12 » comme une heure : la minuterie se DIT en mots.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(LocalizedNumber.spokenDuration(seconds: elapsed))
+        .accessibilityValue(ComposerSceneCameraCopy.segmentCount(compte))
+        .accessibilityAddTraits(.updatesFrequently)
     }
 }
 

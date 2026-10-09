@@ -88,6 +88,8 @@ struct FeedPostCard: View {
     /// d'un commentaire de l'aperçu (#8582), effacé à la fermeture.
     @State var commentsReplyTarget: FeedComment?
     @State var showTranslationSheet = false
+    /// La feuille « Vues » de l'auteur — qui a vu, et ce que chacun a fait (#9727).
+    @State var showViewersSheet = false
     @State private var showRepostOptions = false
     @State var selectedProfileUser: ProfileSheetUser?
     @State var audioFullscreen: AudioFullscreenSource?

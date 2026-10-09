@@ -585,3 +585,14 @@ export function feedCardBody(model: Pick<FeedCardModel, 'scene' | 'media' | 'rep
   if (model.repostOf.isStory || model.repostOf.isReel) return { visual: false, repostOf: model.repostOf };
   return { visual: hasVisual, repostOf: model.repostOf };
 }
+
+/**
+ * L'AFFICHE D'UN RÉEL DANS LE FIL (#9737) — sans scène, le premier média : un
+ * réel PUREMENT audio garde son visuel d'onde, c'est son contenu. Avec une
+ * scène, un média audio du porteur est un SON de la scène (son fond, ou un son
+ * posé) : il ne se dessine jamais en affiche — le fond se dit par le crédit,
+ * hors scène. L'affiche est alors le premier média VISUEL, ou rien.
+ */
+export function reelPosterOf(model: Pick<FeedCardModel, 'scene' | 'media'>): FeedCardMedia | undefined {
+  return model.scene === undefined ? model.media[0] : model.media.find((media) => media.kind !== 'audio');
+}

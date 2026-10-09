@@ -134,7 +134,7 @@ describe('PostService — carte de liens suivis', () => {
 });
 
 function commentPrisma(comment: Row, media: Row[]) {
-  return {
+  const prisma = {
     post: {
       findFirst: jest.fn(async () => ({ id: POST_ID })),
       update: jest.fn(async () => ({})),
@@ -152,7 +152,9 @@ function commentPrisma(comment: Row, media: Row[]) {
       count: jest.fn(async () => media.length),
     },
     notification: { findMany: jest.fn(async () => []), updateMany: jest.fn(async () => ({ count: 0 })) },
+    $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
   };
+  return prisma;
 }
 
 const commentRow = (overrides: Row): Row => ({ id: COMMENT_ID, postId: POST_ID, content: '', metadata: null, ...overrides });

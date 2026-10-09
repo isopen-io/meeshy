@@ -20,11 +20,10 @@ import {
 // version la plus permissive décide, exactement le défaut que #4167 ferme.
 import {
   performLinkJoin,
-  refreshGuestSession,
-  endGuestSession,
   participantConversationPayload,
   resolveClientIp,
 } from './conversations/link-admission';
+import { refreshGuestSession, endGuestSession } from './conversations/guest-sessions';
 // #4167 — les trois portes ci-dessous sont des ALIAS des portes cibles
 // (`POST /links/:key/members`, `PATCH|DELETE /guest-sessions/me`) : elles
 // annoncent leur sursis comme le fait déjà tout alias du dépôt (#4274,

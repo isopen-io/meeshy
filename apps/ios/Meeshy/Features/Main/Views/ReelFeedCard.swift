@@ -138,6 +138,8 @@ struct ReelFeedCard: View, Equatable {
     private var accentHex: String { post.authorColor }
     /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
     @State private var reelCardFullscreenPlace: BubbleFullscreenPlace?
+    /// La feuille « Vues » de l'auteur — qui a vu, et ce que chacun a fait (#9727).
+    @State private var showViewersSheet = false
     /// Flux « Enregistrer en local » du menu « … » : pour un réel, Enregistrer
     /// télécharge le MÉDIA (image/vidéo) dans Photos — distinct du bouton
     /// favori dédié (bookmark) qui, lui, enregistre le poste dans l'app.
@@ -182,10 +184,37 @@ struct ReelFeedCard: View, Equatable {
                                             captions: post.media.map(\.caption)) ?? ""
     }
 
+    /// La couverture d'un réel dont le média joué est un son, s'il en porte une.
+    private var audioCover: FeedMedia? {
+        guard let cover = backgroundMedia,
+              cover.thumbnailUrl != nil || cover.url != nil || cover.thumbHash != nil else { return nil }
+        return cover
+    }
+
+    /// La scène que la carte REJOUE à la place du spectre (#9737) : le réel
+    /// est composé, sans image ni vidéo, et son seul fichier est un son — de
+    /// fond ou posé, ce son n'est pas son visuel. Le spectre reste le visuel du
+    /// réel audio SANS scène (`FeedPost.reelPrincipalAudioMedia`). Un réel
+    /// composé REPUBLIÉ rejoue la scène de sa source (`StoryEffects.played`).
+    private var soundSceneDocument: CanvasV3? {
+        guard let document = post.reelPlayedSceneDocument,
+              Self.showsScene(mediaType: media?.type, hasCover: audioCover != nil) else { return nil }
+        return document
+    }
+
+    /// Un réel composé se montre par sa scène dès qu'il n'a NI vidéo NI image
+    /// à montrer : son seul fichier est un son, ou il n'en porte aucun (son de
+    /// bibliothèque) — sans quoi la carte restait un aplat de couleur.
+    nonisolated static func showsScene(mediaType: FeedMediaType?, hasCover: Bool) -> Bool {
+        guard !hasCover else { return false }
+        return mediaType == nil || mediaType == .audio
+    }
+
     private var kind: ReelMediaKind {
         switch media?.type {
         case .video: return .video
-        case .audio: return .audio
+        case .audio: return soundSceneDocument == nil ? .audio : .scene
+        case .none: return soundSceneDocument == nil ? .imageOnly : .scene
         default: return .imageOnly
         }
     }
@@ -215,6 +244,7 @@ struct ReelFeedCard: View, Equatable {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "feed.reel.card.a11y", defaultValue: "Réel de \(displayAuthor)", bundle: .main))
         .onReceive(ReelFeedSoundIntent.shared.$audioTrackPresence) { soundTrackPresence = $0 }
+        .publicationViewersSheet(isPresented: $showViewersSheet, post: post) { onTapAuthor($0.id) }
         .fullScreenCover(item: $reelCardFullscreenPlace) { item in
             LocationFullscreenView(
                 latitude: item.place.latitude,
@@ -251,8 +281,7 @@ struct ReelFeedCard: View, Equatable {
         case .audio:
             // Un réel audio avec image de couverture montre sa couverture ; le
             // dégradé animé n'est le repli que lorsqu'il n'y a aucun visuel.
-            if let cover = backgroundMedia,
-               cover.thumbnailUrl != nil || cover.url != nil || cover.thumbHash != nil {
+            if let cover = audioCover {
                 ProgressiveCachedImage(
                     thumbHash: cover.thumbHash,
                     thumbnailUrl: cover.thumbnailUrl,
@@ -268,12 +297,25 @@ struct ReelFeedCard: View, Equatable {
             } else {
                 ReelAudioBackdrop(accentHex: accentHex, isActive: isActive)
             }
-        // `.scene` tombe ici sans jamais y arriver : `kind` est dérivé de
-        // `media?.type`, qui ne produit que vidéo / audio / image. Le cas est
-        // nommé pour que l'exhaustivité du `switch` reste une VÉRIFICATION —
-        // un `default:` accueillerait en silence la prochaine famille de
-        // surface, exactement ce qu'un `switch` exhaustif existe pour refuser.
-        case .imageOnly, .scene:
+        // Un réel composé dont le seul fichier est un son montre sa SCÈNE
+        // (#9737) : le spectre est le visuel du réel audio SANS scène, jamais
+        // celui d'un son de fond.
+        case .scene:
+            if let document = soundSceneDocument {
+                ReelCardSceneBackdrop(
+                    post: post,
+                    document: document,
+                    isActive: isActive,
+                    accentColor: accentHex,
+                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                )
+                .equatable()
+                .frame(width: width, height: height)
+                .clipped()
+            } else {
+                Color(hex: accentHex).opacity(MeeshyOpacity.strong)
+            }
+        case .imageOnly:
             if let media, media.thumbnailUrl != nil || media.url != nil || media.thumbHash != nil {
                 ProgressiveCachedImage(
                     thumbHash: media.thumbHash,
@@ -537,6 +579,9 @@ struct ReelFeedCard: View, Equatable {
             } label: {
                 Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
             }
+        }
+        if PublicationViewersAccess.mayList(postType: post.type, isAuthor: isAuthor, viewerRole: AuthManager.shared.currentUser?.role) {
+            PublicationViewersMenuButton { showViewersSheet = true }
         }
         if let onPin {
             Button {

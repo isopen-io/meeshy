@@ -384,8 +384,7 @@ struct ComposerSceneSurface: View {
     /// le relâchement d'un geste sur un son qu'on vient de supprimer ne doit
     /// pas le faire revenir.
     private var foregroundSoundBindings: [Binding<StoryAudioPlayerObject>] {
-        (slide.effects.audioPlayerObjects ?? [])
-            .filter { $0.isBackground != true }
+        SceneAudioStageRule.stagedAudios(in: slide.effects.audioPlayerObjects ?? [])
             .map { objet in
                 Binding<StoryAudioPlayerObject>(
                     get: {

@@ -15,6 +15,7 @@ import { href, navigate } from '@/routes/route-table';
 import { withCommentsAnchor } from './comments-anchor';
 import { copyPlainText } from './copy-text';
 import { openPublicationShare } from './publication-share';
+import { useAdministrationRank } from './use-admin-access';
 import { useLiveAnnouncer } from './use-live-announcer';
 
 /**
@@ -119,6 +120,7 @@ export function usePostGesture(options?: {
     onDeletedRef.current = options?.onDeleted;
   });
   const viewerId = useStore(sessionStore, (s) => (s.session.status === 'authenticated' ? s.session.user.id : null));
+  const viewerIsAdministrator = useAdministrationRank();
 
   const onGesture = useCallback(
     (postId: string, kind: PostToggleKind) => {
@@ -172,6 +174,7 @@ export function usePostGesture(options?: {
     const say = (key: MenuNotice) => announce(translate(currentInterfaceLanguage(), key));
     return {
       viewerId,
+      viewerIsAdministrator,
       editDrafts: draftStore,
       onCopyText: (text: string) => {
         void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed'));
@@ -200,7 +203,7 @@ export function usePostGesture(options?: {
         );
       },
     };
-  }, [viewerId, announce]);
+  }, [viewerId, viewerIsAdministrator, announce]);
 
   return { announcement, onGesture, onShare, onComment, onRepost, pendingRepostId, confirmRepost, cancelRepost, repostConfirm, menu };
 }

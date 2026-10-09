@@ -1421,11 +1421,15 @@ do_release_andp() {
     } > .andp/secrets.yml
     chmod 600 .andp/secrets.yml
 
-    # Write compliance policy
-    {
-        echo "compliance:"
-        echo "  uses_non_exempt_encryption: false"
-    } > andp.yml
+    # Compliance policy: andp.yml is tracked and declares it (#9752). Only an
+    # andp.yml that is MISSING is written — overwriting would wipe the build
+    # targets and the App Store listing it carries.
+    if [ ! -f andp.yml ]; then
+        {
+            echo "compliance:"
+            echo "  uses_non_exempt_encryption: false"
+        } > andp.yml
+    fi
 
     log "Uploading to $target_label via ANDP…"
 

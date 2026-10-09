@@ -223,6 +223,34 @@ describe('la barre haute de la story est la barre commune des plein écrans', ()
     expect(sound?.parentElement).toBe(nameLine?.parentElement ?? null);
   });
 
+  test('la NOTE du crédit porte le muet de la story : la prise du gate, enfoncée quand le son est coupé (#9698)', async () => {
+    await import('@/components/background-sound-credit');
+    const document = parseCanvasDocument({
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          objects: [
+            { id: 'bgsound', kind: 'audio', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'bg', z: 0, transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { isBackground: true, mediaURL: 'a.m4a' } },
+          ],
+        },
+      ],
+    });
+    const calls: string[] = [];
+    const el = mount(topBar({ soundDocument: document, soundControl: { muted: true, onToggle: () => calls.push('toggle'), probe: { 'data-story-sound-toggle': '' } } }));
+    for (let i = 0; i < 20 && el.querySelector('[data-sound-credit]') === null; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    const note = el.querySelector('[data-viewer-identity] [data-story-sound-toggle]');
+    expect(note?.tagName).toBe('BUTTON');
+    expect(note?.getAttribute('aria-pressed')).toBe('true');
+    expect(note?.getAttribute('aria-label')).toBe('Réactiver le son de fond');
+    click(note);
+    expect(calls).toEqual(['toggle']);
+  });
+
   test('sans scène, l’identité garde sa ligne unique, sans crédit', () => {
     const el = mount(topBar({ soundDocument: null }));
     expect(el.querySelector('[data-sound-credit]')).toBeNull();

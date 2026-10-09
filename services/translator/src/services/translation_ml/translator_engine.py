@@ -16,6 +16,7 @@ from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from config.settings import LANGUAGE_MAPPINGS
+from utils.sentence_plan import SentencePlan, plan_sentences
 from utils.text_segmentation import (
     has_translatable_text,
     protect_entities,
@@ -353,6 +354,17 @@ class TranslatorEngine:
         )
         return restore_entities(translated, entities)
 
+    def _plan(self, masked_text: str, source_lang: str, target_lang: str) -> SentencePlan:
+        """Les phrases du message, chacune résolue par le lexique ou confiée au modèle (#9723).
+
+        Un message n'est JAMAIS donné d'un seul tenant à NLLB : traduit entier, un
+        message court à plusieurs phrases perdait ses phrases courtes (mesuré sur
+        600M et 1.3B, staging 2026-10-08)."""
+        return plan_sentences(
+            masked_text, source_lang, target_lang,
+            split_long=lambda sentence: smart_split_text(sentence, max_chars=200),
+        )
+
     async def _translate_masked_text(
         self,
         masked_text: str,
@@ -360,26 +372,28 @@ class TranslatorEngine:
         target_lang: str,
         model_type: str
     ) -> str:
-        """Traduit un texte dont les entités protégées sont déjà masquées."""
-        if len(masked_text) > 200:
-            logger.info(
-                f"[TRANSLATE] Texte long détecté ({len(masked_text)} chars) → "
-                f"découpage intelligent aux ponctuations"
-            )
-            chunks = smart_split_text(masked_text, max_chars=200)
-            logger.info(
-                f"[TRANSLATE] Texte découpé en {len(chunks)} morceaux "
-                f"(tailles: {[len(c) for c in chunks]})"
-            )
-            translated_chunks = []
-            for chunk in chunks:
-                translated_chunks.append(await self._translate_single_chunk(
-                    chunk, source_lang, target_lang, model_type
-                ))
-            return ' '.join(translated_chunks)
+        """Traduit un texte dont les entités protégées sont déjà masquées, phrase par phrase."""
+        plan = self._plan(masked_text, source_lang, target_lang)
+        outputs = await self._translate_model_inputs(
+            plan.model_inputs, source_lang, target_lang, model_type
+        )
+        return plan.assemble(outputs)
 
-        return await self._translate_single_chunk(
-            masked_text, source_lang, target_lang, model_type
+    async def _translate_model_inputs(
+        self,
+        inputs: List[str],
+        source_lang: str,
+        target_lang: str,
+        model_type: str
+    ) -> List[str]:
+        """Les phrases d'un message en UN appel au modèle : une seule passe, jamais N."""
+        if not inputs:
+            return []
+        if len(inputs) == 1:
+            return [await self._translate_single_chunk(inputs[0], source_lang, target_lang, model_type)]
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self.executor, self._infer_batch_sync, inputs, source_lang, target_lang, model_type
         )
 
     async def _translate_single_chunk(
@@ -493,120 +507,106 @@ class TranslatorEngine:
         if not self.model_loader.is_model_loaded(model_type):
             raise Exception(f"Modèle {model_type} non chargé")
 
+        # Chaque texte est découpé en phrases ; toutes les phrases de tous les
+        # textes partent au modèle dans le même lot, puis se regroupent (#9723).
         protected = [protect_entities(text) for text in texts]
-        pending = [i for i, (masked, _) in enumerate(protected) if has_translatable_text(masked)]
-        masked_inputs = [protected[i][0] for i in pending]
-        if not masked_inputs:
-            return list(texts)
-
-        batch_size = self.perf_config.batch_size
-
-        def translate_batch_sync():
-            """Traduction batch synchrone - OPTIMISÉ POUR VITESSE"""
-            try:
-                logger.info(f"[BATCH-SYNC] 🚀 FAST translate_batch_sync: {len(masked_inputs)} textes, {source_lang}→{target_lang}")
-
-                # Codes NLLB — jamais de repli silencieux (#3659)
-                nllb_source = self._resolve_nllb_code(source_lang, 'source')
-                nllb_target = self._resolve_nllb_code(target_lang, 'cible')
-
-                # Obtenir pipeline du cache LRU (ou créer si nécessaire)
-                reusable_pipeline, is_available = self._get_or_create_pipeline(
-                    model_type, nllb_source, nllb_target
-                )
-
-                if not is_available or reusable_pipeline is None:
-                    raise Exception(f"Pipeline non disponible pour {model_type}")
-
-                all_results = []
-
-                # ✨ THREAD-SAFETY: Lock d'inférence pour protéger le modèle PyTorch
-                # Les modèles PyTorch ne sont PAS thread-safe, donc on sérialise les inférences
-                model_lock = self.model_loader.get_model_inference_lock(model_type)
-
-                # ═══════════════════════════════════════════════════════════════
-                # ISOLATION AUDIO ↔ TEXTE (anti-famine)
-                # Le verrou d'inférence est acquis/libéré PAR CHUNK, et non pour
-                # l'intégralité du batch. Un long job audio (un message vocal peut
-                # générer des centaines de segments) libère ainsi le modèle entre
-                # chaque chunk : une traduction texte temps réel en attente peut
-                # s'intercaler au lieu d'attendre tout le batch (→ plus de timeout
-                # ZMQ côté gateway, plus de traductions perdues). Chaque appel
-                # `reusable_pipeline(chunk)` reste atomique et sérialisé par le lock,
-                # donc la thread-safety PyTorch est préservée.
-                # ═══════════════════════════════════════════════════════════════
-                n_chunks = (len(masked_inputs) + batch_size - 1) // batch_size
-                logger.info(
-                    f"🔒 [MODEL_LOCK] Inférence batch '{model_type}' en {n_chunks} chunk(s) "
-                    f"(lock acquis/libéré par chunk)"
-                )
-
-                # OPTIMISATION: Traitement direct SANS timeout wrapper (overhead supprimé)
-                with create_inference_context():
-                    for i in range(0, len(masked_inputs), batch_size):
-                        chunk = masked_inputs[i:i + batch_size]
-
-                        # ═══════════════════════════════════════════════════════════════
-                        # OPTIMISATIONS NLLB AVANCÉES:
-                        # - num_beams=1: Greedy decoding (4x plus rapide que beam search)
-                        # - do_sample=False: Désactive sampling (déterministe)
-                        # - max_length=256: Optimisé pour segments courts
-                        # ═══════════════════════════════════════════════════════════════
-                        with model_lock:
-                            results = reusable_pipeline(
-                                chunk,
-                                src_lang=nllb_source,
-                                tgt_lang=nllb_target,
-                                max_length=256,       # Optimisé pour segments courts (découpage avant si besoin)
-                                num_beams=1,          # GREEDY DECODING (4x plus rapide!)
-                                do_sample=False       # Déterministe
-                                # early_stopping retiré: incompatible avec num_beams=1
-                            )
-
-                        # Agrégation des résultats HORS lock (le modèle est libre
-                        # pour une autre traduction pendant qu'on formate la sortie).
-                        for result in results:
-                            if isinstance(result, dict) and 'translation_text' in result:
-                                all_results.append(result['translation_text'])
-                            elif isinstance(result, list) and len(result) > 0 and 'translation_text' in result[0]:
-                                all_results.append(result[0]['translation_text'])
-                            else:
-                                raise TranslationInferenceError(f"Résultat batch NLLB inattendu: {result}")
-
-                logger.info(f"🔓 [MODEL_LOCK] Batch '{model_type}' terminé (lock libéré entre chunks)")
-
-                logger.info(f"[BATCH-SYNC] ✅ Sortie inference_context, {len(all_results)} résultats")
-
-                # Nettoyage mémoire périodique
-                if self.perf_config.enable_memory_cleanup and len(masked_inputs) > 20:
-                    from utils.performance import get_performance_optimizer
-                    perf_optimizer = get_performance_optimizer()
-                    perf_optimizer.cleanup_memory()
-
-                logger.info(f"[BATCH-SYNC] ✅ Fin translate_batch_sync: {len(all_results)} traductions")
-                return all_results
-
-            except TranslationInferenceError:
-                raise
-            except Exception as e:
-                logger.error(f"[BATCH-SYNC] ❌ Erreur batch pipeline {model_type}: {e}")
-                import traceback
-                traceback.print_exc()
-                raise TranslationInferenceError(f"Erreur batch pipeline {model_type}: {e}") from e
-
-        # Exécuter de manière asynchrone
-        logger.info(f"[BATCH] 🔄 Soumission à executor (threads actifs: {self.executor._max_workers})")
-        loop = asyncio.get_event_loop()
-        logger.info(f"[BATCH] Event loop obtenue: {loop}")
-        results = await loop.run_in_executor(self.executor, translate_batch_sync)
-        logger.info(f"[BATCH] ✅ run_in_executor terminé, {len(results)} résultats")
-
-        logger.info(f"⚡ [BATCH] {len(texts)} textes traduits en batch ({source_lang}→{target_lang})")
-        translated = dict(zip(pending, results))
-        return [
-            restore_entities(translated[i], entities) if i in translated else texts[i]
-            for i, (_, entities) in enumerate(protected)
+        plans = [
+            self._plan(masked, source_lang, target_lang) if has_translatable_text(masked) else None
+            for masked, _ in protected
         ]
+        model_inputs = [chunk for plan in plans if plan is not None for chunk in plan.model_inputs]
+
+        outputs: List[str] = []
+        if model_inputs:
+            loop = asyncio.get_event_loop()
+            outputs = await loop.run_in_executor(
+                self.executor, self._infer_batch_sync, model_inputs, source_lang, target_lang, model_type
+            )
+        logger.info(
+            f"⚡ [BATCH] {len(texts)} textes, {len(model_inputs)} phrases au modèle "
+            f"({source_lang}→{target_lang})"
+        )
+
+        results: List[str] = []
+        cursor = 0
+        for text, plan, (_, entities) in zip(texts, plans, protected):
+            if plan is None:
+                results.append(text)
+                continue
+            taken = len(plan.model_inputs)
+            results.append(restore_entities(plan.assemble(outputs[cursor:cursor + taken]), entities))
+            cursor += taken
+        return results
+
+    def _infer_batch_sync(
+        self,
+        inputs: List[str],
+        source_lang: str,
+        target_lang: str,
+        model_type: str
+    ) -> List[str]:
+        """Inférence par lots de `batch_size`, verrou du modèle pris et rendu PAR lot.
+
+        ISOLATION AUDIO ↔ TEXTE (anti-famine) : un long job audio (des centaines de
+        segments) libère le modèle entre chaque lot ; une traduction texte temps réel
+        en attente s'intercale au lieu d'attendre tout le job (→ plus de timeout ZMQ
+        côté gateway). Chaque appel au pipeline reste atomique et sérialisé par le
+        verrou : la thread-safety PyTorch est préservée.
+        """
+        try:
+            # Codes NLLB — jamais de repli silencieux (#3659)
+            nllb_source = self._resolve_nllb_code(source_lang, 'source')
+            nllb_target = self._resolve_nllb_code(target_lang, 'cible')
+
+            reusable_pipeline, is_available = self._get_or_create_pipeline(
+                model_type, nllb_source, nllb_target
+            )
+            if not is_available or reusable_pipeline is None:
+                raise Exception(f"Pipeline non disponible pour {model_type}")
+
+            model_lock = self.model_loader.get_model_inference_lock(model_type)
+            batch_size = self.perf_config.batch_size
+            all_results: List[str] = []
+
+            with create_inference_context():
+                for i in range(0, len(inputs), batch_size):
+                    chunk = inputs[i:i + batch_size]
+                    # Greedy (num_beams=1), déterministe ; budget borné par la source (#9309)
+                    with model_lock:
+                        results = reusable_pipeline(
+                            chunk,
+                            src_lang=nllb_source,
+                            tgt_lang=nllb_target,
+                            max_length=256,
+                            num_beams=1,
+                            do_sample=False
+                        )
+
+                    # Agrégation HORS verrou : le modèle est libre pendant le formatage.
+                    for result in results:
+                        if isinstance(result, dict) and 'translation_text' in result:
+                            all_results.append(result['translation_text'])
+                        elif isinstance(result, list) and len(result) > 0 and 'translation_text' in result[0]:
+                            all_results.append(result[0]['translation_text'])
+                        else:
+                            raise TranslationInferenceError(f"Résultat batch NLLB inattendu: {result}")
+
+            if len(all_results) != len(inputs):
+                raise TranslationInferenceError(
+                    f"Le modèle a rendu {len(all_results)} traductions pour {len(inputs)} phrases"
+                )
+
+            if self.perf_config.enable_memory_cleanup and len(inputs) > 20:
+                from utils.performance import get_performance_optimizer
+                get_performance_optimizer().cleanup_memory()
+
+            return all_results
+
+        except TranslationInferenceError:
+            raise
+        except Exception as e:
+            logger.error(f"[BATCH-SYNC] ❌ Erreur batch pipeline {model_type}: {e}")
+            raise TranslationInferenceError(f"Erreur batch pipeline {model_type}: {e}") from e
 
     def cleanup(self):
         """Libère les ressources du moteur"""

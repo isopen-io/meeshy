@@ -9,6 +9,7 @@ import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import '@/styles/viewer-chrome.css';
 
 import { Avatar } from './avatar';
+import type { SoundCreditControl } from './background-sound-credit';
 import { CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph } from './glyph';
 import { PersonName } from './person-name';
@@ -74,12 +75,15 @@ export function ViewerIdentity({
   identity,
   nameProbe,
   soundDocument,
+  soundControl,
 }: {
   readonly identity: ViewerIdentityModel;
   readonly nameProbe?: ViewerProbe;
   /** La scène QUI JOUE : son fond sonore s'annonce SOUS le nom (#9678), sa propre
    * ligne, jamais en concurrence avec le nom. */
   readonly soundDocument?: CanvasDocument | null | undefined;
+  /** Présent ⇒ la NOTE du crédit coupe et rétablit le son de fond (#9698). */
+  readonly soundControl?: SoundCreditControl | undefined;
 }) {
   const nameLine = (
     <div {...nameProbe} className="flex min-w-0 items-baseline gap-2">
@@ -109,7 +113,7 @@ export function ViewerIdentity({
         <div className="flex min-w-0 flex-col">
           {nameLine}
           <Suspense fallback={null}>
-            <BackgroundSoundCredit document={soundDocument} language={currentInterfaceLanguage()} surface="media" />
+            <BackgroundSoundCredit document={soundDocument} language={currentInterfaceLanguage()} surface="media" control={soundControl} />
           </Suspense>
         </div>
       )}
@@ -312,6 +316,7 @@ export function ViewerTopBar({
   exit,
   identity,
   soundDocument,
+  soundControl,
   trailing,
   above,
   hidden = false,
@@ -323,6 +328,7 @@ export function ViewerTopBar({
   readonly identity?: ViewerIdentityModel;
   /** La scène qui joue, dont le son s'annonce sous le nom (`ViewerIdentity.soundDocument`). */
   readonly soundDocument?: CanvasDocument | null | undefined;
+  readonly soundControl?: SoundCreditControl | undefined;
   /** Menu « … », Enregistrer… — posés entre l'identité et la croix. */
   readonly trailing?: ReactNode;
   /** Ce qui se pose AU-DESSUS de la ligne : les segments de progression d'une story. */
@@ -345,7 +351,7 @@ export function ViewerTopBar({
       {above}
       <div className="flex min-h-11 items-center gap-2">
         {exit.kind === 'back' ? <ViewerExitButton exit={exit} /> : null}
-        {identity === undefined ? <span className="flex-1" /> : <ViewerIdentity identity={identity} soundDocument={soundDocument} />}
+        {identity === undefined ? <span className="flex-1" /> : <ViewerIdentity identity={identity} soundDocument={soundDocument} soundControl={soundControl} />}
         {trailing === undefined ? null : (
           <div className="pointer-events-auto flex shrink-0 items-center gap-1" onPointerDown={stop}>
             {trailing}

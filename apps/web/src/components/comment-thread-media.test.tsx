@@ -3,7 +3,11 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { apiDeps } from '@/lib/api/deps';
 import { resetFixtureCommentsForTests } from '@/lib/api/fixtures-comments';
+import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
+import { commentDrafts } from '@/lib/comments/comment-draft';
 import type { ApiResult } from '@/lib/api/http';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import { commentsQueryKey, flattenCommentPages, type CommentInfiniteData } from '@/lib/api/publication-comments';
@@ -43,6 +47,8 @@ afterEach(() => {
   act(() => root?.unmount());
   container?.remove();
   appQueryClient.clear();
+  /* Le brouillon (#9743) vit pour la durée du PROCESSUS : un refus le garde, le témoin suivant ne doit pas l'hériter. */
+  commentDrafts.set(`u_${resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? ''}`, 'post-text-rank2', { text: '', pending: [] });
   resetFixtureCommentsForTests();
   resetFixtureStickersForTests();
   resetFixturePacksForTests();
@@ -101,6 +107,22 @@ describe('le fil envoie un commentaire avec sa photo (#9167)', () => {
     expect(host.textContent).toContain('Regarde la mer');
     expect(host.querySelector<HTMLTextAreaElement>('[data-comment-field]')?.value).toBe('');
     expect(host.querySelectorAll('[data-composer-edit]')).toHaveLength(0);
+  });
+
+  test('#9736 — pendant que la photo monte, sa vignette montre la part déjà partie', async () => {
+    let finir: ((result: ApiResult<PostMediaUploadResult>) => void) | undefined;
+    const upload: CommentMediaUpload = (_file, onProgress) => {
+      onProgress?.(0.5);
+      return new Promise((resolve) => {
+        finir = resolve;
+      });
+    };
+    const host = await mountThread(upload);
+    await joindreEtEnvoyer(host, '');
+    expect(host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('50');
+    await act(async () => finir?.({ ok: true, status: 201, data: { postMediaId: 'fx-pm-photo', fileUrl: 'https://cdn.example/plage.jpg', mimeType: 'image/jpeg' } }));
+    await settle();
+    expect(host.querySelector('[data-pending-tile]')).toBeNull();
   });
 
   test('un téléversement refusé : rien ne part, texte et vignette restent, le refus se dit', async () => {

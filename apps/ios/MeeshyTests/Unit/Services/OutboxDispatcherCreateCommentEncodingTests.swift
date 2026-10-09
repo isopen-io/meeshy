@@ -23,7 +23,7 @@ final class OutboxDispatcherCreateCommentEncodingTests: XCTestCase {
             postId: "post-1",
             parentCommentId: nil,
             content: "Ceci a tout l'air d'être écrit en français",
-            originalLanguage: originalLanguage
+            originalLanguage: originalLanguage, authorId: "user-1"
         )
     }
 
@@ -71,7 +71,7 @@ final class OutboxDispatcherCreateCommentEncodingTests: XCTestCase {
             postId: "post-1",
             parentCommentId: "comment-parent",
             content: "une réponse",
-            originalLanguage: "en",
+            originalLanguage: "en", authorId: "user-1",
             effectFlags: 65536
         )
 

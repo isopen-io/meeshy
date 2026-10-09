@@ -581,20 +581,8 @@ struct OutboxDispatcher: OutboxDispatching {
         logger.info("repostPost dispatched for \(payload.postId, privacy: .public) targetType=\(payload.targetType, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
-    /// `POST /posts/:id/comments` — gateway wraps through
-    /// `withMutationLog`. Body matches `CreateCommentSchema` :
-    /// `{ content, parentId? }`.
-    private func dispatchCreateComment(_ record: OutboxRecord) async throws {
-        let payload = try decodePayload(record, as: CreateCommentPayload.self)
-        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            PostsEndpoint.byPostIdComments(postId: payload.postId),
-            method: "POST",
-            body: try CreateCommentBody.encoded(for: payload),
-            queryItems: nil,
-            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
-        )
-        logger.info("createComment dispatched on \(payload.postId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
-    }
+    // `dispatchCreateComment` vit dans `OutboxDispatcher+Comments.swift` : il
+    // téléverse les pièces du commentaire avant de l'écrire (#9743).
 
     /// `DELETE /posts/:postId/comments/:commentId` — gateway wraps
     /// through `withMutationLog`. The route needs `postId` so the
@@ -709,9 +697,14 @@ nonisolated struct CreateCommentBody: Encodable {
     /// au post commenté : encoder une chaîne plate ferait échouer l'envoi
     /// entier, pas seulement la citation.
     let quotedPostMediaId: String?
+    /// Les médias du commentaire, DÉJÀ téléversés (#9743). `nil` quand il n'en
+    /// porte aucun : la clé ne part pas, comme avant le champ.
+    var attachmentIds: [String]? = nil
+    var mobileTranscription: MobileTranscriptionPayload? = nil
 
     enum CodingKeys: String, CodingKey {
         case content, parentId, location, effectFlags, originalLanguage, quotedPostMedia
+        case attachmentIds, mobileTranscription
     }
 
     private struct QuotedPostMediaAnchor: Encodable { let postMediaId: String }
@@ -729,17 +722,21 @@ nonisolated struct CreateCommentBody: Encodable {
             quotedPostMediaId.map { QuotedPostMediaAnchor(postMediaId: $0) },
             forKey: .quotedPostMedia
         )
+        try container.encodeIfPresent(attachmentIds, forKey: .attachmentIds)
+        try container.encodeIfPresent(mobileTranscription, forKey: .mobileTranscription)
     }
 
     /// SEUL site qui traduit un `CreateCommentPayload` persisté en octets HTTP.
-    static func encoded(for payload: CreateCommentPayload) throws -> Data {
+    static func encoded(for payload: CreateCommentPayload, attachmentIds: [String] = []) throws -> Data {
         try JSONEncoder().encode(CreateCommentBody(
             content: payload.content,
             parentId: payload.parentCommentId,
             location: payload.location,
             effectFlags: payload.effectFlags,
             originalLanguage: payload.originalLanguage,
-            quotedPostMediaId: payload.quotedPostMediaId
+            quotedPostMediaId: payload.quotedPostMediaId,
+            attachmentIds: attachmentIds.isEmpty ? nil : attachmentIds,
+            mobileTranscription: attachmentIds.isEmpty ? nil : payload.mobileTranscription
         ))
     }
 }

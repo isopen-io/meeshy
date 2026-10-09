@@ -75,6 +75,7 @@
  * exporté par `messages-list-query.ts`) — et il devra venir avec son lecteur.
  */
 import { Prisma } from '@meeshy/shared/prisma/client';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import {
   transformTranslationsToArray,
   type MessageTranslationJSON,
@@ -235,7 +236,7 @@ export const sovereignMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   replyTo: { select: sovereignReplyToSelect },
   attachments: {
     select: sovereignAttachmentSelect,
-    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+    orderBy: MESSAGE_ATTACHMENT_ORDER,
   },
   // Gardé À CÔTÉ de la liste, et ce n'est pas une redondance : le compteur
   // porte sur TOUTES les pièces du message, la liste sur celles de cette page.

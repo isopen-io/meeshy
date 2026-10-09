@@ -1,7 +1,7 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
-import { canEnterAdmin } from '@/lib/admin/sections';
+import { canEnterAdmin, hasAdministrationRank } from '@/lib/admin/sections';
 import { adminIdentityQueryOptions, type AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -41,12 +41,28 @@ export type AdminAccessOptions = {
  * les défauts — le client, l'adaptateur et la session UNIQUES.
  */
 export function useAdminAccess(options: AdminAccessOptions = {}): boolean {
+  const { authenticated, identity } = useServedAdminIdentity(options);
+  return authenticated && canEnterAdmin(identity?.permissions ?? null);
+}
+
+function useServedAdminIdentity(options: AdminAccessOptions) {
   const deps = options.deps ?? apiDeps;
   const authenticated = useStore(options.session ?? sessionStore, (state) => state.session.status === 'authenticated');
   const identity = useQuery(
     { ...adminIdentityQueryOptions(deps), enabled: authenticated && deps.source === 'gateway' },
     options.client ?? appQueryClient,
   );
+  return { authenticated, identity: identity.data };
+}
 
-  return authenticated && canEnterAdmin(identity.data?.permissions ?? null);
+/**
+ * **LE LECTEUR EST-IL ADMIN/BIGBOSS ?** (#9727) — la même lecture que le barreau
+ * ci-dessus (même clé, même fraîcheur : aucune requête de plus quand le menu
+ * flottant l'a déjà faite), jugée par `hasAdministrationRank` sur le rôle SERVI.
+ * Fail-closed : en vol, sur un refus ou une panne, `false`. Ne décide que de ce
+ * qu'on MONTRE (l'entrée « Vues » d'un post) ; la passerelle reste l'autorité.
+ */
+export function useAdministrationRank(options: AdminAccessOptions = {}): boolean {
+  const { authenticated, identity } = useServedAdminIdentity(options);
+  return authenticated && canEnterAdmin(identity?.permissions ?? null) && hasAdministrationRank(identity?.role ?? null);
 }

@@ -295,7 +295,7 @@ final class OutboxKindCodableTests: XCTestCase {
             postId: "p1",
             parentCommentId: nil,
             content: "first!",
-            originalLanguage: "en"
+            originalLanguage: "en", authorId: "user-1"
         )
         let d = try roundTrip(p)
         XCTAssertEqual(d.content, "first!")
