@@ -693,6 +693,20 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     /// la relecture ferait disparaître SANS ERREUR toute la file gravée avant la
     /// mise à jour de l'app.
     public let quotedPostMediaId: String?
+    /// **Les pièces du commentaire, encore sur le disque** (#9743) — chemins
+    /// relatifs sous `Documents/pending-media/<cmid>/`, résolus par
+    /// `OfflineQueue.absoluteMediaPath(forStored:)`. Le dispatcher les
+    /// téléverse au rejeu puis crée le commentaire avec leurs ids : sans ce
+    /// champ, un commentaire envoyé hors ligne arrivait SANS son média. Même
+    /// mécanisme que `CreatePostPayload.localMediaPaths`. `nil` pour un
+    /// commentaire sans pièce, et pour toute ligne gravée avant le champ.
+    public let localMediaPaths: [String]?
+    /// Le MIME DÉCLARÉ de chaque pièce, aligné par index sur `localMediaPaths`.
+    public let localMediaMimeTypes: [String]?
+    /// Ce qu'une tentative précédente a déjà monté, par index d'origine.
+    public let uploadedMedia: [UploadedCommentMedia]?
+    /// Transcription produite sur l'appareil pour une pièce audio.
+    public let mobileTranscription: MobileTranscriptionPayload?
 
     public init(
         clientMutationId: String,
@@ -702,7 +716,11 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         originalLanguage: String?,
         location: SharedPlace? = nil,
         effectFlags: Int? = nil,
-        quotedPostMediaId: String? = nil
+        quotedPostMediaId: String? = nil,
+        localMediaPaths: [String]? = nil,
+        localMediaMimeTypes: [String]? = nil,
+        uploadedMedia: [UploadedCommentMedia]? = nil,
+        mobileTranscription: MobileTranscriptionPayload? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.postId = postId
@@ -712,6 +730,10 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         self.location = location
         self.effectFlags = effectFlags
         self.quotedPostMediaId = quotedPostMediaId
+        self.localMediaPaths = localMediaPaths
+        self.localMediaMimeTypes = localMediaMimeTypes
+        self.uploadedMedia = uploadedMedia
+        self.mobileTranscription = mobileTranscription
     }
 
     public init(from decoder: Decoder) throws {
@@ -724,6 +746,10 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         effectFlags = try c.decodeIfPresent(Int.self, forKey: .effectFlags)
         quotedPostMediaId = try c.decodeIfPresent(String.self, forKey: .quotedPostMediaId)
+        localMediaPaths = try c.decodeIfPresent([String].self, forKey: .localMediaPaths)
+        localMediaMimeTypes = try c.decodeIfPresent([String].self, forKey: .localMediaMimeTypes)
+        uploadedMedia = try c.decodeIfPresent([UploadedCommentMedia].self, forKey: .uploadedMedia)
+        mobileTranscription = try c.decodeIfPresent(MobileTranscriptionPayload.self, forKey: .mobileTranscription)
     }
 }
 

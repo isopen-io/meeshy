@@ -957,11 +957,11 @@ extension StoryViewerView {
         let language = composerLanguage
         let tempCommentId = optimisticComment.id
         Task {
+            let medias = [pendingMedia].compactMap { $0 }
+            var acquired: [UploadedCommentMedia] = []
             do {
-                var attachmentIds: [String]? = nil
-                if let pendingMedia {
-                    attachmentIds = [try await CommentMediaUploader.upload(pendingMedia)]
-                }
+                acquired = try await CommentMediaUploader.uploadAll(medias)
+                let attachmentIds = CommentMediaUploader.attachmentIds(acquired)
                 try await StoryInteractionService().postComment(
                     storyId: story.id,
                     content: text,
@@ -973,6 +973,7 @@ extension StoryViewerView {
                     location: location,
                     clientMutationId: tempCommentId
                 )
+                CommentMediaUploader.discardLocalFiles(medias)
             } catch {
                 // Le POST direct a échoué — le plus souvent parce qu'on est
                 // hors-ligne. Perdre un commentaire que l'utilisateur vient de
@@ -981,24 +982,20 @@ extension StoryViewerView {
                 // (`FeedCommentsSheet`), même kind `.createComment` : la ligne
                 // optimiste `temp_` est réconciliée par le handler socket
                 // `comment:added` déjà câblé quand le rejeu aboutit.
-                //
-                // LIMITE ASSUMÉE, identique au feed : `CreateCommentPayload` ne
-                // porte pas `attachmentIds` (lacune du schéma SDK). Un média
-                // joint à un commentaire envoyé hors-ligne est perdu au rejeu ;
-                // le TEXTE, sa LANGUE déclarée (#6587) et ses effets survivent.
+                // #9743 — le MÉDIA part avec lui : la file garde son fichier.
                 do {
                     // MÊME cmid que la tentative REST : un POST abouti dont la
                     // réponse s'est perdue est dédoublonné au rejeu (MutationLog).
                     let cmid = tempCommentId
-                    try await OfflineQueue.shared.enqueue(
-                        .createComment,
-                        payload: CreateCommentPayload(
+                    try await CommentMediaDelivery.entrust(
+                        CreateCommentPayload(
                             clientMutationId: cmid, postId: story.id,
                             parentCommentId: parentId, content: text,
                             originalLanguage: language,
-                            location: location, effectFlags: effectFlags
+                            location: location, effectFlags: effectFlags,
+                            mobileTranscription: pendingMedia?.mobileTranscription
                         ),
-                        conversationId: story.id
+                        medias: medias, acquired: CommentMediaDelivery.acquired(from: error, known: acquired)
                     )
                     observeStoryCommentOutcome(cmid: cmid,
                                                tempId: tempCommentId,
@@ -1194,6 +1191,7 @@ extension StoryViewerView {
             for await event in stream {
                 if case .exhausted = event {
                     rollbackOptimisticComment(id: tempId, parentId: parentId)
+                    await OfflineQueue.shared.cancelCreateComment(clientMutationId: cmid)
                     FeedbackToastManager.shared.showError(
                         // Clé du feed réutilisée : message identique, et le
                         // catalogue est verrouillé à 100 % de couverture — une

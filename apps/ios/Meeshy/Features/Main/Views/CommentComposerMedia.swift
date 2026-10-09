@@ -39,10 +39,22 @@ struct PendingCommentMedia: Identifiable, Sendable {
 
 /// Upload d'un média de commentaire via le pipeline TUS partagé (même mécanisme
 /// que posts/stories), avec `uploadContext: "comment"` → le gateway crée un
-/// `PostMedia` pending (postId/commentId = null) que `addComment(mediaId:)` lie
-/// ensuite au commentaire. Renvoie l'ID du PostMedia créé.
+/// `PostMedia` pending (postId/commentId = null) que `addComment(attachmentIds:)`
+/// lie ensuite au commentaire.
+///
+/// **Le fichier local SURVIT au téléversement** (#9743) : il n'est retiré
+/// (`discardLocalFiles`) qu'une fois le commentaire créé. Le supprimer dès la
+/// montée laissait un commentaire dont la création échouait ensuite sans rien
+/// à confier à la file.
 enum CommentMediaUploader {
     enum UploadError: Error { case missingAuth }
+
+    /// La montée s'est arrêtée en chemin : ce qui est acquis voyage avec la
+    /// cause, pour que la file ne le re-téléverse pas.
+    struct Interrupted: Error {
+        let acquired: [UploadedCommentMedia]
+        let underlying: Error
+    }
 
     static func upload(_ media: PendingCommentMedia) async throws -> String {
         guard let baseURL = URL(string: MeeshyConfig.shared.serverOrigin),
@@ -57,19 +69,64 @@ enum CommentMediaUploader {
             uploadContext: "comment",
             thumbHash: media.thumbHash
         )
-        try? FileManager.default.removeItem(at: media.fileURL)
         return result.id
     }
 
     /// Téléverse toutes les pièces d'un commentaire, dans l'ordre de la zone
-    /// (#9736). `nil` quand il n'y en a aucune : le champ ne part pas.
-    static func uploadAll(_ medias: [PendingCommentMedia]) async throws -> [String]? {
-        guard !medias.isEmpty else { return nil }
-        var ids: [String] = []
-        for media in medias {
-            ids.append(try await upload(media))
+    /// (#9736). Lève `Interrupted` avec ce qui a déjà été monté.
+    static func uploadAll(_ medias: [PendingCommentMedia]) async throws -> [UploadedCommentMedia] {
+        var acquired: [UploadedCommentMedia] = []
+        for (index, media) in medias.enumerated() {
+            do {
+                let id = try await upload(media)
+                acquired.append(UploadedCommentMedia(sourceIndex: index, id: id,
+                                                     uploadedAt: Date().timeIntervalSince1970))
+            } catch {
+                throw Interrupted(acquired: acquired, underlying: error)
+            }
         }
-        return ids
+        return acquired
+    }
+
+    /// Les ids à lier au commentaire — `nil` quand il n'a aucune pièce : le
+    /// champ ne part pas.
+    static func attachmentIds(_ acquired: [UploadedCommentMedia]) -> [String]? {
+        acquired.isEmpty ? nil : CommentMediaReplay.attachmentIds(acquired)
+    }
+
+    /// Le commentaire est créé : ses fichiers locaux ne servent plus.
+    static func discardLocalFiles(_ medias: [PendingCommentMedia]) {
+        for media in medias { try? FileManager.default.removeItem(at: media.fileURL) }
+    }
+}
+
+/// **Un commentaire que l'envoi direct n'a pas pu poser rejoint la file AVEC
+/// ses pièces** (#9743) — site unique des trois hôtes de commentaire.
+enum CommentMediaDelivery {
+
+    /// Ce que la tentative directe avait acquis, lu dans l'erreur quand la
+    /// montée s'est arrêtée en chemin, sinon dans ce que l'appelant tenait.
+    static func acquired(from error: Error, known: [UploadedCommentMedia]) -> [UploadedCommentMedia] {
+        (error as? CommentMediaUploader.Interrupted)?.acquired ?? known
+    }
+
+    /// Confie le commentaire à la file. Sans pièce, c'est l'enfilement
+    /// ordinaire ; avec, les fichiers sont copiés dans un dossier durable et
+    /// la ligne les rejoue.
+    static func entrust(_ payload: CreateCommentPayload, medias: [PendingCommentMedia],
+                        acquired: [UploadedCommentMedia]) async throws {
+        guard !medias.isEmpty else {
+            try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: payload.postId)
+            return
+        }
+        try await OfflineQueue.shared.enqueueCommentMedia(
+            payload,
+            sourceMediaURLs: medias.map(\.fileURL),
+            sourceMediaMimeTypes: medias.map(\.mimeType),
+            acquired: acquired
+        )
+        // Les fichiers d'origine restent : la ligne optimiste les affiche
+        // encore. La file tient SA copie, durable.
     }
 }
 

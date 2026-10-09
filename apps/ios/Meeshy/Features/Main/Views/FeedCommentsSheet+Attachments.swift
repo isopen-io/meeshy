@@ -130,6 +130,28 @@ extension CommentsSheetView {
         stageCommentAttachments(CommentComposerStaging.fileAttachments(from: urls))
     }
 
+    // MARK: - Ce qui n'est pas parti (#9743)
+
+    /// Les commentaires de ce post encore dans la file reviennent à l'écran :
+    /// ils survivent à la fermeture de la feuille et au redémarrage de l'app.
+    func restoreUnsentComments() async {
+        let unsent = await OfflineQueue.shared.unsentComments(postId: post.id)
+            .map { CommentUnsent.row(for: $0, author: AuthManager.shared.currentUser) }
+        guard !unsent.isEmpty else { return }
+        liveComments = CommentUnsent.merging(unsent.filter { $0.parentId == nil }, into: liveComments ?? post.comments)
+        for reply in unsent {
+            guard let parentId = reply.parentId else { continue }
+            repliesMap[parentId] = CommentUnsent.merging([reply], into: repliesMap[parentId] ?? [])
+        }
+    }
+
+    /// L'auteur renonce à un commentaire non envoyé : sa ligne part.
+    func discardUnsentComment(_ commentId: String) {
+        let parentId = repliesMap.first { $0.value.contains { $0.id == commentId } }?.key
+        guard parentId != nil || (liveComments ?? post.comments).contains(where: { $0.id == commentId }) else { return }
+        rollbackOptimisticComment(tempId: commentId, parentId: parentId)
+    }
+
     private func linkCommentAsset(_ assetId: String, to attachmentId: String) {
         commentLibrary.link(assetId, to: attachmentId, liveAttachmentIds: commentAttachments.map(\.id))
     }

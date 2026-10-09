@@ -316,7 +316,7 @@ struct CommentsSheetView: View {
     /// count / the sheet's total count) — shared by the synchronous
     /// enqueue-refusal `catch` and the async `.exhausted` outbox observer,
     /// both of which restore the identical pre-send snapshot.
-    private func rollbackOptimisticComment(tempId: String, parentId: String?) {
+    func rollbackOptimisticComment(tempId: String, parentId: String?) {
         if let parentId {
             var existing = repliesMap[parentId] ?? []
             existing.removeAll { $0.id == tempId }
@@ -332,25 +332,6 @@ struct CommentsSheetView: View {
             liveComments = current
         }
         liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
-    }
-
-    /// Subscribes to `OfflineQueue.shared.outcomeStream(for: cmid)` and rolls
-    /// back the optimistic comment if the row is escalated to `.exhausted`
-    /// (retry budget spent — the server permanently rejected it). `.applied`
-    /// is a no-op — the `comment:added` socket echo already reconciled the
-    /// temp row in place.
-    private func observeCreateCommentOutcome(cmid: String, tempId: String, parentId: String?) {
-        Task { @MainActor in
-            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
-            for await event in stream {
-                if case .exhausted = event {
-                    rollbackOptimisticComment(tempId: tempId, parentId: parentId)
-                    FeedbackToastManager.shared.showError(DailyGestureLimitNotice.exhaustedText(clientMutationId: cmid)
-                        ?? String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main)
-                    )
-                }
-            }
-        }
     }
 
     var body: some View {
@@ -519,6 +500,7 @@ struct CommentsSheetView: View {
                 beginReply(to: initialReplyTarget)
             }
         }
+        .unsentComments(restore: { await restoreUnsentComments() }, discard: { discardUnsentComment($0) })
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
             // Ne relâcher QUE ce que la feuille a revendiqué : présentée
@@ -1349,13 +1331,15 @@ struct CommentsSheetView: View {
         liveCommentCount = (liveCommentCount ?? post.commentCount) + 1
 
         Task {
+            var acquired: [UploadedCommentMedia] = []
             do {
-                let attachmentIds = try await CommentMediaUploader.uploadAll(media)
+                acquired = try await CommentMediaUploader.uploadAll(media)
                 let apiComment = try await PostService.shared.addComment(
                     postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
-                    attachmentIds: attachmentIds, mobileTranscription: media.first?.mobileTranscription,
+                    attachmentIds: CommentMediaUploader.attachmentIds(acquired), mobileTranscription: media.first?.mobileTranscription,
                     originalLanguage: lang, location: place, clientMutationId: tempId
                 )
+                CommentMediaUploader.discardLocalFiles(media)
                 let feedComment = FeedComment(
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                     authorAvatarURL: apiComment.author.avatar,
@@ -1392,11 +1376,8 @@ struct CommentsSheetView: View {
                 // already use) instead of unconditionally losing the comment.
                 // The optimistic `tempId` row is reconciled by the already-wired
                 // `comment:added` socket handler once the outbox replay lands.
-                // NOTE: `CreateCommentPayload` carries `effectFlags`, the
-                // authored language (#6587) and the shared place, but not
-                // `attachmentIds` (SDK schema gap) — attached media on a comment
-                // sent while offline is dropped on replay; the comment text, its
-                // declared language and its visual effects survive.
+                // #9743 — les PIÈCES partent avec lui : la file garde leurs
+                // fichiers et les rejoue, sans re-monter ce qui l'est déjà.
                 do {
                     // MÊME cmid que la tentative REST : si le POST a abouti côté
                     // serveur mais que sa réponse s'est perdue, le rejeu outbox
@@ -1407,17 +1388,14 @@ struct CommentsSheetView: View {
                         clientMutationId: cmid, postId: post.id,
                         parentCommentId: parentId, content: trimmed,
                         originalLanguage: lang,
-                        location: place, effectFlags: effectFlags
+                        location: place, effectFlags: effectFlags,
+                        mobileTranscription: media.first?.mobileTranscription
                     )
-                    try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
+                    try await CommentMediaDelivery.entrust(payload, medias: media,
+                                                           acquired: CommentMediaDelivery.acquired(from: error, known: acquired))
                     onCommentSent?(post.id)
-
-                    // Roll back the optimistic comment if the outbox exhausts
-                    // its retry budget (server permanently rejects). Without
-                    // this a permanently-failing comment stays in the sheet
-                    // forever: the `comment:added` echo it's waiting on will
-                    // never arrive for a mutation the outbox gave up on.
-                    observeCreateCommentOutcome(cmid: cmid, tempId: tempId, parentId: parentId)
+                    // Si la file renonce, la ligne RESTE, marquée « non
+                    // envoyé » et relançable (`CommentUnsentBadge`, #9743).
                 } catch {
                     // Roll back the optimistic row + counts — the outbox
                     // itself refused the row.

@@ -229,11 +229,12 @@ extension PostDetailViewModel {
         }
         self.post?.commentCount = snapshotCount + 1
 
+        var acquired: [UploadedCommentMedia] = []
         do {
-            let attachmentIds = try await CommentMediaUploader.uploadAll(pendingMedia)
+            acquired = try await CommentMediaUploader.uploadAll(pendingMedia)
             let apiComment = try await postService.addComment(
                 postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
-                attachmentIds: attachmentIds, mobileTranscription: pendingMedia.first?.mobileTranscription,
+                attachmentIds: CommentMediaUploader.attachmentIds(acquired), mobileTranscription: pendingMedia.first?.mobileTranscription,
                 originalLanguage: originalLanguage, location: location, clientMutationId: tempId,
                 quotedPostMediaId: quoted?.postMediaId
             )
@@ -261,14 +262,49 @@ extension PostDetailViewModel {
             } else if !comments.contains(where: { $0.id == server.id }) {
                 comments.insert(server, at: 0)
             }
+            CommentMediaUploader.discardLocalFiles(pendingMedia)
             try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
         } catch {
-            // Rollback optimiste.
-            comments = snapshotComments
-            if let parentId { repliesMap[parentId] = snapshotReplies }
-            self.post?.commentCount = snapshotCount
-            guard !DailyGestureLimitNotice.surface(error) else { return }
-            FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
+            let rollback = {
+                self.comments = snapshotComments
+                if let parentId { self.repliesMap[parentId] = snapshotReplies }
+                self.post?.commentCount = snapshotCount
+            }
+            // La limite du jour est un refus : la ligne part, avec sa raison.
+            guard !DailyGestureLimitNotice.surface(error) else { return rollback() }
+            // **Sinon le commentaire rejoint la file AVEC ses pièces** (#9743) :
+            // il était retiré de l'écran et son média perdu. La ligne optimiste
+            // reste ; l'écho `comment:added` la réconcilie au rejeu, et
+            // `CommentUnsentBadge` la marque relançable si la file renonce.
+            do {
+                try await CommentMediaDelivery.entrust(
+                    CreateCommentPayload(
+                        clientMutationId: tempId, postId: post.id, parentCommentId: parentId,
+                        content: content, originalLanguage: originalLanguage,
+                        location: location, effectFlags: effectFlags,
+                        quotedPostMediaId: quoted?.postMediaId,
+                        mobileTranscription: pendingMedia.first?.mobileTranscription),
+                    medias: pendingMedia,
+                    acquired: CommentMediaDelivery.acquired(from: error, known: acquired))
+            } catch {
+                rollback()
+                FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
+            }
         }
+    }
+
+    /// L'auteur renonce à un commentaire non envoyé (#9743) : sa ligne part.
+    func discardUnsentComment(_ commentId: String) {
+        if let index = comments.firstIndex(where: { $0.id == commentId }) {
+            comments.remove(at: index)
+        } else if let parentId = repliesMap.first(where: { $0.value.contains { $0.id == commentId } })?.key {
+            repliesMap[parentId]?.removeAll { $0.id == commentId }
+            if let index = comments.firstIndex(where: { $0.id == parentId }), comments[index].replies > 0 {
+                comments[index].replies -= 1
+            }
+        } else {
+            return
+        }
+        if let count = post?.commentCount, count > 0 { post?.commentCount = count - 1 }
     }
 }

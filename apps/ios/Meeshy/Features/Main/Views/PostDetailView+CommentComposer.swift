@@ -124,6 +124,8 @@ extension PostDetailView {
         }
         // « Éditer » une pièce jointe : la scène du composeur (#9127).
         .commentSceneRetouch(attachments: $commentAttachments)
+        // #9743 — un commentaire non envoyé auquel l'auteur renonce quitte la liste.
+        .unsentComments(restore: {}, discard: { viewModel.discardUnsentComment($0) })
     }
 
     // MARK: - Reply targeting

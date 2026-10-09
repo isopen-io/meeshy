@@ -470,7 +470,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     func test_feedCommentsSheet_submitComment_sendsLocationOnTheOfflinePath() throws {
         let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
         let fn = try body(from: "let payload = CreateCommentPayload(",
-                          to: "try await OfflineQueue.shared.enqueue", in: src)
+                          to: "try await CommentMediaDelivery.entrust", in: src)
 
         XCTAssertTrue(fn.contains("location: place"),
                       "Le repli hors-ligne doit transporter le lieu — sinon une position choisie sans réseau disparaît.")
@@ -515,7 +515,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Le chemin direct doit déclarer la langue de la pastille, sinon le serveur la devine.")
 
         let offline = try body(from: "let payload = CreateCommentPayload(",
-                               to: "try await OfflineQueue.shared.enqueue", in: src)
+                               to: "try await CommentMediaDelivery.entrust", in: src)
         XCTAssertTrue(offline.contains("originalLanguage: lang"),
                       "Le repli hors-ligne doit déclarer la MÊME langue — les deux chemins partagent le cmid.")
     }
@@ -523,8 +523,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     func test_storyViewer_submitComment_declaresTheComposerLanguageOnBothPaths() throws {
         let src = try source("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
 
-        let offline = try body(from: "payload: CreateCommentPayload(",
-                               to: "conversationId: story.id", in: src)
+        let offline = try body(from: "try await CommentMediaDelivery.entrust(",
+                               to: "medias: medias", in: src)
         XCTAssertTrue(offline.contains("originalLanguage: language"),
                       "Le repli hors-ligne d'un commentaire de story doit porter la langue déclarée.")
 

@@ -70,7 +70,7 @@ struct CommentRowView: View, Equatable {
         lhs.comment.translatedContent == rhs.comment.translatedContent &&
         // Re-render quand le média (ou son enrichissement audio : transcription /
         // variantes TTS via comment:media-updated) change.
-        lhs.comment.media.first?.id == rhs.comment.media.first?.id &&
+        lhs.comment.media.map(\.id) == rhs.comment.media.map(\.id) &&
         lhs.comment.media.first?.transcription?.text == rhs.comment.media.first?.transcription?.text &&
         lhs.comment.media.first?.translatedAudios.count == rhs.comment.media.first?.translatedAudios.count &&
         // #6578 — sans cette ligne, une citation dont le média vient d'être
@@ -227,7 +227,9 @@ struct CommentRowView: View, Equatable {
                             .padding(.bottom, MeeshySpacing.xsPlus)
                     }
 
-                    if let media = comment.media.first {
+                    // Un commentaire porte jusqu'à `MAX_POST_MEDIA` pièces
+                    // (#9736) : toutes se rendent, plus la seule première.
+                    ForEach(comment.media) { media in
                         CommentMediaView(
                             media: media,
                             accentColor: accentColor,
@@ -253,6 +255,12 @@ struct CommentRowView: View, Equatable {
                         rowFullscreenPlace = BubbleFullscreenPlace(place: place)
                     }
                     .padding(.top, MeeshySpacing.xxs)
+                }
+
+                // #9743 — un commentaire que la file a abandonné reste à
+                // l'écran, relançable. Monté sur les seules lignes locales.
+                if CommentUnsent.isLocal(comment.id) {
+                    CommentUnsentBadge(commentId: comment.id, accentColor: accentColor)
                 }
 
                 HStack(spacing: MeeshySpacing.xl) {
