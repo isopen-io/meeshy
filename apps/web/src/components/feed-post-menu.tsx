@@ -37,6 +37,8 @@ const PostMenuPanel = lazy(() => import('./publication-menu-panel').then((m) => 
  */
 export type PostMenuHost = {
   readonly viewerId: string | null;
+  /** ADMIN/BIGBOSS (#9727) — absent ⇒ non : « Vues » ne s'offre pas. */
+  readonly viewerIsAdministrator?: boolean;
   readonly onCopyText: (text: string) => void;
   readonly onPin: (postId: string) => void;
   /** MODIFIER LE TEXTE (#7534) — la SEULE entrée du menu qui rend son issue :
@@ -108,6 +110,7 @@ export function FeedPostMenu({
     hasText: text !== undefined && text.trim() !== '',
     canShare: onShare !== undefined,
     canSave: onGesture !== undefined,
+    viewerIsAdministrator: menu.viewerIsAdministrator === true,
   });
 
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });

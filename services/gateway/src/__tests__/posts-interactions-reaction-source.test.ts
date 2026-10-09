@@ -53,7 +53,9 @@ const buildPrisma = (opts: {
   ];
   const post = {
     findFirst: jest.fn<(arg?: unknown) => Promise<Record<string, unknown> | null>>()
-      .mockResolvedValue({ id: POST_A, authorId: AUTHOR, reactions: opts.legacyReactions ?? null }),
+      // Une STORY : depuis la décision du 2026-10-09, l'auteur d'un post ou d'un
+      // réel n'en voit que les nombres — seule la story lui sert sa liste.
+      .mockResolvedValue({ id: POST_A, authorId: AUTHOR, type: 'STORY', reactions: opts.legacyReactions ?? null }),
   };
   const postView = {
     findMany: jest.fn<(arg?: unknown) => Promise<ViewRow[]>>().mockResolvedValue(views),

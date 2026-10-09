@@ -140,7 +140,7 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
 
   test('sur un post, le refus parle de la publication, pas d’une story', async () => {
     const host = await mountSheet({ postId: 'st-amie-1', viewCount: 5, subject: 'publication' });
-    expect(host.querySelector('[data-viewers-forbidden]')?.textContent).toBe('Seul l’auteur peut voir qui a vu cette publication.');
+    expect(host.querySelector('[data-viewers-forbidden]')?.textContent).toBe('Vous n’avez pas accès à la liste de qui a vu cette publication.');
   });
 
   test('compte AUTORITATIF absent ⇒ l’en-tête retombe sur la liste servie, jamais « 0 vue » au-dessus de trois lecteurs', async () => {

@@ -49,10 +49,15 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     ...overrides,
   });
 
-  const host = (viewerId: string | null, editOutcome: PostActionOutcome | (() => Promise<PostActionOutcome>) = 'done') => {
+  const host = (
+    viewerId: string | null,
+    editOutcome: PostActionOutcome | (() => Promise<PostActionOutcome>) = 'done',
+    viewerIsAdministrator = false,
+  ) => {
     const journal: string[] = [];
     const menu: PostMenuHost = {
       viewerId,
+      viewerIsAdministrator,
       onCopyText: (text) => journal.push(`copy:${text}`),
       onPin: (id) => journal.push(`pin:${id}`),
       onEdit: (id, content) => {
@@ -152,6 +157,14 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     expect(journal).toEqual(['report:p1:harassment']);
   });
 
+  test('« Vues » ne paraît que pour un ADMINISTRATEUR (#9727) — et ouvre la liste de qui a vu', async () => {
+    const { menu } = host('u-me', 'done', true);
+    monte(post(), menu);
+
+    const vues = (await ouvre()).find((e) => e.dataset.feedPostAction === 'views');
+    expect(vues?.textContent).toContain('Vues');
+  });
+
   test('la carte RÉEL porte le même bouton, en haut à droite', () => {
     const { menu } = host('u-me');
     monte(post({ type: 'REEL' }), menu);
@@ -171,9 +184,9 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
       monte(post(), menu);
 
       const entrees = await ouvre();
-      expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'views', 'pin', 'edit', 'delete']);
-      // #9727 — « Vues » ouvre la liste de qui a vu, et ce que chacun a fait.
-      expect(entrees.find((e) => e.dataset.feedPostAction === 'views')?.textContent).toContain('Vues');
+      // #9727, décision porteur 2026-10-09 — l'auteur d'un post n'en voit que le
+      // NOMBRE de vues : « Vues » n'est pas dans SON menu.
+      expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'pin', 'edit', 'delete']);
 
       const modifier = entrees.find((e) => e.dataset.feedPostAction === 'edit')!;
       expect(modifier.textContent).toContain('Modifier');

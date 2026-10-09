@@ -664,13 +664,20 @@ describe('PostService', () => {
     });
 
     it('throws FORBIDDEN when the user is not the author', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other-user' }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other-user', type: 'STORY' }));
 
       await expect(service.getPostViews('post-1', '0a0a0a0a0a0a0a0a0a0a0a01')).rejects.toThrow('FORBIDDEN');
     });
 
+    it('throws FORBIDDEN to the author of a POST: he only sees the counts (decision 2026-10-09)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'POST' }));
+
+      await expect(service.getPostViews('post-1', '0a0a0a0a0a0a0a0a0a0a0a01')).rejects.toThrow('FORBIDDEN');
+      expect(prisma.postView.findMany).not.toHaveBeenCalled();
+    });
+
     it('returns paginated views with hasMore=true when more items exist', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01' }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY' }));
 
       const viewItems = [
         { id: 'v1', userId: 'u1', postId: 'post-1', viewedAt: new Date() },
@@ -689,7 +696,7 @@ describe('PostService', () => {
     });
 
     it('returns hasMore=false when all items are fetched', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01' }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY' }));
       prisma.postView.findMany.mockResolvedValue([
         { id: 'v1', userId: 'u1', postId: 'post-1', viewedAt: new Date() },
       ]);
@@ -705,7 +712,7 @@ describe('PostService', () => {
     });
 
     it('uses default limit and offset values', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01' }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY' }));
       prisma.postView.findMany.mockResolvedValue([]);
       prisma.postView.count.mockResolvedValue(0);
 

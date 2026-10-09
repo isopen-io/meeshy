@@ -10,7 +10,7 @@ import type { ApiResult, HttpTransport } from '@/lib/api/http';
 import { createSessionStore, type SessionStoreApi } from '@/lib/api/session';
 import type { AdminPermissions } from '@/lib/admin/sections';
 
-import { useAdminAccess, type AdminAccessOptions } from './use-admin-access';
+import { useAdminAccess, useAdministrationRank, type AdminAccessOptions } from './use-admin-access';
 
 /**
  * QUI VOIT LE BARREAU « ADMINISTRATION » (#6458) — la garde de la DÉCOUVERTE.
@@ -234,5 +234,61 @@ describe('la lecture est celle de l’écran d’administration', () => {
 
     expect(verdict()).toBe('oui');
     expect(appels).toEqual([]);
+  });
+});
+
+/**
+ * « VUES » D'UN POST (#9727, décision porteur du 2026-10-09) — seuls ADMIN et
+ * BIGBOSS voient qui a vu un post ou un réel. Le rôle est celui que la matrice
+ * SERT ; MODERATOR, AUDIT et ANALYST entrent dans l'espace d'administration
+ * mais n'ont pas ce rang.
+ */
+describe('le rang d’administration (ADMIN/BIGBOSS) est fail-closed', () => {
+  function SondeRang({ options }: { readonly options: AdminAccessOptions }) {
+    return <output data-admin={useAdministrationRank(options) ? 'oui' : 'non'} />;
+  }
+
+  const monterRang = (options: AdminAccessOptions) => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(<SondeRang options={options} />);
+    });
+  };
+
+  const roleServi = (role: string) => async (): Promise<ApiResult<unknown>> => ({
+    ok: true,
+    data: { role, permissions: { ...AUCUNE, canAccessAdmin: true } },
+  });
+
+  for (const role of ['ADMIN', 'BIGBOSS']) {
+    test(`${role} servi : le rang`, async () => {
+      const { transport } = transportFactice(roleServi(role));
+      monterRang({ deps: deps(transport), client: new QueryClient(), session: sessionOuverte() });
+      await attendre(() => verdict() === 'oui');
+
+      expect(verdict()).toBe('oui');
+    });
+  }
+
+  for (const role of ['MODERATOR', 'AUDIT', 'ANALYST', 'AGENT', 'USER']) {
+    test(`${role} servi, même dans l’espace d’administration : pas le rang`, async () => {
+      const client = new QueryClient();
+      const { transport } = transportFactice(roleServi(role));
+      monterRang({ deps: deps(transport), client, session: sessionOuverte() });
+      await attendre(() => client.getQueryState(ADMIN_PERMISSIONS_QUERY_KEY)?.status === 'success');
+
+      expect(verdict()).toBe('non');
+    });
+  }
+
+  test('requête en vol ou refusée : pas le rang', async () => {
+    const client = new QueryClient();
+    const { transport } = transportFactice(refusee(403));
+    monterRang({ deps: deps(transport), client, session: sessionOuverte() });
+    await attendre(() => client.getQueryState(ADMIN_PERMISSIONS_QUERY_KEY)?.status === 'error');
+
+    expect(verdict()).toBe('non');
   });
 });

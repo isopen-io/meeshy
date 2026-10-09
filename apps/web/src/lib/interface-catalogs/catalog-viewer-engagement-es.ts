@@ -17,7 +17,7 @@ const es = {
   'viewerEngagement.back': 'Volver a las vistas',
   'viewerEngagement.openDetail': 'Ver lo que hizo {name}',
   'viewerEngagement.empty.subtitle': 'Las personas que vean esta publicación aparecerán aquí.',
-  'viewerEngagement.forbidden': 'Solo el autor puede ver quién vio esta publicación.',
+  'viewerEngagement.forbidden': 'No tienes acceso a la lista de quién vio esta publicación.',
   'viewerEngagement.unavailable': 'El detalle de la actividad no está disponible por el momento.',
 } satisfies ViewerEngagementCatalog;
 

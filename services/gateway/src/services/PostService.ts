@@ -6,7 +6,7 @@ import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
-import { readPostViews, readViewerInteractions } from './posts/viewerEngagement';
+import { readPostViews, readViewerInteractions, type ViewerListRequest } from './posts/viewerEngagement';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { borrowedSoundReelEntries } from './posts/storyReelCompanion';
 import { applyMediaOrder } from './posts/mediaOrder';
@@ -2077,23 +2077,17 @@ export class PostService {
     });
   }
 
-  async getPostViews(postId: string, userId: string, limit: number = 50, offset: number = 0) {
-    return readPostViews(this.prisma, postId, userId, limit, offset);
+  async getPostViews(postId: string, userId: string, limit = 50, offset = 0, options: ViewerListRequest = {}) {
+    return readPostViews(this.prisma, postId, { id: userId, ...options }, limit, offset);
   }
 
   /**
-   * La liste des vues enrichie de ce que chaque personne a fait (#9727) —
-   * AUTEUR seul (ADMIN/BIGBOSS attend sa trace d'audit, #9733). Le corps vit dans
-   * `posts/viewerEngagement.ts` (une lecture agrégée par source).
+   * La liste des vues enrichie (#9727) — l'auteur d'une story ; ADMIN/BIGBOSS
+   * pour tout contenu, chaque lecture tracée (#9733). Porte et corps :
+   * `posts/viewerEngagement.ts`.
    */
-  async getPostInteractions(
-    postId: string,
-    userId: string,
-    limit: number = 50,
-    offset: number = 0,
-    options: { readonly role?: string | null } = {},
-  ) {
-    return readViewerInteractions(this.prisma, postId, { id: userId, role: options.role }, limit, offset);
+  async getPostInteractions(postId: string, userId: string, limit = 50, offset = 0, options: ViewerListRequest = {}) {
+    return readViewerInteractions(this.prisma, postId, { id: userId, ...options }, limit, offset);
   }
 
   async repostPost(

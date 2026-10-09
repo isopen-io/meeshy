@@ -1,6 +1,11 @@
 import { PostVisibility, type PrismaClient } from '@meeshy/shared/prisma/client';
 import type { PostViewerEngagement, PostViewersPage } from '@meeshy/shared/types/publication-viewers';
-import { activityDisclosureFloor, viewerActivityDisclosedSince } from '../../config/viewer-activity-disclosure';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import {
+  activityDisclosureFloor,
+  isAuthorListedViewerType,
+  viewerActivityDisclosedSince,
+} from '../../config/viewer-activity-disclosure';
 import { authorSelect } from './postIncludes';
 import { NOT_DELETED } from './softDelete';
 import { filterConsumablePostIds, type PostConsumptionPrisma } from '../../routes/posts/postConsumptionGate';
@@ -28,6 +33,12 @@ const logger = enhancedLogger.child({ module: 'viewerEngagement' });
  * quand il vaut zéro : le client n'a rien à filtrer, et un ancien client
  * continue de lire `reaction`.
  *
+ * **Qui la lit** (décision porteur 2026-10-09 : « seuls les administrateurs
+ * peuvent voir qui a vu les posts ») : l'auteur d'une STORY ou d'un statut ;
+ * pour un POST ou un RÉEL, l'auteur ne voit que des NOMBRES (`viewCount`…),
+ * comme avant #9727. ADMIN/BIGBOSS lisent toute liste, et chacune de leurs
+ * lectures écrit d'abord sa ligne d'`AdminAuditLog` (#9733) — `viewerListAccess`.
+ *
  * **Un post ou un réel ne montre que ce qui suit la mise en service** (décision
  * porteur 2026-10-09 : « seulement à partir de maintenant ») : ses vues et ses
  * partages par lien antérieurs à `VIEWER_ACTIVITY_DISCLOSED_SINCE` ne sortent
@@ -35,7 +46,7 @@ const logger = enhancedLogger.child({ module: 'viewerEngagement' });
  */
 export type ViewerEngagementPrisma = Pick<
   PrismaClient,
-  'post' | 'postView' | 'postReaction' | 'trackingLink' | 'postComment' | 'user'
+  'post' | 'postView' | 'postReaction' | 'trackingLink' | 'postComment' | 'user' | 'adminAuditLog'
 > &
   PostConsumptionPrisma;
 
@@ -87,11 +98,19 @@ export function viewerEngagementGates(prisma: ViewerEngagementPrisma): ViewerEng
 export const REPOSTS_INSPECTED_PER_PERSON = 10;
 export const REPOSTS_INSPECTED_PER_PAGE = 100;
 
-/** Qui demande la liste : son identifiant et son rôle GLOBAL. */
+/**
+ * Qui demande la liste : son identifiant, son rôle GLOBAL, et ce que la trace
+ * d'audit retient de sa requête quand c'est son rôle qui lui ouvre la porte.
+ */
 export type InteractionsReader = {
   readonly id: string;
   readonly role?: string | null;
+  readonly ipAddress?: string | null;
+  readonly userAgent?: string | null;
 };
+
+/** Ce que la route transmet d'une requête, l'identifiant mis à part. */
+export type ViewerListRequest = Omit<InteractionsReader, 'id'>;
 
 export type ViewerInteractionRow = {
   readonly id: string;
@@ -110,12 +129,73 @@ export type ViewerInteractionsPage = {
 };
 
 /**
- * La porte : l'AUTEUR du contenu, et lui seul. Le rôle global est transmis
- * mais n'ouvre rien : la lecture ADMIN/BIGBOSS de l'activité d'autrui attend
- * sa trace d'audit (#9733), et rouvrira par ici.
+ * Comment la liste s'ouvre à ce lecteur :
+ *
+ * - `'author'` — l'auteur d'une story ou d'un statut lit SES spectateurs, sans
+ *   trace (la liste « Vu par » existait avant #9727) ;
+ * - `'admin'` — ADMIN/BIGBOSS, pour tout contenu, PAR LEUR RÔLE : la lecture
+ *   écrit sa ligne d'audit avant de rien lire. Un administrateur auteur d'un
+ *   post y passe aussi — comme auteur, il n'y aurait pas droit ;
+ * - `'denied'` — tout le reste : l'auteur d'un post ou d'un réel (il n'en voit
+ *   que les nombres), MODERATOR, AUDIT, ANALYST, et tout autre lecteur.
  */
-export function mayReadViewerInteractions(postAuthorId: string, reader: InteractionsReader): boolean {
-  return postAuthorId === reader.id;
+export type ViewerListAccess = 'author' | 'admin' | 'denied';
+
+export function viewerListAccess(
+  post: { readonly authorId: string; readonly type?: string | null },
+  reader: InteractionsReader,
+): ViewerListAccess {
+  if (post.authorId === reader.id && isAuthorListedViewerType(post.type)) return 'author';
+  if (typeof reader.role === 'string' && isGlobalAdmin(reader.role)) return 'admin';
+  return 'denied';
+}
+
+/**
+ * La trace qu'écrit chaque lecture administrateur d'une liste des vues. Le code
+ * est écrit en littéral `action: '…'` : c'est la forme que le vocabulaire du
+ * journal (`apps/web/src/lib/admin/audit-vocabulary.test.ts`) reconnaît.
+ */
+const ADMIN_VIEWER_LIST_AUDIT = { action: 'ADMIN_POST_VIEWERS_VIEWED', entity: 'Post' } as const;
+export const ADMIN_VIEWER_LIST_AUDIT_ACTION = ADMIN_VIEWER_LIST_AUDIT.action;
+
+type ViewerListPost = { readonly id: string; readonly authorId: string; readonly type?: string | null };
+
+/**
+ * Ouvre la liste ou lève : `FORBIDDEN` pour un lecteur refusé ;
+ * `AUDIT_UNAVAILABLE` quand la trace d'une lecture administrateur ne s'écrit
+ * pas — la lecture est alors REFUSÉE (fail-closed), jamais servie sans trace.
+ * La trace s'écrit AVANT la lecture : aucune ligne ne sort sans elle.
+ */
+async function openViewerList(
+  prisma: Pick<PrismaClient, 'adminAuditLog'>,
+  post: ViewerListPost,
+  reader: InteractionsReader,
+  list: 'interactions' | 'views',
+  page: { readonly limit: number; readonly offset: number },
+): Promise<void> {
+  const access = viewerListAccess(post, reader);
+  if (access === 'denied') throw new Error('FORBIDDEN');
+  if (access === 'author') return;
+  try {
+    await prisma.adminAuditLog.create({
+      data: {
+        userId: post.authorId,
+        adminId: reader.id,
+        ...ADMIN_VIEWER_LIST_AUDIT,
+        entityId: post.id,
+        metadata: JSON.stringify({ type: post.type ?? null, list, limit: page.limit, offset: page.offset }),
+        ipAddress: reader.ipAddress ?? null,
+        userAgent: reader.userAgent ?? null,
+      },
+    });
+  } catch (error: unknown) {
+    logger.error('[viewerEngagement] trace d’audit non écrite — lecture administrateur refusée', {
+      postId: post.id,
+      adminId: reader.id,
+      error,
+    });
+    throw new Error('AUDIT_UNAVAILABLE');
+  }
 }
 
 type Counts = ReadonlyMap<string, number>;
@@ -334,7 +414,7 @@ export function disclosedViewsWhere(
  * La page des vues d'un contenu DONT LA PORTE EST DÉJÀ PASSÉE — ordre et
  * pagination inchangés, chaque ligne enrichie. Elle ne connaît pas le lecteur :
  * tout ce qu'elle filtre l'est pour l'AUTEUR du contenu, quel que soit celui
- * qui la demande (une future lecture ADMIN, #9733, passe par ici telle quelle).
+ * qui la demande — un administrateur voit la page telle que l'auteur la verrait.
  *
  * Une lecture d'engagement qui ne conclut pas ferme : la page part SANS aucun
  * engagement, jamais avec un engagement non filtré, et le DIT
@@ -393,7 +473,8 @@ export async function readViewerEngagementPage(
 
 /**
  * `GET /posts/:postId/interactions` — `null` ⇒ contenu introuvable ; lève
- * `FORBIDDEN` pour tout lecteur que la porte refuse.
+ * `FORBIDDEN` pour tout lecteur que la porte refuse, `AUDIT_UNAVAILABLE` quand
+ * la trace d'une lecture administrateur ne s'écrit pas.
  */
 export async function readViewerInteractions(
   prisma: ViewerEngagementPrisma,
@@ -409,20 +490,21 @@ export async function readViewerInteractions(
     select: { id: true, authorId: true, type: true },
   });
   if (!post) return null;
-  if (!mayReadViewerInteractions(post.authorId, reader)) throw new Error('FORBIDDEN');
+  await openViewerList(prisma, post, reader, 'interactions', { limit, offset });
   return readViewerEngagementPage(prisma, post, limit, offset, gates, disclosedSince);
 }
 
 /**
- * `GET /posts/:postId/views` — l'ancienne liste « Vu par », auteur seul.
- * `null` ⇒ contenu introuvable ; lève `FORBIDDEN` pour tout autre lecteur. Un
- * post ou un réel n'y montre que les vues postérieures à la mise en service
- * (même borne que la liste enrichie) ; une story garde tout son historique.
+ * `GET /posts/:postId/views` — l'ancienne liste « Vu par », sous la MÊME porte
+ * que la liste enrichie (`viewerListAccess`, trace comprise). `null` ⇒ contenu
+ * introuvable. Un post ou un réel n'y montre que les vues postérieures à la
+ * mise en service (même borne que la liste enrichie) ; une story garde tout son
+ * historique.
  */
 export async function readPostViews(
-  prisma: Pick<PrismaClient, 'post' | 'postView'>,
+  prisma: Pick<PrismaClient, 'post' | 'postView' | 'adminAuditLog'>,
   postId: string,
-  userId: string,
+  reader: InteractionsReader,
   limit: number,
   offset: number,
   disclosedSince: Date = viewerActivityDisclosedSince(),
@@ -432,7 +514,7 @@ export async function readPostViews(
     select: { id: true, authorId: true, type: true },
   });
   if (!post) return null;
-  if (post.authorId !== userId) throw new Error('FORBIDDEN');
+  await openViewerList(prisma, post, reader, 'views', { limit, offset });
 
   const where = disclosedViewsWhere(post, disclosedSince);
   const [items, total] = await Promise.all([

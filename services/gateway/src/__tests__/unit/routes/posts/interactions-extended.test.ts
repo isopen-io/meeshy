@@ -609,7 +609,7 @@ describe('GET /posts/:postId/interactions', () => {
   it("transmet le rôle global du lecteur à la porte", async () => {
     mockGetPostInteractions.mockResolvedValueOnce({ viewers: [], total: 0, hasMore: false });
     await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions?limit=10&offset=20` });
-    expect(mockGetPostInteractions).toHaveBeenLastCalledWith(POST_ID, USER_ID, 10, 20, { role: 'USER' });
+    expect(mockGetPostInteractions).toHaveBeenLastCalledWith(POST_ID, USER_ID, 10, 20, expect.objectContaining({ role: 'USER' }));
   });
 
   it("sert chaque ligne enrichie telle quelle, compteurs absents compris", async () => {

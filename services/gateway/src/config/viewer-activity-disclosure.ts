@@ -56,15 +56,23 @@ export function viewerActivityDisclosedSince(): Date {
 }
 
 /**
- * Les types dont la liste des vues garde tout son historique. Tout autre type —
- * POST, REEL, et un type que ce code ne connaîtrait pas encore — est borné.
+ * Les types dont la liste « Vu par » existait avant #9727 : la story et le
+ * statut. Leur AUTEUR lit la liste de ses spectateurs, avec tout son
+ * historique. Tout autre type — POST, REEL, et un type que ce code ne
+ * connaîtrait pas encore — ne montre à son auteur que des NOMBRES (décision
+ * porteur 2026-10-09), et sa liste, lue par un administrateur seulement, est
+ * bornée à la mise en service.
  */
-const HISTORY_KEPT_TYPES: ReadonlySet<string> = new Set(['STORY', 'STATUS']);
+const AUTHOR_LISTED_TYPES: ReadonlySet<string> = new Set(['STORY', 'STATUS']);
+
+export function isAuthorListedViewerType(postType: string | null | undefined): boolean {
+  return typeof postType === 'string' && AUTHOR_LISTED_TYPES.has(postType);
+}
 
 /**
  * La borne à appliquer aux vues et aux partages par lien d'un contenu, ou
  * `null` quand son historique entier se montre (story, statut).
  */
 export function activityDisclosureFloor(postType: string | null | undefined, since: Date): Date | null {
-  return typeof postType === 'string' && HISTORY_KEPT_TYPES.has(postType) ? null : since;
+  return isAuthorListedViewerType(postType) ? null : since;
 }

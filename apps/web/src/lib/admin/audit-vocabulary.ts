@@ -104,6 +104,7 @@ export const AUDIT_ACTIONS = {
   ADMIN_COMMUNITY_UPDATED: entry('communities', 'usersThree', 'neutral'),
   // ── Contenus, diffusions, agent, signalements ──────────────────────────────
   DELETE_POST: entry('posts', 'trash', 'danger'),
+  ADMIN_POST_VIEWERS_VIEWED: entry('posts', 'eye', 'info', true),
   CREATE_BROADCAST: entry('broadcasts', 'plus', 'neutral'),
   SEND_BROADCAST: entry('broadcasts', 'paperPlaneTilt', 'info'),
   SEND_BROADCAST_INAPP: entry('broadcasts', 'megaphone', 'info'),

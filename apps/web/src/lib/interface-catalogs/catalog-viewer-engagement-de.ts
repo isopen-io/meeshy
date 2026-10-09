@@ -17,7 +17,7 @@ const de = {
   'viewerEngagement.back': 'Zurück zu den Aufrufen',
   'viewerEngagement.openDetail': 'Ansehen, was {name} getan hat',
   'viewerEngagement.empty.subtitle': 'Personen, die diesen Beitrag ansehen, erscheinen hier.',
-  'viewerEngagement.forbidden': 'Nur der Autor kann sehen, wer diesen Beitrag angesehen hat.',
+  'viewerEngagement.forbidden': 'Du hast keinen Zugriff auf die Liste, wer diesen Beitrag angesehen hat.',
   'viewerEngagement.unavailable': 'Die Aktivitätsdetails sind vorübergehend nicht verfügbar.',
 } satisfies ViewerEngagementCatalog;
 

@@ -1,7 +1,12 @@
 /**
  * Ce que chaque personne de la liste des vues a fait sur UN contenu (story,
- * post ou réel) — servi à l'AUTEUR seul par `GET /posts/:postId/interactions`
- * (#9727 ; la lecture ADMIN/BIGBOSS attend sa trace d'audit, #9733).
+ * post ou réel) — servi par `GET /posts/:postId/interactions` (#9727).
+ *
+ * QUI la lit (décision porteur 2026-10-09) : l'AUTEUR d'une story ou d'un
+ * statut. L'auteur d'un POST ou d'un RÉEL n'en voit que les NOMBRES
+ * (`viewCount`…) et reçoit 403 sur la liste. ADMIN/BIGBOSS la lisent pour tout
+ * contenu, chaque lecture journalisée dans `AdminAuditLog` (#9733) — une trace
+ * qui ne s'écrit pas refuse la lecture (503 `AUDIT_UNAVAILABLE`).
  *
  * Chaque champ est OPTIONNEL et ABSENT quand il vaut zéro : « un compteur à 0
  * ne s'affiche pas » se décide au serveur, une fois, pour les deux clients.
