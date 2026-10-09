@@ -16,6 +16,26 @@ struct StoryViewerItem: Identifiable, Equatable {
     let engagement: PostViewerEngagement
 }
 
+/// QUI peut ouvrir la liste des vues (#9727, décision porteur 2026-10-09) —
+/// miroir de `viewerListAccess` (passerelle) : l'AUTEUR d'une story ou d'un
+/// statut ; ADMIN/BIGBOSS pour tout contenu (leur lecture est journalisée côté
+/// passerelle). L'auteur d'un POST ou d'un RÉEL n'en voit que le NOMBRE de
+/// vues, comme avant. Ne décide que de ce qu'on MONTRE ; la passerelle reste
+/// l'autorité (403).
+enum PublicationViewersAccess {
+    private static let administratorRoles: Set<String> = ["ADMIN", "BIGBOSS"]
+    private static let authorListedTypes: Set<String> = ["STORY", "STATUS"]
+
+    static func isAdministrator(role: String?) -> Bool {
+        administratorRoles.contains((role ?? "").uppercased())
+    }
+
+    static func mayList(postType: String?, isAuthor: Bool, viewerRole: String?) -> Bool {
+        if isAuthor, authorListedTypes.contains((postType ?? "").uppercased()) { return true }
+        return isAdministrator(role: viewerRole)
+    }
+}
+
 /// Ce que la feuille montre : une story (ses textes historiques) ou une
 /// publication du fil — post ou réel.
 enum PublicationViewersSubject: Equatable {
@@ -54,8 +74,9 @@ struct StoryViewersSheet: View {
 /// sous chaque nom, ce que la personne y a fait : ses réactions, ses
 /// commentaires, ses réponses, ses republications, ses partages, son favori.
 /// Un compteur à zéro ne se dessine pas (`PostViewerEngagement.marks`) : la
-/// ligne reste aérée. Servie par `GET /posts/:postId/interactions`, à l'AUTEUR
-/// seul (et ADMIN/BIGBOSS).
+/// ligne reste aérée. Servie par `GET /posts/:postId/interactions` à l'auteur
+/// d'une story et à ADMIN/BIGBOSS (`PublicationViewersAccess`) ; un refus (403)
+/// se DIT, il ne se montre jamais comme une liste vide.
 ///
 /// **Toucher une ligne REBONDIT et pousse son DÉTAIL** dans la pile de la
 /// feuille : ce que la personne a fait, en toutes lettres, et « Voir le
@@ -79,6 +100,7 @@ struct PublicationViewersSheet: View {
 
     @State private var viewers: [StoryViewerItem] = []
     @State private var isLoading = true
+    @State private var isRefused = false
     @State private var openedViewer: StoryViewerItem?
     // Coalescing anti-course pour le re-fetch temps réel : une rafale de
     // `story:viewed` ne doit pas lancer N fetches `/interactions` concurrents
@@ -96,6 +118,12 @@ struct PublicationViewersSheet: View {
                 if isLoading {
                     ProgressView(String(localized: "story.viewer.loading", defaultValue: "Chargement…", bundle: .main))
                         .tint(accentColor)
+                } else if isRefused {
+                    EmptyStateView(
+                        icon: "lock",
+                        title: String(localized: "story.viewer.views.title", defaultValue: "Vues", bundle: .main),
+                        subtitle: String(localized: "viewer.engagement.forbidden", defaultValue: "Vous n’avez pas accès à la liste de qui a vu cette publication.", bundle: .main)
+                    )
                 } else if viewers.isEmpty {
                     EmptyStateView(
                         icon: "eye.slash",
@@ -219,11 +247,17 @@ struct PublicationViewersSheet: View {
 
         repeat {
             await MainActor.run { refreshQueued = false }
-            // nil ⇒ « chargement impossible » (journalisé par le service) : la
-            // liste précédente reste en place.
-            let snapshots = await StoryInteractionService().loadViewers(storyId: postId)
+            // `.failed` ⇒ « chargement impossible » (journalisé par le service) :
+            // la liste précédente reste en place. `.forbidden` ⇒ la liste n'est
+            // pas pour ce lecteur, et la feuille le dit.
+            let outcome = await StoryInteractionService().loadViewerList(postId: postId)
             await MainActor.run {
-                if let snapshots {
+                if case .forbidden = outcome {
+                    self.viewers = []
+                    self.isRefused = true
+                }
+                if case .loaded(let snapshots) = outcome {
+                    self.isRefused = false
                     self.viewers = snapshots.map { s in
                         StoryViewerItem(
                             id: s.id,

@@ -181963,6 +181963,53 @@
         }
       }
     },
+    "viewer.engagement.forbidden": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكنك الوصول إلى قائمة من شاهد هذا المنشور."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast keinen Zugriff auf die Liste, wer diesen Beitrag angesehen hat."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You don’t have access to the list of who viewed this post."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No tienes acceso a la lista de quién vio esta publicación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous n’avez pas accès à la liste de qui a vu cette publication."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non hai accesso all’elenco di chi ha visto questo post."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você não tem acesso à lista de quem viu esta publicação."
+          }
+        }
+      }
+    },
     "story.viewer.viewsAndImpressions": {
       "extractionState": "manual",
       "localizations": {

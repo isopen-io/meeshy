@@ -1,8 +1,10 @@
 import Foundation
 
 /// Ce qu'une personne de la liste des vues a fait sur UN contenu — story, post
-/// ou réel (#9727). Servi à l'AUTEUR seul (et ADMIN/BIGBOSS) par
-/// `GET /posts/:postId/interactions`, à côté de l'identité de la ligne.
+/// ou réel (#9727). Servi par `GET /posts/:postId/interactions`, à côté de
+/// l'identité de la ligne, à l'auteur d'une STORY et à ADMIN/BIGBOSS (lecture
+/// journalisée) ; l'auteur d'un post ou d'un réel n'en voit que les nombres
+/// (décision porteur 2026-10-09).
 ///
 /// Miroir de `PostViewerEngagement` (`packages/shared/types/publication-viewers.ts`).
 /// Chaque champ est ABSENT du fil quand il vaut zéro : il se décode à zéro, et

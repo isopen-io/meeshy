@@ -90,14 +90,24 @@ final class StoryInteractionService {
     /// list / show empty state"; an empty array means "loaded, no one
     /// has seen this story yet".
     func loadViewers(storyId: String) async -> [StoryViewerSnapshot]? {
+        guard case .loaded(let snapshots) = await loadViewerList(postId: storyId) else { return nil }
+        return snapshots
+    }
+
+    /// Ce que la liste des vues rend (#9727) : ses lignes, un REFUS — 403, la
+    /// liste n'est pas pour ce lecteur (l'auteur d'un post ou d'un réel n'en
+    /// voit que les nombres, décision porteur 2026-10-09) — ou une panne. Le
+    /// refus se distingue de la panne : la feuille le DIT, au lieu de se
+    /// montrer vide comme si personne n'avait rien vu.
+    func loadViewerList(postId: String) async -> ViewerListOutcome {
         do {
             let response: APIResponse<StoryViewersWireResponse> = try await api.request(
-                PostsEndpoint.byPostIdInteractions(postId: storyId),
+                PostsEndpoint.byPostIdInteractions(postId: postId),
                 method: "GET",
                 body: nil,
                 queryItems: nil
             )
-            return response.data.viewers.map { wire in
+            return .loaded(response.data.viewers.map { wire in
                 StoryViewerSnapshot(
                     id: wire.id,
                     username: wire.username,
@@ -107,10 +117,12 @@ final class StoryInteractionService {
                     reactionEmoji: wire.engagement.latestReaction ?? wire.reaction,
                     engagement: wire.engagement
                 )
-            }
+            })
+        } catch MeeshyError.forbidden(_, _) {
+            return .forbidden
         } catch {
-            Self.logger.error("Failed to load viewers for story \(storyId, privacy: .public): \(error.localizedDescription)")
-            return nil
+            Self.logger.error("Failed to load viewers for \(postId, privacy: .public): \(error.localizedDescription)")
+            return .failed
         }
     }
 
@@ -193,4 +205,11 @@ struct StoryViewersWireResponse: Decodable {
         }
     }
     let viewers: [Viewer]
+}
+
+/// L'issue d'une lecture de la liste des vues (#9727) — voir `loadViewerList`.
+enum ViewerListOutcome {
+    case loaded([StoryViewerSnapshot])
+    case forbidden
+    case failed
 }

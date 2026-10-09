@@ -580,7 +580,7 @@ struct ReelFeedCard: View, Equatable {
                 Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
             }
         }
-        if isAuthor {
+        if PublicationViewersAccess.mayList(postType: post.type, isAuthor: isAuthor, viewerRole: AuthManager.shared.currentUser?.role) {
             PublicationViewersMenuButton { showViewersSheet = true }
         }
         if let onPin {

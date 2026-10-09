@@ -232,6 +232,80 @@ final class StoryInteractionServiceTests: XCTestCase {
         XCTAssertEqual(result, [],
                        "empty array means 'loaded, nobody has viewed yet'")
     }
+
+    // MARK: - loadViewerList (#9727) — un refus se distingue d'une panne
+
+    func test_loadViewerList_forbidden_returnsForbidden() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = MeeshyError.forbidden(reason: "Only the author of a story, or an administrator, can view this list", body: nil)
+
+        let outcome = await sut.loadViewerList(postId: Self.storyId)
+
+        guard case .forbidden = outcome else {
+            return XCTFail("a 403 is a REFUSAL the sheet must say, not a failure nor an empty list — got \(outcome)")
+        }
+    }
+
+    func test_loadViewerList_networkFailure_returnsFailed() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = NSError(domain: "TestNetwork", code: 503)
+
+        let outcome = await sut.loadViewerList(postId: Self.storyId)
+
+        guard case .failed = outcome else { return XCTFail("expected .failed, got \(outcome)") }
+    }
+
+    func test_loadViewerList_success_returnsLoadedRows() async {
+        let (sut, api) = makeSUT()
+        api.stub("/posts/\(Self.storyId)/interactions", result: makeViewersResponse(count: 2))
+
+        let outcome = await sut.loadViewerList(postId: Self.storyId)
+
+        guard case .loaded(let rows) = outcome else { return XCTFail("expected .loaded, got \(outcome)") }
+        XCTAssertEqual(rows.count, 2)
+    }
+
+    func test_loadViewers_forbidden_returnsNil() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = MeeshyError.forbidden(reason: nil, body: nil)
+
+        let result = await sut.loadViewers(storyId: Self.storyId)
+
+        XCTAssertNil(result)
+    }
+}
+
+/// QUI peut ouvrir « Vues » (#9727, décision porteur 2026-10-09) — miroir de
+/// `viewerListAccess` côté passerelle : l'auteur d'une story ou d'un statut ;
+/// ADMIN/BIGBOSS pour tout contenu ; l'auteur d'un post ou d'un réel n'en voit
+/// que les nombres.
+final class PublicationViewersAccessTests: XCTestCase {
+
+    func test_mayList_authorOfPostOrReel_notAdmin_isRefused() {
+        for type in ["POST", "REEL", nil] as [String?] {
+            XCTAssertFalse(PublicationViewersAccess.mayList(postType: type, isAuthor: true, viewerRole: "USER"), "\(type ?? "nil")")
+        }
+    }
+
+    func test_mayList_authorOfStoryOrStatus_isAllowed() {
+        XCTAssertTrue(PublicationViewersAccess.mayList(postType: "STORY", isAuthor: true, viewerRole: "USER"))
+        XCTAssertTrue(PublicationViewersAccess.mayList(postType: "STATUS", isAuthor: true, viewerRole: nil))
+    }
+
+    func test_mayList_administrator_isAllowedOnAnyContent() {
+        for role in ["ADMIN", "BIGBOSS", "admin"] {
+            XCTAssertTrue(PublicationViewersAccess.mayList(postType: "POST", isAuthor: false, viewerRole: role), role)
+            XCTAssertTrue(PublicationViewersAccess.mayList(postType: "REEL", isAuthor: true, viewerRole: role), role)
+        }
+    }
+
+    func test_mayList_otherRoles_areRefused() {
+        for role in ["MODERATOR", "AUDIT", "ANALYST", "AGENT", "USER", ""] {
+            XCTAssertFalse(PublicationViewersAccess.mayList(postType: "POST", isAuthor: false, viewerRole: role), role)
+            XCTAssertFalse(PublicationViewersAccess.mayList(postType: "STORY", isAuthor: false, viewerRole: role), role)
+        }
+        XCTAssertFalse(PublicationViewersAccess.mayList(postType: "POST", isAuthor: false, viewerRole: nil))
+    }
 }
 
 @MainActor

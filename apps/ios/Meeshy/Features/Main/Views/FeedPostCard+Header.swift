@@ -18,6 +18,35 @@ import MeeshyUI
 /// > vit dans la destination du tap. »
 extension FeedPostCard {
 
+    /// « Vues » — qui a vu, et ce que chacun a fait (#9727) — ne s'ouvre qu'à
+    /// ADMIN/BIGBOSS sur un post ou un réel ; l'auteur n'en voit que les
+    /// nombres (décision porteur 2026-10-09). Règle : `PublicationViewersAccess`.
+    var canListViewers: Bool {
+        PublicationViewersAccess.mayList(
+            postType: post.type,
+            isAuthor: isAuthor,
+            viewerRole: AuthManager.shared.currentUser?.role
+        )
+    }
+
+    private var reachMetrics: some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            ReachMetricLabel(
+                icon: "chart.bar.fill",
+                count: post.impressionCount,
+                label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
+                tint: theme.textMuted
+            )
+            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+            ReachMetricLabel(
+                icon: "eye.fill",
+                count: post.viewCount,
+                label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
+                tint: theme.textMuted
+            )
+        }
+    }
+
     // MARK: - Author Header
     var authorHeader: some View {
         HStack(spacing: MeeshySpacing.md) {
@@ -139,29 +168,17 @@ extension FeedPostCard {
 
                     // Reach stats (impressions · views) — visible ONLY to the
                     // post's author, after the meta row (private analytics).
+                    // Les NOMBRES seulement : toucher la portée n'ouvre « Vues »
+                    // que pour ADMIN/BIGBOSS (#9727, décision 2026-10-09).
                     if isAuthor {
                         MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
-                        // Toucher la portée ouvre « Vues » : qui a vu, et ce que
-                        // chacun a fait (#9727).
-                        Button { showViewersSheet = true } label: {
-                            HStack(spacing: MeeshySpacing.xxs) {
-                                ReachMetricLabel(
-                                    icon: "chart.bar.fill",
-                                    count: post.impressionCount,
-                                    label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
-                                    tint: theme.textMuted
-                                )
-                                MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
-                                ReachMetricLabel(
-                                    icon: "eye.fill",
-                                    count: post.viewCount,
-                                    label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
-                                    tint: theme.textMuted
-                                )
-                            }
+                        if canListViewers {
+                            Button { showViewersSheet = true } label: { reachMetrics }
+                                .buttonStyle(GameBounceButtonStyle())
+                                .accessibilityHint(String(localized: "viewer.engagement.openList.hint", defaultValue: "Ouvre la liste des personnes qui ont vu ce contenu", bundle: .main))
+                        } else {
+                            reachMetrics
                         }
-                        .buttonStyle(GameBounceButtonStyle())
-                        .accessibilityHint(String(localized: "viewer.engagement.openList.hint", defaultValue: "Ouvre la liste des personnes qui ont vu ce contenu", bundle: .main))
                     }
                 }
             }
@@ -204,7 +221,7 @@ extension FeedPostCard {
                         systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark"
                     )
                 }
-                if isAuthor {
+                if canListViewers {
                     PublicationViewersMenuButton { showViewersSheet = true }
                 }
                 if onPin != nil {
