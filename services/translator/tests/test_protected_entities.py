@@ -8,7 +8,7 @@ dès l'encodage), puis réinjectés à l'identique après traduction.
 
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -36,10 +36,17 @@ def _translated_words(masked: str) -> str:
 
 
 def _engine(chunk: Callable[[str], str]) -> TranslatorEngine:
+    """Moteur dont le modèle est bouchonné : une phrase seule ou un lot de phrases (#9723)."""
     model_loader = MagicMock()
     model_loader.is_model_loaded.return_value = True
     engine = TranslatorEngine(model_loader, ThreadPoolExecutor(max_workers=1))
-    engine._translate_single_chunk = AsyncMock(side_effect=lambda text, *a, **kw: chunk(text))
+
+    def pipeline(texts, **_: object):
+        if isinstance(texts, str):
+            return {"translation_text": chunk(texts)}
+        return [{"translation_text": chunk(text)} for text in texts]
+
+    engine._get_or_create_pipeline = MagicMock(return_value=(pipeline, True))
     return engine
 
 
