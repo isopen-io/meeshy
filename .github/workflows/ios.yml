@@ -948,7 +948,10 @@ jobs:
   ios-tests:
     needs: [scope, ios-build, ios-test-shard]
     if: always() && needs.scope.outputs.run_tests == 'true'
-    name: ${{ needs.scope.outputs.run_tests == 'true' && 'Build app + tests unitaires' || 'Tests unitaires (non demandés)' }}
+    # Nom STATIQUE : un job sauté (compilation seule) n'évalue pas son nom, et
+    # l'expression brute s'affichait telle quelle dans la liste des checks
+    # (run 37830972768). Sauté, « Build app + tests unitaires » dit juste.
+    name: Build app + tests unitaires
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
