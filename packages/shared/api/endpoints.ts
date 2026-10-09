@@ -1097,7 +1097,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/social/posts': ['GET'],
   '/api/v1/socketio/disconnect-user': ['POST'],
   '/api/v1/socketio/stats': ['GET'],
-  '/api/v1/sounds/:id': ['GET', 'PATCH'],
+  '/api/v1/sounds/:id': ['GET', 'PATCH', 'DELETE'],
   '/api/v1/sounds/:id/posts': ['GET'],
   '/api/v1/sounds/mine': ['GET'],
   '/api/v1/static/:filename': ['GET'],
