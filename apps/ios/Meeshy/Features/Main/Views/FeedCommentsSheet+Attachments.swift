@@ -152,6 +152,15 @@ extension CommentsSheetView {
         rollbackOptimisticComment(tempId: commentId, parentId: parentId)
     }
 
+    /// Un commentaire qui n'a pu ni partir ni rejoindre la file n'est écrit
+    /// nulle part ailleurs : il revient dans le composeur — texte, pièces et
+    /// lieu — pour être renvoyé d'un toucher.
+    func restoreRefusedComment(text: String, attachments: [ComposerAttachment], place: SharedPlace?) {
+        if composerText.isEmpty { composerText = text }
+        if commentAttachments.isEmpty { commentAttachments = attachments }
+        if commentPendingPlace == nil { commentPendingPlace = place }
+    }
+
     private func linkCommentAsset(_ assetId: String, to attachmentId: String) {
         commentLibrary.link(assetId, to: attachmentId, liveAttachmentIds: commentAttachments.map(\.id))
     }

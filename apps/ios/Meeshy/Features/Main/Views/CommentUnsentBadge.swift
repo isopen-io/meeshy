@@ -39,6 +39,15 @@ enum CommentUnsent {
         )
     }
 
+    static let resumedTextKey = "text"
+
+    /// Le brouillon du composeur après une reprise : le texte repris, à la
+    /// suite de ce qui s'y trouvait déjà — rien de ce qui est écrit ne se perd.
+    static func resuming(_ text: String, into draft: String) -> String {
+        let current = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        return current.isEmpty ? text : draft + "\n" + text
+    }
+
     /// Les commentaires relus de la file, ajoutés à une liste qui ne les a
     /// pas déjà — les plus récents en tête, comme à l'envoi.
     static func merging(_ unsent: [FeedComment], into comments: [FeedComment]) -> [FeedComment] {
@@ -66,6 +75,9 @@ struct CommentUnsentBadge: View {
     /// à la bascule : la relire dans le corps la consommerait à chaque rendu.
     @State private var reason: String?
     @State private var isDiscarded = false
+    /// Une ligne de texte héritée d'une version sans auteur : elle ne sera
+    /// jamais envoyée — son texte se REPREND dans le composeur.
+    @State private var isInherited = false
     @State private var round = 0
 
     var body: some View {
@@ -80,8 +92,13 @@ struct CommentUnsentBadge: View {
                     Text(reason ?? String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
                         .foregroundColor(MeeshyColors.error)
                         .lineLimit(2)
-                    Button(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main), action: retry)
-                        .foregroundColor(Color(hex: accentColor))
+                    if isInherited {
+                        Button(String(localized: "story.mine.failed.resume", defaultValue: "Reprendre", bundle: .main), action: resume)
+                            .foregroundColor(Color(hex: accentColor))
+                    } else {
+                        Button(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main), action: retry)
+                            .foregroundColor(Color(hex: accentColor))
+                    }
                     Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), action: discard)
                         .foregroundColor(MeeshyColors.error)
                 }
@@ -97,6 +114,7 @@ struct CommentUnsentBadge: View {
     /// l'ouverture de l'écran), puis se suit au fil de la file.
     private func watch() async {
         if let unsent = await OfflineQueue.shared.unsentComment(clientMutationId: commentId, ownerId: CommentPublisher.currentAccountId()), unsent.isFailed {
+            isInherited = unsent.isInherited
             markFailed()
         }
         let outcomes = await OfflineQueue.shared.outcomeStream(for: commentId)
@@ -124,6 +142,20 @@ struct CommentUnsentBadge: View {
         }
     }
 
+    /// « Reprendre » : le texte d'une ligne héritée revient dans le composeur
+    /// comme un brouillon, et la ligne quitte la file. Il repartira par le
+    /// chemin normal, avec l'auteur du compte qui l'envoie.
+    private func resume() {
+        HapticFeedback.light()
+        Task {
+            guard let text = await OfflineQueue.shared.resumeInheritedComment(
+                clientMutationId: commentId, ownerId: CommentPublisher.currentAccountId()) else { return }
+            isDiscarded = true
+            NotificationCenter.default.post(name: .commentUnsentResumed, object: commentId,
+                                            userInfo: [CommentUnsent.resumedTextKey: text])
+        }
+    }
+
     private func discard() {
         HapticFeedback.light()
         Task {
@@ -140,17 +172,28 @@ extension Notification.Name {
     /// Un commentaire non envoyé vient d'être abandonné par son auteur :
     /// l'hôte retire sa ligne. L'objet est l'identifiant client.
     static let commentUnsentDiscarded = Notification.Name("comment.unsent.discarded")
+    /// Le texte d'une ligne héritée vient d'être repris : l'hôte retire la
+    /// ligne et pose le texte dans son composeur. L'objet est l'identifiant
+    /// client, `CommentUnsent.resumedTextKey` porte le texte.
+    static let commentUnsentResumed = Notification.Name("comment.unsent.resumed")
 }
 
 extension View {
     /// Branche un hôte de commentaires sur ce qui n'est pas parti : `restore`
     /// à l'ouverture, `discard` quand l'auteur renonce à une ligne.
     func unsentComments(restore: @escaping @MainActor () async -> Void,
-                        discard: @escaping @MainActor (String) -> Void) -> some View {
+                        discard: @escaping @MainActor (String) -> Void,
+                        draft: Binding<String>) -> some View {
         task { await restore() }
             .onReceive(NotificationCenter.default.publisher(for: .commentUnsentDiscarded)) { note in
                 guard let commentId = note.object as? String else { return }
                 discard(commentId)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .commentUnsentResumed)) { note in
+                guard let commentId = note.object as? String,
+                      let text = note.userInfo?[CommentUnsent.resumedTextKey] as? String else { return }
+                discard(commentId)
+                draft.wrappedValue = CommentUnsent.resuming(text, into: draft.wrappedValue)
             }
     }
 }

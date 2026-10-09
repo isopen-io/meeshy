@@ -71,6 +71,10 @@ nonisolated protocol NotificationReplyQueueing {
         payload: P,
         conversationId: String?
     ) async throws -> String
+    /// La seule entrée d'un commentaire dans la file (#9743) : dans la base
+    /// PROUVÉE de son auteur, et dans aucune autre.
+    @discardableResult
+    func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String
 }
 
 extension OfflineQueue: NotificationReplyQueueing {}
@@ -615,7 +619,7 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         await prepareReplyQueue()
         do {
-            try await replyQueue.enqueue(.createComment, payload: comment, conversationId: nil)
+            try await replyQueue.enqueueComment(comment, ownerId: currentUserId())
         } catch {
             logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .public)")
         }

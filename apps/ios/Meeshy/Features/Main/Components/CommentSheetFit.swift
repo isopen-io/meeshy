@@ -44,8 +44,21 @@ struct CommentSheetComposerTopKey: PreferenceKey {
 
 extension View {
     /// La zone de contenu de la feuille, dont le haut est le bas de l'en-tête.
+    ///
+    /// **La zone a la taille qu'on lui PROPOSE, jamais celle de son contenu.**
+    /// L'espace de coordonnées était posé sur le conteneur du contenu
+    /// lui-même : quand le composeur débordait, ce conteneur grandissait avec
+    /// lui et remontait d'autant sous l'en-tête — son origine suivait le
+    /// débordement, le haut du composeur n'y devenait jamais négatif, et la
+    /// sonde ne voyait rien (recette du 2026-10-09 : feuille restée à
+    /// mi-hauteur). Un `GeometryReader` prend exactement la place offerte ;
+    /// le contenu y est ancré en BAS, et ce qui dépasse dépasse en haut de
+    /// CETTE zone, où la sonde le mesure.
     func commentSheetContent() -> some View {
-        coordinateSpace(name: CommentSheetFit.space)
+        GeometryReader { area in
+            self.frame(width: area.size.width, height: area.size.height, alignment: .bottom)
+        }
+        .coordinateSpace(name: CommentSheetFit.space)
     }
 
     /// Sonde le haut du composeur et fait grandir la feuille quand il dépasse.

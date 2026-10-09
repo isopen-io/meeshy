@@ -70,6 +70,11 @@ final class NotificationActionHandlerTests: XCTestCase {
             onEnqueue?()
             return "ofqm_test"
         }
+
+        @discardableResult
+        func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String {
+            try await enqueue(.createComment, payload: comment, conversationId: comment.postId)
+        }
     }
 
     private final class MockOptimisticPersistence: OptimisticMessagePersisting {

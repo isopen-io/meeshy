@@ -230,6 +230,13 @@ public protocol OfflineQueueing: Sendable {
         conversationId: String?
     ) async throws -> String
 
+    /// **La SEULE entrée d'un commentaire dans la file** (#9743). La file
+    /// réelle n'écrit la ligne que dans la base PROUVÉE de son auteur
+    /// (`OfflineQueue.enqueueComment`) ; aucun site n'enfile un commentaire
+    /// par l'entrée générique ci-dessus.
+    @discardableResult
+    func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String
+
     func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome>
 
     /// **Une ligne de ce `kind`, rangée sous cette `anchor`, est-elle encore en
@@ -699,6 +706,21 @@ public actor OfflineQueue {
     /// Called from `retryAll()` (sendMessage success), from the
     /// `OutboxFlusher.onOutcome` callback (generic dispatch success /
     /// exhaustion), and from `retryItem(_:)` if the row is missing.
+    /// Oublie l'issue mémorisée d'un identifiant que l'on vient de réarmer :
+    /// sans cela, un abonné recevrait aussitôt le `.exhausted` périmé.
+    func forgetOutcome(for cmid: String) {
+        outcomeTombstones.removeValue(forKey: cmid)
+    }
+
+    /// **Témoins seulement** : joué entre la saisie du triplet d'une opération
+    /// de commentaire et sa transaction — pour y rebrancher la file et prouver
+    /// que l'opération n'agit que sur ce qu'elle a saisi.
+    var commentTransactionHook: (@Sendable @concurrent () async -> Void)?
+
+    func setCommentTransactionHook(_ hook: (@Sendable @concurrent () async -> Void)?) {
+        commentTransactionHook = hook
+    }
+
     public func publishOutcome(_ outcome: OutboxOutcome) {
         // Le flusher vient de supprimer (.applied) ou d'épuiser (.exhausted)
         // la ligne outbox de ce cmid — le nombre de writes en attente a changé.

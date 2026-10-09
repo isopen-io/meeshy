@@ -78,12 +78,12 @@ public enum CommentOwnership {
     /// Une ligne de TEXTE gravée avant le champ « auteur » : sans auteur, et
     /// sans aucune pièce (aucune ligne ancienne ne pouvait en emporter).
     ///
-    /// Elle ne se rejoue JAMAIS d'elle-même. Mais elle vit dans la base d'un
-    /// compte, et la laisser inerte ferait perdre en silence, à la mise à
-    /// jour, ce que son auteur a écrit : elle reste donc VISIBLE pour ce
-    /// compte, « non envoyée », et c'est sa relance MANUELLE — un acte
-    /// explicite du compte connecté, dans sa propre base — qui lui donne un
-    /// auteur (`adopting`).
+    /// Son origine n'est pas authentifiée : elle n'est JAMAIS envoyée, et
+    /// aucun code ne lui écrit un auteur après coup. Mais elle vit dans la
+    /// base d'un compte, et la laisser inerte ferait perdre en silence, à la
+    /// mise à jour, ce que son auteur a écrit : elle reste VISIBLE pour ce
+    /// compte, et « Reprendre » rend son texte au composeur
+    /// (`OfflineQueue.resumeInheritedComment`).
     public static func isUnattributedText(_ payload: CreateCommentPayload) -> Bool {
         identity(payload.authorId) == nil
             && (payload.localMediaPaths ?? []).isEmpty
@@ -244,9 +244,9 @@ public struct UnsentComment: Sendable, Equatable {
 
     public var clientMutationId: String { payload.clientMutationId }
 
-    /// Une ligne héritée sans auteur : elle n'ira nulle part sans une relance
-    /// manuelle, qui l'attribuera au compte connecté.
-    public var needsAdoption: Bool { CommentOwnership.isUnattributedText(payload) }
+    /// Une ligne de texte héritée sans auteur : elle ne sera jamais envoyée.
+    /// Son texte se REPREND dans le composeur, ou la ligne se supprime.
+    public var isInherited: Bool { CommentOwnership.isUnattributedText(payload) }
 
     public init(payload: CreateCommentPayload, isFailed: Bool, lastError: String?,
                 createdAt: Date, localMediaURLs: [URL]) {
@@ -261,6 +261,95 @@ public struct UnsentComment: Sendable, Equatable {
 // MARK: - La file
 
 extension OfflineQueue {
+
+    // MARK: Le triplet d'une opération
+
+    /// **Ce sur quoi UNE opération agit, saisi UNE fois** : le compte (celui
+    /// que le jeton de l'appelant désigne), l'environnement, et la base.
+    ///
+    /// Rien d'autre n'est relu ensuite — ni la base courante de la file, qui
+    /// peut être rebranchée à tout instant par une bascule de compte, ni un
+    /// jeton. Et la PREUVE que cette base est celle de ce compte se fait dans
+    /// la transaction même qui lit ou écrit, sur le fichier de LA CONNEXION
+    /// utilisée (`proves(_:)`) : aucun point de suspension ne la sépare de
+    /// l'action.
+    struct CommentContext: Sendable {
+        let ownerId: String
+        let serverOrigin: String
+        let pool: any DatabaseWriter
+
+        /// À appeler DANS une transaction de `pool` : le fichier ouvert par
+        /// cette connexion est-il la base de `ownerId` ?
+        func proves(_ db: Database) throws -> Bool {
+            let file = try String.fetchOne(db, sql: "SELECT file FROM pragma_database_list WHERE name = 'main'")
+            return CommentOwnership.baseBelongs(toOwner: ownerId, databasePath: file, serverOrigin: serverOrigin)
+        }
+    }
+
+    /// Le triplet de `ownerId` sur la base que la file tient À CET INSTANT —
+    /// `nil` sans compte utilisable ou sans base.
+    func commentContext(ownerId: String?) -> CommentContext? {
+        guard let owner = CommentOwnership.identity(ownerId), let pool = outboxPool else { return nil }
+        return CommentContext(ownerId: owner, serverOrigin: MeeshyConfig.shared.persistedServerOrigin, pool: pool)
+    }
+
+    /// Combien de temps on laisse à la base du compte pour s'ouvrir.
+    public static let baseRebindGrace: TimeInterval = 2
+
+    /// Le triplet d'une ÉCRITURE, attendu un court instant.
+    ///
+    /// Après une bascule de compte, la file est rebranchée par une tâche non
+    /// attendue : le compte B est connecté et la file tient encore la base de
+    /// A. On n'écrit pas ailleurs — on attend que la base de B soit ouverte,
+    /// et le commentaire s'enfile dès qu'elle l'est. Ce pré-contrôle ne
+    /// PROUVE rien : la preuve est refaite dans la transaction d'écriture.
+    func writableCommentContext(ownerId: String?,
+                                grace: TimeInterval = OfflineQueue.baseRebindGrace) async -> CommentContext? {
+        let deadline = Date().addingTimeInterval(grace)
+        while true {
+            guard let context = commentContext(ownerId: ownerId) else {
+                guard CommentOwnership.identity(ownerId) != nil, Date() < deadline else { return nil }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                continue
+            }
+            if CommentOwnership.baseBelongs(toOwner: context.ownerId, databasePath: context.pool.path,
+                                            serverOrigin: context.serverOrigin) {
+                return context
+            }
+            guard Date() < deadline else { return nil }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+
+    private static func commentDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+
+    private static func commentEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
+
+    // MARK: Écrire
+
+    /// **La SEULE entrée d'un commentaire de texte dans la file.** La ligne
+    /// n'est écrite que si la connexion qui l'écrit est PROUVÉE être la base
+    /// de son auteur, dans la même transaction.
+    @discardableResult
+    public func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String {
+        guard CommentOwnership.owns(comment, currentUserId: ownerId),
+              let context = await writableCommentContext(ownerId: ownerId) else {
+            throw CommentOwnership.Refusal.notTheAuthor
+        }
+        await commentTransactionHook?()
+        let outboxId = try await insertComment(comment, in: context)
+        await refreshPendingCount()
+        mutationEnqueued.send(())
+        return outboxId
+    }
 
     /// Confie à la file un commentaire AVEC ses pièces — pour le compte
     /// `ownerId`, qui doit en être l'auteur déclaré (`CommentOwnership`).
@@ -281,22 +370,24 @@ extension OfflineQueue {
               let folder = CommentOwnership.mediaDirectoryName(ownerId: ownerId) else {
             throw CommentOwnership.Refusal.notTheAuthor
         }
-        guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
-        // La ligne et ses pièces ne s'écrivent que dans la base de leur auteur.
-        guard Self.proves(pool, belongsTo: ownerId) else { throw CommentOwnership.Refusal.notTheAuthor }
+        guard outboxPool != nil else { throw EnqueueMediaError.poolNotConfigured }
+        guard let context = await writableCommentContext(ownerId: ownerId) else {
+            throw CommentOwnership.Refusal.notTheAuthor
+        }
         let cmid = comment.clientMutationId
+        let outboxId = "ofqm_\(cmid)"
         // **Un même identifiant client ne s'enfile qu'une fois.** Une ligne
-        // déjà là garde SES fichiers : les recopier puis échouer à l'insertion
-        // les aurait supprimés sous elle.
-        let existingId = "ofqm_\(cmid)"
-        if let existing = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: existingId) }) {
-            // La ligne déjà là doit être LA MÊME, du même auteur : sinon on
-            // refuse, plutôt que de rendre les pièces d'un autre.
-            let stored = try decoder.decode(CreateCommentPayload.self, from: existing.payload)
-            guard CommentOwnership.owns(stored, currentUserId: ownerId) else {
+        // déjà là garde SES fichiers — et doit être celle du même auteur.
+        let existing: Data? = try await context.pool.read { db -> Data? in
+            guard try context.proves(db) else { throw CommentOwnership.Refusal.notTheAuthor }
+            return try OutboxRecord.fetchOne(db, key: outboxId)?.payload
+        }
+        if let existing {
+            let stored = try Self.commentDecoder().decode(CreateCommentPayload.self, from: existing)
+            guard CommentOwnership.owns(stored, currentUserId: context.ownerId) else {
                 throw CommentOwnership.Refusal.notTheAuthor
             }
-            return EnqueueMediaResult(outboxId: existingId, localMediaPaths: stored.localMediaPaths ?? [])
+            return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: stored.localMediaPaths ?? [])
         }
         // **La file ne grossit pas sans borne** (audit, constat 7) : au-delà du
         // plafond par compte, la pose est refusée AVANT toute copie.
@@ -315,232 +406,228 @@ extension OfflineQueue {
         do {
             try Self.copyPendingMediaFiles(sources: sourceMediaURLs, to: relativePaths)
         } catch {
-            removePendingCommentFiles(relativePaths)
+            Self.removePendingCommentFiles(relativePaths)
             throw EnqueueMediaError.mediaCopyFailed(underlying: error)
         }
         let payload = comment.withMedia(localMediaPaths: relativePaths,
                                         localMediaMimeTypes: sourceMediaMimeTypes,
                                         uploadedMedia: acquired.isEmpty ? nil : acquired)
+        await commentTransactionHook?()
         do {
-            let outboxId = try await enqueue(.createComment, payload: payload, conversationId: comment.postId)
-            return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: relativePaths)
+            _ = try await insertComment(payload, in: context)
         } catch {
-            removePendingCommentFiles(relativePaths)
-            throw EnqueueMediaError.outboxWriteFailed(underlying: error)
+            Self.removePendingCommentFiles(relativePaths)
+            Self.removeEmptyParentDirectories(of: relativePaths)
+            throw error
         }
+        await refreshPendingCount()
+        mutationEnqueued.send(())
+        return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: relativePaths)
+    }
+
+    /// L'insertion, et sa preuve, dans UNE transaction de la base du triplet.
+    private func insertComment(_ comment: CreateCommentPayload, in context: CommentContext) async throws -> String {
+        let encoded = try Self.commentEncoder().encode(comment)
+        let cmid = comment.clientMutationId
+        let outboxId = "ofqm_\(cmid)"
+        let anchor = comment.postId
+        try await context.pool.write { db in
+            guard try context.proves(db) else { throw CommentOwnership.Refusal.notTheAuthor }
+            try OutboxRecord(id: outboxId, kind: .createComment, conversationId: anchor,
+                             messageLocalId: nil, clientMessageId: cmid, payload: encoded,
+                             status: .pending, createdAt: Date()).insert(db)
+        }
+        return outboxId
     }
 
     /// Grave sur la ligne qu'UNE pièce est acquise côté serveur. Idempotent
-    /// par index. Un échec d'écriture est journalisé et avalé : il coûte une
-    /// re-montée, jamais la tentative en cours.
+    /// par index. La ligne n'est touchée que dans la base de SON auteur. Un
+    /// échec est journalisé et avalé : il coûte une re-montée, jamais la
+    /// tentative en cours.
     public func recordUploadedCommentMedia(outboxId: String, _ media: UploadedCommentMedia) async {
         guard let pool = outboxPool else { return }
+        let origin = MeeshyConfig.shared.persistedServerOrigin
         do {
-            guard let record = try await pool.read({ db in
-                try OutboxRecord.fetchOne(db, key: outboxId)
-            }) else { return }
-            let payload = try decoder.decode(CreateCommentPayload.self, from: record.payload)
-            var acquired = (payload.uploadedMedia ?? []).filter { $0.sourceIndex != media.sourceIndex }
-            acquired.append(media)
-            acquired.sort { $0.sourceIndex < $1.sourceIndex }
-            let encoded = try encoder.encode(payload.withMedia(
-                localMediaPaths: payload.localMediaPaths,
-                localMediaMimeTypes: payload.localMediaMimeTypes,
-                uploadedMedia: acquired))
             try await pool.write { db in
+                guard let record = try OutboxRecord.fetchOne(db, key: outboxId), record.kind == .createComment else { return }
+                let payload = try Self.commentDecoder().decode(CreateCommentPayload.self, from: record.payload)
+                guard let author = CommentOwnership.identity(payload.authorId),
+                      try CommentContext(ownerId: author, serverOrigin: origin, pool: pool).proves(db) else { return }
+                var acquired = (payload.uploadedMedia ?? []).filter { $0.sourceIndex != media.sourceIndex }
+                acquired.append(media)
+                acquired.sort { $0.sourceIndex < $1.sourceIndex }
+                let encoded = try Self.commentEncoder().encode(payload.withMedia(
+                    localMediaPaths: payload.localMediaPaths,
+                    localMediaMimeTypes: payload.localMediaMimeTypes,
+                    uploadedMedia: acquired))
                 try db.execute(sql: "UPDATE outbox SET payload = ?, updatedAt = ? WHERE id = ?",
                                arguments: [encoded, Date(), outboxId])
             }
         } catch {
-            logger.error("recordUploadedCommentMedia(\(outboxId, privacy: .private), index \(media.sourceIndex, privacy: .public)) failed — pièce re-téléversée au prochain rejeu : \(error.localizedDescription, privacy: .private)")
+            logger.error("recordUploadedCommentMedia(index \(media.sourceIndex, privacy: .public)) failed — pièce re-téléversée au prochain rejeu : \(error.localizedDescription, privacy: .private)")
         }
     }
 
-    /// Les commentaires d'une publication que `ownerId` a écrits et qui ne
-    /// sont pas partis, du plus ancien au plus récent. Ceux d'un autre compte
-    /// ne se montrent jamais.
-    public func unsentComments(postId: String, ownerId: String?) async -> [UnsentComment] {
-        guard let pool = outboxPool else { return [] }
-        let baseIsHis = Self.proves(pool, belongsTo: ownerId)
-        guard baseIsHis else { return [] }
-        let records: [OutboxRecord]
-        do {
-            records = try await pool.read { db in
-                try OutboxRecord
-                    .filter(Column("kind") == OutboxKind.createComment.rawValue)
-                    .order(Column("createdAt").asc)
-                    .fetchAll(db)
-            }
-        } catch {
-            logger.error("unsentComments read failed: \(error.localizedDescription, privacy: .private)")
-            return []
+    // MARK: Lire
+
+    /// Les lignes de commentaire de la base du triplet — lues SOUS preuve.
+    private func commentRecords(in context: CommentContext, id: String? = nil) async -> [OutboxRecord] {
+        await commentTransactionHook?()
+        let records: [OutboxRecord]? = try? await context.pool.read { db -> [OutboxRecord] in
+            guard try context.proves(db) else { return [] }
+            let request = OutboxRecord.filter(Column("kind") == OutboxKind.createComment.rawValue)
+            if let id { return try request.filter(Column("id") == id).fetchAll(db) }
+            return try request.order(Column("createdAt").asc).fetchAll(db)
         }
-        return records.compactMap { record in
-            // La publication se lit dans la CHARGE : tous les sites d'envoi
-            // ne posent pas la même ancre sur la ligne.
-            guard let payload = try? decoder.decode(CreateCommentPayload.self, from: record.payload),
-                  payload.postId == postId,
-                  CommentOwnership.mayHandle(payload, ownerId: ownerId, baseIsHis: baseIsHis) else { return nil }
-            guard let owned = CommentOwnership.ownedMediaPaths(payload) else { return nil }
-            let urls = owned.map { URL(fileURLWithPath: Self.absoluteMediaPath(forStored: $0)) }
-            return UnsentComment(payload: payload,
-                                 isFailed: record.status == .exhausted || CommentOwnership.isUnattributedText(payload),
-                                 lastError: record.lastError, createdAt: record.createdAt,
-                                 localMediaURLs: urls)
-        }
+        return records ?? []
     }
 
-    /// Le commentaire de cet identifiant client, s'il est encore dans la file.
-    public func unsentComment(clientMutationId cmid: String, ownerId: String?) async -> UnsentComment? {
-        guard let pool = outboxPool else { return nil }
-        return await unsentComment(clientMutationId: cmid, ownerId: ownerId, in: pool)
-    }
-
-    /// La même lecture, dans UNE base désignée : celle dont l'appelant tient
-    /// déjà la référence, pour que la preuve et la lecture portent sur la même.
-    private func unsentComment(clientMutationId cmid: String, ownerId: String?,
-                               in pool: any DatabaseWriter) async -> UnsentComment? {
-        let outboxId = "ofqm_\(cmid)"
-        guard let record = try? await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
-              record.kind == .createComment,
-              let payload = try? decoder.decode(CreateCommentPayload.self, from: record.payload),
-              CommentOwnership.mayHandle(payload, ownerId: ownerId, baseIsHis: Self.proves(pool, belongsTo: ownerId)),
+    private static func unsent(_ record: OutboxRecord, ownerId: String) -> UnsentComment? {
+        guard let payload = try? commentDecoder().decode(CreateCommentPayload.self, from: record.payload),
+              CommentOwnership.mayHandle(payload, ownerId: ownerId, baseIsHis: true),
               let owned = CommentOwnership.ownedMediaPaths(payload) else { return nil }
         return UnsentComment(
             payload: payload,
             isFailed: record.status == .exhausted || CommentOwnership.isUnattributedText(payload),
-            lastError: record.lastError,
-            createdAt: record.createdAt,
-            localMediaURLs: owned.map { URL(fileURLWithPath: Self.absoluteMediaPath(forStored: $0)) })
+            lastError: record.lastError, createdAt: record.createdAt,
+            localMediaURLs: owned.map { URL(fileURLWithPath: absoluteMediaPath(forStored: $0)) })
     }
 
-    /// L'AUTEUR renonce à un commentaire qui n'est pas parti : la ligne et
-    /// ses fichiers. Sans effet pour tout autre compte — une ligne ne se
-    /// supprime que sous celui qui l'a écrite. Rend `true` si elle est partie.
+    /// Les commentaires d'une publication qui ne sont pas partis, du plus
+    /// ancien au plus récent : ceux que `ownerId` a écrits, et les lignes de
+    /// texte héritées de SA base. Rien sans la preuve que la base lue est la
+    /// sienne.
+    public func unsentComments(postId: String, ownerId: String?) async -> [UnsentComment] {
+        guard let context = commentContext(ownerId: ownerId) else { return [] }
+        return await commentRecords(in: context)
+            .compactMap { Self.unsent($0, ownerId: context.ownerId) }
+            .filter { $0.payload.postId == postId }
+    }
+
+    /// Le commentaire de cet identifiant client, s'il est encore dans la file.
+    public func unsentComment(clientMutationId cmid: String, ownerId: String?) async -> UnsentComment? {
+        guard let context = commentContext(ownerId: ownerId) else { return nil }
+        return await commentRecords(in: context, id: "ofqm_\(cmid)")
+            .compactMap { Self.unsent($0, ownerId: context.ownerId) }.first
+    }
+
+    // MARK: Agir sur une ligne
+
+    /// Ce qu'une transaction a retiré de la file.
+    private struct Removed: Sendable {
+        let content: String
+        let ownedPaths: [String]
+    }
+
+    /// Retire UNE ligne de la base du triplet, dans une transaction qui
+    /// prouve, lit, juge et supprime — sans point de suspension entre eux.
+    private func removeComment(clientMutationId cmid: String, in context: CommentContext,
+                               onlyIf admits: @escaping @Sendable (CreateCommentPayload) -> Bool) async -> Removed? {
+        let outboxId = "ofqm_\(cmid)"
+        await commentTransactionHook?()
+        let removed: Removed?? = try? await context.pool.write { db -> Removed? in
+            guard try context.proves(db),
+                  let record = try OutboxRecord.fetchOne(db, key: outboxId), record.kind == .createComment else { return nil }
+            let payload = try Self.commentDecoder().decode(CreateCommentPayload.self, from: record.payload)
+            guard CommentOwnership.mayHandle(payload, ownerId: context.ownerId, baseIsHis: true), admits(payload) else { return nil }
+            _ = try OutboxRecord.deleteOne(db, key: outboxId)
+            // Seuls les fichiers du dossier de l'auteur se suppriment.
+            return Removed(content: payload.content, ownedPaths: CommentOwnership.ownedMediaPaths(payload) ?? [])
+        }
+        guard let removed = removed ?? nil else { return nil }
+        Self.removePendingCommentFiles(removed.ownedPaths)
+        Self.removeEmptyParentDirectories(of: removed.ownedPaths)
+        await refreshPendingCount()
+        return removed
+    }
+
+    /// Le compte renonce à un commentaire de SA base qui n'est pas parti : la
+    /// ligne et ses fichiers. Sans effet pour tout autre compte, et sans la
+    /// preuve de base. Rend `true` si elle est partie.
     @discardableResult
     public func cancelCreateComment(clientMutationId cmid: String, ownerId: String?) async -> Bool {
-        let outboxId = "ofqm_\(cmid)"
-        guard let pool = outboxPool else { return false }
-        do {
-            guard let record = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
-                  record.kind == .createComment else { return false }
-            let payload = try decoder.decode(CreateCommentPayload.self, from: record.payload)
-            guard CommentOwnership.mayHandle(payload, ownerId: ownerId,
-                                             baseIsHis: Self.proves(pool, belongsTo: ownerId)) else { return false }
-            // Seuls les fichiers du dossier de l'auteur se suppriment.
-            let owned = CommentOwnership.ownedMediaPaths(payload) ?? []
-            removePendingCommentFiles(owned)
-            Self.removeEmptyParentDirectories(of: owned)
-            try await pool.write { db in _ = try OutboxRecord.deleteOne(db, key: outboxId) }
-        } catch {
-            logger.error("cancelCreateComment failed: \(error.localizedDescription, privacy: .private)")
-            return false
-        }
-        await refreshPendingCount()
-        return true
+        guard let context = commentContext(ownerId: ownerId) else { return false }
+        return await removeComment(clientMutationId: cmid, in: context, onlyIf: { _ in true }) != nil
+    }
+
+    /// **« Reprendre » une ligne de texte héritée** — gravée avant le champ
+    /// « auteur », donc d'origine non authentifiée.
+    ///
+    /// Une telle ligne n'est JAMAIS envoyée, et aucun code ne lui écrit un
+    /// auteur après coup. Ce geste rend son TEXTE à l'appelant, qui le remet
+    /// dans le composeur comme un brouillon, et supprime la ligne : le
+    /// commentaire repart alors par le chemin normal, avec l'auteur du
+    /// compte qui l'envoie. `nil` si la ligne n'est pas une ligne de texte
+    /// héritée de la base PROUVÉE de `ownerId`.
+    public func resumeInheritedComment(clientMutationId cmid: String, ownerId: String?) async -> String? {
+        guard let context = commentContext(ownerId: ownerId) else { return nil }
+        return await removeComment(clientMutationId: cmid, in: context,
+                                   onlyIf: { CommentOwnership.isUnattributedText($0) })?.content
     }
 
     /// L'AUTEUR relance un commentaire que la file a abandonné. Refusé pour
-    /// tout autre compte.
-    ///
-    /// **Une ligne de texte héritée sans auteur est ADOPTÉE par ce geste** :
-    /// le compte connecté, dans sa propre base, déclare vouloir l'envoyer —
-    /// elle prend `ownerId` pour auteur, puis rejoue comme toute autre, sous
-    /// le jeton de ce compte.
-    ///
-    /// L'adoption exige la PREUVE que la base lue est celle de `ownerId`, et
-    /// elle est atomique : l'auteur n'est écrit que si la ligne est encore
-    /// celle qu'on a lue (comparaison des octets dans la transaction), puis
-    /// la ligne est RELUE et doit appartenir à `ownerId` avant d'être réarmée.
-    /// `CommentPublisher` revérifie ensuite, comme pour toute ligne.
+    /// tout autre compte, sans la preuve de base, et pour toute ligne sans
+    /// auteur : la preuve, le jugement et le réarmement tiennent dans UNE
+    /// transaction de la base du triplet.
     public func retryCreateComment(clientMutationId cmid: String, ownerId: String?) async throws {
-        // La base est saisie UNE fois : preuve, lecture, écriture et relecture
-        // portent sur la même, même si la file est rebranchée entre-temps.
-        guard let pool = outboxPool,
-              let owner = CommentOwnership.identity(ownerId),
-              Self.proves(pool, belongsTo: owner) else {
+        guard let context = commentContext(ownerId: ownerId) else {
             throw CommentOwnership.Refusal.notTheAuthor
         }
         let outboxId = "ofqm_\(cmid)"
-        guard let record = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
-              record.kind == .createComment else {
-            throw CommentOwnership.Refusal.notTheAuthor
+        await commentTransactionHook?()
+        let rearmed = try await context.pool.write { db -> Bool in
+            guard try context.proves(db),
+                  let record = try OutboxRecord.fetchOne(db, key: outboxId), record.kind == .createComment else { return false }
+            let payload = try Self.commentDecoder().decode(CreateCommentPayload.self, from: record.payload)
+            guard CommentOwnership.owns(payload, currentUserId: context.ownerId),
+                  CommentOwnership.ownedMediaPaths(payload) != nil else { return false }
+            let now = Date()
+            try db.execute(sql: """
+                UPDATE outbox SET status = ?, attempts = 0, lastError = NULL, updatedAt = ?, nextAttemptAt = ?
+                WHERE id = ?
+                """, arguments: [OutboxStatus.pending.rawValue, now, now, outboxId])
+            return true
         }
-        // Les octets LUS sont ceux qu'on exigera de retrouver à l'écriture.
-        let raw = record.payload
-        let payload = try decoder.decode(CreateCommentPayload.self, from: raw)
-        guard CommentOwnership.mayHandle(payload, ownerId: owner, baseIsHis: true),
-              CommentOwnership.ownedMediaPaths(payload) != nil else {
-            throw CommentOwnership.Refusal.notTheAuthor
-        }
-        if CommentOwnership.isUnattributedText(payload) {
-            let adopted = try encoder.encode(payload.adopting(authorId: owner))
-            let written = try await pool.write { db -> Bool in
-                guard let current = try OutboxRecord.fetchOne(db, key: outboxId),
-                      current.kind == .createComment, current.payload == raw else { return false }
-                try db.execute(sql: "UPDATE outbox SET payload = ?, updatedAt = ? WHERE id = ?",
-                               arguments: [adopted, Date(), outboxId])
-                return true
-            }
-            guard written,
-                  let reread = await unsentComment(clientMutationId: cmid, ownerId: owner, in: pool),
-                  CommentOwnership.owns(reread.payload, currentUserId: owner) else {
-                throw CommentOwnership.Refusal.notTheAuthor
-            }
-        }
-        // Réarmée dans la base PROUVÉE — pas dans celle que la file tiendrait
-        // maintenant si elle venait d'être rebranchée.
-        guard outboxPool.map({ Self.databasePath(of: $0) }) == Self.databasePath(of: pool) else {
-            throw CommentOwnership.Refusal.notTheAuthor
-        }
-        try await retryItem(outboxId)
+        guard rearmed else { throw CommentOwnership.Refusal.notTheAuthor }
+        forgetOutcome(for: cmid)
+        await refreshPendingCount()
+        mutationEnqueued.send(())
     }
 
-    /// Confie à la file un commentaire de TEXTE — dans la base de son auteur,
-    /// et dans aucune autre : même garde que pour un commentaire avec pièces.
-    @discardableResult
-    public func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String {
-        guard CommentOwnership.owns(comment, currentUserId: ownerId),
-              let pool = outboxPool, Self.proves(pool, belongsTo: ownerId) else {
-            throw CommentOwnership.Refusal.notTheAuthor
-        }
-        return try await enqueue(.createComment, payload: comment, conversationId: comment.postId)
-    }
-
-    /// Le fichier d'une base — `nil` pour une base sans fichier.
-    nonisolated static func databasePath(of reader: any DatabaseReader) -> String? {
-        let path = (reader as? DatabasePool)?.path ?? (reader as? DatabaseQueue)?.path
-        guard let path, !path.isEmpty, path != ":memory:" else { return nil }
-        return path
-    }
-
-    /// La base `reader` est-elle PROUVÉE être celle de `ownerId` ?
-    nonisolated static func proves(_ reader: any DatabaseReader, belongsTo ownerId: String?) -> Bool {
-        CommentOwnership.baseBelongs(toOwner: ownerId, databasePath: databasePath(of: reader),
-                                     serverOrigin: MeeshyConfig.shared.persistedServerOrigin)
-    }
+    // MARK: Le disque
 
     /// **Un dossier de pièces sans ligne dans la file est supprimé** (audit,
     /// constat 4). Une ligne purgée à 7 jours, un envoi abouti dont le
     /// nettoyage a échoué, une copie interrompue : rien ne reste sur le disque
-    /// sans une ligne qui le rejouera. `reader` est la base du compte `ownerId`.
-    public nonisolated static func sweepOrphanCommentMedia(ownerId: String?, reader: any DatabaseReader) async {
-        // On ne balaie le dossier d'un compte que contre SA base : contre une
-        // autre, toutes ses pièces vivantes paraîtraient orphelines.
-        guard proves(reader, belongsTo: ownerId),
-              let folder = CommentOwnership.mediaDirectoryName(ownerId: ownerId) else { return }
+    /// sans une ligne qui le rejouera. On ne juge le dossier d'un compte que
+    /// contre SA base — prouvée dans la lecture même.
+    public nonisolated static func sweepOrphanCommentMedia(ownerId: String?, reader: any DatabaseWriter) async {
+        guard let owner = CommentOwnership.identity(ownerId),
+              let folder = CommentOwnership.mediaDirectoryName(ownerId: owner) else { return }
+        let context = CommentContext(ownerId: owner, serverOrigin: MeeshyConfig.shared.persistedServerOrigin, pool: reader)
         let root = absoluteMediaPath(forStored: "\(pendingMediaDirectoryName)/\(folder)")
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: root), !entries.isEmpty else { return }
-        // Fail-closed à l'envers : si la base ne se lit pas, on ne supprime RIEN.
-        guard let living = try? await reader.read({ db in
-            try String.fetchAll(db, sql: "SELECT id FROM outbox WHERE kind = ?",
-                                arguments: [OutboxKind.createComment.rawValue])
-        }) else { return }
+        // Si la base ne se lit pas ou n'est pas la sienne, on ne supprime RIEN.
+        let living: [String]?? = try? await reader.read { db -> [String]? in
+            guard try context.proves(db) else { return nil }
+            return try String.fetchAll(db, sql: "SELECT id FROM outbox WHERE kind = ?",
+                                       arguments: [OutboxKind.createComment.rawValue])
+        }
+        guard let living = living ?? nil else { return }
         let alive = Set(living)
         for entry in entries where !alive.contains("ofqm_\(entry)") {
             FileManager.default.removeItemLogging(atPath: (root as NSString).appendingPathComponent(entry),
                                                   context: "pièces de commentaire orphelines")
         }
+    }
+
+    /// Retire du disque toutes les pièces en attente d'UN compte — à sa
+    /// déconnexion, quand sa file est purgée : rien ne reste pour le suivant.
+    public nonisolated static func purgePendingCommentMedia(ownerId: String?) {
+        guard let folder = CommentOwnership.mediaDirectoryName(ownerId: ownerId) else { return }
+        let relative = "\(pendingMediaDirectoryName)/\(folder)"
+        FileManager.default.removeItemLogging(atPath: absoluteMediaPath(forStored: relative),
+                                              context: "pending comment media (déconnexion)")
     }
 
     /// Retire du disque les pièces en attente de tout compte ABSENT de
@@ -564,6 +651,13 @@ extension OfflineQueue {
         }
     }
 
+    nonisolated static func removePendingCommentFiles(_ relativePaths: [String]) {
+        for relativePath in relativePaths {
+            FileManager.default.removeItemLogging(atPath: absoluteMediaPath(forStored: relativePath),
+                                                  context: "pending comment media")
+        }
+    }
+
     nonisolated static func fileSize(atPath path: String) -> Int64 {
         ((try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? NSNumber)?.int64Value ?? 0
     }
@@ -583,37 +677,9 @@ extension OfflineQueue {
         values.isExcludedFromBackup = true
         try? url.setResourceValues(values)
     }
-
-    /// Retire du disque toutes les pièces en attente d'UN compte — à sa
-    /// déconnexion, quand sa file est purgée : rien ne reste pour le suivant.
-    public nonisolated static func purgePendingCommentMedia(ownerId: String?) {
-        guard let folder = CommentOwnership.mediaDirectoryName(ownerId: ownerId) else { return }
-        let relative = "\(pendingMediaDirectoryName)/\(folder)"
-        FileManager.default.removeItemLogging(atPath: absoluteMediaPath(forStored: relative),
-                                              context: "pending comment media (déconnexion)")
-    }
-
-    private func removePendingCommentFiles(_ relativePaths: [String]) {
-        for relativePath in relativePaths {
-            FileManager.default.removeItemLogging(atPath: Self.absoluteMediaPath(forStored: relativePath),
-                                                  context: "pending comment media")
-        }
-    }
 }
 
 extension CreateCommentPayload {
-    /// La même charge, attribuée à `authorId` — pour l'adoption manuelle
-    /// d'une ligne de texte héritée (`OfflineQueue.retryCreateComment`).
-    func adopting(authorId: String) -> CreateCommentPayload {
-        CreateCommentPayload(
-            clientMutationId: clientMutationId, postId: postId, parentCommentId: parentCommentId,
-            content: content, originalLanguage: originalLanguage, authorId: authorId,
-            location: location, effectFlags: effectFlags, quotedPostMediaId: quotedPostMediaId,
-            localMediaPaths: localMediaPaths, localMediaMimeTypes: localMediaMimeTypes,
-            uploadedMedia: uploadedMedia, mobileTranscription: mobileTranscription
-        )
-    }
-
     /// Une copie portant d'AUTRES pièces. Écrite par l'`init` complet : un
     /// champ ajouté en amont sans passer ici ferait rougir le compilateur
     /// plutôt que de se perdre à la première écriture de progression.

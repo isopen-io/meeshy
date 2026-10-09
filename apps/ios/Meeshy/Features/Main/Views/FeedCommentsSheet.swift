@@ -504,7 +504,7 @@ struct CommentsSheetView: View {
                 beginReply(to: initialReplyTarget)
             }
         }
-        .unsentComments(restore: { await restoreUnsentComments() }, discard: { discardUnsentComment($0) })
+        .unsentComments(restore: { await restoreUnsentComments() }, discard: { discardUnsentComment($0) }, draft: $composerText)
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
             // Ne relâcher QUE ce que la feuille a revendiqué : présentée
@@ -1270,6 +1270,7 @@ struct CommentsSheetView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Toutes les pièces de la zone partent ; celles encore en lecture y restent.
         let media = CommentComposerStaging.pendingMedia(in: attachments)
+        let staged = commentAttachments
         commentAttachments = CommentAttachmentIntake.stillLoading(commentAttachments)
         // Lieu partagé en attente — capturé puis effacé AVANT le guard (comme
         // `PostDetailView.submitComment`) : la chip ne doit pas ré-apparaître
@@ -1403,6 +1404,8 @@ struct CommentsSheetView: View {
                     // itself refused the row.
                     rollbackOptimisticComment(tempId: tempId, parentId: parentId)
                     FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
+                    // Ni envoyé ni confié à la file : il revient au composeur (#9743).
+                    restoreRefusedComment(text: trimmed, attachments: staged, place: place)
                 }
             }
         }

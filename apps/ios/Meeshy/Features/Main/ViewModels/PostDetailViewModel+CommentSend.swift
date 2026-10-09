@@ -25,8 +25,11 @@ extension PostDetailViewModel {
     /// while it's pending the optimistic id (`cmid`) is shown in the
     /// list — when the server response arrives, the socket
     /// `comment:added` broadcast reconciles via the normal path.
-    func sendComment(_ content: String, originalLanguage: String?, effectFlags: Int? = nil, location: SharedPlace? = nil, quoted: CommentQuotedMedia? = nil) async {
-        guard let post else { return }
+    /// Rend `false` quand le commentaire n'a PAS été confié à la file : il
+    /// n'est écrit nulle part ailleurs, et l'appelant le rend au composeur.
+    @discardableResult
+    func sendComment(_ content: String, originalLanguage: String?, effectFlags: Int? = nil, location: SharedPlace? = nil, quoted: CommentQuotedMedia? = nil) async -> Bool {
+        guard let post else { return false }
         let cmid = ClientMutationId.generate()
         let snapshot = comments
         let snapshotCount = self.post?.commentCount ?? 0
@@ -63,7 +66,7 @@ extension PostDetailViewModel {
             quotedPostMediaId: quoted?.postMediaId
         )
         do {
-            try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
+            try await offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())
             try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
 
             // R5 — roll back the optimistic comment if the outbox exhausts its
@@ -75,10 +78,12 @@ extension PostDetailViewModel {
                 self.comments = snapshot
                 self.post?.commentCount = snapshotCount
             }, toast: String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
+            return true
         } catch {
             comments = snapshot
             self.post?.commentCount = snapshotCount
             FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
+            return false
         }
     }
 
@@ -87,8 +92,9 @@ extension PostDetailViewModel {
     /// immédiat keyé cmid, survit au kill de l'app, réconciliée par l'écho
     /// socket `comment:added`. Rollback multi-champs (repliesMap, compteur du
     /// parent, commentCount, dépliage) sur refus d'enfilement ou .exhausted.
-    func sendReply(_ content: String, originalLanguage: String?, effectFlags: Int? = nil, location: SharedPlace? = nil, quoted: CommentQuotedMedia? = nil) async {
-        guard let post, let parent = replyingTo else { return }
+    @discardableResult
+    func sendReply(_ content: String, originalLanguage: String?, effectFlags: Int? = nil, location: SharedPlace? = nil, quoted: CommentQuotedMedia? = nil) async -> Bool {
+        guard let post, let parent = replyingTo else { return false }
         // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME
         // parent racine pour rester au niveau 2 ; l'auteur ciblé est notifié via
         // la @mention préremplie (cf. `PostDetailView.beginReply`).
@@ -131,7 +137,7 @@ extension PostDetailViewModel {
             quotedPostMediaId: quoted?.postMediaId
         )
         do {
-            try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
+            try await offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())
             // Une réponse vit sous une clé SÉPARÉE de son parent : persister
             // les deux, sinon un kill avant flush perd la réponse au cold start.
             try? await CacheCoordinator.shared.comments.savePreservingFreshness(repliesMap[parentId] ?? [], for: "replies-\(parentId)")
@@ -146,6 +152,7 @@ extension PostDetailViewModel {
                 }
                 self.post?.commentCount = snapshotCount
             }, toast: String(localized: "feed.comment.replyError", defaultValue: "Impossible d'envoyer la réponse", bundle: .main))
+            return true
         } catch {
             repliesMap[parentId] = snapshotReplies
             if !snapshotExpanded { expandedThreads.remove(parentId) }
@@ -154,6 +161,7 @@ extension PostDetailViewModel {
             }
             self.post?.commentCount = snapshotCount
             FeedbackToastManager.shared.showError(String(localized: "feed.comment.replyError", defaultValue: "Impossible d'envoyer la réponse", bundle: .main))
+            return false
         }
     }
 
@@ -195,8 +203,8 @@ extension PostDetailViewModel {
     /// l'OfflineQueue, un commentaire média DOIT passer en direct (l'upload du fichier
     /// exige le réseau). Optimistic-first avec le média local, puis upload TUS
     /// (`uploadContext=comment`) → `addComment(attachmentIds:)`, réconcilie/rollback.
-    func submitCommentWithMedia(_ content: String, originalLanguage: String?, effectFlags: Int?, parentId: String?, pendingMedia: [PendingCommentMedia], location: SharedPlace? = nil, quoted: CommentQuotedMedia? = nil) async {
-        guard let post else { return }
+    func submitCommentWithMedia(_ content: String, originalLanguage: String?, effectFlags: Int?, parentId: String?, pendingMedia: [PendingCommentMedia], location: SharedPlace? = nil, quoted: CommentQuotedMedia? = nil) async -> Bool {
+        guard let post else { return false }
         if parentId != nil { replyingTo = nil }
         // La ligne optimiste est keyée par le cmid envoyé au gateway : l'écho
         // `comment:added` porte ce cmid et la remplace en place (pas de doublon),
@@ -240,7 +248,7 @@ extension PostDetailViewModel {
         do {
             guard let apiComment = try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(pendingMedia)) else {
                 CommentMediaUploader.discardLocalFiles(pendingMedia)
-                return
+                return true
             }
             let server = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -268,6 +276,7 @@ extension PostDetailViewModel {
             }
             CommentMediaUploader.discardLocalFiles(pendingMedia)
             try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            return true
         } catch {
             let rollback = {
                 self.comments = snapshotComments
@@ -276,7 +285,7 @@ extension PostDetailViewModel {
             }
             // La limite du jour est un refus : la ligne part, avec sa raison.
             let cause = (error as? CommentPublisher.Interrupted)?.underlying ?? error
-            guard !DailyGestureLimitNotice.surface(cause) else { return rollback() }
+            guard !DailyGestureLimitNotice.surface(cause) else { rollback(); return false }
             // **Sinon le commentaire rejoint la file AVEC ses pièces** (#9743) :
             // il était retiré de l'écran et son média perdu. La ligne optimiste
             // reste ; l'écho `comment:added` la réconcilie au rejeu, et
@@ -284,9 +293,13 @@ extension PostDetailViewModel {
             do {
                 try await CommentMediaDelivery.entrust(payload, medias: pendingMedia,
                                                        acquired: CommentMediaDelivery.acquired(from: error))
+                return true
             } catch {
+                // Ni envoyé ni confié à la file : le commentaire n'est écrit
+                // nulle part ailleurs, l'appelant le rend au composeur.
                 rollback()
                 FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
+                return false
             }
         }
     }

@@ -127,7 +127,7 @@ extension PostDetailView {
         // La caméra, à droite de « Photos » comme dans un message (#9736).
         .commentCamera(attachments: $commentAttachments)
         // #9743 — un commentaire non envoyé auquel l'auteur renonce quitte la liste.
-        .unsentComments(restore: {}, discard: { viewModel.discardUnsentComment($0) })
+        .unsentComments(restore: {}, discard: { viewModel.discardUnsentComment($0) }, draft: $composerText)
     }
 
     // MARK: - Reply targeting
@@ -181,6 +181,7 @@ extension PostDetailView {
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let media = CommentComposerStaging.pendingMedia(in: attachments)
+        let staged = commentAttachments
         commentAttachments = CommentAttachmentIntake.stillLoading(commentAttachments)
         let place = pendingPlace
         pendingPlace = nil
@@ -199,13 +200,21 @@ extension PostDetailView {
         // #6587 — la pastille DÉCLARE la langue ; sans ce relais, le serveur la devine.
         let lang = composerLanguage
         Task {
+            let sent: Bool
             if !media.isEmpty {
-                await viewModel.submitCommentWithMedia(trimmed, originalLanguage: lang, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place, quoted: citation)
+                sent = await viewModel.submitCommentWithMedia(trimmed, originalLanguage: lang, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place, quoted: citation)
             } else if parentId != nil {
-                await viewModel.sendReply(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place, quoted: citation)
+                sent = await viewModel.sendReply(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place, quoted: citation)
             } else {
-                await viewModel.sendComment(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place, quoted: citation)
+                sent = await viewModel.sendComment(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place, quoted: citation)
             }
+            // **Rien n'a pu partir ni rejoindre la file** (#9743) : le
+            // commentaire revient dans le composeur, texte, pièces et lieu
+            // compris, pour être renvoyé d'un toucher.
+            guard !sent else { return }
+            if composerText.isEmpty { composerText = trimmed }
+            if commentAttachments.isEmpty { commentAttachments = staged }
+            if pendingPlace == nil { pendingPlace = place }
         }
     }
 

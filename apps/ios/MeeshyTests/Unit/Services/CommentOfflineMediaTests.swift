@@ -295,6 +295,12 @@ final class CommentOfflineMediaTests: XCTestCase {
         XCTAssertEqual(CommentUnsent.merging([unsent], into: merged).map(\.id), ["cmid_a", "c1"])
     }
 
+    func test_resuming_putsTheInheritedTextInTheDraft_withoutLosingWhatIsThere() {
+        XCTAssertEqual(CommentUnsent.resuming("écrit avant", into: ""), "écrit avant")
+        XCTAssertEqual(CommentUnsent.resuming("écrit avant", into: "  "), "écrit avant")
+        XCTAssertEqual(CommentUnsent.resuming("écrit avant", into: "en cours"), "en cours\nécrit avant")
+    }
+
     func test_isLocal_isFalseForAServerRow() {
         XCTAssertFalse(CommentUnsent.isLocal("66f0a1b2c3d4e5f601234567"))
     }
@@ -341,6 +347,9 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
         XCTAssertTrue(badge.contains("retryCreateComment(clientMutationId: commentId, ownerId: CommentPublisher.currentAccountId())"))
         XCTAssertTrue(badge.contains("clientMutationId: commentId, ownerId: CommentPublisher.currentAccountId())"))
         XCTAssertFalse(badge.contains("retryByClientMessageId("), "Une relance sans garde de propriétaire.")
+        XCTAssertTrue(badge.contains("resumeInheritedComment("),
+                      "Une ligne héritée ne se relance pas : son texte se REPREND dans le composeur.")
+        XCTAssertTrue(badge.contains("\"story.mine.failed.resume\""))
         let sheet = try source("Features/Main/Views/FeedCommentsSheet.swift")
         XCTAssertFalse(sheet.contains("if case .exhausted = event"),
                        "La feuille retire de l'écran un commentaire que la file abandonne : il doit rester, relançable.")
@@ -382,6 +391,59 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
         }
         XCTAssertGreaterThanOrEqual(calls, 4, "les portes de la file ne sont plus trouvées — ce témoin ne garderait rien")
         XCTAssertEqual(offenders, [], "Une ligne en attente se lit ou se relance sans le compte du jeton.")
+    }
+
+    // MARK: - Aucun enfilement de commentaire hors de `enqueueComment`
+
+    /// **L'interdiction** : l'entrée générique de la file n'écrit plus jamais
+    /// une ligne de commentaire. Elle n'exige aucune preuve de base — un
+    /// commentaire de B y tombait dans la base de A pendant une bascule.
+    func test_noFile_enqueuesACommentThroughTheGenericEntry() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let files = (FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL } ?? []).filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(files.count, 500)
+        let offenders = try files.filter { file in
+            AppSourceGuard.stripComments(try String(contentsOf: file, encoding: .utf8))
+                .components(separatedBy: .whitespacesAndNewlines).joined()
+                .contains("enqueue(.createComment")
+        }.map(\.lastPathComponent)
+        XCTAssertEqual(offenders, [], "Un commentaire s'enfile hors de `enqueueComment`, donc sans preuve de base.")
+    }
+
+    func test_thePostDetail_enqueuesItsCommentAndItsReply_throughTheProvenEntry() throws {
+        let code = try source("Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift")
+        XCTAssertEqual(code.components(separatedBy: "offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())").count - 1, 2)
+    }
+
+    func test_theFeed_enqueuesItsComment_throughTheProvenEntry() throws {
+        XCTAssertTrue(try source("Features/Main/ViewModels/FeedViewModel.swift")
+            .contains("offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())"))
+    }
+
+    func test_theNotificationReply_enqueuesItsComment_throughTheProvenEntry() throws {
+        XCTAssertTrue(try source("Features/Main/Services/NotificationActionHandler.swift")
+            .contains("replyQueue.enqueueComment(comment, ownerId: currentUserId())"))
+    }
+
+    func test_theFailedSendFallback_enqueuesThroughTheProvenEntries() throws {
+        let code = try source("Features/Main/Views/CommentComposerMedia.swift")
+        XCTAssertTrue(code.contains("OfflineQueue.shared.enqueueComment(payload, ownerId: owner)"))
+        XCTAssertTrue(code.contains("OfflineQueue.shared.enqueueCommentMedia("))
+    }
+
+    /// Refusé par la file (bascule de compte en cours), le commentaire n'est
+    /// écrit nulle part ailleurs : il revient dans le composeur.
+    func test_aRefusedComment_returnsToTheComposer_textPiecesAndPlace() throws {
+        let sheet = try source("Features/Main/Views/FeedCommentsSheet.swift")
+        XCTAssertTrue(sheet.contains("restoreRefusedComment(text: trimmed, attachments: staged, place: place)"))
+        let detail = try source("Features/Main/Views/PostDetailView+CommentComposer.swift")
+        XCTAssertTrue(detail.contains("guard !sent else { return }"))
+        XCTAssertTrue(detail.contains("composerText = trimmed"))
+        XCTAssertTrue(detail.contains("commentAttachments = staged"))
     }
 
     func test_removingAnAccount_removesItsPendingPieces() throws {

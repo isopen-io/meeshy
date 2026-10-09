@@ -347,23 +347,32 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         XCTAssertNil(CommentOwnership.ownedMediaPaths(orphan), "Des pièces sans propriétaire lisible ne se lisent pas.")
     }
 
-    // MARK: - Une ligne de texte héritée ne se perd pas à la mise à jour
+    // MARK: - Une ligne de texte héritée ne se perd pas, et ne s'envoie jamais
 
     /// Une ligne gravée AVANT le champ « auteur », telle qu'une version
-    /// antérieure l'a laissée dans la base de son compte.
+    /// antérieure l'a laissée dans la base de son compte — écrite par l'entrée
+    /// générique d'alors.
+    ///
+    /// L'identifiant client doit avoir sa forme réelle (`cmid_<uuid>`) : l'entrée
+    /// générique en frappe un autre quand il est mal formé, et la ligne ne se
+    /// retrouverait plus par celui que porte sa charge.
     private func enqueueInheritedText(_ cmid: String) async throws -> String {
         try await queue.enqueue(.createComment, payload: comment(cmid, content: "écrit avant", author: nil),
                                 conversationId: "post-1")
     }
 
-    func test_anInheritedTextRow_isShownUnsent_toTheSignedInAccount_andToNoOneElse() async throws {
-        let cmid = "cmid_inherited_1"
+    private func rowCount() throws -> Int {
+        try pool.read { db in try OutboxRecord.fetchCount(db) }
+    }
+
+    func test_anInheritedTextRow_isShownUnsent_toTheAccountWhoseBaseItIs_andToNoOneElse() async throws {
+        let cmid = ClientMutationId.generate()
         _ = try await enqueueInheritedText(cmid)
 
         let shown = await queue.unsentComments(postId: "post-1", ownerId: alice)
         XCTAssertEqual(shown.map(\.clientMutationId), [cmid], "Elle reste visible pour le compte dont la base la contient.")
-        XCTAssertEqual(shown.first?.isFailed, true, "« Non envoyée » : elle ne partira pas d'elle-même.")
-        XCTAssertEqual(shown.first?.needsAdoption, true)
+        XCTAssertEqual(shown.first?.isFailed, true, "« Non envoyée » : elle ne partira jamais.")
+        XCTAssertEqual(shown.first?.isInherited, true)
         XCTAssertEqual(shown.first?.payload.content, "écrit avant")
 
         let signedOut = await queue.unsentComments(postId: "post-1", ownerId: nil)
@@ -372,49 +381,87 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         XCTAssertTrue(blank.isEmpty)
     }
 
-    func test_aManualRetry_givesTheInheritedRow_theSignedInAccountAsAuthor() async throws {
-        let cmid = "cmid_inherited_2"
+    /// **Aucun geste ne l'envoie** : « Réessayer » la refuse, et rien n'écrit
+    /// un auteur sur la ligne.
+    func test_anInheritedRow_isNeverRearmed_andNeverGivenAnAuthor() async throws {
+        let cmid = ClientMutationId.generate()
         let outboxId = try await enqueueInheritedText(cmid)
-        XCTAssertNil(try payload(outboxId).authorId)
-
-        try await queue.retryCreateComment(clientMutationId: cmid, ownerId: alice)
-
-        let adopted = try payload(outboxId)
-        XCTAssertEqual(adopted.authorId, alice, "La relance est un acte explicite du compte connecté, dans sa propre base.")
-        XCTAssertEqual(adopted.content, "écrit avant")
-        XCTAssertTrue(CommentOwnership.owns(adopted, currentUserId: alice))
-        let after = await queue.unsentComment(clientMutationId: cmid, ownerId: alice)
-        XCTAssertEqual(after?.needsAdoption, false)
-        XCTAssertEqual(after?.isFailed, false, "Relancée, elle est en route.")
-    }
-
-    func test_aManualRetry_withoutASignedInAccount_adoptsNothing() async throws {
-        let cmid = "cmid_inherited_3"
-        let outboxId = try await enqueueInheritedText(cmid)
-        for owner in [String?.none, "", "  "] {
+        try await pool.write { db in
+            try db.execute(sql: "UPDATE outbox SET status = ?, attempts = 5 WHERE id = ?",
+                           arguments: [OutboxStatus.exhausted.rawValue, outboxId])
+        }
+        for owner in [Optional(alice), Optional(bob), String?.none, Optional("")] {
             do {
                 try await queue.retryCreateComment(clientMutationId: cmid, ownerId: owner)
-                XCTFail("Sans compte, rien ne s'attribue.")
+                XCTFail("Une ligne sans auteur ne se relance pas.")
             } catch {
                 XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
             }
         }
-        XCTAssertNil(try payload(outboxId).authorId)
+        XCTAssertNil(try payload(outboxId).authorId, "Aucun auteur n'est jamais écrit sur une ligne existante.")
+        let status = try await pool.read { db in try OutboxRecord.fetchOne(db, key: outboxId)?.status }
+        XCTAssertEqual(status, .exhausted, "Elle n'a pas été réarmée : aucune requête ne partira.")
     }
 
-    func test_onlyTextIsAdoptable_neverPiecesWithoutAnOwner() {
+    /// **« Reprendre »** rend le texte — pour le brouillon du composeur — et
+    /// supprime la ligne. L'envoi qui suit est un commentaire NEUF.
+    func test_resume_returnsTheText_andRemovesTheInheritedRow() async throws {
+        let cmid = ClientMutationId.generate()
+        _ = try await enqueueInheritedText(cmid)
+
+        let text = await queue.resumeInheritedComment(clientMutationId: cmid, ownerId: alice)
+
+        XCTAssertEqual(text, "écrit avant")
+        XCTAssertEqual(try rowCount(), 0, "La ligne héritée a quitté la file.")
+        let again = await queue.resumeInheritedComment(clientMutationId: cmid, ownerId: alice)
+        XCTAssertNil(again)
+    }
+
+    func test_theCommentSentAfterAResume_carriesTheAccountAsItsAuthor() async throws {
+        let inherited = ClientMutationId.generate()
+        _ = try await enqueueInheritedText(inherited)
+        let resumed = await queue.resumeInheritedComment(clientMutationId: inherited, ownerId: alice)
+        let text = try XCTUnwrap(resumed)
+
+        let outboxId = try await queue.enqueueComment(comment("cmid_fresh_1", content: text), ownerId: alice)
+
+        let sent = try payload(outboxId)
+        XCTAssertEqual(sent.content, "écrit avant")
+        XCTAssertEqual(sent.authorId, alice, "Le commentaire repris part par le chemin normal, avec son auteur.")
+        XCTAssertEqual(try rowCount(), 1)
+    }
+
+    func test_resume_isClosedWithoutTheProof_andForAnythingButInheritedText() async throws {
+        let inherited = ClientMutationId.generate()
+        _ = try await enqueueInheritedText(inherited)
+        for owner in [Optional(bob), String?.none, Optional("")] {   // base d'Alice, autre compte ou personne
+            let text = await queue.resumeInheritedComment(clientMutationId: inherited, ownerId: owner)
+            XCTAssertNil(text)
+        }
+        XCTAssertEqual(try rowCount(), 1, "Rien n'a été supprimé.")
+
+        let mine = "cmid_inherited_6"
+        _ = try await enqueueTwoPieces(mine)
+        let owned = await queue.resumeInheritedComment(clientMutationId: mine, ownerId: alice)
+        XCTAssertNil(owned, "Une ligne qui a un auteur se relance, elle ne se « reprend » pas.")
+        XCTAssertEqual(try rowCount(), 2)
+        await cleanup(mine)
+    }
+
+    func test_onlyTextIsInherited_neverPiecesWithoutAnOwner() {
         let text = comment("c", author: nil)
         XCTAssertTrue(CommentOwnership.isUnattributedText(text))
         XCTAssertTrue(CommentOwnership.mayHandle(text, ownerId: alice, baseIsHis: true))
         XCTAssertFalse(CommentOwnership.mayHandle(text, ownerId: nil, baseIsHis: true))
         let withPieces = text.withMedia(localMediaPaths: ["pending-media/x/0.jpg"], localMediaMimeTypes: nil, uploadedMedia: nil)
         XCTAssertFalse(CommentOwnership.isUnattributedText(withPieces))
-        XCTAssertFalse(CommentOwnership.mayHandle(withPieces, ownerId: alice, baseIsHis: true), "Des pièces sans propriétaire ne s'adoptent pas.")
+        XCTAssertFalse(CommentOwnership.mayHandle(withPieces, ownerId: alice, baseIsHis: true),
+                       "Des pièces sans propriétaire ne se montrent ni ne se reprennent : elles partent à la purge.")
         XCTAssertFalse(CommentOwnership.mayHandle(comment("c"), ownerId: bob, baseIsHis: true), "La ligne d'Alice n'est pas à Bob.")
     }
 
-    func test_anInheritedRow_canBeDiscardedByTheSignedInAccount() async throws {
-        let cmid = "cmid_inherited_4"
+    func test_anInheritedRow_canBeDiscardedByTheAccountWhoseBaseItIs() async throws {
+        let cmid = ClientMutationId.generate()
         _ = try await enqueueInheritedText(cmid)
         let refused = await queue.cancelCreateComment(clientMutationId: cmid, ownerId: nil)
         XCTAssertFalse(refused)
@@ -422,31 +469,43 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         XCTAssertTrue(removed)
     }
 
+    /// **Garde de source** : aucun code n'écrit un auteur sur une ligne déjà
+    /// persistée. La seule écriture de `authorId` hors d'une construction
+    /// neuve est la recopie à l'identique de `withMedia`.
+    func test_noCodeWritesAnAuthorOntoAPersistedRow() throws {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Persistence/OfflineQueue+CommentMedia.swift")
+        let source = try String(contentsOf: file, encoding: .utf8)
+        let code = source.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+        XCTAssertFalse(code.contains("adopting("), "Le code d'adoption est revenu.")
+        XCTAssertFalse(code.contains("needsAdoption"))
+        let writes = code.components(separatedBy: "authorId: ").dropFirst().map { String($0.prefix(8)) }
+        XCTAssertEqual(writes, ["authorId"], "Une écriture de `authorId` autre que la recopie à l'identique de `withMedia`.")
+    }
+
     // MARK: - La base d'A ouverte, le jeton de B
 
     /// **La fenêtre de bascule** : B est connecté, la file lit encore la base
     /// de A. « Un compte est connecté » ne suffit pas — il faut la PREUVE que
-    /// la base est la sienne.
-    func test_baseOfA_tokenOfB_theInheritedRowIsNeitherListed_norAdoptable_norDiscardable() async throws {
-        let cmid = "cmid_inherited_window_1"
+    /// la base est la sienne, faite sur la connexion même qui lit ou écrit.
+    func test_baseOfA_tokenOfB_theInheritedRowIsNeitherListed_norResumable_norDiscardable() async throws {
+        let cmid = ClientMutationId.generate()
         let outboxId = try await enqueueInheritedText(cmid)
 
         let listed = await queue.unsentComments(postId: "post-1", ownerId: bob)
         XCTAssertTrue(listed.isEmpty, "La ligne de la base d'Alice ne se montre pas à Bob.")
         let one = await queue.unsentComment(clientMutationId: cmid, ownerId: bob)
         XCTAssertNil(one)
-
-        do {
-            try await queue.retryCreateComment(clientMutationId: cmid, ownerId: bob)
-            XCTFail("Bob n'adopte pas une ligne de la base d'Alice.")
-        } catch {
-            XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
-        }
-        XCTAssertNil(try payload(outboxId).authorId, "Aucun auteur n'a été écrit sur la ligne.")
-
+        let resumed = await queue.resumeInheritedComment(clientMutationId: cmid, ownerId: bob)
+        XCTAssertNil(resumed, "Bob ne reprend pas le texte d'une ligne de la base d'Alice.")
         let discarded = await queue.cancelCreateComment(clientMutationId: cmid, ownerId: bob)
         XCTAssertFalse(discarded)
-        XCTAssertNotNil(try pool.read { db in try OutboxRecord.fetchOne(db, key: outboxId) })
+        let stillThere = try await pool.read { db in try OutboxRecord.fetchOne(db, key: outboxId) }
+        XCTAssertNotNil(stillThere)
+        XCTAssertNil(try payload(outboxId).authorId)
     }
 
     func test_baseOfA_tokenOfB_bobsOwnCommentIsNotWrittenIntoAlicesBase() async throws {
@@ -458,8 +517,69 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
         }
-        let rows = try await pool.read { db in try OutboxRecord.fetchCount(db) }
-        XCTAssertEqual(rows, 0)
+        XCTAssertEqual(try rowCount(), 0)
+    }
+
+    // MARK: - La file est rebranchée ENTRE la saisie et la transaction
+
+    /// La base de Bob, ouverte à côté de celle d'Alice.
+    private func openBobsBase() throws -> DatabaseQueue {
+        let key = try XCTUnwrap(MessageStoreAccountKey(userId: bob, serverOrigin: MeeshyConfig.shared.persistedServerOrigin))
+        let other = try DatabaseQueue(path: scratch.appendingPathComponent(key.databaseFileName).path)
+        try MessageDatabaseMigrations.runAll(on: other)
+        return other
+    }
+
+    /// Alice enfile ; pendant l'opération, la file est rebranchée sur la base
+    /// de Bob. L'opération n'agit que sur ce qu'elle a saisi : la ligne
+    /// d'Alice ne tombe JAMAIS dans la base de Bob.
+    func test_rebindDuringAnEnqueue_neverWritesIntoTheOtherAccountsBase() async throws {
+        let bobsBase = try openBobsBase()
+        await queue.setCommentTransactionHook { await OfflineQueue.shared.configure(pool: bobsBase) }
+
+        _ = try? await queue.enqueueComment(comment("cmid_rebind_1"), ownerId: alice)
+
+        await queue.setCommentTransactionHook(nil)
+        let inBobs = try await bobsBase.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(inBobs, 0, "Rien n'est écrit dans la base du compte arrivé.")
+        let inAlices = try rowCount()
+        XCTAssertEqual(inAlices, 1, "La ligne d'Alice est dans SA base, prouvée dans la transaction qui l'écrit.")
+        await OfflineQueue.shared.configure(pool: pool)
+    }
+
+    /// Le compte a changé (jeton de Bob) et la file tient encore la base
+    /// d'Alice au moment de la transaction : la preuve, faite sur la
+    /// connexion utilisée, refuse — rien n'est écrit, rien n'est listé.
+    func test_tokenChangedAndBaseNotYetRebound_writesNothing_listsNothing() async throws {
+        _ = try await enqueueInheritedText("cmid_rebind_2")
+        let bobsBase = try openBobsBase()
+        // Bob démarre sur SA base ; la file est ramenée sur celle d'Alice
+        // entre la saisie de son triplet et la transaction.
+        await OfflineQueue.shared.configure(pool: bobsBase)
+        let alicesBase: DatabaseQueue = pool
+        await queue.setCommentTransactionHook { await OfflineQueue.shared.configure(pool: alicesBase) }
+
+        let outboxId = try? await queue.enqueueComment(comment("cmid_rebind_3", author: bob), ownerId: bob)
+        let listed = await queue.unsentComments(postId: "post-1", ownerId: bob)
+
+        await queue.setCommentTransactionHook(nil)
+        XCTAssertNotNil(outboxId, "Bob écrit dans la base qu'il a saisie — la sienne.")
+        XCTAssertTrue(listed.allSatisfy { $0.payload.authorId == bob }, "Bob ne voit aucune ligne de la base d'Alice.")
+        XCTAssertEqual(try rowCount(), 1, "La base d'Alice n'a reçu aucune ligne de Bob.")
+        let bobsRows = try await bobsBase.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(bobsRows, 1)
+        await OfflineQueue.shared.configure(pool: pool)
+    }
+
+    /// La saisie elle-même porte sur la base d'un autre : la preuve dans la
+    /// transaction est la dernière ligne de défense.
+    func test_theInTransactionProof_refusesAContextBuiltOnAnotherAccountsBase() async throws {
+        let context = OfflineQueue.CommentContext(ownerId: bob, serverOrigin: MeeshyConfig.shared.persistedServerOrigin, pool: pool)
+        let proven = try await pool.read { db in try context.proves(db) }
+        XCTAssertFalse(proven, "La connexion ouverte est la base d'Alice : Bob n'y prouve rien.")
+        let mine = OfflineQueue.CommentContext(ownerId: alice, serverOrigin: MeeshyConfig.shared.persistedServerOrigin, pool: pool)
+        let alices = try await pool.read { db in try mine.proves(db) }
+        XCTAssertTrue(alices)
     }
 
     func test_enqueueComment_writesATextCommentOnlyIntoItsAuthorsBase() async throws {
@@ -476,8 +596,7 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
                 XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
             }
         }
-        let rows = try await pool.read { db in try OutboxRecord.fetchCount(db) }
-        XCTAssertEqual(rows, 1)
+        XCTAssertEqual(try rowCount(), 1)
     }
 
     func test_baseBelongs_needsTheAccountsOwnFile() throws {
