@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import AVFoundation
 import os
+import QuartzCore
 import MeeshySDK
 import MeeshyUI
 
@@ -56,6 +57,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// **La file UNIQUE de la session** (#9464) : configuration, lancement et
     /// arrêt, dans l'ordre. Ce qu'elle installe est publié ensuite ici.
     nonisolated let sessionQueue = ComposerCaptureSessionQueue()
+    /// L'entrée de l'autre objectif, prête avant la bascule (#9753).
+    nonisolated let preparedInputs = ComposerCameraPreparedInputs<AVCaptureDeviceInput>()
     nonisolated let liveFeed = ComposerCameraFeed()
     #if DEBUG
     /// La caméra de recette (#9351) — `nil` hors simulateur ou sans `-MeeshyCaptureFixture`.
@@ -180,7 +183,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             self.frameOutput.alwaysDiscardsLateVideoFrames = true
             self.frameOutput.setSampleBufferDelegate(self.liveFeed, queue: self.liveFeed.queue)
             if self.session.canAddOutput(self.frameOutput) { self.session.addOutput(self.frameOutput) }
-            let installe = Self.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs)
+            let installe = Self.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs,
+                                                  prepared: self.preparedInputs)
             let micro = armeLeMicro && Self.addAudioInput(to: self.session)
             self.session.commitConfiguration()
             DispatchQueue.main.async {
@@ -191,6 +195,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             }
         }
         sessionQueue.setRunning(true, session)
+        sessionQueue.perform { [weak self] in
+            self?.preparedInputs.prepare(.front) { Self.videoInput(position: .front) }
+        }
     }
 
     /// Demande le micro et branche l'entrée audio, au premier passage en mode
@@ -258,11 +265,13 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// Sur la file de la session ; `nil` ⇒ rien n'a changé.
     nonisolated private static func installVideoInput(
         in session: AVCaptureSession, position: AVCaptureDevice.Position,
-        outputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)]
+        outputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)],
+        prepared: ComposerCameraPreparedInputs<AVCaptureDeviceInput>
     ) -> InstalledCamera? {
         let ancienne = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
-        let nouvelle = videoInput(position: position)
+        let nouvelle = prepared.take(position) ?? videoInput(position: position)
         let issue = ComposerCameraInputSwap.swap(in: session, replacing: ancienne, with: nouvelle)
+        prepared.keep(after: issue, removed: ancienne, at: ancienne?.device.position)
         if let objectif = ComposerCameraInputSwap.orientedPosition(after: issue, new: position,
                                                                    old: ancienne?.device.position) {
             orient(outputs, for: objectif)
@@ -362,6 +371,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// fois l'objectif publié.
     private func performCameraSwitch(to position: AVCaptureDevice.Position,
                                      then: @escaping @MainActor @Sendable () -> Void = {}) {
+        let debut = CACurrentMediaTime()
         sessionQueue.perform { [weak self] in
             guard let self else { return }
             let couverture = self.liveFeed.holdNextFrame(timeout: ComposerCameraSwitchRule.frameWait)
@@ -372,10 +382,13 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                     MainActor.assumeIsolated { self.switchCover = couverture.image }
                 }
             }
-            let installe = Self.installVideoInput(in: self.session, position: position, outputs: self.orientedOutputs)
+            let installe = Self.installVideoInput(in: self.session, position: position, outputs: self.orientedOutputs,
+                                                  prepared: self.preparedInputs)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
+                    let duree = ComposerCameraSwitchTiming.milliseconds(from: debut, to: CACurrentMediaTime())
+                    Logger.media.info("camera switch to \(position == .front ? "front" : "back", privacy: .public): \(duree) ms")
                     self.endSwitch()
                     then()
                 }

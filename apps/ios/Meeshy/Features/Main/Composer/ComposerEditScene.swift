@@ -11,6 +11,8 @@ nonisolated enum ComposerEditPanel: Equatable, Sendable {
     case band
     /// Les proportions par presets.
     case presets
+    /// Le spectre vocal en couleur et la ligne de volume (#9754).
+    case sound
 }
 
 /// L'angle qu'un crochet de recadrage tient.
@@ -39,7 +41,7 @@ nonisolated enum ComposerEditScene {
 
     /// La rangée haute, au-dessus du sol : (X) et « Terminé ».
     static let topBand: CGFloat = 64
-    /// La rangée des outils : Filtres, Cadres, Recadrer.
+    /// La rangée des outils : Filtres, Cadres, Recadrer, Couper, Son.
     static let toolsRow: CGFloat = 64
     static let margin: CGFloat = 16
     static let gap: CGFloat = 8
@@ -52,18 +54,10 @@ nonisolated enum ComposerEditScene {
     static let bandHeight: CGFloat = ComposerLookStripRule.cellSize.height + 30
     static let presetsHeight: CGFloat = 44
 
-    /// Un seul panneau à la fois : la bande ouverte, sinon les proportions,
-    /// sinon — pour une vidéo — sa piste de découpe.
-    static func panel(isVideo: Bool, familyOpen: Bool, presetsOpen: Bool) -> ComposerEditPanel {
-        if familyOpen { return .band }
-        if presetsOpen { return .presets }
-        return isVideo ? .trim : .none
-    }
-
     static func panelHeight(_ panel: ComposerEditPanel) -> CGFloat {
         switch panel {
         case .none: return 0
-        case .trim: return trimHeight
+        case .trim, .sound: return trimHeight
         case .band: return bandHeight
         case .presets: return presetsHeight
         }

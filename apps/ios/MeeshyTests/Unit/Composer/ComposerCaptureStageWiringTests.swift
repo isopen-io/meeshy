@@ -84,19 +84,16 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
 
     // MARK: - La barre du haut (porteur 2026-10-05)
 
-    func test_theTopRow_putsTheCrossLeft_andTheFlashRight() throws {
+    /// La disposition vient de sa loi (#9753) : la croix ouvre la rangée, le
+    /// flash puis le retournement la ferment, au bord droit.
+    func test_theTopRow_putsTheCrossLeft_andTheFlashThenTheFlipRight() throws {
+        let rangee = ComposerCaptureTopRow.Input(stage: .armed)
+        XCTAssertEqual(ComposerCaptureTopRow.leading(rangee).first, .close, "la croix ouvre la rangée, à gauche")
+        XCTAssertEqual(Array(ComposerCaptureTopRow.trailing(rangee).suffix(2)), [.flash, .flip],
+                       "le retournement à DROITE du flash (porteur 2026-10-09)")
         let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
-        guard let debut = barre.range(of: "private var topControls: some View {"),
-              let fin = barre.range(of: "private var flashCluster", range: debut.upperBound..<barre.endIndex)
-        else { return XCTFail("la rangée haute a changé de forme") }
-        let rangee = String(barre[debut.upperBound..<fin.lowerBound])
-        let croix = try XCTUnwrap(rangee.range(of: "symbol: \"xmark\""))
-        let espace = try XCTUnwrap(rangee.range(of: "Spacer(minLength: 0)"))
-        let flash = try XCTUnwrap(rangee.range(of: "flashCluster"))
-        let bascule = try XCTUnwrap(rangee.range(of: "arrow.triangle.2.circlepath.camera"))
-        XCTAssertLessThan(croix.lowerBound, espace.lowerBound, "la croix ouvre la rangée, à gauche")
-        XCTAssertLessThan(bascule.lowerBound, flash.lowerBound, "le flash est le plus à droite")
-        XCTAssertLessThan(espace.lowerBound, bascule.lowerBound)
+        XCTAssertTrue(barre.contains("ForEach(ComposerCaptureTopRow.leading(row)"))
+        XCTAssertTrue(barre.contains("ForEach(trailingItems"))
     }
 
     /// **Sous le flash, UN curseur vertical : son intensité** (porteur 2026-10-07,
@@ -104,9 +101,10 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
     func test_theFlashSlider_isVertical_underTheFlash_andOnlyWhileTheFlashIsOn() throws {
         let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
         let rangee = try XCTUnwrap(barre.range(of: "topControls\n"))
-        let curseur = try XCTUnwrap(barre.range(of: "ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity)"))
+        let curseur = try XCTUnwrap(barre.range(of: "ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity"))
         XCTAssertLessThan(rangee.lowerBound, curseur.lowerBound, "sous la rangée haute, donc sous le flash")
-        XCTAssertTrue(barre.contains("ComposerFlashIntensity.showsSlider(flash: flashMode) && !editing"))
+        XCTAssertTrue(barre.contains("trailingItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode)"),
+                      "le curseur n'existe que sous un flash montré et allumé")
         XCTAssertFalse(barre.contains("Exposure"), "plus de curseur de luminosité permanent")
         let vue = try Self.code("Meeshy/Features/Main/Composer/ComposerFlashIntensitySlider.swift")
         XCTAssertTrue(vue.contains("ComposerFlashIntensity.level(atY:"), "le doigt le règle de haut en bas")
@@ -122,7 +120,10 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
 
     func test_whileRecording_onlyTheChosenThumbnailAndTheLockRemain() throws {
         let chrome = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("if session.stage != .recording {"), "la rangée haute se cache pendant la prise")
+        XCTAssertFalse(chrome.contains("if session.stage != .recording {"),
+                       "la rangée haute reste : la croix et le chrono y demeurent (#9753)")
+        let enregistre = ComposerCaptureTopRow.Input(stage: .recording)
+        XCTAssertEqual(ComposerCaptureTopRow.trailing(enregistre), [], "ni flash, ni retournement en filmant")
         let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("if ComposerCaptureGesture.offersRail(context) {"),
                       "le rail n'existe que si la table l'offre (#9576)")
@@ -156,7 +157,7 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
         let chrome = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("onDisarm: { requestDisarm() }"), "la croix demande d'abord")
         XCTAssertTrue(chrome.contains("HapticFeedback.light()\n                requestDisarm()"), "le glissé aussi")
-        XCTAssertTrue(chrome.contains("ComposerCaptureSegments.asksBeforeClosing(session.segments)"))
+        XCTAssertTrue(chrome.contains("ComposerCaptureDiscardRule.asksBeforeClosing("))
         XCTAssertTrue(chrome.contains(".alert(ComposerSceneCameraCopy.discardTitle, isPresented: $confirmsDiscard)"))
         XCTAssertTrue(chrome.contains("Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) { onDisarm() }"))
         XCTAssertTrue(chrome.contains("Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) {}"))

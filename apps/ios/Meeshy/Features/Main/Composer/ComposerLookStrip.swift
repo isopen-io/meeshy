@@ -75,23 +75,25 @@ struct ComposerLookRail: View {
     let open: ComposerLookFamily?
     /// Vertical pendant la capture ; en rangée sous la scène de retouche (#9567).
     var axis: Axis = .vertical
-    /// Les proportions sont-elles ouvertes ? `nil` ⇒ l'outil « Recadrer » n'est
-    /// pas offert : il n'existe qu'en retouche, après « Cadres ».
-    var cropOpen: Bool?
-    var onCrop: () -> Void = {}
+    /// Les outils de la retouche, après les familles (#9754) — vide pendant la
+    /// capture : ils n'existent qu'en retouche.
+    var editTools: [ComposerEditTool] = []
+    var openTool: ComposerEditTool?
+    var onTool: (ComposerEditTool) -> Void = { _ in }
     let onSelect: (ComposerLookFamily) -> Void
 
     var body: some View {
         let disposition = axis == .vertical
             ? AnyLayout(VStackLayout(spacing: MeeshySpacing.sm))
-            : AnyLayout(HStackLayout(spacing: MeeshySpacing.xl))
+            : AnyLayout(HStackLayout(spacing: editTools.isEmpty ? MeeshySpacing.xl : MeeshySpacing.md))
         disposition {
             ForEach(ComposerLookFamily.allCases, id: \.self) { famille in
                 tool(symbol: ComposerCaptureCopy.familySymbol(famille), name: ComposerCaptureCopy.familyName(famille),
                      selected: open == famille) { onSelect(famille) }
             }
-            if let cropOpen {
-                tool(symbol: "crop", name: ComposerCaptureCopy.reframe, selected: cropOpen, action: onCrop)
+            ForEach(editTools, id: \.self) { outil in
+                tool(symbol: ComposerCaptureCopy.editToolSymbol(outil), name: ComposerCaptureCopy.editToolName(outil),
+                     selected: openTool == outil) { onTool(outil) }
             }
         }
     }
@@ -111,8 +113,9 @@ struct ComposerLookRail: View {
             .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ComposerBounceButtonStyle())
         .accessibilityLabel(name)
+        .accessibilityValue(selected ? ComposerCaptureCopy.toolShown : ComposerCaptureCopy.toolHidden)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

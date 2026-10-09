@@ -412,10 +412,14 @@ struct ComposerTrimTrack: View {
             }
     }
 
+    /// **Pendant le geste, l'aperçu montre la frame EXACTE sous la poignée**
+    /// (#9754) ; sa fin relance la boucle sur la plage gardée (`settle`).
     private func move(_ poignee: ComposerTrimHandle, to temps: TimeInterval, committed: Bool) {
         let nouvelle = poignee == .start
             ? ComposerTrimRule.movedStart(temps, range: range)
             : ComposerTrimRule.movedEnd(temps, range: range, duration: duration)
         session.setTrim(nouvelle, committed: committed)
+        guard !committed else { return }
+        session.scrubTrim(to: ComposerTrimRule.scrubTime(handle: poignee, range: nouvelle))
     }
 }

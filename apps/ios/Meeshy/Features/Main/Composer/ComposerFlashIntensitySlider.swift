@@ -8,9 +8,17 @@ import MeeshyUI
 /// vers le HAUT éclaire plus. VoiceOver le règle d'un balayage — un élément
 /// AJUSTABLE, jamais une piste muette. La loi (`ComposerFlashIntensity`)
 /// convertit la position en niveau.
+///
+/// **Toute interaction le dit** (#9753) : `onInteraction(true)` quand le doigt
+/// se pose, `false` quand il se lève ou qu'un balayage VoiceOver le règle — la
+/// barre réarme alors la minuterie qui l'efface 2 s plus tard.
 struct ComposerFlashIntensitySlider: View {
     let level: Double
     let onChange: (Double) -> Void
+    var onInteraction: (Bool) -> Void = { _ in }
+
+    /// Retombe d'elle-même quand le système annule le glissé sans `onEnded`.
+    @GestureState private var touching = false
 
     private static let trackHeight: CGFloat = 132
     private static let thumb: CGFloat = 18
@@ -34,7 +42,9 @@ struct ComposerFlashIntensitySlider: View {
             case .decrement: onChange(ComposerFlashIntensity.stepped(level, up: false))
             @unknown default: break
             }
+            onInteraction(false)
         }
+        .adaptiveOnChange(of: touching) { _, tenu in onInteraction(tenu) }
     }
 
     private var track: some View {
@@ -59,6 +69,7 @@ struct ComposerFlashIntensitySlider: View {
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
+                .updating($touching) { _, tenu, _ in tenu = true }
                 .onChanged { valeur in
                     onChange(ComposerFlashIntensity.level(atY: valeur.location.y, height: Self.trackHeight))
                 }

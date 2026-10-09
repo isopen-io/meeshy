@@ -32,11 +32,18 @@ protocol ComposerLoopPlayerProviding: ComposerFrameSourcing {
     nonisolated var duration: TimeInterval { get }
     /// La taille de la vidéo DEBOUT, connue avant sa première trame.
     nonisolated var uprightSize: CGSize { get }
+    /// La vidéo porte une piste de son (#9754).
+    nonisolated var hasAudio: Bool { get }
     @MainActor func configure(fps: Int, declaredSpace: CGColorSpace?)
     @MainActor func play()
     @MainActor func stop()
     @MainActor func setRange(_ range: ClosedRange<TimeInterval>)
     @MainActor func seek(to time: TimeInterval)
+    /// La boucle se suspend et l'aperçu montre l'image EXACTE de cet instant ;
+    /// `setRange` relance la boucle (#9754).
+    @MainActor func scrub(to time: TimeInterval)
+    /// Le gain qu'on entend, de 0 (muet) à 1 (#9754).
+    @MainActor func setVolume(_ gain: Float)
     @MainActor var currentTime: TimeInterval { get }
 }
 
@@ -47,6 +54,7 @@ protocol ComposerLoopPlayerProviding: ComposerFrameSourcing {
 nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProviding, @unchecked Sendable {
     let duration: TimeInterval
     let uprightSize: CGSize
+    let hasAudio: Bool
     var declaredSpace: CGColorSpace? {
         lock.lock()
         defer { lock.unlock() }
@@ -65,6 +73,9 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     private var latest: CVPixelBuffer?
     private var space: CGColorSpace?
     private var handlers: [ObjectIdentifier: @Sendable (TimeInterval) -> Void] = [:]
+    /// La règle bouge : une seule recherche vole à la fois (#9754).
+    private var chase = ComposerSeekChase()
+    private var scrubbing = false
 
     private static let attributes: [String: any Sendable] = [
         kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
@@ -75,12 +86,13 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     nonisolated deinit {}
 
     private init(asset: AVURLAsset, whole: CMTimeRange, uprightSize: CGSize,
-                 orientation: CGImagePropertyOrientation) {
+                 orientation: CGImagePropertyOrientation, hasAudio: Bool) {
         self.asset = asset
         self.whole = whole
         self.duration = whole.duration.seconds
         self.uprightSize = uprightSize
         self.orientation = orientation
+        self.hasAudio = hasAudio
         super.init()
     }
 
@@ -94,10 +106,11 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
               let transformation = try? await piste.load(.preferredTransform),
               let duree = try? await asset.load(.duration),
               duree.isNumeric, duree.seconds > 0 else { return nil }
+        let son = (try? await asset.loadTracks(withMediaType: .audio))?.isEmpty == false
         return ComposerLoopPlayer(
             asset: asset, whole: CMTimeRange(start: .zero, duration: duree),
             uprightSize: MeeshyVideoWatermarkBaker.orientedSize(natural: naturelle, transform: transformation),
-            orientation: ComposerVideoOrientation.orientation(of: transformation))
+            orientation: ComposerVideoOrientation.orientation(of: transformation), hasAudio: son)
     }
 
     func latestImage() -> CIImage? {
@@ -157,6 +170,8 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     /// la veille du système reste celle d'un écran qu'on touche.
     @MainActor
     func setRange(_ range: ClosedRange<TimeInterval>) {
+        scrubbing = false
+        chase.reset()
         looper?.disableLooping()
         player.removeAllItems()
         player.preventsDisplaySleepDuringVideoPlayback = false
@@ -177,6 +192,53 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     @MainActor
     func seek(to time: TimeInterval) {
         player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    /// **La frame exacte sous la règle** (#9754) : la boucle cède la place à un
+    /// élément du clip ENTIER, en pause — la poignée peut sortir de la plage
+    /// que la boucle jouait —, et chaque instant se cherche sans tolérance, une
+    /// recherche à la fois (`ComposerSeekChase`).
+    @MainActor
+    func scrub(to time: TimeInterval) {
+        if !scrubbing { beginScrub() }
+        guard let cible = chase.request(time) else { return }
+        seekExactly(cible)
+    }
+
+    @MainActor
+    func setVolume(_ gain: Float) {
+        player.volume = max(0, min(1, gain))
+    }
+
+    @MainActor
+    private func beginScrub() {
+        scrubbing = true
+        chase.reset()
+        looper?.disableLooping()
+        looper = nil
+        player.pause()
+        player.removeAllItems()
+        let element = AVPlayerItem(asset: asset)
+        let sortie = AVPlayerItemVideoOutput(pixelBufferAttributes: Self.attributes)
+        element.add(sortie)
+        outputs = [ObjectIdentifier(element): sortie]
+        player.insert(element, after: nil)
+    }
+
+    @MainActor
+    private func seekExactly(_ time: TimeInterval) {
+        player.seek(to: CMTime(seconds: time, preferredTimescale: 600),
+                    toleranceBefore: ComposerSeekChase.tolerance,
+                    toleranceAfter: ComposerSeekChase.tolerance) { [weak self] _ in
+            guard let lecteur = self else { return }
+            Task { @MainActor in lecteur.seekEnded() }
+        }
+    }
+
+    @MainActor
+    private func seekEnded() {
+        guard scrubbing, let suivante = chase.completed() else { return }
+        seekExactly(suivante)
     }
 
     @MainActor
