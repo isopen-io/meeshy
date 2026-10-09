@@ -968,7 +968,12 @@ public final class StoryCanvasUIView: UIView {
         // « quand je reviens à une story arrière avec vidéo de fond puis
         // repars à la story suivante, j'ai les deux médias qui jouent en
         // même temps ».
-        if mode == .play {
+        //
+        // **Un canvas né EN PAUSE ne réclame rien** (#9827) : la page voisine
+        // du lecteur de réels naît en `.play` puis en pause, et coupait le
+        // mixer du réel affiché sans jamais jouer. Il réclame en REPRENANT.
+        let claimsPlaybackAtBirth = mode == .play && !startsPaused
+        if claimsPlaybackAtBirth {
             registerAsActiveAndPreemptOthers()
         }
         observeAudioSessionEvents()
@@ -1007,8 +1012,11 @@ public final class StoryCanvasUIView: UIView {
             // jouent dans les autres slide ». Le `willStartPlaying(external:)`
             // itère tous les externals enregistrés et les stop sauf
             // celui passé en argument.
-            PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
+            if claimsPlaybackAtBirth {
+                PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
+            }
             startPlayback()
+            if startsPaused { setStoryPlaybackPaused(true) }
         }
     }
 
