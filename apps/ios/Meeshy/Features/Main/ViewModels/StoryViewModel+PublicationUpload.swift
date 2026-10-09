@@ -107,12 +107,7 @@ extension StoryViewModel {
               let token = api.authToken else {
             throw URLError(.userAuthenticationRequired)
         }
-        #if DEBUG
-        // La vitrine (#9820) : le VRAI téléverseur, servi par le serveur TUS de la vitrine — aucune requête ne part.
-        let uploader = TusUploadManager(baseURL: baseURL, urlSession: VitrineReel.sessionDeTeleversement ?? .shared)
-        #else
         let uploader = TusUploadManager(baseURL: baseURL)
-        #endif
         let slideCount = upload.slides.count
         let slideShare = 1.0 / Double(max(1, slideCount))
         // On retry, skip slides whose Posts already exist server-side. Without
@@ -388,10 +383,6 @@ extension StoryViewModel {
             // règle que le canal document (`PublishIntent.document`).
             let legendes = (updatedEffects.mediaObjects ?? []).map { serverMediaCaption[$0.postMediaId] }
                 + [uploadResult?.id].compactMap { $0 }.map { serverMediaCaption[$0] }
-            #if DEBUG
-            // La vitrine (#9820) : sa passerelle crée le post quand elle est installée, le service réel sinon.
-            let postService = VitrineReel.passerelle(devant: self.postService)
-            #endif
             let post = try await postService.createCanvasPost(
                 type: upload.targetType,
                 content: ReelPublishedContent.content(type: upload.targetType, text: slide.content,

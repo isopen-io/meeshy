@@ -8,7 +8,8 @@ import Foundation
 /// Le serveur ne garde AUCUN état : ce que la fin doit rendre (nom, type, taille) voyage dans l'adresse que la création
 /// remet. Une reprise d'une prise précédente (point de reprise du téléverseur) se termine donc comme un envoi neuf.
 nonisolated enum VitrineTus {
-    /// Là où vivent les fichiers téléversés en vitrine : une URL RELATIVE, la clé que lisent les vues face à l'hôte mort.
+    /// Là où vivent les fichiers téléversés en vitrine : une URL RELATIVE, la clé sous laquelle le téléverseur range le
+    /// fichier envoyé dans le cache média.
     static let racine = "/api/v1/attachments/file/vitrine/televerses"
 
     struct Reponse: Sendable, Equatable {

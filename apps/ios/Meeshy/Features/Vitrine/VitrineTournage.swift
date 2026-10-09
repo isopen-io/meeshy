@@ -28,11 +28,20 @@ enum VitrineTournage {
         return .donne
     }
 
-    /// Un clap ou une borne d'une prise précédente ferait partir ou finir la suivante trop tôt.
+    static let prefixeDEtape = "etape-"
+
+    /// Un clap, une borne ou une étape d'une prise précédente ferait partir, finir ou dater la suivante trop tôt.
     static func effacerLesMarqueurs(dans dossier: URL = VitrineLaunch.dossier) {
-        for nom in [VitrineLaunch.marqueurGo, VitrineLaunch.marqueurCelebrationDebut, VitrineLaunch.marqueurCelebrationFin].map(\.lastPathComponent) {
+        let etapes = ((try? FileManager.default.contentsOfDirectory(atPath: dossier.path)) ?? []).filter { $0.hasPrefix(prefixeDEtape) }
+        for nom in [VitrineLaunch.marqueurGo, VitrineLaunch.marqueurCelebrationDebut, VitrineLaunch.marqueurCelebrationFin].map(\.lastPathComponent) + etapes {
             try? FileManager.default.removeItem(at: dossier.appendingPathComponent(nom))
         }
+    }
+
+    /// Une étape de l'action, datée par un fichier (`etape-<nom>.txt`) : le script y ancre les fenêtres de mouvement dont
+    /// l'instant dépend du rendu d'un écran — le choix d'un émoji après que le menu s'est montré, par exemple.
+    static func etape(_ nom: String, dans dossier: URL = VitrineLaunch.dossier) {
+        marquer(dossier.appendingPathComponent("\(prefixeDEtape)\(nom).txt"), contenu: nom)
     }
 
     /// Après « prêt » : le clap, « début », l'action, puis « fin » une fois l'action rendue.
@@ -44,8 +53,12 @@ enum VitrineTournage {
     }
 
     private static func marquer(_ marqueur: URL, _ scene: VitrineScene) {
+        marquer(marqueur, contenu: scene.rawValue)
+    }
+
+    private static func marquer(_ marqueur: URL, contenu: String) {
         try? FileManager.default.createDirectory(at: marqueur.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? Data(scene.rawValue.utf8).write(to: marqueur)
+        try? Data(contenu.utf8).write(to: marqueur)
     }
 }
 #endif

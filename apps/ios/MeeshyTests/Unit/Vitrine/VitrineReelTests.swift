@@ -4,8 +4,9 @@ import MeeshySDK
 @testable import Meeshy
 
 /// Un réel publié depuis le composeur (#9820) : la vraie vidéo du kit entre dans le composeur, part par le chemin réel de
-/// publication — seuls le téléversement (`VitrineTus`, derrière le VRAI `TusUploadManager`) et la création du post
-/// (`VitrinePasserelleDesPosts`) sont fictifs —, puis arrive dans le fil par `post:created`.
+/// publication d'un réel — le canal DOCUMENT, la file durable et `OutboxDispatcher.dispatchCreatePost` (#4869) —, où
+/// seuls le téléversement (`VitrineTus`, derrière le VRAI `TusUploadManager`) et `POST /posts` (`VitrineReel.creer`)
+/// sont fictifs, puis arrive dans le fil par `post:created`.
 @MainActor
 final class VitrineReelTests: XCTestCase {
     private var echantillon: URL {
@@ -39,14 +40,6 @@ final class VitrineReelTests: XCTestCase {
         "filename \(Data(nom.utf8).base64EncodedString()),filetype \(Data(type.utf8).base64EncodedString()),uploadcontext \(Data("story".utf8).base64EncodedString())"
     }
 
-    private func effetsAvecVideo(postMediaId: String, adresse: String) -> StoryEffects {
-        var effets = StoryEffects()
-        effets.mediaObjects = [
-            StoryMediaObject(postMediaId: postMediaId, mediaURL: adresse, mediaType: "video", aspectRatio: 9.0 / 16.0, isBackground: true),
-        ]
-        return effets
-    }
-
     // MARK: - La scène
 
     func test_interactionReel_parses_andWaitsForTheFeedAndTheComposer() {
@@ -74,29 +67,37 @@ final class VitrineReelTests: XCTestCase {
         XCTAssertFalse(VitrineInteractions.choixDuReel.alsoAsReel)
     }
 
-    func test_rendu_relaysTheFeedAndThePublishArrow_andHandsTheVideoOnce() {
+    /// Le geste de l'auteur se joue en DEUX temps, comme au doigt : « Réel » armé au chevron, puis « Publier ». Armer et
+    /// publier dans le même tour laissait la flèche presser un composeur qui ne s'était pas encore relu en réel
+    /// (prise du 2026-10-09 : « Erreur lors de la publication », ou une publication jamais arrivée).
+    func test_rendu_relaysTheFeed_theArmingAndThePublishArrow_separately_andHandsTheVideoOnce() {
         let rendu = VitrineRendu(actif: true)
         var filMontre = false
+        var arme: ComposerPublishChoice?
         var publie: ComposerPublishChoice?
         rendu.racineAffichee { filMontre = true }
         rendu.mediaDuComposeur = VitrineMediaDOuverture(url: URL(fileURLWithPath: "/v.mp4"), mimeType: "video/mp4")
 
         let media = rendu.composeurAffiche {}
-        rendu.composeurPretAPublier { publie = $0 }
+        rendu.composeurPretAPublier(armer: { arme = $0 }, publier: { publie = $0 })
         rendu.montrerLeFil?()
-        rendu.publierDepuisLeComposeur?(VitrineInteractions.choixDuReel)
+        rendu.armerDepuisLeComposeur?(VitrineInteractions.choixDuReel)
 
+        XCTAssertEqual(arme, VitrineInteractions.choixDuReel)
+        XCTAssertNil(publie, "armer ne publie pas")
+        rendu.publierDepuisLeComposeur?(VitrineInteractions.choixDuReel)
+        XCTAssertEqual(publie, VitrineInteractions.choixDuReel)
         XCTAssertEqual(media?.mimeType, "video/mp4")
         XCTAssertNil(rendu.composeurAffiche {}, "le média d'ouverture n'entre qu'une fois")
         XCTAssertTrue(filMontre)
-        XCTAssertEqual(publie, VitrineInteractions.choixDuReel)
     }
 
     func test_rendu_inactive_lendsNothing() {
         let rendu = VitrineRendu(actif: false)
         rendu.racineAffichee {}
-        rendu.composeurPretAPublier { _ in }
+        rendu.composeurPretAPublier(armer: { _ in }, publier: { _ in })
         XCTAssertNil(rendu.montrerLeFil)
+        XCTAssertNil(rendu.armerDepuisLeComposeur)
         XCTAssertNil(rendu.publierDepuisLeComposeur)
     }
 
@@ -151,74 +152,124 @@ final class VitrineReelTests: XCTestCase {
         XCTAssertEqual(resultat.mimeType, "video/mp4")
         XCTAssertEqual(resultat.fileSize, 36)
         XCTAssertTrue(resultat.fileUrl.hasPrefix(VitrineTus.racine + "/"))
+        XCTAssertNotNil(CacheCoordinator.videoLocalFileURL(for: resultat.fileUrl), "le téléverseur range le fichier envoyé sous fileUrl")
     }
 
-    // MARK: - La passerelle des posts
+    // MARK: - La création du post
 
-    func test_passerelle_withoutTheVitrine_forwardsToTheRealService() async throws {
-        VitrineReel.retirer()
-        let service = MockPostService()
-
-        _ = try await VitrineReel.passerelle(devant: service).createCanvasPost(
-            type: .reel, content: nil, storyEffects: nil, visibility: "PUBLIC", visibilityUserIds: nil, originalLanguage: "fr",
-            mediaIds: nil, repostOfId: nil, mentions: nil, allowSoundExtraction: nil, mediaAlt: nil, mediaCaption: nil, alsoAsReel: nil
+    private func corps(type: String? = "REEL", mediaIds: [String]? = ["m1"]) -> CreatePostBody {
+        CreatePostBody(
+            content: "Coucher de soleil", mediaIds: mediaIds, visibility: "PUBLIC", originalLanguage: "fr", type: type,
+            moodEmoji: nil, audioUrl: nil, audioDuration: nil, visibilityUserIds: nil, location: nil, mentions: nil,
+            discoverabilityPrecision: nil, repostOfId: nil, mobileTranscription: nil, storyEffects: nil,
+            mediaCaption: nil, mediaAlt: nil, allowSoundExtraction: nil
         )
-
-        XCTAssertEqual(service.lastCreateCanvasPostType, .reel)
     }
 
-    /// Installée, la passerelle crée le réel du lecteur, avec sa vidéo, et le pousse au fil comme la vraie (`post:created`).
-    func test_passerelle_installed_createsTheReaderReel_andAnnouncesIt() async throws {
+    private var video: VitrineTeleverse {
+        VitrineTeleverse(id: "m1", url: "\(VitrineTus.racine)/m1.mp4", mimeType: "video/mp4")
+    }
+
+    /// Sans la vitrine, `POST /posts` part : la file durable garde sa lettre.
+    func test_creer_withoutTheVitrine_servesNothing() async throws {
+        VitrineReel.retirer()
+
+        let servi = try await VitrineReel.creerSiInstallee(corps(), televerses: [video])
+
+        XCTAssertNil(servi)
+    }
+
+    /// Installée, la vitrine crée le réel du lecteur avec sa vidéo téléversée, et le pousse au fil comme la vraie passerelle
+    /// (`post:created`) — aucune requête ne part.
+    func test_creer_installed_createsTheReaderReel_andAnnouncesIt() async throws {
         let f = try fixtures()
-        let service = MockPostService()
+        VitrineReel.installer(lecteur: f.lecteur, montee: .zero)
+        addTeardownBlock { await MainActor.run { VitrineReel.retirer() } }
         var annonces: [SocketPostCreatedData] = []
         let abonnement = SocialSocketManager.shared.postCreated.sink { annonces.append($0) }
         defer { abonnement.cancel() }
-        let passerelle = VitrinePasserelleDesPosts(service: service, lecteur: f.lecteur, montee: .zero)
 
-        let post = try await passerelle.createCanvasPost(
-            type: .reel, content: nil, storyEffects: effetsAvecVideo(postMediaId: "m1", adresse: "\(VitrineTus.racine)/m1.mp4"),
-            visibility: "PUBLIC", visibilityUserIds: nil, originalLanguage: "fr", mediaIds: ["m1"], repostOfId: nil,
-            mentions: nil, allowSoundExtraction: nil, mediaAlt: nil, mediaCaption: nil, alsoAsReel: nil
-        )
+        let servi = try await VitrineReel.creerSiInstallee(corps(), televerses: [video])
+        let post = try XCTUnwrap(servi)
 
-        XCTAssertNil(service.lastCreateCanvasPostType, "aucune requête ne part")
         XCTAssertEqual(post.type, "REEL")
         XCTAssertEqual(post.author.id, f.lecteur.id)
+        XCTAssertEqual(post.content, "Coucher de soleil")
         XCTAssertEqual(post.media?.first?.mimeType, "video/mp4")
-        XCTAssertEqual(post.media?.first?.fileUrl, "\(VitrineTus.racine)/m1.mp4")
+        XCTAssertEqual(post.media?.first?.fileUrl, "\(VitrineTus.racine)/m1.mp4", "rien en cache : l'adresse téléversée")
         XCTAssertEqual(annonces.map(\.post.id), [post.id])
     }
 
-    func test_postServi_keepsOnlyTheMediaThePublicationAttaches() {
-        var effets = effetsAvecVideo(postMediaId: "m1", adresse: "/a/m1.mp4")
-        effets.mediaObjects?.append(StoryMediaObject(postMediaId: "", mediaURL: "/local.jpg", mediaType: "image", aspectRatio: 1))
-        effets.mediaObjects?.append(StoryMediaObject(postMediaId: "m2", mediaURL: "/a/m2.jpg", mediaType: "image", aspectRatio: 1))
+    /// Face à l'hôte mort, une adresse relative ne se résout pas (`resolveMediaURL` refuse 127.0.0.1) : la vidéo du réel
+    /// se cherchait sur la passerelle et la carte du fil restait un aplat de couleur (prise du 2026-10-09). La vitrine
+    /// sert donc la COPIE que le téléverseur a rangée dans le cache, comme le lecteur la jouerait sur un cache chaud.
+    func test_creer_servesTheUploadedCopy_fromTheMediaCache() async throws {
+        let f = try fixtures()
+        VitrineReel.installer(lecteur: f.lecteur, montee: .zero)
+        addTeardownBlock { await MainActor.run { VitrineReel.retirer() } }
+        let cle = "\(VitrineTus.racine)/copie-\(UUID().uuidString).mp4"
+        let fichier = FileManager.default.temporaryDirectory.appendingPathComponent("vitrine-copie-\(UUID().uuidString).mp4")
+        try Data("video".utf8).write(to: fichier)
+        addTeardownBlock { try? FileManager.default.removeItem(at: fichier) }
+        await CacheCoordinator.shared.video.seed(copyingLocalFile: fichier, for: cle)
+        let piece = VitrineTeleverse(id: "m1", url: cle, mimeType: "video/mp4")
 
-        let medias = VitrinePostServi.medias(effets, retenus: ["m1"])
+        let servi = try await VitrineReel.creerSiInstallee(corps(), televerses: [piece])
+        let post = try XCTUnwrap(servi)
 
-        XCTAssertEqual(medias.compactMap { $0["id"] as? String }, ["m1"])
+        let adresse = try XCTUnwrap(post.media?.first?.fileUrl)
+        XCTAssertEqual(adresse, CacheCoordinator.videoLocalFileURL(for: cle)?.absoluteString)
+        XCTAssertTrue(adresse.hasPrefix("file://"))
+    }
+
+    /// La scène nomme ses médias par `postMediaId` et par `mediaURL` : l'adresse de la scène suit celle de la pièce servie.
+    func test_adressesDeLaScene_followTheServedPiece() throws {
+        let effets: [String: Any] = ["v": 3, "scenes": [["objects": [
+            ["kind": "media", "payload": ["postMediaId": "m1", "mediaURL": "/api/v1/x.mp4"]],
+            ["kind": "media", "payload": ["postMediaId": "m9", "mediaURL": "/api/v1/y.mp4"]],
+        ]]]]
+        let piece = VitrineTeleverse(id: "m1", url: "file:///cache/m1.mp4", mimeType: "video/mp4")
+
+        let servis = try XCTUnwrap(VitrinePostServi.adressesDeLaScene(effets, televerses: [piece]) as? [String: Any])
+
+        let objets = try XCTUnwrap(((servis["scenes"] as? [[String: Any]])?.first?["objects"]) as? [[String: Any]])
+        XCTAssertEqual((objets[0]["payload"] as? [String: Any])?["mediaURL"] as? String, "file:///cache/m1.mp4")
+        XCTAssertEqual((objets[1]["payload"] as? [String: Any])?["mediaURL"] as? String, "/api/v1/y.mp4")
+    }
+
+    /// Les médias du post sont ceux que la publication RATTACHE (`mediaIds`), dans son ordre.
+    func test_postServi_keepsTheAttachedMedia_inTheirOrder() throws {
+        let f = try fixtures()
+        let image = VitrineTeleverse(id: "m2", url: "\(VitrineTus.racine)/m2.jpg", mimeType: "image/jpeg")
+        let autre = VitrineTeleverse(id: "m3", url: "\(VitrineTus.racine)/m3.jpg", mimeType: "image/jpeg")
+
+        let post = try VitrinePostServi.post(corps(mediaIds: ["m2", "m1"]), auteur: f.lecteur, televerses: [video, image, autre])
+
+        XCTAssertEqual(post.media?.map(\.id), ["m2", "m1"])
+        XCTAssertEqual(post.media?.map(\.mimeType), ["image/jpeg", "video/mp4"])
     }
 
     // MARK: - Les crochets du chemin réel
 
-    /// Le chemin publié en Release ne change pas : les deux bouches sont surchargées dans des blocs DEBUG, l'appel de
-    /// production garde sa lettre.
-    func test_runStoryUpload_isOverriddenOnlyInsideDebug() throws {
-        let upload = try source("apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift")
-        XCTAssertTrue(upload.contains("let uploader = TusUploadManager(baseURL: baseURL, urlSession: VitrineReel.sessionDeTeleversement ?? .shared)"))
-        XCTAssertTrue(upload.contains("#else\n        let uploader = TusUploadManager(baseURL: baseURL)\n        #endif"))
-        XCTAssertTrue(upload.contains("let postService = VitrineReel.passerelle(devant: self.postService)"))
-        XCTAssertTrue(upload.contains("let post = try await postService.createCanvasPost("))
+    /// Le chemin publié en Release ne change pas : le téléverseur et `POST /posts` de la file durable ne sont surchargés
+    /// que dans des blocs DEBUG, l'appel de production garde sa lettre.
+    func test_dispatchCreatePost_isOverriddenOnlyInsideDebug() throws {
+        let envoi = try source("apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher+Publications.swift")
+        XCTAssertTrue(envoi.contains("let sessionDeLaVitrine = await VitrineReel.sessionDeTeleversement"))
+        XCTAssertTrue(envoi.contains("let uploader = TusUploadManager(baseURL: baseURL, urlSession: sessionDeLaVitrine ?? .shared)"))
+        XCTAssertTrue(envoi.contains("#else\n            let uploader = TusUploadManager(baseURL: baseURL)\n            #endif"))
+        XCTAssertTrue(envoi.contains("try await VitrineReel.creerSiInstallee(body, televerses:"))
+        XCTAssertTrue(envoi.contains("let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders("))
+        let story = try source("apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+PublicationUpload.swift")
+        XCTAssertFalse(story.contains("Vitrine"), "le réel ne passe pas par le canal de la scène : aucun crochet n'y vit")
     }
 
     /// La flèche publie comme l'auteur : le choix armé au chevron (`chooseArmedPublish`), puis « Publier »
     /// (`requestSoclePublish`) ; le fil se révèle comme par l'accès rapide.
     func test_reel_publishesThroughTheComposerArrow_andTheFeedRevealsLikeTheQuickAccess() throws {
         let pickers = try source("apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift")
-        XCTAssertTrue(pickers.contains("VitrineRendu.shared.composeurPretAPublier { choix in"))
-        XCTAssertTrue(pickers.contains("chooseArmedPublish(choix)"))
-        XCTAssertTrue(pickers.contains("requestSoclePublish(choix)"))
+        XCTAssertTrue(pickers.contains("armer: { chooseArmedPublish($0) }"))
+        XCTAssertTrue(pickers.contains("publier: { requestSoclePublish($0) }"))
         XCTAssertTrue(pickers.contains("declaredMimeType: media.mimeType"))
         let racine = try source("apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift")
         XCTAssertTrue(racine.contains("VitrineRendu.shared.racineAffichee {"))

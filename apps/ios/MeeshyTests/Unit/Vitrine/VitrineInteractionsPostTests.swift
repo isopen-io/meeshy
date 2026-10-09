@@ -91,7 +91,7 @@ final class VitrineInteractionsPostTests: XCTestCase {
         XCTAssertEqual(vocal.fichier, URL(fileURLWithPath: "/medias/commentaire-\(lecteur)-fr.m4a"))
         XCTAssertEqual(vocal.duree, 9, accuracy: 0.01)
         XCTAssertEqual(vocal.transcription?.language, "fr")
-        XCTAssertTrue(vocal.transcription?.text.contains("soleil") ?? false, "il répond au coucher de soleil du post")
+        XCTAssertTrue(vocal.transcription?.text?.contains("soleil") ?? false, "il répond au coucher de soleil du post")
         XCTAssertNotNil(vocal.traductions?["ja"], "traduit dans la langue d'Aiko, l'autrice du post")
         XCTAssertNil(vocal.traductions?["fr"])
     }

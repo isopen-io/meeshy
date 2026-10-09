@@ -40,10 +40,12 @@ extension VitrineInteractions {
         }
         ouvrir()
         await VitrineRendu.shared.attendre([.feuilleDeStickers])
+        VitrineTournage.etape("feuille")
         try? await Task.sleep(for: tenueDeLaFeuille)
         guard let choisir = VitrineRendu.shared.choisirUnSticker else {
             fatalError("Vitrine « \(scene.rawValue) » : la feuille des stickers n'a pas prêté son choix")
         }
+        VitrineTournage.etape("choix")
         choisir(sticker)
         try? await Task.sleep(for: tenueDuSticker)
     }

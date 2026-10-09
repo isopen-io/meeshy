@@ -161,12 +161,14 @@ final class VitrineRendu {
         return media
     }
 
-    /// La flèche du socle, armée sur un choix puis pressée (#9820) : le geste de l'auteur qui choisit « Réel » au chevron
-    /// puis touche « Publier ».
+    /// Le chevron du socle (#9820) : l'auteur y arme « Réel ».
+    private(set) var armerDepuisLeComposeur: ((ComposerPublishChoice) -> Void)?
+    /// La flèche du socle, pressée une fois le choix armé et relu : « Publier ».
     private(set) var publierDepuisLeComposeur: ((ComposerPublishChoice) -> Void)?
 
-    func composeurPretAPublier(_ publier: @escaping (ComposerPublishChoice) -> Void) {
+    func composeurPretAPublier(armer: @escaping (ComposerPublishChoice) -> Void, publier: @escaping (ComposerPublishChoice) -> Void) {
         guard actif else { return }
+        armerDepuisLeComposeur = armer
         publierDepuisLeComposeur = publier
     }
 

@@ -66,6 +66,12 @@ final class VitrineJeuTests: XCTestCase {
         XCTAssertNil(VitrineCelebration.frappe.section)
     }
 
+    /// L'étagère des badges vit dans « À toi de jouer », sous trois sections : ouverte en haut, la médaille se rallumait
+    /// hors de l'écran (prise du 2026-10-09, aucune image ne bougeait). La fiche s'ouvre donc sur elle, comme le coffre.
+    func test_celebration_theBadgeOpensItsFicheOnTheShelf() {
+        XCTAssertEqual(VitrineCelebration.badge.section, .act)
+    }
+
     /// La durée annoncée au script est celle de la chorégraphie, jamais une valeur recopiée.
     func test_celebration_lastsItsChoreography() {
         XCTAssertEqual(VitrineCelebration.rang.duree, GameTimeline.rankDuration)
@@ -88,6 +94,41 @@ final class VitrineJeuTests: XCTestCase {
             XCTAssertNotNil(avant.game, "\(celebration)")
             XCTAssertTrue(ProgressionConceptGestures.exist(for: celebration.concept, progress: progress, game: avant.game), "\(celebration)")
         }
+    }
+
+    /// Le montage « Le jeu » enchaîne les cinq scènes : chacune part de l'état où la précédente arrive — niveau, rang,
+    /// Gloire et points. Sans ce fil, le niveau finissait sur « Niveau 35 · Murmure I » et le rang repartait de
+    /// « Niveau 34 · Écho V » : monté à la suite, le joueur redescendait (prise du 2026-10-09).
+    func test_scenarios_followOneThread_inTheMontageOrder() throws {
+        let base = try base()
+        XCTAssertEqual(VitrineJeuScenarios.ordreDuMontage, [.frappe, .coffre, .niveau, .rang, .badge])
+        XCTAssertEqual(Set(VitrineJeuScenarios.ordreDuMontage), Set(VitrineCelebration.allCases))
+        let scenarios = VitrineJeuScenarios.ordreDuMontage.map { ($0, VitrineJeuScenarios.pour($0, base: base)) }
+        for (precedente, suivante) in zip(scenarios, scenarios.dropFirst()) {
+            let arrivee = try XCTUnwrap(precedente.1.apres.game)
+            let depart = try XCTUnwrap(suivante.1.avant.game)
+            let etiquette = "\(precedente.0) → \(suivante.0)"
+            XCTAssertEqual(depart.level.shown.level, arrivee.level.shown.level, etiquette)
+            XCTAssertEqual(depart.level.score, arrivee.level.score, etiquette)
+            XCTAssertEqual(depart.glory.glory, arrivee.glory.glory, etiquette)
+            XCTAssertEqual(depart.glory.rank, arrivee.glory.rank, etiquette)
+            XCTAssertEqual(depart.glory.division5, arrivee.glory.division5, etiquette)
+            XCTAssertEqual(depart.treasury.held, arrivee.treasury.held, etiquette)
+        }
+    }
+
+    /// Chaque scène fait ce qu'elle annonce, et rien d'autre : le niveau monte d'un cran sans bouger le rang, le rang
+    /// monte d'une division sans bouger le niveau.
+    func test_scenarios_niveauThenRang_climbOneStepEach() throws {
+        let base = try base()
+        let niveau = VitrineJeuScenarios.pour(.niveau, base: base)
+        let rang = VitrineJeuScenarios.pour(.rang, base: base)
+        let (n0, n1) = (try XCTUnwrap(niveau.avant.game), try XCTUnwrap(niveau.apres.game))
+        let (r0, r1) = (try XCTUnwrap(rang.avant.game), try XCTUnwrap(rang.apres.game))
+        XCTAssertEqual(n1.level.shown.level, n0.level.shown.level + 1)
+        XCTAssertEqual(n1.glory.glory, n0.glory.glory)
+        XCTAssertEqual(r1.level.shown.level, r0.level.shown.level)
+        XCTAssertGreaterThan(GameGuideEvents.standingOrder(r1), GameGuideEvents.standingOrder(r0))
     }
 
     // MARK: - La célébration jouée, par le chemin réel du modèle

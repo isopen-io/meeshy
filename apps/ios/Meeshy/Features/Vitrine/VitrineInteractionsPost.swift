@@ -71,9 +71,12 @@ extension VitrineInteractions {
         }
         envoyer(copie, vocal.duree)
         _ = await serveur.attendreLaCreation()
+        VitrineTournage.etape("creation")
         try? await Task.sleep(for: avantLaTranscription)
+        VitrineTournage.etape("transcription")
         if let transcription = serveur.transcriptionArrivee() { SocialSocketManager.shared.commentMediaUpdated.send(transcription) }
         try? await Task.sleep(for: avantLaTraduction)
+        VitrineTournage.etape("traduction")
         if let traduction = serveur.traductionArrivee() { SocialSocketManager.shared.commentMediaUpdated.send(traduction) }
         try? await Task.sleep(for: tenueDeLaTraduction)
     }
@@ -85,10 +88,12 @@ extension VitrineInteractions {
         }
         ouvrir()
         await VitrineRendu.shared.attendre([.paletteDeReactions])
+        VitrineTournage.etape("palette")
         try? await Task.sleep(for: tenueDeLaPalette)
         guard let choisir = VitrineRendu.shared.choisirDansLaPalette else {
             fatalError("Vitrine « \(scene.rawValue) » : la palette n'a pas prêté son geste")
         }
+        VitrineTournage.etape("choix")
         choisir(emojiDuPost)
         try? await Task.sleep(for: tenueDeLaReaction)
     }
