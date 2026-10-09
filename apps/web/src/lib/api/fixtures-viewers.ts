@@ -24,7 +24,6 @@ const VIEWERS_OF_ST_MIENNE: readonly PostViewerRow[] = [
     reactions: ['🔥', '❤️'],
     commentCount: 1,
     replyCount: 2,
-    bookmarked: true,
   },
   {
     id: 'u-viewer-elan',

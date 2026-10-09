@@ -304,7 +304,6 @@ const MARK_GLYPH = {
   replies: FEED_GLYPHS.arrowBendUpLeft,
   reposts: FEED_GLYPHS.arrowsClockwise,
   shares: FEED_GLYPHS.shareNetwork,
-  bookmarked: FEED_GLYPHS.bookmarkFill,
 } as const;
 
 /** La rangée compacte sous le nom : emojis, puis glyphe + nombre. Décorative — le détail la dit en toutes lettres. */
@@ -322,7 +321,7 @@ function EngagementStrip({ marks }: { readonly marks: readonly ViewerEngagementM
         return (
           <span key={mark.kind} className="inline-flex items-center gap-1" data-story-viewer-mark={mark.kind}>
             <GlyphSvg glyph={MARK_GLYPH[mark.kind]} size={14} />
-            {mark.kind === 'bookmarked' ? null : mark.count}
+            {mark.count}
           </span>
         );
       })}
@@ -334,8 +333,6 @@ function markSentence(lang: InterfaceLanguage, mark: ViewerEngagementMark): stri
   switch (mark.kind) {
     case 'reactions':
       return translateViewerEngagement(lang, 'viewerEngagement.reactions', { emojis: mark.emojis.join(' ') });
-    case 'bookmarked':
-      return translateViewerEngagement(lang, 'viewerEngagement.bookmarked');
     case 'comments':
     case 'replies':
     case 'reposts':

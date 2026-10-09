@@ -11,7 +11,6 @@ const ar = {
   'viewerEngagement.replies.one': 'رد واحد ({count})',
   'viewerEngagement.replies.other': '{count} ردود',
   'viewerEngagement.reactions': 'التفاعلات: {emojis}',
-  'viewerEngagement.bookmarked': 'محفوظ في المفضلة',
   'viewerEngagement.viewedAt': 'شوهد في {time}',
   'viewerEngagement.onlyViewed': 'شاهد دون أي تفاعل آخر',
   'viewerEngagement.openProfile': 'عرض الملف الشخصي',

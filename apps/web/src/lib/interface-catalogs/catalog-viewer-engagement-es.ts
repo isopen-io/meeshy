@@ -11,7 +11,6 @@ const es = {
   'viewerEngagement.replies.one': '{count} respuesta',
   'viewerEngagement.replies.other': '{count} respuestas',
   'viewerEngagement.reactions': 'Reacciones: {emojis}',
-  'viewerEngagement.bookmarked': 'Guardado en sus favoritos',
   'viewerEngagement.viewedAt': 'Visto a las {time}',
   'viewerEngagement.onlyViewed': 'Lo vio, sin otra interacción',
   'viewerEngagement.openProfile': 'Ver perfil',

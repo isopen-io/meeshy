@@ -4,7 +4,11 @@ import type { PostViewerRow } from '@meeshy/shared/types/publication-viewers';
  * CE QUE CHAQUE PERSONNE DE LA LISTE DES VUES A FAIT (#9727) — la projection
  * d'une ligne servie en MARQUES à afficher, dans l'ordre de la feuille iOS
  * (`StoryViewersSheet`) : réactions, commentaires, réponses, republications,
- * partages, favori.
+ * partages.
+ *
+ * **Le favori ne s'y montre jamais** (décision porteur 2026-10-09) : mettre un
+ * contenu de côté reste privé. Une passerelle plus ancienne qui servirait
+ * encore `bookmarked` n'y gagne aucune marque.
  *
  * **Un compteur à zéro ne produit pas de marque.** La passerelle n'en sert
  * pas ; la règle est redite ici pour qu'une ligne venue d'ailleurs (un
@@ -15,8 +19,7 @@ import type { PostViewerRow } from '@meeshy/shared/types/publication-viewers';
  */
 export type ViewerEngagementMark =
   | { readonly kind: 'reactions'; readonly emojis: readonly string[] }
-  | { readonly kind: 'comments' | 'replies' | 'reposts' | 'shares'; readonly count: number }
-  | { readonly kind: 'bookmarked' };
+  | { readonly kind: 'comments' | 'replies' | 'reposts' | 'shares'; readonly count: number };
 
 const counted = (kind: 'comments' | 'replies' | 'reposts' | 'shares', count: number | undefined): readonly ViewerEngagementMark[] =>
   count !== undefined && count > 0 ? [{ kind, count }] : [];
@@ -29,6 +32,5 @@ export function viewerEngagementMarks(row: Omit<PostViewerRow, 'id' | 'username'
     ...counted('replies', row.replyCount),
     ...counted('reposts', row.repostCount),
     ...counted('shares', row.shareCount),
-    ...(row.bookmarked === true ? [{ kind: 'bookmarked' } as const] : []),
   ];
 }

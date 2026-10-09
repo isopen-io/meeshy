@@ -6,15 +6,19 @@ import { viewerEngagementMarks } from './viewer-engagement';
 describe('viewerEngagementMarks', () => {
   test('toutes les marques, dans l’ordre de la feuille iOS', () => {
     expect(
-      viewerEngagementMarks({ reaction: '😂', reactions: ['❤️', '😂'], shareCount: 1, repostCount: 2, commentCount: 3, replyCount: 4, bookmarked: true }),
+      viewerEngagementMarks({ reaction: '😂', reactions: ['❤️', '😂'], shareCount: 1, repostCount: 2, commentCount: 3, replyCount: 4 }),
     ).toEqual([
       { kind: 'reactions', emojis: ['❤️', '😂'] },
       { kind: 'comments', count: 3 },
       { kind: 'replies', count: 4 },
       { kind: 'reposts', count: 2 },
       { kind: 'shares', count: 1 },
-      { kind: 'bookmarked' },
     ]);
+  });
+
+  test('le favori ne se montre jamais, même servi par une passerelle d’avant la décision du 2026-10-09', () => {
+    const fromOlderGateway = { reaction: null, commentCount: 1, bookmarked: true as const };
+    expect(viewerEngagementMarks(fromOlderGateway)).toEqual([{ kind: 'comments', count: 1 }]);
   });
 
   test('un compteur à zéro ne produit aucune marque', () => {

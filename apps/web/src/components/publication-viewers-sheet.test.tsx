@@ -90,7 +90,6 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
     expect([...(noor?.querySelectorAll('[data-story-viewer-mark]') ?? [])].map((mark) => [mark.getAttribute('data-story-viewer-mark'), mark.textContent])).toEqual([
       ['comments', '1'],
       ['replies', '2'],
-      ['bookmarked', ''],
     ]);
     expect(host.querySelector('[data-story-viewer="u-viewer-elan"] [data-story-viewer-marks]')).toBeNull();
   });
@@ -108,7 +107,6 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
       'Réactions : 🔥 ❤️',
       '1 commentaire',
       '2 réponses',
-      'Enregistré dans ses favoris',
     ]);
     expect(detail?.querySelector<HTMLAnchorElement>('[data-viewer-detail-profile]')?.getAttribute('href')).toBe('/u/noor.haddad');
     expect(document.activeElement).toBe(detail?.querySelector('[data-viewer-detail-back]') ?? null);

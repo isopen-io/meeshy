@@ -43,7 +43,7 @@ describe('chaque langue porte toutes les clés du français, et rien d’autre',
     const french = await loadViewerEngagementCatalog('fr');
     for (const [language, catalog] of await loadAll()) {
       if (language === 'fr') continue;
-      for (const key of ['viewerEngagement.bookmarked', 'viewerEngagement.onlyViewed', 'viewerEngagement.comments.other', 'viewerEngagement.back'] as const) {
+      for (const key of ['viewerEngagement.reposts.other', 'viewerEngagement.onlyViewed', 'viewerEngagement.comments.other', 'viewerEngagement.back'] as const) {
         expect({ language, key, copied: catalog[key] === french[key] }).toEqual({ language, key, copied: false });
       }
     }
