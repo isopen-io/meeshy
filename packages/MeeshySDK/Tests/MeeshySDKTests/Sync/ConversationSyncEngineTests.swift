@@ -28,7 +28,8 @@ final class ConversationSyncEngineTests: XCTestCase {
             messageSocket: mockMessageSocket,
             socialSocket: mockSocialSocket,
             api: mockAPI,
-            syncDelta: MockSyncDeltaMuet()
+            syncDelta: MockSyncDeltaMuet(),
+            currentUserId: { "" }
         )
     }
 
