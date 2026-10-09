@@ -112,6 +112,10 @@ function makePrisma(opts: {
       update: jest.fn<any>().mockResolvedValue(opts.postUpdate ?? defaultPost),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       count: jest.fn<any>().mockResolvedValue(opts.postCount ?? 0),
+      groupBy: jest.fn<any>().mockResolvedValue([]),
+    },
+    postComment: {
+      groupBy: jest.fn<any>().mockResolvedValue([]),
     },
     postBookmark: {
       create: jest.fn<any>().mockResolvedValue(
@@ -121,6 +125,7 @@ function makePrisma(opts: {
         ? jest.fn<any>().mockRejectedValue(opts.bookmarkDeleteErr)
         : jest.fn<any>().mockResolvedValue({}),
       findFirst: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     postReaction: {
       findMany: jest.fn<any>().mockResolvedValue(opts.reactionFindMany ?? []),
@@ -137,6 +142,7 @@ function makePrisma(opts: {
       findUnique: jest.fn<any>().mockResolvedValue(opts.trackingLinkFindUnique ?? null),
       create: jest.fn<any>().mockResolvedValue(txLink),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      groupBy: jest.fn<any>().mockResolvedValue([]),
     },
     postMedia: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),

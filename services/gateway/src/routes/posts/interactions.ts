@@ -671,7 +671,8 @@ export function registerInteractionRoutes(
     }
   });
 
-  // GET /posts/:postId/interactions — Story viewers enriched with reactions & replies (author only)
+  // GET /posts/:postId/interactions — la liste des vues d'une story, d'un post ou d'un réel, chaque
+  // personne avec ce qu'elle y a fait (#9727) — auteur ou ADMIN/BIGBOSS seulement
   fastify.get('/posts/:postId/interactions', {
     schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
@@ -688,7 +689,9 @@ export function registerInteractionRoutes(
       // unbounded client `limit` into Prisma `take`), and treats `limit=0` as 1.
       const { limit, offset } = validatePagination(query.offset, query.limit, { defaultLimit: 50, maxLimit: 100 });
 
-      const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset);
+      const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset, {
+        role: authContext.registeredUser.role,
+      });
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
