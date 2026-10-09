@@ -8,7 +8,7 @@ La commande de release refuse de construire tant qu'il manque la clé, `google-s
 
 1. **Firebase (#7302).** Dans la console Firebase, ajouter l'application Android `me.meeshy.app` au projet de production et télécharger son `google-services.json`. Dans *Paramètres du projet → Comptes de service*, générer la clé Admin SDK, la déposer sur le serveur et pointer `FIREBASE_ADMIN_CREDENTIALS_PATH` dessus dans l'environnement du gateway de production. Sans cette clé, le gateway ne peut rien envoyer à FCM.
 2. **La clé de signature (#8085).** Elle existe déjà : RSA 4096, PKCS#12, alias `meeshy-release`, gardée hors du dépôt. Son empreinte est déjà publiée dans `public/.well-known/assetlinks.json`. Il faut la retrouver dans le gestionnaire de mots de passe. **La perdre interdit toute mise à jour.**
-3. **Secrets GitHub** (*Settings → Secrets and variables → Actions* du dépôt) :
+3. **Secrets GitHub** (*Settings → Secrets and variables → Actions* du dépôt). `apps/web/android/setup-play-secrets.sh` les pose tous depuis `~/.meeshy-secrets/android-release/` (`meeshy-release.p12`, `keystore.properties`, `google-services.json`, et `play-service-account.json` s'il existe). Il vérifie d'abord que l'empreinte de la clé est celle d'`assetlinks.json`, et lance le workflow avec `--run internal` (#9843). Le `google-services.json` est celui de l'app `me.meeshy.app` du projet Firebase `meeshy-me`, le même que la clé Admin SDK de la passerelle. Ce projet n'a pas à appartenir au compte de la Play Console.
 
    | secret | valeur |
    |---|---|
