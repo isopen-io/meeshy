@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #9748 — Meeshy figure dans « Langue de l'app » d'Android 13+, comme Chrome.
+     Les sept langues de l'interface (SUPPORTED_INTERFACE_LANGUAGES), les memes
+     que les dossiers values-* de la coque ; l'anglais est le defaut (values). -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="fr" />
+    <locale android:name="en" />
+    <locale android:name="es" />
+    <locale android:name="pt" />
+    <locale android:name="de" />
+    <locale android:name="it" />
+    <locale android:name="ar" />
+</locale-config>
