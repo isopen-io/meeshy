@@ -11,7 +11,7 @@ import MeeshyUI
 /// lieu de passer à la suivante ou de fermer le lecteur.
 ///
 /// `nil` : rien ne la retient, elle avance normalement.
-enum StoryPlaybackHold: Equatable {
+nonisolated enum StoryPlaybackHold: Equatable {
     case pause
     case loop
 
@@ -48,7 +48,7 @@ enum StoryPlaybackHold: Equatable {
 ///   jeu (célébration d'un palier, sa carte photo) passe devant elle.
 /// - `engaged` : commentaires, composition, options, langues, légende,
 ///   transcription, feuilles posées sur la story — elle boucle.
-struct StoryPlaybackCauses: Equatable {
+nonisolated struct StoryPlaybackCauses: Equatable {
     var explicitPause = false
     var reacting = false
     var gestureInFlight = false
