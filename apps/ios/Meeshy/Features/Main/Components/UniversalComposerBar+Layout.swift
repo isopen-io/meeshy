@@ -264,7 +264,7 @@ extension UniversalComposerBar {
             // perfectly still.
             if showAttachOptions && !effectiveIsRecording {
                 attachmentCarouselPanel
-                    .frame(height: attachmentPanelHeight)
+                    .modifier(ComposerPanelFrame(resting: attachmentPanelHeight, yields: panelYieldsToHost))
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }

@@ -91,7 +91,7 @@ struct CommentsSheetView: View {
     /// Le lien grille ↔ zone (#9697) : ce qui est joint ne se reprend pas.
     @State var commentLibrary = CommentLibraryLink()
     /// La détente de la feuille : elle grandit quand le composeur déborde (`CommentSheetFit`).
-    @State private var sheetDetent: PresentationDetent = .medium
+    @State var sheetDetent: PresentationDetent = .medium
     @State var showCommentPhotoPicker: Bool = false
     @State var commentPhotoItems: [PhotosPickerItem] = []
     /// True while `commentPhotoItems` is being primed with the recent-media
@@ -1135,6 +1135,7 @@ struct CommentsSheetView: View {
             externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || commentPendingPlace != nil,
             onPhotoLibrary: { openCommentLibraryPreselecting([]) },
             onFilePicker: { showCommentFilePicker = true },
+            onShowAttachments: { growSheetForComposer() },
             onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
             onRecentMediaEdit: { pick in editCommentRecentMedia(pick) },
             onRecentLibraryAssetSelected: { asset in ingestCommentLibraryAsset(asset) },
@@ -1177,6 +1178,7 @@ struct CommentsSheetView: View {
                                  onDone: { pick in ingestCommentRecentMedia(pick) })
         .commentSceneRetouch(attachments: $commentAttachments)
         .commentCamera(attachments: $commentAttachments)
+        .adaptiveOnChange(of: commentAttachments.isEmpty) { _, isEmpty in if !isEmpty { growSheetForComposer() } }
     }
 
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes
@@ -1272,6 +1274,10 @@ struct CommentsSheetView: View {
         let media = CommentComposerStaging.pendingMedia(in: attachments)
         let staged = commentAttachments
         commentAttachments = CommentAttachmentIntake.stillLoading(commentAttachments)
+        // La SOURCE du champ se vide avec la barre : si l'envoi échoue, la
+        // remettre la change, et la barre ré-affiche le texte (#9743).
+        composerText = ""
+        CommentSendTrace.log("envoi : texte=\(!text.isEmpty), pièces=\(media.count)/\(attachments.count)")
         // Lieu partagé en attente — capturé puis effacé AVANT le guard (comme
         // `PostDetailView.submitComment`) : la chip ne doit pas ré-apparaître
         // sur le commentaire suivant, qu'il parte ou soit rejeté par le guard.
@@ -1348,9 +1354,12 @@ struct CommentsSheetView: View {
         Task {
             do {
                 guard let apiComment = try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(media)) else {
+                    CommentSendTrace.log("direct : confirmé sans description (rejeu dédoublonné)")
+                    CommentMediaUploader.discardLocalFiles(media)
                     onCommentSent?(post.id)
                     return
                 }
+                CommentSendTrace.log("direct : créé")
                 CommentMediaUploader.discardLocalFiles(media)
                 let feedComment = FeedComment(
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -1382,6 +1391,7 @@ struct CommentsSheetView: View {
                 }
                 onCommentSent?(post.id)
             } catch {
+                CommentSendTrace.log("direct : échec — \(String(describing: error))")
                 // REST failed — most commonly because the device is offline.
                 // Durably enqueue via the existing `.createComment` outbox
                 // kind (same one `FeedViewModel`/`PostDetailViewModel.sendComment`
@@ -1405,6 +1415,7 @@ struct CommentsSheetView: View {
                     rollbackOptimisticComment(tempId: tempId, parentId: parentId)
                     FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
                     // Ni envoyé ni confié à la file : il revient au composeur (#9743).
+                    CommentSendTrace.log("composeur : restitution du texte et de \(staged.count) pièce(s)")
                     restoreRefusedComment(text: trimmed, attachments: staged, place: place)
                 }
             }

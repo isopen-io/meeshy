@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 import MeeshySDK
 @testable import Meeshy
 
@@ -452,5 +453,104 @@ final class CommentOfflineMediaWiringGuardTests: XCTestCase {
                        "La déconnexion ET le retrait d'un compte emportent ses pièces en attente.")
         XCTAssertTrue(container.contains("OfflineQueue.purgePendingCommentMedia(keepingOwners:"),
                       "Les comptes que l'appareil ne garde plus laissent leurs pièces sur le disque.")
+    }
+}
+
+/// **Le premier envoi avec pièce, transport refusé, depuis la feuille du
+/// fil** (recette du 2026-10-09 : commentaire perdu hors ligne). Ce que la
+/// feuille fait de l'échec — `CommentMediaDelivery.entrust` — exécuté contre
+/// la VRAIE file, sur une base de compte inscrite comme à l'ouverture.
+@MainActor
+final class CommentOfflineFirstSendTests: XCTestCase {
+
+    private let alice = "66f0a1b2c3d4e5f6000000a1"
+    private let bob = "66f0a1b2c3d4e5f6000000b0"
+    private var scratch: URL!
+    private var savedToken: String?
+
+    override func setUp() async throws {
+        scratch = FileManager.default.temporaryDirectory.appendingPathComponent("first-send-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        savedToken = APIClient.shared.authToken
+    }
+
+    override func tearDown() async throws {
+        APIClient.shared.authToken = savedToken
+        OfflineQueue.purgePendingCommentMedia(ownerId: alice)
+        try? FileManager.default.removeItem(at: scratch)
+    }
+
+    /// Une base au nom QUELCONQUE — comme sous un environnement changé
+    /// depuis l'ouverture — inscrite pour Alice : c'est l'inscription qui
+    /// prouve, pas le recalcul de l'empreinte depuis l'hôte courant.
+    private func openAlicesBase() async throws -> DatabaseQueue {
+        let path = scratch.appendingPathComponent("ouverte-sous-un-autre-hote.sqlite").path
+        let base = try DatabaseQueue(path: path)
+        try MessageDatabaseMigrations.runAll(on: base)
+        AccountStoreRegistry.register(databasePath: base.path, ownerId: alice)
+        await OfflineQueue.shared.configure(pool: base)
+        return base
+    }
+
+    private func photo() throws -> PendingCommentMedia {
+        let url = scratch.appendingPathComponent("photo.jpg")
+        try Data("octets-photo".utf8).write(to: url)
+        return PendingCommentMedia(fileURL: url, mimeType: "image/jpeg",
+                                   optimistic: FeedMedia(type: .image, url: url.absoluteString))
+    }
+
+    private func payload() -> CreateCommentPayload {
+        CreateCommentPayload(clientMutationId: ClientMutationId.generate(), postId: "post-recette",
+                             parentCommentId: nil, content: "hors ligne", originalLanguage: "fr", authorId: alice)
+    }
+
+    func test_transportRefused_onTheFirstSendWithAPiece_theQueueKeepsItWithItsPieces_andShowsItUnsent() async throws {
+        let base = try await openAlicesBase()
+        APIClient.shared.authToken = TestSessionToken.make(userId: alice)
+        let comment = payload()
+        let refused = CommentPublisher.Interrupted(acquired: [], underlying: URLError(.cannotConnectToHost))
+
+        try await CommentMediaDelivery.entrust(comment, medias: [try photo()],
+                                               acquired: CommentMediaDelivery.acquired(from: refused))
+
+        let rows = try await base.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(rows, 1, "Le commentaire est dans la file : rien n'est perdu.")
+        let unsent = await OfflineQueue.shared.unsentComments(postId: "post-recette", ownerId: alice)
+        XCTAssertEqual(unsent.map(\.clientMutationId), [comment.clientMutationId], "Il se voit « non envoyé ».")
+        let copies = unsent.first?.localMediaURLs ?? []
+        XCTAssertEqual(copies.count, 1)
+        XCTAssertTrue(copies.allSatisfy { FileManager.default.fileExists(atPath: $0.path) },
+                      "Sa pièce est copiée dans le dossier durable.")
+        XCTAssertEqual(try copies.first.map { try String(contentsOf: $0, encoding: .utf8) }, "octets-photo")
+        await OfflineQueue.shared.cancelCreateComment(clientMutationId: comment.clientMutationId, ownerId: alice)
+    }
+
+    func test_anEnqueueRefusal_isThrown_soTheSheetGivesTheCommentBack() async throws {
+        let base = try await openAlicesBase()
+        APIClient.shared.authToken = TestSessionToken.make(userId: bob)
+
+        do {
+            try await CommentMediaDelivery.entrust(payload(), medias: [try photo()], acquired: [])
+            XCTFail("Sous un autre compte, la file refuse : la feuille rend alors texte et pièce au composeur.")
+        } catch {
+            XCTAssertEqual(error as? CommentOwnership.Refusal, .notTheAuthor)
+        }
+        let rows = try await base.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(rows, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: scratch.appendingPathComponent("photo.jpg").path),
+                      "Le fichier d'origine reste : c'est lui que le composeur ré-affiche.")
+    }
+
+    func test_theSheet_givesTextAndPiecesBack_andClearsTheFieldSourceSoTheBarShowsIt() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let sheet = AppSourceGuard.stripComments(try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Views/FeedCommentsSheet.swift"), encoding: .utf8))
+        let submit = try XCTUnwrap(sheet.range(of: "private func submitComment("))
+        let publish = try XCTUnwrap(sheet.range(of: "CommentPublisher.live.publish(", range: submit.upperBound..<sheet.endIndex))
+        XCTAssertTrue(sheet[submit.upperBound..<publish.lowerBound].contains("composerText = \"\""),
+                      "Sans vider la source, la remettre ne change rien et la barre reste vide.")
+        XCTAssertTrue(sheet.contains("restoreRefusedComment(text: trimmed, attachments: staged, place: place)"))
     }
 }

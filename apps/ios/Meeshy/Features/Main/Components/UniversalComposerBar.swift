@@ -390,6 +390,10 @@ struct UniversalComposerBar: View {
 
     var resolvedOnCamera: (() -> Void)? { onCamera ?? environmentCameraDoor?.open }
 
+    /// L'hôte a une hauteur comptée (une feuille) : le panneau cède plutôt
+    /// que de pousser la zone d'aperçu sous l'en-tête (`ComposerPanelFrame`).
+    @Environment(\.composerPanelYieldsToHost) var panelYieldsToHost
+
     /// Tracks the system keyboard so the attachment carousel can be sized to the
     /// exact space the keyboard last occupied (seamless keyboard <-> carousel swap).
     @StateObject private var keyboardObserver = KeyboardObserver()
