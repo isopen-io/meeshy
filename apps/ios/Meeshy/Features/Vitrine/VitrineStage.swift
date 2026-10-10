@@ -58,6 +58,7 @@ enum VitrineStage {
         await repartirANeuf()
         do {
             try await VitrineSeeder.remplirLesCaches(f, medias: VitrineLaunch.dossierMedias, dans: VitrineSeedTargetsReels())
+            try await VitrineSeeder.rangerLesStories(f, pour: scene, dans: VitrineSeedTargetsReels())
         } catch {
             fatalError("Vitrine « \(scene.rawValue) » : fil et médias impossibles à ranger — \(error)")
         }
@@ -119,7 +120,7 @@ enum VitrineStage {
 
     private static func montrer(_ scene: VitrineScene, _ destination: VitrineFixtures.Destination?, _ f: VitrineFixtures) {
         switch scene {
-        case .global, .amour, .groupe, .imagine, .interactionEmoji:
+        case .global, .amour, .groupe, .imagine, .interactionEmoji, .interactionVocal:
             guard let conversation = f.conversationsServies().first(where: { $0.id == destination?.conversationId }) else {
                 fatalError("Vitrine « \(scene.rawValue) » : sa conversation manque aux fixtures")
             }
@@ -132,7 +133,9 @@ enum VitrineStage {
             VitrineInteractions.ouvrirLeComposeur(f)
         case .interactionReel:
             VitrineInteractions.ouvrirLeFilPuisLeComposeur(f)
-        case .lien:
+        case .interactionDefilement:
+            VitrineInteractions.ouvrirLesReels(f)
+        case .lien, .interactionStory:
             break
         }
     }
@@ -153,7 +156,8 @@ enum VitrineStage {
         case .amour: await faireEntendre(destination)
         case .groupe: rouvrirSurLOriginal(destination)
         case .imagine: await imaginer(destination, f)
-        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker, .interactionReel: break
+        case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker, .interactionReel,
+             .interactionDefilement, .interactionStory, .interactionVocal: break
         }
     }
 

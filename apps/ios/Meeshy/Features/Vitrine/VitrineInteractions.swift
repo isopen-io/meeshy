@@ -21,12 +21,19 @@ nonisolated enum VitrineInteraction: String, CaseIterable, Sendable {
     case sticker
     /// Une vraie vidéo part en réel depuis le composeur et arrive en tête du fil (`requestSoclePublish`, #9820).
     case reel
+    /// Les réels drôles défilent dans le lecteur immersif, chacun légendé dans une autre langue et lu dans celle du
+    /// lecteur (`AdaptiveVerticalPager`, #9904).
+    case defilement
+    /// Une story s'ouvre depuis la racine, son texte traduit pour le lecteur (`storyDetail:`, #9904).
+    case story
+    /// Un vocal joue dans sa langue d'origine, puis se relit dans celle du lecteur (`setBubbleActiveDisplayLanguage`, #9904).
+    case vocal
 
     /// La célébration du jeu que l'interaction déclenche : la passerelle fictive la prépare.
     var celebration: VitrineCelebration? {
         switch self {
         case .frappe: .frappe
-        case .emoji, .emojiPost, .commentaireAudio, .sticker, .reel: nil
+        case .emoji, .emojiPost, .commentaireAudio, .sticker, .reel, .defilement, .story, .vocal: nil
         }
     }
 }
@@ -40,6 +47,9 @@ extension VitrineScene {
         case .interactionCommentaireAudio: .commentaireAudio
         case .interactionSticker: .sticker
         case .interactionReel: .reel
+        case .interactionDefilement: .defilement
+        case .interactionStory: .story
+        case .interactionVocal: .vocal
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: nil
         }
     }
@@ -48,9 +58,10 @@ extension VitrineScene {
     /// ses propres scènes, une interaction rejoue l'écran de l'une d'elles.
     nonisolated var sceneDuKit: VitrineScene {
         switch self {
-        case .interactionEmoji: .amour
+        case .interactionEmoji, .interactionVocal: .amour
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge,
-             .interactionFrappe, .interactionEmojiPost, .interactionCommentaireAudio, .interactionSticker, .interactionReel: self
+             .interactionFrappe, .interactionEmojiPost, .interactionCommentaireAudio, .interactionSticker, .interactionReel,
+             .interactionDefilement, .interactionStory: self
         }
     }
 
@@ -79,6 +90,9 @@ enum VitrineInteractions {
             case .commentaireAudio: await commenterDeVive(scene, f)
             case .sticker: await poserUnSticker(scene)
             case .reel: await publierLeReel(scene)
+            case .defilement: await faireDefilerLesReels(scene, f)
+            case .story: await ouvrirLaStory(scene, f)
+            case .vocal: await faireEntendreLaTraduction(scene, f)
             }
         }
     }

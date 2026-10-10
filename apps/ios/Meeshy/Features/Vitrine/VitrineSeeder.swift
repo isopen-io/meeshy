@@ -16,6 +16,7 @@ protocol VitrineSeedTargets {
     func fixerModeDeLecture(_ mode: ReadingModeOrchestrator.ConversationReadingMode, conversationId: String, userId: String)
     func enregistrerMedia(_ fichier: URL, genre: VitrineFixtures.Media.Genre, cle: String) async
     func enregistrerFil(_ posts: [FeedPost], cle: String) async throws
+    func enregistrerStories(_ groupes: [StoryGroup], cle: String) async throws
 }
 
 /// Les écritures EXISTANTES de l'app — celles qu'emprunte le réseau réel. La liste passe par le
@@ -52,6 +53,10 @@ struct VitrineSeedTargetsReels: VitrineSeedTargets {
     func enregistrerFil(_ posts: [FeedPost], cle: String) async throws {
         try await CacheCoordinator.shared.feed.save(posts, for: cle)
     }
+
+    func enregistrerStories(_ groupes: [StoryGroup], cle: String) async throws {
+        try await CacheCoordinator.shared.stories.save(groupes, for: cle)
+    }
 }
 
 @MainActor
@@ -82,6 +87,14 @@ enum VitrineSeeder {
         }
         let langues = [fixtures.lang]
         try await cibles.enregistrerFil(fixtures.posts.map { $0.toFeedPost(preferredLanguages: langues) }, cle: cleDuFil)
+    }
+
+    /// Le bandeau des stories, sous la clé que `StoryViewModel.loadStories` lit d'abord (#9904) : la story du kit pour la
+    /// scène qui l'ouvre, un bandeau VIDE pour toutes les autres — une prise précédente l'y aurait laissée, et une bague de
+    /// story apparaîtrait sur des écrans qui n'en montrent pas.
+    static func rangerLesStories(_ fixtures: VitrineFixtures, pour scene: VitrineScene, dans cibles: some VitrineSeedTargets) async throws {
+        let stories = scene.interaction == .story ? (fixtures.stories ?? []) : []
+        try await cibles.enregistrerStories(stories.toStoryGroups(currentUserId: fixtures.lecteur.id), cle: StoryViewModel.storiesCacheKey)
     }
 
     /// `progression` remplace celle du kit : une scène du jeu y range l'état d'avant sa célébration (#9805).

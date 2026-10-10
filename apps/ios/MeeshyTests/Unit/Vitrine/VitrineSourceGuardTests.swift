@@ -44,6 +44,8 @@ final class VitrineSourceGuardTests: XCTestCase {
             "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Portals.swift",
             "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher+Publications.swift",
             "apps/ios/Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
+            "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+            "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+Viewing.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkService.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine+Vitrine.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Configuration/MeeshyConfig.swift",
