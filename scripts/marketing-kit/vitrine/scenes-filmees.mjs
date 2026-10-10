@@ -183,16 +183,19 @@ export const SCENES_FILMEES = {
     mouvement: [],
     imagesCles: [{ nom: 'invitation', etape: 'invitation', instantMs: 800 }, { nom: 'formulaire', etape: 'formulaire', instantMs: 1200 }],
   }),
-  // « Mes liens » : le hub (étape « hub »), la liste des liens de partage et ses chiffres (étape « liste »), puis la fiche
-  // du lien du Nova Club et ses arrivées (étape « fiche »), tenue 2,6 s.
-  'interaction-liens': interaction('interaction-liens', {
-    montreUnFil: false,
-    dureeMs: 7000,
+  // « Dis-moi tout » : la conversation d'un lien anonyme, remplie des messages d'invités sans compte (étape « ecran »).
+  'interaction-sonde': interaction('interaction-sonde', {
+    montreUnFil: true,
+    dureeMs: 3000,
     mouvement: [],
-    imagesCles: [
-      { nom: 'hub', etape: 'hub', instantMs: 900 },
-      { nom: 'liste', etape: 'liste', instantMs: 700 },
-      { nom: 'fiche', etape: 'fiche', instantMs: 1500 },
-    ],
+    imagesCles: [{ nom: 'conversation', etape: 'ecran', instantMs: 1500 }],
   }),
+  // La liste des conversations de SAV, une par produit (étape « ecran »).
+  'interaction-sav': interaction('interaction-sav', {
+    montreUnFil: true,
+    dureeMs: 3000,
+    mouvement: [],
+    imagesCles: [{ nom: 'liste', etape: 'ecran', instantMs: 1500 }],
+  }),
+
 }

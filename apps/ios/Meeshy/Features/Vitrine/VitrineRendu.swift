@@ -1,6 +1,7 @@
 #if DEBUG
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Ce qu'un écran annonce une fois RENDU (#8921) : « prêt » n'en part qu'après l'avoir observé.
 nonisolated enum VitrineEvenement: Hashable, Sendable {
@@ -61,6 +62,9 @@ extension VitrineScene {
         case .interactionDefilement: return [.lecteurDeReels]
         case .interactionStory: return appareil == .ipad ? [.fil] : [.racine]
         case .interactionVocal: return [.conversation(conversationId ?? "")]
+        case .interactionInvite: return [.lien]
+        case .interactionSonde: return [.conversation(conversationId ?? "")]
+        case .interactionSav: return appareil == .ipad ? [.fil] : [.racine]
         case .interactionEmojiPost: return appareil == .ipad ? [.paletteDeReactionsPrete, .fil] : [.paletteDeReactionsPrete]
         case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
             let fiche = VitrineEvenement.fiche(celebration?.concept ?? .level)
@@ -213,6 +217,15 @@ final class VitrineRendu {
         guard actif else { return }
         choisirUnSticker = choisir
         signaler(.feuilleDeStickers)
+    }
+
+    /// L'invitation d'un lien, servie (#9904) : la scène y fait le choix « sans compte ».
+    private(set) weak var invitation: JoinFlowViewModel?
+
+    func invitationServie(_ parcours: JoinFlowViewModel) {
+        guard actif else { return }
+        invitation = parcours
+        signaler(.lien)
     }
 
     func attendre(_ attendus: Set<VitrineEvenement>) async {

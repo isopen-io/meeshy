@@ -61,7 +61,7 @@ final class VitrineSourceGuardTests: XCTestCase {
                 if ligne.hasPrefix("#if") { pile.append(ligne == "#if DEBUG"); continue }
                 if ligne.hasPrefix("#else") || ligne.hasPrefix("#elseif") { if !pile.isEmpty { pile[pile.count - 1] = false }; continue }
                 if ligne.hasPrefix("#endif") { _ = pile.popLast(); continue }
-                guard ["Vitrine", "debugLinkInfoOverride", "debugWebOriginOverride", "debugOnPreviewShown"].contains(where: { ligne.contains($0) }) else { continue }
+                guard ["Vitrine", "debugLinkInfoOverride", "debugWebOriginOverride", "debugOnPreviewShown", "debugOnPreviewServed"].contains(where: { ligne.contains($0) }) else { continue }
                 references += 1
                 XCTAssertTrue(pile.contains(true), "\(chemin) : « \(ligne) » vit hors d'un bloc #if DEBUG")
             }

@@ -25,7 +25,8 @@ const prises = () => ({
   'interaction-story': { clip: '/c/story.mp4', rapport: rapport({ ouverture: 0, story: 950 }) },
   'interaction-vocal': { clip: '/c/vocal.mp4', rapport: rapport({ original: 0, traduction: 2730 }), repereY: 1562 },
   'interaction-invite': { clip: '/c/invite.mp4', rapport: rapport({ invitation: 0, 'sans-compte': 1500, formulaire: 2900 }) },
-  'interaction-liens': { clip: '/c/liens.mp4', rapport: rapport({ hub: 0, liste: 2000, fiche: 3700 }) },
+  'interaction-sonde': { clip: '/c/sonde.mp4', rapport: rapport({ ecran: 0 }) },
+  'interaction-sav': { clip: '/c/sav.mp4', rapport: rapport({ ecran: 0 }) },
   'jeu-frappe': { clip: '/c/frappe.mp4', rapport: rapport(), mouvementMs: 40 },
   'jeu-coffre': { clip: '/c/coffre.mp4', rapport: rapport(), mouvementMs: 30 },
   'jeu-niveau': { clip: '/c/niveau.mp4', rapport: rapport(), mouvementMs: 20 },
@@ -63,8 +64,8 @@ describe('l’en-tête épique : le montage suit la musique (#9904)', () => {
     expect(enSecondes(PLANS.at(-1).de)).toBeLessThan(DUREE_S - 1.5)
   })
 
-  test('quatre réels, la story, le vocal, le lien (invitation, arrivées, business), puis le jeu dans l’ordre frappe → coffre → niveau → rang', () => {
-    expect(PLANS.map((p) => p.id)).toEqual(['reel-1', 'reel-2', 'reel-3', 'reel-4', 'story', 'vocal', 'invite', 'arrivees', 'business', 'frappe', 'coffre', 'niveau', 'rang', 'signature'])
+  test('quatre réels, la story, le vocal, le lien (proches, SAV, client sans compte), puis le jeu dans l’ordre frappe → coffre → niveau → rang', () => {
+    expect(PLANS.map((p) => p.id)).toEqual(['reel-1', 'reel-2', 'reel-3', 'reel-4', 'story', 'vocal', 'sonde', 'sav', 'invite', 'frappe', 'coffre', 'niveau', 'rang', 'signature'])
   })
 
   test('les quatre actes d’origine gardent leurs 23 s, le lien dure 7 s juste : 30 s', () => {
@@ -214,8 +215,8 @@ describe('l’en-tête épique : la caméra et la loupe (#9904)', () => {
     const images = Object.fromEntries(p.plans.filter((x) => x.clip).map((x) => [x.id, { dossier: `images/${x.id}`, nombre: 60 }]))
     const m = modeleDeLaPage({ plan: p, images })
     expect(m.plans.map((x) => x.entree)).toEqual(['fouet', 'poing', 'poing', 'poing', ...Array(9).fill('fouet')])
-    expect(m.plans.filter((x) => x.loupe).map((x) => x.id)).toEqual(['vocal', 'arrivees', 'frappe', 'coffre', 'niveau', 'rang'])
-    expect(m.blocs.map((b) => b.id)).toEqual(['reels', 'story', 'vocal', 'invite', 'arrivees', 'business', 'frappe', 'coffre', 'niveau'])
+    expect(m.plans.filter((x) => x.loupe).map((x) => x.id)).toEqual(['vocal', 'frappe', 'coffre', 'niveau', 'rang'])
+    expect(m.blocs.map((b) => b.id)).toEqual(['reels', 'story', 'vocal', 'sonde', 'sav', 'invite', 'frappe', 'coffre', 'niveau'])
     expect(m.temps[0]).toBe(0)
     expect(m.temps.at(-1)).toBeLessThan(DUREE_S)
     expect(m.citations).toHaveLength(4)

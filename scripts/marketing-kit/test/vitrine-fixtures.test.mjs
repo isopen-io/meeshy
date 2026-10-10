@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { REPO_ROOT } from '../lib/catalog.mjs'
 import { KIT_LANGS } from '../lib/locales.mjs'
 import { DEMO, lecteurDe, partenaireDe, profilDe } from '../textes/demo.mjs'
-import { ID_DEBAT, ID_GLOBAL, ID_NOVA, LIEN_LISBOA, MESURE_PAR_DEFAUT, exporterVitrine, idAmour, languesDuCommentaireVocal, mesLiens, oid, storyDeLEntete } from '../vitrine/fixtures.mjs'
+import { ID_DEBAT, ID_GLOBAL, ID_NOVA, ID_SONDE, LIEN_LISBOA, MESURE_PAR_DEFAUT, exporterVitrine, idAmour, languesDuCommentaireVocal, oid, storyDeLEntete } from '../vitrine/fixtures.mjs'
 import { RACINE_MEDIAS, VIDEOS_DES_REELS_DROLES, VIDEO_DU_REEL, afficheMedia, videoMedia } from '../vitrine/medias.mjs'
 
 const MAINTENANT = new Date('2026-09-30T12:00:00.000Z')
@@ -177,7 +177,8 @@ describe('fixtures de la vitrine, lot 2 : les conversations (#8855)', () => {
   test('les deux conversations que les scènes ouvrent n’ont aucun non-lu, et chacune a son mode', () => {
     const f = exporterVitrine({ lang: 'fr', maintenant: MAINTENANT })
     for (const id of [idAmour('fr'), ID_DEBAT]) expect(f.conversations.find((c) => c.id === id).unreadCount).toBe(0)
-    expect(f.modesDeLecture).toEqual({ [ID_GLOBAL]: 'script', [ID_DEBAT]: 'script', [idAmour('fr')]: 'bubbles' })
+    expect(f.modesDeLecture).toEqual({ [ID_GLOBAL]: 'script', [ID_DEBAT]: 'script', [idAmour('fr')]: 'bubbles', [ID_SONDE]: 'script' })
+    expect(f.conversationsDeScene['interaction-sonde'][0].unreadCount).toBe(0)
     expect(f.scenes.global).toEqual({ conversationId: ID_GLOBAL })
   })
 
@@ -305,23 +306,44 @@ describe('fixtures de la vitrine : les réels drôles et la story de l’en-têt
 
 })
 
-describe('fixtures de la vitrine : « Mes liens » (#9904)', () => {
-  test.each(KIT_LANGS)('%s : le lien du Nova Club, ses arrivées SANS compte et les langues des arrivants, au format de la passerelle', (lang) => {
+describe('fixtures de la vitrine : le lien — « Dis-moi tout » et les SAV (#9904)', () => {
+  test.each(KIT_LANGS)('%s : « Dis-moi tout » est remplie d’invités SANS compte, chacun dans une autre langue, traduits pour le lecteur', (lang) => {
     const f = exporterVitrine({ lang, maintenant: MAINTENANT })
-    const { liens, stats, arrivees } = f.mesLiens
-    expect(liens[0].linkId).toBe(DEMO.lienInvitation.identifiant)
-    expect(stats.totalLinks).toBe(liens.length)
-    expect(stats.totalUses).toBe(liens.reduce((n, l) => n + l.currentUses, 0))
-    const a = arrivees[liens[0].linkId]
-    expect(a.visits).toBe(DEMO.lienInvitation.clics)
-    expect(a.anonymousArrivals).toBe(DEMO.lienInvitation.sansCompte)
-    expect(a.arrivalsByLanguage.reduce((n, l) => n + l.count, 0)).toBe(a.arrivals)
-    expect(a.recentArrivals.some((r) => r.isAnonymous)).toBe(true)
-    expect(a.recentArrivals.map((r) => r.participantId).every((id) => HEX24.test(id))).toBe(true)
-    for (const l of liens) expect(l.id).toMatch(HEX24)
+    const { conversationId } = f.scenes['interaction-sonde']
+    expect(f.conversations.map((c) => c.id)).not.toContain(conversationId)
+    expect(f.conversationsDeScene['interaction-sonde'].map((c) => c.id)).toEqual([conversationId])
+    const messages = f.messages[conversationId]
+    expect(messages.length).toBeGreaterThanOrEqual(4)
+    expect(new Set(messages.map((m) => m.originalLanguage)).size).toBe(messages.length)
+    for (const m of messages) {
+      expect(m.sender.type).toBe('anonymous')
+      expect(m.sender.userId).toBeUndefined()
+      expect(m.originalLanguage).not.toBe(lang)
+      expect(m.translations.map((t) => t.targetLanguage)).toContain(lang)
+    }
+    expect(f.modesDeLecture[conversationId]).toBe('script')
   })
 
-  test('le lecteur ne figure pas parmi les arrivants de son propre lien', () => {
-    expect(mesLiens('es', MAINTENANT).arrivees['nova-club'].recentArrivals.map((r) => r.displayName).join()).not.toContain('Sofía')
+  test.each(KIT_LANGS)('%s : une conversation de SAV par produit, la dernière question d’un client sans compte, que seule leur scène ajoute', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    const sav = f.conversationsDeScene['interaction-sav']
+    expect(sav).toHaveLength(4)
+    for (const c of sav) {
+      expect(c.id).toMatch(HEX24)
+      expect(c.title).toBeTruthy()
+      expect(c.lastMessage.sender.type).toBe('anonymous')
+      if (c.lastMessageOriginalLanguage !== lang) expect(c.lastMessageTranslations[lang]).toBeTruthy()
+    }
+    const plusRecent = Math.max(...f.conversations.map((c) => Date.parse(c.lastMessageAt)))
+    expect(sav.every((c) => Date.parse(c.lastMessageAt) > plusRecent)).toBe(true)
+  })
+
+  test.each(KIT_LANGS)('%s : le lien du SAV s’ouvre sans compte, créé par le lecteur', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    expect(f.lienSav.linkId).not.toBe(f.lienInvitation.linkId)
+    expect(f.lienSav.requireAccount).toBe(false)
+    expect(f.lienSav.allowAnonymousMessages).toBe(true)
+    expect(f.lienSav.creator.id).toBe(f.lecteur.id)
+    expect(f.lienSav.conversation.title).toBe(f.conversationsDeScene['interaction-sav'][0].title)
   })
 })
