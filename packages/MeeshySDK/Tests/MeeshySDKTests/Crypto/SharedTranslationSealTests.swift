@@ -31,6 +31,36 @@ final class SharedTranslationSealTests: XCTestCase {
         .messageSecret(Data(repeating: fill, count: count))
     }
 
+    /// Une enveloppe dont le base64 se termine par `==` : c'est là que des bits de
+    /// remplissage peuvent se glisser. Trois longueurs de texte consécutives, dont
+    /// une produit toujours ce remplissage.
+    private func makePaddedEnvelope() throws -> (envelope: SharedTranslationEnvelope, inner: SharedTranslationInner) {
+        let sealed = try (1...3).map { count -> (envelope: SharedTranslationEnvelope, inner: SharedTranslationInner) in
+            let inner = makeInner(text: String(repeating: "x", count: count))
+            let envelope = try SharedTranslationSeal.seal(binding: makeBinding(), key: .messageContent, inner: inner)
+            return (envelope, inner)
+        }
+        return try XCTUnwrap(
+            sealed.first { $0.envelope.payload.hasSuffix("==") },
+            "aucune longueur ne produit un remplissage double"
+        )
+    }
+
+    /// Ce qu'un décodeur indulgent lit comme les mêmes octets : bits de remplissage
+    /// non nuls, remplissage absent, blanc glissé au milieu, blanc en tête.
+    private func nonCanonicalVariants(of payload: String) -> [String] {
+        let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
+        let characters = Array(payload)
+        let last = characters[characters.count - 3]
+        let dirtied = alphabet[(alphabet.firstIndex(of: last) ?? 0) + 1]
+        return [
+            String(characters.dropLast(3)) + String(dirtied) + "==",
+            String(payload.dropLast(2)),
+            String(payload.prefix(8)) + "\n" + String(payload.dropFirst(8)),
+            " " + payload
+        ]
+    }
+
     // MARK: - Aller et retour
 
     func test_open_afterSealByContent_rendersTheTranslation() throws {
@@ -151,6 +181,92 @@ final class SharedTranslationSealTests: XCTestCase {
         ))
     }
 
+    // MARK: - Les champs liés ne peuvent pas se confondre
+
+    private func malformedBindings() -> [(label: String, binding: SharedTranslationBinding)] {
+        [
+            ("une conversation qui n'est pas un identifiant", makeBinding(conversationId: "64f0c0ffee0000000000c0de|x")),
+            ("une conversation vide", makeBinding(conversationId: "")),
+            ("une conversation trop courte", makeBinding(conversationId: "64f0c0ffee0000000000c0d")),
+            ("un message qui n'est pas un identifiant", makeBinding(messageId: "a001")),
+            ("un message hors de l'hexadécimal", makeBinding(messageId: "64f0c0ffee0000000000a00g")),
+            ("une langue qui n'en est pas une", makeBinding(targetLanguage: "fr|es")),
+            ("une langue écrite en toutes lettres", makeBinding(targetLanguage: "français")),
+            ("une langue vide", makeBinding(targetLanguage: ""))
+        ]
+    }
+
+    func test_seal_withABindingThatIsNotWellFormed_throws() {
+        for (label, binding) in malformedBindings() {
+            XCTAssertThrowsError(
+                try SharedTranslationSeal.seal(binding: binding, key: .messageContent, inner: makeInner()), label
+            ) { XCTAssertEqual($0 as? SharedTranslationSealError, .invalidBinding, label) }
+        }
+    }
+
+    func test_open_withABindingThatIsNotWellFormed_rendersNil() throws {
+        let envelope = try SharedTranslationSeal.seal(binding: makeBinding(), key: .messageContent, inner: makeInner())
+
+        for (label, binding) in malformedBindings() {
+            XCTAssertNil(SharedTranslationSeal.open(binding: binding, key: .messageContent, envelope: envelope), label)
+        }
+    }
+
+    func test_sealAndOpen_withTheWholeVocabularyOfIdentifiersAndLanguages_stillRoundTrip() throws {
+        let bindings = [
+            makeBinding(conversationId: "64F0C0FFEE0000000000C0DE", messageId: "64F0C0FFEE0000000000A001"),
+            makeBinding(targetLanguage: "fra"),
+            makeBinding(targetLanguage: "pt-BR"),
+            makeBinding(targetLanguage: "zh_Hant")
+        ]
+
+        for binding in bindings {
+            let envelope = try SharedTranslationSeal.seal(binding: binding, key: .messageContent, inner: makeInner())
+
+            XCTAssertEqual(
+                SharedTranslationSeal.open(binding: binding, key: .messageContent, envelope: envelope),
+                makeInner(),
+                binding.targetLanguage
+            )
+        }
+    }
+
+    // MARK: - Un seul base64 : le canonique
+
+    func test_open_theCanonicalWriting_stillOpens() throws {
+        let (envelope, inner) = try makePaddedEnvelope()
+
+        XCTAssertTrue(envelope.payload.hasSuffix("=="))
+        XCTAssertEqual(
+            SharedTranslationSeal.open(binding: makeBinding(), key: .messageContent, envelope: envelope), inner
+        )
+    }
+
+    func test_open_theSameBytesWrittenAnotherWay_rendersNil() throws {
+        let (envelope, _) = try makePaddedEnvelope()
+        let variants = nonCanonicalVariants(of: envelope.payload)
+
+        XCTAssertGreaterThanOrEqual(variants.count, 3)
+        for payload in variants {
+            XCTAssertNil(
+                SharedTranslationSeal.open(
+                    binding: makeBinding(), key: .messageContent,
+                    envelope: SharedTranslationEnvelope(kdf: .messageContent, payload: payload)
+                ),
+                "payload: …\(payload.suffix(6))"
+            )
+        }
+    }
+
+    func test_canonicalBytes_keepsOnlyTheWritingTheSealProduces() {
+        XCTAssertEqual(SharedTranslationSeal.canonicalBytes(of: "AAEC"), Data([0, 1, 2]))
+        XCTAssertEqual(SharedTranslationSeal.canonicalBytes(of: "AA=="), Data([0]))
+        XCTAssertEqual(SharedTranslationSeal.canonicalBytes(of: "AAE="), Data([0, 1]))
+        for refused in ["AB==", "AA", "AA\n==", " AA==", "AAF=", "A", "%%%"] {
+            XCTAssertNil(SharedTranslationSeal.canonicalBytes(of: refused), refused)
+        }
+    }
+
     // MARK: - Ouvrir ne lève jamais
 
     func test_open_withATamperedTruncatedOrUnreadablePayload_rendersNil() throws {
@@ -225,6 +341,22 @@ final class SharedTranslationSealTests: XCTestCase {
         XCTAssertThrowsError(try SharedTranslationSeal.seal(
             binding: makeBinding(), key: .messageContent, inner: makeInner(text: atTheLimit + "!")
         )) { XCTAssertEqual($0 as? SharedTranslationSealError, .invalidInner) }
+    }
+
+    /// La plus longue traduction admise, dans l'écriture qui pèse le plus (trois
+    /// octets UTF-8 par unité UTF-16) : l'enveloppe tient sous la borne que la
+    /// passerelle fait respecter, et s'ouvre.
+    func test_seal_aFullTextInAThreeByteScript_fitsUnderTheGatewayPayloadBound() throws {
+        let cjk = String(repeating: "中", count: SharedTranslationLimits.textMaxLength)
+
+        let envelope = try SharedTranslationSeal.seal(
+            binding: makeBinding(), key: .messageContent, inner: makeInner(text: cjk)
+        )
+
+        XCTAssertLessThanOrEqual(envelope.payload.utf8.count, SharedTranslationLimits.payloadMaxLength)
+        XCTAssertEqual(
+            SharedTranslationSeal.open(binding: makeBinding(), key: .messageContent, envelope: envelope)?.text, cjk
+        )
     }
 
     func test_seal_whatTheGatewayWouldRefuseForItsSizeThrows() {

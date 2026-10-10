@@ -133,4 +133,96 @@ final class DeviceTranslationEligibilityTests: XCTestCase {
         XCTAssertFalse(DeviceTranslationEligibility.isEndToEnd(makeMessage(), conversationEncryptionMode: nil))
         XCTAssertFalse(DeviceTranslationEligibility.isEndToEnd(makeMessage(), conversationEncryptionMode: "server"))
     }
+
+    // MARK: - Ce que la passerelle accepte : où le serveur lit déjà le message
+
+    /// Miroir de la table « ce que la passerelle accepte » de
+    /// `packages/shared/__tests__/shared-translation.test.ts` : les mêmes lignes,
+    /// dans le même ordre.
+    private typealias Row = (label: String, conversation: String?, isEncrypted: Bool, mode: String?)
+
+    private let readableRows: [Row] = [
+        ("un message en clair", nil, false, nil),
+        ("un message en clair, conversation chiffrée par le serveur", "server", false, nil),
+        ("un message chiffré par le serveur", nil, true, "server"),
+        ("un message chiffré en mode hybride", "hybrid", true, "hybrid"),
+        ("des modes écrits autrement", " Server ", true, "HYBRID")
+    ]
+
+    private let unreadableRows: [Row] = [
+        ("une conversation chiffrée de bout en bout", "e2ee", false, nil),
+        ("une conversation chiffrée de bout en bout, écrite autrement", " E2EE ", false, nil),
+        ("un message chiffré de bout en bout", nil, true, "e2ee"),
+        ("un message de bout en bout envoyé en clair", nil, false, "e2ee"),
+        ("un message chiffré sans mode", nil, true, nil),
+        ("un message chiffré sous un mode inconnu", nil, true, "x"),
+        ("un message en clair sous un mode inconnu", nil, false, "x"),
+        ("une conversation sous un mode inconnu", "x", false, nil)
+    ]
+
+    private func readsMessage(_ row: Row) -> Bool {
+        DeviceTranslationEligibility.serverReadsMessage(
+            conversationEncryptionMode: row.conversation, isEncrypted: row.isEncrypted, encryptionMode: row.mode
+        )
+    }
+
+    func test_serverReadsMessage_aPlainOrServerEncryptedMessage_isReadable() {
+        XCTAssertEqual(readableRows.count, 5)
+        for row in readableRows {
+            XCTAssertTrue(readsMessage(row), row.label)
+        }
+    }
+
+    func test_serverReadsMessage_anythingTheServerCannotBeSureToRead_isNotReadable() {
+        XCTAssertEqual(unreadableRows.count, 8)
+        for row in unreadableRows {
+            XCTAssertFalse(readsMessage(row), row.label)
+        }
+    }
+
+    func test_isEndToEnd_isExactlyWhatTheServerDoesNotRead() {
+        for row in readableRows + unreadableRows {
+            let message = makeMessage(isEncrypted: row.isEncrypted, encryptionMode: row.mode)
+
+            XCTAssertEqual(
+                DeviceTranslationEligibility.isEndToEnd(message, conversationEncryptionMode: row.conversation),
+                !readsMessage(row),
+                row.label
+            )
+        }
+    }
+
+    func test_disposition_whereTheServerReadsTheMessage_isShareable() {
+        for row in readableRows {
+            let message = makeMessage(isEncrypted: row.isEncrypted, encryptionMode: row.mode)
+
+            XCTAssertEqual(disposition(of: message, conversationMode: row.conversation), .shareable, row.label)
+        }
+    }
+
+    func test_disposition_whereTheServerDoesNotReadTheMessage_isNeverShareable() {
+        for row in unreadableRows {
+            let message = makeMessage(isEncrypted: row.isEncrypted, encryptionMode: row.mode)
+
+            XCTAssertEqual(disposition(of: message, conversationMode: row.conversation), .ephemeral, row.label)
+        }
+    }
+
+    func test_disposition_anEncryptedMessageUnderAnUnknownMode_staysOnTheDevice() {
+        let encrypted = makeMessage(isEncrypted: true, encryptionMode: "x")
+
+        XCTAssertNotEqual(disposition(of: encrypted), .shareable)
+        XCTAssertEqual(disposition(of: encrypted), .ephemeral)
+    }
+
+    func test_disposition_aConversationUnderAnUnknownMode_staysOnTheDeviceForEveryMessage() {
+        XCTAssertEqual(disposition(of: makeMessage(), conversationMode: "x"), .ephemeral)
+        XCTAssertEqual(disposition(of: makeMessage(isEncrypted: true, encryptionMode: "server"), conversationMode: "x"), .ephemeral)
+    }
+
+    func test_disposition_anUnknownModeStillInItsCiphertext_isSkipped() {
+        let ciphertext = Data((0..<40).map(UInt8.init)).base64EncodedString()
+
+        XCTAssertEqual(disposition(of: makeMessage(content: ciphertext, isEncrypted: true, encryptionMode: "x")), .skip)
+    }
 }

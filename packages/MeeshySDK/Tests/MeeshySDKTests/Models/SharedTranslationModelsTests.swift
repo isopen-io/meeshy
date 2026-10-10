@@ -88,6 +88,7 @@ final class SharedTranslationModelsTests: XCTestCase {
     func test_shareTranslationBody_encodesTheContractShape() throws {
         let body = ShareTranslationBody(
             messageId: "64f0c0ffee0000000000a001", targetLanguage: "fr",
+            sourceVersion: "2026-10-10T08:15:30.123Z",
             envelope: SharedTranslationEnvelope(kdf: .messageContent, payload: payload)
         )
 
@@ -96,9 +97,10 @@ final class SharedTranslationModelsTests: XCTestCase {
         )
         let envelope = try XCTUnwrap(object["envelope"] as? [String: Any])
 
-        XCTAssertEqual(object.keys.sorted(), ["envelope", "messageId", "targetLanguage"])
+        XCTAssertEqual(object.keys.sorted(), ["envelope", "messageId", "sourceVersion", "targetLanguage"])
         XCTAssertEqual(object["messageId"] as? String, "64f0c0ffee0000000000a001")
         XCTAssertEqual(object["targetLanguage"] as? String, "fr")
+        XCTAssertEqual(object["sourceVersion"] as? String, "2026-10-10T08:15:30.123Z")
         XCTAssertEqual(envelope.keys.sorted(), ["alg", "kdf", "payload", "v"])
         XCTAssertEqual(envelope["v"] as? Int, 1)
         XCTAssertEqual(envelope["alg"] as? String, "A256GCM")
@@ -122,6 +124,156 @@ final class SharedTranslationModelsTests: XCTestCase {
         }
         for refused in ["", "f", "français", "fr-", "fr-X", "fr-US-x", "fr--US", "1r", "fr_US_1", "fr-é", "fr-123456789"] {
             XCTAssertFalse(SharedTranslationFormat.isLanguageCode(refused), refused)
+        }
+    }
+
+    // MARK: - La version du texte que l'appareil a traduit
+
+    /// `sourceVersion` du contrat : `original`, ou l'instant au format `toISOString`.
+    private func matchesTheGatewayPattern(_ version: String) -> Bool {
+        version.range(
+            of: #"^(?:original|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)$"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    /// Ce que le décodeur du SDK fait d'une date du serveur.
+    private func decoded(_ iso: String) throws -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return try XCTUnwrap(formatter.date(from: iso), iso)
+    }
+
+    func test_sourceVersion_ofAMessageNeverEdited_isOriginal() {
+        XCTAssertEqual(SharedTranslationSourceVersion.of(editedAt: nil), "original")
+        XCTAssertEqual(SharedTranslationSourceVersion.original, "original")
+    }
+
+    func test_sourceVersion_ofAnEditedMessage_isTheInstantInUTCToTheMillisecond() throws {
+        let editedAt = try decoded("2026-10-10T08:15:30.123Z")
+
+        XCTAssertEqual(SharedTranslationSourceVersion.of(editedAt: editedAt), "2026-10-10T08:15:30.123Z")
+    }
+
+    func test_sourceVersion_writesAnotherTimezoneAsUTC() throws {
+        let editedAt = try decoded("2026-10-10T10:15:30.100+02:00")
+
+        XCTAssertEqual(SharedTranslationSourceVersion.of(editedAt: editedAt), "2026-10-10T08:15:30.100Z")
+    }
+
+    func test_sourceVersion_keepsEveryMillisecond() {
+        for milliseconds in 0...999 {
+            let date = Date(timeIntervalSince1970: 1_791_000_000 + Double(milliseconds) / 1000)
+
+            let version = SharedTranslationSourceVersion.of(editedAt: date)
+
+            XCTAssertEqual(version, "2026-10-03T04:00:00" + String(format: ".%03ldZ", milliseconds), "\(milliseconds)")
+            XCTAssertTrue(matchesTheGatewayPattern(version), version)
+        }
+    }
+
+    func test_sourceVersion_roundsTheMillisecondInsteadOfTruncatingIt() {
+        let justBelowTheMillisecond = Date(timeIntervalSince1970: 1_791_620_130.1229999)
+
+        XCTAssertEqual(
+            SharedTranslationSourceVersion.of(editedAt: justBelowTheMillisecond), "2026-10-10T08:15:30.123Z"
+        )
+    }
+
+    func test_sourceVersion_padsEveryFieldLikeToISOString() {
+        XCTAssertEqual(
+            SharedTranslationSourceVersion.of(editedAt: Date(timeIntervalSince1970: 951_782_400.007)),
+            "2000-02-29T00:00:00.007Z"
+        )
+        XCTAssertEqual(
+            SharedTranslationSourceVersion.of(editedAt: Date(timeIntervalSince1970: 1_709_164_799.5)),
+            "2024-02-28T23:59:59.500Z"
+        )
+        XCTAssertEqual(
+            SharedTranslationSourceVersion.of(editedAt: Date(timeIntervalSince1970: 4_102_444_800)),
+            "2100-01-01T00:00:00.000Z"
+        )
+    }
+
+    func test_sourceVersion_beforeTheEpoch_countsTheFractionUpwards() {
+        XCTAssertEqual(
+            SharedTranslationSourceVersion.of(editedAt: Date(timeIntervalSince1970: 0)), "1970-01-01T00:00:00.000Z"
+        )
+        XCTAssertEqual(
+            SharedTranslationSourceVersion.of(editedAt: Date(timeIntervalSince1970: -0.5)), "1969-12-31T23:59:59.500Z"
+        )
+    }
+
+    func test_sourceVersion_ofADateThatDoesNotRead_isNeverOriginal() {
+        for unreadable in [Date(timeIntervalSince1970: .nan), Date(timeIntervalSince1970: .infinity)] {
+            let version = SharedTranslationSourceVersion.of(editedAt: unreadable)
+
+            XCTAssertNotEqual(version, "original")
+            XCTAssertTrue(matchesTheGatewayPattern(version), version)
+        }
+    }
+
+    // MARK: - Les refus du partage
+
+    func test_shareRefusal_isReadFromTheCodeTheGatewayPosts() {
+        XCTAssertEqual(SharedTranslationShareRefusal(code: "SHARED_TRANSLATION_READ_RECEIPTS_OFF"), .readReceiptsOff)
+        XCTAssertEqual(SharedTranslationShareRefusal(code: "SHARED_TRANSLATION_STALE_SOURCE"), .staleSource)
+    }
+
+    func test_shareRefusal_ignoresEveryOtherCode() {
+        let others: [String?] = [
+            nil, "", "SHARED_TRANSLATION_BUDGET_EXCEEDED", "shared_translation_stale_source", "VALIDATION_ERROR"
+        ]
+
+        for code in others {
+            XCTAssertNil(SharedTranslationShareRefusal(code: code), code ?? "nil")
+        }
+    }
+
+    // MARK: - Le contrat TypeScript fait foi
+
+    private func contractSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // Models
+            .deletingLastPathComponent() // MeeshySDKTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // MeeshySDK
+            .deletingLastPathComponent() // packages
+            .appendingPathComponent("shared/types/shared-translation.ts")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `payloadMaxLength: 40_960,` → 40960 : la valeur que le contrat écrit.
+    private func contractNumber(_ name: String, in source: String) throws -> Int {
+        let range = try XCTUnwrap(source.range(of: "\(name): [0-9_]+,", options: .regularExpression), name)
+        return try XCTUnwrap(Int(source[range].filter(\.isNumber)), name)
+    }
+
+    func test_limits_areTheOnesTheTypeScriptContractWrites() throws {
+        let source = try contractSource()
+        let mirrored: [(name: String, value: Int)] = [
+            ("payloadMinLength", SharedTranslationLimits.payloadMinLength),
+            ("payloadMaxLength", SharedTranslationLimits.payloadMaxLength),
+            ("textMaxLength", SharedTranslationLimits.textMaxLength),
+            ("engineMaxLength", SharedTranslationLimits.engineMaxLength),
+            ("messageIdsMaxCount", SharedTranslationLimits.messageIdsMaxCount),
+            ("languagesMaxCount", SharedTranslationLimits.languagesMaxCount),
+            ("secretLength", SharedTranslationLimits.secretLength),
+            ("nonceLength", SharedTranslationLimits.nonceLength),
+            ("tagLength", SharedTranslationLimits.tagLength)
+        ]
+
+        for limit in mirrored {
+            XCTAssertEqual(try contractNumber(limit.name, in: source), limit.value, limit.name)
+        }
+    }
+
+    func test_refusalCodes_areWrittenInTheTypeScriptContract() throws {
+        let source = try contractSource()
+
+        XCTAssertFalse(SharedTranslationShareRefusal.allCases.isEmpty)
+        for refusal in SharedTranslationShareRefusal.allCases {
+            XCTAssertTrue(source.contains("'\(refusal.code)'"), refusal.code)
         }
     }
 

@@ -234,7 +234,8 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
         content: String = "Hello",
         originalLanguage: String = "en",
         age: TimeInterval = 0,
-        isMe: Bool = false
+        isMe: Bool = false,
+        editedAt: Date? = nil
     ) -> MeeshyMessage {
         let createdAt = Date().addingTimeInterval(-age)
         return MeeshyMessage(
@@ -243,6 +244,8 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
             senderId: Ids.peer,
             content: content,
             originalLanguage: originalLanguage,
+            isEdited: editedAt != nil,
+            editedAt: editedAt,
             createdAt: createdAt,
             updatedAt: createdAt,
             isMe: isMe
@@ -825,6 +828,104 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
         XCTAssertEqual(rig.source.applied.map(\.persisting), [true, true])
     }
 
+    /// Ce que l'appareil poste pour un message, et la version du texte qu'il dit
+    /// avoir traduit.
+    private func sourceVersionShared(for message: MeeshyMessage) async -> String? {
+        let rig = makeRig(messages: [message])
+        defer { rig.coordinator.stop() }
+        let shared = makeSignal("the translation is shared")
+        rig.sharing.onShare = { shared.fulfill() }
+
+        rig.coordinator.start(source: rig.source, encryptionMode: nil)
+        await fulfillment(of: [shared], timeout: patience)
+
+        return rig.sharing.shareCalls.first?.body.sourceVersion
+    }
+
+    func test_share_postsTheSourceVersionOfTheTranslatedText() async {
+        let unedited = await sourceVersionShared(for: makeMessage())
+        let edited = await sourceVersionShared(
+            for: makeMessage(editedAt: Date(timeIntervalSince1970: 1_791_620_130.123))
+        )
+
+        XCTAssertEqual(unedited, "original")
+        XCTAssertEqual(edited, "2026-10-10T08:15:30.123Z")
+    }
+
+    func test_share_whenTheGatewaySaysTheSourceIsStale_isDroppedWithoutRetryAndTheNextOneStillGoes() async {
+        let rig = makeRig(messages: [makeMessage()])
+        defer { rig.coordinator.stop() }
+        rig.sharing.shareError = SharedTranslationShareRefusal.staleSource
+        let refused = makeSignal("the first share is refused as stale")
+        rig.sharing.onShare = { refused.fulfill() }
+
+        rig.coordinator.start(source: rig.source, encryptionMode: nil)
+        await fulfillment(of: [refused], timeout: patience)
+        let sharedNext = makeSignal("the next message is still shared")
+        rig.sharing.onShare = { sharedNext.fulfill() }
+        rig.source.messages.append(makeMessage(id: Ids.messageB, content: "Good morning"))
+        rig.source.fireTrigger()
+        await fulfillment(of: [sharedNext], timeout: patience)
+        let neverRetried = makeNever("the stale share is not retried")
+        rig.sharing.onShare = { neverRetried.fulfill() }
+        await fulfillment(of: [neverRetried], timeout: quietPeriod)
+
+        XCTAssertEqual(rig.sharing.shareCalls.map(\.body.messageId), [Ids.messageA, Ids.messageB])
+        XCTAssertEqual(rig.source.applied.map(\.persisting), [true, true])
+    }
+
+    /// Le plus récent des deux messages part le premier et reste retenu sur le
+    /// fil ; l'autre, A, attend dans la file pendant que `change` modifie la
+    /// conversation. Rend les messages dont une traduction est effectivement
+    /// partie vers la passerelle.
+    private func sharedMessageIds(whileTheOlderOneWaits change: (FakeConversationSource) -> Void) async -> [String] {
+        let older = makeMessage(id: Ids.messageA, age: 5)
+        let newest = makeMessage(id: Ids.messageB, content: "Good morning")
+        let rig = makeRig(messages: [older, newest])
+        defer { rig.coordinator.stop() }
+        let latch = Latch()
+        let onTheWire = makeSignal("the first share is on the wire")
+        rig.sharing.onShare = { onTheWire.fulfill() }
+        rig.sharing.holdShare = { await latch.wait() }
+
+        rig.coordinator.start(source: rig.source, encryptionMode: nil)
+        await fulfillment(of: [onTheWire], timeout: patience)
+        change(rig.source)
+        let neverPostedAgain = makeNever("the queued share is not posted")
+        rig.sharing.onShare = { neverPostedAgain.fulfill() }
+        latch.open()
+        await fulfillment(of: [neverPostedAgain], timeout: quietPeriod)
+
+        return rig.sharing.shareCalls.map(\.body.messageId)
+    }
+
+    func test_share_whenTheMessageIsEditedWhileQueued_isNotPosted() async {
+        let posted = await sharedMessageIds { source in
+            source.messages[0].content = "Hello, edited"
+            source.messages[0].isEdited = true
+            source.messages[0].editedAt = Date(timeIntervalSince1970: 1_791_620_200)
+        }
+
+        XCTAssertEqual(posted, [Ids.messageB])
+    }
+
+    func test_share_whenOnlyTheEditDateMovesWhileQueued_isNotPosted() async {
+        let posted = await sharedMessageIds { source in
+            source.messages[0].isEdited = true
+            source.messages[0].editedAt = Date(timeIntervalSince1970: 1_791_620_200)
+        }
+
+        XCTAssertEqual(posted, [Ids.messageB])
+    }
+
+    func test_share_whenTheMessageLeavesTheThreadWhileQueued_isNotPosted() async {
+        let posted = await sharedMessageIds { source in
+            source.messages.removeAll { $0.id == Ids.messageA }
+        }
+
+        XCTAssertEqual(posted, [Ids.messageB])
+    }
+
     func test_sharedEvent_beforeTheFirstPass_isNotTranslatedAgainByTheDevice() async throws {
         let rig = makeRig(messages: [makeMessage()])
         defer { rig.coordinator.stop() }
@@ -962,6 +1063,32 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
         rig.coordinator.stop()
 
         XCTAssertEqual(rig.engine.cancelPendingCount, 1)
+    }
+
+    /// Une traduction qui attend sa file ne survit pas à l'écran qu'on ferme : ce
+    /// qui l'envoie n'a plus de conversation à relire. Rouvrir avant que la
+    /// requête en vol ne s'achève ne la ressuscite pas — c'est ce que sépare ce
+    /// témoin d'une file simplement privée de sa source.
+    func test_stop_dropsTheQueuedShares() async {
+        let older = makeMessage(id: Ids.messageA, age: 5)
+        let newest = makeMessage(id: Ids.messageB, content: "Good morning")
+        let rig = makeRig(messages: [older, newest])
+        defer { rig.coordinator.stop() }
+        let latch = Latch()
+        let onTheWire = makeSignal("the first share is on the wire")
+        rig.sharing.onShare = { onTheWire.fulfill() }
+        rig.sharing.holdShare = { await latch.wait() }
+
+        rig.coordinator.start(source: rig.source, encryptionMode: nil)
+        await fulfillment(of: [onTheWire], timeout: patience)
+        rig.coordinator.stop()
+        rig.coordinator.start(source: rig.source, encryptionMode: nil)
+        let neverPostedAgain = makeNever("the queued share is not posted")
+        rig.sharing.onShare = { neverPostedAgain.fulfill() }
+        latch.open()
+        await fulfillment(of: [neverPostedAgain], timeout: quietPeriod)
+
+        XCTAssertEqual(rig.sharing.shareCalls.map(\.body.messageId), [Ids.messageB])
     }
 
     func test_stop_beforeTheSettleDelay_translatesNothingEvenWhenTheThreadChanges() async {

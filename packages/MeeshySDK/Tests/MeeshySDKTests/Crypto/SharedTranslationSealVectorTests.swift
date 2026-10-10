@@ -117,7 +117,7 @@ final class SharedTranslationSealVectorTests: XCTestCase {
         let file = try loadVectors()
 
         XCTAssertGreaterThanOrEqual(file.cases.count, 5, "jamais de vert silencieux")
-        XCTAssertGreaterThanOrEqual(file.rejections.count, 7, "jamais de vert silencieux")
+        XCTAssertGreaterThanOrEqual(file.rejections.count, 10, "jamais de vert silencieux")
     }
 
     // MARK: - Les pièces, une à une
@@ -198,6 +198,20 @@ final class SharedTranslationSealVectorTests: XCTestCase {
             let opened = SharedTranslationSeal.open(binding: binding, key: source, envelope: envelope)
 
             XCTAssertEqual(opened, vector.input.inner, vector.label)
+        }
+    }
+
+    /// Les trois refus de base64 (bits de remplissage non nuls, remplissage absent,
+    /// retour à la ligne) désignent les OCTETS d'une enveloppe authentique : ce
+    /// n'est pas le déchiffrement qui les refuse, c'est l'écriture.
+    func test_theBase64Rejections_areRefusedByTheWritingNotByTheCipher() throws {
+        let base64Rejections = try loadVectors().rejections.filter { $0.label.hasPrefix("un base64") }
+
+        XCTAssertGreaterThanOrEqual(base64Rejections.count, 3, "jamais de vert silencieux")
+        for rejection in base64Rejections {
+            XCTAssertNil(
+                SharedTranslationSeal.canonicalBytes(of: rejection.opening.envelope.payload), rejection.label
+            )
         }
     }
 

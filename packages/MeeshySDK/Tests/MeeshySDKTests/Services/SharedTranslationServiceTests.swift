@@ -3,7 +3,7 @@ import XCTest
 @testable import MeeshySDK
 
 /// #9899 — partager sa traduction, lire celles des autres membres. Le service
-/// ne lit jamais l'enveloppe : il l'envoie et la rend telle que la passerelle
+/// n'ouvre jamais l'enveloppe : il l'envoie et la rend telle que la passerelle
 /// la sert.
 final class SharedTranslationServiceTests: XCTestCase {
 
@@ -34,10 +34,17 @@ final class SharedTranslationServiceTests: XCTestCase {
         )
     }
 
-    private func makeBody() -> ShareTranslationBody {
+    private func makeBody(sourceVersion: String = "original") -> ShareTranslationBody {
         ShareTranslationBody(
             messageId: "64f0c0ffee0000000000a001", targetLanguage: "fr",
+            sourceVersion: sourceVersion,
             envelope: makeSharedTranslation().envelope
+        )
+    }
+
+    private func staleSourceRejection(code: String? = SharedTranslationShareRefusal.staleSource.code) -> MeeshyError {
+        MeeshyError.rejected(
+            APIRejection(statusCode: 409, code: code, message: "The message changed since it was translated")
         )
     }
 
@@ -72,6 +79,16 @@ final class SharedTranslationServiceTests: XCTestCase {
         let envelope = mock.lastRequest?.bodyJSON?["envelope"] as? [String: Any]
         XCTAssertEqual(envelope?["kdf"] as? String, "message-content")
         XCTAssertEqual(envelope?["alg"] as? String, "A256GCM")
+    }
+
+    func test_share_postsTheVersionOfTheTextThatWasTranslated() async throws {
+        mock.stub(route, result: APIResponse<ShareTranslationResult>(
+            success: true, data: ShareTranslationResult(sharedTranslation: makeSharedTranslation(), created: true), error: nil
+        ))
+
+        _ = try await service.share(conversationId: conversationId, body: makeBody(sourceVersion: "2026-10-10T08:15:30.123Z"))
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["sourceVersion"] as? String, "2026-10-10T08:15:30.123Z")
     }
 
     func test_share_rendersWhatTheGatewayServed_whenAnotherMemberWasFirst() async throws {
@@ -129,6 +146,65 @@ final class SharedTranslationServiceTests: XCTestCase {
         }
     }
 
+    func test_share_whenTheMessageChangedSinceTheTranslation_throwsTheTypedRefusal() async {
+        mock.errorToThrow = staleSourceRejection()
+
+        do {
+            _ = try await service.share(conversationId: conversationId, body: makeBody())
+            XCTFail("Expected the refusal to be thrown")
+        } catch {
+            XCTAssertEqual(error as? SharedTranslationShareRefusal, .staleSource)
+        }
+    }
+
+    func test_share_aConflictWithAnotherCode_passesAsTheGatewayServedIt() async {
+        mock.errorToThrow = staleSourceRejection(code: "SOMETHING_ELSE")
+
+        do {
+            _ = try await service.share(conversationId: conversationId, body: makeBody())
+            XCTFail("Expected error to be thrown")
+        } catch {
+            XCTAssertNil(error as? SharedTranslationShareRefusal)
+            guard case .rejected(let rejection)? = error as? MeeshyError else {
+                return XCTFail("Expected the rejection as served, got \(error)")
+            }
+            XCTAssertEqual(rejection.code, "SOMETHING_ELSE")
+        }
+    }
+
+    func test_share_aConflictWithoutACode_passesAsTheGatewayServedIt() async {
+        mock.errorToThrow = staleSourceRejection(code: nil)
+
+        do {
+            _ = try await service.share(conversationId: conversationId, body: makeBody())
+            XCTFail("Expected error to be thrown")
+        } catch {
+            XCTAssertNil(error as? SharedTranslationShareRefusal)
+        }
+    }
+
+    func test_share_theTwoRefusalsKeepTheirOwnReach() async {
+        mock.errorToThrow = MeeshyError.forbidden(
+            reason: "Read receipts are off",
+            body: Data(#"{"code":"SHARED_TRANSLATION_READ_RECEIPTS_OFF"}"#.utf8)
+        )
+        let accountRefusal = await refusal(of: makeBody())
+        mock.errorToThrow = staleSourceRejection()
+        let messageRefusal = await refusal(of: makeBody())
+
+        XCTAssertEqual(accountRefusal, .readReceiptsOff)
+        XCTAssertEqual(messageRefusal, .staleSource)
+    }
+
+    private func refusal(of body: ShareTranslationBody) async -> SharedTranslationShareRefusal? {
+        do {
+            _ = try await service.share(conversationId: conversationId, body: body)
+            return nil
+        } catch {
+            return error as? SharedTranslationShareRefusal
+        }
+    }
+
     // MARK: - fetch
 
     func test_fetch_asksForTheMessagesAndLanguagesSeparatedByCommas() async throws {
@@ -147,12 +223,37 @@ final class SharedTranslationServiceTests: XCTestCase {
         XCTAssertEqual(result, [makeSharedTranslation()])
     }
 
-    func test_fetch_withoutLanguages_omitsTheParameter() async throws {
-        stubList([])
+    /// La passerelle EXIGE `languages` (1 à 8) : sans langue valable elle
+    /// répondrait 400. Aucune requête ne part, la réponse est vide.
+    func test_fetch_withoutLanguages_makesNoRequest() async throws {
+        stubList([makeSharedTranslation()])
 
-        _ = try await service.fetch(conversationId: conversationId, messageIds: ["64f0c0ffee0000000000a001"], languages: [])
+        let result = try await service.fetch(
+            conversationId: conversationId, messageIds: ["64f0c0ffee0000000000a001"], languages: []
+        )
 
-        XCTAssertNil(queryValue(mock.lastRequest, "languages"))
+        XCTAssertTrue(result.isEmpty)
+        XCTAssertEqual(mock.requestCount, 0)
+    }
+
+    func test_fetch_withNoValidLanguage_makesNoRequest() async throws {
+        stubList([makeSharedTranslation()])
+
+        let result = try await service.fetch(
+            conversationId: conversationId,
+            messageIds: ["64f0c0ffee0000000000a001"],
+            languages: ["français", "", "  ", "e"]
+        )
+
+        XCTAssertTrue(result.isEmpty)
+        XCTAssertEqual(mock.requestCount, 0)
+    }
+
+    func test_queryItems_alwaysCarryBothParameters() {
+        let items = SharedTranslationService.queryItems(messageIds: ["64f0c0ffee0000000000a001"], languages: ["fr"])
+
+        XCTAssertEqual(items.map(\.name), ["messageIds", "languages"])
+        XCTAssertEqual(items.map(\.value), ["64f0c0ffee0000000000a001", "fr"])
     }
 
     func test_fetch_dropsWhatTheGatewayWouldRefuse_beforeSending() async throws {

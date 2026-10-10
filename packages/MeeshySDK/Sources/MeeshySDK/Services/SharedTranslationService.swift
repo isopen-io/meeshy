@@ -4,19 +4,25 @@ import Foundation
 /// lire celles des autres. Protocole à part : les doubles de test n'ont pas à
 /// connaître un geste que seule la traduction sur l'appareil déclenche.
 ///
-/// La passerelle ne lit jamais ce qui transite : `envelope` est scellée sur
-/// l'appareil (`SharedTranslationSeal`).
+/// `envelope` est scellée sur l'appareil (`SharedTranslationSeal`) et la
+/// passerelle la garde et la relaie sans l'ouvrir. Ce scellement n'est PAS une
+/// confidentialité contre elle dans une conversation qu'elle lit déjà : elle
+/// pourrait l'ouvrir, puisqu'elle détient le texte d'où la clé dérive (voir
+/// l'en-tête de `SharedTranslationModels.swift`).
 public protocol SharedTranslationServiceProviding: Sendable {
     /// `POST /conversations/:id/shared-translations`. `created == false` quand un
-    /// autre membre l'avait déjà partagée : la sienne est rendue. Un refus au
-    /// compte lève `SharedTranslationShareRefusal` ; tout autre échec passe tel
-    /// quel.
+    /// autre membre l'avait déjà partagée : la sienne est rendue. Un refus que la
+    /// passerelle motive par un code connu (`SharedTranslationShareRefusal` : le
+    /// compte ne partage pas, ou le message a changé depuis la traduction) lève ce
+    /// refus ; tout autre échec passe tel quel.
     func share(conversationId: String, body: ShareTranslationBody) async throws -> ShareTranslationResult
 
     /// `GET /conversations/:id/shared-translations`. Les identifiants et les
     /// langues que la passerelle refuserait sont écartés AVANT l'envoi — un seul
     /// invalide ferait échouer toute la lecture —, et les identifiants au-delà de
-    /// 100 partent par requêtes successives.
+    /// 100 partent par requêtes successives. La passerelle EXIGE `languages` (1 à
+    /// 8, le prisme du lecteur dans son ordre) : sans identifiant ni langue
+    /// valable, rien ne part et la réponse est vide.
     func fetch(conversationId: String, messageIds: [String], languages: [String]) async throws -> [SharedTranslation]
 }
 
@@ -36,8 +42,8 @@ public final class SharedTranslationService: SharedTranslationServiceProviding, 
             )
             return response.data
         } catch {
-            if StoryPublishRetryPolicy.rejectionCode(error) == SharedTranslationShareRefusal.readReceiptsOff.code {
-                throw SharedTranslationShareRefusal.readReceiptsOff
+            if let refusal = SharedTranslationShareRefusal(code: StoryPublishRetryPolicy.rejectionCode(error)) {
+                throw refusal
             }
             throw error
         }
@@ -49,12 +55,12 @@ public final class SharedTranslationService: SharedTranslationServiceProviding, 
         languages: [String]
     ) async throws -> [SharedTranslation] {
         let ids = Self.distinct(messageIds).filter(SharedTranslationFormat.isObjectId)
-        guard !ids.isEmpty else { return [] }
         let wanted = Array(
             Self.distinct(languages)
                 .filter(SharedTranslationFormat.isLanguageCode)
                 .prefix(SharedTranslationLimits.languagesMaxCount)
         )
+        guard !ids.isEmpty, !wanted.isEmpty else { return [] }
         var collected: [SharedTranslation] = []
         for start in stride(from: 0, to: ids.count, by: SharedTranslationLimits.messageIdsMaxCount) {
             let chunk = ids[start..<min(start + SharedTranslationLimits.messageIdsMaxCount, ids.count)]
@@ -68,11 +74,10 @@ public final class SharedTranslationService: SharedTranslationServiceProviding, 
     }
 
     static func queryItems(messageIds: [String], languages: [String]) -> [URLQueryItem] {
-        var items = [URLQueryItem(name: "messageIds", value: messageIds.joined(separator: ","))]
-        if !languages.isEmpty {
-            items.append(URLQueryItem(name: "languages", value: languages.joined(separator: ",")))
-        }
-        return items
+        [
+            URLQueryItem(name: "messageIds", value: messageIds.joined(separator: ",")),
+            URLQueryItem(name: "languages", value: languages.joined(separator: ","))
+        ]
     }
 
     /// Sans blancs ni doublons, dans l'ordre d'arrivée — comme la passerelle lit

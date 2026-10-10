@@ -21,17 +21,24 @@ import os
 //    Prisme que le moteur sait faire (`DeviceTranslationTarget`), l'afficher
 //    aussitôt (`DeviceTranslationConversationSource.applyDeviceTranslation`) ;
 // 3. PARTAGER : sceller la traduction avec le texte original du message et la
-//    poster (`SharedTranslationSeal`). Le partage est un effort : sans réseau,
-//    la traduction reste locale, et personne n'est privé de rien.
+//    poster (`SharedTranslationSeal`), avec la version du texte qu'elle traduit
+//    (`SharedTranslationSourceVersion`). Le partage est un effort : sans réseau,
+//    la traduction reste locale, et personne n'est privé de rien. Une
+//    traduction attend sa file, et le message peut changer pendant ce temps :
+//    juste avant CHAQUE envoi, le message courant est relu, et la traduction ne
+//    part que s'il est encore tel qu'on l'a traduit (`mayPost`).
 //
 // Les traductions que les AUTRES partagent arrivent par `message:translation-shared`
 // et s'ouvrent avec le texte du message que l'appareil a déjà.
 //
-// Chiffrement de bout en bout (fail-closed). Un message d'une conversation `e2ee`
-// est traduit et montré, mais seulement EN MÉMOIRE (`persisting: false`) : ni le
-// disque, ni les caches partagés, ni la passerelle n'en reçoivent rien. La
-// passerelle n'accepte, pour ces messages, que la dérivation `message-secret`
-// — dont le secret voyage dans le message chiffré, lot cryptographique à venir.
+// Chiffrement de bout en bout (fail-closed). Un message que le serveur ne lit pas
+// (conversation `e2ee`, mode inconnu, message chiffré sans mode annoncé :
+// `DeviceTranslationEligibility.serverReadsMessage`) est traduit et montré, mais
+// seulement EN MÉMOIRE (`persisting: false`) : ni le disque, ni les caches
+// partagés, ni la passerelle n'en reçoivent rien. La passerelle n'accepte aucune
+// dérivation pour ces messages : `message-content` lui donnerait de quoi deviner
+// un message court, et `message-secret` attend le message chiffré qui en
+// transporte le secret (#9959).
 //
 // Règles qui tiennent la boucle (chacune a un site unique, voir plus bas) :
 // - une traduction déjà servie n'est JAMAIS écrasée : on recalcule les rangs
@@ -168,8 +175,12 @@ final class DeviceTranslationCoordinator: ObservableObject {
         requestPass()
     }
 
-    /// Le travail en cours s'arrête ; les partages déjà scellés partent quand
-    /// même — une traduction faite ne se jette pas parce que l'écran se ferme.
+    /// Le travail en cours s'arrête, et la file des partages se vide : un partage
+    /// ne part que si le message qu'il traduit est relu, à cet instant, tel qu'on
+    /// l'a traduit (`mayPost`), et sans conversation ouverte plus rien ne le
+    /// garantit. Une traduction scellée qui attendait son tour ne part donc pas —
+    /// elle reste affichée sur l'appareil, mais n'est pas partagée plus tard ; la
+    /// requête déjà en vol, elle, va à son terme.
     func stop() {
         guard isRunning else { return }
         isRunning = false
@@ -179,6 +190,7 @@ final class DeviceTranslationCoordinator: ObservableObject {
         passRequested = false
         cancellables.removeAll()
         engine.cancelPending()
+        shareQueue.removeAll()
         source = nil
     }
 
@@ -598,8 +610,11 @@ final class DeviceTranslationCoordinator: ObservableObject {
     // MARK: - 3. Le partage
 
     /// Scelle la traduction avec le texte original du message, puis la met en
-    /// file. Une traduction que la passerelle refuserait (trop longue, langue mal
-    /// formée) reste locale : le lecteur la voit, personne d'autre ne la reçoit.
+    /// file, datée de la version du texte qu'elle traduit : la passerelle refuse
+    /// (409) la traduction d'un message modifié depuis. Une traduction que la
+    /// passerelle refuserait (trop longue, langue mal formée, message sans
+    /// identifiant serveur) reste locale : le lecteur la voit, personne d'autre
+    /// ne la reçoit.
     private func enqueueShare(_ text: String, target: String, sourceLanguage: String, for message: Message) {
         guard !sharingDeclined else { return }
         let binding = SharedTranslationBinding(
@@ -614,7 +629,12 @@ final class DeviceTranslationCoordinator: ObservableObject {
             shareQueue.append(
                 DeviceTranslationShare(
                     conversationId: message.conversationId,
-                    body: ShareTranslationBody(messageId: message.id, targetLanguage: target, envelope: envelope),
+                    body: ShareTranslationBody(
+                        messageId: message.id,
+                        targetLanguage: target,
+                        sourceVersion: SharedTranslationSourceVersion.of(editedAt: message.editedAt),
+                        envelope: envelope
+                    ),
                     message: message
                 )
             )
@@ -636,11 +656,13 @@ final class DeviceTranslationCoordinator: ObservableObject {
     private func postQueuedShares() async {
         while !shareQueue.isEmpty {
             let next = shareQueue.removeFirst()
-            guard mayShare(next.message) else { continue }
+            guard mayPost(next) else { continue }
             do {
                 _ = try await sharing.share(conversationId: next.conversationId, body: next.body)
             } catch SharedTranslationShareRefusal.readReceiptsOff {
                 sharingDeclined = true
+            } catch SharedTranslationShareRefusal.staleSource {
+                Logger.deviceTranslation.info("translation dropped: the message changed since it was translated")
             } catch {
                 Logger.deviceTranslation.info("translation not shared: \(error.localizedDescription, privacy: .public)")
             }
@@ -648,9 +670,25 @@ final class DeviceTranslationCoordinator: ObservableObject {
         shareTask = nil
     }
 
-    /// Relu au DERNIER moment, juste avant le fil : pendant que la file
-    /// attendait, la conversation a pu passer en chiffrement de bout en bout, ou
-    /// le compte refuser tout partage — fail-closed.
+    /// Relu au DERNIER moment, juste avant l'envoi, sur le message COURANT de la
+    /// conversation et non sur celui qui est entré en file : pendant que la file
+    /// attendait, le message a pu être supprimé, ou modifié, et la conversation
+    /// passer en chiffrement de bout en bout. Une traduction ne part que si le
+    /// message existe encore, porte le même texte et la même langue, est daté de
+    /// la même version que celle qui est scellée, et reste partageable — sinon
+    /// elle est abandonnée sans bruit. Sans conversation, rien à relire :
+    /// fail-closed.
+    private func mayPost(_ share: DeviceTranslationShare) -> Bool {
+        guard let source,
+              let current = source.deviceTranslationMessages.first(where: { $0.id == share.message.id })
+        else { return false }
+        return MessageVersion(current) == MessageVersion(share.message)
+            && SharedTranslationSourceVersion.of(editedAt: current.editedAt) == share.body.sourceVersion
+            && mayShare(current)
+    }
+
+    /// Le compte partage-t-il encore, et le serveur lit-il encore ce message ?
+    /// Relu avec le mode de chiffrement COURANT de la conversation — fail-closed.
     private func mayShare(_ message: Message) -> Bool {
         !sharingDeclined
             && DeviceTranslationEligibility.disposition(
