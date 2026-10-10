@@ -78,6 +78,11 @@ describe('Meeshy Global — un mineur déclaré ne l’écrit pas (#9927)', () =
     expect(isConversationWriteRefused(admission) && admission.reason).toBe('minor-global');
   });
 
+  it('12 ans (déclaration refusée mais écrite) : refusé aussi', async () => {
+    const admission = await admit('global', { birthDate: day('2014-01-01') });
+    expect(isConversationWriteRefused(admission) && admission.reason).toBe('minor-global');
+  });
+
   it('17 ans et 364 jours : refusé', async () => {
     const admission = await admit('global', { birthDate: day('2008-10-11') });
     expect(isConversationWriteRefused(admission) && admission.reason).toBe('minor-global');

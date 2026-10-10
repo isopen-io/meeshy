@@ -66,6 +66,17 @@ export function isDeclaredMinor(birthDate: Date | null | undefined, now: Date): 
   return ageInFullYearsUtc(birthDate, now) < ADULT_AGE;
 }
 
+/**
+ * Sous l'âge minimal DÉCLARÉ (#9927) : la déclaration a été refusée mais
+ * ÉCRITE (un refus est définitif, il ne se contourne pas en redéclarant), et
+ * le compte ne se connecte plus tant qu'il a moins de 13 ans révolus — la
+ * porte se rouvre d'elle-même le jour de ses 13 ans. L'inconnu n'est pas refusé.
+ */
+export function isBelowMinimumAge(birthDate: Date | null | undefined, now: Date): boolean {
+  if (!birthDate || Number.isNaN(birthDate.getTime())) return false;
+  return ageInFullYearsUtc(birthDate, now) < MINIMUM_ACCOUNT_AGE;
+}
+
 const BIRTH_DATE_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**

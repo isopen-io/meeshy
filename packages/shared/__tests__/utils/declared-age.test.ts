@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ageInFullYearsUtc,
+  isBelowMinimumAge,
   isDeclaredMinor,
   judgeDeclaredBirthDate,
   parseBirthDateDay,
@@ -109,5 +110,22 @@ describe('viewerWriteRestrictionOf — Global en lecture seule pour un mineur d�
   it('majeur ou âge inconnu dans Global ⇒ aucune restriction', () => {
     expect(viewerWriteRestrictionOf({ conversationType: 'global', birthDate: day('2008-10-10'), now })).toBeNull();
     expect(viewerWriteRestrictionOf({ conversationType: 'global', birthDate: null, now })).toBeNull();
+  });
+});
+
+describe('isBelowMinimumAge — un compte de moins de 13 ans révolus ne se connecte pas (#9927)', () => {
+  const now = at('2026-10-10T12:00:00.000Z');
+
+  it('12 ans et 364 jours : sous le minimum', () => {
+    expect(isBelowMinimumAge(day('2013-10-11'), now)).toBe(true);
+  });
+
+  it('13 ans le jour même : la porte se rouvre seule', () => {
+    expect(isBelowMinimumAge(day('2013-10-10'), now)).toBe(false);
+  });
+
+  it('âge inconnu ou illisible : rien n’est refusé', () => {
+    expect(isBelowMinimumAge(null, now)).toBe(false);
+    expect(isBelowMinimumAge(new Date('x'), now)).toBe(false);
   });
 });

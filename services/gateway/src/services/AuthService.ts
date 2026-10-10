@@ -27,7 +27,7 @@ import {
   clearFailedLoginAttempts,
   lockIsVisibleTo
 } from './LoginAttemptService';
-import { ActivationRequiresEmailProofError, PasswordNotSetError, UserLockedError } from '../errors/custom-errors';
+import { ActivationRequiresEmailProofError, AgeBelowMinimumError, PasswordNotSetError, UserLockedError } from '../errors/custom-errors';
 import type { GlobalMembershipSocketManager } from './conversations/ensureGlobalConversationMembership';
 import { servedUserPermissions } from './admin/served-permissions';
 import {
@@ -59,6 +59,7 @@ import { verifyEmailProof, type EmailProof, type EmailProofResult } from './auth
 import { emailCodeLink, mintEmailCodePair, verificationTtlMinutes } from './auth/email-code';
 import { isPhoneVerified, sendPhoneVerificationCode, verifyPhoneCode } from './auth/phone-verification';
 import { isActivationBlocked, resolveAccountActivation } from './auth/account-activation';
+import { assertAccountMeetsMinimumAge } from './auth/minimum-age-gate';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -254,6 +255,11 @@ export class AuthService {
         throw new ActivationRequiresEmailProofError(user.email);
       }
 
+      // #9927 — moins de 13 ans déclarés : aucune session, pas même « en
+      // ligne ». Même place que le délai de grâce, pour la même raison : seul
+      // qui connaît le mot de passe l'apprend.
+      await assertAccountMeetsMinimumAge(this.prisma, user.id, this.now());
+
       // Check if 2FA is enabled
       if (user.twoFactorEnabledAt) {
 
@@ -341,6 +347,10 @@ export class AuthService {
       // Un compte SANS mot de passe non plus (#6424) : même raison, autre
       // décision — la porte existe, elle est ailleurs.
       if (error instanceof PasswordNotSetError || error instanceof ActivationRequiresEmailProofError) {
+        throw error;
+      }
+      // #9927 — le refus de l'âge minimal est une décision, pas une panne.
+      if (error instanceof AgeBelowMinimumError) {
         throw error;
       }
       logger.error('[AUTH_SERVICE] ❌ Erreur dans authenticate', error);
@@ -514,6 +524,7 @@ export class AuthService {
       };
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('[AUTH_SERVICE] ❌ Erreur dans completeAuthWith2FA', error);
       return { success: false, error: 'Erreur lors de la vérification 2FA' };
     }

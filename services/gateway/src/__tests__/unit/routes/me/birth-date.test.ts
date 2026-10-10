@@ -24,9 +24,16 @@ jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 const USER_ID = '68a000000000000000000001';
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 
-type Row = { birthDate: Date | null; onboardingSteps: string[] };
+/** `birthDate` : `undefined` = clé ABSENTE du document, `null` = présente et nulle (deux formes du connecteur Mongo). */
+type Row = { birthDate: Date | null | undefined; onboardingSteps: string[] };
 
-function makePrisma(initial: Partial<Row> = {}) {
+type BirthDateClause = { birthDate: null } | { birthDate: { isSet: false } };
+
+/** Évalue `where.OR` comme le connecteur Mongo : `null` ne matche que présent-et-nul, `isSet: false` que l'absence. */
+const matchesClause = (value: Date | null | undefined, clause: BirthDateClause): boolean =>
+  clause.birthDate === null ? value === null : value === undefined;
+
+function makePrisma(initial: Partial<Row> = {}, options: { readonly staleReads?: boolean } = {}) {
   const state: Row = { birthDate: null, onboardingSteps: ['languages'], ...initial };
   const row = () => ({
     id: USER_ID,
@@ -40,9 +47,11 @@ function makePrisma(initial: Partial<Row> = {}) {
     emailReleasedAt: null,
     engagementScore: 0,
     ...state,
+    birthDate: options.staleReads ? null : state.birthDate ?? null,
   });
-  const updateMany = jest.fn(async (args: { where: { OR: unknown[] }; data: Partial<Row> }) => {
-    if (state.birthDate !== null) return { count: 0 };
+  const updateMany = jest.fn(async (args: { where: { id: string; OR: BirthDateClause[] }; data: Partial<Row> }) => {
+    const matches = args.where.id === USER_ID && args.where.OR.some((clause) => matchesClause(state.birthDate, clause));
+    if (!matches) return { count: 0 };
     Object.assign(state, args.data);
     return { count: 1 };
   });
@@ -66,6 +75,8 @@ function makePrisma(initial: Partial<Row> = {}) {
   };
 }
 
+const revokeAllSessions = jest.fn(async (_userId: string) => undefined);
+
 async function buildApp(prisma: ReturnType<typeof makePrisma>): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma as never);
@@ -73,7 +84,7 @@ async function buildApp(prisma: ReturnType<typeof makePrisma>): Promise<FastifyI
     const userId = req.headers['x-test-user-id'] as string | undefined;
     (req as { auth?: unknown }).auth = userId ? { userId, isAuthenticated: true } : undefined;
   });
-  await app.register(meBirthDateRoutes, { prefix: '/api/v1/me', now: () => NOW });
+  await app.register(meBirthDateRoutes, { prefix: '/api/v1/me', now: () => NOW, revokeAllSessions });
   await app.register(meOnboardingRoutes, { prefix: '/api/v1/me', now: () => NOW });
   await app.ready();
   return app;
@@ -91,14 +102,45 @@ describe('PUT /me/birth-date (#9927)', () => {
     await app.close();
   });
 
-  it('12 ans : 422 AGE_BELOW_MINIMUM, rien n’est écrit', async () => {
+  it('12 ans : 422 AGE_BELOW_MINIMUM, la date est ÉCRITE (refus définitif) et les sessions révoquées', async () => {
+    revokeAllSessions.mockClear();
     const prisma = makePrisma();
     const app = await buildApp(prisma);
     const res = await declare(app, '2013-10-11');
     expect(res.statusCode).toBe(422);
     expect(res.json()).toMatchObject({ success: false, code: 'AGE_BELOW_MINIMUM' });
-    expect(prisma.user.updateMany).not.toHaveBeenCalled();
-    expect(prisma.state.birthDate).toBeNull();
+    expect(prisma.state.birthDate?.toISOString()).toBe('2013-10-11T00:00:00.000Z');
+    expect(revokeAllSessions).toHaveBeenCalledWith(USER_ID);
+    await app.close();
+  });
+
+  it('12 ans puis 2000-01-01 aussitôt : la redéclaration est refusée (409), la date de 12 ans reste', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+    await declare(app, '2013-10-11');
+    const res = await declare(app, '2000-01-01');
+    expect(res.statusCode).toBe(409);
+    expect(prisma.state.birthDate?.toISOString()).toBe('2013-10-11T00:00:00.000Z');
+    await app.close();
+  });
+
+  it('une date absente du document (clé non posée) s’écrit aussi', async () => {
+    const prisma = makePrisma({ birthDate: undefined });
+    const app = await buildApp(prisma);
+    const res = await declare(app, '1990-05-05');
+    expect(res.statusCode).toBe(200);
+    expect(prisma.state.birthDate?.toISOString()).toBe('1990-05-05T00:00:00.000Z');
+    await app.close();
+  });
+
+  it('course de deux PUT : la relecture voit « aucune date » des deux côtés, un seul gagne', async () => {
+    const prisma = makePrisma({}, { staleReads: true });
+    const app = await buildApp(prisma);
+    const [a, b] = await Promise.all([declare(app, '2011-03-03'), declare(app, '1990-03-03')]);
+    expect([a.statusCode, b.statusCode].sort()).toEqual([200, 409]);
+    const winner = a.statusCode === 200 ? '2011-03-03' : '1990-03-03';
+    expect(prisma.state.birthDate?.toISOString()).toBe(`${winner}T00:00:00.000Z`);
+    expect(prisma.user.updateMany).toHaveBeenCalledTimes(2);
     await app.close();
   });
 

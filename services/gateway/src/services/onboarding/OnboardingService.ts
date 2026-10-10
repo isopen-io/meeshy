@@ -67,6 +67,7 @@ export function ageClassOf(birthDate: Date | null | undefined, now: Date): AgeCl
 export type BirthDateDeclarationOutcome =
   | { readonly kind: 'declared'; readonly ageClass: 'adult' | 'minor'; readonly viewerWriteRestrictionGlobal: boolean }
   | { readonly kind: 'already-set' }
+  /** La date est ÉCRITE (un refus est définitif) ; l'appelant révoque les sessions. */
   | { readonly kind: 'below-minimum' }
   | { readonly kind: 'invalid' }
   | { readonly kind: 'user-not-found' };
@@ -214,7 +215,10 @@ export class OnboardingService {
   }
 
   /**
-   * `PUT /me/birth-date` (#9927) — la date s'écrit UNE fois. L'écriture est
+   * `PUT /me/birth-date` (#9927) — la date s'écrit UNE fois, y compris quand
+   * elle donne moins de 13 ans : le refus est DÉFINITIF (une redéclaration ne
+   * le contourne pas), et c'est la date écrite qui ferme ensuite les sessions
+   * (`minimum-age-gate`) jusqu'aux 13 ans. L'écriture est
    * conditionnée en base à l'absence de date (`birthDate` nul OU absent du
    * document, les deux formes du connecteur Mongo) : deux déclarations
    * simultanées n'en écrivent qu'une, et la relecture préalable ne sert qu'à
@@ -226,15 +230,12 @@ export class OnboardingService {
     if (!user) return { kind: 'user-not-found' };
     if (user.birthDate) return { kind: 'already-set' };
     const verdict = judgeDeclaredBirthDate(birthDate, now);
-    if (verdict === 'below-minimum') return { kind: 'below-minimum' };
-    if (verdict !== 'admitted') return { kind: 'invalid' };
+    if (verdict === 'in-future' || verdict === 'implausible') return { kind: 'invalid' };
 
     const steps = nextOnboardingWrite(user, { step: 'age', outcome: 'done' }, now);
-    const written = await this.prisma.user.updateMany({
-      where: { id: userId, OR: [{ birthDate: null }, { birthDate: { isSet: false } }] },
-      data: { birthDate, ...(steps ?? {}) },
-    });
-    if (written.count === 0) return { kind: 'already-set' };
+    const written = await writeBirthDateOnce(this.prisma, userId, { birthDate, ...(steps ?? {}) });
+    if (!written) return { kind: 'already-set' };
+    if (verdict === 'below-minimum') return { kind: 'below-minimum' };
     const restriction = viewerWriteRestrictionOf({ conversationType: GLOBAL_CONVERSATION_TYPE, birthDate, now });
     return {
       kind: 'declared',
@@ -422,6 +423,25 @@ export class OnboardingService {
       excludedIds,
     });
   }
+}
+
+/**
+ * L'unique écriture de `User.birthDate` hors administration (#9927) —
+ * conditionnée EN BASE à l'absence de date, sous ses deux formes Mongo
+ * (`null` présent, clé absente) : deux déclarations simultanées n'en écrivent
+ * qu'une, quel que soit le chemin (onboarding, consentement vocal). Rend
+ * `false` quand une date était déjà posée.
+ */
+export async function writeBirthDateOnce(
+  prisma: Pick<PrismaClient, 'user'>,
+  userId: string,
+  data: { birthDate: Date } & Record<string, unknown>,
+): Promise<boolean> {
+  const written = await prisma.user.updateMany({
+    where: { id: userId, OR: [{ birthDate: null }, { birthDate: { isSet: false } }] },
+    data,
+  });
+  return written.count > 0;
 }
 
 /**

@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { AgeBelowMinimumError } from '../../errors/custom-errors';
 import jwt from 'jsonwebtoken';
 import {
   userSchema,
@@ -15,7 +16,8 @@ import { createUnifiedAuthMiddleware, findTrustedSession} from '../../middleware
 import { logWarn } from '../../utils/logger';
 import { AuthRouteContext, formatUserResponse, formatSessionResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { accountIsBelowMinimumAge } from '../../services/auth/minimum-age-gate';
 import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { disconnectSession } from '../../socketio/disconnectSession';
@@ -120,6 +122,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           }
         },
         401: errorResponseSchema,
+        403: errorResponseSchema,
         404: errorResponseSchema
       },
       security: []
@@ -164,6 +167,15 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           claimedUserId: decoded.userId
         });
         return sendUnauthorized(reply, 'Token invalide ou expiré', { code: AUTH_ERROR_CODES.MAGIC_LINK_INVALID });
+      }
+
+      // #9927 — un compte de moins de 13 ans déclarés ne prolonge aucune
+      // session. Posé AVANT la lecture de la session : ses sessions ont été
+      // révoquées à la déclaration, et le refus doit dire POURQUOI (403
+      // AGE_BELOW_MINIMUM), pas seulement « session révoquée ».
+      if (decoded.userId && await accountIsBelowMinimumAge(context.prisma, decoded.userId, new Date())) {
+        const refusal = new AgeBelowMinimumError();
+        return sendError(reply, refusal.statusCode, refusal.message, { code: refusal.code });
       }
 
       // À partir d'ici, la signature est AUTHENTIQUE — éventuellement
@@ -445,6 +457,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('[AUTH] ❌ Erreur lors de la vérification email', error);
       return sendInternalError(reply, 'Erreur lors de la vérification');
     }
