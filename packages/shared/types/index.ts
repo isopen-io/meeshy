@@ -769,5 +769,8 @@ export * from './contact-card.js';
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';
 
+// Traduction calculée par un membre et partagée scellée (#9899)
+export * from './shared-translation.js';
+
 // ===== CE QUE CHAQUE PERSONNE DE LA LISTE DES VUES A FAIT (#9727) =====
 export type { PostViewerEngagement, PostViewerRow } from './publication-viewers.js';

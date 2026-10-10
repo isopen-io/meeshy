@@ -89,6 +89,13 @@ export const SERVER_EVENTS = {
   // l'arrivée, mais rien non plus n'aurait signalé que la moitié de ce câblage
   // ne servait à rien. Retiré au cycle 77.
   /**
+   * La traduction qu'un MEMBRE a calculée sur son appareil et partagée (#9899),
+   * relayée aux lecteurs du message — scellée : la passerelle ne la lit pas.
+   * Distincte de `message:translation`, qui porte une traduction du serveur en
+   * clair. La charge est `SharedTranslation` (`types/shared-translation.ts`).
+   */
+  MESSAGE_TRANSLATION_SHARED: 'message:translation-shared',
+  /**
    * PER-USER "delete for me" on a MESSAGE (`DELETE /api/messages/:id/delete-for-me`
    * and its bulk sibling): a `UserMessageDeletion` row now hides the message from
    * THIS user's view, on every one of their devices. The message itself is

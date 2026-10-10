@@ -236,6 +236,7 @@ import type { SocketIOResponse } from './socket.js';
 import type {
   RequestTranslationData,
   StoryTranslationUpdatedEventData,
+  MessageTranslationSharedEventData,
   TranslationEvent,
 } from './translation.js';
 import type { UserUpdatedEventData } from './user.js';
@@ -252,6 +253,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME]: (data: MessageHiddenForMeEventData) => void;
   [SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME]: (data: MessageRestoredForMeEventData) => void;
   [SERVER_EVENTS.MESSAGE_TRANSLATION]: (data: TranslationEvent) => void;
+  [SERVER_EVENTS.MESSAGE_TRANSLATION_SHARED]: (data: MessageTranslationSharedEventData) => void;
   [SERVER_EVENTS.TYPING_START]: (data: TypingEvent) => void;
   [SERVER_EVENTS.TYPING_STOP]: (data: TypingEvent) => void;
   [SERVER_EVENTS.VIEWING_START]: (data: ViewingEvent) => void;
