@@ -150,11 +150,12 @@ export const SCENES_FILMEES = {
     ],
   }),
   // L'en-tête de la fiche (#9904). Les réels drôles : quatre pages, chacune tenue 1,7 s (étape « reel-n » à son arrivée),
-  // puis le pouce remonte la page (0,45 s) et la suivante part. Les vidéos jouent : aucune image n'y est répétée.
+  // puis le pouce remonte la page (0,45 s) et la suivante part. Le montage coupe sur chaque page tenue et pose ses propres
+  // transitions : la montée de page n'est pas une fenêtre de mouvement (au simulateur chargé, elle perd 2 à 3 images).
   'interaction-defilement': interaction('interaction-defilement', {
     montreUnFil: false,
     dureeMs: 8500,
-    mouvement: [1, 2, 3].map((n) => ({ etape: `reel-${n}`, de: 1750, a: 2150 })),
+    mouvement: [],
     imagesCles: [1, 2, 3, 4].map((n) => ({ nom: `reel-${n}`, etape: `reel-${n}`, instantMs: 900 })),
   }),
   // La story s'ouvre depuis la racine (étape « ouverture »), l'intermède de l'auteur passe, la story est révélée (étape
