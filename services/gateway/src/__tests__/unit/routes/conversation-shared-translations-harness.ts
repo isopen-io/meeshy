@@ -10,10 +10,17 @@
  * La route est montée avec la VRAIE résolution d'identifiant de conversation :
  * `conversationRow()` porte l'identifiant lisible `mshy_equipe`, qui est donc
  * adressable ; `UNKNOWN_CONVERSATION` n'est porté par aucune.
+ *
+ * Les préférences de confidentialité passent par le VRAI résolveur
+ * (`loadPrivacyPreferencesCached`) : la base porte le document `privacy` de
+ * `UserPreferences` et les lignes héritées de `UserPreference`, et le cache du
+ * module est vidé à chaque montage — il vit au niveau MODULE, et un réglage posé
+ * par un témoin survivrait sinon au suivant.
  */
 import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { registerSharedTranslationRoutes } from '../../../routes/conversations/shared-translations';
+import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 import {
   CONV_A,
   HARNESS_NOW,
@@ -112,7 +119,16 @@ export const share = (overrides: Row = {}): Row => ({
   ...overrides,
 });
 
-function database(store: Store, shares: Row[]) {
+/**
+ * Ce que la base porte des préférences de confidentialité : le document `privacy`
+ * par `User.id`, et les lignes kebab-case de janvier (`show-read-receipts`).
+ */
+export type PrivacyFixture = {
+  readonly documents?: Readonly<Record<string, Row>>;
+  readonly legacyRows?: ReadonlyArray<{ readonly userId: string; readonly key: string; readonly value: string }>;
+};
+
+function database(store: Store, shares: Row[], privacy: PrivacyFixture) {
   const base = makePrisma(store);
   const issued = { next: 2 };
   const reads: Array<{ where?: Row; take?: number }> = [];
@@ -122,6 +138,18 @@ function database(store: Store, shares: Row[]) {
       ...base.conversation,
       findUnique: async (args: { where: { id: string } }) => store.conversations.find((c) => c.id === args.where.id) ?? null,
       findFirst: async (args: { where: Row }) => store.conversations.find((c) => matchesWhere(c, args.where)) ?? null,
+    },
+    userPreferences: {
+      findMany: async (args: { where: { userId: { in: string[] } } }) =>
+        Object.entries(privacy.documents ?? {})
+          .filter(([userId]) => args.where.userId.in.includes(userId))
+          .map(([userId, document]) => ({ userId, privacy: document })),
+    },
+    userPreference: {
+      findMany: async (args: { where: { userId: { in: string[] }; key: { in: string[] } } }) =>
+        (privacy.legacyRows ?? []).filter(
+          (row) => args.where.userId.in.includes(row.userId) && args.where.key.in.includes(row.key),
+        ),
     },
     sharedTranslation: {
       create: async (args: { data: Row }) => {
@@ -178,6 +206,20 @@ export const personalHidingLookupDown = (prisma: ReturnType<typeof database>['pr
   },
 });
 
+/**
+ * Une base dont les préférences de confidentialité ne répondent pas : la route ne
+ * peut pas savoir si l'appelant montre ses accusés de lecture, et doit refuser
+ * plutôt que d'en conclure qu'il n'a rien réglé.
+ */
+export const privacyLookupDown = (prisma: ReturnType<typeof database>['prisma']) => ({
+  ...prisma,
+  userPreferences: {
+    findMany: async () => {
+      throw new Error('mongo down');
+    },
+  },
+});
+
 export type Emission = { room: string | string[]; event: string; payload: Row };
 
 export async function buildApp(
@@ -196,11 +238,14 @@ export async function buildApp(
      * qu'elle ne redéclare pas.
      */
     rateLimit?: { skipOnError: boolean; store?: unknown };
+    /** Les préférences de confidentialité stockées — aucune par défaut, donc les défauts s'appliquent. */
+    privacy?: PrivacyFixture;
   } = {},
 ) {
   const store = params.store ?? scene();
   const shares = params.shares ?? [];
-  const { prisma, reads } = database(store, shares);
+  clearPrivacyPreferencesCache();
+  const { prisma, reads } = database(store, shares, params.privacy ?? {});
   const emitted: Emission[] = [];
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });

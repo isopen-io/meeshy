@@ -53,6 +53,12 @@ export const SHARED_TRANSLATION_ERROR_CODES = {
   kdfRefused: 'SHARED_TRANSLATION_KDF_REFUSED',
   sameLanguage: 'SHARED_TRANSLATION_SAME_LANGUAGE',
   unnormalizedLanguage: 'SHARED_TRANSLATION_UNNORMALIZED_LANGUAGE',
+  /**
+   * Le COMPTE ne partage pas, quel que soit le message : il a coupé ses accusés de
+   * lecture, et un partage en est un. L'appareil cesse de partager, et garde ses
+   * traductions pour lui.
+   */
+  readReceiptsOff: 'SHARED_TRANSLATION_READ_RECEIPTS_OFF',
 } as const;
 
 const OBJECT_ID = /^[0-9a-fA-F]{24}$/;

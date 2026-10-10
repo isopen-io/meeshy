@@ -53,6 +53,7 @@ import {
   message,
   personalHidingLookupDown,
   post,
+  privacyLookupDown,
   registeredAs,
   scene,
   share,
@@ -388,6 +389,85 @@ describe('POST /conversations/:id/shared-translations', () => {
       expect(res.statusCode).toBe(500);
       expect(h.shares).toEqual([]);
       expect(h.emitted).toEqual([]);
+    });
+  });
+
+  describe('un partage est un accusé de lecture', () => {
+    // L'appareil traduit ce qu'il AFFICHE, et la diffusion nomme qui partage et
+    // quand : partager dit aux autres « X a ce message sous les yeux ». Qui a
+    // coupé ses accusés de lecture ne partage donc pas — sa traduction reste sur
+    // son appareil, et les autres traduisent sur le leur.
+    const receiptsOff = { documents: { [USER_ID]: { showReadReceipts: false } } };
+
+    it('refuse 403 `SHARED_TRANSLATION_READ_RECEIPTS_OFF` à qui a coupé ses accusés de lecture, sans rien ranger ni diffuser', async () => {
+      const h = await buildApp({ privacy: receiptsOff });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toMatchObject({ success: false, code: SHARED_TRANSLATION_ERROR_CODES.readReceiptsOff });
+      expect(h.shares).toEqual([]);
+      expect(h.emitted).toEqual([]);
+    });
+
+    it('lit le réglage HÉRITÉ de janvier quand le document n’en porte pas — la loi des préférences, pas une seconde lecture', async () => {
+      const h = await buildApp({
+        privacy: { legacyRows: [{ userId: USER_ID, key: 'show-read-receipts', value: 'false' }] },
+      });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code).toBe(SHARED_TRANSLATION_ERROR_CODES.readReceiptsOff);
+    });
+
+    it('refuse sans regarder le message : le refus dit ce que fait le COMPTE, pas ce qu’est le message', async () => {
+      const h = await buildApp({ privacy: receiptsOff });
+
+      const res = await post(h, shareBody({ messageId: UNKNOWN_MESSAGE }));
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code).toBe(SHARED_TRANSLATION_ERROR_CODES.readReceiptsOff);
+    });
+
+    it('ne doit son refus qu’aux accusés : un autre réglage coupé laisse partager', async () => {
+      const h = await buildApp({
+        privacy: { documents: { [USER_ID]: { showOnlineStatus: false, showLastSeen: false, showReadReceipts: true } } },
+      });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(201);
+      expect(h.shares).toHaveLength(1);
+    });
+
+    it('ne retient pas le partage d’un AUTRE membre qui, lui, a coupé ses accusés', async () => {
+      const h = await buildApp({ privacy: { documents: { [OTHER_USER_ID]: { showReadReceipts: false } } } });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(201);
+    });
+
+    it('répond 500 et ne range rien quand le réglage ne se lit pas — jamais « il n’a rien réglé »', async () => {
+      const h = await buildApp({ prismaOverrides: privacyLookupDown });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(500);
+      expect(h.shares).toEqual([]);
+      expect(h.emitted).toEqual([]);
+    });
+
+    it('sert un invité de lien partagé par les défauts, sans interroger la base sous son identifiant de participant', async () => {
+      const store = scene({
+        participants: [participantRow({ id: SHARER, userId: USER_ID }), participantRow({ id: GUEST, userId: null, user: null })],
+      });
+      const h = await buildApp({ store, authContext: guestAs(GUEST), prismaOverrides: privacyLookupDown });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(201);
     });
   });
 

@@ -16,9 +16,10 @@
  *
  * ─── L'ORDRE DES REFUS (POST) ───────────────────────────────────────────────
  *
- * Le corps (400), la conversation (404), la participation (403), le message et le
- * droit de le LIRE (404), puis ce qu'il EST : protégé (422), langue non normalisée
- * (400), même langue (422), dérivation refusée (422).
+ * Le corps (400), la conversation (404), la participation (403), les accusés de
+ * lecture coupés (403), le message et le droit de le LIRE (404), puis ce qu'il
+ * EST : protégé (422), langue non normalisée (400), même langue (422), dérivation
+ * refusée (422).
  *
  * Le droit de LIRE le message précède tout verdict qui en dirait quelque chose :
  * un 422 « message protégé », « même langue » ou « dérivation refusée » apprendrait
@@ -27,6 +28,15 @@
  * précèdent sont donc un même 404 — la loi de lecture est `messageReadAccess.ts`,
  * la même que celle du favori et du transfert, jamais une seconde écriture. Elle
  * est jugée avec `'refuse'` : un masquage personnel illisible n'autorise rien.
+ *
+ * ─── UN PARTAGE EST UN ACCUSÉ DE LECTURE ────────────────────────────────────
+ *
+ * L'appareil traduit ce qu'il AFFICHE, et la diffusion nomme qui partage et
+ * quand : partager dit aux autres « X a ce message sous les yeux », même dans une
+ * conversation à deux où `sharedBy` serait tu. Qui a coupé ses accusés de lecture
+ * (`showReadReceipts`) ne partage donc pas : 403 `SHARED_TRANSLATION_READ_RECEIPTS_OFF`,
+ * jugé avant le message parce qu'il dit ce que fait le COMPTE. Sa traduction reste
+ * sur son appareil ; les autres traduisent sur le leur.
  *
  * ─── LE PREMIER PARTAGE GAGNE ───────────────────────────────────────────────
  *
@@ -78,9 +88,11 @@ import { SUPPORTED_LANGUAGE_CODES } from '@meeshy/shared/utils/language-codes';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { messageProtection, type MessageProtectionInput } from '@meeshy/shared/utils/message-protection';
 
+import { PRIVACY_PREFERENCES_DEFAULTS } from '../../config/user-preferences-defaults';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
-import { historyReaderFromAuthContext } from '../../services/historyFloor';
+import { historyReaderFromAuthContext, type HistoryReader } from '../../services/historyFloor';
 import { readerMayReadMessage, readerMayReadMessages } from '../../services/messaging/messageReadAccess';
+import { loadPrivacyPreferencesCached } from '../../services/preferences/privacy-cache';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { translationReaders } from '../../socketio/translationReaders';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
@@ -157,6 +169,23 @@ const isProtectedMessage = (message: MessageProtectionInput): boolean => {
   const { ephemeral, viewOnce, blurred } = messageProtection(message);
   return ephemeral || viewOnce || blurred;
 };
+
+/**
+ * Le partageur montre-t-il ses accusés de lecture ? Voir l'en-tête : un partage en
+ * est un. La loi des préférences, jamais une seconde lecture — document `privacy`,
+ * puis lignes de janvier (`loadPrivacyPreferencesCached`).
+ *
+ * Rien de réglé n'est pas un refus (`!== false`). Un invité de lien partagé est
+ * servi par les défauts, sans base : son identifiant est un `Participant.id`.
+ * Une lecture qui échoue LÈVE, et la route répond 500 sans rien ranger — le repli
+ * RESTRICTIF de `privacy-cache.ts` : un partage refait plus tard ne coûte qu'une
+ * traduction, une lecture révélée ne se reprend pas.
+ */
+async function sharerShowsReadReceipts(prisma: PrismaClient, reader: HistoryReader): Promise<boolean> {
+  if (reader.kind === 'anonymous') return PRIVACY_PREFERENCES_DEFAULTS.showReadReceipts;
+  const stored = await loadPrivacyPreferencesCached(prisma, [reader.userId]);
+  return stored.get(reader.userId)?.showReadReceipts !== false;
+}
 
 /** Les colonnes de `SharedTranslation` que le fil sert. */
 type SharedTranslationRow = {
@@ -364,6 +393,12 @@ export function registerSharedTranslationRoutes(
       const reader = historyReaderFromAuthContext(authContext);
       if (!caller || !reader) {
         return sendForbidden(reply, 'Not a participant');
+      }
+
+      if (!(await sharerShowsReadReceipts(prisma, reader))) {
+        return sendForbidden(reply, 'Read receipts are off: translations stay on this device', {
+          code: SHARED_TRANSLATION_ERROR_CODES.readReceiptsOff,
+        });
       }
 
       const [message, conversation] = await Promise.all([
