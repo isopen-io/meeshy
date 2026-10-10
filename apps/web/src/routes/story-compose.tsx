@@ -64,6 +64,7 @@ import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
 import { armedPublishChoice, companionReelOffered, publishChoiceTitleKey, publishedKinds, toggledPublishChoice } from '@/lib/stories/publish-also-as-reel';
 import { useStudioReelOffer } from '@/routes/story-compose-reel-offer';
 import type { StudioCompositeDeps } from '@/lib/stories/studio-composite-plan';
+import type { FilterThumbnailRenderer } from '@/lib/stories/studio-filter-thumbnails';
 import { studioFloor } from '@/lib/stories/studio-floor';
 import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep, withoutBirthStep } from '@/lib/stories/studio-history';
 import { STUDIO_INLINE_SECTION_KEYS } from '@/lib/stories/studio-inline-edit';
@@ -183,6 +184,8 @@ export type StoryStudioDeps = {
   readonly composite?: StudioCompositeDeps;
   /** LA CAMÉRA de la capture rapide (#8654) — injectable pour les témoins. */
   readonly camera?: CameraEngine;
+  /** LES MINIATURES des effets visuels (#9828) — injectables pour les témoins. */
+  readonly thumbnails?: FilterThumbnailRenderer;
 };
 
 const defaultStoryStudioDeps: StoryStudioDeps = {
@@ -795,6 +798,7 @@ function StoryStudio({
       onExit: () => setEditingId(null),
     },
     hidden: !chrome.trailingRail,
+    thumbnails: deps.thumbnails,
   });
   /** « Entre ici » / « Sort ici » — la fenêtre de l'objet SÉLECTIONNÉ, à la tête. */
   const moveSelectedEdge = (head: number, law: (timing: StudioTiming, head: number, duration: number) => StudioTiming) => {

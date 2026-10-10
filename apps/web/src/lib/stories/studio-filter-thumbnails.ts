@@ -76,7 +76,9 @@ export function cachedFilterThumbnail(source: string): string | null {
  * média refusé) : la tuile peint alors le fond lui-même, filtré de la même
  * façon.
  */
-export function filterThumbnail({ source, aspectRatio }: { readonly source: string; readonly aspectRatio: number | undefined }): Promise<string | null> {
+export type FilterThumbnailRenderer = (input: { readonly source: string; readonly aspectRatio: number | undefined }) => Promise<string | null>;
+
+export const filterThumbnail: FilterThumbnailRenderer = ({ source, aspectRatio }) => {
   const cached = cache.get(source);
   if (cached !== null) return Promise.resolve(cached);
   const running = pending.get(source);
@@ -90,7 +92,7 @@ export function filterThumbnail({ source, aspectRatio }: { readonly source: stri
     .finally(() => pending.delete(source));
   pending.set(source, render);
   return render;
-}
+};
 
 async function renderThumbnail({ source, aspectRatio }: { readonly source: string; readonly aspectRatio: number | undefined }): Promise<string | null> {
   if (typeof createImageBitmap !== 'function' || typeof document === 'undefined') return null;
