@@ -1402,7 +1402,7 @@ struct StoryViewerView: View {
     /// NOT inside it, so the overlay does not inherit the card's drag offset,
     /// scale, or 3D rotation (bug 2026-05-28: overlay shifted left during
     /// drag / scale transitions).
-    func storyCommentsOverlay() -> StoryCommentsOverlayView {
+    func storyCommentsOverlay(zone: StoryCommentsZone.Frame) -> StoryCommentsOverlayView {
         // L'overlay commentaires n'embarque PLUS son propre composer. Il
         // affiche uniquement : (1) la liste des commentaires, (2) les
         // actions « Répondre » / « like » de chaque row qui mutent
@@ -1430,8 +1430,7 @@ struct StoryViewerView: View {
             },
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
-            keyboard: keyboard,
-            safeBottom: windowBottomInset,
+            zone: zone,
             makeStoryCommentRow: makeStoryCommentRow,
             toggleStoryCommentThread: toggleStoryCommentThread
         )

@@ -41,6 +41,8 @@ nonisolated struct StoryCommentsRenderInputs: Equatable {
     var likedIds: Set<String>
     var likeDelta: [String: Int]
     var inFlightIds: Set<String>
+    /// Où la liste se pose : la carte la place sur le composeur (#9893).
+    var zone: StoryCommentsZone.Frame = .unplaced
 
     static func == (lhs: StoryCommentsRenderInputs, rhs: StoryCommentsRenderInputs) -> Bool {
         let sameComments = ArrayStorageIdentity.same(lhs.comments, rhs.comments)
@@ -56,6 +58,7 @@ nonisolated struct StoryCommentsRenderInputs: Equatable {
             && lhs.targetParentCommentId == rhs.targetParentCommentId
             && lhs.safeBottom == rhs.safeBottom
             && lhs.replyingToId == rhs.replyingToId
+            && lhs.zone == rhs.zone
         let sameRows = lhs.likedIds == rhs.likedIds
             && lhs.likeDelta == rhs.likeDelta
             && lhs.inFlightIds == rhs.inFlightIds
@@ -93,10 +96,19 @@ nonisolated enum ArrayStorageIdentity {
 /// `inputs` change. Ses fermetures lisent l'état du lecteur par ses `@State`,
 /// donc toujours à jour, même quand l'hôte garde l'overlay d'un rendu précédent.
 struct StoryCommentsOverlayHost: View, Equatable {
-    let inputs: StoryCommentsRenderInputs
-    let make: () -> StoryCommentsOverlayView
+    var inputs: StoryCommentsRenderInputs
+    let make: (StoryCommentsZone.Frame) -> StoryCommentsOverlayView
 
-    var body: some View { make() }
+    var body: some View { make(inputs.zone) }
+
+    /// **La carte place la liste sur son composeur** (#9893) : elle seule sait
+    /// s'il est replié, déplié, soulevé par le clavier, et combien il mesure.
+    /// La zone entre dans la comparaison : la liste suit chaque état.
+    func placed(_ reading: StoryCommentsZone.ComposerReading) -> StoryCommentsOverlayHost {
+        var placed = self
+        placed.inputs.zone = reading.frame(safeBottom: inputs.safeBottom)
+        return placed
+    }
 
     static func == (lhs: StoryCommentsOverlayHost, rhs: StoryCommentsOverlayHost) -> Bool {
         lhs.inputs == rhs.inputs
@@ -127,6 +139,6 @@ extension StoryViewerView {
     }
 
     func storyCommentsOverlayHost() -> StoryCommentsOverlayHost {
-        StoryCommentsOverlayHost(inputs: storyCommentsRenderInputs, make: { storyCommentsOverlay() })
+        StoryCommentsOverlayHost(inputs: storyCommentsRenderInputs, make: { storyCommentsOverlay(zone: $0) })
     }
 }
