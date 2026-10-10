@@ -98,10 +98,10 @@ struct MessagePieceOverlay: View {
                     }
                     pager(stage: stage)
                     positionChip
-                    MessageActionsMenu(actions: actions, accentHex: accentHex) { action in
+                    MessageActionsMenu(actions: actions, accentHex: accentHex, onSelect: { action in
                         guard let current else { return }
                         handle(action, on: current)
-                    }
+                    })
                 }
                 .padding(.horizontal, Self.sidePadding)
                 .scaleEffect(isVisible ? 1 : 0.94)
@@ -189,7 +189,6 @@ struct MessagePieceOverlay: View {
                 .frame(minHeight: Self.positionChipHeight)
                 .adaptiveGlass(in: Capsule())
                 .accessibilityHidden(true)
-                .contentTransition(.numericText())
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: index)
         }
     }

@@ -308,6 +308,7 @@ struct FocalGridCell: View {
         .overlay(alignment: .bottomLeading) { reactionsBadge }
         .modifier(MessagePieceLongPress(attachmentId: attachment.id,
                                         enabled: !isSolo && !ComposableAttachment.isProtected(attachment)))
+        .modifier(PieceSpotlightRing(attachmentId: attachment.id, accentHex: accentHex))
         .overlay {
             AttachmentReactionPickerOverlay(isPresented: $showReactionPicker) { emoji in
                 onReactToAttachment?(attachment.id, emoji)

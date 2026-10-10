@@ -376,6 +376,7 @@ fileprivate struct BubbleGridCell: View {
         // de CETTE pièce, dont le menu porte la réaction. Le double tap
         // ci-dessus reste le chemin court vers le sélecteur.
         .modifier(MessagePieceLongPress(attachmentId: attachment.id, enabled: offersPiecePreview))
+        .modifier(PieceSpotlightRing(attachmentId: attachment.id, accentHex: contactColor))
         .overlay {
             AttachmentReactionPickerOverlay(isPresented: $showReactionPicker) { emoji in
                 onReactToAttachment?(attachment.id, emoji)
@@ -453,6 +454,7 @@ fileprivate struct BubbleGridCell: View {
         // #9907/#9910 — la réaction d'une vidéo passe par l'aperçu de la pièce :
         // un double tap y ferait partir la lecture ou le plein écran.
         .modifier(MessagePieceLongPress(attachmentId: attachment.id, enabled: offersPiecePreview))
+        .modifier(PieceSpotlightRing(attachmentId: attachment.id, accentHex: contactColor))
     }
 
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)

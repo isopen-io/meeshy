@@ -198,6 +198,9 @@ final class MessageListViewController: UIViewController {
     var onLongPress: ((String, CGRect?) -> Void)?
     /// L'appui long d'une TUILE (#9907) : message, pièce, frame de la cellule.
     var onLongPressPiece: ((String, String, CGRect?) -> Void)?
+    /// #9911 — la pièce citée à mettre en évidence quand le saut se pose, et le canal des tuiles.
+    var pendingPieceSpotlight: (localId: String, pieceId: String)?
+    let pieceSpotlight = PassthroughSubject<String, Never>()
     /// id de la bulle présentée dans l'overlay d'appui long. La cellule live
     /// correspondante passe à `opacity 0` (masquée) le temps de l'overlay —
     /// seule la copie élevée reste visible (anti double-bulle fantôme). Ne
@@ -1400,6 +1403,10 @@ final class MessageListViewController: UIViewController {
                 guard let self else { return }
                 self.onLongPress?(tappedId, self.cellFrameInWindow(messageId: tappedId))
             }
+            let quotedReference = message.replyTo
+            let quoteJumpHandler: ((String) -> Void) = { [weak self] targetId in
+                self?.followQuote(quotedReference, to: targetId)
+            }
             let pieceLongPressHandler: ((String) -> Void) = { [weak self] pieceId in
                 guard let self else { return }
                 self.onLongPressPiece?(messageId, pieceId, self.cellFrameInWindow(messageId: messageId))
@@ -1551,7 +1558,7 @@ final class MessageListViewController: UIViewController {
                         onShowReactions: showReactionsHandler,
                         onShowReadStatus: showReadStatusHandler,
                         onRetry: retryHandler,
-                        onReplyTap: scrollHandler,
+                        onReplyTap: quoteJumpHandler,
                         onStoryReplyTap: storyReplyHandler,
                         onMediaTap: mediaTapHandler,
                         // LOI DES ZONES (2026-08-24) — les MEMES deux
@@ -1736,7 +1743,7 @@ final class MessageListViewController: UIViewController {
                 focalActions.onShowReadStatus = showReadStatusHandler
                 focalActions.onShowMessageInfo = showInfoHandler
                 focalActions.onRetry = retryHandler
-                focalActions.onReplyTap = scrollHandler
+                focalActions.onReplyTap = quoteJumpHandler
                 focalActions.onStoryReplyTap = storyReplyHandler
                 focalActions.onMediaTap = mediaTapHandler
                 focalActions.onConsumeViewOnce = consumeViewOnceHandler
@@ -1856,6 +1863,7 @@ final class MessageListViewController: UIViewController {
                 .environmentObject(statuses)
                 // #9907 — l'appui long d'une tuile vise CETTE pièce ; aucun en sélection.
                 .environment(\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)
+                .environment(\.pieceSpotlight, self.pieceSpotlight.eraseToAnyPublisher())
                 .conversationListObject(convList).announcesCaptures() // #9617 — le fil déclare ce qu'il montre
                 // Révélé des heures au défilement (successeur de la pilule
                 // « jour · heure »). Observé par `FocalRevealedTime` SEULE —
@@ -2799,6 +2807,7 @@ final class MessageListViewController: UIViewController {
     /// sert TOUS les modes, il n'y a plus de perspective à préserver.
     func flashCell(at indexPath: IndexPath, strong: Bool = false) {
         legacyFlashCell(at: indexPath, strong: strong)
+        releasePieceSpotlight(at: indexPath)
     }
 
     /// Comportement HISTORIQUE, verbatim — Script / bulles (R1 sans objet :

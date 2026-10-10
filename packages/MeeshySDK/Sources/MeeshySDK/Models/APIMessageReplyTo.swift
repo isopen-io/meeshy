@@ -221,6 +221,16 @@ public extension APIMessageReplyTo {
                 }
             )).nature
         }
+        // #9911 — le compte des tuiles d'une citation du message ENTIER. La
+        // passerelle sert au plus quatre pièces du cité : au-delà, « +3 » est
+        // un plancher, jamais un compte inventé.
+        if attachmentReplyTo == nil, !isProtected {
+            let tiles = (attachments ?? []).filter { piece in
+                let kind = AttachmentKind(mimeType: piece.mimeType ?? "")
+                return kind == .image || kind == .video
+            }
+            reference.quotedPieceCount = tiles.isEmpty ? nil : tiles.count
+        }
         if let representative, !reference.quotedMediaIsProtected, reference.attachmentFileUrl != nil,
            AttachmentKind(mimeType: representative.mimeType ?? "") == .audio {
             reference.quotedAudioTracks = ReplyReference.QuotedAudioTracks(

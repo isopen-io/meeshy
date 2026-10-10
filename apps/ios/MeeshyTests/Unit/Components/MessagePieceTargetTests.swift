@@ -272,4 +272,80 @@ final class MessagePieceTargetTests: XCTestCase {
         XCTAssertFalse(gallery.contains("reactableMedia: { catalog.snapshot.isLoaded($0.id) }"),
                        "une pièce de l'index offre la réaction, que le catalogue repeint")
     }
+
+    // MARK: - #9911 — la citation dit combien de pièces porte le message
+
+    private func wholeMessageCitation(pieces: Int?, protected: Bool = false) -> ReplyReference {
+        var reference = ReplyReference(messageId: "m1", authorName: "Demo", previewText: "photo",
+                                       attachmentType: "image", attachmentIsProtected: protected ? true : nil)
+        reference.quotedPieceCount = pieces
+        return reference
+    }
+
+    func test_extraPieces_sevenTiles_announcesPlusSix() {
+        XCTAssertEqual(wholeMessageCitation(pieces: 7).quotedExtraPieceCount, 6)
+    }
+
+    func test_extraPieces_singleTile_announcesNothing() {
+        XCTAssertNil(wholeMessageCitation(pieces: 1).quotedExtraPieceCount)
+    }
+
+    func test_extraPieces_namedPieceOrUnknownCount_announcesNothing() {
+        XCTAssertNil(wholeMessageCitation(pieces: nil).quotedExtraPieceCount)
+    }
+
+    func test_extraPieces_protectedCitation_announcesNoCount() {
+        XCTAssertNil(wholeMessageCitation(pieces: 5, protected: true).quotedExtraPieceCount,
+                     "un compte est déjà un fait sur ce que la protection retient")
+    }
+
+    func test_pieceCount_aBlobEngravedBeforeTheField_stillDecodes() throws {
+        let encoded = try JSONEncoder().encode(wholeMessageCitation(pieces: 3))
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "quotedPieceCount")
+        let legacy = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(ReplyReference.self, from: legacy)
+        XCTAssertNil(decoded.quotedPieceCount)
+        XCTAssertEqual(decoded.messageId, "m1")
+    }
+
+    func test_spotlight_citationNamingAPiece_lightsThatPiece() {
+        let named = citation(of: "m1", naming: "p3")
+        XCTAssertEqual(QuotedPieceSpotlight.pieceId(of: named, jumpingTo: "m1"), "p3")
+    }
+
+    func test_spotlight_wholeMessageCitation_lightsNothing() {
+        var whole = citation(of: "m1", naming: "p1")
+        whole.quotedPieceCount = 4
+        XCTAssertNil(QuotedPieceSpotlight.pieceId(of: whole, jumpingTo: "m1"),
+                     "la face d'une citation du message entier n'a pas choisi sa tuile")
+        XCTAssertNil(QuotedPieceSpotlight.pieceId(of: citation(of: "m1", naming: nil), jumpingTo: "m1"))
+    }
+
+    func test_spotlight_jumpToAnotherMessageOrAStory_lightsNothing() {
+        XCTAssertNil(QuotedPieceSpotlight.pieceId(of: citation(of: "m1", naming: "p3"), jumpingTo: "m2"))
+        XCTAssertNil(QuotedPieceSpotlight.pieceId(of: citation(of: "m1", naming: "p3", story: true), jumpingTo: "m1"))
+    }
+
+    func test_everyCitationSkin_postsThePlusN() throws {
+        for path in ["Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift",
+                     "Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift",
+                     "Meeshy/Features/Main/Views/ConversationView+ComposerBanners.swift"] {
+            XCTAssertTrue(try source(path).contains(".quotedExtraPieces("), "\(path) doit poser « +N »")
+        }
+        XCTAssertTrue(try source("Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift")
+            .contains("quotedPieceCount: reply.quotedPieceCount"), "la porte Equatable de la bulle lit le compte")
+    }
+
+    func test_quoteJump_carriesTheCitation_andLightsTheTileWhenItLands() throws {
+        let controller = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(controller.contains("onReplyTap: quoteJumpHandler"))
+        XCTAssertTrue(controller.contains("focalActions.onReplyTap = quoteJumpHandler"))
+        XCTAssertTrue(controller.contains("releasePieceSpotlight(at: indexPath)"))
+        XCTAssertTrue(controller.contains(".environment(\\.pieceSpotlight,"))
+        let bulles = try source("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        XCTAssertEqual(bulles.components(separatedBy: "PieceSpotlightRing(attachmentId: attachment.id").count - 1, 2)
+        XCTAssertTrue(try source("Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+            .contains("PieceSpotlightRing(attachmentId: attachment.id"))
+    }
 }
