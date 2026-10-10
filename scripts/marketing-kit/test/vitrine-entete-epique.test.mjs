@@ -10,7 +10,7 @@ import { TEXTES_ENTETE } from '../textes/entete-epique.mjs'
 import { tailleDeLoupe } from '../vitrine/entete-epique-page.mjs'
 import {
   DUREE_S, FPS, HAUTEUR, IMAGES, LARGEUR, MUSIQUE, PLANS, REPERES, SONS, TEMPS_S, CIBLE_LUFS, CRETE_DBTP,
-  argumentsDeMixage, entreeDuPlan, enSecondes, fenetre, filtreDeMixage, filtreDeSonie, legendeDuReel, lireMesure, modeleDeLaPage,
+  SONS_DE_COUP, argumentsDeMixage, entreeDuPlan, enSecondes, fenetre, filtreDeMixage, filtreDeSonie, legendeDuReel, lireMesure, modeleDeLaPage,
   planDeLEntete, recaler, titreDeSignature,
 } from '../vitrine/entete-epique-plan.mjs'
 import { ANCIENS_ENTETES, deposerLEntete, nomDuFichier, sourceVerifiee } from '../vitrine/entete-epique.mjs'
@@ -209,6 +209,9 @@ describe('l’en-tête épique : le mixage (#9904)', () => {
     expect(f).toContain(`atrim=start=${MUSIQUE.debutS}:end=${(MUSIQUE.debutS + DUREE_S).toFixed(3)}`)
     expect(f).toContain(`amix=inputs=${p.reperes.length}:duration=longest:normalize=0`)
     expect(f).toContain('[m][cle]sidechaincompress')
+    const coups = p.reperes.filter((r) => SONS_DE_COUP.has(r.son)).length
+    expect(f).toContain(`amix=inputs=${coups}:duration=longest:normalize=0[cle]`)
+    expect(SONS_DE_COUP.has('scintille')).toBe(false)
     expect(f).toContain('[md][fx]amix=inputs=2:duration=first:normalize=0')
     for (const r of p.reperes) expect(f).toContain(`adelay=${Math.round(r.departS * 1000)}|${Math.round(r.departS * 1000)}`)
   })

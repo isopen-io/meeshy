@@ -123,22 +123,23 @@ export const PLANS = [
 ]
 
 // Les effets sonores, posés par leur COUP sur un instant du plan (en temps de musique) ; `retardS` décale d'un instant
-// lu dans la prise (le coup du marteau, le coffre qui s'ouvre). `gainDb` relatif au fichier.
+// lu dans la prise (le coup du marteau, le coffre qui s'ouvre). `gainDb` relatif au fichier, dont la crête est à 0 dBFS
+// (le scintillement à -6) : aucun effet ne dépasse la pleine échelle avant la sonie.
 export const REPERES = [
-  { son: 'impact', temps: 0, gainDb: -8 },
-  ...[3, 6, 9].map((temps) => ({ son: 'balayage', temps, gainDb: -4 })),
-  { son: 'souffle', temps: 12, gainDb: -2 },
-  { son: 'scintille', plan: 'story', etape: 'story', gainDb: 14 },
-  { son: 'souffle', temps: 20, gainDb: -2 },
-  { son: 'scintille', plan: 'vocal', etape: 'traduction', gainDb: 14 },
-  { son: 'frappe', plan: 'frappe', retardS: 0.41, gainDb: -2 },
-  { son: 'piece', plan: 'frappe', retardS: 1.0, gainDb: 0 },
-  { son: 'balayage', temps: 36, gainDb: -4 },
-  { son: 'coffre', plan: 'coffre', retardS: 0.15, gainDb: 0 },
-  { son: 'niveau', plan: 'niveau', retardS: 0.05, gainDb: -2 },
-  { son: 'rang', plan: 'rang', retardS: 0.55, gainDb: 6 },
-  { son: 'souffleImpact', temps: 48, gainDb: -3 },
-  { son: 'impact', temps: 48, gainDb: -1 },
+  { son: 'impact', temps: 0, gainDb: -6 },
+  ...[3, 6, 9].map((temps) => ({ son: 'balayage', temps, gainDb: -6 })),
+  { son: 'souffle', temps: 12, gainDb: -4 },
+  { son: 'scintille', plan: 'story', etape: 'story', gainDb: -6 },
+  { son: 'souffle', temps: 20, gainDb: -4 },
+  { son: 'scintille', plan: 'vocal', etape: 'traduction', gainDb: -6 },
+  { son: 'frappe', plan: 'frappe', retardS: 0.41, gainDb: 0 },
+  { son: 'piece', plan: 'frappe', retardS: 1.0, gainDb: -2 },
+  { son: 'balayage', temps: 36, gainDb: -6 },
+  { son: 'coffre', plan: 'coffre', retardS: 0.15, gainDb: -2 },
+  { son: 'niveau', plan: 'niveau', retardS: 0.05, gainDb: -3 },
+  { son: 'rang', plan: 'rang', retardS: 0.55, gainDb: -3 },
+  { son: 'souffleImpact', temps: 48, gainDb: -4 },
+  { son: 'impact', temps: 48, gainDb: -2 },
 ]
 
 // ── Les prises ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -264,21 +265,28 @@ export const planDeLEntete = ({ lang, prises, nomDeFiche }) => {
 export const CIBLE_LUFS = -16
 export const CRETE_DBTP = -1.5
 
+// Les sons qui CREUSENT la musique : les coups brefs. Un souffle ou un scintillement dure des secondes, et la musique
+// s'éteindrait sous lui.
+export const SONS_DE_COUP = new Set(['impact', 'frappe', 'piece', 'coffre', 'niveau', 'rang'])
+
 // La musique (extrait de DUREE_S, fondu d'entrée court sous le premier impact, fondu de sortie pour la boucle d'Apple) et
 // chaque effet posé à son départ. Les effets forment un bus qui COMPRIME la musique (sidechain) : chaque coup se creuse
 // sa place au lieu de se noyer dans une piste déjà dense. Tout est sommé SANS normalisation par entrée (normalize=0),
 // puis porté à la cible de sonie par loudnorm (deux passes : la mesure de la première est appliquée, en linéaire).
-export const filtreDeMixage = ({ reperes, musiqueGainDb = -4, effetsGainDb = 5 }) => {
+export const filtreDeMixage = ({ reperes, musiqueGainDb = -4, effetsGainDb = 0 }) => {
   const parties = [
     `[0:a]atrim=start=${MUSIQUE.debutS}:end=${(MUSIQUE.debutS + DUREE_S).toFixed(3)},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,volume=${musiqueGainDb}dB,afade=t=in:d=0.12,afade=t=out:st=${(DUREE_S - 0.9).toFixed(3)}:d=0.9[m]`,
   ]
+  const coups = reperes.map((r, i) => [r, i]).filter(([r]) => SONS_DE_COUP.has(r.son)).map(([, i]) => i)
   reperes.forEach((r, i) => {
     const retard = Math.round(r.departS * 1000)
     const coupe = r.coupeS > 0 ? `atrim=start=${r.coupeS.toFixed(3)},asetpts=PTS-STARTPTS,` : ''
-    parties.push(`[${i + 1}:a]${coupe}aformat=sample_rates=48000:channel_layouts=stereo,volume=${r.gainDb + effetsGainDb}dB,adelay=${retard}|${retard},apad=whole_dur=${DUREE_S}[s${i}]`)
+    const sortie = coups.includes(i) ? `asplit=2[s${i}][k${i}]` : `anull[s${i}]`
+    parties.push(`[${i + 1}:a]${coupe}aformat=sample_rates=48000:channel_layouts=stereo,volume=${r.gainDb + effetsGainDb}dB,adelay=${retard}|${retard},apad=whole_dur=${DUREE_S},${sortie}`)
   })
-  parties.push(`${reperes.map((_, i) => `[s${i}]`).join('')}amix=inputs=${reperes.length}:duration=longest:normalize=0,asplit=2[fx][cle]`)
-  parties.push('[m][cle]sidechaincompress=threshold=0.04:ratio=5:attack=4:release=280:makeup=1[md]')
+  parties.push(`${reperes.map((_, i) => `[s${i}]`).join('')}amix=inputs=${reperes.length}:duration=longest:normalize=0[fx]`)
+  parties.push(`${coups.map((i) => `[k${i}]`).join('')}amix=inputs=${coups.length}:duration=longest:normalize=0[cle]`)
+  parties.push('[m][cle]sidechaincompress=threshold=0.1:ratio=3:attack=3:release=180:makeup=1[md]')
   parties.push(`[md][fx]amix=inputs=2:duration=first:normalize=0,atrim=end=${DUREE_S},asetpts=PTS-STARTPTS[mix]`)
   return parties.join(';')
 }

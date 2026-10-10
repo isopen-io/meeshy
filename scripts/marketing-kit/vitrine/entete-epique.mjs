@@ -147,7 +147,7 @@ const assembler = ({ lang, plan, dossier, racine }) => {
 
 export const remixerLEntete = ({ lang, racine = SORTIE_APPSTORE }) => {
   const dossier = resolve(racine, '.travail', appStoreLocale(lang), 'entete-epique')
-  const plan = JSON.parse(readFileSync(resolve(dossier, 'plan.json'), 'utf8'))
+  const plan = planDeLEntete({ lang, prises: prisesDeLaLangue({ lang }), nomDeFiche: nomDeFiche(lang) })
   return assembler({ lang, plan, dossier, racine })
 }
 
@@ -169,7 +169,8 @@ export const monterLEntete = async ({ lang, navigateur, racine = SORTIE_APPSTORE
     await page.evaluate(() => document.fonts.ready)
     await rendreLaVideo({ page, dossier, sortie: video, jusqua })
   } finally {
-    await contexte.close()
+    await contexte.close().catch(() => {})
+    rmSync(resolve(dossier, 'images'), { recursive: true, force: true })
   }
   return assembler({ lang, plan, dossier, racine })
 }
@@ -206,11 +207,12 @@ const main = async () => {
   })
   const langs = values.langue === 'all' ? KIT_LANGS : values.langue.split(',')
   const { chromium } = await import('@playwright/test')
-  const navigateur = values.son ? null : await chromium.launch()
   const bilan = []
-  try {
+  {
     for (const lang of langs) {
-      const r = values.son ? remixerLEntete({ lang }) : await monterLEntete({ lang, navigateur, jusqua: values.jusqua ? Number(values.jusqua) : DUREE_S })
+      // Un navigateur par langue : un plantage de son processus graphique ne coûte qu'une langue.
+      const navigateur = values.son ? null : await chromium.launch()
+      const r = values.son ? remixerLEntete({ lang }) : await monterLEntete({ lang, navigateur, jusqua: values.jusqua ? Number(values.jusqua) : DUREE_S }).finally(() => navigateur.close().catch(() => {}))
       const controle = values.jusqua ? { conforme: null, erreurs: [] } : controler(r.chemin, 'entete-video')
       console.log(`${controle.conforme === false ? '✗' : '✓'} ${r.chemin} — ${r.son.lufs} LUFS, crête ${r.son.creteVraieDbfs} dBFS${controle.erreurs.length ? ` : ${controle.erreurs.join(' ; ')}` : ''}`)
       if (controle.conforme === false) throw new Error(`${r.chemin} n'est pas conforme`)
@@ -220,8 +222,6 @@ const main = async () => {
         console.log(`→ ${d.depose}${d.retires.length ? ` (retiré : ${d.retires.join(', ')})` : ''}`)
       }
     }
-  } finally {
-    await navigateur?.close()
   }
   writeFileSync(resolve(SORTIE_APPSTORE, 'entete-epique.json'), `${JSON.stringify({
     musique: `${MUSIQUE.titre} — ${MUSIQUE.auteur} (${MUSIQUE.source}) — ${MUSIQUE.licence}`,
