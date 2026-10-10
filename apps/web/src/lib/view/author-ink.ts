@@ -1,6 +1,13 @@
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
-import { BACKDROP_DARK_END } from '@/lib/view/thread-backdrop';
+import {
+  BACKDROP_DARK_END,
+  BACKDROP_DARK_START,
+  BACKDROP_DARK_TINT,
+  BACKDROP_LIGHT_BASE,
+  BACKDROP_LIGHT_TINT_END,
+  BACKDROP_LIGHT_TINT_START,
+} from '@/lib/view/thread-backdrop';
 
 import type { CSSProperties } from 'react';
 
@@ -55,8 +62,8 @@ const contrast = (a: string, b: string): number => {
 
 /**
  * LES FONDS QU'UNE LIGNE D'IDENTITÉ PEUT AVOIR SOUS ELLE — la surface et la
- * carte (`packages/design-tokens/ios.css`), l'arrêt le plus lumineux (sombre)
- * ou le plus teinté (clair) du fond du fil (`lib/view/thread-backdrop.ts`), et
+ * carte (`packages/design-tokens/ios.css`), CHAQUE arrêt du fond du fil
+ * (`lib/view/thread-backdrop.ts`), seul puis sous
  * la LUEUR d'accent posée derrière l'en-tête (`.thread-backdrop`,
  * `styles/thread-scene.css`) prise au pire : un accent blanc en sombre, noir
  * en clair. Mesurer contre le pire accent possible rend la teinte
@@ -75,20 +82,40 @@ export const AUTHOR_INK_SURFACES = {
   light: { surface: '#ffffff', card: '#f8f7ff', ink: '#1e1b4b' },
 } as const;
 
-const BACKDROP_DARK = `#${BACKDROP_DARK_END.toLowerCase()}`;
 const WORST_ACCENT = { dark: '#ffffff', light: '#000000' } as const;
+const hexToken = (token: string): string => `#${token.toLowerCase()}`;
+
+/**
+ * LES TROIS ARRÊTS DU FOND DU FIL, accent au pire, chacun SOUS la lueur : le
+ * fond n'est pas un aplat — `thread-scene.css` teinte l'arrêt MÉDIAN (sombre)
+ * ou les arrêts de BORD (clair) par l'accent, et la lueur haute s'y ajoute.
+ * Ne mesurer que l'arrêt de fin laissait passer des teintes à 3,8:1 en clair.
+ */
+const BACKDROP_STOPS = {
+  dark: [
+    hexToken(BACKDROP_DARK_START),
+    mix(hexToken(BACKDROP_DARK_START), WORST_ACCENT.dark, BACKDROP_DARK_TINT),
+    hexToken(BACKDROP_DARK_END),
+  ],
+  light: [
+    mix(hexToken(BACKDROP_LIGHT_BASE), WORST_ACCENT.light, BACKDROP_LIGHT_TINT_START),
+    hexToken(BACKDROP_LIGHT_BASE),
+    mix(hexToken(BACKDROP_LIGHT_BASE), WORST_ACCENT.light, BACKDROP_LIGHT_TINT_END),
+  ],
+} as const;
 
 export const AUTHOR_INK_BACKGROUNDS: { readonly dark: readonly string[]; readonly light: readonly string[] } = {
   dark: [
     AUTHOR_INK_SURFACES.dark.surface,
     AUTHOR_INK_SURFACES.dark.card,
-    BACKDROP_DARK,
-    mix(BACKDROP_DARK, WORST_ACCENT.dark, THREAD_GLOW_DARK),
+    ...BACKDROP_STOPS.dark,
+    ...BACKDROP_STOPS.dark.map((stop) => mix(stop, WORST_ACCENT.dark, THREAD_GLOW_DARK)),
   ],
   light: [
     AUTHOR_INK_SURFACES.light.surface,
     AUTHOR_INK_SURFACES.light.card,
-    mix(AUTHOR_INK_SURFACES.light.surface, WORST_ACCENT.light, THREAD_GLOW_LIGHT),
+    ...BACKDROP_STOPS.light,
+    ...BACKDROP_STOPS.light.map((stop) => mix(stop, WORST_ACCENT.light, THREAD_GLOW_LIGHT)),
   ],
 };
 

@@ -5,6 +5,14 @@ import { describe, expect, test } from 'bun:test';
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 import { AUTHOR_INK_BACKGROUNDS, AUTHOR_INK_SURFACES, authorInk, authorInkStyle } from './author-ink';
+import {
+  BACKDROP_DARK_END,
+  BACKDROP_DARK_START,
+  BACKDROP_DARK_TINT,
+  BACKDROP_LIGHT_BASE,
+  BACKDROP_LIGHT_TINT_END,
+  BACKDROP_LIGHT_TINT_START,
+} from './thread-backdrop';
 
 /**
  * LE NOM D'AUTEUR TEINTÉ, STABLE PAR PERSONNE (#10004, note « look » de la
@@ -95,5 +103,50 @@ describe('le nom d’auteur teinté (#10004)', () => {
     expect(valueOf('ios-surface', lightStart)).toBe(AUTHOR_INK_SURFACES.light.surface);
     expect(valueOf('ios-surface-card', lightStart)).toBe(AUTHOR_INK_SURFACES.light.card);
     expect(valueOf('ios-ink', lightStart)).toBe(AUTHOR_INK_SURFACES.light.ink);
+  });
+
+  /**
+   * LE FOND DU FIL A TROIS ARRÊTS, PAS UN SEUL — `thread-scene.css` teinte le
+   * PREMIER (clair) ou le MÉDIAN (sombre) par l'accent, et la lueur haute s'y
+   * AJOUTE. Le témoin recompose ces fonds sans passer par le module : les
+   * arrêts depuis `thread-backdrop.ts`, la lueur depuis la feuille, prise à la
+   * première ligne lisible (120 px), l'accent au pire (blanc en sombre, noir
+   * en clair). Une liste de fonds qui en oublie un ne peut plus se valider
+   * elle-même.
+   */
+  test('chaque teinte tient 4,5:1 sur chaque arrêt du fond du fil sous sa lueur, accent au pire', () => {
+    const mixHex = (a: string, b: string, t: number): string =>
+      `#${[0, 2, 4]
+        .map((o) => {
+          const x = Number.parseInt(a.slice(1 + o, 3 + o), 16);
+          const y = Number.parseInt(b.slice(1 + o, 3 + o), 16);
+          return Math.round(x + (y - x) * t)
+            .toString(16)
+            .padStart(2, '0');
+        })
+        .join('')}`;
+    const scene = readFileSync(new URL('../../styles/thread-scene.css', import.meta.url).pathname, 'utf8');
+    const glowOf = (selector: string): number => {
+      const rule = scene.slice(scene.indexOf(`${selector} {`));
+      const percent = Number(/--thread-glow-top:\s*color-mix\(in srgb, var\(--accent\) (\d+)%/.exec(rule)?.[1]);
+      const fade = Number(/var\(--thread-glow-top\), transparent (\d+)px/.exec(rule)?.[1]);
+      expect(percent).toBeGreaterThan(0);
+      expect(fade).toBeGreaterThan(120);
+      return (percent / 100) * (1 - 120 / fade);
+    };
+    const darkGlow = glowOf('.thread-backdrop');
+    const lightGlow = glowOf(':root.light .thread-backdrop');
+    const darkStops = [`#${BACKDROP_DARK_START}`, mixHex(`#${BACKDROP_DARK_START}`, '#ffffff', BACKDROP_DARK_TINT), `#${BACKDROP_DARK_END}`].map(
+      (stop) => mixHex(stop.toLowerCase(), '#ffffff', darkGlow),
+    );
+    const lightBase = `#${BACKDROP_LIGHT_BASE}`.toLowerCase();
+    const lightStops = [mixHex(lightBase, '#000000', BACKDROP_LIGHT_TINT_START), lightBase, mixHex(lightBase, '#000000', BACKDROP_LIGHT_TINT_END)].map(
+      (stop) => mixHex(stop, '#000000', lightGlow),
+    );
+    for (const authorId of SEEDS) {
+      const { dark, light } = authorInk({ authorId, name: '' });
+      for (const bg of darkStops) expect(contrast(dark, bg)).toBeGreaterThanOrEqual(4.5);
+      for (const bg of lightStops) expect(contrast(light, bg)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });
