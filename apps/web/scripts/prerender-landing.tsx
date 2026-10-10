@@ -58,7 +58,14 @@ const BUDGET_KB: number | null = budgets.landing_page.kb.value;
  * valeur recopiée.
  */
 function themeColors(): { readonly dark: string; readonly light: string } {
-  const tokens = readFileSync(join(HERE, '../../../packages/design-tokens/ios.css'), 'utf8');
+  // `@meeshy/design-tokens` est une dépendance workspace résolue (package.json),
+  // jamais un chemin relatif codé en dur : la disposition du monorepo local
+  // (3 remontées depuis apps/web/scripts/) diffère de celle, aplatie, de
+  // l'image Docker (apps/web/Dockerfile copie packages/design-tokens/ sous
+  // /app/packages/design-tokens/) — un chemin relatif qui marche dans l'une
+  // sort du système de fichiers dans l'autre (#10069).
+  const iosCssPath = fileURLToPath(import.meta.resolve('@meeshy/design-tokens/ios.css'));
+  const tokens = readFileSync(iosCssPath, 'utf8');
   const [dark, light] = [...tokens.matchAll(/--ios-surface:\s*(#[0-9a-fA-F]{3,8})\s*;/g)].map((m) => m[1]);
   if (dark === undefined || light === undefined) throw new Error('--ios-surface introuvable dans @meeshy/design-tokens/ios.css');
   return { dark, light };
