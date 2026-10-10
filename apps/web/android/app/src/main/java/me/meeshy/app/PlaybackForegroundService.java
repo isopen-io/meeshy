@@ -46,6 +46,11 @@ import android.util.Log;
  */
 public class PlaybackForegroundService extends Service {
 
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(ShellLocale.wrap(base));
+    }
+
     private static final String CHANNEL_PLAYBACK = "meeshy_playback";
     private static final int NOTIFICATION_ID = 0x4d50; // "MP"
     private static final String TAG = "MeeshyPlayback";
