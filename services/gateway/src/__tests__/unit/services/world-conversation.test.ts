@@ -20,6 +20,7 @@ import {
 import { ensureWorldConversation, loadWorldEntry } from '../../../services/world/worldConversation';
 import type { WorldReservedIdentities } from '../../../services/world/worldReservedMembers';
 import { inspectWorldSeed, removeWorldSeed } from '../../../services/world/worldSeedOperations';
+import { classifyAnonymousAttachment, type AnonymousAttachmentVerdict } from '../../../services/attachments/ContentSignature';
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -155,6 +156,30 @@ function worldConversation(prisma: ReturnType<typeof makeDb>) {
 
 function roleOf(prisma: ReturnType<typeof makeDb>, userId: string): unknown {
   return prisma.participant.rows.find((row) => row.userId === userId)?.role;
+}
+
+/** Les contenus qu'un invité de World Wide tenterait de faire passer pour de l'audio (audit #10000, #10029). */
+const MPEG_SYNC_THEN_HTML = Buffer.concat([Buffer.from([0xff, 0xfb]), Buffer.from('<html><script>alert(1)</script></html>', 'latin1')]);
+const ADTS_SYNC_THEN_ZIP = Buffer.concat([Buffer.from([0xff, 0xf1]), Buffer.from('PK\x03\x04\x14\x00\x00\x00', 'latin1')]);
+const MP4_VIDEO = Buffer.concat([
+  Buffer.from([0x00, 0x00, 0x00, 0x20]),
+  Buffer.from('ftypisom', 'latin1'),
+  Buffer.from([0x00, 0x00, 0x02, 0x00]),
+  Buffer.from('isomiso2avc1mp41', 'latin1'),
+  Buffer.from([0x00, 0x00, 0x00, 0x08]),
+  Buffer.from('moov', 'latin1'),
+]);
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
+
+/** Ce que les chemins d'upload lisent du lien d'un invité : ses drapeaux et la conversation qu'il ouvre. */
+function guestDoorOf(prisma: ReturnType<typeof makeDb>) {
+  const [link] = prisma.conversationShareLink.rows;
+  const conversation = prisma.conversation.rows.find((row) => row.id === link.conversationId);
+  return {
+    allowAnonymousFiles: link.allowAnonymousFiles as boolean,
+    allowAnonymousImages: link.allowAnonymousImages as boolean,
+    conversation: { identifier: conversation?.identifier as string },
+  };
 }
 
 describe('ensureWorldConversation — la conversation World Wide (#10000)', () => {
@@ -342,12 +367,26 @@ describe('ensureWorldConversation — le lien de partage stable', () => {
     expect(prisma.conversationShareLink.rows[0].linkId).not.toBe(WORLD_SHARE_LINK_IDENTIFIER);
   });
 
-  it('sème la porte des FICHIERS d’invité FERMÉE : seule la garde de signature de #10001 l’ouvrira, par migration (audit #10000)', async () => {
+  it('un invité du lien semé ne joint RIEN : ni deux octets de synchro MPEG suivis de HTML, ni un MP4 vidéo déclaré audio (audit #10000, #10029)', async () => {
     const prisma = makeDb();
 
     await seed(prisma);
 
-    expect(prisma.conversationShareLink.rows[0]).toMatchObject({ allowAnonymousFiles: false, allowAnonymousImages: false });
+    const door = guestDoorOf(prisma);
+    expect(classifyAnonymousAttachment('audio/mpeg', MPEG_SYNC_THEN_HTML, door)).toMatchObject({ allowed: false });
+    expect(classifyAnonymousAttachment('audio/aac', ADTS_SYNC_THEN_ZIP, door)).toMatchObject({ allowed: false });
+    expect(classifyAnonymousAttachment('audio/mp4', MP4_VIDEO, door)).toMatchObject({ allowed: false });
+    expect(classifyAnonymousAttachment('application/octet-stream', JPEG, door)).toMatchObject({ allowed: false });
+  });
+
+  it('la même charge reste refusée à un invité entré quand le lien portait la porte des fichiers OUVERTE : la garde ne lit pas le drapeau (#10029)', async () => {
+    const prisma = makeDb();
+
+    await seed(prisma);
+
+    const door = { ...guestDoorOf(prisma), allowAnonymousFiles: true, allowAnonymousImages: true };
+    expect(classifyAnonymousAttachment('audio/mpeg', MPEG_SYNC_THEN_HTML, door)).toMatchObject({ allowed: false });
+    expect(classifyAnonymousAttachment('audio/mp4', MP4_VIDEO, door)).toMatchObject({ allowed: false });
   });
 
   it('ne recrée pas le lien qu’un administrateur a fermé', async () => {
@@ -499,6 +538,18 @@ describe('inspectWorldSeed — le pré-vol en lecture seule avant la production 
     expect(flawed.ready).toBe(false);
     expect(flawed.blockers).toEqual(['admin:platform-role', 'world-admin-1:email-unverified']);
     expect(empty.blockers).toEqual(['world-admin-not-configured']);
+  });
+
+  it('bloque tant que la garde des pièces jointes d’invité laisse passer un contenu déguisé en audio (audit #10000, #10029)', async () => {
+    const prisma = makeDb();
+    const audioOpenGuard = (mimeType: string): AnonymousAttachmentVerdict =>
+      mimeType.startsWith('audio/') ? { allowed: true } : { allowed: false, reason: 'closed' };
+
+    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: audioOpenGuard });
+
+    expect(preflight.ready).toBe(false);
+    expect(preflight.blockers).toEqual(['guest-attachments-open:mpeg-sync-html,adts-sync-zip,mp4-video-as-audio']);
+    expect(writes(prisma)).toBe(0);
   });
 });
 
