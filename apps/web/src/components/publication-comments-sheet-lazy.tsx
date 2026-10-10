@@ -31,10 +31,10 @@ export const LazyPublicationCommentsSheet = lazy(() =>
  * `LazyPublicationCommentsSheet`. Un site UNIQUE, ici, à côté de l'appel
  * `lazy()` qu'il ferme.
  */
-export function CommentsSheetPortal({ host }: { readonly host: CommentsSheetHost }) {
+export function CommentsSheetPortal({ host, risesWithComposer = false }: { readonly host: CommentsSheetHost; readonly risesWithComposer?: boolean }) {
   return host.postId !== null ? (
     <Suspense fallback={null}>
-      <LazyPublicationCommentsSheet postId={host.postId} onClose={host.close} onWritingBar={host.reportWriting} />
+      <LazyPublicationCommentsSheet postId={host.postId} onClose={host.close} onWritingBar={host.reportWriting} risesWithComposer={risesWithComposer} />
     </Suspense>
   ) : null;
 }
