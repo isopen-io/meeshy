@@ -84,6 +84,14 @@ const SURFACES: Record<string, Classification> = {
   'conversations/messages-list-query.ts': { kind: 'applies', reads: 1, applications: 0 },
   'conversations/messages-pin.ts': { kind: 'applies', reads: 2, applications: 2 },
   'conversations/messages-search.ts': { kind: 'applies', reads: 2, applications: 2 },
+  // #9899 — les traductions partagées d'une page de messages DEMANDÉS par id
+  // (`GET /conversations/:id/shared-translations`). Une lecture, `applications:
+  // 0` : le masquage n'entre pas dans un `where`, il est JUGÉ en mémoire, message
+  // par message, par la loi de lecture (`readerMayReadMessages` — plancher
+  // d'historique ET masquage personnel, `whenHidingUnreadable: 'refuse'`), et
+  // seules les traductions des messages que le lecteur lit sont servies. Les
+  // marqueurs de `ROUTE_IN_MEMORY_HIDING_SURFACES` en sont la preuve.
+  'conversations/shared-translations.ts': { kind: 'applies', reads: 1, applications: 0 },
   'conversations/threads.ts': { kind: 'applies', reads: 1, applications: 2 },
 
   // `messages-list-views.ts` — le résolveur d'ids des VUES de la collection
@@ -720,6 +728,20 @@ const ROUTE_IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
     'loadPersonalHistoryHidingByConversation(',
     'hiddenMessageIds.includes(',
     'clearHistoryBefore',
+  ],
+  // #9899 — le verdict de lecture vient de `messageReadAccess.ts` (son énoncé
+  // unique : plancher et masquage personnel), la route en tient trois choses :
+  // l'APPEL, la posture fail-closed, et le FILTRE de ce qu'elle sert. Le nom de
+  // l'appel seul survivrait à la suppression de son usage — `readable.has(` est
+  // ce qui tombe avec le filtre. La posture figure aux DEUX appels (écriture et
+  // lecture) : un marqueur de texte ne dit pas lequel a changé, et ce sont les
+  // témoins de comportement de `conversation-shared-translations*.test.ts` (« le
+  // masquage personnel de l'appelant ne répond pas ») qui tiennent chacun d'eux.
+  'conversations/shared-translations.ts': [
+    'readerMayReadMessage(',
+    'readerMayReadMessages(',
+    "whenHidingUnreadable: 'refuse'",
+    'readable.has(',
   ],
 };
 

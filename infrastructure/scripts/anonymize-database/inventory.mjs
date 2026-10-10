@@ -561,4 +561,5 @@ export const INVENTORY = Object.freeze([
   { model: 'AgentAnalysisSnapshot', collection: 'AgentAnalysisSnapshot', action: 'purge', fields: t(['participantSnapshots', 'topTopics']) },
   { model: 'AgentScanLog', collection: 'AgentScanLog', action: 'purge', fields: t(['nodeResults', 'configSnapshot']) },
   { model: 'OrphanMediaCleanup', collection: 'OrphanMediaCleanup', action: 'purge', fields: t(['fileUrl']) },
+  { model: 'SharedTranslation', collection: 'SharedTranslation', action: 'purge', fields: t(['payload']) },
 ]);

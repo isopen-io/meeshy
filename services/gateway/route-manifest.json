@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 652,
+  "routeCount": 654,
   "routes": [
     {
       "method": "DELETE",
@@ -2979,6 +2979,20 @@
     {
       "method": "GET",
       "path": "/api/v1/conversations/:id/reactions",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations/:id/shared-translations",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -7414,6 +7428,20 @@
     {
       "method": "POST",
       "path": "/api/v1/conversations/:id/participants",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/:id/shared-translations",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",

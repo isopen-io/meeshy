@@ -1094,6 +1094,50 @@ model Message {
   @@index([viewOnceBurnAt]) // Balayage de purge des vues uniques (#7578)
 }
 
+/// La traduction d'un message qu'un MEMBRE a faite sur son appareil et PARTAGÉE
+/// aux autres (#9899) — gardée SCELLÉE : le serveur ne la lit jamais.
+///
+/// `payload` est le base64 d'une enveloppe AES-256-GCM (nonce ‖ chiffré ‖ tag)
+/// que seuls les lecteurs du message savent ouvrir. La passerelle la stocke et
+/// la relaie octet pour octet, sans la déchiffrer ni l'analyser (contrat :
+/// `packages/shared/types/shared-translation.ts`). `kdf` nomme la dérivation de
+/// la clé (`message-content` | `message-secret`) : c'est le seul indice que le
+/// serveur ait, et il ne sert qu'à refuser `message-content` quand le message
+/// est chiffré de bout en bout.
+///
+/// UNE traduction par `(messageId, targetLanguage, sourceVersion)` : le PREMIER
+/// partage gagne, l'index unique règle la course et le perdant relit la
+/// gagnante. `sourceVersion` est la version du message qui a été traduite —
+/// `Message.editedAt` en ISO au moment du partage, ou `"original"` pour un
+/// message jamais édité. Une édition change la version : l'ancienne ligne n'est
+/// plus servie (la lecture compare à la version COURANTE) et un nouveau partage
+/// redevient possible.
+///
+/// `sharedById` est le `Participant.id` du partageur — le même espace
+/// d'identifiants que `Message.senderId`. `conversationId` est une COPIE
+/// immuable de `Message.conversationId`, écrite par le serveur depuis la ligne
+/// du message : elle adresse la diffusion et l'index de lecture sans relire le
+/// message.
+///
+/// Aucune relation vers `Message`, à dessein : un message s'efface en douceur
+/// (`deletedAt`), jamais physiquement, et la lecture écarte déjà un message
+/// effacé. Prisma n'émet pas les index sur MongoDB : ils sont posés à la main
+/// par `prisma/migrations/2026-10-10-shared-translation-indexes.mongodb.js`.
+model SharedTranslation {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String   @db.ObjectId
+  messageId      String   @db.ObjectId
+  targetLanguage String
+  sourceVersion  String
+  kdf            String
+  payload        String
+  sharedById     String   @db.ObjectId
+  createdAt      DateTime @default(now())
+
+  @@unique([messageId, targetLanguage, sourceVersion])
+  @@index([conversationId, messageId])
+}
+
 /// Traduction d'un message
 /// Attachement de fichier pour un message
 model MessageAttachment {

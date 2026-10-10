@@ -51,6 +51,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byIdParticipantsByUserIdUnban(id: String, userId: String)
     case byIdPinnedMessages(id: String)
     case byIdReactions(id: String)
+    case byIdSharedTranslations(id: String)
     case byIdStats(id: String)
     case byIdStatus(id: String)
     case byIdThreadsByMessageId(id: String, messageId: String)
@@ -100,6 +101,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byIdParticipantsByUserIdUnban(let id, let userId): return "/api/v1/conversations/\(id)/participants/\(userId)/unban"
         case .byIdPinnedMessages(let id): return "/api/v1/conversations/\(id)/pinned-messages"
         case .byIdReactions(let id): return "/api/v1/conversations/\(id)/reactions"
+        case .byIdSharedTranslations(let id): return "/api/v1/conversations/\(id)/shared-translations"
         case .byIdStats(let id): return "/api/v1/conversations/\(id)/stats"
         case .byIdStatus(let id): return "/api/v1/conversations/\(id)/status"
         case .byIdThreadsByMessageId(let id, let messageId): return "/api/v1/conversations/\(id)/threads/\(messageId)"
