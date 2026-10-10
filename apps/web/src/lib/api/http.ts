@@ -3,7 +3,6 @@ import type { CursorPaginationMeta, PaginationMeta } from '@meeshy/shared/types/
 import type { Transport } from '../net/transport';
 
 import { anySignal, timeoutSignal } from './abort';
-import { CAPABILITIES_HEADER, capabilitiesHeaderValue } from './capabilities';
 
 /**
  * LE CLIENT HTTP RÉEL (#5605, T2) — le transport que `apiConfig`/`session.ts`
@@ -367,7 +366,6 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     const headers: Record<string, string> = {
       ...credentialHeaders(credential),
       ...(locale ? { 'X-Device-Locale': locale } : {}),
-      [CAPABILITIES_HEADER]: capabilitiesHeaderValue(),
       ...(req.body !== undefined && formBody === undefined ? { 'Content-Type': 'application/json' } : {}),
       ...req.headers,
     };

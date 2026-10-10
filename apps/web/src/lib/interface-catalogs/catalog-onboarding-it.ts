@@ -33,13 +33,8 @@ const it = {
 
   'onboarding.age.title': 'La tua data di nascita',
   'onboarding.age.body': 'Per proporti gli spazi giusti. Puoi saltare.',
-  'onboarding.age.label': 'Data di nascita',
-  'onboarding.age.confirm': 'Conferma',
   'onboarding.age.skip': 'Salta',
-  'onboarding.age.incomplete': 'Scegli una data completa.',
-  'onboarding.age.future': 'Questa data non è ancora arrivata.',
-  'onboarding.age.tooOld': 'Controlla l’anno della tua data di nascita.',
-  'onboarding.age.invalid': 'Questa data non è stata accettata. Controllala.',
+  'onboarding.age.check': 'Controlla la tua data di nascita.',
   'onboarding.age.failed': 'La tua data non è stata salvata. Riprova.',
 
   'onboarding.global.title': 'Saluta il mondo',

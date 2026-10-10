@@ -33,13 +33,8 @@ const ar = {
 
   'onboarding.age.title': 'تاريخ ميلادك',
   'onboarding.age.body': 'لنقترح عليك المساحات المناسبة. يمكنك التخطي.',
-  'onboarding.age.label': 'تاريخ الميلاد',
-  'onboarding.age.confirm': 'تأكيد',
   'onboarding.age.skip': 'تخطٍّ',
-  'onboarding.age.incomplete': 'اختر تاريخًا كاملًا.',
-  'onboarding.age.future': 'هذا التاريخ لم يأتِ بعد.',
-  'onboarding.age.tooOld': 'تحقّق من سنة ميلادك.',
-  'onboarding.age.invalid': 'لم يُقبل هذا التاريخ. تحقّق منه.',
+  'onboarding.age.check': 'تحقّق من تاريخ ميلادك.',
   'onboarding.age.failed': 'لم يُحفظ تاريخك. حاول مجددًا.',
 
   'onboarding.global.title': 'قل مرحبًا للعالم',

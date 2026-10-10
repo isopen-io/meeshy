@@ -4,9 +4,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { LoginRequest, LoginResponseData } from '@/lib/api/auth';
 import type { ApiResult } from '@/lib/api/http';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import { ageBlockedNotice } from '@/components/age-blocked';
 import { MagicLinkValidation } from '@/components/magic-link-validation';
-import { LoginDoors } from '@/routes/login';
+import { LoginDoors, ageBlockedFromSearch } from '@/routes/login';
 import { createActMounter, typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -83,15 +82,18 @@ describe('connexion par mot de passe — 403 AGE_BELOW_MINIMUM', () => {
   });
 });
 
-describe('l’accueil vient de refuser la date — la révocation renvoie à la connexion', () => {
-  test('la connexion s’ouvre sur le même écran, une fois', async () => {
-    ageBlockedNotice.raise();
+describe('l’accueil vient de refuser la date — la connexion s’ouvre sur ?motif=age', () => {
+  test('le même écran, et « Compris » rend la porte', async () => {
     const login = async (): Promise<ApiResult<LoginResponseData>> => BLOCKED;
-    const host = await mount(<LoginDoors method="password" passwordLogin={login} />);
+    const host = await mount(<LoginDoors method="password" ageBlocked={ageBlockedFromSearch(new URLSearchParams('motif=age'))} passwordLogin={login} />);
     expect(title(host)).toBe('Meeshy est réservé aux 13 ans et plus');
-    expect(ageBlockedNotice.pending()).toBe(false);
     await click(host.querySelector<HTMLElement>('[data-age-blocked-confirm]'));
     expect(host.querySelector('form')).not.toBeNull();
+  });
+
+  test('sans motif, la porte s’ouvre normalement', () => {
+    expect(ageBlockedFromSearch(new URLSearchParams(''))).toBe(false);
+    expect(ageBlockedFromSearch(new URLSearchParams('motif=autre'))).toBe(false);
   });
 });
 

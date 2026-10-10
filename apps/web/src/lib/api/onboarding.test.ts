@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { scriptedGateway, scriptedTransport } from '@/test-support/scripted-transport';
 
+import { CLIENT_CAPABILITIES, capabilitiesHeaderValue } from './capabilities';
+
 import { decodeOnboardingState, loadOnboarding, patchOnboarding, ONBOARDING_QUERY_KEY, onboardingQueryOptions } from './onboarding';
 
 /**
@@ -106,12 +108,26 @@ describe('decodeOnboardingState — la frontière', () => {
   });
 });
 
+describe('X-Meeshy-Capabilities — l’accueil déclare ce qu’il sait lire (#9928)', () => {
+  test('GET et PATCH portent onboarding-age : sans lui, la passerelle ne sert ni l’âge ni la restriction', async () => {
+    const { deps, calls } = scriptedGateway({ [`GET ${PATH}`]: { ok: true, data: served() }, [`PATCH ${PATH}`]: { ok: true, data: served() } });
+    await loadOnboarding(deps);
+    await patchOnboarding(deps, { step: 'age', outcome: 'skipped' });
+    expect(calls().map((call) => call.headers?.['X-Meeshy-Capabilities'])).toEqual(['onboarding-age', 'onboarding-age']);
+  });
+
+  test('la valeur est la liste déclarée, jointe par des virgules', () => {
+    expect(capabilitiesHeaderValue(['onboarding-age', 'demain'])).toBe('onboarding-age,demain');
+    expect(CLIENT_CAPABILITIES).toContain('onboarding-age');
+  });
+});
+
 describe('loadOnboarding — GET /me/onboarding', () => {
   test('lit la route du contrat et rend l’état décodé', async () => {
     const { deps, calls } = scriptedGateway({ [`GET ${PATH}`]: { ok: true, data: served() } });
     const result = await loadOnboarding(deps);
     expect(result.ok && result.data.eligible).toBe(true);
-    expect(calls()).toEqual([{ method: 'GET', path: PATH }]);
+    expect(calls()).toEqual([{ method: 'GET', path: PATH, headers: { 'X-Meeshy-Capabilities': 'onboarding-age' } }]);
   });
 
   test('une charge illisible est un échec nommé', async () => {
@@ -134,7 +150,7 @@ describe('patchOnboarding — PATCH /me/onboarding', () => {
     const { deps, calls } = scriptedGateway({ [`PATCH ${PATH}`]: { ok: true, data: served({ seenSteps: ['languages'] }) } });
     const result = await patchOnboarding(deps, { step: 'languages', outcome: 'done' });
     expect(result.ok && result.data.seenSteps).toEqual(['languages']);
-    expect(calls()).toEqual([{ method: 'PATCH', path: PATH, body: { step: 'languages', outcome: 'done' } }]);
+    expect(calls()).toEqual([{ method: 'PATCH', path: PATH, body: { step: 'languages', outcome: 'done' }, headers: { 'X-Meeshy-Capabilities': 'onboarding-age' } }]);
   });
 
   test('« Passer tout » part en { finish: true }', async () => {
@@ -143,7 +159,7 @@ describe('patchOnboarding — PATCH /me/onboarding', () => {
     });
     const result = await patchOnboarding(deps, { finish: true });
     expect(result.ok && result.data.completedAt).toBe('2026-09-24T10:00:00.000Z');
-    expect(calls()).toEqual([{ method: 'PATCH', path: PATH, body: { finish: true } }]);
+    expect(calls()).toEqual([{ method: 'PATCH', path: PATH, body: { finish: true }, headers: { 'X-Meeshy-Capabilities': 'onboarding-age' } }]);
   });
 
   test('en fixtures, l’étape est retenue pour la lecture suivante', async () => {

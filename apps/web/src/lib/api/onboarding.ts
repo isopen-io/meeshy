@@ -3,6 +3,7 @@ import * as z from 'zod/mini';
 import type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@meeshy/shared/types/onboarding';
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
+import { capabilitiesHeaders } from './capabilities';
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
@@ -116,7 +117,7 @@ export async function loadOnboarding(deps: OnboardingDeps & { readonly signal?: 
     const { fixtureOnboarding } = await import('./fixtures-onboarding');
     return { ok: true, data: fixtureOnboarding() };
   }
-  return decoded(await deps.transport.request<unknown>({ method: 'GET', path: PATH, ...withSignal(deps.signal) }));
+  return decoded(await deps.transport.request<unknown>({ method: 'GET', path: PATH, headers: capabilitiesHeaders(), ...withSignal(deps.signal) }));
 }
 
 export async function patchOnboarding(deps: OnboardingDeps, body: OnboardingPatchBody): Promise<ApiResult<OnboardingState>> {
@@ -124,7 +125,7 @@ export async function patchOnboarding(deps: OnboardingDeps, body: OnboardingPatc
     const { fixturePatchOnboarding } = await import('./fixtures-onboarding');
     return { ok: true, data: fixturePatchOnboarding(body) };
   }
-  return decoded(await deps.transport.request<unknown>({ method: 'PATCH', path: PATH, body }));
+  return decoded(await deps.transport.request<unknown>({ method: 'PATCH', path: PATH, body, headers: capabilitiesHeaders() }));
 }
 
 /**

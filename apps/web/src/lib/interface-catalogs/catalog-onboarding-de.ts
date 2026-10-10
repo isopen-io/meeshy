@@ -33,13 +33,8 @@ const de = {
 
   'onboarding.age.title': 'Dein Geburtsdatum',
   'onboarding.age.body': 'Damit wir dir die passenden Räume vorschlagen. Du kannst das überspringen.',
-  'onboarding.age.label': 'Geburtsdatum',
-  'onboarding.age.confirm': 'Bestätigen',
   'onboarding.age.skip': 'Überspringen',
-  'onboarding.age.incomplete': 'Wähle ein vollständiges Datum.',
-  'onboarding.age.future': 'Dieses Datum liegt in der Zukunft.',
-  'onboarding.age.tooOld': 'Prüfe das Jahr deines Geburtsdatums.',
-  'onboarding.age.invalid': 'Dieses Datum wurde nicht angenommen. Prüfe es.',
+  'onboarding.age.check': 'Prüfe dein Geburtsdatum.',
   'onboarding.age.failed': 'Dein Datum wurde nicht gespeichert. Versuch es noch einmal.',
 
   'onboarding.global.title': 'Sag Hallo zur Welt',

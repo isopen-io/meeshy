@@ -41,13 +41,8 @@ const fr = {
 
   'onboarding.age.title': 'Ta date de naissance',
   'onboarding.age.body': 'Pour te proposer les bons espaces. Tu peux passer.',
-  'onboarding.age.label': 'Date de naissance',
-  'onboarding.age.confirm': 'Valider',
   'onboarding.age.skip': 'Passer',
-  'onboarding.age.incomplete': 'Choisis une date complète.',
-  'onboarding.age.future': 'Cette date n’est pas encore arrivée.',
-  'onboarding.age.tooOld': 'Vérifie l’année de ta date de naissance.',
-  'onboarding.age.invalid': 'Cette date n’a pas été acceptée. Vérifie-la.',
+  'onboarding.age.check': 'Vérifie ta date de naissance.',
   'onboarding.age.failed': 'Ta date n’a pas été enregistrée. Réessaie.',
 
   'onboarding.global.title': 'Dis salut au monde',

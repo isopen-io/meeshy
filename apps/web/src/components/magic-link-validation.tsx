@@ -6,8 +6,7 @@ import { placeMagicLinkValidationFailure } from '@/lib/view/auth-feedback';
 import { safeReturnPath } from '@/lib/view/magic-link';
 import { href, Link, navigate } from '@/routes/route-table';
 
-import { AgeBlocked, isAgeBelowMinimum } from './age-blocked';
-import { AuthColumn } from './auth-column';
+import { AgeBlocked, AuthColumn, isAgeBelowMinimum } from './auth-column';
 import { AUTH_GLYPHS } from './glyphs-auth';
 import { Glyph, GlyphSvg } from './glyph';
 

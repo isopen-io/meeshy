@@ -33,13 +33,8 @@ const es = {
 
   'onboarding.age.title': 'Tu fecha de nacimiento',
   'onboarding.age.body': 'Para proponerte los espacios adecuados. Puedes saltarlo.',
-  'onboarding.age.label': 'Fecha de nacimiento',
-  'onboarding.age.confirm': 'Confirmar',
   'onboarding.age.skip': 'Saltar',
-  'onboarding.age.incomplete': 'Elige una fecha completa.',
-  'onboarding.age.future': 'Esta fecha aún no ha llegado.',
-  'onboarding.age.tooOld': 'Revisa el año de tu fecha de nacimiento.',
-  'onboarding.age.invalid': 'Esta fecha no fue aceptada. Revísala.',
+  'onboarding.age.check': 'Revisa tu fecha de nacimiento.',
   'onboarding.age.failed': 'Tu fecha no se guardó. Inténtalo de nuevo.',
 
   'onboarding.global.title': 'Saluda al mundo',

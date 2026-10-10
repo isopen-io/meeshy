@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 
-import { CLIENT_CAPABILITIES, capabilitiesHeaderValue } from './capabilities';
 import { createHttpTransport } from './http';
 
 /**
@@ -101,24 +100,6 @@ describe('createHttpTransport — X-Device-Locale (rang 4 du Prisme)', () => {
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
     await transport.request({ method: 'GET', path: '/api/v1/me' });
     expect(headerOf(calls[0]!.init, 'X-Device-Locale')).toBeNull();
-  });
-});
-
-/* #9928 — la passerelle ne sert une évolution (l'étape `age` et
-   `viewerWriteRestriction` de l'accueil, PR #9940) qu'au client qui la
-   DÉCLARE : un ancien client garde l'ancienne forme. */
-describe('createHttpTransport — X-Meeshy-Capabilities (rétrocompatibilité)', () => {
-  test('chaque appel déclare les capacités de ce client, séparées par des virgules', async () => {
-    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
-    const transport = createHttpTransport({ base: '', fetchImpl: impl });
-    await transport.request({ method: 'GET', path: '/api/v1/me/onboarding' });
-    await transport.request({ method: 'PATCH', path: '/api/v1/me/onboarding', body: { step: 'age', outcome: 'skipped' } });
-    expect(calls.map((call) => headerOf(call.init, 'X-Meeshy-Capabilities'))).toEqual(['onboarding-age', 'onboarding-age']);
-  });
-
-  test('la valeur est la liste déclarée, jointe sans espace', () => {
-    expect(capabilitiesHeaderValue(['onboarding-age', 'demain'])).toBe('onboarding-age,demain');
-    expect(CLIENT_CAPABILITIES).toContain('onboarding-age');
   });
 });
 

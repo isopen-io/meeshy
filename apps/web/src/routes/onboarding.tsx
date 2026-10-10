@@ -5,7 +5,7 @@ import { useStore } from 'zustand/react';
 
 import '@/styles/onboarding.css';
 
-import { ageBlockedNotice } from '@/components/age-blocked';
+import { endRevokedSession } from '@/lib/api/account-caches';
 import { apiDeps } from '@/lib/api/deps';
 import { performSendRequest, type FriendActionOutcome } from '@/lib/api/friend-actions';
 import {
@@ -66,7 +66,7 @@ import {
   type LanguagesSave,
   type ResendLink,
 } from './onboarding-cards';
-import { AgeCard, AgeRefusal, type AgeSubmit } from './onboarding-age';
+import { AgeCard, type AgeSubmit } from './onboarding-age';
 import { RecapCard, type RecapNumbers } from './onboarding-recap';
 import { PointsPill, ProgressSegments } from './onboarding-visuals';
 import { href, navigate } from './route-table';
@@ -122,7 +122,7 @@ export type OnboardingScreenDeps = {
   readonly resendVerification: () => Promise<boolean>;
   /** Le retour du studio n'est crédité qu'avec sa preuve (`story-return.ts`). */
   readonly takeStoryProof: (storyId: string) => boolean;
-  /** Ferme la session — après l'écran des moins de 13 ans (#9928). */
+  /** Ferme la session — sur le 422 d'une date sous 13 ans (#9928). */
   readonly signOut: () => Promise<void>;
   readonly random: () => number;
   readonly navigate: (path: string, replace?: boolean) => void;
@@ -179,9 +179,10 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
   },
   resendVerification: () => (apiDeps.source === 'fixtures' ? Promise.resolve(false) : resendOwnVerification(apiDeps.transport)),
   takeStoryProof: storyReturn.take,
-  /* En `import()` : la déconnexion tire le coffre des comptes, que seul
-     l'écran des moins de 13 ans appelle. */
-  signOut: () => import('@/lib/api/device-accounts').then(({ signOutOfThisDevice }) => signOutOfThisDevice()),
+  /* La passerelle a DÉJÀ révoqué toutes les sessions avec son 422 : reste à
+     finir celle-ci ici, comme un 401 le ferait (`endRevokedSession`, déjà du
+     socle), caches du compte compris. */
+  signOut: async () => endRevokedSession(sessionStore),
   random: Math.random,
   navigate,
 };
@@ -281,7 +282,6 @@ export function OnboardingJourney({
   const [askable] = useState(() => deps.notificationsAskable());
   const [step, setStep] = useState<JourneyStep | null>(null);
   const [storyPublished, setStoryPublished] = useState(false);
-  const [refused, setRefused] = useState(false);
   const [today] = useState(() => new Date());
   const { flight, bump, travelling, announcement, celebrate } = useRewardFlight(lang);
   const actionDeps: OnboardingActionDeps = useMemo(() => ({ ...deps.api, queryClient: deps.queryClient }), [deps.api, deps.queryClient]);
@@ -423,9 +423,13 @@ export function OnboardingJourney({
       const outcome = await declareAge(actionDeps, birthDate);
       if (outcome.kind === 'invalid' || outcome.kind === 'failed') return outcome.kind;
       if (!alive.current || context === null) return 'done';
+      /* MOINS DE 13 ANS : la passerelle a écrit la date et révoqué les
+         sessions. Celle-ci finit ici, et la connexion s'ouvre sur l'écran qui
+         le dit (`?motif=age`) — le même qu'à chaque porte refusée ensuite. */
       if (outcome.kind === 'below-minimum') {
-        ageBlockedNotice.raise();
-        setRefused(true);
+        leaving.current = true;
+        await deps.signOut();
+        deps.navigate(href('login', undefined, { motif: 'age' }), true);
         return 'done';
       }
       const served = deps.queryClient.getQueryData<OnboardingState>(ONBOARDING_QUERY_KEY) ?? context.state;
@@ -433,7 +437,7 @@ export function OnboardingJourney({
       setStep(nextStepAfter('age', { ...context, state: served, progress: progressNow.current }));
       return 'done';
     },
-    [actionDeps, context, deps.queryClient, record],
+    [actionDeps, context, deps, record],
   );
 
   const reward = useCallback(
@@ -476,22 +480,6 @@ export function OnboardingJourney({
 
   const sessionPoints = pointsOf(progress);
   const host: CardHost = { lang, online, points: sessionPoints };
-  if (refused) {
-    return (
-      <main data-onboarding className="onb" dir={lang === 'ar' ? 'rtl' : 'ltr'} aria-label={translateOnboarding(lang, 'onboarding.title')}>
-        <div className="onb-backdrop" aria-hidden="true" />
-        <div className="onb-stage">
-          <AgeRefusal
-            host={host}
-            onConfirm={() => {
-              ageBlockedNotice.drop();
-              void deps.signOut();
-            }}
-          />
-        </div>
-      </main>
-    );
-  }
   const { position, count } = journeyPositions(context, step);
   const account = session.status === 'authenticated' ? session.user : null;
   const primaryLanguage = account?.systemLanguage ?? lang;

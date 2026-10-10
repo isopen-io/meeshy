@@ -33,13 +33,8 @@ const en = {
 
   'onboarding.age.title': 'Your date of birth',
   'onboarding.age.body': 'So we can suggest the right spaces for you. You can skip this.',
-  'onboarding.age.label': 'Date of birth',
-  'onboarding.age.confirm': 'Confirm',
   'onboarding.age.skip': 'Skip',
-  'onboarding.age.incomplete': 'Pick a full date.',
-  'onboarding.age.future': 'This date hasn’t happened yet.',
-  'onboarding.age.tooOld': 'Check the year of your date of birth.',
-  'onboarding.age.invalid': 'This date wasn’t accepted. Check it.',
+  'onboarding.age.check': 'Check your date of birth.',
   'onboarding.age.failed': 'Your date wasn’t saved. Try again.',
 
   'onboarding.global.title': 'Say hi to the world',

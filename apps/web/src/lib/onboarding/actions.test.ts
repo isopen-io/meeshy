@@ -32,7 +32,7 @@ describe('recordStep — l’étape vue s’écrit au geste, la passerelle confi
     expect(queryClient.getQueryData<OnboardingState>(ONBOARDING_QUERY_KEY)?.seenSteps).toEqual(['languages']);
     expect(await pending).toBe(true);
     expect(queryClient.getQueryData<OnboardingState>(ONBOARDING_QUERY_KEY)?.prefilledSteps).toEqual(['story']);
-    expect(calls()).toEqual([{ method: 'PATCH', path: '/api/v1/me/onboarding', body: { step: 'languages', outcome: 'done' } }]);
+    expect(calls()).toEqual([{ method: 'PATCH', path: '/api/v1/me/onboarding', body: { step: 'languages', outcome: 'done' }, headers: { 'X-Meeshy-Capabilities': 'onboarding-age' } }]);
   });
 
   test('un échec garde l’étape vue localement : on ne fait pas revenir une carte déjà quittée', async () => {
@@ -56,7 +56,7 @@ describe('finishJourney — « Passer tout » et la fin du récapitulatif', () =
     expect(optimistic?.eligible).toBe(false);
     expect(optimistic?.completedAt).not.toBeNull();
     await pending;
-    expect(calls()).toEqual([{ method: 'PATCH', path: '/api/v1/me/onboarding', body: { finish: true } }]);
+    expect(calls()).toEqual([{ method: 'PATCH', path: '/api/v1/me/onboarding', body: { finish: true }, headers: { 'X-Meeshy-Capabilities': 'onboarding-age' } }]);
     expect(queryClient.getQueryData<OnboardingState>(ONBOARDING_QUERY_KEY)?.completedAt).toBe('2026-09-24T10:00:00.000Z');
   });
 });

@@ -1,6 +1,5 @@
 import { useId, useRef, useState } from 'react';
 
-import { translate } from '@/lib/i18n-catalog';
 import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
 import { birthDateBounds, birthDateVerdict } from '@/lib/onboarding/age';
 
@@ -22,11 +21,13 @@ export type AgeSubmit = 'done' | 'invalid' | 'failed';
 
 type AgeError = 'incomplete' | 'future' | 'tooOld' | 'invalid' | 'failed';
 
+/* Une date à revoir se dit d'UNE phrase, quelle que soit sa faute (le champ
+   natif borne déjà la saisie) ; seul l'échec d'enregistrement dit autre chose. */
 const ERROR_KEY = {
-  incomplete: 'onboarding.age.incomplete',
-  future: 'onboarding.age.future',
-  tooOld: 'onboarding.age.tooOld',
-  invalid: 'onboarding.age.invalid',
+  incomplete: 'onboarding.age.check',
+  future: 'onboarding.age.check',
+  tooOld: 'onboarding.age.check',
+  invalid: 'onboarding.age.check',
   failed: 'onboarding.age.failed',
 } as const satisfies Record<AgeError, string>;
 
@@ -54,7 +55,6 @@ export function AgeCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AgeError | null>(null);
   const field = useRef<HTMLInputElement>(null);
-  const fieldId = useId();
   const errorId = useId();
   const bounds = birthDateBounds(today);
 
@@ -83,7 +83,7 @@ export function AgeCard({
       actions={
         <>
           <PrimaryButton id="age.confirm" onClick={() => void confirm()} busy={busy} disabled={!host.online || value === ''}>
-            {translateOnboarding(lang, 'onboarding.age.confirm')}
+            {translateOnboarding(lang, 'onboarding.continue')}
           </PrimaryButton>
           <SecondaryButton id="age.skip" onClick={onSkip}>
             {translateOnboarding(lang, 'onboarding.age.skip')}
@@ -92,13 +92,10 @@ export function AgeCard({
       }
     >
       <div className="onb-field">
-        <label className="onb-field-label" htmlFor={fieldId}>
-          {translateOnboarding(lang, 'onboarding.age.label')}
-        </label>
         <input
           ref={field}
-          id={fieldId}
           type="date"
+          aria-label={translateOnboarding(lang, 'onboarding.age.title')}
           className="onb-date"
           data-onb-age-input
           value={value}
@@ -123,30 +120,5 @@ export function AgeCard({
       )}
       {!host.online ? <p className="onb-note">{translateOnboarding(lang, 'onboarding.offline')}</p> : null}
     </CardFrame>
-  );
-}
-
-/**
- * **MOINS DE 13 ANS** — la passerelle n'a rien écrit (422) ; l'écran le dit
- * sobrement, sans retour possible au parcours, et « Compris » ferme la
- * session. Il reste monté jusqu'au geste : déconnecter d'abord ferait partir
- * la garde de session vers la connexion avant que la phrase soit lue. Ses
- * textes sont ceux de la connexion refusée (`components/age-blocked.tsx`) :
- * la même phrase à chaque porte.
- */
-export function AgeRefusal({ host, onConfirm }: { readonly host: CardHost; readonly onConfirm: () => void }) {
-  const lang = host.lang;
-  return (
-    <CardFrame
-      step="age-refused"
-      title={translate(lang, 'age.blocked.title')}
-      body={translate(lang, 'age.blocked.body')}
-      illustration={<AgeIllustration />}
-      actions={
-        <PrimaryButton id="age.refused.confirm" onClick={onConfirm}>
-          {translate(lang, 'age.blocked.confirm')}
-        </PrimaryButton>
-      }
-    />
   );
 }

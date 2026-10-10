@@ -33,13 +33,8 @@ const pt = {
 
   'onboarding.age.title': 'A tua data de nascimento',
   'onboarding.age.body': 'Para te propor os espaços certos. Podes saltar.',
-  'onboarding.age.label': 'Data de nascimento',
-  'onboarding.age.confirm': 'Confirmar',
   'onboarding.age.skip': 'Saltar',
-  'onboarding.age.incomplete': 'Escolhe uma data completa.',
-  'onboarding.age.future': 'Esta data ainda não chegou.',
-  'onboarding.age.tooOld': 'Verifica o ano da tua data de nascimento.',
-  'onboarding.age.invalid': 'Esta data não foi aceite. Verifica-a.',
+  'onboarding.age.check': 'Verifica a tua data de nascimento.',
   'onboarding.age.failed': 'A tua data não foi guardada. Tenta de novo.',
 
   'onboarding.global.title': 'Diz olá ao mundo',

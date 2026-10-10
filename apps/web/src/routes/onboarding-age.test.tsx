@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
-import { ageBlockedNotice } from '@/components/age-blocked';
 import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
@@ -9,6 +8,7 @@ import { createActMounter, typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { harness, served, signIn } from '@/test-support/onboarding-harness';
 
+import { ageBlockedFromSearch } from './login';
 import { OnboardingJourney } from './onboarding';
 
 /**
@@ -58,7 +58,7 @@ describe('la carte de l’âge — proposée, accessible, facultative', () => {
     expect(host.textContent).toContain('Pour te proposer les bons espaces. Tu peux passer.');
     const input = host.querySelector<HTMLInputElement>('[data-onb-age-input]');
     expect(input?.type).toBe('date');
-    expect(host.querySelector(`label[for="${input?.id}"]`)?.textContent).toBe('Date de naissance');
+    expect(input?.getAttribute('aria-label')).toBe('Ta date de naissance');
     expect(action(host, 'age.confirm')?.disabled).toBe(true);
   });
 
@@ -80,6 +80,7 @@ describe('la carte de l’âge — proposée, accessible, facultative', () => {
     typeInto(host.querySelector<HTMLInputElement>('[data-onb-age-input]'), '2999-01-01');
     await click(action(host, 'age.confirm'));
     expect(host.querySelector('[data-onb-age-error]')?.getAttribute('data-onb-age-error')).toBe('future');
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe('Vérifie ta date de naissance.');
     expect(host.querySelector('[data-onb-age-input]')?.getAttribute('aria-invalid')).toBe('true');
     expect(declared).toEqual([]);
   });
@@ -130,22 +131,20 @@ describe('la date part, la passerelle tranche', () => {
     expect(patches).toEqual([]);
   });
 
-  test('moins de 13 ans (422) : l’écran le dit, sans « Passer tout », et « Compris » déconnecte', async () => {
-    const { host, patches, signOuts } = await open({
+  test('moins de 13 ans (422) : la session finit et la connexion s’ouvre sur « Meeshy est réservé aux 13 ans et plus »', async () => {
+    const { host, patches, signOuts, visits } = await open({
       state: knowsAges,
       birthDate: { ok: false, status: 422, error: 'trop jeune', code: 'AGE_BELOW_MINIMUM' },
     });
     typeInto(host.querySelector<HTMLInputElement>('[data-onb-age-input]'), '2018-01-01');
     await click(action(host, 'age.confirm'));
     await settle();
-    expect(card(host)).toBe('age-refused');
-    expect(host.querySelector('h1')?.textContent).toBe('Meeshy est réservé aux 13 ans et plus');
-    expect(action(host, 'skipAll')).toBeNull();
-    expect(signOuts()).toBe(0);
-    expect(ageBlockedNotice.pending()).toBe(true);
-    await click(action(host, 'age.refused.confirm'));
     expect(signOuts()).toBe(1);
-    expect(ageBlockedNotice.pending()).toBe(false);
     expect(patches).toEqual([]);
+    const arrival = visits.at(-1);
+    expect(arrival?.replace).toBe(true);
+    const url = new URL(arrival?.path ?? '/', 'http://localhost');
+    expect(url.pathname).toBe('/login');
+    expect(ageBlockedFromSearch(url.searchParams)).toBe(true);
   });
 });

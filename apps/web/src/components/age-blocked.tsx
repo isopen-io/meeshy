@@ -11,30 +11,13 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * au lien magique tant que le compte a moins de 13 ans. Toutes ces portes
  * disent la même chose, avec ce composant et ses textes — jamais un échec
  * générique qui inviterait à réessayer — et rien ne se relance tout seul :
- * seul « Compris » quitte l'écran.
+ * seul « Compris » quitte l'écran. L'accueil, dont le 422 vient de révoquer
+ * la session, finit celle-ci et mène à la connexion sur `?motif=age`
+ * (`login.tsx § ageBlockedFromSearch`) : c'est ce même écran qui le dit.
  */
 export const AGE_BELOW_MINIMUM = 'AGE_BELOW_MINIMUM';
 
 export const isAgeBelowMinimum = (failure: Pick<ApiFailure, 'code'>): boolean => failure.code === AGE_BELOW_MINIMUM;
-
-/**
- * L'ÉCRAN SURVIT À LA RÉVOCATION. Le 422 de l'accueil révoque les sessions :
- * la fin de session poussée par la passerelle (ou le 401 de l'appel suivant)
- * renvoie aussitôt à la connexion, démontant l'accueil avant que la phrase
- * soit lue. L'accueil lève donc cet avis, en mémoire seule (navigation sans
- * rechargement) ; la connexion s'ouvre dessus et le consomme.
- */
-let noticePending = false;
-
-export const ageBlockedNotice = {
-  raise: (): void => {
-    noticePending = true;
-  },
-  pending: (): boolean => noticePending,
-  drop: (): void => {
-    noticePending = false;
-  },
-};
 
 export function AgeBlocked({ language, onConfirm }: { readonly language: InterfaceLanguage; readonly onConfirm: () => void }) {
   const titleId = useId();
