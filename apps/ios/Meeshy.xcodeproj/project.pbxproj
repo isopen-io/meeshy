@@ -1884,6 +1884,7 @@
 		9F0412033781365B965857F5 /* ComposerCameraInputSwap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E20A6F805C5B99A55187E0F /* ComposerCameraInputSwap.swift */; };
 		9F15086E0FBA8BB139558228 /* ReadingModesFlagIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92CD64F97AFE603FB2FC5CDA /* ReadingModesFlagIntegrationTests.swift */; };
 		9F1DCE26194973F16486D90C /* RiverStreamHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 912A351C3F24BBC8AB6C16AE /* RiverStreamHost.swift */; };
+		9F4F02EEB5BC43019BF6D153 /* AttachmentReactionToggle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067ACA9782644B0CF8F84A13 /* AttachmentReactionToggle.swift */; };
 		9F57D3D1695EB9D0C0693E2E /* StoryViewerView+CanvasComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC84C288E18B20BFA0575E7E /* StoryViewerView+CanvasComposerBar.swift */; };
 		9F6B440CDF209A53E33B5AFF /* ShareExtensionLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EF85738C1CE5E10CCB218F /* ShareExtensionLocalizationTests.swift */; };
 		9F9E12394852BF262C088A56 /* RiverNavigationControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12B1F5A2E8F8FAED0165A25D /* RiverNavigationControllerTests.swift */; };
@@ -3241,6 +3242,7 @@
 		0627AB2485B81706C948F56B /* ComposerSelectionMarkerWiringGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSelectionMarkerWiringGuardTests.swift; sourceTree = "<group>"; };
 		06347FF3A460157A65838BF7 /* FocalScrollTimePillMountGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalScrollTimePillMountGuardTests.swift; sourceTree = "<group>"; };
 		0657278C679C2B31B12E21BD /* iPadRootView+Overlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Overlays.swift"; sourceTree = "<group>"; };
+		067ACA9782644B0CF8F84A13 /* AttachmentReactionToggle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentReactionToggle.swift; sourceTree = "<group>"; };
 		06ABDDDA3531C768691D8E21 /* FloatingCallPillView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingCallPillView.swift; sourceTree = "<group>"; };
 		06DC4548837F81E6AF94EF4F /* ComposerMentionStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMentionStrip.swift; sourceTree = "<group>"; };
 		06E65FE1E2F2B95EE5B8FBB0 /* CallEffectsOverlayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallEffectsOverlayTests.swift; sourceTree = "<group>"; };
@@ -7214,6 +7216,7 @@
 				272F5AD3FB01148178C24972 /* AddParticipantSheet.swift */,
 				FE64D11CED9A70560EC0538B /* AttachmentLoadingTile.swift */,
 				44FBF8B8EB22AD824BF1C5D3 /* AttachmentQuickLookPreview.swift */,
+				067ACA9782644B0CF8F84A13 /* AttachmentReactionToggle.swift */,
 				525279659C8F5895AD1C2D9E /* AttachmentTypeGlyph.swift */,
 				77D5C3ABDB3A0E8B2489B213 /* BackgroundColorPalette.swift */,
 				AC3DC8219B7EB265E1141ADE /* BackgroundSoundBadge.swift */,
@@ -10676,6 +10679,7 @@
 				2B214536E8CA04AE8C0A6464 /* AttachmentReactionBadge.swift in Sources */,
 				E6E330C4737BA6016AA378A0 /* AttachmentReactionOffer.swift in Sources */,
 				21438FA6BE776C3E0C34A7DA /* AttachmentReactionPickerOverlay.swift in Sources */,
+				9F4F02EEB5BC43019BF6D153 /* AttachmentReactionToggle.swift in Sources */,
 				8903F0FAB38085C0811831E2 /* AttachmentTypeGlyph.swift in Sources */,
 				57EC5F575CE42BAC5D3D68E8 /* AttachmentUploader.swift in Sources */,
 				88F45EFFAAA92554BC7228F4 /* AudioAvailabilityResolver.swift in Sources */,

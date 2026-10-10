@@ -218,4 +218,58 @@ final class MessagePieceTargetTests: XCTestCase {
         XCTAssertEqual(send.components(separatedBy: "replyAnchor").count - 1, 4,
                        "l'ancre est lue une fois et transmise aux trois envois en ligne qui portent la citation")
     }
+
+    // MARK: - #9910 — on réagit sur chaque pièce partout
+
+    func test_reactionToggle_firstEmoji_isPosted() {
+        let outcome = AttachmentReactionToggle.apply("❤️", summary: nil, mine: nil)
+        XCTAssertEqual(outcome, .init(summary: ["❤️": 1], mine: ["❤️"], added: true))
+    }
+
+    func test_reactionToggle_emojisStack_neverSwap() {
+        let outcome = AttachmentReactionToggle.apply("🔥", summary: ["❤️": 2], mine: ["❤️"])
+        XCTAssertEqual(outcome.summary, ["❤️": 2, "🔥": 1])
+        XCTAssertEqual(outcome.mine, ["❤️", "🔥"])
+    }
+
+    func test_reactionToggle_sameEmojiAgain_isWithdrawn() {
+        let outcome = AttachmentReactionToggle.apply("❤️", summary: ["❤️": 1], mine: ["❤️"])
+        XCTAssertEqual(outcome, .init(summary: nil, mine: nil, added: false))
+    }
+
+    func test_focalGrid_reactionChange_repaintsTheBlock() {
+        var reacted = photo("p1")
+        reacted.reactionSummary = ["👍": 1]
+        let before = FocalAttachmentBlock(items: [photo("p1"), photo("p2")], accentHex: "#31B6BA", messageDeliveryStatus: .sent)
+        let after = FocalAttachmentBlock(items: [reacted, photo("p2")], accentHex: "#31B6BA", messageDeliveryStatus: .sent)
+        XCTAssertNotEqual(before, after, "une réaction posée doit franchir la porte Equatable de la grille Focal")
+    }
+
+    func test_focalTile_offersTheSameReactionGestureAsTheBubbleTile() throws {
+        let focal = try source("Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+        XCTAssertTrue(focal.contains("FocalPieceDoubleTap(enabled: canReact)"), "le double tap ouvre le sélecteur")
+        XCTAssertTrue(focal.contains("AttachmentReactionPickerOverlay(isPresented: $showReactionPicker)"),
+                      "le MÊME sélecteur que la tuile de bulle")
+        XCTAssertTrue(focal.contains("onReactToAttachment: onReactToAttachment"), "la grille transmet le geste à ses cases")
+        let row = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        XCTAssertTrue(row.contains("onReactToAttachment: actions.onReactToAttachment"), "la rangée câble la réaction par pièce")
+    }
+
+    func test_gridVideo_showsItsReactionBadge() throws {
+        let bulles = try source("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        guard let start = bulles.range(of: "private var videoBody: some View {"),
+              let end = bulles.range(of: "// MARK: - Sub-Views", range: start.upperBound..<bulles.endIndex) else {
+            return XCTFail("`videoBody` introuvable — le témoin ne mesure plus rien")
+        }
+        XCTAssertTrue(bulles[start.upperBound..<end.lowerBound].contains("reactionsBadge"),
+                      "la vidéo de grille montre ce qu'elle a récolté")
+    }
+
+    func test_fullscreenReaction_reachesAPieceOutsideTheLoadedWindow() throws {
+        let gallery = try source("Meeshy/Features/Main/Views/ConversationView+MediaGallery.swift")
+        XCTAssertTrue(gallery.contains("viewModel.toggleAttachmentReaction(outOfWindow: piece"))
+        XCTAssertTrue(gallery.contains("catalog.applyReaction(bascule, toAttachment: attachment.id)"))
+        XCTAssertFalse(gallery.contains("reactableMedia: { catalog.snapshot.isLoaded($0.id) }"),
+                       "une pièce de l'index offre la réaction, que le catalogue repeint")
+    }
 }
