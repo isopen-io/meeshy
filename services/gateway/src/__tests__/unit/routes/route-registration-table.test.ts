@@ -204,7 +204,11 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 76 : #9927 ajoute `me-birth-date` — l'adresse NEUVE `PUT
     // /api/v1/me/birth-date` (la date de naissance, déclarée une fois),
     // montage autonome. Aucun alias, aucune route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(76);
+    // 77 : #10000 ajoute `world` — l'adresse NEUVE et PUBLIQUE `GET
+    // /api/v1/world` (l'entrée de World Wide que lit la landing de
+    // meeshy.me), montage autonome. Aucun alias, aucune route retirée ni
+    // renommée.
+    expect(ROUTE_TABLE.length).toBe(77);
   });
 });
 
