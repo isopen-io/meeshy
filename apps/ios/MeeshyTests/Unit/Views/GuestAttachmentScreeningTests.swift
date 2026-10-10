@@ -115,6 +115,48 @@ final class GuestAttachmentScreeningTests: XCTestCase {
         XCTAssertEqual(shell.type, .group)
     }
 
+    // MARK: - World Wide ne s'ouvre jamais en grand (#10055)
+
+    private func worldSession() -> GuestSession {
+        let entry = WorldEntry(identifier: "world", title: "World Wide", shareLinkIdentifier: "cle-servie", memberCount: 3)
+        return GuestSession(identifier: "cle-servie", context: nil, origin: .world(entry))
+    }
+
+    private func context(kinds: [GuestAttachmentKind]?) -> AnonymousSessionContext {
+        AnonymousSessionContext(
+            sessionToken: "t", participantId: "p", permissions: ParticipantPermissions(),
+            linkId: "cle-servie", conversationId: "conv-world", allowedAttachmentKinds: kinds
+        )
+    }
+
+    func test_effectiveContext_world_withoutServedKinds_keepsTheWorldCeiling() {
+        let served = worldSession().effectiveContext(context(kinds: nil))
+
+        XCTAssertEqual(served.allowedAttachmentKinds, [.text, .audio])
+        XCTAssertFalse(served.attachmentAllowance.offersVisualMedia)
+    }
+
+    func test_effectiveContext_world_neverWidensBeyondTheCeiling() {
+        let served = worldSession().effectiveContext(context(kinds: [.text, .audio, .image, .pdf]))
+
+        XCTAssertEqual(served.allowedAttachmentKinds, [.text, .audio])
+    }
+
+    func test_effectiveContext_world_keepsANarrowerServedList() {
+        let served = worldSession().effectiveContext(context(kinds: [.audio]))
+
+        XCTAssertEqual(served.allowedAttachmentKinds, [.audio])
+    }
+
+    func test_effectiveContext_shareLink_withoutKinds_staysUnrestricted() {
+        let session = GuestSession(identifier: "mon-lien", context: nil)
+
+        let served = session.effectiveContext(context(kinds: nil))
+
+        XCTAssertNil(served.allowedAttachmentKinds)
+        XCTAssertEqual(served.attachmentAllowance, .unrestricted)
+    }
+
     func test_sessionContext_decodesWithoutKinds_fromAnOlderSave() throws {
         let json = #"{"sessionToken":"t","participantId":"p","permissions":{"canSendMessages":true,"canSendFiles":false,"canSendImages":false,"canSendVideos":false,"canSendAudios":false,"canSendLocations":false,"canSendLinks":false},"linkId":"l","conversationId":"c"}"#
         let context = try JSONDecoder().decode(AnonymousSessionContext.self, from: Data(json.utf8))
