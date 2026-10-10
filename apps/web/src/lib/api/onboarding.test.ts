@@ -70,8 +70,23 @@ describe('decodeOnboardingState — la frontière', () => {
     expect(decodeOnboardingState(served({ stepRewards: { global: 1, story: 1 } }))).toBeNull();
   });
 
-  test('une étape inconnue rend la charge ILLISIBLE, jamais une étape devinée', () => {
-    expect(decodeOnboardingState(served({ seenSteps: ['languages', 'bonus'] }))).toBeNull();
+  test('une étape inconnue de CE client est ignorée, jamais devinée : un serveur plus récent ne rend pas l’accueil illisible (#9928)', () => {
+    const decoded = decodeOnboardingState(served({ seenSteps: ['languages', 'bonus'], prefilledSteps: ['bonus', 'email'] }));
+    expect({ seen: decoded?.seenSteps, prefilled: decoded?.prefilledSteps }).toEqual({ seen: ['languages'], prefilled: ['email'] });
+  });
+
+  test('l’étape de l’âge se lit, et la restriction d’écriture servie aussi — son absence (serveur antérieur) reste lisible (#9928)', () => {
+    const decoded = decodeOnboardingState(served({ seenSteps: ['languages', 'age'], viewerWriteRestriction: 'minor-global' }));
+    expect({ seen: decoded?.seenSteps, restriction: decoded?.viewerWriteRestriction }).toEqual({
+      seen: ['languages', 'age'],
+      restriction: 'minor-global',
+    });
+    expect(decodeOnboardingState(served({ viewerWriteRestriction: null }))?.viewerWriteRestriction).toBeNull();
+    expect(decodeOnboardingState(served())?.viewerWriteRestriction).toBeUndefined();
+  });
+
+  test('une restriction d’écriture inconnue rend la charge illisible — jamais une restriction devinée', () => {
+    expect(decodeOnboardingState(served({ viewerWriteRestriction: 'other' }))).toBeNull();
   });
 
   test('une présence qui voyagerait à côté d’une suggestion est refusée (fail-closed)', () => {

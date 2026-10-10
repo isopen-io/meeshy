@@ -1,8 +1,16 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import type { OnboardingPatchBody, OnboardingState, OnboardingStepId, OnboardingStepOutcome } from '@meeshy/shared/types/onboarding';
+import type { OnboardingStepOutcome } from '@meeshy/shared/types/onboarding';
 
-import { ONBOARDING_QUERY_KEY, ONBOARDING_STEPS, patchOnboarding, type OnboardingDeps } from '@/lib/api/onboarding';
+import {
+  ONBOARDING_QUERY_KEY,
+  ONBOARDING_STEPS,
+  patchOnboarding,
+  type OnboardingDeps,
+  type OnboardingPatchBody,
+  type OnboardingState,
+  type OnboardingStepId,
+} from '@/lib/api/onboarding';
 
 /**
  * **LES DEUX ÉCRITURES DU PARCOURS, OPTIMISTES** (#7729) — l'étape vue et la

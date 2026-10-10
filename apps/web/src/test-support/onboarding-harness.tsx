@@ -1,7 +1,9 @@
 import { act } from 'react';
 import { QueryClient } from '@tanstack/react-query';
 
-import type { OnboardingPatchBody, OnboardingState, OnboardingStepId, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
+import type { OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
+
+import type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@/lib/api/onboarding';
 
 import type { HttpRequest } from '@/lib/api/http';
 import { ONBOARDING_QUERY_KEY } from '@/lib/api/onboarding';

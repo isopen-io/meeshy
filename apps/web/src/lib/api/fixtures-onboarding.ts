@@ -1,4 +1,6 @@
-import type { OnboardingPatchBody, OnboardingState, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
+import type { OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
+
+import type { OnboardingPatchBody, OnboardingState } from './onboarding';
 
 import { CONVERSATION_ID, portraitStandIn } from './fixtures-base';
 import { ONBOARDING_STEPS } from './onboarding';

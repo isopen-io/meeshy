@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { OnboardingState } from '@meeshy/shared/types/onboarding';
+import type { OnboardingState } from '@/lib/api/onboarding';
 
 import {
   EMPTY_PROGRESS,
@@ -177,6 +177,35 @@ describe('l’étape du courriel (#7907) — proposée au seul courriel NON vér
 
   test('passée (« Plus tard ») : la reprise ne la rouvre pas', () => {
     expect(resumeStep(context({ state: state({ emailVerified: false, seenSteps: ['languages', 'email'] }) }))).toBe('global');
+  });
+});
+
+describe('l’étape de l’âge (#9928) — facultative, proposée par un serveur qui sait les âges', () => {
+  const knowsAges = (overrides: Partial<OnboardingState> = {}) => state({ viewerWriteRestriction: null, ...overrides });
+
+  test('un serveur qui sert la restriction d’écriture : l’âge vient après les langues, avant Meeshy Global', () => {
+    expect(nextStepAfter('languages', context({ state: knowsAges() }))).toBe('age');
+    expect(nextStepAfter('age', context({ state: knowsAges() }))).toBe('global');
+  });
+
+  test('un serveur antérieur (aucune restriction servie) : l’âge n’est jamais proposé, rien ne bloque', () => {
+    expect(nextStepAfter('languages', context())).toBe('global');
+  });
+
+  test('vue, passée ou déjà déclarée (pré-cochée) : la reprise ne la rouvre pas', () => {
+    expect(resumeStep(context({ state: knowsAges({ seenSteps: ['languages', 'age'] }) }))).toBe('global');
+    expect(resumeStep(context({ state: knowsAges({ seenSteps: ['languages'], prefilledSteps: ['age'] }) }))).toBe('global');
+  });
+
+  test('un mineur : Meeshy Global n’est pas proposée, le salut ne peut pas y partir', () => {
+    const minor = context({ state: knowsAges({ viewerWriteRestriction: 'minor-global', seenSteps: ['languages'] }) });
+    expect(resumeStep(minor)).toBe('age');
+    expect(nextStepAfter('age', minor)).toBe('story');
+  });
+
+  test('l’âge n’est pas une production : seul, il n’ouvre pas la carte des notifications', () => {
+    const allButLast = knowsAges({ seenSteps: ['languages', 'age', 'global', 'story', 'friends'] });
+    expect(resumeStep(context({ state: allButLast, progress: withDone(EMPTY_PROGRESS, 'age') }))).toBe('recap');
   });
 });
 

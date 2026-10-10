@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
-import type { OnboardingStepId, OnboardingStepOutcome, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
+import type { OnboardingStepOutcome, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
@@ -7,7 +7,7 @@ import '@/styles/onboarding.css';
 
 import { apiDeps } from '@/lib/api/deps';
 import { performSendRequest, type FriendActionOutcome } from '@/lib/api/friend-actions';
-import { ONBOARDING_QUERY_KEY, ONBOARDING_STEPS, onboardingQueryOptions, type OnboardingDeps } from '@/lib/api/onboarding';
+import { ONBOARDING_QUERY_KEY, ONBOARDING_STEPS, onboardingQueryOptions, type OnboardingDeps, type OnboardingStepId } from '@/lib/api/onboarding';
 import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
 import { performProfileEdit } from '@/lib/api/profile-actions';
 import { retrySendAction, sendAction } from '@/lib/api/query';

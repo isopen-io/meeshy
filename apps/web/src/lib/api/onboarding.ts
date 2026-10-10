@@ -1,6 +1,10 @@
 import * as z from 'zod/mini';
 
-import type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@meeshy/shared/types/onboarding';
+import type {
+  OnboardingState as SharedOnboardingState,
+  OnboardingStepId as SharedOnboardingStepId,
+  OnboardingStepOutcome,
+} from '@meeshy/shared/types/onboarding';
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import { unwrap } from './client';
@@ -19,11 +23,16 @@ import { unreadableFailure } from './link-failure';
  * peut pas diverger en silence : `Served` est contraint, à la compilation,
  * de produire EXACTEMENT `OnboardingState` (`sameShape` plus bas).
  *
- * **Strict aux frontières** : une étape inconnue, une clé de plus sur une
- * suggestion (une présence qui voyagerait à côté) ou un régime protégé servi
- * avec une visibilité publique rendent la charge ILLISIBLE — jamais une valeur
+ * **Strict aux frontières** : une clé de plus sur une suggestion (une
+ * présence qui voyagerait à côté) ou un régime protégé servi avec une
+ * visibilité publique rendent la charge ILLISIBLE — jamais une valeur
  * devinée. Le cache de requêtes est persisté (`query-client.ts`) : ce qui
  * entre ici survit à la session.
+ *
+ * **Une étape inconnue de CE client est IGNORÉE** (#9928, D-182) : elle ne
+ * révèle rien, et la refuser rendait tout l'accueil illisible au premier
+ * serveur qui ajoute une étape — l'ancien client cassait contre le nouveau
+ * serveur, ce que la rétrocompatibilité interdit.
  */
 
 export const ONBOARDING_QUERY_KEY = ['me', 'onboarding'] as const;
@@ -32,9 +41,37 @@ export type OnboardingDeps = { readonly source: DataSource; readonly transport: 
 
 const PATH = meEndpoints.onboarding;
 
-/** L'ordre du parcours — le même que `ONBOARDING_STEP_IDS` (shared), lu sans
- * importer `zod`. `satisfies` + `ExhaustiveSteps` le tiennent complet. */
-export const ONBOARDING_STEPS = ['languages', 'email', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
+/**
+ * **L'ÂGE** (#9928) — l'étape FACULTATIVE que le lot passerelle (#9927) ajoute
+ * à `ONBOARDING_STEP_IDS`. Le web la connaît avant que le fichier partagé la
+ * déclare : l'union reste juste dans les deux états du dépôt (`'age'` y est
+ * absorbé quand le partagé l'ajoute), et une passerelle qui l'ignore ne
+ * bloque rien — son `PATCH` refusé laisse simplement l'étape à reproposer.
+ */
+export type OnboardingStepId = SharedOnboardingStepId | 'age';
+
+/** La restriction d'écriture que la passerelle calcule pour le lecteur (#9927). */
+export type ViewerWriteRestriction = 'minor-global';
+
+/**
+ * L'état servi, tel que CE client le lit : la forme partagée, plus l'étape de
+ * l'âge et la restriction d'écriture (optionnelle, `null` = aucune ; absente
+ * = serveur antérieur).
+ */
+export type OnboardingState = Omit<SharedOnboardingState, 'seenSteps' | 'prefilledSteps'> & {
+  readonly seenSteps: OnboardingStepId[];
+  readonly prefilledSteps: OnboardingStepId[];
+  readonly viewerWriteRestriction?: ViewerWriteRestriction | null | undefined;
+};
+
+export type OnboardingPatchBody =
+  | { readonly step: OnboardingStepId; readonly outcome: OnboardingStepOutcome }
+  | { readonly finish: true };
+
+/** L'ordre du parcours — celui de `ONBOARDING_STEP_IDS` (shared), lu sans
+ * importer `zod`, l'âge juste avant Meeshy Global : c'est lui qui dit si le
+ * salut peut y partir. `satisfies` + `ExhaustiveSteps` le tiennent complet. */
+export const ONBOARDING_STEPS = ['languages', 'email', 'age', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
 
 /** Les étapes dont la vue clôt le parcours — `ONBOARDING_COMPLETION_STEP_IDS`
  * (shared) : `email`, proposée au seul courriel non vérifié, n'en est pas. */
@@ -43,8 +80,6 @@ export const ONBOARDING_COMPLETION_STEPS = ['languages', 'global', 'story', 'fri
 type ExhaustiveSteps = [OnboardingStepId] extends [(typeof ONBOARDING_STEPS)[number]] ? true : never;
 const stepsAreExhaustive: ExhaustiveSteps = true;
 void stepsAreExhaustive;
-
-const StepId = z.enum(ONBOARDING_STEPS);
 
 const Suggestion = z.strictObject({
   id: z.string(),
@@ -58,11 +93,19 @@ const Count = z.number().check(z.int(), z.minimum(0));
 
 const StepRewards = z.strictObject({ global: Count, story: Count, friendship: Count });
 
+const isKnownStep = (id: string): id is OnboardingStepId => (ONBOARDING_STEPS as readonly string[]).includes(id);
+
+/** Les étapes que ce client connaît, dans l'ordre servi ; les autres tombent. */
+const Steps = z.pipe(
+  z.array(z.string()),
+  z.transform((ids: string[]) => ids.filter(isKnownStep)),
+);
+
 const Served = z.strictObject({
   eligible: z.boolean(),
   completedAt: z.nullable(z.string()),
-  seenSteps: z.array(StepId),
-  prefilledSteps: z.array(StepId),
+  seenSteps: Steps,
+  prefilledSteps: Steps,
   globalConversationId: z.nullable(z.string()),
   protectedRegime: z.boolean(),
   storyDefaultVisibility: z.enum(['public', 'friends']),
@@ -71,6 +114,7 @@ const Served = z.strictObject({
   canPublishStory: z.optional(z.boolean()),
   pendingFriendRequests: z.optional(Count),
   stepRewards: z.optional(StepRewards),
+  viewerWriteRestriction: z.optional(z.nullable(z.literal('minor-global'))),
 });
 
 type SameShape<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;

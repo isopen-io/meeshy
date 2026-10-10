@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { QueryClient } from '@tanstack/react-query';
 
-import type { OnboardingState } from '@meeshy/shared/types/onboarding';
+import type { OnboardingState } from '@/lib/api/onboarding';
 
 import { ONBOARDING_QUERY_KEY } from '@/lib/api/onboarding';
 import { scriptedGateway } from '@/test-support/scripted-transport';
