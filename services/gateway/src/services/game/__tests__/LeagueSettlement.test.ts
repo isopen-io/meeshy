@@ -133,10 +133,17 @@ describe('LeagueSettlement.placeWeek', () => {
     expect(await settlement(db).placeWeek(WEEK, MONDAY)).toBe(2);
   });
 
-  it('une semaine antérieure à la première saison n’est jamais placée', async () => {
+  it('une semaine antérieure à la première semaine de ligue (2026-10-12) n’est jamais placée', async () => {
     const db = fakeGameDb();
     player(db, 1);
     expect(await settlement(db).placeWeek('2026-10-05', MONDAY)).toBe(0);
+  });
+
+  it('les ligues ne dépendent pas de l’ouverture des saisons : la semaine du 2026-10-12 se place, avant la saison 1 du 2026-12-21 (#10014)', async () => {
+    const db = fakeGameDb();
+    for (let n = 1; n <= 2; n += 1) player(db, n);
+    expect(await settlement(db).placeWeek(PREVIOUS, new Date('2026-10-12T10:00:00Z'))).toBe(2);
+    expect(db.leagueGroupWeek.rows.map((r) => r.weekKey)).toEqual([PREVIOUS]);
   });
 });
 
@@ -316,28 +323,38 @@ describe('LeagueSettlement.refreshSnapshots', () => {
 
 describe('LeagueSettlement.purgeOld — la conservation (A-9)', () => {
   const seed = (db: FakeGameDb) => {
-    for (const weekKey of ['2026-10-12', '2026-12-07']) {
+    // Une semaine de la pré-saison (avant le 2026-12-21, #10014) et une de la saison 1.
+    for (const weekKey of ['2026-10-12', '2026-12-21']) {
       db.leagueGroupWeek.rows.push({ id: `g-${weekKey}`, groupId: `g-${weekKey}`, weekKey, league: 'jade' });
       db.leagueMembership.rows.push({ id: `m-${weekKey}`, userId: id(1), weekKey, groupId: `g-${weekKey}`, league: 'jade' });
       db.gameWeekPoints.rows.push({ id: `p-${weekKey}`, userId: id(1), weekKey, dayKey: weekKey, points: 5 });
     }
   };
 
-  it('garde la saison tant que 4 semaines ne se sont pas écoulées après sa fin', async () => {
+  it('garde la pré-saison tant que 4 semaines ne se sont pas écoulées après sa fin (2026-12-20)', async () => {
     const db = fakeGameDb();
     seed(db);
-    expect(await settlement(db).purgeOld(new Date('2027-01-03T00:00:00Z'))).toBe(0);
+    expect(await settlement(db).purgeOld(new Date('2027-01-17T00:00:00Z'))).toBe(0);
   });
 
-  it('supprime groupes, appartenances et points de la saison terminée depuis plus de 4 semaines', async () => {
+  it('supprime groupes, appartenances et points de la pré-saison terminée depuis plus de 4 semaines', async () => {
     const db = fakeGameDb();
     seed(db);
 
-    expect(await settlement(db).purgeOld(new Date('2027-01-04T00:00:00Z'))).toBe(3);
+    expect(await settlement(db).purgeOld(new Date('2027-01-18T00:00:00Z'))).toBe(3);
 
-    expect(db.leagueGroupWeek.rows.map((r) => r.weekKey)).toEqual(['2026-12-07']);
-    expect(db.leagueMembership.rows.map((r) => r.weekKey)).toEqual(['2026-12-07']);
-    expect(db.gameWeekPoints.rows.map((r) => r.weekKey)).toEqual(['2026-12-07']);
+    expect(db.leagueGroupWeek.rows.map((r) => r.weekKey)).toEqual(['2026-12-21']);
+    expect(db.leagueMembership.rows.map((r) => r.weekKey)).toEqual(['2026-12-21']);
+    expect(db.gameWeekPoints.rows.map((r) => r.weekKey)).toEqual(['2026-12-21']);
+  });
+
+  it('supprime la saison 1 quatre semaines après sa fin (2027-02-14), pas avant', async () => {
+    const db = fakeGameDb();
+    seed(db);
+    expect(await settlement(db).purgeOld(new Date('2027-03-14T00:00:00Z'))).toBe(3);
+    expect(db.leagueGroupWeek.rows.map((r) => r.weekKey)).toEqual(['2026-12-21']);
+    expect(await settlement(db).purgeOld(new Date('2027-03-15T00:00:00Z'))).toBe(3);
+    expect(db.leagueGroupWeek.rows).toEqual([]);
   });
 
   it('ne purge rien avant la première saison', async () => {

@@ -32,10 +32,13 @@ describe('le pseudonyme tiré', () => {
     expect(again).toBe(first);
   });
 
-  it('se renouvelle à la saison suivante', async () => {
-    const { service } = setup({ draw: draws(1, 2) });
-    const season1 = await service.ensure(USER, new Date('2026-10-14T00:00:00Z'));
-    const season2 = await service.ensure(USER, new Date('2026-12-14T00:00:00Z'));
+  it('tient toute la pré-saison, puis se renouvelle à l’ouverture de la saison 1 (2026-12-21, #10014) et à la suivante', async () => {
+    const { service } = setup({ draw: draws(1, 2, 3) });
+    const preSeason = await service.ensure(USER, new Date('2026-10-14T00:00:00Z'));
+    expect(await service.ensure(USER, new Date('2026-12-14T00:00:00Z'))).toBe(preSeason);
+    const season1 = await service.ensure(USER, new Date('2026-12-23T00:00:00Z'));
+    expect(season1).not.toBe(preSeason);
+    const season2 = await service.ensure(USER, new Date('2027-02-16T00:00:00Z'));
     expect(season2).not.toBe(season1);
   });
 

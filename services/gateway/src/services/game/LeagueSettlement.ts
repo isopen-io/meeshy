@@ -36,6 +36,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { addDays } from '@meeshy/shared/utils/game/day-prng';
 import {
+  isLeagueWeekPlaceable,
   leagueSnapshotDay,
   leagueWeekClose,
   leagueWeekKey,
@@ -264,7 +265,9 @@ export class LeagueSettlement {
   }
 
   async placeWeek(weekKey: string, now: Date = new Date()): Promise<number> {
-    if (seasonAt(weekKey) === null) return 0;
+    // Les ligues ont leur propre première semaine (2026-10-12), indépendante de
+    // l'ouverture des saisons (repoussée au 2026-12-21, #10014).
+    if (!isLeagueWeekPlaceable(weekKey)) return 0;
     if ((await this.prisma.leagueGroupWeek.count({ where: { weekKey } })) > 0) return 0;
     // On attend les groupes pas encore fermés, et ceux qu'on vient de fermer le temps
     // de les régler ; un groupe dont le règlement échoue encore `SETTLEMENT_GRACE_MS`
@@ -405,7 +408,10 @@ export class LeagueSettlement {
   /**
    * Supprime groupes, appartenances et points de semaine des saisons terminées
    * depuis plus de `LEAGUE_RETENTION_DAYS` jours (conformité A-9). Les trophées
-   * gardés ne portent ni pseudonyme ni total d'un autre.
+   * gardés ne portent ni pseudonyme ni total d'un autre. Les semaines de ligue
+   * d'AVANT la saison 1 (du 2026-10-12 au 2026-12-20, #10014) forment une
+   * pré-saison qui finit avec elle : elles partent 4 semaines après le
+   * 2026-12-20, avec le premier horizon de saison.
    */
   async purgeOld(now: Date = new Date()): Promise<number> {
     const cutoffDay = addDays(dayKeyOf(now, 'UTC'), -LEAGUE_RETENTION_DAYS);

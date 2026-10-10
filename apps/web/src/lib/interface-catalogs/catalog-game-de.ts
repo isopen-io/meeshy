@@ -521,6 +521,7 @@ const de = {
   'game.season.claim': 'Etappe {step} abholen',
   'game.season.completed': 'Weg abgeschlossen: ein Pokal, ein datiertes Abzeichen und {glory} Ruhm.',
   'game.season.none': 'Gerade ist keine Saison offen. Die nächste beginnt bald.',
+  'game.season.upcoming': 'Saison {number} beginnt am {date}.',
   'game.season.seal.title': 'Siegel-Reihe',
   'game.season.seal.body': 'Das Siegel ist rein dekorativ: alle {every} Etappen ein Sammelobjekt, ohne Einfluss auf das Spiel.',
   'game.season.seal.buy': 'Siegel holen · {price}',

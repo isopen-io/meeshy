@@ -97,6 +97,36 @@ struct GameWave2ModelsTests {
         #expect(block.league != nil)
     }
 
+    @Test("avant le 2026-12-21, la saison à venir se lit : numéro, thème, ouverture (#10014)")
+    func readsTheUpcomingSeason() throws {
+        let data = try Self.blockData {
+            $0["season"] = NSNull()
+            $0["seasonUpcoming"] = ["number": 1, "themeKey": "language:fr", "startDay": "2026-12-21", "endDay": "2027-02-14"]
+        }
+        let block = try #require(GameBlock.parse(data))
+        #expect(block.season == nil)
+        #expect(block.seasonUpcoming == GameUpcomingSeasonBlock(number: 1, themeKey: "language:fr", startDay: "2026-12-21", endDay: "2027-02-14"))
+    }
+
+    @Test("une saison à venir illisible tombe seule, et un serveur qui ne la sert pas la laisse nil")
+    func anUnreadableUpcomingSeasonFallsAlone() throws {
+        let garbled = try #require(GameBlock.parse(try Self.blockData { $0["seasonUpcoming"] = ["number": "un"] }))
+        #expect(garbled.seasonUpcoming == nil)
+        #expect(garbled.season != nil)
+        #expect(try #require(GameBlock.parse(try Self.blockData())).seasonUpcoming == nil)
+    }
+
+    @Test("la loi miroir : la saison 1 ouvre le lundi 2026-12-21 et s'annonce jusqu'au dimanche 20 h qui la précède")
+    func theUpcomingSeasonLaw() {
+        #expect(GameSeason.oneStart == "2026-12-21")
+        #expect(GameSeason.season(at: "2026-10-12") == nil)
+        #expect(GameSeason.calendar(number: 1)?.endDay == "2027-02-14")
+        #expect(GameSeason.upcoming(of: LeagueMoment(dayKey: "2026-10-14", minuteOfDay: 600))?.startDay == "2026-12-21")
+        #expect(GameSeason.upcoming(of: LeagueMoment(dayKey: "2026-12-20", minuteOfDay: 1199))?.number == 1)
+        #expect(GameSeason.upcoming(of: LeagueMoment(dayKey: "2026-12-20", minuteOfDay: 1200)) == nil)
+        #expect(GameSeason.season(of: LeagueMoment(dayKey: "2026-12-20", minuteOfDay: 1200)) == 1)
+    }
+
     @Test("le bloc et ses extensions survivent à un aller-retour par le cache")
     func roundTripsThroughTheCache() throws {
         let block = try #require(GameBlock.parse(try Self.blockData()))

@@ -31,6 +31,8 @@ struct GameSeasonScreen: View {
                 GameSeasonHeader(season: season)
                 GameSeasonPath(model: model, season: season)
                 GameSeasonSeal(model: model, season: season, held: game.treasury.held)
+            } else if let upcoming = game.seasonUpcoming {
+                GameSeasonUpcoming(upcoming: upcoming)
             } else {
                 GameCard(title: GameText.seasonTitle) {
                     GameNote(text: GameText.seasonNone)
@@ -38,6 +40,34 @@ struct GameSeasonScreen: View {
                 .accessibilityIdentifier("game.season.none")
             }
         }
+    }
+}
+
+// MARK: - La saison à venir (#10014)
+
+/// Avant l'ouverture de la saison 1 (lundi 2026-12-21), le serveur sert `seasonUpcoming` : l'écran dit
+/// laquelle vient, quand, et sur quel thème — jamais un vide. Une donnée de calendrier, la même pour tous.
+struct GameSeasonUpcoming: View {
+    let upcoming: GameUpcomingSeasonBlock
+
+    static func line(_ upcoming: GameUpcomingSeasonBlock, locale: Locale = .current) -> String {
+        GameText.seasonUpcoming(number: GameCopy.formatCount(upcoming.number), date: GameWave2Format.day(upcoming.startDay, locale: locale))
+    }
+
+    var body: some View {
+        GameCard(tint: MeeshyColors.brandPrimary, title: GameText.seasonTitle) {
+            Text(Self.line(upcoming))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundColor(ThemeManager.shared.textPrimary)
+            if let theme = GameWave2Format.seasonTheme(upcoming.themeKey) {
+                Text(GameText.seasonTheme(theme: theme))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundColor(MeeshyColors.brandPrimary)
+            }
+            GameNote(text: GameText.seasonHow(per: GameCopy.formatCount(GameSeason.starsPerStep)))
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("game.season.upcoming")
     }
 }
 

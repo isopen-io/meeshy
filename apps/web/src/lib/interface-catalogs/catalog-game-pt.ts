@@ -521,6 +521,7 @@ const pt = {
   'game.season.claim': 'Resgatar a etapa {step}',
   'game.season.completed': 'Percurso concluído: uma taça, uma insígnia datada e {glory} de Glória.',
   'game.season.none': 'Nenhuma temporada está aberta agora. A próxima começa em breve.',
+  'game.season.upcoming': 'A temporada {number} abre em {date}.',
   'game.season.seal.title': 'Fileira Selo',
   'game.season.seal.body': 'O Selo é puramente decorativo: um item de coleção a cada {every} etapas, sem efeito no jogo.',
   'game.season.seal.buy': 'Pegar o Selo · {price}',
