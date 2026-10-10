@@ -97,6 +97,38 @@ final class SharedTranslationServiceTests: XCTestCase {
         }
     }
 
+    func test_share_whenTheAccountTurnedOffItsReadReceipts_throwsTheTypedRefusal() async {
+        mock.errorToThrow = MeeshyError.forbidden(
+            reason: "Read receipts are off",
+            body: Data(#"{"success":false,"error":"Read receipts are off","code":"SHARED_TRANSLATION_READ_RECEIPTS_OFF"}"#.utf8)
+        )
+
+        do {
+            _ = try await service.share(conversationId: conversationId, body: makeBody())
+            XCTFail("Expected the refusal to be thrown")
+        } catch {
+            XCTAssertEqual(error as? SharedTranslationShareRefusal, .readReceiptsOff)
+        }
+    }
+
+    func test_share_anyOtherForbidden_passesAsTheGatewayServedIt() async {
+        mock.errorToThrow = MeeshyError.forbidden(
+            reason: "Not a participant",
+            body: Data(#"{"success":false,"error":"Not a participant"}"#.utf8)
+        )
+
+        do {
+            _ = try await service.share(conversationId: conversationId, body: makeBody())
+            XCTFail("Expected error to be thrown")
+        } catch {
+            XCTAssertNil(error as? SharedTranslationShareRefusal)
+            guard case .forbidden(let reason, _)? = error as? MeeshyError else {
+                return XCTFail("Expected the 403 as served, got \(error)")
+            }
+            XCTAssertEqual(reason, "Not a participant")
+        }
+    }
+
     // MARK: - fetch
 
     func test_fetch_asksForTheMessagesAndLanguagesSeparatedByCommas() async throws {

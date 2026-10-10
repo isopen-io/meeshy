@@ -91,10 +91,12 @@ nonisolated enum DeviceTranslationPolicy {
     static let maxFetchAttempts = 2
 }
 
-/// Ce qui part vers la passerelle : l'enveloppe est déjà scellée.
+/// Ce qui part vers la passerelle : l'enveloppe est déjà scellée. Le message
+/// voyage avec elle pour que la loi se relise juste avant l'envoi.
 nonisolated struct DeviceTranslationShare: Sendable {
     let conversationId: String
     let body: ShareTranslationBody
+    let message: Message
 }
 
 // MARK: - Le coordinateur
@@ -128,6 +130,11 @@ final class DeviceTranslationCoordinator: ObservableObject {
 
     private var shareQueue: [DeviceTranslationShare] = []
     private var shareTask: Task<Void, Never>?
+    /// Le compte a coupé ses accusés de lecture : la passerelle refuse tout
+    /// partage (`SharedTranslationShareRefusal.readReceiptsOff`). Vaut pour la
+    /// conversation ouverte ; la suivante redemande une fois, le réglage a pu
+    /// être rouvert entre-temps.
+    private var sharingDeclined = false
 
     init(
         engine: any DeviceTranslationEngineProviding = DeviceTranslationEngineFactory.makeDefault(),
@@ -517,9 +524,10 @@ final class DeviceTranslationCoordinator: ObservableObject {
     }
 
     /// Montre la traduction du moteur — si elle sert encore. Pendant que
-    /// l'appareil traduisait, le message a pu être édité, ou le serveur ou un
-    /// autre membre servir ce rang : on relit tout avant de poser, et une
-    /// traduction déjà là n'est jamais écrasée.
+    /// l'appareil traduisait, le message a pu être édité, le serveur ou un
+    /// autre membre servir ce rang, ou la conversation passer en chiffrement de
+    /// bout en bout : on relit tout avant de poser, la disposition comprise, et
+    /// une traduction déjà là n'est jamais écrasée.
     private func deliver(_ text: String, for plan: Plan, pair: DeviceTranslationPair, readers: [String]) {
         markExhausted([plan])
         guard let source,
@@ -527,7 +535,11 @@ final class DeviceTranslationCoordinator: ObservableObject {
               MessageVersion(current) == plan.version,
               candidates(of: current, readers: readers)?.targets.contains(pair.target) == true
         else { return }
-        let shareable = plan.disposition == .shareable
+        let disposition = DeviceTranslationEligibility.disposition(
+            of: current, conversationEncryptionMode: encryptionMode
+        )
+        guard disposition != .skip else { return }
+        let shareable = disposition == .shareable
         present(
             text,
             target: pair.target,
@@ -577,6 +589,7 @@ final class DeviceTranslationCoordinator: ObservableObject {
     /// file. Une traduction que la passerelle refuserait (trop longue, langue mal
     /// formée) reste locale : le lecteur la voit, personne d'autre ne la reçoit.
     private func enqueueShare(_ text: String, target: String, sourceLanguage: String, for message: Message) {
+        guard !sharingDeclined else { return }
         let binding = SharedTranslationBinding(
             conversationId: message.conversationId,
             messageId: message.id,
@@ -589,7 +602,8 @@ final class DeviceTranslationCoordinator: ObservableObject {
             shareQueue.append(
                 DeviceTranslationShare(
                     conversationId: message.conversationId,
-                    body: ShareTranslationBody(messageId: message.id, targetLanguage: target, envelope: envelope)
+                    body: ShareTranslationBody(messageId: message.id, targetLanguage: target, envelope: envelope),
+                    message: message
                 )
             )
             drainShares()
@@ -610,13 +624,26 @@ final class DeviceTranslationCoordinator: ObservableObject {
     private func postQueuedShares() async {
         while !shareQueue.isEmpty {
             let next = shareQueue.removeFirst()
+            guard mayShare(next.message) else { continue }
             do {
                 _ = try await sharing.share(conversationId: next.conversationId, body: next.body)
+            } catch SharedTranslationShareRefusal.readReceiptsOff {
+                sharingDeclined = true
             } catch {
                 Logger.deviceTranslation.info("translation not shared: \(error.localizedDescription, privacy: .public)")
             }
         }
         shareTask = nil
+    }
+
+    /// Relu au DERNIER moment, juste avant le fil : pendant que la file
+    /// attendait, la conversation a pu passer en chiffrement de bout en bout, ou
+    /// le compte refuser tout partage — fail-closed.
+    private func mayShare(_ message: Message) -> Bool {
+        !sharingDeclined
+            && DeviceTranslationEligibility.disposition(
+                of: message, conversationEncryptionMode: encryptionMode
+            ) == .shareable
     }
 
     private func isBlank(_ text: String) -> Bool {

@@ -8,7 +8,9 @@ import Foundation
 /// l'appareil (`SharedTranslationSeal`).
 public protocol SharedTranslationServiceProviding: Sendable {
     /// `POST /conversations/:id/shared-translations`. `created == false` quand un
-    /// autre membre l'avait déjà partagée : la sienne est rendue.
+    /// autre membre l'avait déjà partagée : la sienne est rendue. Un refus au
+    /// compte lève `SharedTranslationShareRefusal` ; tout autre échec passe tel
+    /// quel.
     func share(conversationId: String, body: ShareTranslationBody) async throws -> ShareTranslationResult
 
     /// `GET /conversations/:id/shared-translations`. Les identifiants et les
@@ -28,10 +30,17 @@ public final class SharedTranslationService: SharedTranslationServiceProviding, 
     }
 
     public func share(conversationId: String, body: ShareTranslationBody) async throws -> ShareTranslationResult {
-        let response: APIResponse<ShareTranslationResult> = try await api.post(
-            ConversationsEndpoint.byIdSharedTranslations(id: conversationId), body: body
-        )
-        return response.data
+        do {
+            let response: APIResponse<ShareTranslationResult> = try await api.post(
+                ConversationsEndpoint.byIdSharedTranslations(id: conversationId), body: body
+            )
+            return response.data
+        } catch {
+            if StoryPublishRetryPolicy.rejectionCode(error) == SharedTranslationShareRefusal.readReceiptsOff.code {
+                throw SharedTranslationShareRefusal.readReceiptsOff
+            }
+            throw error
+        }
     }
 
     public func fetch(

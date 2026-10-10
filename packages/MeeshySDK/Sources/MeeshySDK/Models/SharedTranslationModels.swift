@@ -188,6 +188,21 @@ public struct ShareTranslationResult: Decodable, Sendable, Equatable {
     }
 }
 
+/// Un partage que la passerelle refuse au COMPTE, quel que soit le message —
+/// miroir de `SHARED_TRANSLATION_ERROR_CODES` (`packages/shared/types/
+/// shared-translation.ts`). Un partage est un accusé de lecture : qui a coupé
+/// les siens ne partage pas, et l'appareil garde ses traductions pour lui.
+public enum SharedTranslationShareRefusal: Error, Equatable, Sendable {
+    case readReceiptsOff
+
+    /// Le code machine que la passerelle pose sur ce refus (403).
+    public var code: String {
+        switch self {
+        case .readReceiptsOff: return "SHARED_TRANSLATION_READ_RECEIPTS_OFF"
+        }
+    }
+}
+
 /// La réponse de `GET /conversations/:conversationId/shared-translations`.
 ///
 /// La liste se lit élément par élément : une enveloppe qu'une version future du
