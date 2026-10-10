@@ -116,7 +116,9 @@ struct StoryViewerView: View {
     static let heartEmoji = MeeshyQuickReactions.heart
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
-    @State var progress: CGFloat = 0 // internal for cross-file extension access
+    /// La progression vit dans une horloge que SEULE la barre observe (#9859) :
+    /// tenue par référence, jamais observée ici, elle ne réévalue pas le lecteur.
+    @State var progressClock = StoryPlaybackProgressClock() // internal for cross-file extension access
     /// Interstitiel d'identité inter-groupes (directive user 2026-07-03) :
     /// au passage au groupe d'une AUTRE personne, bannière en fond + pseudo,
     /// nom, présence, mood pendant `groupIntroDuration` avant le slide.
@@ -1021,13 +1023,9 @@ struct StoryViewerView: View {
         // vivent ici ; la pause est asservie à `shouldPauseTimer` via
         // `adaptiveOnChange` (+ `setPaused` initial dans `startTimer()`).
         t.onProgressChange = { [self] p in
-            let raw = CGFloat(min(1.0, p))
-            // Granularité 1/300 : évite de committer le @State `progress`
-            // à chaque tick 60 Hz pour des deltas invisibles (la barre fait
-            // ~300 pt de large au maximum).
-            if abs(raw - progress) >= 1.0 / 300.0 || raw >= 1.0 || raw == 0 {
-                progress = raw
-            }
+            // Le tick n'écrit AUCUN état du lecteur (#9859) : il publie dans
+            // l'horloge de la barre, seule à se redessiner.
+            progressClock.publish(p)
             // Seuil d'amorçage du prefetch de la slide suivante : 5 s avant
             // la fin, borné à 50 % minimum (cf. rationale historique dans
             // l'ancien `startTimer()` — conservée à l'identique).
@@ -1475,7 +1473,7 @@ struct StoryViewerView: View {
             isContentTranslated: isContentTranslated,
             isOwnStory: isOwnStory,
             quickEmojis: quickEmojis,
-            progress: progress,
+            progressClock: progressClock,
             currentSlideDuration: currentSlideDuration,
             outgoingOpacity: outgoingOpacity,
             closingScale: closingScale,
@@ -2159,7 +2157,7 @@ extension StoryViewerView {
         groupTransition(forward: false) {
             currentGroupIndex -= 1
             currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-            progress = 0
+            progressClock.reset()
         }
     }
 
