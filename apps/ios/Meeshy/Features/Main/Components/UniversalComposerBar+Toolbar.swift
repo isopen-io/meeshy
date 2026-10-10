@@ -189,19 +189,9 @@ extension UniversalComposerBar {
         return Menu {
             ForEach(choices, content: asyncRenderRowContent)
         } label: {
-            HStack(spacing: MeeshySpacing.xxs) {
-                Text(currentLangOption.flag)
-                    .font(.caption)
-                Text(currentLangOption.code.uppercased())
-                    .font(.caption2).fontWeight(.semibold)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
-            }
-            .fixedSize()
-            .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, MeeshySpacing.xs)
-            .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : iconTint.opacity(0.18))
-            .foregroundColor(iconTint)
+            ComposerLanguagePillLabel(flag: currentLangOption.flag, code: currentLangOption.code)
+                .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : iconTint.opacity(0.18))
+                .foregroundColor(iconTint)
         }
         .accessibilityLabel(String(localized: "a11y.composer.language", defaultValue: "Langue du message", bundle: .main))
         .accessibilityValue(currentLangOption.name)
@@ -258,6 +248,79 @@ nonisolated enum ComposerGlassDoors {
     static func trailing(offersLibrary: Bool, offersCamera: Bool, offersFold: Bool) -> [TrailingDoor] {
         (offersLibrary ? [.library] : []) + (offersCamera ? [.camera] : []) + (offersFold ? [.fold] : [])
     }
+}
+
+/// **La pastille de langue : le drapeau, et le code en petit DESSOUS** (#9954,
+/// directive porteur 2026-10-10). Sur une ligne, « 🇫🇷 FR » élargissait la
+/// pastille ; empilés, drapeau réduit et code minuscule tiennent dans la
+/// hauteur qu'avait la ligne.
+///
+/// La hauteur ne se devine pas, elle se REPREND : un drapeau `.caption`
+/// invisible et sans largeur donne à la pastille exactement la hauteur de
+/// l'ancienne ligne, à toute taille de texte. La pile mord sur la marge
+/// verticale (`ComposerLanguagePillMetrics.bleed`) sans jamais la dépasser, et
+/// Dynamic Type la borne pour qu'elle ne pousse pas la barre.
+struct ComposerLanguagePillLabel: View {
+    let flag: String
+    let code: String
+
+    init(flag: String, code: String) {
+        self.flag = flag
+        self.code = code
+    }
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            ZStack {
+                Text(flag)
+                    .font(.caption)
+                    .fixedSize()
+                    .frame(width: 0)
+                    .hidden()
+                ComposerStackedLanguageMark(flag: flag, code: code.uppercased())
+                    .padding(.vertical, -ComposerLanguagePillMetrics.bleed)
+                    .dynamicTypeSize(...ComposerLanguagePillMetrics.largestTextSize)
+            }
+            Image(systemName: "chevron.down")
+                .font(.caption2.weight(.bold))
+        }
+        .fixedSize()
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
+    }
+}
+
+/// Le drapeau et son code, l'un sur l'autre, serrés.
+struct ComposerStackedLanguageMark: View {
+    let flag: String
+    let code: String
+
+    @ScaledMetric(relativeTo: .caption) private var flagSize: CGFloat = ComposerLanguagePillMetrics.flagSize
+    @ScaledMetric(relativeTo: .caption2) private var codeSize: CGFloat = ComposerLanguagePillMetrics.codeSize
+
+    init(flag: String, code: String) {
+        self.flag = flag
+        self.code = code
+    }
+
+    var body: some View {
+        VStack(spacing: ComposerLanguagePillMetrics.lineSpacing) {
+            Text(flag)
+                .font(.system(size: flagSize))
+            Text(code)
+                .font(.system(size: codeSize, weight: .bold))
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+}
+
+nonisolated enum ComposerLanguagePillMetrics {
+    static let flagSize: CGFloat = 10
+    static let codeSize: CGFloat = 7
+    static let lineSpacing: CGFloat = -2
+    static let bleed: CGFloat = MeeshySpacing.xs - 1
+    static let largestTextSize: DynamicTypeSize = .xLarge
 }
 
 /// Le repli qu'un hôte confie à la barre (#8642) : son glyphe, son libellé
