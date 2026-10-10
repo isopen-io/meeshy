@@ -303,6 +303,13 @@ export interface MessageWithTranslations extends Message {
 export type ConversationType = 'direct' | 'group' | 'public' | 'global' | 'broadcast';
 
 /**
+ * Les restrictions d'écriture qu'un lecteur peut porter sur une conversation
+ * (#9927). Une seule aujourd'hui : un mineur déclaré dans Meeshy Global.
+ */
+export const VIEWER_WRITE_RESTRICTIONS = ['minor-global'] as const;
+export type ViewerWriteRestriction = (typeof VIEWER_WRITE_RESTRICTIONS)[number];
+
+/**
  * Statut de conversation
  */
 export type ConversationStatus = 'active' | 'archived' | 'deleted';
@@ -432,6 +439,15 @@ export interface Conversation {
    * (`packages/MeeshySDK/.../ConversationModels.swift`).
    */
   readonly currentUserRole?: string | null;
+
+  /**
+   * Ce que le LECTEUR n'a pas le droit d'écrire ici (#9927), calculé serveur
+   * depuis sa date de naissance déclarée : `'minor-global'` = mineur (13-17
+   * ans) dans Meeshy Global, en lecture seule et rangée dans ses archives
+   * jusqu'à ses 18 ans. `null` = aucune restriction. ABSENT = serveur antérieur.
+   * Source : `viewerWriteRestrictionOf` (`utils/global-minor-restriction.ts`).
+   */
+  readonly viewerWriteRestriction?: ViewerWriteRestriction | null;
 
   /** Date d'adhésion du lecteur — borne son historique visible. */
   readonly currentUserJoinedAt?: Date | string;

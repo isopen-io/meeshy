@@ -50,6 +50,7 @@ import { resolveCapabilities } from '@meeshy/shared/utils/reading-modes';
 import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
+import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
 import {
   conversationListQuerySelect,
   conversationLastMessagePreviewSelect,
@@ -717,6 +718,15 @@ export function registerConversationListRoute(
       // `metadata.postReplyTo` expurgée : UNE requête pour la page.
       const withdrawnCitations = await loadWithdrawnCitations(prisma, conversations.map((c) => c.messages[0]));
 
+      // #9927 — Global en lecture seule et archivée pour un mineur déclaré :
+      // une lecture de la date de naissance, et seulement si Global est dans la page.
+      const viewerBirthDate = await loadViewerBirthDate(prisma, {
+        userId,
+        isAnonymous: isAnonymousViewer,
+        conversationTypes: conversations.map((c) => c.type)
+      });
+      const restrictionNow = new Date();
+
       // Mapper les conversations avec unreadCount et merge user data
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
@@ -815,6 +825,12 @@ export function registerConversationListRoute(
 
         return {
           ...conversationData,
+          ...servedListRowRestriction({
+            conversationType: conversation.type,
+            birthDate: viewerBirthDate,
+            now: restrictionNow,
+            userPreferences: conversation.userPreferences
+          }),
           // Cap 199+ : l'effectif ENTIER est réservé aux lecteurs autorisés —
           // ADMIN/BIGBOSS/MODERATOR plateforme, OU creator/admin de CETTE
           // conversation. Le second titre est ce que ce site ignorait : un
