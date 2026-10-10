@@ -350,6 +350,7 @@ public enum StoryExportOutro {
         else { throw OutroError.writerRejectedInput }
         session.outputURL = outputURL
         session.outputFileType = .mp4
+        session.shouldOptimizeForNetworkUse = true
         session.videoComposition = videoComposition
         session.audioMix = audioMix
         // `export()` sans argument — le `export(to:as:)` d'iOS 18 tombe en SIGSEGV

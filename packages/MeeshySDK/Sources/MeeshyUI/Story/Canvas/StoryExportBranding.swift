@@ -447,6 +447,7 @@ public enum StoryExportBranding {
         else { throw BrandingError.compositionTrackUnavailable }
         session.outputURL = outputURL
         session.outputFileType = .mp4
+        session.shouldOptimizeForNetworkUse = true
         session.videoComposition = videoComposition
         session.audioMix = audioMix
 

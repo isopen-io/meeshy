@@ -10,10 +10,18 @@ nonisolated struct StoryVideoUploadFile: Equatable, Sendable {
         from sourceURL: URL,
         compress: @Sendable @concurrent (URL) async throws -> URL
     ) async -> StoryVideoUploadFile {
-        StoryVideoUploadFile(fileURL: sourceURL, mimeType: "video/mp4", isDerived: false)
+        guard let compressedURL = try? await compress(sourceURL) else {
+            return StoryVideoUploadFile(fileURL: sourceURL, mimeType: mimeType(for: sourceURL), isDerived: false)
+        }
+        return StoryVideoUploadFile(
+            fileURL: compressedURL,
+            mimeType: mimeType(for: compressedURL),
+            isDerived: compressedURL != sourceURL
+        )
     }
 
     static func mimeType(for url: URL) -> String {
-        "video/mp4"
+        let resolved = MimeTypeResolver.mimeType(forURL: url)
+        return resolved.hasPrefix("video/") ? resolved : "video/mp4"
     }
 }
