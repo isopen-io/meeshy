@@ -31,7 +31,11 @@ export const TEXTES_STATUT = {
 <<<<<<< HEAD
       it: 'Poi, complici.', pt: 'Depois, cúmplices.', ar: 'ثم نقترب أكثر\u00A0فأكثر.',
 =======
+<<<<<<< HEAD
+      it: 'Poi, complici.', pt: 'Depois, cúmplices.', ar: 'ثم نقترب أكثر\u00A0فأكثر.',
+=======
       it: 'Poi, complici.', pt: 'Depois, cúmplices.', ar: 'ثم أقرب فأقرب.',
+>>>>>>> origin/dev
 >>>>>>> origin/dev
     },
     sousTitre: {
@@ -53,7 +57,12 @@ export const TEXTES_STATUT = {
   // Une expression qui ne se coupe pas porte une espace INSÉCABLE (\u00A0) : « نصفك الآخر » (l'autre moitié) reste sur une ligne.
 // La signature : deux phrases courtes, la seconde dit COMMENT (par le rire, pas par un questionnaire de compatibilité).
 =======
+<<<<<<< HEAD
+  // Une expression qui ne se coupe pas porte une espace INSÉCABLE (\u00A0) : « نصفك الآخر » (l'autre moitié) reste sur une ligne.
+// La signature : deux phrases courtes, la seconde dit COMMENT (par le rire, pas par un questionnaire de compatibilité).
+=======
   // La signature : deux phrases courtes, la seconde dit COMMENT (par le rire, pas par un questionnaire de compatibilité).
+>>>>>>> origin/dev
 >>>>>>> origin/dev
   devise: {
     fr: 'Trouve ta moitié. Commence par en rire.',
@@ -65,7 +74,11 @@ export const TEXTES_STATUT = {
 <<<<<<< HEAD
     ar: 'اعثر على نصفك\u00A0الآخر. ابدأ بضحكة.',
 =======
+<<<<<<< HEAD
+    ar: 'اعثر على نصفك\u00A0الآخر. ابدأ بضحكة.',
+=======
     ar: 'اعثر على نصفك الآخر. وابدأ بضحكة.',
+>>>>>>> origin/dev
 >>>>>>> origin/dev
   },
   adresse: 'meeshy.me',
@@ -122,7 +135,11 @@ export const PUBLICATION = {
 <<<<<<< HEAD
     description: 'في البداية نضحك، ثم نصبح أصدقاء، ثم نقترب أكثر فأكثر… ثم الحب. على Meeshy تُقرأ كل رسالة وكل رسالة صوتية وكل قصة بلغتك: لم تعد المسافة ولا اللغة عائقًا.\n\nاعثر على نصفك الآخر. ابدأ بضحكة. سجّل مجانًا: https://meeshy.me\n\n#Meeshy #حب #تعارف #ترجمة #shorts',
 =======
+<<<<<<< HEAD
+    description: 'في البداية نضحك، ثم نصبح أصدقاء، ثم نقترب أكثر فأكثر… ثم الحب. على Meeshy تُقرأ كل رسالة وكل رسالة صوتية وكل قصة بلغتك: لم تعد المسافة ولا اللغة عائقًا.\n\nاعثر على نصفك الآخر. ابدأ بضحكة. سجّل مجانًا: https://meeshy.me\n\n#Meeshy #حب #تعارف #ترجمة #shorts',
+=======
     description: 'في البداية نضحك، ثم نصبح أصدقاء، ثم أقرب فأقرب… ثم الحب. على Meeshy تُقرأ كل رسالة وكل رسالة صوتية وكل قصة بلغتك: لم تعد المسافة ولا اللغة عائقًا.\n\nاعثر على نصفك الآخر. وابدأ بضحكة. سجّل مجانًا: https://meeshy.me\n\n#Meeshy #حب #تعارف #ترجمة #shorts',
+>>>>>>> origin/dev
 >>>>>>> origin/dev
   },
 }

@@ -28,7 +28,12 @@ const attribut = (texte) => String(texte).replace(/&/g, '&amp;').replace(/"/g, '
 // Les mots se coupent aux espaces ordinaires seulement : une espace insécable lie deux mots dans le même bloc, jamais séparés.
 export const mots = (texte) => texte.split(/([ \t\n]+)/u).filter((m) => m.length).map((m) => (/^[ \t\n]+$/u.test(m) ? m : `<span class="mot">${echapper(m)}</span>`)).join('')
 =======
+<<<<<<< HEAD
+// Les mots se coupent aux espaces ordinaires seulement : une espace insécable lie deux mots dans le même bloc, jamais séparés.
+export const mots = (texte) => texte.split(/([ \t\n]+)/u).filter((m) => m.length).map((m) => (/^[ \t\n]+$/u.test(m) ? m : `<span class="mot">${echapper(m)}</span>`)).join('')
+=======
 const mots = (texte) => texte.split(/(\s+)/u).filter((m) => m.length).map((m) => (/^\s+$/u.test(m) ? m : `<span class="mot">${echapper(m)}</span>`)).join('')
+>>>>>>> origin/dev
 >>>>>>> origin/dev
 
 const CSS = `
@@ -206,7 +211,11 @@ const poserBulles = (copie, p, local) => {
 <<<<<<< HEAD
     const u = debut <= 0 ? 1 : lin(local, debut, debut + 0.3)
 =======
+<<<<<<< HEAD
+    const u = debut <= 0 ? 1 : lin(local, debut, debut + 0.3)
+=======
     const u = debut < 0 ? 1 : lin(local, debut, debut + 0.3)
+>>>>>>> origin/dev
 >>>>>>> origin/dev
     r.style.opacity = String(easeOut(u))
     r.style.transformOrigin = (r.classList.contains('mine') !== RTL ? '100%' : '0%') + ' 100%'
