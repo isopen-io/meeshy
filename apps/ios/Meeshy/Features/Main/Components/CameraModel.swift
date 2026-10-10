@@ -1008,6 +1008,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             .appendingPathComponent("video_merged_\(UUID().uuidString).mov")
         exportSession.outputURL = outputURL
         exportSession.outputFileType = .mov
+        exportSession.shouldOptimizeForNetworkUse = true
         exportSession.videoComposition = redressement
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
