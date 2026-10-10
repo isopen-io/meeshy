@@ -22,7 +22,7 @@ type Slot = { readonly model: string; readonly pipeline: MarianPipeline };
 /**
  * **OPUS-MT, MODÈLE PAR MODÈLE** (#9898) — la route d'une paire (`opusMtRoute`)
  * dit quels modèles enchaîner ; chacun ne se charge qu'à la première
- * traduction qui le demande (~55 Mo quantifié). Le plus récemment servi reste
+ * traduction qui le demande (~107 Mo quantifié). Le plus récemment servi reste
  * en mémoire, le moins récent est libéré AVANT que le suivant ne se charge :
  * jamais plus de `capacity` modèles à la fois, même pendant un chargement.
  *

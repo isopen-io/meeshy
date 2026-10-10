@@ -2,9 +2,11 @@
  * **LES MODÈLES EMBARQUÉS** (#9898).
  *
  * Par défaut, **Opus-MT** (Marian, quantifié int8 en ONNX) : sept langues —
- * fr, en, es, pt, de, it, ar —, un modèle par sens de paire (~55 Mo chacun,
- * ~110 Mo pour une paire dans les deux sens), chargé à la première
- * traduction qui le demande. Licence CC-BY-4.0. Les routes sont dans
+ * fr, en, es, pt, de, it, ar —, un modèle par sens de paire (107 Mo pour
+ * `opus-mt-en-fr`, mesuré par le banc : encodeur, décodeur et tokenizer),
+ * chargé à la première traduction qui le demande. L'appareil ne traduit que
+ * vers la langue de son lecteur : une paire lui coûte un modèle, deux quand
+ * elle passe par l'anglais. Licence CC-BY-4.0. Les routes sont dans
  * `opus-mt-routes.ts`, le moteur dans `opus-mt-engine.ts`.
  *
  * NLLB-200 distillé 600M (CC-BY-NC, permise tant que Meeshy est gratuit,
