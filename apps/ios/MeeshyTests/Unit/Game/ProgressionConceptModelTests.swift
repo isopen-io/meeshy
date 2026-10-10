@@ -61,6 +61,23 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(season?.value, GameText.doorSeasonNone, "aucune saison ne court : la ligne reste et le dit")
     }
 
+    func test_cards_beforeSeasonOne_saysWhenItOpens_neverAVoid() {
+        let game = GameWave2Fixture.game(season: nil, seasonUpcoming: GameWave2Fixture.upcoming)
+        let cards = ProgressionConceptModel.cards(progress: progress(game), game: game)
+
+        let season = cards.first { $0.concept == .season }
+        XCTAssertEqual(season?.value, GameText.doorSeasonUpcoming(date: GameWave2Format.day("2026-12-21")),
+                       "avant le lundi 2026-12-21 (#10014), la ligne annonce l'ouverture")
+        XCTAssertNotEqual(season?.value, GameText.doorSeasonNone)
+    }
+
+    func test_upcomingSeasonLine_namesTheNumberAndTheMonday() {
+        let line = GameSeasonUpcoming.line(GameWave2Fixture.upcoming, locale: Locale(identifier: "fr_FR"))
+        XCTAssertTrue(line.contains("1"), line)
+        XCTAssertTrue(line.contains("21"), line)
+        XCTAssertTrue(line.lowercased().contains("décembre"), line)
+    }
+
     // MARK: - La carte à trois étages (amendement porteur)
 
     func test_everyServedConcept_showsAValue_atLeastOneImportantDatum_itsWhy_andItsHow() {

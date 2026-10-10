@@ -36,6 +36,7 @@ import {
   seasonProgress,
   seasonStepReward,
   seasonWeek,
+  upcomingSeason,
 } from './season.js';
 import { orderShowcase, type ShowcaseVisibility, type TrophyRecord } from './trophies.js';
 import type {
@@ -46,6 +47,7 @@ import type {
   GamePrestigeBlock,
   GameSeasonBlock,
   GameTrophiesBlock,
+  GameUpcomingSeasonBlock,
   GameVisibility,
 } from '../../types/game-v2.js';
 
@@ -104,6 +106,8 @@ export type GameBlockExtras = {
   readonly league: GameLeagueBlock;
   readonly duo: GameDuoBlock;
   readonly season: GameSeasonBlock | null;
+  /** La saison à venir, servie tant qu'aucune n'est ouverte (#10014) ; `null` dès qu'une saison court. */
+  readonly seasonUpcoming: GameUpcomingSeasonBlock | null;
   readonly trophies: GameTrophiesBlock;
   readonly atlas: GameAtlasBlock;
   readonly prestige: GamePrestigeBlock;
@@ -224,6 +228,18 @@ function seasonBlock(facts: GameBlockExtrasFacts): GameSeasonBlock | null {
   };
 }
 
+/**
+ * Avant l'ouverture de la saison 1 (lundi 2026-12-21, #10014), `season` est `null` :
+ * ce bloc dit laquelle vient, quand, et sur quel thème — une donnée de calendrier,
+ * la même pour tous, qui ne lit aucun fait du joueur ni d'autrui.
+ */
+function upcomingSeasonBlock(facts: GameBlockExtrasFacts): GameUpcomingSeasonBlock | null {
+  const upcoming = upcomingSeason({ dayKey: facts.today, minuteOfDay: facts.minuteOfDay });
+  return upcoming === null
+    ? null
+    : { number: upcoming.number, themeKey: upcoming.themeKey, startDay: upcoming.startDay, endDay: upcoming.endDay };
+}
+
 export function buildGameBlockExtras(facts: GameBlockExtrasFacts): GameBlockExtras {
   const record = recordOf(facts.levelRecord, facts.score);
   const summary = atlasSummary(facts.atlas);
@@ -231,6 +247,7 @@ export function buildGameBlockExtras(facts: GameBlockExtrasFacts): GameBlockExtr
     league: leagueBlock(facts, record),
     duo: duoBlock(facts, record),
     season: seasonBlock(facts),
+    seasonUpcoming: upcomingSeasonBlock(facts),
     trophies: {
       items: facts.trophies.map((t) => ({ key: t.key, awardedAt: t.awardedAt })),
       order: [...orderShowcase({ owned: facts.trophies, order: facts.showcaseOrder })],
