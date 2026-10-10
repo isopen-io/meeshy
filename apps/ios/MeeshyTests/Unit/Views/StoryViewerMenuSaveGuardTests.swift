@@ -1,14 +1,17 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// **Le menu « … » de la story, revu par le porteur (#9953, 2026-10-10).**
 ///
 /// Le même menu pour TOUT lecteur, sa story ou celle d'un autre :
 /// Plein écran · Transcription (si présente) · Composer · Partager ▸
-/// (Exporter en vidéo, Partager à un ami) · Signaler / Supprimer · Fermer.
+/// (Exporter en vidéo, Partager à un ami, Republier en post, Republier en
+/// réel) · Signaler / Supprimer · Fermer.
 ///
-/// Envoyer, Republier en post, Citer en post, Enregistrer et Enregistrer le(s)
-/// sticker(s) quittent le menu. « Enregistrer » (#8823) vit désormais dans la
+/// Envoyer, Citer en post (définitivement : « Composer » le fait), Enregistrer
+/// et Enregistrer le(s) sticker(s) quittent le menu. Republier en post et en
+/// réel n'y sont offerts que sur la story d'AUTRUI, comme « Republier » au rail. « Enregistrer » (#8823) vit désormais dans la
 /// feuille du système de « Partager à un ami » (« Enregistrer la vidéo »), et
 /// dans la feuille d'export. Le (X) de l'en-tête est retiré : le glissement
 /// vers le bas ferme, « Fermer » est la dernière entrée.
@@ -48,7 +51,7 @@ final class StoryOptionsMenuPlanTests: XCTestCase {
     func test_theMenu_ofSomeoneElsesPublicStory_inTheDecidedOrder() {
         let plan = StoryOptionsMenuPlanFixture.plan(isOwnStory: false, hasAudioTranscript: true)
         XCTAssertEqual(plan.sections, [[.fullscreen, .transcript], [.compose], [.share], [.report], [.close]])
-        XCTAssertEqual(plan.shareEntries, [.exportVideo, .shareWithFriend])
+        XCTAssertEqual(plan.shareEntries, [.exportVideo, .shareWithFriend, .repostAsPost, .repostAsReel])
     }
 
     func test_theMenu_ofOnesOwnStory_isTheSame_butDeletes() {
@@ -68,11 +71,22 @@ final class StoryOptionsMenuPlanTests: XCTestCase {
     /// emporte un lien `meeshy.me/l/…` qui s'ouvre sans compte : il reste réservé
     /// aux stories publiques.
     func test_exportVideo_isForEveryStory_theFriendLink_forPublicOnesOnly() {
-        for isOwnStory in [true, false] {
-            let friends = StoryOptionsMenuPlanFixture.plan(isOwnStory: isOwnStory, isPublicStory: false)
-            XCTAssertEqual(friends.shareEntries, [.exportVideo])
-            let open = StoryOptionsMenuPlanFixture.plan(isOwnStory: isOwnStory, isPublicStory: true)
-            XCTAssertEqual(open.shareEntries, [.exportVideo, .shareWithFriend])
+        let ownFriends = StoryOptionsMenuPlanFixture.plan(isOwnStory: true, isPublicStory: false)
+        XCTAssertEqual(ownFriends.shareEntries, [.exportVideo])
+        let ownOpen = StoryOptionsMenuPlanFixture.plan(isOwnStory: true, isPublicStory: true)
+        XCTAssertEqual(ownOpen.shareEntries, [.exportVideo, .shareWithFriend])
+        let othersFriends = StoryOptionsMenuPlanFixture.plan(isOwnStory: false, isPublicStory: false)
+        XCTAssertEqual(othersFriends.shareEntries, [.exportVideo, .repostAsPost, .repostAsReel])
+    }
+
+    /// Republier en post et en réel : la story d'AUTRUI, TOUTE audience — la
+    /// règle du rail, la loi d'audience du serveur bornant le résultat.
+    func test_repostEntries_areForSomeoneElsesStory_onEveryAudience() {
+        for plan in StoryOptionsMenuPlanFixture.everyReader where plan.entries.contains(.report) {
+            XCTAssertEqual(Array(plan.shareEntries.suffix(2)), [.repostAsPost, .repostAsReel])
+        }
+        for plan in StoryOptionsMenuPlanFixture.everyReader where plan.entries.contains(.delete) {
+            XCTAssertFalse(plan.shareEntries.contains(.repostAsPost) || plan.shareEntries.contains(.repostAsReel))
         }
     }
 
@@ -147,6 +161,8 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
             ("case .compose:", "demanderComposer(cible)"),
             ("case .exportVideo:", "showExportShareSheet = true"),
             ("case .shareWithFriend:", "await mintAndShareStory(story)"),
+            ("case .repostAsPost:", "StoryDirectRepost.publish(story, as: .post)"),
+            ("case .repostAsReel:", "StoryDirectRepost.publish(story, as: .reel)"),
             ("case .report:", "showReportSheet = true"),
             ("case .delete:", "deleteCurrentStory()"),
             ("case .close:", "dismissViewer()"),
@@ -156,6 +172,8 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
         }
         XCTAssertTrue(try entryBlock("case .close:").contains("\"common.close\""))
         XCTAssertTrue(try entryBlock("case .shareWithFriend:").contains("\"story.viewer.share.friend\""))
+        XCTAssertTrue(try entryBlock("case .repostAsPost:").contains("\"story.viewer.repostAsPost\""))
+        XCTAssertTrue(try entryBlock("case .repostAsReel:").contains("\"story.viewer.repostAsReel\""))
         XCTAssertFalse(try header().contains("hors Meeshy"), "Le libellé ne dit pas « hors Meeshy ».")
     }
 
@@ -167,9 +185,9 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
         XCTAssertTrue(text.contains("ShareSheet(activityItems: link.activityItems)"))
     }
 
-    func test_theMenu_noLongerOffersSendRepostQuoteSaveOrStickers() throws {
+    func test_theMenu_noLongerOffersSendQuoteSaveOrStickers() throws {
         let body = try headerBody()
-        for gone in ["story.viewer.action.send", "story.viewer.repostAsPost", "story.viewer.editAndRepostAsPost",
+        for gone in ["story.viewer.action.send", "story.viewer.editAndRepostAsPost", "editAndRepostAsPostSource",
                      "story.viewer.action.save", "story.viewer.sticker.save", "StoryPhotoSaveService.shared.save("] {
             XCTAssertFalse(try header().contains(gone), "\(gone) a quitté le menu (#9953)")
         }
@@ -188,5 +206,32 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
         let sheet = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryExportShareSheet.swift")
         XCTAssertTrue(sheet.contains("languagePicker"), "La feuille garde le choix de la langue à graver.")
         XCTAssertTrue(sheet.contains("viewModel.startExport(story: story, authorUsername: authorUsername)"))
+    }
+}
+
+/// **Une mécanique, trois cibles** (#9953) : le rail republie en story, le menu
+/// en post ou en réel — `RepostIntent.simple` remis à `RepostPublisher`, seule
+/// la cible change.
+@MainActor
+final class StoryDirectRepostTests: XCTestCase {
+
+    func test_eachDestination_targetsItsFormat() {
+        XCTAssertEqual(StoryRepostDestination.story.targetType, .story)
+        XCTAssertEqual(StoryRepostDestination.post.targetType, .post)
+        XCTAssertEqual(StoryRepostDestination.reel.targetType, .reel)
+    }
+
+    func test_eachDestination_announcesWhereItLanded() {
+        let messages = StoryRepostDestination.allCases.map { StoryDirectRepost.successMessage(for: $0) }
+        XCTAssertFalse(messages.contains { $0.isEmpty })
+        XCTAssertEqual(Set(messages).count, StoryRepostDestination.allCases.count,
+                       "Story, post et réel ne disent pas la même chose.")
+    }
+
+    func test_theThreeGestures_shareOneWriter() throws {
+        let sidebar = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        XCTAssertTrue(sidebar.contains(".simple(postId: story.id, targetType: destination.targetType, visibility: nil)"))
+        XCTAssertTrue(sidebar.contains("StoryViewerParticipationStore.shared.note(.reposted, storyId: story.id)"),
+                      "Le rail pose l'anneau « republié » comme le faisait la porte de republication.")
     }
 }

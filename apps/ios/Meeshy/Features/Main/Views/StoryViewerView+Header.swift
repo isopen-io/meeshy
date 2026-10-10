@@ -28,8 +28,9 @@ import MeeshyUI
 ///
 /// Le même menu pour TOUT lecteur, sa story ou celle d'un autre : la lecture
 /// (plein écran, transcription), « Composer », UN sous-menu « Partager »
-/// (exporter en vidéo, partager à un ami), l'action sur la story (signaler, ou
-/// supprimer la sienne), puis « Fermer ». Envoyer et republier restent au rail.
+/// (exporter en vidéo, partager à un ami, republier en post ou en réel),
+/// l'action sur la story (signaler, ou supprimer la sienne), puis « Fermer ».
+/// Envoyer et « Republier » (en story, d'un tap) restent au rail.
 nonisolated enum StoryOptionsMenuEntry: Hashable {
     case fullscreen
     case transcript
@@ -45,9 +46,14 @@ nonisolated enum StoryOptionsMenuEntry: Hashable {
 ///   (`StoryExportShareSheet`), qu'offrait le bouton « Partager » du rail auteur.
 /// - `shareWithFriend` : la feuille du système — le lien traçable, et le
 ///   fichier pour « Enregistrer la vidéo », AirDrop, Fichiers.
+/// - `repostAsPost` / `repostAsReel` : la republication d'un tap
+///   (`StoryDirectRepost`), la même que « Republier » du rail, vers une autre
+///   cible.
 nonisolated enum StoryShareMenuEntry: Hashable {
     case exportVideo
     case shareWithFriend
+    case repostAsPost
+    case repostAsReel
 }
 
 nonisolated struct StoryOptionsMenuPlan: Equatable {
@@ -59,7 +65,9 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
     /// `isPublicStory` ne garde que « Partager à un ami » : son lien
     /// `meeshy.me/l/…` s'ouvre sans compte et élargirait l'audience d'une story
     /// FRIENDS ou PRIVATE. L'export vidéo, lui, est offert sur toute story —
-    /// comme l'était « Enregistrer » (#8823).
+    /// comme l'était « Enregistrer » (#8823). Republier en post ou en réel suit
+    /// la règle du rail : la story d'AUTRUI seulement, sur toute audience — la
+    /// loi d'audience du serveur borne le résultat.
     static func resolve(
         hasStory: Bool,
         isOwnStory: Bool,
@@ -72,7 +80,9 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
             return StoryOptionsMenuPlan(sections: [reading, [.close]], shareEntries: [])
         }
         let composing: [StoryOptionsMenuEntry] = canCompose ? [.compose] : []
-        let sharing: [StoryShareMenuEntry] = isPublicStory ? [.exportVideo, .shareWithFriend] : [.exportVideo]
+        let exporting: [StoryShareMenuEntry] = isPublicStory ? [.exportVideo, .shareWithFriend] : [.exportVideo]
+        let reposting: [StoryShareMenuEntry] = isOwnStory ? [] : [.repostAsPost, .repostAsReel]
+        let sharing = exporting + reposting
         let acting: StoryOptionsMenuEntry = isOwnStory ? .delete : .report
         return StoryOptionsMenuPlan(
             sections: [reading, composing, [.share], [acting], [.close]].filter { !$0.isEmpty },
@@ -107,7 +117,6 @@ struct StoryHeaderView: View {
     @Binding var showAudioTranscript: Bool
 
     @Binding var selectedProfileUser: ProfileSheetUser?
-    @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
     @Binding var showReportSheet: Bool
 
     /// Holds the freshly-minted `meeshy.me/l/<token>` URL for the current
@@ -147,9 +156,7 @@ struct StoryHeaderView: View {
         }
     }
 
-    /// Partage INTERNE, « Republier en post » et « Citer en post » ont quitté le
-    /// menu (#9953) : « Envoyer » et « Republier » restent au rail. Leurs liens
-    /// restent câblés jusqu'ici pour qu'un retour au menu ne coûte qu'une entrée.
+    /// Le partage INTERNE a quitté le menu (#9953) : « Envoyer » reste au rail.
     @Binding var sharedContentWrapper: SharedContentWrapper?
 
     /// « Partager ▸ Exporter en vidéo » (#9953) : la feuille d'export au choix
@@ -158,7 +165,6 @@ struct StoryHeaderView: View {
 
     let makeStoryExternalShareURL: (String) -> URL?
     let deleteCurrentStory: () -> Void
-    let repostAsPostDirect: () -> Void
     let pauseTimer: () -> Void
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
@@ -525,6 +531,22 @@ struct StoryHeaderView: View {
                     Task { await mintAndShareStory(story) }
                 } label: {
                     Label(String(localized: "story.viewer.share.friend", defaultValue: "Partager à un ami", bundle: .main), systemImage: "person.2")
+                }
+            }
+        case .repostAsPost:
+            if let story = currentStory {
+                Button {
+                    StoryDirectRepost.publish(story, as: .post)
+                } label: {
+                    Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "infinity")
+                }
+            }
+        case .repostAsReel:
+            if let story = currentStory {
+                Button {
+                    StoryDirectRepost.publish(story, as: .reel)
+                } label: {
+                    Label(String(localized: "story.viewer.repostAsReel", defaultValue: "Republier en réel", bundle: .main), systemImage: "play.rectangle.on.rectangle")
                 }
             }
         }
