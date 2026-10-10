@@ -35,7 +35,7 @@ permissions:
 
 concurrency:
   group: translation-benchmark-device-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   PYTHON_VERSION: '3.10'
