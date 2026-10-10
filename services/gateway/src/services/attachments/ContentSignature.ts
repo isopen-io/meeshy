@@ -354,13 +354,14 @@ const PDF_MAGIC = Buffer.from('%PDF-', 'latin1');
 const ZIP_LOCAL_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 const UTF8_BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 
-/** Tabulation, saut de ligne, saut de page et retour chariot : les seuls contrôles d'un texte. */
-const TEXT_CONTROL_CHARACTERS = new Set([0x09, 0x0a, 0x0c, 0x0d]);
-
-function isForbiddenTextCharacter(codePoint: number): boolean {
-  if (TEXT_CONTROL_CHARACTERS.has(codePoint)) return false;
-  return codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f);
-}
+/**
+ * Les caractères de contrôle C0, DEL et C1, hors tabulation, saut de ligne,
+ * saut de page et retour chariot — les seuls contrôles d'un texte. Une
+ * expression balaie la chaîne sans la découper : un texte au plafond (25 Mio)
+ * découpé en tableau d'un élément par caractère gelait la boucle une seconde
+ * et coûtait ~400 Mo par envoi.
+ */
+const FORBIDDEN_TEXT_CHARACTER = /[\u0000-\u0008\u000b\u000e-\u001f\u007f-\u009f]/;
 
 /** Le contenu ENTIER est-il un texte brut UTF-8, sans signature binaire ? */
 export function isPlainUtf8Text(buffer: Buffer): boolean {
@@ -372,8 +373,7 @@ export function isPlainUtf8Text(buffer: Buffer): boolean {
     matchesAudioSignature(body);
   if (binary) return false;
   try {
-    const text = new TextDecoder('utf-8', { fatal: true }).decode(body);
-    return !Array.from(text).some((character) => isForbiddenTextCharacter(character.codePointAt(0) ?? 0));
+    return !FORBIDDEN_TEXT_CHARACTER.test(new TextDecoder('utf-8', { fatal: true }).decode(body));
   } catch {
     return false;
   }
