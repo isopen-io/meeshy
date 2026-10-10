@@ -6,7 +6,7 @@ import { sessionStore } from '@/lib/api/session';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { enterSharedContent, type ShareEntryDeps } from '@/lib/share-incoming/web-entry';
 import { takeWebShare } from '@/lib/share-incoming/web-inbox';
-import { navigate } from '@/routes/route-table';
+import { href, navigate } from '@/routes/route-table';
 
 /**
  * LA PAGE OÙ ATTERRIT UN PARTAGE VENU D'UNE AUTRE APPLICATION (#8884) —
@@ -29,6 +29,7 @@ export default function ShareIncomingScreen({ deps }: { readonly deps?: Pick<Sha
       take: takeWebShare,
       open: openSendSheet,
       navigate: (path, replace) => navigate(path, replace),
+      home: href('list'),
       ...deps,
     });
   }, [sessionStatus, deps]);

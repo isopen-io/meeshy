@@ -181,7 +181,15 @@ const notificationsScreen = () =>
   Promise.all([import('@/routes/notifications'), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 export const ROUTES = {
-  list: { pattern: '/', screen: () => import('@/routes/conversations') },
+  /* LA LANDING (#10002) — `/` est la page d'accueil de meeshy.me pour TOUS,
+     prérendue par langue (`scripts/prerender-landing.tsx`) ; nginx sert le
+     document statique, et cet écran ne rend `/` que lorsque c'est la coquille
+     qui la reçoit (service worker, développement). Dans la coque, `/` ouvre la
+     liste : c'est l'adresse que ses liens, ses pushs et son démarrage visaient. */
+  home: { pattern: '/', screen: () => (__SHELL__ ? import('@/routes/home-shell') : import('@/routes/home')) },
+  /* LA LISTE DES CONVERSATIONS déménage sur `/chats` (#10002, décision porteur
+     du 2026-10-10) ; les adresses de fil (`/c/…`) ne changent pas. */
+  list: { pattern: '/chats', screen: () => import('@/routes/conversations') },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
   /* NOUVELLE CONVERSATION (#5652) — nomenclature legacy reprise (D-5) :
      `apps/web/app/conversations/new` porte déjà ce chemin. */
