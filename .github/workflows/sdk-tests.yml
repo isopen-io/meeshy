@@ -20,12 +20,17 @@ on:
       - main
     paths:
       - 'packages/MeeshySDK/**'
+      # Les vecteurs du scellement partagé (#9899) : SharedTranslationSealVectorTests
+      # les relit depuis packages/shared — le TypeScript a raison sur divergence,
+      # et une régénération qui ne toucherait que lui doit rejouer le miroir Swift.
+      - 'packages/shared/fixtures/shared-translation/**'
   pull_request:
     branches:
       - dev
       - main
     paths:
       - 'packages/MeeshySDK/**'
+      - 'packages/shared/fixtures/shared-translation/**'
   # Intentionally NOT triggered by changes to this workflow file itself: an
   # app-only PR that merely touches CI config must not be gated by the SDK suite.
   # Use workflow_dispatch (Actions tab) to exercise CI changes on demand.

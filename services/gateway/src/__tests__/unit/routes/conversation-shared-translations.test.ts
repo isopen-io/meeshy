@@ -24,6 +24,7 @@ import {
   sharedTranslationSchema,
 } from '@meeshy/shared/types/shared-translation';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SHARED_TRANSLATION_SHARE_RATE_LIMIT } from '../../../routes/conversations/shared-translations';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
@@ -537,5 +538,52 @@ describe('POST /conversations/:id/shared-translations', () => {
       expect(h.shares).toEqual([]);
       expect(h.emitted).toEqual([]);
     });
+  });
+});
+
+describe('POST /conversations/:id/shared-translations — le débit compte le COMPTE', () => {
+  const account = (headers: Record<string, unknown>) =>
+    registeredAs(headers['x-account'] === 'peer' ? OTHER_USER_ID : USER_ID);
+  const postAs = (h: Awaited<ReturnType<typeof buildApp>>, who: 'sharer' | 'peer') =>
+    h.app.inject({
+      method: 'POST',
+      url: `/conversations/${CONV_A}/shared-translations`,
+      payload: shareBody(),
+      headers: { 'x-account': who },
+    });
+
+  it('refuse 429 au-delà du plafond par minute, sans entamer le crédit d’un autre membre venu de la même adresse', async () => {
+    const h = await buildApp({ authContextFor: account, rateLimit: { skipOnError: true } });
+
+    const statuses = [];
+    for (let sent = 0; sent < SHARED_TRANSLATION_SHARE_RATE_LIMIT.max; sent += 1) {
+      statuses.push((await postAs(h, 'sharer')).statusCode);
+    }
+    const beyond = await postAs(h, 'sharer');
+    const otherMember = await postAs(h, 'peer');
+
+    expect(statuses.every((status) => status === 200 || status === 201)).toBe(true);
+    expect(beyond.statusCode).toBe(429);
+    expect(beyond.json()).toMatchObject({ success: false });
+    expect(otherMember.statusCode).not.toBe(429);
+    expect(h.shares).toHaveLength(1);
+  });
+
+  it('répond 500 quand le magasin de compteurs tombe, même sous un limiteur global qui laisserait passer', async () => {
+    class StoreDown {
+      child(): StoreDown {
+        return new StoreDown();
+      }
+      incr(_key: string, callback: (error: Error) => void): void {
+        callback(new Error('Redis indisponible'));
+      }
+    }
+    const h = await buildApp({ authContextFor: account, rateLimit: { skipOnError: true, store: StoreDown } });
+
+    const res = await postAs(h, 'sharer');
+
+    expect(res.statusCode).toBe(500);
+    expect(h.shares).toEqual([]);
+    expect(h.emitted).toEqual([]);
   });
 });

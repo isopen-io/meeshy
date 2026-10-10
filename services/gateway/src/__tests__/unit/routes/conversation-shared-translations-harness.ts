@@ -12,6 +12,7 @@
  * adressable ; `UNKNOWN_CONVERSATION` n'est porté par aucune.
  */
 import Fastify from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import { registerSharedTranslationRoutes } from '../../../routes/conversations/shared-translations';
 import {
   CONV_A,
@@ -186,6 +187,15 @@ export async function buildApp(
     authContext?: Row;
     io?: 'throwing' | 'absent';
     prismaOverrides?: (prisma: ReturnType<typeof database>['prisma']) => unknown;
+    /** Le compte de CHAQUE requête, lu dans ses en-têtes — pour les témoins de débit à deux comptes. */
+    authContextFor?: (headers: Record<string, unknown>) => Row;
+    /**
+     * Monte le VRAI `@fastify/rate-limit` (`global: false`) avant la route.
+     * `skipOnError` au niveau du plugin reproduit le global vivant
+     * (`registerGlobalRateLimiter`), dont une config de route hérite tout ce
+     * qu'elle ne redéclare pas.
+     */
+    rateLimit?: { skipOnError: boolean; store?: unknown };
   } = {},
 ) {
   const store = params.store ?? scene();
@@ -208,9 +218,16 @@ export async function buildApp(
   if (params.io !== 'absent') {
     (app as unknown as { socketIOHandler: unknown }).socketIOHandler = { getManager: () => ({ getIO: () => io }) };
   }
-  const auth = async (req: { authContext?: unknown }) => {
-    req.authContext = params.authContext ?? registeredAs(USER_ID);
+  const auth = async (req: { authContext?: unknown; headers?: Record<string, unknown> }) => {
+    req.authContext = params.authContextFor?.(req.headers ?? {}) ?? params.authContext ?? registeredAs(USER_ID);
   };
+  if (params.rateLimit) {
+    await app.register(rateLimit, {
+      global: false,
+      skipOnError: params.rateLimit.skipOnError,
+      ...(params.rateLimit.store ? { store: params.rateLimit.store as never } : {}),
+    });
+  }
   registerSharedTranslationRoutes(app, (params.prismaOverrides?.(prisma) ?? prisma) as never, auth, { now: () => HARNESS_NOW });
   await app.ready();
   return { app, shares, emitted, reads };

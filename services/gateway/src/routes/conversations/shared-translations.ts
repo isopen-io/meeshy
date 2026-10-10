@@ -53,12 +53,13 @@
  * rattrapage de qui rouvre la conversation. Une diffusion qui échoue ne fait
  * jamais échouer le partage — la ligne est rangée, le `GET` la sert.
  *
- * Le débit n'a pas de plafond propre : comme ses voisines (`messages-after-read`,
- * `messages-view-once`), la route est sous le limiteur global. Le stockage croît
- * d'une enveloppe (128 Kio au plus) par message, langue du CATALOGUE et version :
- * un code hors du catalogue est refusé comme un code non normalisé.
+ * Le partage a son plafond PAR COMPTE (`SHARED_TRANSLATION_SHARE_RATE_LIMIT`), en
+ * plus du limiteur global par adresse : chaque partage écrit une ligne et part en
+ * diffusion. Le stockage croît d'une enveloppe (128 Kio au plus) par message,
+ * langue du CATALOGUE et version : un code hors du catalogue est refusé comme un
+ * code non normalisé.
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import {
@@ -89,6 +90,33 @@ import { logger } from './messages-shared';
 import { resolveCallerParticipant } from './utils/access-control';
 
 export type SharedTranslationRouteOptions = { readonly now?: () => Date };
+
+/**
+ * Le plafond des partages, par COMPTE et par minute. Un appareil partage au plus
+ * une traduction par message reçu de sa fenêtre récente (quarante sur iOS) :
+ * cent vingt laissent ouvrir plusieurs conversations d'affilée. Au-delà, la
+ * traduction reste locale — le lecteur la voit, les autres traduisent eux-mêmes.
+ *
+ * `hook: 'preHandler'` : l'identité est posée en `preValidation`, une phase plus
+ * tardive que l'`onRequest` par défaut du plugin, qui compterait l'adresse.
+ * `skipOnError: false` : la config de route hérite sinon du `skipOnError: true`
+ * du limiteur global, et une panne du magasin de compteurs ouvrirait le plafond.
+ */
+export const SHARED_TRANSLATION_SHARE_RATE_LIMIT = {
+  max: 120,
+  timeWindow: '1 minute',
+  hook: 'preHandler' as const,
+  skipOnError: false,
+  keyGenerator: (request: FastifyRequest) => {
+    const authContext = (request as UnifiedAuthRequest).authContext;
+    return `shared-translations:share:${authContext?.userId ?? `ip:${request.ip}`}`;
+  },
+  errorResponseBuilder: () => ({
+    success: false,
+    error: 'Too many shared translations. Please slow down.',
+    statusCode: 429,
+  }),
+};
 
 /** Ce qu'il faut du message pour juger le droit de lire, la protection, la langue, la dérivation et la version. */
 const SHARED_TRANSLATION_MESSAGE_SELECT = {
@@ -316,6 +344,7 @@ export function registerSharedTranslationRoutes(
         500: errorResponseSchema,
       },
     },
+    config: { rateLimit: SHARED_TRANSLATION_SHARE_RATE_LIMIT },
     preValidation: [participantAuth as never],
   }, async (request, reply) => {
     try {
