@@ -379,8 +379,9 @@ export function isPlainUtf8Text(buffer: Buffer): boolean {
   }
 }
 
+/** `null` : aucun nom n'a été transmis. Un nom VIDE en est un, sans extension. */
 function extensionOf(fileName: string | null | undefined): string | null {
-  if (!fileName) return null;
+  if (fileName === undefined || fileName === null) return null;
   const base = fileName.split(/[\\/]/).pop() ?? '';
   const dot = base.lastIndexOf('.');
   return dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
