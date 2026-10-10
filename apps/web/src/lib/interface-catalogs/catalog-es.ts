@@ -29,6 +29,7 @@ import esMessageCard from './catalog-es-message-card';
 import esMentions from './catalog-es-mentions';
 import esStudioChrome from './catalog-es-studio-chrome';
 import esEphemeral from './catalog-es-ephemeral';
+import esWriteRestriction from './catalog-es-write-restriction';
 import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
 import esContactCard from './catalog-es-contact-card';
@@ -1097,6 +1098,7 @@ const es = {
   ...esMentions,
   ...esStudioChrome,
   ...esEphemeral,
+  ...esWriteRestriction,
   ...esGallery,
   ...esDeviceTranslation,
   ...esMessageCard,

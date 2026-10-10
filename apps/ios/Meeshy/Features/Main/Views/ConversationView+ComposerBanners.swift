@@ -497,9 +497,46 @@ private struct ComposerQuotedFlow: View {
 
 // MARK: - Zones qui REMPLACENT le composer (sorties de ConversationView.swift, #9359)
 //
-// Conversation fermée, direct bloqué : le composer cède la place à une zone
-// statique qui dit pourquoi on ne peut pas écrire.
+// Conversation fermée, direct bloqué, Global avant 18 ans : le composer cède la
+// place à une zone statique qui dit pourquoi on ne peut pas écrire.
 extension ConversationView {
+
+    /// Le composer, ou la zone de lecture seule qui le remplace. Le direct
+    /// bloqué et la sélection se tranchent en amont, chez l'hôte.
+    @ViewBuilder
+    var composerOrReadOnlyZone: some View {
+        if viewModel.isConversationClosed {
+            closedConversationBanner
+        } else if viewModel.writeRestriction(served: liveConversation?.viewerWriteRestriction) != nil {
+            minorGlobalBanner
+        } else {
+            themedComposer
+        }
+    }
+
+    // MARK: - Global avant 18 ans (#9929)
+
+    /// Même motif que `closedConversationBanner` : une zone statique, sans
+    /// action, qui dit quand l'écriture s'ouvrira. Le sablier porte l'accent de
+    /// la conversation — c'est une attente, pas une faute.
+    var minorGlobalBanner: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Image(systemName: "hourglass")
+                .foregroundColor(Color(hex: accentColor))
+                .accessibilityHidden(true)
+            Text(String(localized: "conversation.composer.minorGlobal", bundle: .main))
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.md + 2)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .background(.ultraThinMaterial)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("conversation.composer.minorGlobal")
+    }
 
     // MARK: - Closed Conversation Banner
 

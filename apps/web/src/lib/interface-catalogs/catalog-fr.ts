@@ -15,6 +15,7 @@ import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
 import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
+import frWriteRestriction from './catalog-fr-write-restriction';
 import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
@@ -1086,6 +1087,7 @@ const fr = {
   ...frMentions,
   ...frStudioChrome,
   ...frEphemeral,
+  ...frWriteRestriction,
   ...frGallery,
   ...frDeviceTranslation,
   ...frMessageCard,

@@ -159,8 +159,56 @@ final class OnboardingServiceTests: XCTestCase {
         XCTAssertEqual(state.suggestions.count, 6)
     }
 
-    func test_stepOrder_isTheSixCardsInContractOrder() {
-        XCTAssertEqual(OnboardingStepId.allCases, [.languages, .email, .global, .story, .friends, .notifications])
+    func test_stepOrder_isTheSevenCardsInContractOrder() {
+        XCTAssertEqual(OnboardingStepId.allCases, [.languages, .age, .email, .global, .story, .friends, .notifications])
+    }
+
+    // MARK: - Âge (#9929)
+
+    func test_decode_ageStep_isAKnownStep() throws {
+        let json = """
+        {"eligible":true,"completedAt":null,"seenSteps":["age"],"prefilledSteps":["age"],
+         "globalConversationId":null,"protectedRegime":false,"storyDefaultVisibility":"public","suggestions":[]}
+        """
+        let state = try JSONDecoder().decode(APIOnboardingState.self, from: Data(json.utf8))
+
+        XCTAssertEqual(state.seenSteps, [.age])
+        XCTAssertEqual(state.prefilledSteps, [.age])
+    }
+
+    func test_decode_gatewayWithoutAgeKey_doesNotServeTheAgeStep() throws {
+        let json = """
+        {"eligible":true,"completedAt":null,"seenSteps":[],"prefilledSteps":[],
+         "globalConversationId":null,"protectedRegime":false,"storyDefaultVisibility":"public","suggestions":[]}
+        """
+        let state = try JSONDecoder().decode(APIOnboardingState.self, from: Data(json.utf8))
+
+        XCTAssertFalse(state.servesAgeStep)
+        XCTAssertNil(state.viewerWriteRestriction)
+    }
+
+    func test_decode_nullRestriction_servesTheAgeStepWithoutRestriction() throws {
+        let json = """
+        {"eligible":true,"completedAt":null,"seenSteps":[],"prefilledSteps":[],
+         "globalConversationId":null,"protectedRegime":false,"storyDefaultVisibility":"public","suggestions":[],
+         "viewerWriteRestriction":null}
+        """
+        let state = try JSONDecoder().decode(APIOnboardingState.self, from: Data(json.utf8))
+
+        XCTAssertTrue(state.servesAgeStep)
+        XCTAssertNil(state.viewerWriteRestriction)
+    }
+
+    func test_decode_minorGlobalRestriction_isRead() throws {
+        let json = """
+        {"eligible":true,"completedAt":null,"seenSteps":[],"prefilledSteps":[],
+         "globalConversationId":null,"protectedRegime":true,"storyDefaultVisibility":"friends","suggestions":[],
+         "viewerWriteRestriction":"minor-global"}
+        """
+        let state = try JSONDecoder().decode(APIOnboardingState.self, from: Data(json.utf8))
+
+        XCTAssertTrue(state.servesAgeStep)
+        XCTAssertEqual(state.viewerWriteRestriction, .minorGlobal)
     }
 
     // MARK: - Vérification du courriel (#7907)

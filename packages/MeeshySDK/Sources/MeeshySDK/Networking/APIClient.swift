@@ -899,6 +899,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                         // The raw body is forwarded so callers that need
                         // structured 403 payloads (e.g. consent-required
                         // errors) can decode them without a second request.
+                        AgeGateSignal.signal(statusCode: statusCode, body: data)
                         throw MeeshyError.forbidden(reason: errorMsg, body: data)
                     }
 

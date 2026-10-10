@@ -29,6 +29,7 @@ import ptMessageCard from './catalog-pt-message-card';
 import ptMentions from './catalog-pt-mentions';
 import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
+import ptWriteRestriction from './catalog-pt-write-restriction';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
 import ptContactCard from './catalog-pt-contact-card';
@@ -1101,6 +1102,7 @@ const pt = {
   ...ptMentions,
   ...ptStudioChrome,
   ...ptEphemeral,
+  ...ptWriteRestriction,
   ...ptGallery,
   ...ptDeviceTranslation,
   ...ptMessageCard,

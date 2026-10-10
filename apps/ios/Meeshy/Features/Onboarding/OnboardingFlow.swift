@@ -86,8 +86,10 @@ enum OnboardingRewards {
 enum OnboardingFlow {
     /// Les étapes « geste », dans l'ordre. La carte notifications n'en fait pas
     /// partie : elle n'est proposée qu'APRÈS, et seulement si un geste a produit
-    /// de quoi être notifié (leçon du carrousel #5218).
-    static let gestureSteps: [OnboardingStepId] = [.languages, .email, .global, .story, .friends]
+    /// de quoi être notifié (leçon du carrousel #5218). L'âge (#9929) précède
+    /// Global : un 13-17 ans y lit sans écrire, la carte du salut n'a donc pas
+    /// lieu d'être après sa déclaration.
+    static let gestureSteps: [OnboardingStepId] = [.languages, .age, .email, .global, .story, .friends]
 
     /// Les étapes qui PEUVENT appeler une réponse — celles qui justifient de
     /// proposer les notifications.
@@ -101,7 +103,10 @@ enum OnboardingFlow {
         return gestureSteps.filter { step in
             guard !settled.contains(step) else { return false }
             switch step {
-            case .global: return state.globalConversationId != nil
+            case .global: return state.globalConversationId != nil && state.viewerWriteRestriction?.closesComposer != true
+            // Proposée par la SEULE passerelle qui sait l'âge (#9927) : une
+            // plus ancienne n'a pas la route, la carte ne s'invente pas.
+            case .age: return state.servesAgeStep
             case .friends: return !state.suggestions.isEmpty || contactsOfferable
             // Proposée au seul compte DÉCLARÉ non vérifié : une passerelle qui
             // ne le dit pas (`nil`) ne fait naître aucune carte.

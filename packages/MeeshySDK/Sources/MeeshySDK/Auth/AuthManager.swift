@@ -887,7 +887,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken
             } catch let error as MeeshyError {
+                // Un compte de moins de 13 ans (#9929) ne se rafraîchit plus :
+                // ses jetons partent, sans quoi chaque requête rejouerait le refus.
                 if case .auth = error {
+                    self.requireReauthentication(userId: userId)
+                } else if AgeGateSignal.isAgeRefusal(error) {
                     self.requireReauthentication(userId: userId)
                 }
                 throw error
