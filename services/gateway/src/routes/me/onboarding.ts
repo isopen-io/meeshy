@@ -23,7 +23,7 @@ import {
 } from '../../utils/response.js';
 import { logError } from '../../utils/logger';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
-import { announcesCapability, CLIENT_CAPABILITIES, CLIENT_CAPABILITIES_HEADER } from '../../utils/client-capabilities';
+import { announcesCapability, appendVary, CLIENT_CAPABILITIES, CLIENT_CAPABILITIES_HEADER } from '../../utils/client-capabilities';
 
 /**
  * #9927 — l'étape `age` et `viewerWriteRestriction` ne sont servis qu'au client
@@ -150,7 +150,7 @@ export async function meOnboardingRoutes(fastify: FastifyInstance, options: MeOn
         const state = await service.getState(userId, now(), onboardingClientOf(request));
         if (!state) return sendNotFound(reply, 'USER_NOT_FOUND');
         reply.header('Cache-Control', 'private, no-cache');
-        reply.header('Vary', CLIENT_CAPABILITIES_HEADER);
+        appendVary(reply, CLIENT_CAPABILITIES_HEADER);
         return sendSuccess(reply, state);
       } catch (error) {
         logError(fastify.log, '[GET /me/onboarding]', error);
@@ -183,7 +183,7 @@ export async function meOnboardingRoutes(fastify: FastifyInstance, options: MeOn
         const state = await service.recordStep(userId, body.data, now(), onboardingClientOf(request));
         if (!state) return sendNotFound(reply, 'USER_NOT_FOUND');
         reply.header('Cache-Control', 'private, no-cache');
-        reply.header('Vary', CLIENT_CAPABILITIES_HEADER);
+        appendVary(reply, CLIENT_CAPABILITIES_HEADER);
         return sendSuccess(reply, state);
       } catch (error) {
         logError(fastify.log, '[PATCH /me/onboarding]', error);

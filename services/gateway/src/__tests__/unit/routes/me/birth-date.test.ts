@@ -15,6 +15,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import cors from '@fastify/cors';
 import { meBirthDateRoutes } from '../../../../routes/me/birth-date';
 import { meOnboardingRoutes } from '../../../../routes/me/onboarding';
 import { OnboardingStateSchema } from '@meeshy/shared/types/onboarding';
@@ -77,8 +78,9 @@ function makePrisma(initial: Partial<Row> = {}, options: { readonly staleReads?:
 
 const revokeAllSessions = jest.fn(async (_userId: string) => undefined);
 
-async function buildApp(prisma: ReturnType<typeof makePrisma>): Promise<FastifyInstance> {
+async function buildApp(prisma: ReturnType<typeof makePrisma>, options: { readonly withCors?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  if (options.withCors) await app.register(cors, { origin: true, credentials: true });
   app.decorate('prisma', prisma as never);
   app.decorate('authenticate', async (req: FastifyRequest) => {
     const userId = req.headers['x-test-user-id'] as string | undefined;
@@ -270,6 +272,27 @@ describe('GET/PATCH /me/onboarding — un client antérieur reçoit EXACTEMENT l
     const res = await app.inject({ method: 'PATCH', url: '/api/v1/me/onboarding', headers: aware, payload: { step: 'global', outcome: 'done' } });
     expect(res.json().data.seenSteps).toContain('age');
     expect(res.json().data.viewerWriteRestriction).toBe('minor-global');
+    await app.close();
+  });
+});
+
+// #9927 — `Vary` s'AJOUTE à celui que pose @fastify/cors (`Origin`) : l'écraser
+// laisserait un cache partagé servir à une origine la réponse d'une autre.
+describe('GET/PATCH /me/onboarding — Vary s’ajoute, il n’écrase pas', () => {
+  it.each([
+    ['GET', undefined],
+    ['PATCH', { step: 'global', outcome: 'done' }],
+  ] as const)('%s : Vary porte Origin ET x-meeshy-capabilities', async (method, payload) => {
+    const app = await buildApp(makePrisma(), { withCors: true });
+    const res = await app.inject({
+      method,
+      url: '/api/v1/me/onboarding',
+      headers: { ...aware, origin: 'https://web.example.test' },
+      ...(payload ? { payload } : {}),
+    });
+    const vary = String(res.headers.vary).toLowerCase();
+    expect(vary).toContain('origin');
+    expect(vary).toContain('x-meeshy-capabilities');
     await app.close();
   });
 });

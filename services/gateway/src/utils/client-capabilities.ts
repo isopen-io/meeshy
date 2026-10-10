@@ -35,3 +35,21 @@ export function announcesCapability(
     .map((token) => token.trim().toLowerCase())
     .includes(capability);
 }
+
+/**
+ * AJOUTE un en-tête à `Vary` au lieu de le remplacer : `@fastify/cors` y a
+ * déjà posé `Origin`, et l'écraser laisserait un cache partagé servir à une
+ * origine la réponse préparée pour une autre.
+ */
+export function appendVary(
+  reply: { getHeader(name: string): unknown; header(name: string, value: string): unknown },
+  headerName: string
+): void {
+  const current = reply.getHeader('vary');
+  const existing = (Array.isArray(current) ? current.join(',') : typeof current === 'string' ? current : '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  if (existing.some((name) => name === '*' || name.toLowerCase() === headerName.toLowerCase())) return;
+  reply.header('Vary', [...existing, headerName].join(', '));
+}
