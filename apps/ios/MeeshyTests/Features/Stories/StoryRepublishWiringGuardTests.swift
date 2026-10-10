@@ -89,64 +89,33 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
     /// forme de partage sur les stories que la nouvelle loi d'audience vise
     /// précisément.
     ///
-    /// Une assertion textuelle ne distinguerait pas « présent » de « présent
-    /// SOUS le gate » — c'est justement le défaut qu'a eu la première écriture
-    /// de ce lot. On prouve donc la CONTENANCE : les trois formes sont hors du
-    /// bloc `if story.isPublic`, le partage EXTERNE est dedans (son lien
-    /// `meeshy.me/l/…` est ouvrable par n'importe qui, donc lui seul garde le
-    /// gate).
-    func test_theThreeShareForms_liveOutsideTheIsPublicGate_onlyExternalShareStaysInside() throws {
-        // #4084 — les trois formes de partage vivent dans le MENU D'OPTIONS,
-        // parti avec l'en-tête dans son propre fichier. La garde prouve une
-        // CONTENANCE : elle doit donc lire le fichier qui contient le gate,
-        // sinon elle ne prouve plus rien — elle échoue à le trouver.
-        let sidebar = AppSourceGuard.stripComments(
+    /// #9953 — le menu se décide dans `StoryOptionsMenuPlan`, et les formes de
+    /// partage dans son sous-menu « Partager ». La garde prouve désormais
+    /// l'OFFRE sur le plan, sans lire la contenance d'un `if` : les trois
+    /// formes sont offertes sur une story FRIENDS, le partage EXTERNE ne l'est
+    /// que sur une story publique (son lien `meeshy.me/l/…` est ouvrable par
+    /// n'importe qui, donc lui seul garde le gate).
+    func test_theThreeShareForms_areOfferedOnEveryAudience_onlyExternalShareNeedsAPublicStory() throws {
+        let header = AppSourceGuard.stripComments(
             try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift"))
-
-        // Le gate de la branche NON-auteur est le dernier `if story.isPublic`
-        // du fichier (celui de la branche auteur le précède).
-        guard let gateStart = sidebar.range(of: "if story.isPublic {", options: .backwards) else {
-            return XCTFail("bloc `if story.isPublic` introuvable")
+        for key in ["story.viewer.repostAsPost",
+                    "story.viewer.editAndRepostAsPost",
+                    "story.viewer.action.send",
+                    "story.viewer.share.external"] {
+            XCTAssertTrue(header.contains(key), "\(key) doit figurer dans le menu (...)")
         }
-        let gateBody = Self.bracedBody(of: sidebar, openingBraceAfter: gateStart.lowerBound)
 
-        for form in ["story.viewer.repostAsPost",
-                     "story.viewer.editAndRepostAsPost",
-                     "story.viewer.share.internal"] {
-            XCTAssertTrue(
-                sidebar.contains(form),
-                "\(form) doit figurer dans le menu (...)"
+        let threeForms: [StoryShareMenuEntry] = [.send, .repostAsPost, .quoteAsPost]
+        for isPublicStory in [true, false] {
+            let plan = StoryOptionsMenuPlan.resolve(
+                hasStory: true, isOwnStory: false, isPublicStory: isPublicStory,
+                hasAudioTranscript: false, canCompose: false, hasSavableStickers: false
             )
-            XCTAssertFalse(
-                gateBody.contains(form),
-                "\(form) ne doit PAS être enfermé dans `if story.isPublic` : le menu " +
-                "resterait vide de toute forme de partage sur une story FRIENDS ou " +
-                "PRIVATE, alors que la loi d'audience borne déjà le résultat."
-            )
+            XCTAssertEqual(Array(plan.shareEntries.prefix(3)), threeForms,
+                           "Les trois formes ne dépendent pas de l'audience — isPublic=\(isPublicStory)")
+            XCTAssertEqual(plan.shareEntries.contains(.shareOutside), isPublicStory,
+                           "Le partage HORS Meeshy reste gardé : son lien élargirait l'audience hors de tout contrôle.")
         }
-
-        XCTAssertTrue(
-            gateBody.contains("story.viewer.share.external"),
-            "Le partage HORS Meeshy doit rester gardé : son lien est ouvrable par " +
-            "n'importe qui, ce qui élargirait l'audience hors de tout contrôle."
-        )
-    }
-
-    /// Corps délimité par accolades équilibrées à partir de la première `{`
-    /// rencontrée après `index`.
-    private static func bracedBody(of source: String, openingBraceAfter index: String.Index) -> String {
-        guard let open = source[index...].firstIndex(of: "{") else { return "" }
-        var depth = 0
-        var cursor = open
-        while cursor < source.endIndex {
-            if source[cursor] == "{" { depth += 1 }
-            if source[cursor] == "}" {
-                depth -= 1
-                if depth == 0 { return String(source[source.index(after: open)..<cursor]) }
-            }
-            cursor = source.index(after: cursor)
-        }
-        return String(source[source.index(after: open)...])
     }
 
     // MARK: - 2. L'audience est plafonnée
