@@ -62,6 +62,10 @@
                 <data android:path="/me" />
                 <data android:path="/links" />
                 <data android:path="/reels" />
+                <!-- #9947 — une saison ou une semaine de ligue nommée (événements in-app),
+                     comme l'AASA : /me/progression/saison[/n], /me/progression/ligue[/lundi]. -->
+                <data android:pathPrefix="/me/progression/saison" />
+                <data android:pathPrefix="/me/progression/ligue" />
             </intent-filter>
 
             <!-- Le schéma court, miroir de CFBundleURLSchemes = meeshy côté iOS. -->

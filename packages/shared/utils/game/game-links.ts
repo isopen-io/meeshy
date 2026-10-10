@@ -8,8 +8,9 @@
  * La forme sans paramètre reste la saison ou la semaine EN COURS. `weekKey` est
  * le lundi local qui ouvre la semaine (`leagueWeekKey`). Le web (routes
  * `/me/progression/saison|ligue`), iOS (`DeepLinkParser`), l'AASA et les
- * événements in-app d'andp (`store.app_events`) lisent et écrivent ces chemins ;
- * un paramètre invalide n'est pas une destination du Jeu.
+ * événements in-app d'andp (`store.app_events`) lisent et écrivent ces chemins.
+ * Un paramètre invalide ne nomme ni saison ni semaine : la lecture le refuse
+ * (400), et les clients ouvrent alors la page EN COURS — jamais Safari ni un vide.
  */
 
 import { isDayKey } from './day-prng.js';
