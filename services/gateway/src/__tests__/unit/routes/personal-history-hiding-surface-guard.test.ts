@@ -636,6 +636,16 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * marqueurs de `IN_MEMORY_HIDING_SURFACES` ci-dessous en sont la preuve.
    */
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 0 },
+
+  'world/worldSeedOperations.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Retrait opérateur de World Wide (#10000) : `message.count` sur la conversation " +
+      "entière décide si la purge est permise (refusée dès qu'un message existe). " +
+      "Aucun contenu servi, aucun lecteur : masquer un historique personnel ici " +
+      "laisserait purger une conversation qui porte encore les messages des autres.",
+  },
 };
 
 /**

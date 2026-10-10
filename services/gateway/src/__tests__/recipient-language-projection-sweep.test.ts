@@ -137,7 +137,11 @@ describe('balayage : tout appelant du cadrage charge les quatre colonnes (#4642)
   });
 
   it("l'exemption de la SSOT PORTE quelque chose — retirée, le balayage la nomme", () => {
-    expect(Object.keys(EXEMPTIONS)).toEqual(['utils/recipient-language.ts', 'services/linkUnfurl/page.ts']);
+    expect(Object.keys(EXEMPTIONS)).toEqual([
+      'utils/recipient-language.ts',
+      'services/linkUnfurl/page.ts',
+      'services/world/worldConversation.ts',
+    ]);
 
     const sansExemption = balayerAppelsDeCadrage(SRC, {}).filter(
       (appel) => appel.fichier === 'utils/recipient-language.ts',
@@ -165,6 +169,21 @@ describe("l'exemption de l'aperçu d'un lien PORTE quelque chose, et sa raison s
     const page = readFileSync(join(SRC, 'services/linkUnfurl/page.ts'), 'utf8');
     expect(page).toMatch(/creator:\s*\{\s*select:\s*\{[^}]*\.\.\.RECIPIENT_LANG_SELECT/);
     expect(page).toMatch(/select:\s*linkUnfurlSelect/);
+  });
+});
+
+describe("l'exemption du seed de World Wide PORTE quelque chose, et sa raison se vérifie", () => {
+  it('retirée, le balayage nomme l’appel de `services/world/worldConversation.ts` comme non remonté', () => {
+    const sansExemption = balayerAppelsDeCadrage(SRC, {}).filter(
+      (appel) => appel.fichier === 'services/world/worldConversation.ts',
+    );
+    expect(sansExemption.length).toBeGreaterThan(0);
+    expect(sansExemption.every((appel) => appel.verdict === 'non-resolue')).toBe(true);
+  });
+
+  it('la requête des comptes réservés étale les quatre colonnes', () => {
+    const membres = readFileSync(join(SRC, 'services/world/worldReservedMembers.ts'), 'utf8');
+    expect(membres).toMatch(/prisma\.user\.findMany\(\{[\s\S]*?select:\s*\{[^}]*\.\.\.RECIPIENT_LANG_SELECT/);
   });
 });
 
