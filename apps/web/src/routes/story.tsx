@@ -65,7 +65,7 @@ import { useStoryKeyboardShortcuts } from '@/lib/view/use-story-keyboard-shortcu
 import { useStoryOwnerRail } from '@/lib/view/use-story-owner-rail';
 import { useStorySend } from '@/lib/view/use-story-send';
 import { chromeYields } from '@/lib/view/chrome-yields';
-import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
+import { sceneYieldOf, yieldingScene } from '@/lib/view/scene-yields';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useElementSize } from '@/lib/view/use-element-size';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -516,12 +516,12 @@ export default function StoryScreen() {
      l'en-tête, la légende et le rail cèdent ENSEMBLE ; feuille et média restent. */
   const chromeYielded = chromeYields({ sheetOpen, held: chromeHidden });
   /* LA SCÈNE CÈDE AUSSI (#8643, `scene-yields.ts`) : floutée pendant qu'on lit
-     le fil (ou les vues), nette et RÉDUITE au-dessus de la barre pendant
-     qu'on écrit — ancrée sous l'encoche, comme sa carte. */
-  const writingBar = commentsHost.writing;
+     le fil (ou les vues). Écrire ne la réduit plus : la zone de commentaires
+     MONTE avec le composeur et le clavier (#9894, `comments-zone.ts`), et
+     recouvrirait une scène réduite au-dessus d'elle. */
   const scene = yieldingScene({
-    yieldTo: sceneYieldOf({ sheetOpen, writing: writingBar !== null }),
-    scale: writingBar === null ? 1 : writingSceneScale({ ...writingBar, anchorTop: safeTopSize.height }),
+    yieldTo: sceneYieldOf({ sheetOpen, writing: false }),
+    scale: 1,
     anchorTop: safeTopSize.height,
     reducedMotion: prefersReducedMotion(),
   });
@@ -929,7 +929,7 @@ export default function StoryScreen() {
             }
           />
 
-          <CommentsSheetPortal host={commentsHost} />
+          <CommentsSheetPortal host={commentsHost} risesWithComposer />
           <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} />
         </div>
       ) : null}

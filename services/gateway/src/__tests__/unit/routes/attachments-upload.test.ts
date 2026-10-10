@@ -517,6 +517,33 @@ describe('POST /attachments/upload — anonymous voice message allowed even when
   });
 });
 
+describe('POST /attachments/upload — un invité de World Wide ne joint rien tant que la garde décodante n’est pas livrée (audit #10000, #10029)', () => {
+  const WORLD_LINK = { allowAnonymousFiles: false, allowAnonymousImages: false, conversation: { identifier: 'world' } };
+  const MPEG_SYNC_THEN_HTML = Buffer.concat([Buffer.from([0xff, 0xfb]), Buffer.from('<html><script>alert(1)</script></html>', 'latin1')]);
+  let app: FastifyInstance;
+  let prisma: ReturnType<typeof makePrisma>;
+  beforeAll(async () => {
+    mockUploadMultiple.mockResolvedValue([{ id: 'att-world-guest' }]);
+    prisma = makePrisma(WORLD_LINK);
+    app = await buildApp({ authenticated: false, isAnonymous: true, participantId: 'part-world', prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('refuse deux octets de synchro MPEG suivis de HTML déclarés audio/mpeg, et lit la conversation du lien', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload',
+      headers: { 'content-type': CT },
+      payload: multipartFileBuffer('voice.mp3', 'audio/mpeg', MPEG_SYNC_THEN_HTML),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(prisma.conversationShareLink.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ conversation: { select: { identifier: true } } }) }),
+    );
+  });
+});
+
 describe('POST /attachments/upload — anonymous voice message allowed regardless of audio subtype', () => {
   let app: FastifyInstance;
   beforeAll(async () => {

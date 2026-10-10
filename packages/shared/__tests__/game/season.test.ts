@@ -26,24 +26,32 @@ import {
   seasonWeek,
 } from '../../utils/game/season.js';
 import { GLORY_POINTS } from '../../utils/game/glory.js';
+import { leagueWeekKey } from '../../utils/game/league.js';
 
 describe('le calendrier', () => {
-  it('ouvre la saison 1 le lundi 2026-10-12, pour 8 semaines', () => {
-    expect(SEASON_ONE_START).toBe('2026-10-12');
+  it('ouvre la saison 1 le lundi 2026-12-21 (décision du 2026-10-10, #10014), pour 8 semaines', () => {
+    expect(SEASON_ONE_START).toBe('2026-12-21');
     expect(SEASON_WEEKS).toBe(8);
     const s1 = seasonCalendar(1)!;
-    expect(s1.startDay).toBe('2026-10-12');
-    expect(s1.endDay).toBe('2026-12-06');
-    expect(s1.weekKeys).toEqual(['2026-10-12', '2026-10-19', '2026-10-26', '2026-11-02', '2026-11-09', '2026-11-16', '2026-11-23', '2026-11-30']);
+    expect(s1.startDay).toBe('2026-12-21');
+    expect(s1.endDay).toBe('2027-02-14');
+    expect(s1.weekKeys).toEqual(['2026-12-21', '2026-12-28', '2027-01-04', '2027-01-11', '2027-01-18', '2027-01-25', '2027-02-01', '2027-02-08']);
+  });
+
+  it('ouvre un lundi et ferme un dimanche, sur les semaines de ligue', () => {
+    const s1 = seasonCalendar(1)!;
+    expect(new Date(`${s1.startDay}T12:00:00Z`).getUTCDay()).toBe(1);
+    expect(new Date(`${s1.endDay}T12:00:00Z`).getUTCDay()).toBe(0);
+    expect(s1.weekKeys.every((weekKey) => leagueWeekKey(weekKey) === weekKey)).toBe(true);
   });
 
   it('enchaîne les saisons sans trou ni recouvrement', () => {
     const s1 = seasonCalendar(1)!;
     const s2 = seasonCalendar(2)!;
-    expect(s2.startDay).toBe('2026-12-07');
-    expect(s2.weekKeys[0]).toBe('2026-12-07');
+    expect(s2.startDay).toBe('2027-02-15');
+    expect(s2.weekKeys[0]).toBe('2027-02-15');
     expect(s1.endDay < s2.startDay).toBe(true);
-    expect(seasonCalendar(3)!.startDay).toBe('2027-02-01');
+    expect(seasonCalendar(3)!.startDay).toBe('2027-04-12');
   });
 
   it('porte une clé de thème par saison, qui revient en boucle', () => {
@@ -58,28 +66,37 @@ describe('le calendrier', () => {
     expect(seasonCalendar(Number.NaN)).toBeNull();
   });
 
+  it('ne compte plus le 12 octobre 2026 comme une ouverture de saison', () => {
+    expect(seasonAt('2026-10-12')).toBeNull();
+    expect(seasonWeek('2026-10-12')).toBeNull();
+    expect(seasonAt('2026-12-06')).toBeNull();
+    expect(seasonAt('2026-12-07')).toBeNull();
+  });
+
   it('retrouve la saison et la semaine d\'un jour', () => {
-    expect(seasonAt('2026-10-11')).toBeNull();
-    expect(seasonAt('2026-10-12')).toBe(1);
-    expect(seasonAt('2026-12-06')).toBe(1);
-    expect(seasonAt('2026-12-07')).toBe(2);
-    expect(seasonWeek('2026-10-12')).toBe(1);
-    expect(seasonWeek('2026-10-19')).toBe(2);
-    expect(seasonWeek('2026-12-06')).toBe(8);
-    expect(seasonWeek('2026-12-07')).toBe(1);
-    expect(seasonWeek('2026-10-05')).toBeNull();
+    expect(seasonAt('2026-12-20')).toBeNull();
+    expect(seasonAt('2026-12-21')).toBe(1);
+    expect(seasonAt('2027-02-14')).toBe(1);
+    expect(seasonAt('2027-02-15')).toBe(2);
+    expect(seasonWeek('2026-12-21')).toBe(1);
+    expect(seasonWeek('2026-12-28')).toBe(2);
+    expect(seasonWeek('2027-02-14')).toBe(8);
+    expect(seasonWeek('2027-02-15')).toBe(1);
+    expect(seasonWeek('2026-12-14')).toBeNull();
   });
 
   it('suit la fermeture hebdomadaire : après le dimanche 20 h, on est dans la semaine suivante', () => {
-    expect(seasonOfMoment({ dayKey: '2026-12-06', minuteOfDay: 1199 })).toBe(1);
-    expect(seasonOfMoment({ dayKey: '2026-12-06', minuteOfDay: 1200 })).toBe(2);
-    expect(seasonOfMoment({ dayKey: '2026-10-11', minuteOfDay: 1200 })).toBe(1);
+    expect(seasonOfMoment({ dayKey: '2027-02-14', minuteOfDay: 1199 })).toBe(1);
+    expect(seasonOfMoment({ dayKey: '2027-02-14', minuteOfDay: 1200 })).toBe(2);
+    expect(seasonOfMoment({ dayKey: '2026-12-20', minuteOfDay: 1199 })).toBeNull();
+    expect(seasonOfMoment({ dayKey: '2026-12-20', minuteOfDay: 1200 })).toBe(1);
   });
 
   it('dit si une saison est encore ouverte à un jour donné', () => {
-    expect(isSeasonOpen({ season: 1, dayKey: '2026-11-01' })).toBe(true);
-    expect(isSeasonOpen({ season: 1, dayKey: '2026-12-07' })).toBe(false);
-    expect(isSeasonOpen({ season: 2, dayKey: '2026-12-06' })).toBe(false);
+    expect(isSeasonOpen({ season: 1, dayKey: '2026-10-12' })).toBe(false);
+    expect(isSeasonOpen({ season: 1, dayKey: '2027-01-10' })).toBe(true);
+    expect(isSeasonOpen({ season: 1, dayKey: '2027-02-15' })).toBe(false);
+    expect(isSeasonOpen({ season: 2, dayKey: '2027-02-14' })).toBe(false);
   });
 });
 

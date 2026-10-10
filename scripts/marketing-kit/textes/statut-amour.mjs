@@ -28,7 +28,7 @@ export const TEXTES_STATUT = {
   complices: {
     titre: {
       fr: 'Puis complices.', en: 'Then inseparable.', es: 'Luego, cómplices.', de: 'Dann unzertrennlich.',
-      it: 'Poi, complici.', pt: 'Depois, cúmplices.', ar: 'ثم أقرب فأقرب.',
+      it: 'Poi, complici.', pt: 'Depois, cúmplices.', ar: 'ثم نقترب أكثر\u00A0فأكثر.',
     },
     sousTitre: {
       fr: 'même à distance', en: 'even miles apart', es: 'incluso a distancia', de: 'auch aus der Ferne',
@@ -45,7 +45,8 @@ export const TEXTES_STATUT = {
       it: 'il grande giorno ✈️', pt: 'o grande dia ✈️', ar: 'اليوم الموعود ✈️',
     },
   },
-  // La signature : deux phrases courtes, la seconde dit COMMENT (par le rire, pas par un questionnaire de compatibilité).
+  // Une expression qui ne se coupe pas porte une espace INSÉCABLE (\u00A0) : « نصفك الآخر » (l'autre moitié) reste sur une ligne.
+// La signature : deux phrases courtes, la seconde dit COMMENT (par le rire, pas par un questionnaire de compatibilité).
   devise: {
     fr: 'Trouve ta moitié. Commence par en rire.',
     en: 'Find your other half. Start with a laugh.',
@@ -53,7 +54,7 @@ export const TEXTES_STATUT = {
     de: 'Finde deine bessere Hälfte. Fang mit einem Lachen an.',
     it: 'Trova la tua metà. Comincia con una risata.',
     pt: 'Encontre sua cara-metade. Comece dando risada.',
-    ar: 'اعثر على نصفك الآخر. وابدأ بضحكة.',
+    ar: 'اعثر على نصفك\u00A0الآخر. ابدأ بضحكة.',
   },
   adresse: 'meeshy.me',
 }
@@ -106,6 +107,6 @@ export const PUBLICATION = {
   ar: {
     statut: 'بدأت القصة بضحكة. والآن يعدّان الأيام 🥹 ربما يتكلم نصفك الآخر لغة أخرى: Meeshy يترجم كل شيء. 👉 meeshy.me',
     titre: 'كانت تتكلم اليابانية. وهو لا يعرف كلمة واحدة. بعد 12 يومًا… ❤️ #Meeshy',
-    description: 'في البداية نضحك، ثم نصبح أصدقاء، ثم أقرب فأقرب… ثم الحب. على Meeshy تُقرأ كل رسالة وكل رسالة صوتية وكل قصة بلغتك: لم تعد المسافة ولا اللغة عائقًا.\n\nاعثر على نصفك الآخر. وابدأ بضحكة. سجّل مجانًا: https://meeshy.me\n\n#Meeshy #حب #تعارف #ترجمة #shorts',
+    description: 'في البداية نضحك، ثم نصبح أصدقاء، ثم نقترب أكثر فأكثر… ثم الحب. على Meeshy تُقرأ كل رسالة وكل رسالة صوتية وكل قصة بلغتك: لم تعد المسافة ولا اللغة عائقًا.\n\nاعثر على نصفك الآخر. ابدأ بضحكة. سجّل مجانًا: https://meeshy.me\n\n#Meeshy #حب #تعارف #ترجمة #shorts',
   },
 }
