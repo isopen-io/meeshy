@@ -68,6 +68,24 @@ describe('applyFilter — corpus archivé (#5559 T7)', () => {
     const archivedTab = applyFilter({ conversations: [archived, active], filter: 'archived', search: '', viewerId: VIEWER, overrides: NO_OVERRIDES });
     expect(archivedTab.map((c) => c.id)).toEqual(['c-kwame']);
   });
+
+  /* #9928 — Meeshy Global fermée en écriture à un mineur : la passerelle la
+     sert archivée, et le client suit la restriction même si une préférence ou
+     un override disait le contraire — elle revient d'elle-même à ses 18 ans. */
+  test('Global fermée à un mineur vit dans les archives, quoi que disent la préférence ou un override', () => {
+    const global = conversation({ id: 'c-global', type: 'global', identifier: 'meeshy', ...({ viewerWriteRestriction: 'minor-global' } as Partial<Conversation>) });
+    const run = (filter: 'all' | 'archived', overrides = NO_OVERRIDES) =>
+      applyFilter({ conversations: [global], filter, search: '', viewerId: VIEWER, overrides }).map((c) => c.id);
+
+    expect(run('all')).toEqual([]);
+    expect(run('archived')).toEqual(['c-global']);
+    expect(run('all', { 'c-global': { flags: { isArchived: false } } })).toEqual([]);
+  });
+
+  test('Global sans restriction servie reste dans la liste', () => {
+    const global = conversation({ id: 'c-global', type: 'global', identifier: 'meeshy', ...({ viewerWriteRestriction: null } as Partial<Conversation>) });
+    expect(applyFilter({ conversations: [global], filter: 'all', search: '', viewerId: VIEWER, overrides: NO_OVERRIDES }).map((c) => c.id)).toEqual(['c-global']);
+  });
 });
 
 describe('applyFilter — recherche sur le nom AFFICHÉ (#5559 T8)', () => {

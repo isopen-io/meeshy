@@ -36,6 +36,12 @@ export type ConversationFlags = {
   readonly isPinned: boolean;
   readonly isMuted: boolean;
   readonly isArchived: boolean;
+  /**
+   * L'archive est IMPOSÉE par la passerelle (#9928) — Meeshy Global fermée en
+   * écriture à un mineur : elle vit aux archives jusqu'à ses 18 ans, et le
+   * menu ne propose pas de l'en sortir. Absent = aucune contrainte.
+   */
+  readonly archiveLocked?: boolean;
 };
 
 const NO_FLAGS: ConversationFlags = { isPinned: false, isMuted: false, isArchived: false };
