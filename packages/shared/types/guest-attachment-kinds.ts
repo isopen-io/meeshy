@@ -32,6 +32,17 @@ export const guestAttachmentKindSchema = z.enum(GUEST_ATTACHMENT_KINDS);
 /** La forme servie dans les termes du lien : `null` = aucune restriction par famille. */
 export const allowedAttachmentKindsSchema = z.array(guestAttachmentKindSchema).nullable();
 
+/**
+ * Le même champ en JSON Schema, pour les réponses Fastify qui servent les
+ * termes d'un lien : un champ non déclaré y serait supprimé en silence.
+ */
+export const allowedAttachmentKindsJsonSchema = {
+  type: 'array',
+  nullable: true,
+  items: { type: 'string', enum: [...GUEST_ATTACHMENT_KINDS] },
+  description: 'Familles de pièces jointes ouvertes aux invités ; null = aucune restriction par famille',
+} as const;
+
 /** Les codes de refus, stables et localisables, que les trois chemins d'envoi rendent. */
 export const GUEST_ATTACHMENT_REFUSAL_CODES = {
   KIND_NOT_ALLOWED: 'GUEST_ATTACHMENT_KIND_NOT_ALLOWED',

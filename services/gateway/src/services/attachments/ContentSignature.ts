@@ -448,7 +448,9 @@ export type ShareLinkAnonymousFlags = {
 };
 
 /** Les familles qu'un invité de ce lien peut joindre, ou `null` si le lien ne restreint pas par famille. */
-export function guestAttachmentKindsOf(shareLink: ShareLinkAnonymousFlags): readonly GuestAttachmentKind[] | null {
+export function guestAttachmentKindsOf(
+  shareLink: Pick<ShareLinkAnonymousFlags, 'allowedAttachmentKinds' | 'conversation'>,
+): readonly GuestAttachmentKind[] | null {
   return effectiveGuestAttachmentKinds(
     { allowedAttachmentKinds: shareLink.allowedAttachmentKinds, conversationIdentifier: shareLink.conversation?.identifier },
     GUEST_ATTACHMENT_KIND_CEILINGS,
