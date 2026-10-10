@@ -384,22 +384,41 @@ final class ComposerLanguagePillLabelTests: XCTestCase {
     }
 }
 
-/// #9955 — directive porteur 2026-10-10 : dans la conversation aussi, la barre
-/// porte tout à droite le ⌄ qui ferme le clavier et la réduit.
-final class ComposerKeyboardFoldTests: XCTestCase {
+/// #9955 — directive porteur 2026-10-10 (corrigée) : dans la conversation, le
+/// ⌄ est visible EN PERMANENCE tout à droite de la barre, sauf quand on écrit
+/// ou qu'on enregistre ; le toucher réduit la barre à son bouton
+/// « commentaire » — le MÊME repli que la story et les commentaires.
+final class ConversationComposerFoldTests: XCTestCase {
 
-    func test_fold_appearsOnlyWhileTheKeyboardOrThePanelIsUp() {
-        XCTAssertTrue(ComposerKeyboardFold.offersFold(hostOffers: true, isFocused: true, isPanelOpen: false))
-        XCTAssertTrue(ComposerKeyboardFold.offersFold(hostOffers: true, isFocused: false, isPanelOpen: true))
-        XCTAssertFalse(ComposerKeyboardFold.offersFold(hostOffers: true, isFocused: false, isPanelOpen: false))
+    func test_fold_isOfferedOnTheExpandedBar_atRest() {
+        XCTAssertTrue(ConversationComposerFold.offersFoldButton(presentation: .expanded, isComposing: false))
     }
 
-    func test_fold_needsTheHostToAskForIt() {
-        XCTAssertFalse(ComposerKeyboardFold.offersFold(hostOffers: false, isFocused: true, isPanelOpen: true))
+    func test_fold_disappearsWhileComposing() {
+        XCTAssertFalse(ConversationComposerFold.offersFoldButton(presentation: .expanded, isComposing: true))
     }
 
-    func test_fold_wearsTheSameGlyphAsTheOtherComposerSurfaces() {
-        XCTAssertEqual(ComposerKeyboardFold.symbol, StoryComposerFold.foldSymbol)
+    func test_fold_isNotOfferedOnAFoldedBar() {
+        XCTAssertFalse(ConversationComposerFold.offersFoldButton(presentation: .folded, isComposing: false))
+    }
+
+    func test_composing_isTypingOrRecording() {
+        XCTAssertTrue(ConversationComposerFold.isComposing(isFocused: true, isRecording: false))
+        XCTAssertTrue(ConversationComposerFold.isComposing(isFocused: false, isRecording: true))
+        XCTAssertFalse(ConversationComposerFold.isComposing(isFocused: false, isRecording: false))
+    }
+
+    func test_aFocusRequest_reopensAFoldedBar() {
+        XCTAssertTrue(ConversationComposerFold.reopens(userFolded: true, isComposing: true))
+        XCTAssertFalse(ConversationComposerFold.reopens(userFolded: true, isComposing: false))
+        XCTAssertFalse(ConversationComposerFold.reopens(userFolded: false, isComposing: true))
+    }
+
+    /// La conversation s'ouvre déployée, et une réponse en cours ne force pas
+    /// l'ouverture : elle survit au repli.
+    func test_bar_opensExpanded_andAReplyDoesNotBlockTheFold() {
+        XCTAssertEqual(StoryComposerFold.presentation(userFolded: false, isReplying: false), .expanded)
+        XCTAssertEqual(StoryComposerFold.presentation(userFolded: true, isReplying: false), .folded)
     }
 
     func test_fold_sitsAtTheVeryEndOfTheRow() {
@@ -414,26 +433,27 @@ final class ComposerKeyboardFoldTests: XCTestCase {
         return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
-    func test_conversation_asksTheBarForTheKeyboardFold() throws {
+    func test_conversation_mountsTheSharedFold() throws {
         let composer = try source("Meeshy/Features/Main/Views/ConversationView+Composer.swift")
-        XCTAssertTrue(composer.contains("offersKeyboardFold: true"),
-                      "La barre de la conversation pose le ⌄ clavier levé (#9955).")
+        XCTAssertTrue(composer.contains(".foldableConversationComposer("),
+                      "La barre de la conversation se replie comme la story (#9955).")
+        XCTAssertTrue(composer.contains("isFocused: isTyping || composerState.focusRequested"),
+                      "Le ⌄ s'efface clavier levé, et une demande de focus rouvre la barre.")
+        XCTAssertTrue(composer.contains("isRecording: isRecording"),
+                      "Le ⌄ s'efface pendant l'enregistrement d'un vocal.")
     }
 
-    func test_bar_fallsBackOnItsKeyboardFold_afterTheHostFold() throws {
-        let bar = try source("Meeshy/Features/Main/Components/UniversalComposerBar.swift")
-        XCTAssertTrue(bar.contains("foldControl ?? environmentFoldControl ?? keyboardFoldControl"),
-                      "Le repli de l'hôte passe devant celui du clavier.")
-    }
-
-    func test_keyboardFold_closesTheKeyboardAndThePanels() throws {
-        let toolbar = try source("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift")
-        guard let start = toolbar.range(of: "private func foldKeyboard() {") else {
-            return XCTFail("foldKeyboard introuvable")
-        }
-        let body = toolbar[start.upperBound...].prefix(500)
-        XCTAssertTrue(body.contains("isFocused = false"), "Le ⌄ ferme le clavier.")
-        XCTAssertTrue(body.contains("showAttachOptions = false"), "Le ⌄ referme le tiroir qui tient la place du clavier.")
-        XCTAssertTrue(toolbar.contains("\"composer.keyboard.fold\""), "Le ⌄ a son libellé VoiceOver.")
+    /// Un seul mécanisme : le repli de la conversation EST celui des
+    /// commentaires, dont le comportement ne change pas.
+    func test_conversationFold_reusesTheCommentFold_unchanged() throws {
+        let fold = try source("Meeshy/Features/Main/Components/CommentComposerFold.swift")
+        XCTAssertTrue(fold.contains("modifier(CommentComposerFoldModifier(isReplying: isReplying))"),
+                      "Le repli des commentaires garde ses défauts (⌄ visible clavier levé).")
+        XCTAssertTrue(fold.contains("var isComposing: Bool = false"))
+        XCTAssertTrue(fold.contains("var wording: ComposerFoldWording = .comment"))
+        XCTAssertTrue(fold.contains("wording: .conversation"))
+        XCTAssertTrue(fold.contains("\"conversation.composer.fold\""), "Le ⌄ a son libellé VoiceOver.")
+        XCTAssertTrue(fold.contains("\"conversation.composer.unfold\""), "Le bouton replié a son libellé VoiceOver.")
+        XCTAssertTrue(fold.contains("\"story.composer.fold\""), "Les commentaires gardent leurs libellés.")
     }
 }

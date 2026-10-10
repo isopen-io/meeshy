@@ -140,34 +140,6 @@ extension UniversalComposerBar {
         .accessibilityLabel(fold.label)
     }
 
-    /// **Le ⌄ du clavier** (#9955, directive porteur 2026-10-10) : un hôte qui
-    /// n'a pas de repli à lui (la conversation) demande à la barre le sien.
-    /// Il n'existe que clavier levé — ou tiroir de pièces jointes ouvert, qui
-    /// en tient la place — et un repli confié par l'hôte passe devant lui
-    /// (`resolvedFoldControl`).
-    var keyboardFoldControl: ComposerFoldControl? {
-        guard ComposerKeyboardFold.offersFold(hostOffers: offersKeyboardFold,
-                                              isFocused: isFocused,
-                                              isPanelOpen: showAttachOptions) else { return nil }
-        return ComposerFoldControl(
-            symbol: ComposerKeyboardFold.symbol,
-            label: String(localized: "composer.keyboard.fold", defaultValue: "Masquer le clavier", bundle: .main),
-            action: foldKeyboard)
-    }
-
-    /// Ferme le clavier et réduit la barre : le tiroir et les rails ouverts
-    /// au-dessus de la rangée se referment avec lui. Le brouillon reste.
-    private func foldKeyboard() {
-        HapticFeedback.light()
-        isFocused = false
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            showAttachOptions = false
-            showEphemeralPicker = false
-            showEffectsPanel = false
-            showPermanentEffectsPicker = false
-        }
-    }
-
     /// Une porte de la bande (#9082) : glyphe au format des outils (30 pt),
     /// cible de 44 pt, à la couleur servie.
     private func glassDoorButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
@@ -275,18 +247,6 @@ nonisolated enum ComposerGlassDoors {
 
     static func trailing(offersLibrary: Bool, offersCamera: Bool, offersFold: Bool) -> [TrailingDoor] {
         (offersLibrary ? [.library] : []) + (offersCamera ? [.camera] : []) + (offersFold ? [.fold] : [])
-    }
-}
-
-/// **Quand la barre offre son propre ⌄** (#9955) : l'hôte le demande, et
-/// une surface de saisie est levée — le clavier, ou le tiroir de pièces
-/// jointes qui prend sa place. Même glyphe que le repli des commentaires et
-/// des stories : un seul geste, un seul signe.
-nonisolated enum ComposerKeyboardFold {
-    static let symbol = StoryComposerFold.foldSymbol
-
-    static func offersFold(hostOffers: Bool, isFocused: Bool, isPanelOpen: Bool) -> Bool {
-        hostOffers && (isFocused || isPanelOpen)
     }
 }
 

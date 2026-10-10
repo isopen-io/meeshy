@@ -228,10 +228,7 @@ extension ConversationView {
             pendingEffects: $viewModel.pendingEffects,
             hideEffects: composerState.editingMessageId != nil,
             // Porte de focus (#6003) : une réponse lève le clavier sans tap.
-            focusTrigger: $composerState.focusRequested,
-            // #9955 — le ⌄ tout à droite de la barre, clavier levé : il ferme
-            // le clavier et réduit la barre, comme dans un espace commentaire.
-            offersKeyboardFold: true
+            focusTrigger: $composerState.focusRequested
             )
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralChoice != nil)
@@ -242,6 +239,21 @@ extension ConversationView {
         .adaptiveOnChange(of: outgoingReplyRoute.replyToId, initial: true) { _, replyToId in
             viewModel.armReplyContagion(quoting: replyToId)
         }
+        // #9955 (directive porteur 2026-10-10) — le ⌄ tout à droite de la
+        // barre, en permanence sauf quand on écrit ou qu'on enregistre : il
+        // réduit la barre à son seul bouton « commentaire », comme la story.
+        // Replié, la barre reste montée : brouillon, pièces jointes et réponse
+        // en cours survivent. Une demande de focus (répondre, éditer) la rouvre.
+        .foldableConversationComposer(
+            isComposing: ConversationComposerFold.isComposing(
+                isFocused: isTyping || composerState.focusRequested,
+                isRecording: isRecording),
+            onFold: {
+                guard composerState.showTextEmojiPicker else { return }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    composerState.showTextEmojiPicker = false
+                }
+            })
     }
 
     /// 2e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :
