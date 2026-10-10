@@ -246,7 +246,8 @@ final class GameProgressionRenderTests: XCTestCase {
         // Le détail d'avant est un conteneur `.contain` : son identifiant ne remonte pas dans l'arbre lu par le
         // harnais. Ce qui se VOIT, c'est son solde — « 9 Meesh » — que seul ce détail peint sans le bloc du jeu.
         XCTAssertTrue(libelles.contains { $0.contains(ProgressionCopy.meeshBalance(9)) },
-                      "la fiche des Meeshes garde sa frappe d'avant : \(libelles)")
+                      "la fiche des Meeshes garde sa frappe d'avant : \(libelles) — progress \(vm.progress != nil), "
+                      + "meesh \(vm.progress?.meesh != nil), game \(vm.game != nil), état \(vm.loadState), nœuds \(rendu.nodes.count)")
         XCTAssertFalse(identifiants.contains("progression.concept.hero"), "la frappe d'avant est le héros : pas de second")
         XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.") && !$0.hasPrefix("game.element.") },
                        "du jeu est monté sans le bloc : \(identifiants)")
