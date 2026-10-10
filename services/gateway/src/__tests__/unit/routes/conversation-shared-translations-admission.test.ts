@@ -28,6 +28,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import {
   GUEST,
+  MSG_OTHER_CONVERSATION,
   PAYLOAD,
   PEER,
   SHARER,
@@ -39,11 +40,12 @@ import {
   post,
   registeredAs,
   scene,
+  sceneWithTwoConversations,
   shareBody,
   type Harness,
   type Row,
 } from './conversation-shared-translations-harness';
-import { CONV_A, HARNESS_NOW, OTHER_USER_ID, USER_ID, conversationRow, participantRow } from './me/starred-messages-harness';
+import { CONV_A, CONV_B, HARNESS_NOW, OTHER_USER_ID, USER_ID, conversationRow, participantRow } from './me/starred-messages-harness';
 
 const ALL_RIGHTS = {
   canSendMessages: true,
@@ -355,5 +357,18 @@ describe('POST /conversations/:id/shared-translations — le budget d’octets c
     const otherMember = await postAs(h, 'peer', shareBody({ targetLanguage: 'de' }));
 
     expect([first.statusCode, beyond.statusCode, otherMember.statusCode]).toEqual([201, 429, 201]);
+  });
+
+  // Un compte a UNE ligne de participant par conversation : keyer le budget sur elle
+  // (`Participant.id`) donnerait à un seul compte autant de budgets que de conversations.
+  it('compte le COMPTE, pas sa ligne de participant : un même compte qui partage dans deux conversations n’a qu’un budget', async () => {
+    const h = await buildApp({ store: sceneWithTwoConversations(), shareBudget: { perHour: weight, perDay: 100 * weight } });
+
+    const inFirst = await post(h, shareBody());
+    const inSecond = await post(h, shareBody({ messageId: MSG_OTHER_CONVERSATION }), CONV_B);
+
+    expect([inFirst.statusCode, inSecond.statusCode]).toEqual([201, 429]);
+    expect(inSecond.json()).toMatchObject({ success: false, code: SHARED_TRANSLATION_ERROR_CODES.budgetExceeded });
+    expect(h.shares).toHaveLength(1);
   });
 });

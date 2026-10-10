@@ -61,6 +61,7 @@ import {
   privacyLookupDown,
   registeredAs,
   scene,
+  sceneWithTwoConversations,
   share,
   shareBody,
   type HarnessPrisma,
@@ -248,6 +249,39 @@ describe('POST /conversations/:id/shared-translations', () => {
       ]);
     });
 
+    // `io.to([])` ne vise PERSONNE de nommé : socket.io lit une liste vide de rooms comme
+    // « toutes les sockets ». L'audience se calcule APRÈS le rangement ; qu'elle se vide
+    // entre-temps (ici le partageur quitte la conversation pendant l'écriture, et il ne
+    // reste que celui que son plancher d'historique écarte) doit se traduire par le silence.
+    it('n’émet RIEN quand plus aucun lecteur autorisé n’a de room personnelle : une liste vide parlerait à toutes les sockets', async () => {
+      const store = scene({
+        participants: [
+          participantRow({ id: SHARER, userId: USER_ID }),
+          participantRow({ id: LATE, userId: LATE_USER, historyVisibleFrom: AFTER_THE_MESSAGE }),
+        ],
+      });
+      const h = await buildApp({
+        store,
+        prismaOverrides: (prisma) => ({
+          ...prisma,
+          sharedTranslation: {
+            ...prisma.sharedTranslation,
+            create: async (args: { data: Row }) => {
+              const left = store.participants.map((row) => (row.id === SHARER ? { ...row, isActive: false } : row));
+              store.participants.splice(0, store.participants.length, ...left);
+              return prisma.sharedTranslation.create(args);
+            },
+          },
+        }),
+      });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(201);
+      expect(h.shares).toHaveLength(1);
+      expect(h.emitted).toEqual([]);
+    });
+
     it('émet la MÊME forme que celle que le REST sert à la lecture', async () => {
       const h = await buildApp();
       await post(h, shareBody());
@@ -394,6 +428,28 @@ describe('POST /conversations/:id/shared-translations', () => {
       expect(res.statusCode).toBe(404);
       expect(h.shares).toEqual([]);
       expect(h.emitted).toEqual([]);
+    });
+
+    // Le cas « un message d’une AUTRE conversation » du tableau ci-dessus ne tient pas
+    // l’adresse : l’appelant n’y est pas membre de B, son droit de LIRE refuse déjà (pour
+    // une autre raison), et `message.conversationId !== conversationId` pourrait disparaître
+    // sans qu’il rougisse. Ici l’appelant lit les deux conversations ; seul ce contrôle
+    // empêche de ranger, sous l’adresse de A, la traduction d’un message de B (et de la
+    // diffuser dans la room de A).
+    it('refuse 404 un message d’une AUTRE conversation que l’appelant lit aussi : l’adresse dit la conversation, le message ne la déplace pas', async () => {
+      const h = await buildApp({ store: sceneWithTwoConversations() });
+
+      const res = await post(h, shareBody({ messageId: MSG_OTHER_CONVERSATION }));
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ success: false, error: 'Message not found' });
+      expect(h.shares).toEqual([]);
+      expect(h.emitted).toEqual([]);
+
+      const throughItsOwnConversation = await post(h, shareBody({ messageId: MSG_OTHER_CONVERSATION }), CONV_B);
+
+      expect(throughItsOwnConversation.statusCode).toBe(201);
+      expect(h.shares.map((row) => row.conversationId)).toEqual([CONV_B]);
     });
 
     it('juge le droit de LIRE avant la protection : un message protégé qu’on ne lit pas est un 404, jamais un 422', async () => {

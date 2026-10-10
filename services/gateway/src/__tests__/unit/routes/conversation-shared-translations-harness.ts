@@ -39,6 +39,7 @@ import { clearPrivacyPreferencesCache } from '../../../services/preferences/priv
 import { projectDocument } from '../../helpers/find-first-honouring-where';
 import {
   CONV_A,
+  CONV_B,
   HARNESS_NOW,
   MSG_1,
   OTHER_USER_ID,
@@ -119,6 +120,31 @@ export const scene = (overrides: Partial<Store> = {}): Store =>
     participants: [
       participantRow({ id: SHARER, userId: USER_ID }),
       participantRow({ id: PEER, userId: OTHER_USER_ID }),
+    ],
+    ...overrides,
+  });
+
+export const SHARER_IN_B = '68b0000000000000000000b2';
+
+/**
+ * Le même COMPTE dans deux conversations — chacune avec SA ligne de participant
+ * (`SHARER` dans A, `SHARER_IN_B` dans B, deux `Participant.id` pour un seul
+ * `User.id`) et son message (`MSG_1` dans A, `MSG_OTHER_CONVERSATION` dans B). Un
+ * témoin de clé (le budget d'un compte, l'adresse d'un message) ne peut tomber que
+ * si l'appelant a le droit de LIRE ce qu'on lui oppose : dans la scène ordinaire,
+ * le message d'une autre conversation est un 404 pour une autre raison.
+ */
+export const sceneWithTwoConversations = (overrides: Partial<Store> = {}): Store =>
+  scene({
+    conversations: [
+      conversationRow({ id: CONV_A, encryptionMode: 'server' }),
+      conversationRow({ id: CONV_B, identifier: 'mshy_autre', encryptionMode: 'server' }),
+    ],
+    messages: [message(), message({ id: MSG_OTHER_CONVERSATION, conversationId: CONV_B })],
+    participants: [
+      participantRow({ id: SHARER, userId: USER_ID }),
+      participantRow({ id: PEER, userId: OTHER_USER_ID }),
+      participantRow({ id: SHARER_IN_B, userId: USER_ID, conversationId: CONV_B }),
     ],
     ...overrides,
   });
