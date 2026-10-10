@@ -1,12 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ShareTranslationBody } from '@meeshy/shared/types/shared-translation';
+import {
+  SHARED_TRANSLATION_ERROR_CODES,
+  shareTranslationBodySchema,
+  type ShareTranslationBody,
+} from '@meeshy/shared/types/shared-translation';
 import { openSharedTranslation, sealSharedTranslation } from '@meeshy/shared/utils/shared-translation-seal';
+
+import type { ApiResult, HttpRequest } from '@/lib/api/http';
 
 import { createMemoryStore, type KeyValueStore } from './cache';
 import type { DeliveredTranslation, OfferedMessage } from './scheduler';
 import { createShareLedger, createTranslationSharer, type SealPort, type ShareLedger } from './share';
-import type { ShareOutcome } from './shared-translations-api';
+import { postSharedTranslation, type ShareOutcome } from './shared-translations-api';
 
 const MESSAGE = '68b000000000000000000001';
 const CONVERSATION = '68a000000000000000000001';
@@ -18,6 +24,8 @@ const origin = (over: Partial<OfferedMessage> = {}): OfferedMessage => ({
   originalLanguage: 'sw',
   translatedLanguages: [],
   encrypted: false,
+  shareable: true,
+  sourceVersion: 'original',
   ...over,
 });
 
@@ -60,7 +68,12 @@ describe('createTranslationSharer — la traduction de l’appareil part scellé
     expect(h.posted).toEqual([
       {
         conversationId: CONVERSATION,
-        body: { messageId: MESSAGE, targetLanguage: 'fr', envelope: { v: 1, alg: 'A256GCM', kdf: 'message-content', payload: 'QUJD'.repeat(12) } },
+        body: {
+          messageId: MESSAGE,
+          targetLanguage: 'fr',
+          sourceVersion: 'original',
+          envelope: { v: 1, alg: 'A256GCM', kdf: 'message-content', payload: 'QUJD'.repeat(12) },
+        },
       },
     ]);
   });
@@ -76,6 +89,7 @@ describe('createTranslationSharer — la traduction de l’appareil part scellé
     const [body] = posted;
     expect(body).toBeDefined();
     if (body === undefined) return;
+    expect(shareTranslationBodySchema.safeParse(body).success).toBe(true);
     const binding = { conversationId: CONVERSATION, messageId: MESSAGE, targetLanguage: body.targetLanguage, sourceContent: 'habari yako' };
     expect(await openSharedTranslation({ binding, key: { kdf: 'message-content' }, envelope: body.envelope })).toEqual({
       v: 1,
@@ -92,6 +106,26 @@ describe('createTranslationSharer — la traduction de l’appareil part scellé
     await h.share(delivered(), origin({ encrypted: true }));
     expect(h.sealed).toEqual([]);
     expect(h.posted).toEqual([]);
+  });
+
+  test('jamais pour un message que le serveur ne lit pas : un clair d’une conversation chiffrée de bout en bout se lit ici, il ne part pas', async () => {
+    const h = harness();
+    await h.share(delivered(), origin({ shareable: false }));
+    expect(h.sealed).toEqual([]);
+    expect(h.posted).toEqual([]);
+  });
+
+  test('jamais sans version lisible du texte traduit : l’appareil ne sait pas quel état du message il a traduit', async () => {
+    const h = harness();
+    await h.share(delivered(), origin({ sourceVersion: null }));
+    expect(h.sealed).toEqual([]);
+    expect(h.posted).toEqual([]);
+  });
+
+  test('la version du texte traduit voyage avec la traduction : celle du message modifié, pas « original »', async () => {
+    const h = harness();
+    await h.share(delivered(), origin({ sourceVersion: '2026-10-10T08:00:00.123Z' }));
+    expect(h.posted.map((p) => p.body.sourceVersion)).toEqual(['2026-10-10T08:00:00.123Z']);
   });
 
   test('jamais sans conversation connue, ni pour une livraison qui n’est pas celle de ce message', async () => {
@@ -179,6 +213,46 @@ describe('createTranslationSharer — la traduction de l’appareil part scellé
       },
     });
     await share(delivered(), origin());
+  });
+});
+
+/** La passerelle de témoin : le vrai port `postSharedTranslation`, une réponse HTTP par requête. */
+const gatewaySharer = (results: ApiResult<unknown>[]) => {
+  const requests: HttpRequest[] = [];
+  const transport = {
+    request: async (request: HttpRequest) => {
+      requests.push(request);
+      return results.shift() ?? { ok: true, data: {} };
+    },
+  } as unknown as Parameters<typeof postSharedTranslation>[0]['deps']['transport'];
+  const share = createTranslationSharer({
+    seal: async () => ({ v: 1, alg: 'A256GCM', kdf: 'message-content', payload: 'QUJD'.repeat(12) }),
+    post: (conversationId, body) => postSharedTranslation({ deps: { source: 'gateway', transport }, conversationId, body }),
+  });
+  return { share, requests };
+};
+
+describe('ce que la passerelle répond à un partage — le texte a changé, ou le budget est épuisé (#9899)', () => {
+  test('un message modifié depuis (409) : refus définitif de CE texte, jamais renvoyé ; sa nouvelle version, elle, se partage', async () => {
+    const { share, requests } = gatewaySharer([
+      { ok: false, status: 409, error: 'The message changed', code: SHARED_TRANSLATION_ERROR_CODES.staleSource },
+    ]);
+    await share(delivered(), origin({ sourceVersion: 'original' }));
+    await share(delivered(), origin({ sourceVersion: 'original' }));
+    expect(requests).toHaveLength(1);
+
+    await share(delivered({ text: 'comment allez-vous' }), origin({ content: 'habari yako, rafiki', sourceVersion: '2026-10-10T08:00:00.123Z' }));
+    expect(requests).toHaveLength(2);
+  });
+
+  test('un budget de partage épuisé (429) est une panne : la traduction reste sur l’appareil et se repartage plus tard', async () => {
+    const { share, requests } = gatewaySharer([
+      { ok: false, status: 429, error: 'Too many shared translations', code: SHARED_TRANSLATION_ERROR_CODES.budgetExceeded, retryAfter: 60 },
+    ]);
+    await share(delivered(), origin());
+    await share(delivered(), origin());
+    await share(delivered(), origin());
+    expect(requests).toHaveLength(2);
   });
 });
 

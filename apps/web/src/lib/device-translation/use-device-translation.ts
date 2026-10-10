@@ -33,27 +33,33 @@ const defaultPorts: DeviceTranslationPorts = {
  * ouvert après l'accord. Le consentement se relit à CHAQUE fenêtre : le lecteur
  * qui l'accorde ou le retire dans les réglages est entendu au fil suivant, sans
  * recharger la page.
+ *
+ * Le mode de chiffrement de la conversation (`null` quand elle ne le dit pas)
+ * part avec les messages : avec celui de chaque message, il dit ce que le serveur
+ * lit (`offeredMessagesOf`) — un clair qu'il ne lit pas se traduit ici, et ne se
+ * partage pas.
  */
 export function useDeviceTranslation(
   params: {
     readonly messages: readonly Message[];
     readonly readerLanguages: readonly string[];
     readonly viewerId: string;
+    readonly conversationEncryptionMode: string | null;
   },
   ports: DeviceTranslationPorts = defaultPorts,
 ): void {
   const queryClient = useQueryClient();
-  const { messages, readerLanguages, viewerId } = params;
+  const { messages, readerLanguages, viewerId, conversationEncryptionMode } = params;
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       if (!(await ports.granted()) || cancelled) return;
       const { offerToDevice } = await ports.runtime();
       if (cancelled) return;
-      offerToDevice(queryClient, { messages, viewerId, preferredLanguages: readerLanguages });
+      offerToDevice(queryClient, { messages, viewerId, preferredLanguages: readerLanguages, conversationEncryptionMode });
     })().catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [queryClient, messages, readerLanguages, viewerId, ports]);
+  }, [queryClient, messages, readerLanguages, viewerId, conversationEncryptionMode, ports]);
 }

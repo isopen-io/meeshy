@@ -76,7 +76,13 @@ const harness = (serve: () => SharedTranslationsOutcome = () => ({ status: 'ok',
   return { session, requested, applied, wire };
 };
 
-const thread = (messages: readonly Message[], viewerId = 'u-me') => ({ conversationId: CONVERSATION, messages, viewerId, readerLanguages: ['fr', 'en'] });
+const thread = (messages: readonly Message[], viewerId = 'u-me', conversationEncryptionMode: string | null = null) => ({
+  conversationId: CONVERSATION,
+  messages,
+  viewerId,
+  readerLanguages: ['fr', 'en'],
+  conversationEncryptionMode,
+});
 
 describe('createSharedTranslationSession.offer — le fil n’offre que ce que la loi de sortie laisse partir (#9899)', () => {
   test('un message reçu, en clair, est demandé ; les miens, les protégés et les chiffrés de bout en bout ne le sont pas', async () => {
@@ -99,6 +105,24 @@ describe('createSharedTranslationSession.offer — le fil n’offre que ce que l
     h.session.offer(thread([message()], ''));
     await settle();
     expect(h.requested).toEqual([]);
+  });
+
+  test('le serveur lit le message ou non : seul un clair qu’il lit déjà est demandé, quelle que soit la conversation', async () => {
+    const asked = async (messages: readonly Message[], mode: string | null) => {
+      const h = harness();
+      h.session.offer(thread(messages, 'u-me', mode));
+      await settle();
+      return h.requested;
+    };
+
+    expect(await asked([message({ id: 'plain' })], null)).toEqual([['plain']]);
+    expect(await asked([message({ id: 'plain' })], 'server')).toEqual([['plain']]);
+    expect(await asked([message({ id: 'sealed-by-server', isEncrypted: true, encryptionMode: 'server' })], 'hybrid')).toEqual([['sealed-by-server']]);
+
+    expect(await asked([message({ id: 'plain-in-e2ee' })], 'e2ee')).toEqual([]);
+    expect(await asked([message({ id: 'plain-in-unknown' })], 'un-mode-inconnu')).toEqual([]);
+    expect(await asked([message({ id: 'plain-e2ee-message', isEncrypted: false, encryptionMode: 'e2ee' })], null)).toEqual([]);
+    expect(await asked([message({ id: 'no-mode', isEncrypted: true })], null)).toEqual([]);
   });
 });
 

@@ -9,8 +9,10 @@ import { outcomeOf } from '@/lib/api/outcome';
  * **LE PORT SERVEUR DES TRADUCTIONS PARTAGÉES** (#9899) — `POST` et
  * `GET conversations.byIdSharedTranslations`
  * (`services/gateway/src/routes/conversations/shared-translations.ts`). Le
- * serveur garde et relaie une enveloppe SCELLÉE qu'il ne lit pas : ce module ne
- * l'ouvre pas non plus, il la porte.
+ * serveur garde et relaie une enveloppe SCELLÉE sans l'ouvrir — mais il le
+ * pourrait dans une conversation qu'il lit déjà, puisque la clé dérive du texte
+ * du message qu'il détient (`share.ts`). Ce module ne l'ouvre pas non plus, il la
+ * porte.
  *
  * Il ne charge ni le scellement ni zod. Le contrat partagé
  * (`@meeshy/shared/types/shared-translation`) y entre en TYPES seulement : la
@@ -91,7 +93,13 @@ const decodeShares = (data: unknown): readonly SharedTranslation[] | null => {
   return data.sharedTranslations.filter(isSharedTranslation);
 };
 
-/** Relit les traductions que les autres membres ont partagées pour ces messages, dans ces langues. */
+/**
+ * Relit les traductions que les autres membres ont partagées pour ces messages.
+ * `languages` est le prisme du lecteur, DANS SON ORDRE, et la passerelle l'exige :
+ * elle rend au plus UNE traduction par message, la première de ces langues qu'un
+ * membre a partagée. Sans message ou sans langue, il n'y a rien à demander : aucune
+ * requête ne part.
+ */
 export async function fetchSharedTranslations(params: {
   readonly deps: SharedTranslationsDeps;
   readonly conversationId: string;
@@ -101,10 +109,9 @@ export async function fetchSharedTranslations(params: {
   readonly route?: Route;
 }): Promise<SharedTranslationsOutcome> {
   if (__FIXTURES__ && params.deps.source === 'fixtures') return NOTHING_SHARED;
-  if (params.messageIds.length === 0) return NOTHING_SHARED;
+  if (params.messageIds.length === 0 || params.languages.length === 0) return NOTHING_SHARED;
 
-  const query = new URLSearchParams({ messageIds: params.messageIds.join(',') });
-  if (params.languages.length > 0) query.set('languages', params.languages.join(','));
+  const query = new URLSearchParams({ messageIds: params.messageIds.join(','), languages: params.languages.join(',') });
   const result = await requestOrNull<unknown>(params.deps, {
     method: 'GET',
     path: `${(params.route ?? defaultRoute)(params.conversationId)}?${query.toString()}`,
@@ -123,6 +130,13 @@ export type ShareOutcome = 'shared' | 'refused' | 'declined' | 'failed';
 /**
  * Partage la traduction de l'appareil. Un autre membre l'avait déjà partagée
  * (`created: false`) : c'est un succès, la sienne fait foi.
+ *
+ * Les refus se lisent sur le STATUT, jamais sur le nom d'une erreur. Un 4xx est
+ * définitif (`refused`) — dont le 409 `SHARED_TRANSLATION_STALE_SOURCE` : le
+ * message a changé depuis que l'appareil l'a traduit, cette traduction ne se
+ * renvoie pas pour ce texte. Les 408, 425 et 429 sont des pannes (`failed`) :
+ * `SHARED_TRANSLATION_BUDGET_EXCEEDED` (429, `Retry-After`) laisse la traduction
+ * sur l'appareil, qui la repartage plus tard.
  */
 export async function postSharedTranslation(params: {
   readonly deps: SharedTranslationsDeps;

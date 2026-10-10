@@ -5,6 +5,7 @@ import {
   SHARED_TRANSLATION_ERROR_CODES,
   SHARED_TRANSLATION_KDFS,
   SHARED_TRANSLATION_LIMITS,
+  shareTranslationBodySchema,
 } from '@meeshy/shared/types/shared-translation';
 
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
@@ -64,10 +65,17 @@ describe('fetchSharedTranslations — relire ce que les autres membres ont parta
     expect(url.searchParams.get('languages')).toBe('fr,en');
   });
 
-  test('sans langue à demander, la clé `languages` ne part pas', async () => {
+  test('sans langue à demander, aucune requête ne part : la passerelle exige le prisme du lecteur, et en rendrait un refus', async () => {
+    const { transport, requests } = transportServing({ ok: true, data: { sharedTranslations: [share()] } });
+    const outcome = await fetchSharedTranslations({ deps: { ...gateway, transport }, conversationId: CONVERSATION, messageIds: [MSG_1], languages: [], route });
+    expect(requests).toEqual([]);
+    expect(outcome).toEqual({ status: 'ok', shares: [] });
+  });
+
+  test('la clé `languages` part toujours, dans l’ordre du prisme du lecteur', async () => {
     const { transport, requests } = transportServing({ ok: true, data: { sharedTranslations: [] } });
-    await fetchSharedTranslations({ deps: { ...gateway, transport }, conversationId: CONVERSATION, messageIds: [MSG_1], languages: [], route });
-    expect(new URL(requests[0]?.path ?? '', 'https://gate.test').searchParams.has('languages')).toBe(false);
+    await fetchSharedTranslations({ deps: { ...gateway, transport }, conversationId: CONVERSATION, messageIds: [MSG_1], languages: ['pt', 'fr', 'en'], route });
+    expect(new URL(requests[0]?.path ?? '', 'https://gate.test').searchParams.get('languages')).toBe('pt,fr,en');
   });
 
   test('rend les traductions partagées bien formées, et laisse tomber les autres', async () => {
@@ -123,7 +131,12 @@ describe('fetchSharedTranslations — relire ce que les autres membres ont parta
 });
 
 describe('postSharedTranslation — partager la traduction de l’appareil (#9899)', () => {
-  const body = { messageId: MSG_1, targetLanguage: 'fr', envelope: { v: 1, alg: 'A256GCM', kdf: 'message-content', payload: 'A'.repeat(48) } } as const;
+  const body = {
+    messageId: MSG_1,
+    targetLanguage: 'fr',
+    sourceVersion: 'original',
+    envelope: { v: 1, alg: 'A256GCM', kdf: 'message-content', payload: 'A'.repeat(48) },
+  } as const;
 
   test('envoie le corps tel quel, sur la route du catalogue', async () => {
     const { transport, requests } = transportServing({ ok: true, data: { created: true, sharedTranslation: share() } });
@@ -144,6 +157,29 @@ describe('postSharedTranslation — partager la traduction de l’appareil (#989
       }),
     );
     expect(statuses).toEqual(['refused', 'refused', 'refused', 'failed', 'failed']);
+  });
+
+  test('un message modifié depuis la traduction (409) : refus définitif de ce texte — le renvoyer ne le rendrait pas à jour', async () => {
+    const { transport } = transportServing({ ok: false, status: 409, error: 'The message changed', code: SHARED_TRANSLATION_ERROR_CODES.staleSource });
+    expect(await postSharedTranslation({ deps: { ...gateway, transport }, conversationId: CONVERSATION, body, route })).toBe('refused');
+  });
+
+  test('un budget de partage épuisé (429, Retry-After) : une panne, la traduction se repartage plus tard', async () => {
+    const { transport } = transportServing({
+      ok: false,
+      status: 429,
+      error: 'Too many shared translations',
+      code: SHARED_TRANSLATION_ERROR_CODES.budgetExceeded,
+      retryAfter: 60,
+    });
+    expect(await postSharedTranslation({ deps: { ...gateway, transport }, conversationId: CONVERSATION, body, route })).toBe('failed');
+  });
+
+  test('le corps envoyé est celui du contrat : la version du texte y est, et la passerelle l’accepte', async () => {
+    const { transport, requests } = transportServing({ ok: true, data: { created: true, sharedTranslation: share() } });
+    await postSharedTranslation({ deps: { ...gateway, transport }, conversationId: CONVERSATION, body, route });
+    expect(shareTranslationBodySchema.safeParse(requests[0]?.body).success).toBe(true);
+    expect(requests[0]?.body).toMatchObject({ sourceVersion: 'original' });
   });
 
   test('un compte qui a coupé ses accusés de lecture ne partage pas : la passerelle le dit, et c’est le COMPTE qui décline, pas cette traduction', async () => {

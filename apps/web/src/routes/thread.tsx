@@ -313,8 +313,9 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
      ce même `messages`. La rangée qui brûle reste le temps de l'effet. */
   const isMine = useCallback((message: Message) => isMineOf(message, viewer.id ?? ''), [viewer.id]);
   const messages = useLivingMessages({ messages: timeline, isMine, destroyingIds, expiredIds });
-  useDeviceTranslation({ messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '' });
-  useSharedTranslations({ conversationId, messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '' });
+  const conversationEncryptionMode = conversation?.encryptionMode ?? null;
+  useDeviceTranslation({ messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '', conversationEncryptionMode });
+  useSharedTranslations({ conversationId, messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '', conversationEncryptionMode });
   const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
   const group = conversation !== undefined && isGroup(conversation);
   /** LES TROIS QUI PARLENT LE PLUS dans ce qui est chargé (#7830) — groupe seulement. */

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { SharedTranslationInner } from '@meeshy/shared/types/shared-translation';
+import { SHARED_TRANSLATION_LIMITS, type SharedTranslationInner } from '@meeshy/shared/types/shared-translation';
 import { openSharedTranslation, sealSharedTranslation } from '@meeshy/shared/utils/shared-translation-seal';
 
 import { createSealClient, createSealHost, type SealingModule, type SealReply, type SealRequest, type SealWorkerPort } from './seal-protocol';
@@ -48,7 +48,7 @@ describe('le protocole page ↔ Worker du scellement partagé (#9899)', () => {
 
   test('une traduction que la passerelle ne prendrait pas se refuse, avec la cause du Worker', async () => {
     const client = linked({ sealSharedTranslation, openSharedTranslation });
-    const message = await rejection(client.seal({ binding: BINDING, key: KEY, inner: { ...INNER, text: 'x'.repeat(20_001) } }));
+    const message = await rejection(client.seal({ binding: BINDING, key: KEY, inner: { ...INNER, text: 'x'.repeat(SHARED_TRANSLATION_LIMITS.textMaxLength + 1) } }));
     expect(message).not.toBe('');
   });
 

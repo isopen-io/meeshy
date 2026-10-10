@@ -20,15 +20,34 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-type Call = { readonly kind: 'offer'; readonly conversationId: string; readonly viewerId: string; readonly count: number } | { readonly kind: 'watch' | 'release'; readonly conversationId: string };
+type Call =
+  | {
+      readonly kind: 'offer';
+      readonly conversationId: string;
+      readonly viewerId: string;
+      readonly count: number;
+      readonly conversationEncryptionMode: string | null;
+    }
+  | { readonly kind: 'watch' | 'release'; readonly conversationId: string };
 
 /** Une session de témoin : ce que le fil lui demande, dans l'ordre. */
 const recordingLoader = () => {
   const calls: Call[] = [];
   const load = async () => ({
     sharedTranslationSession: () => ({
-      offer: (thread: { readonly conversationId: string; readonly viewerId: string; readonly messages: readonly Message[] }) =>
-        void calls.push({ kind: 'offer', conversationId: thread.conversationId, viewerId: thread.viewerId, count: thread.messages.length }),
+      offer: (thread: {
+        readonly conversationId: string;
+        readonly viewerId: string;
+        readonly messages: readonly Message[];
+        readonly conversationEncryptionMode: string | null;
+      }) =>
+        void calls.push({
+          kind: 'offer',
+          conversationId: thread.conversationId,
+          viewerId: thread.viewerId,
+          count: thread.messages.length,
+          conversationEncryptionMode: thread.conversationEncryptionMode,
+        }),
       watch: (conversationId: string) => {
         calls.push({ kind: 'watch', conversationId });
         return () => void calls.push({ kind: 'release', conversationId });
@@ -44,9 +63,19 @@ function Probe(props: {
   readonly conversationId: string;
   readonly messages: readonly Message[];
   readonly viewerId: string;
+  readonly conversationEncryptionMode?: string | null;
   readonly load: Parameters<typeof useSharedTranslations>[1];
 }) {
-  useSharedTranslations({ conversationId: props.conversationId, messages: props.messages, readerLanguages: ['fr'], viewerId: props.viewerId }, props.load);
+  useSharedTranslations(
+    {
+      conversationId: props.conversationId,
+      messages: props.messages,
+      readerLanguages: ['fr'],
+      viewerId: props.viewerId,
+      conversationEncryptionMode: props.conversationEncryptionMode ?? null,
+    },
+    props.load,
+  );
   return null;
 }
 
@@ -64,8 +93,20 @@ describe('useSharedTranslations — le fil ouvert relit ce que les autres ont tr
     await settle();
     expect(calls).toEqual([
       { kind: 'watch', conversationId: 'c1' },
-      { kind: 'offer', conversationId: 'c1', viewerId: 'u-me', count: 2 },
+      { kind: 'offer', conversationId: 'c1', viewerId: 'u-me', count: 2, conversationEncryptionMode: null },
     ]);
+  });
+
+  test('le mode de chiffrement de la conversation voyage avec l’offre ; qu’il arrive ou change, la fenêtre est offerte de nouveau sans se réabonner', async () => {
+    const { calls, load } = recordingLoader();
+    const client = new QueryClient();
+    const msgs = messages(2);
+    const host = await mount(provided(client, { conversationId: 'c1', messages: msgs, viewerId: 'u-me', conversationEncryptionMode: null, load }));
+    await settle();
+    await rerender(host, provided(client, { conversationId: 'c1', messages: msgs, viewerId: 'u-me', conversationEncryptionMode: 'e2ee', load }));
+    await settle();
+    expect(calls.map((call) => call.kind)).toEqual(['watch', 'offer', 'offer']);
+    expect(calls.flatMap((call) => (call.kind === 'offer' ? [call.conversationEncryptionMode] : []))).toEqual([null, 'e2ee']);
   });
 
   test('chaque fenêtre chargée est offerte de nouveau, sans se réabonner', async () => {

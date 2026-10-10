@@ -11,6 +11,8 @@ const message = (over: Partial<OfferedMessage> = {}): OfferedMessage => ({
   originalLanguage: 'sw',
   translatedLanguages: [],
   encrypted: false,
+  shareable: true,
+  sourceVersion: 'original',
   ...over,
 });
 
@@ -135,6 +137,20 @@ describe('createDeviceTranslationScheduler — l’appareil traduit ce que le se
     });
     await scheduler.idle();
     expect(calls).toEqual([]);
+  });
+
+  test('un clair que le serveur ne lit pas se traduit tout de même sur l’appareil : il ne se partage pas, mais se lit', async () => {
+    const calls: string[] = [];
+    const delivered: DeliveredTranslation[] = [];
+    const scheduler = createDeviceTranslationScheduler({
+      translator: recordingTranslator(calls),
+      cache: createDeviceTranslationCache({ store: createMemoryStore() }),
+      deliver: (translation) => delivered.push(translation),
+    });
+    scheduler.offer({ messages: [message({ shareable: false })], preferredLanguages: ['fr'] });
+    await scheduler.idle();
+    expect(calls).toEqual(['habari yako>fr']);
+    expect(delivered.map((d) => d.text)).toEqual(['fr:habari yako']);
   });
 
   test('les plus récents d’abord : le bas du fil est traduit avant l’historique', async () => {

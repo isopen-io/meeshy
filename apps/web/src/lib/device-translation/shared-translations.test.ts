@@ -25,6 +25,8 @@ const offered = (n: number, over: Partial<OfferedMessage> = {}): OfferedMessage 
   originalLanguage: 'sw',
   translatedLanguages: [],
   encrypted: false,
+  shareable: true,
+  sourceVersion: 'original',
   ...over,
 });
 
@@ -104,9 +106,32 @@ describe('createSharedTranslationReceiver.offer — le fil ouvert relit ce que l
         offered(5, { originalLanguage: null }),
         offered(6, { encrypted: true }),
         offered(7, { content: '   ' }),
+        offered(8, { shareable: false }),
       ]),
     );
     expect(h.fetched).toEqual([{ conversationId: CONVERSATION, messageIds: [messageId(2), messageId(1)], languages: ['fr', 'en'] }]);
+  });
+
+  test('un clair que le serveur ne lit pas ne se demande jamais : seuls les messages partageables partent en requête', async () => {
+    const h = harness({ serve: servingShares(shared(1)) });
+    await h.receiver.offer(thread([offered(1, { shareable: false }), offered(2, { shareable: false })]));
+    expect(h.fetched).toEqual([]);
+    expect(h.opened).toEqual([]);
+    expect(h.applied).toEqual([]);
+  });
+
+  test('une réponse qui désigne tout de même un message non partageable ne l’ouvre pas', async () => {
+    const h = harness({ serve: servingShares(shared(1), shared(2)) });
+    await h.receiver.offer(thread([offered(1, { shareable: false }), offered(2)]));
+    expect(h.fetched[0]?.messageIds).toEqual([messageId(2)]);
+    expect(h.opened.map((call) => call.binding.messageId)).toEqual([messageId(2)]);
+  });
+
+  test('au plus une traduction par message : le prisme ordonné part tel quel, et la première langue partagée s’applique', async () => {
+    const h = harness({ serve: servingShares(shared(1, { id: 'st-en', targetLanguage: 'en' })) });
+    await h.receiver.offer(thread([offered(1)], ['fr', 'en', 'es']));
+    expect(h.fetched).toEqual([{ conversationId: CONVERSATION, messageIds: [messageId(1)], languages: ['fr', 'en', 'es'] }]);
+    expect(h.applied.map((event) => event.translations[0]?.id)).toEqual(['shared:st-en']);
   });
 
   test('ouvre chaque partage avec la clé du texte du message, et l’applique sous l’identité du partage', async () => {
@@ -362,6 +387,14 @@ describe('createSharedTranslationReceiver.receive — un membre vient de partage
     await h.receiver.offer(thread([offered(1, { translatedLanguages: ['fr'] })]));
     await h.receiver.receive(shared(1));
     await h.receiver.receive(shared(1, { id: 'st-de', targetLanguage: 'de' }));
+    expect(h.applied).toEqual([]);
+  });
+
+  test('un partage en direct pour un message que le serveur ne lit pas est ignoré, jamais ouvert', async () => {
+    const h = harness();
+    await h.receiver.offer(thread([offered(1, { shareable: false })]));
+    await h.receiver.receive(shared(1));
+    expect(h.opened).toEqual([]);
     expect(h.applied).toEqual([]);
   });
 

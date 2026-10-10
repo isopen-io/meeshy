@@ -32,7 +32,10 @@ const ports = (granted: boolean) => {
     },
     runtime: async () => {
       calls.push('runtime');
-      return { offerToDevice: (_client, offer) => void calls.push(`offer:${offer.messages.length}:${offer.viewerId}:${offer.preferredLanguages.join(',')}`) };
+      return {
+        offerToDevice: (_client, offer) =>
+          void calls.push(`offer:${offer.messages.length}:${offer.viewerId}:${offer.preferredLanguages.join(',')}:${offer.conversationEncryptionMode ?? 'none'}`),
+      };
     },
   };
   return { calls, value };
@@ -40,8 +43,11 @@ const ports = (granted: boolean) => {
 
 const messages = (count: number): readonly Message[] => Array.from({ length: count }, (_, index) => ({ id: `m${index}` }) as unknown as Message);
 
-function Probe(props: { readonly messages: readonly Message[]; readonly ports: Ports }) {
-  useDeviceTranslation({ messages: props.messages, readerLanguages: ['fr', 'en'], viewerId: 'u-me' }, props.ports);
+function Probe(props: { readonly messages: readonly Message[]; readonly ports: Ports; readonly conversationEncryptionMode?: string | null }) {
+  useDeviceTranslation(
+    { messages: props.messages, readerLanguages: ['fr', 'en'], viewerId: 'u-me', conversationEncryptionMode: props.conversationEncryptionMode ?? null },
+    props.ports,
+  );
   return null;
 }
 
@@ -55,7 +61,7 @@ describe('useDeviceTranslation — le fil confie ses messages à l’appareil, u
   test('avec le consentement : le moteur se charge et reçoit les messages du lecteur', async () => {
     const { calls, value } = ports(true);
     await mount(provided(new QueryClient(), { messages: messages(2), ports: value }));
-    expect(calls).toEqual(['granted?', 'runtime', 'offer:2:u-me:fr,en']);
+    expect(calls).toEqual(['granted?', 'runtime', 'offer:2:u-me:fr,en:none']);
   });
 
   test('sans consentement : rien ne se charge', async () => {
@@ -69,7 +75,17 @@ describe('useDeviceTranslation — le fil confie ses messages à l’appareil, u
     const client = new QueryClient();
     const host = await mount(provided(client, { messages: messages(2), ports: value }));
     await rerender(host, provided(client, { messages: messages(3), ports: value }));
-    expect(calls.filter((call) => call.startsWith('offer'))).toEqual(['offer:2:u-me:fr,en', 'offer:3:u-me:fr,en']);
+    expect(calls.filter((call) => call.startsWith('offer'))).toEqual(['offer:2:u-me:fr,en:none', 'offer:3:u-me:fr,en:none']);
+  });
+
+  test('le mode de chiffrement de la conversation part avec les messages ; qu’il arrive ou change, la fenêtre est offerte de nouveau', async () => {
+    const { calls, value } = ports(true);
+    const client = new QueryClient();
+    const msgs = messages(2);
+    const host = await mount(provided(client, { messages: msgs, ports: value, conversationEncryptionMode: null }));
+    await rerender(host, provided(client, { messages: msgs, ports: value, conversationEncryptionMode: 'server' }));
+    await rerender(host, provided(client, { messages: msgs, ports: value, conversationEncryptionMode: 'e2ee' }));
+    expect(calls.filter((call) => call.startsWith('offer'))).toEqual(['offer:2:u-me:fr,en:none', 'offer:2:u-me:fr,en:server', 'offer:2:u-me:fr,en:e2ee']);
   });
 
   test('un fil fermé avant la réponse du consentement ne charge rien', async () => {

@@ -22,15 +22,20 @@ import { deviceTranslationTarget } from './target';
  * - **à l'ouverture** (`offer`) : les messages dont le rang 1 du lecteur n'est ni
  *   servi ni la langue d'origine — la même question que la file de l'appareil
  *   (`deviceTranslationTarget`), moins ce que CET appareil sait traduire — sont
- *   demandés à la passerelle, cent par requête, les plus récents d'abord ;
+ *   demandés à la passerelle, cent par requête, les plus récents d'abord. La
+ *   requête porte le prisme du lecteur DANS SON ORDRE : la passerelle rend au plus
+ *   UNE traduction par message, la première de ces langues qu'un membre a
+ *   partagée ;
  * - **en direct** (`receive`) : `message:translation-shared`, tant que le fil est
  *   ouvert.
  *
- * Ce qui s'applique : un message qui n'est pas le sien et n'est pas protégé (le
- *   fil n'offre que ceux-là : `offeredMessagesOf`), une langue du lecteur que le
- *   message ne porte pas déjà, et une enveloppe qui s'ouvre depuis LE texte que
- *   l'appareil lit — un message modifié depuis ne s'ouvre pas. Un partage qui ne
- *   s'ouvre pas est ignoré, jamais deviné.
+ * Ce qui s'applique : un message qui n'est pas le sien, qui n'est pas protégé (le
+ *   fil n'offre que ceux-là : `offeredMessagesOf`) et que le serveur lit déjà
+ *   (`shareable` : ni demandé ni ouvert pour un clair que le serveur ne lit pas,
+ *   dont personne ne partage rien), une langue du lecteur que le message ne porte
+ *   pas déjà, et une enveloppe qui s'ouvre depuis LE texte que l'appareil lit — un
+ *   message modifié depuis ne s'ouvre pas. Un partage qui ne s'ouvre pas est
+ *   ignoré, jamais deviné.
  *
  * **Rien de ce qu'on a ouvert ne se perd à la revalidation.** Le fil se recharge
  * depuis le serveur, qui ne connaît pas ces traductions : elles disparaissent de
@@ -99,9 +104,11 @@ export const sharedTranslationEventOf = (share: SharedTranslation, inner: Shared
   };
 };
 
+/** Le message dont on lit les partages : un clair que le serveur lit déjà. Tout autre se traduit sur l'appareil et n'en sort pas. */
+const readsShares = (message: OfferedMessage): boolean => message.shareable && !message.encrypted && message.content.trim() !== '';
+
 const wantsSharedTranslation = (message: OfferedMessage, languages: readonly string[]): boolean =>
-  !message.encrypted &&
-  message.content.trim() !== '' &&
+  readsShares(message) &&
   deviceTranslationTarget({
     preferredLanguages: languages,
     originalLanguage: message.originalLanguage,
@@ -142,7 +149,8 @@ export function createSharedTranslationReceiver(ports: SharedTranslationReceiver
 
   const consume = async (share: SharedTranslation, message: OfferedMessage, languages: readonly string[]): Promise<void> => {
     const language = normalizeLanguageForDedup(share.targetLanguage);
-    if (!languages.includes(language) || coveredLanguages(latest(message)).has(language)) return;
+    const current = latest(message);
+    if (!readsShares(current) || !languages.includes(language) || coveredLanguages(current).has(language)) return;
     if (share.envelope.kdf !== 'message-content' || opened.has(slotKey(message, language))) return;
 
     const inner = await attempted<SharedTranslationInner | null>(

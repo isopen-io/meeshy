@@ -20,7 +20,9 @@ import { fetchSharedTranslations } from './shared-translations-api';
  *
  * `offer` ne confie au receveur que ce que la loi de sortie laisse partir
  * (`offeredMessagesOf` : ni les miens, ni les protégés, ni les floutés, ni les
- * supprimés) ; un lecteur non identifié n'en confie aucun.
+ * supprimés) ; un lecteur non identifié n'en confie aucun. Le mode de chiffrement
+ * de la conversation voyage avec les messages : avec celui de chaque message, il
+ * dit ce que le serveur lit, et le receveur ne demande ni n'ouvre que cela.
  *
  * `watch` s'accroche à `message:translation-shared` par la connexion temps réel
  * (`watchLiveSocket`), pas par `socket.ts` : le point d'entrée du temps réel ne
@@ -41,10 +43,11 @@ export function createSharedTranslationSession(params: {
       readonly messages: readonly Message[];
       readonly viewerId: string;
       readonly readerLanguages: readonly string[];
+      readonly conversationEncryptionMode: string | null;
     }): void => {
       void receiver.offer({
         conversationId: thread.conversationId,
-        messages: offeredMessagesOf(thread.messages, thread.viewerId),
+        messages: offeredMessagesOf(thread.messages, thread.viewerId, thread.conversationEncryptionMode),
         readerLanguages: thread.readerLanguages,
       });
     },

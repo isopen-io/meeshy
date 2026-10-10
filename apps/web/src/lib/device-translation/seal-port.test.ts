@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 
-import type { SharedTranslationInner } from '@meeshy/shared/types/shared-translation';
+import { SHARED_TRANSLATION_LIMITS, type SharedTranslationInner } from '@meeshy/shared/types/shared-translation';
 
 import { openPort, openSealWorker, sealPort } from './seal-port';
 import { createSealClient } from './seal-protocol';
@@ -36,7 +36,7 @@ describe('le Worker du scellement partagé, le vrai, dans son thread (#9899)', (
   });
 
   test('une traduction que la passerelle ne prendrait pas ne se scelle pas', async () => {
-    const sealed = await client.seal({ binding: BINDING, key: KEY, inner: { ...INNER, text: 'x'.repeat(20_001) } }).then(
+    const sealed = await client.seal({ binding: BINDING, key: KEY, inner: { ...INNER, text: 'x'.repeat(SHARED_TRANSLATION_LIMITS.textMaxLength + 1) } }).then(
       () => 'scellée',
       () => 'refusée',
     );

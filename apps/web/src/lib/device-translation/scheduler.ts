@@ -10,6 +10,19 @@ export type OfferedMessage = {
   readonly translatedLanguages: readonly string[];
   /** Chiffré et pas encore déchiffré sur cet appareil : il n'y a pas de clair à traduire. */
   readonly encrypted: boolean;
+  /**
+   * Le serveur lit déjà ce texte (`sharedTranslationServerReadsMessage`) : seul
+   * un tel message se partage aux autres membres et se demande à la passerelle.
+   * Un clair que le serveur ne lit pas — un message de bout en bout, une
+   * conversation dont le mode est inconnu — se traduit sur l'appareil et y reste.
+   */
+  readonly shareable: boolean;
+  /**
+   * La version du texte que l'appareil traduit (`sharedTranslationSourceVersion`) :
+   * `original`, ou l'instant de la dernière modification. `null` quand la date
+   * ne se lit pas — l'appareil ne sait pas ce qu'il traduit, et ne partage pas.
+   */
+  readonly sourceVersion: string | null;
 };
 
 export type DeliveredTranslation = {

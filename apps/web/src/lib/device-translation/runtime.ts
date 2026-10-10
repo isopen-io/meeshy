@@ -23,7 +23,9 @@ import { createWorkerTranslator } from './worker-protocol';
  * Chaque traduction livrée prend DEUX chemins, indépendants : le puits des
  * traductions du serveur, qui la peint ; puis le partage scellé aux autres
  * membres (#9899, `share.ts`), qui ne bloque jamais le premier et dont aucune
- * panne ne remonte.
+ * panne ne remonte. Le second n'existe que pour un message que le serveur lit
+ * déjà (`OfferedMessage.shareable`) : un clair qu'il ne lit pas se traduit ici et
+ * n'en sort pas.
  *
  * Le consentement est vérifié par `useDeviceTranslation` AVANT l'`import()` de
  * ce module, et ce module ne partage aucun fichier statique avec le hook : un
@@ -60,7 +62,15 @@ function deviceTranslationScheduler(queryClient: QueryClient): DeviceTranslation
 
 export function offerToDevice(
   queryClient: QueryClient,
-  params: { readonly messages: readonly Message[]; readonly viewerId: string; readonly preferredLanguages: readonly string[] },
+  params: {
+    readonly messages: readonly Message[];
+    readonly viewerId: string;
+    readonly preferredLanguages: readonly string[];
+    readonly conversationEncryptionMode: string | null;
+  },
 ): void {
-  deviceTranslationScheduler(queryClient)?.offer({ messages: offeredMessagesOf(params.messages, params.viewerId), preferredLanguages: params.preferredLanguages });
+  deviceTranslationScheduler(queryClient)?.offer({
+    messages: offeredMessagesOf(params.messages, params.viewerId, params.conversationEncryptionMode),
+    preferredLanguages: params.preferredLanguages,
+  });
 }

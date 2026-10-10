@@ -13,7 +13,8 @@ const loadSession = (): Promise<SessionModule> => import('./shared-translations-
  * chargée, les partages de la conversation sont relus et ouverts ; tant que le
  * fil est ouvert, `message:translation-shared` les apporte en direct. Les
  * traductions entrent par le puits des traductions du serveur : aucune peau ne
- * change.
+ * change. Le mode de chiffrement de la conversation (`null` quand elle ne le dit
+ * pas) part avec les messages : seul un clair que le serveur lit déjà est demandé.
  *
  * Ce hook ne pèse rien dans le chunk du fil : la session, le contrat de
  * scellement et leur lot de dépendances n'arrivent que par `import()`, et le
@@ -27,11 +28,12 @@ export function useSharedTranslations(
     readonly messages: readonly Message[];
     readonly readerLanguages: readonly string[];
     readonly viewerId: string;
+    readonly conversationEncryptionMode: string | null;
   },
   load: () => Promise<Pick<SessionModule, 'sharedTranslationSession'>> = loadSession,
 ): void {
   const queryClient = useQueryClient();
-  const { conversationId, messages, readerLanguages, viewerId } = params;
+  const { conversationId, messages, readerLanguages, viewerId, conversationEncryptionMode } = params;
 
   useEffect(() => {
     if (conversationId === '') return;
@@ -55,11 +57,11 @@ export function useSharedTranslations(
     void load()
       .then(({ sharedTranslationSession }) => {
         if (cancelled) return;
-        sharedTranslationSession(queryClient).offer({ conversationId, messages, viewerId, readerLanguages });
+        sharedTranslationSession(queryClient).offer({ conversationId, messages, viewerId, readerLanguages, conversationEncryptionMode });
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [queryClient, conversationId, messages, readerLanguages, viewerId, load]);
+  }, [queryClient, conversationId, messages, readerLanguages, viewerId, conversationEncryptionMode, load]);
 }
