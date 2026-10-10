@@ -390,9 +390,9 @@ describe('MessagingService.handleMessage — familles des pièces jointes d’un
       expect(mockPrisma.message.create).not.toHaveBeenCalled();
     });
 
-    it('laisse un invité de World Wide transférer un vocal, famille ouverte', async () => {
+    it.each([['audio/mpeg'], ['text/plain']])('laisse un invité de World Wide transférer une pièce %s, famille ouverte', async (mimeType) => {
       mockPrisma.participant.findUnique.mockResolvedValue(worldGuest());
-      storeAttachments([sourceAttachment('audio/mpeg')]);
+      storeAttachments([sourceAttachment(mimeType)]);
       readableSource();
 
       const response = await service.handleMessage(
