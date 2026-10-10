@@ -187,6 +187,7 @@ export async function registerUploadRoutes(
             select: {
               allowAnonymousFiles: true,
               allowAnonymousImages: true,
+              conversation: { select: { identifier: true } },
             },
           });
 

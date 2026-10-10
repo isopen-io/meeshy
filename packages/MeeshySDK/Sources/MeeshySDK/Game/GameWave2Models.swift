@@ -367,6 +367,25 @@ private struct LossyRarityEntry: Decodable {
     }
 }
 
+/// La saison À VENIR (#10014) — `gameUpcomingSeasonBlockSchema` : servie tant qu'aucune saison n'est
+/// ouverte (`season == nil`), pour que l'écran annonce la date d'ouverture plutôt qu'un vide. Une donnée
+/// de calendrier, la même pour tous : rien de la présence d'autrui.
+public struct GameUpcomingSeasonBlock: Codable, Sendable, Equatable {
+    public let number: Int
+    public let themeKey: String
+    /// Le lundi d'ouverture (`AAAA-MM-JJ`).
+    public let startDay: String
+    /// Le dernier dimanche de la saison.
+    public let endDay: String
+
+    public init(number: Int, themeKey: String, startDay: String, endDay: String) {
+        self.number = number
+        self.themeKey = themeKey
+        self.startDay = startDay
+        self.endDay = endDay
+    }
+}
+
 /// Les sept extensions du bloc `game`, groupées : un client sans elles les lit `nil`.
 public struct GameWave2: Sendable, Equatable {
     public let league: GameLeagueBlock?
@@ -379,13 +398,16 @@ public struct GameWave2: Sendable, Equatable {
     /// La rareté mesurée de chaque succès — extension DÉCLARÉE du contrat partagé (`gameAchievementRaritiesSchema`),
     /// optionnelle et tolérante : une entrée illisible tombe seule, la carte vide vaut `nil`.
     public let achievementRarities: [String: GameRarityEntry]?
+    /// La saison à venir, tant qu'aucune n'est ouverte (#10014) ; `nil` dès qu'une saison court.
+    public let seasonUpcoming: GameUpcomingSeasonBlock?
 
     public static let empty = GameWave2()
 
     public init(league: GameLeagueBlock? = nil, duo: GameDuoBlock? = nil, season: GameSeasonBlock? = nil,
                 trophies: GameTrophiesBlock? = nil, atlas: GameAtlasBlock? = nil,
                 prestige: GamePrestigeBlock? = nil, visibility: GameVisibility? = nil,
-                achievementRarities: [String: GameRarityEntry]? = nil) {
+                achievementRarities: [String: GameRarityEntry]? = nil,
+                seasonUpcoming: GameUpcomingSeasonBlock? = nil) {
         self.league = league
         self.duo = duo
         self.season = season
@@ -394,10 +416,11 @@ public struct GameWave2: Sendable, Equatable {
         self.prestige = prestige
         self.visibility = visibility
         self.achievementRarities = achievementRarities
+        self.seasonUpcoming = seasonUpcoming
     }
 
     enum CodingKeys: String, CodingKey {
-        case league, duo, season, trophies, atlas, prestige, visibility, achievementRarities
+        case league, duo, season, trophies, atlas, prestige, visibility, achievementRarities, seasonUpcoming
     }
 
     /// Chaque extension se lit seule : l'une illisible tombe, les autres restent.
@@ -414,7 +437,8 @@ public struct GameWave2: Sendable, Equatable {
             atlas: (try? container.decodeIfPresent(GameAtlasBlock.self, forKey: .atlas)) ?? nil,
             prestige: (try? container.decodeIfPresent(GamePrestigeBlock.self, forKey: .prestige)) ?? nil,
             visibility: (try? container.decodeIfPresent(GameVisibility.self, forKey: .visibility)) ?? nil,
-            achievementRarities: Self.rarities(in: container)
+            achievementRarities: Self.rarities(in: container),
+            seasonUpcoming: (try? container.decodeIfPresent(GameUpcomingSeasonBlock.self, forKey: .seasonUpcoming)) ?? nil
         )
     }
 
@@ -436,6 +460,7 @@ public struct GameWave2: Sendable, Equatable {
         try container.encodeIfPresent(prestige, forKey: .prestige)
         try container.encodeIfPresent(visibility, forKey: .visibility)
         try container.encodeIfPresent(achievementRarities, forKey: .achievementRarities)
+        try container.encodeIfPresent(seasonUpcoming, forKey: .seasonUpcoming)
     }
 }
 

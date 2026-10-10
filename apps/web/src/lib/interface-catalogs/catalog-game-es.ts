@@ -521,6 +521,7 @@ const es = {
   'game.season.claim': 'Reclamar la etapa {step}',
   'game.season.completed': 'Recorrido completado: una copa, una insignia fechada y {glory} de Gloria.',
   'game.season.none': 'No hay ninguna temporada abierta por ahora. La próxima empieza pronto.',
+  'game.season.upcoming': 'La temporada {number} abre el {date}.',
   'game.season.seal.title': 'Fila Sello',
   'game.season.seal.body': 'El Sello es puramente decorativo: un objeto de colección cada {every} etapas, que no cambia nada del juego.',
   'game.season.seal.buy': 'Conseguir el Sello · {price}',
