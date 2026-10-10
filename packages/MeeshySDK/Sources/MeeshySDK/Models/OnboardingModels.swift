@@ -148,6 +148,9 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
         case protectedRegime, storyDefaultVisibility, suggestions
         case emailVerified, canPublishStory, stepRewards
         case viewerWriteRestriction
+        // Jamais servie : elle garde la capacité à travers un aller-retour
+        // d'encodage, où une restriction `nil` n'est pas réécrite.
+        case servesAgeStep
     }
 
     public init(from decoder: Decoder) throws {
@@ -167,7 +170,8 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
             emailVerified: try container.decodeIfPresent(Bool.self, forKey: .emailVerified),
             canPublishStory: try container.decodeIfPresent(Bool.self, forKey: .canPublishStory),
             stepRewards: try? container.decodeIfPresent(APIOnboardingStepRewards.self, forKey: .stepRewards),
-            servesAgeStep: container.contains(.viewerWriteRestriction),
+            servesAgeStep: container.contains(.viewerWriteRestriction)
+                || ((try? container.decodeIfPresent(Bool.self, forKey: .servesAgeStep)) ?? nil) == true,
             viewerWriteRestriction: (try? container.decodeIfPresent(ConversationWriteRestriction.self, forKey: .viewerWriteRestriction)) ?? nil
         )
     }

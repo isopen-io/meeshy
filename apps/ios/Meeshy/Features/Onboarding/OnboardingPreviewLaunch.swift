@@ -12,7 +12,9 @@ import MeeshyUI
 ///     -MeeshyOnboardingPreviewDone YES -AppleLanguages "(ar)"
 /// ```
 ///
-/// Cartes : `languages`, `global`, `story`, `friends`, `notifications`, `recap`.
+/// Cartes : `languages`, `age`, `global`, `story`, `friends`, `notifications`, `recap`.
+/// `-MeeshyOnboardingPreviewAge adult|minor|under13|taken|failed` choisit ce que
+/// la passerelle fictive répond à la date confirmée sur la carte `age` (#9929).
 /// `-MeeshyOnboardingPreviewDone YES` montre la carte APRÈS son geste (salut
 /// envoyé, story publiée, demandes envoyées) — « +N » compris.
 /// `-MeeshyOnboardingPreviewProtected YES` joue le régime protégé.
@@ -86,7 +88,8 @@ enum OnboardingPreviewLaunch {
             storyDefaultVisibility: protected ? .friends : .public,
             suggestions: Array(fixtureSuggestions.prefix(suggestionCount)),
             emailVerified: false,
-            canPublishStory: UserDefaults.standard.string(forKey: "MeeshyOnboardingPreviewStory") != "verify"
+            canPublishStory: UserDefaults.standard.string(forKey: "MeeshyOnboardingPreviewStory") != "verify",
+            servesAgeStep: true
         )
     }
 
@@ -117,7 +120,9 @@ struct OnboardingPreviewScreen: View {
         progress: PreviewEngagementProgress(),
         permission: PreviewNotificationPermission(),
         contacts: PreviewContactSync(),
-        directory: PreviewContactDirectory()
+        directory: PreviewContactDirectory(),
+        birthDates: PreviewBirthDateService(),
+        signOut: {}
     )
 
     var body: some View {
@@ -219,6 +224,20 @@ nonisolated private final class PreviewContactDirectory: ContactDirectoryService
                                     pagination: CursorPagination(nextCursor: nil, hasMore: false, limit: limit), error: nil)
     }
 
+}
+
+/// La passerelle fictive de la carte `age` : elle répond selon
+/// `-MeeshyOnboardingPreviewAge`, sans réseau.
+nonisolated private final class PreviewBirthDateService: BirthDateServiceProviding, @unchecked Sendable {
+    func setBirthDate(_ birthDate: Date) async throws -> APIBirthDateDeclaration {
+        switch UserDefaults.standard.string(forKey: "MeeshyOnboardingPreviewAge") {
+        case "minor": return APIBirthDateDeclaration(ageClass: .minor, viewerWriteRestrictionGlobal: true)
+        case "under13": throw BirthDateDeclarationError.belowMinimumAge
+        case "taken": throw BirthDateDeclarationError.alreadySet
+        case "failed": throw BirthDateDeclarationError.unavailable
+        default: return APIBirthDateDeclaration(ageClass: .adult, viewerWriteRestrictionGlobal: false)
+        }
+    }
 }
 
 private final class PreviewNotificationPermission: OnboardingNotificationPermitting {
