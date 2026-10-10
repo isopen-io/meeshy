@@ -6,9 +6,9 @@ import { AMOUR } from '../textes/amour.mjs'
 import { partenaireDe } from '../textes/demo.mjs'
 import { documentDeLEcran, repliqueDAmitie } from '../vitrine/statut-amour-ecrans.mjs'
 import { svgDesApparitions } from '../vitrine/statut-amour-mee.mjs'
-import { CARTE, documentDuStatut, modeleDeLaPage } from '../vitrine/statut-amour-page.mjs'
+import { CARTE, documentDuStatut, modeleDeLaPage, mots } from '../vitrine/statut-amour-page.mjs'
 import {
-  AMOUREUX, DUREE_S, ECRAN, FESTIN, FPS, GLOUTONS, HAUTEUR, IMAGES, LARGEUR, PLANS, SONS, SONS_DE_COUP, STICKERS, TEMPS_S,
+  AMOUREUX, CRETE_DBTP, CRETE_MAX_DBTP, DUREE_S, ECRAN, cibleSuivante, filtreDeSonie, FESTIN, FPS, GLOUTONS, HAUTEUR, IMAGES, LARGEUR, PLANS, SONS, SONS_DE_COUP, STICKERS, TEMPS_S,
   argumentsDeMixage, compteARebours, debitVideoKbps, enSecondes, entreeDuPlan, fenetre, fenetreDeLEffet, filtreDeMixage, planDuStatut,
 } from '../vitrine/statut-amour-plan.mjs'
 import { filtreDeLaPlanche, nomDeLaPlanche, nomDuFichier } from '../vitrine/statut-amour.mjs'
@@ -247,5 +247,49 @@ describe('la vidéo de statut : les textes de publication (#9988)', () => {
       expect(md).toContain(PUBLICATION[lang].statut)
       expect(md).toContain(PUBLICATION[lang].titre)
     })
+  })
+})
+
+describe('la vidéo de statut : les corrections du porteur (#9988)', () => {
+  test('« نصفك الآخر » ne se coupe jamais : une espace insécable les lie dans un même bloc de mots', () => {
+    const devise = TEXTES_STATUT.devise.ar
+    expect(devise).toContain('نصفك\u00A0الآخر')
+    const blocs = [...mots(devise).matchAll(/<span class="mot">([^<]*)<\/span>/g)].map((m) => m[1])
+    expect(blocs).toContain('نصفك\u00A0الآخر.')
+    expect(PUBLICATION.ar.description).toContain(devise.replace('\u00A0', ' '))
+  })
+
+  test('les autres langues gardent leurs mots un par un', () => {
+    expect([...mots(TEXTES_STATUT.devise.fr).matchAll(/class="mot"/g)].length).toBe(TEXTES_STATUT.devise.fr.split(' ').length)
+  })
+
+  test('la carte des amis montre sa première bulle dès son entrée, sans coup de bulle sous le tonnerre', () => {
+    const amis = PLANS.find((x) => x.id === 'amis')
+    expect(amis.revelations[0]).toBe(0)
+    const p = plan('fr')
+    const debut = p.plans.find((x) => x.id === 'amis').debutS
+    expect(p.reperes.some((r) => r.son === 'bulle' && r.instantS === debut)).toBe(false)
+  })
+
+  test('la page tient pour visible une bulle révélée à l’instant 0 du plan', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync(new URL('../vitrine/statut-amour-page.mjs', import.meta.url), 'utf8')
+    expect(source).toContain('debut <= 0 ? 1')
+  })
+
+  test('la crête : le mixage vise sous -1,5 dBTP et se reprend tant que la mesure après AAC dépasse', () => {
+    expect(CRETE_MAX_DBTP).toBe(-1.5)
+    expect(CRETE_DBTP).toBeLessThan(CRETE_MAX_DBTP)
+    expect(filtreDeSonie(null, -3)).toContain('TP=-3')
+    expect(cibleSuivante({ cible: -2.5, mesuree: -1.6 })).toBeNull()
+    expect(cibleSuivante({ cible: -2.5, mesuree: -1.5 })).toBeNull()
+    expect(cibleSuivante({ cible: -2.5, mesuree: -0.9 })).toBeCloseTo(-3.3, 5)
+  })
+
+  test('aucun fichier du module ne porte de marqueur de conflit', async () => {
+    const { readFileSync } = await import('node:fs')
+    for (const f of ['../vitrine/statut-amour.mjs', '../vitrine/statut-amour-plan.mjs', '../vitrine/statut-amour-page.mjs', '../vitrine/statut-amour-ecrans.mjs', '../vitrine/statut-amour-mee.mjs', '../textes/statut-amour.mjs']) {
+      expect(readFileSync(new URL(f, import.meta.url), 'utf8')).not.toMatch(/^(<{7}|={7}|>{7})( |$)/m)
+    }
   })
 })

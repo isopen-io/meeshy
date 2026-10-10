@@ -171,4 +171,13 @@ describe('les autres états', () => {
   test('aucune saison ouverte : on dit que la prochaine arrive', () => {
     expect(text(renderToStaticMarkup(<GameSeason {...props({ season: null })} />))).toContain('Aucune saison n’est ouverte');
   });
+
+  test('avant le lundi 21 décembre 2026 : la saison 1 s’annonce, avec son thème, jamais un vide (#10014)', () => {
+    const upcoming = { number: 1, themeKey: 'language:fr', startDay: '2026-12-21', endDay: '2027-02-14' };
+    const html = renderToStaticMarkup(<GameSeason {...props({ season: null, upcoming })} />);
+    expect(html).toContain('data-game-season-upcoming="2026-12-21"');
+    expect(text(html)).toContain('La saison 1 ouvre le 21 décembre 2026');
+    expect(text(html)).not.toContain('Aucune saison n’est ouverte');
+    expect(html).not.toContain('data-game-season-step=');
+  });
 });

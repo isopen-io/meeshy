@@ -26,8 +26,15 @@ const mission = (patch: Partial<GameMission> & Pick<GameMission, 'id' | 'difficu
 
 export const GAME_FIXTURE_TODAY = '2026-10-05';
 
-/** Un lundi de la quatrième semaine de la saison 1 : la ligue, le duo et la saison sont ouverts. */
+/** Un lundi de ligue ouverte : la ligue et le duo y courent. Depuis #10014, c'est la PRÉ-SAISON : la saison 1 ouvre le 2026-12-21. */
 export const GAME_EXTRAS_TODAY = '2026-11-02';
+
+/**
+ * Un lundi de la quatrième semaine de la saison 1 (ouverte le lundi 2026-12-21, #10014) : la saison
+ * du fixture se lit à ce jour, la ligue et le duo restent à `GAME_EXTRAS_TODAY` — les ligues ne
+ * dépendent pas de la date des saisons.
+ */
+export const GAME_SEASON_TODAY = '2027-01-11';
 
 /**
  * Les dix étapes des niveaux faites (#9706) — cinq Meeshes, dix missions, une Flamme de 30 jours, le rang
@@ -140,10 +147,14 @@ export const gameBlockWithExtrasFixture = (
   extras: Partial<GameBlockExtrasFacts> = {},
 ): GameBlock => {
   const facts = gameFactsFixture(patch);
+  const extrasFacts = gameExtrasFactsFixture({ score: facts.score, levelRecord: facts.levelRecord, prestige: facts.prestige, balance: facts.balance, flameDays: facts.streak, ...extras });
+  const built = buildGameBlockExtras(extrasFacts);
+  // Un jour imposé par le témoin fait foi pour tout ; sinon la saison se lit dans la saison 1.
+  const seasonal = extras.today === undefined ? buildGameBlockExtras({ ...extrasFacts, today: GAME_SEASON_TODAY }) : built;
   return {
     ...buildGameBlock(facts),
-    ...buildGameBlockExtras(
-      gameExtrasFactsFixture({ score: facts.score, levelRecord: facts.levelRecord, prestige: facts.prestige, balance: facts.balance, flameDays: facts.streak, ...extras }),
-    ),
+    ...built,
+    season: seasonal.season,
+    seasonUpcoming: seasonal.seasonUpcoming,
   };
 };

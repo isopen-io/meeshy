@@ -10386,17 +10386,17 @@
       "expected": {
         "calendar": {
           "number": 1,
-          "startDay": "2026-10-12",
-          "endDay": "2026-12-06",
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
           "weekKeys": [
-            "2026-10-12",
-            "2026-10-19",
-            "2026-10-26",
-            "2026-11-02",
-            "2026-11-09",
-            "2026-11-16",
-            "2026-11-23",
-            "2026-11-30"
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
           ],
           "themeKey": "language:fr"
         }
@@ -10411,17 +10411,17 @@
       "expected": {
         "calendar": {
           "number": 2,
-          "startDay": "2026-12-07",
-          "endDay": "2027-01-31",
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
           "weekKeys": [
-            "2026-12-07",
-            "2026-12-14",
-            "2026-12-21",
-            "2026-12-28",
-            "2027-01-04",
-            "2027-01-11",
-            "2027-01-18",
-            "2027-01-25"
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
           ],
           "themeKey": "language:es"
         }
@@ -10436,17 +10436,17 @@
       "expected": {
         "calendar": {
           "number": 3,
-          "startDay": "2027-02-01",
-          "endDay": "2027-03-28",
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
           "weekKeys": [
-            "2027-02-01",
-            "2027-02-08",
-            "2027-02-15",
-            "2027-02-22",
-            "2027-03-01",
-            "2027-03-08",
-            "2027-03-15",
-            "2027-03-22"
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
           ],
           "themeKey": "language:ar"
         }
@@ -10461,17 +10461,17 @@
       "expected": {
         "calendar": {
           "number": 9,
-          "startDay": "2028-01-03",
-          "endDay": "2028-02-27",
+          "startDay": "2028-03-13",
+          "endDay": "2028-05-07",
           "weekKeys": [
-            "2028-01-03",
-            "2028-01-10",
-            "2028-01-17",
-            "2028-01-24",
-            "2028-01-31",
-            "2028-02-07",
-            "2028-02-14",
-            "2028-02-21"
+            "2028-03-13",
+            "2028-03-20",
+            "2028-03-27",
+            "2028-04-03",
+            "2028-04-10",
+            "2028-04-17",
+            "2028-04-24",
+            "2028-05-01"
           ],
           "themeKey": "language:fr"
         }
@@ -10486,17 +10486,17 @@
       "expected": {
         "calendar": {
           "number": 25,
-          "startDay": "2030-06-17",
-          "endDay": "2030-08-11",
+          "startDay": "2030-08-26",
+          "endDay": "2030-10-20",
           "weekKeys": [
-            "2030-06-17",
-            "2030-06-24",
-            "2030-07-01",
-            "2030-07-08",
-            "2030-07-15",
-            "2030-07-22",
-            "2030-07-29",
-            "2030-08-05"
+            "2030-08-26",
+            "2030-09-02",
+            "2030-09-09",
+            "2030-09-16",
+            "2030-09-23",
+            "2030-09-30",
+            "2030-10-07",
+            "2030-10-14"
           ],
           "themeKey": "language:fr"
         }
@@ -10512,7 +10512,8 @@
       "expected": {
         "season": null,
         "week": null,
-        "seasonOfMoment": null
+        "seasonOfMoment": null,
+        "upcoming": "2026-12-21"
       }
     },
     {
@@ -10523,9 +10524,10 @@
         "minuteOfDay": 0
       },
       "expected": {
-        "season": 1,
-        "week": 1,
-        "seasonOfMoment": 1
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": "2026-12-21"
       }
     },
     {
@@ -10536,9 +10538,10 @@
         "minuteOfDay": 1199
       },
       "expected": {
-        "season": 1,
-        "week": 8,
-        "seasonOfMoment": 1
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": "2026-12-21"
       }
     },
     {
@@ -10549,9 +10552,10 @@
         "minuteOfDay": 1200
       },
       "expected": {
-        "season": 1,
-        "week": 8,
-        "seasonOfMoment": 2
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": "2026-12-21"
       }
     },
     {
@@ -10562,9 +10566,10 @@
         "minuteOfDay": 0
       },
       "expected": {
-        "season": 2,
-        "week": 1,
-        "seasonOfMoment": 2
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": "2026-12-21"
       }
     },
     {
@@ -10575,9 +10580,10 @@
         "minuteOfDay": 0
       },
       "expected": {
-        "season": 3,
-        "week": 1,
-        "seasonOfMoment": 3
+        "season": 1,
+        "week": 7,
+        "seasonOfMoment": 1,
+        "upcoming": null
       }
     },
     {
@@ -10588,9 +10594,94 @@
         "minuteOfDay": 800
       },
       "expected": {
-        "season": 24,
+        "season": 23,
+        "week": 6,
+        "seasonOfMoment": 23,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "saison du 2026-12-20 à 1199 min",
+      "input": {
+        "law": "season-at",
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": "2026-12-21"
+      }
+    },
+    {
+      "_label": "saison du 2026-12-20 à 1200 min",
+      "input": {
+        "law": "season-at",
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "season": null,
+        "week": null,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "saison du 2026-12-21 à 0 min",
+      "input": {
+        "law": "season-at",
+        "dayKey": "2026-12-21",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "season": 1,
+        "week": 1,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "saison du 2027-02-14 à 1199 min",
+      "input": {
+        "law": "season-at",
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "season": 1,
         "week": 8,
-        "seasonOfMoment": 24
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "saison du 2027-02-14 à 1200 min",
+      "input": {
+        "law": "season-at",
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "season": 1,
+        "week": 8,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "saison du 2027-02-15 à 0 min",
+      "input": {
+        "law": "season-at",
+        "dayKey": "2027-02-15",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "season": 2,
+        "week": 1,
+        "seasonOfMoment": 2,
+        "upcoming": null
       }
     },
     {
