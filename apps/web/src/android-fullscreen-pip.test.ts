@@ -60,5 +60,17 @@ describe("la vidéo plein écran en image dans l'image dans la coque Android (#9
     expect(plugin).toContain('call.getInt("width"');
     expect(plugin).toContain('call.getInt("height"');
   });
+
+  test('la fenêtre flottante d’une vidéo porte lecture/pause, remis à la page (#9847)', () => {
+    const activite = sansCommentaires(lire('MainActivity.java'));
+    const params = corpsDe(activite, 'PictureInPictureParams floatParams(');
+    expect(params).toContain('FullscreenPictureInPicture.toggleAction(floatPlaying)');
+    expect(params).toContain('setActions(');
+    expect(corpsDe(activite, 'void onHideCustomView(')).toContain('floatPlaying = null');
+    const plugin = sansCommentaires(lire('MeeshyPlaybackPlugin.java'));
+    expect(corpsDe(plugin, 'void setFloatPlaying(')).toContain('call.getBoolean("playing"');
+    expect(plugin).toContain('notifyListeners("floatToggleRequested"');
+    expect(plugin).toContain('RECEIVER_NOT_EXPORTED');
+  });
 });
 

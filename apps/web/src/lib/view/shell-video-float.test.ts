@@ -14,16 +14,37 @@ import { shellVideoFloat, type FloatableVideo } from './shell-video-float';
 
 type Appel = { readonly plugin: string; readonly methode: string };
 
+type Ecouteurs = Map<string, Set<() => void>>;
+
+function emettre(ecouteurs: Ecouteurs, type: string): void {
+  for (const rappel of ecouteurs.get(type) ?? []) rappel();
+}
+
+function ecouter(ecouteurs: Ecouteurs, type: string, rappel: () => void): void {
+  ecouteurs.set(type, new Set([...(ecouteurs.get(type) ?? []), rappel]));
+}
+
+function oublier(ecouteurs: Ecouteurs, type: string, rappel: () => void): void {
+  ecouteurs.get(type)?.delete(rappel);
+}
+
 function coque(
   methodes: readonly string[],
   reponse: unknown = { floated: true },
-): CoqueNative & { readonly appels: Appel[]; readonly options: object[] } {
+): CoqueNative & { readonly appels: Appel[]; readonly options: object[]; readonly evenements: Ecouteurs } {
   const appels: Appel[] = [];
   const options: object[] = [];
+  const evenements: Ecouteurs = new Map();
   return {
     appels,
     options,
+    evenements,
     getPlatform: () => 'android',
+    addListener: (_plugin, evenement, rappel) => {
+      const sans = (): void => rappel(undefined);
+      ecouter(evenements, evenement, sans);
+      return { remove: () => Promise.resolve(oublier(evenements, evenement, sans)) };
+    },
     PluginHeaders: [{ name: 'MeeshyPlayback', methods: methodes.map((name) => ({ name })) }],
     nativePromise: (plugin, methode, recues) => {
       appels.push({ plugin, methode });
@@ -33,9 +54,25 @@ function coque(
   };
 }
 
-function video(issue: 'resout' | 'rejette' = 'resout', taille = { videoWidth: 1080, videoHeight: 1920 }): FloatableVideo & { pleinEcran: number } {
+function video(
+  issue: 'resout' | 'rejette' = 'resout',
+  taille = { videoWidth: 1080, videoHeight: 1920 },
+): FloatableVideo & { pleinEcran: number; paused: boolean } {
+  const ecouteurs: Ecouteurs = new Map();
   const v = {
     ...taille,
+    paused: false,
+    play: () => {
+      v.paused = false;
+      emettre(ecouteurs, 'play');
+      return Promise.resolve();
+    },
+    pause: () => {
+      v.paused = true;
+      emettre(ecouteurs, 'pause');
+    },
+    addEventListener: (type: string, rappel: () => void) => ecouter(ecouteurs, type, rappel),
+    removeEventListener: (type: string, rappel: () => void) => oublier(ecouteurs, type, rappel),
     pleinEcran: 0,
     requestFullscreen: () => {
       v.pleinEcran += 1;
@@ -45,9 +82,24 @@ function video(issue: 'resout' | 'rejette' = 'resout', taille = { videoWidth: 10
   return v;
 }
 
-function documentSortant(): { sorties: number; readonly exitFullscreen: () => Promise<void> } {
+function documentSortant(): {
+  sorties: number;
+  fullscreenElement: unknown;
+  readonly exitFullscreen: () => Promise<void>;
+  readonly addEventListener: (type: string, rappel: () => void) => void;
+  readonly removeEventListener: (type: string, rappel: () => void) => void;
+  readonly quitterPleinEcran: () => void;
+} {
+  const ecouteurs: Ecouteurs = new Map();
   const d = {
     sorties: 0,
+    fullscreenElement: {} as unknown,
+    addEventListener: (type: string, rappel: () => void) => ecouter(ecouteurs, type, rappel),
+    removeEventListener: (type: string, rappel: () => void) => oublier(ecouteurs, type, rappel),
+    quitterPleinEcran: () => {
+      d.fullscreenElement = null;
+      emettre(ecouteurs, 'fullscreenchange');
+    },
     exitFullscreen: () => {
       d.sorties += 1;
       return Promise.resolve();
@@ -102,4 +154,38 @@ describe('la vidéo qui flotte d’un appui dans la coque Android (#9410)', () =
     await laisserFiler();
     expect(hote.options).toEqual([{ width: 1080, height: 1920 }]);
   });
+
+  test('la fenêtre flottante met la vidéo en pause et la relance, et son bouton suit la vidéo (#9847)', async () => {
+    const hote = coque(['floatVideo', 'setFloatPlaying']);
+    const doc = documentSortant();
+    const v = video();
+    shellVideoFloat(hote, doc)!(v);
+    await laisserFiler();
+    expect(hote.appels.map((a) => a.methode)).toEqual(['setFloatPlaying', 'floatVideo']);
+    expect(hote.options[0]).toEqual({ playing: true });
+
+    emettre(hote.evenements, 'floatToggleRequested');
+    expect(v.paused).toBe(true);
+    expect(hote.options.at(-1)).toEqual({ playing: false });
+
+    emettre(hote.evenements, 'floatToggleRequested');
+    expect(v.paused).toBe(false);
+    expect(hote.options.at(-1)).toEqual({ playing: true });
+  });
+
+  test('sorti du plein écran, le bouton de la fenêtre ne pilote plus la vidéo (#9847)', async () => {
+    const hote = coque(['floatVideo', 'setFloatPlaying']);
+    const doc = documentSortant();
+    const v = video();
+    shellVideoFloat(hote, doc)!(v);
+    await laisserFiler();
+    doc.quitterPleinEcran();
+    await laisserFiler();
+    const avant = hote.options.length;
+    emettre(hote.evenements, 'floatToggleRequested');
+    v.pause();
+    expect(v.paused).toBe(true);
+    expect(hote.options.length).toBe(avant);
+  });
 });
+
