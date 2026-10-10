@@ -134,6 +134,23 @@ const stderrDeFfmpeg = (args) => spawnSync('ffmpeg', args, { encoding: 'utf8', m
 
 // ── Une langue ─────────────────────────────────────────────────────────────────────────────────────────────
 
+// Le son seul, sur l'image déjà rendue (`--son`) : le mixage se reprend sans refaire les 690 images.
+const assembler = ({ lang, plan, dossier, racine }) => {
+  const locale = appStoreLocale(lang)
+  const son = mixerLeSon({ plan, dossier })
+  const sortie = resolve(racine, locale, 'product_page_header', nomDuFichier(lang))
+  mkdirSync(resolve(racine, locale, 'product_page_header'), { recursive: true })
+  ffmpeg(['-y', '-v', 'error', '-i', resolve(dossier, 'video.mp4'), '-i', son, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-ac', '2',
+    '-shortest', '-movflags', '+faststart', sortie])
+  return { lang, locale, chemin: sortie, plan, son: mesurerLeSon(sortie) }
+}
+
+export const remixerLEntete = ({ lang, racine = SORTIE_APPSTORE }) => {
+  const dossier = resolve(racine, '.travail', appStoreLocale(lang), 'entete-epique')
+  const plan = JSON.parse(readFileSync(resolve(dossier, 'plan.json'), 'utf8'))
+  return assembler({ lang, plan, dossier, racine })
+}
+
 export const monterLEntete = async ({ lang, navigateur, racine = SORTIE_APPSTORE, jusqua = DUREE_S }) => {
   const locale = appStoreLocale(lang)
   const dossier = resolve(racine, '.travail', locale, 'entete-epique')
@@ -154,12 +171,7 @@ export const monterLEntete = async ({ lang, navigateur, racine = SORTIE_APPSTORE
   } finally {
     await contexte.close()
   }
-  const son = mixerLeSon({ plan, dossier })
-  const sortie = resolve(racine, locale, 'product_page_header', nomDuFichier(lang))
-  mkdirSync(resolve(racine, locale, 'product_page_header'), { recursive: true })
-  ffmpeg(['-y', '-v', 'error', '-i', video, '-i', son, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-ac', '2',
-    '-shortest', '-movflags', '+faststart', sortie])
-  return { lang, locale, chemin: sortie, plan, son: mesurerLeSon(sortie) }
+  return assembler({ lang, plan, dossier, racine })
 }
 
 export const mixerLeSon = ({ plan, dossier }) => {
@@ -189,15 +201,16 @@ const main = async () => {
       langue: { type: 'string', default: 'fr' },
       deposer: { type: 'boolean', default: false },
       jusqua: { type: 'string' },
+      son: { type: 'boolean', default: false },
     },
   })
   const langs = values.langue === 'all' ? KIT_LANGS : values.langue.split(',')
   const { chromium } = await import('@playwright/test')
-  const navigateur = await chromium.launch()
+  const navigateur = values.son ? null : await chromium.launch()
   const bilan = []
   try {
     for (const lang of langs) {
-      const r = await monterLEntete({ lang, navigateur, jusqua: values.jusqua ? Number(values.jusqua) : DUREE_S })
+      const r = values.son ? remixerLEntete({ lang }) : await monterLEntete({ lang, navigateur, jusqua: values.jusqua ? Number(values.jusqua) : DUREE_S })
       const controle = values.jusqua ? { conforme: null, erreurs: [] } : controler(r.chemin, 'entete-video')
       console.log(`${controle.conforme === false ? '✗' : '✓'} ${r.chemin} — ${r.son.lufs} LUFS, crête ${r.son.creteVraieDbfs} dBFS${controle.erreurs.length ? ` : ${controle.erreurs.join(' ; ')}` : ''}`)
       if (controle.conforme === false) throw new Error(`${r.chemin} n'est pas conforme`)
@@ -208,7 +221,7 @@ const main = async () => {
       }
     }
   } finally {
-    await navigateur.close()
+    await navigateur?.close()
   }
   writeFileSync(resolve(SORTIE_APPSTORE, 'entete-epique.json'), `${JSON.stringify({
     musique: `${MUSIQUE.titre} — ${MUSIQUE.auteur} (${MUSIQUE.source}) — ${MUSIQUE.licence}`,

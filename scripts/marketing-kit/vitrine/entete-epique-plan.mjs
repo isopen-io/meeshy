@@ -264,20 +264,22 @@ export const planDeLEntete = ({ lang, prises, nomDeFiche }) => {
 export const CIBLE_LUFS = -16
 export const CRETE_DBTP = -1.5
 
-// La musique (extrait de DUREE_S, fondu d'entrée court sous le premier impact, fondu de sortie pour la boucle d'Apple)
-// et chaque effet posé à son départ ; tout est sommé SANS normalisation par entrée (amix normalize=0), puis porté à la
-// cible de sonie par loudnorm (deux passes : `mesure` rend les valeurs que la seconde applique, en linéaire).
-export const filtreDeMixage = ({ reperes, musiqueGainDb = -3 }) => {
+// La musique (extrait de DUREE_S, fondu d'entrée court sous le premier impact, fondu de sortie pour la boucle d'Apple) et
+// chaque effet posé à son départ. Les effets forment un bus qui COMPRIME la musique (sidechain) : chaque coup se creuse
+// sa place au lieu de se noyer dans une piste déjà dense. Tout est sommé SANS normalisation par entrée (normalize=0),
+// puis porté à la cible de sonie par loudnorm (deux passes : la mesure de la première est appliquée, en linéaire).
+export const filtreDeMixage = ({ reperes, musiqueGainDb = -4, effetsGainDb = 5 }) => {
   const parties = [
     `[0:a]atrim=start=${MUSIQUE.debutS}:end=${(MUSIQUE.debutS + DUREE_S).toFixed(3)},asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,volume=${musiqueGainDb}dB,afade=t=in:d=0.12,afade=t=out:st=${(DUREE_S - 0.9).toFixed(3)}:d=0.9[m]`,
   ]
   reperes.forEach((r, i) => {
     const retard = Math.round(r.departS * 1000)
     const coupe = r.coupeS > 0 ? `atrim=start=${r.coupeS.toFixed(3)},asetpts=PTS-STARTPTS,` : ''
-    parties.push(`[${i + 1}:a]${coupe}aformat=sample_rates=48000:channel_layouts=stereo,volume=${r.gainDb}dB,adelay=${retard}|${retard}[s${i}]`)
+    parties.push(`[${i + 1}:a]${coupe}aformat=sample_rates=48000:channel_layouts=stereo,volume=${r.gainDb + effetsGainDb}dB,adelay=${retard}|${retard},apad=whole_dur=${DUREE_S}[s${i}]`)
   })
-  const entrees = ['[m]', ...reperes.map((_, i) => `[s${i}]`)].join('')
-  parties.push(`${entrees}amix=inputs=${reperes.length + 1}:duration=first:normalize=0,atrim=end=${DUREE_S},asetpts=PTS-STARTPTS[mix]`)
+  parties.push(`${reperes.map((_, i) => `[s${i}]`).join('')}amix=inputs=${reperes.length}:duration=longest:normalize=0,asplit=2[fx][cle]`)
+  parties.push('[m][cle]sidechaincompress=threshold=0.04:ratio=5:attack=4:release=280:makeup=1[md]')
+  parties.push(`[md][fx]amix=inputs=2:duration=first:normalize=0,atrim=end=${DUREE_S},asetpts=PTS-STARTPTS[mix]`)
   return parties.join(';')
 }
 

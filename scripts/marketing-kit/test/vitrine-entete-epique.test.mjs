@@ -207,7 +207,9 @@ describe('l’en-tête épique : le mixage (#9904)', () => {
     const p = plan('fr')
     const f = filtreDeMixage({ reperes: p.reperes })
     expect(f).toContain(`atrim=start=${MUSIQUE.debutS}:end=${(MUSIQUE.debutS + DUREE_S).toFixed(3)}`)
-    expect(f).toContain(`amix=inputs=${p.reperes.length + 1}:duration=first:normalize=0`)
+    expect(f).toContain(`amix=inputs=${p.reperes.length}:duration=longest:normalize=0`)
+    expect(f).toContain('[m][cle]sidechaincompress')
+    expect(f).toContain('[md][fx]amix=inputs=2:duration=first:normalize=0')
     for (const r of p.reperes) expect(f).toContain(`adelay=${Math.round(r.departS * 1000)}|${Math.round(r.departS * 1000)}`)
   })
 
