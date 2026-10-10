@@ -175,6 +175,18 @@ describe('ensureWorldConversation — la conversation World Wide (#10000)', () =
     expect(report.members).toContainEqual({ username: 'jcnm', outcome: 'promoted' });
   });
 
+  it('ne rétrograde jamais un rang réservé tenu PLUS haut : jcnm devenu créateur le reste', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    const jcnmRow = prisma.participant.rows.find((row) => row.userId === JCNM.id)!;
+    jcnmRow.role = 'creator';
+
+    const report = await seed(prisma);
+
+    expect(roleOf(prisma, JCNM.id)).toBe('creator');
+    expect(report.members).toContainEqual({ username: 'jcnm', outcome: 'already-member' });
+  });
+
   it('respecte un départ : une participation inactive n’est ni réveillée ni réécrite', async () => {
     const prisma = makeDb();
     await seed(prisma);

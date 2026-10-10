@@ -17,8 +17,9 @@
  * Ce que le seed ne fait JAMAIS sur une ligne existante : renommer la
  * conversation, réactiver un lien qu'un administrateur a fermé, réveiller une
  * participation quittée (même loi que `ensureGlobalConversationMembership`,
- * #4010). Le seed POSE un état initial ; il ne réécrit pas les décisions prises
- * depuis.
+ * #4010), rétrograder un rang réservé tenu plus haut (un `jcnm` devenu
+ * créateur le reste). Le seed POSE un état initial ; il ne réécrit pas les
+ * décisions prises depuis.
  *
  * Deux instances qui démarrent ensemble convergent : chaque création qui perd
  * la course sur un index unique (P2002) relit la ligne gagnante.
@@ -27,7 +28,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { MemberRoleType } from '@meeshy/shared/types/role-types';
+import { hasMinimumMemberRole, type MemberRoleType } from '@meeshy/shared/types/role-types';
 import {
   WORLD_CONVERSATION_IDENTIFIER,
   WORLD_CONVERSATION_TITLE,
@@ -154,7 +155,7 @@ async function ensureMember(
   const existing = await find();
   if (existing) {
     if (!existing.isActive) return 'left';
-    if (existing.role === role) return 'already-member';
+    if (hasMinimumMemberRole(existing.role, role)) return 'already-member';
     await prisma.participant.update({ where: { id: existing.id }, data: { role } });
     return 'promoted';
   }
