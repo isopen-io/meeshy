@@ -22,8 +22,7 @@ struct StoryComposerBlockHeightKey: PreferenceKey {
 extension StoryCardView {
 
     var composerFoldPresentation: StoryComposerFold.Presentation { // internal for cross-file extension access
-        StoryComposerFold.presentation(userFolded: isComposerFolded,
-                                       isReplying: replyingToStoryComment != nil)
+        StoryComposerFold.readerPresentation(userFolded: isComposerFolded)
     }
 
     /// **Le sol du texte de la story** : le haut de la plaque du composeur
@@ -140,6 +139,11 @@ extension StoryCardView {
         .adaptiveOnChange(of: composerFocusTrigger) { _, requested in
             if requested { isComposerFolded = false }
         }
+        // Replier garde la réponse en cours ; une NOUVELLE demande rouvre.
+        .adaptiveOnChange(of: replyingToStoryComment?.id) { old, new in
+            guard StoryComposerFold.unfoldsOnReply(from: old, to: new) else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { isComposerFolded = false }
+        }
     }
 
     /// Le bloc entier : ⌄ en rédaction, la plaque, le panneau d'émojis — ou,
@@ -170,6 +174,7 @@ extension StoryCardView {
                 composerFocusTrigger: $composerFocusTrigger,
                 storyDrafts: $storyDrafts,
                 replyingToStoryComment: $replyingToStoryComment,
+                isRecordingVoice: $isComposerRecording,
                 foldControl: composerFoldControl,
                 sendComment: sendComment
             )
@@ -253,17 +258,23 @@ extension StoryCardView {
                           defaultValue: "Masquer la zone de commentaire", bundle: .main),
             hint: String(localized: "story.composer.fold.hint",
                          defaultValue: "Ferme le clavier et replie la zone de commentaire en bulle", bundle: .main),
+            survivesRecording: true,
             action: foldComposer)
     }
 
-    /// Replié, il ne reste que ce bouton, centré, à l'icône de commentaire.
+    /// Replié, il ne reste que ce bouton, centré, à l'icône de commentaire —
+    /// et la pastille de ce que le repli garde : une prise en cours, une
+    /// réponse (#9893).
     private var composerUnfoldButton: some View {
-        Button(action: unfoldComposer) {
+        let badge = StoryComposerFold.bubbleBadge(isRecording: isComposerRecording,
+                                                  isReplying: replyingToStoryComment != nil)
+        return Button(action: unfoldComposer) {
             Image(systemName: StoryComposerFold.unfoldSymbol)
                 .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
+                .overlay(alignment: .topTrailing) { unfoldBadge(badge) }
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -272,5 +283,37 @@ extension StoryCardView {
                                    defaultValue: "Afficher la zone de commentaire", bundle: .main))
         .accessibilityHint(String(localized: "story.composer.unfold.hint",
                                   defaultValue: "Rouvre la zone de commentaire sans ouvrir le clavier", bundle: .main))
+        .accessibilityValue(unfoldBadgeValue(badge))
+    }
+
+    @ViewBuilder
+    private func unfoldBadge(_ badge: StoryComposerFold.BubbleBadge) -> some View {
+        switch badge {
+        case .none:
+            EmptyView()
+        case .recording:
+            Circle()
+                .fill(MeeshyColors.error)
+                .frame(width: MeeshySpacing.smPlus, height: MeeshySpacing.smPlus)
+                .accessibilityHidden(true)
+        case .reply:
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.caption2.weight(.bold))
+                .foregroundColor(.white)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func unfoldBadgeValue(_ badge: StoryComposerFold.BubbleBadge) -> String {
+        switch badge {
+        case .none:
+            return ""
+        case .recording:
+            return String(localized: "story.composer.unfold.recording",
+                          defaultValue: "Enregistrement vocal en cours", bundle: .main)
+        case .reply:
+            return String(localized: "story.composer.unfold.replying",
+                          defaultValue: "Réponse en cours", bundle: .main)
+        }
     }
 }

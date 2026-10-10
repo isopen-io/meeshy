@@ -111,22 +111,32 @@ nonisolated enum StoryComposerFold {
     /// second geste, que l'utilisateur choisit.
     static let bubbleTapped = Tap(userFolded: false, resignsKeyboard: false, focusesField: false)
 
+    /// **Sur la story, le ⌄ replie TOUJOURS** (#9893), réponse en cours
+    /// comprise : la plaque reste montée, donc la bannière « Réponse à X » et
+    /// le brouillon attendent la réouverture. Le fil et le détail d'un post
+    /// gardent `presentation(userFolded:isReplying:)`.
     static func readerPresentation(userFolded: Bool) -> Presentation {
-        .expanded
+        userFolded ? .folded : .expanded
     }
 
+    /// Seule une NOUVELLE demande de réponse rouvre un composeur replié —
+    /// annuler ou envoyer la réponse ne rouvre rien.
     static func unfoldsOnReply(from oldReplyId: String?, to newReplyId: String?) -> Bool {
-        false
+        newReplyId != nil && newReplyId != oldReplyId
     }
 
+    /// Ce que la bulle signale de ce que le repli garde.
     enum BubbleBadge: Equatable, Sendable {
         case none
         case recording
         case reply
     }
 
+    /// Une prise en cours passe avant la réponse : c'est elle qu'il ne faut
+    /// pas oublier sous la bulle.
     static func bubbleBadge(isRecording: Bool, isReplying: Bool) -> BubbleBadge {
-        .none
+        if isRecording { return .recording }
+        return isReplying ? .reply : .none
     }
 
     static let foldSymbol = "chevron.down"

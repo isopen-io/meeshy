@@ -855,15 +855,14 @@ struct StoryCardView: View {
     /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) — seul
     /// loader actif (l'ancien `ProgressView` blanc redondant a été retiré).
     /// Cf. spec stories-video-layers-text-sprint § 3.D.
-    /// **Le token de retour en tête du corpus** (#4831).
-    ///
-    /// État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
+    /// **Le token de retour en tête du corpus** (#4831). État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
     /// suspend l'horloge de lecture et appartient donc au parent — remonter une
     /// fenêtre de défilement ne regarde personne d'autre que cette carte.
     @State var captionScrollToTopToken: Int = 0 // internal for cross-file extension access
-    /// Repli du composeur et hauteur mesurée de son bloc (#8431).
+    /// Repli du composeur, hauteur mesurée de son bloc (#8431), prise vocale en cours (#9893).
     @State var isComposerFolded: Bool = false // internal for cross-file extension access
     @State var composerBlockHeight: CGFloat? // internal for cross-file extension access
+    @State var isComposerRecording: Bool = false // internal for cross-file extension access
     @State private var slideContentProgress: Double = 0
     /// Le pont du parcours au doigt (#7878) : la barre le pilote, le canvas de
     /// la story COURANTE s'y attache au montage.

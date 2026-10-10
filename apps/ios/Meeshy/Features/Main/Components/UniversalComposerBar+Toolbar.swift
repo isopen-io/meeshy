@@ -125,7 +125,7 @@ extension UniversalComposerBar {
     /// de la plaque ; il ferme désormais la rangée d'outils, dont la bande
     /// `trailing` ne défile jamais — Dynamic Type ne peut pas le pousser hors de
     /// l'écran. Glyphe au format des outils (30 pt), cible de 44 pt.
-    private func foldButton(_ fold: ComposerFoldControl) -> some View {
+    func foldButton(_ fold: ComposerFoldControl) -> some View {
         Button(action: fold.action) {
             Image(systemName: fold.symbol)
                 .font(.footnote.weight(.bold))
@@ -253,7 +253,7 @@ extension UniversalComposerBar {
 /// sur une rangée à lui ; les autres (fils, posts) gardent la barre nue.
 nonisolated enum ComposerFoldPlacement {
     static func rowDuringRecording(isRecording: Bool, survivesRecording: Bool) -> Bool {
-        false
+        isRecording && survivesRecording
     }
 }
 
@@ -277,6 +277,8 @@ struct ComposerFoldControl {
     let symbol: String
     let label: String
     var hint: String? = nil
+    /// Le ⌄ reste visible pendant une prise vocale (`ComposerFoldPlacement`).
+    var survivesRecording: Bool = false
     let action: () -> Void
 }
 
