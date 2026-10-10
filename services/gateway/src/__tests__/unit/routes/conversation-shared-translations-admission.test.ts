@@ -118,6 +118,24 @@ describe('POST /conversations/:id/shared-translations — ce que la conversation
       refusedWithoutTrace(h);
     });
 
+    // Le canal d'annonces exige le rang `admin` quel que soit `defaultWriteRole`
+    // (`requiredWriteRank`) : seul le drapeau, sans plancher qui le double, dit s'il
+    // est lu. Avec `defaultWriteRole: 'admin'` — le réglage qu'écrit la création —,
+    // le plancher refuse à sa place et le drapeau peut manquer au `select`.
+    it.each([
+      ['ouvert à tous', 'everyone'],
+      ['absent', null],
+      ['réservé aux membres', 'member'],
+    ])('refuse 403 au simple membre d’un canal d’annonces dont le plancher d’écriture est %s : le drapeau PRIME', async (_label, defaultWriteRole) => {
+      const h = await buildApp({ store: sceneWith({ conversation: { isAnnouncementChannel: true, defaultWriteRole } }) });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toMatchObject({ success: false });
+      refusedWithoutTrace(h);
+    });
+
     it('refuse 403 au membre d’un groupe dont l’écriture est réservée aux modérateurs', async () => {
       const h = await buildApp({ store: sceneWith({ conversation: { defaultWriteRole: 'moderator' } }) });
 
