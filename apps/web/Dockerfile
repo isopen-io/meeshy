@@ -163,7 +163,7 @@ RUN set -eu; for p in about contact partners privacy terms; do \
     echo "les cinq pages sont presentes et precachees, build-info.json ecrit"
 
 # ===== SERVICE =====
-FROM docker.io/nginx:1.29-alpine AS runner
+FROM docker.io/nginx:1.31-alpine AS runner
 
 RUN apk add --no-cache tini curl
 
