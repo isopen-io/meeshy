@@ -6,7 +6,7 @@
  * MongoDB la crée à la pose du premier index, ou à la première écriture si le
  * script n'a pas encore été joué.
  *
- * Deux index :
+ * Trois index :
  * - SharedTranslation (messageId, targetLanguage, sourceVersion) UNIQUE — l'arbitre
  *   du « premier partage gagne » : la route (`routes/conversations/shared-translations.ts`)
  *   crée d'abord et ne relit que sur la violation d'unicité. Sans lui la création ne
@@ -14,6 +14,14 @@
  *   tous deux et diffusés tous deux (le `GET`, lui, n'en sert qu'un — le premier).
  * - SharedTranslation (conversationId, messageId) — la lecture : les traductions
  *   d'une conversation pour les messages demandés, sans balayer la collection.
+ * - SharedTranslation (sharedById) — l'effacement par COMPTE : la purge d'un compte
+ *   supprimé retire les partages de tous ses participants
+ *   (`eraseSharedTranslationsOfAccount` : `deleteMany` sur `sharedById`, un
+ *   `Participant.id`). Aucun des deux index ci-dessus ne commence par cette
+ *   colonne : sans lui, chaque purge parcourt la collection ENTIÈRE.
+ *
+ * Le troisième est venu après les deux premiers : rejouer le script sur une base qui a
+ * déjà ces deux-là pose le seul qui manque et ne touche pas aux autres.
  *
  * L'ordre avec le déploiement : à jouer AVANT que la passerelle qui sert la route
  * ne reçoive du trafic, ou aussitôt après. Le créneau est sans conséquence tant
@@ -47,6 +55,7 @@ const specs = [
     unique: true,
   },
   { collection: 'SharedTranslation', name: 'SharedTranslation_conversationId_messageId_idx', key: { conversationId: 1, messageId: 1 } },
+  { collection: 'SharedTranslation', name: 'SharedTranslation_sharedById_idx', key: { sharedById: 1 } },
 ];
 
 const sameKey = (a, b) => JSON.stringify(a) === JSON.stringify(b);

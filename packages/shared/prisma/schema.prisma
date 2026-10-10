@@ -1136,6 +1136,8 @@ model SharedTranslation {
 
   @@unique([messageId, targetLanguage, sourceVersion])
   @@index([conversationId, messageId])
+  // L'effacement par COMPTE (`eraseSharedTranslationsOfAccount`) retire par partageur.
+  @@index([sharedById])
 }
 
 /// Traduction d'un message

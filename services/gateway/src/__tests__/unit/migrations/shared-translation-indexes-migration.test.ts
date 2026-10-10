@@ -22,6 +22,7 @@ const SCHEMA = resolve(MIGRATIONS, 'schema.prisma');
 
 const UNIQUE = 'SharedTranslation_messageId_targetLanguage_sourceVersion_key';
 const READING = 'SharedTranslation_conversationId_messageId_idx';
+const ERASURE = 'SharedTranslation_sharedById_idx';
 
 type Index = { readonly name: string; readonly key: Record<string, number>; readonly unique?: boolean };
 
@@ -59,7 +60,7 @@ const indexesOf = (database: ReturnType<typeof fakeDatabase>): readonly Index[] 
 const named = (database: ReturnType<typeof fakeDatabase>, name: string) => indexesOf(database).find((index) => index.name === name);
 
 describe('2026-10-10-shared-translation-indexes.mongodb.js', () => {
-  it('pose l’unique (messageId, targetLanguage, sourceVersion) et l’index de lecture, sous les noms que Prisma leur donnerait', () => {
+  it('pose l’unique (messageId, targetLanguage, sourceVersion), l’index de lecture et l’index de l’effacement par compte, sous les noms que Prisma leur donnerait', () => {
     const database = fakeDatabase({ SharedTranslation: ID_ONLY });
 
     run(database);
@@ -70,15 +71,36 @@ describe('2026-10-10-shared-translation-indexes.mongodb.js', () => {
     const reading = named(database, READING);
     expect(reading?.unique).toBeUndefined();
     expect(Object.keys(reading?.key ?? {})).toEqual(['conversationId', 'messageId']);
+    const erasure = named(database, ERASURE);
+    expect(erasure?.unique).toBeUndefined();
+    expect(Object.keys(erasure?.key ?? {})).toEqual(['sharedById']);
   });
 
-  it('pose les deux sur une collection qui n’existe pas encore, sans la lire', () => {
+  it('pose les trois sur une collection qui n’existe pas encore, sans la lire', () => {
     const database = fakeDatabase({});
 
     const { quits } = run(database);
 
-    expect(indexesOf(database).map((index) => index.name).sort()).toEqual([READING, UNIQUE]);
+    expect(indexesOf(database).map((index) => index.name).sort()).toEqual([ERASURE, READING, UNIQUE].sort());
     expect(database.aggregated).toEqual([]);
+    expect(quits).toEqual([]);
+  });
+
+  it('complète une base qui n’a que les deux premiers index : le troisième se pose, les deux autres ne bougent pas', () => {
+    const database = fakeDatabase({
+      SharedTranslation: [
+        ...ID_ONLY,
+        { name: UNIQUE, key: { messageId: 1, targetLanguage: 1, sourceVersion: 1 }, unique: true },
+        { name: READING, key: { conversationId: 1, messageId: 1 } },
+      ],
+    });
+
+    const { text, quits } = run(database);
+
+    expect(indexesOf(database).map((index) => index.name)).toEqual(['_id_', UNIQUE, READING, ERASURE]);
+    expect(text).toContain('Créés (1) :');
+    expect(text).toContain(`+ SharedTranslation.${ERASURE}`);
+    expect(text).toContain('Déjà présents (2)');
     expect(quits).toEqual([]);
   });
 
@@ -91,7 +113,7 @@ describe('2026-10-10-shared-translation-indexes.mongodb.js', () => {
 
     expect(JSON.stringify([...database.indexes.entries()])).toBe(after);
     expect(text).toContain('Créés (0) :');
-    expect(text).toContain('Déjà présents (2)');
+    expect(text).toContain('Déjà présents (3)');
     expect(quits).toEqual([]);
   });
 
@@ -101,22 +123,24 @@ describe('2026-10-10-shared-translation-indexes.mongodb.js', () => {
         ...ID_ONLY,
         { name: 'unique_a_la_main', key: { messageId: 1, targetLanguage: 1, sourceVersion: 1 }, unique: true },
         { name: 'lecture_a_la_main', key: { conversationId: 1, messageId: 1 } },
+        { name: 'effacement_a_la_main', key: { sharedById: 1 } },
       ],
     });
 
     const { text } = run(database);
 
-    expect(indexesOf(database)).toHaveLength(3);
-    expect(text).toContain('Déjà présents (2)');
+    expect(indexesOf(database)).toHaveLength(4);
+    expect(text).toContain('Déjà présents (3)');
   });
 
-  it('un index voisin (un préfixe, ou la même clé dans un autre ordre) ne remplace ni l’unique ni la lecture', () => {
+  it('un index voisin (un préfixe, ou la même clé dans un autre ordre) ne remplace ni l’unique, ni la lecture, ni l’effacement', () => {
     const database = fakeDatabase({
       SharedTranslation: [
         ...ID_ONLY,
         { name: 'a', key: { messageId: 1 } },
         { name: 'b', key: { messageId: 1, sourceVersion: 1, targetLanguage: 1 }, unique: true },
         { name: 'c', key: { messageId: 1, conversationId: 1 } },
+        { name: 'd', key: { sharedById: 1, createdAt: 1 } },
       ],
     });
 
@@ -124,6 +148,7 @@ describe('2026-10-10-shared-translation-indexes.mongodb.js', () => {
 
     expect(named(database, UNIQUE)?.unique).toBe(true);
     expect(named(database, READING)).toBeDefined();
+    expect(named(database, ERASURE)).toBeDefined();
     expect(named(database, 'b')?.unique).toBe(true);
   });
 
@@ -147,6 +172,7 @@ describe('2026-10-10-shared-translation-indexes.mongodb.js', () => {
 
       expect(named(database, UNIQUE)).toBeUndefined();
       expect(named(database, READING)).toBeDefined();
+      expect(named(database, ERASURE)).toBeDefined();
       expect(text).toContain('Bloqués par des doublons (1) :');
       expect(text).toContain(`! SharedTranslation.${UNIQUE} — 3 groupe(s) en doublon`);
       expect(quits).toEqual([2]);
@@ -174,6 +200,7 @@ describe('2026-10-10-shared-translation-indexes.mongodb.js', () => {
     expect(text).toContain('SIMULATION');
     expect(text).toContain(`+ SharedTranslation.${UNIQUE}`);
     expect(text).toContain(`+ SharedTranslation.${READING}`);
+    expect(text).toContain(`+ SharedTranslation.${ERASURE}`);
   });
 
   describe('contre schema.prisma', () => {
@@ -197,7 +224,7 @@ describe('2026-10-10-shared-translation-indexes.mongodb.js', () => {
         ...fieldLists('@@unique').map((fields) => ({ fields, unique: true })),
         ...fieldLists('@@index').map((fields) => ({ fields, unique: false })),
       ];
-      expect(declared).toHaveLength(2);
+      expect(declared).toHaveLength(3);
       expect(posed).toEqual(expect.arrayContaining(declared));
       expect(posed).toHaveLength(declared.length);
     });
