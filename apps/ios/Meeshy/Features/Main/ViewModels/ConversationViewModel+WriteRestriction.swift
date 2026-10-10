@@ -18,12 +18,14 @@ extension ConversationViewModel {
         return served?.closesComposer == true ? served : nil
     }
 
-    /// Le refus d'un envoi : le composeur cède la place au bandeau, et la bulle
+    /// Le refus d'un envoi : le composeur cède la place au bandeau, la bulle
     /// optimiste disparaît sans laisser de « message supprimé » — le message
-    /// n'a jamais existé pour personne.
+    /// n'a jamais existé pour personne — et la ligne de liste, qui l'annonçait
+    /// déjà (« Vous : … »), revient au dernier message réel.
     func withdrawRefusedMessage(tempId: String, restriction: ConversationWriteRestriction) async {
         Logger.messages.warning("perf:ios.send.fail.write-restricted clientMessageId=\(tempId, privacy: .public) restriction=\(restriction.wireValue, privacy: .public)")
         learnedWriteRestriction = restriction
         try? await messagePersistence.purgeMessages(ids: [tempId])
+        await ConversationSyncEngine.shared.withdrawLocalMessage(conversationId: conversationId, messageId: tempId)
     }
 }
