@@ -32,6 +32,9 @@ import { useFocusFrame } from '@/lib/view/use-focus-frame';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
+import { authorInkStyle } from '@/lib/view/author-ink';
+import { authorLanguageChip } from '@/lib/view/author-language-chip';
+import '@/styles/conversation-look.css';
 import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
@@ -143,8 +146,11 @@ export const FocalRow = memo(function FocalRow({
   onOpenDetail,
   selected,
   onToggleSelect,
+  group = false,
 }: {
   mode: FlatRowMode;
+  /** Une conversation de GROUPE (#10004) : le nom d'un autre auteur y prend SA teinte. */
+  group?: boolean;
   place: PlacedMessage;
   languages: readonly string[];
   viewerId: string;
@@ -387,6 +393,10 @@ export const FocalRow = memo(function FocalRow({
     fallbackLanguage: message.originalLanguage,
   });
 
+  /* LA PASTILLE DE LANGUE SUR L'AVATAR DE 22 PX (#10004) — la langue SERVIE
+     est celle que la rangée vient de résoudre, jamais une seconde descente. */
+  const languageChip = authorLanguageChip({ originalLanguage: message.originalLanguage, servedLanguage: activeLanguage, isMine });
+
   const footerLanguages = languageBand({
     originalLanguage: message.originalLanguage,
     preferredLanguages: languages,
@@ -438,6 +448,12 @@ export const FocalRow = memo(function FocalRow({
    * CIBLE (famille #5681-#5683), pas une dérivation qui invente une
    * couleur : issue compagnon ouverte côté iOS, pas ici. */
   const senderNameColor = isMine ? 'var(--color-self-name-ink)' : 'var(--color-ios-ink)';
+  /* LE NOM TEINTÉ PAR PERSONNE, EN GROUPE (#10004) — l'identifiant d'abord,
+     le nom en repli (`authorAccentColor`) ; la feuille choisit le schéma. */
+  const tintsName = group && !isMine;
+  const senderNameStyle = tintsName
+    ? authorInkStyle({ authorId: message.sender?.userId ?? message.senderId, name: senderAvatarName })
+    : { color: senderNameColor };
   /* SANS COMPTE (#5774, travail 2/3 ; glyphe #5935) — miroir
    * `FocalIdentityHeader.swift:99-161` : un visiteur entré par lien porte un
    * marqueur AVANT son nom. Le fantôme `theatermasks.fill` d'iOS est
@@ -688,6 +704,7 @@ export const FocalRow = memo(function FocalRow({
             <span className="offscreen">Sélectionner ce message</span>
           </button>
         ) : head ? (
+          <span className="relative inline-flex">
           <AuthorAvatar
             {...(isMine ? {} : { authorId: hereKeyOf(message.sender) })}
             initials={initialsOf(senderAvatarName)}
@@ -708,6 +725,12 @@ export const FocalRow = memo(function FocalRow({
               : {})}
             presence={presenceOf(message.sender, nowMs)}
           />
+          {languageChip === null ? null : (
+            <span aria-hidden data-author-language={languageChip} className={`author-language-chip${tintsName ? ' author-ink' : ''}`} style={tintsName ? senderNameStyle : { color: 'var(--color-ios-ink-2)' }}>
+              {languageChip}
+            </span>
+          )}
+          </span>
         ) : null}
       </div>
 
@@ -788,8 +811,8 @@ export const FocalRow = memo(function FocalRow({
               username={senderHandle}
               {...(senderRing === undefined ? {} : { storyRing: senderRing })}
               redundant
-              className="text-title font-extrabold"
-              style={{ color: senderNameColor }}
+              className={`text-title font-extrabold${tintsName ? ' author-ink' : ''}`}
+              style={senderNameStyle}
             >
               {senderName}
             </PersonName>

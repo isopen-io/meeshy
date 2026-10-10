@@ -986,6 +986,22 @@
         "status": "ESTIMEE POUR LA SECTION BADGES DU CARNET (#9639) -- A REMESURER PAR LA CI",
         "source": "Estimation du 2026-10-08 (#9639), sans build local (directive : builds lourds en CI) : les 7 cles `game.rules.badges.*` (la section badges du carnet, que visent tous les liens « Comprendre les badges ») dans les sept langues ajoutent 2,43 Ko gzip -9 aux SOURCES ; au ratio built/source mesure (10,18 / 12,02), +2,06 Ko = 12,24 Ko ; plafond = ceil(12,24) + 1 = 14, a remplacer par la mesure de la CI. PRECEDENT : Mesure du 2026-10-07 par la CI (`bun run build` puis `node scripts/measure-weight.mjs`, job Quality (bun), run 37593972086, tete b1b60b9b5a ; gzip -9 par fichier) : 10,18 Ko pour les SEPT fichiers du carnet des regles et de son atlas (`catalog-game-rules-<l>.ts`, 58 cles `game.rules.*`), de 1,34 Ko (en) a 1,66 Ko (ar). Charges avec la seule page « Comment ca marche » (`/me/progression/regles`) ; un lecteur n'en telecharge qu'UN, et seulement s'il ouvre le carnet. Arrondi au Ko SUPERIEUR (11) + 1 Ko de marge."
       }
+    },
+    "conversations": {
+      "pattern": "^assets/conversations-[A-Za-z0-9_-]{7}\\.js$",
+      "kb": {
+        "value": null,
+        "status": "CREEE PAR #10004, A RELEVER SUR LA MESURE DE LIVRAISON",
+        "source": "L'ecran de LISTE (`routes/conversations.tsx`, `route-table.tsx` § list) n'avait aucun plafond propre : il n'etait borne que par la somme `on_demand_gzip_9_bytes`, qui ne designe personne. #10004 y ajoute la carte World Wide epinglee (`lens/world-pin.ts`, la variante `card` de `LensRow`, sa peau dans `lens-row-meta.css`). Entree CREEE ici sans valeur (`null` : `measure-weight.mjs` mesure et RAPPORTE le chunk, rougit s'il ne trouve AUCUN fichier, ne plafonne pas) : le lot s'est developpe sans build, la mesure appartient a l'etape de livraison serialisee (`bun run build` puis `node scripts/measure-weight.mjs`). Ce jour-la, la valeur se pose selon la regle de la premiere mesure : arrondi au Ko SUPERIEUR + 1 Ko de marge. Ne JAMAIS y ecrire une estimation."
+      }
+    },
+    "thread": {
+      "pattern": "^assets/thread-[A-Za-z0-9_-]{7}\\.js$",
+      "kb": {
+        "value": null,
+        "status": "CREEE PAR #10004, A RELEVER SUR LA MESURE DE LIVRAISON",
+        "source": "L'ecran du FIL (`routes/thread.tsx`, `route-table.tsx` § thread) n'avait aucun plafond propre. Le motif borne le chunk de la ROUTE et lui seul : `thread-` suivi EXACTEMENT du hachage de 7 (`vite.config.ts` § chunkFileNames), donc jamais `thread-media-viewer-`, `thread-sheets-` ni aucun voisin (temoin `components/conversation-look.test.tsx`). #10004 y ajoute le nom d'auteur teinte (`lib/view/author-ink.ts`), la pastille de langue (`lib/view/author-language-chip.ts`), les cartes vocal/fichier (`lib/view/file-badge.ts`) et `styles/conversation-look.css` ; la lueur d'accent est du CSS pur (`thread-scene.css`). Entree CREEE sans valeur (`null`) pour la meme raison que `conversations` ci-dessus : la valeur se pose sur la mesure de l'etape de livraison, arrondi au Ko SUPERIEUR + 1 Ko de marge, jamais sur une estimation."
+      }
     }
   },
   "network_note": "Le profil est REPRIS TEL QUEL de apps/web/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",
