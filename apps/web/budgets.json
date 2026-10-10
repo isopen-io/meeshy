@@ -29,9 +29,9 @@
       "apps/web/scripts/prerender-landing.tsx"
     ],
     "kb": {
-      "value": null,
-      "status": "A POSER A LA LIVRAISON DE #10002 -- valeur mesuree par `bun run build`, arrondie au Ko SUPERIEUR + 1 Ko de marge, puis A CONFIRMER PAR LE PORTEUR",
-      "source": "La landing remplace la liste sur / (#10002) : elle ne touche pas first_paint.kb (la coquille de l'application, index.html, reste servie a toutes les autres adresses et ne change pas de poids), et porte donc son PROPRE plafond, sur le modele de institutional_page.kb. Tant que la valeur est null, le prerendu mesure et l'annonce sans rougir."
+      "value": 10,
+      "status": "CIBLE POSEE A LA LIVRAISON DE #10002 le 2026-10-10 -- mesure arrondie au Ko SUPERIEUR + 1 Ko de marge, A CONFIRMER PAR LE PORTEUR",
+      "source": "MESURE 2026-10-10 (`bun run build`, livraison #10002) : / 8,58 Ko · /en 8,43 · /es 8,56 · /pt 8,54 · /de 8,59 · /it 8,52 · /ar 8,78 (la plus lourde : la copie arabe). 8,78 arrondi a 9, + 1 Ko de marge = 10. La landing remplace la liste sur / (#10002) : elle ne touche pas first_paint.kb (la coquille de l'application, index.html, reste servie a toutes les autres adresses et ne change pas de poids), et porte donc son PROPRE plafond, sur le modele de institutional_page.kb. Tant que la valeur est null, le prerendu mesure et l'annonce sans rougir."
     }
   },
   "on_demand_chunks": {
