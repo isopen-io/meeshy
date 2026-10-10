@@ -500,6 +500,10 @@ public actor TusUploadManager {
                 throw TusResumeRetriableError()
 
             default:
+                if let refusal = GuestAttachmentRefusal(statusCode: patchHttp.statusCode, body: responseData) {
+                    await store.delete(checkpointKey: checkpointKey)
+                    throw refusal
+                }
                 throw URLError(.badServerResponse)
             }
         }
@@ -533,7 +537,14 @@ public actor TusUploadManager {
         )
         createReq.setValue(metadataValue, forHTTPHeaderField: "Upload-Metadata")
 
-        let (_, createResponse) = try await urlSession.data(for: createReq)
+        let (createBody, createResponse) = try await urlSession.data(for: createReq)
+        // #10006 — le refus d'une pièce jointe d'INVITÉ est définitif et dit
+        // pourquoi (famille fermée, taille) : il remonte typé, jamais en
+        // `badServerResponse` que l'appelant rejouerait.
+        if let http = createResponse as? HTTPURLResponse,
+           let refusal = GuestAttachmentRefusal(statusCode: http.statusCode, body: createBody) {
+            throw refusal
+        }
         guard let httpResponse = createResponse as? HTTPURLResponse,
               httpResponse.statusCode == 201,
               let location = httpResponse.value(forHTTPHeaderField: "Location") else {

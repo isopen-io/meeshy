@@ -72,6 +72,9 @@ struct ConversationComposerState {
     var showPhotoPicker = false
     var showCamera = false
     var showFilePicker = false
+    /// #10006 — la feuille « Partager dans … » d'un invité dont le lien
+    /// restreint les familles : elle remplace le sélecteur de fichiers libre.
+    var showGuestAttachmentSheet = false
     var selectedPhotoItems: [PhotosPickerItem] = []
     /// True while `selectedPhotoItems` is being primed with the recent-media
     /// strip's multi-selection before presenting the PhotosPicker. Priming
