@@ -39,7 +39,7 @@ import { VOICE_CLONING_QUALITY_PRESETS } from '@meeshy/shared/types/preferences'
 import type { FastifyInstance } from 'fastify';
 import { emitPreferenceCategoryUpdated } from './preferences/preferences-broadcast';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { calculateAge } from '@meeshy/shared/utils/age';
+import { calculateAge, judgeDeclaredBirthDate, parseBirthDateDay } from '@meeshy/shared/utils/age';
 import { EngagementService } from './engagement/EngagementService';
 import { guardedTimeout } from '../utils/guarded-timer';
 // Logger dédié pour VoiceProfileService
@@ -319,6 +319,7 @@ export class VoiceProfileService extends EventEmitter {
           dataProcessingConsentAt: true,
           voiceDataConsentAt: true,
           voiceProfileConsentAt: true,
+          birthDate: true,
         }
       });
       logger.info('[VoiceProfileService] Existing user consents:', existingUser);
@@ -362,10 +363,15 @@ export class VoiceProfileService extends EventEmitter {
         }
       }
 
-      // birthDate et ageVerifiedAt sont tous deux sur User maintenant
-      if (consent.birthDate) {
-        userData.birthDate = new Date(consent.birthDate);
+      // #9927 — déclarée UNE fois, jamais une date que PUT /me/birth-date refuserait.
+      const declaredBirthDate = consent.birthDate ? parseBirthDateDay(consent.birthDate) : null;
+      if (declaredBirthDate && !existingUser?.birthDate && judgeDeclaredBirthDate(declaredBirthDate, now) === 'admitted') {
+        userData.birthDate = declaredBirthDate;
         userData.ageVerifiedAt = now;
+      }
+
+      if (Object.keys(userData).length === 0 && consent.birthDate) {
+        return { success: true, data: { consentUpdated: false } };
       }
 
       if (Object.keys(userData).length === 0) {

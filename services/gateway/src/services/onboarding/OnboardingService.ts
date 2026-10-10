@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { calculateAge } from '@meeshy/shared/utils/age';
+import { isDeclaredMinor, judgeDeclaredBirthDate } from '@meeshy/shared/utils/age';
+import { GLOBAL_CONVERSATION_TYPE, viewerWriteRestrictionOf } from '@meeshy/shared/utils/global-minor-restriction';
 import {
   ONBOARDING_COMPLETION_STEP_IDS,
   ONBOARDING_MAX_SUGGESTIONS,
@@ -56,8 +57,19 @@ export type AgeClass = 'adult' | 'minor' | 'unknown';
 
 export function ageClassOf(birthDate: Date | null | undefined, now: Date): AgeClass {
   if (!birthDate) return 'unknown';
-  return calculateAge(birthDate, now) >= 18 ? 'adult' : 'minor';
+  return isDeclaredMinor(birthDate, now) ? 'minor' : 'adult';
 }
+
+/**
+ * L'issue d'une déclaration de date de naissance (#9927). `declared` porte ce
+ * que la route rend ; les trois refus ne touchent à rien.
+ */
+export type BirthDateDeclarationOutcome =
+  | { readonly kind: 'declared'; readonly ageClass: 'adult' | 'minor'; readonly viewerWriteRestrictionGlobal: boolean }
+  | { readonly kind: 'already-set' }
+  | { readonly kind: 'below-minimum' }
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'user-not-found' };
 
 export type SuggestionViewer = {
   readonly id: string;
@@ -192,6 +204,36 @@ export class OnboardingService {
     return this.stateOf({ ...user, ...data }, now);
   }
 
+  /**
+   * `PUT /me/birth-date` (#9927) — la date s'écrit UNE fois. L'écriture est
+   * conditionnée en base à l'absence de date (`birthDate` nul OU absent du
+   * document, les deux formes du connecteur Mongo) : deux déclarations
+   * simultanées n'en écrivent qu'une, et la relecture préalable ne sert qu'à
+   * répondre vite. L'étape `age` de l'onboarding est marquée faite dans la
+   * même écriture.
+   */
+  async declareBirthDate(userId: string, birthDate: Date, now: Date = new Date()): Promise<BirthDateDeclarationOutcome> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_STATE_SELECT });
+    if (!user) return { kind: 'user-not-found' };
+    if (user.birthDate) return { kind: 'already-set' };
+    const verdict = judgeDeclaredBirthDate(birthDate, now);
+    if (verdict === 'below-minimum') return { kind: 'below-minimum' };
+    if (verdict !== 'admitted') return { kind: 'invalid' };
+
+    const steps = nextOnboardingWrite(user, { step: 'age', outcome: 'done' }, now);
+    const written = await this.prisma.user.updateMany({
+      where: { id: userId, OR: [{ birthDate: null }, { birthDate: { isSet: false } }] },
+      data: { birthDate, ...(steps ?? {}) },
+    });
+    if (written.count === 0) return { kind: 'already-set' };
+    const restriction = viewerWriteRestrictionOf({ conversationType: GLOBAL_CONVERSATION_TYPE, birthDate, now });
+    return {
+      kind: 'declared',
+      ageClass: restriction === null ? 'adult' : 'minor',
+      viewerWriteRestrictionGlobal: restriction !== null,
+    };
+  }
+
   private async stateOf(user: UserStateRow, now: Date): Promise<OnboardingState> {
     const window = onboardingWindow({ createdAt: user.createdAt, completedAt: user.onboardingCompletedAt, now });
     const completedAt = window === 'expired' ? await this.closeExpired(user.id, now) : user.onboardingCompletedAt;
@@ -221,6 +263,7 @@ export class OnboardingService {
       canPublishStory: mayPublish(resolveAccountActivation(user, now)),
       pendingFriendRequests,
       stepRewards,
+      ...minorGlobalRestriction(user.birthDate, now),
     };
   }
 
@@ -370,6 +413,16 @@ export class OnboardingService {
       excludedIds,
     });
   }
+}
+
+/**
+ * #9927 — `viewerWriteRestriction` n'est servi QUE quand il restreint : un
+ * client antérieur décode l'état en objet strict (web `Served`), et une clé de
+ * plus le rendrait illisible pour TOUT compte. Absent = aucune restriction.
+ */
+function minorGlobalRestriction(birthDate: Date | null, now: Date): Pick<OnboardingState, 'viewerWriteRestriction'> {
+  const restriction = viewerWriteRestrictionOf({ conversationType: GLOBAL_CONVERSATION_TYPE, birthDate, now });
+  return restriction === null ? {} : { viewerWriteRestriction: restriction };
 }
 
 /**

@@ -96,6 +96,9 @@ const onboardingResponseSchema = {
             friendship: { type: 'integer', minimum: 0 },
           },
         },
+        // #9927 — servi SEULEMENT quand il restreint (mineur déclaré) : Meeshy
+        // Global est en lecture seule et rangée dans les archives.
+        viewerWriteRestriction: { type: 'string', enum: ['minor-global'] },
       },
     },
   },

@@ -1,0 +1,181 @@
+/**
+ * `PUT /api/v1/me/birth-date` (#9927) — la date de naissance se déclare UNE
+ * fois, à l'onboarding, facultativement. Sous 13 ans révolus : refus, rien
+ * n'est écrit. De 13 à 17 ans : Meeshy Global passe en lecture seule. Une
+ * seconde déclaration est refusée — un mineur ne se redéclare pas majeur ;
+ * une correction passe par le support.
+ *
+ * Et l'état d'onboarding (`GET /me/onboarding`) le dit : `viewerWriteRestriction:
+ * 'minor-global'` pour un mineur déclaré, absent sinon (un client antérieur
+ * décode l'état en objet strict).
+ *
+ * @jest-environment node
+ */
+
+import { describe, it, expect, jest } from '@jest/globals';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import { meBirthDateRoutes } from '../../../../routes/me/birth-date';
+import { meOnboardingRoutes } from '../../../../routes/me/onboarding';
+import { OnboardingStateSchema } from '@meeshy/shared/types/onboarding';
+
+jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+
+const USER_ID = '68a000000000000000000001';
+const NOW = new Date('2026-10-10T12:00:00.000Z');
+
+type Row = { birthDate: Date | null; onboardingSteps: string[] };
+
+function makePrisma(initial: Partial<Row> = {}) {
+  const state: Row = { birthDate: null, onboardingSteps: ['languages'], ...initial };
+  const row = () => ({
+    id: USER_ID,
+    createdAt: new Date('2026-10-09T09:00:00.000Z'),
+    systemLanguage: 'fr',
+    regionalLanguage: null,
+    blockedUserIds: [],
+    onboardingCompletedAt: null,
+    emailVerifiedAt: null,
+    phoneNumber: null,
+    emailReleasedAt: null,
+    engagementScore: 0,
+    ...state,
+  });
+  const updateMany = jest.fn(async (args: { where: { OR: unknown[] }; data: Partial<Row> }) => {
+    if (state.birthDate !== null) return { count: 0 };
+    Object.assign(state, args.data);
+    return { count: 1 };
+  });
+  return {
+    state,
+    user: {
+      findUnique: jest.fn(async () => row()),
+      findMany: jest.fn(async () => []),
+      update: jest.fn(async () => row()),
+      updateMany,
+    },
+    conversation: { findUnique: jest.fn(async () => ({ id: 'global-1' })) },
+    message: { findMany: jest.fn(async () => []) },
+    participant: { findMany: jest.fn(async () => []) },
+    friendRequest: { findFirst: jest.fn(async () => null), findMany: jest.fn(async () => []), count: jest.fn(async () => 0) },
+    post: { findFirst: jest.fn(async () => null) },
+    engagementCounter: { findUnique: jest.fn(async () => null), findMany: jest.fn(async () => []) },
+    engagementMilestone: { findMany: jest.fn(async () => []) },
+    engagementConversationCredit: { findFirst: jest.fn(async () => null) },
+    engagementScaleConfig: { findFirst: jest.fn(async () => null), findUnique: jest.fn(async () => null) },
+  };
+}
+
+async function buildApp(prisma: ReturnType<typeof makePrisma>): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  app.decorate('prisma', prisma as never);
+  app.decorate('authenticate', async (req: FastifyRequest) => {
+    const userId = req.headers['x-test-user-id'] as string | undefined;
+    (req as { auth?: unknown }).auth = userId ? { userId, isAuthenticated: true } : undefined;
+  });
+  await app.register(meBirthDateRoutes, { prefix: '/api/v1/me', now: () => NOW });
+  await app.register(meOnboardingRoutes, { prefix: '/api/v1/me', now: () => NOW });
+  await app.ready();
+  return app;
+}
+
+const headers = { 'x-test-user-id': USER_ID };
+const declare = (app: FastifyInstance, birthDate: string) =>
+  app.inject({ method: 'PUT', url: '/api/v1/me/birth-date', headers, payload: { birthDate } });
+
+describe('PUT /me/birth-date (#9927)', () => {
+  it('401 sans authentification', async () => {
+    const app = await buildApp(makePrisma());
+    const res = await app.inject({ method: 'PUT', url: '/api/v1/me/birth-date', payload: { birthDate: '2000-01-01' } });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('12 ans : 422 AGE_BELOW_MINIMUM, rien n’est écrit', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+    const res = await declare(app, '2013-10-11');
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toMatchObject({ success: false, code: 'AGE_BELOW_MINIMUM' });
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    expect(prisma.state.birthDate).toBeNull();
+    await app.close();
+  });
+
+  it('13 ans le jour même : mineur, Global fermée en écriture, l’étape age faite', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+    const res = await declare(app, '2013-10-10');
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, data: { ageClass: 'minor', viewerWriteRestrictionGlobal: true } });
+    expect(prisma.state.birthDate?.toISOString()).toBe('2013-10-10T00:00:00.000Z');
+    expect(prisma.state.onboardingSteps).toEqual(['languages', 'age']);
+    await app.close();
+  });
+
+  it('18 ans le jour même : majeur, Global ouverte', async () => {
+    const app = await buildApp(makePrisma());
+    const res = await declare(app, '2008-10-10');
+    expect(res.json().data).toEqual({ ageClass: 'adult', viewerWriteRestrictionGlobal: false });
+    await app.close();
+  });
+
+  it('une seconde déclaration est refusée : 409 BIRTH_DATE_ALREADY_SET, la première reste', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+    await declare(app, '2011-03-03');
+    const res = await declare(app, '1990-03-03');
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'BIRTH_DATE_ALREADY_SET' });
+    expect(prisma.state.birthDate?.toISOString()).toBe('2011-03-03T00:00:00.000Z');
+    await app.close();
+  });
+
+  it('une date déjà posée par un autre chemin compte aussi : 409', async () => {
+    const app = await buildApp(makePrisma({ birthDate: new Date('2011-03-03T00:00:00.000Z') }));
+    const res = await declare(app, '1990-03-03');
+    expect(res.statusCode).toBe(409);
+    await app.close();
+  });
+
+  it.each([
+    ['une date future', '2026-10-11'],
+    ['plus de 120 ans', '1905-10-10'],
+    ['un jour qui n’existe pas', '2009-02-29'],
+    ['une autre forme', '10/10/2000'],
+  ])('%s : 400, rien n’est écrit', async (_label, birthDate) => {
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+    const res = await declare(app, birthDate);
+    expect(res.statusCode).toBe(400);
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('ne garde rien d’autre que la date : un champ de plus est refusé', async () => {
+    const app = await buildApp(makePrisma());
+    const res = await app.inject({ method: 'PUT', url: '/api/v1/me/birth-date', headers, payload: { birthDate: '2000-01-01', role: 'ADMIN' } });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('GET /me/onboarding — la restriction de Global (#9927)', () => {
+  it('mineur déclaré : viewerWriteRestriction minor-global, conforme au contrat', async () => {
+    const app = await buildApp(makePrisma({ birthDate: new Date('2011-03-03T00:00:00.000Z'), onboardingSteps: ['languages', 'age'] }));
+    const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.viewerWriteRestriction).toBe('minor-global');
+    expect(res.json().data.seenSteps).toEqual(['languages', 'age']);
+    expect(OnboardingStateSchema.safeParse(res.json().data).success).toBe(true);
+    await app.close();
+  });
+
+  it('âge inconnu ou majeur : le champ n’est pas servi (un client antérieur décode en strict)', async () => {
+    for (const birthDate of [null, new Date('1990-01-01T00:00:00.000Z')]) {
+      const app = await buildApp(makePrisma({ birthDate }));
+      const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers });
+      expect('viewerWriteRestriction' in res.json().data).toBe(false);
+      await app.close();
+    }
+  });
+});
