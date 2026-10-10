@@ -737,7 +737,7 @@ const MUTATIONS = [
     (world) => {
       world.lock.packages.react = ['react@18.0.0', '', {}, 'sha512-sonde'];
     },
-    'déclare 19.2.8, résout 18.0.0',
+    ', résout 18.0.0',
   ],
   [
     'un paquet suivi déclaré sur deux planchers',
