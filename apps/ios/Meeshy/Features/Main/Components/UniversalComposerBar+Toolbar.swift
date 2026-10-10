@@ -317,7 +317,7 @@ struct ComposerStackedLanguageMark: View {
     var body: some View {
         VStack(spacing: ComposerLanguagePillMetrics.lineSpacing) {
             Text(flag)
-                .font(.system(size: flagSize))
+                .font(MeeshyFont.emoji(flagSize))
             Text(code)
                 .font(.system(size: codeSize, weight: .bold))
         }

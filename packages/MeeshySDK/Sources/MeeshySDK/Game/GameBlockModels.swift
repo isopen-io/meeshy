@@ -247,11 +247,32 @@ public struct GameBlock: Codable, Sendable, Equatable {
         public let odds: ChestOdds
         /// Révélé une fois ouvert ; `nil` avant.
         public let reward: DailyChest?
+        /// Le contenu CERTAIN du jour (#10011) — points, Gloire, fragments — dit avant l'ouverture. `nil` devant
+        /// un serveur antérieur, avant le tirage des missions, ou s'il est illisible (il tombe seul).
+        public let today: ChestContent?
+        /// Les fragments de Meesh en poche (#10011), cinq par frappe gratuite — `nil` devant un serveur antérieur.
+        public let meeshFragments: MeeshFragmentProgress?
 
-        public init(status: Status, odds: ChestOdds, reward: DailyChest?) {
+        public init(status: Status, odds: ChestOdds, reward: DailyChest?,
+                    today: ChestContent? = nil, meeshFragments: MeeshFragmentProgress? = nil) {
             self.status = status
             self.odds = odds
             self.reward = reward
+            self.today = today
+            self.meeshFragments = meeshFragments
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case status, odds, reward, today, meeshFragments
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            status = try container.decode(Status.self, forKey: .status)
+            odds = try container.decode(ChestOdds.self, forKey: .odds)
+            reward = try container.decodeIfPresent(DailyChest.self, forKey: .reward)
+            today = (try? container.decodeIfPresent(ChestContent.self, forKey: .today)) ?? nil
+            meeshFragments = (try? container.decodeIfPresent(MeeshFragmentProgress.self, forKey: .meeshFragments)) ?? nil
         }
     }
 

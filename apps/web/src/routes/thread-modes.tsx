@@ -772,6 +772,7 @@ export function ThreadModes({
                         <FocalRow
                           mode={mode}
                           place={p}
+                          group={group}
                           languages={readerLanguages}
                           viewerId={viewerId}
                           onJumpToMessage={jumpToMessage}

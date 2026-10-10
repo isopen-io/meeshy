@@ -176,3 +176,43 @@ describe('les écritures du jeu', () => {
     expect(!result.ok && result.code).toBe('INSUFFICIENT_MEESHES');
   });
 });
+
+describe('le coffre et la frappe gratuite de #10011', () => {
+  test('le contenu du jour, les fragments en poche et la frappe par fragments se lisent', () => {
+    const block = gameBlockFixture({ meeshFragments: { earned: 7, spent: 0 } });
+    const read = readGameBlock(block);
+    expect(read?.chest.today).toEqual(block.chest.today);
+    expect(read?.chest.meeshFragments).toEqual({ held: 7, perMeesh: 5 });
+    expect(read?.mint.withFragments).toEqual({ cost: 5, held: 7, canMint: true, missingFragments: 0 });
+  });
+
+  test('illisibles, ils tombent SEULS : le bloc reste lu', () => {
+    const block = gameBlockFixture({ meeshFragments: { earned: 7, spent: 0 } });
+    const broken = {
+      ...block,
+      chest: { ...block.chest, today: { points: 'beaucoup' }, meeshFragments: { held: -1, perMeesh: 5 } },
+      mint: { ...block.mint, withFragments: { cost: 0 } },
+    };
+    const read = readGameBlock(broken);
+    expect(read).not.toBeNull();
+    expect(read && 'today' in read.chest).toBe(false);
+    expect(read && 'meeshFragments' in read.chest).toBe(false);
+    expect(read && 'withFragments' in read.mint).toBe(false);
+  });
+
+  test('un coffre d’avant #10011 se lit encore, sans Gloire ni fragments', async () => {
+    const transport = transportServing({ success: true, data: { status: 'already-claimed', reward: { points: 140, fragment: true, freeze: false }, score: 900 } });
+    const result = await claimChest(transport, 'req-0008-abcd');
+    expect(result.ok && result.data.reward).toEqual({ points: 140, fragment: true, freeze: false });
+  });
+
+  test('un coffre d’aujourd’hui porte sa Gloire, ses fragments et ceux en poche', async () => {
+    const transport = transportServing({
+      success: true,
+      data: { status: 'claimed', reward: { points: 1750, fragment: true, freeze: false, glory: 175, meeshFragments: 2 }, score: 3000, meeshFragments: { held: 6, perMeesh: 5 } },
+    });
+    const result = await claimChest(transport, 'req-0009-abcd');
+    expect(result.ok && result.data.meeshFragments).toEqual({ held: 6, perMeesh: 5 });
+    expect(result.ok && result.data.reward.glory).toBe(175);
+  });
+});

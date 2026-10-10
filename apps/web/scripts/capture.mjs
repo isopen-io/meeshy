@@ -151,7 +151,7 @@ for (const scheme of ['dark', 'light']) {
   {
     const page = await context.newPage();
     await page.clock.setFixedTime(INSTANT);
-    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE}/chats`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(300);
     await page.locator('#contenu').hover();
     for (let i = 0; i < 7; i += 1) {

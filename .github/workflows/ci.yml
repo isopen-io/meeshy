@@ -2206,6 +2206,15 @@ jobs:
   security:
     name: Security
     runs-on: ubuntu-latest
+    # Sans `security-events: write`, l'envoi du SARIF échoue sur les pushes de
+    # dev (« Resource not accessible by integration », masqué par
+    # continue-on-error) : dev n'a alors AUCUNE analyse Trivy de référence, et
+    # le check « Trivy » d'une PR qui touche bun.lock compte toutes les alertes
+    # déjà présentes comme introduites par elle.
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7

@@ -23,6 +23,17 @@
       "source": "RELEVE 2026-09-30 (#8877) — mesure (`bun run build`) : /about 9,94 Ko sur dev, 10,03 Ko avec la charte visuelle iOS. L'ecart (~90 octets gzip par page) vient des 16 cotes d'echelle neuves (MeeshySpacing/Radius/Font) que generate-from-ios.mjs publie dans ios.css, que toute page institutionnelle inline — meme regle que les pas deja publies sans consommateur web. 10,5 garde un gate (0,5 Ko de croissance) sur le modele de first_paint.kb. HISTORIQUE — Le doc-comment de src/styles/institutional.css citait deja un plafond de 9 Ko (mesure de rejet de l'alternative -- inliner la feuille de l'application aurait coute 11,28 Ko) sans qu'aucun gate ne le fasse respecter : /about mesurait 9,28 Ko avant ce lot, 9,59 apres son ajout de logo+signature -- deja AU-DESSUS de 9. 10 est le plafond le plus proche qui absorbe la mesure ACTUELLE (9,59-9,69 selon les jetons ajoutes) avec une marge round, sur le meme modele que first_paint.kb ci-dessus : une CIBLE proposee, jamais arbitree par le porteur, qui attend sa decision (alleger la page ou relever le plafond)."
     }
   },
+  "landing_page": {
+    "subject": "chaque LANDING prerendue de meeshy.me (/, /en, /es, /pt, /de, /it, /ar), gzip -9 — le document HTML complet, feuille INLINEE et script de la page compris (scripts/prerender-landing.tsx, #10002). Une langue a la fois : un visiteur n'en lit qu'une.",
+    "read_by": [
+      "apps/web/scripts/prerender-landing.tsx"
+    ],
+    "kb": {
+      "value": null,
+      "status": "A POSER A LA LIVRAISON DE #10002 -- valeur mesuree par `bun run build`, arrondie au Ko SUPERIEUR + 1 Ko de marge, puis A CONFIRMER PAR LE PORTEUR",
+      "source": "La landing remplace la liste sur / (#10002) : elle ne touche pas first_paint.kb (la coquille de l'application, index.html, reste servie a toutes les autres adresses et ne change pas de poids), et porte donc son PROPRE plafond, sur le modele de institutional_page.kb. Tant que la valeur est null, le prerendu mesure et l'annonce sans rougir."
+    }
+  },
   "on_demand_chunks": {
     "subject": "chunks CHARGES A LA DEMANDE (import() differe), gzip -9 -- hors premiere peinture par construction (#5695). Chaque entree nomme le PATTERN de fichier qu'elle borne (prefixe du chunk produit par Vite) ; measure-weight.mjs rougit si AUCUN fichier ne matche (un lazy() casse inline le module, sans erreur ailleurs) ou si la somme depasse la valeur.",
     "summary": {
@@ -1021,6 +1032,22 @@
         "value": 14,
         "status": "ESTIMEE POUR LA SECTION BADGES DU CARNET (#9639) -- A REMESURER PAR LA CI",
         "source": "Estimation du 2026-10-08 (#9639), sans build local (directive : builds lourds en CI) : les 7 cles `game.rules.badges.*` (la section badges du carnet, que visent tous les liens « Comprendre les badges ») dans les sept langues ajoutent 2,43 Ko gzip -9 aux SOURCES ; au ratio built/source mesure (10,18 / 12,02), +2,06 Ko = 12,24 Ko ; plafond = ceil(12,24) + 1 = 14, a remplacer par la mesure de la CI. PRECEDENT : Mesure du 2026-10-07 par la CI (`bun run build` puis `node scripts/measure-weight.mjs`, job Quality (bun), run 37593972086, tete b1b60b9b5a ; gzip -9 par fichier) : 10,18 Ko pour les SEPT fichiers du carnet des regles et de son atlas (`catalog-game-rules-<l>.ts`, 58 cles `game.rules.*`), de 1,34 Ko (en) a 1,66 Ko (ar). Charges avec la seule page « Comment ca marche » (`/me/progression/regles`) ; un lecteur n'en telecharge qu'UN, et seulement s'il ouvre le carnet. Arrondi au Ko SUPERIEUR (11) + 1 Ko de marge."
+      }
+    },
+    "conversations": {
+      "pattern": "^assets/conversations-[A-Za-z0-9_-]{7}\\.js$",
+      "kb": {
+        "value": 25,
+        "status": "MESUREE PAR BUILD LOCAL A LA LIVRAISON DE #10004 -- A CONFIRMER PAR LA CI",
+        "source": "Mesure du 2026-10-10 a la livraison de #10004 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 23,29 Ko pour les DEUX fichiers que le motif designe -- le chunk de la route (21,14 Ko) et le module de synchronisation des conversations que Vite nomme aussi `conversations-` (2,06 Ko) ; le motif ne peut pas les separer, le plafond borne donc leur somme. Arrondi au Ko SUPERIEUR (24) + 1 Ko de marge. HISTORIQUE : L'ecran de LISTE (`routes/conversations.tsx`, `route-table.tsx` § list) n'avait aucun plafond propre : il n'etait borne que par la somme `on_demand_gzip_9_bytes`, qui ne designe personne. #10004 y ajoute la carte World Wide epinglee (`lens/world-pin.ts`, la variante `card` de `LensRow`, sa peau dans `lens-row-meta.css`). Entree CREEE ici sans valeur (`null` : `measure-weight.mjs` mesure et RAPPORTE le chunk, rougit s'il ne trouve AUCUN fichier, ne plafonne pas) : le lot s'est developpe sans build, la mesure appartient a l'etape de livraison serialisee (`bun run build` puis `node scripts/measure-weight.mjs`). Ce jour-la, la valeur se pose selon la regle de la premiere mesure : arrondi au Ko SUPERIEUR + 1 Ko de marge. Ne JAMAIS y ecrire une estimation."
+      }
+    },
+    "thread": {
+      "pattern": "^assets/thread-[A-Za-z0-9_-]{7}\\.js$",
+      "kb": {
+        "value": 42,
+        "status": "MESUREE PAR BUILD LOCAL A LA LIVRAISON DE #10004 -- A CONFIRMER PAR LA CI",
+        "source": "Mesure du 2026-10-10 a la livraison de #10004 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 40,02 Ko pour le seul chunk de la route du fil. Arrondi au Ko SUPERIEUR (41) + 1 Ko de marge. HISTORIQUE : L'ecran du FIL (`routes/thread.tsx`, `route-table.tsx` § thread) n'avait aucun plafond propre. Le motif borne le chunk de la ROUTE et lui seul : `thread-` suivi EXACTEMENT du hachage de 7 (`vite.config.ts` § chunkFileNames), donc jamais `thread-media-viewer-`, `thread-sheets-` ni aucun voisin (temoin `components/conversation-look.test.tsx`). #10004 y ajoute le nom d'auteur teinte (`lib/view/author-ink.ts`), la pastille de langue (`lib/view/author-language-chip.ts`), les cartes vocal/fichier (`lib/view/file-badge.ts`) et `styles/conversation-look.css` ; la lueur d'accent est du CSS pur (`thread-scene.css`). Entree CREEE sans valeur (`null`) pour la meme raison que `conversations` ci-dessus : la valeur se pose sur la mesure de l'etape de livraison, arrondi au Ko SUPERIEUR + 1 Ko de marge, jamais sur une estimation."
       }
     }
   },

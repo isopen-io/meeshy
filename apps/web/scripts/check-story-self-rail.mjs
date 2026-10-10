@@ -103,7 +103,7 @@ async function openList(context) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto(`${BASE}/`, { waitUntil: 'load' });
+  await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
   await page.waitForSelector(CELL, { timeout: 8000 });
   return { page, errors };
 }
@@ -321,7 +321,7 @@ async function runScheme({ colorScheme, locale, dir }) {
      `hasMyStory` ni `hasAnyStory`. Le rail lit le MÊME cache que le listing
      (`useStoryTray`) : revenir sur « / » après la suppression doit donc
      montrer une cellule dont le centre n'est plus INERTE. */
-  await page.goto(`${BASE}/`, { waitUntil: 'load' });
+  await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
   await page.waitForSelector(CELL, { timeout: 8000 });
   const apresSuppression = await page.evaluate(
     (cell) => ({

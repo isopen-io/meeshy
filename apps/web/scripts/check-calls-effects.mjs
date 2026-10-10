@@ -154,7 +154,7 @@ const openActions = async (page) => {
 const selfFramed = (page) => until(page, () => (document.querySelector('[data-call-corner] video, [data-call-tile-self] video')?.videoWidth ?? 0) > 0);
 
 const startConnectedVideoCall = async (page) => {
-  await page.goto(`${BASE}/`, { waitUntil: 'load' });
+  await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
   await page.waitForSelector('[data-row] a');
   const first = await page.$eval('[data-row]', (el) => el.getAttribute('data-row'));
   await page.click(`[data-row="${first}"] a`);

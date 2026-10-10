@@ -98,7 +98,7 @@ try {
       page.on('pageerror', (error) => errors.push(error.message));
 
       // ------------------------------------------------ 1. un appel vivant, lancé du fil
-      await page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
       await page.waitForSelector('[data-row] a');
       const rows = await page.$$eval('[data-row]', (els) => els.map((el) => el.getAttribute('data-row')));
       const caller = rows.find((id) => id !== WRITE_TO) ?? rows[0];

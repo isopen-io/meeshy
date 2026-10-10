@@ -33,6 +33,8 @@ struct GameMintPreviewView: View {
     let error: String?
     let celebration: MintCelebration?
     let onMint: () -> Void
+    /// Frappe contre cinq fragments de Meesh (#10011) ; `nil` : pas de frappe par fragments ici.
+    var onMintWithFragments: (() -> Void)?
     /// Ouvre la règle de la frappe au carnet (« ? ») ; `nil` : pas de porte.
     var onOpenRule: (() -> Void)?
     var haptics: GameHapticsProviding = GameHaptics.shared
@@ -87,6 +89,9 @@ struct GameMintPreviewView: View {
                 if !online {
                     GameNote(text: String(localized: "game.mint.offline", defaultValue: "Hors ligne : la frappe reprendra avec la connexion.", bundle: .main))
                 }
+            }
+            if let offer = mint.withFragments {
+                fragments(offer)
             }
             if !minting {
                 GameErrorLine(message: error, identifier: "game.mint.error")
@@ -144,6 +149,24 @@ struct GameMintPreviewView: View {
         }
     }
 
+    // MARK: - La frappe gratuite par fragments (#10011)
+
+    /// Le compteur « x / 5 fragments de Meesh », et le bouton quand il y en a cinq : la frappe ne coûte alors aucun
+    /// point ni aucun niveau. Sous cinq, aucun bouton grisé — le compteur dit ce qui manque.
+    @ViewBuilder
+    private func fragments(_ offer: GameFragmentMintOffer) -> some View {
+        GameNote(text: GameCopy.mintFragmentsCounter(held: offer.held, cost: offer.cost))
+            .accessibilityIdentifier("game.mint.fragments")
+        if offer.canMint, let onMintWithFragments {
+            GameActionButton(
+                title: GameCopy.mintWithFragmentsAction(cost: offer.cost),
+                busyTitle: String(localized: "game.mint.minting", defaultValue: "Frappe en cours…", bundle: .main),
+                busy: minting, disabled: !online, identifier: minting ? "game.mint.minting" : "game.mint.fragments.action",
+                action: onMintWithFragments
+            )
+        }
+    }
+
     // MARK: - Ce que le geste coûte, en pastilles
 
     /// Le niveau avant → après, la Gloire gagnée (et le rang qui change), les badges qui redescendent — jamais un tableau.
@@ -183,5 +206,20 @@ struct GameMintPreviewView: View {
         let levels = mint.shownLevels
         let base = "\(GameCopy.formatCount(levels.levelBefore)) → \(GameCopy.formatCount(levels.levelAfter))"
         return levels.levelsLost > 0 ? base + " (−\(GameCopy.formatCount(levels.levelsLost)))" : base
+    }
+}
+
+extension GameCopy {
+    /// « 3 / 5 fragments de Meesh » — la frappe gratuite les consomme (#10011).
+    static func mintFragmentsCounter(held: Int, cost: Int) -> String {
+        let count = formatCount(held)
+        let total = formatCount(cost)
+        return String(localized: "game.mint.fragments.counter", defaultValue: "\(count) / \(total) fragments de Meesh", bundle: .main)
+    }
+
+    /// « Frapper avec 5 fragments ».
+    static func mintWithFragmentsAction(cost: Int) -> String {
+        let total = formatCount(cost)
+        return String(localized: "game.mint.fragments.action", defaultValue: "Frapper avec \(total) fragments", bundle: .main)
     }
 }

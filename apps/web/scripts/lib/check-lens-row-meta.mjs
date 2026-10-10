@@ -70,7 +70,7 @@ export async function checkLensRowMetaRest({ browser, base, row, check }) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'fr-FR', reducedMotion });
     await context.addInitScript(OBSERVE_ROW_META);
     const page = await context.newPage();
-    await page.goto(`${base}/`, { waitUntil: 'load' });
+    await page.goto(`${base}/chats`, { waitUntil: 'load' });
     await page.waitForSelector(META(row));
     await page.mouse.move(2, 2);
 

@@ -45,6 +45,11 @@ public struct StoryComposerSeed {
         /// `attachPastedAudio`, qui crée le sien. Lui en imposer un d'avance
         /// obligerait à réécrire la pose plutôt qu'à l'emprunter.
         case audio(fileURL: URL)
+        /// **Une story publiée ENTIÈRE** (#9994) — objets, positions, timeline
+        /// et sons, chaque média déjà rapatrié en local et détaché de son post
+        /// d'origine (`StoryRecomposition`). Seule `scene(_:images:files:)` la
+        /// fabrique.
+        case scene(StoryComposerRecomposedScene)
     }
 
     /// Ce qui se pose sur le CANVAS. **Optionnel depuis #4025** : une graine de
@@ -135,6 +140,57 @@ public struct StoryComposerSeed {
         )
     }
 
+    /// **La fabrique de la graine de SCÈNE** (#9994).
+    ///
+    /// `images` porte les bitmaps DÉCODÉS (fond sous l'id de slide, médias et
+    /// stickers sous leur id d'objet), `files` les fichiers locaux des vidéos et
+    /// des sons. Chaque fichier est COPIÉ sous `{objectId}.{ext}`, pour la raison
+    /// de `video(copying:)` : la source vient d'un cache soumis à éviction.
+    ///
+    /// `nil` dès qu'un fond, un média ou un son manque — la scène ne se reprend
+    /// qu'entière. Une image de STICKER absente ne refuse rien : le sticker se
+    /// peint par son emoji, comme chez tout lecteur à qui l'image manque.
+    public static func scene(_ recomposition: StoryRecomposition,
+                             images: [String: UIImage],
+                             files: [String: URL]) -> StoryComposerSeed? {
+        var background: UIImage?
+        var bitmaps: [String: UIImage] = [:]
+        var videos: [String: URL] = [:]
+        var audios: [String: URL] = [:]
+        let abandon: () -> StoryComposerSeed? = {
+            for copie in Array(videos.values) + Array(audios.values) {
+                try? FileManager.default.removeItem(at: copie)
+            }
+            return nil
+        }
+        for asset in recomposition.assets {
+            switch asset.kind {
+            case .backgroundImage:
+                guard let image = images[asset.objectId] else { return abandon() }
+                background = image
+            case .image:
+                guard let image = images[asset.objectId] else { return abandon() }
+                bitmaps[asset.objectId] = image
+            case .stickerImage:
+                if let image = images[asset.objectId] { bitmaps[asset.objectId] = image }
+            case .video, .audio:
+                guard let source = files[asset.objectId],
+                      let copied = StoryComposerSeedFile.copyForComposer(
+                          source: source,
+                          objectId: asset.objectId,
+                          declaredMimeType: asset.kind == .audio ? "audio/mp4" : nil)
+                else { return abandon() }
+                if asset.kind == .video { videos[asset.objectId] = copied } else { audios[asset.objectId] = copied }
+            }
+        }
+        let scene = StoryComposerRecomposedScene(slide: recomposition.slide,
+                                                 backgroundImage: background,
+                                                 images: bitmaps,
+                                                 videoURLs: videos,
+                                                 audioURLs: audios)
+        return StoryComposerSeed(payload: .scene(scene), description: recomposition.description)
+    }
+
     public static func text(_ raw: String) -> StoryComposerSeed? {
         let taille = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !taille.isEmpty else { return nil }
@@ -173,6 +229,18 @@ public struct StoryComposerSeed {
                            objectId: objectId)
         )
     }
+}
+
+/// **La scène d'une story publiée, prête à poser** (#9994) — la slide détachée
+/// de son post d'origine et ses actifs locaux, sous les identifiants que la
+/// slide leur donne.
+public struct StoryComposerRecomposedScene {
+    public let slide: StorySlide
+    /// Le fond IMAGE hérité de la slide, que `runStoryUpload` lit dans `slideImages`.
+    public let backgroundImage: UIImage?
+    public let images: [String: UIImage]
+    public let videoURLs: [String: URL]
+    public let audioURLs: [String: URL]
 }
 
 /// La copie sous la convention de nom du composer, isolée pour être lisible
@@ -260,6 +328,26 @@ public extension StoryComposerViewModel {
         case .none:
             // Graine de texte seul : la description ci-dessus EST le semis.
             break
+
+        case .scene(let scene)?:
+            // La scène REMPLACE l'ardoise : une story reprise se pose comme
+            // elle a été publiée, et sa description y est déjà — résolue par le
+            // Prisme du lecteur. Les médias arrivent en UNE passe (un seul bump
+            // du canvas), et une vidéo ne reçoit que sa VIGNETTE : la mesurer
+            // réécrirait la durée que l'auteur d'origine avait rognée.
+            slides = [scene.slide]
+            currentSlideIndex = 0
+            if let background = scene.backgroundImage {
+                setImage(background, for: scene.slide.id)
+                hasBackgroundImage = true
+            }
+            mergeRestoredMedia(images: scene.images,
+                               videoURLs: scene.videoURLs,
+                               audioURLs: scene.audioURLs)
+            for (objectId, fileURL) in scene.videoURLs {
+                loadVideoThumbnail(objectId: objectId, fileURL: fileURL)
+            }
+            isSeededSession = true
 
         case .audio(let copied)?:
             // **Le son devient le SON de la scène** (#4461), par le chemin que

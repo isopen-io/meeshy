@@ -1,0 +1,109 @@
+[
+ {
+  "file": "poses-cotes",
+  "overlap": 1989,
+  "face": 0,
+  "depth": 49,
+  "bbox": [
+   80,
+   414,
+   459,
+   577
+  ],
+  "windowPx": 158358
+ },
+ {
+  "file": "poses-groupe",
+  "overlap": 7211,
+  "face": 0,
+  "depth": 73,
+  "bbox": [
+   80,
+   614,
+   459,
+   720
+  ],
+  "windowPx": 158360
+ },
+ {
+  "file": "poses-message-cartouche",
+  "overlap": 8878,
+  "face": 0,
+  "depth": 72,
+  "bbox": [
+   80,
+   615,
+   459,
+   720
+  ],
+  "windowPx": 158358
+ },
+ {
+  "file": "poses-message-parchemin",
+  "overlap": 1947,
+  "face": 0,
+  "depth": 42,
+  "bbox": [
+   80,
+   407,
+   459,
+   576
+  ],
+  "windowPx": 158358
+ },
+ {
+  "file": "poses-message-ruban",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 158358
+ },
+ {
+  "file": "poses-perches",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 158358
+ },
+ {
+  "file": "poses-pied",
+  "overlap": 9268,
+  "face": 0,
+  "depth": 72,
+  "bbox": [
+   80,
+   616,
+   459,
+   720
+  ],
+  "windowPx": 158358
+ },
+ {
+  "file": "poses-ruban",
+  "overlap": 232,
+  "face": 0,
+  "depth": 6,
+  "bbox": [
+   80,
+   697,
+   459,
+   720
+  ],
+  "windowPx": 158358
+ },
+ {
+  "file": "poses-selfie",
+  "overlap": 12933,
+  "face": 0,
+  "depth": 120,
+  "bbox": [
+   324,
+   549,
+   459,
+   719
+  ],
+  "windowPx": 158358
+ }
+]

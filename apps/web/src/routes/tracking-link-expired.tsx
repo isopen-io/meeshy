@@ -24,7 +24,7 @@ export function TrackingLinkDead({ language }: { readonly language: InterfaceLan
       title={translate(language, 'trackingLink.dead.title')}
       body={<LinkText>{translate(language, 'trackingLink.dead.body')}</LinkText>}
     >
-      <ActionLink to="list" tone="primary">
+      <ActionLink to="home" tone="primary">
         {translate(language, 'linkPage.home')}
       </ActionLink>
     </LinkPage>

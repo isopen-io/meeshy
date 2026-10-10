@@ -250,7 +250,7 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
             note={t('download.android.note')}
             badge={
               <Link
-                to="list"
+                to="home"
                 data-store="google-play"
                 aria-label={t('download.android.badge')}
                 className={BADGE_CLASS}
@@ -275,7 +275,7 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
         </div>
 
         <div className="mx-auto grid w-full max-w-sm gap-3 text-center">
-          <ActionLink to="list" tone="primary">
+          <ActionLink to="home" tone="primary">
             {t('download.web')}
           </ActionLink>
           <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>

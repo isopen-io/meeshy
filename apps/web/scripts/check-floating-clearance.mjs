@@ -289,7 +289,7 @@ for (const scheme of ['light', 'dark']) {
     constate(bandeRendue, `${tagFlux} : revenu en haut, la bande ne rend pas la fente au titre`);
 
     // --------------------------------------------------------------- la liste
-    await page.goto(`${BASE}/`, { waitUntil: 'load' });
+    await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
     await page.waitForSelector('[data-row]');
     await page.waitForSelector('.floating-disc');
     await page.waitForTimeout(300);

@@ -517,7 +517,7 @@ describe('POST /attachments/upload — anonymous voice message allowed even when
   });
 });
 
-describe('POST /attachments/upload — un invité de World Wide ne joint rien tant que la garde décodante n’est pas livrée (audit #10000, #10029)', () => {
+describe('POST /attachments/upload — un invité de World Wide ne fait pas passer un en-tête MPEG pour un audio (audit #10000, #10029)', () => {
   const WORLD_LINK = { allowAnonymousFiles: false, allowAnonymousImages: false, conversation: { identifier: 'world' } };
   const MPEG_SYNC_THEN_HTML = Buffer.concat([Buffer.from([0xff, 0xfb]), Buffer.from('<html><script>alert(1)</script></html>', 'latin1')]);
   let app: FastifyInstance;

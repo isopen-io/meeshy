@@ -9,6 +9,8 @@ const en = {
   'game.meeshes.none': 'No Meesh',
   'game.meeshes.one': '{count} Meesh',
   'game.meeshes.other': '{count} Meeshes',
+  'game.meesh_fragments.one': '{count} Meesh fragment',
+  'game.meesh_fragments.other': '{count} Meesh fragments',
   'game.tier.etincelle': 'Spark',
   'game.tier.lueur': 'Glimmer',
   'game.tier.lumiere': 'Light',

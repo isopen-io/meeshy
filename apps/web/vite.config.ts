@@ -8,6 +8,7 @@ import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
+import { LANDING_LANGUAGES, LANDING_SUBPATH_PATTERN, landingFiles } from './src/landing/landing-languages';
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
@@ -249,6 +250,42 @@ const prerenderInstitutionalPages = (): Plugin => {
 };
 
 /**
+ * LA LANDING DE meeshy.me EST PRÉRENDUE, une page par langue (#10002).
+ *
+ * Même horloge que le préchauffage institutionnel ci-dessus — `closeBundle`
+ * d'un greffon ordinaire, donc AVANT que `vite-plugin-pwa` ne scelle son
+ * manifeste de précache — et même processus séparé (`react-dom/server` lit des
+ * `.tsx`). Variante web SEULEMENT : la coque n'a pas de landing, `/` y ouvre la
+ * liste des conversations (`routes/home-shell.tsx`).
+ */
+const prerenderLanding = (): Plugin => {
+  const root = fileURLToPath(new URL('.', import.meta.url));
+  let outDir = 'dist';
+  return {
+    name: 'meeshy-prerender-landing',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir;
+    },
+    closeBundle: {
+      sequential: true,
+      handler() {
+        const r = spawnSync('bun', ['run', 'scripts/prerender-landing.tsx', resolve(root, outDir)], {
+          cwd: root,
+          stdio: 'inherit',
+        });
+        if (r.status !== 0) {
+          throw new Error(
+            `Le prérendu de la landing a échoué (code ${r.status}). La construction s'arrête : ` +
+              'sans `landing.html`, nginx ne servirait rien sur / et les robots ne liraient aucune balise.',
+          );
+        }
+      },
+    },
+  };
+};
+
+/**
  * LES SCRIPTS QUE LE SERVICE WORKER GÉNÉRÉ IMPORTE, déclarés UNE fois.
  *
  * Deux lecteurs : `importScripts` (variante A) et le retrait de la variante B
@@ -308,6 +345,10 @@ const dropWebOnlyAssets = (): Plugin => ({
   writeBundle(options) {
     if (options.dir === undefined) return;
     rmSync(join(options.dir, 'store-shots'), { recursive: true, force: true });
+    /* LES IMAGES D'APERÇU (#10002) — `og/` ne sert que les robots qui
+       déplient un lien `https://meeshy.me/…` (sept landings, ~75 Ko chacune,
+       et l'invitation de la passerelle) : la coque ne les affiche jamais. */
+    rmSync(join(options.dir, 'og'), { recursive: true, force: true });
   },
 });
 
@@ -508,6 +549,7 @@ export default defineConfig({
     inlineSchemeBootstrap(),
     inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
+    ...(forCapacitor ? [] : [prerenderLanding()]),
     ...(forCapacitor ? [dropServiceWorkerScripts(), dropWebOnlyAssets()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
@@ -550,7 +592,9 @@ export default defineConfig({
               short_name: 'Meeshy',
               description: 'Messagerie multilingue en temps réel',
               lang: 'fr',
-              start_url: '/',
+              /* #10002 — `/` est la landing ; l'application installée
+                 démarre sur la liste des conversations, là où elle démarrait. */
+              start_url: '/chats',
               scope: '/',
               display: 'standalone',
               /* #7877 — la PWA installée tourne comme les coques Android
@@ -652,6 +696,11 @@ export default defineConfig({
                */
               globIgnores: [
                 '*/index.html',
+                /* LES SEPT LANDINGS (#10002) — un visiteur n'en lit qu'une, et
+                   un membre de la PWA aucune : les précacher ferait payer
+                   ~7 documents à chaque installation. `/` reste servie par la
+                   coquille précachée (`routes/home.tsx`), `/en`… par le réseau. */
+                ...LANDING_LANGUAGES.flatMap(landingFiles).filter((file) => !file.includes('/')),
                 'sw-legacy-purge.js',
                 'sw-push.js',
                 'sw-share-target.js',
@@ -692,7 +741,15 @@ export default defineConfig({
                * — la coquille d'une version en attente ne sait pas toujours le
                * consommer (`src/lib/net/email-token-navigations.ts`).
                */
-              navigateFallbackDenylist: [INSTITUTIONAL_PATTERN, ...NETWORK_ONLY_NAVIGATIONS, ...EMAIL_TOKEN_NAVIGATIONS],
+              navigateFallbackDenylist: [
+                INSTITUTIONAL_PATTERN,
+                /* LES LANDINGS DE LANGUE (#10002) — `/en`, `/ar`… sont des
+                   documents prérendus : la coquille n'a pas de route pour eux.
+                   `/en` sort du précache (`en.html`), `/en/` du réseau. */
+                LANDING_SUBPATH_PATTERN,
+                ...NETWORK_ONLY_NAVIGATIONS,
+                ...EMAIL_TOKEN_NAVIGATIONS,
+              ],
               /**
                * La zone rurale est la raison d'etre de ce cache : le shell est
                * precache une fois, puis JAMAIS retelecharge tant que son hash
@@ -852,6 +909,8 @@ export default defineConfig({
       input: {
         index: fileURLToPath(new URL('./index.html', import.meta.url)),
         institutional: fileURLToPath(new URL('./src/styles/institutional.css', import.meta.url)),
+        /* LA LANDING (#10002) — sa feuille, inlinée par `scripts/prerender-landing.tsx`. */
+        landing: fileURLToPath(new URL('./src/styles/landing.css', import.meta.url)),
       },
       output: {
         /**
