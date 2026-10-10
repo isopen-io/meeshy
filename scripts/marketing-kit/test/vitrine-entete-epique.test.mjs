@@ -208,7 +208,7 @@ describe('l’en-tête épique : la caméra et la loupe (#9904)', () => {
     const images = Object.fromEntries(p.plans.filter((x) => x.clip).map((x) => [x.id, { dossier: `images/${x.id}`, nombre: 60 }]))
     const m = modeleDeLaPage({ plan: p, images })
     expect(m.plans.map((x) => x.entree)).toEqual(['fouet', 'poing', 'poing', ...Array(10).fill('fouet')])
-    expect(m.plans.filter((x) => x.loupe).map((x) => x.id)).toEqual(['vocal', 'sonde', 'sav', 'frappe', 'coffre', 'niveau', 'rang'])
+    expect(m.plans.filter((x) => x.loupe).map((x) => x.id)).toEqual(['vocal', 'sonde', 'sav', 'liens', 'frappe', 'coffre', 'niveau', 'rang'])
     expect(m.blocs.map((b) => b.id)).toEqual(['reels', 'story', 'vocal', 'sonde', 'sav', 'invite', 'liens', 'frappe', 'coffre', 'niveau'])
     expect(m.temps[0]).toBe(0)
     expect(m.temps.at(-1)).toBeLessThan(DUREE_S)

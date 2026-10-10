@@ -119,7 +119,8 @@ export const PLANS = [
   {
     id: 'liens', acte: 'lien', de: 42, a: 49, cote: 'droite',
     prise: { famille: 'interaction', scene: 'interaction-liens' }, ancre: { etape: 'hub', decalageS: -0.1 },
-    camera: { de: fenetre(660, 1100, 1.25), a: fenetre(660, 1050, 1.35) },
+    camera: { de: fenetre(660, 1400, 1.05), a: fenetre(660, 1300, 1.1) },
+    loupe: { x: 30, y: 380, largeur: 1260, hauteur: 420 },
   },
   {
     id: 'frappe', acte: 'jeu', de: 49, a: 53, cote: 'gauche',
