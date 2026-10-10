@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { GuestAttachmentKind } from './guest-attachment-kinds.js';
+
 /**
  * WORLD WIDE (#10000) — la conversation dans laquelle le monde entier entre
  * depuis meeshy.me, et ce qu'une landing doit savoir pour y faire entrer
@@ -22,6 +24,19 @@ export const WORLD_CONVERSATION_TITLE = 'World Wide';
 
 /** L'identifiant LISIBLE du lien de partage semé — la clé de jonction que la landing suit. */
 export const WORLD_SHARE_LINK_IDENTIFIER = 'mshy_world';
+
+/**
+ * Ce qu'un INVITÉ de World Wide peut joindre (#10001, décision porteur du
+ * 2026-10-10) : du texte `.txt` et de l'audio, rien d'autre. C'est un PLAFOND
+ * posé sur la conversation (#10029) : le lien ne peut que le resserrer, et un
+ * lien qui ne dit rien n'ouvre pas davantage. Les comptes ne sont pas concernés.
+ */
+export const WORLD_GUEST_ATTACHMENT_KINDS: readonly GuestAttachmentKind[] = ['text', 'audio'];
+
+/** Les plafonds de familles décidés sur une conversation, par identifiant. */
+export const GUEST_ATTACHMENT_KIND_CEILINGS: Readonly<Record<string, readonly GuestAttachmentKind[]>> = {
+  [WORLD_CONVERSATION_IDENTIFIER]: WORLD_GUEST_ATTACHMENT_KINDS,
+};
 
 /**
  * Ce que `GET /api/v1/world` sert — public, sans identité, mis en cache court.
