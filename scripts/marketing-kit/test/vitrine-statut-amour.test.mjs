@@ -6,9 +6,15 @@ import { AMOUR } from '../textes/amour.mjs'
 import { partenaireDe } from '../textes/demo.mjs'
 import { documentDeLEcran, repliqueDAmitie } from '../vitrine/statut-amour-ecrans.mjs'
 import { svgDesApparitions } from '../vitrine/statut-amour-mee.mjs'
+<<<<<<< HEAD
 import { CARTE, documentDuStatut, modeleDeLaPage, mots } from '../vitrine/statut-amour-page.mjs'
 import {
   AMOUREUX, CRETE_DBTP, CRETE_MAX_DBTP, DUREE_S, ECRAN, cibleSuivante, filtreDeSonie, FESTIN, FPS, GLOUTONS, HAUTEUR, IMAGES, LARGEUR, PLANS, SONS, SONS_DE_COUP, STICKERS, TEMPS_S,
+=======
+import { CARTE, documentDuStatut, modeleDeLaPage } from '../vitrine/statut-amour-page.mjs'
+import {
+  AMOUREUX, DUREE_S, ECRAN, FESTIN, FPS, GLOUTONS, HAUTEUR, IMAGES, LARGEUR, PLANS, SONS, SONS_DE_COUP, STICKERS, TEMPS_S,
+>>>>>>> origin/dev
   argumentsDeMixage, compteARebours, debitVideoKbps, enSecondes, entreeDuPlan, fenetre, fenetreDeLEffet, filtreDeMixage, planDuStatut,
 } from '../vitrine/statut-amour-plan.mjs'
 import { filtreDeLaPlanche, nomDeLaPlanche, nomDuFichier } from '../vitrine/statut-amour.mjs'
@@ -249,6 +255,7 @@ describe('la vidéo de statut : les textes de publication (#9988)', () => {
     })
   })
 })
+<<<<<<< HEAD
 
 describe('la vidéo de statut : les corrections du porteur (#9988)', () => {
   test('« نصفك الآخر » ne se coupe jamais : une espace insécable les lie dans un même bloc de mots', () => {
@@ -287,3 +294,5 @@ describe('la vidéo de statut : les corrections du porteur (#9988)', () => {
     expect(suivante).toBeCloseTo(-3.3, 5)
   })
 })
+=======
+>>>>>>> origin/dev
