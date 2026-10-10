@@ -169,65 +169,44 @@ final class SocialComposerSeedTests: XCTestCase {
                        "ni Post ni PostMedia ne portent de drapeau de protection côté serveur")
     }
 
-    // MARK: - STORY
+    // MARK: - STORY — la scène ENTIÈRE (#9994)
 
-    func test_story_uneSeulePiece_semeLeMediaEtLaDescription() throws {
-        let plan = try XCTUnwrap(
-            ComposableAttachment.seedPlan(inStory: story(media: [media()], content: "Coucher de soleil"))
+    /// Une story à plusieurs objets : deux images, un texte posé, un sticker —
+    /// la forme que la règle « exactement une pièce » refusait.
+    private func storyScene(content: String? = "Coucher de soleil",
+                            translations: [StoryTranslation]? = nil) -> StoryItem {
+        let effects = StoryEffects(
+            stickerObjects: [StorySticker(id: "st-1", emoji: "🔥")],
+            textObjects: [StoryTextObject(id: "tx-1", text: "Bonjour")],
+            mediaObjects: [
+                StoryMediaObject(id: "m-1", postMediaId: "pm-a", mediaURL: "https://cdn.example/a.jpg",
+                                 mediaType: "image", aspectRatio: 1.5),
+                StoryMediaObject(id: "m-2", postMediaId: "pm-b", mediaURL: "https://cdn.example/b.jpg",
+                                 mediaType: "image", aspectRatio: 0.75)
+            ]
         )
-        XCTAssertEqual(plan.media?.id, "pm-1")
-        XCTAssertEqual(plan.description, "Coucher de soleil")
+        return StoryItem(id: "story-1", content: content, storyEffects: effects, translations: translations)
+    }
+
+    func test_story_aPlusieursObjets_offreComposer_etEmporteToutesSesCouches() throws {
+        let cible = try XCTUnwrap(ComposerSeedTarget(story: storyScene(), preferredLanguages: []),
+                                  "une slide à plusieurs médias doit offrir « Composer »")
+        let scene = try XCTUnwrap(cible.recomposition)
+
+        XCTAssertEqual(scene.assets.map(\.objectId), ["m-1", "m-2"])
+        XCTAssertEqual(scene.slide.effects.textObjects.map(\.id), ["tx-1"])
+        XCTAssertEqual(scene.slide.effects.stickerObjects?.map(\.id), ["st-1"])
+        XCTAssertNil(cible.attachment, "la scène se sème entière, jamais par une pièce isolée")
     }
 
     func test_story_laDescription_descendLePrismeDuLecteur() throws {
-        let traduite = story(
-            media: [media()],
-            content: "Sunset",
-            translations: [StoryTranslation(language: "fr", content: "Coucher de soleil")]
-        )
-        XCTAssertEqual(
-            ComposableAttachment.seedPlan(inStory: traduite, preferredLanguages: ["fr"])?.description,
-            "Coucher de soleil"
-        )
-        XCTAssertEqual(
-            ComposableAttachment.seedPlan(inStory: traduite, preferredLanguages: ["de"])?.description,
-            "Sunset",
-            "aucune traduction pour la langue lue ⇒ l'ORIGINAL, jamais translations.first"
-        )
-    }
-
-    func test_story_plusieursPiecesComposables_neSemeAucunMedia() throws {
-        let plan = try XCTUnwrap(
-            ComposableAttachment.seedPlan(inStory: story(media: [media(id: "a"), media(id: "b")],
-                                                         content: "Deux"))
-        )
-        XCTAssertNil(plan.media)
-    }
-
-    func test_story_sansMediaNiTexte_nOffreRien() {
-        XCTAssertNil(ComposableAttachment.seedPlan(inStory: story()))
-    }
-
-    func test_story_unePieceProtegee_neSeraitPasPosee() {
-        for protegee in [piece(mimeType: "image/jpeg", isViewOnce: true),
-                         piece(mimeType: "image/jpeg", isBlurred: true),
-                         piece(mimeType: "image/jpeg", isEncrypted: true)] {
-            let source = ComposableAttachment.SeedSource(
-                pieces: [protegee], text: "Coucher de soleil", carrierIsProtected: false
-            )
-            XCTAssertNil(ComposableAttachment.seedPlan(for: source)?.media)
-        }
-    }
-
-    func test_laSourceDUneStory_bridSesMedias_etDescendLePrisme() {
-        let source = ComposableAttachment.SeedSource.story(
-            story(media: [media()], content: "Sunset",
-                  translations: [StoryTranslation(language: "fr", content: "Coucher de soleil")]),
-            preferredLanguages: ["fr"]
-        )
-        XCTAssertEqual(source.pieces.map(\.id), ["pm-1"])
-        XCTAssertEqual(source.text, "Coucher de soleil")
-        XCTAssertFalse(source.carrierIsProtected)
+        let traduite = storyScene(content: "Sunset",
+                                  translations: [StoryTranslation(language: "fr", content: "Coucher de soleil")])
+        XCTAssertEqual(ComposerSeedTarget(story: traduite, preferredLanguages: ["fr"])?.plan.description,
+                       "Coucher de soleil")
+        XCTAssertEqual(ComposerSeedTarget(story: traduite, preferredLanguages: ["de"])?.plan.description,
+                       "Sunset",
+                       "aucune traduction pour la langue lue ⇒ l'ORIGINAL, jamais translations.first")
     }
 
     // MARK: - Les CIBLES, et l'origine qu'elles portent
@@ -244,8 +223,8 @@ final class SocialComposerSeedTests: XCTestCase {
             ComposerSeedTarget(story: story(media: [media()], content: "Coucher de soleil"),
                                preferredLanguages: [])
         )
-        XCTAssertEqual(cible.id, "story/story-1/pm-1")
-        XCTAssertEqual(cible.origin, .socialMedia(postId: "story-1", mediaId: "pm-1"))
+        XCTAssertEqual(cible.id, "story/story-1")
+        XCTAssertEqual(cible.origin, .socialMedia(postId: "story-1", mediaId: nil))
     }
 
     func test_cible_refuseCeQuiNeSemeRien_surLesDeuxSurfaces() {
@@ -280,7 +259,9 @@ final class SocialComposerSeedTests: XCTestCase {
         XCTAssertEqual(resolver.lastRequest?.remoteURLString, "https://cdn.example/post.jpg")
     }
 
-    func test_graineDUneStory_porteLeMediaETLaDescription() async throws {
+    /// La forme LEGACY — un média seul dans `story.media`, sans objet de scène —
+    /// se reprend aussi : son média devient le FOND de la slide.
+    func test_graineDUneStory_legacy_porteSonFondETLaDescription() async throws {
         let resolver = StubSocialMediaResolver()
         resolver.result = .success(try makeJPEG())
         let cible = try XCTUnwrap(
@@ -288,12 +269,44 @@ final class SocialComposerSeedTests: XCTestCase {
                                preferredLanguages: [])
         )
 
-        let graine = await ComposerMediaSeeding.seed(for: cible.plan, resolver: resolver)
+        let graine = await StoryRecompositionSeeding.seed(for: try XCTUnwrap(cible.recomposition),
+                                                          resolver: resolver)
 
         XCTAssertEqual(graine?.description, "Coucher de soleil")
-        guard case .image = graine?.payload else {
-            return XCTFail("la graine d'une story doit poser son IMAGE sur le canvas")
+        guard case .scene(let scene)? = graine?.payload else {
+            return XCTFail("la graine d'une story pose sa SCÈNE")
         }
+        XCTAssertNotNil(scene.backgroundImage, "le média legacy devient le fond de la slide")
+        XCTAssertEqual(resolver.lastRequest?.remoteURLString, "https://cdn.example/post.jpg")
+    }
+
+    func test_graineDUneStory_aPlusieursMedias_lesRapatrieTous() async throws {
+        let resolver = StubSocialMediaResolver()
+        resolver.result = .success(try makeJPEG())
+        let cible = try XCTUnwrap(ComposerSeedTarget(story: storyScene(), preferredLanguages: []))
+
+        let graine = await StoryRecompositionSeeding.seed(for: try XCTUnwrap(cible.recomposition),
+                                                          resolver: resolver)
+
+        guard case .scene(let scene)? = graine?.payload else {
+            return XCTFail("la graine d'une story pose sa SCÈNE")
+        }
+        XCTAssertEqual(Set(scene.images.keys), ["m-1", "m-2"])
+        XCTAssertEqual(scene.slide.effects.mediaObjects?.map(\.postMediaId), ["", ""],
+                       "un média repris est DÉTACHÉ : la publication neuve le téléverse sous son auteur")
+        XCTAssertEqual(resolver.callCount, 2)
+    }
+
+    /// **Une scène amputée serait pire qu'un refus.** Un média qui ne se rapatrie
+    /// pas referme la porte, et la porte le dit.
+    func test_graineDUneStory_unMediaIntrouvable_neSemeRien() async throws {
+        let resolver = StubSocialMediaResolver()
+        let cible = try XCTUnwrap(ComposerSeedTarget(story: storyScene(), preferredLanguages: []))
+
+        let graine = await StoryRecompositionSeeding.seed(for: try XCTUnwrap(cible.recomposition),
+                                                          resolver: resolver)
+
+        XCTAssertNil(graine)
     }
 
     // MARK: - Critère 2 : AUCUN second site ne réécrit la règle

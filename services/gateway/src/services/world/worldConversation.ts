@@ -39,6 +39,7 @@ import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import {
   WORLD_CONVERSATION_IDENTIFIER,
   WORLD_CONVERSATION_TITLE,
+  WORLD_GUEST_ATTACHMENT_KINDS,
   WORLD_SHARE_LINK_IDENTIFIER,
   type WorldEntry,
 } from '@meeshy/shared/types/world';
@@ -75,26 +76,31 @@ export type WorldSeedReport = {
 };
 
 /**
- * Les termes du lien d'entrée publique. Un INVITÉ écrit ; il ne joint RIEN,
- * audio compris, tant que la garde décodante de #10001 / #10029 n'est pas
- * livrée.
+ * Les termes du lien d'entrée publique. Un INVITÉ écrit, et ne joint que du
+ * texte `.txt` et de l'audio (#10001, décision porteur du 2026-10-10).
  *
- * Les drapeaux ci-dessous NE SUFFISENT PAS à le garantir (second passage de
- * l'audit adversarial de #10000) : l'exemption « voix » de
- * `classifyAnonymousAttachment` ne lit ni `allowAnonymousFiles` ni
- * `allowAnonymousImages`, `link-admission.ts` grave `canSendAudios` d'après le
- * droit d'ÉCRIRE, et un en-tête de deux octets suffisait à mériter « audio ».
- * Ce qui ferme la porte est la garde elle-même, décidée sur la CONVERSATION
- * World Wide (`ContentSignature.ts`, `WORLD_GUEST_ATTACHMENTS_CLOSED_REASON`),
- * sur REST comme sur tus ; le pré-vol (`inspectWorldSeed`) la met à l'épreuve
- * de contenus déguisés et bloque si l'un passe.
+ * `allowedAttachmentKinds` le dit aux clients, qui filtrent leur sélecteur ;
+ * ce qui le GARANTIT est la garde de `ContentSignature.ts`
+ * (`classifyAnonymousAttachment`), qui parcourt le contenu ENTIER sur tus et
+ * REST et relit la famille de chaque pièce à l'envoi (REST, socket), pièces
+ * recopiées par un transfert ou une diffusion comprises (#10051). Elle se décide
+ * sur la CONVERSATION (`GUEST_ATTACHMENT_KIND_CEILINGS`, #10029) : un lien qui
+ * ne dit rien n'ouvre pas davantage, et ni `allowAnonymousFiles` ni les droits
+ * gravés à l'entrée (`link-admission.ts`) n'y entrent. Le pré-vol
+ * (`inspectWorldSeed`) la met à l'épreuve de contenus déguisés et bloque si
+ * l'un passe ; il nomme aussi les risques résiduels qu'elle laisse passer (une
+ * charge arbitraire dans un conteneur audio, #10045) et bloque tant que le
+ * porteur ne les a pas acceptés (#10057).
  *
- * `allowAnonymousFiles` reste semé FERMÉ : `link-admission.ts` GRAVE
- * `canSendFiles` / `canSendVideos` dans chaque participation à l'entrée, et le
- * seed ne réécrit jamais la ligne du lien. `allowViewHistory: false` : un
- * invité lit le salon depuis son arrivée, comme tout anonyme (#4169) — la
+ * `allowAnonymousFiles` reste semé FERMÉ : la porte des fichiers génériques ne
+ * s'ouvre pas, la liste des familles la remplace. `allowViewHistory: false` :
+ * un invité lit le salon depuis son arrivée, comme tout anonyme (#4169) — la
  * planche « Onboarding » montre d'ailleurs un fil qui commence à « {nom} a
  * rejoint World Wide ».
+ *
+ * Le seed ne réécrit jamais ces termes sur un lien existant, à une exception :
+ * un lien semé AVANT la colonne `allowedAttachmentKinds` (liste vide) la reçoit
+ * — jamais un choix qu'un administrateur a posé depuis.
  */
 export const WORLD_SHARE_LINK_TERMS = {
   name: WORLD_CONVERSATION_TITLE,
@@ -108,6 +114,7 @@ export const WORLD_SHARE_LINK_TERMS = {
   requireNickname: true,
   requireEmail: false,
   requireBirthday: false,
+  allowedAttachmentKinds: [...WORLD_GUEST_ATTACHMENT_KINDS],
 } as const;
 
 function isUniqueViolation(error: unknown): boolean {
@@ -180,6 +187,22 @@ async function ensureMember(
   return created ? 'joined' : 'already-member';
 }
 
+/**
+ * Un lien semé avant la colonne `allowedAttachmentKinds` la reçoit — et lui
+ * seul : une liste déjà posée, même par un administrateur, n'est pas touchée.
+ */
+async function poseGuestAttachmentKinds(
+  deps: WorldSeedDeps,
+  link: { readonly id: string; readonly allowedAttachmentKinds?: readonly string[] | null },
+): Promise<void> {
+  if (link.allowedAttachmentKinds && link.allowedAttachmentKinds.length > 0) return;
+  await deps.prisma.conversationShareLink.update({
+    where: { id: link.id },
+    data: { allowedAttachmentKinds: [...WORLD_GUEST_ATTACHMENT_KINDS] },
+  });
+  deps.logger.info(`[WORLD] lien "${WORLD_SHARE_LINK_IDENTIFIER}" : familles des invités posées (${WORLD_GUEST_ATTACHMENT_KINDS.join(', ')})`);
+}
+
 async function ensureShareLink(
   deps: WorldSeedDeps,
   conversationId: string,
@@ -189,11 +212,14 @@ async function ensureShareLink(
   const find = () =>
     prisma.conversationShareLink.findFirst({
       where: { identifier: WORLD_SHARE_LINK_IDENTIFIER },
-      select: { id: true, conversationId: true },
+      select: { id: true, conversationId: true, allowedAttachmentKinds: true },
     });
   const existing = await find();
   if (existing) {
-    if (existing.conversationId === conversationId) return 'existing';
+    if (existing.conversationId === conversationId) {
+      await poseGuestAttachmentKinds(deps, existing);
+      return 'existing';
+    }
     logger.error(
       `[WORLD] l'identifiant de lien "${WORLD_SHARE_LINK_IDENTIFIER}" désigne une AUTRE conversation — aucun lien World Wide créé, la landing n'aura pas d'entrée tant que ce conflit n'est pas tranché`,
     );
@@ -212,6 +238,7 @@ async function ensureShareLink(
       prisma.conversationShareLink.create({
         data: {
           ...WORLD_SHARE_LINK_TERMS,
+          allowedAttachmentKinds: [...WORLD_SHARE_LINK_TERMS.allowedAttachmentKinds],
           allowedCountries: [],
           allowedLanguages: [],
           allowedIpRanges: [],

@@ -1,0 +1,209 @@
+[
+ {
+  "file": "savane-ambassadeur-1",
+  "overlap": 233,
+  "face": 0,
+  "depth": 11,
+  "bbox": [
+   99,
+   704,
+   440,
+   730
+  ],
+  "windowPx": 157872
+ },
+ {
+  "file": "savane-ambassadeur-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 168928
+ },
+ {
+  "file": "savane-ambassadeur-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 122388
+ },
+ {
+  "file": "savane-ambassadeur-4",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 141743
+ },
+ {
+  "file": "savane-ambassadeur-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 177887
+ },
+ {
+  "file": "savane-legende-1",
+  "overlap": 7082,
+  "face": 0,
+  "depth": 71,
+  "bbox": [
+   311,
+   601,
+   459,
+   700
+  ],
+  "windowPx": 164731
+ },
+ {
+  "file": "savane-legende-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 163424
+ },
+ {
+  "file": "savane-legende-3",
+  "overlap": 1382,
+  "face": 0,
+  "depth": 29,
+  "bbox": [
+   75,
+   448,
+   463,
+   527
+  ],
+  "windowPx": 145639
+ },
+ {
+  "file": "savane-legende-4",
+  "overlap": 7862,
+  "face": 0,
+  "depth": 77,
+  "bbox": [
+   75,
+   627,
+   466,
+   704
+  ],
+  "windowPx": 161094
+ },
+ {
+  "file": "savane-legende-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 163396
+ },
+ {
+  "file": "savane-mythe-a",
+  "overlap": 25,
+  "face": 0,
+  "depth": 0,
+  "bbox": [
+   432,
+   722,
+   443,
+   728
+  ],
+  "windowPx": 150646
+ },
+ {
+  "file": "savane-mythe-b",
+  "overlap": 757,
+  "face": 0,
+  "depth": 28,
+  "bbox": [
+   85,
+   409,
+   531,
+   739
+  ],
+  "windowPx": 150374
+ },
+ {
+  "file": "savane-mythe-c",
+  "overlap": 429,
+  "face": 0,
+  "depth": 12,
+  "bbox": [
+   227,
+   702,
+   323,
+   720
+  ],
+  "windowPx": 132539
+ },
+ {
+  "file": "savane-oracle-a",
+  "overlap": 1691,
+  "face": 0,
+  "depth": 50,
+  "bbox": [
+   75,
+   251,
+   455,
+   694
+  ],
+  "windowPx": 169074
+ },
+ {
+  "file": "savane-oracle-b",
+  "overlap": 1398,
+  "face": 0,
+  "depth": 38,
+  "bbox": [
+   72,
+   545,
+   110,
+   628
+  ],
+  "windowPx": 152655
+ },
+ {
+  "file": "savane-oracle-c",
+  "overlap": 5087,
+  "face": 0,
+  "depth": 68,
+  "bbox": [
+   80,
+   632,
+   226,
+   726
+  ],
+  "windowPx": 156563
+ },
+ {
+  "file": "savane-orateur-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 153838
+ },
+ {
+  "file": "savane-orateur-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 157256
+ },
+ {
+  "file": "savane-orateur-c",
+  "overlap": 6696,
+  "face": 0,
+  "depth": 73,
+  "bbox": [
+   80,
+   637,
+   459,
+   734
+  ],
+  "windowPx": 159002
+ }
+]

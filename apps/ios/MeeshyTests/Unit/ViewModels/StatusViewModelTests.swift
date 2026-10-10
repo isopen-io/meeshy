@@ -695,7 +695,7 @@ final class StatusViewModelTests: XCTestCase {
     func test_currentUserDisplayName_fallsBackToMoi() {
         mockAuthManager.currentUser = nil
 
-        XCTAssertEqual(sut.currentUserDisplayName, "Moi")
+        XCTAssertEqual(sut.currentUserDisplayName, String(localized: "common.me", defaultValue: "Moi", bundle: .main))
     }
 
     func test_currentUserInitial_usesFirstName() {

@@ -1,0 +1,185 @@
+[
+ {
+  "file": "moments-flamme-100",
+  "overlap": 1730,
+  "face": 0,
+  "depth": 38,
+  "bbox": [
+   97,
+   408,
+   442,
+   513
+  ],
+  "windowPx": 139442
+ },
+ {
+  "file": "moments-flamme-30",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 126968
+ },
+ {
+  "file": "moments-flamme-365",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 129896
+ },
+ {
+  "file": "moments-flamme-7",
+  "overlap": 6877,
+  "face": 0,
+  "depth": 58,
+  "bbox": [
+   93,
+   631,
+   446,
+   716
+  ],
+  "windowPx": 148737
+ },
+ {
+  "file": "moments-jour-a",
+  "overlap": 5163,
+  "face": 0,
+  "depth": 61,
+  "bbox": [
+   97,
+   628,
+   453,
+   720
+  ],
+  "windowPx": 147337
+ },
+ {
+  "file": "moments-jour-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 139141
+ },
+ {
+  "file": "moments-meesh-1",
+  "overlap": 5899,
+  "face": 0,
+  "depth": 59,
+  "bbox": [
+   93,
+   623,
+   446,
+   717
+  ],
+  "windowPx": 132508
+ },
+ {
+  "file": "moments-meesh-10",
+  "overlap": 1752,
+  "face": 0,
+  "depth": 34,
+  "bbox": [
+   90,
+   407,
+   449,
+   522
+  ],
+  "windowPx": 147883
+ },
+ {
+  "file": "moments-meesh-100",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 145671
+ },
+ {
+  "file": "moments-meesh-1000",
+  "overlap": 10290,
+  "face": 0,
+  "depth": 118,
+  "bbox": [
+   331,
+   556,
+   455,
+   713
+  ],
+  "windowPx": 144213
+ },
+ {
+  "file": "moments-palier-aurore",
+  "overlap": 287,
+  "face": 0,
+  "depth": 6,
+  "bbox": [
+   119,
+   115,
+   438,
+   146
+  ],
+  "windowPx": 157995
+ },
+ {
+  "file": "moments-palier-galaxie",
+  "overlap": 26,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   402,
+   633,
+   409,
+   643
+  ],
+  "windowPx": 125381
+ },
+ {
+  "file": "moments-palier-lueur",
+  "overlap": 7367,
+  "face": 0,
+  "depth": 61,
+  "bbox": [
+   92,
+   622,
+   447,
+   719
+  ],
+  "windowPx": 144854
+ },
+ {
+  "file": "moments-palier-nebuleuse",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 140776
+ },
+ {
+  "file": "moments-palier-singularite",
+  "overlap": 5636,
+  "face": 0,
+  "depth": 59,
+  "bbox": [
+   97,
+   655,
+   232,
+   714
+  ],
+  "windowPx": 133393
+ },
+ {
+  "file": "moments-palier-supernova",
+  "overlap": 6134,
+  "face": 0,
+  "depth": 81,
+  "bbox": [
+   369,
+   568,
+   450,
+   714
+  ],
+  "windowPx": 158109
+ }
+]

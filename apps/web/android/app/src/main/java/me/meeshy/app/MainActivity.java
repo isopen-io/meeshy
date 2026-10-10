@@ -7,6 +7,7 @@ import android.app.RemoteAction;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.net.Uri;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import android.os.Build;
@@ -213,6 +214,10 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshyFileSinkPlugin.class);
         registerPlugin(MeeshyScreenGuardPlugin.class);
         registerPlugin(MeeshyLocalePlugin.class);
+        // #10034 — recreee par Android, l'activite rejoue l'ecran ouvert par le
+        // chemin des liens profonds : `BridgeActivity.load()` relit l'intent.
+        String route = savedInstanceState == null ? null : savedInstanceState.getString(ShellRoute.KEY);
+        if (route != null) setIntent(new Intent(Intent.ACTION_VIEW, Uri.parse(route)));
         super.onCreate(savedInstanceState);
         suivreTailleDuTexte(getResources().getConfiguration());
         SilentNotificationChannel.ensure(ShellLocale.wrap(this));
@@ -303,6 +308,16 @@ public class MainActivity extends BridgeActivity {
                     }
                 }
             );
+    }
+
+    /** #10034 — l'adresse in-app de la WebView, gardee pour une recreation. */
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        WebView webView = getBridge() == null ? null : getBridge().getWebView();
+        if (webView == null) return;
+        String route = ShellRoute.restoreLink(webView.getUrl(), getBridge().getAppUrl());
+        if (route != null) outState.putString(ShellRoute.KEY, route);
     }
 
     /**

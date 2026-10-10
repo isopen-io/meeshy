@@ -1,0 +1,72 @@
+/*
+ * LA CONVERSATION PLUS VIVANTE, DANS LE DESIGN ACTUEL (#10004) — les ajouts de
+ * la note « look » de la planche World Wide, et eux seuls : verre, rayons,
+ * tailles et rangées focales ne bougent pas. Sombre par défaut, `:root.light`
+ * surcharge (convention de `thread-scene.css`). Aucune couleur écrite ici qui
+ * ne soit l'accent de la conversation (`--accent`, `lib/accent.ts`), une encre
+ * ou une surface des jetons iOS, ou la teinte d'auteur calculée et mesurée
+ * par `lib/view/author-ink.ts`.
+ */
+
+/* LE NOM D'AUTEUR TEINTÉ — les deux encres sont posées par le composant, la
+   feuille choisit celle du schéma. */
+.author-ink {
+  color: var(--author-ink-dark);
+}
+:root.light .author-ink {
+  color: var(--author-ink-light);
+}
+
+/* LA PASTILLE DE LANGUE SUR L'AVATAR DE 22 PX — au coin BAS-GAUCHE : le coin
+   bas-droit porte déjà le point de présence (`avatar.tsx`), et la pastille ne
+   doit jamais le recouvrir. Bordée de la surface pour se détacher de
+   l'avatar, comme le point de présence. */
+.author-language-chip {
+  position: absolute;
+  inset-inline-start: -5px;
+  top: 14px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--color-ios-surface, var(--ios-surface));
+  border: 0.5px solid var(--ios-day-hairline);
+  font-size: 8px;
+  line-height: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+/* LE VOCAL EN CARTE TEINTÉE PAR L'ACCENT — rayon de bulle (18), fond et filet
+   à l'accent. En clair, l'accent est plus léger : à 28 % sur du blanc il
+   devenait un aplat, et l'encre de la durée y perdait son contraste. */
+.voice-card {
+  padding: 8px 12px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent, var(--ios-indigo-500)) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, var(--ios-indigo-500)) 34%, transparent);
+}
+:root.light .voice-card {
+  background: color-mix(in srgb, var(--accent, var(--ios-indigo-500)) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent, var(--ios-indigo-500)) 28%, transparent);
+}
+
+/* LE FICHIER EN CARTE — carte de 16 (rayon des cartes du design actuel), le
+   badge de format à gauche. */
+.file-card {
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--ios-surface-card);
+  border: 0.5px solid var(--color-edge, color-mix(in srgb, var(--ios-ink) 8%, transparent));
+}
+.file-card-badge {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent, var(--ios-indigo-500)) 14%, transparent);
+  color: var(--ios-ink);
+  font-size: 10px;
+  font-weight: 800;
+}

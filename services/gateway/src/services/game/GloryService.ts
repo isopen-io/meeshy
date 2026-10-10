@@ -47,6 +47,8 @@ export type GloryReason =
   | 'league'
   | 'season'
   | 'prestige'
+  /** Le coffre du jour (#10011) : `chest:<jour>`, un point de Gloire pour dix points du coffre. */
+  | 'chest'
   | 'correction';
 
 export type GloryCredit = {

@@ -9,6 +9,8 @@ const pt = {
   'game.meeshes.none': 'Nenhuma Meesh',
   'game.meeshes.one': '{count} Meesh',
   'game.meeshes.other': '{count} Meeshes',
+  'game.meesh_fragments.one': '{count} fragmento de Meesh',
+  'game.meesh_fragments.other': '{count} fragmentos de Meesh',
   'game.tier.etincelle': 'Faísca',
   'game.tier.lueur': 'Lampejo',
   'game.tier.lumiere': 'Luz',

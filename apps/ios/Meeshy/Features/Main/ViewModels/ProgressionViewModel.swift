@@ -62,6 +62,8 @@ final class ProgressionViewModel: ObservableObject {
      * qu'après une frappe qui a abouti.
      */
     private var mintRequestId = UUID().uuidString
+    /// L'intention de frappe PAR FRAGMENTS (#10011) : la sienne, pour qu'un rejeu ne devienne jamais une frappe en points.
+    private var fragmentMintRequestId = UUID().uuidString
 
     let service: EngagementProgressProviding
     let gameService: GameServiceProviding
@@ -221,6 +223,30 @@ final class ProgressionViewModel: ObservableObject {
             )
         }
         endGesture()
+        isMinting = false
+    }
+
+    /// Frappe une Meesh contre CINQ fragments de Meesh, au prix courant ignoré (#10011), puis RELIT depuis le
+    /// réseau. Aucun point ne part, aucun niveau ne se perd : le retour immédiat est le bouton en cours de frappe,
+    /// la pièce se joue quand la passerelle confirme.
+    func mintWithFragments() async {
+        guard !isMinting else { return }
+        isMinting = true
+        mintError = nil
+        let preview = game?.mint
+        do {
+            let result = try await service.mintMeeshWithFragments(requestId: fragmentMintRequestId)
+            fragmentMintRequestId = UUID().uuidString
+            celebrate(result, preview: preview)
+            await load(forceNetwork: true)
+        } catch {
+            if GameService.refusal(of: error) == .requestIdConflict { fragmentMintRequestId = UUID().uuidString }
+            mintError = String(
+                localized: "progression.meesh.mint_error",
+                defaultValue: "La frappe n'a pas abouti — réessayez",
+                bundle: .main
+            )
+        }
         isMinting = false
     }
 

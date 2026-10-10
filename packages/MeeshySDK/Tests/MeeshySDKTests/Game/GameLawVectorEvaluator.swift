@@ -138,6 +138,7 @@ enum GameLawVectorEvaluator {
         case "level-record": return levelRecord(input)
         case "mint-price": return mintPrice(input)
         case "mint-preview": return try mintPreview(input)
+        case "mint-fragments": return mintFragments(input)
         case "glory-standing": return gloryStanding(input)
         case "glory-gain": return try gloryGain(input)
         case "treasury": return treasury(input)
@@ -243,6 +244,18 @@ enum GameLawVectorEvaluator {
                                        debitablePoints: int(input, "debitablePoints"),
                                        levelCap: GameGlory.levelCap(forGlory: glory), steps: steps)
         return try GameJSON.parse(JSONEncoder().encode(preview))
+    }
+
+    private static func mintFragments(_ input: GameJSON) -> GameJSON {
+        let preview = GameMint.previewWithFragments(
+            score: int(input, "score"), mintedLifetime: int(input, "mintedLifetime"),
+            fragmentsHeld: int(input, "fragmentsHeld"), levelCap: GameGlory.levelCap(forGlory: int(input, "glory"))
+        )
+        return object([
+            "number": .int(preview.number), "edition": .string(preview.edition.rawValue), "cost": .int(preview.cost),
+            "held": .int(preview.held), "canMint": .bool(preview.canMint), "missingFragments": .int(preview.missingFragments),
+            "levelBefore": .int(preview.levelBefore), "levelAfter": .int(preview.levelAfter), "gloryGained": .int(preview.gloryGained),
+        ])
     }
 
     // MARK: Gloire et trésor
@@ -402,8 +415,11 @@ enum GameLawVectorEvaluator {
     }
 
     private static func chest(_ input: GameJSON) -> GameJSON {
-        let chest = GameChest.daily(userId: string(input, "userId"), dayKey: string(input, "dayKey"))
-        return object(["points": .int(chest.points), "fragment": .bool(chest.fragment), "freeze": .bool(chest.freeze)])
+        let chest = GameChest.daily(userId: string(input, "userId"), dayKey: string(input, "dayKey"), effort: int(input, "effort"))
+        return object([
+            "points": .int(chest.points), "fragment": .bool(chest.fragment), "freeze": .bool(chest.freeze),
+            "glory": .int(chest.glory), "meeshFragments": .int(chest.meeshFragments),
+        ])
     }
 
     // MARK: Guide

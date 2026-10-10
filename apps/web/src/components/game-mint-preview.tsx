@@ -54,6 +54,8 @@ export type GameMintPreviewProps = {
   /** Incrémenté à chaque intention de frappe : fait jouer Mee et Meo. */
   readonly strikeKey?: number;
   readonly onMint: () => void;
+  /** La frappe gratuite contre cinq fragments de Meesh (#10011) ; absente : l'hôte ne la propose pas. */
+  readonly onMintWithFragments?: () => void;
 };
 
 const badgesLine = (lost: number): string =>
@@ -72,7 +74,8 @@ function Chips({ lines }: { readonly lines: readonly string[] }) {
 }
 
 export function GameMintPreview(props: GameMintPreviewProps) {
-  const { mint, held, badgesLost, online, minting, error, celebration, strikeKey = 0, onMint } = props;
+  const { mint, held, badgesLost, online, minting, error, celebration, strikeKey = 0, onMint, onMintWithFragments } = props;
+  const offer = mint.withFragments;
   const impact = [
     mintLevels(mint).levelsLost > 0 ? gameText('game.hero.mint_cost', { levels: levelsLabel(mintLevels(mint).levelsLost) }) : null,
     gameText('game.hero.mint_glory', { glory: formatCount(mint.gloryGained) }),
@@ -127,6 +130,28 @@ export function GameMintPreview(props: GameMintPreviewProps) {
           )}
         </>
       ) : null}
+
+      {/* La frappe GRATUITE (#10011) : le compteur « x / 5 », et le bouton dès cinq — sous cinq, aucun bouton grisé. */}
+      {offer === undefined ? null : (
+        <div data-game-mint-fragments="" className="flex flex-col gap-1.5">
+          <p className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
+            {gameText('game.mint.fragments.counter', { count: formatCount(offer.held), total: formatCount(offer.cost) })}
+          </p>
+          {offer.canMint && onMintWithFragments !== undefined ? (
+            <button
+              type="button"
+              data-game-mint-fragments-action=""
+              disabled={!online || minting}
+              aria-busy={minting}
+              onClick={onMintWithFragments}
+              className="rounded-chip px-4 text-body font-bold disabled:opacity-80"
+              style={{ minHeight: 44, color: GAME_BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
+            >
+              {minting ? gameText('game.mint.minting') : gameText('game.mint.fragments.action', { total: formatCount(offer.cost) })}
+            </button>
+          ) : null}
+        </div>
+      )}
 
       {error === undefined || minting ? null : (
         <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>

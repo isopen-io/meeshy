@@ -180,7 +180,7 @@ const es = {
   'game.detail.mission.what': 'Una misión es una pequeña meta para hoy.',
   'game.detail.mission.how': 'Da puntos y te acerca al cofre del día.',
   'game.detail.chest.what': 'El cofre del día se abre cuando tus misiones están hechas.',
-  'game.detail.chest.how': 'Puntos, y a veces un fragmento de Meesh o una congelación.',
+  'game.detail.chest.how': 'Puntos según tus misiones, Gloria, fragmentos de Meesh —cinco pagan una acuñación— y a veces un congelador.',
   'game.detail.coin.what': 'La Meesh es la moneda rara de Meeshy. Cada moneda lleva su número.',
   'game.detail.coin.how': 'Acúñala con tus puntos en cuanto tengas suficientes.',
   'game.detail.ring.what': 'El anillo muestra tu nivel: se llena con tus puntos.',
