@@ -1,3 +1,4 @@
+import { quotedPieceIdOf } from '@/lib/view/quoted-preview';
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
 
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
@@ -148,7 +149,8 @@ export function Bubble({
    */
   revealable?: boolean;
   /** Saute au message cité (#5566 défaut 10 : le bouton de citation ne faisait rien). */
-  onJumpToMessage: (messageId: string) => void;
+  /** `pieceId` (#9911) — la pièce que la citation nomme : le saut met sa tuile en évidence. */
+  onJumpToMessage: (messageId: string, pieceId?: string) => void;
   /** Ouvre la story citée (#5936) — voir `focal-row.tsx`, même contrat. */
   onOpenStory?: (messageId: string) => void;
   /** Mis en évidence brièvement après un saut de citation. */
@@ -327,7 +329,7 @@ export function Bubble({
           quote={message.replyTo}
           isMine={isMine}
           languages={languages}
-          onJump={() => onJumpToMessage(message.replyTo!.id)}
+          onJump={() => onJumpToMessage(message.replyTo!.id, quotedPieceIdOf(message.replyTo!))}
           citingId={message.id}
           now={new Date(nowMs)}
         />

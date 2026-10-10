@@ -85,7 +85,7 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
       // message se LIT du serveur, donc `canStar: true` monterait une requête
       // qui n'a rien à voir avec ce qui est mesuré.
       canStar: false,
-      onReply: () => {},
+      reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
     });
     return null;

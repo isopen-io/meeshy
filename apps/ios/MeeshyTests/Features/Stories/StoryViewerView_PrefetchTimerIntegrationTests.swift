@@ -184,6 +184,25 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
                        "Gated timer completion must not mutate currentSlideId — only setCurrentSlide may")
     }
 
+    // MARK: - #9859 — le tick publie dans l'horloge de la barre
+
+    /// Le compte à rebours ne réécrit plus aucun état du lecteur : sa
+    /// fraction arrive dans `progressClock`, que seule la barre observe.
+    func test_aProgressTick_publishesIntoTheBarClock() {
+        let (sut, stories, _) = makeSUT(storyCount: 2, currentIndex: 0)
+        let prefetcher = StoryReaderPrefetcher()
+        let timer = StoryReaderTimerController(useDisplayLink: false)
+
+        sut.installPrefetchPipelineIfNeeded(prefetcher: prefetcher, timer: timer)
+        sut.refreshPrefetchWindowAndTimer(prefetcher: prefetcher, timer: timer)
+        timer.markContentReady(slideId: stories[0].id)
+        timer._advanceClockForTesting(by: 1.0)
+
+        XCTAssertGreaterThan(timer.progress, 0)
+        XCTAssertEqual(Double(sut.progressClock.fraction), timer.progress,
+                       accuracy: Double(StoryPlaybackProgressClock.granularity))
+    }
+
     // MARK: - test_viewerOnDisappear_detachesPrefetcher
 
     /// `.onDisappear` releases the bootstrapped canvas views so the 3

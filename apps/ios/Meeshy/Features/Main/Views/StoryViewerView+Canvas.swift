@@ -708,7 +708,7 @@ struct StoryCardView: View {
     let quickEmojis: [String]
 
     // Animation drivers (written by parent transition funcs)
-    let progress: CGFloat
+    let progressClock: StoryPlaybackProgressClock
     let currentSlideDuration: TimeInterval
     let outgoingOpacity: Double
     let closingScale: CGFloat
@@ -1544,8 +1544,7 @@ struct StoryCardView: View {
                !audios.isEmpty {
                 AudioForegroundReaderOverlay(
                     foregroundAudios: audios,
-                    slideDuration: currentSlideDuration,
-                    fallbackElapsedTime: progress > 0 ? TimeInterval(progress) * currentSlideDuration : nil
+                    slideDuration: currentSlideDuration
                 )
                 .storyFocusFade(readerDecorationsShown)
             }
@@ -1576,10 +1575,10 @@ struct StoryCardView: View {
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
             // min 59pt accounts for Dynamic Island when .statusBarHidden() zeroes safeAreaInsets
             VStack(spacing: 0) {
-                StoryProgressBarsView(
+                StoryLiveProgressBars(
+                    clock: progressClock,
                     group: currentGroup,
                     currentIndex: currentStoryIndex,
-                    progress: progress,
                     scrubber: sceneScrubber,
                     onScrubStateChanged: onScrubStateChanged,
                     onSeek: seekTimer

@@ -26,7 +26,6 @@ const arCallJoin = {
   'keypad.input.placeholder': 'رقم أو اسم',
   'keypad.input.label': 'الرقم أو الاسم المطلوب البحث عنه',
   'keypad.delete': 'حذف',
-  'keypad.clear': 'حذف الكل',
   'keypad.prompt.title': 'اطلب رقمًا أو اسمًا',
   'keypad.prompt.subtitle': 'ابحث عن شخص برقم هاتفه أو باسمه.',
   'keypad.searching': 'جارٍ البحث…',
