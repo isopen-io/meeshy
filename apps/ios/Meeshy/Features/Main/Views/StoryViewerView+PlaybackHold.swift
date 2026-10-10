@@ -189,6 +189,8 @@ final class StoryOptionsMenuWatch {
     private(set) var declaredOpen = false
     weak var probe: UIView?
 
+    nonisolated deinit {}
+
     func declare(_ open: Bool) { declaredOpen = open }
 
     /// Vérifie la déclaration contre la scène, et oublie une déclaration

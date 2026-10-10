@@ -18,6 +18,7 @@ import {
   isEditRefused,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../services/messaging/messageEditAdmission';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../services/messaging/conversationWriteAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
 import { applyMessageRemovalEffects } from '../services/messaging/messageRemovalEffects';
 import { applyMessageEditEffects } from '../services/messaging/messageEditEffects';
@@ -156,7 +157,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
               sender: { select: { userId: true } },
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-              conversation: { select: { isActive: true, closedAt: true } },
+              conversation: { select: { isActive: true, closedAt: true, type: true } },
               attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER }
             }
           })
@@ -198,6 +199,9 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         // apprendre autrement. Lui rendre un 404 le ferait réessayer sans fin.
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
+        if (admission.reason === 'minor-global') {
+          return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
         }
         return admission.reason === 'edit-window-expired'
           ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
