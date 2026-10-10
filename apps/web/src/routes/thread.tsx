@@ -41,6 +41,7 @@ import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conv
 import { useOptionalRoute } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { useDeviceTranslation } from '@/lib/device-translation/use-device-translation';
 import { useSend } from '@/lib/view/use-send';
 import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
@@ -327,6 +328,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
      ce même `messages`. La rangée qui brûle reste le temps de l'effet. */
   const isMine = useCallback((message: Message) => isMineOf(message, viewer.id ?? ''), [viewer.id]);
   const messages = useLivingMessages({ messages: timeline, isMine, destroyingIds, expiredIds });
+  useDeviceTranslation({ messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '' });
   const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
   const group = conversation !== undefined && isGroup(conversation);
   /** LES TROIS QUI PARLENT LE PLUS dans ce qui est chargé (#7830) — groupe seulement. */

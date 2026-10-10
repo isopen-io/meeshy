@@ -23,6 +23,9 @@ import { createRealtimeConnection, type RealtimeConnection } from './socket';
 import { typingStore } from './typing-store';
 import { resolveViewer } from './viewer';
 
+/** Le puits de `message:translation`, offert aux traductions faites sur l'appareil (#9898) : elles le rejoignent par ce chunk déjà chargé, jamais par un second. */
+export { applyMessageTranslation } from './realtime-apply';
+
 /**
  * L'AMORÇAGE DU TEMPS RÉEL (#5793) — chargé EN `import()` (`main.tsx`), APRÈS
  * la première peinture, jamais dans le socle : c'est ce qui tient

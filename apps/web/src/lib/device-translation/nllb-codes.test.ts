@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { NLLB_CODES } from './nllb-codes';
 
-const SETTINGS = join(import.meta.dir, '../../../../../services/translator/src/config/settings.py');
+const SETTINGS = join(dirname(fileURLToPath(import.meta.url)), '../../../../../services/translator/src/config/settings.py');
 
 const serverMappings = (): Record<string, string> => {
   const source = readFileSync(SETTINGS, 'utf8');
