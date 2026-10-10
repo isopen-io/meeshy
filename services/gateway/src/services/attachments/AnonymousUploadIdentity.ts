@@ -35,7 +35,7 @@ export interface AnonymousUploadIdentityPrisma {
   conversationShareLink: {
     findUnique(args: {
       where: { id: string };
-      select: { allowAnonymousFiles: true; allowAnonymousImages: true };
+      select: { allowAnonymousFiles: true; allowAnonymousImages: true; conversation: { select: { identifier: true } } };
     }): Promise<ShareLinkAnonymousFlags | null>;
   };
 }
@@ -92,7 +92,7 @@ export async function fetchShareLinkAnonymousFlags(
   if (!shareLinkId) return null;
   return prisma.conversationShareLink.findUnique({
     where: { id: shareLinkId },
-    select: { allowAnonymousFiles: true, allowAnonymousImages: true },
+    select: { allowAnonymousFiles: true, allowAnonymousImages: true, conversation: { select: { identifier: true } } },
   });
 }
 

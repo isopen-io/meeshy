@@ -12,7 +12,11 @@
  *    ni `mshy_world` n'existent, et chaque administrateur désigné est présent
  *    et légitime (actif, non supprimé, adresse vérifiée, rôle plateforme
  *    attendu). Une désignation vide (`WORLD_ADMIN_EMAILS` non configuré) est
- *    elle-même un bloquant : le porteur doit être nommé avant d'ouvrir.
+ *    elle-même un bloquant : le porteur doit être nommé avant d'ouvrir. Et la
+ *    garde des pièces jointes d'invité DÉPLOYÉE est mise à l'épreuve de
+ *    contenus déguisés en audio (`worldGuestAttachments.ts`) : un seul qui
+ *    passe bloque — ouvrir World Wide au monde entier sans compte ne doit pas
+ *    ouvrir un hébergement de contenus arbitraires (audit #10000, #10029).
  *
  *  · `removeWorldSeed` — à blanc par défaut. `close` ferme la porte et la
  *    conversation (réversible, rien n'est supprimé : c'est le retour arrière
@@ -23,6 +27,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { WORLD_CONVERSATION_IDENTIFIER, WORLD_SHARE_LINK_IDENTIFIER } from '@meeshy/shared/types/world';
+import { openWorldGuestAttachmentDoors, type GuestAttachmentGuard } from './worldGuestAttachments';
 import {
   designateWorldReservedAccounts,
   type DesignatedAccount,
@@ -54,7 +59,21 @@ function memberBlocker(member: WorldPreflightMember): string | null {
   return `${member.designation}:${member.status === 'absent' ? 'absent' : member.reason}`;
 }
 
-export async function inspectWorldSeed(prisma: PrismaClient, identities: WorldReservedIdentities): Promise<WorldSeedPreflight> {
+function guestAttachmentBlockers(guard: GuestAttachmentGuard | undefined): readonly string[] {
+  const open = openWorldGuestAttachmentDoors(guard);
+  return open.length === 0 ? [] : [`guest-attachments-open:${open.join(',')}`];
+}
+
+export type WorldSeedPreflightOptions = {
+  /** La garde des pièces jointes d'invité mise à l'épreuve — celle des chemins d'upload par défaut. */
+  readonly guestAttachmentGuard?: GuestAttachmentGuard;
+};
+
+export async function inspectWorldSeed(
+  prisma: PrismaClient,
+  identities: WorldReservedIdentities,
+  options: WorldSeedPreflightOptions = {},
+): Promise<WorldSeedPreflight> {
   const [conversation, shareLink, designated] = await Promise.all([
     prisma.conversation.findFirst({ where: { identifier: WORLD_CONVERSATION_IDENTIFIER }, select: { id: true } }),
     prisma.conversationShareLink.findFirst({ where: { identifier: WORLD_SHARE_LINK_IDENTIFIER }, select: { id: true } }),
@@ -67,6 +86,7 @@ export async function inspectWorldSeed(prisma: PrismaClient, identities: WorldRe
     ...(shareLink ? ['share-link-exists'] : []),
     ...members.map(memberBlocker).filter((blocker): blocker is string => blocker !== null),
     ...(identities.worldAdminEmails.length === 0 ? ['world-admin-not-configured'] : []),
+    ...guestAttachmentBlockers(options.guestAttachmentGuard),
   ];
 
   return {
