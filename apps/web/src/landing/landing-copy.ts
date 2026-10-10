@@ -50,6 +50,9 @@ export type LandingCopy = {
   readonly privacy: string;
   readonly terms: string;
   readonly download: string;
+  readonly about: string;
+  readonly contact: string;
+  readonly partners: string;
   readonly unavailable: string;
 };
 
@@ -104,6 +107,9 @@ const fr: LandingCopy = {
   privacy: 'Confidentialité',
   terms: "Conditions d'utilisation",
   download: "Télécharger l'app",
+  about: 'À propos',
+  contact: 'Contact',
+  partners: 'Partenaires',
   unavailable: 'World Wide est momentanément fermée. Connectez-vous pour retrouver vos conversations.',
 };
 
@@ -158,6 +164,9 @@ const en: LandingCopy = {
   privacy: 'Privacy',
   terms: 'Terms of use',
   download: 'Download the app',
+  about: 'About',
+  contact: 'Contact',
+  partners: 'Partners',
   unavailable: 'World Wide is closed for now. Sign in to find your conversations.',
 };
 
@@ -212,6 +221,9 @@ const es: LandingCopy = {
   privacy: 'Privacidad',
   terms: 'Condiciones de uso',
   download: 'Descargar la app',
+  about: 'Acerca de',
+  contact: 'Contacto',
+  partners: 'Socios',
   unavailable: 'World Wide está cerrada por ahora. Inicia sesión para encontrar tus conversaciones.',
 };
 
@@ -266,6 +278,9 @@ const pt: LandingCopy = {
   privacy: 'Privacidade',
   terms: 'Termos de uso',
   download: 'Baixar o app',
+  about: 'Sobre',
+  contact: 'Contato',
+  partners: 'Parceiros',
   unavailable: 'O World Wide está fechado no momento. Entre para encontrar suas conversas.',
 };
 
@@ -320,6 +335,9 @@ const de: LandingCopy = {
   privacy: 'Datenschutz',
   terms: 'Nutzungsbedingungen',
   download: 'App herunterladen',
+  about: 'Über uns',
+  contact: 'Kontakt',
+  partners: 'Partner',
   unavailable: 'World Wide ist gerade geschlossen. Melde dich an, um deine Unterhaltungen zu finden.',
 };
 
@@ -374,6 +392,9 @@ const it: LandingCopy = {
   privacy: 'Privacy',
   terms: "Condizioni d'uso",
   download: "Scarica l'app",
+  about: 'Chi siamo',
+  contact: 'Contatti',
+  partners: 'Partner',
   unavailable: 'World Wide è chiusa per ora. Accedi per ritrovare le tue conversazioni.',
 };
 
@@ -428,6 +449,9 @@ const ar: LandingCopy = {
   privacy: 'الخصوصية',
   terms: 'شروط الاستخدام',
   download: 'تنزيل التطبيق',
+  about: 'حول Meeshy',
+  contact: 'اتصل بنا',
+  partners: 'الشركاء',
   unavailable: 'World Wide مغلقة حاليًا. سجّل الدخول للعثور على محادثاتك.',
 };
 

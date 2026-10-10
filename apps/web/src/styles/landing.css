@@ -10,10 +10,14 @@
  * jetons générés depuis iOS (`@meeshy/design-tokens/ios.css`) — aucune couleur
  * n'est écrite ici, seulement des dosages de jetons.
  *
+ * L'en-tête et le pied vivent dans `site-chrome.css` (#10071) : toutes les
+ * pages statiques de meeshy.me les portent.
+ *
  * Le schéma suit la règle de l'application : `:root.dark` par défaut (HTML),
  * `:root.light` posé par `INLINE_SCHEME_BOOTSTRAP` avant la première peinture.
  */
 @import '@meeshy/design-tokens/ios.css';
+@import './site-chrome.css';
 
 :root {
   color-scheme: dark;
@@ -58,139 +62,12 @@ body {
   outline-offset: 2px;
 }
 
-.ld-sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
 .ld-glow {
   position: absolute;
   inset: 0 0 auto 0;
   height: 900px;
   background: radial-gradient(60% 40% at 50% 20%, color-mix(in srgb, var(--ios-indigo-500) 18%, transparent), transparent);
   pointer-events: none;
-}
-
-.ld-wrap {
-  position: relative;
-  max-width: 1160px;
-  margin: 0 auto;
-  padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
-}
-
-/* L'EN-TÊTE — le verre de l'application (`.glass`, 80 %, flou 24 px). */
-.ld-header {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  padding-top: env(safe-area-inset-top);
-  background: color-mix(in srgb, var(--ios-surface) 80%, transparent);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
-  border-bottom: 0.5px solid var(--ios-edge);
-}
-.ld-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px 14px;
-  flex-wrap: wrap;
-  padding-block: 10px;
-}
-.ld-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-}
-.ld-brand img {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-}
-.ld-wordmark {
-  font-size: 22px;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--ios-indigo-400), var(--ios-indigo-500));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.ld-nav {
-  display: flex;
-  gap: 4px 20px;
-  margin-inline-start: 10px;
-  font-size: 15px;
-  font-weight: 500;
-  flex-wrap: wrap;
-}
-.ld-nav a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-}
-.ld-spacer {
-  flex: 1;
-}
-.ld-language {
-  position: relative;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  border-radius: 9999px;
-  background: var(--ios-surface-card);
-  border: 0.5px solid var(--ios-edge);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ios-ink-2);
-}
-.ld-language select {
-  background: transparent;
-  color: var(--ios-ink);
-  border: 0;
-  font: inherit;
-  font-weight: 600;
-  min-height: 44px;
-}
-.ld-language option {
-  background: var(--ios-surface-card);
-  color: var(--ios-ink);
-}
-
-.ld-btn {
-  min-height: 44px;
-  padding: 0 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  font-size: 15px;
-  font-weight: 600;
-  border: 0;
-  cursor: pointer;
-  font-family: inherit;
-}
-.ld .ld-btn--ghost {
-  border: 1px solid color-mix(in srgb, var(--ios-indigo-300) 42%, transparent);
-  color: var(--ios-ink);
-}
-.ld .ld-btn--primary {
-  background: linear-gradient(135deg, var(--ios-indigo-500), var(--ios-indigo-700));
-  color: var(--ios-on-brand);
-  font-weight: 700;
-}
-.ld .ld-btn--primary:hover {
-  color: var(--ios-on-brand);
-}
-.ld-btn--large {
-  min-height: 52px;
-  font-size: 17px;
-  padding: 0 22px;
 }
 
 /* QUI EST LÀ — posé par le script d'amorçage AVANT la première peinture
@@ -520,40 +397,7 @@ body {
   gap: 28px;
 }
 
-/* LE PIED */
-.ld-footer {
-  position: relative;
-  border-top: 0.5px solid var(--ios-edge);
-  margin-top: 32px;
-}
-.ld-footer-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  align-items: center;
-  padding-block: 20px calc(36px + env(safe-area-inset-bottom));
-  font-size: 14px;
-  color: var(--ios-ink-3);
-}
-.ld-footer-name {
-  font-weight: 700;
-  color: var(--ios-ink);
-}
-.ld-footer nav {
-  display: flex;
-  gap: 4px 18px;
-  flex-wrap: wrap;
-}
-.ld-footer nav a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-}
-
 @media (max-width: 640px) {
-  .ld-nav {
-    display: none;
-  }
   .ld-hero {
     padding-block: 40px 32px;
     gap: 40px;
