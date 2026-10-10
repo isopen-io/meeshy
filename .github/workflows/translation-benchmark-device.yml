@@ -114,18 +114,12 @@ jobs:
 
       - name: Servir le GGUF (llama.cpp, CPU)
         if: matrix.kind == 'llama'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p "$RUNNER_TEMP/llama"
-          gh release download --repo ggml-org/llama.cpp --pattern '*-bin-ubuntu-x64.zip' --dir "$RUNNER_TEMP/llama"
-          gh release view --repo ggml-org/llama.cpp --json tagName --jq '"llama.cpp " + .tagName' | tee -a "$GITHUB_STEP_SUMMARY"
-          unzip -q "$RUNNER_TEMP"/llama/*.zip -d "$RUNNER_TEMP/llama"
-          SERVER=$(find "$RUNNER_TEMP/llama" -type f -name llama-server | head -1)
-          chmod +x "$SERVER"
-          export LD_LIBRARY_PATH="$(dirname "$SERVER"):${LD_LIBRARY_PATH:-}"
-          nohup "$SERVER" -hf "${{ matrix.gguf }}" --port 8080 --ctx-size 4096 --threads "$(nproc)" \
-            --temp 0 --reasoning-budget 0 > "$RUNNER_TEMP/engine.log" 2>&1 &
+          mkdir -p "$HOME/.cache/llama.cpp"
+          docker pull -q ghcr.io/ggml-org/llama.cpp:server
+          docker run -d --name engine -p 8080:8080 -v "$HOME/.cache/llama.cpp:/root/.cache/llama.cpp" \
+            ghcr.io/ggml-org/llama.cpp:server -hf "${{ matrix.gguf }}" --host 0.0.0.0 --port 8080 \
+            --ctx-size 4096 --threads "$(nproc)" --temp 0 --reasoning-budget 0
           for i in $(seq 1 180); do curl -fsS localhost:8080/health && break; sleep 5; done
           curl -fsS localhost:8080/health
           echo "ENGINE=openai" >> "$GITHUB_ENV"
@@ -167,13 +161,14 @@ jobs:
           {
             echo "#### Écarts face à NLLB 600M fp32 (serveur)"
             echo '```'
-            python -m benchmark gate --current "$RUNNER_TEMP/bench/report.json" --baseline "$BASELINE" || true
+            test -f "$RUNNER_TEMP/bench/report.json" && python -m benchmark gate --current "$RUNNER_TEMP/bench/report.json" --baseline "$BASELINE" || true
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Journal du moteur
         if: failure()
-        run: tail -n 200 "$RUNNER_TEMP/engine.log"
+        run: |
+          if [ "${{ matrix.kind }}" = llama ]; then docker logs --tail 200 engine; else tail -n 200 "$RUNNER_TEMP/engine.log"; fi
 
       - name: Publier le rapport
         if: always()
