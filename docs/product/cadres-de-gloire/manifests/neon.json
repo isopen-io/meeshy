@@ -1,0 +1,192 @@
+[
+ {
+  "file": "neon-ambassadeur-5.jpg",
+  "rank": "ambassadeur",
+  "division": 5,
+  "option": "V",
+  "name": "L'Enseigne de minuit",
+  "story": "Un seul tube de néon magenta, plié d'un trait autour de la photo, s'enroule en auréole autour du blason ; l'enseigne pend à deux chaînettes devant un mur de briques sous une pluie fine, et sa lumière tombe sur le trottoir mouillé.",
+  "layout": "pied : Mee (sourire) et Meo (cool) au bas de l'enseigne",
+  "message": null
+ },
+ {
+  "file": "neon-ambassadeur-4.jpg",
+  "rank": "ambassadeur",
+  "division": 4,
+  "option": "IV",
+  "name": "La Rue des enseignes",
+  "story": "Une rue de nuit sous la pluie, guirlandes tendues d'une façade à l'autre ; les enseignes-drapeaux ne vendent rien : ce sont des symboles adinkra des Akan du Ghana tracés en néon — Nsoromma l'étoile, Sankofa le retour aux sources, Akoma le cœur, Dwennimmen les cornes du bélier, Adinkrahene le roi, Nkyinkyim le chemin sinueux — chacun signé de son nom, et leurs couleurs coulent sur le bitume mouillé.",
+  "layout": "ruban : Mee (coucou) et Meo (salut) au bord de la plaque",
+  "message": "Pour toi, maman"
+ },
+ {
+  "file": "neon-ambassadeur-3.jpg",
+  "rank": "ambassadeur",
+  "division": 3,
+  "option": "III",
+  "name": "Le Soleil de la grille",
+  "story": "Le soleil à bandes se couche derrière le blason sur une grille de lumière qui file à l'infini ; sur l'horizon, entre des montagnes en fil de fer, quatre baobabs de la savane africaine — troncs-bouteilles énormes, branches courtes tordues comme des racines tendues au ciel — sont tracés en néon jaune et orange, comme si la nuit électrique gardait la mémoire de l'arbre à palabres, sous lequel on se réunit pour parler.",
+  "layout": "pied : Mee et Meo (bravo) sur la grille",
+  "message": null
+ },
+ {
+  "file": "neon-ambassadeur-2.jpg",
+  "rank": "ambassadeur",
+  "division": 2,
+  "option": "II",
+  "name": "La Mosquée de lumière",
+  "story": "La photo s'ouvre comme une porte dans la façade de la Grande Mosquée de Djenné (Mali), la plus grande construction de terre crue au monde, redessinée en néon d'ambre : ses trois tours-minarets battues, ses piliers coiffés de pinacles en pain de sucre et d'œufs d'autruche, et la grille des toron — les poutres de rônier qui hérissent la façade et servent d'échafaudage à la fête du crépissage — devenus des diodes d'or ; au pied, le parvis surélevé et la crue du Bani.",
+  "layout": "pied : Mee (wow) et Meo (roi) sur le parvis de la mosquée",
+  "message": "Le voyage continue"
+ },
+ {
+  "file": "neon-ambassadeur-1.jpg",
+  "rank": "ambassadeur",
+  "division": 1,
+  "option": "I",
+  "name": "Afropolis",
+  "story": "Une mégapole africaine de l'an 2100 : des tours vêtues de façades ndebele (Afrique du Sud) en panneaux lumineux, des colonnes de kente (Ghana) en LED, deux gratte-ciel en ogive qui reprennent la case-obus musgum (Cameroun) et ses chevrons ; un monorail traverse la nuit, l'autoroute file en traînées de lumière et des lasers d'or saluent le blason.",
+  "layout": "pied : Mee (fête) et Meo (champagne) sur l'autoroute de lumière",
+  "message": "Merci la famille"
+ },
+ {
+  "file": "neon-orateur-a.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "A",
+  "name": "La Voix-Laser",
+  "story": "Le blason chante : les ondes sonores s'en échappent en arcs, un éventail de lasers balaie la fumée de la salle et l'égaliseur monte en tours de part et d'autre ; la scène est une grille de lumière et deux enceintes portent Mee, qui envoie un baiser à la salle, et Meo, sous ses feux d'artifice.",
+  "layout": "libre : Mee (bisou volé) et Meo (feu d'artifice) sur les enceintes",
+  "message": "On l'a fait ensemble"
+ },
+ {
+  "file": "neon-orateur-b.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "B",
+  "name": "La Toguna électrique",
+  "story": "La photo s'abrite sous une toguna, la case à palabres des Dogon du Mali : un toit de mil en huit couches, plus épais que le passage qu'il abrite pour qu'on y parle assis — on ne s'y lève pas en colère —, porté par des poteaux fourchus sculptés de chevrons, de losanges et de damiers. Derrière, la falaise de Bandiagara, ses maisons tellem accrochées à la paroi et ses greniers coiffés de paille, s'allume en néon ; une bande de kente borde le sol.",
+  "layout": "pied : Mee (courage !) et Meo (sérénade) au pied des poteaux",
+  "message": "Ma voix porte loin"
+ },
+ {
+  "file": "neon-orateur-c.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "C",
+  "name": "L'Antenne de minuit",
+  "story": "À minuit, le blason est hissé au sommet d'un pylône d'émission chromé : sa voix part en anneaux de lumière qui couvrent toute la ville, et la rue mouillée les renvoie ; d'un côté, le cadran du tuner s'est arrêté sur 98,6 ; de l'autre, l'oscilloscope dessine la voix ; l'enseigne « ON AIR » est allumée.",
+  "layout": "pied : Mee (casque) et Meo (yo) au pied du pylône",
+  "message": null
+ },
+ {
+  "file": "neon-oracle-a.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "A",
+  "name": "La Grille céleste",
+  "story": "La grille de lumière file sous la photo jusqu'à l'horizon, et au-dessus le ciel s'est ouvert : deux constellations inventées y dessinent Mee et Meo — le corps rond, les petites ailes, la houppette en spirale et la crête à trois pointes — dans le réticule d'un télescope, et une comète passe ; un croissant de lune et les Pléiades veillent sur les flancs ; et dans les loupes du HUD, on entrevoit le minuscule — un flocon de glace à six branches et une druse de quartz.",
+  "layout": "pied : Mee (montée au ciel) et Meo (love) sur la grille",
+  "message": null
+ },
+ {
+  "file": "neon-oracle-b.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "B",
+  "name": "Le Cristal-Oracle",
+  "story": "Le blason flotte dans un icosaèdre holographique, sur une rosace de cercles entrelacés (la géométrie sacrée) ; un réseau cristallin en nid d'abeille monte le long des bords, des améthystes de néon poussent au pied du cadre, et les loupes révèlent un grain de pollen hérissé et une cellule vivante.",
+  "layout": "selfie : Mee et Meo se prennent en photo dans le coin",
+  "message": "Le futur est à nous"
+ },
+ {
+  "file": "neon-oracle-c.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "C",
+  "name": "La Lune de silicium",
+  "story": "Une pleine lune gravée comme une galette de silicium : ses cratères sont des vias, ses mers des pistes de cuivre, et le blason y est posé comme une puce ; les circuits en descendent le long des bords jusqu'à la ville mouillée, et deux loupes montrent le réseau d'atomes de silicium et la grille des transistors.",
+  "layout": "pied : Mee (amoureuse) et Meo (salut) au bord de la ville",
+  "message": "Jusqu'à la lune"
+ },
+ {
+  "file": "neon-legende-5.jpg",
+  "rank": "legende",
+  "division": 5,
+  "option": "V",
+  "name": "Orbitales",
+  "story": "Le blason devient le noyau d'un atome : trois orbites de néon tournent autour, chacune avec son électron. Sur le flanc gauche, l'infime — les orbitales 1s, 2p et 3d en nuages de probabilité ; sur le flanc droit, l'immense — une galaxie, une nébuleuse, un amas : 10⁻¹⁰ m d'un côté, 10²¹ m de l'autre.",
+  "layout": "pied : Mee (jackpot) et Meo (muscles) sur la grille",
+  "message": null
+ },
+ {
+  "file": "neon-legende-4.jpg",
+  "rank": "legende",
+  "division": 4,
+  "option": "IV",
+  "name": "Hélices",
+  "story": "Deux doubles hélices d'ADN montent en tubes de néon de part et d'autre de la photo, leurs paires de bases allumées ; au-dessus, une galaxie spirale en fil de lumière tourne autour du blason, et une planète se lève au pied du cadre.",
+  "layout": "duo : Mee et Meo main dans la main, au coin de la photo",
+  "message": "Main dans la main"
+ },
+ {
+  "file": "neon-legende-3.jpg",
+  "rank": "legende",
+  "division": 3,
+  "option": "III",
+  "name": "Supernova",
+  "story": "Une étoile explose derrière le blason en gerbe de rayons et d'anneaux de choc ; sur les bords, des neurones de néon se tendent leurs axones comme les pistes d'un circuit, des molécules aromatiques s'allument au pied du cadre, et deux amas d'étoiles veillent aux coins.",
+  "layout": "pied : Mee (wow) et Meo (bravo) au bord de la grille",
+  "message": "Plus loin que les étoiles"
+ },
+ {
+  "file": "neon-legende-2.jpg",
+  "rank": "legende",
+  "division": 2,
+  "option": "II",
+  "name": "L'Onde et l'Amas",
+  "story": "Derrière le blason s'ouvre une orbitale d en trèfle, cerclée d'un anneau ; des paquets d'ondes quantiques (ψ) longent la photo, un triangle de Sierpiński et un flocon de Koch — deux fractales — s'allument au pied, et dans le ciel un amas de galaxies voisine avec un petit trou noir et son disque.",
+  "layout": "pied : Mee (clin d'œil) et Meo (trophée) sur la grille",
+  "message": null
+ },
+ {
+  "file": "neon-legende-1.jpg",
+  "rank": "legende",
+  "division": 1,
+  "option": "I",
+  "name": "La Galaxie-ADN",
+  "story": "Une galaxie spirale dont le blason est le bulbe : ses deux bras, larges de cent mille années-lumière, sont chacun une double hélice d'ADN de néon, paires de bases allumées, qui s'enroule autour de la photo — 10²¹ m et 10⁻⁹ m dans le même trait. Dans les coins du ciel, deux loupes ouvrent sur l'infime : un atome et un neurone.",
+  "layout": "pied : Mee (fête) et Meo (roi) au pied de la galaxie",
+  "message": "Écrit dans les étoiles"
+ },
+ {
+  "file": "neon-mythe-a.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "A",
+  "name": "La Singularité électrique",
+  "story": "Le blason prisme est posé dans l'ombre d'un trou noir cerné d'anneaux de lumière, dont le disque d'accrétion repasse devant lui ; un quasar en jaillit comme un laser. À gauche la toile cosmique et ses amas (10²⁶ m), à droite les traces de particules, la mousse quantique et les cordes (10⁻³⁵ m) ; la grille de néon, au pied, n'est plus que constellation.",
+  "layout": "duo : Mee et Meo trinquent ensemble, au pied de la toile cosmique",
+  "message": "On brille ensemble"
+ },
+ {
+  "file": "neon-mythe-b.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "B",
+  "name": "Du quark au quasar",
+  "story": "Un seul faisceau de lumière traverse le ciel et porte le blason prisme : il part d'un quasar, à douze milliards d'années-lumière, et finit dans un proton où la loupe trouve trois quarks liés par des gluons. Sur le flanc gauche, le champ profond — une spirale, une elliptique, un amas qui courbe la lumière ; sur le flanc droit, les traces d'une collision en chambre à bulles et un diagramme de Feynman où deux particules s'annihilent en lumière.",
+  "layout": "pied : Mee (clin d'œil) et Meo (champagne) au pied du cadre",
+  "message": "Jusqu'au bout de l'univers"
+ },
+ {
+  "file": "neon-mythe-c.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "C",
+  "name": "L'Échelle de lumière",
+  "story": "Deux colonnes de médaillons de néon tiennent toute l'échelle de l'univers : à gauche l'immense — toile cosmique, amas, galaxie, étoile, Terre — à droite l'infime — cellule, molécule, atome, noyau, corde ; derrière la photo, un tunnel de cadres emboîtés fuit vers le blason prisme, comme un zoom de soixante et une puissances de dix.",
+  "layout": "duo : Mee et Meo dansent ensemble dans le coin du ciel",
+  "message": "Pour toujours, ensemble"
+ }
+]

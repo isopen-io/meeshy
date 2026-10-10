@@ -1,0 +1,214 @@
+[
+ {
+  "file": "nord-ambassadeur-1",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 123010
+ },
+ {
+  "file": "nord-ambassadeur-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 155712
+ },
+ {
+  "file": "nord-ambassadeur-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 116842
+ },
+ {
+  "file": "nord-ambassadeur-4",
+  "overlap": 1368,
+  "face": 0,
+  "depth": 38,
+  "bbox": [
+   93,
+   431,
+   447,
+   516
+  ],
+  "windowPx": 145313
+ },
+ {
+  "file": "nord-ambassadeur-5",
+  "overlap": 9039,
+  "face": 0,
+  "depth": 69,
+  "bbox": [
+   70,
+   640,
+   470,
+   722
+  ],
+  "windowPx": 176443
+ },
+ {
+  "file": "nord-legende-1",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 102582
+ },
+ {
+  "file": "nord-legende-2",
+  "overlap": 2952,
+  "face": 0,
+  "depth": 37,
+  "bbox": [
+   84,
+   656,
+   455,
+   696
+  ],
+  "windowPx": 149640
+ },
+ {
+  "file": "nord-legende-3",
+  "overlap": 4217,
+  "face": 0,
+  "depth": 50,
+  "bbox": [
+   105,
+   650,
+   434,
+   723
+  ],
+  "windowPx": 139443
+ },
+ {
+  "file": "nord-legende-4",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 124785
+ },
+ {
+  "file": "nord-legende-5",
+  "overlap": 2213,
+  "face": 0,
+  "depth": 32,
+  "bbox": [
+   106,
+   686,
+   440,
+   718
+  ],
+  "windowPx": 138413
+ },
+ {
+  "file": "nord-mythe-a",
+  "overlap": 4799,
+  "face": 0,
+  "depth": 41,
+  "bbox": [
+   94,
+   662,
+   457,
+   723
+  ],
+  "windowPx": 146063
+ },
+ {
+  "file": "nord-mythe-b",
+  "overlap": 1104,
+  "face": 0,
+  "depth": 17,
+  "bbox": [
+   328,
+   633,
+   417,
+   708
+  ],
+  "windowPx": 119938
+ },
+ {
+  "file": "nord-mythe-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 130946
+ },
+ {
+  "file": "nord-oracle-a",
+  "overlap": 5576,
+  "face": 0,
+  "depth": 77,
+  "bbox": [
+   349,
+   623,
+   449,
+   722
+  ],
+  "windowPx": 143937
+ },
+ {
+  "file": "nord-oracle-b",
+  "overlap": 5609,
+  "face": 0,
+  "depth": 65,
+  "bbox": [
+   88,
+   643,
+   451,
+   720
+  ],
+  "windowPx": 149189
+ },
+ {
+  "file": "nord-oracle-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 120463
+ },
+ {
+  "file": "nord-orateur-a",
+  "overlap": 2703,
+  "face": 0,
+  "depth": 58,
+  "bbox": [
+   90,
+   646,
+   449,
+   722
+  ],
+  "windowPx": 148688
+ },
+ {
+  "file": "nord-orateur-b",
+  "overlap": 284,
+  "face": 0,
+  "depth": 10,
+  "bbox": [
+   107,
+   614,
+   427,
+   666
+  ],
+  "windowPx": 138993
+ },
+ {
+  "file": "nord-orateur-c",
+  "overlap": 7372,
+  "face": 0,
+  "depth": 61,
+  "bbox": [
+   80,
+   644,
+   459,
+   720
+  ],
+  "windowPx": 165292
+ }
+]
