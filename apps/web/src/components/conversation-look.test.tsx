@@ -12,7 +12,7 @@ import { authorInk } from '@/lib/view/author-ink';
 
 import { Attachments } from './attachment-blocks';
 import { FocalRow } from './focal-row';
-import { LensRow } from './lens-row';
+import { LensRow, ROW_HEIGHT, VISUAL_HEIGHT } from './lens-row';
 
 /**
  * LA CONVERSATION PLUS VIVANTE, DANS LE DESIGN ACTUEL (#10004) — les SEULS
@@ -192,6 +192,29 @@ describe('World Wide épinglée en carte en tête de liste (#10004)', () => {
     expect(html).toContain('data-world-card');
     expect(html).toContain('Épinglée');
     expect(html).toContain('12');
+  });
+
+  /**
+   * LA CARTE TIENT DANS SA CASE (revue #10004). Le conteneur visuel d'une
+   * rangée mesure 100 et déborde de 8 de chaque côté de sa case de 84 — un
+   * débord INVISIBLE tant que la rangée n'a pas de fond. Peinte sur ce
+   * conteneur, la carte faisait 100 de haut et mordait sur la barre de
+   * filtres au-dessus et sur le premier en-tête de section en dessous. La
+   * peau vit donc sur un pseudo-élément rentré dans la case : 76 de haut,
+   * comme la planche « List ».
+   */
+  test('la peau de la carte tient dans la case de la rangée, à la hauteur de la planche', () => {
+    const meta = css('lens-row-meta.css');
+    expect(ruleOf(meta, '.lens-row.lens-row--card')).not.toContain('background');
+    for (const selector of ['.lens-row.lens-row--card::before', ':root.light .lens-row.lens-row--card::before']) {
+      expect(ruleOf(meta, selector)).toContain('background');
+    }
+    const skin = ruleOf(meta, '.lens-row.lens-row--card::before');
+    const inset = Number(/inset-block:\s*(\d+)px/.exec(skin)?.[1]);
+    expect(VISUAL_HEIGHT - 2 * inset).toBe(76);
+    expect(inset).toBeGreaterThanOrEqual((VISUAL_HEIGHT - ROW_HEIGHT) / 2);
+    expect(skin).toContain('z-index: -1');
+    expect(skin).toContain('pointer-events: none');
   });
 
   test('l’écran de liste pose la carte au-dessus des sections', () => {
