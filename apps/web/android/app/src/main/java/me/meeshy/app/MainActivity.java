@@ -1,10 +1,14 @@
 package me.meeshy.app;
 
 import android.annotation.SuppressLint;
+import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
+import android.app.RemoteAction;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -23,6 +27,7 @@ import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
 import com.getcapacitor.PluginHandle;
 import com.getcapacitor.WebViewListener;
+import java.util.ArrayList;
 
 /**
  * Defaut de coque 3b (#5604, recette 2026-09-07) : `BridgeActivity` (Capacitor
@@ -66,6 +71,9 @@ public class MainActivity extends BridgeActivity {
 
     /** #9845 — la forme de la video que la page a fait flotter, tant que son plein ecran dure. */
     private Rational floatAspect;
+
+    /** #9847 — la video qui flotte joue-t-elle ? null tant que la page ne l'a pas dit. */
+    private Boolean floatPlaying;
 
     static boolean isInForeground() {
         return inForeground;
@@ -130,7 +138,39 @@ public class MainActivity extends BridgeActivity {
     private PictureInPictureParams floatParams() {
         PictureInPictureParams.Builder params = new PictureInPictureParams.Builder();
         if (floatAspect != null) params.setAspectRatio(floatAspect);
+        ArrayList<RemoteAction> actions = new ArrayList<>();
+        String toggle = FullscreenPictureInPicture.toggleAction(floatPlaying);
+        if (toggle != null) actions.add(toggleAction("pause".equals(toggle)));
+        params.setActions(actions);
         return params.build();
+    }
+
+    @SuppressLint("NewApi")
+    private RemoteAction toggleAction(boolean pause) {
+        PendingIntent pending = PendingIntent.getBroadcast(
+            this,
+            MeeshyPlaybackPlugin.ACTION_FLOAT_TOGGLE.hashCode(),
+            new Intent(MeeshyPlaybackPlugin.ACTION_FLOAT_TOGGLE).setPackage(getPackageName()),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        String label = getString(pause ? R.string.playback_pause : R.string.playback_play);
+        Icon icon = Icon.createWithResource(this, pause ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play);
+        return new RemoteAction(icon, label, label, pending);
+    }
+
+    /**
+     * #9847 — la page dit si la video qui flotte joue : le bouton de la
+     * fenetre suit, qu'elle flotte deja ou pas encore.
+     */
+    @SuppressLint("NewApi")
+    void floatPlaying(boolean playing) {
+        floatPlaying = playing;
+        if (fullscreenView == null || Build.VERSION.SDK_INT < FullscreenPictureInPicture.MIN_SDK) return;
+        try {
+            setPictureInPictureParams(floatParams());
+        } catch (IllegalStateException | IllegalArgumentException refused) {
+            // PiP coupee pour Meeshy : la video garde ses commandes dans la page.
+        }
     }
 
     @SuppressLint("NewApi")
@@ -211,6 +251,7 @@ public class MainActivity extends BridgeActivity {
             public void onHideCustomView() {
                 floatOnFullscreen = false;
                 floatAspect = null;
+                floatPlaying = null;
                 if (fullscreenView == null) {
                     return;
                 }

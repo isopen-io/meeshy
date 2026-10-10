@@ -1,5 +1,10 @@
 package me.meeshy.app;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -17,6 +22,11 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class MeeshyPlaybackPlugin extends Plugin {
 
     private static volatile MeeshyPlaybackPlugin live;
+
+    /** #9847 — le bouton lecture/pause de la fenetre flottante d'une video ({@link MainActivity}). */
+    static final String ACTION_FLOAT_TOGGLE = "me.meeshy.app.VIDEO_PIP_TOGGLE";
+
+    private BroadcastReceiver floatToggle;
 
     /**
      * La « Pause » de la notification (#9301) remise a la page. Rend `false`
@@ -43,6 +53,24 @@ public class MeeshyPlaybackPlugin extends Plugin {
     @Override
     public void load() {
         live = this;
+        floatToggle = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                notifyListeners("floatToggleRequested", new JSObject());
+            }
+        };
+        ContextCompat.registerReceiver(getContext(), floatToggle, new IntentFilter(ACTION_FLOAT_TOGGLE), ContextCompat.RECEIVER_NOT_EXPORTED);
+    }
+
+    /** #9847 — la page dit si la video qui flotte joue ; le bouton de la fenetre suit. */
+    @PluginMethod
+    public void setFloatPlaying(PluginCall call) {
+        boolean playing = Boolean.TRUE.equals(call.getBoolean("playing", false));
+        getActivity()
+            .runOnUiThread(() -> {
+                if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).floatPlaying(playing);
+                call.resolve();
+            });
     }
 
     @PluginMethod
@@ -84,6 +112,10 @@ public class MeeshyPlaybackPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         if (live == this) live = null;
+        if (floatToggle != null) {
+            getContext().unregisterReceiver(floatToggle);
+            floatToggle = null;
+        }
         PlaybackForegroundService.stop(getContext());
         super.handleOnDestroy();
     }
