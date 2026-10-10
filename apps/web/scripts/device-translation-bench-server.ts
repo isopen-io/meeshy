@@ -24,6 +24,12 @@ type TransformersNode = {
   readonly pipeline: (task: 'translation', model: string, options: { readonly dtype: string }) => Promise<TransformersTranslationPipeline>;
 };
 
+/* Le `tsconfig` du web ne charge pas les types de Bun : le runtime est décrit par ce qu'on en appelle (motif de `render-frame-board.ts`). */
+type BunRuntime = {
+  readonly serve: (options: { readonly port: number; readonly fetch: (request: Request) => Promise<Response> }) => { readonly port: number };
+};
+const Bun = (globalThis as unknown as { readonly Bun: BunRuntime }).Bun;
+
 const modulePath = process.env.TRANSFORMERS_MODULE;
 if (modulePath === undefined) throw new Error('TRANSFORMERS_MODULE manquant : chemin de transformers.node.mjs');
 
