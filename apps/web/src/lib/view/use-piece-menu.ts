@@ -94,7 +94,7 @@ export function usePieceMenu(params: {
       const message = messageOf(messageId);
       /* Sans ses libellés, le menu d'une pièce n'existe pas : le message entier. */
       if (message === undefined || !isMessagePiecesCatalogLoaded(currentInterfaceLanguage())) return undefined;
-      const target = targetedPieceOf(message, pieceId);
+      const target = targetedPieceOf(message, pieceId, Date.now());
       if (target === null) return undefined;
       const piece = target.pieces[target.index]!;
       const now = Date.now();

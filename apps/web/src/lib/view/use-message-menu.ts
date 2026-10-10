@@ -218,7 +218,7 @@ export function useMessageMenu(params: {
         messageId,
         element: anchor.element,
         isMine: isMineOf(message, viewerId),
-        ...(targetedPieceOf(message, pieceId) === null || pieceId === undefined ? {} : { pieceId }),
+        ...(targetedPieceOf(message, pieceId, Date.now()) === null || pieceId === undefined ? {} : { pieceId }),
       });
     },
     [selection, messageOf, viewerId],

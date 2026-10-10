@@ -470,6 +470,14 @@ describe('MediaGrid — chaque case se nomme, la tuile citée s’éclaire (#990
     expect(html).toMatch(new RegExp(`data-piece="${items[2]!.id}"[^>]*data-piece-highlighted|data-piece-highlighted[^>]*data-piece="${items[2]!.id}"`));
   });
 
+  test('la mise en évidence d’une pièce MASQUÉE ne révèle rien : la case garde son substitut, sans fichier', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID).map((a) => ({ ...a, isBlurred: true }));
+    const html = render(items, items[2]!.id);
+    expect(html).toContain('data-piece-highlighted');
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<video');
+  });
+
   test('une pièce cachée derrière « +N » éclaire la case « +N »', () => {
     const items = attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID);
     const html = render(items, items[5]!.id);

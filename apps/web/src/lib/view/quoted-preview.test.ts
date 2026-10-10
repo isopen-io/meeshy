@@ -333,6 +333,15 @@ describe('quotedPreviewOf — « +N » sur la citation d’un message à plusieu
     expect(preview(named).media?.more).toBe(0);
   });
 
+  test('flouté ou chiffré : aucun « +N », aucune vignette', () => {
+    for (const protection of [{ isBlurred: true }, { isEncrypted: true }] as const) {
+      const media = preview(quoted({ content: '🔒', attachments: pieces(7), ...protection })).media;
+      expect(media?.more).toBe(0);
+      expect(media?.thumbnailSrc).toBeNull();
+      expect(media?.openable).toBeNull();
+    }
+  });
+
   test('un message protégé ne dit pas combien de pièces il cache', () => {
     expect(preview(quoted({ content: '👁️ 🖼️', isViewOnce: true, attachments: pieces(7) })).media?.more).toBe(0);
   });

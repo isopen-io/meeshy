@@ -10,6 +10,7 @@ import {
   pieceIdAt,
   pieceMenuItems,
   piecePreviewBox,
+  piecesMayOpen,
   targetedPieceOf,
   withPieceRestored,
   withoutPiece,
@@ -101,15 +102,17 @@ describe('pieceIdAt — la tuile que l’appui a touchée (#9907)', () => {
   });
 });
 
+const NOW = new Date('2026-10-10T10:00:00.000Z').getTime();
+
 describe('targetedPieceOf — la pièce visée et son rang', () => {
   test('la 3ᵉ d’un lot de sept', () => {
-    expect(targetedPieceOf(lot(7), 'a-3')).toEqual({ pieces: menuPiecesOf(lot(7)), index: 2 });
+    expect(targetedPieceOf(lot(7), 'a-3', NOW)).toEqual({ pieces: menuPiecesOf(lot(7)), index: 2 });
   });
 
   test('une pièce disparue, ou un message à une pièce : rien', () => {
-    expect(targetedPieceOf(lot(7), 'a-9')).toBeNull();
-    expect(targetedPieceOf(lot(1), 'a-1')).toBeNull();
-    expect(targetedPieceOf(lot(7), undefined)).toBeNull();
+    expect(targetedPieceOf(lot(7), 'a-9', NOW)).toBeNull();
+    expect(targetedPieceOf(lot(1), 'a-1', NOW)).toBeNull();
+    expect(targetedPieceOf(lot(7), undefined, NOW)).toBeNull();
   });
 });
 
@@ -176,5 +179,24 @@ describe('piecePreviewBox — une boîte stable pour tout le défilement (#9907)
 
   test('un grand écran ne dépasse pas la largeur maximale ; sans dimensions, un carré', () => {
     expect(piecePreviewBox({ pieces: [{}, {}], viewport: { width: 1440, height: 900 }, sidePadding: 16 })).toEqual({ width: 420, height: 420 });
+  });
+});
+
+describe('piecesMayOpen — un contenu protégé n’ouvre pas l’aperçu par pièce (fail-closed)', () => {
+  test('un lot ordinaire s’ouvre', () => {
+    expect(piecesMayOpen(lot(3), NOW)).toBe(true);
+  });
+
+  test('la protection du MESSAGE ferme, même sans drapeau sur les pièces', () => {
+    expect(piecesMayOpen(lot(3, { isBlurred: true }), NOW)).toBe(false);
+    expect(piecesMayOpen(lot(3, { isViewOnce: true }), NOW)).toBe(false);
+    expect(piecesMayOpen(lot(3, { isEncrypted: true }), NOW)).toBe(false);
+    expect(piecesMayOpen(lot(3, { expiresAt: new Date(NOW + 3_600_000) }), NOW)).toBe(false);
+    expect(piecesMayOpen(lot(3, { deletedAt: new Date(NOW - 1000) }), NOW)).toBe(false);
+  });
+
+  test('UNE pièce protégée ferme tout le lot', () => {
+    const one = lot(3);
+    expect(piecesMayOpen({ ...one, attachments: one.attachments!.map((a, i) => (i === 2 ? { ...a, isBlurred: true } : a)) }, NOW)).toBe(false);
   });
 });

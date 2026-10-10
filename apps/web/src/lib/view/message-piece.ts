@@ -1,6 +1,7 @@
 import type { Attachment, Message } from '@/lib/api/types';
 import type { MessagePiecesCatalogKey } from '@/lib/i18n-message-pieces-catalog';
 
+import { contentExitOf, exitOffers, pieceIsOpen, type ExitMessage } from './content-exit';
 import { partitionAttachments } from './media-grid-layout';
 import type { MediaPageOffers } from './viewer-page-offers';
 
@@ -41,12 +42,32 @@ export function pieceIdAt(origin: EventTarget | null | undefined, row: Element):
   return id === null || id === '' ? undefined : id;
 }
 
-/** La pièce visée, si elle est encore l'une des pièces que l'aperçu parcourt. */
+/**
+ * L'APERÇU PAR PIÈCE N'EXISTE QUE POUR UN CONTENU QUI A LE DROIT D'ÊTRE MONTRÉ
+ * ET DE SORTIR (fail-closed, revue de sécurité du lot #9907) — il pose le
+ * FICHIER de la pièce au premier plan et offre de l'enregistrer et de le
+ * transférer. Un message flouté, à vue unique, éphémère, chiffré, supprimé ou
+ * échu ne l'ouvre donc jamais, et un message dont UNE pièce est protégée non
+ * plus : l'appui long y retombe sur le menu du message.
+ *
+ * La protection se lit aux DEUX niveaux qui la déclarent, par les lois qui
+ * existent déjà : celle du MESSAGE (`contentExitOf`, qui porte `protectionOf`
+ * et le masque du message) et celle de chaque PIÈCE (`pieceIsOpen`). Lire les
+ * seuls drapeaux des pièces ne suffisait pas : une charge peut arriver sans
+ * eux (cache ancien, envoi optimiste — la raison d'être de `veiledAttachment`).
+ */
+export function piecesMayOpen(message: ExitMessage, now: number): boolean {
+  if (!exitOffers(contentExitOf(message, now), 'save')) return false;
+  return (message.attachments ?? []).every((piece) => piece === null || piece === undefined || pieceIsOpen(piece));
+}
+
+/** La pièce visée, si elle est encore l'une des pièces que l'aperçu parcourt — jamais dans un contenu protégé (`piecesMayOpen`). */
 export function targetedPieceOf(
-  message: Pick<Message, 'attachments'>,
+  message: ExitMessage & Pick<Message, 'attachments'>,
   pieceId: string | undefined,
+  now: number,
 ): { readonly pieces: readonly Attachment[]; readonly index: number } | null {
-  if (pieceId === undefined) return null;
+  if (pieceId === undefined || !piecesMayOpen(message, now)) return null;
   const pieces = menuPiecesOf(message);
   const index = pieces.findIndex((piece) => piece.id === pieceId);
   return index === -1 ? null : { pieces, index };
