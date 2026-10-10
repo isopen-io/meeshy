@@ -1,10 +1,10 @@
-import type { GameSeasonBlock } from '@meeshy/shared/types/game';
+import type { GameSeasonBlock, GameUpcomingSeasonBlock } from '@meeshy/shared/types/game';
 import { SEASON_SEAL_EVERY, SEASON_STARS_PER_STEP, SEASON_STEPS, seasonStepReward } from '@meeshy/shared/utils/game/season';
 
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { spendPreview } from '@meeshy/shared/utils/game/spend';
 import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
-import { seasonThemeName } from '@/lib/view/game-copy-v2';
+import { dayLabel, seasonThemeName } from '@/lib/view/game-copy-v2';
 import { sealDetail, stepDetail } from '@/lib/view/game-detail';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -23,12 +23,15 @@ import { GameSpendLine, GameTouch, PRESS, touchProps } from './game-touch';
  * par le TEXTE (réclamée, à réclamer, à venir), pas seulement par la couleur.
  * Toucher une étape à réclamer la réclame ; le bouton nomme la prochaine.
  *
- * Aucune saison ouverte (`season: null`) est une VALEUR, pas une panne : la
- * prochaine commence bientôt.
+ * Aucune saison ouverte (`season: null`) est une VALEUR, pas une panne : avant
+ * la saison 1 (lundi 2026-12-21, #10014), le serveur sert `seasonUpcoming` et la
+ * carte dit « La saison 1 ouvre le 21 décembre 2026 », son thème avec.
  */
 
 export type GameSeasonProps = {
   readonly season: GameSeasonBlock | null;
+  /** La saison à venir, servie tant qu'aucune n'est ouverte (#10014). */
+  readonly upcoming?: GameUpcomingSeasonBlock | null | undefined;
   readonly held: number;
   readonly online: boolean;
   readonly claimingStep: number | null;
@@ -92,6 +95,26 @@ function Step({ season, step, online, busy, onClaim }: { readonly season: GameSe
 export function GameSeason(props: GameSeasonProps) {
   const { season, held, online, claimingStep, buyingSeal, errors, onClaim, onBuySeal } = props;
   const language = currentInterfaceLanguage();
+
+  if (season === null && props.upcoming) {
+    const upcoming = props.upcoming;
+    const upcomingTheme = seasonThemeName(upcoming.themeKey, language);
+    return (
+      <GameCard id="game-season-upcoming" labelledBy="game-season-upcoming-title" tint={GAME_BRAND}>
+        <h2 id="game-season-upcoming-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          {gameText('game.season.title')}
+        </h2>
+        <p data-game-season-upcoming={upcoming.startDay} className="text-body font-semibold" style={{ color: GAME_INK }}>
+          {gameText('game.season.upcoming', { number: formatCount(upcoming.number), date: dayLabel(upcoming.startDay, language) })}
+        </p>
+        {upcomingTheme === null ? null : (
+          <p className="text-body font-semibold" style={{ color: GAME_BRAND }}>
+            {gameText('game.season.theme', { theme: upcomingTheme })}
+          </p>
+        )}
+      </GameCard>
+    );
+  }
 
   if (season === null) {
     return (
