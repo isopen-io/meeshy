@@ -94,10 +94,36 @@ describe('connexion par mot de passe — le refus de createSession remonte tel q
     expect((refus as AgeBelowMinimumError).code).toBe('AGE_BELOW_MINIMUM');
   });
 
-  it('un mot de passe faux ne révèle pas l’âge : échec ordinaire', async () => {
+  it('bon mot de passe, moins de 13 ans : 403 sans session, et le compte ne passe PAS « en ligne »', async () => {
+    mockCreateSession.mockRejectedValueOnce(new AgeBelowMinimumError());
+    const { svc, update } = service(account(yearsAgo(12)));
+
+    await svc.authenticate({ username: 'kid', password: 'ok' }).catch(() => undefined);
+
+    expect(update).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ isOnline: true }) }));
+  });
+
+  it('mauvais mot de passe : la MÊME réponse pour un compte de 12 ans et un majeur, l’échec compté, aucune session tentée', async () => {
     mockCompare.mockResolvedValue(false);
-    const { svc } = service(account(yearsAgo(10)));
-    await expect(svc.authenticate({ username: 'kid', password: 'faux' })).resolves.toBeNull();
+    const kid = service(account(yearsAgo(12)));
+    const adult = service(account(yearsAgo(30)));
+
+    const kidResult = await kid.svc.authenticate({ username: 'kid', password: 'faux' });
+    const adultResult = await adult.svc.authenticate({ username: 'kid', password: 'faux' });
+
+    expect(kidResult).toBeNull();
+    expect(adultResult).toBeNull();
+    expect(mockCreateSession).not.toHaveBeenCalled();
+    expect(kid.update.mock.calls.length).toBe(adult.update.mock.calls.length);
+  });
+
+  it('compte à second facteur : l’âge n’est PAS dit avant le second facteur — la première étape rend le défi', async () => {
+    const { svc } = service({ ...account(yearsAgo(12)), twoFactorEnabledAt: NOW });
+
+    const result = await svc.authenticate({ username: 'kid', password: 'ok' });
+
+    expect(result?.requires2FA).toBe(true);
+    expect(mockCreateSession).not.toHaveBeenCalled();
   });
 });
 

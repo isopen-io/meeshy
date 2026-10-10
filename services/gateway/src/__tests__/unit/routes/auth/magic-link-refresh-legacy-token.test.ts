@@ -448,7 +448,8 @@ describe('GET /sessions — la liste sert version, plateforme, appareil, moyen d
 });
 
 // #9927 — un compte de moins de 13 ans déclarés ne prolonge aucune session : le
-// refus dit pourquoi (403 AGE_BELOW_MINIMUM), avant toute lecture de session.
+// refus dit pourquoi (403 AGE_BELOW_MINIMUM), mais seulement APRÈS les preuves
+// d'origine (signature, session) — jamais à leur place.
 describe('POST /refresh — la porte de l’âge minimal (#9927)', () => {
   beforeEach(() => { mockFindTrustedSession.mockReset().mockResolvedValue(null); });
 
@@ -467,6 +468,22 @@ describe('POST /refresh — la porte de l’âge minimal (#9927)', () => {
     expect(res.statusCode).toBe(403);
     expect(res.json()).toMatchObject({ success: false, code: 'AGE_BELOW_MINIMUM' });
     expect(authService.generateToken).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('12 ans, session RÉVOQUÉE : la réponse d’origine (401 SESSION_REVOKED), l’âge n’est pas dit', async () => {
+    const authService = makeAuthService();
+    const prisma = makePrisma({
+      sessionsValides: new Set<string>(),
+      user: { findUnique: jest.fn<any>().mockResolvedValue({ birthDate: yearsAgo(12) }) },
+    });
+    const app = await buildApp({ authService, prisma });
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ code: 'SESSION_REVOKED' });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
     await app.close();
   });
 

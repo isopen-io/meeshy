@@ -169,15 +169,6 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         return sendUnauthorized(reply, 'Token invalide ou expiré', { code: AUTH_ERROR_CODES.MAGIC_LINK_INVALID });
       }
 
-      // #9927 — un compte de moins de 13 ans déclarés ne prolonge aucune
-      // session. Posé AVANT la lecture de la session : ses sessions ont été
-      // révoquées à la déclaration, et le refus doit dire POURQUOI (403
-      // AGE_BELOW_MINIMUM), pas seulement « session révoquée ».
-      if (decoded.userId && await accountIsBelowMinimumAge(context.prisma, decoded.userId, new Date())) {
-        const refusal = new AgeBelowMinimumError();
-        return sendError(reply, refusal.statusCode, refusal.message, { code: refusal.code });
-      }
-
       // À partir d'ici, la signature est AUTHENTIQUE — éventuellement
       // expirée, ce qui est la raison d'être de cette route
       // (`ignoreExpiration` ci-dessus). C'est la SEULE forme acceptée :
@@ -286,6 +277,16 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // existante ne se renouvelle plus ; la connexion mènera au code.
       if (user.activation?.phase === 'blocked') {
         return sendUnauthorized(reply, 'Confirmez votre adresse e-mail pour continuer', { code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+      }
+
+      // #9927 — un compte de moins de 13 ans déclarés ne prolonge aucune
+      // session. Posé APRÈS toutes les preuves d'identité et de session, dans
+      // leur ordre d'origine (signature, session nommée, compte, délai de
+      // grâce) : le refus ne se dit qu'à qui les a toutes franchies, et AVANT
+      // l'émission du jeton.
+      if (await accountIsBelowMinimumAge(context.prisma, user.id, new Date())) {
+        const refusal = new AgeBelowMinimumError();
+        return sendError(reply, refusal.statusCode, refusal.message, { code: refusal.code });
       }
 
       // Le jeton renouvelé garde le nom de SA session (#4264, critère 1 :
