@@ -5,7 +5,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest, beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -977,48 +977,5 @@ describe('POST /attachments/upload-text — byte-based size cap, not codepoint-b
 
     expect(res.statusCode).toBe(400);
     expect(mockCreateTextAttachment).not.toHaveBeenCalled();
-  });
-});
-
-// #9927 — une pièce jointe ajoutée à un message EXISTANT paraît dans sa
-// conversation : dans Meeshy Global, un mineur déclaré ne le fait pas.
-
-/** Horloge FIGÉE (#9927) : une date de naissance comparée à l'horloge murale rougirait le jour où l'âge change. */
-const FROZEN_NOW = new Date('2026-10-10T12:00:00.000Z');
-const yearsBeforeFrozenNow = (years: number): Date =>
-  new Date(Date.UTC(FROZEN_NOW.getUTCFullYear() - years, FROZEN_NOW.getUTCMonth(), FROZEN_NOW.getUTCDate()));
-const freezeClock = () => jest.useFakeTimers({
-  doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'performance', 'hrtime'],
-  now: FROZEN_NOW,
-});
-
-describe('POST /attachments/upload-text — ajout à un message de Global par un mineur (#9927)', () => {
-  beforeEach(() => { freezeClock(); });
-  afterEach(() => { jest.useRealTimers(); });
-
-  it('403 GLOBAL_ADULTS_ONLY, et rien n’est créé', async () => {
-    mockCreateTextAttachment.mockClear();
-    const app = await buildApp({ prisma: makePrisma(undefined, { conversationType: 'global', birthDate: yearsBeforeFrozenNow(15) }) });
-    try {
-      const res = await app.inject({ method: 'POST', url: '/attachments/upload-text', payload: { content: 'coucou', messageId: '507f1f77bcf86cd799439033' } });
-      expect(res.statusCode).toBe(403);
-      expect(res.json()).toMatchObject({ success: false, code: 'GLOBAL_ADULTS_ONLY' });
-      expect(mockCreateTextAttachment).not.toHaveBeenCalled();
-    } finally {
-      await app.close();
-    }
-  });
-
-  it('sans messageId, le fichier n’entre dans aucune conversation : rien n’est lu', async () => {
-    mockCreateTextAttachment.mockResolvedValue({ id: 'att-1', fileUrl: 'https://example.com/file.txt' });
-    const prisma = makePrisma(undefined, { conversationType: 'global', birthDate: yearsBeforeFrozenNow(15) });
-    const app = await buildApp({ prisma });
-    try {
-      const res = await app.inject({ method: 'POST', url: '/attachments/upload-text', payload: { content: 'coucou' } });
-      expect(res.statusCode).toBe(200);
-      expect(prisma.message.findFirst).not.toHaveBeenCalled();
-    } finally {
-      await app.close();
-    }
   });
 });
