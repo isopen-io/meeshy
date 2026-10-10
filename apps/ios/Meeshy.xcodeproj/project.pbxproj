@@ -509,6 +509,7 @@
 		2ADD3116B6D40A8025170595 /* ConversationInfoSheetLiveConversationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863BC437F65D5290913D0884 /* ConversationInfoSheetLiveConversationTests.swift */; };
 		2AE3F22FB873BC34B4D4B5CF /* MockConversationCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB0BE3056E36AB766AB030C /* MockConversationCreator.swift */; };
 		2AE550729E6221EA9E3FC343 /* ComposerForegroundSoundMountGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B26E649B036E4539F0958924 /* ComposerForegroundSoundMountGuardTests.swift */; };
+		2AEFBA735B5A3C3E378D930E /* GameLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CEF978CBF5351028835B52D /* GameLink.swift */; };
 		2B214536E8CA04AE8C0A6464 /* AttachmentReactionBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 610F8623BC2F57D32738DF67 /* AttachmentReactionBadge.swift */; };
 		2B608BF2218A11F56FEC1787 /* ContentFetchFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C399307DD17F7EA2A3DE93F /* ContentFetchFailureTests.swift */; };
 		2B6455E9E8D6F1FE0E487568 /* ScreenShareWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD73D46DA89F6474476B1B6F /* ScreenShareWire.swift */; };
@@ -799,6 +800,7 @@
 		434C8F10821CB3463026534B /* MeeshyAppPushBootstrapOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB9D38EFBDB1063E445E639D /* MeeshyAppPushBootstrapOrderTests.swift */; };
 		43C03A0DFD2E294C0927827B /* MuteButtonExistenceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2126D077796B80072DF10E0 /* MuteButtonExistenceGuardTests.swift */; };
 		43DC7FEE96A923350EEDC475 /* E2ESessionManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DDA175BEC62F9F2A903D0BE /* E2ESessionManagerTests.swift */; };
+		43E45212E6F9CE468340FF49 /* GameDeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E43926B2404FD1C5C65DE8 /* GameDeepLinkTests.swift */; };
 		440ED107E58CE4A5667B46F7 /* AttachmentPreparationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3745C05D70B1ECAF846634 /* AttachmentPreparationService.swift */; };
 		441A2E10F583BECC63CA86BA /* ForgotPasswordWordingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CFA66DEB79CEBE96017BF63 /* ForgotPasswordWordingTests.swift */; };
 		441E59A368069B41BEC2EC6E /* GameWave2CatalogGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 919D90721BE938C7C86EBB1A /* GameWave2CatalogGuardTests.swift */; };
@@ -4927,6 +4929,7 @@
 		8CBD3BCF94A992D7C665B69C /* MediaChromeRailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaChromeRailTests.swift; sourceTree = "<group>"; };
 		8CC55A8F19E4AE29DCD5CBC2 /* ShareCancelCommitGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareCancelCommitGuardTests.swift; sourceTree = "<group>"; };
 		8CDFEB98CCFB4531C11F8E63 /* CallCaptureCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCaptureCopy.swift; sourceTree = "<group>"; };
+		8CEF978CBF5351028835B52D /* GameLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameLink.swift; sourceTree = "<group>"; };
 		8CF18F6DB1B8A46296D7E856 /* FeedScrollPublicationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedScrollPublicationTests.swift; sourceTree = "<group>"; };
 		8CF1DFB5522F0043D860B1F9 /* CallWindowPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallWindowPresenter.swift; sourceTree = "<group>"; };
 		8D07885D4D596C6A1CC86A22 /* ComposerAvatarSoundBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAvatarSoundBadge.swift; sourceTree = "<group>"; };
@@ -5434,6 +5437,7 @@
 		B9B65404049C6234FBB5B21E /* ConversationViewValueSizeGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewValueSizeGuardTests.swift; sourceTree = "<group>"; };
 		B9B8A02FB433A893CEF0BD04 /* ComposerTextFormatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTextFormatTests.swift; sourceTree = "<group>"; };
 		B9B9FF0D70A3444A4DCC921F /* ComposerAudienceReach.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAudienceReach.swift; sourceTree = "<group>"; };
+		B9E43926B2404FD1C5C65DE8 /* GameDeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameDeepLinkTests.swift; sourceTree = "<group>"; };
 		BA1EBE24B2AF8BE6A57D88D6 /* MockSocialSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSocialSocket.swift; sourceTree = "<group>"; };
 		BA4C39C183307A917D193DB0 /* VoicePlaybackActivityLawTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePlaybackActivityLawTests.swift; sourceTree = "<group>"; };
 		BA8BAE28E0058B017DB1E89C /* CoordinatedAudioPlayerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinatedAudioPlayerTests.swift; sourceTree = "<group>"; };
@@ -8394,6 +8398,7 @@
 				297D2959D2F0CD3978035385 /* GameHeroView.swift */,
 				394D6928BB5D25B69D93FE29 /* GameLeagueDetailCard.swift */,
 				911EB384B09D33319F4F2496 /* GameLevelConfirmation.swift */,
+				8CEF978CBF5351028835B52D /* GameLink.swift */,
 				F390268114F5FBDE6E4D4749 /* GameMintBadgeImpact.swift */,
 				0464094611CE65A09E69366A /* GameMintPreviewView.swift */,
 				10AD61D26FB652F6A1227CFB /* GameMintSequence.swift */,
@@ -9319,6 +9324,7 @@
 				F2E16C690C4B6ABC786EA41D /* DeepLinkWidgetIntegrationTests.swift */,
 				F0F2400C419C224EED1D8760 /* DeepLinkWidgetSurfaceTests.swift */,
 				558E512E88F3F244B2C4F1A8 /* EmailVerificationLinkTests.swift */,
+				B9E43926B2404FD1C5C65DE8 /* GameDeepLinkTests.swift */,
 				46AF26D0BEE6F192CE0A9653 /* InAppLinksTests.swift */,
 				58018494E1F1770602EACF6A /* NavigationStateRestorationTests.swift */,
 				B3DB2491EA18B3414BE023A1 /* NotificationContentRouterTests.swift */,
@@ -11506,6 +11512,7 @@
 				19BF8CFA4084BBFF0C832472 /* GameLeagueDetailCard.swift in Sources */,
 				0CA3EE7BC47C8EFDEA40EBF7 /* GameLeagueViews.swift in Sources */,
 				07BA970C5E04B4B3FAFA3309 /* GameLevelConfirmation.swift in Sources */,
+				2AEFBA735B5A3C3E378D930E /* GameLink.swift in Sources */,
 				70A1F4F871BFF2904A3CC73D /* GameMintBadgeImpact.swift in Sources */,
 				2C7ECF54A70FF27EE0E24D20 /* GameMintPreviewView.swift in Sources */,
 				B5C699896FDEB82FCBDB36E5 /* GameMintSequence.swift in Sources */,
@@ -12959,6 +12966,7 @@
 				559B3FB6FC699D32AC477EDE /* GallerySceneStageTests.swift in Sources */,
 				9EE784CF2B683C1DF1E60C8B /* GameBadgeGuideTests.swift in Sources */,
 				29601752F671892E39768919 /* GameCopyTests.swift in Sources */,
+				43E45212E6F9CE468340FF49 /* GameDeepLinkTests.swift in Sources */,
 				75B08BA7D08E4DC0E69998B8 /* GameElementDetailTests.swift in Sources */,
 				83A8AE8B82B85A545B6CEA31 /* GameFixture.swift in Sources */,
 				B1442A35AFE10A42ED5C5FE9 /* GameGuideCardTests.swift in Sources */,

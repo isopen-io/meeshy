@@ -155,6 +155,9 @@ extension iPadRootView {
             // Cible EXTERNAL d'un `/l/<token>` : elle s'ouvre, elle ne se
             // rejoint pas. Même geste que `RootView`.
             UIApplication.shared.open(url)
+        case .game(let link):
+            // Même porte que l'iPhone (#9947) : la chaîne du Jeu, dans le panneau.
+            router.openGame(at: GameNavigationMap.entry(for: link))
         case .unresolvedTrackedLink:
             FeedbackToastManager.shared.showError(
                 String(localized: "deepLink.tracked.unresolved",
