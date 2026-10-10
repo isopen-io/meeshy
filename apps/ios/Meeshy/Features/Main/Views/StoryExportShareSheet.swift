@@ -4,13 +4,19 @@ import MeeshyUI
 
 // MARK: - StoryExportShareSheet
 //
-// Author-only sheet that bakes the current slide into an MP4 and presents
-// the system share sheet (`ShareSheet`) so the user can drop the file into
-// Photos / Messages / WhatsApp / AirDrop. NEVER touches the Meeshy backend.
+// Sheet that bakes the current slide into an MP4 — in the language the
+// reader picks — and presents the system share sheet (`ShareSheet`) so the
+// user can drop the file into Photos / Messages / WhatsApp / AirDrop. Offered
+// to EVERY reader since #9953 (« Partager ▸ Exporter en vidéo »). NEVER
+// touches the Meeshy backend.
 
 struct StoryExportShareSheet: View {
     let story: StoryItem
     @ObservedObject var viewModel: StoryExportShareViewModel
+    /// Le pseudo de l'AUTEUR de la story : le filigrane le nomme, et seule SA
+    /// story porte l'interlude d'identité de l'utilisateur connecté (#9953).
+    /// `nil` (« Mes stories ») : l'utilisateur connecté est l'auteur.
+    var authorUsername: String? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
@@ -164,7 +170,7 @@ struct StoryExportShareSheet: View {
         case .idle, .failed:
             Button {
                 HapticFeedback.medium()
-                Task { await viewModel.startExport(story: story) }
+                Task { await viewModel.startExport(story: story, authorUsername: authorUsername) }
             } label: {
                 Text(String(localized: "story.export.share.cta", defaultValue: "Exporter en vidéo"))
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))

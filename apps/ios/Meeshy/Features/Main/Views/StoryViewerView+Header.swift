@@ -26,15 +26,13 @@ import MeeshyUI
 /// a quitté l'écran : le geste ferme déjà, et le menu offre la sortie quand le
 /// geste n'est pas disponible (VoiceOver, Switch Control).
 ///
-/// Le menu tient en cinq groupes : la lecture (plein écran, transcription),
-/// garder ou reprendre la slide (enregistrer, ses stickers, composer), UN
-/// sous-menu « Partager » qui rassemble toutes les formes de partage, l'action
-/// sur la story (signaler, ou supprimer la sienne), puis « Fermer ».
+/// Le même menu pour TOUT lecteur, sa story ou celle d'un autre : la lecture
+/// (plein écran, transcription), « Composer », UN sous-menu « Partager »
+/// (exporter en vidéo, partager à un ami), l'action sur la story (signaler, ou
+/// supprimer la sienne), puis « Fermer ». Envoyer et republier restent au rail.
 nonisolated enum StoryOptionsMenuEntry: Hashable {
     case fullscreen
     case transcript
-    case save
-    case saveStickers
     case compose
     case share
     case report
@@ -42,14 +40,14 @@ nonisolated enum StoryOptionsMenuEntry: Hashable {
     case close
 }
 
-/// Le sous-menu « Partager » : dans Meeshy (envoyer, republier, citer), puis
-/// hors de Meeshy (le lien d'une story publique, la vidéo pour l'auteur).
+/// Le sous-menu « Partager ».
+/// - `exportVideo` : la feuille d'export au choix de la LANGUE
+///   (`StoryExportShareSheet`), qu'offrait le bouton « Partager » du rail auteur.
+/// - `shareWithFriend` : la feuille du système — le lien traçable, et le
+///   fichier pour « Enregistrer la vidéo », AirDrop, Fichiers.
 nonisolated enum StoryShareMenuEntry: Hashable {
-    case send
-    case repostAsPost
-    case quoteAsPost
-    case shareOutside
     case exportVideo
+    case shareWithFriend
 }
 
 nonisolated struct StoryOptionsMenuPlan: Equatable {
@@ -58,39 +56,26 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
 
     var entries: [StoryOptionsMenuEntry] { sections.flatMap { $0 } }
 
-    /// - `isPublicStory` : seul le partage HORS Meeshy en dépend — son lien
-    ///   `meeshy.me/l/…` s'ouvre sans compte. Republier et citer restent
-    ///   offerts sur toute audience, la loi d'audience bornant le résultat.
-    /// - Republier et citer en post sont pour la story d'AUTRUI ; l'export
-    ///   vidéo pour la sienne (le même que le bouton « Partager » du rail).
+    /// `isPublicStory` ne garde que « Partager à un ami » : son lien
+    /// `meeshy.me/l/…` s'ouvre sans compte et élargirait l'audience d'une story
+    /// FRIENDS ou PRIVATE. L'export vidéo, lui, est offert sur toute story —
+    /// comme l'était « Enregistrer » (#8823).
     static func resolve(
         hasStory: Bool,
         isOwnStory: Bool,
         isPublicStory: Bool,
         hasAudioTranscript: Bool,
-        canCompose: Bool,
-        hasSavableStickers: Bool
+        canCompose: Bool
     ) -> StoryOptionsMenuPlan {
-        let reading: [StoryOptionsMenuEntry] = ([.fullscreen, hasAudioTranscript ? .transcript : nil] as [StoryOptionsMenuEntry?])
-            .compactMap { $0 }
+        let reading: [StoryOptionsMenuEntry] = hasAudioTranscript ? [.fullscreen, .transcript] : [.fullscreen]
         guard hasStory else {
             return StoryOptionsMenuPlan(sections: [reading, [.close]], shareEntries: [])
         }
-        let keeping: [StoryOptionsMenuEntry] = ([
-            .save,
-            hasSavableStickers && !isOwnStory ? .saveStickers : nil,
-            canCompose ? .compose : nil
-        ] as [StoryOptionsMenuEntry?]).compactMap { $0 }
-        let sharing: [StoryShareMenuEntry] = ([
-            .send,
-            isOwnStory ? nil : .repostAsPost,
-            isOwnStory ? nil : .quoteAsPost,
-            isPublicStory ? .shareOutside : nil,
-            isOwnStory ? .exportVideo : nil
-        ] as [StoryShareMenuEntry?]).compactMap { $0 }
+        let composing: [StoryOptionsMenuEntry] = canCompose ? [.compose] : []
+        let sharing: [StoryShareMenuEntry] = isPublicStory ? [.exportVideo, .shareWithFriend] : [.exportVideo]
         let acting: StoryOptionsMenuEntry = isOwnStory ? .delete : .report
         return StoryOptionsMenuPlan(
-            sections: [reading, keeping, [.share], [acting], [.close]],
+            sections: [reading, composing, [.share], [acting], [.close]].filter { !$0.isEmpty },
             shareEntries: sharing
         )
     }
@@ -162,15 +147,13 @@ struct StoryHeaderView: View {
         }
     }
 
-    /// Partage INTERNE (vers une conversation ou un contact) — troisième forme
-    /// du menu (...) demandée le 2026-08-19, aux côtés de « Republier en post »
-    /// et « Citer en post ». La même feuille que le bouton « Envoyer » du rail,
-    /// qui reste en place : le menu regroupe les trois formes de partage, il ne
-    /// retire pas l'affordance directe.
+    /// Partage INTERNE, « Republier en post » et « Citer en post » ont quitté le
+    /// menu (#9953) : « Envoyer » et « Republier » restent au rail. Leurs liens
+    /// restent câblés jusqu'ici pour qu'un retour au menu ne coûte qu'une entrée.
     @Binding var sharedContentWrapper: SharedContentWrapper?
 
-    /// L'export vidéo de l'auteur, offert aussi par le sous-menu « Partager »
-    /// (#9953) : la feuille du bouton « Partager » du rail, présentée par le lecteur.
+    /// « Partager ▸ Exporter en vidéo » (#9953) : la feuille d'export au choix
+    /// de la langue, présentée par le lecteur.
     @Binding var showExportShareSheet: Bool
 
     let makeStoryExternalShareURL: (String) -> URL?
@@ -205,8 +188,7 @@ struct StoryHeaderView: View {
     /// lecteur, qui seul survit aux ticks de la barre.
     @Environment(\.storyOptionsMenuPresenceChange) private var optionsMenuPresenceChange: ((Bool) -> Void)?
 
-    /// La cible résolue pour la slide COURANTE. Cachée pour la MÊME raison que
-    /// `savableStickers` juste en dessous : l'en-tête est reconstruit à chaque
+    /// La cible résolue pour la slide COURANTE. Cachée : l'en-tête est reconstruit à chaque
     /// tick de la barre de progression, et le contenu d'un `Menu` est construit
     /// avec lui — résoudre la règle d'offre en ligne la rejouerait des dizaines
     /// de fois par seconde, en re-bridant les médias à chaque passe.
@@ -222,12 +204,6 @@ struct StoryHeaderView: View {
     /// dizaines de fois par seconde pour un contenu inchangé (post-revue
     /// 2026-07-13, angle optimisation).
     @State private var cachedProfileLabel: String = ""
-
-    /// Stickers IMAGE de la slide courante, copiables dans « Mes stickers ».
-    /// Caché pour la MÊME raison que `cachedProfileLabel` : le header est
-    /// reconstruit à chaque tick de la barre de progression, et le contenu
-    /// d'un `Menu` est construit avec lui.
-    @State private var savableStickers: [StoryStickerLibrary.Savable] = []
 
     /// Label VoiceOver du bouton profil auteur — inclut l'attribution de
     /// republication (icône + @handle visuels que ce label unique remplace).
@@ -394,7 +370,6 @@ struct StoryHeaderView: View {
         }
         .padding(.horizontal, FullscreenTopBarLayout.horizontalPadding)
         .adaptiveOnChange(of: currentStory?.id, initial: true) { _, _ in
-            savableStickers = currentStory.map { StoryStickerLibrary.savable(in: $0) } ?? []
             composableSlide = resolveComposableSlide()
         }
         .sheet(item: $selectedProfileUser) { user in
@@ -444,8 +419,7 @@ struct StoryHeaderView: View {
             isOwnStory: isOwnStory,
             isPublicStory: currentStory?.isPublic ?? false,
             hasAudioTranscript: hasAudioTranscript,
-            canCompose: composableSlide != nil && demanderComposer != nil,
-            hasSavableStickers: !savableStickers.isEmpty
+            canCompose: composableSlide != nil && demanderComposer != nil
         )
     }
 
@@ -487,40 +461,10 @@ struct StoryHeaderView: View {
                     systemImage: showAudioTranscript ? "captions.bubble.fill" : "captions.bubble"
                 )
             }
-        case .save:
-            // « Enregistrer » pour TOUT lecteur (#8823) : la sauvegarde
-            // EXISTANTE du rail auteur et de « Mes stories », idempotente.
-            if let story = currentStory, let group = currentGroup {
-                Button {
-                    HapticFeedback.light()
-                    StoryPhotoSaveService.shared.save(story: story, authorUsername: group.username)
-                } label: {
-                    Label(String(localized: "story.viewer.action.save", defaultValue: "Enregistrer", bundle: .main),
-                          systemImage: "square.and.arrow.down")
-                }
-            }
-        case .saveStickers:
-            // S5 — garder les stickers IMAGE d'une story reçue.
-            Button {
-                HapticFeedback.light()
-                let stickers = savableStickers
-                Task { await StickerLibraryReceive.saveAndAnnounce(stickers) }
-            } label: {
-                Label(
-                    savableStickers.count == 1
-                        ? String(localized: "story.viewer.sticker.save.one",
-                                 defaultValue: "Enregistrer le sticker",
-                                 bundle: .main)
-                        : String(format: String(localized: "story.viewer.sticker.save.many",
-                                                defaultValue: "Enregistrer les %d stickers",
-                                                bundle: .main),
-                                 savableStickers.count),
-                    systemImage: "square.and.arrow.down"
-                )
-            }
         case .compose:
             // « Composer » (#6085) : même libellé et même glyphe que dans la
-            // conversation. L'en-tête DEMANDE, le conteneur présente.
+            // conversation ; l'éventail du meuble offre story, réel ou post.
+            // L'en-tête DEMANDE, le conteneur présente.
             if let cible = composableSlide, let demanderComposer {
                 Button {
                     HapticFeedback.light()
@@ -563,57 +507,24 @@ struct StoryHeaderView: View {
 
     @ViewBuilder
     private func shareMenuItem(_ entry: StoryShareMenuEntry) -> some View {
-        if let story = currentStory, let group = currentGroup {
-            switch entry {
-            case .send:
-                // Dans Meeshy (conversation ou contact) : la feuille du bouton
-                // « Envoyer » du rail, sous le même mot. Elle se pose SUR la
-                // story, qui boucle (#9821).
-                Button {
-                    HapticFeedback.light()
-                    EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
-                    sharedContentWrapper = SharedContentWrapper(
-                        content: .story(item: story, authorName: group.username)
-                    )
-                } label: {
-                    Label(String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main), systemImage: "paperplane.fill")
-                }
-            case .repostAsPost:
-                // L'ANCRAGE, un tap (arbitrage D3) : le serveur hérite de
-                // l'audience de l'original. `infinity` : story éphémère → post
-                // durable, distinct du glyphe du rail.
-                Button {
-                    repostAsPostDirect()
-                } label: {
-                    Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "infinity")
-                }
-            case .quoteAsPost:
-                // Ouvre le composeur de POST avec la story citée.
-                Button {
-                    HapticFeedback.light()
-                    pauseTimer()
-                    editAndRepostAsPostSource = RepostPostSourceWrapper(
-                        story: story,
-                        authorHandle: group.username
-                    )
-                } label: {
-                    Label(String(localized: "story.viewer.editAndRepostAsPost", defaultValue: "Citer en post", bundle: .main), systemImage: "square.and.pencil")
-                }
-            case .shareOutside:
-                // Le lien traçable `meeshy.me/l/<token>`, frappé au tap.
+        switch entry {
+        case .exportVideo:
+            // La feuille d'export EXISTANTE, au choix de la langue, présentée
+            // par le lecteur. Posée SUR la story : elle boucle (#9821).
+            Button {
+                HapticFeedback.light()
+                showExportShareSheet = true
+            } label: {
+                Label(String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo", bundle: .main), systemImage: "film")
+            }
+        case .shareWithFriend:
+            // La feuille du système : le lien traçable `meeshy.me/l/<token>`,
+            // frappé au tap, et le fichier rendu à la demande.
+            if let story = currentStory {
                 Button {
                     Task { await mintAndShareStory(story) }
                 } label: {
-                    Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
-                }
-            case .exportVideo:
-                // La vidéo de la slide, au choix de la langue : la feuille du
-                // bouton « Partager » du rail auteur.
-                Button {
-                    HapticFeedback.light()
-                    showExportShareSheet = true
-                } label: {
-                    Label(String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo", bundle: .main), systemImage: "film")
+                    Label(String(localized: "story.viewer.share.friend", defaultValue: "Partager à un ami", bundle: .main), systemImage: "person.2")
                 }
             }
         }
