@@ -136,6 +136,30 @@ final class LongPressProtectedMessageTests: XCTestCase {
         XCTAssertEqual(OverlayPreviewMediaLayout.aspectRatio(of: photo(width: 720, height: 1280)), 0.5625, accuracy: 0.0001)
     }
 
+    // MARK: - Les pièces au-delà de quatre : « +N » sur la dernière case (#9950)
+
+    func test_grid_fourPiecesOrLess_hidesNothing() {
+        XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 4), 0)
+        XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 1), 0)
+        XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 0), 0)
+    }
+
+    func test_grid_fivePhotos_saysPlusOne_onTheLastCell() {
+        XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 5), 1)
+        XCTAssertEqual(OverlayPreviewMediaLayout.hiddenCount(total: 9), 5)
+        XCTAssertEqual(OverlayPreviewMediaLayout.overflowCell(total: 5), 3)
+        XCTAssertNil(OverlayPreviewMediaLayout.overflowCell(total: 4))
+    }
+
+    func test_grid_drawsTheOverflow_likeTheBubbleGrid() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let grid = try String(contentsOf: root.appendingPathComponent(
+            "Meeshy/Features/Main/Components/MessageOverlayPreviewMedia.swift"), encoding: .utf8)
+        XCTAssertTrue(grid.contains("OverlayPreviewMediaLayout.overflowCell(total: attachments.count)"))
+        XCTAssertTrue(grid.contains("Text(verbatim: \"+\\(hidden)\")"))
+    }
+
     func test_aspectRatio_missingDimensions_isSquare() {
         XCTAssertEqual(OverlayPreviewMediaLayout.aspectRatio(of: photo(width: nil, height: nil)), 1)
         XCTAssertEqual(OverlayPreviewMediaLayout.aspectRatio(of: photo(width: 0, height: 800)), 1)
