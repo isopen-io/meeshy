@@ -60,8 +60,9 @@ final class ActiveSessionsViewAccessibilityTests: XCTestCase {
         // Grouping the info block must NOT swallow the per-session revoke action:
         // the button keeps its own explicit label and stays actionable.
         XCTAssertTrue(
-            source.contains("sessions_revoke"),
-            "The per-session revoke button must remain a separately-labelled, actionable element."
+            source.contains("sessions.revoke.a11y"),
+            "The per-session revoke button must remain a separately-labelled, actionable element "
+            + "that names the device it signs out (#9612)."
         )
     }
 
@@ -76,5 +77,24 @@ final class ActiveSessionsViewAccessibilityTests: XCTestCase {
             source.contains("AdaptiveContentUnavailableView("),
             "The empty state must delegate to the shared native ContentUnavailableView wrapper."
         )
+    }
+
+    /// #9612 — la courante est marquée et ne porte aucun bouton de
+    /// déconnexion ; chaque fermeture passe par une confirmation ; le pied
+    /// porte l'attribution que la licence de DB-IP exige.
+    func test_currentSessionHasNoRevokeButton_andRevocationsAreConfirmed() throws {
+        let source = try activeSessionsViewSource()
+        XCTAssertTrue(source.contains("if !row.isCurrent {"), "La session courante ne se déconnecte pas d'ici.")
+        XCTAssertTrue(source.contains("viewModel.requestRevoke(session)"), "Le geste demande, la confirmation exécute.")
+        XCTAssertTrue(source.contains(".confirmationDialog("), "Aucune fermeture sans confirmation.")
+        XCTAssertTrue(source.contains("viewModel.attribution.text"), "L'attribution DB-IP accompagne les lieux.")
+    }
+
+    /// Cache-first : jamais d'indicateur de chargement sur une liste connue ;
+    /// le squelette ne sert que l'écran vide.
+    func test_noSpinner_onlyASkeletonOnAnEmptyCache() throws {
+        let source = try activeSessionsViewSource()
+        XCTAssertFalse(source.contains("ProgressView("), "Un spinner masquerait une liste déjà connue.")
+        XCTAssertTrue(source.contains("SkeletonShape("))
     }
 }

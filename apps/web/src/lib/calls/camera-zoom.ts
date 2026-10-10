@@ -54,3 +54,25 @@ export function applyZoom(track: MediaStreamTrack, zoom: number): Promise<void> 
   const constraint: ZoomConstraint = { zoom };
   return track.applyConstraints({ advanced: [constraint] });
 }
+
+/**
+ * Le zoom NUMÉRIQUE de mon seul aperçu (#8441), là où la caméra n'a pas de
+ * zoom : l'image est agrandie à l'écran, jamais dans ce qui part.
+ */
+export const LOCAL_ZOOM_RANGE: ZoomRange = { min: 1, max: 3, step: 0.1 };
+
+const STOPS: readonly number[] = [1, 2, 5];
+
+const LAST_STOP = 5;
+
+/** Les crans du bouton de ma vignette : 1×, 2×, 5× dans la plage, et le maximum quand il vient avant 5×. */
+export function zoomStops(range: ZoomRange): readonly number[] {
+  const inside = STOPS.filter((stop) => stop > range.min && stop < range.max);
+  return [range.min, ...inside, ...(range.max <= LAST_STOP ? [range.max] : [])];
+}
+
+/** Un toucher passe au cran suivant ; après le dernier, on revient au premier. */
+export function nextZoomStop(range: ZoomRange, current: number): number {
+  const stops = zoomStops(range);
+  return stops.find((stop) => stop > current + 0.01) ?? range.min;
+}

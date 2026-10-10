@@ -10,7 +10,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { parseConversationNotice } from '@meeshy/shared/utils/conversation-notice';
-import { postConversationNotice } from '../../../../services/conversations/conversationNotice';
+import { postConversationNotice, postSystemNotice } from '../../../../services/conversations/conversationNotice';
 import { systemEventFromMessage } from '../../../../routes/conversations/utils/last-message-nature';
 
 const CONV_ID = '507f1f77bcf86cd799439022';
@@ -74,5 +74,30 @@ describe('postConversationNotice', () => {
       notice: { kind: 'conversation-renamed', actor: demo },
     });
     expect(message).toMatchObject({ id: 'msg-1' });
+  });
+});
+
+describe('postSystemNotice — un avis SILENCIEUX (#9629, #9630)', () => {
+  it('porte son échéance, n’avance pas l’horloge du fil et ne diffuse pas quand on le lui demande', async () => {
+    const h = harness();
+    const expiresAt = new Date('2026-09-24T10:00:00.000Z');
+    const message = await postSystemNotice(h.deps as never, {
+      conversationId: CONV_ID,
+      senderParticipantId: demo.participantId,
+      content: 'Demo a capturé l’éphémère',
+      metadata: { kind: 'content-capture' },
+      expiresAt,
+      advanceConversationClock: false,
+    });
+
+    expect((h.create.mock.calls[0][0] as { data: Record<string, unknown> }).data).toMatchObject({ expiresAt });
+    expect(h.update).not.toHaveBeenCalled();
+    expect(message).toMatchObject({ id: 'msg-1', expiresAt });
+  });
+
+  it('n’écrit aucune échéance quand on ne lui en donne pas', async () => {
+    const h = harness();
+    await postConversationNotice(h.deps as never, { conversationId: CONV_ID, notice: { kind: 'member-left', actor: bob } });
+    expect((h.create.mock.calls[0][0] as { data: Record<string, unknown> }).data).not.toHaveProperty('expiresAt');
   });
 });

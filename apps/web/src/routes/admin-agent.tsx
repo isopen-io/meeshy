@@ -1,83 +1,90 @@
-import { useQuery } from '@tanstack/react-query';
-
+import { AdminDeniedInline, AdminDeniedScreen, AdminSkeleton } from '@/components/admin/states';
 import { agentAccess } from '@/lib/admin/agent-access';
-import { adminIdentityQueryOptions } from '@/lib/api/admin';
-import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { adminListRoute } from '@/lib/admin/admin-routes';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
+import { translate } from '@/lib/i18n-catalog';
 import { AdminAgentPanel } from '@/routes/admin-agent-parts';
-import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminScreenFrame } from '@/routes/admin-shell';
 
 /**
- * **LE PILOTAGE DE L'AGENT** (#6733) — `/adm/agent` et `/admin/agent`.
+ * **LE PILOTAGE DE L'AGENT** (#6733, #8876) — `/adm/agent` et `/admin/agent`.
  *
- * Le périmètre tranché par le porteur : vue d'ensemble, conversations suivies,
- * relance / arrêt, journal des scans. Les onglets LLM, sujets, rôles et file de
- * livraison sont un second lot.
+ * Vue d'ensemble (chiffres, activité récente, statistiques du journal),
+ * conversations suivies (relance / arrêt, et la fiche de l'agent sur chacune :
+ * réglages, résumé, planning, rôles, messages publiés), journal des scans, et
+ * quatre modales : modèle et configuration globale, file de livraison, sujets,
+ * remises à zéro (lot Agent complet, #9000–#9005).
  *
  * ## AUCUNE ROUTE NEUVE
  *
  * Les 35 routes `/admin/agent/*` existent depuis longtemps
- * (`services/gateway/src/routes/admin/agent-*.ts`) et n'avaient aucun
- * consommateur dans la v2 : la tuile portait `route: null`. Cet écran les
- * CONSOMME — via `lib/api/admin-agent.ts`, qui documente pour chacune ce que
- * son HANDLER sert, les schémas étant déclarés `additionalProperties: true`.
+ * (`services/gateway/src/routes/admin/agent-*.ts`). Cet écran les CONSOMME toutes,
+ * via `lib/api/admin-agent.ts` et ses ports voisins (`admin-agent-activity.ts`,
+ * `admin-agent-settings.ts`, `admin-agent-conversation.ts`,
+ * `admin-agent-topics.ts`), qui documentent pour chacune ce que son HANDLER sert.
+ * Chaque geste écrit est tracé au journal d'audit par la passerelle.
  *
  * ## LA GARDE EST LUE ICI, PAS HÉRITÉE
  *
- * On entre sur cette adresse par un lien profond aussi bien que par le hub, et
- * une garde posée seulement à l'étage du dessus ne garde que l'escalier. La
- * décision vient de `agentAccess` (`lib/admin/agent-access.ts`), qui distingue
- * les DEUX refus : « rien à faire ici » (`AdminDenied`) et « le droit d'être là
- * sans le droit de lire ceci » — le cas d'un MODERATOR ou d'un AUDIT, qui
- * portent `canAccessAdmin` et à qui la matrice centrale refuse
- * `canManageAgent`.
+ * On entre sur cette adresse par un lien profond aussi bien que par le hub.
+ * La décision vient de `agentAccess` (`lib/admin/agent-access.ts`), qui distingue
+ * les DEUX refus : « rien à faire ici » (`AdminDeniedScreen`) et « le droit d'être là
+ * sans le droit de lire ceci » — le cas d'un MODERATOR ou d'un AUDIT, qui portent
+ * `canAccessAdmin` et à qui la matrice centrale refuse `canManageAgent`. Leur
+ * servir « espace réservé » leur ferait croire qu'ils se sont trompés de porte.
  *
- * ## LE SEUIL EST `canManageAgent`, ET IL VIENT D'ARRIVER
+ * C'est pourquoi l'écran n'emprunte pas `AdminSectionScreen`, dont le refus est
+ * UNIQUE et ne dit pas pourquoi : ici, dire pourquoi est le métier de la garde.
+ *
+ * ## LE SEUIL EST `canManageAgent`
  *
  * C'est la garde RÉELLE de ces routes (`requirePermission('canManageAgent')`,
- * `agent-shared.ts`). La passerelle la sert depuis le lot B de ce chantier ;
- * la v2 la décode depuis celui-ci. Se rabattre sur `canAccessAdmin` — ce que
- * la tuile faisait — peignait un contrôle voué au 403.
+ * `agent-shared.ts`). Se rabattre sur `canAccessAdmin` peindrait un contrôle voué
+ * au 403.
  */
-
 export default function AdminAgentScreen() {
-  const language = currentInterfaceLanguage();
-  const identite = useQuery(adminIdentityQueryOptions(apiDeps));
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
+  const reach = useAdminReach();
 
-  const acces = agentAccess({
-    permissions: identite.data?.permissions ?? null,
-    role: identite.data?.role,
-    chargement: identite.isPending,
+  const access = agentAccess({
+    permissions: reach.permissions,
+    role: reach.role,
+    chargement: reach.status === 'pending',
   });
 
-  const titre = translateAdmin(language, 'admin.agent.title');
+  const frame = {
+    language,
+    title: translateAdmin(language, 'admin.agent.title'),
+    back: adminListRoute('dashboard', reach.space),
+    backLabel: translate(language, 'admin.title'),
+    heading: 'content' as const,
+  };
 
-  if (acces === 'attente') {
+  if (access === 'attente') {
     return (
-      <AdminScreenFrame language={language} title={titre} back="admin">
+      <AdminScreenFrame {...frame}>
         <AdminSkeleton rows={4} />
       </AdminScreenFrame>
     );
   }
 
-  if (acces !== 'ouvert') {
+  if (access !== 'ouvert') {
     return (
-      <AdminScreenFrame language={language} title={titre} back="admin">
-        {acces === 'espace-sans-droit' ? (
-          <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }} data-admin-agent-denied>
-            {translateAdmin(language, 'admin.agent.denied')}
-          </p>
+      <AdminScreenFrame {...frame}>
+        {access === 'espace-sans-droit' ? (
+          <AdminDeniedInline language={language} message={translateAdmin(language, 'admin.agent.denied')} data={{ 'data-admin-agent-denied': '' }} />
         ) : (
-          <AdminDenied language={language} />
+          <AdminDeniedScreen language={language} />
         )}
       </AdminScreenFrame>
     );
   }
 
   return (
-    <AdminScreenFrame language={language} title={titre} back="admin">
-      <AdminAgentPanel language={language} deps={apiDeps} />
+    <AdminScreenFrame {...frame}>
+      <AdminAgentPanel language={language} />
     </AdminScreenFrame>
   );
 }

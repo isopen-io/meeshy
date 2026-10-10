@@ -32,7 +32,7 @@ enum ComposerSceneCameraCopy {
         switch ComposerSceneCamera.hintKey(mode: mode, stage: stage) {
         case "composer.camera.hint.photo":
             return String(localized: "composer.camera.hint.photo",
-                          defaultValue: "toucher pour prendre une photo",
+                          defaultValue: "toucher deux fois pour une photo · maintenir pour filmer",
                           bundle: .main)
         case "composer.camera.hint.video":
             return String(localized: "composer.camera.hint.video",
@@ -73,12 +73,25 @@ enum ComposerSceneCameraCopy {
                defaultValue: "Poser dans la scène", bundle: .main)
     }
 
-    /// **L'action VoiceOver du déclencheur.** Un lecteur d'écran ne TIENT pas
-    /// un doigt : sans elle, la vidéo serait offerte à la main et refusée à la
-    /// voix — une capacité que le geste rendrait inatteignable.
-    static var filmActionLabel: String {
-        String(localized: "composer.camera.filmAction",
-               defaultValue: "Filmer", bundle: .main)
+    /// **Une prise se perdrait** — un enregistrement, des segments qui attendent
+    /// leur `✓`, ou la prise qu'on retouche (#9781). La question dit ce qui se
+    /// perd ; les deux choix, ce qu'ils font.
+    static func discardTitle(photo: Bool) -> String {
+        photo
+            ? String(localized: "composer.camera.discard.photo.title",
+                     defaultValue: "Abandonner la photo ?", bundle: .main)
+            : String(localized: "composer.camera.discard.title",
+                     defaultValue: "Abandonner la vidéo ?", bundle: .main)
+    }
+
+    static var discardConfirm: String {
+        String(localized: "composer.camera.discard.confirm",
+               defaultValue: "Abandonner", bundle: .main)
+    }
+
+    static var discardKeep: String {
+        String(localized: "composer.camera.discard.keep",
+               defaultValue: "Continuer", bundle: .main)
     }
 
     /// **Le libellé dit OÙ l'on va**, jamais où l'on est : un lecteur d'écran
@@ -104,6 +117,89 @@ enum ComposerSceneCameraCopy {
     static var disarmLabel: String {
         String(localized: "composer.camera.disarm",
                defaultValue: "Revenir à la scène", bundle: .main)
+    }
+
+    /// **Les gestes d'une scène vide, une ligne chacun** (#8653, #8671,
+    /// #8711, #9464) : le viseur au premier toucher, la photo au double toucher,
+    /// la vidéo au maintien — le format décide lesquels paraissent
+    /// (`ComposerSceneQuickCapture.gestureLines`).
+    static func gestureLine(_ line: ComposerSceneQuickCapture.GestureLine) -> String {
+        switch line {
+        case .tapArm:
+            return String(localized: "composer.camera.gesture.tapArm",
+                          defaultValue: "Toucher : ouvrir le viseur", bundle: .main)
+        case .tapAgainPhoto:
+            return String(localized: "composer.camera.gesture.tapAgainPhoto",
+                          defaultValue: "Puis toucher deux fois : photo", bundle: .main)
+        case .holdFilm:
+            return String(localized: "composer.camera.gesture.holdFilm",
+                          defaultValue: "Maintenir : filmer", bundle: .main)
+        }
+    }
+
+    /// **La scène vide se VEND avant de s'expliquer** (#8671, directive porteur
+    /// 2026-09-29 : « être plus commercial : ceci est votre scène, ajouter
+    /// texte, dessin, image, vidéo. Puis le petit détail en plus grand »).
+    static var emptySceneTitle: String {
+        String(localized: "composer.scene.empty.title",
+               defaultValue: "Ceci est votre scène", bundle: .main)
+    }
+
+    static var emptySceneInvite: String {
+        String(localized: "composer.scene.empty.invite",
+               defaultValue: "Ajoutez-y un texte, un dessin, une image ou une vidéo — et faites-la vôtre.",
+               bundle: .main)
+    }
+
+    /// Ce que VoiceOver lit de la scène vide : les trois lignes, dans l'ordre
+    /// où l'œil les parcourt.
+    static func emptySceneSpoken(_ hint: ComposerSceneQuickCapture.Hint) -> String {
+        ([emptySceneTitle, emptySceneInvite]
+            + ComposerSceneQuickCapture.gestureLines(hint).map(gestureLine))
+            .joined(separator: ". ")
+    }
+
+    /// **Le cadenas** (#8671) — dit ce que le glissé FAIT.
+    static var lockHint: String {
+        String(localized: "composer.camera.lock.hint",
+               defaultValue: "Glisser vers le cadenas pour verrouiller", bundle: .main)
+    }
+
+    /// Annoncé quand le verrou prend : le doigt peut partir.
+    static var lockedAnnouncement: String {
+        String(localized: "composer.camera.lock.done",
+               defaultValue: "Enregistrement verrouillé", bundle: .main)
+    }
+
+    /// La tenue renonce : la prise précédente n'a pas fini de s'enregistrer (#9351).
+    static var previousTakeStillSaving: String {
+        String(localized: "composer.camera.previousTake.stillSaving",
+               defaultValue: "La prise précédente s'enregistre encore", bundle: .main)
+    }
+
+    static var zoomLabel: String {
+        String(localized: "composer.camera.zoom",
+               defaultValue: "Zoom", bundle: .main)
+    }
+
+    /// Le facteur tel qu'on le lit sur un appareil photo : « 2,5× ».
+    static func zoomValue(_ factor: CGFloat) -> String {
+        Double(factor).formatted(.number.precision(.fractionLength(1))) + "×"
+    }
+
+    /// Un cran de la pastille, lu comme l'appareil photo : « 0,5× », « 1× », « 2× ».
+    static func zoomPresetValue(_ factor: CGFloat) -> String {
+        Double(factor).formatted(.number.precision(.fractionLength(0...1))) + "×"
+    }
+
+    static var flashIntensityLabel: String {
+        String(localized: "composer.camera.flashIntensity",
+               defaultValue: "Intensité du flash", bundle: .main)
+    }
+
+    static func flashIntensityValue(_ level: Double) -> String {
+        (Double(ComposerFlashIntensity.percent(level)) / 100)
+            .formatted(.percent.precision(.fractionLength(0)))
     }
 
     /// **Le libellé parlé dit l'ACTION, jamais la forme.** « Bouton rond

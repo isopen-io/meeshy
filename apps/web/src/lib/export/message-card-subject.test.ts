@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { amina, message, translation } from '@/lib/api/fixtures-base';
-import type { Message } from '@/lib/api/types';
+import { amina, attachmentDefaults, message, translation } from '@/lib/api/fixtures-base';
+import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import { cardAuthorOf, messageCardFileName, messageCardLanguagesOf, messageCardSubjectOf } from './message-card-subject';
@@ -11,7 +11,7 @@ beforeAll(async () => {
 });
 
 const NOW = new Date('2026-09-28T12:00:00.000Z').getTime();
-const VIEWER = { id: 'u-jacques', displayName: 'Jacques' };
+const VIEWER = { id: 'u-jacques', displayName: 'Jacques', handle: 'jacques' };
 
 const quoted = (overrides: Partial<Message> = {}): Message =>
   message({
@@ -21,6 +21,7 @@ const quoted = (overrides: Partial<Message> = {}): Message =>
     content: 'Where do we meet tonight?',
     originalLanguage: 'en',
     translations: [translation('m-quoted', 'fr', 'On se retrouve où ce soir ?')],
+    effectFlags: 0,
     createdAt: new Date('2026-09-28T11:00:00.000Z'),
     ...overrides,
   });
@@ -51,10 +52,17 @@ const subjectOf = (target: Message, servedText?: string) =>
 describe('messageCardSubjectOf — ce que la carte a le droit de montrer', () => {
   test('une réponse porte sa citation, servie dans la langue du lecteur', () => {
     expect(subjectOf(reply())).toEqual({
-      quoted: { author: amina.displayName ?? '', text: 'On se retrouve où ce soir ?' },
-      reply: { author: 'Jacques', text: 'Chez Lina, à 20 h !' },
+      quoted: { author: amina.displayName ?? '', text: 'On se retrouve où ce soir ?', handle: null },
+      reply: { author: 'Jacques', text: 'Chez Lina, à 20 h !', handle: 'jacques' },
       sentAt: new Date('2026-09-28T11:01:00.000Z'),
+      quotedAt: new Date('2026-09-28T11:00:00.000Z'),
+      media: [],
     });
+  });
+
+  test('le pseudo de chaque auteur voyage avec son nom — « pseudo au lieu du nom affiché »', () => {
+    const subject = subjectOf(reply({ replyTo: quoted({ sender: { ...amina, username: 'amina.d' } as NonNullable<Message['sender']> }) }));
+    expect(subject?.quoted?.handle).toBe('amina.d');
   });
 
   test('le texte de la réponse est celui que le lecteur VOIT (traduction imposée comprise)', () => {
@@ -75,14 +83,123 @@ describe('messageCardSubjectOf — ce que la carte a le droit de montrer', () =>
     expect(subjectOf(reply({ expiresAt: new Date(NOW - 1000) }))).toBeNull();
   });
 
-  test('une citation protégée ne montre que son placeholder, jamais son contenu', () => {
-    const subject = subjectOf(reply({ replyTo: quoted({ isViewOnce: true, content: '👁️' }) }));
-    expect(subject?.quoted?.text).toBe('👁️');
-    expect(JSON.stringify(subject)).not.toContain('On se retrouve');
+  test('une réponse qui cite un contenu protégé ne s’image pas (#9573, décision porteur du 2026-10-08)', () => {
+    expect(subjectOf(reply({ replyTo: quoted({ isViewOnce: true, content: '👁️' }) }))).toBeNull();
   });
 
   test('un message sans texte n’a rien à peindre', () => {
     expect(subjectOf(reply({ content: '   ' }))).toBeNull();
+  });
+});
+
+describe('les médias qu’une carte peut montrer (#8693)', () => {
+  const piece = (overrides: Partial<Attachment>): Attachment => ({
+    ...attachmentDefaults,
+    id: 'a-1',
+    messageId: 'm-reply',
+    fileName: 'photo.jpg',
+    originalName: 'photo.jpg',
+    mimeType: 'image/jpeg',
+    fileSize: 1000,
+    fileUrl: '/api/v1/attachments/a-1/file',
+    uploadedBy: VIEWER.id,
+    createdAt: '2026-09-28T11:01:00.000Z',
+    width: 1200,
+    height: 900,
+    ...overrides,
+  });
+
+  test('images, vidéos et audios deviennent des médias de carte ; un document n’en est pas un', () => {
+    const subject = subjectOf(
+      standalone({
+        attachments: [
+          piece({ id: 'a-img' }),
+          piece({ id: 'a-vid', mimeType: 'video/mp4', width: 1920, height: 1080, thumbnailUrl: '/thumb.jpg' }),
+          piece({ id: 'a-aud', mimeType: 'audio/mp4', originalName: 'note.m4a', duration: 12_000 }),
+          piece({ id: 'a-pdf', mimeType: 'application/pdf' }),
+        ],
+      }),
+    );
+    expect(subject?.media.map((item) => item.card.kind)).toEqual(['image', 'video', 'audio']);
+    const voice = subject?.media[2]?.card;
+    expect(voice?.kind === 'audio' ? [voice.durationMs, voice.name, voice.peaks.length > 0] : null).toEqual([12_000, 'note.m4a', true]);
+    expect(subject?.media[1]?.posterUrl).toBe('/thumb.jpg');
+  });
+
+  test('un message fait d’une seule photo s’image, même sans texte', () => {
+    const subject = subjectOf(standalone({ content: '', attachments: [piece({})] }));
+    expect(subject?.reply.text).toBe('');
+    expect(subject?.media).toHaveLength(1);
+  });
+
+  test('une pièce FLOUTÉE n’est jamais peinte — et seule, elle ne donne pas de carte ; une pièce à VUE UNIQUE ferme la carte du message entier (#9573)', () => {
+    const subject = subjectOf(standalone({ attachments: [piece({ id: 'a-open' }), piece({ id: 'a-blur', isBlurred: true })] }));
+    expect(subject?.media.map((item) => item.id)).toEqual(['a-open']);
+    expect(subjectOf(standalone({ attachments: [piece({ id: 'a-open' }), piece({ id: 'a-once', isViewOnce: true })] }))).toBeNull();
+    expect(subjectOf(standalone({ content: '', attachments: [piece({ isBlurred: true })] }))).toBeNull();
+  });
+
+  test('une pièce CHIFFRÉE n’est jamais peinte : son fichier n’est pas lisible hors de la bulle', () => {
+    const subject = subjectOf(standalone({ attachments: [piece({ id: 'a-open' }), piece({ id: 'a-e2ee', isEncrypted: true })] }));
+    expect(subject?.media.map((item) => item.id)).toEqual(['a-open']);
+  });
+});
+
+describe('le message CITÉ apporte son média (#8901)', () => {
+  const piece = (overrides: Partial<Attachment>): Attachment => ({
+    ...attachmentDefaults,
+    id: 'q-1',
+    messageId: 'm-quoted',
+    fileName: 'photo.jpg',
+    originalName: 'photo.jpg',
+    mimeType: 'image/jpeg',
+    fileSize: 1000,
+    fileUrl: '/api/v1/attachments/file/2026%2F09%2Fq%2Fphoto.jpg',
+    uploadedBy: 'u-amina',
+    createdAt: '2026-09-28T11:00:00.000Z',
+    width: 1200,
+    height: 900,
+    ...overrides,
+  });
+
+  test('répondre à une photo par du texte : la carte peint la photo citée', () => {
+    const subject = subjectOf(reply({ replyTo: quoted({ attachments: [piece({})] }) }));
+    expect(subject?.media.map((item) => item.id)).toEqual(['q-1']);
+    expect(subject?.media[0]?.url).toBe('/api/v1/attachments/file/2026%2F09%2Fq%2Fphoto.jpg');
+  });
+
+  test('les médias de la réponse passent d’abord, ceux de la citation ensuite', () => {
+    const own = piece({ id: 'r-1', messageId: 'm-reply' });
+    const subject = subjectOf(reply({ attachments: [own], replyTo: quoted({ attachments: [piece({ id: 'q-vid', mimeType: 'video/mp4', thumbnailUrl: '/q-poster.jpg' })] }) }));
+    expect(subject?.media.map((item) => item.id)).toEqual(['r-1', 'q-vid']);
+  });
+
+  test('une citation PROTÉGÉE ferme la carte — vue unique, floutée, chiffrée, supprimée', () => {
+    const cases: readonly Partial<Message>[] = [{ isViewOnce: true, content: '👁️' }, { isBlurred: true }, { isEncrypted: true }, { deletedAt: new Date('2026-09-28T11:30:00.000Z') }];
+    for (const protection of cases) {
+      expect(subjectOf(reply({ replyTo: quoted({ attachments: [piece({})], ...protection }) }))).toBeNull();
+    }
+  });
+
+  test('une pièce citée floutée ou chiffrée n’est pas peinte, ses voisines le sont ; une pièce citée à vue unique ferme la carte', () => {
+    const subject = subjectOf(
+      reply({ replyTo: quoted({ attachments: [piece({ id: 'q-blur', isBlurred: true }), piece({ id: 'q-e2ee', isEncrypted: true }), piece({ id: 'q-open' })] }) }),
+    );
+    expect(subject?.media.map((item) => item.id)).toEqual(['q-open']);
+    expect(subjectOf(reply({ replyTo: quoted({ attachments: [piece({ id: 'q-once', isViewOnce: true }), piece({ id: 'q-open' })] }) }))).toBeNull();
+  });
+
+  test('chaque média porte son AUTEUR (#9236) : la réponse les siens, la citation les siens — même sans texte cité', () => {
+    const own = piece({ id: 'r-1', messageId: 'm-reply' });
+    const subject = subjectOf(reply({ attachments: [own], replyTo: quoted({ content: '', translations: [], attachments: [piece({ id: 'q-1' })], sender: { ...amina, username: 'amina.d' } as NonNullable<Message['sender']> }) }));
+    expect(subject?.media.map((item) => item.author)).toEqual([
+      { name: 'Jacques', handle: 'jacques', quoted: false },
+      { name: amina.displayName ?? '', handle: 'amina.d', quoted: true },
+    ]);
+  });
+
+  test('une citation ÉCHUE ferme la carte', () => {
+    expect(subjectOf(reply({ replyTo: quoted({ attachments: [piece({})], expiresAt: new Date(NOW - 1000) }) }))).toBeNull();
   });
 });
 
@@ -100,6 +217,7 @@ describe('cardAuthorOf — qui signe chaque bloc', () => {
 describe('messageCardFileName — un nom lisible, rien du contenu', () => {
   test('horodaté, en .png', () => {
     expect(messageCardFileName(new Date(2026, 8, 28, 9, 5, 7))).toBe('meeshy-20260928-090507.png');
+    expect(messageCardFileName(new Date(2026, 8, 28, 9, 5, 7), 'mp4')).toBe('meeshy-20260928-090507.mp4');
   });
 });
 
@@ -136,5 +254,44 @@ describe('la langue d’export — choisie après le format', () => {
     expect(subject === null).toBe(false);
     const hidden = messageCardSubjectOf({ message: { ...bilingual(), isBlurred: true }, servedText: undefined, viewer: VIEWER, readerLanguages: ['fr'], interfaceLanguage: 'fr', now: NOW, language: 'en' });
     expect(hidden).toBeNull();
+  });
+});
+
+describe('un vocal part dans la piste de son texte servi (#9687, famille audio du Prisme, parité iOS)', () => {
+  const voice = (id: string): Attachment => ({
+    ...attachmentDefaults,
+    id,
+    messageId: 'm-reply',
+    fileName: 'voz.m4a',
+    originalName: 'voz.m4a',
+    mimeType: 'audio/mp4',
+    fileSize: 1000,
+    fileUrl: `/voz-${id}.m4a`,
+    uploadedBy: VIEWER.id,
+    createdAt: '2026-09-28T11:01:00.000Z',
+    duration: 9000,
+    transcription: { text: 'Hola a todos', language: 'es' } as NonNullable<Attachment['transcription']>,
+    translations: { en: { type: 'audio', transcription: 'Hello everyone', url: `/voice-en-${id}.m4a`, durationMs: 8000 } } as unknown as NonNullable<Attachment['translations']>,
+  });
+  const subjectIn = (target: Message, readerLanguages: readonly string[], language?: string) =>
+    messageCardSubjectOf({ message: target, servedText: undefined, viewer: VIEWER, readerLanguages, interfaceLanguage: 'fr', now: NOW, ...(language === undefined ? {} : { language }) });
+  const audio = (target: Message, readerLanguages: readonly string[], language?: string) =>
+    subjectIn(target, readerLanguages, language)?.media.filter((item) => item.card.kind === 'audio').map((item) => ({ url: item.url, durationMs: item.card.kind === 'audio' ? item.card.durationMs : null }));
+
+  test('vocal JOINT, prisme [fr, en] sans piste française : la piste anglaise au rang 2, sa durée avec elle', () => {
+    expect(audio(standalone({ content: '', originalLanguage: 'es', attachments: [voice('a-1')] }), ['fr', 'en'])).toEqual([{ url: '/voice-en-a-1.m4a', durationMs: 8000 }]);
+  });
+
+  test('vocal CITÉ : la même élection, au même rang', () => {
+    const target = reply({ replyTo: quoted({ content: '', originalLanguage: 'es', translations: [], attachments: [voice('q-1')] }) });
+    expect(audio(target, ['fr', 'en'])).toEqual([{ url: '/voice-en-q-1.m4a', durationMs: 8000 }]);
+  });
+
+  test('aucune langue du prisme n’a de piste : l’original', () => {
+    expect(audio(standalone({ content: '', originalLanguage: 'es', attachments: [voice('a-1')] }), ['fr', 'de'])).toEqual([{ url: '/voz-a-1.m4a', durationMs: 9000 }]);
+  });
+
+  test('la langue d’EXPORT choisie prend la tête : l’espagnol original', () => {
+    expect(audio(standalone({ content: '', originalLanguage: 'es', attachments: [voice('a-1')] }), ['fr', 'en'], 'es')).toEqual([{ url: '/voz-a-1.m4a', durationMs: 9000 }]);
   });
 });

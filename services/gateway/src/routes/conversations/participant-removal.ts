@@ -14,6 +14,7 @@ import { resolveTargetParticipant, identifyTarget } from './utils/target-partici
 import { participantActionRefusal } from './utils/participant-authority';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 
 const logger = enhancedLogger.child({ module: 'ConversationParticipantRemovalRoute' });
 
@@ -164,6 +165,7 @@ export function registerParticipantRemovalRoute(
         }
       });
       invalidateParticipantLookup(removedParticipant.id, conversationId);
+      announceConversationLanguageChange({ kind: 'departure', conversationId });
 
       // #7593 — la ligne de liste des restants dit « Demo a retiré Bob ».
       await postConversationNotice(

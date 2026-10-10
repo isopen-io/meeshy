@@ -56,6 +56,17 @@ describe('FeedMediaSurface — une vidéo du fil se lit dans le fil', () => {
     expect(html).toContain('https://gate.meeshy.me/api/v1/attachments/file/voix.webm');
   });
 
+  /** #9693 — le son d'un post se LIT : il était monté `sr-only`, sans
+   * contrôle ni geste, un glyphe d'onde au-dessus d'un lecteur muet. */
+  test('un média AUDIO porte un lecteur visible, avec ses contrôles', () => {
+    const html = renderToStaticMarkup(
+      <FeedMediaSurface media={media({ kind: 'audio', src: 'https://gate.meeshy.me/api/v1/attachments/file/chanson.mp3' })} playable />,
+    );
+
+    expect(html).toMatch(/<audio[^>]*controls/);
+    expect(html).not.toMatch(/<audio[^>]*sr-only/);
+  });
+
   /**
    * L'AFFICHE RESTE — `poster` est ce que le navigateur peint AVANT la
    * première image décodée ; la retirer ferait clignoter un cadre noir à

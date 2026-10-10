@@ -89,6 +89,10 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// "member-joined"`). Le rendu dédié court-circuite le rendu ordinaire —
     /// une arrivée n'est pas une prise de parole.
     public var joinNotice: JoinNoticeMetadata?
+    /// Avis de capture (`metadata.kind == "content-capture"`, #9617) : la
+    /// phrase se compose chez le lecteur (`CaptureNoticeText`), `content`
+    /// n'en est que le repli français.
+    public var captureNotice: CaptureNoticeMetadata?
 
     /// Lieu partagé, restitué depuis la colonne `locationJson` du cache GRDB
     /// (`APIMessage.location` hissé côté serveur). `nil` pour un message sans
@@ -196,6 +200,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 cachedTimeString: String? = nil,
                 callSummary: CallSummaryMetadata? = nil,
                 joinNotice: JoinNoticeMetadata? = nil,
+                captureNotice: CaptureNoticeMetadata? = nil,
                 location: SharedPlace? = nil,
                 sticker: MessageSticker? = nil,
                 trackedLinkMap: [String: String] = [:]) {
@@ -221,6 +226,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.cachedTimeString = cachedTimeString
         self.callSummary = callSummary
         self.joinNotice = joinNotice
+        self.captureNotice = captureNotice
         self.location = location
         self.sticker = sticker
         self.trackedLinkMap = trackedLinkMap
@@ -240,6 +246,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case cachedTimeString
         case callSummary
         case joinNotice
+        case captureNotice
         case location
         case sticker
         case trackedLinkMap
@@ -299,6 +306,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         // jamais lue) et toute conversation rouverte retombait sur la vue
         // système générique (icône téléphone) avec le repli français.
         joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .joinNotice)
+        captureNotice = try? c.decodeIfPresent(CaptureNoticeMetadata.self, forKey: .captureNotice)
         // Same tolerance as callSummary: a malformed location blob must not
         // fail the whole cached-message decode.
         location = try? c.decodeIfPresent(SharedPlace.self, forKey: .location)
@@ -364,6 +372,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(cachedTimeString, forKey: .cachedTimeString)
         try c.encodeIfPresent(callSummary, forKey: .callSummary)
         try c.encodeIfPresent(joinNotice, forKey: .joinNotice)
+        try c.encodeIfPresent(captureNotice, forKey: .captureNotice)
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(sticker, forKey: .sticker)
         if !trackedLinkMap.isEmpty {

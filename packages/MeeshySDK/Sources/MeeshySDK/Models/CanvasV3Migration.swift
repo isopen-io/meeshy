@@ -618,6 +618,7 @@ public extension CanvasV3 {
         // Le filtre PROPRE d'un média posé (#8502). Celui du fond est le filtre
         // de slide, posé plus loin sur le même objet.
         if !media.isBackground, let filter = nonEmpty(media.filter) { payload["filter"] = .string(filter) }
+        if let adjustments = media.adjustments?.canvasPayload { payload["adjustments"] = adjustments } // #9175
         if let duration = media.duration { payload["duration"] = .number(duration) }
         // **La clé sort quand la MESURE existe, pas quand la valeur diffère de 1**
         // (#5182, suivi de #5100). Le test `!= 1` interrogeait la PROJECTION
@@ -712,6 +713,7 @@ public extension CanvasV3 {
         if let username = nonEmpty(audio.soundAuthorUsername) {
             payload["soundAuthorUsername"] = .string(username)
         }
+        if let createdAt = nonEmpty(audio.soundCreatedAt) { payload["soundCreatedAt"] = .string(createdAt) }
         if let name = nonEmpty(audio.name) { payload["name"] = .string(name) }
         if audio.volume != 1 { payload["volume"] = .number(exactDouble(audio.volume)) }
         if let memento = audio.mutedVolumeMemento {
@@ -1072,6 +1074,7 @@ public extension StoryEffects {
             isDuckingDisabled: object.payload.bool("isDuckingDisabled"))
         media.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
         if !media.isBackground { media.filter = object.payload.string("filter") }
+        media.adjustments = ImageAdjustments(canvasPayload: object.payload["adjustments"]) // #9175
         media.sourceStart = object.payload.double("sourceStart")
         media.sourceEnd = object.payload.double("sourceEnd")
         media.crop = crop
@@ -1159,7 +1162,8 @@ public extension StoryEffects {
             keyframes: object.timing?.keyframes.map { $0.map(StoryKeyframe.init(rendering:)) },
             mediaURL: object.payload.string("mediaURL"),
             soundId: object.payload.string("soundId"),
-            soundAuthorUsername: object.payload.string("soundAuthorUsername"))
+            soundAuthorUsername: object.payload.string("soundAuthorUsername"),
+            soundCreatedAt: object.payload.string("soundCreatedAt"))
         audio.zIndex = object.z
         audio.scale = object.transform.scale == 1 ? nil : object.transform.scale
         audio.rotation = object.transform.rotation == 0 ? nil : object.transform.rotation

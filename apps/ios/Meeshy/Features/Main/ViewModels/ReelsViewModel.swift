@@ -273,18 +273,18 @@ final class ReelsViewModel: ObservableObject {
             let response = try await service.getReels(seedReelId: seedReelId, cursor: reset ? nil : nextCursor, limit: 20)
             let mapped = response.data.map { $0.toFeedPost(preferredLanguages: preferred) }
             let newReels = FeedPost.reels(from: mapped)
-            if reset {
-                reels = newReels
-            } else {
-                let existing = Set(reels.map(\.id))
-                reels.append(contentsOf: newReels.filter { !existing.contains($0.id) })
-            }
+            // L'ordre est STABLE sous le lecteur (#9702) : la passerelle reclasse
+            // sa page à chaque lecture (les réels vus coulent, la graine est
+            // exclue). Le réel regardé et ce qui le précède gardent leur place ;
+            // une relecture ne réordonne que la suite, une page de plus s'ajoute.
+            reels = reset
+                ? ReelThreadOrder.refreshed(current: reels, anchorId: currentId, served: newReels)
+                : ReelThreadOrder.appended(current: reels, served: newReels)
             absorbServerFlags(newReels)
             nextCursor = response.pagination?.nextCursor
             hasMore = response.pagination?.hasMore ?? (nextCursor != nil)
-            // A reset replaces the list, so a `currentId` seeded from the cache
-            // may now point at a reel the fresh feed dropped — fall back to the
-            // first reel in that case (and on first load when it was nil).
+            // Sans réel regardé (premier chargement sur cache vide), le premier
+            // réel servi le devient.
             if currentId == nil || !reels.contains(where: { $0.id == currentId }) {
                 currentId = reels.first?.id
             }
@@ -413,6 +413,8 @@ final class ReelsViewModel: ObservableObject {
                     else { try await service.like(postId: id) }
                     restOK = true
                 } catch {
+                    // La limite du jour (#9571) se dit ; le geste se défait.
+                    DailyGestureLimitNotice.surface(error)
                     restOK = false
                 }
                 if !restOK { applyLike(id: id, liked: wasLiked) }
@@ -566,7 +568,7 @@ final class ReelsViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
     ) async {
         guard let idx = reels.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = reels[idx]
@@ -593,7 +595,7 @@ final class ReelsViewModel: ObservableObject {
             // champ non déclaré est OMIS, et le serveur préserve le sien.
             let updated = try await service.update(postId: postId, known: known, draft: PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
-                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
             ))
             if let newIdx = reels.firstIndex(where: { $0.id == postId }) {

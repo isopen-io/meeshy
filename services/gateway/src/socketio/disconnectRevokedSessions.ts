@@ -17,10 +17,12 @@ export interface RevokedSessionIO {
   in(room: string): { fetchSockets(): Promise<RevokedSessionSocket[]> };
 }
 
-const DEFAULT_MESSAGES: Record<AuthSessionRevokedEventData['reason'], string> = {
+export const DEFAULT_REVOCATION_MESSAGES: Record<AuthSessionRevokedEventData['reason'], string> = {
   password_changed: 'Your password was changed — please sign in again.',
   logout_all_devices: 'All sessions were signed out — please sign in again.',
-  admin_revoke: 'Your session was revoked — please sign in again.',
+  admin_revoke: 'Your session was closed by the Meeshy team — please sign in again.',
+  user_revoke: 'This device was signed out from another device.',
+  logout: 'Signed out.',
   // #5712 — jamais passé par les deux appelants de CETTE fonction (révocation
   // TOTALE d'un compte) : la session expirée est refusée à la CONNEXION, un
   // seul socket à la fois, directement par `AuthHandler._authenticateJWTUser`
@@ -94,7 +96,7 @@ export async function disconnectRevokedSessions(
 
   const payload: AuthSessionRevokedEventData = {
     code: 'session_revoked',
-    message: message ?? DEFAULT_MESSAGES[reason],
+    message: message ?? DEFAULT_REVOCATION_MESSAGES[reason],
     reason,
   };
 

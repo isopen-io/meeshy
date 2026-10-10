@@ -57,8 +57,8 @@ public struct ProtectedVeilAffordance: View, Equatable {
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
                         .foregroundColor(isDark ? .white.opacity(0.92) : .black.opacity(0.85))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
                             Capsule().fill(.ultraThinMaterial)
                         )

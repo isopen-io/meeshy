@@ -25,7 +25,11 @@ export type StatsRead = {
   readonly bytesSent: number;
   readonly bytesReceived: number;
   readonly codec: string | null;
+  /** Le chemin du média (#8698) : par un relais TURN, ou direct ; `null` avant qu'une paire soit élue. */
+  readonly path: MediaPath | null;
 };
+
+export type MediaPath = 'direct' | 'relay';
 
 export type PeerQuality = {
   readonly level: ConnectionQualityLevel;
@@ -45,7 +49,29 @@ export function qualityLevel({ packetLoss, rtt }: { readonly packetLoss: number;
   return 'poor';
 }
 
+export type MetricGrade = 'good' | 'medium' | 'poor';
+export type GradedMetric = 'packetLoss' | 'rtt' | 'jitter';
+
+/** Les seuils de `CallQualityRows.grade` (iOS) : un même relevé rend le même niveau sur les deux plateformes (#8209). */
+const GRADE_THRESHOLDS: Readonly<Record<GradedMetric, { readonly medium: number; readonly poor: number }>> = {
+  packetLoss: { medium: 3, poor: 5 },
+  rtt: { medium: 300, poor: 450 },
+  jitter: { medium: 30, poor: 50 },
+};
+
+export function metricGrade(metric: GradedMetric, value: number): MetricGrade {
+  const { medium, poor } = GRADE_THRESHOLDS[metric];
+  if (value >= poor) return 'poor';
+  return value >= medium ? 'medium' : 'good';
+}
+
 const numberOf = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+
+/** La gigue de `CallStats.reduce` (iOS, #8209) : la moyenne des flux entrants non vidéo qui la rapportent, en ms. */
+const audioJitterMs = (inbound: readonly StatsEntry[]): number => {
+  const samples = inbound.filter((entry) => entry.kind !== 'video' && typeof entry.jitter === 'number' && Number.isFinite(entry.jitter)).map((entry) => numberOf(entry.jitter));
+  return samples.length === 0 ? 0 : (samples.reduce((sum, value) => sum + value, 0) / samples.length) * 1000;
+};
 
 const subtype = (mimeType: unknown): string | null => (typeof mimeType === 'string' && mimeType.includes('/') ? (mimeType.split('/')[1] ?? null) : null);
 
@@ -60,10 +86,11 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
   const sending = (kind: string): StatsEntry | undefined => outbound.find((entry) => entry.kind === kind && numberOf(entry.bytesSent) > 0);
   const codecEntry = (sending('video') ?? sending('audio'))?.codecId;
   const codec = entries.find((entry) => entry.type === 'codec' && entry.id === codecEntry);
+  const local = pair === undefined ? undefined : entries.find((entry) => entry.type === 'local-candidate' && entry.id === pair.localCandidateId);
   return {
     at,
     rtt: numberOf(pair?.currentRoundTripTime ?? remote?.roundTripTime) * 1000,
-    jitter: inbound.reduce((worst, entry) => Math.max(worst, numberOf(entry.jitter) * 1000), 0),
+    jitter: audioJitterMs(inbound),
     lost: sum(inbound, 'packetsLost'),
     received: sum(inbound, 'packetsReceived'),
     audioBytes: sum(inbound, 'bytesReceived', 'audio'),
@@ -71,6 +98,7 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
     bytesSent: sum(outbound, 'bytesSent'),
     bytesReceived: sum(inbound, 'bytesReceived'),
     codec: subtype(codec?.mimeType),
+    path: local === undefined ? null : local.candidateType === 'relay' ? 'relay' : 'direct',
   };
 }
 
@@ -107,9 +135,9 @@ export type VideoTier = 'high' | 'medium' | 'low' | 'frozen' | 'suspended';
 
 export type TierEncoding = { readonly active: boolean; readonly maxBitrate: number; readonly scaleResolutionDownBy: number; readonly maxFramerate: number };
 
-/** Les paliers d'`applyVideoQuality` d'iOS ; `frozen` est `survivalFrozenFPS` au plancher `minVideoBitrate`. */
+/** Les paliers d'`applyVideoQuality` d'iOS ; `high` est le plafond Wi-Fi du barème (`call-data-profile.ts`), `frozen` `survivalFrozenFPS` au plancher `minVideoBitrate`. */
 export const TIER_ENCODING: Readonly<Record<VideoTier, TierEncoding>> = {
-  high: { active: true, maxBitrate: 1_500_000, scaleResolutionDownBy: 1, maxFramerate: 30 },
+  high: { active: true, maxBitrate: 1_200_000, scaleResolutionDownBy: 1, maxFramerate: 30 },
   medium: { active: true, maxBitrate: 600_000, scaleResolutionDownBy: 1.5, maxFramerate: 24 },
   low: { active: true, maxBitrate: 250_000, scaleResolutionDownBy: 2, maxFramerate: 15 },
   frozen: { active: true, maxBitrate: 100_000, scaleResolutionDownBy: 2, maxFramerate: 2 },

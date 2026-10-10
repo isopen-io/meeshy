@@ -55,6 +55,7 @@ type AppOptions = {
   withEmailService?: boolean;
   emailServiceRejects?: boolean;
   emailVerified?: boolean;
+  withinGrace?: boolean;
 };
 
 async function buildApp({
@@ -62,6 +63,7 @@ async function buildApp({
   withEmailService = true,
   emailServiceRejects = false,
   emailVerified = true,
+  withinGrace = false,
 }: AppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
@@ -73,7 +75,11 @@ async function buildApp({
     // juste après `fastify.authenticate` sur cette route).
     (req as unknown as Record<string, unknown>).authContext = {
       isAuthenticated: true,
-      registeredUser: { id: USER_ID, emailVerifiedAt: emailVerified ? new Date() : null },
+      registeredUser: {
+        id: USER_ID,
+        emailVerifiedAt: emailVerified ? new Date() : null,
+        ...(withinGrace ? { activation: { phase: 'quiet', deadline: '2026-10-30T00:00:00.000Z', missing: ['email'] } } : {}),
+      },
     };
   });
 
@@ -134,6 +140,23 @@ describe('POST /invitations/email', () => {
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
     await appUnverified.close();
+  });
+
+  // #9713 — le délai de grâce ouvre la création de liens, PAS l'invitation par
+  // e-mail : elle écrit à une adresse tierce, et reste sous la garde stricte.
+  it('stays 403 EMAIL_NOT_VERIFIED for an unproven address even within its grace (#9713)', async () => {
+    const appInGrace = await buildApp({ emailVerified: false, withinGrace: true });
+
+    const res = await appInGrace.inject({
+      method: 'POST',
+      url: '/invitations/email',
+      headers: AUTH_HEADER,
+      payload: { email: 'friend@example.com' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await appInGrace.close();
   });
 
   it('persists a dedicated single-use affiliate token and the invitation relation (#3691)', async () => {

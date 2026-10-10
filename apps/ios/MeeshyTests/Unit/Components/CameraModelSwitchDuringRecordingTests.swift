@@ -24,7 +24,7 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/CameraView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Components/CameraModel.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

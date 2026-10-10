@@ -80,19 +80,21 @@ describe('layerOffered', () => {
 });
 
 describe('layerChrome', () => {
-  test('au repos : en-tête, pilule, pas de rangées, auto-masquage', () => {
-    expect(layerChrome(IDLE)).toEqual({ header: true, pill: true, rows: false, panel: null, mode: null, selfControls: true, autoHide: true });
+  /* Aucune couche n'efface ses commandes au bout d'une attente (#8988) : la
+     couche ne dit que ce qu'elle montre, jamais quand cela s'efface. */
+  test('au repos : en-tête, pilule, pas de rangées', () => {
+    expect(layerChrome(IDLE)).toEqual({ header: true, pill: true, rows: false, panel: null, mode: null, selfControls: true });
   });
 
-  test('menu : les rangées au-dessus de la pilule, auto-masquage', () => {
-    expect(layerChrome(menu)).toEqual({ header: true, pill: true, rows: true, panel: null, mode: null, selfControls: true, autoHide: true });
+  test('menu : les rangées au-dessus de la pilule', () => {
+    expect(layerChrome(menu)).toEqual({ header: true, pill: true, rows: true, panel: null, mode: null, selfControls: true });
   });
 
-  test('panneau : il remplace les rangées, jamais d’auto-masquage', () => {
-    expect(layerChrome(panel('react'))).toEqual({ header: true, pill: true, rows: false, panel: 'react', mode: null, selfControls: true, autoHide: false });
+  test('panneau : il remplace les rangées', () => {
+    expect(layerChrome(panel('react'))).toEqual({ header: true, pill: true, rows: false, panel: 'react', mode: null, selfControls: true });
   });
 
   test('mode : TOUT le chrome d’appel s’efface, seul le mode reste', () => {
-    expect(layerChrome(mode('montage'))).toEqual({ header: false, pill: false, rows: false, panel: null, mode: 'montage', selfControls: false, autoHide: false });
+    expect(layerChrome(mode('montage'))).toEqual({ header: false, pill: false, rows: false, panel: null, mode: 'montage', selfControls: false });
   });
 });

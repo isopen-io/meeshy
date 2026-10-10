@@ -44,6 +44,19 @@ final class PresenceManager: ObservableObject {
         }
     }
 
+    /// « Est dans la conversation » (#8892) : qui a l'écran de quelle
+    /// conversation ouvert, alimenté par `viewing:start` / `viewing:stop` /
+    /// `viewing:snapshot`. Hors de `presenceMap` : ce n'est pas une présence
+    /// globale mais un signal d'activité scopé à une room — il n'est ni
+    /// persisté, ni gardé à travers une coupure du socket (le serveur oublie
+    /// tout à la déconnexion). Chaque changement relance `refreshSignal`.
+    private(set) var conversationViewers = ConversationViewers() {
+        didSet {
+            guard conversationViewers != oldValue else { return }
+            scheduleVersionBump()
+        }
+    }
+
     /// Debounced companion signal — see `PresenceRefreshSignal`. Bumped
     /// `Self.versionBumpDebounce` seconds after the LAST `presenceMap`
     /// mutation settles, coalescing a burst of `user:status` events (e.g.
@@ -53,6 +66,7 @@ final class PresenceManager: ObservableObject {
     nonisolated static let versionBumpDebounce: TimeInterval = 0.4
 
     private var cancellables = Set<AnyCancellable>()
+    private var restTasks: [String: Task<Void, Never>] = [:]
     nonisolated(unsafe) private var recalcTimer: Timer?
     nonisolated(unsafe) private var persistTask: Task<Void, Never>?
 
@@ -96,6 +110,31 @@ final class PresenceManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 self?.noteActivity(userId: event.userId)
+            }
+            .store(in: &cancellables)
+
+        // Un pair qui arrive dans une conversation est actif LÀ, MAINTENANT —
+        // même statut que la frappe. Voir `applyViewing(_:)`.
+        MessageSocketManager.shared.conversationViewing
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyViewing(event)
+            }
+            .store(in: &cancellables)
+
+        // Contrairement à `presenceMap` (ci-dessous), l'ensemble des présents
+        // NE survit PAS à une coupure : le serveur retire la présence à l'écran
+        // de chaque socket déconnecté, puis ré-annonce après `authenticated`
+        // un `viewing:snapshot` par conversation NON VIDE — une conversation
+        // vidée entre-temps n'en reçoit aucun. La garder ferait briller un
+        // point primaire périmé ; `.sessionStarted` la vide aussi quand une
+        // reconnexion automatique ne passe pas par `isConnected == false`.
+        MessageSocketManager.shared.$isConnected
+            .removeDuplicates()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.clearConversationViewers()
             }
             .store(in: &cancellables)
 
@@ -169,6 +208,76 @@ final class PresenceManager: ObservableObject {
     func noteActivity(userId: String) {
         guard !userId.isEmpty else { return }
         presenceMap[userId] = UserPresence(isOnline: true, lastActiveAt: Date())
+    }
+
+    // MARK: - « Est dans la conversation » (#8892)
+
+    /// `userId` a l'écran de `conversationId` ouvert, au premier plan.
+    func isHere(userId: String, conversationId: String) -> Bool {
+        conversationViewers.isHere(userId: userId, conversationId: conversationId)
+    }
+
+    /// … et y regarde, écoute ou agit en ce moment (#9061) : son point pulse.
+    func isHereActive(userId: String, conversationId: String) -> Bool {
+        conversationViewers.isActive(userId: userId, conversationId: conversationId)
+    }
+
+    /// Ce que l'avatar de `userId` dit dans `conversationId` : absent, ici, actif.
+    func here(userId: String, conversationId: String) -> ConversationHere {
+        conversationViewers.here(userId: userId, conversationId: conversationId)
+    }
+
+    /// Le temps qu'un pair reste actif après son dernier `viewing:activity` —
+    /// jumeau de `ACTIVITY_HOLD_MS` (`apps/web/src/lib/api/conversation-viewing.ts`).
+    nonisolated static let defaultActivityHold: TimeInterval = 4
+    var activityHold: TimeInterval = PresenceManager.defaultActivityHold
+
+    /// Applique un événement `viewing:*`. Un pair annoncé présent (arrivée ou
+    /// snapshot) compte aussi comme activité : le serveur n'annonce que les
+    /// utilisateurs qui montrent leur statut en ligne.
+    func applyViewing(_ event: ConversationViewingEvent) {
+        conversationViewers = conversationViewers.applying(event)
+        switch event {
+        case .arrived(let change):
+            noteActivity(userId: change.userId)
+        case .snapshot(let snapshot):
+            snapshot.userIds.forEach { noteActivity(userId: $0) }
+        case .active(let change):
+            noteActivity(userId: change.userId)
+            scheduleRest(change)
+        case .left(let change):
+            restTasks.removeValue(forKey: Self.restKey(change))?.cancel()
+        case .sessionStarted:
+            cancelRestTasks()
+        }
+    }
+
+    func clearConversationViewers() {
+        cancelRestTasks()
+        conversationViewers = ConversationViewers()
+    }
+
+    private nonisolated static func restKey(_ change: ConversationViewingChange) -> String {
+        "\(change.conversationId)\u{0}\(change.userId)"
+    }
+
+    /// Chaque activité reçue repousse l'extinction : le point pulse tant que
+    /// le pair continue, et s'apaise `activityHold` après son dernier geste.
+    private func scheduleRest(_ change: ConversationViewingChange) {
+        let key = Self.restKey(change)
+        restTasks[key]?.cancel()
+        let hold = activityHold
+        restTasks[key] = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
+            guard !Task.isCancelled, let self else { return }
+            self.restTasks[key] = nil
+            self.conversationViewers = self.conversationViewers.resting(userId: change.userId, conversationId: change.conversationId)
+        }
+    }
+
+    private func cancelRestTasks() {
+        restTasks.values.forEach { $0.cancel() }
+        restTasks = [:]
     }
 
     /// Présence temps réel si l'utilisateur est suivi par le manager, `nil`

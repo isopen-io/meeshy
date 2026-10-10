@@ -19,7 +19,7 @@ struct ProgressionCard<Content: View>: View {
 
     var body: some View {
         content()
-            .padding(MeeshySpacing.md + 2)
+            .padding(MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.surfaceGradient(tint: tint))
@@ -73,7 +73,7 @@ struct ProgressionTierDots: View {
         HStack(spacing: MeeshySpacing.xs) {
             ForEach(tiers) { tier in
                 Circle()
-                    .strokeBorder(tier.reached ? tint : theme.textMuted.opacity(0.45), lineWidth: 1.5)
+                    .strokeBorder(tier.reached ? tint : theme.textMuted.opacity(0.45), lineWidth: MeeshyBorder.emphasis)
                     .background(Circle().fill(tier.reached ? tint : Color.clear))
                     .frame(width: 10, height: 10)
                     .accessibilityLabel(ProgressionCopy.tierAccessibilityLabel(tier))
@@ -93,17 +93,17 @@ struct ProgressionStreakCard: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "flame.fill")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                         .foregroundColor(tint)
                         .accessibilityHidden(true)
                     Text(ProgressionCopy.streak(streak.currentDays))
-                        .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.8)
                 }
                 Text(ProgressionCopy.streakRecord(streak.longestDays))
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                 ProgressionBar(
                     progress: streak.scale.progress,
@@ -112,7 +112,7 @@ struct ProgressionStreakCard: View {
                 )
                 .padding(.top, MeeshySpacing.xs)
                 Text(ProgressionCopy.nextStep(for: streak.scale, kind: .streak))
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -143,12 +143,12 @@ struct ProgressionAxisRow: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(ProgressionCopy.title(for: axis.axis))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
                     Spacer(minLength: MeeshySpacing.sm)
                     Text("\(axis.scale.value)")
-                        .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.textMuted)
                         .monospacedDigit()
                 }
@@ -156,20 +156,23 @@ struct ProgressionAxisRow: View {
                     ProgressionTierDots(tiers: axis.scale.tiers, tint: tint)
                     Spacer(minLength: MeeshySpacing.sm)
                     Text(ProgressionCopy.nextStep(for: axis.scale, kind: .badge))
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                 }
             }
         }
-        .padding(.vertical, MeeshySpacing.sm + 2)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .accessibilityElement(children: .combine)
     }
 }
 
 struct ProgressionAchievementRow: View {
     let achievement: EngagementAchievementProgress
+    /// La rareté MESURÉE de ce succès (#9390), servie par la passerelle ; `nil` — ancien serveur, ou succès jamais
+    /// mesuré — et la ligne reste celle d'avant.
+    var rarity: GameRarityEntry? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -189,9 +192,9 @@ struct ProgressionAchievementRow: View {
                 )
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(ProgressionCopy.title(for: achievement.key))
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(achievement.unlocked ? theme.textPrimary : theme.textMuted)
                 Text(
                     achievement.unlocked
@@ -199,13 +202,15 @@ struct ProgressionAchievementRow: View {
                             ?? String(localized: "progression.unlocked", defaultValue: "Débloqué", bundle: .main))
                         : ProgressionCopy.condition(for: achievement.key)
                 )
-                .font(MeeshyFont.relative(11, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
+                GameRarityLine(entry: rarity)
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, MeeshySpacing.sm + 2)
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .gameRarityRim(rarity?.visibleRarity.map(GameRarity.border(for:)), cornerRadius: MeeshyRadius.sm)
         .accessibilityElement(children: .combine)
     }
 }
@@ -260,11 +265,11 @@ struct ProgressionNotice: View {
     var body: some View {
         HStack(alignment: .top, spacing: MeeshySpacing.md) {
             Image(systemName: symbol)
-                .font(MeeshyFont.relative(16, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(tint)
                 .accessibilityHidden(true)
             Text(text)
-                .font(MeeshyFont.relative(13, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -274,7 +279,7 @@ struct ProgressionNotice: View {
                     retry()
                 } label: {
                     Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main))
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                         .foregroundColor(tint)
                 }
                 .accessibilityLabel(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main))
@@ -320,6 +325,9 @@ struct ProgressionSkeleton: View {
 struct ProgressionGeneratedAchievements: View {
     let sections: [AchievementSectionView]
 
+    /// Autant de colonnes que la largeur en porte, 132 pt au moins chacune : deux à 320 pt, trois sur un grand écran.
+    private static let columns = [GridItem(.adaptive(minimum: 132), spacing: MeeshySpacing.sm, alignment: .topLeading)]
+
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -331,19 +339,22 @@ struct ProgressionGeneratedAchievements: View {
                     VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                         HStack {
                             Text(AchievementCopy.sectionTitle(vue.section))
-                                .font(MeeshyFont.relative(13, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                                 .foregroundColor(theme.textPrimary)
                             Spacer()
                             Text("\(vue.unlockedCount) / \(vue.attainableCount)")
-                                .font(MeeshyFont.relative(11, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                                 .foregroundColor(theme.textMuted)
                         }
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: MeeshySpacing.sm) {
-                                ForEach(vue.entries) { entry in
-                                    ProgressionAchievementChip(entry: entry)
-                                }
+                        // Une GRILLE qui passe à la ligne, plus un carrousel (#9564, amendement n° 3) : aucune rangée
+                        // de Progression ne défile de côté — un carrousel sous le pouce dispute le geste de retour
+                        // depuis le bord, et cache des paliers hors de l'écran.
+                        LazyVGrid(columns: Self.columns, alignment: .leading, spacing: MeeshySpacing.sm) {
+                            ForEach(vue.entries) { entry in
+                                // Un palier de défi SE TOUCHE (#9564) : il rebondit et ouvre ses précisions.
+                                ProgressionAchievementChip(entry: entry)
+                                    .gameElement(GameElementDetails.challenge(entry))
                             }
                         }
                     }
@@ -360,24 +371,24 @@ private struct ProgressionAchievementChip: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Image(systemName: entry.unlocked ? "star.fill" : "medal")
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 .foregroundColor(entry.unlocked ? MeeshyColors.success : theme.textMuted)
                 .accessibilityHidden(true)
             // Une famille hors catalogue rend `nil` : on montre alors RIEN
             // plutôt qu'une clé technique.
             Text(AchievementCopy.label(entry.family, tier: entry.tier) ?? "")
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             if entry.unlocked {
                 Text(AchievementCopy.earned)
-                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
         }
-        .frame(width: 132, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.vertical, MeeshySpacing.sm)
         .background(

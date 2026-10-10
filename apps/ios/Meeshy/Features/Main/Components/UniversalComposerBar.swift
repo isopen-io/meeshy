@@ -42,6 +42,10 @@ struct UniversalComposerBar: View {
     /// Called when the composer collapses back to minimized state
     var onCollapse: (() -> Void)? = nil
 
+    /// **Le repli que l'hôte offre, posé DANS la plaque** (#8642) — au bout de
+    /// la rangée d'outils, angle intérieur haut-droit. `nil` = aucun repli.
+    var foldControl: ComposerFoldControl? = nil
+
     /// Called when clipboard content exceeds 2000 chars (creates a clipboard_content attachment)
     var onClipboardContent: ((ClipboardContent) -> Void)? = nil
 
@@ -189,6 +193,12 @@ struct UniversalComposerBar: View {
     /// stack on top of each other.
     var onShowAttachments: (() -> Void)? = nil
 
+    /// Le panneau des pièces s'ouvre ET se ferme, quelle que soit la cause
+    /// (frappe, focus, envoi). Un hôte qui suspend quelque chose pendant
+    /// qu'une pièce se compose — la lecture d'une story (#9821) — le relâche
+    /// ici ; `onShowAttachments` ne dit que l'ouverture.
+    var onAttachmentsVisibilityChange: ((Bool) -> Void)? = nil
+
     /// Called when user taps emoji icon in ladder — parent should show EmojiFullPickerSheet
     var onRequestTextEmoji: (() -> Void)? = nil
 
@@ -218,6 +228,14 @@ struct UniversalComposerBar: View {
     /// press). The host opens its media editor with the resolved photo/video
     /// and stages the edited result. When nil the action is hidden.
     var onRecentMediaEdit: ((RecentMediaPick) -> Void)? = nil
+
+    /// Hôte à zone d'attachement LIÉE (#9683) : reçoit le média de la grille
+    /// avec son `localIdentifier`, à la place d'`onRecentMediaSelected`.
+    var onRecentLibraryAssetSelected: ((RecentMediaAsset) -> Void)? = nil
+
+    /// Les assets déjà dans la zone d'attachement, dérivés d'elle par l'hôte :
+    /// la grille les marque et refuse de les reprendre (#9683).
+    var recentAttachedAssetIds: Set<String> = []
 
     /// Called when the user opens the full photo library from the recent-media
     /// strip, carrying the asset identifiers already multi-selected there so
@@ -314,6 +332,9 @@ struct UniversalComposerBar: View {
     /// La sélection du champ (`TextSelection`, iOS 18+), rangée en `Any?`
     /// parce qu'une propriété stockée ne peut pas être `@available` (#7849).
     @State var formatSelectionStorage: Any? = nil
+    /// Le texte pour lequel cette sélection a été posée — par la frappe, ou
+    /// par la mise en forme qui la replace elle-même (#8791).
+    @State var selectionText = ""
     /// La feuille des dix cadres à mots, ouverte par un appui long sur le
     /// bouton d'envoi (#5326, directive porteur 2026-09-25).
     @State var showTextStickerSheet = false
@@ -363,23 +384,43 @@ struct UniversalComposerBar: View {
     var theme: ThemeManager { ThemeManager.shared }
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    /// Le repli confié par l'ENVIRONNEMENT (#9122) — `foldableComment` le pose
+    /// sur un espace commentaire sans toucher à l'appel de la barre.
+    @Environment(\.composerFoldControl) var environmentFoldControl
+
+    var resolvedFoldControl: ComposerFoldControl? { foldControl ?? environmentFoldControl }
+
+    /// La caméra confiée par l'ENVIRONNEMENT (#9736) — `commentCamera` la pose
+    /// sur un composeur de commentaire sans toucher à l'appel de la barre.
+    @Environment(\.composerCameraDoor) var environmentCameraDoor
+
+    var resolvedOnCamera: (() -> Void)? { onCamera ?? environmentCameraDoor?.open }
+
+    /// L'hôte a une hauteur comptée (une feuille) : le panneau cède plutôt
+    /// que de pousser la zone d'aperçu sous l'en-tête (`ComposerPanelFrame`).
+    @Environment(\.composerPanelYieldsToHost) var panelYieldsToHost
 
     /// Tracks the system keyboard so the attachment carousel can be sized to the
     /// exact space the keyboard last occupied (seamless keyboard <-> carousel swap).
     @StateObject private var keyboardObserver = KeyboardObserver()
 
     /// Height for the attachment carousel — matches the last known keyboard
-    /// height so swapping keyboard <-> carousel keeps the input row still, but
-    /// never shorter than the panel's own content (taller when the two-row
-    /// recent-media grid is shown, so it can't clip).
+    /// height so swapping keyboard <-> carousel keeps the input row still,
+    /// never shorter than the panel's own content, and never so tall that the
+    /// composer leaves the screen (`ComposerPanelHeightLaw`, #8869).
     var attachmentPanelHeight: CGFloat {
         let keyboard = max(keyboardObserver.lastKnownHeight, 260)
         // iPad / macOS gets a taller floor so the roomy recent-media grid has
-        // breathing room; iPhone (incl. landscape, also .regular width) keeps the
-        // compact two-row floor since its screen is short.
+        // breathing room; iPhone keeps a floor that shows two rows of the grid.
         let recentFloor: CGFloat = DeviceLayout.isPad ? 460 : 324
         let contentFloor: CGFloat = onRecentMediaSelected != nil ? recentFloor : 150
-        let resting = max(keyboard, contentFloor)
+        let resting = ComposerPanelHeightLaw.restingHeight(
+            lastKeyboardHeight: keyboard,
+            contentFloor: contentFloor,
+            windowHeight: DeviceLayout.windowSize.height,
+            safeAreaTop: DeviceLayout.safeAreaTop,
+            safeAreaBottom: DeviceLayout.safeAreaBottom
+        )
         guard isExpandingToLibrary else { return resting }
         return ComposerLibraryHandoff.expandedHeight(
             resting: resting,

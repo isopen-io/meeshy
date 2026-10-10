@@ -121,7 +121,11 @@ final class ReactionBarScaleParityTests: XCTestCase {
     private static let hotes = [
         "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",
-        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
+        // Le sélecteur de la tuile a quitté `BubbleStandardLayout+Media` pour
+        // être partagé avec la tuile Focal (#9910).
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/AttachmentReactionPickerOverlay.swift",
+        // L'aperçu d'UNE pièce (#9907) : sa bande réagit sur la pièce.
+        "apps/ios/Meeshy/Features/Main/Components/MessagePieceOverlay.swift",
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageRow.swift",
         "apps/ios/Meeshy/Features/Main/Views/PostReactionPalette.swift",
     ]

@@ -30,6 +30,7 @@ const wire = (overrides: Record<string, Record<string, unknown>> = {}) => ({
     pushEnabled: false,
     soundEnabled: true,
     contactActivityEnabled: false,
+    gameEnabled: false,
     emailEnabled: true,
     dndEnabled: false,
     ...overrides.notification,
@@ -52,6 +53,7 @@ const expected: AppPreferences = {
   pushEnabled: false,
   soundEnabled: true,
   contactActivityEnabled: false,
+  gameEnabled: false,
   showOnlineStatus: false,
   showLastSeen: true,
   showReadReceipts: true,
@@ -73,8 +75,18 @@ const transportAnswering = (answer: ApiResult<unknown>) => {
 };
 
 describe('decodeAppPreferences — une PROJECTION, jamais la charge reçue', () => {
-  test('rend exactement les onze réglages de l’écran', () => {
+  test('rend exactement les douze réglages de l’écran', () => {
     expect(decodeAppPreferences(wire())).toEqual(expected);
+  });
+
+  test('les notifications du jeu : lues sous `notification`, ABSENTES = reçues (un ancien serveur ne les sert pas)', () => {
+    expect(decodeAppPreferences(wire({ notification: { gameEnabled: true } }))?.gameEnabled).toBe(true);
+    const { gameEnabled: _served, ...withoutGame } = wire().notification;
+    expect(decodeAppPreferences({ ...wire(), notification: withoutGame })?.gameEnabled).toBe(true);
+  });
+
+  test('un interrupteur du jeu de mauvais type rend la lecture illisible, jamais une valeur devinée', () => {
+    expect(decodeAppPreferences(wire({ notification: { gameEnabled: 'oui' } }))).toBeNull();
   });
 
   test('aucun champ voisin n’entre dans le cache persisté', () => {
@@ -101,6 +113,15 @@ describe('decodeServedPreferences — ce qu’une écriture rend, catégorie par
       pushEnabled: true,
       soundEnabled: false,
       contactActivityEnabled: false,
+    });
+  });
+
+  test('l’interrupteur du jeu, servi, est rendu ; non servi, il n’est pas inventé', () => {
+    expect(decodeServedPreferences({ notification: { pushEnabled: true, soundEnabled: false, contactActivityEnabled: true, gameEnabled: false } })).toEqual({
+      pushEnabled: true,
+      soundEnabled: false,
+      contactActivityEnabled: true,
+      gameEnabled: false,
     });
   });
 
@@ -132,6 +153,16 @@ describe('preferencesPatchBody — un réglage retrouve SA catégorie', () => {
 
   test('« quand un contact revient » part sous `notification`, là où la réception la lit (#8285)', () => {
     expect(preferencesPatchBody({ contactActivityEnabled: false })).toEqual({ notification: { contactActivityEnabled: false } });
+  });
+
+  test('« notifications du jeu » part sous `notification`, là où `GameNotifier` la lit (#9490)', () => {
+    expect(preferencesPatchBody({ gameEnabled: false })).toEqual({ notification: { gameEnabled: false } });
+  });
+
+  test('la lecture demande le champ du jeu avec les autres', async () => {
+    const { calls, transport } = transportAnswering({ ok: true, data: wire() });
+    await loadAppPreferences({ source: 'gateway', transport });
+    expect(calls[0]?.path).toContain('notification.gameEnabled');
   });
 
   test('une catégorie que le geste ne touche pas ne part pas', () => {

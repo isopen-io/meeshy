@@ -97,6 +97,12 @@ final class CallControlsLayoutTests: XCTestCase {
         XCTAssertTrue(actions.theCall.contains(.capture))
     }
 
+    /// #9287 — le cadre en direct se choisit DANS la capture : aucune entrée à part.
+    func test_theCall_videoDuo_framesLiveThroughCaptureOnly() {
+        let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true))
+        XCTAssertEqual(actions.theCall, [.captions, .journal, .addPeople, .react, .capture, .recording])
+    }
+
     func test_theCall_videoNotYetConnected_offersNoCapture() {
         let actions = CallActionSet.resolve(context(isVideoEnabled: true, isConnected: false))
         XCTAssertFalse(actions.contains(.capture))

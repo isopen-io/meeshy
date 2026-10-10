@@ -46,7 +46,11 @@ export function shellPushUrl(target: PushTapTarget): string {
     case 'userProfile':
       return href('userProfile', target.params);
     case 'progression':
-      return href('progression');
+      return href('progression', undefined, target.search);
+    case 'progressionLigue':
+      return href('progressionLigue');
+    case 'progressionSaison':
+      return href('progressionSaison');
     case 'settings':
       return href('settings');
     case 'notifications':

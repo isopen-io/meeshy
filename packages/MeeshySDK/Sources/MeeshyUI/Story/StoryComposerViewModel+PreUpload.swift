@@ -89,7 +89,8 @@ extension StoryComposerViewModel {
     ///
     /// Un média de FOND n'a pas toujours son bitmap dans `loadedImages` : la
     /// slide le tient (`slideImages`), ou seul son fichier local l'a — d'où la
-    /// cascade, qui finit sur le fichier (décodé paresseusement par UIKit).
+    /// cascade, qui finit sur le fichier — décodé à la taille publiée, jamais
+    /// pleine taille (#6922).
     private func relayLoadedImage(objectId: String, slideId: String, isImage: Bool,
                                   localURL: String, to keys: [String]) {
         guard isImage, let local = URL(string: localURL) else { return }
@@ -97,7 +98,10 @@ extension StoryComposerViewModel {
         let image = loadedImages[objectId]
             ?? loadedImages[cleFichier]
             ?? slideImages[slideId]
-            ?? (local.isFileURL ? UIImage(contentsOfFile: local.path) : nil)
+            ?? (local.isFileURL
+                ? SceneImageDownsampling.image(fileAt: local,
+                                               maxPixelSize: SceneImageDownsampling.workingMaxPixelSize)
+                : nil)
         guard let image else { return }
         // Deux clés, deux lecteurs : un média POSÉ se cherche sous son
         // `postMediaId` (`StoryMediaLayer`), le FOND sous son ADRESSE — la clé

@@ -67,6 +67,22 @@ public enum ConversationListAuthor {
         return senderName
     }
 
+    /// L'identifiant qui voyage AVEC le nom de l'auteur (#9359) : celui du
+    /// PAIR, et seulement quand le nom posé le désigne. « Vous », un auteur
+    /// inconnu ou un id vide rendent `nil` — `user:updated` ne doit repeindre
+    /// que le nom d'un pair, jamais le mot du lecteur.
+    public static func peerUserId(
+        senderUserId: String?,
+        senderName: String?,
+        readerId: String?,
+        youLabel: String = readerLabel
+    ) -> String? {
+        guard let senderUserId, !senderUserId.isEmpty,
+              let senderName, senderName != youLabel,
+              senderUserId != readerId else { return nil }
+        return senderUserId
+    }
+
     /// Ce que l'événement AFFIRME de l'auteur — trois états, comme partout où
     /// ce dépôt sépare une clé absente d'une clé nulle.
     ///

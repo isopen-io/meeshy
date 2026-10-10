@@ -375,8 +375,11 @@ final class LentilleFocusCardTests: XCTestCase {
         XCTAssertTrue(row.contains("LentilleFocusCard.fullTimestamp("), "date complète sous la loupe")
         XCTAssertTrue(row.contains("LentilleRowTimestamp(date: conversation.lastMessageAt)"), "relatif court au repos")
         let dateLine = try XCTUnwrap(row.range(of: "private var dateLine: some View {"))
-        let after = row[dateLine.upperBound...].prefix(1200)
-        XCTAssertTrue(after.contains("Spacer(minLength: 0)"), "la date reste poussée à droite, magnifiée ou non")
+        // Borné au corps de la ligne, AVANT la date — pas à une fenêtre de caractères :
+        // la pastille de série (#8906) a allongé ce qui précède le `Spacer` (#8972).
+        let after = row[dateLine.upperBound...]
+        let avantLaDate = after[..<(after.range(of: "timestampText")?.lowerBound ?? after.endIndex)]
+        XCTAssertTrue(avantLaDate.contains("Spacer(minLength: 0)"), "la date reste poussée à droite, magnifiée ou non")
     }
 
     /// L'aperçu coule sur DEUX lignes sous la loupe, une seule au repos.

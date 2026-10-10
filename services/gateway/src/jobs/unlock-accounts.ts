@@ -5,6 +5,7 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { guardedInterval } from '../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'UnlockAccountsJob' });
 
@@ -29,9 +30,9 @@ export class UnlockAccountsJob {
     this.unlock();
 
     // Then run on interval
-    this.intervalId = setInterval(() => {
+    this.intervalId = guardedInterval({ name: 'unlock-accounts', everyMs: this.intervalHours * 60 * 60 * 1000, logger, run: () => {
       this.unlock();
-    }, this.intervalHours * 60 * 60 * 1000);
+    } });
     this.intervalId.unref?.();
   }
 

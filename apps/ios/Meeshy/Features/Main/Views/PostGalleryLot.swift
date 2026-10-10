@@ -69,6 +69,8 @@ nonisolated struct GallerySceneItem: Equatable {
     /// C'est elle qui fait naître le curseur au couloir de transport
     /// (`GallerySceneTimeline`).
     var timeline: TimeInterval? = nil
+    /// L'auteur du post, que le filigrane d'un enregistrement nomme (recette #9681).
+    var authorUsername: String? = nil
 
     /// La scène elle-même, et non le document entier : deux pages d'un même
     /// document ne diffèrent que par elle, et comparer le document ferait payer
@@ -257,10 +259,14 @@ nonisolated struct PostGalleryLot {
     let sceneCaptions: [String: GallerySceneCaption]
     let captionServings: [String: SocialMediaCaptionServing]
     let captionMap: [String: String]
+    /// Page → la carte des liens suivis de SON porteur (#9075) : le post pour ses
+    /// scènes et ses médias, le commentaire pour le média qu'il a joint.
+    let captionLinks: [String: [String: String]]
     let attributions: [String: Attribution]
 
     static let empty = PostGalleryLot(attachments: [], scenes: [:], sceneCaptions: [:],
-                                      captionServings: [:], captionMap: [:], attributions: [:])
+                                      captionServings: [:], captionMap: [:], captionLinks: [:],
+                                      attributions: [:])
 
     static func compose(post: FeedPost,
                         comments: [FeedComment],
@@ -371,6 +377,7 @@ nonisolated struct PostGalleryLot {
             sceneCaptions: indexed(pages.compactMap { page in page.anchor.map { (page.item.id, $0) } }),
             captionServings: [:],
             captionMap: indexed(pages.compactMap { page in page.caption.map { (page.item.id, $0) } }),
+            captionLinks: links(post.trackedLinkMap, for: pages.map(\.item.id)),
             attributions: indexed(pages.map { ($0.item.id, auteur) })
         )
     }
@@ -400,6 +407,7 @@ nonisolated struct PostGalleryLot {
             thumbHash: scene.thumbHash ?? media?.thumbHash,
             thumbnailURL: media.flatMap(thumbnailURL(of:))
         )
+        item.authorUsername = post.authorUsername
         item.timeline = GallerySceneTimeline.duration(moves: item.moves) { [item] in
             item.renderableSlide(preferredLanguages: []).computedTotalDuration()
         }
@@ -443,6 +451,7 @@ nonisolated struct PostGalleryLot {
                                                         preferredLanguages: preferredLanguages),
             captionMap: SocialMediaCaption.map(for: post.media, carrierText: post.displayContent,
                                                preferredLanguages: preferredLanguages),
+            captionLinks: links(post.trackedLinkMap, for: visuels.map(\.id)),
             attributions: indexed(visuels.map { ($0.id, auteur) })
         )
     }
@@ -467,6 +476,8 @@ nonisolated struct PostGalleryLot {
                                             preferredLanguages: preferredLanguages)
                     .map { (piece.media.id, $0) }
             }),
+            captionLinks: indexed(pieces.filter { !$0.comment.trackedLinkMap.isEmpty }
+                .map { ($0.media.id, $0.comment.trackedLinkMap) }),
             attributions: indexed(pieces.map { ($0.media.id, Attribution.of(comment: $0.comment)) })
         )
     }
@@ -487,8 +498,13 @@ nonisolated struct PostGalleryLot {
             sceneCaptions: sceneCaptions.merging(suite.sceneCaptions) { premier, _ in premier },
             captionServings: captionServings.merging(suite.captionServings) { premier, _ in premier },
             captionMap: captionMap.merging(suite.captionMap) { premier, _ in premier },
+            captionLinks: captionLinks.merging(suite.captionLinks) { premier, _ in premier },
             attributions: attributions.merging(suite.attributions) { premier, _ in premier }
         )
+    }
+
+    private static func links(_ carte: [String: String], for pages: [String]) -> [String: [String: String]] {
+        carte.isEmpty ? [:] : indexed(pages.map { ($0, carte) })
     }
 
     private static func indexed<Value>(_ paires: [(String, Value)]) -> [String: Value] {

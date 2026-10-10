@@ -75,6 +75,7 @@
  * exporté par `messages-list-query.ts`) — et il devra venir avec son lecteur.
  */
 import { Prisma } from '@meeshy/shared/prisma/client';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import {
   transformTranslationsToArray,
   type MessageTranslationJSON,
@@ -228,11 +229,14 @@ export const sovereignMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   translations: true,
   ...messageContentProtectionSelect,
   ...viewOnceCountersSelect,
+  // La durée d'un message ÉPHÉMÈRE (secondes) : `expiresAt` dit QUAND il
+  // tombe, elle dit POUR COMBIEN il a été écrit (audit 2026-10-04).
+  ephemeralDuration: true,
   sender: { select: sovereignSenderSelect },
   replyTo: { select: sovereignReplyToSelect },
   attachments: {
     select: sovereignAttachmentSelect,
-    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+    orderBy: MESSAGE_ATTACHMENT_ORDER,
   },
   // Gardé À CÔTÉ de la liste, et ce n'est pas une redondance : le compteur
   // porte sur TOUTES les pièces du message, la liste sur celles de cette page.
@@ -470,6 +474,7 @@ export function mapSovereignMessageRow(message: SovereignMessageRow) {
     isBlurred: message.isBlurred,
     effectFlags: message.effectFlags,
     expiresAt: message.expiresAt,
+    ephemeralDuration: message.ephemeralDuration ?? null,
     isEncrypted: message.isEncrypted,
     encryptionMode: message.encryptionMode,
     isProtected: protege,
@@ -638,6 +643,7 @@ export const sovereignMessageSchema = {
     isBlurred: { type: 'boolean', nullable: true },
     effectFlags: { type: 'number', nullable: true },
     expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    ephemeralDuration: { type: 'number', nullable: true, description: 'Durée de vie d’un message éphémère, en secondes' },
     isEncrypted: { type: 'boolean', nullable: true },
     encryptionMode: { type: 'string', nullable: true },
     isProtected: { type: 'boolean' },

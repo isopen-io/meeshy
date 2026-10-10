@@ -23,6 +23,10 @@ public struct ImageViewerView: View {
     // in the scroll list). Dark/light comes reactively from the environment
     // instead (cf. ChatBubble.swift precedent).
     @Environment(\.colorScheme) private var colorScheme
+    /// Le portillon de sortie posé par l'hôte (#9573), reposé sur ce que cette vue présente.
+    @Environment(\.contentExitGate) private var exitGate
+    /// Le bouclier de capture de l'hôte (#9574), reposé sur ce que cette vue présente.
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
     @State private var showFullscreen = false
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
@@ -85,6 +89,8 @@ public struct ImageViewerView: View {
                 attachmentId: isOwnMessage ? nil : attachment.id,
                 onSaveRequested: onSaveRequested
             )
+            .contentExitGate(exitGate)
+            .captureShield(isCaptureShielded)
         }
     }
 
@@ -122,11 +128,11 @@ public struct ImageViewerView: View {
                     Spacer()
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: MeeshyIconSize.lg))
                             .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(.ultraThinMaterial).frame(width: 14, height: 14))
                     }
-                    .padding(6)
+                    .padding(MeeshySpacing.xsPlus)
                 }
                 Spacer()
             }
@@ -137,18 +143,18 @@ public struct ImageViewerView: View {
                 Spacer()
                 HStack {
                     Button { onEdit(); HapticFeedback.light() } label: {
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: "pencil")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                             Text(String(localized: "media.image.edit", defaultValue: "\u{00C9}diter", bundle: .module))
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.black.opacity(0.5)))
+                        .padding(.horizontal, MeeshySpacing.sm)
+                        .padding(.vertical, MeeshySpacing.xs)
+                        .background(Capsule().fill(MeeshyColors.mediaScrim))
                     }
-                    .padding(6)
+                    .padding(MeeshySpacing.xsPlus)
                     Spacer()
                 }
             }
@@ -160,12 +166,12 @@ public struct ImageViewerView: View {
                 HStack {
                     Spacer()
                     Text(attachment.fileSizeFormatted)
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(.black.opacity(0.5)))
-                        .padding(6)
+                        .padding(.horizontal, MeeshySpacing.xs)
+                        .padding(.vertical, MeeshySpacing.xxs)
+                        .background(Capsule().fill(MeeshyColors.mediaScrim))
+                        .padding(MeeshySpacing.xsPlus)
                 }
             }
         }
@@ -174,7 +180,7 @@ public struct ImageViewerView: View {
     // MARK: - Placeholder
     private func placeholder(icon: String) -> some View {
         Rectangle()
-            .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+            .fill(MeeshyColors.surfaceFill(isDark: isDark))
             .overlay(
                 Image(systemName: icon)
                     .font(.system(size: context.isCompact ? 22 : 28))
@@ -197,6 +203,8 @@ public struct ImageFullscreen: View {
     public var onSaveRequested: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    /// Le portillon de sortie posé par l'hôte (#9573) : fermé, l'enregistrement ne fait rien.
+    @Environment(\.contentExitGate) private var exitGate
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @State private var showControls = true
@@ -277,42 +285,8 @@ public struct ImageFullscreen: View {
 
             if showControls {
                 VStack {
-                    HStack {
-                        Button { dismiss() } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding()
-                        }
-                        Spacer()
-
-                        Button {
-                            if let onSaveRequested {
-                                onSaveRequested()
-                            } else {
-                                saveToPhotos()
-                            }
-                        } label: {
-                            Group {
-                                switch saveState {
-                                case .idle:
-                                    Image(systemName: "arrow.down.to.line")
-                                case .saving:
-                                    ProgressView().tint(.white)
-                                case .saved:
-                                    Image(systemName: "checkmark")
-                                case .failed:
-                                    Image(systemName: "xmark")
-                                }
-                            }
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.9))
-                            .frame(width: 40, height: 40)
-                            .background(Circle().fill(Color.white.opacity(0.2)))
-                            .padding(.trailing, 12)
-                            .padding(.top, 8)
-                        }
-                        .disabled(saveState == .saving || saveState == .saved)
+                    FullscreenTopBar(onClose: { dismiss() }) {
+                        ContentExitGated { saveButton }
                     }
                     Spacer()
 
@@ -329,8 +303,8 @@ public struct ImageFullscreen: View {
                         )
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.md)
                         .background(.ultraThinMaterial)
                         .tint(Color(hex: accentColor))
                     }
@@ -341,6 +315,38 @@ public struct ImageFullscreen: View {
         .statusBar(hidden: true)
         .onAppear { viewStartTime = Date() }
         .onDisappear { reportImageViewed() }
+    }
+
+    @ViewBuilder
+    private var saveButton: some View {
+        if saveState == .saving {
+            ProgressView()
+                .tint(MeeshyColors.mediaChromeForeground)
+                .frame(width: FullscreenChromeMetrics.tapTarget,
+                       height: FullscreenChromeMetrics.tapTarget)
+        } else {
+            FullscreenChromeButton(
+                systemImage: saveGlyph,
+                label: String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
+            ) {
+                exitGate.perform {
+                    if let onSaveRequested {
+                        onSaveRequested()
+                    } else {
+                        saveToPhotos()
+                    }
+                }
+            }
+            .disabled(saveState == .saved)
+        }
+    }
+
+    private var saveGlyph: String {
+        switch saveState {
+        case .idle, .saving: return FullscreenChromeSymbol.save
+        case .saved: return FullscreenChromeSymbol.saved
+        case .failed: return FullscreenChromeSymbol.close
+        }
     }
 
     private func reportImageViewed() {
@@ -355,7 +361,7 @@ public struct ImageFullscreen: View {
     }
 
     private func saveToPhotos() {
-        guard let url = imageUrl else { return }
+        guard exitGate.mayLeave(), let url = imageUrl else { return }
         saveState = .saving
         HapticFeedback.light()
         Task {
@@ -399,6 +405,10 @@ public struct ImageFullscreen: View {
     /// chemin qui puisse l'atteindre.
     @MainActor
     private func saveAsReceived(_ url: URL) async -> Bool {
+        // Le fichier du cache part PAR RÉFÉRENCE : rien n'est relu ni décodé (#9685).
+        if let onDisk = CacheCoordinator.imageLocalFileURL(for: url.absoluteString) {
+            return await PhotoLibraryManager.shared.saveImageFile(at: onDisk)
+        }
         guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
             return false
         }

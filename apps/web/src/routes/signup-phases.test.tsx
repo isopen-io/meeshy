@@ -129,14 +129,25 @@ function toCard(el: HTMLElement) {
 }
 
 describe('phase 1 — le téléphone d’abord, en verre liquide', () => {
-  test('à l’ouverture : le numéro, son pays, le lien discret — et rien d’autre', () => {
+  test('à l’ouverture : le numéro et son pays — et rien d’autre, aucun moyen de passer (#9343)', () => {
     const { el } = mount();
     expect(phase(el)).toBe('phone');
     expect(has(el, '[data-signup-phone-glass] #signup-phone')).toBe(true);
     expect(has(el, '[data-signup-country]')).toBe(true);
-    expect(el.querySelector('[data-signup-skip-phone]')?.textContent).toBe('Continuer avec l’e-mail seulement');
+    expect(el.querySelector('label[for="signup-phone"]')?.textContent).toBe('Téléphone');
+    expect(el.querySelector('#signup-phone')?.getAttribute('aria-required')).toBe('true');
+    expect(has(el, '[data-signup-skip-phone]')).toBe(false);
+    expect(el.textContent).not.toContain('Plus tard');
     expect(has(el, '#signup-email')).toBe(false);
     expect(has(el, '[data-signup-card]')).toBe(false);
+  });
+
+  test('ce que le numéro ouvre se lit d’emblée, sans (i) à ouvrir (#8842)', () => {
+    const { el } = mount();
+    const benefit = el.querySelector('#signup-phone-hint');
+    expect(benefit?.textContent).toBe('Il vous permettra de vous connecter, et à vos proches de vous retrouver.');
+    expect(benefit?.classList.contains('sr-only')).toBe(false);
+    expect(has(el, '[data-signup-phone-glass] [aria-controls="signup-phone-hint"]')).toBe(false);
   });
 
   test('« S’inscrire » est déjà là, inactif', () => {
@@ -172,11 +183,72 @@ describe('phase 2 — l’adresse paraît', () => {
     expect(has(el, '#signup-email')).toBe(true);
   });
 
-  test('ou par « Continuer avec l’e-mail seulement »', async () => {
+  test('jamais sans numéro plausible — « 42424242 » ou « 1111100000 » ne l’ouvrent pas (#9343)', () => {
     const { el } = mount();
-    await click(el, '[data-signup-skip-phone]');
+    type(el, '#signup-phone', '42424242');
+    expect(has(el, '#signup-email')).toBe(false);
+    type(el, '#signup-phone', '1111100000');
+    expect(has(el, '#signup-email')).toBe(false);
+    expect(phase(el)).toBe('phone');
+  });
+});
+
+/**
+ * LE REFUS DU NUMÉRO SE DIT SOUS LE CHAMP (#9343) — lié à la saisie par
+ * `aria-describedby`, annoncé par `role="alert"` ; jamais pendant la première
+ * frappe, dès que le champ est quitté avec une saisie.
+ */
+describe('le refus du numéro, sous le champ', () => {
+  const phoneInput = (el: HTMLElement) => el.querySelector('#signup-phone') as HTMLInputElement;
+  const errorOf = (el: HTMLElement) => el.querySelector('#signup-phone-error');
+
+  function blurPhone(el: HTMLElement) {
+    act(() => {
+      phoneInput(el).dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      phoneInput(el).dispatchEvent(new FocusEvent('blur'));
+    });
+  }
+
+  test('pendant la frappe, rien ne s’affiche', () => {
+    const { el } = mount();
+    type(el, '#signup-phone', '061');
+    expect(errorOf(el)).toBeNull();
+    expect(phoneInput(el).getAttribute('aria-invalid')).toBe('false');
+  });
+
+  test('quitté trop court ⇒ « trop court », cité par le champ et annoncé', () => {
+    const { el } = mount();
+    type(el, '#signup-phone', '061234');
+    blurPhone(el);
+    expect(errorOf(el)?.textContent).toBe('Ce numéro est trop court : 9 chiffres au moins.');
+    expect(errorOf(el)?.getAttribute('role')).toBe('alert');
+    expect(phoneInput(el).getAttribute('aria-describedby')).toBe('signup-phone-error signup-phone-hint');
+    expect(phoneInput(el).getAttribute('aria-invalid')).toBe('true');
+  });
+
+  test('quitté rempli d’un motif ⇒ « ne semble pas réel »', () => {
+    const { el } = mount();
+    type(el, '#signup-phone', '1111100000');
+    blurPhone(el);
+    expect(errorOf(el)?.textContent).toBe('Ce numéro ne semble pas réel : vérifiez-le.');
+  });
+
+  test('corrigé ⇒ le refus disparaît et l’adresse paraît', () => {
+    const { el } = mount();
+    type(el, '#signup-phone', '061234');
+    blurPhone(el);
+    type(el, '#signup-phone', '0612345678');
+    expect(errorOf(el)).toBeNull();
     expect(has(el, '#signup-email')).toBe(true);
-    expect(has(el, '[data-signup-skip-phone]')).toBe(false);
+  });
+
+  test('donné puis EFFACÉ ⇒ l’absence se dit, et « S’inscrire » s’éteint', () => {
+    const { el } = mount();
+    toCard(el);
+    expect(primary(el).disabled).toBe(false);
+    type(el, '#signup-phone', '');
+    expect(errorOf(el)?.textContent).toBe('Saisissez votre numéro de téléphone pour continuer.');
+    expect(primary(el).disabled).toBe(true);
   });
 });
 
@@ -188,7 +260,7 @@ describe('phase 2 — l’adresse paraît', () => {
 describe('l’adresse parue porte son (i)', () => {
   async function emailShown() {
     const harness = mount();
-    await click(harness.el, '[data-signup-skip-phone]');
+    type(harness.el, '#signup-phone', '0612345678');
     return harness.el;
   }
 
@@ -346,14 +418,14 @@ describe('« S’inscrire » depuis la carte', () => {
     expect(location()).toBe('/onboarding');
   });
 
-  test('« Continuer avec l’e-mail seulement » était la question : aucune alerte « sans numéro » ne la repose', async () => {
+  test('la charge porte le couple numéro + pays, et aucune alerte ne s’interpose (#9343)', async () => {
     const { el, sent } = mount();
-    await click(el, '[data-signup-skip-phone]');
-    type(el, '#signup-email', EMAIL);
+    toCard(el);
     await click(el, '[data-signup-primary]');
     expect(el.querySelector('dialog[data-confirm-dialog="signup-phone-nudge"]')).toBeNull();
     expect(sent.length).toBe(1);
-    expect(sent[0]?.phoneNumber).toBeUndefined();
+    expect(sent[0]?.phoneNumber).toBe('0612345678');
+    expect(typeof sent[0]?.phoneCountryCode).toBe('string');
   });
 
   test('une invitation (`next`) garde la priorité', async () => {

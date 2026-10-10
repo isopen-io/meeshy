@@ -71,8 +71,21 @@ export interface AuthSessionRevokedEventData {
    * `activation_required` (#8238) — le délai de grâce de l'adresse est passé
    * (28 jours sans preuve, aucun numéro) : le socket est refusé à la
    * connexion, et la prochaine connexion mène au code d'activation.
+   *
+   * `user_revoke` (#9613) — le membre a fermé CETTE session depuis un autre de
+   * ses appareils ; `logout` — l'appareil s'est déconnecté lui-même. Jusqu'à
+   * #9613, ces deux gestes partaient sous `admin_revoke` : le membre lisait
+   * qu'un administrateur l'avait déconnecté. `admin_revoke` ne nomme jamais
+   * l'administrateur : c'est « l'équipe Meeshy ».
    */
-  readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke' | 'session_expired' | 'activation_required';
+  readonly reason:
+    | 'password_changed'
+    | 'logout_all_devices'
+    | 'admin_revoke'
+    | 'user_revoke'
+    | 'logout'
+    | 'session_expired'
+    | 'activation_required';
 }
 
 /**

@@ -14,6 +14,8 @@ import {
   MEDIA_IMAGE_WITNESS_ID,
   MEDIA_MASKED_PIECE_WITNESS_ID,
   MEDIA_NULL_METADATA_WITNESS_ID,
+  MEDIA_ON_DEMAND,
+  MEDIA_UNTRANSCRIBED_VOICE_WITNESS_ID,
   MEDIA_VIEW_ONCE_WITNESS_ID,
   MEDIA_VOICE_DE_WITNESS_ID,
   MEDIA_VOICE_EN_WITNESS_ID,
@@ -124,13 +126,38 @@ test('wavDataUri : un en-tête RIFF/WAVE valide, dont les tailles déclarées co
   expect(dataSize).toBe(bytes.length - 44);
 });
 
+const wavSeconds = (uri: string): number => {
+  const bytes = Buffer.from(uri.slice('data:audio/wav;base64,'.length), 'base64');
+  return bytes.readUInt32LE(40) / bytes.readUInt32LE(28);
+};
+
+/**
+ * #9294 — LE VOCAL DU MINI-LECTEUR NE COURT PAS CONTRE SA FIN : les étapes
+ * navigateur du mini-lecteur (`check-audio-fullscreen.mjs`) ferment le plein
+ * écran, changent deux fois de route et touchent la bulle pendant qu'il joue.
+ * Huit secondes ne laissaient que ~3 s de marge ; arrivé au bout, le
+ * mini-lecteur se retire et l'étape rougit pour un son trop court.
+ */
+test('media-17 : chaque piste dure au moins 30 s, et le fichier dit la durée déclarée', () => {
+  const attachment = attachmentOf(MEDIA_UNTRANSCRIBED_VOICE_WITNESS_ID);
+  const tracks = Object.values(MEDIA_ON_DEMAND[attachment.id]?.translations ?? {});
+  expect(tracks.length).toBeGreaterThan(0);
+  expect(wavSeconds(attachment.fileUrl)).toBeGreaterThanOrEqual(30);
+  expect(wavSeconds(attachment.fileUrl) * 1000).toBe(attachment.duration ?? 0);
+  expect(Buffer.from(attachment.fileUrl.slice('data:audio/wav;base64,'.length), 'base64').length).toBe(attachment.fileSize);
+  for (const track of tracks) {
+    expect(wavSeconds(track.url ?? '') * 1000).toBe(track.durationMs ?? 0);
+    expect(track.durationMs).toBe(attachment.duration);
+  }
+});
+
 test('wavDataUri : deux tons différents rendent deux URIs différentes', () => {
   expect(wavDataUri({ seconds: 1, tone: 440 })).not.toBe(wavDataUri({ seconds: 1, tone: 523 }));
 });
 
-test('les DIX-NEUF messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique (#6221, +5 ; #7018, +1 ; #8008, +3)', () => {
+test('les VINGT messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique (#6221, +5 ; #7018, +1 ; #8008, +3 ; #9256, +1)', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  expect(messages).toHaveLength(19);
+  expect(messages).toHaveLength(20);
   const times = messages.map((m) => new Date(m.createdAt).getTime());
   expect(times).toEqual([...times].sort((a, b) => a - b));
   expect(messages.some((m) => m.id === MEDIA_BROKEN_IMAGE_WITNESS_ID)).toBe(true);
@@ -173,10 +200,19 @@ test('lastMessage reste media-7 malgré les cinq messages neufs (#6221)', () => 
   expect(MEDIA_CONVERSATION.lastMessage?.id).toBe(MEDIA_NULL_METADATA_WITNESS_ID);
 });
 
+/**
+ * Les bornes sont lues sur media-5 et media-7 EUX-MÊMES, pas sur un second
+ * `dayAt` : le corpus date ses messages au CHARGEMENT du module, et un minuit
+ * passé entre ce chargement et le test décalait les bornes d'un jour entier.
+ */
 test('les cinq messages neufs sont datés ENTRE media-5 (09:20) et media-7 (09:30)', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  const lower = dayAt(0, 9, 20);
-  const upper = dayAt(0, 9, 30);
+  const createdAtOf = (id: string) => new Date(messages.find((m) => m.id === id)!.createdAt);
+  const lower = createdAtOf(MEDIA_BROKEN_IMAGE_WITNESS_ID);
+  const upper = createdAtOf(MEDIA_NULL_METADATA_WITNESS_ID);
+  expect([lower.getHours(), lower.getMinutes()]).toEqual([9, 20]);
+  expect([upper.getHours(), upper.getMinutes()]).toEqual([9, 30]);
+  expect(upper.getTime() - lower.getTime()).toBe(10 * 60_000);
   for (const id of [
     MEDIA_SOLO_VIDEO_WITNESS_ID,
     MEDIA_GRID_PAIR_WITNESS_ID,

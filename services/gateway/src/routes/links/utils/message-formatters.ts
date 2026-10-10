@@ -3,6 +3,7 @@ import { resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant
 import { mapMessageProtectionFields } from '../../conversations/messages-list-query';
 import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
 import { attachmentReplyToFromMetadata } from '../../../services/messaging/attachmentReplySnapshot';
+import type { EphemeralReaderResolution } from '../../conversations/ephemeralReaderDeadlines';
 
 /**
  * Extracts sender info from unified Participant model
@@ -98,7 +99,12 @@ export function formatMessageWithUnifiedSender(message: any) {
  * plus exposée (visiteurs sans compte) était aussi la seule à n'avoir aucun
  * moyen de savoir qu'un message est protégé.
  */
-export function formatLinkMessageWithDetails(message: any) {
+export type LinkQuotedReaders = {
+  readonly deadlines: ReadonlyMap<string, EphemeralReaderResolution>;
+  readonly now: Date;
+};
+
+export function formatLinkMessageWithDetails(message: any, readers?: LinkQuotedReaders) {
   return {
     id: message.id,
     content: message.content,
@@ -117,7 +123,7 @@ export function formatLinkMessageWithDetails(message: any) {
     ...(message.metadata ? { metadata: message.metadata } : {}),
     sender: extractSenderInfo(message.sender),
     attachments: message.attachments || [],
-    replyTo: message.replyTo ? formatReplyToMessage(message.replyTo, message.metadata) : null,
+    replyTo: message.replyTo ? formatReplyToMessage(message.replyTo, message.metadata, readers) : null,
     reactions: message.reactions || [],
     translations: transformTranslationsToArray(
       message.id,
@@ -154,10 +160,12 @@ export function formatLinkMessageWithDetails(message: any) {
  * à sauter. Clé ABSENTE quand la réponse vise le message entier — c'est le cas
  * de toutes les citations d'avant ce lot, et rien n'y change.
  */
-function formatReplyToMessage(replyTo: any, citingMetadata?: unknown) {
+function formatReplyToMessage(replyTo: any, citingMetadata?: unknown, readers?: LinkQuotedReaders) {
   const guarded = servedQuotedMessage(replyTo, {
     includeTranslations: false,
     attachmentReplyTo: attachmentReplyToFromMetadata(citingMetadata),
+    // #8562 — l'échéance de CE lecteur ; sans elle, l'heure brute ne sort pas.
+    ephemeralReader: readers ? { resolution: readers.deadlines.get(replyTo.id), now: readers.now } : undefined,
   });
   return {
     id: replyTo.id,

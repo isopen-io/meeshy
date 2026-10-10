@@ -1,5 +1,7 @@
 import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
 
+import { holdViewerPoints } from '@/lib/feed/viewer-points';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import {
@@ -102,6 +104,7 @@ export async function loadBookmarkedPostsPage(
 export function bookmarkedPostsInfiniteOptions(deps: BookmarkedPostsDeps) {
   return {
     queryKey: BOOKMARKS_QUERY_KEY,
+    structuralSharing: holdViewerPoints,
     queryFn: async ({ pageParam, signal }: { readonly pageParam?: FeedPageParam; readonly signal?: AbortSignal }) =>
       unwrap(
         await loadBookmarkedPostsPage({

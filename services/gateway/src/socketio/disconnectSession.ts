@@ -1,6 +1,7 @@
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { AuthSessionRevokedEventData } from '@meeshy/shared/types/socketio-events';
 import type { RevokedSessionSocket } from './disconnectRevokedSessions';
+import { DEFAULT_REVOCATION_MESSAGES } from './disconnectRevokedSessions';
 
 /**
  * La clé où l'identifiant de session est rangé sur un socket.
@@ -27,6 +28,12 @@ export interface DisconnectSessionParams {
   userId: string;
   /** `UserSession.id` — le SEUL socket à couper. */
   sessionId: string;
+  /**
+   * POURQUOI la session tombe (#9613) — REQUIS, jamais un défaut : le motif
+   * valait toujours `admin_revoke`, et un membre qui fermait lui-même un de ses
+   * appareils lisait qu'un administrateur l'avait déconnecté.
+   */
+  reason: AuthSessionRevokedEventData['reason'];
   message?: string;
   onError?: (error: unknown) => void;
 }
@@ -77,13 +84,13 @@ export interface DisconnectSessionParams {
  * Rend le nombre de sockets réellement fermés.
  */
 export async function disconnectSession(params: DisconnectSessionParams): Promise<number> {
-  const { io, userId, sessionId, message, onError } = params;
+  const { io, userId, sessionId, reason, message, onError } = params;
   if (!io || !userId || !sessionId) return 0;
 
   const payload: AuthSessionRevokedEventData = {
     code: 'session_revoked',
-    message: message ?? 'This device was signed out — please sign in again.',
-    reason: 'admin_revoke',
+    message: message ?? DEFAULT_REVOCATION_MESSAGES[reason],
+    reason,
   };
 
   try {

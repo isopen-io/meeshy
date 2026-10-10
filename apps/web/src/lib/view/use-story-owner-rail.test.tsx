@@ -3,9 +3,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { sessionStore } from '@/lib/api/session';
+import type { GallerySaveInput, GallerySaveOutcome, GallerySaver } from '@/lib/gallery/gallery-saver';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 import type { StoryPlaybackStory } from '@/lib/stories/playback';
+import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 import * as storySaveStore from '@/lib/stories/save-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -14,7 +16,7 @@ import { useStoryOwnerRail, type StoryOwnerRail } from './use-story-owner-rail';
 /**
  * `useStoryOwnerRail` (#7116) — l'hôte du plan AUTEUR, mesuré par son API
  * publique. Les lois qu'il COMPOSE (`storyDownloadableMedia`, `downloadFile`,
- * `fileDeliveryPortal`, `storySaveStore`, `sharePublicationLink`) ont chacune
+ * `fileDeliveryPortal`, `storySaveStore`, `openSendSheet`) ont chacune
  * leurs témoins.
  *
  * **REVUE** — les vecteurs que le premier jet ne pouvait pas passer :
@@ -54,8 +56,6 @@ function storyOf(id: string, withMedia = true): StoryPlaybackStory {
 
 type Probe = {
   readonly rail: () => StoryOwnerRail;
-  readonly pauses: string[];
-  readonly resumes: string[];
   readonly announced: string[];
   readonly delivered: string[];
   readonly render: (story: StoryPlaybackStory | undefined, online?: boolean) => void;
@@ -77,19 +77,15 @@ function anchorHost(delivered: string[]): FileDeliveryHost {
   };
 }
 
-function mountProbe(host?: FileDeliveryHost): Probe {
-  const pauses: string[] = [];
-  const resumes: string[] = [];
+function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null = null): Probe {
   const announced: string[] = [];
   const delivered: string[] = [];
   const deliveryHost = host ?? anchorHost(delivered);
   const seen: StoryOwnerRail[] = [];
-  const pause = () => pauses.push('pause');
-  const resume = () => resumes.push('resume');
   const announce = (message: string) => announced.push(message);
 
   function Harness({ story, online }: { readonly story: StoryPlaybackStory | undefined; readonly online: boolean }) {
-    seen.push(useStoryOwnerRail({ story, online, pause, resume, announce, language: 'fr', deliveryHost }));
+    seen.push(useStoryOwnerRail({ story, online, announce, language: 'fr', deliveryHost, gallerySaver }));
     return null;
   }
 
@@ -98,8 +94,6 @@ function mountProbe(host?: FileDeliveryHost): Probe {
   const root: Root = createRoot(container);
   return {
     rail: () => seen[seen.length - 1] as StoryOwnerRail,
-    pauses,
-    resumes,
     announced,
     delivered,
     render: (story, online = true) => act(() => root.render(<Harness story={story} online={online} />)),
@@ -119,6 +113,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   globals.fetch = originalFetch;
+  closeSendSheet();
   probe?.unmount();
   probe = undefined;
   for (const id of ['st-a', 'st-b', 'st-texte']) storySaveStore.cancel(id);
@@ -156,35 +151,38 @@ describe('useStoryOwnerRail — ce que le plan auteur OFFRE', () => {
   });
 
   test('un hôte SANS porte de livraison DE FICHIER (coque Android) ⇒ Vues + Partager, jamais Enregistrer (revue #7116, défaut 2)', () => {
-    /* `share` ne lit jamais `host` — il partage un LIEN par
-       `sharePublicationLink` → `portailDuNavigateur()`, où la coque Android a
-       `MeeshySharePlugin` (#7710) même sans porte de fichier. Le retirer avec
-       `save` aurait caché un bouton qui, lui, aurait un effet — loi 4 lue à
-       l'envers. */
+    /* `share` ne lit jamais `host` — il ouvre la feuille d'envoi, dont « Plus
+       d'options… » porte `MeeshySharePlugin` (#7710) même sans porte de
+       fichier. Le retirer avec `save` aurait caché un bouton qui, lui, aurait
+       un effet — loi 4 lue à l'envers. */
     probe = mountProbe({});
     probe.render(storyOf('st-a'));
     expect(Object.keys(probe.rail().handlers).sort()).toEqual(['share', 'views']);
   });
 });
 
-describe('useStoryOwnerRail — « Vues » et « Partager » mettent la lecture EN PAUSE', () => {
-  test('ouvrir « Vues » met en pause et ouvre la feuille de CETTE story ; fermer reprend', () => {
+describe('useStoryOwnerRail — « Vues » ouvre la feuille de CETTE story ; « Partager » ouvre la feuille d’envoi (#8884)', () => {
+  /* La story BOUCLE sous la feuille (#9821) : c'est le lecteur qui le décide
+     (`resolveStoryPlaybackHold`), le rail ne la fige plus. */
+  test('ouvrir « Vues » ouvre la feuille de CETTE story ; fermer la referme', () => {
     probe = mountProbe();
     probe.render(storyOf('st-a'));
     act(() => probe?.rail().handlers.views?.());
     expect(probe.rail().viewers.postId).toBe('st-a');
-    expect(probe.pauses).toEqual(['pause']);
     act(() => probe?.rail().viewers.close());
-    expect(probe.resumes).toEqual(['resume']);
+    expect(probe.rail().viewers.postId).toBeNull();
   });
 
-  test('« Partager » met en pause AVANT la feuille du système et reprend quand elle se referme (iOS `:744-755`)', async () => {
+  test('« Partager » ouvre la feuille d’envoi COMMUNE avec la story, publiée en STORY, et son lien pour « Plus d’options… »', async () => {
     probe = mountProbe();
     probe.render(storyOf('st-a'));
-    act(() => probe?.rail().handlers.share?.());
-    expect(probe.pauses).toEqual(['pause']);
-    await settle();
-    expect(probe.resumes).toEqual(['resume']);
+    await act(async () => {
+      probe?.rail().handlers.share?.();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    });
+    const request = sendSheetStore.getState().request;
+    expect(request?.payload).toMatchObject({ kind: 'publication', postId: 'st-a', postType: 'STORY' });
+    expect(request?.moreOptions).toEqual({ url: 'https://meeshy.me/feeds/post/st-a' });
   });
 });
 
@@ -283,5 +281,55 @@ describe('useStoryOwnerRail — « Enregistrer » : un job, un anneau, une issue
        jet rendait « Enregistrer », un bouton que le store refusait. */
     probe.render(storyOf('st-a'));
     expect(probe.rail().saving).not.toBeNull();
+  });
+});
+
+/** La galerie de la coque Android (`@capacitor-community/media`), dont chaque écriture est COMPTÉE. */
+function galleryOf(outcome: GallerySaveOutcome): GallerySaver & { readonly saved: GallerySaveInput[] } {
+  const saved: GallerySaveInput[] = [];
+  return {
+    saved,
+    available: true,
+    save: async (input) => {
+      saved.push(input);
+      return outcome;
+    },
+  };
+}
+
+describe('useStoryOwnerRail — « Enregistrer » dans la coque Android range la story dans la GALERIE (#9246)', () => {
+  test('la story part dans l’album « Meeshy », sans feuille de partage, et l’issue est dite', async () => {
+    serveImage();
+    const gallery = galleryOf('saved');
+    probe = mountProbe(undefined, gallery);
+    probe.render(storyOf('st-a'));
+    act(() => probe?.rail().handlers.save?.());
+    await settle();
+    expect(gallery.saved.map(({ fileName, mimeType }) => ({ fileName, mimeType }))).toEqual([
+      { fileName: 'meeshy-m-st-a.jpg', mimeType: 'image/jpeg' },
+    ]);
+    expect(probe.delivered).toEqual([]);
+    expect(probe.announced).toEqual(['Story enregistrée']);
+    expect(probe.rail().saving).toBeNull();
+  });
+
+  test('une écriture refusée par la galerie annonce l’échec, sans rouvrir une feuille de partage', async () => {
+    serveImage();
+    probe = mountProbe(undefined, galleryOf('failed'));
+    probe.render(storyOf('st-a'));
+    act(() => probe?.rail().handlers.save?.());
+    await settle();
+    expect(probe.delivered).toEqual([]);
+    expect(probe.announced).toEqual(['Échec de l’enregistrement']);
+  });
+
+  test('une galerie qui ne sait pas écrire ce fichier rend la main à la livraison de fichier', async () => {
+    serveImage();
+    probe = mountProbe(undefined, galleryOf('unavailable'));
+    probe.render(storyOf('st-a'));
+    act(() => probe?.rail().handlers.save?.());
+    await settle();
+    expect(probe.delivered).toEqual(['meeshy-m-st-a.jpg']);
+    expect(probe.announced).toEqual(['Story enregistrée']);
   });
 });

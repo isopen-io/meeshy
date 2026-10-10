@@ -81,6 +81,30 @@ private nonisolated struct SendableWriterInput: @unchecked Sendable {
 
 // MARK: - MediaCompressor
 
+/// **Une vidéo ré-encodée garde l'étiquette couleur de sa source** (#9332).
+///
+/// Le ré-encodage ne change pas l'espace des pixels — il les recompresse.
+/// Sans étiquette, l'encodeur laisse le lecteur supposer du BT.709 : une prise
+/// Display P3 ressort délavée. L'étiquette se lit donc sur la description de
+/// format de la piste source et se reporte telle quelle ; une source muette
+/// reste muette, rien n'est inventé.
+nonisolated enum VideoColorTagging {
+    static func properties(of description: CMFormatDescription) -> [String: String]? {
+        let tags = [
+            (AVVideoColorPrimariesKey, kCMFormatDescriptionExtension_ColorPrimaries),
+            (AVVideoTransferFunctionKey, kCMFormatDescriptionExtension_TransferFunction),
+            (AVVideoYCbCrMatrixKey, kCMFormatDescriptionExtension_YCbCrMatrix),
+        ].compactMap { paire -> (String, String)? in
+            guard let valeur = CMFormatDescriptionGetExtension(description, extensionKey: paire.1) as? String else {
+                return nil
+            }
+            return (paire.0, valeur)
+        }
+        guard tags.count == 3 else { return nil }
+        return Dictionary(uniqueKeysWithValues: tags)
+    }
+}
+
 actor MediaCompressor {
     static let shared = MediaCompressor()
 
@@ -98,7 +122,13 @@ actor MediaCompressor {
             // pixel buffer to JPEG TWICE (~150ms wasted on a 4K image). Now we
             // bypass the round-trip by feeding the CGImage straight to
             // ImageIO via `downsample(cgImage:)`.
-            if let cg = image.cgImage,
+            //
+            // Ce raccourci dessine le CGImage BRUT : il ne vaut que pour une
+            // image `.up`. Une photo d'appareil tenue en portrait (`.right`)
+            // y partait couchée (#9403) ; le chemin par données, lui, écrit
+            // l'orientation EXIF puis la cuit (`WithTransform`).
+            if image.imageOrientation == .up,
+               let cg = image.cgImage,
                let downsampled = downsample(cgImage: cg, maxDimension: maxDimension) {
                 let jpeg = downsampled.jpegData(compressionQuality: quality) ?? Data()
                 return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
@@ -226,8 +256,9 @@ actor MediaCompressor {
 
         let useHEVC = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
         let codecType: AVVideoCodecType = useHEVC ? .hevc : .h264
+        let colorTags = try await videoTrack.load(.formatDescriptions).first.flatMap(VideoColorTagging.properties(of:))
 
-        let videoSettings: [String: Any] = [
+        let encodage: [String: Any] = [
             AVVideoCodecKey: codecType,
             AVVideoWidthKey: Int(targetRawSize.width),
             AVVideoHeightKey: Int(targetRawSize.height),
@@ -240,8 +271,11 @@ actor MediaCompressor {
                 AVVideoMaxKeyFrameIntervalKey: Int(targetFPS) * 2,
             ] as [String: Any]
         ]
+        let etiquette: [String: Any] = colorTags.map { [AVVideoColorPropertiesKey: $0] } ?? [:]
+        let videoSettings = encodage.merging(etiquette) { garde, _ in garde }
 
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+        writer.shouldOptimizeForNetworkUse = true
 
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         videoInput.expectsMediaDataInRealTime = false
@@ -348,8 +382,16 @@ actor MediaCompressor {
     /// Single-pass CGImage downsample using ImageIO. Skips the JPEG@1.0 round-trip
     /// that the data-based variant requires when the caller already holds a CGImage
     /// (via `UIImage.cgImage`). Cuts ~150ms on a 4K source.
+    ///
+    /// **Échelle 1, et ce n'est pas un détail** (#6922) : le format par défaut
+    /// prend l'échelle de l'ÉCRAN, si bien qu'une cible de 2 048 sortait à
+    /// 6 144 px sur un écran ×3 — un bitmap transitoire de 113 Mo par photo et
+    /// un JPEG plus lourd que l'original. `targetSize` est en pixels.
     private func downsample(cgImage: CGImage, maxDimension: CGFloat) -> UIImage? {
-        let renderer = UIGraphicsImageRenderer(size: targetSize(for: cgImage, maxDimension: maxDimension))
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: targetSize(for: cgImage, maxDimension: maxDimension),
+                                               format: format)
         let downsampled = renderer.image { ctx in
             ctx.cgContext.interpolationQuality = .high
             UIImage(cgImage: cgImage).draw(in: CGRect(origin: .zero, size: renderer.format.bounds.size))

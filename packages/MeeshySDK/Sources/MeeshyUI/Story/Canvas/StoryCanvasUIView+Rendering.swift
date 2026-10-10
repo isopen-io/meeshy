@@ -124,6 +124,9 @@ extension StoryCanvasUIView {
             // in-place image edit re-filters via `contentVersion` (2026-06-03 pivot).
             filter: slide.effects.filter.flatMap { StoryFilter(rawValue: $0) },
             filterIntensity: Float(slide.effects.filterIntensity ?? 1.0),
+            // Les réglages du média de fond (#9496), projetés sur son genre —
+            // la même fonction que la vignette composite et l'export.
+            adjustments: StoryBackgroundLook.adjustments(for: slide.effects),
             contentVersion: composerImageRevision
         )
 

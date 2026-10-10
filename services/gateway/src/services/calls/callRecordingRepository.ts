@@ -69,9 +69,21 @@ export function prismaCallRecordingRepository(prisma: RecordingPrisma): CallReco
       });
       return found ? toRow(found) : null;
     },
+    // `NOT has` garde l'écriture atomique et sans doublon ; il n'apparie
+    // jamais une demande SANS la liste (#8309), que `has` positif départage.
     async addConsent(id, userId) {
-      await prisma.callRecording.updateMany({
+      const recorded = await prisma.callRecording.updateMany({
         where: { AND: [{ id }, PENDING_RECORDING, { NOT: { consentedUserIds: { has: userId } } }] },
+        data: { consentedUserIds: { push: userId } },
+      });
+      if (recorded.count > 0) return;
+      const already = await prisma.callRecording.findFirst({
+        where: { id, consentedUserIds: { has: userId } },
+        select: { id: true },
+      });
+      if (already) return;
+      await prisma.callRecording.updateMany({
+        where: { AND: [{ id }, PENDING_RECORDING] },
         data: { consentedUserIds: { push: userId } },
       });
     },

@@ -26,6 +26,7 @@ const cached: AppPreferences = {
   acceptCallsFromNonContacts: false,
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
+  gameEnabled: true,
 };
 
 const deferred = () => {

@@ -22,8 +22,9 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
 }));
 
+const mockGetRequestContext = jest.fn(async () => ({ geoData: { country: 'FR' } }));
 jest.mock('../../../services/GeoIPService', () => ({
-  getRequestContext: async () => ({ geoData: { country: 'FR' } }),
+  getRequestContext: () => mockGetRequestContext(),
 }));
 
 import { directoryAvailabilityRoutes, candidatsDePseudo } from '../../../routes/directory/availability';
@@ -191,6 +192,31 @@ describe('Le contrat', () => {
     expect(data.email.status).toBe('valid');
     expect(data.phoneNumber.status).toBe('valid');
 
+    await app.close();
+  });
+});
+
+describe('Le pays fourni dispense de la géolocalisation (audit #9608)', () => {
+  it('avec `country`, aucune géolocalisation n’est attendue — le numéro se lit dans le pays donné', async () => {
+    mockGetRequestContext.mockClear();
+    const { prisma } = buildApp();
+    const app = await monter(prisma);
+
+    const res = await appeler(app, 'phoneNumber=0612345678&country=FR');
+
+    expect(res.json().data.phoneNumber.e164).toBe('+33612345678');
+    expect(mockGetRequestContext).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('sans `country`, la géolocalisation fournit le pays par défaut', async () => {
+    mockGetRequestContext.mockClear();
+    const { prisma } = buildApp();
+    const app = await monter(prisma);
+
+    await appeler(app, 'phoneNumber=0612345678');
+
+    expect(mockGetRequestContext).toHaveBeenCalledTimes(1);
     await app.close();
   });
 });

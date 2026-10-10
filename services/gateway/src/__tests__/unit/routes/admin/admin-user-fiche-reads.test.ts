@@ -118,11 +118,17 @@ describe('GET /admin/users — coercition des filtres de la querystring', () => 
   it('ne passe à Prisma qu\'un rôle de la liste blanche', async () => {
     const accepted = createMockPrisma({});
     await get(accepted, 'ADMIN', '/admin/users?role=MODERATOR');
-    expect(firstCall(accepted.user.findMany as jest.Mock).where).toEqual(expect.objectContaining({ role: 'MODERATOR' }));
+    expect(firstCall(accepted.user.findMany as jest.Mock).where).toEqual(expect.objectContaining({ role: { in: ['MODERATOR'] } }));
 
     const rejected = createMockPrisma({});
     await get(rejected, 'ADMIN', '/admin/users?role=superuser');
     expect(firstCall(rejected.user.findMany as jest.Mock).where).not.toHaveProperty('role');
+  });
+
+  it('lit le rang d\'administration comme UNE liste : role=BIGBOSS,ADMIN sélectionne les deux rôles, un rôle inconnu de la liste est retiré', async () => {
+    const prisma = createMockPrisma({});
+    await get(prisma, 'ADMIN', '/admin/users?role=BIGBOSS,ADMIN,superuser');
+    expect(firstCall(prisma.user.findMany as jest.Mock).where).toEqual(expect.objectContaining({ role: { in: ['BIGBOSS', 'ADMIN'] } }));
   });
 
   it('ignore une date illisible au lieu de faire tomber la requête en 500', async () => {

@@ -15,6 +15,9 @@ import {
 import { buildCallInitiatedEvent, pushIncomingCall, ringCalleeSockets } from './call-ring';
 import { ACCEPTED, gatedCallControl, refused } from './call-control-gate';
 import { logger } from '../utils/logger';
+import { EngagementService } from '../services/engagement/EngagementService';
+import { creditCallInvitation } from '../services/calls/callEngagementCredits';
+import type { CallInvitationLifecycle, PendingCallInvitation } from './call-invite-lifecycle';
 
 /**
  * `call:invite-participant` (#8433) — un participant connecté fait sonner un
@@ -47,8 +50,13 @@ export type CallInviteEventDeps = {
     readonly inviterUserId: string;
     readonly inviteeUserId: string;
   }) => Promise<CallInvitationGrant | CallInvitationRefusal>;
-  readonly record: (session: CallInvitationGrant['session'], inviteeUserId: string) => Promise<void>;
+  /** `true` quand l'invitation est nouvelle (`recordCallInvitation`). */
+  readonly record: (session: CallInvitationGrant['session'], inviteeUserId: string) => Promise<boolean>;
+  /** #8959 `conversation.call_participant_added` — l'inviteur, sur une invitation nouvelle. */
+  readonly credit: (invitation: { readonly inviterUserId: string; readonly callId: string; readonly conversationId: string }) => void;
   readonly ring: (ring: CallInviteRing) => Promise<void>;
+  /** #8470 · #8467 — l'échéance de l'invitation : sans réponse, elle se solde (`call-invite-lifecycle.ts`). */
+  readonly armExpiry: (invitation: PendingCallInvitation) => void;
 };
 
 export function callInviteDependencies(input: {
@@ -57,13 +65,22 @@ export function callInviteDependencies(input: {
   readonly callService: Pick<CallService, 'getCallSession' | 'generateIceServers'>;
   readonly rateLimiter: Pick<SocketRateLimiter, 'checkLimit'>;
   readonly pushService: () => PushNotificationService | null;
+  readonly invitations: CallInvitationLifecycle;
 }): CallInviteEventDeps {
   const { io, prisma, callService } = input;
+  let engagement: EngagementService | null = null;
   return {
     io,
     rateLimiter: input.rateLimiter,
     authorize: (request) => authorizeCallInvitation({ prisma, callService }, request),
     record: (session, inviteeUserId) => recordCallInvitation(prisma, session, inviteeUserId),
+    credit: (invitation) =>
+      creditCallInvitation({
+        engagement: (engagement ??= new EngagementService(prisma)),
+        ...invitation,
+        onError: (error) => logger.warn('call-invite: engagement credit failed', { callId: invitation.callId, error }),
+      }),
+    armExpiry: (invitation) => input.invitations.arm(io, invitation),
     ring: async (ring) => {
       const { foregroundUserIds } = await ringCalleeSockets(
         { io, prisma, callService },
@@ -106,7 +123,9 @@ export function registerCallInviteEvents(
         const grant = await deps.authorize({ callId, inviterUserId, inviteeUserId });
         if ('code' in grant) return refused(grant.code);
 
-        await deps.record(grant.session, inviteeUserId);
+        if (await deps.record(grant.session, inviteeUserId)) {
+          deps.credit({ inviterUserId, callId, conversationId: grant.session.conversationId });
+        }
         deps.io.to(ROOMS.call(callId)).emit(SERVER_EVENTS.CALL_PARTICIPANT_INVITED, {
           callId,
           invitedBy: grant.inviter.userId,
@@ -136,6 +155,13 @@ export function registerCallInviteEvents(
             event,
           })
           .catch((error: unknown) => logger.error('call-invite: ring failed', { callId, inviteeUserId, error }));
+        deps.armExpiry({
+          callId,
+          conversationId: grant.session.conversationId,
+          inviterUserId,
+          inviteeUserId,
+          callType: event.type === 'video' ? 'video' : 'audio',
+        });
         return ACCEPTED;
       },
     })

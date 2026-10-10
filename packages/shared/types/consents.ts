@@ -53,6 +53,21 @@ export const CONSENT_PURPOSES = [
 export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
 
 /**
+ * Les consentements du JEU (#9384, conformité A-1/A-14). Ils ne rejoignent PAS
+ * `CONSENT_PURPOSES` : un ancien client décode la liste `consents` avec une
+ * énumération FERMÉE (iOS `ConsentPurpose`), et un `purpose` inconnu y ferait
+ * échouer la liste ENTIÈRE. Ils sont servis à CÔTÉ (`GET /me/consents` →
+ * `gameConsents`) et s'écrivent par la même porte (`PUT /me/consents/{purpose}`).
+ */
+export const GAME_CONSENT_PURPOSES = ['public-league'] as const;
+
+export type GameConsentPurpose = (typeof GAME_CONSENT_PURPOSES)[number];
+
+export function isGameConsentPurpose(value: string): value is GameConsentPurpose {
+  return (GAME_CONSENT_PURPOSES as readonly string[]).includes(value);
+}
+
+/**
  * Le PARENT DIRECT de chaque `purpose`, `null` pour la racine — la source
  * unique de la hiérarchie depuis #4709. `analytics` et `voice-data` sont
  * tous deux enfants de `data-processing` et ne dépendent pas l'un de

@@ -233,7 +233,9 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
     /// mode d'échec silencieux que son doc-comment décrit.
     func test_convertedDurationHostsNameTheSingleSource() {
         let hosts = [
-            "Features/Main/Components/CameraView.swift",
+            // #9125 — la minuterie de la caméra a SUIVI la capture : l'ancienne
+            // vue a quitté le dépôt, le viseur du composeur la porte.
+            "Features/Main/Composer/ComposerSceneCameraBar.swift",
             "Features/Main/Components/MediaKindLabel.swift",
             // #7005 — la minuterie de l'aperçu d'appui long a DÉMÉNAGÉ, elle
             // n'a pas disparu : `OverlayAudioPlayer` a quitté
@@ -244,7 +246,9 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             "Features/Main/Components/UniversalComposerBar+Recording.swift",
             "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
             "Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",
-            "Features/Main/Services/CallManager.swift",
+            // La durée d'appel a quitté `CallManager.swift` avec son découpage
+            // (2026-10-02) : la liste suit l'hôte.
+            "Features/Main/Services/CallManager+Duration.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
             "Features/Main/Views/MagicLinkView.swift",
             // #7548 — la minuterie de la ligne de liste a DÉMÉNAGÉ : la ligne
@@ -277,7 +281,7 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             "Features/Main/Views/FloatingCallPillView.swift",
             "Features/Main/Views/MagicLinkView.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
-            "Features/Main/Components/CameraView.swift",
+            "Features/Main/Composer/ComposerSceneCameraBar.swift",
             "Features/Main/Components/UniversalComposerBar+Recording.swift",
         ]
         for host in hosts {

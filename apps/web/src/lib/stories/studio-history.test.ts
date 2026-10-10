@@ -7,6 +7,7 @@ import {
   recordStudioStep,
   redoStudioStep,
   undoStudioStep,
+  withoutBirthStep,
 } from './studio-history';
 import { currentStudioPage, emptyStudioDraft, withAddedText, withAudience, withPostText, withText, withVisual, withVisualUpload, type StudioDraft } from './studio';
 import { IDENTITY_POSE } from './studio-pose';
@@ -83,5 +84,33 @@ describe('rebaseStudioLive — ce qui s’est passé DEPUIS reste vrai', () => {
     const rebased = rebaseStudioLive(restored, current);
     expect(rebased.visibility).toBe('PUBLIC');
     expect(rebased.postText).toBe('Corps');
+  });
+});
+
+/** UN TEXTE LAISSÉ VIDE NE LAISSE PAS DE PAS FANTÔME (#9140, jumelle de
+ * `ComposerTextSceneDoor.returnsToDocument` iOS, #9137) — « T+ » puis fermer
+ * sans écrire rend l'historique d'avant : « Annuler » ne rejoue pas un geste
+ * qui n'a rien laissé. */
+describe('withoutBirthStep — le pas qui a fait naître un texte retiré vide', () => {
+  const born = (draft: StudioDraft) => currentStudioPage(draft).texts.at(-1)!.id;
+
+  test('le dernier pas de la clé du texte, pris AVANT sa naissance, est oublié', () => {
+    const before = empty();
+    const id = born(withAddedText(before, 'fr'));
+    const history = recordStudioStep(emptyStudioHistory, before, `text:${id}`);
+    expect(withoutBirthStep(history, id)).toEqual(emptyStudioHistory);
+  });
+
+  test('un texte qui existait déjà garde son pas : « Annuler » rend ce qu’il disait', () => {
+    const before = withText(empty(), seedId(empty()), 'abc');
+    const history = recordStudioStep(emptyStudioHistory, before, `text:${seedId(before)}`);
+    expect(withoutBirthStep(history, seedId(before))).toBe(history);
+  });
+
+  test('un autre geste depuis : rien n’est oublié', () => {
+    const before = empty();
+    const id = born(withAddedText(before, 'fr'));
+    const history = recordStudioStep(emptyStudioHistory, before, null);
+    expect(withoutBirthStep(history, id)).toBe(history);
   });
 });

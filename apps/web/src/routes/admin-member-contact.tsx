@@ -1,15 +1,17 @@
 import { useState, type ReactNode } from 'react';
 
+import { AdminVerifiedBadge } from '@/components/admin/badges';
+import { AdminButton } from '@/components/admin/button';
+import { AdminFormStatus, AdminTextInput } from '@/components/admin/form';
 import { contactDraftOf, contactEditOf, sectionIsDirty, type ContactDraft } from '@/lib/admin/member-sections';
 import type { AdminDeps } from '@/lib/api/admin';
 import { updateAdminUser } from '@/lib/api/admin-user-actions';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
-import { requestAdminUserVerification, setAdminUserVerification, type AdminContactChannel } from '@/lib/api/admin-user-verifications';
+import { requestAdminUserVerification, type AdminContactChannel } from '@/lib/api/admin-user-verifications';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
-import { BadgeVerifie, INK2, MemberSection, SectionButton, Texte, useFieldFocus, useMemberWrite } from './admin-member-parts';
+import { MemberSection, useMemberWrite } from './admin-member-parts';
 
 /**
  * **LE CONTACT D'UN MEMBRE** (#8289) — e-mail et téléphone, chacun avec son
@@ -17,10 +19,13 @@ import { BadgeVerifie, INK2, MemberSection, SectionButton, Texte, useFieldFocus,
  *
  * Deux sortes de gestes vivent ici, et ne se confondent pas :
  * - la VALEUR (changer l'adresse, le numéro) s'enregistre avec la section ;
- * - la PREUVE (renvoyer la vérification, marquer vérifié ou non) est un geste
- *   IMMÉDIAT sur la valeur servie — renvoyer une vérification vers une adresse
- *   encore en brouillon l'enverrait à l'ancienne. Tant que la section a des
- *   modifications non enregistrées, ces gestes attendent.
+ * - le RENVOI de la vérification est un geste IMMÉDIAT sur la valeur servie —
+ *   renvoyer une vérification vers une adresse encore en brouillon l'enverrait à
+ *   l'ancienne. Tant que la section a des modifications non enregistrées, il attend.
+ *
+ * POSER ou RETIRER la preuve n'est plus ici (#8004) : c'est un geste sensible, qui
+ * vit dans la section Sécurité, derrière sa confirmation et son motif. Deux portes
+ * pour un même geste, l'une confirmée et l'autre pas, n'auraient pas la même loi.
  */
 export function AdminMemberContactSection({
   membre,
@@ -29,7 +34,7 @@ export function AdminMemberContactSection({
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
 }) {
@@ -38,7 +43,6 @@ export function AdminMemberContactSection({
      jamais ici une valeur périmée qui ferait croire à une modification. */
   const [touches, setTouches] = useState<Partial<ContactDraft>>({});
   const draft: ContactDraft = { ...contactDraftOf(membre), ...touches };
-  const focus = useFieldFocus();
   const ecriture = useMemberWrite({ userId: membre.id, language, onAnnounce });
   const edit = contactEditOf(membre, draft);
   const dirty = sectionIsDirty(edit);
@@ -70,14 +74,13 @@ export function AdminMemberContactSection({
         deps={deps}
         gesturesWaiting={dirty}
         champ={
-          <Texte
+          <AdminTextInput
             id="admin-member-email"
             type="email"
             label={translateAdmin(language, 'admin.edit.email')}
-            valeur={draft.email}
+            value={draft.email}
             error={ecriture.failure?.code === 'EMAIL_TAKEN' ? translateAdmin(language, 'admin.create.emailTaken') : undefined}
-            {...focus('email')}
-            onValeur={(email) => poser({ email })}
+            onValue={(email) => poser({ email })}
           />
         }
       />
@@ -89,19 +92,21 @@ export function AdminMemberContactSection({
         deps={deps}
         gesturesWaiting={dirty}
         champ={
-          <Texte
+          <AdminTextInput
             id="admin-member-phone"
             type="tel"
             label={translateAdmin(language, 'admin.contact.phone')}
-            valeur={draft.phoneNumber}
-            {...focus('phone')}
-            onValeur={(phoneNumber) => poser({ phoneNumber })}
+            value={draft.phoneNumber}
+            onValue={(phoneNumber) => poser({ phoneNumber })}
           />
         }
       />
     </MemberSection>
   );
 }
+
+/** Le renvoi d'une vérification parle la langue d'état du kit : envoyer, c'est enregistrer. */
+const PHASE_DU_RENVOI = { idle: 'idle', sending: 'saving', sent: 'saved', failed: 'error' } as const;
 
 /** Le membre tel qu'il sera une fois la preuve posée (ou retirée) — l'aperçu optimiste du badge. */
 export function withContactProof(m: AdminUserDetail, channel: AdminContactChannel, verified: boolean): AdminUserDetail {
@@ -120,18 +125,17 @@ function ContactRow({
 }: {
   readonly channel: AdminContactChannel;
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps: AdminDeps;
   readonly gesturesWaiting: boolean;
   readonly champ: ReactNode;
 }) {
-  const preuve = useMemberWrite({ userId: membre.id, language, onAnnounce });
   const [renvoi, setRenvoi] = useState<{ readonly phase: 'idle' | 'sending' | 'sent' | 'failed' }>({ phase: 'idle' });
 
   const valeur = channel === 'email' ? membre.email : membre.phoneNumber;
   const verifie = (channel === 'email' ? membre.emailVerifiedAt : membre.phoneVerifiedAt) !== null;
-  const occupe = gesturesWaiting || preuve.state.phase === 'saving' || renvoi.phase === 'sending';
+  const occupe = gesturesWaiting || renvoi.phase === 'sending';
 
   async function renvoyer() {
     setRenvoi({ phase: 'sending' });
@@ -146,43 +150,22 @@ function ContactRow({
       ? translateAdmin(language, 'admin.contact.resent')
       : renvoi.phase === 'failed'
         ? translateAdmin(language, 'admin.contact.resendFailed')
-        : preuve.state.phase === 'saved' || preuve.state.phase === 'error'
-          ? preuve.state.message
-          : '';
+        : '';
 
   return (
     <div className="grid gap-2" data-admin-contact={channel}>
       {champ}
       {valeur === '' ? null : (
         <div className="flex flex-wrap items-center gap-2">
-          <BadgeVerifie verifie={verifie} language={language} />
+          <AdminVerifiedBadge verified={verifie} language={language} />
           {verifie ? null : (
-            <SectionButton data={{ 'data-admin-contact-resend': channel }} disabled={occupe} onClick={() => void renvoyer()}>
+            <AdminButton data={{ 'data-admin-contact-resend': channel }} disabled={occupe} onClick={() => void renvoyer()}>
               {translateAdmin(language, 'admin.contact.resend')}
-            </SectionButton>
+            </AdminButton>
           )}
-          <SectionButton
-            data={{ 'data-admin-contact-verify': channel }}
-            disabled={occupe}
-            onClick={() =>
-              void preuve.run(
-                () => setAdminUserVerification({ ...deps, userId: membre.id, channel, verified: !verifie }),
-                'admin.edit.saved',
-                (avant) => withContactProof(avant, channel, !verifie),
-              )
-            }
-          >
-            {translateAdmin(language, verifie ? 'admin.contact.markUnverified' : 'admin.contact.markVerified')}
-          </SectionButton>
-          <p
-            role="status"
-            aria-live="polite"
-            className="min-w-0 basis-full text-caption"
-            data-admin-contact-state={channel}
-            style={{ color: renvoi.phase === 'failed' || preuve.state.phase === 'error' ? 'var(--color-danger)' : INK2 }}
-          >
-            {statut}
-          </p>
+          <div className="flex min-w-0 basis-full">
+            <AdminFormStatus phase={PHASE_DU_RENVOI[renvoi.phase]} text={statut} data={{ 'data-admin-contact-state': channel }} />
+          </div>
         </div>
       )}
     </div>

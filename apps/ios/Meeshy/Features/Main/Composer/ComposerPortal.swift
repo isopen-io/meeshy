@@ -96,4 +96,16 @@ nonisolated enum ComposerPortal: String, Identifiable, CaseIterable, Equatable {
     case audience
 
     public var id: String { rawValue }
+
+    /// **Comment le portail se présente** (#9125). La caméra s'ouvre SEULE en
+    /// plein écran — un viseur dans une feuille laisserait voir le composer
+    /// derrière l'image qu'on cadre ; tout le reste est une feuille.
+    nonisolated enum Presentation: Equatable, Sendable {
+        case sheet
+        case fullScreen
+    }
+
+    var presentation: Presentation {
+        self == .camera ? .fullScreen : .sheet
+    }
 }

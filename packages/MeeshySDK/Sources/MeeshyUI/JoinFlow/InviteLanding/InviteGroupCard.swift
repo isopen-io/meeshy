@@ -62,11 +62,11 @@ struct InviteGroupCard: View {
     // MARK: - Identity
 
     private var identity: some View {
-        HStack(alignment: .bottom, spacing: 14) {
+        HStack(alignment: .bottom, spacing: MeeshySpacing.mdPlus) {
             logo
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(title)
-                    .font(MeeshyFont.relative(24, weight: .heavy, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .heavy, design: .rounded))
                     .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -83,7 +83,7 @@ struct InviteGroupCard: View {
     }
 
     private var logo: some View {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
             .fill(LinearGradient(colors: [MeeshyColors.indigo900, MeeshyColors.indigo500], startPoint: .topLeading, endPoint: .bottomTrailing))
             .overlay(
                 CachedAsyncImage(url: conversation.avatar, targetSize: CGSize(width: Self.logoSide, height: Self.logoSide), showsStatusOverlays: false) {
@@ -93,9 +93,9 @@ struct InviteGroupCard: View {
                 }
                 .scaledToFill()
             )
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
                     .stroke(isDark ? MeeshyColors.indigo950 : Color.white, lineWidth: 4)
             )
             .frame(width: Self.logoSide, height: Self.logoSide)
@@ -132,7 +132,7 @@ struct InviteGroupCard: View {
                 .environment(\.layoutDirection, .leftToRight)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.md)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
@@ -144,7 +144,7 @@ struct InviteGroupCard: View {
     }
 
     private var actions: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Button(action: copy) {
                 actionLabel(copied ? InviteLandingCopy.copied : InviteLandingCopy.copy,
                             icon: copied ? "checkmark" : "doc.on.doc")
@@ -179,7 +179,7 @@ struct InviteGroupCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
-                .stroke(isDark ? MeeshyColors.indigo700 : MeeshyColors.indigo200, lineWidth: 1.5)
+                .stroke(isDark ? MeeshyColors.indigo700 : MeeshyColors.indigo200, lineWidth: MeeshyBorder.emphasis)
         )
         .contentShape(Rectangle())
     }
@@ -190,7 +190,7 @@ struct InviteGroupCard: View {
         UIAccessibility.post(notification: .announcement, argument: InviteLandingCopy.linkCopiedAnnouncement)
         withAnimation(.easeOut(duration: 0.2)) { copied = true }
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(for: .seconds(2))
             withAnimation(.easeOut(duration: 0.2)) { copied = false }
         }
     }

@@ -261,7 +261,7 @@ final class CommentQuotedMediaTests: XCTestCase {
     func test_fileDurable_rejoueLaCitationSousLaFormeQueLeServeurLIT() throws {
         let charge = CreateCommentPayload(
             clientMutationId: "cmid-1", postId: "post-1", parentCommentId: nil,
-            content: "celle-là est floue", originalLanguage: "fr",
+            content: "celle-là est floue", originalLanguage: "fr", authorId: "user-1",
             quotedPostMediaId: Self.deuxieme
         )
         let json = try JSONSerialization.jsonObject(
@@ -275,7 +275,7 @@ final class CommentQuotedMediaTests: XCTestCase {
     func test_fileDurable_uneLigneGraveeAVANTLeChampRejoueSansLaCle() throws {
         let charge = CreateCommentPayload(
             clientMutationId: "cmid-2", postId: "post-1", parentCommentId: nil,
-            content: "bravo", originalLanguage: nil
+            content: "bravo", originalLanguage: nil, authorId: "user-1"
         )
         let json = try JSONSerialization.jsonObject(
             with: try CreateCommentBody.encoded(for: charge)

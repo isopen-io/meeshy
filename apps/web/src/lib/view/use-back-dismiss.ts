@@ -147,10 +147,18 @@ function adoptLeftEntry(): string | null {
 export type BackDismissOptions = {
   /** Échap ferme aussi la couche — seulement quand elle est au sommet. */
   readonly escape?: boolean;
+  /**
+   * `false` : la couche ne pose AUCUNE entrée d'historique — son ouverture vit
+   * déjà dans l'adresse (`?open=`, `useAdminOpen`), qui a poussé la sienne : le
+   * retour change l'adresse et c'est l'adresse qui démonte la couche. Deux
+   * entrées pour une modale coûteraient deux retours. Lu au montage.
+   */
+  readonly history?: boolean;
 };
 
 export function useBackDismiss(onClose: () => void, options: BackDismissOptions = {}): void {
   const escape = options.escape === true;
+  const withHistory = options.history !== false;
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -158,6 +166,7 @@ export function useBackDismiss(onClose: () => void, options: BackDismissOptions 
 
   useLayoutEffect(() => {
     const releaseModalLayer = openModalLayer();
+    if (!withHistory) return releaseModalLayer;
     const adopted = adoptLeftEntry();
     let marker = adopted;
     if (marker === null) {

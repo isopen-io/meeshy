@@ -72,18 +72,18 @@ public struct CategoryPickerField: View {
     }
 
     private func selectedChip(_ category: ConversationCategory) -> some View {
-        let chipColor = Color(hex: category.color ?? "6366F1")
+        let chipColor = Color(hex: category.color ?? MeeshyColors.brandPrimaryHex)
         return HStack(spacing: MeeshySpacing.xs) {
             Circle().fill(chipColor).frame(width: 8, height: 8)
             Text(category.name)
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(chipColor)
             Button {
                 selectedId = nil
             } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(9, weight: .bold))
-                    .foregroundColor(chipColor.opacity(0.7))
+                    .foregroundColor(chipColor.opacity(MeeshyOpacity.heavy))
                     .meeshyTapTarget()
             }
             .buttonStyle(.plain)
@@ -101,7 +101,7 @@ public struct CategoryPickerField: View {
             TextField(placeholder, text: $editing)
                 .focused($focused)
                 .textFieldStyle(.plain)
-                .font(MeeshyFont.relative(15, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.words)
                 .onSubmit { submit() }
@@ -121,11 +121,11 @@ public struct CategoryPickerField: View {
         .padding(MeeshySpacing.md)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
         )
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .strokeBorder(focused ? accentColor.opacity(0.6) : Color.gray.opacity(0.15), lineWidth: 1)
+                .strokeBorder(focused ? accentColor.opacity(0.6) : MeeshyColors.hairline(isDark: isDark), lineWidth: 1)
         )
     }
 
@@ -145,8 +145,8 @@ public struct CategoryPickerField: View {
                     focused = false
                 } label: {
                     HStack(spacing: MeeshySpacing.sm) {
-                        Circle().fill(Color(hex: cat.color ?? "6366F1")).frame(width: 8, height: 8)
-                        Text(cat.name).font(MeeshyFont.relative(14, weight: .medium))
+                        Circle().fill(Color(hex: cat.color ?? MeeshyColors.brandPrimaryHex)).frame(width: 8, height: 8)
+                        Text(cat.name).font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         Spacer()
                     }
                     .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.sm)
@@ -156,7 +156,7 @@ public struct CategoryPickerField: View {
             }
 
             if canCreate {
-                if !displayedCategories.isEmpty { Divider().opacity(0.3) }
+                if !displayedCategories.isEmpty { Divider().opacity(MeeshyOpacity.medium) }
                 Button {
                     Task { await create() }
                 } label: {
@@ -167,7 +167,7 @@ public struct CategoryPickerField: View {
                             Image(systemName: "plus.circle.fill").foregroundColor(accentColor)
                         }
                         Text(String(localized: "common.create_quoted", defaultValue: "Créer « \(trimmedQuery) »", bundle: .module))
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             .foregroundColor(accentColor)
                         Spacer()
                     }
@@ -178,8 +178,8 @@ public struct CategoryPickerField: View {
                 .accessibilityLabel(Text(String(localized: "category.create", defaultValue: "Créer la catégorie \(trimmedQuery)", bundle: .module)))
             }
         }
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(isDark ? Color.white.opacity(0.06) : Color.white))
-        .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.sm).strokeBorder(Color.gray.opacity(0.12), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.white))
+        .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.sm).strokeBorder(MeeshyColors.hairline(isDark: isDark), lineWidth: 1))
     }
 
     private func submit() {

@@ -21,6 +21,7 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         private(set) var videoEnabled: [Bool] = []
         private(set) var iceServerUpdates: [[IceServer]] = []
         private(set) var closeCallCount = 0
+        private(set) var sentControls: [Data] = []
 
         init(configuration: GroupPeerLinkConfiguration) {
             self.configuration = configuration
@@ -34,6 +35,24 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         func updateIceServers(_ servers: [IceServer]) { iceServerUpdates.append(servers) }
         func audioLevel() async -> Double? { nil }
         func close() { closeCallCount += 1 }
+        func sendControl(_ data: Data) { sentControls.append(data) }
+
+        var sentAudible: [Bool] {
+            sentControls.compactMap { try? JSONDecoder().decode(CallPreviewControlMessage.self, from: $0).audible }
+        }
+    }
+
+    @MainActor
+    private final class MockConsentStore: CallPreviewConsentStoring {
+        private(set) var consents: [String: CallPreviewConsent] = [:]
+
+        func consent(localUserId: String, peerUserId: String) -> CallPreviewConsent {
+            consents["\(localUserId)|\(peerUserId)"] ?? .initial
+        }
+
+        func remember(_ consent: CallPreviewConsent, localUserId: String, peerUserId: String) {
+            consents["\(localUserId)|\(peerUserId)"] = consent
+        }
     }
 
     @MainActor
@@ -78,11 +97,11 @@ final class CallPreviewCoordinatorTests: XCTestCase {
 
     // MARK: - Fabriques
 
-    private func makeSUT() -> (sut: CallPreviewCoordinator, factory: MockPeerLinkFactory, signaling: MockPreviewSignaling, host: MockPreviewHost) {
+    private func makeSUT(consents: MockConsentStore = MockConsentStore()) -> (sut: CallPreviewCoordinator, factory: MockPeerLinkFactory, signaling: MockPreviewSignaling, host: MockPreviewHost) {
         let factory = MockPeerLinkFactory()
         let signaling = MockPreviewSignaling()
         let host = MockPreviewHost()
-        let sut = CallPreviewCoordinator(linkFactory: factory, signaling: signaling)
+        let sut = CallPreviewCoordinator(linkFactory: factory, signaling: signaling, consents: consents)
         sut.attach(host: host)
         // Le coordinateur tient son hôte en `weak`.
         addTeardownBlock { _ = host }
@@ -350,13 +369,13 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         await settle()
 
         factory.emit(.state(.connected))
-        XCTAssertTrue(sut.isSeenByCallee)
+        XCTAssertTrue(sut.reachesCallee)
         sut.sync(state(.answering, peer: "callee"))
-        XCTAssertTrue(sut.isSeenByCallee)
+        XCTAssertTrue(sut.reachesCallee)
         XCTAssertEqual(factory.links.first?.closeCallCount, 0)
         sut.sync(state(.connected, peer: "callee"))
 
-        XCTAssertFalse(sut.isSeenByCallee)
+        XCTAssertFalse(sut.reachesCallee)
         XCTAssertEqual(factory.links.first?.closeCallCount, 1)
     }
 
@@ -393,6 +412,222 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         sut.sync(state(.connected, peer: "callee", muted: true, video: false))
 
         XCTAssertEqual(host.restoreCount, 0)
+    }
+
+    // MARK: - Ce que l'appelant laisse voir et entendre (#8795)
+
+    /// L'appelant dont le lien d'aperçu atteint l'appelé.
+    private func connectedCaller(
+        consents: MockConsentStore = MockConsentStore(),
+        muted: Bool = false,
+        video: Bool = true
+    ) async -> (sut: CallPreviewCoordinator, factory: MockPeerLinkFactory, consents: MockConsentStore) {
+        let (sut, factory, _, _) = makeSUT(consents: consents)
+        sut.sync(state(.outgoingRinging, peer: "callee", muted: muted, video: video))
+        sut.handle(.requested(CallPreviewRequestedEvent(callId: "call1", userId: "callee")))
+        await settle()
+        factory.emit(.state(.connected))
+        return (sut, factory, consents)
+    }
+
+    private func audible(_ value: Bool) -> GroupPeerLinkEvent {
+        // swiftlint:disable:next force_try
+        .control(try! JSONEncoder().encode(CallPreviewControlMessage(audible: value)))
+    }
+
+    func test_outgoingRinging_newContact_offersTheCameraButNotTheMic() async {
+        let (sut, factory, _, _) = makeSUT()
+
+        sut.sync(state(.outgoingRinging, peer: "callee"))
+        sut.handle(.requested(CallPreviewRequestedEvent(callId: "call1", userId: "callee")))
+        await settle()
+
+        XCTAssertTrue(sut.offersOutgoingControls)
+        XCTAssertEqual(sut.outgoingConsent, CallPreviewConsent(sendsAudio: false, sendsVideo: true))
+        let link = factory.links.first
+        XCTAssertEqual(link?.configuration.sendsAudio, false)
+        XCTAssertEqual(link?.configuration.sendsVideo, true)
+        XCTAssertEqual(link?.configuration.opensControlChannel, true)
+    }
+
+    func test_outgoingRinging_replaysTheChoiceMadeForThisContact() async {
+        let consents = MockConsentStore()
+        consents.remember(CallPreviewConsent(sendsAudio: true, sendsVideo: false), localUserId: "me", peerUserId: "callee")
+        let (sut, factory, _, _) = makeSUT(consents: consents)
+
+        sut.sync(state(.outgoingRinging, peer: "callee"))
+        sut.handle(.requested(CallPreviewRequestedEvent(callId: "call1", userId: "callee")))
+        await settle()
+
+        XCTAssertEqual(sut.outgoingConsent, CallPreviewConsent(sendsAudio: true, sendsVideo: false))
+        XCTAssertEqual(factory.links.first?.configuration.sendsAudio, true)
+        XCTAssertEqual(factory.links.first?.configuration.sendsVideo, false)
+    }
+
+    func test_outgoingRinging_theChoiceOfOneContactNeverLeaksToAnother() {
+        let consents = MockConsentStore()
+        consents.remember(CallPreviewConsent(sendsAudio: true, sendsVideo: false), localUserId: "me", peerUserId: "friend")
+        let (sut, _, _, _) = makeSUT(consents: consents)
+
+        sut.sync(state(.outgoingRinging, peer: "callee"))
+
+        XCTAssertEqual(sut.outgoingConsent, .initial)
+    }
+
+    func test_togglePreviewAudio_opensTheMicForTheCallee_andRemembersItForThisContact() async {
+        let (sut, factory, consents) = await connectedCaller()
+
+        sut.togglePreviewAudio()
+
+        XCTAssertEqual(factory.links.first?.audioEnabled, [true])
+        XCTAssertEqual(consents.consent(localUserId: "me", peerUserId: "callee"), CallPreviewConsent(sendsAudio: true, sendsVideo: true))
+    }
+
+    func test_togglePreviewVideo_cutsTheCameraForTheCallee_andRemembersIt() async {
+        let (sut, factory, consents) = await connectedCaller()
+
+        sut.togglePreviewVideo()
+        await settle()
+
+        XCTAssertEqual(factory.links.first?.videoEnabled, [false])
+        XCTAssertEqual(consents.consent(localUserId: "me", peerUserId: "callee"), CallPreviewConsent(sendsAudio: false, sendsVideo: false))
+    }
+
+    func test_previewToggles_outsideTheOutgoingRinging_doNothing() {
+        let consents = MockConsentStore()
+        let (incoming, _, _, _) = makeSUT(consents: consents)
+        incoming.sync(state(.incomingRinging))
+        let (group, _, _, _) = makeSUT(consents: consents)
+        group.sync(state(.outgoingRinging, peer: "callee", isGroup: true))
+
+        incoming.togglePreviewAudio()
+        group.togglePreviewVideo()
+
+        XCTAssertFalse(incoming.offersOutgoingControls)
+        XCTAssertFalse(group.offersOutgoingControls)
+        XCTAssertTrue(consents.consents.isEmpty)
+    }
+
+    func test_callMicMuted_keepsThePreviewSilent_evenWhenTheContactMayHear() async {
+        let consents = MockConsentStore()
+        consents.remember(CallPreviewConsent(sendsAudio: true, sendsVideo: true), localUserId: "me", peerUserId: "callee")
+
+        let (_, factory, _) = await connectedCaller(consents: consents, muted: true)
+
+        XCTAssertEqual(factory.links.first?.configuration.sendsAudio, false)
+    }
+
+    /// La règle du libellé : jamais plus que ce que l'appelé reçoit VRAIMENT.
+    func test_calleeExposure_saysSeenFirst_andHeardOnlyOnceTheCalleeTurnedTheSoundOn() async {
+        let (sut, factory, _) = await connectedCaller()
+        XCTAssertEqual(sut.calleeExposure, .seen)
+
+        factory.emit(audible(true))
+        XCTAssertTrue(sut.isHeardByCallee)
+        XCTAssertEqual(sut.calleeExposure, .seen, "micro de l'aperçu coupé : l'appelé n'entend rien")
+
+        sut.togglePreviewAudio()
+        XCTAssertEqual(sut.calleeExposure, .seenAndHeard)
+
+        sut.togglePreviewVideo()
+        XCTAssertEqual(sut.calleeExposure, .heard)
+
+        factory.emit(audible(false))
+        XCTAssertEqual(sut.calleeExposure, .nothing)
+    }
+
+    func test_calleeExposure_audioCall_isNeverSeen() async {
+        let consents = MockConsentStore()
+        consents.remember(CallPreviewConsent(sendsAudio: true, sendsVideo: true), localUserId: "me", peerUserId: "callee")
+        let (sut, factory, _) = await connectedCaller(consents: consents, video: false)
+
+        XCTAssertEqual(sut.calleeExposure, .nothing)
+        factory.emit(audible(true))
+
+        XCTAssertEqual(sut.calleeExposure, .heard)
+    }
+
+    func test_calleeExposure_beforeTheLinkReachesTheCallee_isNothing() {
+        let (sut, _, _, _) = makeSUT()
+
+        sut.sync(state(.outgoingRinging, peer: "callee"))
+
+        XCTAssertEqual(sut.calleeExposure, .nothing)
+    }
+
+    func test_controlMessage_garbled_changesNothing() async {
+        let (sut, factory, _) = await connectedCaller()
+
+        factory.emit(.control(Data("pas du json".utf8)))
+
+        XCTAssertFalse(sut.isHeardByCallee)
+    }
+
+    func test_callConnects_theCallerForgetsHeWasHeard() async {
+        let (sut, factory, _) = await connectedCaller()
+        sut.togglePreviewAudio()
+        factory.emit(audible(true))
+
+        sut.sync(state(.connected, peer: "callee"))
+
+        XCTAssertFalse(sut.isHeardByCallee)
+        XCTAssertEqual(sut.calleeExposure, .nothing)
+    }
+
+    // MARK: - L'appelé dit à l'appelant qu'il a activé le son (#8795)
+
+    func test_calleeLink_neverOpensTheControlChannelItself() async {
+        let (_, factory, _, _) = await connectedCallee()
+
+        XCTAssertEqual(factory.links.first?.configuration.opensControlChannel, false)
+    }
+
+    func test_toggleSound_tellsTheCaller() async {
+        let (sut, factory, _, _) = await connectedCallee()
+
+        sut.toggleSound()
+        sut.toggleSound()
+
+        XCTAssertEqual(factory.links.first?.sentAudible, [true, false])
+    }
+
+    func test_controlChannelOpens_theCalleeRepeatsTheChoiceHeMadeWhileItRang() async {
+        let (sut, factory, _, _) = makeSUT()
+        sut.sync(state(.incomingRinging))
+        sut.toggleSound()
+        sut.handle(previewSignal("offer", from: "caller"))
+        await settle()
+
+        factory.emit(.controlOpened)
+
+        XCTAssertEqual(factory.links.first?.sentAudible, [true])
+    }
+
+    // MARK: - La mémoire par contact (#8795)
+
+    private func isolatedDefaults() -> UserDefaults {
+        let name = "CallPreviewConsentStoreTests-\(UUID().uuidString)"
+        addTeardownBlock { UserDefaults().removePersistentDomain(forName: name) }
+        return UserDefaults(suiteName: name) ?? .standard
+    }
+
+    func test_consentStore_unknownContact_startsWithTheMicMutedAndTheCameraOn() {
+        let store = CallPreviewConsentStore(defaults: isolatedDefaults())
+
+        XCTAssertEqual(store.consent(localUserId: "me", peerUserId: "callee"), CallPreviewConsent(sendsAudio: false, sendsVideo: true))
+    }
+
+    func test_consentStore_remembersEachContact_forEachAccount_acrossInstances() {
+        let defaults = isolatedDefaults()
+        let first = CallPreviewConsentStore(defaults: defaults)
+        first.remember(CallPreviewConsent(sendsAudio: true, sendsVideo: false), localUserId: "me", peerUserId: "callee")
+        first.remember(CallPreviewConsent(sendsAudio: true, sendsVideo: true), localUserId: "me", peerUserId: "friend")
+
+        let second = CallPreviewConsentStore(defaults: defaults)
+
+        XCTAssertEqual(second.consent(localUserId: "me", peerUserId: "callee"), CallPreviewConsent(sendsAudio: true, sendsVideo: false))
+        XCTAssertEqual(second.consent(localUserId: "me", peerUserId: "friend"), CallPreviewConsent(sendsAudio: true, sendsVideo: true))
+        XCTAssertEqual(second.consent(localUserId: "other-account", peerUserId: "callee"), .initial)
     }
 
     // MARK: - Serveurs ICE
@@ -449,9 +684,15 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         XCTAssertTrue(CallManager.previewRingsInApp(usesCallKit: false, isAppActive: true))
     }
 
-    func test_seenLabel_audioOnlyWithMutedMic_announcesNothing() {
-        XCTAssertNil(CallPreviewSeenLabel.text(peerName: "Bob", isVideo: false, isMuted: true))
-        XCTAssertNotNil(CallPreviewSeenLabel.text(peerName: "Bob", isVideo: false, isMuted: false))
-        XCTAssertNotNil(CallPreviewSeenLabel.text(peerName: "Bob", isVideo: true, isMuted: true))
+    /// #8795 — le libellé dit ce que l'appelé reçoit, rien de plus.
+    func test_seenLabel_saysExactlyWhatTheCalleeGets() {
+        XCTAssertNil(CallPreviewSeenLabel.text(peerName: "Bob", exposure: .nothing))
+        let texts = [CallPreviewExposure.seen, .heard, .seenAndHeard].compactMap {
+            CallPreviewSeenLabel.text(peerName: "Bob", exposure: $0)
+        }
+
+        XCTAssertEqual(texts.count, 3)
+        XCTAssertEqual(Set(texts).count, 3, "vu, entendu, vu et entendu : trois phrases distinctes")
+        XCTAssertTrue(texts.allSatisfy { $0.contains("Bob") })
     }
 }

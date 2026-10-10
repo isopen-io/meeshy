@@ -1,8 +1,10 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../utils/logger';
+import { logError, logWarn } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
+import type { UnifiedAuthRequest } from '../middleware/auth';
+import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -197,6 +199,8 @@ export async function translationRoutes(fastify: FastifyInstance) {
     throw new Error('MessageTranslationService not provided to translation routes');
   }
 
+  const engagement = lazyTranslationRequestEngagement(() => fastify.prisma);
+
   // Route principale de traduction
   fastify.post<{ Body: TranslateRequest }>('/translate-blocking', {
     // SECURITY: authentification obligatoire.
@@ -247,6 +251,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
       let result: any;
       let messageId: string | undefined;
+      let conversationId: string | undefined;
 
       // Gérer les deux cas : nouveau message vs retraduction
       if (validatedData.message_id) {
@@ -290,6 +295,8 @@ export async function translationRoutes(fastify: FastifyInstance) {
         if (!hasAccess) {
           return sendForbidden(reply, 'Access denied to this message');
         }
+
+        conversationId = existingMessage.conversationId;
 
         // Utiliser le texte du message existant si pas fourni
         const messageText = validatedData.text || existingMessage.content;
@@ -379,6 +386,12 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
       const processingTime = (Date.now() - startTime) / 1000;
 
+      creditTranslationRequest({
+        engagement,
+        requester: (request as UnifiedAuthRequest).authContext,
+        conversationId,
+        onError: (error) => logWarn(request.log, 'tool.translation_request engagement credit failed', error)
+      });
 
       return sendSuccess(reply, {
         message_id: messageId,

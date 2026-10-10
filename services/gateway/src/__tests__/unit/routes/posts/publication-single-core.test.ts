@@ -202,7 +202,7 @@ const ATTACHMENT_ROW = {
     isBlurred: false,
     isEncrypted: false,
     effectFlags: 0,
-    expiresAt: null,
+    expiresAt: null, ephemeralDuration: null, attachments: [{ isViewOnce: false, isBlurred: false, effectFlags: 0 }],
     createdAt: new Date('2026-09-01T00:00:00.000Z'),
   },
 };

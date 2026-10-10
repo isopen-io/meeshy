@@ -223,7 +223,7 @@ final class EditParityInventoryTests: XCTestCase {
                 nom: "eventail POST/REEL gate",
                 chezLaFeuille: [
                     "private var showTypePicker: Bool",
-                    "!isRepost && (remainingQualifiesAsReel || normalizedOriginalType == \"REEL\")"
+                    "PostEditTypeChoice.reelIsChoosable("
                 ],
                 mesuree: gateDuRepost,
                 attendue: false,
@@ -233,8 +233,8 @@ final class EditParityInventoryTests: XCTestCase {
             Capacite(
                 nom: "repli automatique du reel",
                 chezLaFeuille: [
-                    "if selectedType == \"REEL\" && !remainingQualifiesAsReel {",
-                    "selectedType = (normalizedOriginalType == \"REEL\" && !remainingQualifiesAsReel)"
+                    "selectedType = PostEditTypeChoice.selection(selectedType, reelIsChoosable: reelIsChoosable)",
+                    "selectedType = PostEditTypeChoice.initialType(originalType: originalType)"
                 ],
                 mesuree: repliAutomatique,
                 attendue: false,

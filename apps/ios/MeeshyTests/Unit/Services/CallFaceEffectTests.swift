@@ -102,6 +102,18 @@ final class CallFaceEffectTests: XCTestCase {
         XCTAssertEqual(VideoFilterConfig.default.withBrightness(-0.9).brightness, -VideoFilterConfig.brightnessLimit)
     }
 
+    func test_withSmoothingIntensity_clampsToAVisibleStrength() {
+        XCTAssertEqual(VideoFilterConfig.default.withSmoothingIntensity(0.7).skinSmoothingIntensity, 0.7, accuracy: 0.0001)
+        XCTAssertEqual(VideoFilterConfig.default.withSmoothingIntensity(0).skinSmoothingIntensity, VideoFilterConfig.smoothingIntensityRange.lowerBound)
+        XCTAssertEqual(VideoFilterConfig.default.withSmoothingIntensity(3).skinSmoothingIntensity, VideoFilterConfig.smoothingIntensityRange.upperBound)
+    }
+
+    func test_withSmoothingIntensity_survivesAColourChange() {
+        let config = VideoFilterConfig.default.selectingFaceEffect(.smoothing).withSmoothingIntensity(0.8).applyingPreset(.warm)
+        XCTAssertEqual(config.skinSmoothingIntensity, 0.8, accuracy: 0.0001)
+        XCTAssertEqual(config.activeFaceEffect, .smoothing)
+    }
+
     func test_withBackgroundBlur_togglesOnlyTheBlur() {
         let config = VideoFilterConfig.default.selectingFaceEffect(.demon).withBackgroundBlur(true)
         XCTAssertTrue(config.backgroundBlurEnabled)

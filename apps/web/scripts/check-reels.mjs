@@ -15,7 +15,7 @@
  *     carte de réel ;
  *  2. toucher la carte ouvre `/reels?seed=<id>` SUR ce réel, peint depuis le
  *     cache : aucun squelette, aucun disque flottant ;
- *  3. le réel visible JOUE, et lui seul ; au plus trois lecteurs montés ;
+ *  3. le réel visible JOUE, et lui seul ; au plus cinq lecteurs montés (N±2, #9702) ;
  *  4. un balayage tactile vers le haut accroche le réel SUIVANT (un arrêt par
  *     réel), vers le bas le PRÉCÉDENT, sans tâche longue ; la lecture suit ;
  *  5. les flèches du clavier valent le balayage ;
@@ -73,6 +73,13 @@ const check = (ok, what) => {
 };
 
 const TAP_FLOOR = 44;
+
+/* Un compteur NUL ne s'affiche pas (rail commun des plein écrans, #8879) :
+   l'absence du nœud vaut 0, jamais une attente de dix secondes. */
+const countOf = async (page, selector) => {
+  const node = await page.$(`${selector} .tabular-nums`);
+  return node === null ? 0 : Number(await node.textContent());
+};
 const WCAG_AA = 4.5;
 const SEED = 'reel-portrait';
 const DEEP_SEED = 'reel-sunset-en';
@@ -130,7 +137,7 @@ const settle = async (page, expected) => {
  * portait son propre diagnostic dans son message d'échec.
  *
  * La restriction ne relâche rien. L'invariante 3 — « lui seul joue », « au
- * plus trois lecteurs montés » — parle des lecteurs de RÉEL, et c'est
+ * plus cinq lecteurs montés » (N±2 depuis #9702) — parle des lecteurs de RÉEL, et c'est
  * exactement ce qui est compté maintenant ; un média du fil n'y entrait que
  * par accident de sélecteur. */
 const players = (page) =>
@@ -349,7 +356,12 @@ try {
       );
       const headerBox = await page.$eval('[data-feed-reels]', (el) => {
         const r = el.getBoundingClientRect();
-        return { right: innerWidth - r.right, top: r.top, href: el.getAttribute('href') };
+        /* Le bandeau du haut (#9536) allonge l'encoche pendant l'ouverture : l'en-tête descend d'autant. */
+        const bande = (() => {
+          const hote = document.querySelector('[data-top-band-host]');
+          return hote === null ? 0 : Number.parseFloat(getComputedStyle(hote).getPropertyValue('--top-band')) || 0;
+        })();
+        return { right: innerWidth - r.right, top: r.top - bande, bande, href: el.getAttribute('href') };
       });
       check(headerBox.href === '/reels' && headerBox.right <= 16 && headerBox.top < 80, `${label} : en haut à droite, sans graine (${JSON.stringify(headerBox)})`);
       await capture(page, `reels-flux-entete-${slug}`);
@@ -375,7 +387,7 @@ try {
       check(await waitPlaying(page, 0), `${label} : le réel visible joue`);
       const atRest = await players(page);
       check(atRest.filter((p) => p.playing).length === 1 && atRest.every((p) => !p.playing || p.page === 0), `${label} : lui seul (${JSON.stringify(atRest)})`);
-      check(atRest.length <= 3, `${label} : au plus trois lecteurs montés — le visible et ses voisins (${atRest.length})`);
+      check(atRest.length <= 5, `${label} : au plus cinq lecteurs montés — le visible et la fenêtre N±2 (${atRest.length})`);
       await capture(page, `reels-lecture-${slug}`);
 
       // ------------------------------------------------ 7. contraste et cibles
@@ -442,12 +454,12 @@ try {
 
       // ------------------------------------------------ 6. j'aime, partagé avec le Flux
       const likeSel = '[data-reel-index="0"] [data-reel-gesture="like"]';
-      const before = Number(await page.textContent(`${likeSel} .tabular-nums`));
+      const before = (await countOf(page, likeSel));
       await page.click(likeSel);
       const liked = await page
         .waitForFunction((sel) => document.querySelector(sel)?.getAttribute('aria-pressed') === 'true', likeSel, { timeout: 500 })
         .then(() => true, () => false);
-      check(liked && Number(await page.textContent(`${likeSel} .tabular-nums`)) === before + 1, `${label} : « J'aime » bascule au geste, compte +1`);
+      check(liked && (await countOf(page, likeSel)) === before + 1, `${label} : « J'aime » bascule au geste, compte +1`);
 
       // ------------------------------------------------ 15. commenter et repartager (#6484)
       const commentSel = '[data-reel-index="0"] [data-reel-gesture="comment"]';
@@ -480,7 +492,7 @@ try {
         await page.click(repostConfirmSel);
       };
 
-      const beforeAnyTap = Number(await page.textContent(`${repostSel} .tabular-nums`));
+      const beforeAnyTap = (await countOf(page, repostSel));
       await page.click(repostSel);
       const dialogOpened = await page.waitForSelector(repostConfirmSel, { timeout: 1500 }).then(() => true, () => false);
       const pressedBeforeConfirm = await page.evaluate((sel) => document.querySelector(sel)?.getAttribute('aria-pressed'), repostSel);
@@ -488,7 +500,7 @@ try {
       const dialogClosedAfterCancel = await page
         .waitForSelector(repostConfirmSel, { state: 'detached', timeout: 1500 })
         .then(() => true, () => false);
-      const countAfterCancel = Number(await page.textContent(`${repostSel} .tabular-nums`));
+      const countAfterCancel = (await countOf(page, repostSel));
       check(
         dialogOpened && pressedBeforeConfirm === 'false' && dialogClosedAfterCancel && countAfterCancel === beforeAnyTap,
         `${label} : « Repartager » ouvre une confirmation avant d'envoyer — « Annuler » ne laisse aucun effet (ouverte ${dialogOpened}, pressé ${pressedBeforeConfirm}, fermée ${dialogClosedAfterCancel}, compte ${beforeAnyTap}→${countAfterCancel})`,
@@ -527,10 +539,10 @@ try {
       // #8601 — FEUILLE OUVERTE, LE CHROME DU RÉEL CÈDE : « Retour »,
       // identité, légende et rail s'effacent, inertes (`chromeYields`).
       await page
-        .waitForFunction(() => getComputedStyle(document.querySelector('[data-reels-back]')).opacity === '0', null, { timeout: 1500 })
+        .waitForFunction(() => getComputedStyle(document.querySelector('[data-viewer-top-bar]')).opacity === '0', null, { timeout: 1500 })
         .catch(() => undefined);
       const chromeCede = await page.evaluate(() => {
-        const back = document.querySelector('[data-reels-back]');
+        const back = document.querySelector('[data-viewer-top-bar]');
         const chrome = document.querySelector('[data-reel-index="0"] [data-reel-chrome]');
         return {
           retour: back === null ? null : { opacite: getComputedStyle(back).opacity, inerte: back.inert },
@@ -541,6 +553,49 @@ try {
         chromeCede.retour?.opacite === '0' && chromeCede.retour.inerte && chromeCede.chrome?.opacite === '0' && chromeCede.chrome.inerte,
         `${label} : feuille ouverte, « Retour » et le chrome du réel s'effacent, inertes (#8601) — ${JSON.stringify(chromeCede)}`,
       );
+
+      // #8643 — LIRE FLOUTE LE RÉEL ; ÉCRIRE LE RÉDUIT, NET, AU-DESSUS DE LA
+      // FEUILLE ; replier (⌄) rend la lecture. Même loi que la story.
+      const pagerYield = () =>
+        page.evaluate(() => {
+          const pager = document.querySelector('[data-reels-pager]');
+          const sheet = document.querySelector('[data-story-comments-sheet]');
+          if (pager === null || sheet === null) return null;
+          return {
+            etat: pager.getAttribute('data-scene-yields'),
+            filtre: getComputedStyle(pager).filter,
+            basPager: Math.round(pager.getBoundingClientRect().bottom),
+            hautFeuille: Math.round(sheet.getBoundingClientRect().top),
+          };
+        });
+      const pagerSettled = (state) =>
+        page
+          .waitForFunction(
+            (want) => {
+              const pager = document.querySelector('[data-reels-pager]');
+              return pager?.getAttribute('data-scene-yields') === want && pager.getAnimations().length === 0;
+            },
+            state,
+            { timeout: 1500 },
+          )
+          .catch(() => undefined);
+      await pagerSettled('reading');
+      const lu = await pagerYield();
+      check(lu?.etat === 'reading' && /blur\(/.test(lu.filtre), `${label} : feuille ouverte, le réel se floute pour laisser lire le fil (#8643) — ${JSON.stringify(lu)}`);
+      if ((await page.$('[data-comment-field]')) !== null) {
+        await page.click('[data-comment-field]');
+        await pagerSettled('writing');
+        const ecrit = await pagerYield();
+        check(
+          ecrit?.etat === 'writing' && ecrit.filtre === 'none' && ecrit.basPager <= ecrit.hautFeuille,
+          `${label} : champ pris, le réel revient net et tient ENTIER au-dessus de la feuille (#8643) — ${JSON.stringify(ecrit)}`,
+        );
+        await capture(page, `reels-ecrire-${slug}`);
+        await page.click('[data-comment-fold]');
+        await pagerSettled('reading');
+        const replie = await pagerYield();
+        check(replie?.etat === 'reading', `${label} : le repli ⌄ rend la lecture (#8643) — ${JSON.stringify(replie)}`);
+      }
       await capture(page, `reels-commentaires-${slug}`);
 
       // RIEN DU RÉEL NE SE PEINT PAR-DESSUS LA FEUILLE (revue-correction
@@ -616,12 +671,16 @@ try {
 
       // LE COMPTEUR DU RAIL SUIT L'ENVOI EN OPTIMISTE (#6484, C2) — lu sur le
       // rail lui-même, la caisse que le lecteur peint, pas sur un cache voisin.
-      const commentBefore = Number(await page.textContent(`${commentSel} .tabular-nums`));
+      const commentBefore = (await countOf(page, commentSel));
+      // Le ⌄ a replié la barre en son icône (#9122) : la rouvrir d'abord.
+      if ((await page.$('[data-story-comments-sheet] [data-comment-unfold]')) !== null) {
+        await page.click('[data-story-comments-sheet] [data-comment-unfold]');
+      }
       await page.fill('[data-story-comments-sheet] textarea', 'Bien vu');
       await page.click('[data-story-comments-sheet] [data-comment-send]');
       const countFollowed = await page
         .waitForFunction(
-          ([sel, expected]) => Number(document.querySelector(`${sel} .tabular-nums`)?.textContent) === expected,
+          ([sel, expected]) => Number(document.querySelector(`${sel} .tabular-nums`)?.textContent ?? 0) === expected,
           [commentSel, commentBefore + 1],
           { timeout: 1500 },
         )
@@ -643,7 +702,7 @@ try {
         sheet: document.querySelector('[data-story-comments-sheet]') !== null,
         inert: document.querySelector('[data-reels-pager]')?.inert === true,
         focus: document.activeElement?.getAttribute('data-reel-gesture') ?? null,
-        chromeRendu: document.querySelector('[data-reels-back]')?.inert === false && document.querySelector('[data-reel-index="0"] [data-reel-chrome]')?.inert === false,
+        chromeRendu: document.querySelector('[data-viewer-top-bar]')?.inert === false && document.querySelector('[data-reel-index="0"] [data-reel-chrome]')?.inert === false,
       }));
       check(afterEscape.chromeRendu, `${label} : feuille fermée, « Retour » et le chrome du réel reviennent atteignables (#8601)`);
       const urlAfter = new URL(page.url());
@@ -655,17 +714,17 @@ try {
       // REPARTAGER — optimiste, compte +1, teinte posée, jamais défait par un
       // second tap (append-only, miroir `ReelsViewModel.repost`) — CONFIRMÉ,
       // comme chaque tap depuis le défaut majeur 1 (#6278).
-      const repostBefore = Number(await page.textContent(`${repostSel} .tabular-nums`));
+      const repostBefore = (await countOf(page, repostSel));
       await tapRepost();
       const reposted = await page
         .waitForFunction((sel) => document.querySelector(sel)?.getAttribute('aria-pressed') === 'true', repostSel, { timeout: 1500 })
         .then(() => true, () => false);
-      const repostColor = await page.evaluate((sel) => document.querySelector(sel)?.getAttribute('style') ?? '', repostSel);
+      const repostColor = await page.evaluate((sel) => document.querySelector(`${sel} [data-viewer-disc]`)?.getAttribute('style') ?? '', repostSel);
       const announcedSuccess = await page
         .waitForFunction(() => document.querySelector('[role="status"].sr-only')?.textContent === 'Repartage', undefined, { timeout: 1500 })
         .then(() => true, () => false);
       check(
-        reposted && announcedSuccess && Number(await page.textContent(`${repostSel} .tabular-nums`)) === repostBefore + 1 && repostColor.includes('--color-ok'),
+        reposted && announcedSuccess && (await countOf(page, repostSel)) === repostBefore + 1 && repostColor.includes('--color-ok'),
         `${label} : « Repartager » bascule au geste, compte +1, teinte posée, succès annoncé (${repostColor})`,
       );
       await capture(page, `reels-repartage-${slug}`);
@@ -678,7 +737,7 @@ try {
         .waitForFunction(() => document.querySelector('[role="status"].sr-only')?.textContent === 'Déjà repartagé', undefined, { timeout: 1500 })
         .then(() => true, () => false);
       check(
-        announcedAlready && Number(await page.textContent(`${repostSel} .tabular-nums`)) === repostBefore + 1,
+        announcedAlready && (await countOf(page, repostSel)) === repostBefore + 1,
         `${label} : un second tap ne compte pas deux fois — append-only (#6484)`,
       );
 
@@ -820,7 +879,13 @@ try {
       await scenePage.goto(`${BASE}/reels?seed=${SCENE_SEED}`, { waitUntil: 'load' });
       await scenePage.waitForSelector(`[data-reel-index="0"][data-reel="${SCENE_SEED}"] [data-reel-scene]`);
 
-      const scenePlayerPresent = (await scenePage.$('[data-reel-index="0"] [data-scene-player]')) !== null;
+      /* Le moteur de scène est un chunk À LA DEMANDE (#6903) : à cache froid
+         il arrive APRÈS `[data-reel-scene]`. On attend qu'il monte (borné) au
+         lieu de parier sur la course — mesuré : rouge une fois sur la première
+         passe du gate complet, vert seul. */
+      const scenePlayerPresent = await scenePage
+        .waitForSelector('[data-reel-index="0"] [data-scene-player]', { timeout: 5_000 })
+        .then(() => true, () => false);
       const rawVideoAbsent = (await scenePage.$('[data-reel-index="0"] [data-reel-media="video"]')) === null;
       check(scenePlayerPresent && rawVideoAbsent, `${label} : un réel composé monte [data-scene-player], jamais un <video data-reel-media> brut`);
 
@@ -836,13 +901,14 @@ try {
       );
 
       const soundLabel = await scenePage.getAttribute('[data-reel-index="0"] [data-reel-gesture="sound"]', 'aria-label');
-      check(soundLabel === 'Activer le son', `${label} : sans activation, le son du réel composé démarre coupé`);
+      // #9698 — le son de fond se coupe par la NOTE du crédit, qui porte la prise du rail.
+      check(soundLabel === 'Réactiver le son de fond', `${label} : sans activation, le son du réel composé démarre coupé (${soundLabel})`);
 
       // Revue-correction #6903 — LE MUET SE DIT UNE FOIS : la pastille du
       // moteur doublait le bouton son du rail et se posait MESURÉ sur le
       // compteur de partages.
       const badges = await scenePage.$$eval('[data-reel-index="0"] [data-scene-sound="muted"]', (els) => els.length);
-      check(badges === 0, `${label} : le muet d'un réel composé se dit UNE fois, sur le rail — aucune pastille de moteur (${badges})`);
+      check(badges === 0, `${label} : le muet d'un réel composé se dit UNE fois, sur la note du crédit — aucune pastille de moteur (${badges})`);
 
       // Revue-correction #6903 — LE TAP ET LA BARRE SONT SUR LA PAGE, pas
       // dans la boîte 9:16 : une scène ajustée laisse des bandes où le tap
@@ -962,7 +1028,7 @@ try {
         label: document.querySelector('[data-reel-index="0"] [data-reel-gesture="sound"]')?.getAttribute('aria-label') ?? null,
         fond: document.querySelector('[data-reel-index="0"] [data-scene-player] video')?.muted ?? null,
       }));
-      check(unmuted && afterSound.label === 'Couper le son', `${label} : le bouton son d'un réel composé OUVRE sa piste de fond (${JSON.stringify(afterSound)})`);
+      check(unmuted && afterSound.label === 'Couper le son de fond', `${label} : le bouton son d'un réel composé OUVRE sa piste de fond (${JSON.stringify(afterSound)})`);
       check(afterSound.fond === true, `${label} : le fond vidéo que l'AUTEUR a coupé reste muet, son ouvert (${afterSound.fond})`);
 
       await scenePage.click('[data-reels-back]');

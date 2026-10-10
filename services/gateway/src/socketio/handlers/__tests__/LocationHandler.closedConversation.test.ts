@@ -192,7 +192,8 @@ describe('LocationHandler — la conversation CLOSE', () => {
 
       expect(ctx.prisma.conversation.findUnique).toHaveBeenCalledWith({
         where: { id: NORMALIZED_CONV_ID },
-        select: { isActive: true, closedAt: true },
+        // `type` en plus (#9927) : la règle des 13-17 ans lit le type sur la même lecture.
+        select: { isActive: true, closedAt: true, type: true },
       });
     });
 

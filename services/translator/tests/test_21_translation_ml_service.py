@@ -870,7 +870,6 @@ class TestTranslateWithStructure:
             with patch('services.translation_ml_service.ML_AVAILABLE', True):
                 with patch('services.translation_ml_service.get_settings', return_value=mock_settings):
                     mock_segmenter = MagicMock()
-                    mock_segmenter.extract_emojis.return_value = ({}, {})
 
                     with patch('services.translation_ml_service.TextSegmenter', return_value=mock_segmenter):
                         from services.translation_ml_service import TranslationMLService
@@ -926,7 +925,6 @@ class TestTranslateWithStructure:
             with patch('services.translation_ml_service.ML_AVAILABLE', True):
                 with patch('services.translation_ml_service.get_settings', return_value=mock_settings):
                     mock_segmenter = MagicMock()
-                    mock_segmenter.extract_emojis.return_value = ("text", {})
                     mock_segmenter.segment_text.return_value = ([{'text': 'hello', 'type': 'line', 'index': 0}], {})
                     mock_segmenter.reassemble_text.return_value = "translated"
 
@@ -1129,7 +1127,6 @@ class TestTranslateWithStructureAdvanced:
             with patch('services.translation_ml_service.ML_AVAILABLE', True):
                 with patch('services.translation_ml_service.get_settings', return_value=mock_settings):
                     mock_segmenter = MagicMock()
-                    mock_segmenter.extract_emojis.return_value = ("text" * 50, {})
 
                     with patch('services.translation_ml_service.TextSegmenter', return_value=mock_segmenter):
                         from services.translation_ml_service import TranslationMLService
@@ -1163,7 +1160,6 @@ class TestTranslateWithStructureAdvanced:
             with patch('services.translation_ml_service.ML_AVAILABLE', True):
                 with patch('services.translation_ml_service.get_settings', return_value=mock_settings):
                     mock_segmenter = MagicMock()
-                    mock_segmenter.extract_emojis.return_value = ("text" * 50, {})
 
                     with patch('services.translation_ml_service.TextSegmenter', return_value=mock_segmenter):
                         from services.translation_ml_service import TranslationMLService
@@ -1197,7 +1193,6 @@ class TestTranslateWithStructureAdvanced:
             with patch('services.translation_ml_service.ML_AVAILABLE', True):
                 with patch('services.translation_ml_service.get_settings', return_value=mock_settings):
                     mock_segmenter = MagicMock()
-                    mock_segmenter.extract_emojis.return_value = ("long text " * 30, {})
                     mock_segmenter.segment_text.return_value = (
                         [
                             {'text': 'Hello', 'type': 'line', 'index': 0},
@@ -1261,7 +1256,6 @@ class TestTranslateWithStructureAdvanced:
             with patch('services.translation_ml_service.ML_AVAILABLE', True):
                 with patch('services.translation_ml_service.get_settings', return_value=mock_settings):
                     mock_segmenter = MagicMock()
-                    mock_segmenter.extract_emojis.return_value = ("long text " * 30, {})
                     mock_segmenter.segment_text.return_value = (
                         [
                             {'text': 'Hello', 'type': 'line', 'index': 0},
@@ -1307,7 +1301,6 @@ class TestTranslateWithStructureAdvanced:
                 with patch('services.translation_ml_service.get_settings', return_value=mock_settings):
                     mock_segmenter = MagicMock()
                     # Make segment_text raise an exception
-                    mock_segmenter.extract_emojis.return_value = ("text" * 50, {})
                     mock_segmenter.segment_text.side_effect = Exception("Segmentation error")
 
                     with patch('services.translation_ml_service.TextSegmenter', return_value=mock_segmenter):
@@ -1350,7 +1343,6 @@ class TestEmojiPlaceholderHandling:
             with patch('services.translation_ml_service.ML_AVAILABLE', True):
                 with patch('services.translation_ml_service.get_settings', return_value=mock_settings):
                     mock_segmenter = MagicMock()
-                    mock_segmenter.extract_emojis.return_value = ("text" * 50, {})
                     mock_segmenter.segment_text.return_value = (
                         [
                             {'text': 'EMOJI_0 Hello world', 'type': 'line', 'index': 0},

@@ -10,6 +10,7 @@ import { MessageTranslationService } from '../services/message-translation/Messa
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { socketIOAdminRoutes } from './socketio-admin-routes';
+import { setEngagementEmitIOProvider } from '../services/engagement/engagement-emit-registry';
 
 export class MeeshySocketIOHandler {
   private socketIOManager: MeeshySocketIOManager | null = null;
@@ -31,6 +32,8 @@ export class MeeshySocketIOHandler {
     // Initialiser Socket.IO avec le serveur HTTP et translationService
     this.socketIOManager = new MeeshySocketIOManager(httpServer, this.prisma, this.translationService);
     await this.socketIOManager.initialize();
+    // Les crédits d'engagement annoncent « N (M) 🔥 » au crédité (#8906).
+    setEngagementEmitIOProvider(() => this.socketIOManager?.getIO());
 
     // Les deux gestes d'administration vivent dans `socketio-admin-routes.ts`
     // et se MONTENT ici, plutôt que d'être déclarés en ligne. La raison n'est
@@ -49,6 +52,28 @@ export class MeeshySocketIOHandler {
     });
 
     logger.info('✅ Socket.IO configuré et routes ajoutées');
+  }
+
+  /**
+   * Ferme le temps réel à l'arrêt de la passerelle (#8297) : les appels passent
+   * d'abord en mode arrêt — la rafale de déconnexions qui suit n'est pas un
+   * raccrochage, le média pair-à-pair continue —, puis les sockets tombent et
+   * les clients se reconnectent aussitôt à la nouvelle instance.
+   */
+  public async close(): Promise<void> {
+    const manager = this.socketIOManager;
+    if (!manager) return;
+    try {
+      const calls = manager.getCallEventsHandler();
+      calls.prepareForShutdown();
+      calls.destroy();
+      manager.getCallService().destroy();
+      logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
+    } catch (error) {
+      logger.warn('⚠️ Could not set call handler shutdown mode', error);
+    }
+    await manager.close();
+    logger.info('✓ Socket.IO closed (clients reconnect to the new instance)');
   }
 
   /**

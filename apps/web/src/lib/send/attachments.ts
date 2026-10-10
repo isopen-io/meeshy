@@ -6,6 +6,7 @@ import {
   isVideoMimeType,
 } from '@meeshy/shared/types/attachment';
 import { messageTypeForClientAttachments, type AttachmentMessageType } from '@meeshy/shared/utils/attachment-message-type';
+import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
@@ -49,11 +50,24 @@ function kindOfMimeType(mimeType: string): AttachmentMessageType {
   return 'file';
 }
 
+/**
+ * LE FICHIER SOUS LE TYPE DE CE QU'IL EST (#9693) — Firefox et la WebView
+ * Android nomment un WAV `audio/x-wav`, et un MP3 que le système ne connaît
+ * pas arrive SANS type : la pièce devenait un « fichier », refusée d'un
+ * commentaire et montrée sans lecteur. Les octets restent ceux de l'original ;
+ * seul le type déclaré change, et un fichier déjà juste est rendu tel quel.
+ */
+function typedAsItsMedia(file: File): File {
+  const type = canonicalMediaMimeType({ mimeType: file.type, fileName: file.name });
+  return type === file.type ? file : new File([file], file.name, { type, lastModified: file.lastModified });
+}
+
 export function pendingAttachmentOf(
-  file: File,
+  source: File,
   opts?: { readonly durationMs?: number },
 ): PendingAttachment {
   counter += 1;
+  const file = typedAsItsMedia(source);
   return {
     localId: `pending-${counter}`,
     file,
@@ -145,11 +159,11 @@ export function acceptPendingFiles(params: {
     readonly doublon?: string;
   }>(
     (acc, file) => {
-      const signature = signatureDeFichier(file);
+      const signature = fileSignature(file);
       if (acc.vues.has(signature)) return { ...acc, doublon: acc.doublon ?? file.name };
       return { ...acc, retenus: [...acc.retenus, file], vues: new Set([...acc.vues, signature]) };
     },
-    { retenus: [], vues: new Set(params.current.map((piece) => signatureDeFichier(piece.file))) },
+    { retenus: [], vues: new Set(params.current.map((piece) => fileSignature(piece.file))) },
   );
 
   const list = tri.retenus.reduce(
@@ -179,7 +193,7 @@ export function acceptPendingFiles(params: {
  * Le séparateur est un octet NUL parce qu'aucun nom de fichier n'en contient :
  * « a.jpg » + 12 et « a.jpg1 » + 2 se confondraient sur une simple concaténation.
  */
-function signatureDeFichier(file: File): string {
+export function fileSignature(file: File): string {
   return `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
 }
 

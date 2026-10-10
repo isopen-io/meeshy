@@ -55,6 +55,8 @@ jest.mock('../../../services/posts/postVisibility', () => ({
   canUserViewPost: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
   canUserInteractWithPost: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
   canUserConsumePost: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
+  canUserInteractWithThread: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
+  canUserConsumeThread: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
   loadPostAcl: jest.fn<() => Promise<unknown>>().mockResolvedValue({
     authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
   }),

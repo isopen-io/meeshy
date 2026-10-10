@@ -157,12 +157,49 @@ final class ConversationReplyContagionTests: XCTestCase {
         XCTAssertTrue(fx.sut.composerBlurEnabled)
     }
 
+    // MARK: - Une réponse floutée par contagion peut être à vue unique (#8567)
+
+    func test_composerViewOnce_underImposedBlur_isArmableAndCombinesWithBlur() async throws {
+        let fx = try await makeFixture()
+        quote(.blurred, in: fx.sut)
+
+        fx.sut.composerViewOnceEnabled = true
+
+        XCTAssertTrue(fx.sut.composerViewOnceEnabled, "la vue unique s'arme sous un flou imposé")
+        XCTAssertTrue(fx.sut.composerBlurEnabled, "le flou imposé reste allumé à côté")
+    }
+
+    func test_sendMessage_replyToBlurredMessageWithViewOnce_sendsBothBits() async throws {
+        let fx = try await makeFixture()
+        quote(.blurred, in: fx.sut)
+        fx.sut.composerViewOnceEnabled = true
+
+        _ = await fx.sut.sendMessage(content: "réponse", replyToId: quotedId,
+                                     protection: fx.sut.captureArmedProtection(replyingTo: quotedId))
+
+        let request = try XCTUnwrap(fx.messageService.lastSendRequest)
+        XCTAssertEqual(request.isBlurred, true, "le flou du cité passe à la réponse")
+        XCTAssertEqual(request.isViewOnce, true, "la vue unique choisie part avec lui")
+    }
+
+    func test_composerViewOnce_armedUnderImposedBlur_turnsOffTheArmedBlurOnceTheQuoteLeaves() async throws {
+        let armed = ConversationProtectionPreference(ephemeralChoice: nil, isBlurred: true, isViewOnce: false)
+        let fx = try await makeFixture(armed: armed)
+        quote(.blurred, in: fx.sut)
+
+        fx.sut.composerViewOnceEnabled = true
+        fx.sut.armReplyContagion(quoting: nil)
+
+        XCTAssertTrue(fx.sut.composerViewOnceEnabled)
+        XCTAssertFalse(fx.sut.composerBlurEnabled, "hors contagion, flou et vue unique restent exclusifs (#7667)")
+    }
+
     func test_armReplyContagion_quoteRemoved_restoresArmingAndKeepsPersistedPreference() async throws {
         let armed = ConversationProtectionPreference(ephemeralChoice: .duration(.oneMinute), isBlurred: false, isViewOnce: true)
         let fx = try await makeFixture(armed: armed)
         quote([.ephemeral, .ephemeralAfterRead, .blurred], in: fx.sut)
 
-        XCTAssertFalse(fx.sut.composerViewOnceEnabled, "flou imposé ⇒ la vue unique (exclusive) s'éteint à l'affichage")
+        XCTAssertTrue(fx.sut.composerViewOnceEnabled, "flou imposé ⇒ la vue unique armée reste allumée (#8567)")
         XCTAssertEqual(fx.sut.composerEphemeralChoice, .afterRead)
         XCTAssertEqual(fx.store.preference(for: conversationId), armed, "l'imposition n'écrit jamais la préférence")
 

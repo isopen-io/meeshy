@@ -464,15 +464,6 @@ public struct UserUpdatedEvent: Decodable, Sendable {
         case replaced(String?)
     }
 
-    /// Nom à afficher, recomposé avec la règle du chemin REST
-    /// (`APIConversationUser.name` : `displayName` puis `username`) pour que la
-    /// ligne de liste dise la même chose quel que soit le transport qui l'a
-    /// hydratée. `nil` quand le payload ne porte pas le groupe du nom.
-    public var resolvedDisplayName: String? {
-        guard hasNameGroup else { return nil }
-        return [displayName, username].compactMap { $0 }.first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-    }
-
     private enum CodingKeys: String, CodingKey {
         case userId, changes
     }
@@ -1667,6 +1658,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — typing
     public let typingStarted = PassthroughSubject<TypingEvent, Never>()
     public let typingStopped = PassthroughSubject<TypingEvent, Never>()
+    public let conversationViewing = PassthroughSubject<ConversationViewingEvent, Never>()
+    public let conversationEngagementUpdated = PassthroughSubject<ConversationEngagementSnapshot, Never>()
 
     // Combine publishers — presence
     public let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
@@ -1990,7 +1983,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket = manager?.defaultSocket
         setupEventHandlers()
-        socket?.connect()
+        socket?.connect(withPayload: ClientInfoProvider.socketAuthPayload())
         return .armed
     }
 
@@ -3006,21 +2999,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        // --- Typing events ---
-
-        socket.on("typing:start") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(TypingEvent.self, from: data) { [weak self] event in
-                self?.typingStarted.send(event)
-            }
-        }
-
-        socket.on("typing:stop") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(TypingEvent.self, from: data) { [weak self] event in
-                self?.typingStopped.send(event)
-            }
-        }
+        registerActivitySignalHandlers(on: socket)
 
         // --- Unread events ---
 
@@ -3128,12 +3107,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // `handleUnauthorized()` comme la ligne au-dessus : son
         // `refreshSession(force:)` obtiendrait un JWT neuf — `/auth/refresh` ne
         // verifie pas que la session existe encore — et re-armerait pour 24 h
-        // la session qu'on vient de revoquer. La charge (`code`/`message`/
-        // `reason`) n'est pas decodee : aucune surface iOS ne l'affiche.
-        socket.on("auth:session-revoked") { _, _ in
+        // la session qu'on vient de revoquer. Le `reason` sert l'avis d'avant la reconnexion (#9612).
+        socket.on("auth:session-revoked") { data, _ in
+            let reason = SessionRevocationReason.fromSocketPayload(data)
             Logger.socket.warning("MessageSocket: session revoked — forcing re-authentication")
             Task { @MainActor in
-                AuthManager.shared.handleSessionRevoked()
+                AuthManager.shared.handleSessionRevoked(reason: reason)
             }
         }
 
@@ -3169,6 +3148,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         registerViewOnceHandlers(on: socket)
         registerCitedPostHandlers(on: socket)
+        registerConversationEngagementHandlers(on: socket)
         registerCallRecordingHandlers(on: socket)
         registerCallControlHandlers(on: socket)
         registerCallPreviewHandlers(on: socket)

@@ -2,9 +2,14 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Bandeau réutilisable des pièces jointes stagées d'un commentaire (chips avec
-/// retrait). Partagé par toutes les surfaces de composer commentaire (feed/reels,
-/// post detail, stories) via `customAttachmentsPreview` de `UniversalComposerBar`.
+/// **La zone d'attachement d'un commentaire EST celle du message** (#9736).
+///
+/// Ce bandeau rendait des pastilles de texte — un glyphe, un nom, une croix —
+/// là où le message montre ce qu'on joint. Il monte désormais les MÊMES vues
+/// (`ComposerAttachmentZone`, `ComposerAttachmentTile`, `ComposerPlaceTile`) :
+/// vignette de l'image, première image de la vidéo, onde d'un son, retrait en
+/// coin, « Éditer » au centre. Partagé par les trois surfaces de commentaire
+/// (fil et réels, détail d'un post, story) via `customAttachmentsPreview`.
 struct CommentAttachmentsTray: View {
     let attachments: [ComposerAttachment]
     let onRemove: (String) -> Void
@@ -14,53 +19,31 @@ struct CommentAttachmentsTray: View {
     /// défaut pour les hôtes qui ne câblent pas encore le partage de position.
     var place: SharedPlace? = nil
     var onRemovePlace: (() -> Void)? = nil
+    var accentColor: String = MeeshyColors.brandPrimaryHex
 
-    private var theme: ThemeManager { ThemeManager.shared }
+    /// « Éditer » une pièce dans la scène (#9127) — posé par l'hôte via
+    /// `.commentSceneRetouch` ; absent, la zone ne promet aucune édition.
+    @Environment(\.commentRetouch) private var retouch
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if let place {
-                    placeChip(place)
-                }
-                ForEach(attachments) { attachment in
-                    HStack(spacing: 6) {
-                        Image(systemName: attachment.type.glyph)
-                            .font(.caption)
-                            .foregroundColor(Color(hex: attachment.thumbnailColor))
-                            .accessibilityHidden(true)
-                        Text(attachment.name)
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                            .frame(maxWidth: 120)
-                        Button {
-                            remove(attachment)
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(theme.textMuted)
-                                .frame(width: 18, height: 18)
-                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
-                        }
-                        .accessibilityHidden(true)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
-                    )
-                    .foregroundColor(theme.textPrimary)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))) {
-                        remove(attachment)
-                    }
-                }
+        ComposerAttachmentZone(accentColor: accentColor) {
+            ForEach(attachments) { attachment in
+                CommentAttachmentTile(
+                    attachment: attachment,
+                    fileURL: attachment.url,
+                    edit: editAction(attachment),
+                    onRemove: { remove(attachment) }
+                )
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            if let place {
+                ComposerPlaceTile(place: place, onRemove: removePlace)
+            }
         }
+    }
+
+    private func editAction(_ attachment: ComposerAttachment) -> (() -> Void)? {
+        guard let retouch, CommentSceneRetouch.editGlyph(for: attachment) != nil else { return nil }
+        return { retouch.open(attachment.id) }
     }
 
     private func remove(_ attachment: ComposerAttachment) {
@@ -71,43 +54,73 @@ struct CommentAttachmentsTray: View {
         if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
     }
 
-    /// Même gabarit de chip que les pièces jointes ci-dessus, pour un lieu.
-    private func placeChip(_ place: SharedPlace) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "location.fill")
-                .font(.caption)
-                .foregroundColor(MeeshyColors.success)
-                .accessibilityHidden(true)
-            Text(MediaKindLabel.placeLabel(place.name))
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-                .frame(maxWidth: 120)
-            Button {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                    onRemovePlace?()
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(theme.textMuted)
-                    .frame(width: 18, height: 18)
-                    .background(Circle().fill(theme.textMuted.opacity(0.15)))
-            }
-            .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(theme.inputBackground)
-                .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
-        )
-        .foregroundColor(theme.textPrimary)
-        .accessibilityElement(children: .combine)
-        .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))) {
+    private func removePlace() {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
             onRemovePlace?()
         }
+    }
+}
+
+/// La tuile d'une pièce de commentaire : elle lit sa vignette dans le fichier
+/// local de la pièce, et la relit quand la scène le remplace. `fileURL` est
+/// passé À PART de la pièce — deux `ComposerAttachment` de même identifiant
+/// sont égaux, et le fichier qui arrive doit quand même repeindre la tuile.
+private struct CommentAttachmentTile: View {
+    let attachment: ComposerAttachment
+    let fileURL: URL?
+    let edit: (() -> Void)?
+    let onRemove: () -> Void
+
+    @State private var thumbnail: UIImage?
+
+    var body: some View {
+        ComposerAttachmentTile(
+            thumbnail: thumbnail,
+            art: art,
+            tint: attachment.thumbnailColor,
+            typeGlyph: attachment.type.glyph,
+            centerGlyph: edit == nil ? nil : ComposerPendingTileGlyph.edit,
+            label: attachment.name,
+            tapAccessibilityLabel: tapLabel,
+            removeAccessibilityLabel: String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(attachment.name)", bundle: .main),
+            onTap: edit,
+            onRemove: onRemove
+        )
+        .contextMenu {
+            Button(role: .destructive, action: onRemove) {
+                Label(
+                    String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(attachment.name)", bundle: .main),
+                    systemImage: "trash"
+                )
+            }
+        } preview: {
+            if attachment.type == .image || attachment.type == .video {
+                AttachmentQuickLookPreview(
+                    kind: attachment.type == .video ? .video : .image,
+                    fileURL: fileURL,
+                    thumbnail: thumbnail
+                )
+            }
+        }
+        .task(id: fileURL) {
+            thumbnail = await CommentAttachmentThumbnail.load(type: attachment.type, url: fileURL)
+        }
+    }
+
+    /// Le dessin d'une pièce sans vignette : la lecture en cours d'un fichier
+    /// qui n'est pas encore là, l'onde d'un son.
+    private var art: AnyView? {
+        if fileURL == nil { return AnyView(ComposerAttachmentLoadingArt(tint: attachment.thumbnailColor)) }
+        if attachment.type == .voice { return AnyView(ComposerAudioTileArt(tint: attachment.thumbnailColor)) }
+        return nil
+    }
+
+    /// Une pièce que la scène n'ouvre pas (son, GIF, pièce en lecture) se lit
+    /// par son nom : elle ne promet ni aperçu ni édition.
+    private var tapLabel: String {
+        guard edit != nil else { return attachment.name }
+        return String(localized: "conversation.composer.attachment.edit", defaultValue: "Éditer \(attachment.name)", bundle: .main)
     }
 }
 
@@ -156,6 +169,9 @@ struct CommentMediaView: View {
     let authorAvatarURL: String?
     let authorColor: String
     let sentAt: Date
+    /// La carte des liens suivis du commentaire porteur — la légende du média en
+    /// plein écran ouvre ses adresses par `/l/` (#9075).
+    var trackedLinks: [String: String] = [:]
 
     @State private var showFullscreen = false
     @State private var audioFullscreen: AudioFullscreenSource?
@@ -350,6 +366,7 @@ struct CommentMediaView: View {
         return CommentMediaGallerySnapshot(
             attachments: [attachment],
             captions: caption.map { [attachment.id: $0] } ?? [:],
+            links: trackedLinks.isEmpty ? [:] : [attachment.id: trackedLinks],
             senders: [attachment.id: ConversationViewModel.MediaSenderInfo(
                 senderName: authorName,
                 senderAvatarURL: authorAvatarURL,
@@ -375,10 +392,15 @@ struct CommentMediaView: View {
             startAttachmentId: media.id,
             accentColor: accentColor,
             captionMap: snapshot.captions,
+            captionLinks: snapshot.links,
             senderInfoMap: snapshot.senders,
             // #7362 — pièce de COMMENTAIRE, pas de `MessageAttachment` :
             // aucune consommation à reporter.
             reportsAttachmentConsumption: false
         )
+        // Une pièce de publication n'est pas un contenu de conversation qui
+        // disparaît : ses sorties sont offertes. Le portillon est FERMÉ par
+        // défaut (#9573) ; l'hôte l'ouvre, et le dit.
+        .contentExitGate(.open)
     }
 }

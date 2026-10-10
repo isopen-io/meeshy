@@ -34,6 +34,7 @@ const enActivation = {
   'activation.gate.publish': 'To publish, verify your address. Your post is kept and will go out as soon as the code is confirmed.',
   'activation.gate.invite': 'To invite by email, verify your address. Your invitation will go out as soon as the code is confirmed.',
   'activation.gate.link': 'To create a link, verify your address. Your link will be created as soon as the code is confirmed.',
+  'activation.gate.moreLinks': 'Beyond 5 active links, verify your address to create more. Your link will be created as soon as the code is confirmed.',
 } as const;
 
 export default enActivation;

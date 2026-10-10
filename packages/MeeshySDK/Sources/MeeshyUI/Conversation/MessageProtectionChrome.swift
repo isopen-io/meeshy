@@ -52,7 +52,7 @@ public struct MessageProtectionChrome: View, Equatable {
             // n'a aucune protection et ne paie pas une pile de capsules vides.
             EmptyView()
         } else {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 // `enumerated()` plutôt qu'un `id: \.self` : deux badges de même
                 // forme (impossible aujourd'hui, mais rien ne l'interdit) ne
                 // doivent pas se voler leur identité de vue. Le rang est stable
@@ -136,13 +136,13 @@ public struct MessageProtectionChrome: View, Equatable {
 
     @ViewBuilder
     private func chrome<Content: View>(tint: Color, @ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 4) { content() }
+        HStack(spacing: MeeshySpacing.xs) { content() }
             .padding(.horizontal, isCompact ? 6 : 8)
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(tint.opacity(isDark ? 0.15 : 0.1))
-                    .overlay(Capsule().stroke(tint.opacity(0.3), lineWidth: 0.5))
+                    .overlay(Capsule().stroke(tint.opacity(0.3), lineWidth: MeeshyBorder.hairline))
             )
     }
 
@@ -154,6 +154,10 @@ public struct MessageProtectionChrome: View, Equatable {
 
     public static var viewOnceA11y: String {
         String(localized: "protection.view_once.a11y", defaultValue: "Vue unique", bundle: .module)
+    }
+
+    public static var afterReadA11y: String {
+        String(localized: "protection.after_read.a11y", defaultValue: "Message éphémère, disparaît après lecture", bundle: .module)
     }
 
     public static var blurredLabel: String {
@@ -210,11 +214,20 @@ public extension MessageProtectionChrome {
     /// `message.expiresAt != nil`) et la vue unique n'était annoncée nulle
     /// part : la protection la plus forte du produit était la seule invisible
     /// au lecteur d'écran.
+    ///
+    /// La flamme-œil (#8635) n'a pas de capsule — son filigrane est muet —,
+    /// elle s'annonce donc en tête, à la place qu'aurait le décompte.
     static func accessibilityLabels(
         for descriptor: MessageProtectionDescriptor,
         now: Date = Date()
     ) -> [String] {
-        descriptor.badges.compactMap { accessibilityLabel(for: $0, now: now) }
+        let afterRead: [String]
+        if descriptor.isAfterRead, case .expired = descriptor.ephemeralState {
+            afterRead = []
+        } else {
+            afterRead = descriptor.isAfterRead ? [afterReadA11y] : []
+        }
+        return afterRead + descriptor.badges.compactMap { accessibilityLabel(for: $0, now: now) }
     }
 
     /// La phrase d'UN badge — celle que la capsule porte, et celle que les

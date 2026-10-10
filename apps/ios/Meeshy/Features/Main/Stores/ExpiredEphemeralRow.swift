@@ -35,3 +35,43 @@ enum ExpiredEphemeralRow {
         ).isExpired
     }
 }
+
+/// **Ce que le rattrapage depuis le cache a le droit de remettre en base** (#7552).
+///
+/// `observeSync` recopie dans GRDB les messages que le cache tient et que le
+/// fil n'a pas. Or un éphémère mort n'est PLUS au fil, par construction — et
+/// `deleteExpiredEphemeral` l'a effacé de la base : il revenait comme « nouveau »,
+/// réinséré sans drapeau, sans durée ni échéance, c'est-à-dire en message
+/// ORDINAIRE que plus aucun balayage ne pouvait retirer. Un mort ne remonte
+/// pas ; un vivant remonte avec sa protection.
+enum CachedThreadSurfacing {
+
+    static func rows(_ cached: [Message],
+                     present: Set<String>,
+                     ledger: EphemeralReceiptRecording = EphemeralReceiptLedger.shared,
+                     now: Date = Date()) -> [MessagePersistenceActor.IncomingMessageData] {
+        cached
+            .filter { !present.contains($0.id) }
+            .filter { message in
+                !ExpiredEphemeralRow.isGone(id: message.id, flags: message.protectionFlags,
+                                            expiresAt: message.expiresAt,
+                                            ephemeralDuration: message.effects.ephemeralDuration,
+                                            ledger: ledger, now: now)
+            }
+            .map { message in
+                MessagePersistenceActor.IncomingMessageData(
+                    id: message.id,
+                    conversationId: message.conversationId,
+                    senderId: message.senderId,
+                    content: message.content.isEmpty ? nil : message.content,
+                    createdAt: message.createdAt,
+                    computedState: .delivered,
+                    messageSource: message.messageSource.rawValue,
+                    messageType: message.messageType.rawValue,
+                    expiresAt: message.expiresAt,
+                    effectFlags: message.protectionFlags.rawValue,
+                    ephemeralDuration: message.effects.ephemeralDuration
+                )
+            }
+    }
+}

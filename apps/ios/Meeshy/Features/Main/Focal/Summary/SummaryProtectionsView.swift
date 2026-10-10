@@ -80,7 +80,7 @@ struct SummaryProtectionsView: View {
                                 FlameEyeGlyph(size: 18, tint: ComposerProtection.ephemeral.tint)
                             }
                             Text(entry.senderDisplayName)
-                                .font(MeeshyFont.relative(13, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                                 .foregroundColor(isDark ? .white.opacity(0.9) : .black.opacity(0.85))
                                 .lineLimit(1)
                             Spacer(minLength: 0)

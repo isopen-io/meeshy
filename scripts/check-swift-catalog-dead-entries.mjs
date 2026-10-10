@@ -344,7 +344,95 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 280 → 279 (#8438) : le retrait d'un participant d'appel appelle enfin
 // `DELETE /calls/:callId/participants/:participantId` depuis le catalogue.
 // Valeur MESURÉE le 2026-09-28.
-const BASELINE_DEAD_ENTRIES = 279;
+// 279 -> 285 (#8876, 2026-09-30) : six entrées `AdminEndpoint` GÉNÉRÉES depuis
+// `route-manifest.json` pour la vue de Dieu de l'administration —
+// `.auditLogs`, `.trackingLinks`, `.trackingLinksByLinkId`, `.monitoring`,
+// `.communitiesByCommunityId` et `.communitiesByCommunityIdMembers`. Leur seul
+// appelant est la console d'administration WEB, comme leurs voisines
+// `AdminEndpoint` ; iOS n'a pas d'écran d'administration. Valeur MESURÉE le
+// 2026-09-30.
+// 285 -> 286 (#8906, fusion de `dev` dans la vue de Dieu, 2026-09-30) :
+// `AdminEndpoint.engagementScale` — le barème de points se règle depuis
+// l'administration WEB (`/admin/engagement-scale`) ; iOS n'a pas d'écran
+// d'administration du barème. Sa jumelle lecteur,
+// `ConversationsEndpoint.byIdEngagement`, est appelée par
+// `ConversationService.engagement(conversationId:)`. Les deux cliquets se
+// lisent ici sur le résultat de la fusion (chacun 279 de son côté : 285 et
+// 280), jamais sur l'un des deux parents. Valeur MESURÉE le 2026-09-30.
+// 285 -> 292 (#9141, 2026-10-02) : les sept entrées `StickerPacksEndpoint`
+// GÉNÉRÉES depuis `route-manifest.json` pour les packs de stickers tiers —
+// `.root`, `.installed`, `.pending`, `.submissions`, `.bySlug`,
+// `.bySlugInstall` et `.bySlugReview`. Mortes à la naissance PAR
+// CONSTRUCTION : #9141 livre les routes gateway et la Boutique WEB ; les
+// onglets par pack côté iOS sont un suivi à part, qui n'existe pas encore.
+// Valeur MESURÉE le 2026-10-02.
+// 289 -> 294 (#9399, 2026-10-05) : les cinq entrées `MeEndpoint.game*`
+// (`.gameChestClaim`, `.gameFlameFreezes`, `.gameFlameRelight`,
+// `.gameGuideSeen`, `.gameMissionsByMissionIdReroll`) GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `MeEndpoint.swift` (le fichier était
+// resté périmé après le lot du jeu, #9382). Mortes à la naissance PAR
+// CONSTRUCTION, même motif que `StickerPacksEndpoint` ci-dessus : le jeu
+// (chests, flamme, missions) est livré côté gateway et web ; aucun écran iOS
+// ne les appelle encore. Valeur MESURÉE le 2026-10-05.
+// 294 -> 308 (#9506, 2026-10-05) : quatorze entrées GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `MeEndpoint.swift` et
+// `UsersEndpoint.swift` (restés périmés après la vague 2 du jeu — ligues,
+// duos, saisons, prestige, parrainage — #9225/#9230, #9504) :
+// `MeEndpoint.gameDuoByDuoIdAbandon`, `.gameDuoByDuoIdAccept`,
+// `.gameDuoInvite`, `.gameLeagueConsent`, `.gameLeagueFriends`,
+// `.gameLeaguePseudonym`, `.gameLeagueWeek`, `.gamePrestige`, `.gamePrivacy`,
+// `.gameSeasonSeal`, `.gameSeasonStepsByStepClaim`, `.gameShowcaseOrder`,
+// `.gameVisibility`, et `UsersEndpoint.byUserIdGameShowcase`. Mortes à la
+// naissance PAR CONSTRUCTION, même motif que les deux entrées ci-dessus : la
+// vague 2 est livrée côté gateway ; aucun écran iOS ne les appelle encore.
+// Valeur MESURÉE le 2026-10-05.
+// 308 -> 309 (#9529, 2026-10-06) : `UsersEndpoint.byUserIdGame`
+// (`GET /users/:userId/game`, le jeu d'un autre membre selon son réglage),
+// GÉNÉRÉE depuis `route-manifest.json` par `e0a8b73588` (#9481), qui a livré
+// la route gateway et régénéré `UsersEndpoint.swift` sans relever cette
+// référence. Trouvée en comparant la liste triée de `fe1c386e6f` (308) à celle
+// de la tête de `dev` (309) : une entrée de plus, aucune n'a regagné
+// d'appelant. iOS APPELLE cette route (`GameService.fetchUserGame`,
+// `ef03716ee9`), mais par `GameEndpoint.userGame` — le catalogue du jeu ÉCRIT
+// À LA MAIN, qui encode l'identifiant avant de le poser dans le chemin
+// (`GameIntegrationRoutes.userGamePath`, témoin `GameRoutesTests`) et déclare
+// les refus typés (`rejectionPolicy == .structured`) ; l'entrée générée
+// interpole l'identifiant brut et n'a pas cette politique, la lui substituer
+// retirerait les deux. Même cas que `byUserIdGameShowcase` et les dix-huit
+// `MeEndpoint.game*` ci-dessus, dont chacune a sa jumelle dans `GameEndpoint`.
+// Elles ne reviendront au compte que le jour où `GameEndpoint` se retire au
+// profit du catalogue généré, comme son en-tête l'annonce. Valeur MESURÉE le
+// 2026-10-06.
+// 309 -> 289 (#9535, 2026-10-07) : le jour annoncé ci-dessus est arrivé.
+// `GameEndpoint` (le catalogue du jeu écrit à la main) est RETIRÉ ; `GameService`
+// appelle le catalogue généré — dix-huit `MeEndpoint.game*` et les deux
+// `UsersEndpoint.byUserIdGame*` reviennent au compte des entrées appelées, soit
+// vingt de moins. Ce que la jumelle apportait que le générateur ne dit pas vit
+// désormais dans `GameEndpointPolicy.swift` : les refus 409 typés
+// (`rejectionPolicy == .structured`) et l'encodage des identifiants (fabriques
+// `MeEndpoint.gameMissionReroll(missionId:)`, `.gameDuoAccept`, `.gameDuoAbandon`,
+// `.gameSeasonClaim`, `UsersEndpoint.gameOf`, `.gameShowcaseOf`). `GameRoutesTests`
+// compare les adresses du CATALOGUE à `GAME_ROUTES` et `GAME_INTEGRATION_ROUTES`.
+// Valeur MESURÉE le 2026-10-07.
+// 289 -> 291 (2026-10-08) : deux entrées SANS appelant, chacune pour une raison
+// dite. `AttachmentsEndpoint.signedByTokenByWildcard` (#9600) n'aura JAMAIS
+// d'appelant client : l'adresse signée par lecteur est SERVIE par la passerelle
+// dans les charges (`fileUrl`, vignettes, variantes, pistes) et les clients la
+// consomment telle quelle — c'est ce qui rend le lot rétrocompatible sans
+// toucher aux clients. `MeEndpoint.securityEvents` (65d71ff793, correctif
+// d'audit L2-4) est PRÉMATURÉE : les écrans Sécurité iOS et web ne l'appellent
+// pas encore ; #9651 la branche et fera redescendre la référence d'un cran.
+// Valeur MESURÉE le 2026-10-08.
+// 291 -> 292 (#9927, 2026-10-10) : `MeEndpoint.birthDate` (`PUT /me/birth-date`),
+// GÉNÉRÉE depuis `route-manifest.json` avec la route — PRÉMATURÉE : l'étape d'âge de
+// l'onboarding iOS l'appellera avec #9929, qui ramène la référence à 291. Valeur
+// MESURÉE le 2026-10-10.
+//
+// 292 -> 291 (#9929, 2026-10-10) : l'étape d'âge de l'onboarding iOS appelle
+// désormais `MeEndpoint.birthDate` (`BirthDateService.setBirthDate`) — l'entrée
+// n'est plus morte, comme annoncé ci-dessus. Valeur MESURÉE sur l'arbre fusionné
+// avec `dev` du 2026-10-10.
+const BASELINE_DEAD_ENTRIES = 291;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

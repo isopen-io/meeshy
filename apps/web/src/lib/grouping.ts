@@ -118,9 +118,9 @@ export function place(messages: readonly Message[], options: PlaceOptions): read
 
 /**
  * Les trois libellés relatifs — miroir des paramètres `today`/`yesterday`/
- * `dayBeforeYesterday` de `MessageDayLabel.label` (défauts français, comme
- * côté Swift). Le catalogue i18n (dimension 9, non mûre sur toute la v3.1)
- * les remplacera par une résolution i18n sans toucher `dayLabel`.
+ * `dayBeforeYesterday` de `MessageDayLabel.label`. Sans `labels` explicites,
+ * ils suivent la LOCALE du libellé (`dayLabelsFor`, #9710), comme le nom du
+ * jour qu'ils précèdent.
  */
 export type DayLabels = {
   readonly today: string;
@@ -133,6 +133,42 @@ export const FRENCH_DAY_LABELS: DayLabels = {
   yesterday: 'Hier',
   dayBeforeYesterday: 'Avant-hier',
 };
+
+/**
+ * LES SEPT LANGUES DU PRODUIT (#9710) — valeurs du catalogue iOS
+ * (`date.today`, `date.yesterday`, `date.dayBeforeYesterday`). Un fil lu en
+ * anglais s'ouvrait sur « Aujourd'hui » suivi de noms de jours anglais : les
+ * mots relatifs ne suivaient pas la locale que le reste du libellé suivait.
+ */
+const DAY_LABELS: Readonly<Record<string, DayLabels>> = {
+  fr: FRENCH_DAY_LABELS,
+  en: { today: 'Today', yesterday: 'Yesterday', dayBeforeYesterday: 'Day before yesterday' },
+  es: { today: 'Hoy', yesterday: 'Ayer', dayBeforeYesterday: 'Anteayer' },
+  pt: { today: 'Hoje', yesterday: 'Ontem', dayBeforeYesterday: 'Anteontem' },
+  de: { today: 'Heute', yesterday: 'Gestern', dayBeforeYesterday: 'Vorgestern' },
+  it: { today: 'Oggi', yesterday: 'Ieri', dayBeforeYesterday: "L'altro ieri" },
+  ar: { today: 'اليوم', yesterday: 'أمس', dayBeforeYesterday: 'أول أمس' },
+};
+
+/** Hors des sept langues, les mots du navigateur (`Intl.RelativeTimeFormat`) ;
+ * une locale qu'il ne connaît pas retombe sur le français, le défaut produit. */
+function relativeDayLabels(locale: string): DayLabels {
+  try {
+    const format = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+    return {
+      today: capitalizeFirst(format.format(0, 'day'), locale),
+      yesterday: capitalizeFirst(format.format(-1, 'day'), locale),
+      dayBeforeYesterday: capitalizeFirst(format.format(-2, 'day'), locale),
+    };
+  } catch {
+    return FRENCH_DAY_LABELS;
+  }
+}
+
+export function dayLabelsFor(locale: string): DayLabels {
+  const base = locale.trim().toLowerCase().split(/[-_]/u)[0] ?? '';
+  return DAY_LABELS[base] ?? relativeDayLabels(locale);
+}
 
 /** Capitalise uniquement la première lettre — jamais tous les mots (`.toUpperCase()` capitaliserait la phrase entière). */
 function capitalizeFirst(text: string, locale: string): string {
@@ -179,7 +215,7 @@ export type DayLabelOptions = {
 export function dayLabel(iso: Clock, options: DayLabelOptions): string {
   const date = new Date(iso);
   const now = options.now === undefined ? new Date() : new Date(options.now);
-  const labels = options.labels ?? FRENCH_DAY_LABELS;
+  const labels = options.labels ?? dayLabelsFor(options.locale);
   const daysDiff = daysBetween(date, now, options.timeZone);
 
   // Une date au futur le même jour calendaire reste « Aujourd'hui ».

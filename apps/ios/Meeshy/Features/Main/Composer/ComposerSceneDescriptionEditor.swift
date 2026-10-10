@@ -104,11 +104,15 @@ struct ComposerSceneDescriptionEditor: View {
         // glass comme pour les captions »). Il était un aplat opaque de bord à
         // bord, qui coupait l'écran sous la scène ; il flotte désormais sur
         // elle, teinté du plateau comme le reste du chrome.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
                        tint: plateauTint.opacity(0.55))
-        .padding(.horizontal, 8)
-        .padding(.bottom, 4)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xs)
+        // **Un fondu, plus un glissement** (#9448) : en glissant vers le bas,
+        // le panneau traversait les rangées @ # et la barre Public / Publier
+        // qui revenaient. Il s'efface sur place, et le chrome attend la fin
+        // du fondu (`ComposerWritingExit`).
+        .transition(ComposerWritingExit.zoneTransition(reduceMotion: reduceMotion))
         .environment(\.colorScheme, .dark)
     }
 
@@ -117,6 +121,8 @@ struct ComposerSceneDescriptionEditor: View {
     /// sa taille naturelle, ce qui est le seul défaut sûr : une valeur devinée
     /// ferait sauter la scène à la première image.
     @State private var mesureHauteur: CGFloat?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var editeur: some View {
         ComposerDescriptionLayer(
@@ -138,8 +144,8 @@ struct ComposerSceneDescriptionEditor: View {
             languageAccessory: languageAccessory,
             validationLabel: validationLabel
         )
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .frame(maxWidth: .infinity)
         .background { mesure }
         .onPreferenceChange(ComposerDescriptionEditorHeightKey.self) { hauteur in

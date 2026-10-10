@@ -35,6 +35,9 @@ nonisolated enum MessageStickerFavorite {
     /// promettrait (loi 4).
     static func entry(for sticker: MessageSticker?) -> StickerUsageEntry? {
         guard let sticker else { return nil }
+        // Un Mee s'épingle comme Mee (#9067) — jamais comme le gabarit
+        // `mee.<id>`, que la feuille ne sait pas relire, ni comme son emoji.
+        if let mee = MeeStickerCatalog.sticker(forTemplateID: sticker.templateId) { return .mee(mee) }
         // Le GABARIT d'abord : il porte aussi un emoji de repli, et le lire en
         // premier épinglerait le repli à la place de la chose.
         if let id = sticker.templateId, !id.isEmpty {

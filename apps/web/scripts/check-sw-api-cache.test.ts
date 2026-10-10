@@ -1,8 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
+import { apiCacheIdentityPlugin } from '@/lib/net/api-cache-identity';
 import { API_RESPONSE_CACHE_PATTERN } from '@/lib/net/api-runtime-cache';
+import { mediaCacheFreshnessPlugin } from '@/lib/net/media-cache-freshness';
 
 import {
+  auditDelaiDuSeauApi,
+  auditFraicheurDuSeauMedias,
+  auditIdentiteDuSeauApi,
   auditRoutage,
   auditSeauApi,
   auditSeauMedias,
@@ -30,9 +35,10 @@ import {
  * seule dont la réponse soit observable par l'utilisateur.
  */
 
-/** Le seau `api`, tel que Workbox le sérialise. */
-const SEAU_API = (matcher: string) =>
-  `s.registerRoute(${matcher},new s.NetworkFirst({cacheName:"api",networkTimeoutSeconds:3,` +
+/** Le seau `api`, tel que Workbox le sérialise — avec le délai réseau des
+ * artefacts livrés avant #9637 quand `delai` le demande. */
+const SEAU_API = (matcher: string, { delai = false }: { readonly delai?: boolean } = {}) =>
+  `s.registerRoute(${matcher},new s.NetworkFirst({cacheName:"api",${delai ? 'networkTimeoutSeconds:3,' : ''}` +
   `plugins:[new s.ExpirationPlugin({maxEntries:200,maxAgeSeconds:604800})]}),"GET")`;
 
 /** Le seau `medias`, avec ou sans sa garde de réponse cachable. */
@@ -256,5 +262,108 @@ describe('le découpage du premier argument', () => {
     expect(decoupePremierArgument('registerRoute(({url:u})=>f(u,1),new X())', 'registerRoute('.length)).toBe(
       '({url:u})=>f(u,1)',
     );
+  });
+});
+
+describe('#9637 — le seau `api` ne rend sa copie que sur un ÉCHEC du réseau, jamais sur un délai', () => {
+  /*
+   * `networkTimeoutSeconds: 3` rendait la réponse RANGÉE dès que la passerelle
+   * mettait plus de trois secondes, à un lecteur EN LIGNE : la liste relue
+   * était celle d'une lecture précédente, et TanStack l'écrivait par-dessus
+   * l'aperçu que `message:new` venait de poser. L'affichage instantané est
+   * l'affaire du cache persisté de TanStack ; la copie du seau sert le hors
+   * ligne, c'est-à-dire un réseau qui ÉCHOUE.
+   */
+  test('l’artefact livré avec un délai réseau est dénoncé', () => {
+    const violations = auditDelaiDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API(MATCHER_JUSTE, { delai: true })));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('networkTimeoutSeconds');
+  });
+
+  test('l’artefact sans délai est accepté', () => {
+    expect(auditDelaiDuSeauApi(CONFORME)).toEqual([]);
+  });
+
+  test('un artefact sans seau `api` laisse ce verdict à l’audit du seau', () => {
+    expect(auditDelaiDuSeauApi('self.define([],function(){})')).toEqual([]);
+  });
+});
+
+describe('le seau `api` range chaque réponse sous son identité (#8674)', () => {
+  /** Le seau `api` avec un greffon `cacheKeyWillBeUsed` — la forme que Workbox sérialise. */
+  const SEAU_API_AVEC = (greffon: string) =>
+    `s.registerRoute(${MATCHER_JUSTE},new s.NetworkFirst({cacheName:"api",networkTimeoutSeconds:3,` +
+    `plugins:[new s.ExpirationPlugin({maxEntries:200,maxAgeSeconds:604800}),{cacheKeyWillBeUsed:${greffon}}]}),"GET")`;
+
+  test('sans greffon, deux comptes partagent l’entrée d’une URL : dénoncé', async () => {
+    const violations = await auditIdentiteDuSeauApi(CONFORME);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('cacheKeyWillBeUsed');
+  });
+
+  test('le greffon de PRODUCTION, stringifié comme Workbox le fait, est accepté', async () => {
+    const greffon = String(apiCacheIdentityPlugin.cacheKeyWillBeUsed);
+    expect(await auditIdentiteDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC(greffon)))).toEqual([]);
+  });
+
+  test('un greffon qui rend l’URL nue (même clé pour A et B) est dénoncé', async () => {
+    const violations = await auditIdentiteDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async({request:s})=>s.url')));
+    expect(violations.join('\n')).toContain('MÊME clé');
+  });
+
+  test('un greffon qui écrit le jeton en clair est dénoncé', async () => {
+    const violations = await auditIdentiteDuSeauApi(
+      AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async({request:s})=>s.url+"#"+(s.headers.get("Authorization")??"")')),
+    );
+    expect(violations.join('\n')).toContain('EN CLAIR');
+  });
+
+  test('un greffon non autonome (identifiant importé) est dénoncé', async () => {
+    const violations = await auditIdentiteDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async({request:s})=>empreinte(s)')));
+    expect(violations.join('\n')).toContain('NON AUTONOME');
+  });
+});
+
+describe('#9478 — le seau `medias` respecte la fraîcheur déclarée par la passerelle', () => {
+  const SEAU_MEDIAS_AVEC = (ecriture: string, lecture: string) =>
+    `s.registerRoute(({request:s})=>"image"===s.destination,new s.CacheFirst({cacheName:"medias",plugins:[` +
+    `new s.ExpirationPlugin({maxEntries:300,maxAgeSeconds:2592e3,purgeOnQuotaError:!0}),` +
+    `new s.CacheableResponsePlugin({statuses:[0,200]}),` +
+    `{cacheWillUpdate:${ecriture},cachedResponseWillBeUsed:${lecture}}]}),"GET")`;
+
+  const PRODUCTION = SEAU_MEDIAS_AVEC(
+    String(mediaCacheFreshnessPlugin.cacheWillUpdate),
+    String(mediaCacheFreshnessPlugin.cachedResponseWillBeUsed),
+  );
+
+  test('le greffon de PRODUCTION, stringifié comme Workbox le fait, est accepté', async () => {
+    expect(await auditFraicheurDuSeauMedias(AUTOUR(PRODUCTION))).toEqual([]);
+  });
+
+  test('sans greffon, une vue unique s’écrit trente jours sur le disque : dénoncé', async () => {
+    const violations = await auditFraicheurDuSeauMedias(AUTOUR(SEAU_MEDIAS()));
+    expect(violations.join('\n')).toContain('cacheWillUpdate');
+    expect(violations.join('\n')).toContain('cachedResponseWillBeUsed');
+  });
+
+  test('un greffon qui écrit tout (Cache-Control ignoré) est dénoncé', async () => {
+    const violations = await auditFraicheurDuSeauMedias(
+      AUTOUR(SEAU_MEDIAS_AVEC('async({response:s})=>s', String(mediaCacheFreshnessPlugin.cachedResponseWillBeUsed))),
+    );
+    expect(violations.join('\n')).toContain('no-store');
+  });
+
+  test('un greffon qui refuse aussi le média ORDINAIRE est dénoncé — le Cache-First nominal compte', async () => {
+    const violations = await auditFraicheurDuSeauMedias(
+      AUTOUR(SEAU_MEDIAS_AVEC('async()=>null', String(mediaCacheFreshnessPlugin.cachedResponseWillBeUsed))),
+    );
+    expect(violations.join('\n')).toContain('ordinaire');
+  });
+
+  test('un greffon non autonome est dénoncé', async () => {
+    const violations = await auditFraicheurDuSeauMedias(
+      AUTOUR(SEAU_MEDIAS_AVEC('async({response:s})=>protege(s)?null:s', String(mediaCacheFreshnessPlugin.cachedResponseWillBeUsed))),
+    );
+    expect(violations.join('\n')).toContain('NON AUTONOME');
   });
 });

@@ -102,7 +102,7 @@ export function LivingSummary({
           vide. `mt-auto` le pousse en bas quand le contenu est court,
           `sticky` le retient en vue quand il est long.
         */
-        className="sticky bottom-0 mt-auto min-h-11 w-full rounded-chip px-4 py-3 text-bubble font-bold text-white"
+        className="sticky bottom-0 mt-auto min-h-11 w-full rounded-chip px-4 py-3 text-bubble font-bold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)' }}
       >
         Reprendre le fil

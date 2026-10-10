@@ -34,11 +34,19 @@ export const sessionSchema = {
     browserVersion: { type: 'string', nullable: true, description: 'Browser version' },
     isMobile: { type: 'boolean', description: 'Is mobile device' },
 
-    // Location Information
+    // Ce que le client déclare (#9610, `utils/client-session.ts`) et le moyen de connexion posé par le serveur
+    appVersion: { type: 'string', nullable: true, description: 'Meeshy version declared by the client (X-Meeshy-Version)' },
+    appBuild: { type: 'string', nullable: true, description: 'Meeshy build declared by the client (X-Meeshy-Build)' },
+    platform: { type: 'string', nullable: true, description: 'ios | web | pwa | android-shell (X-Meeshy-Platform)' },
+    deviceName: { type: 'string', nullable: true, description: 'Readable device name derived from the model by the client (X-Meeshy-Device-Name)' },
+    loginMethod: { type: 'string', nullable: true, description: 'password | two_factor | magic_link | registration | email_verification | oauth | anonymous' },
+
+    // Location Information — déduit de l'adresse par une base LOCALE (DB-IP Lite, #9609) ; la ville est APPROXIMATIVE
     ipAddress: { type: 'string', nullable: true, description: 'IP address' },
     country: { type: 'string', nullable: true, description: 'Country code (ISO 3166-1 alpha-2: FR, US)' },
-    city: { type: 'string', nullable: true, description: 'City name' },
+    city: { type: 'string', nullable: true, description: 'Approximate city, derived from the IP address' },
     location: { type: 'string', nullable: true, description: 'Formatted location: Paris, France' },
+    timezone: { type: 'string', nullable: true, description: 'IANA time zone declared by the client' },
 
     // Lifecycle
     createdAt: { type: 'string', format: 'date-time', description: 'Session creation timestamp' },
@@ -65,5 +73,22 @@ export const sessionMinimalSchema = {
     isMobile: { type: 'boolean', description: 'Is mobile device' },
     createdAt: { type: 'string', format: 'date-time', description: 'Session creation' },
     isTrusted: { type: 'boolean', description: 'Is this a trusted device (user-marked at login via `rememberDevice`)' }
+  }
+} as const;
+
+/**
+ * L'attribution de la géolocalisation, servie avec toute liste de sessions
+ * (#9609) — la licence CC-BY 4.0 de DB-IP Lite exige qu'elle accompagne le
+ * lieu affiché. Valeur : `GEOLOCATION_ATTRIBUTION` (`utils/client-session.ts`).
+ */
+export const geolocationAttributionSchema = {
+  type: 'object',
+  description: 'Attribution required by the IP geolocation database license; the city is approximate',
+  properties: {
+    provider: { type: 'string', example: 'DB-IP' },
+    text: { type: 'string', example: 'IP Geolocation by DB-IP' },
+    url: { type: 'string', example: 'https://db-ip.com' },
+    license: { type: 'string', example: 'CC-BY-4.0' },
+    approximate: { type: 'boolean', example: true }
   }
 } as const;

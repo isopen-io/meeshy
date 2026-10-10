@@ -113,6 +113,19 @@ extension BubbleContent {
         }
     }
 
+    /// Le voile de ce message consomme-t-il la vue unique au toucher ?
+    ///
+    /// Une vue unique TEXTE ouverte a déjà été consommée ; si elle est aussi
+    /// floutée, le voile qui reste est celui du FLOU (#8567, décision porteur
+    /// du 2026-09-29 : « l'ouverture de la vue unique n'enlève pas le flou ») —
+    /// son geste révèle sur place, comme pour tout message flouté.
+    var veilConsumesViewOnce: Bool { protection.isViewOnce }
+
+    /// Retoucher le texte d'une vue unique ouverte la referme (#7579) — sauf
+    /// s'il est encore voilé par son flou : le toucher appartient alors au
+    /// voile (#8567).
+    var viewOnceRetouchIsActive: Bool { isViewOnceRevealed && !requiresVeil }
+
     /// Ce que fait un toucher sur ce message — sur son voile, ou sur la
     /// cellule `media` de sa grille quand c'est elle qu'on touche.
     func protectedTap(on media: MessageAttachment? = nil) -> ProtectedContentTap {
@@ -124,7 +137,7 @@ extension BubbleContent {
         default:
             break
         }
-        if isViewOnceRevealed { return .closeViewOnce }
+        if isViewOnceRevealed { return isBlurred ? .revealInPlace : .closeViewOnce }
         if isViewOnce { return .openViewOnce(fullscreen: false) }
         if isBlurred { return .revealInPlace }
         return media.map(ProtectedContentTap.resolve(cell:)) ?? .none

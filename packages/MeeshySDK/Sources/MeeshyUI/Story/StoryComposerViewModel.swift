@@ -265,13 +265,22 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// `internal` obligeait l'app à re-résoudre la luminance depuis ses propres
     /// lectures du fond : une seconde descente, à faire diverger de celle-ci au
     /// premier ajustement de seuil.
+    ///
+    /// **Le fond LU est celui de la scène, pas celui de l'outil** (#5008) :
+    /// `backgroundColor` garde la dernière teinte choisie, alors qu'une scène
+    /// neuve n'a pas de fond et que le canvas la peint noire. Lire l'outil
+    /// posait une encre claire sur ce noir.
     public var canvasChromeScheme: ColorScheme {
         CanvasChromeScheme.scheme(
-            background: backgroundColor,
+            background: currentEffects.background ?? Self.unpaintedSlideBackground,
             hasMediaBackground: hasBackgroundImage || currentEffects.hasVisualBackgroundMedia,
             mediaLuminance: backgroundMediaLuminance
         )
     }
+
+    /// Ce que le canvas peint sous une scène sans `effects.background` : noir
+    /// opaque (`StoryComposerView+Canvas`, repli documenté).
+    static let unpaintedSlideBackground = "000000"
 
     /// Luminance WCAG moyenne du bitmap de fond effectivement affiché
     /// (`currentSlideBackgroundImage` : média moderne d'abord, legacy
@@ -313,7 +322,9 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// persistance passe par la même chaîne `granularCanvasSync` — aucun
     /// callback de synchro à câbler par surface.
     @Published public var openingEffect: StoryTransitionEffect?
-    @Published var closingEffect: StoryTransitionEffect?
+    /// `public` en LECTURE (#8792) : le carrousel d'effets de la scène la
+    /// montre ; l'écriture passe par `setSlideTransitions`.
+    @Published public internal(set) var closingEffect: StoryTransitionEffect?
 
     // Per-slide background image transforms (persisted across slide changes)
     struct BackgroundTransform {

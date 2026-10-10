@@ -13,6 +13,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
 import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
+import { SessionActivitySampler, sharedSessionActivity } from '../services/auth/session-activity';
 
 const authLogger = enhancedLogger.child({ module: 'auth' });
 
@@ -57,6 +58,14 @@ export type UnifiedAuthContext = {
   readonly userId?: string;
   readonly jwtToken?: string;
   readonly sessionToken?: string;
+  /**
+   * La session `UserSession` NOMMÉE par le claim `sid` du JWT vérifié (#9606) —
+   * la seule façon fiable de reconnaître « cet appareil-ci » : aucun client
+   * inscrit n'envoie `x-session-token` en REST. Absent pour un invité et pour
+   * un jeton sans `sid` (refusé à la porte depuis la fin de la fenêtre de
+   * transition, `legacyTokenRefusal`).
+   */
+  readonly sessionId?: string;
 
   readonly participantId?: string;
   readonly participant?: unknown;
@@ -182,6 +191,8 @@ class SessionRevokedError extends Error {
 export type AuthMiddlewareOptions = {
   /** L'horloge du délai de grâce — injectée par les témoins. */
   readonly now?: () => Date;
+  /** L'échantillonneur de dernière activité (#9607) — le partagé par défaut. */
+  readonly sessionActivity?: SessionActivitySampler;
 };
 
 export { ActivationBlockedError };
@@ -190,6 +201,7 @@ export { ActivationBlockedError };
 
 export class AuthMiddleware {
   private readonly now: () => Date;
+  private readonly sessionActivity: SessionActivitySampler;
 
   constructor(
     private prisma: PrismaClient,
@@ -197,6 +209,7 @@ export class AuthMiddleware {
     options: AuthMiddlewareOptions = {}
   ) {
     this.now = options.now ?? (() => new Date());
+    this.sessionActivity = options.sessionActivity ?? sharedSessionActivity;
   }
 
   async createAuthContext(
@@ -487,17 +500,13 @@ export class AuthMiddleware {
         }
       }
 
-      // round 6 — plus de concept de « JWT expiré mais accepté » à ce niveau
-      // (il aurait déjà levé plus haut) : dès qu'on atteint ce point, le JWT
-      // est valide et non expiré. Bookkeeping pur, ne décide jamais rien.
-      if (sessionToken) {
-        const hashedSessionToken = hashSessionToken(sessionToken);
-        this.prisma.userSession.update({
-          where: { sessionToken: hashedSessionToken },
-          data: { lastActivityAt: new Date() }
-        }).catch(err => {
-          authLogger.warn('Failed to update trusted session lastActivityAt (anon)', { err });
-        });
+      // #9607 — la dernière activité avance sur la session NOMMÉE par le JWT,
+      // échantillonnée (une écriture par session et par quart d'heure au plus)
+      // et détachée : bookkeeping pur, ne décide jamais rien, n'attend rien.
+      // L'en-tête `x-session-token` n'y est plus lu : il faisait réécrire la
+      // ligne à chaque requête, et aucun client inscrit ne l'envoie.
+      if (sid) {
+        this.sessionActivity.touch(this.prisma.userSession, { userId: user.id, sessionId: sid });
       }
 
       const userLanguage = resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined });
@@ -510,6 +519,7 @@ export class AuthMiddleware {
         userId: user.id,
         jwtToken,
         sessionToken: sessionToken || undefined,
+        sessionId: sid,
 
         displayName: user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username,
         userLanguage,
@@ -727,9 +737,13 @@ export function createUnifiedAuthMiddleware(
     allowAnonymous?: boolean;
     statusService?: StatusService;
     now?: () => Date;
+    sessionActivity?: SessionActivitySampler;
   } = {}
 ) {
-  const authMiddleware = new AuthMiddleware(prisma, options.statusService, { now: options.now });
+  const authMiddleware = new AuthMiddleware(prisma, options.statusService, {
+    now: options.now,
+    sessionActivity: options.sessionActivity,
+  });
 
   const unifiedAuth = async function unifiedAuth(request: FastifyRequest, reply: FastifyReply) {
     try {
@@ -954,6 +968,9 @@ export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
 export {
   requireEmailVerification,
   requirePublishingGrace,
+  requireShareLinkGrace,
+  UNVERIFIED_ACTIVE_SHARE_LINK_CAP,
   EMAIL_VERIFICATION_GATED_ROUTES,
   PUBLISHING_GRACE_GATED_ROUTES,
+  SHARE_LINK_GRACE_GATED_ROUTES,
 } from './verification-gates';

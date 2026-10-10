@@ -120,7 +120,7 @@ struct BubbleExpandableText: View, Equatable {
         let state = state
         let textColor = isMe ? Color.white : MeeshyColors.textPrimary(isDark: isDark)
 
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             MessageTextRenderer.render(state.displayedText, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
@@ -151,7 +151,7 @@ struct BubbleExpandableText: View, Equatable {
         // marque posée sur le verre mesurait 2,6:1, sous le seuil AA.
         return Text(title)
             .underline()
-            .font(MeeshyFont.relative(12, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             .foregroundColor(textColor)
             .frame(maxWidth: .infinity, minHeight: 24, alignment: .trailing)
             .padding(.trailing, 48)

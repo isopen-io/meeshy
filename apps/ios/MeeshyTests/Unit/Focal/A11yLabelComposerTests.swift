@@ -128,6 +128,17 @@ final class A11yLabelComposerTests: XCTestCase {
         XCTAssertTrue(expected.allSatisfy(composed.contains))
     }
 
+    /// #8635 — une flamme-œil n'a ni capsule ni décompte : VoiceOver ne disait
+    /// pas qu'elle disparaît après lecture.
+    func test_compose_afterReadMessage_announcesItDisappearsAfterReading() {
+        let descriptor = MessageProtectionDescriptor(badges: [], ephemeralState: .notEphemeral, isAfterRead: true)
+        let content = makeContent(text: "Salut", protection: descriptor)
+        XCTAssertTrue(
+            MessageAccessibilityLabelComposer.compose(content)
+                .contains(MessageProtectionChrome.afterReadA11y)
+        )
+    }
+
     /// Une vue unique n'était annoncée NULLE PART au lecteur d'écran : la
     /// protection la plus forte du produit était la seule invisible.
     func test_compose_viewOnceMessage_includesViewOnceLabel() {

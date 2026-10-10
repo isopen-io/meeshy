@@ -78,10 +78,20 @@ nonisolated enum NSEAttachmentPolicy {
     /// (`audio/mp4; codecs=mp4a.40.2`) et une casse quelconque : ce qui arrive
     /// ici vient d'une charge réseau, pas d'une constante du dépôt.
     static func isRenderableFamily(_ mimeType: String) -> Bool {
+        let base = baseType(mimeType)
+        return base.hasPrefix("image/") || base.hasPrefix("audio/")
+    }
+
+    /// Un média AUDIO — ce que la notification déployée sait faire écouter
+    /// (#8859). Même lecture tolérante du mime que `isRenderableFamily`.
+    static func isAudioFamily(_ mimeType: String) -> Bool {
+        baseType(mimeType).hasPrefix("audio/")
+    }
+
+    private static func baseType(_ mimeType: String) -> String {
         let tete = mimeType.split(separator: ";", maxSplits: 1,
                                   omittingEmptySubsequences: false).first ?? ""
-        let base = String(tete).trimmingCharacters(in: .whitespaces).lowercased()
-        return base.hasPrefix("image/") || base.hasPrefix("audio/")
+        return String(tete).trimmingCharacters(in: .whitespaces).lowercased()
     }
 
     /// **Ce message DÉCLARE-T-IL une protection de contenu ?** (#7453)
@@ -121,6 +131,10 @@ nonisolated enum NSEAttachmentPolicy {
     /// site d'appel — une taille mal lue vaut une taille absente, et une taille
     /// absente ouvre le pré-vol.
     static func declaredFileSize(_ raw: Any?) -> Int? { declaredInt(raw) }
+
+    /// La durée d'un média en millisecondes (`attachmentDurationMs`), sous la
+    /// même double forme chaîne / nombre que la taille.
+    static func declaredDurationMs(_ raw: Any?) -> Int? { declaredInt(raw) }
 
     /// Un entier de la charge `data`, qu'il voyage en nombre ou en chaîne.
     /// `declaredFileSize` en est le nom MÉTIER ; `declaresProtection` lit des

@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   CONVERSATION_TYPES,
+  SHARE_LINK_ARRIVALS_PAGE_DEFAULT,
+  SHARE_LINK_ARRIVALS_PAGE_MAX,
   SHARE_LINK_RECENT_ARRIVALS_CAP,
+  shareLinkArrivalsPageJsonSchema,
+  shareLinkArrivalsPageSchema,
   shareLinkPreviewConversationJsonSchema,
   shareLinkPreviewConversationSchema,
   shareLinkStatsJsonSchema,
@@ -63,5 +67,37 @@ describe('statistiques d’un lien d’invitation', () => {
     expect(Object.keys(shareLinkStatsJsonSchema.properties.recentArrivals.items.properties).sort()).toEqual(
       Object.keys(arrival()).sort(),
     );
+  });
+});
+
+describe('page des arrivées d’un lien d’invitation (#7813)', () => {
+  const entry = (overrides: Record<string, unknown> = {}) => ({
+    displayName: 'Nova',
+    isAnonymous: true,
+    country: 'FR',
+    language: 'fr',
+    joinedAt: '2026-09-24T10:00:00.000Z',
+    ...overrides,
+  });
+
+  it('accepte une page et sa suite', () => {
+    expect(shareLinkArrivalsPageSchema.safeParse({ arrivals: [entry()], nextCursor: 'abc' }).success).toBe(true);
+    expect(shareLinkArrivalsPageSchema.safeParse({ arrivals: [], nextCursor: null }).success).toBe(true);
+  });
+
+  it('une arrivée ne porte QUE nom, badge sans compte, pays, langue et date', () => {
+    const fields = ['country', 'displayName', 'isAnonymous', 'joinedAt', 'language'];
+    expect(Object.keys(shareLinkArrivalsPageSchema.shape.arrivals.element.shape).sort()).toEqual(fields);
+    expect(Object.keys(shareLinkArrivalsPageJsonSchema.properties.arrivals.items.properties).sort()).toEqual(fields);
+    expect(shareLinkArrivalsPageJsonSchema.properties.arrivals.items.additionalProperties).toBe(false);
+  });
+
+  it('le schéma JSON nomme chaque champ de la page', () => {
+    expect(Object.keys(shareLinkArrivalsPageJsonSchema.properties).sort()).toEqual(Object.keys(shareLinkArrivalsPageSchema.shape).sort());
+  });
+
+  it('une page par défaut tient entre la vingtaine des récentes et le plafond', () => {
+    expect(SHARE_LINK_ARRIVALS_PAGE_DEFAULT).toBeGreaterThan(SHARE_LINK_RECENT_ARRIVALS_CAP);
+    expect(SHARE_LINK_ARRIVALS_PAGE_MAX).toBeGreaterThanOrEqual(SHARE_LINK_ARRIVALS_PAGE_DEFAULT);
   });
 });

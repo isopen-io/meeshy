@@ -2,7 +2,7 @@ import { readMediaCrop } from '@meeshy/shared/utils/media-crop';
 
 import { fitScene } from '@/lib/canvas/fit';
 import { backgroundFraming } from '@/lib/canvas/background';
-import type { CanvasObject, CanvasScene } from '@/lib/canvas/document';
+import { isBackgroundAudio, type CanvasObject, type CanvasScene } from '@/lib/canvas/document';
 import { backgroundMedia, carriesPicture, isBackground } from '@/lib/feed/scene-framing';
 
 import { letterboxBands } from './letterbox';
@@ -149,7 +149,6 @@ function visibleImageRect(params: {
  * sur aucun pixel : il ne compte pas comme un objet à mesurer, contrairement
  * à un son NON-fond (la puce de lecture, mesurable et donc soumise à la
  * même règle que tout autre objet visible). */
-const isBackgroundSound = (object: CanvasObject): boolean => object.kind === 'audio' && object.payload.isBackground === true;
 
 /**
  * **CE QUI OCCUPE LA SCÈNE PAR-DESSUS SON FOND** — les objets que la loi doit
@@ -167,7 +166,7 @@ const isBackgroundSound = (object: CanvasObject): boolean => object.kind === 'au
 export function sceneOccupants(scene: CanvasScene): readonly CanvasObject[] {
   const fond = backgroundMedia(scene);
   return scene.objects.filter(
-    (o) => o.id !== fond?.id && !isBackgroundSound(o) && !(isBackground(o) && !carriesPicture(o)),
+    (o) => o.id !== fond?.id && !isBackgroundAudio(o) && !(isBackground(o) && !carriesPicture(o)),
   );
 }
 

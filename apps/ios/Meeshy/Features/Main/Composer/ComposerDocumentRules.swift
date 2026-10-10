@@ -24,7 +24,7 @@ import ImageIO
 nonisolated enum ComposerMediaIntake: Equatable, Hashable, CaseIterable {
     /// La pellicule — `PhotosPicker`.
     case photoLibrary
-    /// La capture en direct — `CameraView`.
+    /// La capture en direct — le viseur du composeur (`ComposerViewfinder`).
     case camera
     /// L'importateur de documents — `fileImporter`.
     case files
@@ -134,12 +134,19 @@ nonisolated enum ComposerDocumentToolEffect: Equatable {
     /// l'inverse (régression fermée par 7.4b sur `audioRecording`, rouverte
     /// ici si `originalLanguage` partait tel quel).
     case attachesTranscribedAudio
+
+    /// Fait NAÎTRE la scène d'un post sans média et y ouvre la saisie d'un
+    /// texte posé, dans le même geste (#9137) : un fond, le texte, le clavier.
+    /// Un texte laissé vide rend le document tel qu'il était
+    /// (`ComposerTextSceneDoor.returnsToDocument`).
+    case composesTextScene
 }
 
 nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     case photo
     case camera
     case emoji
+    case textScene
     case mention
     case document
     case place
@@ -167,9 +174,19 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     /// `.mention` perd le moins à ce déplacement : la mention s'écrit aussi en
     /// tapant `@` dans le texte, avec sa bande de suggestions — c'est le seul
     /// outil de la rangée qui a une seconde porte.
+    ///
+    /// **`.textScene` suit l'emoji et précède la palette (#9137)** : ce sont
+    /// les deux portes qui font naître une scène, et elles se lisent côte à
+    /// côte. Les trois premières de la maquette gardent leur rang.
     static let canonicalRow: [ComposerDocumentTool] = [
-        .photo, .camera, .emoji, .document, .place, .microphone, .mention
+        .photo, .camera, .emoji, .textScene, .document, .place, .microphone, .mention
     ]
+
+    /// L'outil derrière lequel la palette du fond se range : le texte s'il est
+    /// servi, l'emoji sinon — les deux naissances de la scène restent voisines.
+    static func paletteAnchor(in tools: [ComposerDocumentTool]) -> ComposerDocumentTool {
+        tools.contains(.textScene) ? .textScene : .emoji
+    }
 
     /// **Ce que cet outil DÉCLENCHE — et `nil` veut dire « rien ».**
     ///
@@ -215,6 +232,8 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
             return .attachesLocalMedia(.camera)
         case .emoji:
             return .insertsEmojiIntoText
+        case .textScene:
+            return .composesTextScene
         case .mention:
             return .opensReferencePicker
         case .document:
@@ -260,8 +279,14 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     /// j'y avais servi les outils qui posent un objet de scène, pour réparer un
     /// défaut que je venais de créer en retirant les rails. Les rails sont
     /// restaurés — la story se compose par eux et par la rangée contextuelle.
+    ///
+    /// Un mood n'a pas de scène : la porte qui en fait naître une s'en retire.
     static func servedRow(for format: ComposerFormat) -> [ComposerDocumentTool] {
-        format == .story ? [] : servedRow
+        switch format {
+        case .story: return []
+        case .status: return servedRow.filter { $0 != .textScene }
+        case .post, .reel: return servedRow
+        }
     }
 
     /// **Le jeu SF MODERNE — décision produit 2026-08-26 : SF retravaillés
@@ -278,6 +303,7 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
         case .photo: return "photo"
         case .camera: return "camera"
         case .emoji: return "face.smiling"
+        case .textScene: return ComposerRailDoor.text.symbolName
         case .mention: return "at"
         case .document: return "paperclip"
         case .place: return "mappin.and.ellipse"
@@ -964,6 +990,8 @@ nonisolated enum ComposerDocumentCopy {
         case .emoji:
             return String(localized: "composer.attach.emoji",
                           defaultValue: "Emoji", bundle: .main)
+        case .textScene:
+            return ComposerRailCopy.label(.text)
         case .document:
             return String(localized: "composer.attach.file",
                           defaultValue: "Fichier", bundle: .main)

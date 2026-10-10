@@ -24,6 +24,9 @@ import {
 } from './UploadProcessor';
 import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { unsetOrNull } from '../../utils/prisma-unset';
+import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
+import { derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
 
@@ -135,6 +138,16 @@ export class AttachmentService {
    * jamais sur la charge reçue : c'est la ligne qui a composé `effectFlags`
    * depuis toutes ses sources. Une clé ABSENTE ne touche pas sa colonne —
    * l'appelant qui ne déclare rien n'écrase rien.
+   *
+   * LE LIEN NE DÉPLACE NI NE DÉPROTÈGE (#9587). Il n'apparie que des pièces
+   * NON attachées (`messageId` nul ou absent du document) : une pièce déjà
+   * portée par un message y reste. Et il n'AJOUTE que de la protection — un
+   * `false` ou un zéro du message n'efface rien de ce que la pièce porte, les
+   * bits se composent par OU.
+   *
+   * LE LIEN FIXE LE RANG (#9776). L'ordre de `attachmentIds` est l'ordre du
+   * composeur ; chaque pièce reçoit le sien en `rank`, que toute lecture trie
+   * par `MESSAGE_ATTACHMENT_ORDER`. Un id répété garde sa première place.
    */
   async associateAttachmentsToMessage(
     attachmentIds: readonly string[],
@@ -146,21 +159,34 @@ export class AttachmentService {
       readonly maxViewOnceCount?: number | null;
     }
   ): Promise<void> {
-    await this.prisma.messageAttachment.updateMany({
-      where: {
-        id: { in: [...attachmentIds] },
-      },
-      data: {
-        messageId: messageId,
-        // Écrit seulement ce que le message DÉCLARE. Poser `false` en l'absence
-        // d'appelant renseigné écraserait la protection d'une pièce qui la
-        // porterait déjà par un autre chemin — un `undefined` laisse Prisma
-        // ne pas toucher la colonne.
-        ...(protection?.isViewOnce === undefined ? {} : { isViewOnce: protection.isViewOnce }),
-        ...(protection?.isBlurred === undefined ? {} : { isBlurred: protection.isBlurred }),
-        ...(protection?.effectFlags === undefined ? {} : { effectFlags: protection.effectFlags }),
-      },
+    const orderedIds = [...new Set(attachmentIds)];
+    const added = {
+      messageId,
+      ...(protection?.isViewOnce === true ? { isViewOnce: true } : {}),
+      ...(protection?.isBlurred === true ? { isBlurred: true } : {}),
+    };
+    const addedFlags = protection?.effectFlags ?? 0;
+    const carriedFlags = addedFlags === 0
+      ? null
+      : new Map(
+          (await this.prisma.messageAttachment.findMany({
+            where: { id: { in: orderedIds }, ...unsetOrNull('messageId') },
+            select: { id: true, effectFlags: true },
+          })).map((row) => [row.id, row.effectFlags ?? 0] as const),
+        );
+    const writes = orderedIds.flatMap((id, rank) => {
+      if (carriedFlags === null) return [{ id, data: { ...added, rank } }];
+      const carried = carriedFlags.get(id);
+      return carried === undefined ? [] : [{ id, data: { ...added, rank, effectFlags: carried | addedFlags } }];
     });
+    await Promise.all(
+      writes.map(({ id, data }) =>
+        this.prisma.messageAttachment.updateMany({
+          where: { id: { in: [id] }, ...unsetOrNull('messageId') },
+          data,
+        }),
+      ),
+    );
   }
 
   private toAttachment(attachment: {
@@ -364,6 +390,62 @@ export class AttachmentService {
     if (attachment.thumbnailPath) {
       await this.unlinkIfUnreferenced('thumbnailPath', attachment.thumbnailPath);
     }
+
+    await this.unlinkDerivedFiles(attachment);
+  }
+
+  /**
+   * Les pistes TTS et les variantes WebP de la ligne supprimée (#9315), MOINS
+   * ce que citent encore les lignes qui partagent ses octets : une copie
+   * transférée reprend le `filePath` et la carte de traductions de l'original,
+   * mais peut porter des pistes à elle (`<idCopie>_<langue>`). Sans ce ménage,
+   * elles restaient servies par la route de fichiers, à une adresse dérivée de
+   * l'ObjectId, après le départ de la ligne. Une lecture qui échoue garde tout.
+   */
+  private async unlinkDerivedFiles(attachment: {
+    filePath: string;
+    thumbnailPath: string | null;
+    translations?: unknown;
+    imageVariants?: unknown;
+  }): Promise<void> {
+    const candidates = derivedFileCandidates(attachment);
+    if (candidates.length === 0) {
+      return;
+    }
+
+    let survivors: Array<{
+      filePath: string;
+      thumbnailPath: string | null;
+      translations: unknown;
+      imageVariants: unknown;
+    }>;
+    try {
+      survivors = await this.prisma.messageAttachment.findMany({
+        where: { filePath: attachment.filePath },
+        select: { filePath: true, thumbnailPath: true, translations: true, imageVariants: true },
+      });
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
+
+    const kept = new Set(
+      [attachment, ...survivors]
+        .flatMap((row) => [
+          row.filePath,
+          row.thumbnailPath,
+          ...(row === attachment ? [] : derivedFileCandidates(row)),
+        ])
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => resolveInsideUploadRoot(this.uploadBasePath, value))
+    );
+    const derived = new Set(
+      candidates
+        .map((candidate) => resolveInsideUploadRoot(this.uploadBasePath, candidate))
+        .filter((fullPath): fullPath is string => fullPath !== null && !kept.has(fullPath))
+    );
+
+    await Promise.all([...derived].map((fullPath) => this.unlinkQuietly(fullPath)));
   }
 
   /**
@@ -383,8 +465,17 @@ export class AttachmentService {
       if (stillReferenced > 0) {
         return;
       }
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
 
-      await fs.unlink(path.join(this.uploadBasePath, relativePath));
+    await this.unlinkQuietly(path.join(this.uploadBasePath, relativePath));
+  }
+
+  private async unlinkQuietly(fullPath: string): Promise<void> {
+    try {
+      await fs.unlink(fullPath);
     } catch (error) {
       logger.error('Erreur suppression fichiers', error as Error);
     }
@@ -416,6 +507,36 @@ export class AttachmentService {
    * même forme dérivent ; une seule ne peut pas. La méthode rend donc un
    * `Attachment`, comme ses deux sœurs.
    */
+  /**
+   * La galerie d'une conversation — et la seule surface de LISTE qui rende des
+   * pièces jointes à un lecteur ordinaire, y compris un participant anonyme.
+   *
+   * ## Pourquoi le cycle de vie du porteur se borne ICI (#9244)
+   *
+   * `carrierMessageStillServesBytes` répondait déjà pour le DÉTAIL
+   * (`GET /attachments/:id/metadata`, depuis #4923) ; cette liste, elle, ne
+   * bornait que `deletedAt`. Elle annonçait donc le nom d'origine, les
+   * dimensions, l'auteur et la date d'un média dont le porteur avait EXPIRÉ
+   * (`expiresAt`) ou BRÛLÉ (`viewOnceBurnAt`) — un média que l'émetteur avait
+   * voulu disparu, et que le détail refusait déjà. #4923 avait aligné le détail
+   * sur la liste et lui avait donné, du même geste, une borne de PLUS : la
+   * liste restait en retard sur ce qui s'était aligné sur elle.
+   *
+   * L'exclusion entre dans le `where`, jamais dans une boucle après coup —
+   * même forme que l'opt-out d'accusés de lecture (#3907), et pour la même
+   * raison : cette liste PAGINE (`take`/`skip`), et un filtrage post-requête
+   * ferait rétrécir la page sans corriger ce qui la borne.
+   *
+   * La forme de requête vient de la SSOT (`carrierMessageStillServesWhere`),
+   * pas d'une copie locale : deux écritures d'une seule loi dérivent au premier
+   * ajout de colonne, et c'est exactement ce défaut qui a laissé la liste
+   * derrière le détail.
+   *
+   * @param options.now L'instant qui tranche les échéances. Passé par
+   *   l'appelant comme la route du détail le fait à son site d'appel ; à défaut,
+   *   l'heure courante — une borne qui n'agirait que si on pense à l'activer
+   *   serait un demi-correctif.
+   */
   async getConversationAttachments(
     conversationId: string,
     options: {
@@ -423,13 +544,14 @@ export class AttachmentService {
       limit?: number;
       offset?: number;
       messageFilter?: Prisma.MessageWhereInput;
+      now?: Date;
     } = {}
   ): Promise<Attachment[]> {
     const where: Prisma.MessageAttachmentWhereInput = {
       message: {
         ...options.messageFilter,
         conversationId: conversationId,
-        deletedAt: null,
+        ...carrierMessageStillServesWhere(options.now ?? new Date()),
       },
     };
 

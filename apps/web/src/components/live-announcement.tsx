@@ -46,6 +46,9 @@ const MARKERS = {
   /* « Mes stories » (#6149) — l'issue d'une suppression : réussie, ou refusée
      et la rangée revenue. */
   myStories: { 'data-my-stories-announce': '' },
+  /* « Mes sons » (#9848) — l'issue d'un retrait : réussi, ou refusé et la
+     rangée revenue à sa place. */
+  mySounds: { 'data-my-sounds-announce': '' },
 } as const;
 
 export type AnnouncementMarker = keyof typeof MARKERS;

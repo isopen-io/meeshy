@@ -11,11 +11,11 @@ extension MeeshyComposerHost {
     }
 
     var sceneFitMode: String {
-        ComposerFraming.fitMode(of: viewModel.currentSlide.effects.backgroundTransform)
+        ComposerBackdropFraming.fitMode(of: viewModel.currentSlide.effects.backgroundTransform)
     }
 
     var sceneBackdrop: StoryBackdrop {
-        ComposerFraming.backdrop(of: viewModel.currentSlide.effects.backgroundTransform)
+        ComposerBackdropFraming.backdrop(of: viewModel.currentSlide.effects.backgroundTransform)
     }
 
     /// Le bouton Cadre du rail droit : le même geste ouvre et referme la bande.
@@ -33,14 +33,14 @@ extension MeeshyComposerHost {
 
     func applySceneFitMode(_ mode: String) {
         var slide = viewModel.currentSlide
-        slide.effects.backgroundTransform = ComposerFraming.applying(
+        slide.effects.backgroundTransform = ComposerBackdropFraming.applying(
             fitMode: mode, to: slide.effects.backgroundTransform)
         viewModel.currentSlide = slide
     }
 
     func applySceneBackdrop(_ fond: StoryBackdrop) {
         var slide = viewModel.currentSlide
-        slide.effects.backgroundTransform = ComposerFraming.applying(
+        slide.effects.backgroundTransform = ComposerBackdropFraming.applying(
             backdrop: fond, to: slide.effects.backgroundTransform)
         viewModel.currentSlide = slide
     }

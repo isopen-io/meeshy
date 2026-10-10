@@ -52,6 +52,14 @@ extension ConversationView {
         viewModel.messages.filter { overlayState.selectedMessageIds.contains($0.id) }
     }
 
+    /// **Une sélection qui contient un message non transférable n'offre pas
+    /// « Transférer »** (#9573) : la loi de sortie le refuse (vue unique,
+    /// flamme après lecture, flou), et le lot partirait amputé. Le bouton
+    /// n'est pas rendu — jamais grisé.
+    var selectionOffersForward: Bool {
+        MessageExitOffer.selectionOffersForward(selectedMessagesInThreadOrder)
+    }
+
     /// #4024 — « pour tous » n'est proposé QUE si TOUS les messages
     /// sélectionnés sont éligibles (miens ET encore dans la fenêtre) ;
     /// une sélection vide n'autorise rien.
@@ -78,12 +86,12 @@ extension ConversationView {
     /// tant que la sélection est active — voir le site de montage
     /// (`ConversationView.body`, branche `isSelectionModeActive`).
     var selectionToolbar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: MeeshySpacing.lg) {
             Button {
                 endSelectionMode()
             } label: {
                 Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
             }
             .accessibilityIdentifier("conversation.selection.cancel")
 
@@ -106,31 +114,33 @@ extension ConversationView {
             // d'un élément (un seul sélectionné ⇒ pas de compteur).
             if overlayState.selectedMessageIds.count >= 2 {
                 Text(selectionCountLabel)
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(ThemeManager.shared.textSecondary)
                     .accessibilityIdentifier("conversation.selection.count")
             }
 
             Spacer(minLength: 0)
 
-            Button {
-                let selected = selectedMessagesInThreadOrder
-                guard let first = selected.first else { return }
-                composerState.forwardMessage = first
-                composerState.forwardAdditionalMessages = Array(selected.dropFirst())
-                endSelectionMode()
-            } label: {
-                Label(
-                    String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main),
-                    systemImage: "arrowshape.turn.up.right"
-                )
-                .font(MeeshyFont.relative(15, weight: .semibold))
+            if selectionOffersForward {
+                Button {
+                    let selected = selectedMessagesInThreadOrder
+                    guard let first = selected.first, MessageExitOffer.selectionOffersForward(selected) else { return }
+                    composerState.forwardMessage = first
+                    composerState.forwardAdditionalMessages = Array(selected.dropFirst())
+                    endSelectionMode()
+                } label: {
+                    Label(
+                        String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main),
+                        systemImage: "arrowshape.turn.up.right"
+                    )
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                }
+                .disabled(overlayState.selectedMessageIds.isEmpty)
+                .accessibilityIdentifier("conversation.selection.forward")
             }
-            .disabled(overlayState.selectedMessageIds.isEmpty)
-            .accessibilityIdentifier("conversation.selection.forward")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
         .background(.regularMaterial)
     }
 

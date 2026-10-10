@@ -13,4 +13,7 @@
     <string name="call_ongoing_audio">Llamada de voz en curso</string>
     <string name="call_ongoing_video">Videollamada en curso</string>
     <string name="call_ongoing_return">Toca para volver a la llamada</string>
+    <string name="call_pip_mute">Silenciar micrófono</string>
+    <string name="call_pip_unmute">Activar micrófono</string>
+    <string name="call_pip_hangup">Colgar</string>
 </resources>

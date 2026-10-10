@@ -66,6 +66,8 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     public let nature: LastMessageNature?
     public let lastReaction: PreviewFieldUpdate<ConversationLastReaction>
     public let activeCall: PreviewFieldUpdate<ConversationActiveCall>
+    /// Le rang SERVI de la ligne (#9026) — `nil` : ne pas réordonner.
+    public let listRankAt: Date?
 
     public init(
         conversationId: String,
@@ -92,7 +94,8 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         media: LastMessageMediaGroup? = nil,
         nature: LastMessageNature? = nil,
         lastReaction: PreviewFieldUpdate<ConversationLastReaction> = .unchanged,
-        activeCall: PreviewFieldUpdate<ConversationActiveCall> = .unchanged
+        activeCall: PreviewFieldUpdate<ConversationActiveCall> = .unchanged,
+        listRankAt: Date? = nil
     ) {
         self.conversationId = conversationId
         self.lastMessageAt = lastMessageAt
@@ -119,6 +122,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.nature = nature
         self.lastReaction = lastReaction
         self.activeCall = activeCall
+        self.listRankAt = listRankAt
     }
 }
 

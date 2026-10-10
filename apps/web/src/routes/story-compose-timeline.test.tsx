@@ -50,6 +50,8 @@ function fakeClock(journal: Journal): SceneClockHandle {
     subscribe: () => () => undefined,
     subscribeSeek: () => () => undefined,
     isDriving: () => true,
+    setStalled: () => undefined,
+    subscribeStall: () => () => undefined,
   };
 }
 

@@ -73,8 +73,8 @@ enum ConversationStickerRendering {
         let metrics = plusLong > templateMaxSide
             ? StickerTemplateMetrics.preview(side: templateMaxSide * (templateMaxSide / plusLong))
             : base
-        guard let rendu = StickerTemplateRenderer.image(templateID: templateID, slots: slots,
-                                                        metrics: metrics, screenScale: renderScale),
+        guard let rendu = StickerTemplateRenderer.dieCutImage(templateID: templateID, slots: slots,
+                                                              metrics: metrics, screenScale: renderScale),
               let image = rendu.0, rendu.1.width > 0, rendu.1.height > 0 else { return nil }
         return fitted(image, size: rendu.1, maxSide: templateMaxSide)
     }

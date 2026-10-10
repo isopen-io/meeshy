@@ -23,6 +23,9 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  *
  * « Sortie » ouvre la feuille des appareils (caméra, micro, sortie audio —
  * `call-devices-sheet.tsx`, chunk à part chargé au premier geste).
+ *
+ * Un toucher qui manque la pilule de peu reste à elle (#8735) : un débord
+ * transparent autour d'elle garde les commandes au lieu de les effacer.
  */
 
 const CallActionRows = lazy(() => import('./call-control-actions').then((module) => ({ default: module.CallActionRows })));
@@ -50,7 +53,7 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
   return (
     <>
       <div
-        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} mx-auto flex flex-col rounded-[28px] p-1.5 ${expanded ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
+        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${expanded ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
         data-call-control-pill={expanded ? 'grown' : 'pill'}
         data-call-chrome-keep=""
       >
@@ -64,7 +67,7 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
                 </Suspense>
               )}
             </div>
-            <hr className="mx-2 my-2 border-0 border-t border-white/20" />
+            <hr className="mx-2 my-2 border-0 border-t border-media-hairline" />
           </>
         ) : null}
         <div className="flex items-center justify-center gap-2">

@@ -1,3 +1,5 @@
+import { browserPhotoEnv, developPhoto, PHOTO_MIME, type PhotoEnv } from '@/lib/media/photo-develop';
+
 import { captureStamp, type CaptureFile } from './call-capture-save';
 
 /**
@@ -9,8 +11,8 @@ import { captureStamp, type CaptureFile } from './call-capture-save';
  *   l'appel — ma voix et celles des autres, mixées en une piste par Web
  *   Audio. MP4 là où le navigateur sait l'écrire (Safari : la photothèque
  *   d'un iPhone le lit), sinon WebM. `stop` rend UN fichier ;
- * - `captureStill` : deux tapes prennent l'image affichée d'une vidéo, en
- *   PNG, dans son miroir.
+ * - `captureStill` : deux tapes prennent l'image affichée d'une vidéo, à
+ *   l'endroit (#8696), par le développement unique des photos (#8695).
  *
  * Tout ce qui touche au navigateur passe par `ClipEnv`, que les témoins
  * remplacent.
@@ -111,11 +113,9 @@ export const browserClipEnv = (): ClipEnv => ({
   now: () => new Date(),
 });
 
-const paintVideo = (context: CanvasRenderingContext2D, video: HTMLVideoElement, mirrored: boolean): void => {
+const paintVideo = (context: CanvasRenderingContext2D, video: HTMLVideoElement): void => {
   const { width, height } = context.canvas;
-  context.setTransform(mirrored ? -1 : 1, 0, 0, 1, mirrored ? width : 0, 0);
   context.drawImage(video, 0, 0, width, height);
-  context.setTransform(1, 0, 0, 1, 0, 0);
 };
 
 const canvasFor = (video: HTMLVideoElement): { readonly canvas: HTMLCanvasElement; readonly context: CanvasRenderingContext2D } | null => {
@@ -127,22 +127,21 @@ const canvasFor = (video: HTMLVideoElement): { readonly canvas: HTMLCanvasElemen
   return context === null ? null : { canvas, context };
 };
 
-/** L'image qu'une vidéo affiche, dans son miroir, en PNG. */
-export async function captureStill({ video, style, now }: { readonly video: HTMLVideoElement; readonly style: string; readonly now: Date }): Promise<CaptureFile | null> {
-  const surface = canvasFor(video);
-  if (surface === null) return null;
-  paintVideo(surface.context, video, video.hasAttribute('data-call-mirrored'));
-  const blob = await new Promise<Blob | null>((resolve) => surface.canvas.toBlob(resolve, 'image/png'));
-  return blob === null ? null : { blob, fileName: `meeshy-appel-${style}-${captureStamp(now)}.png` };
+type StillInput = { readonly video: HTMLVideoElement; readonly style: string; readonly now: Date; readonly photo?: PhotoEnv };
+
+/** L'image qu'une vidéo affiche, à l'endroit, développée (`developPhoto`). */
+export async function captureStill({ video, style, now, photo = browserPhotoEnv }: StillInput): Promise<CaptureFile | null> {
+  if (video.videoWidth === 0 || video.videoHeight === 0) return null;
+  const blob = await developPhoto({ image: video, size: { width: video.videoWidth, height: video.videoHeight } }, photo);
+  return blob === null ? null : { blob, fileName: `meeshy-appel-${style}-${captureStamp(now)}.jpg`, mimeType: blob.type || PHOTO_MIME };
 }
 
-/** Une vidéo repeinte dans son miroir, en piste filmable — `release` arrête tout. */
-export function mirroredTrack(video: HTMLVideoElement, fps: number): { readonly track: MediaStreamTrack; readonly release: () => void } | null {
+/** Une vidéo repeinte à l'endroit, en piste filmable — `release` arrête tout. */
+export function filmedTrack(video: HTMLVideoElement, fps: number): { readonly track: MediaStreamTrack; readonly release: () => void } | null {
   const surface = canvasFor(video);
   const track = surface?.canvas.captureStream?.(fps).getVideoTracks()[0];
   if (surface === null || track === undefined) return null;
-  const mirrored = video.hasAttribute('data-call-mirrored');
-  const timer = setInterval(() => paintVideo(surface.context, video, mirrored), 1000 / fps);
+  const timer = setInterval(() => paintVideo(surface.context, video), 1000 / fps);
   return {
     track,
     release: () => {

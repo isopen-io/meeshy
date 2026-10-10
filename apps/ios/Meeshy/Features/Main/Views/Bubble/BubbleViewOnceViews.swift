@@ -31,17 +31,17 @@ struct BubbleViewOnceSealedView: View, Equatable {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
             if isMe { Spacer(minLength: 50) }
 
-            VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+            VStack(alignment: isMe ? .trailing : .leading, spacing: MeeshySpacing.xs) {
                 MessageProtectionChrome(descriptor: protection.withoutViewOnce, isDark: isDark)
                     .equatable()
-                HStack(alignment: .center, spacing: 6) {
+                HStack(alignment: .center, spacing: MeeshySpacing.xsPlus) {
                     ViewOnceChip(state: state, isDark: isDark, hint: hint, onOpen: onOpen)
                         .equatable()
                     Text(timeString)
-                        .font(MeeshyFont.relative(11, weight: .regular))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
                         .foregroundColor(ThemeManager.shared.textMuted)
                         .accessibilityHidden(true)
                 }
@@ -50,6 +50,6 @@ struct BubbleViewOnceSealedView: View, Equatable {
             if !isMe { Spacer(minLength: 50) }
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, 2)
+        .padding(.vertical, MeeshySpacing.xxs)
     }
 }

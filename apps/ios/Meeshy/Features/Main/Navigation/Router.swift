@@ -75,6 +75,24 @@ enum Route: Hashable {
     /// les trois gratuitement — c'est le modèle que servent déjà l'Android et
     /// le web.
     case progressionSection(ProgressionSection)
+    /// « Comment ça marche » (#9379) — les huit règles du jeu et les sept cartes
+    /// de l'intégration, la page que Mee et Meo rouvrent. `rule` : la règle (1 à 8) à
+    /// laquelle la page s'ouvre — « Comment gagner » du héro (#5841) mène à la première. `section` : la section du
+    /// carnet où la page s'ouvre — « Comprendre les badges » (#9640) mène à celle des badges.
+    case progressionRules(rule: Int? = nil, section: GameRulesSection? = nil)
+    /// Le carnet de progression (#9382) — les photos des grands moments, sur
+    /// l'appareil.
+    case progressionNotebook
+    /// Une page de la vague 2 du jeu (#9481) — Ligue, Saison, Vitrine, Atlas, Prestige, Réglages. Poussée dans la
+    /// pile comme les autres pages du jeu, jamais présentée en feuille.
+    case gamePage(GamePage)
+    /// La FICHE d'un concept de Progression (#9564) — niveau, points, Meeshes, gloire… : le deuxième niveau, poussé
+    /// au-dessus de la première page. `section` : la section où une entrée extérieure (notification, bandeau du
+    /// joueur) pose le regard ; `nil` : la fiche s'ouvre en haut.
+    case progressionConcept(ProgressionConcept, section: ProgressionConceptSection? = nil)
+    /// L'ANCIEN tableau de bord de Progression, retiré (#9564, amendement n° 4). La route reste une version pour les
+    /// liens déjà posés et ouvre la première page de Progression ; elle se retire à zéro usage mesuré.
+    case progressionDashboard
     case links
     case affiliate
     case trackingLinks
@@ -108,21 +126,6 @@ extension Route {
             return true
         default:
             return false
-        }
-    }
-
-    /// Hauteur du `CollapsibleHeader` que l'écran de cette route monte, ou
-    /// `nil` s'il n'en monte aucun. Sert à la pastille de synchronisation
-    /// (`RootChromeLayer.syncPillTopPadding`) : ce qui décide de sa marge
-    /// haute hors conversation n'est pas « suis-je sur telle route ? » mais
-    /// « qu'est-ce que l'hôte pose en haut ? » — un booléen ne peut dire que
-    /// deux cas là où il y en a trois (#5944).
-    var collapsibleHeaderHeight: CGFloat? {
-        switch self {
-        case .settings, .profile, .postDetail, .links, .contacts, .peopleDiscovery:
-            return CollapsibleHeaderMetrics.expandedHeight
-        default:
-            return nil
         }
     }
 
@@ -168,6 +171,16 @@ extension Route {
             case .defis: return AchievementCopy.sectionsHeader
             case .succes: return ProgressionCopy.achievementsTitle
             }
+        case .progressionRules:
+            return String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main)
+        case .progressionNotebook:
+            return String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main)
+        case .gamePage(let page):
+            return page.title
+        case .progressionConcept(let concept, _):
+            return ConceptText.name(concept)
+        case .progressionDashboard:
+            return String(localized: "route.title.progression", defaultValue: "Progression", bundle: .main)
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:
@@ -351,6 +364,21 @@ final class Router: ObservableObject {
         guard let palier = pendingEngagementReveal else { return nil }
         pendingEngagementReveal = nil
         return palier
+    }
+
+    /// UNE ENTRÉE EXTÉRIEURE du jeu (notification, bandeau du joueur, vitrine du profil — #9564, carte de
+    /// navigation) : la pile reçoit le CHEMIN COMPLET jusqu'à l'écran visé — Progression, puis la fiche, puis la
+    /// sous-page — en UNE mutation, donc une seule transition : « retour » remonte la chaîne, jamais ailleurs. Déjà
+    /// dans le jeu, on repart de SA première page au lieu d'en empiler une seconde. Sur iPad, chaque étape passe par le
+    /// panneau, qui empile les pages du jeu au-dessus de Progression.
+    func openGame(at target: Route) {
+        let chain = GameNavigationMap.chain(to: target)
+        if onRouteRequested != nil {
+            chain.forEach { push($0) }
+            return
+        }
+        let base = path.lastIndex(of: .progression).map { Array(path[...$0]) } ?? (path + [.progression])
+        path = base + chain.drop { $0 == .progression }
     }
 
     /// Ramasse la demande de composeur de flux, UNE fois.

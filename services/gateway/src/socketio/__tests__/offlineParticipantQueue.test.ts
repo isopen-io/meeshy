@@ -192,3 +192,15 @@ describe('enqueueForOfflineParticipants — best effort', () => {
     expect(attempted.sort()).toEqual(['participant-C', 'user-B']);
   });
 });
+
+// #9709 — un lecteur dont le plancher d'historique est postérieur au message
+// (`translationReaders`) ne reçoit pas sa traduction en file non plus.
+describe('enqueueForOfflineParticipants — excludedQueueKeys', () => {
+  it('ne met RIEN en file pour une clé exclue, sous ses deux formes (userId ou participant id)', async () => {
+    const { sink, deps } = makeDeps(THREE);
+
+    await enqueueForOfflineParticipants(deps, { ...base, excludedQueueKeys: new Set(['user-B', 'participant-C']) });
+
+    expect(sink.map(e => e.userId)).toEqual(['user-A']);
+  });
+});

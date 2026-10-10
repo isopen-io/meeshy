@@ -540,6 +540,7 @@ describe('storyEffectsV3 — contrat étendu (rattrapage B8a)', () => {
     const a = convertV1ToV3(rich()).scenes[0].objects.find(o => o.kind === 'audio');
     expect(a?.payload.soundId).toBe('64b0000000000000000000dd');
     expect(a?.payload.soundAuthorUsername).toBe('sam');
+    expect(a?.payload.soundCreatedAt).toBe('2026-03-12T09:30:00.000Z');
     expect(a?.payload.volume).toBe(0.35);
     expect(a?.payload).toMatchObject({
       isBackground: true, loop: true, duration: 18,

@@ -31,6 +31,12 @@ const es = {
   'onboarding.email.sent': 'Enlace enviado. Ábrelo y vuelve aquí.',
   'onboarding.email.failed': 'El enlace no se envió. Inténtalo de nuevo.',
 
+  'onboarding.age.title': 'Tu fecha de nacimiento',
+  'onboarding.age.body': 'Para proponerte los espacios adecuados. Puedes saltarlo.',
+  'onboarding.age.skip': 'Saltar',
+  'onboarding.age.check': 'Revisa tu fecha de nacimiento.',
+  'onboarding.age.failed': 'Tu fecha no se guardó. Inténtalo de nuevo.',
+
   'onboarding.global.title': 'Saluda al mundo',
   'onboarding.global.body': 'Meeshy Global es el salón donde está todo el mundo. Suelta un saludo, sin presión.',
   'onboarding.global.field': 'Tu saludo, editable',
@@ -88,6 +94,7 @@ const es = {
   'onboarding.recap.friends': 'Solicitudes en camino: {count}',
   'onboarding.recap.tomorrow': 'Mañana tu racha puede llegar a {next}.',
   'onboarding.recap.explore': 'Seguir explorando',
+  'onboarding.recap.game': 'Descubrir el juego con Mee y Meo',
   'onboarding.recap.done': 'Suficiente por hoy',
 } satisfies OnboardingCatalog;
 

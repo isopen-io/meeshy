@@ -25,6 +25,11 @@ final class NotificationCallBackActionTests: XCTestCase {
         ) async throws -> String {
             "ofqm_inert"
         }
+
+        @discardableResult
+        func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String {
+            try await enqueue(.createComment, payload: comment, conversationId: comment.postId)
+        }
     }
 
     private final class InertPersistence: OptimisticMessagePersisting {

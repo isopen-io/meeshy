@@ -135,11 +135,13 @@ export async function loadCallSession(deps: Deps, callId: string, signal?: Abort
   return { ok: true, data: decodeCallSession(result.data) };
 }
 
-export async function loadConversationActiveCallId(deps: Deps, conversationId: string, signal?: AbortSignal): Promise<ApiResult<string | null>> {
+export type ConversationActiveCall = { readonly callId: string; readonly media: CallSession['media'] };
+
+export async function loadConversationActiveCall(deps: Deps, conversationId: string, signal?: AbortSignal): Promise<ApiResult<ConversationActiveCall | null>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     const { fixtureActiveCall } = await import('./fixtures-calls');
     const active = fixtureActiveCall();
-    return { ok: true, data: active !== null && active.conversationId === conversationId ? active.callId : null };
+    return { ok: true, data: active !== null && active.conversationId === conversationId ? { callId: active.callId, media: active.media } : null };
   }
   const result = await deps.transport.request<unknown>({
     method: 'GET',
@@ -148,5 +150,19 @@ export async function loadConversationActiveCallId(deps: Deps, conversationId: s
   });
   if (!result.ok) return result;
   const session = decodeCallSession(result.data);
-  return { ok: true, data: session !== null && session.live ? session.callId : null };
+  return { ok: true, data: session !== null && session.live ? { callId: session.callId, media: session.media } : null };
+}
+
+/**
+ * L'appel que le bouton du fil rejoint (#9111) : la réponse de la passerelle
+ * l'emporte, TYPE COMPRIS — après un rechargement ouvert sur le fil, la ligne
+ * de liste manque, et rejoindre en audio un appel vidéo laissait le revenant
+ * sans caméra. Avant la réponse (`undefined`), la ligne de liste sert.
+ */
+export function joinableCall(
+  served: ConversationActiveCall | null | undefined,
+  hint: { readonly id: string; readonly kind: string } | null,
+): ConversationActiveCall | null {
+  if (served !== undefined) return served;
+  return hint === null ? null : { callId: hint.id, media: hint.kind === 'video' ? 'video' : 'audio' };
 }

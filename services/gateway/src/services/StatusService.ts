@@ -23,6 +23,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { getCacheStore, type CacheStore } from './CacheStore';
+import { guardedInterval } from '../utils/guarded-timer';
 
 export interface StatusUpdateMetrics {
   totalRequests: number;
@@ -450,9 +451,9 @@ export class StatusService {
    * Démarrer le nettoyage périodique du cache
    */
   private startCacheCleanup(): void {
-    this.cleanupInterval = setInterval(() => {
+    this.cleanupInterval = guardedInterval({ name: 'status-cache-cleanup', everyMs: this.CACHE_CLEANUP_INTERVAL_MS, logger, run: () => {
       this.clearOldCacheEntries();
-    }, this.CACHE_CLEANUP_INTERVAL_MS);
+    } });
     this.cleanupInterval.unref?.();
 
     logger.info(`🧹 Cache cleanup démarré (intervalle: ${this.CACHE_CLEANUP_INTERVAL_MS}ms)`);

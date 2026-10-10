@@ -33,7 +33,7 @@ describe('Seul le socket VISÉ est coupé', () => {
     const vise = socketDouble('sess-A');
     const { io } = ioDouble([vise]);
 
-    const fermes = await disconnectSession({ io: io as never, userId: UTILISATEUR, sessionId: 'sess-A' });
+    const fermes = await disconnectSession({ io: io as never, userId: UTILISATEUR, sessionId: 'sess-A', reason: 'admin_revoke' });
 
     expect(fermes).toBe(1);
     // Émettre PUIS fermer : l'émission est une courtoisie au client conforme,
@@ -50,7 +50,7 @@ describe('Seul le socket VISÉ est coupé', () => {
     const epargne = socketDouble('sess-B');
     const { io } = ioDouble([vise, epargne]);
 
-    const fermes = await disconnectSession({ io: io as never, userId: UTILISATEUR, sessionId: 'sess-A' });
+    const fermes = await disconnectSession({ io: io as never, userId: UTILISATEUR, sessionId: 'sess-A', reason: 'admin_revoke' });
 
     expect(fermes).toBe(1);
     expect(epargne.disconnect).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe('Seul le socket VISÉ est coupé', () => {
     const ancien = socketDouble(undefined);
     const { io } = ioDouble([ancien]);
 
-    const fermes = await disconnectSession({ io: io as never, userId: UTILISATEUR, sessionId: 'sess-A' });
+    const fermes = await disconnectSession({ io: io as never, userId: UTILISATEUR, sessionId: 'sess-A', reason: 'admin_revoke' });
 
     expect(fermes).toBe(0);
     expect(ancien.disconnect).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe('Seul le socket VISÉ est coupé', () => {
   it("cherche dans la room PERSONNELLE de l'utilisateur", async () => {
     const { io } = ioDouble([]);
 
-    await disconnectSession({ io: io as never, userId: UTILISATEUR, sessionId: 'sess-A' });
+    await disconnectSession({ io: io as never, userId: UTILISATEUR, sessionId: 'sess-A', reason: 'admin_revoke' });
 
     expect(io.in).toHaveBeenCalledWith(`user:${UTILISATEUR}`);
   });
@@ -102,5 +102,21 @@ describe('Best-effort : la révocation est déjà écrite', () => {
 
     expect(await disconnectSession({ io: io as never, userId: UTILISATEUR, sessionId: '' })).toBe(0);
     expect(socket.disconnect).not.toHaveBeenCalled();
+  });
+});
+
+describe('le motif est celui du geste, jamais « admin » par défaut (#9613)', () => {
+  it.each([
+    ['user_revoke', 'fermée par le membre depuis un autre appareil'],
+    ['logout', 'déconnexion de l’appareil lui-même'],
+    ['password_changed', 'changement de mot de passe'],
+    ['admin_revoke', 'fermée par l’équipe Meeshy'],
+  ] as const)('émet `%s` (%s)', async (reason) => {
+    const vise = socketDouble('sess-A');
+    const { io } = ioDouble([vise]);
+
+    await disconnectSession({ io: io as never, userId: UTILISATEUR, sessionId: 'sess-A', reason });
+
+    expect(vise.emit).toHaveBeenCalledWith('auth:session-revoked', expect.objectContaining({ code: 'session_revoked', reason }));
   });
 });

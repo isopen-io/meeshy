@@ -56,6 +56,7 @@ nonisolated extension VideoFilterConfig {
         next.skinSmoothingEnabled = skinSmoothingEnabled
         next.skinSmoothingIntensity = skinSmoothingIntensity
         next.faceEffect = faceEffect
+        next.naturalComplexionEnabled = naturalComplexionEnabled
         return next
     }
 
@@ -63,6 +64,14 @@ nonisolated extension VideoFilterConfig {
         var next = self
         next.brightness = min(max(brightness, -Self.brightnessLimit), Self.brightnessLimit)
         next.isEnabled = true
+        return next
+    }
+
+    /// #9289 — la force de la Peau lissée, réglée dans le mode Effets ; jamais nulle, sinon
+    /// le lissage choisi ne se verrait plus du tout.
+    func withSmoothingIntensity(_ intensity: Float) -> VideoFilterConfig {
+        var next = self
+        next.skinSmoothingIntensity = min(max(intensity, Self.smoothingIntensityRange.lowerBound), Self.smoothingIntensityRange.upperBound)
         return next
     }
 
@@ -77,4 +86,5 @@ nonisolated extension VideoFilterConfig {
     }
 
     static let brightnessLimit: Float = 0.3
+    static let smoothingIntensityRange: ClosedRange<Float> = 0.1 ... 1
 }

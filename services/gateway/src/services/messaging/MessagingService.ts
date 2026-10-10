@@ -9,18 +9,18 @@ import type {
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types';
-import { ErrorCode } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
-import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
+import { postSaveToolFields, queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
 import { EngagementService } from '../engagement/EngagementService';
 import { stickerFromMetadata } from '../stickers/messageSticker';
 import {
   admitMessageForward,
   describeForwardRefusal,
+  forwardedCopyRequest,
   isForwardRefused,
   sanitizeForwardReferences
 } from './forwardAdmission';
@@ -29,7 +29,8 @@ import { admitStoryReply } from './storyReplyAdmission';
 import {
   admitConversationWrite,
   isConversationWriteRefused,
-  describeConversationWriteRefusal
+  describeConversationWriteRefusal,
+  writeRefusalCode
 } from './conversationWriteAdmission';
 import { sharedSendReservations, type SendReservationStore } from './newcomerSendReservations';
 import { resolveParticipantRights, attachmentSendRightForMimeType, NEW_MEMBER_PERMISSIONS } from '../participantRights';
@@ -37,6 +38,7 @@ import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
 
@@ -254,13 +256,11 @@ export class MessagingService {
           ...corr, conversationId, reason: conversationAdmission.reason,
           retryAfterSeconds: conversationAdmission.retryAfterSeconds
         });
-        return conversationAdmission.reason === 'newcomer-slow-mode'
-          ? this.createErrorResponse(
-              describeConversationWriteRefusal(conversationAdmission),
-              ErrorCode.NEWCOMER_SLOW_MODE,
-              conversationAdmission.retryAfterSeconds
-            )
-          : this.createErrorResponse(describeConversationWriteRefusal(conversationAdmission));
+        return this.createErrorResponse(
+          describeConversationWriteRefusal(conversationAdmission),
+          writeRefusalCode(conversationAdmission),
+          conversationAdmission.reason === 'newcomer-slow-mode' ? conversationAdmission.retryAfterSeconds : undefined
+        );
       }
       releaseReservation = conversationAdmission.releaseReservation;
 
@@ -358,31 +358,29 @@ export class MessagingService {
               )
             : 'fr');
 
-      // 4.4. Admission de la CITATION (#6601) — `replyToId` doit désigner un
-      //      message VIVANT de CETTE conversation. Posé ICI pour la même
-      //      raison que l'admission du transfert juste en dessous : les trois
-      //      transports d'envoi (REST, socket texte, socket pièces jointes)
-      //      convergent sur `handleMessage`, seul site qui voit
-      //      `conversationId` déjà résolu sans jamais faire confiance au
-      //      client. Un garde par transport aurait fait grossir
-      //      `MessageHandler.ts` — déjà hors budget (#4426) — pour une règle
-      //      qui n'a besoin de vivre qu'une fois.
+      // 4.4. Admission de la CITATION (#6601) et de sa PIÈCE NOMMÉE (#9909)
+      //      — `replyToId` doit désigner un message VIVANT de CETTE
+      //      conversation, et une pièce citée en plus doit appartenir à ce
+      //      message. Posé ICI parce que les trois transports d'envoi (REST,
+      //      socket texte, socket pièces jointes) convergent sur
+      //      `handleMessage`, seul site qui voit `conversationId` déjà résolu
+      //      sans jamais faire confiance au client.
       //
-      //      La route REST relit la MÊME garde plus tôt (`messages-send.ts`),
-      //      avec la pièce jointe nommée en plus : elle a besoin de
-      //      l'instantané `{attachmentId, kind}` qu'`admitAttachmentReply`
-      //      rend, pour le graver dans `metadata.attachmentReplyTo`. Ici on ne
-      //      revérifie que le lien message-cité → conversation — gratuit pour
-      //      un envoi qui ne cite personne, et redondant mais inoffensif pour
-      //      la route REST qui l'a déjà fait (une lecture par identifiant).
+      //      La requête est ensuite RÉÉCRITE avec l'instantané ADMIS : ce que
+      //      le transport a reçu (nature déclarée comprise) n'atteint jamais
+      //      `metadata.attachmentReplyTo`, seule la nature relue du MIME y
+      //      entre. La route REST relit la même garde plus tôt pour répondre
+      //      en 400 ; la seconde lecture est redondante mais inoffensive.
       const citation = await admitAttachmentReply(this.prisma, {
         conversationId,
-        replyToId: request.replyToId
+        replyToId: request.replyToId,
+        attachmentReplyTo: request.attachmentReplyTo
       });
       if (!citation.ok) {
         logger.info('reply citation refused', { ...corr, conversationId, reason: citation.reason });
         return this.createErrorResponse(citation.reason ?? 'Message cité invalide');
       }
+      request = { ...request, attachmentReplyTo: citation.snapshot ?? undefined };
 
       // 4.4 bis. Admission de la STORY citée (#7882) — la jumelle de #6601 sur
       //      le second champ de citation. `storyReplyToId` gèle l'instantané du
@@ -417,8 +415,14 @@ export class MessagingService {
       //      tenir. Sans lui, un transfert dont la source a disparu créait une
       //      ligne sans contenu, sans pièce jointe et sans chiffré — une bulle
       //      vide diffusée à tous. Les deux règles évoluent ensemble.
+      //
+      //      #9579 — l'expéditeur est remis au garde : un transfert n'est admis
+      //      que s'il peut LIRE la source, et la conversation de provenance
+      //      n'est gardée que si la source y vit.
       const forwardAdmission = await admitMessageForward(this.prisma, {
         forwardedFromId: request.forwardedFromId,
+        senderParticipantId: participant.id,
+        forwardedFromConversationId: request.forwardedFromConversationId,
         at: new Date(),
         bodyOnlyFromSource: this.bodyOnlyFromSource(request)
       });
@@ -433,18 +437,16 @@ export class MessagingService {
       //    déclenche un duplicate-key, MessageProcessor relit l'existant
       //    et flague `(message as any).isDuplicate = true`.
       //
-      //    `ephemeralDuration` : la DURÉE héritée de la source prime sur celle
-      //    que le client a (ou n'a pas) envoyée — c'est tout l'objet du garde
-      //    ci-dessus. Depuis #7451 c'est bien une durée et non une échéance :
-      //    le décompte de la copie repart de la réception de chaque nouveau
-      //    destinataire. Le bit `EPHEMERAL` s'en déduit dans `saveMessage`.
+      //    `forwardedCopyRequest` (#9572) pose le VERDICT du garde ci-dessus,
+      //    APRÈS le spread de la requête : ce qu'un client aurait glissé sous
+      //    `forwardImposes` est écrasé. `saveMessage` en tire durée bornée,
+      //    bits et flou de la copie ; une source indisponible retire
+      //    `forwardedFromId`, donc rien de la source n'est recopié.
       const message = await performanceLogger.withTiming(
         'messaging.saveMessage',
         () => this.processor.saveMessage({
           ...request,
-          ...(forwardAdmission.ephemeralDuration
-            ? { ephemeralDuration: forwardAdmission.ephemeralDuration }
-            : {}),
+          ...forwardedCopyRequest(request, forwardAdmission),
           originalLanguage,
           conversationId,
           senderId: participant!.id,
@@ -563,6 +565,7 @@ export class MessagingService {
     const saved = message as typeof message & {
       sender?: { userId?: string | null } | null;
       attachments?: Array<{ mimeType?: string | null }> | null;
+      replyTo?: { sender?: { userId?: string | null } | null } | null;
     };
 
     runMessagePostSaveEffects({
@@ -576,9 +579,11 @@ export class MessagingService {
         senderUserId: saved.sender?.userId ?? null,
         attachmentMimeTypes: (saved.attachments ?? []).map((att) => att.mimeType ?? ''),
         hasSticker: Boolean(stickerFromMetadata(message.metadata)),
+        ...postSaveToolFields(saved),
         content: message.content,
         messageType: message.messageType,
-        replyToId: message.replyToId
+        replyToId: message.replyToId,
+        storyReplyToId: message.storyReplyToId ?? null
       },
       originalLanguage,
       onError: (effect, err) =>
@@ -832,6 +837,7 @@ export class MessagingService {
         }
       });
 
+      announceConversationLanguageChange({ kind: 'arrival', conversationId, language: recipientLanguage(user, 'fr'), readerUserId: user.id });
       logger.info('Auto-created Participant', { conversationId });
       return participant;
     } catch (error) {

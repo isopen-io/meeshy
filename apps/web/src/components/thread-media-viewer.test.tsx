@@ -8,6 +8,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -91,7 +92,10 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 afterEach(() => {
-  act(() => root.unmount());
+  act(() => {
+    closeSendSheet();
+    root.unmount();
+  });
   container.remove();
 });
 
@@ -105,7 +109,7 @@ const until = async (check: () => boolean) => {
 
 const viewer = (): HTMLElement | null => document.body.querySelector<HTMLElement>('[data-media-viewer]');
 
-function mountThreadGrid(onReplyToMedia: (messageId: string, attachmentId: string) => void): void {
+function mountThreadGrid(onReplyToMedia: (messageId: string, attachmentId: string) => void, viewerId = 'u-me'): void {
   container = document.createElement('div');
   container.id = 'root';
   document.body.appendChild(container);
@@ -114,7 +118,7 @@ function mountThreadGrid(onReplyToMedia: (messageId: string, attachmentId: strin
   act(() => {
     root.render(
       <QueryClientProvider client={client}>
-        <ThreadMediaContext.Provider value={{ viewerId: 'u-me', onReplyToMedia }}>
+        <ThreadMediaContext.Provider value={{ viewerId, onReplyToMedia }}>
           <Attachments
             attachments={opened.attachments as readonly Attachment[]}
             message={opened}
@@ -148,13 +152,47 @@ describe('le fil ouvre la visionneuse conversation-entière (#6303)', () => {
     act(() => {
       container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
     });
-    await until(() => viewer()?.querySelector('[data-viewer-action="reply"]') !== null && viewer() !== null);
+    await until(() => viewer()?.querySelector('[data-viewer-reply]') !== null && viewer() !== null);
 
     act(() => {
-      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-action="reply"]')!.click();
+      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-reply]')!.click();
     });
     expect(replies).toEqual([[M2, A3]]);
     await until(() => viewer() === null);
     expect(viewer()).toBeNull();
+  });
+
+  test('« Partager » ouvre la feuille d’envoi avec la PIÈCE regardée (ses identifiants, jamais son fichier), « mine » faux pour le message d’un autre (#8884)', async () => {
+    mountThreadGrid(() => {});
+    act(() => {
+      container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
+    });
+    await until(() => viewer()?.querySelector('[data-viewer-action="share"]') != null);
+    act(() => {
+      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-action="share"]')!.click();
+    });
+    const request = sendSheetStore.getState().request;
+    expect(request?.intent).toBe('share');
+    expect(request?.payload).toMatchObject({
+      kind: 'attachment',
+      conversationId: CONVERSATION,
+      messageId: M2,
+      attachmentId: A3,
+      mime: 'image/jpeg',
+      mine: false,
+      protected: false,
+    });
+  });
+
+  test('sur sa propre pièce, « mine » est vrai : la copie serveur lui est permise', async () => {
+    mountThreadGrid(() => {}, 'u-nour');
+    act(() => {
+      container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
+    });
+    await until(() => viewer()?.querySelector('[data-viewer-action="share"]') != null);
+    act(() => {
+      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-action="share"]')!.click();
+    });
+    expect(sendSheetStore.getState().request?.payload).toMatchObject({ kind: 'attachment', mine: true });
   });
 });

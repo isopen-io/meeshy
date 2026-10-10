@@ -203,6 +203,23 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.queueCount, 0)
     }
 
+    /// La croix ferme le lecteur sur le champ ; une file épuisée le laisse le temps d'un fondu
+    /// (#8983). Les deux écrivent `activeContext = nil` : seule la raison les distingue.
+    func test_close_reportsAUserClose() {
+        let (sut, _) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1"), tail: [], conversationName: "T", conversationArtworkURL: nil)
+        sut.close()
+        XCTAssertEqual(sut.derniereFin, .fermee)
+    }
+
+    func test_engineFinished_emptyQueue_reportsAnExhaustedQueue() async {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1"), tail: [], conversationName: "T", conversationArtworkURL: nil)
+        engine.simulateFinishPlayback()
+        await Task.yield()
+        XCTAssertEqual(sut.derniereFin, .epuisee)
+    }
+
     func test_appendUpcoming_idempotent_byAttachmentId() {
         let (sut, _) = makeSUT()
         sut.play(current: makeQueuedAudio(attachmentId: "a1"), tail: [],

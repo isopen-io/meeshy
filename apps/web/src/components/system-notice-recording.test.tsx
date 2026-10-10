@@ -40,4 +40,15 @@ describe('la bulle d’appel rejoue son enregistrement (#8064)', () => {
   test('sans enregistrement, la bulle ne montre aucun lecteur', () => {
     expect(render(target({ recording: null }))).not.toContain('data-call-recording');
   });
+
+  test('un enregistrement vidéo se revoit dans la bulle, par le lecteur vidéo du fil (#8437)', () => {
+    const video = { id: 'att-vid', mimeType: 'video/webm', fileUrl: '/u/rec.webm', duration: 272_000, width: 1280, height: 720 } as unknown as Attachment;
+    const html = render(target({ media: 'video', recording: { attachment: video, language: 'fr' } }));
+
+    expect(html).toContain('data-call-recording="att-vid"');
+    expect(html).toContain('data-video-status="idle"');
+    expect(html).toMatch(/<video[^>]*src="[^"]*\/u\/rec\.webm"/);
+    expect(html).toContain('data-video-control="play-pause"');
+    expect(html).not.toContain('<audio');
+  });
 });

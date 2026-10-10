@@ -1,5 +1,7 @@
 import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
 
+import { holdViewerPoints } from '@/lib/feed/viewer-points';
+
 import { AUTHOR_POSTS_QUERY_ROOT } from './card-caches';
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -89,6 +91,7 @@ export const AUTHOR_POSTS_STALE_TIME = 60_000;
 export function authorPostsInfiniteOptions(deps: AuthorPostsDeps & { readonly authorId: string }) {
   return {
     queryKey: authorPostsQueryKey(deps.authorId),
+    structuralSharing: holdViewerPoints,
     staleTime: AUTHOR_POSTS_STALE_TIME,
     initialPageParam: undefined as FeedPageParam,
     queryFn: ({ pageParam, signal }: { readonly pageParam: FeedPageParam; readonly signal: AbortSignal }) =>

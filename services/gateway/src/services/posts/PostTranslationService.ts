@@ -14,26 +14,20 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { isUrlOnly } from '../../utils/url-content';
 import { isContentDerivedFromTextObjects, storyTextObjectText } from './storyContentComposition';
 import { translationTargetId, translationTargetNamespace } from '../zmq-translation/utils/zmq-helpers';
+import { detectContentLanguage } from '../../utils/content-language';
 
 const log = enhancedLogger.child({ module: 'PostTranslationService' });
 
 const TOP_LANGUAGES = ['fr', 'en', 'es', 'ar', 'pt'];
 
-function detectLanguage(text: string): string {
-  if (!text) return 'en';
-  const lower = text.toLowerCase();
-  const langPatterns: Record<string, RegExp> = {
-    fr: /\b(le|la|les|un|une|des|je|tu|il|nous|vous|est|sont|avec|pour|dans|que|qui|pas|mais)\b/,
-    es: /\b(el|la|los|las|un|una|es|son|con|para|en|que|por|del|como|pero|más)\b/,
-    de: /\b(der|die|das|ein|eine|ist|sind|mit|für|und|ich|nicht|auf|dem|den)\b/,
-    pt: /\b(o|a|os|as|um|uma|é|são|com|para|em|que|por|do|da|não|mas)\b/,
-    ar: /[\u0600-\u06FF]/,
-  };
-  for (const [lang, pattern] of Object.entries(langPatterns)) {
-    if (pattern.test(lower)) return lang;
-  }
-  return 'en';
-}
+/**
+ * Une traduction vers la langue d'ORIGINE n'est pas une traduction : c'est une
+ * paraphrase de l'original que le Prisme servirait à sa place (#9861). La
+ * garde vit dans le filtre de l'écriture (`originalLanguage: { $ne: cible }`),
+ * atomique ; une ligne non appariée ne se diffuse pas non plus.
+ */
+const refusedBySourceGuard = (written: unknown): boolean =>
+  (written as { n?: unknown } | null)?.n === 0;
 
 export class PostTranslationService {
   private static _shared: PostTranslationService | null = null;
@@ -70,7 +64,7 @@ export class PostTranslationService {
    * detection over the actually-typed text, e.g. `detectMeasuredLanguage`
    * on web) — never an interface preference. It only backs up
    * `originalLanguage` (an author CLAIM, which always wins), and is itself
-   * preferred over this service's own crude regex `detectLanguage(content)`:
+   * preferred over this service's own crude regex `detectContentLanguage(content)`:
    * a real measurement beats a guess made from a handful of stop-word
    * patterns.
    */
@@ -83,7 +77,7 @@ export class PostTranslationService {
       return;
     }
 
-    const sourceLang = originalLanguage ?? detectedLanguage ?? detectLanguage(content);
+    const sourceLang = originalLanguage ?? detectedLanguage ?? detectContentLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
     /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
@@ -169,7 +163,7 @@ export class PostTranslationService {
     // revendication de l'auteur d'abord, puis la mesure on-device PERSISTÉE
     // (jamais recalculée), et seulement en dernier recours la détection regex
     // — une supposition, pas une mesure.
-    const sourceLang = post.originalLanguage ?? post.detectedLanguage ?? detectLanguage(post.content);
+    const sourceLang = post.originalLanguage ?? post.detectedLanguage ?? detectContentLanguage(post.content);
 
     if (sourceLang === targetLanguage) {
       log.info('PostTranslation: target same as source, skipping', { postId, targetLanguage });
@@ -236,7 +230,7 @@ export class PostTranslationService {
 
       const sourceLanguage = typeof obj.sourceLanguage === 'string'
         ? obj.sourceLanguage
-        : detectLanguage(text);
+        : detectContentLanguage(text);
       if (sourceLanguage === targetLanguage) return;
 
       const existing = (obj.translations ?? null) as Record<string, unknown> | null;
@@ -264,7 +258,7 @@ export class PostTranslationService {
       return;
     }
 
-    const sourceLang = originalLanguage ?? detectLanguage(content);
+    const sourceLang = originalLanguage ?? detectContentLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
     /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
@@ -318,7 +312,7 @@ export class PostTranslationService {
       return;
     }
 
-    const sourceLang = comment.originalLanguage ?? detectLanguage(comment.content);
+    const sourceLang = comment.originalLanguage ?? detectContentLanguage(comment.content);
     if (sourceLang === targetLanguage) {
       log.info('CommentTranslation: target same as source, skipping', { commentId, targetLanguage });
       return;
@@ -388,13 +382,18 @@ export class PostTranslationService {
     };
 
     try {
-      await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
+      const written = await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
         update: 'Post',
         updates: [{
-          q: { _id: { $oid: postId } },
+          q: { _id: { $oid: postId }, originalLanguage: { $ne: targetLanguage } },
           u: { $set: { [`translations.${targetLanguage}`]: translationData } },
         }],
       });
+
+      if (refusedBySourceGuard(written)) {
+        log.info('PostTranslation: target is the original language, not persisted', { postId, targetLanguage });
+        return;
+      }
 
       log.info('PostTranslation: persisted', { postId, targetLanguage });
 
@@ -436,13 +435,18 @@ export class PostTranslationService {
     };
 
     try {
-      await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
+      const written = await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
         update: 'PostComment',
         updates: [{
-          q: { _id: { $oid: commentId } },
+          q: { _id: { $oid: commentId }, originalLanguage: { $ne: targetLanguage } },
           u: { $set: { [`translations.${targetLanguage}`]: translationData } },
         }],
       });
+
+      if (refusedBySourceGuard(written)) {
+        log.info('CommentTranslation: target is the original language, not persisted', { commentId, targetLanguage });
+        return;
+      }
 
       log.info('CommentTranslation: persisted', { commentId, targetLanguage });
 

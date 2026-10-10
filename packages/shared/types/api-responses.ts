@@ -42,6 +42,19 @@ export interface CursorPaginationMeta {
  */
 export interface ResponseMeta {
   conversationStats?: ConversationStats;
+  /**
+   * L'attribution de la géolocalisation (#9609) — la licence CC-BY 4.0 de
+   * DB-IP Lite l'exige partout où un lieu déduit de l'adresse est servi ; la
+   * ville est approximative. Valeur : `GEOLOCATION_ATTRIBUTION`
+   * (`utils/client-session.ts`).
+   */
+  geolocation?: {
+    readonly provider: string;
+    readonly text: string;
+    readonly url: string;
+    readonly license: string;
+    readonly approximate: boolean;
+  };
   pagination?: PaginationMeta;
   timestamp?: string;
   requestId?: string;

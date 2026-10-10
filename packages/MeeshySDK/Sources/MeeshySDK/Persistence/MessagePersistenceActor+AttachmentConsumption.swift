@@ -21,8 +21,8 @@ extension MessagePersistenceActor {
     ///
     /// A future full resync from the server (`upsertFromAPIMessages`) will
     /// overwrite this local write with the server's own computed truth, the
-    /// same bridging relationship `bufferBatchDelivery` already has with
-    /// delivery status: this is a live bridge, not a competing source.
+    /// same bridging relationship `bufferReadStatusSummary` has with the
+    /// delivery counters: this is a live bridge, not a competing source.
     public func markAttachmentConsumedByAll(
         messageId: String,
         attachmentId: String,

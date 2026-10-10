@@ -69,3 +69,35 @@ describe('threadOpenScrollDecision — D-L2 : sur le séparateur à l’OUVERTUR
     expect(decision).toEqual({ kind: 'pin-to-bottom' });
   });
 });
+
+describe('threadOpenScrollDecision — une ouverture ANCRÉE sur un message (#9294)', () => {
+  test('ouverture initiale ancrée ⇒ saut au message, AVANT le séparateur', () => {
+    const decision = threadOpenScrollDecision({
+      isInitialOpen: true,
+      unreadBoundary: { firstUnreadId: 'm-2', unreadCount: 2 },
+      placed: placedOf(['m-1', 'm-2', 'm-3']),
+      anchorMessageId: 'm-1',
+    });
+    expect(decision).toEqual({ kind: 'jump-to-message', messageId: 'm-1' });
+  });
+
+  test('l’ancre hors de la fenêtre chargée reste un saut : la recherche des pages plus anciennes appartient au saut', () => {
+    const decision = threadOpenScrollDecision({
+      isInitialOpen: true,
+      unreadBoundary: null,
+      placed: placedOf(['m-1', 'm-2']),
+      anchorMessageId: 'm-ancien',
+    });
+    expect(decision).toEqual({ kind: 'jump-to-message', messageId: 'm-ancien' });
+  });
+
+  test('un message arrivé en cours de session ne rejoue jamais l’ancre ⇒ ancrage en bas', () => {
+    const decision = threadOpenScrollDecision({
+      isInitialOpen: false,
+      unreadBoundary: null,
+      placed: placedOf(['m-1', 'm-2', 'm-3']),
+      anchorMessageId: 'm-1',
+    });
+    expect(decision).toEqual({ kind: 'pin-to-bottom' });
+  });
+});

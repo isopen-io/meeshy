@@ -62,27 +62,43 @@ extension MessageListViewController {
     /// document y offre téléchargement/partage).
     func openQuotedMedia(_ reference: ReplyReference) {
         let localId = resolveLocalId(reference.messageId)
-        if reference.quotedMediaKind == .audio {
+        let quoted = store.domainMessage(for: localId, currentUserId: currentUserId)
+        // Le geste, l'élection et le verrou vivent dans `QuotedMediaOpening`,
+        // partagé avec la Rivière (#8283). Miroir de `BubbleGridCell.handleTap`,
+        // qui refuse d'ouvrir un attachement protégé tant qu'il n'a pas été
+        // révélé : élargir une porte sans son verrou serait une régression
+        // d'exposition. Le repli est le saut à l'original, où le média garde son
+        // propre geste de révélation et où la carte document offre
+        // téléchargement/partage.
+        switch QuotedMediaOpening.gesture(for: reference, quoted: quoted) {
+        case .playInPlace:
             if conversationViewModel?.toggleQuotedAudio(reference) != true {
                 scrollToMessage(localId: localId)
             }
-            return
-        }
-        let quoted = store.domainMessage(for: localId, currentUserId: currentUserId)
-        // L'élection et le verrou vivent dans `QuotedMediaOpening`, partagé avec
-        // la Rivière (#8283). Miroir de `BubbleGridCell.handleTap`, qui refuse
-        // d'ouvrir un attachement protégé tant qu'il n'a pas été révélé :
-        // élargir une porte sans son verrou serait une régression d'exposition.
-        // Le repli est le saut à l'original, où le média garde son propre geste
-        // de révélation et où la carte document offre téléchargement/partage.
-        guard let attachment = QuotedMediaOpening.attachment(for: reference, quoted: quoted) else {
+        case .open(let attachment):
+            onMediaTap?(attachment)
+        case .followQuote:
             scrollToMessage(localId: localId)
-            return
         }
-        guard attachment.type != .audio else {
-            scrollToMessage(localId: localId)
-            return
+    }
+
+    /// **Le saut vers le message cité** — zone 3 d'une citation (#9911). La
+    /// cellule qui porte la citation remet SA référence : si elle nomme une
+    /// pièce, la tuile s'allumera quand le saut se posera (`flashCell`).
+    func followQuote(_ reference: ReplyReference?, to targetId: String) {
+        pendingPieceSpotlight = QuotedPieceSpotlight.pieceId(of: reference, jumpingTo: targetId)
+            .map { (localId: resolveLocalId(targetId), pieceId: $0) }
+        scrollToMessage(localId: targetId)
+    }
+
+    /// Le saut s'est posé sur `indexPath` : la pièce citée s'allume, une fois.
+    func releasePieceSpotlight(at indexPath: IndexPath) {
+        guard let pending = pendingPieceSpotlight,
+              dataSource?.itemIdentifier(for: indexPath) == .message(localId: pending.localId) else { return }
+        pendingPieceSpotlight = nil
+        let pieceId = pending.pieceId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.pieceSpotlight.send(pieceId)
         }
-        onMediaTap?(attachment)
     }
 }

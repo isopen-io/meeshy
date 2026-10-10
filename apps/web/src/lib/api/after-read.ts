@@ -142,7 +142,7 @@ export function removeAfterReadLocally(
   const now = input.now ?? new Date();
   for (const messageId of messageIds) {
     expireLastMessage(queryClient, conversationId, messageId, now);
-    tombstoneQuotesOf(queryClient, { conversationId, messageId, deletedAt: now.toISOString() });
+    tombstoneQuotesOf(queryClient, { conversationId, messageId, deletedAt: now.toISOString(), expired: true });
     forgetEphemeral(messageId);
   }
   patchThreadMessages(queryClient, conversationId, (messages) =>

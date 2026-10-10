@@ -85,14 +85,14 @@ public struct MeeshyForgotPasswordView: View {
                 theme.backgroundPrimary.ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 24) {
+                    VStack(spacing: MeeshySpacing.xxl) {
                         Picker(String(localized: "auth.forgotPassword.modePicker", defaultValue: "Mode", bundle: .module), selection: $mode) {
                             ForEach(RecoveryMode.allCases, id: \.self) { m in
                                 Text(m.label).tag(m)
                             }
                         }
                         .pickerStyle(.segmented)
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, MeeshySpacing.xxl)
 
                         if mode == .email {
                             emailFlow
@@ -100,7 +100,7 @@ public struct MeeshyForgotPasswordView: View {
                             phoneFlow
                         }
                     }
-                    .padding(.top, 20)
+                    .padding(.top, MeeshySpacing.xl)
                     .iPadFormWidth()
                 }
             }
@@ -155,7 +155,7 @@ public struct MeeshyForgotPasswordView: View {
     }
 
     private var emailInputContent: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             VStack(spacing: MeeshySpacing.xs) {
                 Text(String(localized: "auth.forgotPassword.emailPrompt", defaultValue: "Recevez par e-mail un lien pour choisir un nouveau mot de passe.", bundle: .module))
                     .multilineTextAlignment(.center)
@@ -176,7 +176,7 @@ public struct MeeshyForgotPasswordView: View {
                     alignment: .center
                 )
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, MeeshySpacing.xxl)
 
             AuthTextField(
                 title: String(localized: "auth.forgotPassword.emailField", defaultValue: "E-mail", bundle: .module),
@@ -184,7 +184,7 @@ public struct MeeshyForgotPasswordView: View {
                 text: $email,
                 keyboardType: .emailAddress
             )
-            .padding(.horizontal, 24)
+            .padding(.horizontal, MeeshySpacing.xxl)
 
             errorView
 
@@ -208,9 +208,9 @@ public struct MeeshyForgotPasswordView: View {
     }
 
     private var emailSentContent: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "envelope.badge.fill")
-                .font(.system(size: 48))
+                .font(.system(size: MeeshyIconSize.hero))
                 .foregroundStyle(MeeshyColors.brandPrimary)
                 .accessibilityHidden(true)
 
@@ -246,7 +246,7 @@ public struct MeeshyForgotPasswordView: View {
                 )
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
     }
 
     // MARK: - Phone Flow
@@ -255,14 +255,14 @@ public struct MeeshyForgotPasswordView: View {
     private var phoneFlow: some View {
         switch phoneStep {
         case .lookup:
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 Text(String(localized: "auth.forgotPassword.phonePrompt", defaultValue: "Entrez votre numéro de téléphone pour retrouver votre compte.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
 
                 CountryPicker(selectedCountry: $selectedCountry, phoneNumber: $phoneNumber)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
 
                 errorView
 
@@ -275,9 +275,9 @@ public struct MeeshyForgotPasswordView: View {
             }
 
         case .verifyIdentity:
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 if let info = maskedInfo {
-                    VStack(spacing: 8) {
+                    VStack(spacing: MeeshySpacing.sm) {
                         Text(String(localized: "auth.forgotPassword.accountFound", defaultValue: "Compte trouvé", bundle: .module))
                             .font(.headline)
                             .foregroundStyle(theme.textPrimary)
@@ -291,21 +291,21 @@ public struct MeeshyForgotPasswordView: View {
                     .padding()
                     .frame(maxWidth: .infinity)
                     .background(theme.inputBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .padding(.horizontal, 24)
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+                    .padding(.horizontal, MeeshySpacing.xxl)
                 }
 
                 Text(String(localized: "auth.forgotPassword.verifyIdentityPrompt", defaultValue: "Pour vérifier votre identité, entrez votre nom d'utilisateur et votre e-mail complets.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
 
                 AuthTextField(title: String(localized: "auth.forgotPassword.fullUsername", defaultValue: "Nom d'utilisateur complet", bundle: .module), icon: "person.fill", text: $fullUsername, textContentType: .username)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
 
                 AuthTextField(title: String(localized: "auth.forgotPassword.fullEmail", defaultValue: "E-mail complet", bundle: .module), icon: "envelope.fill", text: $fullEmail, keyboardType: .emailAddress, textContentType: .emailAddress)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
 
                 errorView
 
@@ -318,14 +318,14 @@ public struct MeeshyForgotPasswordView: View {
             }
 
         case .verifyCode:
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 Text(String(localized: "auth.forgotPassword.smsCodeSent", defaultValue: "Un code SMS a été envoyé à votre téléphone.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
 
                 AuthTextField(title: String(localized: "auth.forgotPassword.verificationCode", defaultValue: "Code à 6 chiffres", bundle: .module), icon: "number", text: $verificationCode, keyboardType: .numberPad, textContentType: .oneTimeCode)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
 
                 errorView
 
@@ -347,7 +347,7 @@ public struct MeeshyForgotPasswordView: View {
             Text(error)
                 .font(.caption)
                 .foregroundStyle(.red)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
         }
     }
 

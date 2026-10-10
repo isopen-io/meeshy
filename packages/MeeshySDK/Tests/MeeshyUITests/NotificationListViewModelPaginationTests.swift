@@ -19,6 +19,8 @@ final class NotificationListViewModelPaginationTests: XCTestCase {
             let cursor: String?
             let limit: Int
             let unreadOnly: Bool
+            let types: [String]
+            let hideReadTypes: [String]
         }
 
         var pages: [NotificationListResponse] = []
@@ -28,9 +30,14 @@ final class NotificationListViewModelPaginationTests: XCTestCase {
             offset: Int?,
             cursor: String?,
             limit: Int,
-            unreadOnly: Bool
+            unreadOnly: Bool,
+            types: [String],
+            hideReadTypes: [String]
         ) async throws -> NotificationListResponse {
-            appels.append(Appel(offset: offset, cursor: cursor, limit: limit, unreadOnly: unreadOnly))
+            appels.append(Appel(
+                offset: offset, cursor: cursor, limit: limit, unreadOnly: unreadOnly,
+                types: types, hideReadTypes: hideReadTypes
+            ))
             guard !pages.isEmpty else { throw URLError(.badServerResponse) }
             return pages.removeFirst()
         }

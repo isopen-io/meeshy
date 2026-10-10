@@ -1,0 +1,338 @@
+/**
+ * LE CATALOGUE DES OPÉRATIONS RÉCOMPENSABLES (#8959) — chaque geste qui
+ * rapporte des points, sa fréquence, la portée de son plafond et ses défauts.
+ *
+ * Les vingt AXES (`ENGAGEMENT_AXES`) sont les compteurs que l'écran
+ * « Progression » montre, avec leurs badges ; ils restent des opérations.
+ * Les opérations ajoutées ici créditent le score, la série et l'état « N (M) »
+ * d'une conversation sans ouvrir de badge : elles gardent leur propre
+ * compteur, que les clients ignorent tant qu'ils ne le connaissent pas.
+ *
+ * Les défauts sont ceux que le porteur a fixés le 2026-09-30. Ce qui est
+ * STRUCTUREL (fréquence, portée du plafond, variantes possibles) vit ici et ne
+ * se règle pas ; ce qui est une VALEUR (points, élan, plafond, points d'une
+ * variante) vit dans le barème (`engagement-scale.ts`) et se règle depuis
+ * l'administration.
+ */
+
+import { ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES, type EngagementAxisFamily, type EngagementAxisKey } from './engagement.js';
+
+export const ENGAGEMENT_OPERATION_DOMAINS = [
+  'messaging',
+  'calls',
+  'conversations',
+  'communities',
+  'publishing',
+  'feed',
+  'links',
+  'friends',
+  'profile',
+  'tools',
+] as const;
+
+export type EngagementOperationDomain = (typeof ENGAGEMENT_OPERATION_DOMAINS)[number];
+
+/**
+ * - `repeatable` : chaque geste paie, sous son plafond s'il en a un ;
+ * - `per-target` : une fois par cible (personne, conversation, post, communauté) ;
+ * - `per-account` : une fois dans la vie du compte, jamais multiplié ;
+ * - `progressive` : la valeur du geste monte avec le volume (visites de lien).
+ */
+export type EngagementOperationFrequency = 'repeatable' | 'per-target' | 'per-account' | 'progressive';
+
+/**
+ * Où se compte le plafond d'une opération répétable :
+ * par conversation et par jour civil, par jour civil tous lieux confondus, ou
+ * par cible (les tranches de cinq minutes d'UN appel). `none` ⇒ sans plafond.
+ */
+export type EngagementCapScope = 'conversation-day' | 'day' | 'target' | 'none';
+
+export const EXTRA_ENGAGEMENT_OPERATIONS = [
+  'tool.quote_reply',
+  'tool.forward',
+  'tool.pin',
+  'tool.voice_listened',
+  'tool.translation_request',
+  'tool.location',
+  'conversation.call_started',
+  'conversation.call_joined',
+  'conversation.call_minutes',
+  'conversation.call_participant_added',
+  'social.conversation_invite',
+  'social.conversation_link_joined',
+  'social.community_created',
+  'social.community_joined',
+  'content.status',
+  'tool.post_reaction',
+  'tool.comment_like',
+  'social.repost',
+  'tool.post_bookmark',
+  'tool.story_viewed',
+  'tool.poll_answered',
+  'social.affiliate_link_created',
+  'social.conversation_link_created',
+  'social.link_visit',
+  'social.email_invite',
+  'social.contacts_synced',
+  'profile.avatar',
+  'profile.bio',
+  'profile.second_language',
+  'profile.email_verified',
+  'profile.phone_verified',
+  'profile.two_factor',
+  'profile.voice_profile',
+  'tool.sticker_created',
+  'streak.bonus',
+] as const;
+
+export type ExtraEngagementOperationKey = (typeof EXTRA_ENGAGEMENT_OPERATIONS)[number];
+
+export type EngagementOperationKey = EngagementAxisKey | ExtraEngagementOperationKey;
+
+export const ENGAGEMENT_OPERATIONS: readonly EngagementOperationKey[] = [
+  ...ENGAGEMENT_AXES,
+  ...EXTRA_ENGAGEMENT_OPERATIONS,
+];
+
+export const isEngagementOperationKey = (value: string): value is EngagementOperationKey =>
+  (ENGAGEMENT_OPERATIONS as readonly string[]).includes(value);
+
+/** Les variantes de points d'une publication, selon QUI peut la voir. */
+export const VISIBILITY_VARIANTS = ['public', 'community', 'friends', 'other'] as const;
+export type VisibilityVariant = (typeof VISIBILITY_VARIANTS)[number];
+
+export const LOCATION_VARIANTS = ['live', 'static'] as const;
+
+/**
+ * Les variantes de points d'un message texte, selon le TYPE de sa conversation
+ * (#9666, décision du porteur du 2026-10-08) : `broadcast` et tout type
+ * inconnu tombent dans `other`.
+ */
+export const CONVERSATION_TYPE_VARIANTS = ['direct', 'group', 'public', 'global', 'other'] as const;
+export type ConversationTypeVariant = (typeof CONVERSATION_TYPE_VARIANTS)[number];
+
+export type EngagementOperationDefinition = {
+  readonly domain: EngagementOperationDomain;
+  readonly frequency: EngagementOperationFrequency;
+  readonly capScope: EngagementCapScope;
+  /** La famille qui compte pour l'élan ; `null` ⇒ l'opération n'en ouvre aucune. */
+  readonly family: EngagementAxisFamily | null;
+  /** Les variantes possibles (visibilité, position, type de conversation) ; vide ⇒ une seule valeur. */
+  readonly variants: readonly string[];
+  readonly defaults: {
+    readonly points: number;
+    readonly multiplied: boolean;
+    readonly cap: number | null;
+    readonly variantPoints?: Readonly<Record<string, number>>;
+  };
+};
+
+type Def = EngagementOperationDefinition;
+
+const repeat = (
+  domain: EngagementOperationDomain,
+  family: EngagementAxisFamily,
+  points: number,
+  capScope: EngagementCapScope,
+  cap: number | null,
+): Def => ({ domain, frequency: 'repeatable', capScope, family, variants: [], defaults: { points, multiplied: true, cap } });
+
+const perTarget = (domain: EngagementOperationDomain, family: EngagementAxisFamily, points: number): Def => ({
+  domain,
+  frequency: 'per-target',
+  capScope: 'none',
+  family,
+  variants: [],
+  defaults: { points, multiplied: true, cap: null },
+});
+
+const perAccount = (domain: EngagementOperationDomain, points: number): Def => ({
+  domain,
+  frequency: 'per-account',
+  capScope: 'none',
+  family: null,
+  variants: [],
+  defaults: { points, multiplied: false, cap: null },
+});
+
+/**
+ * Un contenu qui vaut selon QUI PEUT LE VOIR (#9667). Sans variante, il vaut la
+ * plus basse des audiences ouvertes (amis), jamais la plus haute ; une audience
+ * restreinte (`other`) ne vaut rien. Le plafond compte des ACTES.
+ */
+const byVisibility = (
+  family: EngagementAxisFamily,
+  capScope: EngagementCapScope,
+  cap: number | null,
+  variantPoints: Readonly<Record<VisibilityVariant, number>>,
+): Def => ({
+  domain: 'publishing',
+  frequency: 'repeatable',
+  capScope,
+  family,
+  variants: VISIBILITY_VARIANTS,
+  defaults: { points: variantPoints.friends, multiplied: true, cap, variantPoints },
+});
+
+const byConversationType = (cap: number, variantPoints: Readonly<Record<ConversationTypeVariant, number>>): Def => ({
+  domain: 'messaging',
+  frequency: 'repeatable',
+  capScope: 'conversation-day',
+  family: 'content',
+  variants: CONVERSATION_TYPE_VARIANTS,
+  defaults: { points: variantPoints.other, multiplied: true, cap, variantPoints },
+});
+
+export const ENGAGEMENT_OPERATION_CATALOG: Readonly<Record<EngagementOperationKey, EngagementOperationDefinition>> = {
+  'content.text_message': byConversationType(300, { direct: 2, group: 4, public: 6, global: 8, other: 4 }),
+  'content.audio_message': repeat('messaging', 'content', 5, 'conversation-day', 500),
+  'tool.attachment': repeat('messaging', 'tool', 4, 'conversation-day', 100),
+  'tool.sticker': repeat('messaging', 'tool', 1, 'conversation-day', 100),
+  'tool.reaction': repeat('messaging', 'tool', 2, 'conversation-day', 30),
+  'tool.quote_reply': repeat('messaging', 'tool', 1, 'conversation-day', 100),
+  'tool.forward': repeat('messaging', 'tool', 1, 'conversation-day', 10),
+  'tool.pin': repeat('messaging', 'tool', 1, 'conversation-day', 5),
+  'tool.voice_listened': repeat('messaging', 'tool', 2, 'conversation-day', 200),
+  'tool.translation_request': repeat('messaging', 'tool', 1, 'day', 20),
+  'tool.location': {
+    domain: 'messaging',
+    frequency: 'repeatable',
+    capScope: 'day',
+    family: 'tool',
+    variants: LOCATION_VARIANTS,
+    defaults: { points: 1, multiplied: true, cap: 3, variantPoints: { live: 2, static: 1 } },
+  },
+
+  'conversation.call_started': repeat('calls', 'conversation', 5, 'day', 10),
+  'conversation.call_joined': repeat('calls', 'conversation', 3, 'day', 10),
+  'conversation.call_minutes': repeat('calls', 'conversation', 1, 'target', 12),
+  'conversation.call_participant_added': repeat('calls', 'conversation', 2, 'day', 5),
+
+  'conversation.private': perTarget('conversations', 'conversation', 5),
+  'conversation.public': perTarget('conversations', 'conversation', 5),
+  'conversation.community': perTarget('conversations', 'conversation', 5),
+  'conversation.group_created': perTarget('conversations', 'conversation', 1),
+  'social.conversation_invite': perTarget('conversations', 'social', 2),
+  'social.conversation_link_joined': perTarget('conversations', 'social', 5),
+
+  'social.community_created': repeat('communities', 'social', 5, 'day', 1),
+  'social.community_joined': perTarget('communities', 'social', 2),
+
+  // La grille des publications, par visibilité public / communauté / amis
+  // (#9667, décision du porteur du 2026-10-08) ; les plafonds comptent des actes.
+  'content.post': byVisibility('content', 'day', 50, { public: 500, community: 200, friends: 100, other: 0 }),
+  'content.story': byVisibility('content', 'day', 20, { public: 300, community: 200, friends: 100, other: 0 }),
+  'content.reel': byVisibility('content', 'day', 10, { public: 1000, community: 500, friends: 250, other: 0 }),
+  'content.status': byVisibility('content', 'day', 3, { public: 50, community: 25, friends: 10, other: 0 }),
+  'tool.in_app_edit': repeat('publishing', 'tool', 1, 'none', null),
+  'tool.direct_publish': repeat('publishing', 'tool', 1, 'none', null),
+  // Selon la visibilité du CONTENU COMMENTÉ (celle de la publication qui porte le fil) ;
+  // bornés par les limites quotidiennes de gestes (`DEFAULT_PATH_CAPS`), pas par un plafond propre.
+  'comment.text': byVisibility('comment', 'none', null, { public: 100, community: 50, friends: 10, other: 0 }),
+  'comment.audio': byVisibility('comment', 'none', null, { public: 100, community: 50, friends: 10, other: 0 }),
+
+  // Ni plafond ni portée propres (#9584) : la limite quotidienne de gestes
+  // (`DEFAULT_PATH_CAPS`) borne la réaction ET ses points — un second plafond
+  // ferait diverger ce qu'on peut faire de ce que ça rapporte.
+  'tool.post_reaction': repeat('feed', 'tool', 1, 'none', null),
+  'tool.comment_like': repeat('feed', 'tool', 1, 'day', 30),
+  'social.repost': repeat('feed', 'social', 3, 'day', 10),
+  'social.share': perTarget('feed', 'social', 7),
+  'tool.post_bookmark': repeat('feed', 'tool', 1, 'day', 10),
+  'tool.story_viewed': repeat('feed', 'tool', 1, 'day', 20),
+  'tool.poll_answered': perTarget('feed', 'tool', 2),
+
+  'social.tracked_link': repeat('links', 'social', 1, 'day', 10),
+  'social.affiliate_link_created': repeat('links', 'social', 1, 'day', 5),
+  'social.conversation_link_created': repeat('links', 'social', 1, 'day', 10),
+  'social.link_visit': {
+    domain: 'links',
+    frequency: 'progressive',
+    capScope: 'none',
+    family: 'social',
+    variants: [],
+    defaults: { points: 2, multiplied: false, cap: null },
+  },
+  'social.invite_joined': perTarget('links', 'social', 7),
+
+  'social.friendship': perTarget('friends', 'social', 7),
+  'social.email_invite': repeat('friends', 'social', 1, 'day', 10),
+  'social.contacts_synced': perAccount('friends', 5),
+
+  'profile.avatar': perAccount('profile', 10),
+  'profile.bio': perAccount('profile', 5),
+  'profile.second_language': perAccount('profile', 5),
+  'profile.email_verified': perAccount('profile', 10),
+  'profile.phone_verified': perAccount('profile', 10),
+  'profile.two_factor': perAccount('profile', 15),
+  'profile.voice_profile': perAccount('profile', 20),
+
+  'tool.sticker_created': repeat('tools', 'tool', 2, 'day', 5),
+
+  'streak.bonus': {
+    domain: 'profile',
+    frequency: 'progressive',
+    capScope: 'none',
+    family: null,
+    variants: [],
+    defaults: { points: 0, multiplied: false, cap: null },
+  },
+};
+
+/** Le plus qu'UNE action de l'opération rapporte par défaut, toutes variantes confondues. */
+const topDefaultPoints = (definition: EngagementOperationDefinition): number =>
+  Math.max(definition.defaults.points, ...Object.values(definition.defaults.variantPoints ?? {}));
+
+/**
+ * « COMMENT GAGNER » (#9667) : ce qu'un geste de chaque famille rapporte AU
+ * PLUS, avant multiplicateurs — dérivé du catalogue, jamais recopié. Miroir
+ * Swift : `EngagementCatalog.familyTopPoints`.
+ */
+export const ENGAGEMENT_FAMILY_TOP_POINTS: Readonly<Record<EngagementAxisFamily, number>> = Object.fromEntries(
+  ENGAGEMENT_AXIS_FAMILIES.map((family) => [
+    family,
+    Math.max(
+      0,
+      ...Object.values(ENGAGEMENT_OPERATION_CATALOG)
+        .filter((definition) => definition.family === family)
+        .map(topDefaultPoints),
+    ),
+  ]),
+) as Record<EngagementAxisFamily, number>;
+
+export function engagementOperation(key: EngagementOperationKey): EngagementOperationDefinition {
+  return ENGAGEMENT_OPERATION_CATALOG[key];
+}
+
+/** Une opération dont le plafond se règle — répétable, avec une portée. */
+export const hasConfigurableCap = (key: EngagementOperationKey): boolean => {
+  const operation = ENGAGEMENT_OPERATION_CATALOG[key];
+  return operation.frequency === 'repeatable' && operation.capScope !== 'none';
+};
+
+/** Type d'une conversation, tel que la base l'écrit, en variante de points d'un message. */
+export function conversationTypeVariant(type: string | null | undefined): ConversationTypeVariant {
+  const normalized = (type ?? '').toLowerCase();
+  return CONVERSATION_TYPE_VARIANTS.find((variant) => variant !== 'other' && variant === normalized) ?? 'other';
+}
+
+/**
+ * Visibilité d'une publication, telle que la base l'écrit, en variante de points.
+ * Une audience restreinte (`EXCEPT`, `ONLY`, brouillon `PRIVATE`) ⇒ `other` ; une
+ * visibilité inconnue ⇒ `friends`, la plus basse des audiences ouvertes, jamais
+ * la plus haute (#9667).
+ */
+export function visibilityVariant(visibility: string | null | undefined): VisibilityVariant {
+  switch ((visibility ?? '').toUpperCase()) {
+    case 'PUBLIC':
+      return 'public';
+    case 'COMMUNITY':
+      return 'community';
+    case 'EXCEPT':
+    case 'ONLY':
+    case 'PRIVATE':
+      return 'other';
+    default:
+      return 'friends';
+  }
+}

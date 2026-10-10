@@ -1,0 +1,105 @@
+/* LES BOUTONS CANONIQUES (#8879) — un `@utility` par RÔLE, pas par écran.
+ *
+ * La passe d'harmonie a relevé les boutons pleins réécrits site par site :
+ * `backgroundColor: var(--color-ios-brand)` plus `color: '#fff'`, une hauteur
+ * de 44, 48 ou 52, un rayon de 14, 20 ou capsule. Ils se posent désormais
+ * d'une classe (`BUTTON` de `components/ui-chrome.tsx` les nomme) :
+ *
+ *   btn-primary      l'action principale — aplat de marque, encre `onBrand`
+ *   btn-secondary    l'action d'à côté — remplissage neutre, encre de l'écran
+ *   btn-destructive  le geste qui détruit — TEXTE rouge sur un voile rouge,
+ *                    jamais du blanc sur du rouge (ConfirmDialog, AA)
+ *   btn-icon         une icône seule — cible de 44, sans fond ; dans un
+ *                    en-tête, `ChromeActionDisc` dessine le disque
+ *   btn-on-media     une icône posée sur un média plein écran — voile léger,
+ *                    encre blanche, filet (échelle `MeeshyColors.onMedia…`)
+ *
+ * Tailwind n'émet un `@utility` que s'il est EMPLOYÉ : ces règles ne coûtent
+ * rien à la première peinture tant qu'aucun écran ne les pose. Aucune couleur
+ * n'est écrite ici — chaque teinte est un jeton (`ui-primitives.test.ts`).
+ * La couleur d'accent d'une conversation se pose en surcharge
+ * (`style={{ backgroundColor: 'var(--accent)' }}`) sur `btn-primary`.
+ */
+
+@utility btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  background-color: var(--ios-indigo-500);
+  color: var(--ios-on-brand);
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+@utility btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  background-color: var(--color-ios-fill);
+  color: var(--ios-ink);
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+@utility btn-destructive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-semibold);
+  background-color: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  color: var(--color-danger);
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+@utility btn-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  min-height: 44px;
+  min-width: 44px;
+  border-radius: var(--radius-pill);
+  background-color: transparent;
+  color: inherit;
+  &:disabled {
+    opacity: 0.4;
+  }
+}
+
+@utility btn-on-media {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  min-height: 44px;
+  min-width: 44px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ios-media-hairline);
+  background-color: var(--ios-scrim-soft);
+  color: var(--ios-on-media);
+  &:disabled {
+    opacity: 0.4;
+  }
+}

@@ -11,24 +11,34 @@
  * qu'y brancher les événements de pointeur.
  */
 
-export const COMMENT_SWIPE_MINIMUM_DISTANCE = 22;
-export const COMMENT_SWIPE_DOMINANCE_RATIO = 3;
-export const COMMENT_SWIPE_ACTION_ZONE = 72;
-export const COMMENT_SWIPE_RUBBER_BAND = 0.15;
-export const COMMENT_SWIPE_COMMIT_DISTANCE = 66;
+import {
+  SWIPE_ACTION_ZONE,
+  SWIPE_COMMIT_DISTANCE,
+  SWIPE_RUBBER_BAND,
+  swipeCommits,
+  swipeDominanceRatio,
+  swipeEngages,
+  swipeMinimumDistance,
+  swipeTrackedOffset,
+} from './swipe';
+
+export { readingDelta } from './swipe';
+
+/* La LOI vit dans `swipe.ts` (#7559), partagée avec le glissé d'un message ;
+   ce fichier n'en garde que la projection « répondre seul, vers la droite ». */
+export const COMMENT_SWIPE_MINIMUM_DISTANCE = swipeMinimumDistance('normal');
+export const COMMENT_SWIPE_DOMINANCE_RATIO = swipeDominanceRatio('normal');
+export const COMMENT_SWIPE_ACTION_ZONE = SWIPE_ACTION_ZONE;
+export const COMMENT_SWIPE_RUBBER_BAND = SWIPE_RUBBER_BAND;
+export const COMMENT_SWIPE_COMMIT_DISTANCE = SWIPE_COMMIT_DISTANCE;
 
 /** Un glissé HORIZONTAL FRANC — sinon le geste appartient au défilement. */
 export function commentSwipeEngages(dx: number, dy: number): boolean {
-  const horizontal = Math.abs(dx);
-  return horizontal > Math.abs(dy) * COMMENT_SWIPE_DOMINANCE_RATIO && horizontal > COMMENT_SWIPE_MINIMUM_DISTANCE;
+  return swipeEngages(dx, dy, 'normal');
 }
 
 /** Le doigt est suivi 1:1 jusqu'à la zone d'action, puis l'élastique freine. */
-export function commentSwipeTrackedOffset(dx: number): number {
-  const horizontal = Math.abs(dx);
-  if (horizontal <= COMMENT_SWIPE_ACTION_ZONE) return dx;
-  return Math.sign(dx) * (COMMENT_SWIPE_ACTION_ZONE + (horizontal - COMMENT_SWIPE_ACTION_ZONE) * COMMENT_SWIPE_RUBBER_BAND);
-}
+export const commentSwipeTrackedOffset = swipeTrackedOffset;
 
 /**
  * Le décalage à peindre pour une translation `(dx, dy)` exprimée dans le SENS
@@ -37,23 +47,13 @@ export function commentSwipeTrackedOffset(dx: number): number {
  */
 export function commentSwipeOffset(dx: number, dy: number): number | null {
   if (!commentSwipeEngages(dx, dy)) return null;
-  return Math.max(0, commentSwipeTrackedOffset(dx));
+  return Math.max(0, swipeTrackedOffset(dx));
 }
 
 /** Relâcher au-delà du seuil RÉPOND ; en deçà, le geste s'annule. */
-export function commentSwipeCommits(offset: number): boolean {
-  return offset >= COMMENT_SWIPE_COMMIT_DISTANCE;
-}
+export const commentSwipeCommits = swipeCommits;
 
 /** Avancement de 0 à 1 jusqu'au seuil — pilote la flèche révélée. */
 export function commentSwipeProgress(offset: number): number {
-  return Math.min(1, Math.max(0, offset / COMMENT_SWIPE_COMMIT_DISTANCE));
-}
-
-/**
- * LA TRANSLATION LUE DANS LE SENS DE LECTURE — en arabe, « vers la droite »
- * se lit « depuis le bord de DÉBUT » (`ReadingDirection.readingDelta` d'iOS).
- */
-export function readingDelta(dx: number, direction: 'ltr' | 'rtl'): number {
-  return direction === 'rtl' ? -dx : dx;
+  return Math.min(1, Math.max(0, offset / SWIPE_COMMIT_DISTANCE));
 }

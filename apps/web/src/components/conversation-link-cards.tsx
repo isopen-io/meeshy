@@ -7,6 +7,7 @@ import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { cardJoinAccount } from '@/lib/links/card-join-account';
 import { conversationLinksIn, type ConversationLinkTarget } from '@/lib/links/conversation-link';
 import { webOriginOf } from '@/lib/links/web-origin';
 import { isAppPath } from '@/routes/app-paths';
@@ -45,6 +46,9 @@ function CardsHost({ targets }: { readonly targets: readonly ConversationLinkTar
   const accountLanguage = useStore(sessionStore, (state) =>
     state.session.status === 'authenticated' ? (state.session.user.systemLanguage ?? null) : null,
   );
+  const displayName = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? (state.session.user.displayName ?? null) : null));
+  const username = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.username : null));
+  const account = useMemo(() => cardJoinAccount(username === null ? null : { displayName, username }), [displayName, username]);
   const language = currentInterfaceLanguage();
   return (
     <>
@@ -56,6 +60,7 @@ function CardsHost({ targets }: { readonly targets: readonly ConversationLinkTar
           language={language}
           signedIn={signedIn}
           accountLanguage={accountLanguage}
+          account={account}
         />
       ))}
     </>

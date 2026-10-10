@@ -170,8 +170,11 @@ for (const mode of ConversationReadingModeSchema.options.filter((m) => MODE_CONT
     expect(revealed?.querySelector('img')?.getAttribute('src')).toContain('plage');
 
     await mounter.click(revealed);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    await mounter.settle();
-    expect(document.body.querySelector('[data-media-viewer]')).not.toBeNull();
+    /* La visionneuse est un chunk À LA DEMANDE : on attend qu'il s'ouvre (borné), on ne parie pas sur 50 ms. */
+    for (let tries = 0; tries < 40 && document.body.querySelector('[data-media-viewer]') === null; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await mounter.settle();
+    }
+    expect(document.body.querySelector('[data-media-viewer]') !== null).toBe(true);
   });
 }

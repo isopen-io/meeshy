@@ -98,6 +98,9 @@ struct ReelFeedVideoSurface: View {
     /// à `true` (DoD S2 rejet, constat majeur #2).
     @State private var isMutedMirror: Bool = SharedAVPlayerManager.shared.isMuted
     @State private var isForceMutedMirror: Bool = SharedAVPlayerManager.shared.isForceMuted
+    /// Miroir du PiP (#9575) : la carte ne monte pas le lecteur que la fenêtre
+    /// PiP joue.
+    @State private var isPipActiveMirror: Bool = SharedAVPlayerManager.shared.isPipActive
 
     /// `true` once THIS card instance has actually driven the shared engine
     /// (called `load()`/`play()` while active) and not yet relinquished it.
@@ -110,8 +113,15 @@ struct ReelFeedVideoSurface: View {
     @State private var ownsEngine = false
 
     private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
+    /// Le verdict de montage du MOTEUR (#9575), au rôle EN LIGNE : faux tant
+    /// que la fenêtre PiP joue ce média — la carte rend son poster, et ne
+    /// met pas non plus en pause une lecture qui n'est plus la sienne.
     private var isShowingThis: Bool {
-        player != nil && activeURL == attachment.fileUrl
+        player != nil && SharedAVPlayerManager.mayMountPlayer(
+            role: .inline,
+            surfaceMedia: attachment.fileUrl,
+            activeMedia: activeURL,
+            isPipActive: isPipActiveMirror)
     }
 
     var body: some View {
@@ -123,6 +133,7 @@ struct ReelFeedVideoSurface: View {
         .onReceive(ReelFeedSoundIntent.shared.$isSoundOn) { soundOn = $0 }
         .onReceive(manager.$isMuted) { isMutedMirror = $0; isSoundAudible.wrappedValue = !($0 || isForceMutedMirror) }
         .onReceive(manager.$isForceMuted) { isForceMutedMirror = $0; isSoundAudible.wrappedValue = !(isMutedMirror || $0) }
+        .onReceive(manager.$isPipActive) { isPipActiveMirror = $0 }
     }
 
     @ViewBuilder
@@ -198,6 +209,10 @@ struct ReelFeedVideoSurface: View {
             }
             return
         }
+        // La fenêtre PiP joue CE média : la carte ne reprend pas le moteur —
+        // ni lecture relancée, ni muet du fil posé sur ce que l'utilisateur
+        // écoute ailleurs (#9575).
+        guard !(manager.isPipActive && manager.activeURL == attachment.fileUrl) else { return }
         if manager.activeURL != attachment.fileUrl {
             manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
             // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la

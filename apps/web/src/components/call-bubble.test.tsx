@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { ActiveCall } from '@/lib/calls/call-store';
+import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 
 import { CallBubble } from './call-bubble';
 import { ActiveCallView } from './call-overlay';
@@ -77,6 +77,48 @@ describe('la bulle', () => {
 
   test('sans vidéo, le navigateur n’a rien à faire flotter : pas de bouton image dans l’image', () => {
     expect(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />)).not.toContain('data-call-bubble-control="pip"');
+  });
+});
+
+const liveVideo = { getVideoTracks: () => [{ readyState: 'live' }] } as unknown as MediaStream;
+
+const peer = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected', ...overrides });
+
+const withSinks = (sinks: boolean, render: () => string): string => {
+  const scope = globalThis as { HTMLMediaElement?: unknown };
+  const saved = scope.HTMLMediaElement;
+  scope.HTMLMediaElement = sinks ? { prototype: { setSinkId: () => undefined } } : { prototype: {} };
+  try {
+    return render();
+  } finally {
+    scope.HTMLMediaElement = saved;
+  }
+};
+
+describe('la bulle, en grand ou en petit (#8145)', () => {
+  test('elle dit sa taille et comment la changer', () => {
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />);
+    expect(html).toContain('data-call-bubble-size="small"');
+    expect(html).toContain('+ et − changent sa taille');
+  });
+});
+
+describe('un écran partagé dans la bulle (#8164)', () => {
+  test('il s’y voit ENTIER, une caméra y reste recadrée', () => {
+    const sharing = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', members: { 'u-a': peer({ screenSharing: true }) }, remoteStreams: { 'u-a': liveVideo } })} />);
+    expect(sharing).toContain('data-call-stream="contain"');
+    const camera = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', members: { 'u-a': peer({ cameraOn: true }) }, remoteStreams: { 'u-a': liveVideo } })} />);
+    expect(camera).toContain('data-call-stream="cover"');
+  });
+});
+
+describe('la sortie audio depuis la bulle (#9097)', () => {
+  test('« Choisir les périphériques » est dans la bulle là où le navigateur choisit la sortie ; absent sinon', () => {
+    const offered = withSinks(true, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />));
+    expect(offered).toContain('data-call-bubble-control="output"');
+    expect(offered).toContain('aria-label="Choisir les périphériques"');
+    expect(offered).toContain('aria-haspopup="dialog"');
+    expect(withSinks(false, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />))).not.toContain('data-call-bubble-control="output"');
   });
 });
 

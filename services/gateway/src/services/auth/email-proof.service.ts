@@ -46,7 +46,8 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveSecondFactor, type SecondFactorState } from '../MagicLinkService';
 import { emailCodeMatches, emailTokenMatches } from './email-code';
 import { emailProofFields, settleEmailAddressProof } from './email-address-proof';
-import { proveEmailClaim, type EmailClaimStore } from './email-claim';
+import { proveEmailClaim } from './email-claim';
+import { creditContactProof, type ContactProofRecorder } from './contact-proof-engagement';
 
 const logger = enhancedLogger.child({ module: 'EmailProof' });
 
@@ -94,13 +95,16 @@ type ProofRow = {
  * revendiquant qui s'ouvre.
  */
 async function preuveDeRevendication(
-  prisma: EmailClaimStore,
+  deps: EmailProofDeps,
   proof: EmailProof,
   parCode: boolean,
 ): Promise<EmailProofResult> {
-  const issue = await proveEmailClaim(prisma, proof);
+  const issue = await proveEmailClaim(deps.prisma, proof);
   if (issue.kind === 'expired') return parCode ? REFUS.codeExpire : REFUS.lienExpire;
   if (issue.kind !== 'proven') return parCode ? REFUS.codeInvalide : REFUS.lienInvalide;
+  // Le compte revendiquant reçoit une adresse qu'il vient de prouver : c'est
+  // son geste, et c'est sa première adresse vérifiée (#8959).
+  creditContactProof(deps, issue.userId, 'profile.email_verified');
   return {
     success: true,
     userId: issue.userId,
@@ -111,10 +115,18 @@ async function preuveDeRevendication(
   };
 }
 
+/** Le moteur d'engagement se double en test ; absent ⇒ celui de `prisma`. */
+type EmailProofDeps = {
+  readonly prisma: PrismaClient;
+  readonly engagement?: ContactProofRecorder;
+};
+
 export async function verifyEmailProof(
-  prisma: Pick<PrismaClient, 'user'> & EmailClaimStore,
+  prisma: PrismaClient,
   proof: EmailProof,
+  options: { readonly engagement?: ContactProofRecorder } = {},
 ): Promise<EmailProofResult> {
+  const deps: EmailProofDeps = { prisma, engagement: options.engagement };
   const parCode = typeof proof.code === 'string' && proof.code.length > 0;
   const saisie = parCode ? proof.code ?? '' : proof.token ?? '';
   const invalide = parCode ? REFUS.codeInvalide : REFUS.lienInvalide;
@@ -138,7 +150,7 @@ export async function verifyEmailProof(
       (parCode
         ? emailCodeMatches(ligne.emailVerificationCode, saisie)
         : emailTokenMatches(ligne.emailVerificationToken, saisie));
-    if (!ligne || !correspond) return preuveDeRevendication(prisma, proof, parCode);
+    if (!ligne || !correspond) return preuveDeRevendication(deps, proof, parCode);
 
     if (!ligne.emailVerificationExpiry || ligne.emailVerificationExpiry.getTime() <= Date.now()) {
       return parCode ? REFUS.codeExpire : REFUS.lienExpire;
@@ -163,8 +175,13 @@ export async function verifyEmailProof(
 
     if (consomme.count === 0) return invalide;
 
-    // L'arrivée (#8105) est annoncée par la route, qui connaît `afterResponse`.
-    await settleEmailAddressProof({ prisma }, { userId: ligne.id, now: maintenant, newlyProven: false });
+    // L'arrivée (#8105) est annoncée par la route, qui connaît `afterResponse` :
+    // aucun `announce` n'est passé ici, `newlyProven` ne sert qu'au crédit.
+    await settleEmailAddressProof(deps, {
+      userId: ligne.id,
+      now: maintenant,
+      newlyProven: ligne.emailVerifiedAt === null,
+    });
 
     logger.info(`adresse prouvée (${parCode ? 'code' : 'lien'})`);
     return {

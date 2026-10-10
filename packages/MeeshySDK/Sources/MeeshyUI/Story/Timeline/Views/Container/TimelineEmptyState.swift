@@ -13,16 +13,16 @@ public struct TimelineEmptyState: View, Equatable {
     }
 
     public var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle()
                     .fill(MeeshyColors.indigo500.opacity(isDark ? 0.20 : 0.14))
                     .frame(width: 56, height: 56)
                 Image(systemName: "rectangle.stack.badge.plus")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
                     .foregroundStyle(MeeshyColors.indigo500)
             }
-            VStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Text(String(localized: "story.timeline.empty.title", defaultValue: "Aucune piste", bundle: .module))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo900)
@@ -32,7 +32,7 @@ public struct TimelineEmptyState: View, Equatable {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, MeeshySpacing.xxxl)
             }
         }
         .frame(maxWidth: .infinity)

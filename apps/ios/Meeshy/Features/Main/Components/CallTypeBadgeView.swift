@@ -11,22 +11,22 @@ struct CallTypeBadgeView: View {
     let label: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: isVideo ? "video.fill" : "phone.fill")
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 .accessibilityHidden(true)
             Text(label)
                 .font(.caption2.weight(.semibold))
         }
         .foregroundColor(MeeshyColors.indigo400)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
-                .fill(MeeshyColors.indigo400.opacity(0.15))
+                .fill(MeeshyColors.indigo400.opacity(MeeshyOpacity.light))
                 .overlay(
                     Capsule()
-                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 0.5)
+                        .stroke(MeeshyColors.indigo400.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
                 )
         )
     }

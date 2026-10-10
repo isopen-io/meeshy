@@ -901,6 +901,48 @@ describe('ScenePlayer — le fond SONORE n’est pas doublé par une couche d’
     );
     expect(el.querySelector('[data-scene-object="audio"]')).not.toBeNull();
   });
+
+  /* #9737 — LE SON DE FOND NE PRODUIT AUCUN PIXEL SUR LA SCÈNE. La pastille
+   * « son coupé » du moteur en était un : elle se posait sur une scène dont le
+   * SEUL son est le fond, que le crédit hors scène dit déjà. Elle reste pour
+   * ce qui sonne SUR la scène — un son de premier plan, une vidéo. */
+  test('un son de FOND seul, muet, dans les cinq modes ⇒ aucun pixel : ni couche, ni pastille', () => {
+    const fondSeul = sceneDocumentOf([audioObject({ postMediaId: 'clip', isBackground: true })]);
+    for (const mode of ['card', 'reader', 'story', 'preview', 'reel'] as const) {
+      const el = mount(<ScenePlayer document={fondSeul} sceneIndex={0} mode={mode} playing muted carrier={soundCarrier} preferredLanguages={['fr']} />);
+      expect(el.querySelector('[data-scene-object="audio"]')).toBeNull();
+      expect(el.querySelector('[data-scene-sound]')).toBeNull();
+      expect(el.querySelector('[data-scene-audio-chip]')).toBeNull();
+      act(() => root.unmount());
+      container.remove();
+    }
+    mount(<ScenePlayer document={fondSeul} sceneIndex={0} mode="card" playing={false} carrier={soundCarrier} preferredLanguages={['fr']} />);
+  });
+
+  test('un son de PREMIER PLAN garde la pastille « son coupé » et sa pastille de scène, à la pose de l’objet', () => {
+    const el = mount(
+      <ScenePlayer
+        document={sceneDocumentOf([
+          audioObject({ postMediaId: 'fond', isBackground: true }),
+          { ...audioObject({ postMediaId: 'clip', waveformSamples: [0.2, 0.9, 0.4] }), id: 'a2', anchor: { t: 'free', x: 0.25, y: 0.75 }, transform: { scale: 1.5, rotation: 10, opacity: 1 } },
+        ])}
+        sceneIndex={0}
+        mode="story"
+        playing
+        muted
+        carrier={soundCarrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('[data-scene-sound="muted"]')).not.toBeNull();
+    const layers = el.querySelectorAll<HTMLElement>('[data-scene-object="audio"]');
+    expect(layers.length).toBe(1);
+    expect(layers[0]?.getAttribute('data-scene-object-id')).toBe('a2');
+    expect(layers[0]?.style.left).toBe('25%');
+    expect(layers[0]?.style.top).toBe('75%');
+    expect(layers[0]?.style.transform).toBe('translate(-50%, -50%) rotate(10deg) scale(1.5)');
+    expect(layers[0]?.querySelector('[data-scene-audio-chip="recording"]')).not.toBeNull();
+  });
 });
 
 /* T-E13 (revue-correction #6901) — LE MODE NE CHANGE JAMAIS LA GÉOMÉTRIE :

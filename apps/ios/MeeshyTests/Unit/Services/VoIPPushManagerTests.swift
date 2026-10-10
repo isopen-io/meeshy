@@ -345,13 +345,7 @@ final class VoIPPushManagerTests: XCTestCase {
     }
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_duplicatePushPhantomPath_passesCallIdToReportPhantomVoIPCall() throws {

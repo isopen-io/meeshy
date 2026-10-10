@@ -1,7 +1,7 @@
 /**
  * L'AGENCEMENT D'UNE PUBLICATION, CHOISI PAR SON AUTEUR (#6514) — dérivation de
  * `MosaicLayoutMode` (`packages/MeeshySDK/.../Models/CanvasV3.swift`) et de la
- * géométrie `MosaicLayout` (`packages/MeeshySDK/.../MeeshyUI/Story/MosaicLayout.swift`),
+ * géométrie `MosaicLayout` (`packages/MeeshySDK/.../MeeshySDK/Story/MosaicLayout.swift`),
  * le seul rendu qui existait avant ce lot (le fil iOS, `PostSceneMosaic`).
  *
  * C'est une décision d'AUTEUR, qui voyage avec la publication

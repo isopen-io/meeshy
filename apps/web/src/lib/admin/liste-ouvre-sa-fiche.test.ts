@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { ROUTES } from '@/routes/route-table';
 
+import { ADMIN_FICHES, ADMIN_ROUTE_KEYS, adminListRoute } from './admin-routes';
+
 /**
  * **UNE LISTE D'ADMINISTRATION OUVRE SA FICHE** — la garde qui manquait, et
  * dont l'absence a laissé passer un défaut entier.
@@ -33,15 +35,33 @@ import { ROUTES } from '@/routes/route-table';
  * déclarer dans les deux espaces, ne passe plus en silence.
  */
 
-/** Les paires « liste → fiche » de l'administration, dans les DEUX espaces. */
-const PAIRES = [
-  { liste: 'adminUsers', fiche: 'adminUser', parametre: 'user' },
-  { liste: 'admUsers', fiche: 'admUser', parametre: 'user' },
-  { liste: 'adminConversations', fiche: 'adminConversation', parametre: 'conversation' },
-  { liste: 'admConversations', fiche: 'admConversation', parametre: 'conversation' },
-] as const;
+/**
+ * Les paires « liste → fiche » de l'administration, dans les DEUX espaces —
+ * DÉRIVÉES de la table des sections (`admin-routes.ts`, #8876) : une liste
+ * ajoutée avec sa fiche entre ici sans qu'on écrive une ligne de plus, et la
+ * table ne peut plus déclarer une clé que `ROUTES` ignore.
+ */
+const PAIRES = ADMIN_FICHES.flatMap((fiche) =>
+  (['admin', 'adm'] as const).map((space) => ({
+    liste: adminListRoute(fiche.section, space),
+    fiche: fiche[space],
+    parametre: fiche.param,
+  })),
+);
 
 describe('toute liste d’administration a une fiche à ouvrir (#6862)', () => {
+  test('la table couvre les dix genres d’entité dans les deux espaces', () => {
+    expect(PAIRES).toHaveLength(20);
+  });
+
+  test('toute clé de la table existe dans ROUTES — et inversement, aucune route d’administration n’y manque', () => {
+    const declarees = Object.entries(ROUTES)
+      .filter(([, route]) => route.pattern.startsWith('/adm'))
+      .map(([key]) => key)
+      .sort();
+    expect([...ADMIN_ROUTE_KEYS].sort()).toEqual(declarees);
+  });
+
   for (const { liste, fiche, parametre } of PAIRES) {
     test(`${liste} → ${fiche} : les deux routes existent`, () => {
       expect(ROUTES[liste]).toBeDefined();

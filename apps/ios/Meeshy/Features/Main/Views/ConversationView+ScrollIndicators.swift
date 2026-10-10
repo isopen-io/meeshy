@@ -60,6 +60,7 @@ extension ConversationView {
             isAudioPlaying: scrollButtonAudioIsPlaying,
             isOffline: isOffline,
             isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
+            isLoadingNewer: viewModel.isLoadingNewer,
             accentColor: accentColor,
             secondaryColor: secondaryColor,
             unreadCallSymbol: unreadCallSymbol,

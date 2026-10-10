@@ -958,6 +958,38 @@ extension GRDBCacheStore where Key == String {
             await update(for: key) { items in items.filter { $0.id != itemId } }
         }
     }
+
+    /// Applique `rule` à chaque item de chaque clé, mémoire comme base (#9307).
+    /// Le pendant de `patchEverywhere` quand l'item visé ne se reconnaît pas à
+    /// son `id` — un participant à son `userId`, une demande d'ami à l'une de
+    /// ses deux parties. `rule` rend `nil` pour un item intact : seules les
+    /// clés où un item CHANGE sont réécrites, fraîcheur préservée.
+    public func repaintEverywhere(_ rule: @escaping @Sendable (Value) -> Value?) async {
+        let keys = Set(loadedKeys()).union(l2Keys())
+        for key in keys {
+            let items = memoryCache[key]?.items ?? readFromL2(for: namespacedKey(key))?.items ?? []
+            guard items.repaintedElements(by: rule) != nil else { continue }
+            await update(for: key) { items in items.repaintedElements(by: rule) ?? items }
+        }
+    }
+
+    /// Toutes les clés (dé-namespacées) persistées par CE store.
+    private nonisolated func l2Keys() -> [String] {
+        let prefix = namespace.isEmpty ? "" : "\(namespace):"
+        do {
+            let keys = try db.read { db in
+                try String.fetchAll(
+                    db,
+                    sql: "SELECT DISTINCT key FROM cache_entries WHERE substr(key, 1, ?) = ?",
+                    arguments: [prefix.count, prefix]
+                )
+            }
+            return keys.map { String($0.dropFirst(prefix.count)) }
+        } catch {
+            logger.error("Failed to list keys of \(self.namespace, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return []
+        }
+    }
 }
 
 // MARK: - Inventaire pour la purge sélective

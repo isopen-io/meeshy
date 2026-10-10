@@ -21,6 +21,7 @@
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 
 jest.mock('../../../routes/conversations/utils/access-control', () => ({
   canAccessConversation: jest.fn<any>(),
@@ -119,11 +120,16 @@ function createMockFastify() {
  * par un `mockResolvedValueOnce` positionnel — laisse le test survivre à une
  * requête ajoutée ailleurs dans la route.
  */
-function createMockPrisma(audience: Array<{ id: string; userId: string | null }>) {
+function createMockPrisma(audience: Array<{ id: string; userId?: string | null } & Record<string, unknown>>) {
   const findMany = jest.fn<any>(async (args: any) => {
     const where = args?.where ?? {};
     if (where.isActive === true && where.userId === undefined) {
-      return audience.filter((p) => !where.NOT || p.userId !== where.NOT.userId);
+      // Les sémantiques MESURÉES de MongoDB (#9106) : un invité par lien n'a
+      // pas de clé `userId`, et une négation écarte la clé absente.
+      return audience
+        .map((p) => ({ conversationId: CONV_ID, isActive: true, ...p }))
+        .filter((p) => matchesMongoWhere(p, where))
+        .map((p) => ({ ...p, userId: p.userId ?? null }));
     }
     return [];
   });
@@ -218,7 +224,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
     prisma = createMockPrisma([
       { id: 'p-actor', userId: ACTOR_ID },
       { id: 'p-witness', userId: WITNESS_ID },
-      { id: ANON_PARTICIPANT_ID, userId: null },
+      { id: ANON_PARTICIPANT_ID },
       { id: 'p-added', userId: TARGET_ID },
     ]);
     fastify = createMockFastify();
@@ -376,7 +382,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
     await addTarget();
 
     const audienceCall = prisma.participant.findMany.mock.calls.find(
-      (call: any[]) => call[0]?.where?.isActive === true && call[0]?.where?.NOT
+      (call: any[]) => call[0]?.where?.isActive === true && call[0]?.where?.OR
     );
     expect(audienceCall?.[0]?.select).toMatchObject({
       id: true,
@@ -408,7 +414,7 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
     emitted = [];
     prisma = createMockPrisma([
       { id: 'p-actor', userId: ACTOR_ID },
-      { id: ANON_PARTICIPANT_ID, userId: null },
+      { id: ANON_PARTICIPANT_ID },
     ]);
     fastify = createMockFastify();
     registerParticipantsRoutes(fastify as any, prisma, jest.fn(), jest.fn());

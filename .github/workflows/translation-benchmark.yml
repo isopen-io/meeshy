@@ -1,0 +1,105 @@
+name: Banc de traduction
+
+# Mesure le moteur de traduction de texte sur FLORES-200 et sur le jeu doré de
+# conversations, puis refuse une régression face à la référence committée (#3662).
+# Aucun modèle ne remplace NLLB-200 sans être passé par ce banc (#9268).
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Modèle NLLB à mesurer'
+        default: 'facebook/nllb-200-distilled-600M'
+      languages:
+        description: 'Langues Meeshy (codes ISO), mesurées dans les deux sens contre les pivots'
+        default: 'fr,en,sw,ha,yo,wo,ln,ff,pt,ar'
+      sentences:
+        description: 'Phrases FLORES par direction'
+        default: '6'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: translation-benchmark
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.10'
+  MODEL: ${{ inputs.model || 'facebook/nllb-200-distilled-600M' }}
+  LANGUAGES: ${{ inputs.languages || 'fr,en,sw,ha,yo,wo,ln,ff,pt,ar' }}
+  SENTENCES: ${{ inputs.sentences || '6' }}
+  COMET_MODEL: Unbabel/wmt22-comet-da
+  FLORES_URL: https://dl.fbaipublicfiles.com/nllb/flores200_dataset.tar.gz
+
+jobs:
+  measure:
+    name: Mesurer ${{ inputs.model || 'facebook/nllb-200-distilled-600M' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache des modèles et de FLORES-200
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/flores200_dataset
+          key: translation-benchmark-${{ env.MODEL }}-${{ env.COMET_MODEL }}-v1
+
+      - name: Installer le banc (torch CPU)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install "numpy<2" "transformers>=4.46,<5" sentencepiece sacrebleu unbabel-comet
+
+      - name: Télécharger FLORES-200
+        run: |
+          if [ ! -d ~/flores200_dataset/devtest ]; then
+            curl -fsSL --retry 3 "$FLORES_URL" | tar -xz -C ~
+          fi
+          ls ~/flores200_dataset/devtest | wc -l
+
+      - name: Mesurer
+        working-directory: services/translator/src
+        run: |
+          mkdir -p "$RUNNER_TEMP/bench"
+          python -m benchmark run \
+            --engine nllb \
+            --model "$MODEL" \
+            --golden benchmark/golden/meeshy-chat.jsonl \
+            --flores-dir ~/flores200_dataset \
+            --languages "$LANGUAGES" \
+            --pivots fr,en \
+            --sentences "$SENTENCES" \
+            --paragraphs 1 \
+            --comet-model "$COMET_MODEL" \
+            --out "$RUNNER_TEMP/bench/report.json" \
+            --markdown "$RUNNER_TEMP/bench/report.md"
+          cat "$RUNNER_TEMP/bench/report.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "::group::report.json (la référence se committe depuis ce bloc)"
+          cat "$RUNNER_TEMP/bench/report.json"
+          echo "::endgroup::"
+
+      - name: Publier le rapport
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: translation-benchmark-report
+          path: ${{ runner.temp }}/bench/
+          if-no-files-found: ignore
+
+      - name: Refuser une régression
+        working-directory: services/translator/src
+        run: |
+          BASELINE="benchmark/baselines/$(basename "$MODEL").json"
+          python -m benchmark gate \
+            --current "$RUNNER_TEMP/bench/report.json" \
+            --baseline "$BASELINE" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -325,7 +325,7 @@ export function createPostRouteRateLimitConfig(
  * - detail  : 120/min · patch : 30/min
  */
 export function createSoundRouteRateLimitConfig(
-  type: 'upload' | 'list' | 'stream' | 'detail' | 'patch'
+  type: 'upload' | 'list' | 'stream' | 'detail' | 'patch' | 'delete'
 ): object {
   const configs = {
     upload: { max: 20, label: 'upload' },
@@ -333,6 +333,7 @@ export function createSoundRouteRateLimitConfig(
     stream: { max: 240, label: 'stream' },
     detail: { max: 120, label: 'detail' },
     patch: { max: 30, label: 'patch' },
+    delete: { max: 30, label: 'delete' },
   };
   const cfg = configs[type];
   return {

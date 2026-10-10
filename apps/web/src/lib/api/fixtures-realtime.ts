@@ -479,6 +479,18 @@ export function recordSurgedFromEntry(entry: ScheduledFixtureEvent): void {
   } as Conversation);
 }
 
+/**
+ * LE ZÉRO DE LA CHRONOLOGIE, ANNONCÉ (#9267) — `LIVE_SCHEDULE` se compte
+ * depuis `connect()`, et `connect()` survient quand les chunks `realtime` puis
+ * `fixtures-realtime` ont fini d'arriver : un instant MURAL, qui varie d'un
+ * chargement à l'autre et qu'aucun gate ne peut déduire du montage du fil
+ * (mesuré : la connexion tombe avant OU après `live-1` selon l'ordre
+ * d'arrivée des chunks). `connect()` le pose donc ici, lu par le gate sur
+ * l'horloge truquée — même motif que `__meeshyFixtureCallPeer` : le chunk
+ * de ce bouchon n'entre dans aucun build `gateway`.
+ */
+export const FIXTURES_CONNECTED_AT_GLOBAL = '__meeshyFixturesConnectedAt';
+
 export const createFixturesSocketClient: SocketFactory = () => {
   const handlers = new Map<string, Set<SocketHandler>>();
   let connected = false;
@@ -519,6 +531,7 @@ export const createFixturesSocketClient: SocketFactory = () => {
     connect: () => {
       if (connected) return;
       connected = true;
+      Reflect.set(globalThis, FIXTURES_CONNECTED_AT_GLOBAL, Date.now());
       fire(SERVER_EVENTS.AUTHENTICATED, {
         success: true,
         user: { id: VIEWER_ID, language: 'fr', isAnonymous: false },

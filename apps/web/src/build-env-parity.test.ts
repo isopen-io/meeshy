@@ -49,6 +49,14 @@ function sansCommentaires(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
+/**
+ * Les variables INTERNES de Vite : ce ne sont pas des réglages de construction.
+ * `VITE_USER_NODE_ENV` est le relais par lequel Vite recopie le `NODE_ENV` d'un
+ * fichier `.env` ; `vite.config.ts` l'écarte pour qu'un `.env` hérité ne fasse
+ * plus d'un `vite build` un build de développement (#9176).
+ */
+const INTERNES_VITE = new Set(['VITE_USER_NODE_ENV']);
+
 /** Toute occurrence `VITE_XXX` dans les sources et la configuration de build. */
 function variablesLues(): Set<string> {
   const vues = new Set<string>();
@@ -74,7 +82,7 @@ function variablesLues(): Set<string> {
   balayer(join(V3, 'src'));
   const config = sansCommentaires(readFileSync(join(V3, 'vite.config.ts'), 'utf8'));
   for (const m of config.matchAll(/\bVITE_[A-Z0-9_]+/g)) {
-    vues.add(m[0]);
+    if (!INTERNES_VITE.has(m[0])) vues.add(m[0]);
   }
   return vues;
 }

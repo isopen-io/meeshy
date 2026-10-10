@@ -22,7 +22,8 @@ enum CallAction: String, CaseIterable, Sendable {
     case addPeople
     /// #8439 — envoyer une réaction à tout l'appel.
     case react
-    /// #8552 — capturer l'appel en une image montée, ou chaque visage.
+    /// #8552 — capturer l'appel en une image montée, ou chaque visage. #9287 — c'est aussi
+    /// là que se choisit le cadre en direct d'un duo : capture et cadre sont une seule fonction.
     case capture
     case journal
 }

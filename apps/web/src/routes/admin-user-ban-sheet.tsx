@@ -1,22 +1,28 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { Field } from '@/components/field';
-import { Sheet } from '@/components/sheet';
+import { AdminBadge } from '@/components/admin/badges';
+import { AdminButton } from '@/components/admin/button';
+import { AdminFormActions, AdminFormSheet, AdminReasonField, AdminTextInput, motiveState } from '@/components/admin/form';
+import { AdminEmptyState, AdminSkeleton } from '@/components/admin/states';
+import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
+import { personLabel } from '@/lib/admin/interpret/labels';
+import { sentenceCase } from '@/lib/admin/interpret/language';
+import { adminDate } from '@/lib/admin/interpret/time';
 import {
   adminUserBansQueryKey,
+  adminUserBansQueryOptions,
   banAdminUser,
   liftAdminUserBan,
-  loadAdminUserBans,
   type AdminBan,
+  type AdminBanActor,
 } from '@/lib/api/admin-user-bans';
+import type { AdminDeps } from '@/lib/api/admin';
+import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
-import { ActionButton } from '@/routes/link-page-parts';
-
-import { AdminSkeleton } from './admin-parts';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { useOnline } from '@/lib/net/online';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
 
 /**
  * **BANNIR, LEVER, CONSULTER** (#6819) — la feuille, ouverte depuis la fiche.
@@ -39,13 +45,41 @@ import { AdminSkeleton } from './admin-parts';
  * ## L'échéance
  *
  * `<input type="date">` rend `AAAA-MM-JJ` ; la passerelle valide un
- * `datetime()` ISO complet et **refuse une échéance passée**. On convertit
- * donc, et le port refuse déjà le passé avant tout aller-retour.
+ * `datetime()` ISO complet et **refuse une échéance passée**. `new Date('AAAA-MM-JJ')`
+ * lit cette chaîne en MINUIT UTC : choisir « aujourd'hui » donnait toujours une
+ * échéance déjà passée, refusée sans qu'aucune raison ne s'affiche. La date se lit
+ * donc en heure LOCALE — la fin de la journée choisie, « jusqu'au » étant inclusif —,
+ * le champ n'offre que DEMAIN et après (`min`), et une date qui ne l'est pas est refusée
+ * ICI, sous le champ, dans la langue du lecteur, sans aller-retour.
+ *
+ * Le motif et la date saisis ne sont effacés QUE si le bannissement a réussi : un refus
+ * ne fait pas perdre ce qui vient d'être écrit.
+ *
+ * ## Les pièces du kit (#9463)
+ *
+ * Motif, échéance, état vide et gestes sont ceux de `components/admin` ; la règle du
+ * motif est `motiveState` — trois caractères, facultatif pour le rang souverain —, la
+ * même que celle de la conversation et du mot de passe.
  */
 
-const INK = 'var(--color-ios-ink)';
-const INK2 = 'var(--color-ios-ink-2)';
-const BRAND = 'var(--color-ios-brand)';
+const pad = (value: number): string => String(value).padStart(2, '0');
+
+/** `AAAA-MM-JJ` en heure LOCALE — jamais `toISOString()`, qui lit le jour en UTC. */
+const localDateOf = (date: Date): string => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+/** Le premier jour qu'une échéance peut désigner : demain, en heure locale. */
+const tomorrowOf = (now: Date): string => localDateOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+
+/** La FIN du jour choisi, en heure locale, en ISO complet — `null` pour une date illisible. */
+function endOfLocalDay(value: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (match === null) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 23, 59, 59, 999);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+/** Le plancher du motif que la passerelle tient pour un bannissement. */
+const MOTIF_MINIMUM = 3;
 
 function etatDe(ban: AdminBan): 'active' | 'lifted' | 'expired' {
   if (ban.active) return 'active';
@@ -59,29 +93,31 @@ export function AdminUserBanSheet({
   language,
   onClose,
   onAnnounce,
+  deps = apiDeps,
+  now = () => new Date(),
 }: {
   readonly userId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onClose: () => void;
   readonly onAnnounce: (texte: string) => void;
+  /** Le port, injectable : la feuille se mesure sans passerelle. */
+  readonly deps?: AdminDeps;
+  /** L'horloge, injectable : « demain » se fixe dans un témoin. */
+  readonly now?: () => Date;
 }) {
   const client = useQueryClient();
-  const historique = useQuery({
-    queryKey: adminUserBansQueryKey(userId),
-    queryFn: async ({ signal }) => {
-      const resultat = await loadAdminUserBans({ ...apiDeps, userId, signal });
-      if (!resultat.ok) throw new Error(resultat.error);
-      return resultat.data;
-    },
-    retry: false,
-  });
+  const historique = useQuery(adminUserBansQueryOptions(deps, userId));
 
   const [motif, setMotif] = useState('');
-  const [focus, setFocus] = useState(false);
   const [jusquAu, setJusquAu] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const [dateRefusee, setDateRefusee] = useState(false);
 
-  const motifPret = motif.trim().length >= 3;
+  const premierJour = tomorrowOf(now());
+  /* Le rang souverain bannit sans motif (spec 2026-10-04 § 4) : le champ reste, FACULTATIF —
+     un motif commencé se valide encore (trois caractères), un champ vide part sans `reason`. */
+  const souverain = useAdminReach().isSovereign;
+  const motive = motiveState({ text: motif, minLength: MOTIF_MINIMUM, required: true, sovereign: souverain, whenSovereign: 'optional' });
 
   /**
    * Les deux clés sont EN DUR, et ce n'est pas une simplification : passées en
@@ -91,96 +127,108 @@ export function AdminUserBanSheet({
    * FERMÉE sur des littéraux. Les deux appels employaient de toute façon les
    * mêmes clés : les paramétrer ne servait personne.
    */
-  async function appliquer(action: () => Promise<{ ok: boolean }>) {
-    if (envoi) return;
+  async function appliquer(action: () => Promise<{ ok: boolean }>): Promise<{ ok: boolean }> {
+    if (envoi) return { ok: false };
     setEnvoi(true);
     const resultat = await action();
     setEnvoi(false);
 
     onAnnounce(translateAdmin(language, resultat.ok ? 'admin.ban.done' : 'admin.ban.failed'));
-    if (resultat.ok) void client.invalidateQueries({ queryKey: adminUserBansQueryKey(userId) });
+    /* Un ban change l'ÉTAT du compte : l'historique, la fiche (son badge « Banni ») et la
+       liste des comptes se relisent — n'invalider que l'historique laissait les deux autres
+       dire l'état d'avant (audit 2026-10-04). */
+    if (resultat.ok) {
+      void client.invalidateQueries({ queryKey: adminUserBansQueryKey(userId) });
+      void client.invalidateQueries({ queryKey: adminUserDetailQueryKey(userId), exact: true });
+      void client.invalidateQueries({ queryKey: ['admin', 'users'] });
+    }
+    return resultat;
   }
 
-  const bannir = () =>
-    appliquer(() =>
-      banAdminUser({
-        ...apiDeps,
-        userId,
-        reason: motif,
-        // Absent = permanent. Une date saisie devient un ISO complet, la
-        // passerelle validant un `datetime()`.
-        ...(jusquAu === '' ? {} : { expiresAt: new Date(jusquAu).toISOString() }),
-      }),
-    ).then(() => {
-      setMotif('');
-      setJusquAu('');
-    });
+  async function bannir() {
+    // Absent = permanent. Une date saisie devient la FIN du jour choisi, en heure locale, en
+    // ISO complet : la passerelle valide un `datetime()` et refuse le passé.
+    const expiresAt = jusquAu === '' ? null : endOfLocalDay(jusquAu);
+    if (jusquAu !== '' && (jusquAu < premierJour || expiresAt === null)) {
+      setDateRefusee(true);
+      return;
+    }
+
+    const resultat = await appliquer(() =>
+      banAdminUser({ ...deps, userId, reason: motive.sent, ...(expiresAt === null ? {} : { expiresAt }) }),
+    );
+    if (!resultat.ok) return;
+    setMotif('');
+    setJusquAu('');
+  }
 
   return (
-    <Sheet title={translateAdmin(language, 'admin.ban.title')} presentation="centered" onClose={onClose}>
-      <div className="grid gap-4 px-4 pb-6">
-        <Field id="admin-ban-reason" label={translateAdmin(language, 'admin.ban.reason')} tint={BRAND} focused={focus}>
-          {({ id, describedBy }) => (
-            <input
-              id={id}
-              type="text"
-              value={motif}
-              data-admin-ban-reason
-              aria-describedby={describedBy}
-              onInput={(event) => setMotif(event.currentTarget.value)}
-              onFocus={() => setFocus(true)}
-              onBlur={() => setFocus(false)}
-              className="w-full bg-transparent text-body outline-none"
-              style={{ minHeight: 44, color: INK }}
+    <AdminFormSheet language={language} title={translateAdmin(language, 'admin.ban.title')} onClose={onClose}>
+      <AdminReasonField
+        id="admin-ban-reason"
+        language={language}
+        label={translateAdmin(language, 'admin.ban.reason')}
+        value={motif}
+        onValue={setMotif}
+        minLength={MOTIF_MINIMUM}
+        required
+        sovereign={souverain}
+        whenSovereign="optional"
+        data={{ 'data-admin-ban-reason': '' }}
+      />
+
+      <AdminTextInput
+        id="admin-ban-until"
+        type="date"
+        label={translateAdmin(language, jusquAu === '' ? 'admin.ban.permanent' : 'admin.ban.until')}
+        value={jusquAu}
+        min={premierJour}
+        onValue={(valeur) => {
+          setJusquAu(valeur);
+          setDateRefusee(false);
+        }}
+        error={dateRefusee ? translateAdmin(language, 'admin.ban.untilPast') : undefined}
+        errorData={{ 'data-admin-ban-until-error': '' }}
+        data={{ 'data-admin-ban-until': '' }}
+      />
+
+      <AdminFormActions
+        language={language}
+        primary={{
+          label: translateAdmin(language, 'admin.ban.apply'),
+          tone: 'danger',
+          busy: envoi,
+          disabled: !motive.ready,
+          onClick: () => void bannir(),
+        }}
+      />
+
+      <section className="grid gap-2 pt-2" aria-label={translateAdmin(language, 'admin.ban.title')}>
+        {historique.isPending ? (
+          <AdminSkeleton rows={2} language={language} />
+        ) : (historique.data ?? []).length === 0 ? (
+          <AdminEmptyState title={translateAdmin(language, 'admin.ban.none')} />
+        ) : (
+          (historique.data ?? []).map((ban) => (
+            <BanRow
+              key={ban.id}
+              ban={ban}
+              language={language}
+              envoi={envoi}
+              onLift={() => void appliquer(() => liftAdminUserBan({ ...deps, userId, banId: ban.id }))}
             />
-          )}
-        </Field>
+          ))
+        )}
+      </section>
 
-        <label className="grid gap-1">
-          <span className="text-caption" style={{ color: INK2 }}>
-            {translateAdmin(language, jusquAu === '' ? 'admin.ban.permanent' : 'admin.ban.until')}
-          </span>
-          <input
-            type="date"
-            value={jusquAu}
-            data-admin-ban-until
-            onChange={(event) => setJusquAu(event.currentTarget.value)}
-            className="rounded-chip px-4 text-body"
-            style={{ minHeight: 44, backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)', color: INK }}
-          />
-        </label>
-
-        <ActionButton tone="danger" disabled={!motifPret || envoi} onClick={() => void bannir()}>
-          {translateAdmin(language, 'admin.ban.apply')}
-        </ActionButton>
-
-        <section className="grid gap-2 pt-2" aria-label={translateAdmin(language, 'admin.ban.title')}>
-          {historique.isPending ? (
-            <AdminSkeleton rows={2} />
-          ) : (historique.data ?? []).length === 0 ? (
-            <p className="text-caption" style={{ color: INK2 }}>
-              {translateAdmin(language, 'admin.ban.none')}
-            </p>
-          ) : (
-            (historique.data ?? []).map((ban) => (
-              <BanRow
-                key={ban.id}
-                ban={ban}
-                language={language}
-                envoi={envoi}
-                onLift={() => void appliquer(() => liftAdminUserBan({ ...apiDeps, userId, banId: ban.id }))}
-              />
-            ))
-          )}
-        </section>
-
-        <ActionButton tone="secondary" onClick={onClose}>
-          {translate(language, 'common.cancel')}
-        </ActionButton>
-      </div>
-    </Sheet>
+      <AdminFormActions language={language} onCancel={onClose} />
+    </AdminFormSheet>
   );
 }
+
+/** Le nom d'un acteur : son nom affiché, jamais un identifiant ; `null` quand son compte n'existe plus. */
+const actorLabel = (actor: AdminBanActor | null, language: AdminLanguage): string | null =>
+  actor === null ? null : personLabel({ displayName: actor.displayName, username: actor.username }, language);
 
 function BanRow({
   ban,
@@ -189,34 +237,61 @@ function BanRow({
   onLift,
 }: {
   readonly ban: AdminBan;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly envoi: boolean;
   readonly onLift: () => void;
 }) {
+  /* Lever ÉCRIT, comme Bannir : hors ligne, il se désactive comme les gestes
+     d'`AdminFormActions` — la règle que l'avis `admin.kit.offline` promet. */
+  const online = useOnline();
   const etat = etatDe(ban);
+  const banner = actorLabel(ban.bannedBy, language);
+  const lifter = actorLabel(ban.liftedBy, language);
+  const tone = etat === 'active' ? 'danger' : 'neutral';
 
   return (
     <div
       data-admin-ban={ban.id}
       data-admin-ban-state={etat}
       className="grid gap-1 rounded-card px-4 py-3"
-      style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
+      style={{ backgroundColor: SURFACE, border: `1px solid ${EDGE}` }}
     >
       <div className="flex items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate text-body" style={{ color: INK }}>
+        <span className="min-w-0 flex-1 break-words text-body" style={{ color: INK }}>
           {ban.reason}
         </span>
-        <span
-          className="shrink-0 text-caption"
-          style={{ color: etat === 'active' ? 'var(--color-danger)' : INK2 }}
-        >
-          {translateAdmin(language, etat === 'active' ? 'admin.ban.active' : etat === 'lifted' ? 'admin.ban.lifted' : 'admin.ban.expired')}
-        </span>
+        <AdminBadge tone={tone}>
+          {sentenceCase(translateAdmin(language, etat === 'active' ? 'admin.ban.active' : etat === 'lifted' ? 'admin.ban.lifted' : 'admin.ban.expired'), language)}
+        </AdminBadge>
       </div>
+      <p className="text-caption" style={{ color: INK2 }} data-admin-ban-by="">
+        {ban.createdAt === null
+          ? null
+          : banner === null
+            ? translateAdmin(language, 'admin.people.ban.byUnknown', { date: adminDate(ban.createdAt, language) })
+            : translateAdmin(language, 'admin.people.ban.by', { name: banner, date: adminDate(ban.createdAt, language) })}
+      </p>
+      <p className="text-caption" style={{ color: INK2 }}>
+        {ban.expiresAt === null
+          ? translateAdmin(language, 'admin.ban.permanent')
+          : translateAdmin(language, 'admin.people.ban.until', { date: adminDate(ban.expiresAt, language) })}
+      </p>
+      {ban.liftedAt === null ? null : (
+        <p className="text-caption" style={{ color: INK2 }} data-admin-ban-lifted="">
+          {ban.liftedBySystem
+            ? translateAdmin(language, 'admin.people.ban.liftedBySystem', { date: adminDate(ban.liftedAt, language) })
+            : lifter === null
+              ? translateAdmin(language, 'admin.people.ban.liftedUnknown', { date: adminDate(ban.liftedAt, language) })
+              : translateAdmin(language, 'admin.people.ban.liftedBy', { name: lifter, date: adminDate(ban.liftedAt, language) })}
+          {ban.liftReason === null ? null : ` · ${translateAdmin(language, 'admin.people.ban.liftReason', { reason: ban.liftReason })}`}
+        </p>
+      )}
       {etat === 'active' ? (
-        <ActionButton tone="secondary" disabled={envoi} onClick={onLift}>
-          {translateAdmin(language, 'admin.ban.lift')}
-        </ActionButton>
+        <div className="flex justify-end pt-1">
+          <AdminButton disabled={envoi || !online} onClick={onLift}>
+            {translateAdmin(language, 'admin.ban.lift')}
+          </AdminButton>
+        </div>
       ) : null}
     </div>
   );

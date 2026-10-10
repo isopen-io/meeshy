@@ -21,7 +21,8 @@ nonisolated extension FeedComment {
             currentUserReactions: c.currentUserReactions,
             media: (c.media ?? []).map { $0.toFeedMedia() },
             location: c.location,
-            quotedMedia: c.quotedCitation
+            quotedMedia: c.quotedCitation,
+            trackedLinkMap: c.trackedLinkMap
         )
     }
 }

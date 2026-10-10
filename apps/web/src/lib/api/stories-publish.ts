@@ -88,6 +88,13 @@ export type PublishStoryParams = ConversationsDeps & {
    */
   readonly mediaAlt?: Record<string, string>;
   readonly originalLanguage?: string;
+  /**
+   * **LA STORY PART AUSSI EN RÉEL** (#9476, `CreatePostSchema.alsoAsReel`) —
+   * la passerelle publie la story ET un réel aux médias COPIÉS, ou rien
+   * (`REEL_NOT_QUALIFIED`, 422). Absent ⇒ la clé ne part pas : le corps d'un
+   * client antérieur, que la passerelle lit « story seule ».
+   */
+  readonly alsoAsReel?: boolean;
   readonly storyEffects: CanvasV3;
   readonly mediaIds: readonly string[];
   readonly signal?: AbortSignal;
@@ -145,6 +152,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
       ...(params.originalLanguage !== undefined ? { originalLanguage: params.originalLanguage } : {}),
       ...(params.mediaCaption !== undefined ? { mediaCaption: params.mediaCaption } : {}),
       ...(params.mediaAlt !== undefined ? { mediaAlt: params.mediaAlt } : {}),
+      ...(params.alsoAsReel === true ? { alsoAsReel: true } : {}),
       storyEffects: params.storyEffects,
       mediaIds: params.mediaIds,
     },

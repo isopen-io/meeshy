@@ -498,6 +498,7 @@ public enum StoryExportIntro {
         else { throw IntroError.writerRejectedInput }
         session.outputURL = outputURL
         session.outputFileType = .mp4
+        session.shouldOptimizeForNetworkUse = true
         session.videoComposition = videoComposition
         session.audioMix = audioMix
 

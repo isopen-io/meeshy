@@ -20,7 +20,7 @@ extension StoryComposerView {
 
     var slideStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach(Array(viewModel.slides.enumerated()), id: \.element.id) { index, slide in
                     slideThumb(slide: slide, index: index)
                 }
@@ -33,7 +33,7 @@ extension StoryComposerView {
                     addSlideThumb
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, MeeshySpacing.sm)
         }
     }
 
@@ -85,7 +85,8 @@ extension StoryComposerView {
                 bgImage: viewModel.slideImages[slide.id],
                 drawingData: drawData,
                 loadedImages: viewModel.loadedImages,
-                index: index
+                index: index,
+                thumbnails: SceneThumbnailCache.shared
             )
             .frame(width: thumbW, height: thumbH)
             .clipShape(RoundedRectangle(cornerRadius: 3))
@@ -153,7 +154,8 @@ extension StoryComposerView {
         // `.onMove` (offset post-cible). Câble enfin `moveSlide` (it.37).
         .draggable(slide.id) {
             SlideMiniPreview(effects: slide.effects, bgImage: viewModel.slideImages[slide.id],
-                             drawingData: drawData, loadedImages: viewModel.loadedImages, index: index)
+                             drawingData: drawData, loadedImages: viewModel.loadedImages, index: index,
+                             thumbnails: SceneThumbnailCache.shared)
                 .frame(width: thumbW, height: thumbH)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
         }

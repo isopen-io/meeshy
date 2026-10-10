@@ -7,11 +7,13 @@ import {
   activeIndexOf,
   composeReelThread,
   entryReelIds,
+  holdReelThread,
   neighborIndex,
   pageModeOf,
   playbackIntentOf,
   reelSeedOf,
   reelDisplayOf,
+  reelVisitorState,
   shouldLoadMoreReels,
 } from './thread';
 
@@ -77,6 +79,59 @@ describe('composeReelThread — l’ordre ne bouge jamais sous le doigt', () => 
   });
 });
 
+/**
+ * Recette du 2026-10-09 (#9702) — jumelle de `ReelThreadOrder.refreshed`
+ * (`ReelThreadOrderTests.swift`). La passerelle reclasse sa page à chaque
+ * lecture (les réels vus coulent) : une relecture ne déplace ni le réel
+ * regardé ni ce qui le précède.
+ */
+describe('holdReelThread — une relecture ne déplace pas le réel regardé', () => {
+  const ids = (thread: readonly FeedPost[]): readonly string[] => thread.map((r) => r.id);
+
+  test('le réel d’ouverture garde la tête quand la passerelle le reclasse en queue', () => {
+    const held = holdReelThread({
+      heldIds: ['r14', 'r13', 'r12'],
+      activeId: 'r14',
+      composed: [reel('r13'), reel('r12'), reel('r11'), reel('image'), reel('video'), reel('r14')],
+    });
+    expect(ids(held)).toEqual(['r14', 'r13', 'r12', 'r11', 'image', 'video']);
+  });
+
+  test('ce qui PRÉCÈDE le réel regardé ne bouge pas, ce qui le SUIT prend l’ordre composé', () => {
+    const held = holdReelThread({
+      heldIds: ['a', 'b', 'c', 'd', 'e'],
+      activeId: 'c',
+      composed: [reel('e'), reel('c'), reel('a'), reel('f'), reel('d'), reel('b')],
+    });
+    expect(ids(held)).toEqual(['a', 'b', 'c', 'e', 'f', 'd']);
+  });
+
+  test('chaque réel tenu est peint depuis sa donnée composée, la plus récente', () => {
+    const held = holdReelThread({
+      heldIds: ['a', 'b'],
+      activeId: 'a',
+      composed: [reel('b', { likeCount: 7 }), reel('a', { likeCount: 9 })],
+    });
+    expect(held.map((r) => r.likeCount)).toEqual([9, 7]);
+  });
+
+  test('un réel tenu que la composition ne porte plus (supprimé) quitte le fil', () => {
+    const held = holdReelThread({ heldIds: ['a', 'b', 'c'], activeId: 'c', composed: [reel('c'), reel('a'), reel('d')] });
+    expect(ids(held)).toEqual(['a', 'c', 'd']);
+  });
+
+  test('sans réel regardé connu (premier rendu), l’ordre composé s’applique tel quel', () => {
+    const composed = [reel('b'), reel('a')];
+    expect(holdReelThread({ heldIds: [], activeId: '', composed })).toBe(composed);
+    expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'zz', composed })).toBe(composed);
+  });
+
+  test('un ordre inchangé rend la composition elle-même', () => {
+    const composed = [reel('a'), reel('b'), reel('c')];
+    expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'b', composed })).toBe(composed);
+  });
+});
+
 describe('activeIndexOf — le réel visible', () => {
   test('arrondi à la page la plus proche du défilement', () => {
     expect(activeIndexOf({ scrollTop: 0, pageHeight: 800, count: 5 })).toBe(0);
@@ -93,14 +148,16 @@ describe('activeIndexOf — le réel visible', () => {
   });
 });
 
-describe('pageModeOf — un seul réel joue, ses voisins restent montés, les autres sont libérés', () => {
-  test('la fenêtre est d’un réel de part et d’autre', () => {
-    expect(REEL_WINDOW_RADIUS).toBe(1);
+describe('pageModeOf — un seul réel joue, N±2 restent montés, les autres sont libérés (#9702)', () => {
+  test('la fenêtre montée est de deux réels de part et d’autre', () => {
+    expect(REEL_WINDOW_RADIUS).toBe(2);
     expect(pageModeOf(3, 3)).toBe('active');
     expect(pageModeOf(2, 3)).toBe('near');
     expect(pageModeOf(4, 3)).toBe('near');
-    expect(pageModeOf(1, 3)).toBe('far');
-    expect(pageModeOf(5, 3)).toBe('far');
+    expect(pageModeOf(1, 3)).toBe('warm');
+    expect(pageModeOf(5, 3)).toBe('warm');
+    expect(pageModeOf(0, 3)).toBe('far');
+    expect(pageModeOf(6, 3)).toBe('far');
   });
 });
 
@@ -185,5 +242,26 @@ describe('reelSeedOf — les deux portes d’un réel nommé', () => {
     expect(reelSeedOf({ params: {}, search: noSearch })).toBeUndefined();
     expect(reelSeedOf({ params: { post: '' }, search: noSearch })).toBeUndefined();
     expect(reelSeedOf({ params: {}, search: new URLSearchParams('seed=') })).toBeUndefined();
+  });
+});
+
+/* #9172 — ce que l'invitation d'un VISITEUR dit des réels. La passerelle ne
+   sert aucun fil de réels sans compte (`scope=reels`) : sans réel NOMMÉ, il n'y
+   a rien à montrer — et rien n'est refusé non plus. */
+describe('reelVisitorState', () => {
+  test('un réel peint est servi, l’invitation se pose par-dessus', () => {
+    expect(reelVisitorState({ count: 1, hasSeed: true, seedRefused: false })).toBe('served');
+  });
+
+  test('un réel nommé en lecture attend, même sur un réseau lent', () => {
+    expect(reelVisitorState({ count: 0, hasSeed: true, seedRefused: false })).toBe('pending');
+  });
+
+  test('un réel nommé que la passerelle refuse est refusé', () => {
+    expect(reelVisitorState({ count: 0, hasSeed: true, seedRefused: true })).toBe('refused');
+  });
+
+  test('`/reels` sans identifiant invite à rejoindre, jamais « contenu indisponible »', () => {
+    expect(reelVisitorState({ count: 0, hasSeed: false, seedRefused: false })).toBe('invite');
   });
 });

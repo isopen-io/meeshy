@@ -363,6 +363,84 @@ const media3 = mediaMessage({
   ],
 });
 
+/**
+ * media-17 — LE VOCAL SANS TRANSCRIPTION (#9256) : ni `transcription` ni
+ * `translations`, la forme d'un vocal que Whisper n'a pas encore traité. Le
+ * lecteur plein écran y offre « Transcrire », puis « Traduire » ; sous
+ * `fixtures`, les deux demandes répondent par `MEDIA_ON_DEMAND` ci-dessous,
+ * ce que la passerelle rend par `message:attachment-updated`. Trente secondes
+ * (#9294 ; huit jusque-là) : le mini-lecteur y est fermé EN COURS de lecture,
+ * promené sur deux routes et commandé depuis la bulle — huit secondes ne
+ * laissaient que ~3 s de marge avant qu'il se retire au bout du son.
+ */
+export const MEDIA_UNTRANSCRIBED_VOICE_WITNESS_ID = 'media-17';
+const MEDIA_UNTRANSCRIBED_VOICE_SECONDS = 30;
+const media17CreatedAt = dayAt(0, 9, 12);
+const media17Attachment: Attachment = {
+  ...attachmentDefaults,
+  id: `${MEDIA_UNTRANSCRIBED_VOICE_WITNESS_ID}-a1`,
+  messageId: MEDIA_UNTRANSCRIBED_VOICE_WITNESS_ID,
+  fileName: 'point-du-jour.wav',
+  originalName: 'point-du-jour.wav',
+  mimeType: 'audio/wav',
+  fileSize: 44 + MEDIA_UNTRANSCRIBED_VOICE_SECONDS * SAMPLE_RATE,
+  fileUrl: wavDataUri({ seconds: MEDIA_UNTRANSCRIBED_VOICE_SECONDS, tone: 294 }),
+  duration: MEDIA_UNTRANSCRIBED_VOICE_SECONDS * 1000,
+  uploadedBy: 'u-kwame',
+  createdAt: media17CreatedAt.toISOString(),
+  currentUserConsumption: null,
+};
+const media17 = mediaMessage({
+  id: MEDIA_UNTRANSCRIBED_VOICE_WITNESS_ID,
+  senderId: 'u-kwame',
+  sender: kwame,
+  content: '',
+  originalLanguage: 'fr',
+  messageType: 'audio',
+  translations: [],
+  createdAt: media17CreatedAt,
+  attachments: [media17Attachment],
+});
+
+/**
+ * CE QUE LA PASSERELLE PRODUIT À LA DEMANDE (#9256) — la transcription
+ * Whisper et les traductions (texte + piste TTS) d'un vocal, par pièce. Lu
+ * par les ports `requestAttachmentTranscription` / `requestAttachmentTranslation`
+ * sous `fixtures` ; une pièce absente répond « en cours », comme la passerelle
+ * qui a mis le travail en file.
+ */
+export const MEDIA_ON_DEMAND: Readonly<
+  Record<string, { readonly transcription: NonNullable<Attachment['transcription']>; readonly translations: NonNullable<Attachment['translations']> }>
+> = {
+  [media17Attachment.id]: {
+    transcription: {
+      type: 'audio',
+      transcribedText: 'Point du jour : la mise en production est validée, on se retrouve demain à neuf heures.',
+      language: 'fr',
+      confidence: 0.93,
+      source: 'whisper',
+    },
+    translations: {
+      en: {
+        type: 'audio',
+        transcription: 'Daily update: the release is approved, see you tomorrow at nine.',
+        url: wavDataUri({ seconds: MEDIA_UNTRANSCRIBED_VOICE_SECONDS, tone: 370 }),
+        durationMs: MEDIA_UNTRANSCRIBED_VOICE_SECONDS * 1000,
+        format: 'wav',
+        createdAt: media17CreatedAt.toISOString(),
+      },
+      es: {
+        type: 'audio',
+        transcription: 'Resumen del día: la puesta en producción está aprobada, nos vemos mañana a las nueve.',
+        url: wavDataUri({ seconds: MEDIA_UNTRANSCRIBED_VOICE_SECONDS, tone: 415 }),
+        durationMs: MEDIA_UNTRANSCRIBED_VOICE_SECONDS * 1000,
+        format: 'wav',
+        createdAt: media17CreatedAt.toISOString(),
+      },
+    },
+  },
+};
+
 // ===== media-4 — le fil se ferme, l'identité se pose sur la dernière bulle reçue =====
 const media4CreatedAt = dayAt(0, 9, 15);
 const media4 = mediaMessage({
@@ -506,6 +584,7 @@ export const MEDIA_MESSAGES: readonly Message[] = [
   media1,
   media2,
   media3,
+  media17,
   media4,
   media5,
   MEDIA_SOLO_VIDEO_MESSAGE,

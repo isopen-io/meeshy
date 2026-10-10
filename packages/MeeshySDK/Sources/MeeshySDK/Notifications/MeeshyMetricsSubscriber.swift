@@ -32,9 +32,10 @@ import os
 /// ## Categories
 ///
 /// Only signposts whose `signpostCategory` matches one of `trackedCategories`
-/// are aggregated. The default allowlist is `["TimelineEngine"]` — the single
-/// category currently used by `TimelineSignposter`. Add more categories as new
-/// hot-path subsystems adopt `OSSignposter`.
+/// are aggregated. The default allowlist is `mediaCategories`. A category only reaches
+/// MetricKit when its intervals are emitted with `mxSignpost` on a log handle
+/// made by `MXMetricManager.makeLogHandle(category:)` — an `OSSignposter` on
+/// a plain `OSLog` shows in Instruments and never in a payload.
 ///
 /// ## Testability
 ///
@@ -55,17 +56,20 @@ public final class MeeshyMetricsSubscriber: NSObject, @unchecked Sendable {
         public let name: String
         public let totalCount: UInt
         public let cumulativeCPUTimeSeconds: Double?
+        public let hitchTimeRatio: Double?
 
         public init(
             category: String,
             name: String,
             totalCount: UInt,
-            cumulativeCPUTimeSeconds: Double?
+            cumulativeCPUTimeSeconds: Double?,
+            hitchTimeRatio: Double? = nil
         ) {
             self.category = category
             self.name = name
             self.totalCount = totalCount
             self.cumulativeCPUTimeSeconds = cumulativeCPUTimeSeconds
+            self.hitchTimeRatio = hitchTimeRatio
         }
     }
 
@@ -77,6 +81,7 @@ public final class MeeshyMetricsSubscriber: NSObject, @unchecked Sendable {
         public let name: String
         public let totalCount: UInt
         public let cumulativeCPUTimeSeconds: Double?
+        public let hitchTimeRatio: Double?
         public let receivedAt: Date
 
         public init(
@@ -84,12 +89,14 @@ public final class MeeshyMetricsSubscriber: NSObject, @unchecked Sendable {
             name: String,
             totalCount: UInt,
             cumulativeCPUTimeSeconds: Double?,
+            hitchTimeRatio: Double? = nil,
             receivedAt: Date
         ) {
             self.category = category
             self.name = name
             self.totalCount = totalCount
             self.cumulativeCPUTimeSeconds = cumulativeCPUTimeSeconds
+            self.hitchTimeRatio = hitchTimeRatio
             self.receivedAt = receivedAt
         }
     }
@@ -112,6 +119,16 @@ public final class MeeshyMetricsSubscriber: NSObject, @unchecked Sendable {
         aggregatesLock.withLock { $0 }
     }
 
+    public static let mediaCategories: Set<String> = ["TimelineEngine", "ReelSwitch"]
+
+    public static let maxRetainedPayloads = 30
+
+    let payloadsLock = OSAllocatedUnfairLock<[PayloadSummary]>(initialState: [])
+
+    public var payloadSummaries: [PayloadSummary] {
+        payloadsLock.withLock { $0 }
+    }
+
     /// Clock injection seam. Tests pin this to a fixed instant; production
     /// uses the real `Date.init` so each aggregate carries a wall-clock
     /// timestamp matching the payload delivery time.
@@ -122,7 +139,7 @@ public final class MeeshyMetricsSubscriber: NSObject, @unchecked Sendable {
     private let registrationLock = OSAllocatedUnfairLock<Bool>(initialState: false)
 
     public init(
-        trackedCategories: Set<String> = ["TimelineEngine"],
+        trackedCategories: Set<String> = MeeshyMetricsSubscriber.mediaCategories,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.trackedCategories = trackedCategories
@@ -179,6 +196,7 @@ public final class MeeshyMetricsSubscriber: NSObject, @unchecked Sendable {
                 name: input.name,
                 totalCount: input.totalCount,
                 cumulativeCPUTimeSeconds: input.cumulativeCPUTimeSeconds,
+                hitchTimeRatio: input.hitchTimeRatio,
                 receivedAt: now
             )
         }
@@ -196,6 +214,9 @@ public final class MeeshyMetricsSubscriber: NSObject, @unchecked Sendable {
         aggregatesLock.withLock { store in
             store.removeAll()
         }
+        payloadsLock.withLock { store in
+            store.removeAll()
+        }
     }
 }
 
@@ -209,6 +230,7 @@ extension MeeshyMetricsSubscriber: MXMetricManagerSubscriber {
     /// Note: `signpostMetrics` is optional — payloads with only CPU, memory
     /// or animation data carry `nil` here, which is the normal empty case.
     public func didReceive(_ payloads: [MXMetricPayload]) {
+        consume(payloadSummaries: payloads.map(PayloadSummary.init(payload:)))
         var inputs: [SignpostMetricInput] = []
         for payload in payloads {
             guard let metrics = payload.signpostMetrics, !metrics.isEmpty else { continue }
@@ -217,12 +239,16 @@ extension MeeshyMetricsSubscriber: MXMetricManagerSubscriber {
                     .cumulativeCPUTime?
                     .converted(to: .seconds)
                     .value
+                let hitchRatio = metric.signpostIntervalData?
+                    .cumulativeHitchTimeRatio?
+                    .value
                 inputs.append(
                     SignpostMetricInput(
                         category: metric.signpostCategory,
                         name: metric.signpostName,
                         totalCount: UInt(metric.totalCount),
-                        cumulativeCPUTimeSeconds: cpuSeconds
+                        cumulativeCPUTimeSeconds: cpuSeconds,
+                        hitchTimeRatio: hitchRatio
                     )
                 )
             }

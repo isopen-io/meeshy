@@ -147,8 +147,8 @@ private struct CommentSwipeReplyIndicator: View {
 
     var body: some View {
         Image(systemName: "arrowshape.turn.up.left.fill")
-            .font(MeeshyFont.relative(18, weight: .semibold))
-            .foregroundStyle(isArmed ? MeeshyColors.brandPrimary : MeeshyColors.brandPrimary.opacity(0.55))
+            .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
+            .foregroundStyle(isArmed ? MeeshyColors.brandPrimary : MeeshyColors.brandPrimary.opacity(MeeshyOpacity.strong))
             .scaleEffect(0.6 + 0.4 * progress)
             .opacity(progress)
             .animation(.easeInOut(duration: 0.15), value: isArmed)
@@ -195,7 +195,7 @@ private struct CommentBlurVeil: ViewModifier {
             .accessibilityHidden(isVeiled)
             .overlay {
                 if reveal.fogOpacity > 0 {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                         .fill(.ultraThinMaterial)
                         .opacity(reveal.fogOpacity)
                         .allowsHitTesting(false)

@@ -22,6 +22,8 @@ import {
   readFilePrefix,
 } from '../../services/attachments/AnonymousUploadIdentity';
 import { classifyAnonymousAttachment, verifyDeclaredMimeType, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
+import { admittedUploadMimeType, audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from '../../services/attachments/uploadMimeType';
+import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
 import { isExifStrippable, stripExifFromImageBuffer } from '../../services/attachments/ExifStrip';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { originIsAllowed } from '../../config/cors-origins';
@@ -332,7 +334,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         };
       }
 
-      const mimeType = upload.metadata?.filetype || 'application/octet-stream';
+      const mimeType = canonicalMediaMimeType({ mimeType: upload.metadata?.filetype, fileName: upload.metadata?.filename })
+        || 'application/octet-stream';
       const attachmentType = getAttachmentType(mimeType, upload.metadata?.filename ?? undefined);
       const sizeLimit = getSizeLimit(attachmentType);
 
@@ -355,7 +358,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
     },
     async onUploadFinish(_req, upload) {
       const filename = upload.metadata?.filename || 'unknown';
-      const mimeType = upload.metadata?.filetype || 'application/octet-stream';
+      const declaredMimeType = upload.metadata?.filetype || 'application/octet-stream';
       const userId = upload.metadata?.userId || 'anonymous';
       const isAnonymous = upload.metadata?.isAnonymous === 'true';
       const anonymousShareLinkId = upload.metadata?.anonymousShareLinkId || null;
@@ -391,6 +394,14 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       // PostMedia ou d'un MessageAttachment. Le préfixe est lu UNE FOIS et
       // réutilisé plus bas par `classifyAnonymousAttachment` (même octets).
       const signaturePrefix = await readFilePrefix(destPath, RECOMMENDED_SIGNATURE_PREFIX_BYTES);
+      // #9693 — le type ADMIS est celui du média, comme sur la route
+      // multipart : un alias se ramène au nom accepté, un type générique se
+      // déduit de l'extension quand les octets le confirment, et un `.mp4`
+      // sans piste vidéo est un son.
+      const admittedMimeType = admittedUploadMimeType({ declared: declaredMimeType, fileName: filename, head: signaturePrefix });
+      const mimeType = mayBeAudioOnlyContainer(admittedMimeType)
+        ? audioOnlyContainerMimeType(admittedMimeType, await metadataManager.probeMediaStreams(destPath).catch(() => null))
+        : admittedMimeType;
       const mimeVerdict = verifyDeclaredMimeType(mimeType, signaturePrefix);
       if (mimeVerdict.verified === false) {
         await fs.unlink(destPath).catch((err) =>

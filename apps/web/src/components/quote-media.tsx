@@ -132,7 +132,7 @@ export function QuoteAudioPreview({
   const waves = useMemo(() => waveformOf(attachment, WAVE_BARS), [attachment]);
   const isPlaying = status === 'playing';
   const language = currentInterfaceLanguage();
-  const ink = isMine ? 'white' : 'var(--accent)';
+  const ink = isMine ? 'var(--color-ios-on-brand)' : 'var(--accent)';
 
   return (
     <span className="mt-1.5 block">
@@ -160,18 +160,18 @@ export function QuoteAudioPreview({
           width: QUOTED_CARD_WIDTH,
           minHeight: QUOTE_AUDIO_TARGET_PX,
           color: ink,
-          backgroundColor: isMine ? 'color-mix(in srgb, white 16%, transparent)' : 'color-mix(in srgb, var(--accent) 14%, transparent)',
+          backgroundColor: isMine ? 'color-mix(in srgb, var(--color-ios-on-brand) 16%, transparent)' : 'color-mix(in srgb, var(--accent) 14%, transparent)',
         }}
       >
         <span
           className="grid size-6 shrink-0 place-items-center rounded-full"
-          style={{ backgroundColor: isMine ? 'color-mix(in srgb, white 28%, transparent)' : 'var(--accent)' }}
+          style={{ backgroundColor: isMine ? 'color-mix(in srgb, var(--color-ios-on-brand) 28%, transparent)' : 'var(--accent)' }}
           aria-hidden
         >
           {isPlaying ? (
-            <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={10} className="text-white" />
+            <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={10} className="text-ios-on-brand" />
           ) : (
-            <Glyph name="fillPlay" size={10} className="text-white" />
+            <Glyph name="fillPlay" size={10} className="text-ios-on-brand" />
           )}
         </span>
         <span data-quote-wave aria-hidden className="flex h-4 flex-1 items-center gap-px">

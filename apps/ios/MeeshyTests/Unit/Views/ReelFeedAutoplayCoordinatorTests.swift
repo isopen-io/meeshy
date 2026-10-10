@@ -280,28 +280,42 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
         XCTAssertNil(ReelPrewarmWindow.next(after: "absent", in: [frame("a", midY: 100)]))
     }
 
-    // MARK: - #7625 — le lecteur plein écran garde ses deux voisins chauds
+    // MARK: - #9702 — la fenêtre du lecteur plein écran
 
-    /// Le pager plein écran (`ReelsPlayerView`) ne préparait RIEN : sa pile est
-    /// paresseuse, la page N+1 n'était montée qu'au moment où elle entrait à
-    /// l'écran, et c'est seulement là que son téléchargement partait — le swipe
-    /// montrait le poster et un indicateur à la place de la vidéo. Le suivant
-    /// passe EN PREMIER (geste majoritaire), le précédent ensuite (retour).
-    func test_neighbours_auMilieu_rendLeSuivantPuisLePrecedent() {
-        XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: "b", in: ["a", "b", "c"]), ["c", "a"])
+    /// Le pager plein écran ne gardait chauds que ses deux voisins (#7625),
+    /// en dur. La fenêtre suit désormais l'usage (`ReelPreloadWindow`, N±2 à
+    /// N±10) ; ce qui en SORT rend son téléchargement automatique — en
+    /// silence : l'utilisateur n'a rien demandé, rien ne doit vibrer.
+    func test_retire_cancelsSilentlyTheDownloadOfAReelThatLeftTheWindow() {
+        var haptics: [AttachmentDownloadCenter.Haptic] = []
+        let center = AttachmentDownloadCenter(haptics: { haptics.append($0) })
+        let urls = (0..<6).map { "https://cdn.example.invalid/reel-\($0)-\(UUID().uuidString).mp4" }
+        let reels = urls.map { makeVideoReel(url: $0) }
+        center.prefetch(urlString: urls[5], expectedSize: 1000, cacheStore: .video)
+        center.prefetch(urlString: urls[2], expectedSize: 1000, cacheStore: .video)
+
+        ReelPagerPreloader(center: center)
+            .retire(reels: reels, activeIndex: 0, window: ReelPreloadWindow.Window(ahead: 2, behind: 2))
+
+        XCTAssertNil(center.progress(for: AttachmentDownloadCenter.key(for: urls[5])),
+                     "N+5 est hors de la fenêtre N±2 : son téléchargement doit s'arrêter")
+        XCTAssertNotNil(center.progress(for: AttachmentDownloadCenter.key(for: urls[2])),
+                        "N+2 est dans la fenêtre : il continue")
+        XCTAssertEqual(haptics, [], "un préchargement annulé ne vibre pas")
+        center.cancel(key: AttachmentDownloadCenter.key(for: urls[2]))
     }
 
-    func test_neighbours_auDernier_rendSeulementLePrecedent() {
-        XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: "c", in: ["a", "b", "c"]), ["b"])
-    }
+    /// Un téléchargement lancé d'un TAP appartient à l'utilisateur : la
+    /// fenêtre ne l'annule jamais.
+    func test_cancelPrefetch_neverCancelsAManualDownload() {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let url = "https://cdn.example.invalid/manual-\(UUID().uuidString).mp4"
+        center.start(urlString: url, expectedSize: 1000, cacheStore: .video, origin: .manual)
 
-    func test_neighbours_auPremier_rendSeulementLeSuivant() {
-        XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: "a", in: ["a", "b", "c"]), ["b"])
-    }
+        center.cancelPrefetch(urlString: url)
 
-    func test_neighbours_sansCourantOuInconnu_neRendRien() {
-        XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: nil, in: ["a", "b"]), [])
-        XCTAssertEqual(ReelPagerPrewarmWindow.neighbours(of: "z", in: ["a", "b"]), [])
+        XCTAssertNotNil(center.progress(for: AttachmentDownloadCenter.key(for: url)))
+        center.cancel(key: AttachmentDownloadCenter.key(for: url))
     }
 
     /// **Préchauffer, c'est aussi TÉLÉCHARGER** (#7625). La surface vidéo d'un

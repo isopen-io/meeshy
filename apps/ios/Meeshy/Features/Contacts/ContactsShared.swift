@@ -249,7 +249,7 @@ struct ContactsSearchField: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textMuted)
@@ -272,10 +272,10 @@ struct ContactsSearchField: View {
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(theme.inputBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
     }
 }
 
@@ -294,10 +294,10 @@ struct ContactsFilterChip: View {
             Text(title)
                 .font(.footnote.weight(.semibold))
                 .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear))
-                .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1))
+                .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(MeeshyOpacity.medium), lineWidth: 1))
                 .frame(minHeight: hitTarget ? 44 : nil)
                 .contentShape(Rectangle())
         }
@@ -323,8 +323,8 @@ struct HubTabButton<Selection: Equatable>: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                HStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: icon)
                         .font(.footnote.weight(.medium))
 
@@ -348,7 +348,7 @@ struct HubTabButton<Selection: Equatable>: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selection)
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, 10)
+            .padding(.top, MeeshySpacing.smPlus)
         }
     }
 }
@@ -409,7 +409,7 @@ struct DirectoryPersonRow: View, Equatable {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: MeeshySpacing.mdPlus) {
             MeeshyAvatar(
                 name: name,
                 context: .userListItem,
@@ -417,7 +417,7 @@ struct DirectoryPersonRow: View, Equatable {
                 avatarURL: avatarURL
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
@@ -434,25 +434,25 @@ struct DirectoryPersonRow: View, Equatable {
             Spacer(minLength: 8)
 
             Button(action: onAction) {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: action.icon).font(.caption2.weight(.bold))
                     Text(action.title).font(.caption.weight(.semibold))
                 }
                 .foregroundColor(action.isFilled ? .white : MeeshyColors.indigo500)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(
                     Capsule().fill(action.isFilled ? MeeshyColors.indigo500 : Color.clear)
                 )
                 .overlay(
-                    Capsule().stroke(action.isFilled ? Color.clear : MeeshyColors.indigo500.opacity(0.5), lineWidth: 1)
+                    Capsule().stroke(action.isFilled ? Color.clear : MeeshyColors.indigo500.opacity(MeeshyOpacity.strong), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
             .accessibilityLabel(action.title)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityDetail.map { "\(name), \($0)" } ?? name)
     }

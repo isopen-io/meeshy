@@ -2,6 +2,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 import type { StarredMessageItem } from '@meeshy/shared/types/message-star';
 
 import { BLURRED_WITNESS_ID, PROTECTION_CONVERSATION_ID, VIEWER_ID, conversationById, messagesOf } from './fixtures';
+import { ARCHIVE_CONVERSATION_ID, ARCHIVE_STARRED_ID } from './fixtures-archive';
 import { CONVERSATION_ID, minutesAgo } from './fixtures-base';
 import type { ApiResult } from './http';
 import type { StarredMembership, StarredPage } from './starred-messages-cache';
@@ -23,10 +24,12 @@ import type { Message } from './types';
  * doit éteindre l'étoile du fil — c'est le critère de fin de #7378, et les
  * gates navigateur le jouent sur le `dist` construit en fixtures.
  *
- * TROIS ÉTOILES AU DÉPART, et chacune garde quelque chose : `m1` est anglais
+ * QUATRE ÉTOILES AU DÉPART, et chacune garde quelque chose : `m1` est anglais
  * avec une traduction française (le Prisme), `m-amina` vit dans une
- * conversation DIRECTE (le nom servi est celui du pair), et le témoin FLOUTÉ
- * de la salle protégée rend un placeholder.
+ * conversation DIRECTE (le nom servi est celui du pair), le témoin FLOUTÉ
+ * de la salle protégée rend un placeholder, et `arch-12` est PLUS ANCIEN que
+ * les premières pages de son fil (#7420 : le fil s'ouvre dessus par sa
+ * fenêtre autour du message).
  */
 
 type StarEntry = { readonly messageId: string; readonly conversationId: string; readonly starredAt: string };
@@ -35,6 +38,7 @@ const SEEDS = (): readonly StarEntry[] => [
   { messageId: 'm1', conversationId: CONVERSATION_ID, starredAt: minutesAgo(5).toISOString() },
   { messageId: 'm-amina', conversationId: 'c-amina', starredAt: minutesAgo(40).toISOString() },
   { messageId: BLURRED_WITNESS_ID, conversationId: PROTECTION_CONVERSATION_ID, starredAt: minutesAgo(90).toISOString() },
+  { messageId: ARCHIVE_STARRED_ID, conversationId: ARCHIVE_CONVERSATION_ID, starredAt: minutesAgo(180).toISOString() },
 ];
 
 let stars: readonly StarEntry[] = SEEDS();

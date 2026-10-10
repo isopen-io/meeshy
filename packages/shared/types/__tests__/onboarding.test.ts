@@ -21,8 +21,8 @@ const state = {
 };
 
 describe('le contrat d\'onboarding (#7729)', () => {
-  it('déclare les six étapes dans l\'ordre du parcours — le courriel juste après les langues (#7907)', () => {
-    expect(ONBOARDING_STEP_IDS).toEqual(['languages', 'email', 'global', 'story', 'friends', 'notifications']);
+  it('déclare les sept étapes dans l\'ordre du parcours — l\'âge juste après les langues (#9927), puis le courriel (#7907)', () => {
+    expect(ONBOARDING_STEP_IDS).toEqual(['languages', 'age', 'email', 'global', 'story', 'friends', 'notifications']);
   });
 
   it('seules les cinq étapes proposées à TOUS closent le parcours ; le courriel, conditionnel, n\'en fait pas partie', () => {

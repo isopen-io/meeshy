@@ -151,16 +151,27 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         return try listBeforeResult.get()
     }
 
+    /// Appelé PENDANT `listAfter`, avant la réponse — un témoin y lit l'état
+    /// « en vol » du modèle (#9304, `isLoadingNewer`).
+    var onListAfter: (() -> Void)?
+
+    /// Retient la réponse de `listAfter` APRÈS l'avoir tirée de la file : la
+    /// page reste « en vol » le temps qu'un témoin rejoue un saut (#9364).
+    var holdListAfter: (@MainActor @Sendable () async -> Void)?
+
     nonisolated func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
-        try await MainActor.run {
+        let served: Result<MessagesAPIResponse, Error> = await MainActor.run {
             listAfterCallCount += 1
             lastListAfterConversationId = conversationId
             lastListAfterAfter = after
             lastListAfterLimit = limit
             lastListAfterLanguages = languages
-            if !listAfterResults.isEmpty { return listAfterResults.removeFirst() }
-            return try listAfterResult.get()
+            onListAfter?()
+            if !listAfterResults.isEmpty { return .success(listAfterResults.removeFirst()) }
+            return listAfterResult
         }
+        if let hold = await MainActor.run(body: { holdListAfter }) { await hold() }
+        return try served.get()
     }
 
     nonisolated func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {

@@ -55,6 +55,7 @@ jest.mock('../../../services/EmailService', () => ({
 
 import { AuthService } from '../../../services/AuthService';
 import { AUTH_USER_SELECT } from '../../../services/auth/auth-user-projection';
+import { AgeBelowMinimumError } from '../../../errors/custom-errors';
 
 const PASSWORD = 'motdepasse-1';
 const BACKUP_CODE = 'ABCD1234';
@@ -320,5 +321,41 @@ describe('Une réponse d’authentification ne lit que ce que son select a deman
     expect(secondFacteur.password).toBeUndefined();
     expect(lienMagique.password).toBeUndefined();
     expect(lienMagique.twoFactorSecret).toBeUndefined();
+  });
+});
+
+// #9927 — le refus de l'âge minimal (levé par `createSession`) ne se dit
+// qu'APRÈS un second facteur VALIDE ; un code faux rend l'échec ordinaire.
+describe('second facteur et âge minimal (#9927)', () => {
+  it('code valide, compte de moins de 13 ans : AgeBelowMinimumError relayé, aucune trace « en ligne »', async () => {
+    const store = makeStore(seedUser({ twoFactorEnabledAt: new Date('2026-01-01T00:00:00Z'), isOnline: false }));
+    const service = newService(store.client);
+    const etape1 = await service.authenticate({ username: 'alice', password: PASSWORD }, requestContext);
+    mockCreateSession.mockRejectedValueOnce(new AgeBelowMinimumError());
+
+    const refus = await service
+      .completeAuthWith2FA((etape1 as { twoFactorToken: string }).twoFactorToken, BACKUP_CODE, requestContext)
+      .catch((error: unknown) => error);
+
+    expect(refus).toBeInstanceOf(AgeBelowMinimumError);
+    expect(store.client.user.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isOnline: true }) })
+    );
+  });
+
+  it('code FAUX : échec ordinaire, la session n’est même pas tentée', async () => {
+    const store = makeStore(seedUser({ twoFactorEnabledAt: new Date('2026-01-01T00:00:00Z') }));
+    const service = newService(store.client);
+    const etape1 = await service.authenticate({ username: 'alice', password: PASSWORD }, requestContext);
+    mockCreateSession.mockClear();
+
+    const etape2 = await service.completeAuthWith2FA(
+      (etape1 as { twoFactorToken: string }).twoFactorToken,
+      'FAUX0000',
+      requestContext
+    );
+
+    expect('success' in etape2 && etape2.success === false).toBe(true);
+    expect(mockCreateSession).not.toHaveBeenCalled();
   });
 });

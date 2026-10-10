@@ -76,7 +76,7 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   // les laissait à `undefined` — `instanceof undefined` lève un TypeError
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../../../../utils/withMutationLog') as object),
-  withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()),
+  withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()), withMutationVerdict: jest.fn<any>().mockImplementation(async ({ op }: any) => ({ result: await op(), replayed: false })),
 }));
 
 jest.mock('../../../../utils/sanitize.js', () => ({
@@ -739,12 +739,10 @@ describe('POST /posts/:postId/translate — invalid body', () => {
 
 // ─── POST /posts — onDuplicate path (line 76-77) ────────────────────────────
 
-describe('POST /posts — onDuplicate replay path via withMutationLog', () => {
-  it('returns 201 by replaying existing post from getPostById', async () => {
-    const { withMutationLog } = jest.requireMock('../../../../utils/withMutationLog') as any;
-    withMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
-      return onDuplicate('post-001');
-    });
+describe('POST /posts — onDuplicate replay path via withMutationVerdict', () => {
+  it('returns 201 by replaying existing post from getPostById (#9603 : rien d’autre ne repart)', async () => {
+    const { withMutationVerdict } = jest.requireMock('../../../../utils/withMutationLog') as any;
+    withMutationVerdict.mockImplementationOnce(async ({ onDuplicate }: any) => ({ result: await onDuplicate('post-001'), replayed: true }));
     mockGetPostById.mockResolvedValueOnce({ id: 'post-001', content: 'Hello', type: 'POST', visibility: 'PUBLIC', createdAt: new Date() });
     const app = await buildApp();
     const res = await app.inject({
@@ -1185,22 +1183,18 @@ describe('POST /posts — STORY without visibility defaults to FRIENDS (line 73)
 
 // ─── Branch coverage: onDuplicate returning null (line 77) ───────────────────
 
-describe('POST /posts — onDuplicate returns null when getPostById finds nothing (line 77)', () => {
-  it('returns null from onDuplicate when replay finds no existing post', async () => {
-    const { withMutationLog } = jest.requireMock('../../../../utils/withMutationLog') as any;
-    withMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
-      return onDuplicate('missing-post-id');
+describe('POST /posts — the replayed post is gone (line 77)', () => {
+  it('returns 410 when the replay finds no existing post — a create replay never resurrects it (#9603)', async () => {
+    const { withMutationVerdict, MutationResultGone } = jest.requireMock('../../../../utils/withMutationLog') as any;
+    withMutationVerdict.mockImplementationOnce(async ({ kind }: any) => {
+      throw new MutationResultGone('missing-post-id', kind);
     });
-    mockGetPostById.mockResolvedValueOnce(null); // triggers null path at line 77
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: '/posts',
       payload: { content: 'Hello', type: 'POST' },
     });
-    // When onDuplicate returns null, the post is null — route returns 500 or continues
-    // Actually withMutationLog returns null, then post is null → notification on null post
-    // This is fine — it just returns 201 with null data or crashes with 500
-    expect([201, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(410);
     await app.close();
   });
 });

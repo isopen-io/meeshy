@@ -1,6 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { MEMBER_EXTRAS } from '@/lib/admin/member-fixture';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -87,6 +88,7 @@ const MEMBRE = {
   lastActiveAt: null,
   createdAt: null,
   updatedAt: null,
+  ...MEMBER_EXTRAS,
 } satisfies AdminUserDetail;
 
 const LISTE = {
@@ -379,5 +381,45 @@ describe('les conversations du membre se trient et se gèrent (#7845)', () => {
       </QueryClientProvider>,
     );
     expect(avec.querySelector('[data-admin-conversation-manage="c-atelier"]')?.getAttribute('href')).toBe('/adm/conversations/c-atelier');
+  });
+});
+
+describe('la ligne dit ce que la passerelle sert (audit 2026-10-04)', () => {
+  test('volume, dernier message, rôle et date d’entrée du membre, état fermé', async () => {
+    const liste = {
+      data: [
+        {
+          id: 'c-ferme',
+          title: 'Atelier',
+          type: 'group',
+          memberCount: 4,
+          messageCount: 1204,
+          lastMessageAt: '2026-09-30T09:00:00.000Z',
+          closedAt: '2026-09-30T10:00:00.000Z',
+          isActive: true,
+          membership: { userId: 'u-membre', displayName: 'Le membre', role: 'MODERATOR', joinedAt: '2026-03-01T12:00:00.000Z', isActive: true },
+        },
+        { id: 'c-vide', title: 'Vide', type: 'group', memberCount: 2, messageCount: 0, lastMessageAt: null, membership: { userId: 'u-membre', displayName: 'Le membre', role: 'member', isActive: false } },
+      ],
+      pagination: { total: 2, offset: 0, limit: 20, hasMore: false },
+    };
+    const transport = { request: async () => ({ ok: true, data: liste }) } as unknown as HttpTransport;
+    const hote = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" deps={{ source: 'gateway', transport }} now={() => new Date('2026-09-30T12:00:00.000Z')} />
+      </QueryClientProvider>,
+    );
+    await mounter.settle();
+    await mounter.settle();
+    const facts = (id: string) => (hote.querySelector(`[data-admin-conversation="${id}"] [data-admin-conversation-facts]`)?.textContent ?? '').replace(/[\u00a0\u202f]/g, ' ');
+    const ferme = facts('c-ferme');
+    expect(ferme).toContain('1 204 message(s)');
+    expect(ferme).toContain('Dernier message');
+    expect(ferme).toContain('il y a 3 heures');
+    expect(ferme).toContain('Modérateur depuis le');
+    expect(ferme).toContain('Fermée');
+    const vide = facts('c-vide');
+    expect(vide).toContain('Aucun message');
+    expect(vide).toContain('N’en fait plus partie');
   });
 });

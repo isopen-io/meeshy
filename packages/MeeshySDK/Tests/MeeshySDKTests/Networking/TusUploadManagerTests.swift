@@ -240,4 +240,40 @@ final class TusUploadManagerTests: XCTestCase {
         XCTAssertNil(attachment.thumbnailUrl)
         XCTAssertEqual(attachment.duration, 120)
     }
+
+    // MARK: - Provenance déclarée à la création (#9775)
+
+    /// Décode `Upload-Metadata` comme le serveur TUS : paires `clé base64`.
+    private func decodedMetadata(_ header: String) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: header.split(separator: ",").compactMap { pair in
+            let parts = pair.split(separator: " ", maxSplits: 1).map(String.init)
+            guard let key = parts.first else { return nil }
+            let value = parts.count > 1 ? Data(base64Encoded: parts[1]).flatMap { String(data: $0, encoding: .utf8) } ?? "" : ""
+            return (key, value)
+        })
+    }
+
+    func test_creationMetadata_capture_declaresCapturedInAppTrue() {
+        let header = TusUploadManager.creationMetadata(
+            fileName: "prise.jpg", mimeType: "image/jpeg", uploadContext: nil,
+            thumbHash: nil, transcription: nil, capturedInApp: true
+        )
+
+        let metadata = decodedMetadata(header)
+        XCTAssertEqual(metadata["capturedinapp"], "true")
+        XCTAssertEqual(metadata["filename"], "prise.jpg")
+        XCTAssertEqual(metadata["filetype"], "image/jpeg")
+    }
+
+    func test_creationMetadata_notACapture_carriesNoCaptureKey() {
+        let header = TusUploadManager.creationMetadata(
+            fileName: "galerie.jpg", mimeType: "image/jpeg", uploadContext: "post",
+            thumbHash: "abc", transcription: nil, capturedInApp: false
+        )
+
+        let metadata = decodedMetadata(header)
+        XCTAssertNil(metadata["capturedinapp"])
+        XCTAssertEqual(metadata["uploadcontext"], "post")
+        XCTAssertEqual(metadata["thumbhash"], "abc")
+    }
 }

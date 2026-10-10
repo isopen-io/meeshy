@@ -18,36 +18,28 @@ struct MessageProtectionIntentTests {
 
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-    @Test("Rien d'armé ne porte ni bit ni échéance")
+    @Test("Rien d'armé ne porte ni bit ni durée")
     func test_none_neProtègeRien() {
         let intent = MessageProtectionIntent.none
         #expect(intent.isEmpty)
         #expect(intent.lifecycleFlags.isEmpty)
-        #expect(intent.expiresAt(from: now) == nil)
+        #expect(intent.ephemeralDurationSeconds == nil)
     }
 
-    @Test("Une durée éphémère pose le bit et l'échéance, comptée depuis l'ENVOI")
-    func test_éphémère_poseBitEtÉchéance() {
+    /// L'envoi n'est pas une réception (#8905) : l'intention transporte une
+    /// DURÉE, jamais une échéance — celle de l'expéditeur est `max D(u)`,
+    /// servie par la passerelle.
+    @Test("Une durée éphémère pose le bit et la DURÉE, jamais une échéance")
+    func test_éphémère_poseBitEtDurée() {
         let intent = MessageProtectionIntent(ephemeralDurationSeconds: 300)
         #expect(intent.lifecycleFlags.contains(.ephemeral))
-        #expect(intent.expiresAt(from: now) == now.addingTimeInterval(300))
-    }
-
-    /// L'échéance se calcule au moment où le message PART, pas au tap : entre
-    /// les deux il y a la durée d'un upload, qui ne doit pas être volée au
-    /// destinataire.
-    @Test("La même intention rend deux échéances différentes à deux instants")
-    func test_échéance_suitLInstantDeLEnvoi() {
-        let intent = MessageProtectionIntent(ephemeralDurationSeconds: 60)
-        let plusTard = now.addingTimeInterval(45)
-        #expect(intent.expiresAt(from: now) != intent.expiresAt(from: plusTard))
-        #expect(intent.expiresAt(from: plusTard) == plusTard.addingTimeInterval(60))
+        #expect(intent.ephemeralDurationSeconds == 300)
     }
 
     @Test("Une durée nulle ou négative n'arme rien")
     func test_duréeNonPositive_nArmeRien() {
         #expect(MessageProtectionIntent(ephemeralDurationSeconds: 0).isEmpty)
-        #expect(MessageProtectionIntent(ephemeralDurationSeconds: -1).expiresAt(from: now) == nil)
+        #expect(MessageProtectionIntent(ephemeralDurationSeconds: -1).ephemeralDurationSeconds == nil)
     }
 
     @Test("Le flou et la vue unique posent LEUR bit, et seulement le leur")

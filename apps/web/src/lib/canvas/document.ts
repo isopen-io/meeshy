@@ -19,6 +19,22 @@
  */
 import type { CanvasV3, KeyframeV3, ObjectV3, SceneV3 } from '@meeshy/shared/types/canvas-v3';
 
+/**
+ * LA RÈGLE DU SON SUR LA SCÈNE (#9737) vit dans `@meeshy/shared` ; elle se lit
+ * ICI et nulle part ailleurs dans l'application : un second importateur direct
+ * en ferait un morceau de plus, donc un nom dans la table de l'entrée.
+ */
+import { backgroundSoundProvenance } from '@meeshy/shared/utils/scene-audio';
+
+export {
+  backgroundAudioOf,
+  backgroundSoundProvenance,
+  isBackgroundAudio,
+  sceneAudioChipForm,
+  sceneAudioPresence,
+  soundAuthorTag,
+} from '@meeshy/shared/utils/scene-audio';
+
 export type CanvasAnchor =
   | { readonly t: 'free'; readonly x: number; readonly y: number }
   | { readonly t: 'band'; readonly edge: 'top' | 'bottom' };
@@ -266,4 +282,14 @@ export function parseCanvasDocument(storyEffects: unknown): CanvasDocument | nul
     ...(layout !== undefined ? { layout } : {}),
     ...(storyEffects.sound !== undefined ? { sound: storyEffects.sound } : {}),
   };
+}
+
+/**
+ * LA SCÈNE ANNONCE-T-ELLE UN SON DE FOND ? (#9698) — vrai dès que le crédit
+ * existe (`announceBackgroundSound` ≠ `none`, la MÊME provenance). L'hôte s'en
+ * sert pour confier le muet à la note du crédit plutôt qu'à un bouton à part.
+ */
+export function documentAnnouncesSound(document: CanvasDocument | null | undefined, sceneIndex = 0): boolean {
+  const scene = document?.scenes[sceneIndex];
+  return scene !== undefined && backgroundSoundProvenance({ documentSound: document?.sound, objects: scene.objects }) !== null;
 }

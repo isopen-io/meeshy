@@ -97,37 +97,37 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
             // Panel header
             HStack {
                 Image(systemName: "mic.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(localized: "story.voiceRecorder.title", defaultValue: "Enregistrement", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(primaryTextColor)
                 Spacer()
             }
-            .padding(.bottom, 12)
+            .padding(.bottom, MeeshySpacing.md)
 
             if !recorder.isRecording {
                 AudioRecorderSourceChips(
                     onImportAudioFile: onImportAudioFile,
                     onOpenSoundLibrary: onOpenSoundLibrary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, MeeshySpacing.sm)
             }
 
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 if let error = errorMessage {
                     Text(error)
-                        .font(.system(size: 13))
+                        .font(.system(size: MeeshyFont.subheadSize))
                         .foregroundColor(MeeshyColors.error)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, MeeshySpacing.xl)
                 }
 
                 Spacer()
 
                 waveformView
                     .frame(height: 56)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, MeeshySpacing.xl)
                     .opacity(recorder.isRecording ? 1 : 0.3)
 
                 Text(recorder.isRecording
@@ -143,7 +143,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                 Spacer()
 
                 // Controls always at the bottom
-                HStack(spacing: 32) {
+                HStack(spacing: MeeshySpacing.xxxl) {
                     if recorder.isRecording {
                         // Cancel
                         Button {
@@ -156,7 +156,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                                     .fill(controlFill)
                                     .frame(width: 50, height: 50)
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 18, weight: .medium))
+                                    .font(.system(size: MeeshyIconSize.lg, weight: .medium))
                                     .foregroundColor(controlIcon)
                             }
                         }
@@ -171,19 +171,19 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                             .frame(width: 50, height: 50)
                     }
                 }
-                .padding(.bottom, 4)
+                .padding(.bottom, MeeshySpacing.xs)
 
                 if let accessory, !recorder.isRecording {
                     accessory
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, MeeshySpacing.sm)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 16)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+        .padding(.horizontal, MeeshySpacing.lg)
         .onDisappear {
             stopPhaseTimer()
             // Panel fermé mid-recording (swipe, changement d'onglet) : sans ce
@@ -218,22 +218,22 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     /// (and downstream transcription / Prisme) start from the right idiom.
     private var languageStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(LanguageData.allLanguagesCommonFirst, id: \.code) { language in
                     let isActive = selectedLanguage == language.code
                     Button {
                         HapticFeedback.light()
                         selectedLanguage = language.code
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Text(language.flag)
                             Text(language.nativeName)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                                 .lineLimit(1)
                         }
                         .foregroundColor(isActive ? .white : secondaryTextColor)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
                             Capsule().fill(isActive
                                            ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -243,7 +243,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, MeeshySpacing.xs)
         }
         .frame(height: 34)
     }
@@ -251,7 +251,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     // MARK: - Waveform
 
     private var waveformView: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(0..<15, id: \.self) { i in
                 let level: CGFloat = i < recorder.audioLevels.count ? recorder.audioLevels[i] : 0
                 RoundedRectangle(cornerRadius: 2.5)
@@ -273,7 +273,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: recorder.isRecording)
 
             Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
-                .font(.system(size: 26, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxxl, weight: .semibold))
                 .foregroundColor(recorder.isRecording ? .white : controlIcon)
         }
         .shadow(color: recorder.isRecording ? MeeshyColors.brandPrimary.opacity(0.5) : .clear, radius: 16)
@@ -368,7 +368,7 @@ public struct AudioRecorderSourceChips: View {
 
     public var body: some View {
         if onImportAudioFile != nil || onOpenSoundLibrary != nil {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if let onImportAudioFile {
                     chip(icon: "folder.fill",
                          text: String(localized: "story.voiceRecorder.fromFiles", defaultValue: "Fichiers", bundle: .module),

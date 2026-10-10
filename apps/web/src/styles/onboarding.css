@@ -438,6 +438,39 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ios-indigo-500) 30%, transparent);
 }
 
+/* La date de naissance (#9928) : le champ NATIF, une cible d'au moins 44 px. */
+.onb-date {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--onb-hairline);
+  background: var(--onb-soft);
+  color: var(--onb-ink);
+  color-scheme: dark;
+  font: inherit;
+  font-size: 1rem;
+}
+
+:root.light .onb-date {
+  color-scheme: light;
+}
+
+.onb-date:focus-visible {
+  border-color: var(--ios-indigo-400);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ios-indigo-500) 30%, transparent);
+}
+
+.onb-date[aria-invalid='true'] {
+  border-color: var(--ios-error);
+}
+
+.onb-age-disc {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
 .onb-composer {
   display: grid;
   gap: 8px;

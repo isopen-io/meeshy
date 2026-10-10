@@ -22,6 +22,7 @@
  */
 
 import { jest } from '@jest/globals';
+import { matchesMongoWhere } from './mongo-where';
 
 export type OrphanDbDocument = Record<string, unknown>;
 
@@ -92,6 +93,10 @@ const readPath = (doc: OrphanDbDocument, path: string): unknown =>
     );
 
 const isMissing = (value: unknown): boolean => value === null || value === undefined;
+
+/** Une clé posée à `undefined` dans un objet de test n'existe pas dans le document. */
+const withoutUndefinedKeys = (row: OrphanDbDocument): OrphanDbDocument =>
+  Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
 
 function matchesCondition(value: unknown, condition: unknown): boolean {
   if (condition === null) return isMissing(value);
@@ -225,13 +230,26 @@ export function makeOrphanedSenderDb(seed: OrphanDbSeed = {}) {
         state.messages = state.messages.filter((message) => !ids.includes(message.id));
         return { count: before - state.messages.length };
       }),
+      /**
+       * L'horloge du fil (`recomputeConversationLastMessageAt`) : conversation,
+       * non supprimé, et — depuis #9630 — un `AND` qui écarte les avis de
+       * capture (`withoutCaptureNotices`). Le `AND` est ÉVALUÉ contre la ligne
+       * avec la sémantique Mongo (clé absente ≠ `null`, `helpers/mongo-where.ts`),
+       * qui jette sur tout opérateur inconnu : jamais ignoré.
+       */
       findFirst: jest.fn(async (args: any) => {
-        const { conversationId, deletedAt, ...rest } = args?.where ?? {};
-        if (Object.keys(rest).length > 0 || deletedAt !== null || args?.orderBy?.createdAt !== 'desc') {
+        const { conversationId, deletedAt, AND, ...rest } = args?.where ?? {};
+        if (
+          Object.keys(rest).length > 0 ||
+          deletedAt !== null ||
+          (AND !== undefined && !Array.isArray(AND)) ||
+          args?.orderBy?.createdAt !== 'desc'
+        ) {
           throw unsupported('findFirst', args);
         }
         const newest = state.messages
           .filter((message) => message.conversationId === conversationId && isMissing(message.deletedAt))
+          .filter((message) => AND === undefined || matchesMongoWhere(withoutUndefinedKeys(message), { AND }))
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
         return newest ? { createdAt: newest.createdAt } : null;
       }),

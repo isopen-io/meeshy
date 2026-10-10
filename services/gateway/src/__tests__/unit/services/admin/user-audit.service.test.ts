@@ -427,6 +427,17 @@ describe('UserAuditService.logResetPassword', () => {
       data: expect.objectContaining({ action: UserAuditAction.RESET_PASSWORD }),
     });
   });
+
+  // La route accepte un motif : il était reçu, puis perdu (audit du 2026-10-04).
+  it('consigne le motif reçu dans metadata.reason', async () => {
+    const create = jest.fn().mockResolvedValue(makeDbRecord({ action: UserAuditAction.RESET_PASSWORD }));
+    const svc = makeService(makePrisma({ create }));
+
+    await svc.logResetPassword('admin-1', 'user-1', '1.2.3.4', 'ua', 'demande du membre par écrit');
+
+    const callData = (create.mock.calls[0] as any[])[0].data;
+    expect(JSON.parse(callData.metadata)).toEqual({ reason: 'demande du membre par écrit' });
+  });
 });
 
 describe('UserAuditService.logDeleteUser', () => {

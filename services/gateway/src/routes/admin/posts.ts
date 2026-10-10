@@ -11,6 +11,7 @@ import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { requirePermission } from '../../middleware/authorize';
+import { judgeReason, sendReasonRefusal } from '../../middleware/sovereign-reason';
 
 /**
  * Ligne de la liste d'administration des posts.
@@ -273,6 +274,9 @@ function buildPeriodFilter(period: string): Date {
   return startDate;
 }
 
+/** Le motif d'un retrait de post, quand il est exigé ou écrit (spec 2026-10-04 § 4). */
+const MOTIF_DE_RETRAIT_MINIMAL = 3;
+
 export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
   // ──────────────────────────────────────────────────────────────────────
@@ -330,7 +334,8 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         totalByType,
         totalDeleted,
         topAuthors,
-        trending
+        trending,
+        live
       ] = await Promise.all([
         // Total posts (non-deleted)
         fastify.prisma.post.count({
@@ -379,6 +384,18 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             { commentCount: 'desc' },
           ],
           take: 10
+        }),
+
+        // EN LIGNE : non supprimé ET pas expiré. `total` compte encore les
+        // stories et statuts dont l'échéance est passée, que plus personne ne
+        // voit. Une échéance absente (tout post ordinaire) est « sans
+        // échéance » — d'où les trois branches (leçon 318).
+        fastify.prisma.post.count({
+          where: {
+            deletedAt: NOT_DELETED,
+            ...dateFilter,
+            AND: [{ OR: [{ expiresAt: null }, { expiresAt: { isSet: false } }, { expiresAt: { gt: new Date() } }] }]
+          }
         })
       ]);
 
@@ -400,6 +417,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
       return sendSuccess(reply, {
         total: totalPosts,
+        live,
         deleted: totalDeleted,
         byType,
         topAuthors: topAuthors.map((a) => ({
@@ -512,7 +530,10 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       if (isDeleted === 'true') {
         where.deletedAt = { not: null };
       } else if (isDeleted === 'false' || isDeleted === undefined) {
-        where.deletedAt = null;
+        // NOT_DELETED (`isSet: false`), jamais `null` : un post vivant n'a
+        // PAS de colonne `deletedAt`, et `deletedAt: null` n'en appariait
+        // aucun — la liste par défaut était vide (leçon 318).
+        where.deletedAt = NOT_DELETED;
       }
 
       if (search) {
@@ -678,7 +699,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       body: {
         type: 'object',
         properties: {
-          reason: { type: 'string', description: 'Reason for deletion (for audit trail)' }
+          reason: { type: 'string', maxLength: 500, description: 'Motif du retrait (3 caractères minimum ; obligatoire sauf pour le rang souverain), consigné dans AdminAuditLog' }
         }
       },
       response: {
@@ -690,6 +711,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             message: { type: 'string' }
           }
         },
+        400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
@@ -707,7 +729,13 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       const { postId } = request.params;
-      const { reason } = request.body ?? {};
+      // Motif obligatoire (3 caractères) sauf pour le rang souverain, validé
+      // s'il est écrit (spec 2026-10-04 § 4).
+      const verdict = judgeReason(request, request.body?.reason, MOTIF_DE_RETRAIT_MINIMAL);
+      if (verdict.problem) {
+        return sendReasonRefusal(reply, verdict.problem, { source: 'body', min: MOTIF_DE_RETRAIT_MINIMAL });
+      }
+      const { reason } = verdict;
 
       // `type` / `visibility` / `visibilityUserIds` ne servent pas au retrait
       // lui-même mais à l'annoncer : ils choisissent l'événement et refiltrent
@@ -760,7 +788,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       // `applyPostRemovalEffects`, partagé avec le service. Les trois effets
       // ont été rattrapés ici un par un, à des cycles d'intervalle, parce que
       // rien ne nommait la liste : il n'y a plus qu'un endroit à tenir.
-      await applyPostRemovalEffects(fastify.prisma, post, { id: user.id, reason });
+      await applyPostRemovalEffects(fastify.prisma, post, { id: user.id, reason, viaAdministration: true });
 
       fastify.log.info({
         action: 'admin_post_delete',

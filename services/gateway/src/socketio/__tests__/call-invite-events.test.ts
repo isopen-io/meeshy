@@ -2,6 +2,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { CallControlAck, CallControlErrorCode } from '@meeshy/shared/types/call-controls';
 import { registerCallInviteEvents, type CallInviteRing } from '../call-invite-events';
+import type { PendingCallInvitation } from '../call-invite-lifecycle';
 
 const CALL = '64b7f0c2a1b2c3d4e5f60718';
 const CONV = '64b7f0c2a1b2c3d4e5f60719';
@@ -34,6 +35,7 @@ const harness = (options: { userId?: string; refusal?: CallControlErrorCode; rin
   const handlers = new Map<string, (raw: unknown, ack?: (r: CallControlAck) => void) => Promise<void>>();
   const emitted: Emission[] = [];
   const rings: CallInviteRing[] = [];
+  const armed: PendingCallInvitation[] = [];
   const record = jest.fn(async (_session: unknown, _invitee: string) => undefined);
   const authorize = jest.fn(async (_input: unknown) =>
     options.refusal ? { ok: false as const, code: options.refusal } : grant()
@@ -44,6 +46,8 @@ const harness = (options: { userId?: string; refusal?: CallControlErrorCode; rin
       rateLimiter: { checkLimit: async () => true },
       authorize,
       record,
+      credit: () => undefined,
+      armExpiry: (invitation) => void armed.push(invitation),
       ring: async (ring) => {
         rings.push(ring);
         if (options.ringFails) throw new Error('push down');
@@ -57,7 +61,7 @@ const harness = (options: { userId?: string; refusal?: CallControlErrorCode; rin
     await handlers.get(CLIENT_EVENTS.CALL_INVITE_PARTICIPANT)?.(raw, (r) => acks.push(r));
     return acks[0];
   };
-  return { invite, emitted, rings, record, authorize };
+  return { invite, emitted, rings, record, authorize, armed };
 };
 
 describe('call:invite-participant — faire sonner un ami dans l’appel en cours (#8433)', () => {
@@ -103,6 +107,7 @@ describe('call:invite-participant — faire sonner un ami dans l’appel en cour
     expect(h.record).not.toHaveBeenCalled();
     expect(h.emitted).toEqual([]);
     expect(h.rings).toEqual([]);
+    expect(h.armed).toEqual([]);
   });
 
   it('une sonnerie en panne n’annule pas l’invitation déjà notée', async () => {
@@ -110,6 +115,17 @@ describe('call:invite-participant — faire sonner un ami dans l’appel en cour
 
     expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: true });
     expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.armed).toHaveLength(1);
+  });
+
+  it('arme l’échéance de l’invitation : sans réponse, l’inviteur l’apprendra (#8470, #8467)', async () => {
+    const h = harness();
+
+    await h.invite({ callId: CALL, userId: DAVE });
+
+    expect(h.armed).toEqual([
+      { callId: CALL, conversationId: CONV, inviterUserId: 'alice', inviteeUserId: DAVE, callType: 'video' },
+    ]);
   });
 
   it('refuse un socket non authentifié et une charge malformée avant toute lecture', async () => {

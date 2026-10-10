@@ -5,8 +5,10 @@
  * `select`/`include` et leurs doc-comments d'origine, déplacés verbatim.
  */
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { PREVIEW_ATTACHMENT_SUMMARY_LIMIT } from './utils/last-message-nature';
+import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
 
 /**
  * Participant fields fetched + serialized per participant in the GET
@@ -102,6 +104,9 @@ export const conversationLastMessagePreviewSelect = {
   // #7451 — dit à `resolveLastMessageSummaryKind` que `expiresAt` est l'heure
   // INTERNE de destruction, et non l'échéance d'un lecteur.
   ephemeralDuration: true,
+  // #8630 — la chaîne citée : une réponse meurt, pour son lecteur, avec ce
+  // qu'elle cite, et sa ligne de liste passe alors à « expiré ».
+  replyToId: true,
   // #7545 — la protection (chiffré) et la NATURE du message (système, appel,
   // transfert) que `resolveLastMessageNature` lit.
   isEncrypted: true,
@@ -141,6 +146,7 @@ export const conversationLastMessagePreviewSelect = {
     // 1,4 Mo ») lit toutes les pièces jointes ; la liste n'en SERT que la
     // première (`core-list.ts`). Même borne que le socket.
     take: PREVIEW_ATTACHMENT_SUMMARY_LIMIT,
+    orderBy: MESSAGE_ATTACHMENT_ORDER,
     select: {
       id: true,
       mimeType: true,
@@ -281,9 +287,8 @@ export const conversationListQuerySelect = (viewerId: string) => ({
   // lecture batchée par page (`loadConversationListActivity`).
   lastReactionId: true,
   activeCallId: true,
-  // #7592 — le rang du lecteur (`listRankAt`, `utils/list-rank.ts`).
-  lastReactionAt: true,
-  lastReactionTargetKey: true,
+  // #9026 — le rang de la ligne (`listRankAt`, `utils/list-rank.ts`).
+  lastActivityAt: true,
   participants: {
     take: 5,
     where: {
@@ -297,10 +302,9 @@ export const conversationListQuerySelect = (viewerId: string) => ({
     take: 1,
     select: conversationUserPreferencesSelect
   },
+  // #9630 — un avis de capture est une ligne silencieuse : jamais l'aperçu.
   messages: {
-    where: {
-      deletedAt: null
-    },
+    where: withoutCaptureNotices({ deletedAt: null }),
     orderBy: { createdAt: 'desc' as const },
     take: 1,
     select: conversationLastMessagePreviewSelect

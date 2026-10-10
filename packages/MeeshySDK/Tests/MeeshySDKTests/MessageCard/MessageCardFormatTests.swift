@@ -49,11 +49,11 @@ struct MessageCardFormatTests {
 
     @Test func format_offersTheTitleOnlyWhenItExists_andAnonymityOnlyForAPaintedName() {
         let initial = MessageCardFormat.initial
-        #expect(initial.offeredToggles(hasConversationTitle: true, hasQuote: true) == [.showConversationTitle, .showAuthors, .showDate, .anonymizeQuoted, .anonymizeReply])
-        #expect(initial.offeredToggles(hasConversationTitle: false, hasQuote: false) == [.showAuthors, .showDate, .anonymizeReply])
+        #expect(initial.offeredToggles(hasConversationTitle: true, hasQuote: true) == [.showConversationTitle, .showAuthors, .anonymizeQuoted, .anonymizeReply])
+        #expect(initial.offeredToggles(hasConversationTitle: false, hasQuote: false) == [.showAuthors, .anonymizeReply])
         var hidden = initial
         hidden[.showAuthors] = false
-        #expect(hidden.offeredToggles(hasConversationTitle: false, hasQuote: true) == [.showAuthors, .showDate])
+        #expect(hidden.offeredToggles(hasConversationTitle: false, hasQuote: true) == [.showAuthors])
     }
 
     // MARK: - Usage
@@ -87,7 +87,7 @@ struct MessageCardFormatTests {
 
     private static func message(
         content: String = "Chez Lina, à 20 h !",
-        replyTo: ReplyReference? = ReplyReference(messageId: "m-quoted", authorName: "Amina", previewText: "On se retrouve où ce soir ?"),
+        replyTo: ReplyReference? = MessageCardFormatTests.quote(nature: .ordinary),
         isMe: Bool = true,
         configure: (inout MeeshyMessage) -> Void = { _ in }
     ) -> MeeshyMessage {
@@ -99,6 +99,13 @@ struct MessageCardFormatTests {
         )
         configure(&message)
         return message
+    }
+
+    /// Une citation dont le fil a déclaré la nature — `nil` : non déclarée.
+    private static func quote(nature: ContentExitLaw.Nature?) -> ReplyReference {
+        var reference = ReplyReference(messageId: "m-quoted", authorName: "Amina", previewText: "On se retrouve où ce soir ?")
+        reference.quotedExitNature = nature
+        return reference
     }
 
     private static func subject(_ message: MeeshyMessage, served: String? = nil, translations: [String: String] = [:], language: String? = nil) -> MessageCardSubject? {
@@ -131,16 +138,73 @@ struct MessageCardFormatTests {
         #expect(Self.subject(Self.message { $0.expiresAt = Self.now.addingTimeInterval(-1) }) == nil)
         #expect(Self.subject(Self.message { $0.messageSource = .system }) == nil)
         #expect(Self.subject(Self.message(content: "   ")) == nil)
-        #expect(Self.subject(Self.message { $0.expiresAt = Self.now.addingTimeInterval(60) }) != nil)
     }
 
+    /// La loi de sortie (#9573) : un contenu qui disparaît ne s'image pas, même
+    /// VIVANT — flamme à durée, flamme après lecture, échéance sans durée lisible.
+    @Test func subject_aMessageThatDisappearsNeverLeavesAsAnImage_evenAlive() {
+        #expect(Self.subject(Self.message { $0.effects = MessageEffects(flags: .ephemeral, ephemeralDuration: 300) }) == nil)
+        #expect(Self.subject(Self.message { $0.effects = MessageEffects(flags: [.ephemeral, .ephemeralAfterRead]) }) == nil)
+        #expect(Self.subject(Self.message { $0.expiresAt = Self.now.addingTimeInterval(60) }) == nil)
+        #expect(!MessageCardSubject.isExportable(
+            Self.message { $0.effects = MessageEffects(flags: .ephemeral, ephemeralDuration: 300) }, now: Self.now
+        ))
+        #expect(MessageCardSubject.isExportable(Self.message(), now: Self.now))
+    }
+
+    /// Un message qui CITE un contenu protégé ne s'image pas (#9573, décision
+    /// porteur du 2026-10-08) : flamme, flamme après lecture, vue unique, média
+    /// cité flouté, ou nature non déclarée — la carte ENTIÈRE se refuse, plutôt
+    /// que de peindre la réponse sans ce qu'elle cite.
+    @Test func subject_aReplyQuotingProtectedContent_neverLeavesAsAnImage() {
+        for nature in [ContentExitLaw.Nature.timedFlame, .afterReadFlame, .viewOnce] {
+            #expect(Self.subject(Self.message(replyTo: Self.quote(nature: nature))) == nil, "\(nature.rawValue)")
+            #expect(!MessageCardSubject.isExportable(Self.message(replyTo: Self.quote(nature: nature)), now: Self.now))
+            #expect(Self.message(replyTo: Self.quote(nature: nature)).quotesProtectedContent)
+        }
+        #expect(Self.subject(Self.message(replyTo: Self.quote(nature: nil))) == nil, "citation illisible ⇒ fermé")
+        let blurredMedia = ReplyReference(messageId: "m-quoted", authorName: "Amina", previewText: "🌫️ 🖼️", attachmentIsProtected: true)
+        #expect(Self.subject(Self.message(replyTo: blurredMedia)) == nil, "un média cité protégé ⇒ fermé")
+        #expect(Self.subject(Self.message(replyTo: Self.quote(nature: .ordinary)))?.quoted != nil)
+        #expect(!Self.message(replyTo: Self.quote(nature: .ordinary)).quotesProtectedContent)
+    }
+
+    /// Le message cité RÉEL, quand il est en mémoire, fait foi sur la citation.
+    @Test func subject_theRealQuotedMessageDecides_overWhatTheReferenceDeclares() {
+        func card(reference: ReplyReference, quoted: MeeshyMessage) -> MessageCardSubject? {
+            MessageCardSubject.of(message: Self.message(replyTo: reference), servedText: nil, translations: [:],
+                                  viewer: Self.viewer, quotedMessage: quoted, now: Self.now)
+        }
+        var flame = MeeshyMessage(id: "m-quoted", conversationId: "c-1", senderId: "u-amina", content: "On se retrouve où ce soir ?")
+        flame.effects = MessageEffects(flags: .ephemeral, ephemeralDuration: 30)
+        #expect(card(reference: Self.quote(nature: .ordinary), quoted: flame) == nil,
+                "une citation qui se dit ordinaire ne fait pas sortir une flamme")
+        var blurred = MeeshyMessage(id: "m-quoted", conversationId: "c-1", senderId: "u-amina", content: "Secret")
+        blurred.isBlurred = true
+        #expect(card(reference: Self.quote(nature: .ordinary), quoted: blurred) == nil)
+        let ordinary = MeeshyMessage(id: "m-quoted", conversationId: "c-1", senderId: "u-amina", content: "On se retrouve où ce soir ?")
+        #expect(card(reference: Self.quote(nature: nil), quoted: ordinary)?.quoted != nil,
+                "le message réel, ordinaire, rouvre une citation que le fil n'avait pas déclarée")
+        let other = MeeshyMessage(id: "autre", conversationId: "c-1", senderId: "u-amina", content: "x")
+        #expect(card(reference: Self.quote(nature: nil), quoted: other) == nil,
+                "un autre message que le cité ne prouve rien")
+    }
+
+    /// Une flamme citée qui a EXPIRÉ reste une flamme citée ; la citation d'un
+    /// message SUPPRIMÉ ou d'une story ne porte rien de protégé — la réponse
+    /// s'image, sans citation.
     @Test func subject_aDeletedOrExpiredQuoteShowsNothing() {
         var expired = ReplyReference(messageId: "m-quoted", authorName: "Amina", previewText: "Secret")
         expired.quotedExpiresAt = Self.now.addingTimeInterval(-1)
-        #expect(Self.subject(Self.message(replyTo: expired))?.quoted == nil)
+        #expect(Self.subject(Self.message(replyTo: expired)) == nil)
+        let sealedFlame = Self.quote(nature: .timedFlame).tombstoned(at: Self.now, expired: true)
+        #expect(Self.subject(Self.message(replyTo: sealedFlame)) == nil)
         let deleted = ReplyReference(messageId: "m-quoted", authorName: "Amina", previewText: "Secret").tombstoned(at: Self.now)
+        #expect(Self.subject(Self.message(replyTo: deleted)) != nil)
         #expect(Self.subject(Self.message(replyTo: deleted))?.quoted == nil)
-        #expect(Self.subject(Self.message(replyTo: ReplyReference(messageId: "s", authorName: "Story", previewText: "x", isStoryReply: true)))?.quoted == nil)
+        let story = ReplyReference(messageId: "s", authorName: "Story", previewText: "x", isStoryReply: true)
+        #expect(Self.subject(Self.message(replyTo: story)) != nil)
+        #expect(Self.subject(Self.message(replyTo: story))?.quoted == nil)
         #expect(Self.subject(Self.message(replyTo: nil))?.quoted == nil)
     }
 

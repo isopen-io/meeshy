@@ -77,7 +77,7 @@ function ConversationRow({ conversation, viewerId }: { readonly conversation: Co
           {name}
         </span>
         <span aria-hidden="true" className="shrink-0" style={{ color: INK_2 }}>
-          <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={14} />
+          <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={14} className="rtl:-scale-x-100" />
         </span>
       </Link>
     </li>

@@ -186,6 +186,7 @@ final class ConversationSocketHandler {
         // avant la garde d'idempotence de `loadMessages` (#4943).
         armSocketSubscriptions()
         messageSocket.joinConversation(conversationId)
+        ConversationViewingReporter.shared.conversationOpened(conversationId)
         NotificationToastManager.shared.onConversationOpened(conversationId)
         NotificationCoordinator.shared.markConversationRead(conversationId)
     }
@@ -202,7 +203,6 @@ final class ConversationSocketHandler {
         // n'a jamais rejoint ni publié, donc il ne doit rien défaire — sinon
         // il publie `onConversationClosed` et relance la boucle.
         if didActivate {
-            leaveRoom()
             // Capturé AVANT la `Task` : `deinit` est nonisolé et `self` ne
             // survit pas à la fermeture — lire `conversationId` dedans ne
             // compilerait pas, et le capturer implicitement retiendrait `self`.
@@ -214,6 +214,13 @@ final class ConversationSocketHandler {
                 // d'entrer — et toutes ses notifications se remettaient à
                 // s'afficher par-dessus le fil qu'on lisait.
                 NotificationToastManager.shared.onConversationClosed(id)
+                // La room ne se quitte qu'au DERNIER écran de la conversation
+                // (#9047) : un `conversation:leave` immédiat, émis par un écran
+                // démonté après la réouverture, retirait le socket de la room
+                // et la présence « ici » côté serveur.
+                if ConversationViewingReporter.shared.conversationClosed(id) {
+                    MessageSocketManager.shared.leaveConversation(id)
+                }
             }
             if isEmittingTyping {
                 MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
@@ -264,10 +271,6 @@ final class ConversationSocketHandler {
 
     // MARK: - Room Management
 
-    private nonisolated func leaveRoom() {
-        MessageSocketManager.shared.leaveConversation(conversationId)
-    }
-
     // MARK: - Typing Emission
 
     func onTextChanged(_ text: String) {
@@ -275,6 +278,7 @@ final class ConversationSocketHandler {
         if !trimmed.isEmpty {
             startTypingEmission()
             resetIdleTimer()
+            ConversationViewingReporter.shared.activityOccurred(conversationId)
         } else {
             stopTypingEmission()
         }
@@ -666,9 +670,11 @@ final class ConversationSocketHandler {
                         // out-of-order edit events, which only works if every device
                         // is comparing the same (server) clock.
                         let editedAt = apiMsg.editedAt ?? Date()
+                        let marksEdited = apiMsg.isEdited ?? true
                         Task {
                             do {
-                                try await persistence.markEdited(localId: msgId, newContent: content, editedAt: editedAt)
+                                try await persistence.markEdited(
+                                    localId: msgId, newContent: content, editedAt: editedAt, marksEdited: marksEdited)
                             } catch {
                                 Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                             }
@@ -719,7 +725,7 @@ final class ConversationSocketHandler {
                     let msgId = event.messageId
                     Task {
                         do {
-                            try await persistence.markDeleted(localId: msgId, deletedAt: now)
+                            try await persistence.markDeleted(localId: msgId, deletedAt: now, expired: true)
                         } catch {
                             Logger.messages.warning("[ConversationSocket] markDeleted (expired) failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                         }
@@ -744,22 +750,30 @@ final class ConversationSocketHandler {
         // **L'échéance SERVIE d'un éphémère** (`message:countdown-started`,
         // contrat du fil #7451 point 5).
         //
-        // Elle ne REMPLACE pas l'échéance locale : les deux concourent, et
-        // `EphemeralDeadline.resolve` retient la plus PROCHE. Poser la valeur
-        // servie sur `expiresAt` suffit donc — elle ne peut que raccourcir la
-        // vie du message, jamais l'allonger, ce qui est la seule direction
-        // qu'une protection ait le droit de prendre.
+        // Chez un destinataire elle ne REMPLACE pas l'échéance locale : les
+        // deux concourent, et `EphemeralDeadline.resolve` retient la plus
+        // PROCHE. Chez l'EXPÉDITEUR, dont l'envoi ne compte pas comme une
+        // réception, elle est la SEULE horloge (#8905) : `max D(u)`, qui recule
+        // à chaque destinataire qui reçoit plus tard — d'où le remplacement.
         //
-        // C'est aussi ce qui donne une horloge à l'EXPÉDITEUR, dont l'envoi ne
-        // compte pas comme une réception : tant que cet événement n'est pas
-        // arrivé, il lit « en attente de réception ».
+        // Gravée en base : le fil relit GRDB, et une valeur posée en mémoire
+        // seule s'effaçait à la première écriture de la conversation.
         socketManager.messageCountdownStarted
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let delegate = self.delegate else { return }
-                guard let index = delegate.messageIndex(for: event.messageId) else { return }
-                delegate.messages[index].expiresAt = event.expiresAt
+                guard let self else { return }
+                if let delegate = self.delegate, let index = delegate.messageIndex(for: event.messageId) {
+                    delegate.messages[index].expiresAt = event.expiresAt
+                }
+                guard let persistence = self.persistence else { return }
+                Task {
+                    do {
+                        try await persistence.applyServedEphemeralDeadline(messageId: event.messageId, expiresAt: event.expiresAt)
+                    } catch {
+                        Logger.messages.warning("[ConversationSocket] servedEphemeralDeadline failed \(event.messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
             }
             .store(in: &cancellables)
 
@@ -979,39 +993,21 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Read status updated (delivered / read) — persist delivery state;
-        // store observation surfaces the updated checkmarks in the view.
+        // Read status updated (delivered / read) — #7433 : le résumé décrit
+        // UN message (`summary.messageId`, sinon le dernier du fil) et ne
+        // touche que lui, s'il est le mien (`ReadStatusReceipt`). L'appliquer
+        // à tout message antérieur à `updatedAt` — l'instant d'ÉMISSION —
+        // peignait de faux « Lu » que la fiche « Vu par » démentait.
         socketManager.readStatusUpdated
             .filter { $0.conversationId == convId }
             .filter { ($0.userId ?? $0.participantId) != userId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let persistence = self.persistence else { return }
-                let summary = event.summary
-                // WhatsApp-style all-or-nothing: the sender's ✓✓ / read indicator
-                // must reflect EVERY recipient, never a single member of a group.
-                // `totalMembers` is the active recipient count (sender excluded);
-                // a partial summary advances NOTHING — the bubbles stay at their
-                // current (lower) state until the whole group catches up. The
-                // threshold is owned by DeliveryStatusResolver (single source of
-                // truth; a 0 denominator falls back to legacy "any > 0" for 1:1).
-                let deliveryEvent: MessageEvent?
-                switch DeliveryStatusResolver.fromCounts(
-                    deliveredCount: summary.deliveredCount,
-                    readCount: summary.readCount,
-                    recipientCount: summary.totalMembers
-                ) {
-                case .read:
-                    deliveryEvent = .readBy(userId: userId, at: event.updatedAt)
-                case .delivered:
-                    deliveryEvent = .delivered(count: summary.deliveredCount, at: event.updatedAt)
-                default:
-                    deliveryEvent = nil
-                }
-                // Batch-update delivery state; store observation will rebuild
-                // the message list with updated deliveryStatus for all rows.
-                if let deliveryEvent {
-                    Task { await persistence.bufferBatchDelivery(conversationId: convId, event: deliveryEvent) }
+                Task {
+                    await persistence.bufferReadStatusSummary(
+                        conversationId: convId, summary: event.summary, currentUserId: userId
+                    )
                 }
             }
             .store(in: &cancellables)

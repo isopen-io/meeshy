@@ -170,7 +170,7 @@ describe('/admin/agent/topics — la garde lit la matrice, jamais request.user.r
     });
     await probe.ready();
 
-    const token = jwt.sign({ userId: BIGBOSS_ID }, JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ userId: BIGBOSS_ID, sid: 'test-session' }, JWT_SECRET, { expiresIn: '1h' });
     const res = await probe.inject({ method: 'GET', url: '/probe', headers: { authorization: `Bearer ${token}` } });
     await probe.close();
 

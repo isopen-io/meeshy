@@ -15,7 +15,8 @@ import SnapshotTesting
 //
 // Comme les suites `Timeline`/`Story`, le mode par défaut `.missing` enregistre
 // la baseline PNG au premier run puis échoue une fois pour le signaler ; le
-// second run compare proprement. Commits atterrissent avec `record: false`.
+// second run compare proprement. Aucun `record:` en dur : la CI ré-enregistre
+// sur le runtime qui juge par SNAPSHOT_TESTING_RECORD (#9701).
 //
 // DÉTERMINISME : la vignette n'embarque plus de Map vivante (les tuiles Metal
 // async faisaient crasher/diverger la capture sync de swift-snapshot-testing).
@@ -46,8 +47,7 @@ final class LocationMessageViewSnapshotTests: XCTestCase {
         assertSnapshot(
             of: makeView(colorScheme: .light),
             as: .image(precision: 0.99, perceptualPrecision: 0.98,
-                       layout: .fixed(width: 260, height: 194)),
-            record: false
+                       layout: .fixed(width: 260, height: 194))
         )
     }
 
@@ -55,8 +55,7 @@ final class LocationMessageViewSnapshotTests: XCTestCase {
         assertSnapshot(
             of: makeView(colorScheme: .dark),
             as: .image(precision: 0.99, perceptualPrecision: 0.98,
-                       layout: .fixed(width: 260, height: 194)),
-            record: false
+                       layout: .fixed(width: 260, height: 194))
         )
     }
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 struct AffiliateCreateView: View {
     @Environment(\.dismiss) private var dismiss
@@ -20,13 +21,13 @@ struct AffiliateCreateView: View {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
-                VStack(spacing: 24) {
+                VStack(spacing: MeeshySpacing.xxl) {
                     formSection
                     createButton
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.lg)
             }
             .navigationTitle(String(localized: "affiliate.create.title", defaultValue: "Nouveau lien", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
@@ -42,8 +43,8 @@ struct AffiliateCreateView: View {
     // MARK: - Form
 
     private var formSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 // A `Text` sitting above a `TextField` is a separate accessibility
                 // element, not the field's label: VoiceOver would read the field as
                 // its placeholder ("Ex: Invitation Twitter") and never say what it
@@ -51,14 +52,14 @@ struct AffiliateCreateView: View {
                 // label is the pattern `CreateTrackingLinkView.formField` already
                 // applies to the twin screen.
                 Text(String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .accessibilityHidden(true)
 
                 TextField(String(localized: "affiliate.create.name.placeholder", defaultValue: "Ex. : Invitation Twitter", bundle: .main), text: $name)
                     .accessibilityLabel(String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main))
-                    .font(MeeshyFont.relative(14))
-                    .padding(12)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
+                    .padding(MeeshySpacing.md)
                     .background(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(theme.surfaceGradient(tint: accentColor))
@@ -69,17 +70,17 @@ struct AffiliateCreateView: View {
                     )
             }
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .accessibilityHidden(true)
 
                 TextField(String(localized: "affiliate.create.maxUses.placeholder", defaultValue: "Illimité", bundle: .main), text: $maxUses)
                     .accessibilityLabel(String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main))
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     .keyboardType(.numberPad)
-                    .padding(12)
+                    .padding(MeeshySpacing.md)
                     .background(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(theme.surfaceGradient(tint: accentColor))
@@ -92,7 +93,7 @@ struct AffiliateCreateView: View {
 
             if let errorMessage {
                 Text(errorMessage)
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
             }
         }
@@ -104,7 +105,7 @@ struct AffiliateCreateView: View {
         Button {
             Task { await create() }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if isCreating {
                     ProgressView()
                         .tint(.white)
@@ -114,15 +115,15 @@ struct AffiliateCreateView: View {
                     // says what the button does, so hide it rather than let
                     // VoiceOver read the SF Symbol name in front of the label.
                     Image(systemName: "link.badge.plus")
-                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                         .accessibilityHidden(true)
                 }
                 Text(String(localized: "affiliate.create.button", defaultValue: "Créer le lien", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(

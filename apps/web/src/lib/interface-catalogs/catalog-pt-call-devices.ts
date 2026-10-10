@@ -9,6 +9,7 @@ const ptCallDevices = {
   'call.bubble.collapse': 'Reduzir para bolha',
   'call.bubble.ongoing': 'Chamada em curso',
   'call.bubble.moveHint': 'As setas movem a bolha',
+  'call.bubble.resizeHint': '+ e − mudam o tamanho, assim como Ctrl + roda do mouse ou o gesto de pinça',
   'call.pip.enter': 'Imagem em imagem',
   'call.devices.open': 'Escolher dispositivos',
   'call.devices.title': 'Dispositivos',

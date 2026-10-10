@@ -63,7 +63,7 @@ final class ComposerSceneFriseTests: XCTestCase {
     func test_temps_nEstServiQuEnSceneAnimee() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("onTimeButton:sceneIsAnimated&&!returnsImageToConversation?{toggleSceneFrise()}:nil"),
+        XCTAssertTrue(code.contains("onTimeButton:sceneIsAnimated&&!returnsToConversation?{toggleSceneFrise()}:nil"),
                       "« Temps » doit n'exister qu'en scène animée, et jamais dans la retouche d'une image.")
     }
 

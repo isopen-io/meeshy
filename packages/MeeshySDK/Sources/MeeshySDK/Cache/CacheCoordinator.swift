@@ -48,10 +48,14 @@ public actor CacheCoordinator {
     /// Local-only call transcripts — never sent to the Meeshy server. See
     /// `CachePolicy.callTranscripts`.
     public let callTranscripts: GRDBCacheStore<String, CallTranscript>
+    /// #8698 — per-call network and quality journal, local to this device.
+    public let callNetworkJournals: GRDBCacheStore<String, CallNetworkJournal>
     public let statuses: GRDBCacheStore<String, StatusEntry>
     public let friends: GRDBCacheStore<String, FriendRequestUser>
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
     public let blockedUsers: GRDBCacheStore<String, BlockedUser>
+    /// #9612 — Sécurité > Sessions s'ouvre sur la dernière liste connue. Chiffré : adresses et villes.
+    public let sessions: GRDBCacheStore<String, UserSession>
     public let userSearch: GRDBCacheStore<String, UserSearchResult>
     /// Répertoire — carnet d'adresses synchronisé. Chiffré : ce sont les
     /// contacts de l'utilisateur, la donnée la plus personnelle du cache.
@@ -300,14 +304,23 @@ public actor CacheCoordinator {
     private var isStarted = false
     private var currentUserId: String = ""
 
+    /// #8674 — où dorment les caches des comptes quittés mais gardés, et qui
+    /// possède le cache vivant. Injectables pour les témoins.
+    nonisolated let accountArchiveDirectory: URL
+    nonisolated(unsafe) let ownerDefaults: UserDefaults
+
     public init(
         messageSocket: any MessageSocketProviding = MessageSocketManager.shared,
         socialSocket: any SocialSocketProviding = SocialSocketManager.shared,
-        db: any DatabaseWriter = AppDatabase.shared.databaseWriter
+        db: any DatabaseWriter = AppDatabase.shared.databaseWriter,
+        accountArchiveDirectory: URL = AppDatabase.accountArchiveDirectory,
+        ownerDefaultsSuite: String? = nil
     ) {
         self.messageSocket = messageSocket
         self.socialSocket = socialSocket
         self.db = db
+        self.accountArchiveDirectory = accountArchiveDirectory
+        self.ownerDefaults = ownerDefaultsSuite.flatMap(UserDefaults.init(suiteName:)) ?? .standard
 
         self.conversations = GRDBCacheStore(policy: .conversations, db: db, namespace: "conv", encrypted: true)
         self.messages = GRDBCacheStore(policy: .messages, db: db, namespace: "msg", encrypted: true)
@@ -332,10 +345,12 @@ public actor CacheCoordinator {
         self.communities = GRDBCacheStore(policy: .communities, db: db, namespace: "communities")
         self.drafts = GRDBCacheStore(policy: .drafts, db: db, namespace: "drafts")
         self.callTranscripts = GRDBCacheStore(policy: .callTranscripts, db: db, namespace: "calltx", encrypted: true)
+        self.callNetworkJournals = GRDBCacheStore(policy: .callNetworkJournals, db: db, namespace: "callnet", encrypted: true)
         self.statuses = GRDBCacheStore(policy: .statuses, db: db, namespace: "statuses")
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
         self.blockedUsers = GRDBCacheStore(policy: .participants, db: db, namespace: "blocked", encrypted: true)
+        self.sessions = GRDBCacheStore(policy: .participants, db: db, namespace: "sessions", encrypted: true)
         self.userSearch = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "usearch")
         self.phonebook = GRDBCacheStore(policy: .participants, db: db, namespace: "phonebook", encrypted: true)
         self.affiliates = GRDBCacheStore(policy: .participants, db: db, namespace: "affiliates")
@@ -381,7 +396,7 @@ public actor CacheCoordinator {
         await translationHydrationTask?.value
     }
 
-    private func hydrateTranslationCachesFromDisk() {
+    func hydrateTranslationCachesFromDisk() {
         loadTranslationCaches()
     }
 
@@ -416,6 +431,16 @@ public actor CacheCoordinator {
     /// runs once per view lifecycle while `onChange(isAuth:)` is the
     /// re-init entry point.
     public func reset() async {
+        await wipeLiveContent()
+        stop()
+        markLiveOwner(.nobody)
+    }
+
+    /// #8674 — vide le cache VIVANT (disque et mémoire) sans toucher aux
+    /// caches mis de côté des autres comptes. C'est la moitié « purge » de
+    /// `reset()` ; `bindAccount(_:isPreserved:)` l'appelle à chaque changement
+    /// de propriétaire.
+    func wipeLiveContent() async {
         // 1. Purge everything on disk first so a concurrent reader on the
         //    other side of the actor hop sees an empty cache (no stale
         //    entries from the previous user).
@@ -468,7 +493,18 @@ public actor CacheCoordinator {
         // `start()` re-runs the backfill against their freshly hydrated cache.
         UserDefaults.standard.removeObject(forKey: "meeshy.searchindex.backfillDone.v1")
 
-        // 2. Tear down the coordinator state so the next `start()` re-arms.
+        translationCache.removeAll()
+        translationInsertionOrder.removeAll()
+        translationTimestamps.removeAll()
+        transcriptionCache.removeAll()
+        audioTranslationCache.removeAll()
+    }
+
+    /// Démonte les abonnements pour que le `start()` suivant réarme, SANS
+    /// rien effacer : à la sortie de session, ce qui doit partir est décidé
+    /// par `bindAccount(_:isPreserved:)` — le cache d'un compte gardé est mis
+    /// de côté, celui d'un compte déconnecté est effacé (#8674).
+    public func stop() {
         isStarted = false
         cancellables.removeAll()
         for observer in lifecycleObservers {
@@ -476,11 +512,6 @@ public actor CacheCoordinator {
         }
         lifecycleObservers.removeAll()
         currentUserId = ""
-        translationCache.removeAll()
-        translationInsertionOrder.removeAll()
-        translationTimestamps.removeAll()
-        transcriptionCache.removeAll()
-        audioTranslationCache.removeAll()
     }
 
     private func resolveCurrentUserId() {
@@ -712,7 +743,7 @@ public actor CacheCoordinator {
         [
             conversations, messages, conversationMedia, notifications, feed, stories, participants, profiles,
             comments, statuses, communities, stats, engagementProgress, drafts,
-            callTranscripts, friends, friendRequests, blockedUsers, userSearch,
+            callTranscripts, callNetworkJournals, friends, friendRequests, blockedUsers, sessions, userSearch,
             phonebook, affiliates, callHistory, timeline,
             affiliateTokens, shareLinks, trackingLinks, communityLinks,
             categories, userTags, userPreferences, conversationPreferences

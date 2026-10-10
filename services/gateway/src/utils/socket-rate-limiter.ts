@@ -8,6 +8,7 @@
 import { Socket } from 'socket.io';
 import { REACTION_SYNC_BUDGET } from '@meeshy/shared/types/socketio-events';
 import { logger } from './logger.js';
+import { guardedInterval } from './guarded-timer.js';
 
 export interface RateLimitConfig {
   maxRequests: number;
@@ -128,6 +129,12 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 5,
     windowMs: 1000,
     keyPrefix: 'socket:call:reaction'
+  },
+  /** #9214 — choisir le cadre en direct d'un appel à deux : dix choix par dix secondes et par personne. */
+  CALL_FRAME_SELECT: {
+    maxRequests: 10,
+    windowMs: 10000,
+    keyPrefix: 'socket:call:frame-select'
   },
   /** #8480 — demander l'aperçu d'un appel qui sonne : une fois par sonnerie, plus les reprises de socket. */
   CALL_PREVIEW_REQUEST: {
@@ -254,6 +261,38 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:message:delete'
   },
+  // #9617 — `message:capture-detected` et son jumeau REST : une déclaration de
+  // capture d'écran ou d'enregistrement, par acteur ET par conversation (clé
+  // composée par `captureRateLimitKey`). Une personne prend rarement plus de
+  // six captures par minute ; le budget arrête l'inondation d'avis système.
+  MESSAGE_CAPTURE: {
+    maxRequests: 6,
+    windowMs: 60000,
+    keyPrefix: 'socket:message:capture'
+  },
+  // #9617 (audit A1) — les AVIS écrits, par acteur et conversation : au plus
+  // trente par heure, quel que soit le nombre de déclarations. Chaque avis
+  // compte comme non lu pour tous et fait remonter la conversation.
+  MESSAGE_CAPTURE_NOTICES_HOURLY: {
+    maxRequests: 30,
+    windowMs: 3600000,
+    keyPrefix: 'capture:notices:hourly'
+  },
+  // #8892 — `viewing:start` : une ouverture de conversation. Le geste est
+  // rare (naviguer d'un fil à l'autre) ; le budget n'arrête que le script.
+  CONVERSATION_VIEWING: {
+    maxRequests: 60,
+    windowMs: 60000,
+    keyPrefix: 'socket:viewing'
+  },
+  // #9061 — `viewing:activity` : le client émet au plus une fois toutes les
+  // deux secondes pendant qu'on défile, écoute ou agit (30/min) ; le budget
+  // laisse deux appareils actifs et n'arrête que le script.
+  CONVERSATION_ACTIVITY: {
+    maxRequests: 90,
+    windowMs: 60000,
+    keyPrefix: 'socket:viewing-activity'
+  },
   TYPING_INDICATOR: {
     maxRequests: 60,
     windowMs: 60000, // 1 minute — global guard; per-conversation 2s throttle is the primary gate
@@ -292,9 +331,9 @@ export class SocketRateLimiter {
     // Clean up expired entries every minute. unref: ce timer d'hygiène ne
     // doit jamais maintenir le process en vie (jest/outillage) — même
     // pattern que les intervals de CallEventsHandler/NotificationService.
-    this.cleanupInterval = setInterval(() => {
+    this.cleanupInterval = guardedInterval({ name: 'socket-rate-limiter-cleanup', everyMs: 60000, logger, run: () => {
       this.cleanup();
-    }, 60000);
+    } });
     this.cleanupInterval.unref?.();
   }
 

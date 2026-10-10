@@ -19,6 +19,13 @@ export type SystemNoticeInput = {
   /** Repli FRANÇAIS pour les surfaces sans rendu dédié ; la vérité est dans `metadata`. */
   readonly content: string;
   readonly metadata: Readonly<Record<string, unknown>>;
+  /** Un avis qui meurt : détruit par le balayage des éphémères (avis de capture, #9629). Absent : l'avis vit. */
+  readonly expiresAt?: Date;
+  /**
+   * `false` : l'avis est une ligne SILENCIEUSE — il ne devient pas le dernier
+   * message du fil, donc ne fait remonter la conversation chez personne (#9630).
+   */
+  readonly advanceConversationClock?: boolean;
 };
 
 export type SocketNoticeGateway = {
@@ -73,6 +80,7 @@ export async function postSystemNotice(deps: SystemNoticeDeps, input: SystemNoti
         messageType: 'system',
         messageSource: 'system',
         metadata: input.metadata,
+        ...(input.expiresAt ? { expiresAt: input.expiresAt } : {}),
         ...LIVE_MESSAGE_MARK,
       },
     } as never);
@@ -84,6 +92,8 @@ export async function postSystemNotice(deps: SystemNoticeDeps, input: SystemNoti
     });
     return null;
   }
+
+  if (input.advanceConversationClock === false) return deliver(deps, message, input.conversationId);
 
   try {
     await deps.prisma.conversation.update({
@@ -97,17 +107,20 @@ export async function postSystemNotice(deps: SystemNoticeDeps, input: SystemNoti
     });
   }
 
+  return deliver(deps, message, input.conversationId);
+}
+
+async function deliver(deps: SystemNoticeDeps, message: unknown, conversationId: string): Promise<unknown> {
   if (deps.broadcast) {
     try {
-      await deps.broadcast(message, input.conversationId);
+      await deps.broadcast(message, conversationId);
     } catch (error) {
       logger.warn('system notice written but not broadcast', {
-        conversationId: input.conversationId,
+        conversationId,
         error: error instanceof Error ? error.message : String(error),
       });
     }
   }
-
   return message;
 }
 

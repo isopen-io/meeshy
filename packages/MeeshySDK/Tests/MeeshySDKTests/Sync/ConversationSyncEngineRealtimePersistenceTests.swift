@@ -208,7 +208,7 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         let mutation = ConversationSyncEngine.mutation(
             for: TestFactories.makeAPIMessage(id: "m1", content: "corrigé"), content: "corrigé"
         )
-        guard case let .edited(messageId, content, _) = mutation else {
+        guard case let .edited(messageId, content, _, _) = mutation else {
             return XCTFail("un message sans résumé d'appel est une édition")
         }
         XCTAssertEqual(messageId, "m1")
@@ -260,7 +260,7 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         ))
 
         let received = await waitUntil { await collector.mutations.contains {
-            if case let .edited(messageId, content, _) = $0 { return messageId == "m-edit" && content == "corrigé" }
+            if case let .edited(messageId, content, _, _) = $0 { return messageId == "m-edit" && content == "corrigé" }
             return false
         } }
         XCTAssertTrue(received)

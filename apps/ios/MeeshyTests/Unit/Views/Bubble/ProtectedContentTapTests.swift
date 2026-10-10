@@ -236,6 +236,56 @@ final class ProtectedContentTapTests: XCTestCase {
         XCTAssertEqual(content(message(viewOnce: true, revealed: true)).protectedTap(), .closeViewOnce)
     }
 
+    // MARK: - Une vue unique FLOUTÉE ouverte reste floutée (#8567)
+    //
+    // Décision porteur du 2026-09-29 : « l'ouverture de la vue unique n'enlève
+    // pas le flou, sauf si c'est un attachement directement ». Le texte ouvert
+    // reste voilé, et le geste du voile est celui du FLOU — il révèle sur
+    // place, il ne consomme pas une seconde fois la vue unique.
+
+    func test_resolve_revealedBlurredViewOnceText_tapRevealsTheBlurInPlace() {
+        XCTAssertEqual(content(message(blurred: true, viewOnce: true, revealed: true)).protectedTap(), .revealInPlace)
+    }
+
+    func test_bubbleContent_revealedBlurredViewOnceText_staysVeiledOverItsText() {
+        let opened = content(message(text: "code 4242", blurred: true, viewOnce: true, revealed: true))
+        XCTAssertEqual(opened.kind, .standard)
+        XCTAssertEqual(opened.text?.raw, "code 4242", "ouverte, la vue unique livre son texte au modèle")
+        XCTAssertTrue(opened.requiresVeil, "…mais le flou le garde voilé")
+        XCTAssertFalse(opened.veilConsumesViewOnce, "le voile restant est celui du FLOU")
+        XCTAssertFalse(opened.viewOnceRetouchIsActive, "toucher le voile ne referme pas la vue unique")
+    }
+
+    func test_accessibilityLabel_revealedBlurredViewOnceText_doesNotReadTheText() {
+        let label = MessageAccessibilityLabelComposer.compose(
+            content(message(text: "code 4242", blurred: true, viewOnce: true, revealed: true)))
+        XCTAssertFalse(label.contains("4242"), label)
+    }
+
+    func test_veilReveal_revealedBlurredViewOnceText_revealsWithoutConsuming() {
+        let opened = content(message(blurred: true, viewOnce: true, revealed: true))
+        let controller = BubbleBlurRevealController()
+        var consumed = 0
+
+        controller.requestReveal(
+            request: .init(messageId: opened.messageId, isViewOnce: opened.veilConsumesViewOnce),
+            consumeViewOnce: { _, completion in consumed += 1; completion(true) }
+        )
+
+        XCTAssertTrue(controller.isRevealed, "le geste du flou lève le voile sur place")
+        XCTAssertEqual(consumed, 0, "la vue unique a déjà été consommée à l'ouverture")
+    }
+
+    func test_bubbleContent_revealedViewOnceText_withoutBlur_isRetouchable() {
+        let opened = content(message(viewOnce: true, revealed: true))
+        XCTAssertFalse(opened.requiresVeil)
+        XCTAssertTrue(opened.viewOnceRetouchIsActive)
+    }
+
+    func test_veilConsumesViewOnce_blurredOnly_isFalse() {
+        XCTAssertFalse(content(message(blurred: true)).veilConsumesViewOnce)
+    }
+
     func test_resolve_openedViewOnce_doesNotReopen() {
         let opened = content(message(viewOnce: true, openedAt: Date())).protectedTap()
         XCTAssertEqual(opened, .alreadyOpened)
@@ -288,5 +338,166 @@ final class ProtectedContentTapTests: XCTestCase {
         let hint = ProtectedContentTap.openFullscreen(photo()).accessibilityHint ?? ""
         XCTAssertTrue(hint.localizedCaseInsensitiveContains("plein écran")
                       || hint.localizedCaseInsensitiveContains("full screen"), hint)
+    }
+}
+
+// MARK: - #9574 — toute surface qui rend un contenu de message passe par le bouclier
+
+/// **Garde de couverture de l'anti-capture** (#9574, #9617). Chaque surface
+/// qui rend le contenu d'un message, d'une citation ou d'une pièce protégée le
+/// pose dans la couche sécurisée — pour la VUE UNIQUE seulement depuis #9617 :
+/// une flamme est annoncée, jamais noircie — et la décision vient d'UNE lecture,
+/// `exitOffer.capture`, jamais d'un prédicat réécrit. Une surface qui affiche
+/// `Text(<message>.content)` sans bouclier, ni hôte déclaré qui l'enveloppe,
+/// fait rougir ce témoin.
+final class CaptureShieldCoverageGuardTests: XCTestCase {
+
+    private static let mainRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()   // .../Bubble
+        .deletingLastPathComponent()   // .../Views
+        .deletingLastPathComponent()   // .../Unit
+        .deletingLastPathComponent()   // .../MeeshyTests
+        .deletingLastPathComponent()   // .../apps/ios
+        .appendingPathComponent("Meeshy/Features/Main")
+
+    private func code(_ relative: String) throws -> String {
+        let text = try String(contentsOf: Self.mainRoot.appendingPathComponent(relative), encoding: .utf8)
+        XCTAssertGreaterThan(text.count, 200, "\(relative) introuvable — ce témoin ne mesurerait rien")
+        return AppSourceGuard.stripComments(text).components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// Les surfaces, et ce que chacune doit porter. Une surface ENREGISTRÉE
+    /// auprès du détecteur de capture lit `announcesCapture` (ou sa portée
+    /// `surfaceAnnounces: true`) ; toute autre garde le bouclier, FERMÉ par
+    /// défaut — annoncé OU noir, jamais capturé en silence (#9617).
+    private static let surfaces: [(file: String, shield: String)] = [
+        ("Views/ThemedMessageBubble.swift", ".captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces:announcesCapture))"),
+        ("Focal/Row/FocalRow.swift", ".captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces:announcesCapture))"),
+        ("Riviere/View/RiverBubbleView.swift", "messageBox.captureShield(content.capturesBlocked)"),
+        ("Riviere/View/RiverBubbleView.swift", ".captureShield(reply.capturesBlocked)"),
+        ("Views/Bubble/BubbleQuotedReply.swift", "quotedBody.captureShield(reply.quotedCapture(quotedMessage:nil).shieldsCapture(surfaceAnnounces:announcesCapture))"),
+        ("Focal/Row/FocalQuotedReplyView.swift", "quotedBody.captureShield(reference.quotedCapture(quotedMessage:nil).shieldsCapture(surfaceAnnounces:announcesCapture))"),
+        ("Views/ConversationView+MediaGallery.swift", ".captureShieldScope(captureScope)"),
+        ("Views/ConversationMediaGalleryView+Pages.swift", "pageBody.captureShield(captureScope.shields(attachment.id))"),
+        ("Components/MediaHub/ConversationMediaHubView.swift", ".captureShieldScope(MessageExitOffer.captureShieldScope("),
+        ("Components/MessageMoreSheet.swift", ".captureShield(message.exitOffer.capture.shieldsCapture())"),
+        ("Components/ConversationInfoSheet+Pinned.swift", ".captureShield(msg.exitOffer.capture.shieldsCapture())"),
+        ("Views/ThreadView.swift", ".captureShield(parentMessage.exitOffer.capture.shieldsCapture())"),
+        ("Components/ForwardPickerSheet.swift", "message.exitOffer.capture.shieldsCapture()"),
+        ("Views/ConversationView+ComposerBanners.swift", ".captureShield(reply.quotedCapture(quotedMessage:quoted).shieldsCapture())"),
+        ("Views/MediaReplyComposerBar.swift", "citationBanner.captureShield(citation.quotedCapture(quotedMessage:nil).shieldsCapture())"),
+        ("Views/ConversationPreviewLine.swift", ".captureShield(preview.icon==.ephemeral)"),
+    ]
+
+    func test_everyMessageContentSurface_isShielded() throws {
+        for surface in Self.surfaces {
+            XCTAssertTrue(try code(surface.file).contains(surface.shield),
+                          "\(surface.file) : le contenu protégé doit passer par `\(surface.shield)`")
+        }
+    }
+
+    func test_theProjections_readTheExitOfferOnce() throws {
+        XCTAssertTrue(try code("Views/Bubble/BubbleContentBuilder.swift")
+            .contains("self.captureVerdict=ContentCaptureVisibility.renderedVerdict(for:message)"))
+        XCTAssertTrue(try code("Riviere/Core/RiverConversationMapping.swift")
+            .contains("capturesBlocked:message.exitOffer.capture.shieldsCapture(),"),
+                      "la Rivière ne pose aucun accusé de lecture par bulle : elle n'annonce pas, la flamme y reste noire")
+        XCTAssertTrue(try code("Models/Message.swift")
+            .contains("!ContentCaptureVisibility.renderedVerdict(for:$0).shieldsCapture(surfaceAnnounces:surfaceAnnounces)"))
+    }
+
+    // MARK: - #9617 — annoncé OU noir, jamais capturé en silence
+
+    /// Ce qu'un `captureShield(` peut lire : la règle `shieldsCapture`, une
+    /// portée ou une projection qui en dérive.
+    private static let ruleReadings = [
+        "shieldsCapture(", "captureScope", "apturesBlocked", "aptureBlocked", "preview.icon==.ephemeral", "isCaptureShielded",
+    ]
+    /// Ce qu'il ne lit jamais : un verdict brut décide sans savoir si la
+    /// surface annonce — `== .blocked` laissait une flamme en clair sur une
+    /// surface muette (la régression de la première passe de #9617).
+    private static let rawReadings = ["==.blocked", "!=.blocked", ".announced", "==.free", "!=.free", "isDeclared"]
+
+    func test_everyShield_readsTheAnnouncedOrBlackRule_neverARawVerdict() throws {
+        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: Self.mainRoot, includingPropertiesForKeys: nil))
+        var offenders: [String] = []
+        var shields = 0
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
+            let text = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+                .components(separatedBy: .whitespacesAndNewlines).joined()
+            for chunk in text.components(separatedBy: "captureShield(").dropFirst() {
+                let argument = Self.balancedArgument(chunk)
+                shields += 1
+                let readsTheRule = Self.ruleReadings.contains { argument.contains($0) }
+                let readsARawVerdict = Self.rawReadings.contains { argument.contains($0) }
+                if !readsTheRule || readsARawVerdict { offenders.append("\(relative) : captureShield(\(argument))") }
+            }
+        }
+        XCTAssertGreaterThan(shields, 10, "le témoin ne voit plus les boucliers — il ne mesurerait rien")
+        XCTAssertEqual(offenders, [], "un bouclier lit shieldsCapture : annoncé OU noir")
+    }
+
+    /// Une surface ne se dit « qui annonce » que si elle est ENREGISTRÉE
+    /// auprès du détecteur — sinon sa flamme serait en clair ET muette.
+    private static let announcingSurfaces: [(file: String, registrationFile: String, registration: String)] = [
+        ("Views/MessageListViewController.swift", "Views/MessageListView.swift", "ContentCaptureReporter.shared.register(vc)"),
+        ("Views/ConversationView+MediaGallery.swift", "Views/ConversationView+MediaGallery.swift", "ContentCaptureReporter.shared.register(surface)"),
+    ]
+
+    func test_onlyRegisteredSurfaces_announce() throws {
+        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: Self.mainRoot, includingPropertiesForKeys: nil))
+        var announcing: Set<String> = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
+            let text = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+                .components(separatedBy: .whitespacesAndNewlines).joined()
+                .replacingOccurrences(of: "funcannouncesCaptures()", with: "")
+            if text.contains(".announcesCaptures()") || text.contains("surfaceAnnounces:true") {
+                announcing.insert(relative)
+            }
+        }
+        XCTAssertEqual(announcing, Set(Self.announcingSurfaces.map(\.file)),
+                       "une surface qui annonce doit être enregistrée — et celles-ci seulement")
+        for surface in Self.announcingSurfaces {
+            XCTAssertTrue(try code(surface.registrationFile).contains(surface.registration),
+                          "\(surface.file) annonce sans être enregistrée (\(surface.registration))")
+        }
+    }
+
+    /// Le texte jusqu'à la parenthèse qui ferme `captureShield(` — les appels
+    /// imbriqués (`quotedCapture(quotedMessage: nil).shieldsCapture()`) en font partie.
+    private static func balancedArgument(_ chunk: String) -> String {
+        var depth = 0
+        var argument = ""
+        for character in chunk {
+            if character == ")" && depth == 0 { break }
+            if character == "(" { depth += 1 }
+            if character == ")" { depth -= 1 }
+            argument.append(character)
+        }
+        return argument
+    }
+
+    /// Les fichiers qui affichent le texte brut d'un message, et l'hôte qui
+    /// les enveloppe quand ils ne le font pas eux-mêmes.
+    private static let wrappedBy: [String: String] = [
+        "Views/Bubble/BubbleStandardLayout.swift": "Views/ThemedMessageBubble.swift",
+        "Components/MessageDetail/MessageLanguageDetailView.swift": "Components/MessageMoreSheet.swift",
+    ]
+
+    func test_noRawMessageText_escapesTheShield() throws {
+        let pattern = try NSRegularExpression(pattern: #"Text\((message|msg|parentMessage)\.content\)"#)
+        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: Self.mainRoot, includingPropertiesForKeys: nil))
+        var offenders: [String] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
+            let text = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            guard pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil else { continue }
+            if text.contains("captureShield(") { continue }
+            if let host = Self.wrappedBy[relative], try code(host).contains("captureShield(") { continue }
+            offenders.append(relative)
+        }
+        XCTAssertEqual(offenders, [], "ces surfaces rendent le texte d'un message hors de la couche sécurisée")
     }
 }

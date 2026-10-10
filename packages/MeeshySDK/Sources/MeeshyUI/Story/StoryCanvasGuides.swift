@@ -91,17 +91,17 @@ struct SafeZoneOverlay: View {
 
         ZStack {
             if isDragging {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .strokeBorder(style: .storyDashed)
                     .foregroundStyle(MeeshyColors.indigo300.opacity(0.7))
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
 
                 Text(String(localized: "story.canvas.safe_area", defaultValue: "Zone sûre", bundle: .module))
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .font(.system(size: MeeshyFont.microSize, weight: .medium, design: .rounded))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.85)))
                     .position(x: rect.midX, y: rect.minY - 10)
             }
@@ -159,7 +159,7 @@ struct OutOfBoundsWarningOverlay: View {
 
         ZStack {
             if isOutOfBounds {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .strokeBorder(
                         Color.red.opacity(pulse ? 0.9 : 0.5),
                         lineWidth: pulse ? 2.5 : 1.5
@@ -178,15 +178,15 @@ struct OutOfBoundsWarningOverlay: View {
                     )
                     .transition(.opacity)
 
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                     Text(String(localized: "story.canvas.out_of_bounds", defaultValue: "Hors zone visible", bundle: .module))
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .font(.system(size: MeeshyFont.captionSize, weight: .semibold, design: .rounded))
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
                         .fill(Color.red.opacity(0.9))
@@ -197,39 +197,5 @@ struct OutOfBoundsWarningOverlay: View {
             }
         }
         .allowsHitTesting(false)
-    }
-}
-
-// MARK: - Filter overlay (shared composer + reader)
-
-/// Applique un blend SwiftUI correspondant a un `StoryFilter` avec intensite. Utilise
-/// par le reader (lecture seule) ET par le composer pour garantir un rendu
-/// pixel-identique entre les deux modes — auparavant le composer n'appliquait le
-/// filtre qu'au `selectedImage` legacy, donc une story avec media de fond + filtre
-/// montrait un canvas non-filtre dans le composer mais filtre dans le viewer.
-struct StoryFilterOverlayView: View {
-    let filter: StoryFilter
-    let intensity: Double
-
-    var body: some View {
-        switch filter {
-        case .vintage:
-            Color.orange.opacity(0.15 * intensity).blendMode(.multiply)
-        case .bw:
-            Color.gray.opacity(0.001)
-                .saturation(1.0 - intensity)
-        case .warm:
-            Color.orange.opacity(0.08 * intensity).blendMode(.softLight)
-        case .cool:
-            Color.blue.opacity(0.08 * intensity).blendMode(.softLight)
-        case .dramatic:
-            Color.black.opacity(0.2 * intensity).blendMode(.multiply)
-        case .vivid:
-            Color.clear.saturation(1.0 + 0.5 * intensity)
-        case .fade:
-            Color.white.opacity(0.15 * intensity).blendMode(.lighten)
-        case .chrome:
-            Color.clear.contrast(1.0 + 0.3 * intensity)
-        }
     }
 }

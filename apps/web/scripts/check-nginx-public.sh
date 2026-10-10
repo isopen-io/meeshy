@@ -50,6 +50,7 @@ expect_type /.well-known/assetlinks.json application/json
 expect_type /robots.txt text/plain
 expect_type /sitemap.xml text/xml
 expect_type /android-chrome-512x512.png image/png
+expect_type /og/invitation-v1.png image/png
 expect_type /manifest.json application/manifest+json
 expect_type /conversations/new text/html
 

@@ -1,5 +1,5 @@
 /**
- * `processExplicitLinks` — la source unique du traitement `[[url]]` / `<url>`,
+ * `processExplicitLinks` — la source unique du traitement `<url>`,
  * à l'ENVOI comme à l'ÉDITION, quel qu'en soit le transport.
  *
  * @jest-environment node
@@ -28,18 +28,18 @@ function makeLinkService(processed = 'salut m+abc123') {
 }
 
 describe('processExplicitLinks', () => {
-  it('rend le contenu traité quand le texte porte un [[url]]', async () => {
+  it('transmet au service le contenu et tout son contexte pour un <url>', async () => {
     const trackingLinkService = makeLinkService();
 
     const content = await processExplicitLinks({
       trackingLinkService,
-      content: 'salut [[https://example.com]]',
+      content: 'salut <https://example.com>',
       ...CONTEXT,
     });
 
     expect(content).toBe('salut m+abc123');
     expect(trackingLinkService.processExplicitLinksInContent).toHaveBeenCalledWith({
-      content: 'salut [[https://example.com]]',
+      content: 'salut <https://example.com>',
       conversationId: 'conv-1',
       messageId: 'msg-1',
       createdBy: 'u-editor',
@@ -67,11 +67,12 @@ describe('processExplicitLinks', () => {
 
     const content = await processExplicitLinks({
       trackingLinkService,
-      content: 'bonjour https://example.com et [texte](https://example.org)',
+      content: 'bonjour https://example.com, [texte](https://example.org) et [[https://example.net]]',
       ...CONTEXT,
     });
 
-    expect(content).toBe('bonjour https://example.com et [texte](https://example.org)');
+    // `[[url]]` n'est plus une syntaxe traçable (#9093) : affiché tel quel, sans suivi.
+    expect(content).toBe('bonjour https://example.com, [texte](https://example.org) et [[https://example.net]]');
     expect(trackingLinkService.processExplicitLinksInContent).not.toHaveBeenCalled();
   });
 
@@ -86,23 +87,23 @@ describe('processExplicitLinks', () => {
 
     const content = await processExplicitLinks({
       trackingLinkService,
-      content: 'salut [[https://example.com]]',
+      content: 'salut <https://example.com>',
       ...CONTEXT,
       onError,
     });
 
-    expect(content).toBe('salut [[https://example.com]]');
+    expect(content).toBe('salut <https://example.com>');
     expect(onError).toHaveBeenCalledWith(boom);
   });
 
   it('rend le contenu original sans service câblé', async () => {
     const content = await processExplicitLinks({
       trackingLinkService: null,
-      content: 'salut [[https://example.com]]',
+      content: 'salut <https://example.com>',
       ...CONTEXT,
     });
 
-    expect(content).toBe('salut [[https://example.com]]');
+    expect(content).toBe('salut <https://example.com>');
   });
 });
 
@@ -140,7 +141,7 @@ describe('reconcileEditedLinks', () => {
     const result = await reconcileEditedLinks({
       linkService,
       message: MESSAGE,
-      content: 'salut [[https://b.com]]',
+      content: 'salut <https://b.com>',
       editorUserId: 'u-editor',
     });
 
@@ -192,13 +193,13 @@ describe('reconcileEditedLinks', () => {
     const result = await reconcileEditedLinks({
       linkService: makeReconciler({ rewriteRejects: true }),
       message: MESSAGE,
-      content: 'salut [[https://a.com]]',
+      content: 'salut <https://a.com>',
       editorUserId: 'u-editor',
       onError,
     });
 
     expect(result.reconciled).toBe(false);
-    expect(result.processedContent).toBe('salut [[https://a.com]]');
+    expect(result.processedContent).toBe('salut <https://a.com>');
     expect(onError).toHaveBeenCalled();
   });
 
@@ -211,7 +212,7 @@ describe('reconcileEditedLinks', () => {
     const result = await reconcileEditedLinks({
       linkService: makeReconciler({ processed: 'salut m+abc123', collectRejects: true }),
       message: MESSAGE,
-      content: 'salut [[https://a.com]]',
+      content: 'salut <https://a.com>',
       editorUserId: 'u-editor',
       onError,
     });

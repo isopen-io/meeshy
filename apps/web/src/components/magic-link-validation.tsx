@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { auth } from '@/lib/api/auth';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { placeMagicLinkValidationFailure } from '@/lib/view/auth-feedback';
 import { safeReturnPath } from '@/lib/view/magic-link';
 import { href, Link, navigate } from '@/routes/route-table';
 
-import { AuthColumn } from './auth-column';
+import { AgeBlocked, AuthColumn, isAgeBelowMinimum } from './auth-column';
 import { AUTH_GLYPHS } from './glyphs-auth';
 import { Glyph, GlyphSvg } from './glyph';
 
@@ -17,7 +18,7 @@ import { Glyph, GlyphSvg } from './glyph';
  * `MeeshyApp.swift:1019-1034`) — cet écran ne fait que naviguer ensuite.
  */
 
-type ValidationState = 'validating' | 'invalid' | 'offline' | 'done';
+type ValidationState = 'validating' | 'invalid' | 'offline' | 'age-blocked' | 'done';
 
 export function MagicLinkValidation({
   token,
@@ -50,6 +51,10 @@ export function MagicLinkValidation({
         }
         setState('done');
         go(safeReturnPath(returnUrl), true);
+        return;
+      }
+      if (isAgeBelowMinimum(result)) {
+        setState('age-blocked');
         return;
       }
       if (result.status === 0) {
@@ -91,7 +96,7 @@ export function MagicLinkValidation({
               to="magicLink"
               replace
               search={{ next: returnUrl ?? undefined }}
-              className="grid place-items-center rounded-[14px] font-bold text-white"
+              className="grid place-items-center rounded-field font-bold text-ios-on-brand"
               style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }}
             >
               Demander un nouveau lien
@@ -100,7 +105,7 @@ export function MagicLinkValidation({
               to="login"
               search={{ next: returnUrl ?? undefined }}
               replace
-              className="grid place-items-center rounded-[14px] font-semibold"
+              className="grid place-items-center rounded-field font-semibold"
               style={{
                 minHeight: 52,
                 border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)',
@@ -113,6 +118,8 @@ export function MagicLinkValidation({
         </>
       ) : null}
 
+      {state === 'age-blocked' ? <AgeBlocked language={currentInterfaceLanguage()} onConfirm={() => go(href('login'), true)} /> : null}
+
       {state === 'offline' ? (
         <>
           <p role="alert" style={{ color: 'var(--ios-error)' }}>
@@ -121,7 +128,7 @@ export function MagicLinkValidation({
           <button
             type="button"
             onClick={retry}
-            className="mx-auto grid place-items-center rounded-[14px] px-6 font-semibold text-white"
+            className="mx-auto grid place-items-center rounded-field px-6 font-semibold text-ios-on-brand"
             style={{ minHeight: 44, background: 'var(--color-ios-brand)' }}
           >
             Réessayer

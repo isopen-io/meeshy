@@ -84,6 +84,8 @@ extension ConversationMediaGalleryView {
 
     /// Appelé à l'apparition, à chaque changement de page et à la fermeture.
     func trackImageOpen(leaving oldID: String?, entering newID: String?) {
+        // #9617 — la page à l'écran est ce qu'une capture déclare.
+        ContentCaptureReporter.shared.noteFullscreenAttachment(newID)
         let leaving = oldID.flatMap { indexByID[$0] }.map { allAttachments[$0] }
         let entering = newID.flatMap { indexByID[$0] }.map { allAttachments[$0] }
         guard let report = imageViewSession.move(

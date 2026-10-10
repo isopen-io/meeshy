@@ -9,14 +9,11 @@ import MeeshyUI
 // ajoutaient pas sans consommer la marge que #6141 venait déjà d'entamer. La
 // découpe suit la règle des frères précédents — une responsabilité par fichier.
 //
-// Deux gardes ancrées sur le FICHIER racine suivent ce code dans le même
-// commit, parce qu'une découpe éteint en silence ce qui s'ancre sur un chemin
-// (leçon 578) :
-//   • `FixedFontSizeGuardTests.bearingFiles` — le glyphe figé du couloir
-//     déménage, la POPULATION ne bouge pas (relocalisation pure, plafonds
-//     inchangés) ;
-//   • `LocalizationConsistencyTests.fullyLocalizedScreens` — les clés neuves du
-//     menu doivent rester tenues par le cliquet qui épingle l'écran.
+// Une garde ancrée sur le FICHIER racine suit ce code dans le même commit,
+// parce qu'une découpe éteint en silence ce qui s'ancre sur un chemin
+// (leçon 578) : `LocalizationConsistencyTests.fullyLocalizedScreens` — les clés
+// neuves du menu doivent rester tenues par le cliquet qui épingle l'écran.
+// Le disque du ⋯ est celui du chrome plein écran (`FullscreenMoreMenu`, #8878).
 
 // MARK: - Ce que cette page-ci sait enregistrer
 
@@ -66,6 +63,33 @@ enum GallerySaveSubject {
     }
 }
 
+/// Monte le menu ⋯ quand le portillon de sortie laisse partir la pièce de la
+/// page ; sinon réserve sa place, pour que le couloir haut ne bouge pas d'une
+/// page à l'autre.
+///
+/// Il remet aussi le portillon au coordinateur d'enregistrement de la galerie :
+/// les deux transports du menu (`requestSaveCurrent`, `shareCurrentOutsideMeeshy`)
+/// vivent dans une extension, qui ne lit pas l'environnement — c'est le
+/// coordinateur qui refuse pour eux.
+struct GalleryExitGatedMenu<Menu: View>: View {
+    let contentId: String?
+    let coordinator: MediaSaveCoordinator
+    @ViewBuilder let menu: () -> Menu
+    @Environment(\.contentExitGate) private var exitGate
+
+    var body: some View {
+        Group {
+            if let contentId, exitGate.mayLeave(contentId) {
+                menu()
+            } else {
+                Color.clear.frame(width: FullscreenChromeMetrics.tapTarget, height: FullscreenChromeMetrics.tapTarget)
+            }
+        }
+        .onAppear { coordinator.exitGate = exitGate }
+        .adaptiveOnChange(of: exitGate) { _, gate in coordinator.exitGate = gate }
+    }
+}
+
 extension ConversationMediaGalleryView {
 
     /// **Le sujet de cette page**, lu une fois pour les trois. La scène d'abord :
@@ -107,77 +131,56 @@ extension ConversationMediaGalleryView {
     /// ce que la page sait TENIR (`GallerySaveSubject.offersExternalShare`).
     /// Une scène sait s'enregistrer — l'œuvre bakée, sans prélude ni outro —
     /// et ne sait pas encore se partager.
+    ///
+    /// **Et une pièce que la loi de sortie retient n'a pas de menu** (#9573).
+    /// Ses deux verbes sont deux SORTIES — enregistrer, partager hors de
+    /// Meeshy — et l'hôte dit par `contentExitGate` quelles pièces peuvent
+    /// sortir : la photo d'une flamme ou d'une vue unique n'en fait pas partie.
+    /// Le portillon se lit par `GalleryExitGatedMenu`, dans l'environnement,
+    /// parce qu'une extension ne peut pas déclarer `@Environment`.
     @ViewBuilder
     var overflowMenu: some View {
         if let subject = currentSaveSubject {
-            Menu {
-                Button {
-                    requestSaveCurrent()
-                } label: {
-                    // Trois vues dans le label d'une entrée de menu : titre,
-                    // SOUS-TITRE, glyphe. C'est le seul emplacement où la note
-                    // de marque peut vivre sous son verbe plutôt qu'à côté.
-                    Text(saveVerb)
-                    Text(brandingNote)
-                    Image(systemName: "arrow.down.to.line")
-                }
-                .accessibilityLabel(saveVerb)
-                .accessibilityHint(brandingNote)
-
-                if subject.offersExternalShare {
+            GalleryExitGatedMenu(contentId: currentExitContentId, coordinator: saveCoordinator) {
+                FullscreenMoreMenu(isBusy: saveCoordinator.isProcessing) {
                     Button {
-                        shareCurrentOutsideMeeshy()
+                        requestSaveCurrent()
                     } label: {
-                        Label(shareVerb, systemImage: "square.and.arrow.up")
+                        // Trois vues dans le label d'une entrée de menu : titre,
+                        // SOUS-TITRE, glyphe. C'est le seul emplacement où la note
+                        // de marque peut vivre sous son verbe plutôt qu'à côté.
+                        Text(saveVerb)
+                        Text(brandingNote)
+                        Image(systemName: "arrow.down.to.line")
                     }
-                    .accessibilityLabel(shareVerb)
+                    .accessibilityLabel(saveVerb)
+                    .accessibilityHint(brandingNote)
+
+                    if subject.offersExternalShare {
+                        Button {
+                            shareCurrentOutsideMeeshy()
+                        } label: {
+                            Label(shareVerb, systemImage: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel(shareVerb)
+                    }
                 }
-            } label: {
-                overflowGlyph
+                .disabled(saveCoordinator.isProcessing)
+                .accessibilityLabel(
+                    String(localized: "gallery.menu.more", defaultValue: "Autres actions", bundle: .main))
+                .accessibilityValue(saveStateAccessibilityValue)
+                // Le flux vit DANS la présentation plein écran : une sheet attachée
+                // sous un `fullScreenCover` ne se présente pas (SwiftUI iOS 16).
+                .mediaSaveFlow(saveCoordinator)
             }
-            .disabled(saveCoordinator.isProcessing)
-            .accessibilityLabel(
-                String(localized: "gallery.menu.more", defaultValue: "Autres actions", bundle: .main))
-            .accessibilityValue(saveStateAccessibilityValue)
-            // Le flux vit DANS la présentation plein écran : une sheet attachée
-            // sous un `fullScreenCover` ne se présente pas (SwiftUI iOS 16).
-            .mediaSaveFlow(saveCoordinator)
         } else {
-            Color.clear.frame(width: 44, height: 44)
+            Color.clear.frame(width: FullscreenChromeMetrics.tapTarget, height: FullscreenChromeMetrics.tapTarget)
         }
     }
 
-    /// **L'ellipse VERTICALE, dans le même cercle glass 40 pt que la croix.**
-    ///
-    /// SF Symbols ne porte aucun glyphe d'ellipse verticale — `ellipsis` est
-    /// horizontal, et `ellipsis.vertical` n'existe pas. On tourne donc celui
-    /// qu'on a d'un quart de tour, plutôt que de dessiner trois points à la
-    /// main : la rotation garde le poids, l'échelle optique et le rendu du
-    /// symbole système.
-    ///
-    /// Le verre reste à 40 pt pour que le couloir n'ait pas deux grammaires ;
-    /// la CIBLE, elle, vaut 44 pt — un cadre plus large posé autour, et un
-    /// `contentShape` pour que la zone entière réponde. Sans lui, seuls les
-    /// pixels dessinés seraient touchables et les 4 pt gagnés ne serviraient
-    /// à rien.
-    ///
-    /// Chrome : glyphe figé dans un cadre fixe (doctrine 82i) — ne pas scaler.
-    /// Une police relative ferait grossir le glyphe sans que le cercle suive.
-    private var overflowGlyph: some View {
-        Group {
-            if saveCoordinator.isProcessing {
-                ProgressView().tint(.white)
-            } else {
-                Image(systemName: "ellipsis")
-                    .rotationEffect(.degrees(90))
-            }
-        }
-        .font(.system(size: 18, weight: .semibold))
-        .foregroundColor(.white.opacity(0.9))
-        .frame(width: 40, height: 40)
-        .adaptiveGlass(in: Circle(), interactive: true)
-        .frame(width: 44, height: 44)
-        .contentShape(Rectangle())
+    /// L'identifiant que le portillon juge : celui de la pièce affichée.
+    private var currentExitContentId: String? {
+        currentIndex < allAttachments.count ? allAttachments[currentIndex].id : nil
     }
 
     // MARK: - Les deux transports
@@ -208,7 +211,7 @@ extension ConversationMediaGalleryView {
     /// ligne « Mes stories » quand son anneau n'est pas à l'écran. Un second
     /// tap pendant le bake est ignoré par `bakeThenSave` (garde `jobs`).
     func requestSaveCurrent() {
-        guard let subject = currentSaveSubject else { return }
+        guard let subject = currentSaveSubject, saveCoordinator.mayLeave(currentExitContentId) else { return }
         HapticFeedback.light()
         switch subject {
         case .scene(let scene):
@@ -222,7 +225,7 @@ extension ConversationMediaGalleryView {
     /// destination : c'est tout ce que « Partager hors de Meeshy » promet, et
     /// lui faire traverser une sheet intermédiaire trahirait le verbe.
     func shareCurrentOutsideMeeshy() {
-        guard let request = currentSaveRequest else { return }
+        guard let request = currentSaveRequest, saveCoordinator.mayLeave(currentExitContentId) else { return }
         HapticFeedback.light()
         Task { await saveCoordinator.pick(.share, request: request) }
     }

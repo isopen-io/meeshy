@@ -37,7 +37,7 @@ extension PostDetailView {
     /// reste en second, jamais en premier : partir est le repli, pas le geste
     /// attendu.
     func loadFailedState(_ cause: ContentFetchFailure) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: cause.symbolName)
                 // `MeeshyFont.relative` et non `.system(size:)` : une icône
                 // d'état vide n'a pas de cadre fixe, donc rien ne justifie
@@ -46,11 +46,11 @@ extension PostDetailView {
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
             Text(cause.title)
-                .font(MeeshyFont.relative(17, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
             Text(cause.message)
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
             Button {
@@ -59,7 +59,7 @@ extension PostDetailView {
             } label: {
                 Text(String(localized: "feed.post.detail.loadFailed.retry",
                             defaultValue: "Réessayer", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
             }
             .buttonStyle(.borderedProminent)
             Button {
@@ -68,12 +68,12 @@ extension PostDetailView {
             } label: {
                 Text(String(localized: "feed.post.detail.unavailable.back",
                             defaultValue: "Retour", bundle: .main))
-                    .font(MeeshyFont.relative(15))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
             }
             .buttonStyle(.plain)
             .foregroundColor(theme.textSecondary)
         }
-        .padding(.horizontal, 32)
+        .padding(.horizontal, MeeshySpacing.xxxl)
         .accessibilityElement(children: .contain)
     }
 
@@ -81,17 +81,17 @@ extension PostDetailView {
     /// cette personne. On ne distingue pas — l'utilisateur n'a rien de
     /// différent à faire, et prétendre savoir lequel serait inventer.
     var unavailableState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: ContentFetchFailure.notFound.symbolName)
                 .font(MeeshyFont.relative(40))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
             Text(ContentFetchFailure.notFound.title)
-                .font(MeeshyFont.relative(17, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
             Text(ContentFetchFailure.notFound.message)
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
             Button {
@@ -103,12 +103,12 @@ extension PostDetailView {
             } label: {
                 Text(String(localized: "feed.post.detail.unavailable.back",
                             defaultValue: "Retour", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
             }
             .buttonStyle(.bordered)
-            .padding(.top, 4)
+            .padding(.top, MeeshySpacing.xs)
         }
-        .padding(32)
+        .padding(MeeshySpacing.xxxl)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
     }

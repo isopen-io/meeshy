@@ -119,7 +119,7 @@ public extension View {
 
     /// Guarantee a ≥ `minSize` square hit region (Apple HIG minimum is 44pt)
     /// while keeping the visible glyph at its design size.
-    func meeshyTapTarget(_ minSize: CGFloat = 44) -> some View {
+    func meeshyTapTarget(_ minSize: CGFloat = MeeshyControlSize.tapTarget) -> some View {
         frame(minWidth: minSize, minHeight: minSize)
             .contentShape(Rectangle())
     }
@@ -160,6 +160,18 @@ public extension MeeshyFont {
         design: Font.Design = .default
     ) -> Font {
         Font.system(textStyle(for: size), design: design).weight(weight)
+    }
+}
+
+public extension MeeshyFont {
+    /// **Un emoji seul, à la taille EXACTE demandée** (#9054).
+    ///
+    /// `relative(_:)` range toute taille ≥ 31 pt sous `.largeTitle` (34 pt) :
+    /// les 90 / 60 / 45 d'un message d'emojis sortaient donc tous à 34, et
+    /// leurs multiples aussi. L'emoji seul est déjà un affichage géant ; il ne
+    /// suit pas Dynamic Type au-delà de ce que sa taille porte.
+    nonisolated static func emoji(_ size: CGFloat) -> Font {
+        Font.system(size: size)
     }
 }
 

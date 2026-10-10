@@ -86,3 +86,63 @@ describe('le bloc de section', () => {
     expect(suivante).toContain(`margin-top:${lentilleTokens.list.row.marginVertical}px`);
   });
 });
+
+/**
+ * LA SECTION REPLIÉE DIT CE QU'ELLE CACHE (#8694). `pinned` reçoit un pliage
+ * de la liste : l'en-tête devient un bouton accordéon, repliée la section
+ * retire ses rangées et porte à côté du chevron la pastille de leurs
+ * non-lus ; dépliée, aucune pastille — les rangées la portent déjà.
+ */
+describe('le pliage d’une section (#8694)', () => {
+  const noop = () => {};
+
+  test('repliée avec 12 non-lus : un bouton accordéon fermé, la pastille, aucune rangée', () => {
+    const html = renderToStaticMarkup(
+      <LensSection id="pinned" fold={{ folded: true, unread: 12, onToggle: noop }}>
+        <li data-row="c1">rangée</li>
+      </LensSection>,
+    );
+    expect(html).toMatch(/<h2[^>]*data-sticker="pinned"[^>]*><button/);
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-label="Épingles, repliée, 12 messages non lus"');
+    expect(html).toContain('data-unread="12"');
+    expect(html).not.toContain('data-row');
+  });
+
+  test('la pastille précède le chevron — elle est À CÔTÉ de lui, au bout de la ligne', () => {
+    const html = renderToStaticMarkup(<LensSticker id="pinned" fold={{ folded: true, unread: 3, onToggle: noop }} />);
+    expect(html.indexOf('data-unread')).toBeGreaterThan(html.indexOf('Épingles'));
+    expect(html.indexOf('data-unread')).toBeLessThan(html.indexOf('<svg'));
+  });
+
+  test('au-delà de 99, l’œil lit « 99+ », le lecteur d’écran le nombre exact', () => {
+    const html = renderToStaticMarkup(<LensSticker id="pinned" fold={{ folded: true, unread: 4312, onToggle: noop }} />);
+    expect(html).toContain('>99+</span>');
+    expect(html).toContain('4312 messages non lus');
+  });
+
+  test('repliée sans non-lus : aucune pastille, le nom dit l’état seul', () => {
+    const html = renderToStaticMarkup(<LensSticker id="pinned" fold={{ folded: true, unread: 0, onToggle: noop }} />);
+    expect(html).not.toContain('data-unread');
+    expect(html).toContain('aria-label="Épingles, repliée"');
+  });
+
+  test('dépliée : les rangées sont là, aucune pastille sur l’en-tête', () => {
+    const html = renderToStaticMarkup(
+      <LensSection id="pinned" fold={{ folded: false, unread: 0, onToggle: noop }}>
+        <li data-row="c1">rangée</li>
+      </LensSection>,
+    );
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain('aria-label="Épingles, dépliée"');
+    expect(html).not.toContain('data-unread');
+    expect(html).toContain('data-row="c1"');
+  });
+
+  test('le chevron pointe vers l’avant replié (retourné en arabe), vers le bas déplié', () => {
+    const folded = renderToStaticMarkup(<LensSticker id="pinned" fold={{ folded: true, unread: 0, onToggle: noop }} />);
+    const open = renderToStaticMarkup(<LensSticker id="pinned" fold={{ folded: false, unread: 0, onToggle: noop }} />);
+    expect(folded).toMatch(/<svg[^>]*class="-rotate-90 rtl:rotate-90"/);
+    expect(open).not.toContain('rotate');
+  });
+});

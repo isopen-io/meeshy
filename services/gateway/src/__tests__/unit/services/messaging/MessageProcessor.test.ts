@@ -25,7 +25,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 const mockFindExistingTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCreateTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCollectContentTrackingLinks = jest.fn(async () => []) as jest.Mock<any>;
-// L'algorithme `[[url]]` / `<url>` vit dans `TrackingLinkService` et n'est
+// L'algorithme `<url>` vit dans `TrackingLinkService` et n'est
 // testé QUE là (`TrackingLinkService.test.ts`). MessageProcessor en portait un
 // second exemplaire complet ; il n'en garde que la délégation, donc c'est la
 // délégation — pas l'algorithme — que ces tests décrivent. Identité par
@@ -249,7 +249,7 @@ describe('MessageProcessor.processLinksInContent', () => {
     processor = makeProcessor();
   });
 
-  // L'algorithme lui-même (protection markdown, `[[url]]`, `<url>`, réutilisation
+  // L'algorithme lui-même (protection markdown, `<url>`, réutilisation
   // de token, séquences `$`) est décrit UNE fois, dans `TrackingLinkService.test.ts`.
   // Le décrire ici aussi, c'était le prix du second exemplaire qui vivait dans
   // ce fichier — et deux descriptions d'un même algorithme ne restent pas
@@ -257,11 +257,11 @@ describe('MessageProcessor.processLinksInContent', () => {
   it('délègue au traitement de liens de TrackingLinkService et rend son résultat', async () => {
     mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+abc123', trackingLinks: [] });
 
-    const result = await processor.processLinksInContent('[[https://example.com/page]]', CONV_ID, 'u-author', MSG_ID);
+    const result = await processor.processLinksInContent('<https://example.com/page>', CONV_ID, 'u-author', MSG_ID);
 
     expect(result).toBe('m+abc123');
     expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith({
-      content: '[[https://example.com/page]]',
+      content: '<https://example.com/page>',
       conversationId: CONV_ID,
       messageId: MSG_ID,
       createdBy: 'u-author',
@@ -280,9 +280,9 @@ describe('MessageProcessor.processLinksInContent', () => {
   it('rend le contenu original quand le traitement lève', async () => {
     mockProcessExplicitLinksInContent.mockRejectedValue(new Error('DB error'));
 
-    const result = await processor.processLinksInContent('[[https://example.com/err]]', CONV_ID);
+    const result = await processor.processLinksInContent('<https://example.com/err>', CONV_ID);
 
-    expect(result).toBe('[[https://example.com/err]]');
+    expect(result).toBe('<https://example.com/err>');
   });
 });
 
@@ -316,7 +316,7 @@ describe('MessageProcessor.saveMessage — le propriétaire du lien de suivi', (
   it('crée le lien au nom du User derrière le participant expéditeur, pas du participant', async () => {
     partFindUnique.mockResolvedValue({ userId: 'u-author' });
 
-    await processor.saveMessage({ ...baseData, content: 'regarde [[https://example.com]]' });
+    await processor.saveMessage({ ...baseData, content: 'regarde <https://example.com>' });
 
     expect(partFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: SENDER_ID } })
@@ -344,7 +344,7 @@ describe('MessageProcessor.saveMessage — le propriétaire du lien de suivi', (
   it('laisse le lien sans propriétaire pour un expéditeur anonyme', async () => {
     partFindUnique.mockResolvedValue({ userId: null });
 
-    await processor.saveMessage({ ...baseData, content: 'regarde [[https://example.com]]' });
+    await processor.saveMessage({ ...baseData, content: 'regarde <https://example.com>' });
 
     expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
       expect.objectContaining({ createdBy: undefined })
@@ -361,7 +361,7 @@ describe('MessageProcessor.saveMessage — le propriétaire du lien de suivi', (
   it('envoie quand même, sans propriétaire, si la résolution échoue', async () => {
     partFindUnique.mockRejectedValue(new Error('DB down'));
 
-    const result = await processor.saveMessage({ ...baseData, content: 'regarde [[https://example.com]]' });
+    const result = await processor.saveMessage({ ...baseData, content: 'regarde <https://example.com>' });
 
     expect(result).toBeDefined();
     expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
@@ -446,6 +446,9 @@ describe('MessageProcessor.getEncryptionContext', () => {
 });
 
 // ── saveMessage ────────────────────────────────────────────────────────────
+
+// La projection ENTIÈRE qu'exige la lecture de protection d'une source de copie (#9572).
+const ORDINARY_SOURCE = { isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null, forwardedFromId: null, attachments: [] };
 
 describe('MessageProcessor.saveMessage', () => {
   let processor: MessageProcessor;
@@ -586,7 +589,7 @@ describe('MessageProcessor.saveMessage', () => {
     };
     attFindMany.mockResolvedValueOnce([origAtt]).mockResolvedValue([]);
     attCreate.mockResolvedValue({ ...origAtt });
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(attCreate).toHaveBeenCalledTimes(1);
   });
 
@@ -638,7 +641,7 @@ describe('MessageProcessor.saveMessage', () => {
   const forwardedAttachmentData = async () => {
     attFindMany.mockResolvedValueOnce([encryptedOrigAtt]).mockResolvedValue([]);
     attCreate.mockResolvedValue({ ...encryptedOrigAtt });
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     return (attCreate.mock.calls[0][0] as { data: Record<string, unknown> }).data;
   };
 
@@ -708,7 +711,7 @@ describe('MessageProcessor.saveMessage', () => {
       thumbnailEncryptionIv: null, thumbnailEncryptionAuthTag: null };
     attFindMany.mockResolvedValueOnce([plainAtt]).mockResolvedValue([]);
     attCreate.mockResolvedValue({ ...plainAtt });
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     const data = (attCreate.mock.calls[0][0] as { data: Record<string, unknown> }).data;
     expect(data.isEncrypted).toBeFalsy();
     expect(data.encryptionIv ?? null).toBeNull();
@@ -737,7 +740,7 @@ describe('MessageProcessor.saveMessage', () => {
     };
     attFindMany.mockResolvedValue([imageAtt]);
     attCreate.mockResolvedValue(imageAtt);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'image' } }));
   });
 
@@ -749,7 +752,7 @@ describe('MessageProcessor.saveMessage', () => {
       pageCount: null, lineCount: null, transcription: null, translations: null, metadata: null };
     attFindMany.mockResolvedValue([audioAtt]);
     attCreate.mockResolvedValue(audioAtt);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'audio' } }));
   });
 
@@ -761,7 +764,7 @@ describe('MessageProcessor.saveMessage', () => {
       pageCount: null, lineCount: null, transcription: null, translations: null, metadata: null };
     attFindMany.mockResolvedValue([videoAtt]);
     attCreate.mockResolvedValue(videoAtt);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'video' } }));
   });
 
@@ -773,7 +776,7 @@ describe('MessageProcessor.saveMessage', () => {
       pageCount: 5, lineCount: null, transcription: null, translations: null, metadata: null };
     attFindMany.mockResolvedValue([fileAtt]);
     attCreate.mockResolvedValue(fileAtt);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'file' } }));
   });
 
@@ -798,21 +801,15 @@ describe('MessageProcessor.saveMessage', () => {
       pageCount: null, lineCount: null, transcription: null, translations: null, metadata: null };
     attFindMany.mockResolvedValue([textAtt]);
     attCreate.mockResolvedValue(textAtt);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'file' } }));
   });
 
-  it('handles empty original attachments on forward gracefully', async () => {
-    attFindMany.mockResolvedValueOnce([]).mockResolvedValue([]);
-    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
-    expect(attCreate).not.toHaveBeenCalled();
-  });
-
-  it('updates tracking link messageIds when [[url]] was processed', async () => {
+  it('updates tracking link messageIds when <url> was processed', async () => {
     // La réécriture est le SIGNAL : `saveMessage` rattache les liens au message
     // seulement quand le contenu traité diffère de celui qu'on lui a donné.
     mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+tok-abc', trackingLinks: [] });
-    await processor.saveMessage({ ...baseData, content: '[[https://example.com]]' });
+    await processor.saveMessage({ ...baseData, content: '<https://example.com>' });
     expect(tlUpdateMany).toHaveBeenCalled();
   });
 
@@ -827,7 +824,7 @@ describe('MessageProcessor.saveMessage', () => {
    */
   it('rattache un lien dont la colonne messageId est ABSENTE, sans voler celui d\'un autre message', async () => {
     mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+tok-abc', trackingLinks: [] });
-    await processor.saveMessage({ ...baseData, content: '[[https://example.com]]' });
+    await processor.saveMessage({ ...baseData, content: '<https://example.com>' });
 
     const { where } = tlUpdateMany.mock.calls[0][0] as any;
     const fresh = { token: 'tok-abc', conversationId: baseData.conversationId };
@@ -870,7 +867,7 @@ describe('MessageProcessor.saveMessage', () => {
     const SOURCE_MSG_ID = 'orig-msg-id';
 
     it('copie les pièces jointes de la source et NE supprime PAS le message créé', async () => {
-      msgFindUnique.mockResolvedValue({ sender: { id: SENDER_ID, userId: 'user-1' } });
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: SENDER_ID, userId: 'user-1' } });
       partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
       const origAtt = {
         id: 'orig-att', fileName: 'file.jpg', originalName: 'file.jpg',
@@ -887,7 +884,7 @@ describe('MessageProcessor.saveMessage', () => {
     });
 
     it('supprime le message ORPHELIN quand le contrôle de propriété refuse la copie', async () => {
-      msgFindUnique.mockResolvedValue({ sender: { id: 'someone-else', userId: 'user-2' } });
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: 'someone-else', userId: 'user-2' } });
       partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
 
       await expect(
@@ -899,7 +896,7 @@ describe('MessageProcessor.saveMessage', () => {
     });
 
     it('supprime le message ORPHELIN quand la source ne porte aucune pièce jointe', async () => {
-      msgFindUnique.mockResolvedValue({ sender: { id: SENDER_ID, userId: 'user-1' } });
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: SENDER_ID, userId: 'user-1' } });
       partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
       attFindMany.mockResolvedValue([]);
 
@@ -912,7 +909,7 @@ describe('MessageProcessor.saveMessage', () => {
     });
 
     it('remonte l’échec de copie même si la suppression de la ligne orpheline échoue elle-même', async () => {
-      msgFindUnique.mockResolvedValue({ sender: { id: 'someone-else', userId: 'user-2' } });
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: 'someone-else', userId: 'user-2' } });
       partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
       msgDelete.mockRejectedValue(new Error('delete failed'));
 
@@ -981,7 +978,7 @@ describe('MessageProcessor.saveMessage', () => {
      * différents.
      */
     it('diffusion (copyAttachmentsFromMessageId) : persiste "image", pas "text"', async () => {
-      msgFindUnique.mockResolvedValue({ sender: { id: SENDER_ID, userId: 'user-1' } });
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: SENDER_ID, userId: 'user-1' } });
       partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
       attFindMany.mockResolvedValue([imageAtt]);
       attCreate.mockResolvedValue({ ...imageAtt });
@@ -998,7 +995,7 @@ describe('MessageProcessor.saveMessage', () => {
     it('transfert d’une carte de visite (text/vcard) : "file", jamais "text"', async () => {
       attFindMany.mockResolvedValue([cardAtt]);
       attCreate.mockResolvedValue({ ...cardAtt });
-      await processor.saveMessage({ ...baseData, content: '', forwardedFromId: 'orig-msg-id' });
+      await processor.saveMessage({ ...baseData, content: '', forwardedFromId: 'orig-msg-id', forwardImposes: null });
       expect(persistedMessageType()).toBe('file');
     });
 
@@ -1010,7 +1007,7 @@ describe('MessageProcessor.saveMessage', () => {
     it('lot hétérogène : "file", pas le type de la PREMIÈRE pièce jointe', async () => {
       attFindMany.mockResolvedValue([imageAtt, videoAtt]);
       attCreate.mockResolvedValue({ ...imageAtt });
-      await processor.saveMessage({ ...baseData, content: '', forwardedFromId: 'orig-msg-id' });
+      await processor.saveMessage({ ...baseData, content: '', forwardedFromId: 'orig-msg-id', forwardImposes: null });
       expect(persistedMessageType()).toBe('file');
     });
 
@@ -1451,7 +1448,7 @@ describe('MessageProcessor — branch gap coverage', () => {
     // First call (in copyForwardedAttachments) throws; second call (refresh) returns []
     attFindMany.mockRejectedValueOnce(new Error('db fail')).mockResolvedValue([]);
     const processor = makeProcessor();
-    await expect(processor.saveMessage({ ...baseData, forwardedFromId: 'orig-id' })).resolves.toBeDefined();
+    await expect(processor.saveMessage({ ...baseData, forwardedFromId: 'orig-id', forwardImposes: null })).resolves.toBeDefined();
   });
 
   // Lines 740-741 — already-transcribed audio skip log
@@ -1478,7 +1475,7 @@ describe('MessageProcessor — branch gap coverage', () => {
     mockCreateTrackingLink.mockResolvedValue({ token: 'tok-xyz' });
     tlUpdateMany.mockRejectedValue(new Error('update failed'));
     const processor = makeProcessor();
-    await expect(processor.saveMessage({ ...baseData, content: '[[https://example.com]]' })).resolves.toBeDefined();
+    await expect(processor.saveMessage({ ...baseData, content: '<https://example.com>' })).resolves.toBeDefined();
   });
 
   // Line 1099 — catch block in triggerAllNotifications

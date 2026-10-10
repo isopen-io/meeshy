@@ -25,7 +25,7 @@ extension CallManager: CallControlsHosting {
 
     func participantName(for userId: String) -> String {
         if let member = GroupCallMeshCoordinator.shared.roster.member(userId) { return member.displayName }
-        if userId == remoteUserId, let name = remoteUsername { return name }
+        if userId == remoteUserId, !isGroupPrimaryVacated, let name = remoteUsername { return name }
         return ""
     }
 }

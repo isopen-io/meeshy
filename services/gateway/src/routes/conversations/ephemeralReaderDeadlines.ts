@@ -5,6 +5,8 @@ import {
   servedEphemeralExpiresAt,
 } from '@meeshy/shared/utils/ephemeral-countdown';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { servedQuotedMessage, type QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
 
 const logger = enhancedLogger.child({ module: 'ephemeralReaderDeadlines' });
 
@@ -134,6 +136,113 @@ export async function loadEphemeralReaderDeadlines(
   }
 
   return resolutions;
+}
+
+/**
+ * L'échéance de CE lecteur pour CE message, lue de façon CIBLÉE et exacte
+ * (#9579) — pour qui DÉCIDE sur elle, et pas seulement l'affiche.
+ *
+ * Le balayage de page ci-dessus ne convient pas à une décision de sortie : il
+ * est plafonné et sans ordre, donc dans une conversation où plus de
+ * destinataires que le plafond ont démarré leur décompte, la ligne du lecteur
+ * peut manquer à la tranche lue — et « absente » s'y lit « décompte pas encore
+ * démarré ». Un écran en retard pour une page ; une porte ouverte pour un
+ * transfert, un téléchargement, une publication.
+ *
+ * Deux lectures, jamais un balayage :
+ *  - un DESTINATAIRE : sa propre ligne, par le couple unique
+ *    `(messageId, participantId)` ;
+ *  - l'AUTEUR : la plus tardive des échéances de ses destinataires, par une
+ *    lecture ORDONNÉE d'une ligne — le maximum réel, où qu'il soit.
+ *
+ * Elle rend la MÊME forme que le balayage (`EphemeralReaderResolution`) : les
+ * lois qui la consomment (`servedEphemeralExpiresAt`,
+ * `isEphemeralServableToReader`) ne voient pas la différence. Seul le champ
+ * que la loi lit pour ce lecteur est renseigné.
+ *
+ * Un message sans échéance par lecteur ne coûte aucune requête. Elle PROPAGE
+ * ses erreurs : une échéance illisible n'est pas une échéance absente, et
+ * c'est à l'appelant de fermer.
+ */
+export async function readEphemeralReaderResolution(
+  prisma: EphemeralDeadlinesPrisma,
+  message: EphemeralRow,
+  readerParticipantId: string,
+): Promise<EphemeralReaderResolution> {
+  const isSender = message.senderId === readerParticipantId;
+  if (!hasPerReaderEphemeralDeadline(message)) return { ...NO_DEADLINE, isSender };
+
+  const started = [{ ephemeralExpiresAt: { isSet: true } }, { ephemeralExpiresAt: { not: null } }];
+  const entry = isSender
+    ? await prisma.messageStatusEntry.findFirst({
+        where: { messageId: message.id, AND: started },
+        orderBy: { ephemeralExpiresAt: 'desc' },
+        select: { ephemeralExpiresAt: true },
+      })
+    : await prisma.messageStatusEntry.findFirst({
+        where: { messageId: message.id, participantId: readerParticipantId, AND: started },
+        select: { ephemeralExpiresAt: true },
+      });
+
+  const deadline = entry?.ephemeralExpiresAt instanceof Date ? entry.ephemeralExpiresAt : null;
+  return isSender
+    ? { isSender, readerDeadline: null, latestRecipientDeadline: deadline }
+    : { isSender, readerDeadline: deadline, latestRecipientDeadline: null };
+}
+
+/**
+ * #8562 — la page ET les messages qu'elle CITE : une citation d'éphémère se
+ * scelle à l'échéance de CE lecteur, que le message cité soit sur la page ou
+ * non. Même lecture, même plafond — une seule requête.
+ */
+export function withQuotedMessages(messages: ReadonlyArray<EphemeralRow & QuotingRow>): EphemeralRow[] {
+  return [...messages, ...quotedRowsOf(messages)];
+}
+
+type QuotingRow = { readonly replyTo?: (Omit<EphemeralRow, 'id'> & { readonly id?: string | null }) | null };
+
+const quotedRowsOf = (messages: ReadonlyArray<QuotingRow>): EphemeralRow[] =>
+  messages.flatMap(({ replyTo }) => (replyTo?.id ? [{ ...replyTo, id: replyTo.id }] : []));
+
+/**
+ * #8562 — les échéances des seuls messages CITÉS, pour une porte qui ne les
+ * charge pas déjà (fil de réponses, lien de partage). Le lecteur n'est résolu
+ * — une requête — que si une citation porte un éphémère.
+ */
+export async function loadQuotedEphemeralReaders(
+  prisma: EphemeralDeadlinesPrisma,
+  messages: ReadonlyArray<QuotingRow>,
+  readerParticipantId: () => Promise<string | undefined>,
+): Promise<Map<string, EphemeralReaderResolution>> {
+  const quoted = quotedRowsOf(messages).filter((row) => hasPerReaderEphemeralDeadline(row));
+  if (quoted.length === 0) return new Map();
+  return loadEphemeralReaderDeadlines(prisma, quoted, await readerParticipantId());
+}
+
+/**
+ * #8562 — un message rendu à UN lecteur nommé (la réponse HTTP d'un envoi) :
+ * sa citation passe par la garde unique, avec l'échéance de ce lecteur. La
+ * ligne relue par `saveMessage` porte le message cité ENTIER — texte,
+ * traductions, pièces, transcription — et partait telle quelle.
+ */
+export async function withQuoteServedToReader<T extends { readonly replyTo?: unknown; readonly metadata?: unknown }>(
+  prisma: EphemeralDeadlinesPrisma,
+  message: T,
+  readerParticipantId: string | undefined,
+): Promise<T> {
+  const quoted = message.replyTo as (QuotedMessageRow & Record<string, unknown>) | null | undefined;
+  if (!quoted || typeof quoted !== 'object') return message;
+  const deadlines = await loadQuotedEphemeralReaders(prisma, [{ replyTo: quoted as EphemeralRow }], async () => readerParticipantId);
+  return {
+    ...message,
+    replyTo: {
+      ...quoted,
+      ...servedQuotedMessage(quoted, {
+        attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
+        ephemeralReader: { resolution: quoted.id ? deadlines.get(quoted.id) : undefined, now: new Date() },
+      }),
+    },
+  };
 }
 
 /**

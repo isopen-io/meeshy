@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Combine
 import WebKit
 import MeeshySDK
@@ -24,6 +25,10 @@ public struct DocumentViewerView: View {
     // singleton (cf. ChatBubble.swift precedent). Dark/light comes reactively
     // from the environment instead.
     @Environment(\.colorScheme) private var colorScheme
+    /// Le portillon de sortie posé par l'hôte (#9573), reposé sur ce que cette vue présente.
+    @Environment(\.contentExitGate) private var exitGate
+    /// Le bouclier de capture de l'hôte (#9574), reposé sur ce que cette vue présente.
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
     @State private var showFullViewer = false
 
     private var isDark: Bool { colorScheme == .dark || context.isImmersive }
@@ -56,14 +61,16 @@ public struct DocumentViewerView: View {
                 onSaveRequested: onSaveRequested,
                 isMe: isMe
             )
+            .contentExitGate(exitGate)
+            .captureShield(isCaptureShielded)
         }
     }
 
     // MARK: - Compact Card (composer attachment)
     private var compactCard: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(
                         LinearGradient(
                             colors: [Color(hex: docType.color), Color(hex: docType.color).opacity(0.7)],
@@ -74,14 +81,14 @@ public struct DocumentViewerView: View {
                     .frame(width: 52, height: 52)
 
                 Image(systemName: docType.icon)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
                     .foregroundColor(.white)
             }
             .overlay(alignment: .topTrailing) {
                 if let onDelete = onDelete {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
+                            .font(.system(size: MeeshyIconSize.sm))
                             .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
@@ -91,7 +98,7 @@ public struct DocumentViewerView: View {
             }
 
             Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.6))
                 .lineLimit(1)
                 .frame(width: 60)
@@ -100,7 +107,7 @@ public struct DocumentViewerView: View {
 
     // MARK: - Rich Card (message, feed)
     private var richCard: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 RoundedRectangle(cornerRadius: context.isCompact ? 10 : 12)
                     .fill(
@@ -121,29 +128,29 @@ public struct DocumentViewerView: View {
                     .foregroundColor(.white)
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(attachment.originalName.isEmpty ? docType.label : attachment.originalName)
                     .font(.system(size: context.isCompact ? 12 : 13, weight: .semibold))
                     .foregroundColor(isDark ? .white : .black)
                     .lineLimit(1)
 
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(docType.label)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(Color(hex: docType.color))
 
                     if attachment.fileSize > 0 {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(attachment.fileSizeFormatted)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
                     }
 
                     if let pages = attachment.pageCount {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
                         Text(String(localized: "media.document.pages", defaultValue: "\(pages) pages", bundle: .module))
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
                     }
                 }
             }
@@ -151,13 +158,13 @@ public struct DocumentViewerView: View {
             Spacer(minLength: 0)
 
             Image(systemName: "arrow.up.right.square")
-                .font(.system(size: 13))
+                .font(.system(size: MeeshyIconSize.xs))
                 .foregroundColor(isDark ? .white.opacity(0.25) : .black.opacity(0.18))
 
             if context.showsDeleteButton, let onDelete = onDelete {
                 Button { onDelete(); HapticFeedback.light() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
+                        .font(.system(size: MeeshyIconSize.sm))
                         .foregroundColor(MeeshyColors.error)
                 }
                 .accessibilityLabel(String(localized: "media.document.deleteAttachment", defaultValue: "Supprimer la pi\u{00E8}ce jointe", bundle: .module))
@@ -167,10 +174,10 @@ public struct DocumentViewerView: View {
         .padding(.vertical, context.isCompact ? 8 : 12)
         .background(
             RoundedRectangle(cornerRadius: context.cornerRadius)
-                .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                .fill(MeeshyColors.surfaceFill(isDark: isDark))
                 .overlay(
                     RoundedRectangle(cornerRadius: context.cornerRadius)
-                        .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                        .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: MeeshyBorder.hairline)
                 )
         )
     }
@@ -192,6 +199,8 @@ public struct DocumentFullSheet: View {
     // Do not @ObservedObject the ThemeManager singleton (cf. ChatBubble.swift
     // precedent); colorScheme drives the two derived colors below directly.
     @Environment(\.colorScheme) private var colorScheme
+    /// Le portillon de sortie posé par l'hôte (#9573) : fermé, ni enregistrement, ni partage, ni copie.
+    @Environment(\.contentExitGate) private var exitGate
     @State private var saveState: SaveState = .idle
 
     private enum SaveState { case idle, saving, saved, failed }
@@ -210,7 +219,7 @@ public struct DocumentFullSheet: View {
             Group {
                 if let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
                    let url = MeeshyConfig.resolveMediaURL(urlStr) {
-                    DocumentWebView(url: url)
+                    DocumentWebView(url: url, mayLeave: exitGate.mayLeave(attachment.id))
                 } else {
                     noPreviewView
                 }
@@ -228,12 +237,14 @@ public struct DocumentFullSheet: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if !attachment.fileUrl.isEmpty {
+                    if !attachment.fileUrl.isEmpty, exitGate.mayLeave(attachment.id) {
                         Button {
-                            if let onSaveRequested {
-                                onSaveRequested()
-                            } else {
-                                saveDocument()
+                            exitGate.perform(attachment.id) {
+                                if let onSaveRequested {
+                                    onSaveRequested()
+                                } else {
+                                    saveDocument()
+                                }
                             }
                         } label: {
                             Group {
@@ -252,7 +263,8 @@ public struct DocumentFullSheet: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
+                    if exitGate.mayLeave(attachment.id),
+                       let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
                        let url = MeeshyConfig.resolveMediaURL(urlStr) {
                         ShareLink(item: url) {
                             Image(systemName: "square.and.arrow.up")
@@ -275,7 +287,7 @@ public struct DocumentFullSheet: View {
 
     /// Saves the document into the Files app (Documents) in one tap.
     private func saveDocument() {
-        guard !attachment.fileUrl.isEmpty,
+        guard exitGate.mayLeave(attachment.id), !attachment.fileUrl.isEmpty,
               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) else { return }
         saveState = .saving
         HapticFeedback.light()
@@ -326,22 +338,22 @@ public struct DocumentFullSheet: View {
     }
 
     private var noPreviewView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: docType.icon)
-                .font(.system(size: 48))
+                .font(.system(size: MeeshyIconSize.hero))
                 .foregroundColor(Color(hex: docType.color))
 
             Text(attachment.originalName.isEmpty ? String(localized: "media.document.defaultName", defaultValue: "Document", bundle: .module) : attachment.originalName)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.document.previewUnavailable", defaultValue: "Aper\u{00E7}u non disponible", bundle: .module))
-                .font(.system(size: 14))
+                .font(.system(size: MeeshyFont.labelSize))
                 .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
 
             if attachment.fileSize > 0 {
                 Text(attachment.fileSizeFormatted)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
             }
         }
@@ -350,16 +362,90 @@ public struct DocumentFullSheet: View {
 
 // MARK: - Document Web View (WKWebView wrapper)
 
+/// **Le lecteur de document, et TOUTES les sorties qu'une vue web embarque**
+/// (#9573). Enregistrer et partager sont des boutons de la fiche ; la vue web
+/// en porte d'autres, que le système offre sans rien demander : la sélection de
+/// texte et son menu (Copier, Partager, Rechercher, Traduire), l'aperçu et le
+/// menu d'un lien ou d'une image à l'appui long (Enregistrer l'image, Copier,
+/// Partager), et le glisser-déposer vers une autre application sur iPad.
+///
+/// `mayLeave` est OBLIGATOIRE : un site d'appel ne peut pas l'oublier. Faux, la
+/// vue web ne laisse que LIRE — voir `DocumentWebView.Interaction`.
 public struct DocumentWebView: UIViewRepresentable {
     public let url: URL
+    public let mayLeave: Bool
 
-    public init(url: URL) {
+    public init(url: URL, mayLeave: Bool) {
         self.url = url
+        self.mayLeave = mayLeave
+    }
+
+    /// Ce que la vue web laisse faire au lecteur — valeur pure, lue par
+    /// `makeWebView` et par ses témoins.
+    public struct Interaction: Equatable, Sendable {
+        /// Sélection de texte, donc Copier / Partager / Rechercher / Traduire.
+        public let selectsText: Bool
+        /// Aperçu et menu contextuel d'un lien à l'appui long.
+        public let previewsLinks: Bool
+        /// Glisser un texte, un lien ou une image hors de la vue.
+        public let dragsContent: Bool
+        /// Feuille de style injectée : ni sélection ni menu d'appui long, y
+        /// compris sur les images. `nil` quand le contenu peut sortir.
+        public let sealingStyle: String?
+
+        public static let open = Interaction(selectsText: true, previewsLinks: true, dragsContent: true, sealingStyle: nil)
+
+        public static let sealed = Interaction(
+            selectsText: false, previewsLinks: false, dragsContent: false,
+            sealingStyle: "*{-webkit-user-select:none!important;user-select:none!important;"
+                + "-webkit-touch-callout:none!important;-webkit-user-drag:none!important}"
+        )
+
+        public init(mayLeave: Bool) {
+            self = mayLeave ? .open : .sealed
+        }
+
+        public init(selectsText: Bool, previewsLinks: Bool, dragsContent: Bool, sealingStyle: String?) {
+            self.selectsText = selectsText
+            self.previewsLinks = previewsLinks
+            self.dragsContent = dragsContent
+            self.sealingStyle = sealingStyle
+        }
+    }
+
+    /// La vue web configurée pour ce portillon — sans rien charger encore.
+    public static func makeWebView(mayLeave: Bool) -> WKWebView {
+        let interaction = Interaction(mayLeave: mayLeave)
+        let config = WKWebViewConfiguration()
+        config.preferences.isTextInteractionEnabled = interaction.selectsText
+        if let style = interaction.sealingStyle {
+            let source = "var s=document.createElement('style');s.textContent=\"\(style)\";"
+                + "(document.head||document.documentElement).appendChild(s);"
+            config.userContentController.addUserScript(
+                WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+            )
+        }
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.allowsLinkPreview = interaction.previewsLinks
+        if !interaction.dragsContent {
+            Self.removeDragInteractions(from: webView)
+        }
+        return webView
+    }
+
+    /// Retire les interactions de glisser que la vue web installe sur elle-même
+    /// et sur sa vue de contenu.
+    static func removeDragInteractions(from webView: WKWebView) {
+        let views: [UIView] = [webView, webView.scrollView] + webView.scrollView.subviews
+        for view in views {
+            for interaction in view.interactions where interaction is UIDragInteraction {
+                view.removeInteraction(interaction)
+            }
+        }
     }
 
     public func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        let webView = WKWebView(frame: .zero, configuration: config)
+        let webView = Self.makeWebView(mayLeave: mayLeave)
         webView.load(URLRequest(url: url))
         return webView
     }

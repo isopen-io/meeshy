@@ -90,9 +90,11 @@ final class CallMuteSyncTests: XCTestCase {
         )
         XCTAssertFalse(unit.contains("webRTCService.startLocalMedia("),
                        "La piste locale naît seulement par startLocalMediaKeepingMute (#8434)")
+        // #8788 — les deux replis vers l'audio n'en font plus qu'un
+        // (`continueAudioOnly`) : la déclaration, le démarrage et ce repli.
         XCTAssertGreaterThanOrEqual(
-            AppSourceGuard.occurrences(ofIdentifier: "startLocalMediaKeepingMute", in: unit), 4,
-            "Le démarrage et ses deux replis passent par la resynchronisation du micro"
+            AppSourceGuard.occurrences(ofIdentifier: "startLocalMediaKeepingMute", in: unit), 3,
+            "Le démarrage et son repli audio passent par la resynchronisation du micro"
         )
     }
 

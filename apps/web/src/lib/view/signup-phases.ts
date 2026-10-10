@@ -1,4 +1,4 @@
-import { phoneImplausibility } from '@meeshy/shared/utils/phone-plausibility';
+import type { SignupPhoneRefusal } from '../signup-form';
 
 /**
  * L'INSCRIPTION EN PHASES VIVANTES (#8288) — ce qui est VISIBLE, et quand.
@@ -10,8 +10,8 @@ import { phoneImplausibility } from '@meeshy/shared/utils/phone-plausibility';
  *
  * | phase | ce qu'elle rend | ce qui l'ouvre |
  * |---|---|---|
- * | `phone` | le numéro en verre liquide, le pays, « Continuer avec l'e-mail seulement » | rien — dès l'ouverture |
- * | `email` | l'adresse | un numéro DONNÉ (plausible) ou PASSÉ |
+ * | `phone` | le numéro en verre liquide, le pays | rien — dès l'ouverture |
+ * | `email` | l'adresse | un numéro DONNÉ (présent et plausible) — il ne se passe plus (#9343) |
  * | `card` | la carte d'identité : nom affiché, @pseudo, refus, « Valider mon compte maintenant » | une adresse cohérente |
  * | `code` | le code à 6 chiffres, dans la carte | le compte créé par la carte |
  * | `verified` | le feu d'artifice ; « S'inscrire » devient « Parler aux autres » | le code juste, ou le lien ouvert |
@@ -31,22 +31,14 @@ export const INITIAL_SIGNUP_PROGRESS: SignupProgress = { emailShown: false, card
 
 /** Ce que l'écran OBSERVE, à l'instant du rendu. */
 export type SignupObservation = {
-  /** Un numéro plausible est saisi (`isPhoneGiven`). */
+  /** Un numéro présent et plausible est saisi (`isPhoneValid`, `signup-form.ts`). */
   readonly phoneGiven: boolean;
-  /** « Continuer avec l'e-mail seulement » a été touché. */
-  readonly phoneSkipped: boolean;
   /** L'adresse passe `isEmailValid` — la MÊME loi que le bouton d'envoi. */
   readonly emailValid: boolean;
 };
 
-/** Un numéro est DONNÉ quand il est plausible — jamais pendant la saisie :
- * l'adresse ne paraît pas au troisième chiffre. */
-export function isPhoneGiven(phoneDigits: string): boolean {
-  return phoneDigits.replace(/\D/g, '').length > 0 && phoneImplausibility(phoneDigits) === null;
-}
-
 export function nextSignupProgress(previous: SignupProgress, observation: SignupObservation): SignupProgress {
-  const emailShown = previous.emailShown || observation.phoneGiven || observation.phoneSkipped;
+  const emailShown = previous.emailShown || observation.phoneGiven;
   const cardShown = previous.cardShown || (emailShown && observation.emailValid);
   if (emailShown === previous.emailShown && cardShown === previous.cardShown) return previous;
   return { emailShown, cardShown };
@@ -105,10 +97,16 @@ export function signupPrimaryAction(input: {
 }
 
 /**
- * L'ALERTE « SANS NUMÉRO » (#8040) — posée quand aucun numéro n'est donné,
- * sauf si l'on a CHOISI l'e-mail seul : le lien discret de la phase 1 était
- * déjà la question, la reposer serait un geste de trop.
+ * LE REFUS DU NUMÉRO SE DIT-IL ? (#9343) — sous le champ, jamais pendant la
+ * première frappe (« trop court » au troisième chiffre ne dirait rien d'utile),
+ * mais dès que le champ a été QUITTÉ avec une saisie, qu'un envoi a été tenté,
+ * ou qu'un numéro donné a été retiré — l'adresse, déjà parue, ne se referme
+ * pas (#6405), et l'inscription doit alors dire pourquoi elle ne part plus.
  */
-export function shouldNudgePhone(input: { readonly hasPhone: boolean; readonly phoneSkipped: boolean }): boolean {
-  return !input.hasPhone && !input.phoneSkipped;
+export function phoneRefusalShown(input: {
+  readonly refusal: SignupPhoneRefusal | null;
+  readonly checked: boolean;
+  readonly progress: SignupProgress;
+}): boolean {
+  return input.refusal !== null && (input.checked || input.progress.emailShown);
 }

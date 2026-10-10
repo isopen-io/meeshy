@@ -166,12 +166,14 @@ nonisolated extension CallMontageRenderer {
         fill(context, bounds, gray: 0.06)
         placed.forEach { slot, portrait in
             drawPortrait(context, portrait, in: slot)
-            context.saveGState()
-            context.addPath(path(for: slot))
-            context.clip()
-            context.setBlendMode(.saturation)
-            fill(context, slot.frame, gray: 0.5)
-            context.restoreGState()
+            if portrait.hole == nil {
+                context.saveGState()
+                context.addPath(path(for: slot))
+                context.clip()
+                context.setBlendMode(.saturation)
+                fill(context, slot.frame, gray: 0.5)
+                context.restoreGState()
+            }
             stroke(context, slot, color: white(0.85), width: 3 * unit)
         }
         drawGrain(context, in: bounds, unit: unit)

@@ -291,11 +291,11 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+PlaybackHold.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
-        guard let start = source.range(of: "var shouldPauseTimer: Bool {"),
+        guard let start = source.range(of: "var playbackCauses: StoryPlaybackCauses {"),
               let end = source.range(of: "\n    }", range: start.upperBound..<source.endIndex) else {
-            return XCTFail("shouldPauseTimer introuvable")
+            return XCTFail("playbackCauses introuvable")
         }
         XCTAssertTrue(
             codeOnly(String(source[start.upperBound..<end.lowerBound])).contains("gestureAxis != 0"),

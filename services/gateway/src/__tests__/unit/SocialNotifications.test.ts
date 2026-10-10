@@ -45,6 +45,15 @@ jest.mock('../../utils/logger-enhanced', () => ({
 
 import { NotificationService } from '../../services/notifications/NotificationService';
 
+/** Le post que le bâtisseur RELIT pour servir son extrait (#8731) — vivant, sans traduction. */
+const liveExcerptSource = (content: string) => ({
+  content,
+  originalLanguage: null,
+  translations: null,
+  deletedAt: null,
+  expiresAt: null,
+});
+
 // ---------------------------------------------------------------------------
 // Shared mock factories
 // ---------------------------------------------------------------------------
@@ -482,12 +491,12 @@ describe('Social Notification Methods', () => {
       const repostPrefs = { repostEnabled: true };
       setupSuccessMocks(mockPrisma, { type: 'post_repost', priority: 'normal' }, repostPrefs);
 
+      mockPrisma.post = { ...mockPrisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Le texte du post repris')) };
       await service.createPostRepostNotification({
         actorId: ACTOR_ID,
         originalPostId: POST_ID,
         postAuthorId: AUTHOR_ID,
         repostId: REPOST_ID,
-        postPreview: 'Le texte du post repris',
       });
 
       const createArg = mockPrisma.notification.create.mock.calls[0][0];

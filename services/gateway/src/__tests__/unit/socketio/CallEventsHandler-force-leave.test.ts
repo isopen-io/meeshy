@@ -204,6 +204,49 @@ describe('CallEventsHandler — call:force-leave handler', () => {
   // Line 1130: cleanupParticipantId || userId
   // -------------------------------------------------------------------------
 
+  describe('un appel DÉCROCHÉ qui garde un autre participant n’est pas un fantôme (#9111)', () => {
+    function liveDuoInGrace() {
+      const call = makeActiveCallWithParticipant(USER_ID);
+      return {
+        ...call,
+        answeredAt: new Date(Date.now() - 120_000),
+        participants: [
+          ...call.participants,
+          { id: 'call-participant-peer', participantId: 'membership-peer', callSessionId: CALL_ID, leftAt: null, participant: { userId: 'user-peer' } },
+        ],
+      };
+    }
+
+    it('le revenant qui touche « Appeler » ne quitte pas sa ligne et ne termine pas le duo', async () => {
+      const prisma = makePrisma({ callSessionFindMany: jest.fn<any>().mockResolvedValue([liveDuoInGrace()]) });
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(mockLeaveCall5).not.toHaveBeenCalled();
+      expect(roomEmit).not.toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.anything());
+      expect(roomEmit).not.toHaveBeenCalledWith(CALL_EVENTS.PARTICIPANT_LEFT, expect.anything());
+    });
+
+    it('un appel décroché où l’on est seul reste nettoyé', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([{ ...makeActiveCallWithParticipant(USER_ID), answeredAt: new Date() }]),
+      });
+      mockLeaveCall5.mockResolvedValue(makeEndedCallSession());
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(mockLeaveCall5).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('la sortie forcée vise la participation de la ligne d’appel (#8433)', () => {
     it('quitte par la participation de la ligne active, sans relire la conversation', async () => {
       const prisma = makePrisma({

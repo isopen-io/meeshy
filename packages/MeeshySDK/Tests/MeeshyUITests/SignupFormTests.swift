@@ -21,7 +21,7 @@ final class SignupFormTests: XCTestCase {
     private func makeForm(
         displayName: String? = "Awa N’Diaye",
         email: String = "awa@example.com",
-        phoneDigits: String = "",
+        phoneDigits: String = "0612345678",
         password: String = "motdepasse",
         countryISO: String = "FR",
         systemLanguage: String = "fr",
@@ -131,15 +131,27 @@ final class SignupFormTests: XCTestCase {
 
     // MARK: - Activation du bouton
 
-    func test_canSubmit_withTheThreeRequiredFields_isTrue() {
+    func test_canSubmit_withTheRequiredFields_isTrue() {
         XCTAssertTrue(makeForm().canSubmit)
     }
 
-    /// **Le téléphone n'entre PAS dans l'activation.** C'est la règle produit du
-    /// lot : il n'est ni requis, ni annoncé facultatif — un formulaire qui
-    /// resterait gris tant qu'il est vide le rendrait obligatoire en pratique.
-    func test_canSubmit_withoutPhone_isTrue() {
-        XCTAssertTrue(makeForm(phoneDigits: "").canSubmit)
+    /// **Le numéro est REQUIS par l'écran** (#9343, directive porteur
+    /// 2026-10-04) — par l'écran seul : la passerelle accepte toujours une
+    /// adresse sans numéro. Vide, ou fait d'espaces, il éteint le bouton.
+    func test_canSubmit_withoutPhone_isFalse() {
+        XCTAssertFalse(makeForm(phoneDigits: "").canSubmit)
+        XCTAssertFalse(makeForm(phoneDigits: "   ").canSubmit)
+    }
+
+    func test_phoneRefusal_emptyPhone_isMissing() {
+        XCTAssertEqual(makeForm(phoneDigits: "").phoneRefusal, .missing)
+        XCTAssertEqual(makeForm(phoneDigits: " - ").phoneRefusal, .missing)
+        XCTAssertFalse(makeForm(phoneDigits: "").isPhoneValid)
+    }
+
+    func test_phoneRefusal_plausiblePhone_isNil() {
+        XCTAssertNil(makeForm(phoneDigits: "06 12 34 56 78").phoneRefusal)
+        XCTAssertTrue(makeForm(phoneDigits: "06 12 34 56 78").isPhoneValid)
     }
 
     /// L'ADRESSE est le seul champ requis (#6441) — une saisie FOURNIE doit
@@ -157,11 +169,11 @@ final class SignupFormTests: XCTestCase {
     // pareil ». Le formulaire doit donc laisser partir une charge qui n'en
     // porte AUCUN — et `canSubmit` cessait seul de le permettre.
 
-    /// LE témoin de ce lot. Il ne peut pas verdir pour un motif étranger : les
-    /// deux autres champs facultatifs y sont VIDES eux aussi, donc seul le
-    /// relâchement du nom affiché peut l'activer.
-    func test_canSubmit_withEmailAlone_isTrue() {
-        XCTAssertTrue(makeForm(displayName: "", phoneDigits: "", password: "").canSubmit)
+    /// LE témoin de ce lot. Il ne peut pas verdir pour un motif étranger : le
+    /// mot de passe y est VIDE lui aussi, donc seul le relâchement du nom
+    /// affiché peut l'activer. Le numéro, requis depuis #9343, est donné.
+    func test_canSubmit_withEmailAndPhoneAlone_isTrue() {
+        XCTAssertTrue(makeForm(displayName: "", password: "").canSubmit)
     }
 
     /// Le BRANCHEMENT de la loi partagée (#6479) — `PhonePlausibilityTests`
@@ -169,7 +181,8 @@ final class SignupFormTests: XCTestCase {
     func test_canSubmit_withAnImplausiblePhone_isFalse() {
         XCTAssertFalse(makeForm(phoneDigits: "1111100000").canSubmit)
         XCTAssertFalse(makeForm(phoneDigits: "42424242").canSubmit)
-        XCTAssertEqual(makeForm(phoneDigits: "1111100000").phoneRefusal, .identicalRun)
+        XCTAssertEqual(makeForm(phoneDigits: "1111100000").phoneRefusal, .implausible(.identicalRun))
+        XCTAssertEqual(makeForm(phoneDigits: "06123456").phoneRefusal, .implausible(.tooShort))
     }
 
     func test_canSubmit_withARealPhone_isTrue() {

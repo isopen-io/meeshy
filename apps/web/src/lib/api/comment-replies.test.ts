@@ -18,6 +18,7 @@ import {
   type CommentInfiniteData,
   type PostComment,
 } from './publication-comments';
+import { ownerPresent } from '@/test-support/comment-owner';
 
 /**
  * **RÉPONDRE À UN COMMENTAIRE** (#8583) — la caisse des réponses d'une
@@ -117,7 +118,7 @@ describe('performComment avec `parentId` — la réponse se range sous sa racine
       content: 'je réponds',
       author,
       parentId: 'root',
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
     const optimistic = repliesOf(queryClient);
     expect(optimistic.map((c) => c.pending === true)).toEqual([false, true]);
@@ -143,7 +144,7 @@ describe('performComment avec `parentId` — la réponse se range sous sa racine
       content: 'je réponds',
       author,
       parentId: 'root',
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(result).toEqual({ ok: false, message: COMMENT_FAILED_MESSAGE });

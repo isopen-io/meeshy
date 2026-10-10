@@ -87,6 +87,7 @@ extension MessageSocketManager {
         if !sticker.slots.isEmpty { dict["slots"] = sticker.slots }
         if let animation = sticker.animation { dict["animation"] = animation.rawValue }
         if let emoji = sticker.emoji { dict["emoji"] = emoji }
+        if let stickerId = sticker.stickerId { dict["stickerId"] = stickerId }
         return dict
     }
 

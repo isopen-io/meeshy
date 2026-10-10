@@ -26,34 +26,34 @@ public struct StatsCard: View {
     }
 
     public var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Icon with circular background
             ZStack {
                 Circle()
-                    .fill(Color(hex: accentColor).opacity(0.15))
-                    .frame(width: 40, height: 40)
+                    .fill(Color(hex: accentColor).opacity(MeeshyOpacity.light))
+                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
 
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: MeeshyIconSize.md, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
 
             // Label and value
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
                 Text(value)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
 
             Spacer()
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(theme.surfaceGradient(tint: accentColor))
-        .glassCard(cornerRadius: 12)
+        .glassCard(cornerRadius: MeeshyRadius.smPlus)
     }
 }
 
@@ -62,26 +62,26 @@ public struct StatsCard: View {
 #if DEBUG
 struct StatsCard_Previews: PreviewProvider {
     static var previews: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             StatsCard(
                 icon: "paperplane.fill",
                 label: "Messages envoyés",
                 value: "1,234",
-                accentColor: "FF2E63"
+                accentColor: MeeshyColors.tileRoseHex
             )
 
             StatsCard(
                 icon: "character.book.closed.fill",
                 label: "Traductions",
                 value: "567",
-                accentColor: "08D9D6"
+                accentColor: MeeshyColors.tileCyanHex
             )
 
             StatsCard(
                 icon: "globe",
                 label: "Langues utilisées",
                 value: "5",
-                accentColor: "A855F7"
+                accentColor: MeeshyColors.purple500Hex
             )
         }
         .padding()

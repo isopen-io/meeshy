@@ -46,8 +46,8 @@ export function FeedCarouselChrome({
       <span
         data-feed-media-counter
         aria-hidden="true"
-        className="pointer-events-none absolute top-2.5 end-2.5 rounded-full px-2.5 py-1.25 font-mono text-[12px] font-bold text-white"
-        style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+        className="pointer-events-none absolute top-2.5 end-2.5 rounded-full px-2.5 py-1.25 font-mono text-[12px] font-bold text-on-media"
+        style={{ backgroundColor: 'var(--color-scrim)' }}
       >
         {page + 1} / {count}
       </span>
@@ -67,14 +67,14 @@ function CarouselArrow({ direction, label, onPress }: { readonly direction: 'bac
       data-feed-carousel-arrow={direction}
       onClick={onPress}
       className={`absolute inset-y-0 my-auto grid size-11 place-items-center rounded-full focus-visible:outline-2 focus-visible:-outline-offset-2 ${direction === 'backward' ? 'start-2.5' : 'end-2.5'}`}
-      style={{ outlineColor: 'white' }}
+      style={{ outlineColor: 'var(--color-on-media)' }}
     >
-      <span className="grid size-[34px] place-items-center rounded-full" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}>
+      <span className="grid size-[34px] place-items-center rounded-full" style={{ backgroundColor: 'var(--color-scrim)' }}>
         <GlyphSvg
           glyph={FEED_GLYPHS.caretRight}
           size={14}
           className={direction === 'backward' ? '-scale-x-100 rtl:scale-x-100' : 'rtl:-scale-x-100'}
-          style={{ color: 'white' }}
+          style={{ color: 'var(--color-on-media)' }}
         />
       </span>
     </button>

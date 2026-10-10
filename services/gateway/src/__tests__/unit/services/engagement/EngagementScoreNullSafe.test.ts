@@ -29,9 +29,12 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ENGAGEMENT_AXIS_WEIGHTS } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
+import { DEFAULT_ENGAGEMENT_SCALE } from '@meeshy/shared/types/engagement-scale';
+import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+
+const poidsParDefaut = (axisKey: EngagementAxisKey): number => DEFAULT_ENGAGEMENT_SCALE.operations[axisKey].points;
 
 jest.mock('../../../../services/notifications/notification-service-registry');
 jest.mock('../../../../services/notifications/NotificationService');
@@ -77,7 +80,10 @@ function makeMongoLikePrisma(initialScore: number | null | undefined) {
     },
     engagementMilestone: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
     engagementConversationCredit: { create: jest.fn().mockResolvedValue({}) },
-    user: { findUnique: jest.fn().mockResolvedValue(null), update: userUpdate },
+    engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    engagementQuota: { upsert: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({ count: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue(null) },
+    conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
+    user: { findUnique: jest.fn().mockResolvedValue(null), update: userUpdate, updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     $runCommandRaw: runCommandRaw,
   } as unknown as PrismaClient;
 
@@ -91,7 +97,7 @@ describe('updateEngagementScore — un champ null ne fait plus perdre le point',
 
     await new EngagementService(prisma).recordActivity('u-1', 'content.text_message');
 
-    expect(state.engagementScore).toBe(ENGAGEMENT_AXIS_WEIGHTS['content.text_message']);
+    expect(state.engagementScore).toBe(poidsParDefaut('content.text_message'));
   });
 
   it('crédite aussi quand le champ est ABSENT — le cas d\'un compte neuf', async () => {
@@ -100,7 +106,7 @@ describe('updateEngagementScore — un champ null ne fait plus perdre le point',
 
     await new EngagementService(prisma).recordActivity('u-2', 'conversation.private');
 
-    expect(state.engagementScore).toBe(ENGAGEMENT_AXIS_WEIGHTS['conversation.private']);
+    expect(state.engagementScore).toBe(poidsParDefaut('conversation.private'));
   });
 
   it('accumule sur plusieurs activités depuis un score null initial', async () => {
@@ -108,14 +114,15 @@ describe('updateEngagementScore — un champ null ne fait plus perdre le point',
     const { prisma, state } = makeMongoLikePrisma(null);
     const service = new EngagementService(prisma);
 
-    await service.recordActivity('u-3', 'content.post');
+    // Trois gestes LÉGERS (#9667 : un post vaut désormais au moins 100, donc un gros poids borné pour un compte non vérifié).
+    await service.recordActivity('u-3', 'content.audio_message');
     await service.recordActivity('u-3', 'comment.text');
     await service.recordActivity('u-3', 'tool.sticker');
 
     expect(state.engagementScore).toBe(
-      ENGAGEMENT_AXIS_WEIGHTS['content.post'] +
-        ENGAGEMENT_AXIS_WEIGHTS['comment.text'] +
-        ENGAGEMENT_AXIS_WEIGHTS['tool.sticker'],
+      poidsParDefaut('content.audio_message') +
+        poidsParDefaut('comment.text') +
+        poidsParDefaut('tool.sticker'),
     );
   });
 
@@ -139,13 +146,13 @@ describe('EngagementCounter.points — l\'invariant qui remplace `Σ(compteur ×
     const { prisma } = makeMongoLikePrisma(0);
     const upsert = (prisma as unknown as { engagementCounter: { upsert: jest.Mock } }).engagementCounter.upsert;
 
-    await new EngagementService(prisma).recordActivity('u-5', 'content.reel');
+    await new EngagementService(prisma).recordActivity('u-5', 'content.audio_message');
 
     const args = upsert.mock.calls[0][0] as {
       create: { count: number; points: number };
       update: { count: { increment: number }; points: { increment: number } };
     };
-    const poids = ENGAGEMENT_AXIS_WEIGHTS['content.reel'];
+    const poids = poidsParDefaut('content.audio_message');
     expect(args.create.points).toBe(poids);
     expect(args.update.points.increment).toBe(poids);
     expect(args.create.count).toBe(1);

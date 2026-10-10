@@ -79,7 +79,7 @@ final class ConversationLinkCardViewModelTests: XCTestCase {
         service.cachedResult = cached
         service.refreshResult = refresh
         let actions = MockConversationCardActions()
-        let sut = ConversationLinkCardViewModel(target: target, service: service, performer: actions, viewerHasAccount: false)
+        let sut = ConversationLinkCardViewModel(target: target, service: service, performer: actions)
         return (sut, service, actions)
     }
 
@@ -288,14 +288,25 @@ final class ConversationLinkCardViewModelTests: XCTestCase {
         await waitUntil { service.refreshCount == 1 }
     }
 
-    // MARK: - « Rejoindre en anonyme » n'existe que pour un visiteur sans compte
+    // MARK: - « Rejoindre ? Anonyme / Mon compte » (#8726)
 
-    func test_actions_connectedAccountOnGuestFriendlyLink_joinsInItsOwnNameOnly() {
-        let service = MockConversationCardService()
-        service.cachedResult = .fresh(.card(makeCard(canJoinAnonymously: true)), age: 1)
-        let sut = ConversationLinkCardViewModel(target: .shareLink(identifier: "abc"), service: service,
-                                                performer: MockConversationCardActions(), viewerHasAccount: true)
-        XCTAssertEqual(sut.actions, .join(identifier: "abc", allowsAnonymous: false))
+    func test_actions_connectedAccountOnGuestFriendlyLink_offersAnonymousToo() {
+        let (sut, _, _) = makeSUT(cached: .fresh(.card(makeCard(canJoinAnonymously: true)), age: 1))
+        XCTAssertEqual(sut.actions, .join(identifier: "abc", allowsAnonymous: true))
+    }
+
+    func test_joinAnonymously_connectedAccount_takesTheGuestPathNotTheAccountOne() {
+        let (sut, _, actions) = makeSUT(cached: .fresh(.card(makeCard(canJoinAnonymously: true)), age: 1))
+        sut.joinAnonymously()
+        XCTAssertEqual(actions.anonymousIdentifiers, ["abc"])
+        XCTAssertEqual(actions.joinCount, 0)
+    }
+
+    func test_joinAccount_isTheInjectedConnectedAccount() {
+        let account = ConversationCardJoinAccount(title: "Awa", handle: "@awa")
+        let sut = ConversationLinkCardViewModel(target: .shareLink(identifier: "abc"), service: MockConversationCardService(),
+                                                performer: MockConversationCardActions(), joinAccount: account)
+        XCTAssertEqual(sut.joinAccount, account)
     }
 
     func test_conversationChange_ofAnotherConversation_isIgnored() async {

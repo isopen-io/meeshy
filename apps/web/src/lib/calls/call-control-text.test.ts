@@ -27,10 +27,23 @@ describe('le mot d’un contrôle d’appel', () => {
     expect(controlNoticeText('fr', { kind: 'invite-failed', code: 'INTERNAL_ERROR', name: 'Bruno' }, nameOf)).toBe('Impossible d’inviter Bruno');
   });
 
+  test('une invitation qui se résout sans décroché le dit, en statut discret (#8470)', () => {
+    expect(controlNoticeText('fr', { kind: 'invite-declined', name: 'Léa' }, nameOf)).toBe('Léa a refusé');
+    expect(controlNoticeText('fr', { kind: 'invite-unanswered', name: 'Léa' }, nameOf)).toBe('Léa n’a pas répondu');
+    expect(noticeRole({ kind: 'invite-declined', name: 'Léa' })).toBe('status');
+    expect(noticeRole({ kind: 'invite-unanswered', name: 'Léa' })).toBe('status');
+  });
+
   test('un micro qu’on n’a pas pu couper, un retrait refusé', () => {
     expect(controlNoticeText('fr', { kind: 'mute-failed', code: 'PERMISSION_DENIED', name: 'Nadia' }, nameOf)).toBe('Vous n’avez pas ce droit dans cet appel');
     expect(controlNoticeText('fr', { kind: 'mute-failed', code: 'VALIDATION_ERROR', name: 'Nadia' }, nameOf)).toBe('Impossible de couper le micro de Nadia');
     expect(controlNoticeText('fr', { kind: 'remove-failed', name: 'Nadia' }, nameOf)).toBe('Impossible de retirer Nadia');
+  });
+
+  test('une caméra qui ne s’ouvre pas en cours d’appel se dit (#9095) : refusée, ou indisponible', () => {
+    expect(controlNoticeText('fr', { kind: 'camera-failed', failure: 'permission' }, nameOf)).toBe('L’accès à la caméra est refusé');
+    expect(controlNoticeText('fr', { kind: 'camera-failed', failure: 'unavailable' }, nameOf)).toBe('La caméra n’a pas pu s’ouvrir');
+    expect(noticeRole({ kind: 'camera-failed', failure: 'unavailable' })).toBe('alert');
   });
 
   test('une coupure imposée se dit, un échec s’annonce', () => {

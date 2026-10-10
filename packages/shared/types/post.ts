@@ -211,6 +211,19 @@ export interface Post {
   readonly reactionCount?: number;
   readonly currentUserReactions?: readonly string[];
   readonly isLikedByMe?: boolean;
+  /**
+   * Les points que CE post a rapportés au LECTEUR (#9569) : sa publication
+   * s'il en est l'auteur, ses réactions, commentaires, republications, signets,
+   * vues de story — la somme de ce qui lui a réellement été crédité. Servi sur
+   * les LECTURES (fil, listes, détail, stories) à un lecteur connecté ; absent
+   * pour un lecteur sans compte, d'un ancien serveur et des réponses d'écriture
+   * — absent veut dire « garde ce que tu sais », jamais zéro. Après un geste,
+   * la nouvelle valeur arrive par `engagement:post-updated`
+   * (`PostEngagementSnapshot`), adressé au lecteur seul. Elle peut BAISSER :
+   * retirer un contenu reprend ses points ; `keptViewerPoints` dit laquelle de
+   * deux valeurs garder.
+   */
+  readonly viewerPoints?: number;
   readonly bookmarkedAt?: string | Date | null;
   readonly likeCount: number;
   readonly commentCount: number;

@@ -109,6 +109,8 @@ function makeAuthService(overrides: Record<string, any> = {}) {
     }),
     updateOnlineStatus: jest.fn<any>().mockResolvedValue(undefined),
     logout: jest.fn<any>().mockResolvedValue(true),
+    logoutCurrent: jest.fn<any>().mockResolvedValue(1),
+    getUserActiveSessions: jest.fn<any>().mockResolvedValue([]),
     ...overrides,
   } as any;
 }
@@ -415,10 +417,10 @@ describe('POST /login/2fa — préférence retenue, markSessionTrusted throws (c
 
 // ─── POST /logout — loggedOut returns false (false branch of if(loggedOut)) ───
 
-describe('POST /logout — logout service returns false (session already invalid)', () => {
-  it('returns 200 even when logout returns false', async () => {
+describe('POST /logout — nothing left to close (session already invalid)', () => {
+  it('returns 200 even when no session is closed', async () => {
     const authService = makeAuthService();
-    authService.logout = jest.fn<any>().mockResolvedValue(false);
+    authService.logoutCurrent = jest.fn<any>().mockResolvedValue(0);
     const { app } = await buildApp({ authService });
     const res = await app.inject({
       method: 'POST', url: '/logout',

@@ -55,6 +55,11 @@ public struct APIRejection: Error, Sendable, Equatable {
     /// Le détenteur masqué d'un `EMAIL_TAKEN` — `nil` sur une passerelle qui
     /// ne le sert pas encore, et pour tout autre code.
     public let emailOwner: EmailOwner?
+    /// L'instant de remise à zéro d'une limite quotidienne de gestes
+    /// (`DailyGestureLimit`) — `nil` pour tout autre refus.
+    public let resetAt: Date?
+    /// Le plafond atteint d'une limite quotidienne — `nil` pour tout autre refus.
+    public let limit: Int?
 
     public init(
         statusCode: Int,
@@ -63,7 +68,9 @@ public struct APIRejection: Error, Sendable, Equatable {
         message: String,
         suggestions: [String] = [],
         violations: [Violation] = [],
-        emailOwner: EmailOwner? = nil
+        emailOwner: EmailOwner? = nil,
+        resetAt: Date? = nil,
+        limit: Int? = nil
     ) {
         self.statusCode = statusCode
         self.code = code
@@ -72,6 +79,8 @@ public struct APIRejection: Error, Sendable, Equatable {
         self.suggestions = suggestions
         self.violations = violations
         self.emailOwner = emailOwner
+        self.resetAt = resetAt
+        self.limit = limit
     }
 
     /// La phrase à poser SOUS `field`, en préférant la violation qui le nomme.

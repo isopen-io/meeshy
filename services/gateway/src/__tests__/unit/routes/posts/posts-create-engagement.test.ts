@@ -116,9 +116,11 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));
 
 const mockRecordActivity = jest.fn<any>().mockResolvedValue(undefined);
+const mockRecordGameSignal = jest.fn<any>().mockResolvedValue(undefined);
 jest.mock('../../../../services/engagement/EngagementService', () => ({
   EngagementService: jest.fn().mockImplementation(() => ({
     recordActivity: (...args: any[]) => mockRecordActivity(...args),
+    recordGameSignal: (...args: any[]) => mockRecordGameSignal(...args),
   })),
 }));
 
@@ -168,7 +170,7 @@ const ATTACHMENT_ROW = {
     isBlurred: false,
     isEncrypted: false,
     effectFlags: 0,
-    expiresAt: null,
+    expiresAt: null, ephemeralDuration: null, attachments: [{ isViewOnce: false, isBlurred: false, effectFlags: 0 }],
     createdAt: new Date('2026-09-01T00:00:00.000Z'),
   },
 };
@@ -216,6 +218,13 @@ async function buildApp(): Promise<FastifyInstance> {
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
+/** Les opérations créditées à l'auteur, dans l'ordre — les options se vérifient à part. */
+const creditedKeys = (): string[] =>
+  mockRecordActivity.mock.calls.filter((call) => call[0] === USER_ID).map((call) => call[1] as string);
+
+const creditOptions = (key: string): unknown =>
+  mockRecordActivity.mock.calls.find((call) => call[0] === USER_ID && call[1] === key)?.[2];
+
 beforeEach(() => {
   mockCreatePost.mockReset().mockResolvedValue(PUBLISHED_ROW);
   mockDuplicate.mockReset().mockResolvedValue(DUPLICATED);
@@ -235,7 +244,7 @@ describe('POST /posts — axe d\'engagement « content.story » (#5534)', () => 
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.story');
+    expect(creditedKeys()).toContain('content.story');
 
     await app.close();
   });
@@ -250,7 +259,7 @@ describe('POST /posts — axe d\'engagement « content.story » (#5534)', () => 
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.story');
+    expect(creditedKeys()).not.toContain('content.story');
 
     await app.close();
   });
@@ -270,7 +279,7 @@ describe('POST /posts — axe d\'engagement « content.story » (#5534)', () => 
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.story');
+    expect(creditedKeys()).not.toContain('content.story');
 
     await app.close();
   });
@@ -288,7 +297,7 @@ describe('POST /posts/from-attachment — axe d\'engagement « content.story » 
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.story');
+    expect(creditedKeys()).toContain('content.story');
 
     await app.close();
   });
@@ -303,7 +312,7 @@ describe('POST /posts/from-attachment — axe d\'engagement « content.story » 
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.story');
+    expect(creditedKeys()).not.toContain('content.story');
 
     await app.close();
   });
@@ -321,8 +330,8 @@ describe('POST /posts — axe d\'engagement « content.reel » (#5535)', () => {
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.reel');
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.story');
+    expect(creditedKeys()).toContain('content.reel');
+    expect(creditedKeys()).not.toContain('content.story');
 
     await app.close();
   });
@@ -337,7 +346,7 @@ describe('POST /posts — axe d\'engagement « content.reel » (#5535)', () => {
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.reel');
+    expect(creditedKeys()).not.toContain('content.reel');
 
     await app.close();
   });
@@ -355,8 +364,32 @@ describe('POST /posts — axe d\'engagement « content.reel » (#5535)', () => {
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.reel');
+    expect(creditedKeys()).not.toContain('content.reel');
 
+    await app.close();
+  });
+
+  it('un REEL demandé compte pour son défi, même écrit en POST : l’intention « réel » (#9635)', async () => {
+    mockRecordGameSignal.mockClear();
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW); // écrit comme POST
+    const app = await buildApp();
+
+    await app.inject({ method: 'POST', url: '/posts', payload: { type: 'REEL', content: 'Bonjour tout le monde' } });
+    await settle();
+
+    expect(mockRecordGameSignal).toHaveBeenCalledWith(USER_ID, 'reel-published', { key: PUBLISHED_ROW.id });
+    await app.close();
+  });
+
+  it('un POST demandé ne porte aucune intention « réel » (#9635)', async () => {
+    mockRecordGameSignal.mockClear();
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW);
+    const app = await buildApp();
+
+    await app.inject({ method: 'POST', url: '/posts', payload: { type: 'POST', content: 'Bonjour tout le monde' } });
+    await settle();
+
+    expect(mockRecordGameSignal).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -373,7 +406,7 @@ describe('POST /posts/from-attachment — axe d\'engagement « content.reel » (
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.reel');
+    expect(creditedKeys()).toContain('content.reel');
 
     await app.close();
   });
@@ -388,7 +421,7 @@ describe('POST /posts/from-attachment — axe d\'engagement « content.reel » (
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.reel');
+    expect(creditedKeys()).not.toContain('content.reel');
 
     await app.close();
   });
@@ -414,8 +447,8 @@ describe('POST /posts — axes d\'engagement « tool.in_app_edit » / « tool.di
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
+    expect(creditedKeys()).toContain('tool.in_app_edit');
+    expect(creditedKeys()).not.toContain('tool.direct_publish');
 
     await app.close();
   });
@@ -430,8 +463,8 @@ describe('POST /posts — axes d\'engagement « tool.in_app_edit » / « tool.di
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
+    expect(creditedKeys()).toContain('tool.direct_publish');
+    expect(creditedKeys()).not.toContain('tool.in_app_edit');
 
     await app.close();
   });
@@ -446,7 +479,7 @@ describe('POST /posts — axes d\'engagement « tool.in_app_edit » / « tool.di
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
+    expect(creditedKeys()).toContain('tool.direct_publish');
 
     await app.close();
   });
@@ -462,8 +495,8 @@ describe('POST /posts — axes d\'engagement « tool.in_app_edit » / « tool.di
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.story');
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
+    expect(creditedKeys()).toContain('content.story');
+    expect(creditedKeys()).toContain('tool.in_app_edit');
 
     await app.close();
   });
@@ -479,8 +512,8 @@ describe('POST /posts — axes d\'engagement « tool.in_app_edit » / « tool.di
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
+    expect(creditedKeys()).not.toContain('tool.in_app_edit');
+    expect(creditedKeys()).not.toContain('tool.direct_publish');
 
     await app.close();
   });
@@ -497,8 +530,8 @@ describe('POST /posts/from-attachment — axes d\'engagement « tool.in_app_edit
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
+    expect(creditedKeys()).toContain('tool.in_app_edit');
+    expect(creditedKeys()).not.toContain('tool.direct_publish');
 
     await app.close();
   });
@@ -513,8 +546,8 @@ describe('POST /posts/from-attachment — axes d\'engagement « tool.in_app_edit
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
+    expect(creditedKeys()).toContain('tool.direct_publish');
+    expect(creditedKeys()).not.toContain('tool.in_app_edit');
 
     await app.close();
   });
@@ -531,7 +564,7 @@ describe('POST /posts — axe d\'engagement « content.post » (#5533)', () => {
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.post');
+    expect(creditedKeys()).toContain('content.post');
 
     await app.close();
   });
@@ -547,7 +580,7 @@ describe('POST /posts — axe d\'engagement « content.post » (#5533)', () => {
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.post');
+    expect(creditedKeys()).not.toContain('content.post');
 
     await app.close();
   });
@@ -563,7 +596,7 @@ describe('POST /posts — axe d\'engagement « content.post » (#5533)', () => {
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.post');
+    expect(creditedKeys()).not.toContain('content.post');
 
     await app.close();
   });
@@ -580,7 +613,7 @@ describe('POST /posts/from-attachment — axe d\'engagement « content.post » (
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.post');
+    expect(creditedKeys()).toContain('content.post');
 
     await app.close();
   });
@@ -596,8 +629,128 @@ describe('POST /posts/from-attachment — axe d\'engagement « content.post » (
     await settle();
 
     expect(res.statusCode).toBe(201);
-    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.post');
+    expect(creditedKeys()).not.toContain('content.post');
 
     await app.close();
+  });
+});
+
+/**
+ * Le barème (#8959) : chaque crédit de publication porte sa CIBLE (le post —
+ * unicité d'un contenu lourd, reprise à la suppression) et, pour POST et
+ * STORY, la variante de sa visibilité. STATUS crédite `content.status`.
+ */
+describe('POST /posts — cible et variante du barème (#8959)', () => {
+  const publish = async (row: Record<string, unknown>, payload: Record<string, unknown>) => {
+    mockCreatePost.mockResolvedValue(row);
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: '/posts', payload });
+    await settle();
+    await app.close();
+    return res;
+  };
+
+  it.each([
+    ['PUBLIC', 'public'],
+    ['COMMUNITY', 'community'],
+    ['FRIENDS', 'friends'],
+    ['EXCEPT', 'other'],
+    ['ONLY', 'other'],
+  ])('un POST %s crédite content.post avec la variante « %s » et sa cible', async (visibility, variant) => {
+    const res = await publish({ ...PUBLISHED_ROW, visibility }, { content: 'Bonjour' });
+
+    expect(res.statusCode).toBe(201);
+    expect(creditOptions('content.post')).toEqual({ postId: PUBLISHED_ROW.id, targetId: PUBLISHED_ROW.id, variant, receipt: `post:${PUBLISHED_ROW.id}` });
+  });
+
+  it('une STORY crédite content.story avec la variante de sa visibilité et sa cible', async () => {
+    const row = storyRow();
+    await publish(row, { type: 'STORY', content: 'Bonjour' });
+
+    expect(creditOptions('content.story')).toEqual({ postId: row.id, targetId: row.id, variant: 'friends', receipt: `post:${row.id}` });
+  });
+
+  it.each([
+    ['PUBLIC', 'public'],
+    ['COMMUNITY', 'community'],
+    ['FRIENDS', 'friends'],
+    ['EXCEPT', 'other'],
+    [undefined, 'friends'],
+  ])('un REEL %s crédite content.reel avec la variante « %s » de sa visibilité écrite (#9667)', async (visibility, variant) => {
+    const row = { ...reelRow(), visibility };
+    await publish(row, { type: 'REEL', content: 'Bonjour', visibility: 'PUBLIC' });
+
+    expect(creditOptions('content.reel')).toEqual({ postId: row.id, targetId: row.id, variant, receipt: `post:${row.id}` });
+  });
+
+  it('les axes outil portent la cible de la publication', async () => {
+    await publish(PUBLISHED_ROW, { content: 'Bonjour', editedInApp: true });
+
+    expect(creditOptions('tool.in_app_edit')).toEqual({ postId: PUBLISHED_ROW.id, targetId: PUBLISHED_ROW.id, receipt: `post:${PUBLISHED_ROW.id}` });
+  });
+
+  it.each([
+    ['PUBLIC', 'public'],
+    ['COMMUNITY', 'community'],
+    ['FRIENDS', 'friends'],
+    ['ONLY', 'other'],
+  ])('un STATUS %s crédite content.status avec la variante « %s », et aucun axe outil (#9667)', async (visibility, variant) => {
+    const row = { ...PUBLISHED_ROW, id: `${PUBLISHED_ROW.id}-STATUS`, type: 'STATUS', visibility };
+    await publish(row, { type: 'STATUS', content: 'Bonjour', moodEmoji: '😀' });
+
+    expect(creditedKeys()).toEqual(['content.status']);
+    expect(creditOptions('content.status')).toEqual({ postId: row.id, targetId: row.id, variant, receipt: `post:${row.id}` });
+  });
+
+  /**
+   * Les deux crédits d'une publication nomment le MÊME post (#9569). Lancés
+   * ensemble, leurs annonces `engagement:post-updated` pouvaient se croiser et
+   * laisser au client la valeur d'avant le second. L'un après l'autre, la
+   * dernière annonce porte le total.
+   */
+  it('l’axe outil ne part qu’une fois le contenu crédité — les deux crédits d’un post s’enchaînent', async () => {
+    let finishContent: () => void = () => undefined;
+    mockRecordActivity.mockImplementation((_userId: string, key: string) =>
+      key === 'content.post' ? new Promise<void>((resolve) => { finishContent = resolve; }) : Promise.resolve(),
+    );
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW);
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Bonjour' } });
+    await settle();
+    const beforeContentSettles = creditedKeys();
+    finishContent();
+    await settle();
+    const afterContentSettles = creditedKeys();
+    await app.close();
+    mockRecordActivity.mockReset().mockResolvedValue(undefined);
+
+    expect(res.statusCode).toBe(201);
+    expect(beforeContentSettles).toEqual(['content.post']);
+    expect(afterContentSettles).toEqual(['content.post', 'tool.direct_publish']);
+  });
+
+  it('un crédit de contenu en échec n’empêche pas l’axe outil', async () => {
+    mockRecordActivity.mockImplementation((_userId: string, key: string) =>
+      key === 'content.post' ? Promise.reject(new Error('mongo down')) : Promise.resolve(),
+    );
+    mockCreatePost.mockResolvedValue(PUBLISHED_ROW);
+    const app = await buildApp();
+
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Bonjour' } });
+    await settle();
+    const keys = creditedKeys();
+    await app.close();
+    mockRecordActivity.mockReset().mockResolvedValue(undefined);
+
+    expect(res.statusCode).toBe(201);
+    expect(keys).toEqual(['content.post', 'tool.direct_publish']);
+  });
+
+  it('un STATUS brouillon (PRIVATE) ne crédite rien', async () => {
+    const row = { ...PUBLISHED_ROW, type: 'STATUS', visibility: 'PRIVATE' };
+    await publish(row, { type: 'STATUS', content: 'Bonjour', moodEmoji: '😀', visibility: 'PRIVATE' });
+
+    expect(creditedKeys()).toEqual([]);
   });
 });

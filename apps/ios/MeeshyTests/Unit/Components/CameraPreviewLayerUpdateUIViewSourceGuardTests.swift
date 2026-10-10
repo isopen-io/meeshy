@@ -22,12 +22,12 @@ final class CameraPreviewLayerUpdateUIViewSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Components/CameraView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Components/CameraPreviewLayer.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
     /// Isole le corps de `updateUIView(_:context:)` plutôt que de grepper le fichier entier — une
-    /// future occurrence non liée de `DispatchQueue.main.async` ailleurs dans `CameraView.swift` ne
+    /// future occurrence non liée de `DispatchQueue.main.async` ailleurs dans `CameraPreviewLayer.swift` ne
     /// doit ni faire échouer ni masquer cette garde précise.
     private func updateUIViewBody(in src: String) throws -> String {
         // **Le NOM, jamais la SIGNATURE** (2026-09-06). Ce marqueur épinglait
@@ -39,11 +39,11 @@ final class CameraPreviewLayerUpdateUIViewSourceGuardTests: XCTestCase {
         // réintroduit dans ce corps serait passé inaperçu.
         let marker = "func updateUIView("
         guard let start = src.range(of: marker) else {
-            XCTFail("`func updateUIView(` introuvable dans CameraView.swift — la garde ne mesure plus rien.")
+            XCTFail("`func updateUIView(` introuvable dans CameraPreviewLayer.swift — la garde ne mesure plus rien.")
             throw XCTSkip("marker")
         }
         guard let end = src.range(of: "\n}\n", range: start.upperBound..<src.endIndex) else {
-            XCTFail("Fin du corps de updateUIView introuvable — CameraView.swift a changé de forme.")
+            XCTFail("Fin du corps de updateUIView introuvable — CameraPreviewLayer.swift a changé de forme.")
             throw XCTSkip("marker")
         }
         return String(src[start.upperBound..<end.lowerBound])

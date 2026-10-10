@@ -75,6 +75,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
         conversationId: CONV_ID,
         conversation: { id: CONV_ID, title: 'Fil', type: 'group', participants: [] },
       }),
+      // #9713 — rouvrir relit la ligne et la loi de son créateur : un lien
+      // déjà actif n'entre pas dans le compte, la loi n'est pas consultée.
+      findUnique: jest.fn<any>().mockResolvedValue({ createdBy: USER_ID, isActive: true, expiresAt: null }),
       update: jest.fn<any>().mockResolvedValue({ id: LINK_DB_ID, linkId: LINK_PUBLIC_ID }),
       delete: jest.fn<any>().mockResolvedValue({}),
     },

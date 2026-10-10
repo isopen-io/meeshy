@@ -75,10 +75,37 @@ describe('une flamme-œil consommée ne se repeint pas au retour du lecteur', ()
     expect(destructionPhaseOf({ deadline, now: NOW, destroying: false, expired: false })).toBe('gone');
   });
 
-  test('expéditeur : la bulle reste, même si une échéance passée lui parvenait', () => {
-    const message = messageOf({ effectFlags: AFTER_READ, senderId: 'u-me', expiresAt: new Date(NOW - 5 * 60_000) });
+  test('expéditeur : la bulle reste tant que la passerelle ne lui sert aucune échéance', () => {
+    const message = messageOf({ effectFlags: AFTER_READ, senderId: 'u-me' });
     const deadline = resolveEphemeralDeadline({ message, isMine: true, now: NOW });
     expect(destructionPhaseOf({ deadline, now: NOW, destroying: false, expired: false })).toBe('visible');
+  });
+});
+
+/**
+ * #8630 — UNE RÉPONSE PART AVEC CE QU'ELLE CITE. La passerelle sert à la
+ * réponse l'échéance du message cité quand celui-ci est mort pour ce lecteur
+ * (`inheritedEphemeralExpiresAt`) : c'est la SEULE échéance que l'auteur d'une
+ * flamme-œil peut recevoir, et elle vaut destruction pour lui aussi.
+ */
+describe('une réponse meurt, pour son lecteur, avec le message éphémère qu’elle cite (#8630)', () => {
+  test('réponse ordinaire, échéance héritée passée ⇒ la rangée est partie', () => {
+    const message = messageOf({ id: 'reply', replyToId: 'flamme', expiresAt: new Date(NOW - 5 * 60_000) } as Partial<Message>);
+    const deadline = resolveEphemeralDeadline({ message, isMine: false, now: NOW });
+    expect(destructionPhaseOf({ deadline, now: NOW, destroying: false, expired: false })).toBe('gone');
+  });
+
+  test('MA réponse flamme-œil, échéance héritée passée ⇒ partie de mon écran aussi', () => {
+    const message = messageOf({ id: 'reply', senderId: 'u-me', effectFlags: AFTER_READ, expiresAt: new Date(NOW - 5 * 60_000) });
+    const deadline = resolveEphemeralDeadline({ message, isMine: true, now: NOW });
+    expect(destructionPhaseOf({ deadline, now: NOW, destroying: false, expired: false })).toBe('gone');
+  });
+
+  test('réponse ordinaire, échéance héritée À VENIR ⇒ encore là, et elle partira à cette échéance', () => {
+    const message = messageOf({ id: 'reply', expiresAt: new Date(NOW + 60_000) });
+    const deadline = resolveEphemeralDeadline({ message, isMine: false, now: NOW });
+    expect(destructionPhaseOf({ deadline, now: NOW, destroying: false, expired: false })).toBe('visible');
+    expect(destructionPhaseOf({ deadline, now: NOW + 60_000 + 1_000, destroying: false, expired: false })).toBe('gone');
   });
 });
 

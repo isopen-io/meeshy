@@ -40,8 +40,11 @@ import { sweepPreferenceWriteSites, formatSite } from './preference-writer-sweep
  * Les trois écrivains de `user-deletions.ts` n'y figurent PAS : ils passent par
  * `writeConversationPreferences`, ce qui est précisément la forme voulue — un
  * écrivain consolidé ne crée pas de site de plus.
+ *
+ * | `routes/communities/settings.ts` (DELETE, `userCommunityPreferences.deleteMany`) | aucune — #9508 : suppression TERMINALE de la communauté, dans la MÊME transaction que `community.delete` ; il n'existe plus d'écran « préférences de cette communauté » à resynchroniser puisque la communauté elle-même disparaît. Même motif de consolidation que `user-deletions.ts` ci-dessus. |
  */
 const FROZEN_WRITE_SITES = [
+  'routes/communities/settings.ts|userCommunityPreferences|deleteMany',
   'routes/community-preferences.ts|userCommunityPreferences|delete',
   'routes/community-preferences.ts|userCommunityPreferences|upsert',
   'routes/community-preferences.ts|userCommunityPreferences|upsert',

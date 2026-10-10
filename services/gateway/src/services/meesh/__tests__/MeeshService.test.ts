@@ -63,6 +63,7 @@ function fausseBase(params: {
   const compte: Compte = { ...params.compte };
   const registre: LigneRegistre[] = [...(params.registre ?? [])];
   const paliers: Palier[] = [...(params.paliers ?? [])];
+  const gloire: LigneRegistre[] = [];
   const compteur = { axisKey: 'content.text_message', count: 400, points: params.points };
   let conflitsRestants = params.conflits ?? 0;
 
@@ -112,7 +113,23 @@ function fausseBase(params: {
       findUnique: async () => ({
         meeshBalance: relire(compte.meeshBalance),
         meeshMintedLifetime: relire(compte.meeshMintedLifetime),
+        engagementScore: relire(compte.engagementScore),
+        levelRecord: 1000,
       }),
+      updateMany: async () => ({ count: 0 }),
+    },
+    // Les missions du jour accomplies, que jugent les étapes des niveaux (#9706) : aucune ici.
+    dailyMission: { count: async () => 0 },
+    gloryLedger: {
+      create: async (args: { data: LigneRegistre }) => {
+        gloire.push({ ...args.data });
+        return args.data;
+      },
+      // Le plafond de niveau se lit sur la Gloire gravée (#9688).
+      aggregate: async (args: { where: { userId: string } }) => {
+        const lignes = gloire.filter((l) => l.userId === args.where.userId);
+        return { _sum: { delta: lignes.length === 0 ? null : lignes.reduce((s, l) => s + l.delta, 0) } };
+      },
     },
     meeshLedger: {
       findUnique: async (args: { where: { userId_requestId: { userId: string; requestId: string } } }) => {
@@ -143,6 +160,7 @@ function fausseBase(params: {
       compteur: { ...compteur },
       registre: [...registre],
       paliers: [...paliers],
+      gloire: [...gloire],
     };
     try {
       return await fn(client);
@@ -151,6 +169,7 @@ function fausseBase(params: {
       Object.assign(compteur, instantane.compteur);
       registre.splice(0, registre.length, ...instantane.registre);
       paliers.splice(0, paliers.length, ...instantane.paliers);
+      gloire.splice(0, gloire.length, ...instantane.gloire);
       throw err;
     }
   };
@@ -197,7 +216,7 @@ describe('MeeshService.mint — le solde se lit au REGISTRE', () => {
 
     const issue = await new MeeshService(prisma).mint(USER_ID, 'frappe-0003');
 
-    expect(issue).toEqual({ status: 'already-minted', balance: 1, mintedLifetime: 1 });
+    expect(issue).toEqual({ status: 'already-minted', balance: 1, mintedLifetime: 1, receipt: null });
   });
 
   it('un compte sain ne compte pas deux fois la frappe qu’il vient d’écrire', async () => {

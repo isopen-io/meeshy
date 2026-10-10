@@ -492,17 +492,25 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
   // Le fallback (langue déclarée par le call site) est normalisé comme les
   // niveaux de resolveUserLanguagesOrdered : le docstring promet la « même
   // normalisation que resolveUserLanguage » pour TOUS les chemins de retour.
-  // Ces niveaux réduisent la casse ET les sous-tags région/script via
-  // normalizeLanguageCode ('it-IT' → 'it', 'FR' → 'fr') : un fallback laissé
-  // région-taggé ('pt-BR' → 'pt-br') ou en casse haute manquerait les
+  // Ces niveaux réduisent la casse ET les sous-tags région/script : un fallback
+  // laissé région-taggé ('pt-BR' → 'pt-br') ou en casse haute manquerait les
   // traductions indexées en minuscules 2/3-lettres exactement comme une
-  // préférence in-app non normalisée (violation du Prisme). Le repli
-  // `?? .toLowerCase()` préserve le fallback terminal (jamais `undefined`) pour
-  // les codes que normalizeLanguageCode ne sait pas réduire — parité stricte
-  // avec le contrat normalizeLanguageForDedup, zéro régression sur les codes
-  // déjà canoniques.
-  const fallback =
-    normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
+  // préférence in-app non normalisée (violation du Prisme).
+  //
+  // Le couple « normalisation avec repli » est une SSOT, `normalizeLanguageForDedup`,
+  // et c'est elle qu'on appelle — pas une troisième réécriture (#9247). Le repli
+  // écrit ici à la main, `normalizeLanguageCode(x) ?? x.toLowerCase()`, se croyait
+  // en « parité stricte » avec elle et ne l'était que sur les codes CATALOGUÉS :
+  // hors catalogue, `normalizeLanguageCode` rend `undefined` et `.toLowerCase()`
+  // GARDE la région — 'yue-HK' → 'yue-hk', 'fil-PH' → 'fil-ph' — quand le chemin
+  // INSCRIT (normalizeInAppLanguage, juste au-dessus) et le pipeline de traduction
+  // strippent tous deux vers 'yue' / 'fil'. Deux formes pour une même langue, donc
+  // un lecteur que la comparaison ne reconnaît plus : la file hors ligne ne
+  // déposait rien pour un invité de lien partagé déclarant un tel code.
+  //
+  // La SSOT préserve la garantie de fallback terminal (jamais `undefined`, jamais
+  // la chaîne vide) et ne change rien aux codes déjà canoniques.
+  const fallback = normalizeLanguageForDedup(participant.language)
   if (participant.type !== 'user' || !participant.user) {
     return fallback
   }
@@ -564,45 +572,77 @@ export function canEditMessage(
   return { canEdit: true };
 }
 
+/** Ce que {@link generateDefaultConversationTitle} lit d'un membre pour le nommer. */
+type TitleMember = {
+  id?: string;
+  displayName?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+};
+
 /**
- * Génère un titre par défaut pour une conversation sans titre
+ * Nom d'un membre dans l'ordre CANONIQUE du produit : `displayName` →
+ * `firstName lastName` → `username` → repli. Une chaîne blanche vaut absence.
+ *
+ * Cet ordre n'est pas un choix local : c'est celui que les DEUX clients
+ * appliquent — SDK Swift (`ParticipantModels.swift`, `FriendModels.swift`,
+ * `ShareLinkModels.swift`, `Cache/UserDisplayNameCache.swift`, tous
+ * `displayName ?? [firstName, lastName] ?? username`) et web Vite
+ * (`apps/web/src/lib/api/conversation-members.ts`) — et celui que le SSOT
+ * partagé délègue explicitement au client (`participant-helpers.ts`,
+ * `resolveParticipantDisplayName` : « Ne couvre QUE le niveau `displayName` …
+ * Les fallbacks `firstName lastName` / `username` restent la responsabilité du
+ * client »).
+ *
+ * Ce titre-ci était le SEUL site du produit à placer `username` AVANT le nom
+ * réel (#8970) : un membre ayant un prénom et un nom mais pas de `displayName`
+ * intitulait la conversation `@jdoe123` là où chaque bulle de la même
+ * conversation affiche « John Doe ». La coalescence était de surcroît écrite
+ * DEUX fois — un membre seul, puis plusieurs — donc deux ordres à maintenir
+ * pour une seule règle. Elle ne l'est plus qu'ici.
+ */
+const resolveMemberName = (member: TitleMember): string => {
+  const fullName = [member.firstName, member.lastName]
+    .filter((part): part is string => !!part && part.trim().length > 0)
+    .map((part) => part.trim())
+    .join(' ');
+  return member.displayName?.trim() || fullName || member.username?.trim() || 'Unknown User';
+};
+
+/**
+ * Génère un titre par défaut pour une conversation sans titre.
+ *
+ * Chaque membre est nommé par {@link resolveMemberName} — appelants côté
+ * gateway : `services/conversationCard.ts`, `routes/conversations/core-detail.ts`,
+ * `core-list.ts` et `search.ts`. Tous doivent passer `firstName`/`lastName` ET
+ * les charger dans leur `select` Prisma, sans quoi le nom réel n'atteint jamais
+ * cette fonction et le titre retombe sur `@username` (#8970, défaut 2 : c'était
+ * le cas de `search.ts`). Le garde
+ * `services/gateway/src/__tests__/unit/services/default-title-callers.test.ts`
+ * le vérifie sur les sources.
  */
 export function generateDefaultConversationTitle(
-  members: Array<{ id?: string; displayName?: string; username?: string; firstName?: string; lastName?: string }>,
+  members: Array<TitleMember>,
   currentUserId: string
 ): string {
   const otherMembers = members.filter((m) => m.id !== currentUserId);
-  
+
   if (otherMembers.length === 0) {
     return 'Conversation';
   }
-  
+
   if (otherMembers.length === 1) {
     const member = otherMembers[0];
-    if (member) {
-      const fullName = [member.firstName, member.lastName]
-        .filter((p): p is string => !!p && p.trim().length > 0)
-        .map(p => p.trim())
-        .join(' ');
-      return member.displayName?.trim() || member.username?.trim() || fullName || 'Unknown User';
-    }
-    return 'Unknown User';
+    return member ? resolveMemberName(member) : 'Unknown User';
   }
-  
-  const resolveName = (m: { displayName?: string; username?: string; firstName?: string; lastName?: string }): string => {
-    const fullName = [m.firstName, m.lastName]
-      .filter((p): p is string => !!p && p.trim().length > 0)
-      .map(p => p.trim())
-      .join(' ');
-    return m.displayName?.trim() || m.username?.trim() || fullName || 'Unknown User';
-  };
 
   if (otherMembers.length === 2) {
-    return otherMembers.map(resolveName).join(', ');
+    return otherMembers.map(resolveMemberName).join(', ');
   }
 
   // 3+ membres
-  const firstTwo = otherMembers.slice(0, 2).map(resolveName);
+  const firstTwo = otherMembers.slice(0, 2).map(resolveMemberName);
   return `${firstTwo.join(', ')} and ${otherMembers.length - 2} other(s)`;
 }
 

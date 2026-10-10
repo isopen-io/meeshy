@@ -41,6 +41,7 @@ describe('Composer — le cadre des emojis rapides', () => {
       root.unmount();
     });
     container.remove();
+    localStorage.clear();
   });
 
   const mount = (onSend: (payload: { text: string }) => void = () => {}) => {
@@ -85,11 +86,11 @@ describe('Composer — le cadre des emojis rapides', () => {
     expect(frame.hasAttribute('data-covers-toolbar')).toBe(false);
   });
 
-  test('la barre d’outils garde TOUTE sa largeur, focus ou non : aucune réserve, tonalité présente', () => {
+  test('la barre d’outils garde TOUTE sa largeur, focus ou non : aucune réserve, la caméra tient l’angle droit (#9082)', () => {
     const el = mount();
     const toolbar = el.querySelector<HTMLElement>('[data-composer-toolbar]')!;
     expect(toolbar.style.paddingInlineEnd).toBe('');
-    expect(toolbar.querySelector('[role="img"][aria-label^="Tonalité"]')).not.toBeNull();
+    expect(toolbar.lastElementChild?.hasAttribute('data-composer-camera')).toBe(true);
   });
 
   test('du texte dans le champ : le cadre cède la place au bouton d’envoi', () => {
@@ -211,6 +212,7 @@ describe('Composer — le retour après envoi', () => {
       dispose: () => {
         act(() => root.unmount());
         container.remove();
+        localStorage.clear();
       },
     };
   };

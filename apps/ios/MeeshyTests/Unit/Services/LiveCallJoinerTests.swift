@@ -24,6 +24,7 @@ final class LiveCallJoinerTests: XCTestCase {
         var pendingCallId: String?
         private(set) var broughtForward = 0
         private(set) var rejoins: [(callId: String, conversationId: String, remoteUserId: String, name: String, isVideo: Bool)] = []
+        private(set) var markedGroups: [(conversationId: String, title: String?)] = []
 
         var context: LiveCallJoinContext {
             LiveCallJoinContext(
@@ -34,7 +35,8 @@ final class LiveCallJoinerTests: XCTestCase {
                 rejoinActiveCall: { [weak self] callId, conversationId, remoteUserId, name, isVideo in
                     self?.rejoins.append((callId, conversationId, remoteUserId, name, isVideo))
                     return true
-                }
+                },
+                markGroupConversation: { [weak self] conversationId, title in self?.markedGroups.append((conversationId, title)) }
             )
         }
     }
@@ -134,5 +136,56 @@ final class LiveCallJoinerTests: XCTestCase {
             FeedbackToastManager.shared.currentToast?.message,
             String(localized: "bubble.call.join.ended", defaultValue: "L'appel est terminé", bundle: .main)
         )
+    }
+
+    // MARK: - #9111 — un groupe se rejoint par le maillage
+
+    private func groupRow() -> Conversation {
+        var row = Conversation(id: "group-1", identifier: "group-1", type: .group, lastMessageAt: Date())
+        row.title = "Équipe"
+        row.activeCall = call()
+        return row
+    }
+
+    func test_request_fromAGroupRow_isAGroupJoin() throws {
+        let request = try XCTUnwrap(LiveCallJoinRequest(conversation: groupRow(), currentUserId: "u-me"))
+
+        XCTAssertTrue(request.isGroup)
+    }
+
+    func test_join_group_marksTheConversationAndRejoinsThroughIt() async throws {
+        let spy = CallSpy()
+        let stub = ActiveCallStub()
+        stub.result = .success(ActiveCallSession(
+            id: "call-1", conversationId: "group-1", mode: "p2p", status: "active",
+            participants: [ActiveCallParticipant(userId: "u-me"), ActiveCallParticipant(userId: "u-bob"), ActiveCallParticipant(userId: "u-cleo")]
+        ))
+        let request = try XCTUnwrap(LiveCallJoinRequest(conversation: groupRow(), currentUserId: "u-me"))
+
+        await LiveCallJoiner(context: spy.context, activeCallService: stub).join(request)
+
+        XCTAssertEqual(spy.markedGroups.map(\.conversationId), ["group-1"])
+        XCTAssertEqual(spy.markedGroups.first?.title, "Équipe")
+        XCTAssertEqual(spy.rejoins.first?.remoteUserId, "group-1")
+        XCTAssertEqual(spy.rejoins.first?.name, "Équipe")
+    }
+
+    func test_join_direct_rejoinsTheRemainingPeer_neverADepartedOne() async throws {
+        let spy = CallSpy()
+        let stub = ActiveCallStub()
+        stub.result = .success(ActiveCallSession(
+            id: "call-1", conversationId: "conv-1", mode: "p2p", status: "active",
+            participants: [
+                ActiveCallParticipant(userId: "u-ghost", leftAt: "2026-10-02T10:00:00.000Z"),
+                ActiveCallParticipant(userId: "u-me"),
+                ActiveCallParticipant(userId: "u-alice")
+            ]
+        ))
+        let request = try XCTUnwrap(LiveCallJoinRequest(conversation: conversation(call: call()), currentUserId: "u-me"))
+
+        await LiveCallJoiner(context: spy.context, activeCallService: stub).join(request)
+
+        XCTAssertEqual(spy.rejoins.first?.remoteUserId, "u-alice")
+        XCTAssertTrue(spy.markedGroups.isEmpty)
     }
 }

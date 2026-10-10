@@ -1,9 +1,9 @@
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
+import { contentExitOf, exitOffers, messageExitOffers, pieceIsOpen, type ExitMessage } from '@/lib/view/content-exit';
 import type { Message, MessageTranslation } from '@/lib/api/types';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
-import { translationsOf } from '@/lib/view/message';
-import { forwardRefusalOf } from '@/lib/view/forward';
+import { kindOf, translationsOf } from '@/lib/view/message';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
 /**
@@ -39,7 +39,7 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * serveur est dite ICI, avant l'aller-retour, pour qu'un refus ne se découvre
  * pas après coup.
  */
-export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'more';
+export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'exportDiscussion' | 'more';
 
 /** Les six glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
 export type MessageMenuGlyph = 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'imageSquare' | 'lightning' | 'dotsThree';
@@ -59,6 +59,7 @@ const MENU_LABEL_KEYS = {
   reply: 'message.menu.reply',
   export: 'message.menu.export',
   exportQuick: 'message.menu.exportQuick',
+  exportDiscussion: 'message.menu.exportDiscussion',
   more: 'message.menu.more',
 } as const satisfies Readonly<Record<MessageActionId, InterfaceCatalogKey>>;
 
@@ -79,12 +80,35 @@ export type MessageMenuContext = {
    * sous-menu à une seule entrée ne changerait rien (loi 4). */
   readonly languageCount: number;
   /**
-   * #5866 — `forwardRefusalOf(message) === null` (`view/forward.ts`), la
-   * règle du serveur rejouée AVANT l'aller-retour. Indépendante d'`isProtected` :
-   * un ÉPHÉMÈRE et un FLOU se transfèrent (le serveur les admet, l'éphémère
-   * héritant même de sa durée) alors qu'ils ne se copient ni ne se traduisent.
+   * #5866, #9573 — la loi de sortie autorise le transfert (`content-exit.ts`),
+   * dit AVANT l'aller-retour. Indépendante d'`isProtected` : un FLOU et une
+   * FLAMME À DURÉE se transfèrent (la copie garde le flou, et ne dure pas
+   * plus que sa source) alors qu'ils ne se copient pas ; une flamme après
+   * lecture et une vue unique ne se transfèrent pas.
    */
   readonly canForward: boolean;
+  /**
+   * LE CONTENU PEUT QUITTER MEESHY (#9573) — `false` pour tout contenu qui
+   * disparaît (flamme, vue unique, message ou pièce) : ni Copier, ni Imager,
+   * ni Imager la discussion, ni Composer. Traduire et Répondre restent : ils
+   * ne sortent rien. Absent ⇒ rien ne le retient.
+   */
+  readonly leaves?: boolean;
+  /**
+   * LE MESSAGE PEUT S'IMAGER, CITATION COMPRISE (décision porteur du
+   * 2026-10-08, #9573) — `false` dès qu'il CITE un contenu qui ne sort pas
+   * (`messageExitOffers`) : ni Imager, ni Export rapide, ni Imager la
+   * discussion, alors que Copier, Transférer et Composer restent. Absent ⇒
+   * rien ne le retient.
+   */
+  readonly imageLeaves?: boolean;
+  /**
+   * LA DISCUSSION QUI MÈNE AU MESSAGE PEUT S'IMAGER (#9039, #9573) — `false`
+   * quand sa carte se refuse, notamment parce qu'un des messages peints CITE
+   * un contenu qui ne sort pas (`discussionCardSubjectOf`). Posé par l'hôte
+   * qui tient le fil ; absent ⇒ seule la garde d'« Imager » s'applique.
+   */
+  readonly discussionImageable?: boolean;
   /**
    * UNE VUE UNIQUE N'OFFRE RIEN QUI TOUCHE À SON CONTENU (#7580) — ouverte ou
    * non : ni aperçu, ni copie, ni transfert, ni traduction, ni réponse qui la
@@ -94,7 +118,18 @@ export type MessageMenuContext = {
   readonly isViewOnce?: boolean;
   /** Un format d'export par défaut est enregistré sur l'appareil : « Export rapide » l'applique sans options. */
   readonly hasDefaultExportFormat?: boolean;
+  /**
+   * UNE PHOTO, UNE VIDÉO OU UN VOCAL NON MASQUÉS (#8693) — « Imager » un
+   * message sans texte a quelque chose à peindre. Une pièce à vue unique ou
+   * floutée n'en est pas une (leçon 275 : la protection se lit aussi au niveau
+   * de la pièce).
+   */
+  readonly hasImageableMedia?: boolean;
+  /** Le rang de la première photo ou vidéo que « Composer » peut poser dans le studio — `null` : rien à composer. */
+  readonly composableIndex?: number | null;
 };
+
+type MenuPiece = { readonly mimeType: string; readonly isBlurred?: boolean; readonly isViewOnce?: boolean; readonly isEncrypted?: boolean; readonly effectFlags?: number | null };
 
 /**
  * Dérive le contexte d'UN message, à l'instant `now` — même discipline que
@@ -107,21 +142,28 @@ export type MessageMenuContext = {
  * `translationsOf` qui déclare l'optionalité, une fois.
  */
 export function messageMenuContextOf(
-  message: Pick<
-    Message,
-    'deletedAt' | 'isViewOnce' | 'viewOnceCount' | 'isBlurred' | 'expiresAt' | 'content' | 'effectFlags'
-  > & {
-    readonly translations?: readonly MessageTranslation[];
-  },
+  message: Omit<ExitMessage, 'attachments'> &
+    Pick<Message, 'content'> & {
+      readonly translations?: readonly MessageTranslation[];
+      readonly attachments?: readonly MenuPiece[];
+      readonly replyTo?: ExitMessage | null;
+    },
   input: { readonly now: number },
 ): MessageMenuContext {
-  const kind = protectionOf(message, input.now);
+  const exit = contentExitOf(message, input.now);
+  const leaves = exitOffers(exit, 'image');
+  const open = leaves ? (message.attachments ?? []).map((piece) => (pieceIsOpen(piece) ? kindOf(piece) : 'file')) : [];
+  const composable = exitOffers(exit, 'compose') ? open.findIndex((form) => form === 'image' || form === 'video') : -1;
   return {
     hasText: message.content.trim().length > 0,
-    isProtected: kind !== 'standard',
+    isProtected: !exit.readable,
     languageCount: 1 + translationsOf(message).length,
-    canForward: forwardRefusalOf(message, input.now) === null,
+    canForward: exitOffers(exit, 'forward'),
+    leaves: exitOffers(exit, 'copy'),
+    imageLeaves: messageExitOffers(message, 'image', input.now),
     isViewOnce: message.isViewOnce === true,
+    hasImageableMedia: open.some((form) => form !== 'file'),
+    composableIndex: composable === -1 ? null : composable,
   };
 }
 
@@ -144,8 +186,9 @@ export function messageDetailExposureOf(
 /**
  * `MessageActionResolver.primaryActions` réduit : `select` et `more`
  * inconditionnels, `translate`/`copy` gardés par `hasText` ET `!isProtected`
- * (`translate` de plus par `languageCount > 1`), `forward` gardé par
- * `canForward` (#5866 — la règle du serveur, dite AVANT l'aller-retour),
+ * (`translate` de plus par `languageCount > 1`, `copy` par `leaves` — un
+ * contenu qui disparaît ne se copie pas, #9573), `forward` gardé par
+ * `canForward` (la loi de sortie, dite AVANT l'aller-retour),
  * `reply` inconditionnel —
  * répondre reste toujours possible, aucune capacité manquante ne le retire.
  */
@@ -155,17 +198,20 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
   if (ctx.hasText && !ctx.isProtected && ctx.languageCount > 1) {
     items.push({ id: 'translate', labelKey: MENU_LABEL_KEYS.translate, glyph: 'globe' });
   }
-  if (ctx.hasText && !ctx.isProtected) {
+  if (ctx.hasText && !ctx.isProtected && ctx.leaves !== false) {
     items.push({ id: 'copy', labelKey: MENU_LABEL_KEYS.copy, glyph: 'copy' });
   }
   if (ctx.canForward) {
     items.push({ id: 'forward', labelKey: MENU_LABEL_KEYS.forward, glyph: 'arrowBendUpRight' });
   }
   items.push({ id: 'reply', labelKey: MENU_LABEL_KEYS.reply, glyph: 'magicWand' });
-  /* « EXPORTER EN IMAGE » — même garde que « Copier » : une image est une
-     copie qu'on partage, ce qui ne se copie pas ne se peint pas
-     (`lib/export/message-card-subject.ts`). */
-  if (ctx.hasText && !ctx.isProtected) {
+  /* « IMAGER » (#8693, ex « Exporter en image ») — même garde que « Copier » :
+     une image est une copie qu'on partage, ce qui ne se copie pas ne se peint
+     pas (`lib/export/message-card-subject.ts`). Il tient dans le menu RAPIDE la
+     place qu'iOS donnait à « Composer » ; « Composer » ET « Imager » vivent
+     ensemble derrière le (>) de « Plus… » (`message-detail-sheet.tsx`). Un
+     message fait d'un seul média s'image aussi. */
+  if (imageableOf(ctx)) {
     items.push({ id: 'export', labelKey: MENU_LABEL_KEYS.export, glyph: 'imageSquare' });
     if (ctx.hasDefaultExportFormat === true) {
       items.push({ id: 'exportQuick', labelKey: MENU_LABEL_KEYS.exportQuick, glyph: 'lightning' });
@@ -173,6 +219,23 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
   }
   items.push({ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' });
   return items;
+}
+
+/** « Imager » a quelque chose à peindre ET le contenu peut sortir, citation comprise — la garde du menu, de son sous-menu et de « Plus… ». */
+export const imageableOf = (ctx: MessageMenuContext): boolean =>
+  (ctx.hasText || ctx.hasImageableMedia === true) && !ctx.isProtected && ctx.leaves !== false && ctx.imageLeaves !== false;
+
+/**
+ * **LE SOUS-MENU DE « TRANSFÉRER »** (#9039) — « Transférer » y garde son
+ * effet (armer la sélection, D-113) et propose « Imager la discussion » :
+ * l'image des messages qui mènent à celui-ci (`discussion-card-subject.ts`),
+ * sous la garde d'« Imager ». Une seule entrée ⇒ le menu n'ouvre pas de
+ * sous-menu (loi 4 : un niveau qui ne change rien n'existe pas).
+ */
+export function forwardMenuItems(ctx: MessageMenuContext): readonly MessageMenuItem[] {
+  const forward: MessageMenuItem = { id: 'forward', labelKey: MENU_LABEL_KEYS.forward, glyph: 'arrowBendUpRight' };
+  if (!imageableOf(ctx) || ctx.discussionImageable === false) return [forward];
+  return [forward, { id: 'exportDiscussion', labelKey: MENU_LABEL_KEYS.exportDiscussion, glyph: 'imageSquare' }];
 }
 
 /**
@@ -226,8 +289,8 @@ export function starrableOf(
   return !message.isViewOnce && ((message.effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) === 0;
 }
 
-/** Le rail — 6 fixes (question 6 de la spécification, tranchée : jamais un
- * classement par usage ce lot). Miroir `MessageOverlayMenu.swift:99-101`. */
+/** Les 6 réactions rapides par DÉFAUT — miroir `MessageOverlayMenu.swift:99-101`.
+ * Le rail et le composeur les classent par usage (`lib/emoji-usage.ts`, #7983). */
 export const QUICK_REACTIONS = ['😂', '❤️', '👍', '😮', '😢', '🔥'] as const;
 
 /** Les 20 emojis étendus — miroir `MessageOverlayMenu.swift:99-104`

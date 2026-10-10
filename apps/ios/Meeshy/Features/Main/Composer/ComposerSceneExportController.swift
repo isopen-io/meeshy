@@ -152,6 +152,34 @@ final class ComposerSceneExportController: ObservableObject {
         }
     }
 
+    /// **Bake la scène pour la rendre au MESSAGE** (#9124) : ni filigrane, ni
+    /// interlude, ni carte de fin — la vidéo ne sort pas de Meeshy, elle part
+    /// dans une conversation. Le fichier appartient ensuite au message : il
+    /// n'est pas nettoyé ici.
+    func bakeForMessage(slide: StorySlide, inputs: StoryExportInputs,
+                        onReady: @escaping @MainActor (URL) -> Void) {
+        guard !isExporting else { return }
+        progress = 0
+        let exporter = self.exporter
+        task = Task { [weak self] in
+            let url = await exporter.prepareExport(
+                slide: slide, languages: [], watermark: nil, intro: nil, inputs: inputs,
+                appendsBrandOutro: false,
+                onProgress: { [weak self] fraction in self?.progress = fraction },
+                onPhaseChange: nil)
+            guard let self, !Task.isCancelled else {
+                if let url { exporter.cleanupExport(at: url) }
+                return
+            }
+            self.progress = nil
+            guard let url else {
+                self.toasts.showError(ComposerExportCopy.failed)
+                return
+            }
+            onReady(url)
+        }
+    }
+
     /// Ce que devient le fichier baké. **Le nettoyage est ici et nulle part
     /// ailleurs pour la photothèque** : une fois la copie faite, le
     /// temporaire n'a plus de lecteur, et le laisser derrière remplit le

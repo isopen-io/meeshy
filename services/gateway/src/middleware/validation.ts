@@ -8,6 +8,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { z, ZodError } from 'zod';
 import { logger } from '../utils/logger.js';
+import { redactReaderFileUrl } from '../utils/redact-reader-file-url';
 
 /**
  * Creates a validation middleware for Fastify routes
@@ -46,7 +47,7 @@ export function createValidationMiddleware(schema: z.ZodType<any>) {
         }));
 
         logger.warn('Validation error', {
-          path: request.url,
+          path: redactReaderFileUrl(request.url),
           method: request.method,
           errors
         });

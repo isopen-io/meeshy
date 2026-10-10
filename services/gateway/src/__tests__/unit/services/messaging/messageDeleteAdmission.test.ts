@@ -61,6 +61,8 @@ const admit = (params: {
     message: {
       authorUserId: params.authorUserId === undefined ? AUTHOR : params.authorUserId,
       conversationId: CONV,
+      messageType: 'text',
+      metadata: null,
     },
     onError: params.onError,
   });

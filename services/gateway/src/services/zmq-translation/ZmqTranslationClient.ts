@@ -27,6 +27,7 @@ import type {
   VoiceProfileRequest
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { guardedInterval, guardedTimeout } from '../../utils/guarded-timer';
 // Logger dédié pour ZmqTranslationClient
 const logger = enhancedLogger.child({ module: 'ZmqTranslationClient' });
 
@@ -475,11 +476,6 @@ export class ZmqTranslationClient extends EventEmitter {
       logger.info(`🔧 Démarrage de l'écoute des résultats...`);
       this._startResultListener();
 
-      // Vérification de connectivité après un délai
-      setTimeout(() => {
-        // Log de vérification (optionnel)
-      }, 2000);
-
       this.running = true;
       logger.info('✅ ZmqTranslationClient initialisé avec succès');
       logger.info(`🔌 Socket PUSH connecté: ${this.host}:${this.pushPort} (envoi commandes)`);
@@ -565,7 +561,7 @@ export class ZmqTranslationClient extends EventEmitter {
 
     // Démarrer le polling avec setInterval
     logger.info('🔄 Démarrage polling avec setInterval...');
-    this.pollingIntervalId = setInterval(checkForMessages, 100); // 100ms entre chaque vérification
+    this.pollingIntervalId = guardedInterval({ name: 'zmq-result-polling', everyMs: 100, logger, run: checkForMessages }); // 100ms entre chaque vérification
     this.pollingIntervalId.unref?.();
   }
 
@@ -850,11 +846,11 @@ export class ZmqTranslationClient extends EventEmitter {
       logger.info(`🧪 [ZMQ-Client] Ping envoyé pour test via port ${this.pushPort}`);
 
       // Attendre un peu pour voir si on reçoit quelque chose
-      setTimeout(() => {
+      guardedTimeout({ name: 'zmq-reception-test-report', afterMs: 3000, logger, run: () => {
         logger.info(`🧪 [ZMQ-Client] Test terminé. Messages reçus: ${this.stats.results_received}`);
         logger.info(`🧪 [ZMQ-Client] Heartbeats: ${this.stats.uptime_seconds}s`);
         logger.info(`🧪 [ZMQ-Client] Running: ${this.running}`);
-      }, 3000);
+      } });
 
     } catch (error) {
       logger.error(`❌ [ZMQ-Client] Erreur test réception: ${error}`);

@@ -1,3 +1,4 @@
+import { quotedPieceIdOf } from '@/lib/view/quoted-preview';
 import { memo, useRef } from 'react';
 
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
@@ -23,12 +24,14 @@ import {
   META_TEXT_OPACITY,
   ROW_PADDING_HORIZONTAL,
   ROW_PADDING_VERTICAL,
+  STICKER_RENDER_SCALE,
   STICKER_SIDE,
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
 import { useFocusFrame } from '@/lib/view/use-focus-frame';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
+import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
 import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
@@ -203,7 +206,8 @@ export const FocalRow = memo(function FocalRow({
    */
   revealable?: boolean;
   /** Saute au message cité (défaut #5566 défaut 10 : le bouton ne faisait rien). */
-  onJumpToMessage: (messageId: string) => void;
+  /** `pieceId` (#9911) — la pièce que la citation nomme : le saut met sa tuile en évidence. */
+  onJumpToMessage: (messageId: string, pieceId?: string) => void;
   /**
    * Ouvre la story citée (#5936) — `undefined` ⇒ la carte se rend quand même
    * (« la citation qui subsiste »), mais AUCUN geste ne s'arme (loi 4,
@@ -529,7 +533,7 @@ export const FocalRow = memo(function FocalRow({
             quote={message.replyTo}
             isMine={false}
             languages={languages}
-            onJump={() => onJumpToMessage(message.replyTo!.id)}
+            onJump={() => onJumpToMessage(message.replyTo!.id, quotedPieceIdOf(message.replyTo!))}
             citingId={message.id}
             now={new Date(nowMs)}
           />
@@ -550,7 +554,7 @@ export const FocalRow = memo(function FocalRow({
       {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
-        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} />
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE * STICKER_RENDER_SCALE} />
       ) : body.kind === 'emoji-only' ? (
         <EmojiOnly text={body.text} fontSize={body.fontSize} />
       ) : rendered.text ? (
@@ -676,7 +680,7 @@ export const FocalRow = memo(function FocalRow({
                 height: AVATAR_SIZE,
                 border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--color-ios-ink-3)'}`,
                 backgroundColor: selected ? 'var(--accent)' : 'transparent',
-                color: 'white',
+                color: 'var(--color-ios-on-brand)',
               }}
             >
               {selected ? '✓' : null}
@@ -685,6 +689,7 @@ export const FocalRow = memo(function FocalRow({
           </button>
         ) : head ? (
           <AuthorAvatar
+            {...(isMine ? {} : { authorId: hereKeyOf(message.sender) })}
             initials={initialsOf(senderAvatarName)}
             color="var(--accent)"
             size={AVATAR_SIZE}
@@ -817,6 +822,7 @@ export const FocalRow = memo(function FocalRow({
                   messageId={message.id}
                   kind={kind}
                   isViewOnce={message.isViewOnce}
+                  isBlurred={message.isBlurred === true}
                   contentLength={message.content.length}
                   attachments={message.attachments}
                   surface="row"

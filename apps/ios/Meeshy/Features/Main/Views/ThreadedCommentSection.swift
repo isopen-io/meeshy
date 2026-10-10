@@ -15,6 +15,8 @@ struct ThreadedCommentSection: View {
     let isExpanded: Bool
     let isLoadingReplies: Bool
     let accentColor: String
+    /// Le post commenté — « Imager » un commentaire le met en tête (#9686).
+    var post: FeedPost? = nil
     let likedIds: Set<String>
     let likeDelta: [String: Int]
     let heartInFlightIds: Set<String>
@@ -101,7 +103,9 @@ struct ThreadedCommentSection: View {
                 onSeeReplies: { onToggleThread() },
                 moodEmoji: moodEmoji,
                 storyState: storyState,
-                presenceState: presenceState
+                presenceState: presenceState,
+                threadReplies: replies,
+                post: post
             )
                 .equatable()
 
@@ -122,7 +126,10 @@ struct ThreadedCommentSection: View {
                         onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil
+                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil,
+                        threadRoot: comment,
+                        threadReplies: replies,
+                        post: post
                     )
                         .equatable()
                     .padding(.leading, 36)
@@ -143,7 +150,7 @@ struct ThreadedCommentSection: View {
                         Spacer()
                     }
                     .padding(.leading, 36)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, MeeshySpacing.sm)
                 }
 
                 ForEach(replies) { reply in
@@ -161,14 +168,17 @@ struct ThreadedCommentSection: View {
                         onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
                         moodEmoji: replyMoodResolver?(reply.authorId),
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil
+                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil,
+                        threadRoot: comment,
+                        threadReplies: replies,
+                        post: post
                     )
                         .equatable()
                     .padding(.leading, 36)
                     // Même style que le tint de section (les deux appelants) —
                     // au niveau de la rangée pour cibler UNE réponse précise.
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .fill(Color(hex: accentColor).opacity(highlightedCommentId == reply.id ? 0.12 : 0))
                     )
                     .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
@@ -183,11 +193,11 @@ struct ThreadedCommentSection: View {
                         HapticFeedback.light()
                         Task { await onLoadMoreReplies() }
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "chevron.down")
-                                .font(MeeshyFont.relative(10, weight: .bold))
+                                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                             Text(String(localized: "feed.comments.load_more_replies", defaultValue: "Voir plus de réponses", bundle: .main))
-                                .font(MeeshyFont.relative(12, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                         }
                         .foregroundColor(Color(hex: accentColor))
                     }

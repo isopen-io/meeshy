@@ -28,6 +28,7 @@ const mockMetadataManager = {
   extractMetadata: jest.fn() as jest.Mock<any>,
   generateThumbnail: jest.fn() as jest.Mock<any>,
   generateVideoThumbnail: jest.fn() as jest.Mock<any>,
+  probeMediaStreams: jest.fn(async () => ({ video: true, audio: true })) as jest.Mock<any>,
   generateImageVariants: jest.fn() as jest.Mock<any>,
   generateThumbnailFromBuffer: jest.fn() as jest.Mock<any>,
   generateVideoThumbnailFromBuffer: jest.fn() as jest.Mock<any>,

@@ -255,3 +255,84 @@ describe('les liaisons — des façons variées de mener la question à la répo
     for (const link of CARD_LINKS) expect(layoutWith(link).height).toBe(CARD_MIN_HEIGHT);
   });
 });
+
+describe('les zones touchables d’une carte', () => {
+  test('une réponse citée se lit de haut en bas : citation, liaison, réponse — sans en-tête non demandé', () => {
+    const layout = layoutMessageCard(cardInput(), measure);
+    expect(layout.regions.map((r) => r.part)).toEqual(['quote', 'link', 'reply']);
+    const [quote, link, reply] = layout.regions;
+    expect(quote!.y + quote!.height).toBeLessThanOrEqual(link!.y);
+    expect(link!.y + link!.height).toBeLessThanOrEqual(reply!.y);
+  });
+
+  test('le titre ou la date ouvrent une zone d’en-tête ; un message isolé n’a ni citation ni liaison', () => {
+    const layout = layoutMessageCard(cardInput({ quoted: null, title: 'Soirée', date: '28 septembre 2026' }), measure);
+    expect(layout.regions.map((r) => r.part)).toEqual(['header', 'reply']);
+  });
+
+  test('chaque zone contient le texte qu’elle nomme', () => {
+    const layout = layoutMessageCard(cardInput({ template: templateIdOf({ palette: 'neige', typeface: 'systeme', link: 'bulles' }) }), measure);
+    const reply = layout.regions.find((r) => r.part === 'reply')!;
+    const line = opWithText(layout.ops, 'Chez Lina, à 20 h !')!;
+    expect(line.y).toBeGreaterThan(reply.y);
+    expect(line.y).toBeLessThanOrEqual(reply.y + reply.height);
+  });
+
+  test('les zones ne se chevauchent pas et restent dans la carte', () => {
+    const layout = layoutMessageCard(cardInput({ title: 'Soirée', date: '28 septembre 2026' }), measure);
+    expect(layout.regions.map((r) => r.part)).toEqual(['header', 'quote', 'link', 'reply']);
+    for (const [i, zone] of layout.regions.entries()) {
+      expect(zone.x).toBeGreaterThanOrEqual(0);
+      expect(zone.x + zone.width).toBeLessThanOrEqual(CARD_WIDTH);
+      expect(zone.y + zone.height).toBeLessThanOrEqual(layout.height);
+      const next = layout.regions[i + 1];
+      if (next !== undefined) expect(zone.y + zone.height).toBeLessThanOrEqual(next.y);
+    }
+  });
+});
+
+describe('les RÉPONSES d’un commentaire, sous lui (#8734)', () => {
+  const withReplies = cardInput({
+    quoted: null,
+    reply: { author: 'Awa', text: 'Joli coin' },
+    followUps: [
+      { author: 'Kwame', text: 'C’est où ?' },
+      { author: 'Lina', text: 'À Dakar' },
+    ],
+  });
+
+  test('chaque réponse se peint APRÈS le commentaire, dans l’ordre, avec son auteur', () => {
+    const { ops } = layoutMessageCard(withReplies, measure);
+    const root = opWithText(ops, 'Joli coin');
+    const first = opWithText(ops, 'C’est où ?');
+    const second = opWithText(ops, 'À Dakar');
+    expect(root).toBeDefined();
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect((first?.y ?? 0) > (root?.y ?? 0)).toBe(true);
+    expect((second?.y ?? 0) > (first?.y ?? 0)).toBe(true);
+    expect(opWithText(ops, 'Kwame')).toBeDefined();
+    expect(opWithText(ops, 'Lina')).toBeDefined();
+  });
+
+  test('en taille RÉDUITE — le commentaire imagé reste le sujet', () => {
+    const { ops } = layoutMessageCard(withReplies, measure);
+    const root = opWithText(ops, 'Joli coin');
+    const first = opWithText(ops, 'C’est où ?');
+    expect(sizeOf(first as CardTextOp)).toBeLessThan(sizeOf(root as CardTextOp));
+  });
+
+  test('la carte grandit pour les porter, et une zone « replies » les désigne, sous la réponse', () => {
+    const long = { author: 'Awa', text: 'Joli coin '.repeat(20) };
+    const alone = layoutMessageCard({ ...withReplies, reply: long, followUps: [] }, perChar(40));
+    const both = layoutMessageCard({ ...withReplies, reply: long }, perChar(40));
+    expect(alone.regions.some((region) => region.part === 'replies')).toBe(false);
+    expect(both.regions.map((region) => region.part)).toEqual(['reply', 'replies']);
+    expect(both.height).toBeGreaterThan(alone.height);
+  });
+
+  test('une réponse vide ne se peint pas', () => {
+    const { regions } = layoutMessageCard({ ...withReplies, followUps: [{ author: 'Kwame', text: '  ' }] }, measure);
+    expect(regions.some((region) => region.part === 'replies')).toBe(false);
+  });
+});

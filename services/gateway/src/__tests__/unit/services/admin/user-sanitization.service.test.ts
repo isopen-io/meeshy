@@ -14,6 +14,11 @@ jest.mock('../../../../services/admin/permissions.service', () => ({
   permissionsService: {
     canViewSensitiveData: (...args: unknown[]) => mockCanViewSensitiveData(...args),
     canViewPresence: (...args: unknown[]) => mockCanViewPresence(...args),
+    // Audit A2-4 — la hiérarchie décide des traces de connexion (rangs réels).
+    canManageUser: (viewer: string, target: string) => {
+      const rank: Record<string, number> = { BIGBOSS: 100, ADMIN: 80, MODERATOR: 60, AUDIT: 40, ANALYST: 30, USER: 10 };
+      return (rank[viewer] ?? 0) > (rank[target] ?? 0);
+    },
   },
 }));
 
@@ -114,18 +119,22 @@ describe('UserSanitizationService.sanitizeUser — sensitive viewer', () => {
     });
   });
 
-  it('preserves twoFactorBackupCodes (defaults empty array for null)', () => {
+  // #8876 — les empreintes des codes de secours ne sont servies sur AUCUNE ligne :
+  // on en sert le NOMBRE. Le détail des cas vit dans
+  // `user-sanitization-admin-metadata.test.ts`.
+  it('serves the REMAINING COUNT of backup codes, never the hashes', () => {
     const svc = makeService();
-    const user = makeFullUser({ twoFactorBackupCodes: [] });
+    const user = makeFullUser({ twoFactorBackupCodes: ['h1', 'h2'] });
     const result = svc.sanitizeUser(user, UserRoleEnum.ADMIN) as any;
-    expect(result.twoFactorBackupCodes).toEqual([]);
+    expect(result.twoFactorBackupCodesRemaining).toBe(2);
+    expect(result).not.toHaveProperty('twoFactorBackupCodes');
   });
 
-  it('uses empty array when twoFactorBackupCodes is falsy', () => {
+  it('counts zero remaining codes when the column is falsy', () => {
     const svc = makeService();
     const user = makeFullUser({ twoFactorBackupCodes: undefined as unknown as string[] });
     const result = svc.sanitizeUser(user, UserRoleEnum.ADMIN) as any;
-    expect(result.twoFactorBackupCodes).toEqual([]);
+    expect(result.twoFactorBackupCodesRemaining).toBe(0);
   });
 
   it('includes deletedAt and deletedBy in AdminUser', () => {

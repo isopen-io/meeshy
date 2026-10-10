@@ -59,9 +59,10 @@ final class ConversationLinkCardViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     let target: ConversationCardTarget
+    /// Le compte que « Rejoindre » engage, nommé sur son bouton (#8726).
+    let joinAccount: ConversationCardJoinAccount?
     private let service: ConversationCardServiceProviding
     private let performer: ConversationCardActionPerforming
-    private let viewerHasAccount: Bool
     private var isFresh: Bool
     private var changeSubscription: AnyCancellable?
     /// Le changement que CETTE carte vient d'annoncer : elle connaît déjà son
@@ -75,12 +76,12 @@ final class ConversationLinkCardViewModel: ObservableObject {
         target: ConversationCardTarget,
         service: ConversationCardServiceProviding = ConversationCardService.shared,
         performer: ConversationCardActionPerforming = LiveConversationCardActions(),
-        viewerHasAccount: Bool = ConversationLinkCardViewModel.currentViewerHasAccount()
+        joinAccount: ConversationCardJoinAccount? = ConversationCardJoinAccount.current()
     ) {
         self.target = target
         self.service = service
         self.performer = performer
-        self.viewerHasAccount = viewerHasAccount
+        self.joinAccount = joinAccount
         // Cache d'abord, à la construction : une carte déjà vue se rend dès la
         // première image, sans squelette.
         switch service.cached(target) {
@@ -122,13 +123,6 @@ final class ConversationLinkCardViewModel: ObservableObject {
         service.invalidate(conversationId: conversationId, from: target)
     }
 
-    /// Un compte connecté (pas une session invitée) : il ne rejoint qu'en son
-    /// nom, jamais « en anonyme » — même règle que la page d'invitation web.
-    static func currentViewerHasAccount() -> Bool {
-        guard let user = AuthManager.shared.currentUser else { return false }
-        return user.isAnonymous != true
-    }
-
     private func designates(_ conversationId: String) -> Bool {
         if target.directConversationId == conversationId { return true }
         if case .card(let card) = phase { return card.conversationId == conversationId }
@@ -137,7 +131,7 @@ final class ConversationLinkCardViewModel: ObservableObject {
 
     var actions: ConversationCardActions {
         guard case .card(let card) = phase else { return .none }
-        return ConversationCardActions.resolve(for: card, target: target, viewerHasAccount: viewerHasAccount)
+        return ConversationCardActions.resolve(for: card, target: target)
     }
 
     /// Relit la carte, sauf si le cache est frais. Une carte périmée reste à

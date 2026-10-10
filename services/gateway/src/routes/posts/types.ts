@@ -3,6 +3,7 @@ import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
+import { parseMessageSticker } from '../../services/stickers/messageSticker';
 
 // ============================================
 // CURSOR PAGINATION HELPERS
@@ -62,6 +63,44 @@ const STORY_FONT_MAX = 64;
 const STORY_STYLE_MAX = 64;
 const STORY_ARRAY_CAP = 32;             // medias/texts/stickers/audios par slide
 
+// Les REGLAGES d'une image posee (#9175) — `ImageAdjustments` iOS : seules les
+// valeurs actives voyagent. Bornes LARGES (le client borne chaque reglage a sa
+// plage de curseur) mais finies : une charge ne decide pas du cout du rendu.
+// `passthrough` comme le reste du blob — un reglage plus recent qu'un client
+// ancien voyage, et ce client l'ignore.
+const STORY_ADJUSTMENT_BOUND = 10;
+const adjustmentValue = z.number().finite().min(-STORY_ADJUSTMENT_BOUND).max(STORY_ADJUSTMENT_BOUND).optional();
+// Les EFFETS d'une image (#9498) — bloom et grain, ce que l'outil « Effets » de
+// l'ancien editeur offrait de plus que les reglages — voyagent dans le meme sac.
+// Leur curseur va de 0 a 1 sur iOS comme sur le web : la borne est la sienne.
+const effectValue = z.number().finite().min(0).max(1).optional();
+export const StoryMediaAdjustmentsSchema = z.object({
+  exposure: adjustmentValue,
+  brightness: adjustmentValue,
+  contrast: adjustmentValue,
+  saturation: adjustmentValue,
+  vibrance: adjustmentValue,
+  temperature: adjustmentValue,
+  sharpness: adjustmentValue,
+  blur: adjustmentValue,
+  vignette: adjustmentValue,
+  bloom: effectValue,
+  grain: effectValue,
+}).passthrough();
+
+// Le RECADRAGE d'une image posee (#9499) — `MediaCropRect` iOS : un rectangle
+// en FRACTIONS de la source, origine en haut a gauche, absent quand il est
+// plein. Les quatre bornes ensemble, dans la source, d'aire non nulle — meme
+// contrat que les cles `cropX/Y/W/H` du pont v3 (`canvas-v3.ts`).
+const cropFraction = z.number().finite().min(0).max(1);
+const cropSide = z.number().finite().gt(0).max(1);
+export const StoryMediaCropSchema = z.object({
+  x: cropFraction,
+  y: cropFraction,
+  width: cropSide,
+  height: cropSide,
+});
+
 export const StoryMediaObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
   postMediaId: z.string().max(STORY_ID_MAX).optional(),
@@ -95,6 +134,8 @@ export const StoryMediaObjectSchema = z.object({
   // Le filtre PROPRE a l'objet (2026-09-28) : memes valeurs que le filtre de
   // slide (`StoryEffects.filter`, celui du fond). Borne comme ses freres.
   filter: z.string().max(32).optional(),
+  adjustments: StoryMediaAdjustmentsSchema.optional(),
+  crop: StoryMediaCropSchema.optional(),
 }).passthrough();
 
 const StoryTextObjectSchema = z.object({
@@ -313,6 +354,12 @@ export const CreatePostSchema = z.object({
   // dont la majorité n'est pas vérifiée), `EXACT` retombe sur `NEIGHBORHOOD`
   // côté serveur (`PostService.createPost` via `resolveDiscoverabilityPrecision`).
   discoverabilityPrecisionConfirmed: z.boolean().optional(),
+  // « Publier AUSSI en réel » (#9476) — OPTIONNEL : un client qui n'envoie que
+  // `type` publie exactement comme avant. Vrai, il n'est admis que sur une
+  // STORY originale (`ALSO_AS_REEL_REQUIRES_STORY` sinon) ; le réel reçoit ses
+  // PROPRES médias, par copie (`services/posts/storyReelCompanion.ts`), ou rien
+  // ne part (`REEL_NOT_QUALIFIED`).
+  alsoAsReel: z.boolean().optional(),
 }).refine((data) => {
   // Une republication HÉRITE la liste de sa source (`PostService.createPost`,
   // `repostVisibilityInheritsAudienceList`) : ce que le client envoie est
@@ -453,7 +500,11 @@ export const CreateCommentSchema = z.object({
   /// ment — il montrait N pièces pour n'en envoyer qu'une. Le plafond RÉUTILISE
   /// celui des médias d'un post : deux plafonds seraient deux vérités, et la
   /// seconde dériverait au premier ajustement.
-  attachmentIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
+  ///
+  /// Chaque id est un ObjectId (#9745), comme `attachmentIds` du socket
+  /// (`socket-event-schemas.ts`) : la colonne en est une, et une autre chaîne
+  /// faisait lever la requête d'admission — 500 au lieu d'un refus lisible.
+  attachmentIds: z.array(z.string().regex(OBJECT_ID_REGEX)).max(MAX_POST_MEDIA).optional(),
   /// Le média du POST COMMENTÉ que ce commentaire cite (#6578) — voie
   /// `metadata.quotedPostMedia`, AUCUNE colonne. `z.unknown()` parce que la
   /// forme est tranchée par `admitQuotedPostMedia`, seul site de la règle : la
@@ -466,9 +517,21 @@ export const CreateCommentSchema = z.object({
   mobileTranscription: MobileTranscriptionSchema.optional(),
   /// Lieu partagé — même contrat que CreatePostSchema ci-dessus.
   location: z.unknown().optional(),
+  /// Sticker (#9080) — la MÊME forme que le sticker d'un message
+  /// (`MessageSticker`) : ce descripteur ici, l'image rendue en média joint
+  /// (`attachmentIds`). `z.unknown()` parce que la loi est
+  /// `parseMessageSticker`, seul site : le service l'écrit, blanchi, dans
+  /// `metadata.sticker`.
+  sticker: z.unknown().optional(),
 }).refine(
-  (data) => (data.content?.trim().length ?? 0) > 0 || (data.attachmentIds?.length ?? 0) > 0,
-  { message: 'A comment must have text content or an attached media' },
+  // Un sticker seul rend le corps non vide — mais VALIDE, comme pour un
+  // message (`services/messaging/nonTextBody.ts`) : un sticker que la loi
+  // rejette n'écrirait rien, le commentaire serait vide.
+  (data) =>
+    (data.content?.trim().length ?? 0) > 0 ||
+    (data.attachmentIds?.length ?? 0) > 0 ||
+    parseMessageSticker(data.sticker) !== null,
+  { message: 'A comment must have text content, an attached media or a sticker' },
 );
 
 export const UpdateCommentSchema = z.object({

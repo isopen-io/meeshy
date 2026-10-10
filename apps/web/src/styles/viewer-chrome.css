@@ -1,0 +1,102 @@
+/**
+ * LE CHROME DES VISIONNEUSES PLEIN ÉCRAN (#8879) — story, réel, média de
+ * conversation, scène de publication. La feuille voyage avec les primitives
+ * (`components/viewer-chrome.tsx`), jamais dans `app.css` : ces écrans sont
+ * des chunks À LA DEMANDE, et leur chrome ne coûte rien à l'ouverture de
+ * l'application (même arbitrage que `media-viewer.css`).
+ *
+ * UNE scène, TOUJOURS sombre : le chrome ne suit pas le schéma de
+ * l'application, il suit la photo d'en dessous, qui n'a aucune raison de le
+ * suivre. L'encre est `onMedia`, le voile `mediaBackdrop` (`MeeshyColors.swift`
+ * → `--ios-on-media`, `--ios-media-backdrop`) — le noir que le SDK déclare
+ * pour une visionneuse, jamais un `rgba(0,0,0,…)` recopié écran par écran
+ * (mesuré avant ce lot : 0,2 / 0,35 / 0,38 / 0,42 / 0,55 pour un même rôle).
+ *
+ * Le VERRE des disques n'est pas ici : il est `glass-call` (`glass.css`), la
+ * matière sombre déjà mesurée AA contre le pire cas — du BLANC pur passant
+ * dessous. `glass-site.mjs` interdit de la réécrire ailleurs.
+ */
+.viewer-chrome {
+  --viewer-veil: var(--ios-media-backdrop);
+  color: var(--ios-on-media);
+}
+
+/* LES VOILES — ce qui tient le blanc du texte au-dessus d'AA sur la PIRE
+   image. Les valeurs sont celles du lecteur de stories (`story.tsx`,
+   `CHROME_SCRIM_TOP/BOTTOM`), les seules mesurées par un gate
+   (`check-story-scene.mjs`). */
+.viewer-scrim-top {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--viewer-veil) 55%, transparent) 0%,
+    color-mix(in srgb, var(--viewer-veil) 28%, transparent) 55%,
+    transparent 100%
+  );
+}
+
+/* Le voile FORT — une vidéo n'a aucun plateau noir sous elle : le réel tient le
+   blanc de l'auteur et de la légende au-dessus d'AA sur la PIRE image (une mire
+   blanche), mesuré au pixel par `check-reels.mjs`. */
+.viewer-scrim-bottom-strong {
+  background: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--viewer-veil) 85%, transparent) 0%,
+    color-mix(in srgb, var(--viewer-veil) 75%, transparent) 70%,
+    transparent 100%
+  );
+}
+
+.viewer-scrim-bottom {
+  background: linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--viewer-veil) 55%, transparent) 0%,
+    color-mix(in srgb, var(--viewer-veil) 28%, transparent) 55%,
+    transparent 100%
+  );
+}
+
+/* LE DISQUE — 40 de verre dans 44 de cible (`MediaStageActionColumn`,
+   `ConversationMediaGalleryView+Actions.swift` : « le VERRE fait 40, la
+   CIBLE fait 44 »). */
+.viewer-disc {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+/* L'ombre portée du texte posé SUR la scène (compteurs, légende, nom). */
+.viewer-ink-shadow {
+  text-shadow: 0 1px 2px color-mix(in srgb, var(--ios-media-backdrop) 60%, transparent);
+}
+
+.viewer-ink-muted {
+  color: color-mix(in srgb, var(--ios-on-media) 75%, transparent);
+}
+
+/* LES EFFETS DU RAIL (directive porteur 2026-10-01) — ce que le rail de la
+   story montrait avant le chrome commun, et qu'il avait perdu : le HALO d'une
+   action allumée (son ouvert, cœur posé), l'ANNEAU d'un geste déjà fait, et le
+   REBOND au changement d'état (`StoryActionButton` d'avant #8878 : contour
+   d'accent, ombre colorée à 55 % de rayon 7, `symbolEffect(.bounce)`).
+   `prefers-reduced-motion` fige le rebond par la règle générale d'`app.css`. */
+.viewer-disc-halo {
+  opacity: 0.55;
+}
+
+.viewer-disc-pop {
+  animation: viewer-disc-pop 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes viewer-disc-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.22);
+  }
+  70% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

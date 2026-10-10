@@ -45,15 +45,36 @@ public struct MessageSticker: Codable, Equatable, Hashable, Sendable {
     /// L'emoji du sticker, ou le REPLI d'un gabarit pour un lecteur qui ne
     /// sait pas le dessiner (cf. `StickerTemplate.fallbackEmoji`).
     public let emoji: String?
+    /// Le sticker de BIBLIOTHÈQUE (« Mes stickers ») d'où vient l'image jointe —
+    /// un ObjectId (#7938, #9635). Il ne suffit jamais à RENDRE (la pièce jointe
+    /// rend) : il dit seulement d'où vient le sticker, ce que la passerelle
+    /// compte pour le défi « Envoyer N stickers ».
+    public let stickerId: String?
 
     public init(templateId: String? = nil,
                 slots: [String: String] = [:],
                 animation: StickerAnimation? = nil,
-                emoji: String? = nil) {
+                emoji: String? = nil,
+                stickerId: String? = nil) {
         self.templateId = templateId
         self.slots = slots
         self.animation = animation
         self.emoji = emoji
+        self.stickerId = stickerId
+    }
+
+    /// Un sticker de « Mes stickers » : seulement son identifiant de bibliothèque, quand c'est
+    /// un ObjectId (24 hex) — un identifiant LOCAL (UUID d'un collage pas encore synchronisé)
+    /// ne dit rien à la passerelle, qui refuserait le champ : `nil`, une image ordinaire.
+    public static func library(_ id: String) -> MessageSticker? {
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count == 24, trimmed.allSatisfy(\.isHexDigit) else { return nil }
+        return MessageSticker(stickerId: trimmed.lowercased())
+    }
+
+    /// Ce qui mérite de VOYAGER : un sticker rendable, ou l'identifiant d'un sticker de bibliothèque.
+    public var ifWireWorthy: MessageSticker? {
+        isRenderable || !(stickerId ?? "").isEmpty ? self : nil
     }
 
     /// `true` si `templateId` OU `emoji` est non vide — ce qu'un rendu peut
@@ -89,7 +110,7 @@ public struct MessageSticker: Codable, Equatable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case templateId, slots, animation, emoji
+        case templateId, slots, animation, emoji, stickerId
     }
 
     /// Décodage TOLÉRANT : chaque clé est optionnelle, `slots` absent vaut
@@ -103,6 +124,7 @@ public struct MessageSticker: Codable, Equatable, Hashable, Sendable {
         animation = try c.decodeIfPresent(String.self, forKey: .animation)
             .flatMap(StickerAnimation.init(rawValue:))
         emoji = try c.decodeIfPresent(String.self, forKey: .emoji)
+        stickerId = try? c.decodeIfPresent(String.self, forKey: .stickerId)
     }
 
     /// Encodage minimal : les `nil` sont omis et `slots` vide aussi — le corps
@@ -114,5 +136,6 @@ public struct MessageSticker: Codable, Equatable, Hashable, Sendable {
         if !slots.isEmpty { try c.encode(slots, forKey: .slots) }
         try c.encodeIfPresent(animation?.rawValue, forKey: .animation)
         try c.encodeIfPresent(emoji, forKey: .emoji)
+        try c.encodeIfPresent(stickerId, forKey: .stickerId)
     }
 }

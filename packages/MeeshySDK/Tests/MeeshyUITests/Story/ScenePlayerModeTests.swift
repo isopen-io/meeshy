@@ -386,10 +386,20 @@ final class ScenePlayerSourceGuardTests: XCTestCase {
             .joined(separator: "\n")
     }
 
-    /// Les deux couches du canvas qui portent un `AVPlayer`.
+    /// Les deux couches du canvas qui portent un `AVPlayer` — chacune lue avec
+    /// ses extensions (`Nom+*.swift`) : la garde suit le TYPE, pas un fichier
+    /// qu'un découpage par responsabilité vide de son code (#9496).
     private static func strippedLayerSources() throws -> [(String, String)] {
-        try ["StoryBackgroundLayer", "StoryMediaLayer"].map { name in
-            (name, try strippedSource("Sources/MeeshyUI/Story/Canvas/Layers/\(name).swift"))
+        let dossier = packageRoot().appendingPathComponent("Sources/MeeshyUI/Story/Canvas/Layers")
+        let fichiers = try FileManager.default.contentsOfDirectory(at: dossier, includingPropertiesForKeys: nil)
+        return try ["StoryBackgroundLayer", "StoryMediaLayer"].map { name in
+            let famille = fichiers.filter {
+                $0.lastPathComponent == "\(name).swift" || $0.lastPathComponent.hasPrefix("\(name)+")
+            }
+            let code = try famille
+                .map { strippingLineComments(try String(contentsOf: $0, encoding: .utf8)) }
+                .joined(separator: "\n")
+            return (name, code)
         }
     }
 

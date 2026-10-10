@@ -18,8 +18,8 @@ struct AffiliatesListView: View {
                 placeholder: String(localized: "contacts.affiliates.search-placeholder", defaultValue: "Rechercher un affilié", bundle: .main),
                 query: $viewModel.searchQuery
             )
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.sm)
 
             content
         }
@@ -56,7 +56,7 @@ struct AffiliatesListView: View {
                         .equatable()
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, MeeshySpacing.xs)
             }
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
             .refreshable { await viewModel.load(forceNetwork: true) }

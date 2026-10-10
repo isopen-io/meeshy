@@ -3,7 +3,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache';
 
+import { quotedPreviewOf } from '@/lib/view/quoted-preview';
+
 import { messagesQueryKey } from './messages';
+import { tombstoneQuotesOf } from './quote-tombstone';
 import { applyMessageExpired } from './realtime-ephemeral';
 import type { Message } from './types';
 
@@ -45,6 +48,29 @@ describe('message:expired — les citations du message détruit sont scellées s
     expect(quote?.content).toBe('');
     expect(quote?.deletedAt).toBeDefined();
     expect(JSON.stringify(rowOf(client, 'm-reply'))).not.toContain('Code 4521');
+  });
+
+  test('la citation scellée se lit « Message éphémère expiré », pas « Message supprimé » (#8631)', () => {
+    const client = seeded([reply(ephemeral())]);
+
+    applyMessageExpired(client, { messageId: 'm-eph', conversationId: 'c-a' }, never, NOW);
+
+    const quote = rowOf(client, 'm-reply')?.replyTo;
+    expect(quote?.expiresAt).toEqual(quote?.deletedAt);
+    expect(quotedPreviewOf({ quoted: quote as Message, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).text).toBe(
+      'Message éphémère expiré',
+    );
+  });
+
+  test('une SUPPRESSION reste « Message supprimé » (#8631)', () => {
+    const client = seeded([reply(localMessage({ id: 'm-plain', senderId: 'u-other', content: 'Salut' }))]);
+
+    tombstoneQuotesOf(client, { conversationId: 'c-a', messageId: 'm-plain', deletedAt: NOW.toISOString() });
+
+    const quote = rowOf(client, 'm-reply')?.replyTo;
+    expect(quotedPreviewOf({ quoted: quote as Message, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).text).toBe(
+      'Message supprimé',
+    );
   });
 
   test('la citation suit MÊME si le message expiré n’est pas dans la fenêtre chargée', () => {

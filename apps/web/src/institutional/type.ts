@@ -26,12 +26,23 @@ export type FramedRow = {
   readonly href?: string;
 };
 
+/**
+ * UNE VUE DE MEE (#9034) — un sticker du catalogue (`src/lib/mee`), animé en
+ * CSS pur dans la page statique, et la phrase qui le légende. La légende est
+ * le texte : le dessin n'en double jamais une information.
+ */
+export type MeeView = {
+  readonly sticker: string;
+  readonly caption: string;
+};
+
 export type Block =
   | { readonly kind: 'paragraphes'; readonly body: readonly string[] }
   | { readonly kind: 'list'; readonly items: readonly string[] }
   | { readonly kind: 'cartes'; readonly cards: readonly Card[] }
   | { readonly kind: 'accent'; readonly body: string }
-  | { readonly kind: 'encadre'; readonly rows: readonly FramedRow[] };
+  | { readonly kind: 'encadre'; readonly rows: readonly FramedRow[] }
+  | { readonly kind: 'mee'; readonly views: readonly MeeView[] };
 
 export type Section = {
   readonly title: string;
@@ -67,6 +78,8 @@ export type ContentPage = {
   /** « Dernière mise à jour : … » — les deux pages légales seules la portent. */
   readonly mention?: string;
   readonly description: string;
+  /** Mee, ou Meo, qui accueille le lecteur sous le titre (#9034). */
+  readonly mee?: MeeView;
   readonly sections: readonly Section[];
   readonly run: FollowUpRow;
 };

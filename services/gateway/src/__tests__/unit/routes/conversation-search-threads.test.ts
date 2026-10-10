@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { threadCollectionCalls } from './thread-collection-calls';
 
 // ─── Module mocks (must come before all imports — jest hoisting) ──────────────
-
 // Mocked fn refs declared at module scope (hoisted correctly)
 const mockGenerateDefaultConversationTitle = jest.fn<any>();
 const mockGetUnreadCountsForUser = jest.fn<any>();
@@ -1225,7 +1225,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
     // findMany called twice: depth 0 + depth 1 (empty)
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
+    expect(threadCollectionCalls(prisma)).toBe(2);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(1);
   });
@@ -1269,7 +1269,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
     // Only one findMany call (first batch saturates limit)
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(1);
+    expect(threadCollectionCalls(prisma)).toBe(1);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(200);
     expect(result.totalCount).toBe(200);
@@ -1322,7 +1322,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
     // MAX_DEPTH = 10, so findMany is called exactly 10 times
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(10);
+    expect(threadCollectionCalls(prisma)).toBe(10);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(10);
   });
@@ -1488,7 +1488,7 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
 
     await route.handler(makeThreadRequest(VALID_CONV_ID, VALID_MSG_ID), reply);
 
-    expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
+    expect(threadCollectionCalls(prisma)).toBe(2);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(1);
   });

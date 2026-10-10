@@ -1,3 +1,4 @@
+import { isAfterReadMessage } from './after-read';
 import { kindOf } from './message';
 import type { Delivery } from './message';
 import { forwardAttributionOf, forwardLabelOf, systemRowOf, systemRowText } from './message-badges';
@@ -7,6 +8,7 @@ import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/rea
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { messageProtection } from '@meeshy/shared/utils/message-protection';
 import { plainTextOf } from '@meeshy/shared/utils/text-plain';
 import { isContactCardAttachment } from '@meeshy/shared/utils/vcard';
 
@@ -183,6 +185,29 @@ export type MessageLabelInput = {
 };
 
 /**
+ * LA PROTECTION SE DIT (#8635) — miroir `MessageProtectionChrome
+ * .accessibilityLabels` (iOS). La flamme-œil n'a ni capsule ni décompte, son
+ * filigrane est muet : sans ce segment, rien ne disait qu'elle disparaît après
+ * lecture. L'éphémère à durée se dit même sans échéance servie. Le flou et la
+ * vue unique ne se disent ici que sur un contenu MONTÉ : au repos, leur
+ * substitut (« Contenu masqué », la puce) les nomme déjà.
+ */
+type ProtectionLabelKey = 'message.afterRead.a11y' | 'message.ephemeral.label.a11y' | 'message.viewOnce.a11y' | 'message.blurred.a11y';
+
+function protectionSegments(message: Message, contentShown: boolean, language: InterfaceLanguage): readonly string[] {
+  const flags = messageProtection(message);
+  const lifetime: readonly ProtectionLabelKey[] = isAfterReadMessage(message)
+    ? ['message.afterRead.a11y']
+    : flags.ephemeral
+      ? ['message.ephemeral.label.a11y']
+      : [];
+  const shown: readonly ProtectionLabelKey[] = contentShown
+    ? [...(flags.viewOnce ? (['message.viewOnce.a11y'] as const) : []), ...(flags.blurred ? (['message.blurred.a11y'] as const) : [])]
+    : [];
+  return [...lifetime, ...shown].map((key) => translate(language, key));
+}
+
+/**
  * Compose le libellé complet d'une rangée de message — appelé UNE fois par
  * rangée montée (Focal, Script ou Bulles), jamais recalculé par sous-partie.
  */
@@ -325,7 +350,7 @@ export function composeMessageLabel({
    */
   const attribution = forwardAttributionOf(message);
   if (attribution !== null) segments.push(lowerFirst(forwardLabelOf(attribution, language), language));
-  if (message.expiresAt !== undefined) segments.push('éphémère');
+  segments.push(...protectionSegments(message, rendersContent(protection, phase) && !contentWithheld, language));
 
   /* LES EFFETS DÉCORATIFS ne se prononcent plus (#7596) : ils s'EXÉCUTENT à
      l'écran, et les énumérer au lecteur d'écran ferait d'une décoration une

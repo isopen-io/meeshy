@@ -16,8 +16,11 @@ import Foundation
 /// peut plus être oublié par un hôte.
 public struct ReplyReference: Codable, Equatable, Sendable {
     public let messageId: String
-    public let authorName: String
-    public let authorColor: String
+    /// Nom, couleur et portrait de l'auteur cité : GRAVÉS, et repeints par la
+    /// seule loi `UserUpdatedEvent.repainted(_:)` quand `authorUserId` désigne
+    /// le pair renommé (#9371).
+    public internal(set) var authorName: String
+    public internal(set) var authorColor: String
     /// Avatar de l'auteur cite, GRAVE dans la citation — jamais re-resolu au
     /// rendu.
     ///
@@ -38,7 +41,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// presents a tous les sites de construction, donc l'avatar se dessine
     /// quand meme en initiales colorees. La porte vers le profil ne depend
     /// jamais de la presence d'une photo.
-    public let authorAvatarUrl: String?
+    public internal(set) var authorAvatarUrl: String?
     public let previewText: String
     public let isMe: Bool
     public let attachmentType: String?
@@ -132,6 +135,15 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// Auteur de la story ou de l'humeur citée — la clé de `StoryReplyAdmission`
     /// (#7883). `nil` sur toute citation de message et sur les blobs anciens.
     public var storyAuthorId: String?
+    /// L'identifiant d'UTILISATEUR de l'auteur cité (#9371), gravé à la
+    /// RÉCEPTION depuis `replyTo.sender` — jamais `replyTo.senderId`, qui est
+    /// l'appartenance à la conversation. C'est la SEULE clé par laquelle
+    /// `user:updated` apparie une citation : sans lui, la citation garde le
+    /// nom gravé (apparier sur le nom repeindrait un homonyme).
+    ///
+    /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
+    /// ce champ se relit sans lui. Même discipline que `authorAvatarUrl`.
+    public var authorUserId: String?
     /// La story citée a DISPARU sans laisser d'instantané (#7895) : la
     /// passerelle n'a servi que `storyReplyToId`, sans `postReplyTo` — le
     /// message n'en gravait pas et le post n'existe plus. Posé par un seul
@@ -151,11 +163,32 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// après l'init, comme `quotedMessageDeletedAt` : optionnelle, un blob
     /// gravé avant elle se relit sans emporter le message.
     public var quotedExpiresAt: Date?
+    /// **La nature de disparition du message CITÉ** (#9573), telle que la loi de
+    /// sortie la lit sur ce que le fil a servi de lui. `nil` = le fil ne l'a pas
+    /// déclarée (citation reconstruite pour le temps réel, ligne de cache écrite
+    /// avant ce champ) : la citation est alors ILLISIBLE, et son contenu ne sort
+    /// pas avec le message qui la porte (`quotedContentMayLeave`).
+    public var quotedExitNature: ContentExitLaw.Nature?
     /// #8320 — les pistes TRADUITES d'un audio cité et la langue d'origine
     /// qui les départage, pour que la citation joue, hors de la fenêtre
     /// chargée, la MÊME piste que le vocal d'origine (Prisme audio). Jamais
     /// posée pour un média protégé : le fichier EST le secret.
     public var quotedAudioTracks: QuotedAudioTracks?
+    /// **Combien de TUILES (photos, vidéos) porte le message cité** (#9911),
+    /// quand la citation vise le message ENTIER — la face montre la première,
+    /// « +N » dit qu'il y en a d'autres. `nil` quand la citation NOMME une
+    /// pièce (elle n'en montre qu'une, et c'est la bonne) et pour un contenu
+    /// protégé : un compte est déjà un fait sur ce que la protection retient.
+    ///
+    /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
+    /// ce champ doit toujours se décoder.
+    public var quotedPieceCount: Int?
+
+    /// Le nombre de tuiles que « +N » annonce au-delà de la face, ou `nil`.
+    public var quotedExtraPieceCount: Int? {
+        guard let quotedPieceCount, quotedPieceCount > 1, !quotedMediaIsProtected else { return nil }
+        return quotedPieceCount - 1
+    }
 
     /// Le PREDICAT unique des deux peaux (`BubbleQuotedReply`,
     /// `FocalQuotedReplyView`) : un media cite protege ne montre ni vignette ni
@@ -225,7 +258,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
 
     public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentId: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentFileUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
                 storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil, storyAuthorId: String? = nil,
-                attachmentFacts: QuotedAttachmentFacts? = nil, storyUnavailable: Bool? = nil) {
+                attachmentFacts: QuotedAttachmentFacts? = nil, storyUnavailable: Bool? = nil, authorUserId: String? = nil) {
         self.messageId = messageId
         self.authorName = authorName
         self.previewText = previewText
@@ -253,6 +286,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
         self.moodEmoji = moodEmoji
         self.storyAuthorId = storyAuthorId
         self.storyUnavailable = storyUnavailable
+        self.authorUserId = authorUserId
     }
 }
 
@@ -353,11 +387,16 @@ public struct ForwardReference: Codable, Sendable {
     /// `MeeshyConversation.ConversationType`. Optionnel : les caches GRDB
     /// antérieurs au champ décodent en `nil` sans migration.
     public let conversationType: String?
+    /// L'identifiant d'UTILISATEUR de l'expéditeur d'origine (#9371), gravé à
+    /// la réception depuis `forwardedFrom.sender` : la clé par laquelle
+    /// `user:updated` repeint la référence. Optionnel : un blob gravé avant
+    /// lui se relit sans lui, et la référence garde alors le nom gravé.
+    public let senderUserId: String?
 
     public init(originalMessageId: String = "", senderName: String, senderAvatar: String? = nil,
                 previewText: String, conversationId: String? = nil, conversationName: String? = nil,
                 attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil,
-                conversationType: String? = nil) {
+                conversationType: String? = nil, senderUserId: String? = nil) {
         self.originalMessageId = originalMessageId
         self.senderName = senderName
         self.senderAvatar = senderAvatar
@@ -367,5 +406,6 @@ public struct ForwardReference: Codable, Sendable {
         self.attachmentType = attachmentType
         self.attachmentThumbnailUrl = attachmentThumbnailUrl
         self.conversationType = conversationType
+        self.senderUserId = senderUserId
     }
 }

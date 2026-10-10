@@ -23,7 +23,7 @@ extension MessagePersistenceActor {
     /// Elle lit `AuthManager` sur le MainActor ; posée dans la boucle SÉRIELLE
     /// d'écriture, elle faisait attendre CHAQUE lot ingéré que le fil de RENDU
     /// soit libre — c'est-à-dire précisément pendant un défilement ou une
-    /// animation de clavier — et les `reconcileBatch` / `batchDeliveryUpdate`
+    /// animation de clavier — et les `reconcileBatch` / `readStatusSummary`
     /// en file derrière lui attendaient avec. La persistance dépendait alors du
     /// fil qu'elle est censée décharger. Le prisme voyage donc DANS
     /// l'opération (`case upsertAPIMessages(_, preferredLanguages:)`), résolu

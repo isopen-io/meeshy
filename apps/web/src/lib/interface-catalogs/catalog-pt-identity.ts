@@ -16,7 +16,6 @@ const ptIdentity = {
   'avatar.menu.view_story': 'Ver a story',
   'avatar.menu.conversation_details': 'Detalhes da conversa',
   'conversation.details.title': 'Detalhes da conversa',
-  'conversation.details.open': 'Ver os detalhes de {name}',
   'conversation.details.type.direct': 'Conversa privada',
   'conversation.details.type.group': 'Grupo',
   'conversation.details.type.public': 'Conversa pública',

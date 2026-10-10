@@ -58,6 +58,7 @@ import type {
 } from '@meeshy/shared/types';
 import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
 import { attachmentTranscriptionView, type AttachmentTranscriptionView } from './audio/attachmentTranscriptionView';
+import { guardedTimeout } from '../utils/guarded-timer';
 
 // Response timeout in milliseconds
 const DEFAULT_TIMEOUT = 60000; // 60 seconds for fast voice ops (status, profile, …)
@@ -206,10 +207,10 @@ export class AudioTranslateService extends EventEmitter {
     timeout: number = DEFAULT_TIMEOUT
   ): Promise<T> {
     return new Promise((resolve, reject) => {
-      const timeoutHandle = setTimeout(() => {
+      const timeoutHandle = guardedTimeout({ name: 'audio-translate-request-timeout', afterMs: timeout, logger, run: () => {
         this.pendingRequests.delete(request.taskId);
         reject(new AudioTranslateError('Request timeout', 'TIMEOUT'));
-      }, timeout);
+      } });
 
       this.pendingRequests.set(request.taskId, {
         resolve,
@@ -280,10 +281,10 @@ export class AudioTranslateService extends EventEmitter {
           audioFormat: options.audioFormat,
         });
 
-        const timeoutHandle = setTimeout(() => {
+        const timeoutHandle = guardedTimeout({ name: 'audio-transcription-timeout', afterMs: 30000, logger, run: () => {
           this.pendingRequests.delete(taskId);
           reject(new AudioTranslateError('Transcription timeout', 'TIMEOUT'));
-        }, 30000);
+        } });
 
         this.pendingRequests.set(taskId, {
           resolve: async (result: TranscriptionResult) => {

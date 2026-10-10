@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MediaStorage } from './MediaStorage';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { guardedInterval } from '../../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'OrphanMediaCleanupService' });
 
@@ -110,11 +111,11 @@ export class OrphanMediaCleanupService {
   /** Starts the periodic reap loop. Idempotent. */
   start(intervalMs: number = OrphanMediaCleanupService.DEFAULT_SCAN_INTERVAL_MS): void {
     if (this.timer) return;
-    this.timer = setInterval(() => {
+    this.timer = guardedInterval({ name: 'orphan-media-reap', everyMs: intervalMs, logger: log, run: () => {
       this.reapExpired().catch((err: unknown) => {
         log.error('Reap cycle failed', { error: (err as Error).message });
       });
-    }, intervalMs);
+    } });
     this.timer.unref?.();
     log.info('OrphanMediaCleanup worker started', { intervalMs });
   }

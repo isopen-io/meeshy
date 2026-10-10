@@ -1,7 +1,7 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { type AdminDeps } from './admin';
-import { decodeAdminUserDetail, type AdminUserDetail } from './admin-user-detail';
+import { memberFromResult, type AdminUserDetail } from './admin-user-detail';
 import type { ApiResult } from './http';
 
 /**
@@ -14,45 +14,61 @@ import type { ApiResult } from './http';
  */
 export type AdminContactChannel = 'email' | 'phone';
 
-const CHAMP_DE_PREUVE: Readonly<Record<AdminContactChannel, 'emailVerified' | 'phoneVerified'>> = {
+/** Les trois PREUVES qu'un administrateur peut poser ou retirer : l'e-mail, le téléphone et l'âge (#8004). */
+export type AdminProofChannel = AdminContactChannel | 'age';
+
+const CHAMP_DE_PREUVE: Readonly<Record<AdminProofChannel, 'emailVerified' | 'phoneVerified' | 'ageVerified'>> = {
   email: 'emailVerified',
   phone: 'phoneVerified',
+  age: 'ageVerified',
 };
 
 const withSignal = (signal: AbortSignal | undefined) => (signal === undefined ? {} : { signal });
 
-async function membreRendu(result: ApiResult<unknown>): Promise<ApiResult<AdminUserDetail>> {
-  if (!result.ok) return result;
-  const membre = decodeAdminUserDetail(result.data);
-  return membre === null ? { ok: false, status: 0, error: 'Membre illisible' } : { ok: true, data: membre };
-}
+/** Un motif VIDE n'est pas un motif : l'envoyer blanc remplirait le journal d'audit de raisons qui n'en sont pas. */
+const withReason = (reason: string | undefined): { readonly reason?: string } => {
+  const motif = reason?.trim() ?? '';
+  return motif === '' ? {} : { reason: motif };
+};
 
-/** Marquer un e-mail ou un téléphone vérifié — ou retirer la preuve. */
+const membreRendu = async (result: ApiResult<unknown>): Promise<ApiResult<AdminUserDetail>> => memberFromResult(result);
+
+/**
+ * Marquer un e-mail, un téléphone ou un âge vérifié — ou retirer la preuve.
+ * `PATCH admin.usersByUserIdVerifications`, sous la loi de ses champs
+ * (`canUpdateUsers`, hiérarchie sur la cible) ; le motif est facultatif mais
+ * voyage dans la trace d'audit quand il est écrit.
+ */
 export async function setAdminUserVerification(
   params: AdminDeps & {
     readonly userId: string;
-    readonly channel: AdminContactChannel;
+    readonly channel: AdminProofChannel;
     readonly verified: boolean;
+    readonly reason?: string;
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<AdminUserDetail>> {
   const result = await params.transport.request<unknown>({
     method: 'PATCH',
     path: adminEndpoints.usersByUserIdVerifications(params.userId),
-    body: { [CHAMP_DE_PREUVE[params.channel]]: params.verified },
+    body: { [CHAMP_DE_PREUVE[params.channel]]: params.verified, ...withReason(params.reason) },
     ...withSignal(params.signal),
   });
   return membreRendu(result);
 }
 
-/** Activer ou désactiver le second facteur du membre. */
+/**
+ * Activer ou désactiver le second facteur du membre — `PATCH
+ * admin.usersByUserIdSecurity`. Désarmer est le chemin de récupération d'un
+ * appareil perdu ; le motif, écrit, part dans la trace.
+ */
 export async function setAdminUserTwoFactor(
-  params: AdminDeps & { readonly userId: string; readonly enabled: boolean; readonly signal?: AbortSignal },
+  params: AdminDeps & { readonly userId: string; readonly enabled: boolean; readonly reason?: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<AdminUserDetail>> {
   const result = await params.transport.request<unknown>({
     method: 'PATCH',
     path: adminEndpoints.usersByUserIdSecurity(params.userId),
-    body: { twoFactorEnabled: params.enabled },
+    body: { twoFactorEnabled: params.enabled, ...withReason(params.reason) },
     ...withSignal(params.signal),
   });
   return membreRendu(result);

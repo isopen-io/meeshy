@@ -4,6 +4,7 @@ import {
   auditCallComponents,
   auditForbiddenPermissions,
   auditManifestPermissions,
+  auditShareIntentFilters,
   formatViolations,
   REQUIRED_PERMISSIONS,
 } from './check-android-manifest.mjs';
@@ -279,4 +280,90 @@ describe('la galerie (#8336) écrit sans lire : aucune permission de stockage', 
       expect(auditForbiddenPermissions({ manifest })).toEqual([permission]);
     });
   }
+});
+
+/**
+ * MEESHY FIGURE DANS LA FEUILLE DE PARTAGE D'ANDROID (#8884).
+ *
+ * Une image, une vidéo ou un lien partagé depuis une autre application arrive
+ * sur la feuille d'envoi : c'est l'`<intent-filter>` SEND / SEND_MULTIPLE de
+ * l'activité principale qui inscrit l'app. Sans la catégorie DEFAULT, le
+ * système ne la propose pas — et rien ne casse, elle est simplement absente.
+ */
+const activityWith = (filters: readonly string[]): string =>
+  manifestWith([
+    '<application>',
+    '<activity android:name=".MainActivity" android:exported="true">',
+    ...filters,
+    '</activity>',
+    '</application>',
+  ]);
+
+const filter = (action: string, mimeTypes: readonly string[], category = 'android.intent.category.DEFAULT'): string =>
+  [
+    '<intent-filter>',
+    `<action android:name="android.intent.action.${action}" />`,
+    `<category android:name="${category}" />`,
+    ...mimeTypes.map((mimeType) => `<data android:mimeType="${mimeType}" />`),
+    '</intent-filter>',
+  ].join('\n');
+
+const SEND = filter('SEND', ['image/*', 'video/*', 'text/plain']);
+const SEND_MULTIPLE = filter('SEND_MULTIPLE', ['image/*', 'video/*']);
+
+describe('auditShareIntentFilters — l\'app est proposée au partage', () => {
+  test('SEND et SEND_MULTIPLE complets → aucune violation', () => {
+    expect(auditShareIntentFilters({ manifest: activityWith([SEND, SEND_MULTIPLE]) })).toEqual([]);
+  });
+
+  test('un filtre absent est nommé', () => {
+    const violations = auditShareIntentFilters({ manifest: activityWith([SEND]) });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('SEND_MULTIPLE');
+  });
+
+  test('sans la catégorie DEFAULT, le système ne propose pas l\'app', () => {
+    const violations = auditShareIntentFilters({
+      manifest: activityWith([filter('SEND', ['image/*', 'video/*', 'text/plain'], 'android.intent.category.BROWSABLE'), SEND_MULTIPLE]),
+    });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('DEFAULT');
+  });
+
+  test('un type manquant est nommé', () => {
+    const violations = auditShareIntentFilters({ manifest: activityWith([filter('SEND', ['image/*', 'text/plain']), SEND_MULTIPLE]) });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('video/*');
+  });
+
+  test('un type que le pont ne copie pas est refusé : l\'app serait proposée pour un contenu qu\'elle rejetterait', () => {
+    const violations = auditShareIntentFilters({
+      manifest: activityWith([filter('SEND', ['image/*', 'video/*', 'text/plain', '*/*']), SEND_MULTIPLE]),
+    });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('*/*');
+  });
+
+  test('un filtre en commentaire ne compte pas', () => {
+    const violations = auditShareIntentFilters({ manifest: activityWith([`<!-- ${SEND} -->`, SEND_MULTIPLE]) });
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('SEND —');
+  });
+
+  test('un filtre posé sur une AUTRE activité ne compte pas', () => {
+    const manifest = manifestWith([
+      '<application>',
+      '<activity android:name=".Autre">',
+      SEND,
+      SEND_MULTIPLE,
+      '</activity>',
+      '<activity android:name=".MainActivity"></activity>',
+      '</application>',
+    ]);
+    expect(auditShareIntentFilters({ manifest })).toHaveLength(2);
+  });
+
+  test('pas d\'activité principale : violation, pas d\'exception', () => {
+    expect(auditShareIntentFilters({ manifest: manifestWith([]) })).toEqual(['.MainActivity — absente du manifeste']);
+  });
 });

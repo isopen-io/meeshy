@@ -1,6 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
+  boundedCopySenderDeadline,
   ephemeralDestructionAt,
+  isDurationBoundedCopy,
   recipientEphemeralDeadline,
 } from '@meeshy/shared/utils/ephemeral-countdown';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -84,6 +86,7 @@ interface EphemeralMessageRow {
   conversationId: string;
   createdAt: Date;
   ephemeralDuration: number | null;
+  effectFlags?: number | null;
   isViewOnce: boolean;
   senderId: string;
   sender: { id: string; userId: string | null } | null;
@@ -129,6 +132,7 @@ export async function startEphemeralCountdowns(
         conversationId: true,
         createdAt: true,
         ephemeralDuration: true,
+        effectFlags: true,
         isViewOnce: true,
         senderId: true,
         sender: { select: { id: true, userId: true } },
@@ -181,7 +185,7 @@ export async function startEphemeralCountdowns(
       recipientRoomKey,
       senderRoomKey: row.sender?.userId ?? row.sender?.id ?? row.senderId,
       recipientExpiresAt: deadline,
-      latestExpiresAt: latest ?? deadline,
+      latestExpiresAt: senderDeadline(row, latest ?? deadline),
     });
   }
 
@@ -189,6 +193,16 @@ export async function startEphemeralCountdowns(
 
   return started;
 }
+
+/**
+ * #9588 — l'expéditeur d'une copie bornée ne suit pas le décompte tardif d'un
+ * destinataire : son échéance reste « envoi + durée ». La destruction, elle,
+ * est repoussée — le destinataire garde sa durée entière.
+ */
+const senderDeadline = (row: EphemeralMessageRow, latest: Date): Date =>
+  (isDurationBoundedCopy(row)
+    ? boundedCopySenderDeadline({ ephemeralDuration: row.ephemeralDuration, sentAt: row.createdAt })
+    : null) ?? latest;
 
 /**
  * Room personnelle du destinataire — `userId ?? id`, la règle du dépôt
@@ -240,6 +254,7 @@ async function recomputeDestruction(
   const destruction = ephemeralDestructionAt({
     sentAt: row.createdAt,
     ephemeralDuration: duration,
+    effectFlags: row.effectFlags,
     recipientDeadlines: known,
   });
   if (!destruction) return null;

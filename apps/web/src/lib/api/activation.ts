@@ -80,6 +80,22 @@ export async function loadMyActivation(deps: ActivationDeps): Promise<ApiResult<
   };
 }
 
+const WirePhone = z.object({ user: z.optional(z.object({ phoneNumber: z.optional(z.nullable(z.string())) })) });
+
+/**
+ * LE PROFIL A-T-IL UN NUMÉRO ? (#8843) — lu sur le même `GET me.root` que
+ * l'activation. La session ne le garde pas (projection de `session.ts`) : la
+ * question se pose au moment où la proposition « Ajoutez votre numéro » en
+ * dépend. Sous fixtures : `false`, pour que la recette voie la proposition.
+ */
+export async function loadMyPhonePresence(deps: ActivationDeps): Promise<ApiResult<boolean>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: false };
+  const result = await deps.transport.request<unknown>({ method: 'GET', path: meEndpoints.root });
+  if (!result.ok) return result;
+  const phone = WirePhone.safeParse(result.data).data?.user?.phoneNumber;
+  return { ok: true, data: typeof phone === 'string' && phone.trim() !== '' };
+}
+
 /** Un numéro international : `+`, puis 8 à 15 chiffres (E.164). Les espaces,
  * points, tirets et parenthèses de la saisie sont retirés avant d'envoyer. */
 export function compactPhone(value: string): string | null {

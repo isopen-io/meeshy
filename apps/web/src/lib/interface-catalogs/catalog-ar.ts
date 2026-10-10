@@ -10,6 +10,7 @@ import arPassword from './catalog-ar-password';
 import arAccounts from './catalog-ar-accounts';
 import arCall from './catalog-ar-call';
 import arRowActions from './catalog-ar-row-actions';
+import arEngagement from './catalog-ar-engagement';
 import arCallShell from './catalog-ar-call-shell';
 import arCallJoin from './catalog-ar-call-join';
 import arCallDecline from './catalog-ar-call-decline';
@@ -27,12 +28,16 @@ import arMessageCard from './catalog-ar-message-card';
 import arMentions from './catalog-ar-mentions';
 import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
+import arWriteRestriction from './catalog-ar-write-restriction';
 import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
 import arQuote from './catalog-ar-quote';
 import arCommentRow from './catalog-ar-comment-row';
 import arContactDiscovery from './catalog-ar-contact-discovery';
+import arDownload from './catalog-ar-download';
+import arPhonePrompt from './catalog-ar-phone-prompt';
+import arUserProfile from './catalog-ar-user-profile';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -46,16 +51,6 @@ const ar = {
   'message.excerpt.protected': 'محتوى محمي',
   'a11y.message.menu.subject': 'إجراءات رسالة {author}: {excerpt}',
 
-  'selection.toolbar': 'تحديد الرسائل',
-  'selection.cancel': 'إلغاء',
-  'selection.count': 'تم تحديد {count}',
-  'forward.title': 'إعادة التوجيه إلى…',
-  'forward.empty': 'لا توجد محادثة',
-  'forward.search.label': 'البحث عن محادثة',
-  'forward.search.placeholder': 'بحث',
-  'forward.announce.sent': 'تمت إعادة توجيه الرسالة',
-  'forward.announce.sentMany': 'تمت إعادة توجيه {count} رسائل',
-  'forward.announce.failed': 'تعذّرت إعادة التوجيه',
   'forward.refusal.viewOnce': 'لا يمكن إعادة توجيه رسالة تُعرض مرة واحدة',
   'forward.refusal.unavailable': 'الرسالة الأصلية لم تعد متاحة: لا شيء لإعادة توجيهه',
 
@@ -83,7 +78,6 @@ const ar = {
   'reels.sound.off': 'كتم الصوت',
   'reels.play': 'تشغيل الريل',
   'reels.pause': 'إيقاف الريل مؤقتًا',
-  'reels.media.error': 'تعذّر التشغيل — إعادة المحاولة',
   'reels.image': 'صورة {index} من {count}',
 
   'stories.title': 'القصص',
@@ -225,6 +219,7 @@ const ar = {
   ...arAccounts,
   ...arCall,
   ...arRowActions,
+  ...arEngagement,
   ...arCallShell,
   ...arCallJoin,
   ...arCallDecline,
@@ -236,7 +231,6 @@ const ar = {
   ...arCallCaptions,
   ...arCallRecording,
   ...arSignup,
-  'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'report.title': 'الإبلاغ عن هذا الحساب',
   'report.body': 'اختر سبب البلاغ. سيصل إلى فريق الإشراف لدينا.',
   'report.action': 'إبلاغ',
@@ -256,7 +250,6 @@ const ar = {
   'feed.gesture.pending': 'لم يتم تأكيد الإجراء — غير متصل',
   'feed.share.error': 'تعذّرت مشاركة المنشور',
   'feed.share.copied': 'تم نسخ الرابط — لم يتبقَّ سوى لصقه.',
-  'feed.share.text': 'منشور على Meeshy',
 
   'root.menu.feed': 'التدفق',
   'root.menu.links': 'روابطي',
@@ -281,6 +274,7 @@ const ar = {
   'notifications.category.reactions': 'التفاعلات',
   'notifications.category.mentions': 'الإشارات',
   'notifications.category.social': 'اجتماعي',
+  'notifications.category.engagement': 'التفاعل',
   'notifications.category.contacts': 'جهات الاتصال',
   'notifications.category.groups': 'المجموعات',
   'notifications.category.calls': 'المكالمات',
@@ -483,6 +477,7 @@ const ar = {
   'settings.export_data': 'تصدير بياناتي',
   'settings.section.tools': 'الأدوات',
   'settings.tools.progression': 'التقدّم',
+  'settings.tools.game': 'اللعبة',
   'settings.section.about': 'حول',
   'settings.terms': 'شروط الاستخدام',
   'settings.privacy_policy': 'سياسة الخصوصية',
@@ -497,6 +492,7 @@ const ar = {
   'settings.save.error': 'لم يُحفظ الإعداد.',
   'settings.theme.sync_error': 'طُبّق المظهر على هذا الجهاز دون مزامنة.',
   'common.cancel': 'إلغاء',
+  'common.close': 'إغلاق',
 
   'media.video.play': 'تشغيل الفيديو',
   'media.video.pause': 'إيقاف مؤقت',
@@ -504,6 +500,9 @@ const ar = {
   'media.audio.position': 'موضع التشغيل',
   'media.audio.speed': 'سرعة التشغيل',
   'media.video.position.value': '{elapsed} من {total}',
+  'media.video.duration': 'المدة',
+  'media.video.remaining': 'الوقت المتبقي',
+  'media.buffering': 'جارٍ التحميل…',
   'media.video.mute': 'كتم الصوت',
   'media.video.unmute': 'إلغاء كتم الصوت',
   'media.video.more_options': 'مزيد من الخيارات',
@@ -629,7 +628,6 @@ const ar = {
   'discover.blocked.empty.title': 'لا يوجد مستخدمون محظورون',
   'discover.blocked.empty.subtitle': 'سيظهر هنا الأشخاص الذين تحظرهم.',
   'discover.unknown': 'مجهول',
-  'discover.loading': 'جارٍ التحميل',
   'discover.allLoaded': 'تم تحميل القائمة كاملة',
   'discover.error.title': 'تعذّر تحميل هذه القائمة',
   'discover.error.body': 'تحقّق من اتصالك ثم أعد المحاولة.',
@@ -649,57 +647,12 @@ const ar = {
   'discover.announce.unblockFailed': 'تعذّر إلغاء الحظر',
   'discover.announce.offline': 'غير متصل: لم يُرسَل شيء.',
 
-  'userProfile.title': 'الملف الشخصي',
-  'userProfile.loading': 'جارٍ تحميل الملف الشخصي',
-  'userProfile.section.publications': 'المنشورات',
-  'userProfile.section.relation': 'الاتصال',
-  'userProfile.section.conversations': 'المحادثات',
-  'userProfile.conversations.empty': 'لا توجد محادثة مشتركة',
-  'userProfile.conversations.emptyBody': 'لا شيء يجمعكما بعد — «اكتب» يفتح المحادثة الأولى.',
-  'userProfile.conversations.error': 'تعذّر تحميل المحادثات',
-  'userProfile.conversations.loading': 'جارٍ تحميل المحادثات',
-  'userProfile.refused.title': 'هذا الملف الشخصي غير متاح',
-  'userProfile.refused.body': 'إما أنه غير موجود، أو لا تملك صلاحية الوصول إليه.',
-  'userProfile.throttled.title': 'طلبات كثيرة جدًا',
-  'userProfile.throttled.body': 'أعد المحاولة بعد لحظة.',
-  'userProfile.error.title': 'تعذّر تحميل هذا الملف الشخصي',
-  'userProfile.error.body': 'أعد المحاولة بعد لحظة.',
-  'userProfile.offline.body': 'سيظهر الملف الشخصي عند عودة الاتصال.',
-  'userProfile.posts.empty': 'لا توجد منشورات',
-  'userProfile.posts.emptyBody': 'لا يوجد بعد محتوى عام للقراءة.',
-  'userProfile.posts.emptyPosts': 'لا توجد منشورات هنا',
-  'userProfile.posts.emptyReels': 'لا توجد ريلز هنا',
-  'userProfile.posts.emptyFilter': 'انقر على البطاقة مرة أخرى لعرض كل شيء.',
-  'userProfile.posts.error': 'تعذّر تحميل المنشورات',
-  'userProfile.posts.loadMore': 'تحميل المزيد',
-  'userProfile.posts.loaded': 'المنشورات المضافة: {count}',
-  'userProfile.posts.loadedNone': 'لا مزيد من المنشورات للعرض',
-  'userProfile.posts.loading': 'جارٍ التحميل…',
-  'userProfile.stat.posts': 'منشورات',
-  'userProfile.stat.reels': 'ريلز',
-  'userProfile.stat.stories': 'قصص',
-  'userProfile.stat.filterLabel': 'التصفية على {name}',
-  'userProfile.stat.filterClear': 'عرض الكل',
-  'userProfile.context.received': 'يريد {name} التواصل معك. اقبل لتبادل الرسائل.',
-  'userProfile.context.sent': 'أرسلت طلب اتصال إلى {name}. في انتظار الرد.',
-  'userProfile.action.write': 'مراسلة',
-  'userProfile.action.writeLabel': 'مراسلة {name}',
-  'userProfile.action.block': 'حظر',
-  'userProfile.action.blockLabel': 'حظر {name}',
-  'userProfile.blocked.title': 'لقد حظرت هذا الشخص',
-  'userProfile.blocked.body': 'تبقى منشوراته وإحصاءاته مخفية ما دام الحظر قائمًا.',
-  'userProfile.signin.title': 'سجّل الدخول للتواصل',
-  'userProfile.signin.body': 'طلبات الاتصال والرسائل تتطلب حسابًا.',
-  'userProfile.signin.cta': 'تسجيل الدخول',
-  'userProfile.announce.blocked': 'تم حظر الشخص',
-  'userProfile.announce.blockFailed': 'تعذّر الحظر',
-  'userProfile.announce.writeFailed': 'تعذّر فتح المحادثة',
 
   'a11y.floating.rung.discover.requests.one': 'اكتشاف، {count} طلب وارد',
   'a11y.floating.rung.discover.requests.other': 'اكتشاف، {count} طلبات واردة',
 
   'links.hub.banner.title': 'إدارة روابطك',
-  'links.hub.banner.subtitle': 'ادعُ من تشاء إلى محادثاتك',
+  'links.hub.banner.subtitle': 'شارك وتابع ووسّع جمهورك',
   'links.hub.share.title': 'روابط المشاركة',
   'links.hub.share.description': 'ادعُ جهات اتصالك للانضمام إلى محادثاتك',
   'links.hub.share.create': 'إنشاء رابط مشاركة',
@@ -729,8 +682,6 @@ const ar = {
   'links.detail.disable': 'تعطيل',
   'links.detail.activate': 'تفعيل',
   'links.detail.stats': 'الإحصاءات',
-  'links.detail.stats.uses': 'مرات الاستخدام',
-  'links.detail.stats.max': 'الحد الأقصى',
   'links.detail.info': 'المعلومات',
   'links.detail.identifier': 'المعرّف',
   'links.detail.createdAt': 'تاريخ الإنشاء',
@@ -804,8 +755,6 @@ const ar = {
   'feed.scene.mosaic.more': 'المشهد {index}، و{count} أخرى',
   'feed.scene.mosaic.video': 'المشهد {index}، فيديو',
   'feed.scene.shared_by': 'مشهد شاركه {author}',
-  'feed.scene.open.fullscreen': 'اضغط مرتين للعرض بملء الشاشة',
-  'feed.scene.open.post': 'اضغط مرتين لفتح المنشور',
   'feed.scene.sound.muted': 'الصوت مكتوم',
   'feed.scene.count': '{count} مشاهد',
   'scene.fullscreen.play': 'استئناف الكل',
@@ -820,7 +769,6 @@ const ar = {
      بواسطة المحرك المشترك، تُنشر بصيغة CanvasV3 مثل iOS. */
   'story.studio.title': 'قصة جديدة',
   'story.studio.cancel': 'إلغاء',
-  'story.studio.publish': 'نشر',
   'story.studio.publishing': 'جارٍ النشر…',
   'story.studio.publish.waiting': 'في انتظار الشبكة…',
   'story.studio.publishing.progress': 'نشر {current}/{total}…',
@@ -851,7 +799,6 @@ const ar = {
   'story.studio.text.label': 'نص القصة',
   'story.studio.text.placeholder': 'إضافة نص',
   'story.studio.hint.duration': 'تبقى القصة مرئية لمدة عشرين ساعة.',
-  'story.studio.error.upload': 'تعذّر إرسال الملف.',
   'story.studio.error.publish': 'تعذّر نشر القصة.',
   'story.studio.refusal.title': 'يلزم حساب لإنشاء قصة.',
   'story.studio.refusal.login': 'تسجيل الدخول',
@@ -870,11 +817,8 @@ const ar = {
   'story.studio.failure.refused': 'تم رفض النشر.',
   'story.studio.failure.unavailable': 'الخادم غير متاح.',
   'story.studio.text.add': 'إضافة نص',
-  'story.studio.text.remove': 'إزالة هذا النص',
   'story.studio.object.text': 'نص {index}',
   'story.studio.object.overlay': 'طبقة',
-  'story.studio.object.select': 'تحديد {name}',
-  'story.studio.objects.label': 'عناصر المشهد',
   'story.studio.overlay.add': 'ضع صورة على المشهد',
   'story.studio.overlay.label': 'طبقة',
   'story.studio.overlay.remove': 'إزالة الطبقة',
@@ -944,8 +888,6 @@ const ar = {
   'story.studio.pose.rotateLeft': 'تدوير لليسار',
   'story.studio.pose.rotateRight': 'تدوير لليمين',
   'story.studio.pose.reset': 'إعادة التوسيط',
-  'story.studio.pose.handle': 'تحريك {name} — الأسهم للتحريك، + و − للحجم، [ و ] للتدوير',
-  'story.studio.pose.grip': 'تغيير حجم {name} وتدويره',
 
   /* ورقة جمهور الاستوديو (#7683) — القيم الست لـ PostVisibility،
      مرآة PostVisibility.swift (packages/MeeshySDK). */
@@ -1037,7 +979,6 @@ const ar = {
   'comment.refused.session': 'انتهت الجلسة — سجّل الدخول من جديد.',
   'comment.refused.right': 'هذا الإجراء غير متاح لك.',
   'comment.like.limit': 'خمسة تفاعلات كحد أقصى لكل شخص.',
-  'feed.action.comment': 'تعليق',
 
   'admin.title': 'الإدارة',
 
@@ -1068,11 +1009,8 @@ const ar = {
   'message-detail.load-error': 'تعذر تحميل هذه المعلومات',
   'message-detail.retry': 'إعادة المحاولة',
 
-  'download.title': 'نزّل Meeshy',
-  'download.body': 'اكتب بلغتك واقرأ بلغتك: يترجم Meeshy كل رسالة في الطريق.',
-  'download.appStore': 'التنزيل من App Store',
-  'download.web': 'افتح Meeshy في المتصفح',
-  'download.otherPlatforms': 'على أندرويد وعلى الحاسوب، يعمل Meeshy مباشرة في المتصفح.',
+  ...arDownload,
+  ...arPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...arComposerAttach,
@@ -1130,6 +1068,7 @@ const ar = {
   'attachment.protected.open.hint': 'المس للعرض بملء الشاشة',
   'media.reactions.badge.a11y': 'التفاعلات',
   'media.reactions.badge.mine.a11y': 'بما في ذلك تفاعلك',
+  'message.join.noAccount': 'بدون حساب',
   'attachment.kind.image': 'صورة',
   'attachment.kind.video': 'فيديو',
   'attachment.kind.audio': 'مقطع صوتي',
@@ -1155,14 +1094,17 @@ const ar = {
   ...arMentions,
   ...arStudioChrome,
   ...arEphemeral,
+  ...arWriteRestriction,
   ...arGallery,
   ...arMessageCard,
   ...arConversationCard,
   ...arStoriesMine,
+  'settings.tools.sounds': 'أصواتي',
   ...arContactCard,
   ...arQuote,
   ...arCommentRow,
   ...arContactDiscovery,
+  ...arUserProfile,
 } satisfies InterfaceCatalog;
 
 export default ar;

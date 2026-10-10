@@ -144,7 +144,7 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         XCTAssertEqual(ConversationPreviewLine.symbol(for: .viewOnce), MessageProtectionSymbols.viewOnce)
         XCTAssertEqual(ConversationPreviewLine.symbol(for: .ephemeral), MessageProtectionSymbols.ephemeral)
         XCTAssertEqual(ConversationPreviewLine.symbol(for: .hidden), MessageProtectionSymbols.blurred)
-        XCTAssertEqual(ConversationPreviewLine.symbol(for: .expired), "timer.badge.xmark")
+        XCTAssertEqual(ConversationPreviewLine.symbol(for: .expired), MessageProtectionSymbols.expired)
 
         let viewOnce = composed { $0.lastMessagePreview = "4242"; $0.lastMessageIsViewOnce = true }
         XCTAssertEqual(viewOnce.icon, .viewOnce)

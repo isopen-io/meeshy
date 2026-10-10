@@ -338,7 +338,12 @@ extension iPadRootView {
             // elle dérive le palier de la notification qu'elle tient déjà.
             router.pendingEngagementReveal = EngagementReveal.from(
                 type: notification.notificationType, metadata: notification.metadata)
-            rightPanelRoute = .progression
+            router.openGame(at: GameNavigationMap.entry(for: notification.notificationType) ?? .progression)
+
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
+            // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme, sur son chemin
+            // complet (#9564) — même geste que sur iPhone.
+            router.openGame(at: GameNavigationMap.entry(for: notification.notificationType) ?? .progression)
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
@@ -397,7 +402,12 @@ extension iPadRootView {
             // Célébration (#5809) — le chemin SOCKET porte sa métadonnée.
             router.pendingEngagementReveal = EngagementReveal.from(
                 type: event.notificationType, metadata: event.metadata)
-            rightPanelRoute = .progression
+            router.openGame(at: GameNavigationMap.entry(for: event.notificationType) ?? .progression)
+
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
+            // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme, sur son chemin
+            // complet (#9564) — même geste que sur iPhone.
+            router.openGame(at: GameNavigationMap.entry(for: event.notificationType) ?? .progression)
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
@@ -526,10 +536,15 @@ extension iPadRootView {
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
             // Célébration (#5809) : la charge APNs ne porte pas de
             // `NotificationMetadata` typée. On n'invente donc AUCUN palier —
-            // le tap ouvre le tableau de bord, comme avant. Parité exacte avec
-            // `NotificationNavContext.init(from: NotificationPayload)`, qui
-            // pose `reveal = nil` pour la même raison.
-            rightPanelRoute = .progression
+            // le tap ouvre la fiche du palier, comme sur iPhone (#9564). Parité
+            // exacte avec `NotificationNavContext.init(from: NotificationPayload)`,
+            // qui pose `reveal = nil` pour la même raison.
+            router.openGame(at: GameNavigationMap.entry(for: type) ?? .progression)
+
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
+            // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme, sur son chemin
+            // complet (#9564) — même geste que sur iPhone.
+            router.openGame(at: GameNavigationMap.entry(for: type) ?? .progression)
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
@@ -607,7 +622,7 @@ extension iPadRootView {
         notifications.manager.dismissToast()
 
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
-            notificationPreviewConversation = existing
+            sheetTargets.notificationPreview = existing
             return
         }
         Task { @MainActor in
@@ -619,12 +634,12 @@ extension iPadRootView {
                 }
             }()
             if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
-                notificationPreviewConversation = cached
+                sheetTargets.notificationPreview = cached
                 return
             }
             let currentUserId = AuthManager.shared.currentUser?.id ?? ""
             if let apiConv = try? await ConversationService.shared.getById(conversationId) {
-                notificationPreviewConversation = apiConv.toConversation(currentUserId: currentUserId)
+                sheetTargets.notificationPreview = apiConv.toConversation(currentUserId: currentUserId)
             } else {
                 handleSocketNotificationTap(event)
             }
