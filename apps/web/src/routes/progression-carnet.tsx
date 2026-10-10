@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import type { GameBlock } from '@meeshy/shared/types/game';
-import { photoCatchUp, PHOTO_TRACKS, type PhotoTrack } from '@meeshy/shared/utils/game/photo-catch-up';
 
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/api/engagement';
 
@@ -12,9 +11,17 @@ import { GameBird } from '@/components/game';
 import { GamePhotoFlow } from '@/components/game-photo-flow';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
-import { catchUpMoments, catchUpStandingOf, type CatchUpMoment } from '@/lib/game-photo/catch-up';
 import type { PhotoEnv } from '@/lib/game-photo/env';
-import { momentLines, type PhotoMoment } from '@/lib/game-photo/moments';
+import {
+  catchUpMoments,
+  catchUpStandingOf,
+  momentLines,
+  photoCatchUp,
+  PHOTO_TRACKS,
+  type CatchUpMoment,
+  type PhotoMoment,
+  type PhotoTrack,
+} from '@/lib/game-photo/moments';
 import type { NotebookEntry } from '@/lib/game-photo/notebook';
 import { referralOf, referralShareText } from '@/lib/game-photo/referral';
 import { dateLabelOf, fileNameOf } from '@/lib/game-photo/render';

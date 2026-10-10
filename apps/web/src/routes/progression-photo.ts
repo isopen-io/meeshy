@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { photoCatchUp, photoOfferFor } from '@meeshy/shared/utils/game/photo-catch-up';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
-import { catchUpMoments, catchUpStandingOf } from '@/lib/game-photo/catch-up';
 import type { PhotoEnv } from '@/lib/game-photo/env';
-import { photoMomentsOfTransition, type PhotoMoment } from '@/lib/game-photo/moments';
+import { catchUpMoments, catchUpStandingOf, photoCatchUp, photoMomentsOfTransition, photoOfferFor, type PhotoMoment } from '@/lib/game-photo/moments';
 
 /**
  * LES PROPOSITIONS DE PHOTO (#9382) — Mee propose APRÈS la célébration, pendant
