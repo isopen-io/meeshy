@@ -9,7 +9,6 @@ import type {
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types';
-import { ErrorCode } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
@@ -30,7 +29,8 @@ import { admitStoryReply } from './storyReplyAdmission';
 import {
   admitConversationWrite,
   isConversationWriteRefused,
-  describeConversationWriteRefusal
+  describeConversationWriteRefusal,
+  writeRefusalCode
 } from './conversationWriteAdmission';
 import { sharedSendReservations, type SendReservationStore } from './newcomerSendReservations';
 import { resolveParticipantRights, attachmentSendRightForMimeType, NEW_MEMBER_PERMISSIONS } from '../participantRights';
@@ -256,13 +256,11 @@ export class MessagingService {
           ...corr, conversationId, reason: conversationAdmission.reason,
           retryAfterSeconds: conversationAdmission.retryAfterSeconds
         });
-        return conversationAdmission.reason === 'newcomer-slow-mode'
-          ? this.createErrorResponse(
-              describeConversationWriteRefusal(conversationAdmission),
-              ErrorCode.NEWCOMER_SLOW_MODE,
-              conversationAdmission.retryAfterSeconds
-            )
-          : this.createErrorResponse(describeConversationWriteRefusal(conversationAdmission));
+        return this.createErrorResponse(
+          describeConversationWriteRefusal(conversationAdmission),
+          writeRefusalCode(conversationAdmission),
+          conversationAdmission.reason === 'newcomer-slow-mode' ? conversationAdmission.retryAfterSeconds : undefined
+        );
       }
       releaseReservation = conversationAdmission.releaseReservation;
 

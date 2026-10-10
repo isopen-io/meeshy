@@ -30,7 +30,7 @@ import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forw
 import { FORWARD_PIECE_PROTECTION_SELECT, FORWARD_SOURCE_PROTECTION_SELECT, forwardPreviewOf, signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
 import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
 import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
-import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
+import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER, QUOTED_VISUAL_ATTACHMENT_COUNT_SELECT } from '../../services/attachments/attachmentIncludes';
 import {
   resolveParticipantAvatar,
   resolveParticipantDisplayName,
@@ -418,11 +418,7 @@ export function buildMessageListSelect(options: {
               orderBy: MESSAGE_ATTACHMENT_ORDER,
               take: 4,
             },
-            _count: {
-              select: {
-                reactions: true
-              }
-            }
+            _count: { select: { reactions: true, ...QUOTED_VISUAL_ATTACHMENT_COUNT_SELECT } }
           }
         };
       }

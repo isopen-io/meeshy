@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshyUI
 
 // MARK: - Pause ou boucle : ce que fait une story retenue (#9821)
@@ -74,7 +75,7 @@ extension StoryViewerView {
                 || showCommentsOverlay || showLanguageOptions || showFullLanguagePicker
                 || isCaptionExpanded || showAudioTranscript
                 || showViewersSheet || showExportShareSheet || sharedContentWrapper != nil
-                || showReportSheet || selectedProfileUser != nil || isOptionsMenuOpen
+                || showReportSheet || selectedProfileUser != nil || optionsMenuWatch.declaredOpen
         )
     }
 
@@ -86,7 +87,11 @@ extension StoryViewerView {
 
     /// La fin de la story courante : en boucle, la barre repart de zéro et le
     /// canvas est rembobiné (vidéo, audio, animations) ; sinon on avance.
+    ///
+    /// Le menu « … » n'y compte que s'il couvre ENCORE la scène (#9949) : un
+    /// menu refermé d'un toucher à côté peut ne jamais dire sa fermeture.
     func storyDidReachItsEnd() {
+        optionsMenuWatch.forgetUnlessShown()
         switch StoryPlaybackHold.endAction(for: playbackHold) {
         case .restartInPlace:
             slideTimer.seek(toFraction: 0)
@@ -157,7 +162,83 @@ extension EnvironmentValues {
 }
 
 extension View {
-    func storyOptionsMenuPresence(_ isOpen: Binding<Bool>) -> some View {
-        environment(\.storyOptionsMenuPresenceChange, { isOpen.wrappedValue = $0 })
+    func storyOptionsMenuPresence(_ watch: StoryOptionsMenuWatch) -> some View {
+        environment(\.storyOptionsMenuPresenceChange, { watch.declare($0) })
+            .background(StorySceneCoverProbe(watch: watch).allowsHitTesting(false))
+    }
+}
+
+// MARK: - Le menu ne retient la story que tant qu'il est RÉELLEMENT présenté (#9949)
+
+/// Le contenu d'un `Menu` ne reçoit pas son `onDisappear` à coup sûr quand on
+/// le referme d'un toucher à côté (recette du 2026-10-10, iOS 26) : la story
+/// bouclait alors sans fin. La déclaration d'ouverture ne suffit donc pas ; à
+/// la fin de la story, le lecteur vérifie qu'un menu couvre ENCORE la scène.
+/// Sans sonde, ou si rien ne la couvre, le menu ne retient rien : la règle ne
+/// bloque jamais la story — au pire, elle avance sous un menu ouvert.
+nonisolated enum StoryOptionsMenuPresence {
+    static func isShown(declaredOpen: Bool, sceneCovered: Bool?) -> Bool {
+        declaredOpen && sceneCovered == true
+    }
+}
+
+/// Une référence stable (`@State`) : l'en-tête, reconstruit à chaque tick, y
+/// déclare l'ouverture ; la fin de la story la vérifie. Rien n'est affiché
+/// d'après elle, elle n'a donc pas à être observée.
+final class StoryOptionsMenuWatch {
+    private(set) var declaredOpen = false
+    weak var probe: UIView?
+
+    nonisolated deinit {}
+
+    func declare(_ open: Bool) { declaredOpen = open }
+
+    /// Vérifie la déclaration contre la scène, et oublie une déclaration
+    /// orpheline (menu refermé sans signal).
+    func forgetUnlessShown() {
+        let shown = StoryOptionsMenuPresence.isShown(
+            declaredOpen: declaredOpen,
+            sceneCovered: probe.flatMap(StorySceneCover.isCovered)
+        )
+        if !shown { declaredOpen = false }
+    }
+}
+
+/// Un menu présenté pose son conteneur AU-DESSUS du contrôleur qui porte la
+/// story, au niveau de la fenêtre : c'est lui qui reçoit le toucher qui le
+/// referme. Au centre de la sonde, la fenêtre désigne donc une vue étrangère
+/// au contrôleur tant que le menu est là.
+enum StorySceneCover {
+    static func isCovered(_ probe: UIView) -> Bool? {
+        guard let window = probe.window, let owner = owningView(of: probe) else { return nil }
+        let center = probe.convert(CGPoint(x: probe.bounds.midX, y: probe.bounds.midY), to: window)
+        guard let hit = window.hitTest(center, with: nil) else { return false }
+        return !hit.isDescendant(of: owner)
+    }
+
+    private static func owningView(of view: UIView) -> UIView? {
+        var responder: UIResponder? = view.next
+        while let current = responder {
+            if let controller = current as? UIViewController { return controller.view }
+            responder = current.next
+        }
+        return nil
+    }
+}
+
+/// La sonde, posée derrière le lecteur : elle ne reçoit aucun toucher.
+private struct StorySceneCoverProbe: UIViewRepresentable {
+    let watch: StoryOptionsMenuWatch
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        watch.probe = view
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        watch.probe = uiView
     }
 }

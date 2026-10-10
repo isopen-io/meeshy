@@ -98,7 +98,7 @@ const firstOpenFrom = (index: number, context: JourneyContext): JourneyStep =>
 export const resumeStep = (context: JourneyContext): JourneyStep => firstOpenFrom(0, context);
 
 export const nextStepAfter = (current: OnboardingStepId, context: JourneyContext): JourneyStep =>
-  firstOpenFrom(ONBOARDING_STEPS.indexOf(current) + 1, context);
+  firstOpenFrom((ONBOARDING_STEPS as readonly OnboardingStepId[]).indexOf(current) + 1, context);
 
 /**
  * **UNE RELECTURE DU SERVEUR SE REJOUE CONTRE LA CARTE AFFICHÉE.** L'écran

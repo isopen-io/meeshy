@@ -456,7 +456,7 @@ class StatusViewModel: ObservableObject {
 
     var currentUserDisplayName: String {
         let user = authManager.currentUser
-        return user?.displayName ?? user?.username ?? "Moi"
+        return user?.displayName ?? user?.username ?? String(localized: "common.me", defaultValue: "Moi", bundle: .main)
     }
 
     var currentUserInitial: String {
