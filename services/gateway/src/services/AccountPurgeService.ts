@@ -77,9 +77,11 @@ export async function purgeAccountIsolatedData(
     prisma.notification.deleteMany({ where: { userId } }),
     eraseAddressBookOf(prisma, userId),
     // Une panne PROPAGE, comme celle de chaque suppression voisine : les deux
-    // appelants la journalisent et la passe suivante rejoue la purge, que son
-    // idempotence autorise. La taire ferait compter comme purgé un compte dont
-    // des contributions subsistent.
+    // appelants la journalisent. Aucune passe ne la rejoue aujourd'hui — la
+    // demande est déjà `GRACE_PERIOD_EXPIRED`, que l'élection horaire ne relit
+    // plus (rejeu jusqu'au succès : #10021) ; l'idempotence de la purge
+    // l'autorise, elle ne la déclenche pas. La taire ferait compter comme purgé
+    // un compte dont des contributions subsistent.
     eraseSharedTranslationsOfAccount(prisma, userId),
     purgeGameData(prisma, userId),
   ]);

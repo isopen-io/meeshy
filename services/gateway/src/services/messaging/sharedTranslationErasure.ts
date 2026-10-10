@@ -37,9 +37,15 @@ const LOGGED_MESSAGE_IDS_MAX = 20;
  *   version servie).
  * - {@link eraseSharedTranslationsOfAccount} — par COMPTE. La purge d'un compte
  *   propage ses pannes (`purgeAccountIsolatedData` : `Promise.all` sans
- *   `.catch`), et ses deux appelants les journalisent puis REJOUENT à la passe
- *   suivante. Se taire ici ferait compter comme purgé un compte dont des
- *   contributions subsistent.
+ *   `.catch`), et ses deux appelants les JOURNALISENT — rien de plus : aucune passe
+ *   ne la rejoue d'elle-même. La passe horaire n'élit que les demandes
+ *   `CONFIRMED`, or la transaction qui précède la purge a déjà posé
+ *   `GRACE_PERIOD_EXPIRED` et `User.deletedAt` ; la demande ne revient plus, et
+ *   l'étape ratée avec elle. L'idempotence de la purge PERMET un rejeu, elle ne le
+ *   déclenche pas. Le seul rejeu qui existe est le second appel de la route
+ *   « supprimer maintenant » — au clic de la personne, erreurs avalées ; rejouer
+ *   jusqu'au succès est #10021. Se taire ici ferait compter comme purgé un compte
+ *   dont des contributions subsistent : la panne reste au moins VISIBLE du journal.
  */
 
 /** Le seul délégué que l'effacement par message lit — un double de test n'a que lui à fournir. */

@@ -700,9 +700,15 @@ export class MaintenanceService {
    * Motif commun aux cinq catégories de purge/anonymisation d'un compte
    * expiré, ci-dessous : un appel best-effort, après l'écriture qui a déjà
    * fait passer la ligne en `GRACE_PERIOD_EXPIRED` — un échec ne doit jamais
-   * faire compter l'expiration elle-même comme ratée par l'appelant, la
-   * prochaine passe horaire rejouera l'étape (chacune est idempotente par
-   * construction, cf. son propre module).
+   * faire compter l'expiration elle-même comme ratée par l'appelant.
+   *
+   * L'échec est JOURNALISÉ, il n'est PAS rejoué : la passe n'élit que les
+   * demandes `CONFIRMED` (`processAccountDeletionRequests`), et celle-ci ne
+   * l'est plus — la prochaine passe horaire ne revient pas sur l'étape. Chacune
+   * est idempotente par construction (cf. son propre module), ce qui PERMET un
+   * rejeu sans le faire exister ; rejouer jusqu'au succès est #10021. Le seul
+   * rejeu actuel est le second appel de la route « supprimer maintenant » (au
+   * clic de la personne, erreurs avalées), pour deux de ces étapes seulement.
    */
   private async bestEffortDeletionStep(userId: string, label: string, step: () => Promise<unknown>): Promise<void> {
     try {

@@ -154,7 +154,7 @@ describe('purgeAccountIsolatedData — traductions partagées', () => {
     expect(second.sharedTranslationsDeleted).toBe(0);
   });
 
-  it("une panne PROPAGE, comme celle des autres suppressions : l'appelant la journalise et rejoue la purge", async () => {
+  it("une panne PROPAGE, comme celle des autres suppressions : l'appelant la journalise (aucune passe ne la rejoue, #10021)", async () => {
     const table = sharedTranslationTable([sharedTranslationRow({ sharedById: PARTICIPANT_EN_A })]);
     table.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
 

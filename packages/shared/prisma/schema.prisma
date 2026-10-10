@@ -1119,10 +1119,16 @@ model Message {
 /// du message : elle adresse la diffusion et l'index de lecture sans relire le
 /// message.
 ///
-/// Aucune relation vers `Message`, à dessein : un message s'efface en douceur
-/// (`deletedAt`), jamais physiquement, et la lecture écarte déjà un message
-/// effacé. Prisma n'émet pas les index sur MongoDB : ils sont posés à la main
-/// par `prisma/migrations/2026-10-10-shared-translation-indexes.mongodb.js`.
+/// Aucune relation vers `Message`, à dessein : un message s'efface presque toujours
+/// en douceur (`deletedAt`) et la lecture écarte déjà un message effacé. Deux chemins
+/// retirent pourtant la LIGNE : la compensation d'un envoi dont la copie des pièces
+/// jointes échoue (`MessageProcessor.handleAttachments`) et le balayage des avis
+/// d'arrivée d'un expéditeur disparu (`repairOrphanedMessageSenders`). Une traduction
+/// partagée y survivrait sans message, mais elle n'est jamais SERVIE : la lecture
+/// charge d'abord les messages demandés et ne rend une enveloppe que pour la version
+/// COURANTE d'un message qu'elle sert elle-même. Le balayage de ces lignes
+/// orphelines est #10008. Prisma n'émet pas les index sur MongoDB : ils sont posés à
+/// la main par `prisma/migrations/2026-10-10-shared-translation-indexes.mongodb.js`.
 model SharedTranslation {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   conversationId String   @db.ObjectId
