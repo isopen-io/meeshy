@@ -325,6 +325,7 @@ final class StoryOptionsMenuReleaseTests: XCTestCase {
 
     /// Une fenêtre réelle : la sonde est posée dans la vue du contrôleur, un
     /// menu ouvert pose son conteneur AU-DESSUS, au niveau de la fenêtre.
+    @MainActor
     private final class SceneUnderTest {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 300, height: 600))
         let probe = UIView(frame: CGRect(x: 0, y: 0, width: 300, height: 600))

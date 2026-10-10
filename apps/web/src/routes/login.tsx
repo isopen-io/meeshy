@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { AuthBrandFooter, AuthSubmitButton, AuthTitle } from '@/components/auth-chrome';
-import { AuthColumn } from '@/components/auth-column';
+import { AgeBlocked, AuthColumn, isAgeBelowMinimum } from '@/components/auth-column';
 import { Field } from '@/components/field';
 import { GlyphSvg } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
@@ -86,6 +86,10 @@ const NEXT_PARAM = 'next';
  */
 const EMAIL_PARAM = 'email';
 
+/** `?motif=age` — l'accueil vient de recevoir le 422 d'une date sous 13 ans
+ * (#9928) : la connexion s'ouvre sur l'écran qui le dit. */
+export const ageBlockedFromSearch = (search: URLSearchParams): boolean => search.get('motif') === 'age';
+
 type LoginMethod = 'lien' | 'password';
 
 /**
@@ -143,6 +147,7 @@ export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?
       method={loginMethodFromSearch(search.get(METHOD_PARAM))}
       next={search.get(NEXT_PARAM)}
       email={search.get(EMAIL_PARAM)}
+      ageBlocked={ageBlockedFromSearch(search)}
       {...(magicLinkDeps === undefined ? {} : { magicLinkDeps })}
       serverLabel={import.meta.env.DEV ? loginServerLabel({ dev: true, base: apiConfig.base, proxyTarget: __API_PROXY_TARGET__ }) : null}
     />
@@ -153,6 +158,7 @@ export function LoginDoors({
   method,
   next = null,
   email = null,
+  ageBlocked: ageBlockedAtArrival = false,
   magicLinkDeps,
   passwordLogin = auth.login,
   accounts = { vault: accountVault, switcher: accountSwitcher },
@@ -163,6 +169,8 @@ export function LoginDoors({
   readonly next?: string | null;
   /** L'adresse à PRÉREMPLIR (#8216) — la valeur brute de `?email=`. */
   readonly email?: string | null;
+  /** Ouvrir sur l'écran des moins de 13 ans (`?motif=age`, #9928). */
+  readonly ageBlocked?: boolean;
   readonly magicLinkDeps?: MagicLinkPanelDeps;
   /** La connexion par mot de passe — injectable pour les témoins. */
   readonly passwordLogin?: typeof auth.login;
@@ -180,6 +188,8 @@ export function LoginDoors({
   const [focused, setFocused] = useState<'username' | 'password' | 'code' | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /* MOINS DE 13 ANS (#9928) : un 403 `AGE_BELOW_MINIMUM` n'est pas un échec à réessayer. */
+  const [ageBlocked, setAgeBlocked] = useState(ageBlockedAtArrival);
 
   const language = currentInterfaceLanguage();
   const [deviceAccounts, setDeviceAccounts] = useState<readonly DeviceAccount[]>(() => accounts.vault.list());
@@ -228,6 +238,11 @@ export function LoginDoors({
     setErrorMessage(null);
     const result = await passwordLogin({ username, password, ...(offersKeepSignedIn ? { rememberDevice: keepSignedIn } : {}) });
     setSubmitting(false);
+    if (!result.ok && isAgeBelowMinimum(result)) {
+      setPassword('');
+      setAgeBlocked(true);
+      return;
+    }
     if (!result.ok) {
       setErrorMessage(placeLoginFailure(result).message);
       return;
@@ -254,6 +269,13 @@ export function LoginDoors({
     setErrorMessage(null);
     const result = await auth.completeTwoFactor(twoFactorCode);
     setSubmitting(false);
+    if (!result.ok && isAgeBelowMinimum(result)) {
+      sessionStore.getState().clearSession();
+      setTwoFactorCode('');
+      setPassword('');
+      setAgeBlocked(true);
+      return;
+    }
     if (!result.ok) setErrorMessage(placeLoginFailure(result).message);
   }
 
@@ -261,6 +283,14 @@ export function LoginDoors({
     sessionStore.getState().clearSession();
     setTwoFactorCode('');
     setErrorMessage(null);
+  }
+
+  if (ageBlocked) {
+    return (
+      <AuthColumn className="justify-center gap-6 px-8">
+        <AgeBlocked language={language} onConfirm={() => setAgeBlocked(false)} />
+      </AuthColumn>
+    );
   }
 
   return (

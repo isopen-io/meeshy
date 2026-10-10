@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
+import type { GameBlock } from '@meeshy/shared/types/game';
+
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/api/engagement';
 
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
@@ -10,11 +12,21 @@ import { GamePhotoFlow } from '@/components/game-photo-flow';
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
 import type { PhotoEnv } from '@/lib/game-photo/env';
-import { momentLines, type PhotoMoment } from '@/lib/game-photo/moments';
+import {
+  catchUpMoments,
+  catchUpStandingOf,
+  momentLines,
+  photoCatchUp,
+  PHOTO_TRACKS,
+  type CatchUpMoment,
+  type PhotoMoment,
+  type PhotoTrack,
+} from '@/lib/game-photo/moments';
 import type { NotebookEntry } from '@/lib/game-photo/notebook';
 import { referralOf, referralShareText } from '@/lib/game-photo/referral';
 import { dateLabelOf, fileNameOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
+import type { GameCatalogKey } from '@/lib/i18n-game-catalog';
 import { gameText } from '@/lib/view/game-copy';
 import { ProgressionShell } from '@/routes/progression-shell';
 
@@ -28,6 +40,11 @@ import { ProgressionShell } from '@/routes/progression-shell';
  * une alerte qui ferait croire à une perte. Aucune image ne quitte l'appareil
  * sans un geste de partage. Retirer une photo demande une confirmation : c'est
  * le seul exemplaire.
+ *
+ * LE RATTRAPAGE (#9961, #9962) : chaque étape déjà franchie sans photo gardée
+ * se photographie, DANS L'ORDRE de sa piste (`photo-catch-up.ts`). Les étapes
+ * se lisent dans le bloc du jeu DÉJÀ en cache — sans lui, la section se tait.
+ * Un moment en attente qui est une étape ne paraît qu'une fois : là.
  */
 
 const CONFIRM_MS = 4000;
@@ -146,7 +163,103 @@ function PendingEntry({ entry, onTake }: { readonly entry: NotebookEntry; readon
   );
 }
 
-export function CarnetBody({ env, flameDays = null }: { readonly env: PhotoEnv; readonly flameDays?: number | null }) {
+const TRACK_LABEL = {
+  start: 'game.photo.kicker.start',
+  rank: 'game.gauge.rank',
+  tier: 'game.concept.level.name',
+  summit: 'game.photo.kicker.summit',
+  meesh: 'game.concept.meesh.name',
+  treasury: 'game.gauge.treasury',
+  flame: 'game.gauge.flame',
+} as const satisfies Readonly<Record<PhotoTrack, GameCatalogKey>>;
+
+function LockGlyph() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+function CatchUpEntry({ entry, firstTitle, onTake }: { readonly entry: CatchUpMoment; readonly firstTitle: string | null; readonly onTake: (moment: PhotoMoment) => void }) {
+  const { id, kicker, title } = entry.moment;
+  if (entry.state === 'locked') {
+    const first = firstTitle ?? '';
+    return (
+      <li
+        data-carnet-catch-up={id}
+        data-carnet-catch-up-locked=""
+        aria-label={gameText('game.notebook.catch_up_locked_a11y', { title, first })}
+        className="flex items-center gap-3 rounded-card px-3 py-3 opacity-60"
+        style={{ backgroundColor: GAME_CARD, color: GAME_INK_2 }}
+      >
+        <div aria-hidden="true" className="flex min-w-0 flex-1 flex-col gap-1">
+          <p className="text-body font-bold" style={{ color: GAME_INK }}>
+            {title}
+          </p>
+          <p className="text-caption">{gameText('game.notebook.catch_up_locked', { title: first })}</p>
+        </div>
+        <LockGlyph />
+      </li>
+    );
+  }
+  return (
+    <li data-carnet-catch-up={id} className="flex items-center gap-3 rounded-card px-3 py-3" style={{ backgroundColor: GAME_CARD }}>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
+          {kicker}
+        </p>
+        <p className="text-body font-bold" style={{ color: GAME_INK }}>
+          {title}
+        </p>
+      </div>
+      <button
+        type="button"
+        data-carnet-catch-up-take=""
+        onClick={() => onTake(entry.moment)}
+        className="shrink-0 rounded-chip px-3 text-check font-semibold"
+        style={{ minHeight: 44, color: 'var(--color-ios-surface)', backgroundColor: GAME_BRAND }}
+      >
+        {gameText('game.photo.offer.start')}
+      </button>
+    </li>
+  );
+}
+
+function CatchUpSection({ entries, onTake }: { readonly entries: readonly CatchUpMoment[]; readonly onTake: (moment: PhotoMoment) => void }) {
+  const titles = new Map(entries.map((entry) => [entry.moment.id, entry.moment.title]));
+  const groups = PHOTO_TRACKS.map((track) => ({ track, items: entries.filter((entry) => entry.track === track) })).filter((group) => group.items.length > 0);
+  return (
+    <section aria-labelledby="carnet-rattrapage" className="flex flex-col gap-3">
+      <h2 id="carnet-rattrapage" className="text-title font-bold" style={{ color: GAME_INK }}>
+        {gameText('game.notebook.catch_up')}
+      </h2>
+      {groups.map(({ track, items }) => (
+        <div key={track} data-carnet-track={track} role="group" aria-labelledby={`carnet-piste-${track}`} className="flex flex-col gap-2">
+          <h3 id={`carnet-piste-${track}`} className="px-1 text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
+            {gameText(TRACK_LABEL[track])}
+          </h3>
+          <ul className="flex flex-col gap-2">
+            {items.map((entry) => (
+              <CatchUpEntry key={entry.moment.id} entry={entry} firstTitle={entry.blockedBy === null ? null : (titles.get(entry.blockedBy) ?? null)} onTake={onTake} />
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+export function CarnetBody({
+  env,
+  flameDays = null,
+  game = null,
+}: {
+  readonly env: PhotoEnv;
+  readonly flameDays?: number | null;
+  readonly game?: GameBlock | null;
+}) {
   const [entries, setEntries] = useState<readonly NotebookEntry[] | null>(null);
   const [taking, setTaking] = useState<PhotoMoment | null>(null);
 
@@ -161,10 +274,12 @@ export function CarnetBody({ env, flameDays = null }: { readonly env: PhotoEnv; 
     return <div aria-busy="true" className="px-4 py-6" />;
   }
 
-  const pending = entries.filter((entry) => entry.status === 'pending');
   const kept = entries
     .filter((entry) => entry.status === 'kept')
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const catchUp = game === null ? [] : catchUpMoments(photoCatchUp(catchUpStandingOf(game), kept.map((entry) => entry.momentId)));
+  const caught = new Set(catchUp.map((entry) => entry.moment.id));
+  const pending = entries.filter((entry) => entry.status === 'pending' && !caught.has(entry.momentId));
 
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
@@ -177,6 +292,8 @@ export function CarnetBody({ env, flameDays = null }: { readonly env: PhotoEnv; 
           <GameBird bird="meoGuide" size={80} flip />
         </section>
       ) : null}
+
+      {catchUp.length === 0 ? null : <CatchUpSection entries={catchUp} onTake={setTaking} />}
 
       {pending.length === 0 ? null : (
         <section aria-labelledby="carnet-attente" className="flex flex-col gap-2">
@@ -221,11 +338,11 @@ export function CarnetBody({ env, flameDays = null }: { readonly env: PhotoEnv; 
 
 export default function ProgressionCarnetScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
-  /* Les jours de la Flamme du bandeau : lus dans le cache de Progression, jamais redemandés. */
-  const flameDays = useQueryClient().getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY)?.game?.flame.days ?? null;
+  /* Le bloc du jeu (Flamme du bandeau, étapes à rattraper) : lu dans le cache de Progression, jamais redemandé. */
+  const game = useQueryClient().getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY)?.game ?? null;
   return (
     <ProgressionShell title={gameText('game.notebook.page_title')}>
-      <CarnetBody env={appPhotoEnv()} flameDays={flameDays} />
+      <CarnetBody env={appPhotoEnv()} flameDays={game?.flame.days ?? null} game={game} />
     </ProgressionShell>
   );
 }
