@@ -36,6 +36,7 @@ const documentFor = (language: LandingLanguage): string =>
       sessionKey: SESSION_KEY,
       languageKey: INTERFACE_LANGUAGE_KEY,
       entryTemplate: WORLD_GUEST_ENTRY_TEMPLATE,
+      appPath: href('list'),
     },
   });
 
@@ -120,6 +121,7 @@ const harness = (input: {
   readonly language: LandingLanguage;
   readonly stored?: Readonly<Record<string, string>>;
   readonly response?: { readonly status: number; readonly body: unknown };
+  readonly installed?: 'display-mode' | 'ios-standalone';
 }): Harness => {
   const html = documentFor(input.language);
   document.documentElement.removeAttribute('data-session');
@@ -133,6 +135,8 @@ const harness = (input: {
     HTMLSelectElement: window.HTMLSelectElement,
     HTMLFormElement: window.HTMLFormElement,
     HTMLInputElement: window.HTMLInputElement,
+    matchMedia: (query: string) => ({ matches: input.installed === 'display-mode' && query === '(display-mode: standalone)' }),
+    navigator: input.installed === 'ios-standalone' ? { standalone: true } : {},
     localStorage: {
       getItem: (key: string) => stored.get(key) ?? null,
       setItem: (key: string, value: string) => void stored.set(key, value),
@@ -162,6 +166,7 @@ const harness = (input: {
     sessionKey: SESSION_KEY,
     languageKey: INTERFACE_LANGUAGE_KEY,
     entryTemplate: WORLD_GUEST_ENTRY_TEMPLATE,
+    appPath: href('list'),
     presence: LANDING_COPY[input.language].presence,
   };
   /* Le script est exécuté par son TEXTE, comme dans la page servie : une
@@ -222,6 +227,12 @@ describe('le script de la landing — la langue', () => {
     const { trace } = harness({ language: 'fr', stored: { [INTERFACE_LANGUAGE_KEY]: 'ar' } });
     expect(trace.replaced).toEqual(['/ar']);
     expect(harness({ language: 'fr' }).trace.replaced).toEqual([]);
+  });
+
+  test('l’application INSTALLÉE (PWA d’avant #10002, start_url sur /) ouvre la liste, jamais la landing', () => {
+    expect(harness({ language: 'fr', installed: 'display-mode' }).trace.replaced).toEqual(['/chats']);
+    expect(harness({ language: 'en', installed: 'ios-standalone' }).trace.replaced).toEqual(['/chats']);
+    expect(harness({ language: 'fr', installed: 'display-mode', stored: { [INTERFACE_LANGUAGE_KEY]: 'ar' } }).trace.replaced).toEqual(['/chats']);
   });
 
   test('une landing de langue ne se redirige jamais', () => {
