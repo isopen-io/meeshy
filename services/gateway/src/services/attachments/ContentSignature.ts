@@ -444,7 +444,7 @@ export type ShareLinkAnonymousFlags = {
   /** Les familles ouvertes aux invités (#10001) — vide ou absent : aucune restriction par famille. */
   readonly allowedAttachmentKinds?: readonly string[] | null;
   /** La conversation que le lien ouvre — elle peut plafonner les familles (World Wide). */
-  readonly conversation?: { readonly identifier: string } | null;
+  readonly conversation?: { readonly identifier?: string | null } | null;
 };
 
 /** Les familles qu'un invité de ce lien peut joindre, ou `null` si le lien ne restreint pas par famille. */

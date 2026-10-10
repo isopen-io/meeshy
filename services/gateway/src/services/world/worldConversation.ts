@@ -235,6 +235,7 @@ async function ensureShareLink(
       prisma.conversationShareLink.create({
         data: {
           ...WORLD_SHARE_LINK_TERMS,
+          allowedAttachmentKinds: [...WORLD_SHARE_LINK_TERMS.allowedAttachmentKinds],
           allowedCountries: [],
           allowedLanguages: [],
           allowedIpRanges: [],

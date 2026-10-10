@@ -27,9 +27,17 @@
 
 export type AudioContainer = 'mpeg' | 'adts' | 'iso-bmff' | 'webm' | 'ogg' | 'wav';
 
-export type AudioDecodingVerdict =
-  | { readonly ok: true; readonly container: AudioContainer }
-  | { readonly ok: false; readonly reason: string };
+/**
+ * Type PLAT, pas une union discriminée : le gateway compile sous
+ * `strictNullChecks: false`, où un discriminant booléen ne se resserre pas
+ * (même patron que `MessageAttachmentAdmission`). `ok: true` porte `container`,
+ * `ok: false` porte `reason`.
+ */
+export type AudioDecodingVerdict = {
+  readonly ok: boolean;
+  readonly container?: AudioContainer;
+  readonly reason?: string;
+};
 
 const refuse = (reason: string): AudioDecodingVerdict => ({ ok: false, reason });
 
