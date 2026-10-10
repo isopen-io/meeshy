@@ -119,6 +119,28 @@ final class MoodBadgeTests: XCTestCase {
         )
     }
 
+    /// Le contour se peint en huit copies masquées de la silhouette, sous une
+    /// échelle qui peut bouger : aplaties en UNE texture Metal, elles se
+    /// composent une fois au lieu de huit masques par image (#9868).
+    func test_theOutline_isFlattenedIntoOneTexture() throws {
+        let badge = try Self.source("Primitives/MoodBadge.swift")
+        XCTAssertTrue(
+            badge.contains(".drawingGroup()"),
+            "Les huit copies du contour doivent être rastérisées par `.drawingGroup()`."
+        )
+    }
+
+    /// L'onde « ici » tourne en `repeatForever` : quittant l'écran, elle doit
+    /// être REMPLACÉE par une valeur posée sans animation, sans quoi une vue
+    /// couverte la garde vivante (#9868).
+    func test_theHereWave_stopsWhenItLeavesTheScreen() throws {
+        let waves = try Self.source("Primitives/PresenceDotWaves.swift")
+        XCTAssertTrue(
+            waves.contains(".onDisappear"),
+            "PresenceHereWaveView doit arrêter son onde à la disparition."
+        )
+    }
+
     private static func source(_ relativePath: String) throws -> String {
         let url = ComposerSourceGuard.packageRoot
             .appendingPathComponent("Sources/MeeshyUI")
