@@ -85,7 +85,10 @@ enum Route: Hashable {
     case progressionNotebook
     /// Une page de la vague 2 du jeu (#9481) — Ligue, Saison, Vitrine, Atlas, Prestige, Réglages. Poussée dans la
     /// pile comme les autres pages du jeu, jamais présentée en feuille.
-    case gamePage(GamePage)
+    ///
+    /// `focus` : la saison ou la semaine de ligue sur laquelle la page s'ouvre — un lien du Jeu (#9947) ; `nil`,
+    /// l'en cours.
+    case gamePage(GamePage, focus: GamePageFocus? = nil)
     /// La FICHE d'un concept de Progression (#9564) — niveau, points, Meeshes, gloire… : le deuxième niveau, poussé
     /// au-dessus de la première page. `section` : la section où une entrée extérieure (notification, bandeau du
     /// joueur) pose le regard ; `nil` : la fiche s'ouvre en haut.
@@ -175,7 +178,7 @@ extension Route {
             return String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main)
         case .progressionNotebook:
             return String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main)
-        case .gamePage(let page):
+        case .gamePage(let page, _):
             return page.title
         case .progressionConcept(let concept, _):
             return ConceptText.name(concept)
@@ -554,6 +557,9 @@ final class Router: ObservableObject {
 
             case .hashtag(let tag):
                 push(.hashtagResults(tag: tag))
+
+            case .game(let link):
+                openGame(at: GameNavigationMap.entry(for: link))
 
             case .referral, .call, .external:
                 break

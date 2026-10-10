@@ -220,8 +220,15 @@ export const ROUTES = {
   /* LA LIGUE (#9384, #9385) — la ligue publique, la ligue entre amis et la
      mission en duo. PRIVÉE : `session-guard.ts`. */
   progressionLigue: { pattern: '/me/progression/ligue', screen: progressionLigueScreen },
+  /* UNE SEMAINE DE LIGUE NOMMÉE (#9947) — le lien canonique d'une semaine, son lundi
+     (`leagueWeekLinkPath`, `packages/shared`) : celui que porte la carte d'un événement
+     in-app `COMPETITION`. PRIVÉE. */
+  progressionLigueSemaine: { pattern: '/me/progression/ligue/$semaine', screen: progressionLigueScreen },
   /* LA SAISON (#9386) — huit semaines, quarante étapes gratuites, la rangée Sceau. PRIVÉE. */
   progressionSaison: { pattern: '/me/progression/saison', screen: progressionSaisonScreen },
+  /* UNE SAISON NOMMÉE (#9947) — passée, en cours ou future (`seasonLinkPath`) : celle
+     que porte la carte d'un événement in-app `NEW_SEASON`. PRIVÉE. */
+  progressionSaisonNumero: { pattern: '/me/progression/saison/$saison', screen: progressionSaisonScreen },
   /* LA VITRINE, L'ATLAS ET LE PRESTIGE (#9387, #9388, #9389) — PRIVÉES. */
   progressionVitrine: { pattern: '/me/progression/vitrine', screen: progressionVitrineScreen },
   progressionAtlas: { pattern: '/me/progression/atlas', screen: progressionAtlasScreen },
