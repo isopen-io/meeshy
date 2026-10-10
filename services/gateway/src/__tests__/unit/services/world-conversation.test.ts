@@ -21,6 +21,7 @@ import { ensureWorldConversation, loadWorldEntry } from '../../../services/world
 import type { WorldReservedIdentities } from '../../../services/world/worldReservedMembers';
 import { inspectWorldSeed, removeWorldSeed } from '../../../services/world/worldSeedOperations';
 import { classifyAnonymousAttachment, type AnonymousAttachmentVerdict } from '../../../services/attachments/ContentSignature';
+import { PLAIN_TEXT, JPEG_PHOTO, PDF_DOCUMENT, m4aVoice, webmVoice } from '../../../services/attachments/__tests__/guest-attachment-fixtures';
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -178,6 +179,7 @@ function guestDoorOf(prisma: ReturnType<typeof makeDb>) {
   return {
     allowAnonymousFiles: link.allowAnonymousFiles as boolean,
     allowAnonymousImages: link.allowAnonymousImages as boolean,
+    allowedAttachmentKinds: link.allowedAttachmentKinds as string[] | undefined,
     conversation: { identifier: conversation?.identifier as string },
   };
 }
@@ -424,6 +426,61 @@ describe('ensureWorldConversation — le lien de partage stable', () => {
   });
 });
 
+describe('ensureWorldConversation — le lien semé dit ce qu’un invité peut joindre (#10001)', () => {
+  it('le lien créé liste texte et audio, et rien d’autre', async () => {
+    const prisma = makeDb();
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.rows[0].allowedAttachmentKinds).toEqual(['text', 'audio']);
+  });
+
+  it('un invité du lien semé joint un .txt et un vocal ; un PDF et une photo sont refusés', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    const door = guestDoorOf(prisma);
+
+    expect(classifyAnonymousAttachment('text/plain', PLAIN_TEXT, door, { fileName: 'notes.txt' })).toEqual({ allowed: true });
+    expect(classifyAnonymousAttachment('audio/webm', webmVoice(), door, { fileName: 'voice.webm' })).toEqual({ allowed: true });
+    expect(classifyAnonymousAttachment('audio/mp4', m4aVoice(), door, { fileName: 'voice.m4a' })).toEqual({ allowed: true });
+    expect(classifyAnonymousAttachment('application/pdf', PDF_DOCUMENT, door, { fileName: 'doc.pdf' })).toMatchObject({ allowed: false });
+    expect(classifyAnonymousAttachment('image/jpeg', JPEG_PHOTO, door, { fileName: 'photo.jpg' })).toMatchObject({ allowed: false });
+  });
+
+  it('un lien semé AVANT la colonne la reçoit au démarrage suivant, sans que rien d’autre ne change', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    const legacy = prisma.conversationShareLink.rows[0];
+    delete legacy.allowedAttachmentKinds;
+    legacy.isActive = false;
+
+    const report = await seed(prisma);
+
+    expect(report.shareLink).toBe('existing');
+    expect(prisma.conversationShareLink.rows[0]).toMatchObject({ allowedAttachmentKinds: ['text', 'audio'], isActive: false });
+  });
+
+  it('un lien dont un administrateur a choisi les familles n’est pas réécrit', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    prisma.conversationShareLink.rows[0].allowedAttachmentKinds = ['audio'];
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.rows[0].allowedAttachmentKinds).toEqual(['audio']);
+  });
+
+  it('une fois posées, un démarrage suivant n’écrit plus rien sur le lien', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    const before = prisma.conversationShareLink.update.mock.calls.length + prisma.conversationShareLink.updateMany.mock.calls.length;
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.update.mock.calls.length + prisma.conversationShareLink.updateMany.mock.calls.length).toBe(before);
+  });
+});
+
 describe('ensureWorldConversation — idempotence', () => {
   it('un double appel ne duplique rien : une conversation, un lien, une participation par compte', async () => {
     const prisma = makeDb();
@@ -548,7 +605,7 @@ describe('inspectWorldSeed — le pré-vol en lecture seule avant la production 
     const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: audioOpenGuard });
 
     expect(preflight.ready).toBe(false);
-    expect(preflight.blockers).toEqual(['guest-attachments-open:mpeg-sync-html,adts-sync-zip,mp4-video-as-audio']);
+    expect(preflight.blockers).toEqual(['guest-attachments-open:mpeg-sync-html,adts-sync-zip,mp4-video-as-audio,mp3-frames-then-zip']);
     expect(writes(prisma)).toBe(0);
   });
 });
