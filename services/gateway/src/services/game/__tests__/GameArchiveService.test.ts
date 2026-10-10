@@ -79,6 +79,12 @@ describe('GameArchiveService.season', () => {
     expect(read).toHaveBeenCalledWith(2);
   });
 
+  it('avant l’ouverture de la saison 1, elle est À VENIR : son thème et sa date d’ouverture, jamais un vide (#10014)', async () => {
+    const { service } = setup();
+    const eve = at(addDaysUtc(S1.startDay, -3));
+    expect(await service.season(USER, 1, eve)).toMatchObject({ number: 1, status: 'upcoming', startDay: S1.startDay, themeKey: S1.themeKey, progress: null });
+  });
+
   it('un numéro qui n’est pas une saison ne lit rien', async () => {
     const { service } = setup();
     expect(await service.season(USER, 0, MID_S2)).toBeNull();
@@ -125,6 +131,15 @@ describe('GameArchiveService.leagueWeek', () => {
     const { service } = setup();
     expect(await service.leagueWeek(USER, S1.weekKeys[7]!, MID_S2)).toMatchObject({ retention: 'kept' });
     expect(await service.leagueWeek(USER, S1.weekKeys[7]!, LATE_S2)).toMatchObject({ status: 'past', season: 1, retention: 'purged', result: null });
+  });
+});
+
+describe('la pré-saison des ligues (#10014)', () => {
+  it('une semaine de ligue d’avant la saison 1 garde son résultat, hors saison', async () => {
+    const { db, service } = setup();
+    const weekKey = addDaysUtc(S1.startDay, -14);
+    db.leagueMembership.rows.push({ id: 'm1', userId: USER, weekKey, groupId: 'g', league: 'quartz', finalRank: 2, finalPoints: 410, zone: 'promotion', cup: 'silver', settledAt: new Date() });
+    expect(await service.leagueWeek(USER, weekKey, at(addDaysUtc(S1.startDay, -3)))).toMatchObject({ status: 'past', season: null, retention: 'kept', result: { cup: 'silver' } });
   });
 });
 
