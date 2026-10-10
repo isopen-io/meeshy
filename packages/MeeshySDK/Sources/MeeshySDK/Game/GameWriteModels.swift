@@ -47,13 +47,29 @@ public struct ChestClaimResponse: Decodable, Sendable, Equatable {
     public let reward: DailyChest
     /// Le score en poche après le crédit.
     public let score: Int
+    /// Les fragments de Meesh en poche après l'ouverture (#10011) — `nil` devant un serveur antérieur.
+    public let meeshFragments: MeeshFragmentProgress?
 
     public var alreadyDone: Bool { status.hasPrefix("already-") }
 
-    public init(status: String, reward: DailyChest, score: Int) {
+    public init(status: String, reward: DailyChest, score: Int,
+                meeshFragments: MeeshFragmentProgress? = nil) {
         self.status = status
         self.reward = reward
         self.score = score
+        self.meeshFragments = meeshFragments
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status, reward, score, meeshFragments
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        status = try container.decode(String.self, forKey: .status)
+        reward = try container.decode(DailyChest.self, forKey: .reward)
+        score = try container.decode(Int.self, forKey: .score)
+        meeshFragments = (try? container.decodeIfPresent(MeeshFragmentProgress.self, forKey: .meeshFragments)) ?? nil
     }
 }
 

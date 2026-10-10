@@ -101,7 +101,7 @@ describe('les quatre états', () => {
     appQueryClient.setQueryData(STARRED_LIST_QUERY_KEY, listOf([]));
     const el = mountNow();
     expect(el.querySelector('[data-starred-empty]')?.textContent).toContain('Ajouter aux favoris');
-    expect(el.querySelector('[data-starred-empty] a[href="/"]')).not.toBeNull();
+    expect(el.querySelector('[data-starred-empty] a[href="/chats"]')).not.toBeNull();
     expect(el.querySelector('[role="alert"]')).toBeNull();
   });
 

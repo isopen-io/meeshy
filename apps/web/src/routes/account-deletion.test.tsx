@@ -61,7 +61,7 @@ describe('le lien de l’e-mail — la conséquence d’abord, le clic ensuite',
     expect(host.querySelector('h1')?.textContent).toBe('Confirmer la suppression de votre compte');
     expect(host.textContent).toContain('période de grâce de 30 jours');
     expect(buttonNamed(host, 'Confirmer la suppression')?.style.minHeight).toBe('52px');
-    expect(host.querySelector('a[href="/"]')?.textContent).toBe('Ne rien faire');
+    expect(host.querySelector('a[href="/chats"]')?.textContent).toBe('Ne rien faire');
     expect(script.resolved).toEqual([]);
   });
 

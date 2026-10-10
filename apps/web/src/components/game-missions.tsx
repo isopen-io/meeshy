@@ -11,6 +11,7 @@ import { timerLabel } from '@/lib/view/game-copy-v2';
 import { Chest, useChoreography } from '@/components/game';
 import { ProgressBar } from '@/components/progress-bar';
 import { difficultyName, formatCount, gameText, meeshCount, missionTitle, pointsLabel } from '@/lib/view/game-copy';
+import { chestRewardLines, chestTodayLine, meeshFragmentsProgressLine } from '@/lib/view/game-chest-copy';
 import { chestDetail, missionDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard, GameChip } from './game-surface';
@@ -21,9 +22,10 @@ import { GameFactChips, GameRequirementLine, GameSpendLine, GameTouch } from './
  * un changement par jour (1 Meesh), et le coffre qui s'ouvre quand tout est
  * fait (conception, partie II « Missions du jour »).
  *
- * Le coffre dit son contenu AVANT l'ouverture (60 à 200 points, une chance sur
- * six d'un fragment, une sur vingt d'un gel) : un tirage dont on ignore les
- * chances est une loterie, pas un jeu. Ouvert, ses récompenses se posent AU-
+ * Le coffre dit son contenu AVANT l'ouverture (#10011 : ses points — 100 à
+ * 10 000 selon les missions du jour —, sa Gloire et ses fragments de Meesh
+ * certains, puis une chance sur six d'un fragment en prime et une sur vingt
+ * d'un gel) : un tirage dont on ignore les chances est une loterie, pas un jeu. Ouvert, ses récompenses se posent AU-
  * DESSUS de lui (`data-game-reward`) — c'est la cible de la chorégraphie
  * « chest », que ce composant joue quand le contenu servi arrive.
  *
@@ -219,19 +221,11 @@ function PersonalMissionRow({ mission, now }: { readonly mission: NonNullable<Ga
 function Rewards({ reward }: { readonly reward: NonNullable<GameChest['reward']> }) {
   return (
     <ul className="flex flex-wrap justify-center gap-2" aria-label={gameText('game.chest.contents')}>
-      <li data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
-        {gameText('game.fmt.signed', { value: pointsLabel(reward.points) })}
-      </li>
-      {reward.fragment ? (
-        <li data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
-          {gameText('game.chest.reward.fragment')}
+      {chestRewardLines(reward).map((line) => (
+        <li key={line} data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
+          {line}
         </li>
-      ) : null}
-      {reward.freeze ? (
-        <li data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
-          {gameText('game.chest.reward.freeze')}
-        </li>
-      ) : null}
+      ))}
     </ul>
   );
 }
@@ -261,7 +255,7 @@ function ChestCard({
     }
     if (rewarded.current) return;
     rewarded.current = true;
-    play('chest', { rewards: 1 + Number(chest.reward.fragment) + Number(chest.reward.freeze) });
+    play('chest', { rewards: chestRewardLines(chest.reward).length });
   }, [chest.reward, play]);
 
   const state = opening || chest.status === 'claimed' ? (chest.reward === null ? 'opening' : 'claimed') : chest.status;
@@ -312,6 +306,11 @@ function ChestCard({
           {gameText('game.chest.claimed')}
         </p>
       ) : null}
+      {(state === 'locked' || state === 'ready') && chest.today != null ? (
+        <p data-game-chest-today="" className="text-center text-caption font-semibold" style={{ color: GAME_INK }}>
+          {chestTodayLine(chest.today)}
+        </p>
+      ) : null}
       <p className="text-center text-caption" style={{ color: GAME_INK_2 }}>
         {gameText('game.chest.odds', {
           min: formatCount(odds.minPoints),
@@ -320,6 +319,11 @@ function ChestCard({
           freeze: chance(odds.freeze),
         })}
       </p>
+      {chest.meeshFragments === undefined ? null : (
+        <p data-game-chest-fragments="" className="text-center text-caption" style={{ color: GAME_INK_2 }}>
+          {meeshFragmentsProgressLine(chest.meeshFragments)}
+        </p>
+      )}
       {error === undefined || opening ? null : (
         <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
           {error}

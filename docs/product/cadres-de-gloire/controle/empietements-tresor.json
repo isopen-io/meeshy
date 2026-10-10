@@ -1,0 +1,154 @@
+[
+ {
+  "file": "tresor-bourse-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 138306
+ },
+ {
+  "file": "tresor-bourse-b",
+  "overlap": 4337,
+  "face": 0,
+  "depth": 46,
+  "bbox": [
+   100,
+   636,
+   439,
+   703
+  ],
+  "windowPx": 131453
+ },
+ {
+  "file": "tresor-coffre-a",
+  "overlap": 190,
+  "face": 0,
+  "depth": 16,
+  "bbox": [
+   149,
+   629,
+   162,
+   648
+  ],
+  "windowPx": 103906
+ },
+ {
+  "file": "tresor-coffre-b",
+  "overlap": 5,
+  "face": 0,
+  "depth": 0,
+  "bbox": [
+   114,
+   712,
+   118,
+   713
+  ],
+  "windowPx": 143332
+ },
+ {
+  "file": "tresor-coffre-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 168121
+ },
+ {
+  "file": "tresor-coffret-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 134684
+ },
+ {
+  "file": "tresor-coffret-b",
+  "overlap": 299,
+  "face": 0,
+  "depth": 11,
+  "bbox": [
+   109,
+   392,
+   470,
+   490
+  ],
+  "windowPx": 117543
+ },
+ {
+  "file": "tresor-escarcelle-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 134576
+ },
+ {
+  "file": "tresor-escarcelle-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 133173
+ },
+ {
+  "file": "tresor-reserve-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 134090
+ },
+ {
+  "file": "tresor-reserve-b",
+  "overlap": 1002,
+  "face": 0,
+  "depth": 38,
+  "bbox": [
+   94,
+   632,
+   445,
+   679
+  ],
+  "windowPx": 144326
+ },
+ {
+  "file": "tresor-reserve-c",
+  "overlap": 6690,
+  "face": 0,
+  "depth": 78,
+  "bbox": [
+   314,
+   593,
+   434,
+   708
+  ],
+  "windowPx": 135209
+ },
+ {
+  "file": "tresor-tresor-a",
+  "overlap": 899,
+  "face": 0,
+  "depth": 16,
+  "bbox": [
+   105,
+   330,
+   445,
+   416
+  ],
+  "windowPx": 134297
+ },
+ {
+  "file": "tresor-tresor-b",
+  "overlap": 422,
+  "face": 0,
+  "depth": 14,
+  "bbox": [
+   100,
+   397,
+   439,
+   492
+  ],
+  "windowPx": 141843
+ }
+]

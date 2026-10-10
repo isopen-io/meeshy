@@ -9,7 +9,11 @@ import MeeshyUI
 /// CACHE-FIRST. Le bloc `game` vient du cache de la progression (la même clé que le hub : aucune requête de
 /// plus à l'ouverture) ; le classement et la ligue Amis sont des lectures à part, servies depuis leur cache
 /// disque dès qu'il existe et rafraîchies en silence. Un squelette ne paraît que sur un cache VIDE.
+///
+/// `focus` : la semaine qu'un lien du Jeu nomme (#9947), lue par l'écran d'une semaine passée (#10018).
 struct GameLeaguePage: View {
+    var focus: GamePageFocus? = nil
+
     var body: some View {
         GamePageShell(title: GameText.leagueTitle, identifier: "game.league.page") {
             GameWave2Host { model, game in

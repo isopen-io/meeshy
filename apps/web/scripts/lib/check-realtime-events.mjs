@@ -504,7 +504,7 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
      `chrono`, déjà en pause. La réinstaller ici écraserait son journal en
      silence (§1.1 de `paused-chronology.mjs`) sans qu'aucun `expect` n'en
      dépende : c'était un doublon d'infrastructure, pas un témoin. */
-  await listPage.goto(`${BASE}/`, { waitUntil: 'load' });
+  await listPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
   const listOrigin = await bootLiveChronology({ chrono, targetPage: listPage, selector: '[data-row="c-live"]', expect, what: `${label} la liste` });
   if (listOrigin === null) {
     await context.close();

@@ -180,7 +180,7 @@ const ar = {
   'game.detail.mission.what': 'المهمة هدف صغير تبلغه اليوم.',
   'game.detail.mission.how': 'تمنح نقاطًا وتقرّبك من صندوق اليوم.',
   'game.detail.chest.what': 'صندوق اليوم يُفتح حين تُنجز مهامك.',
-  'game.detail.chest.how': 'نقاط، وأحيانًا جزء من Meesh أو تجميد.',
+  'game.detail.chest.how': 'نقاط حسب مهامك، ومجد، وأجزاء Meesh — خمسة تدفع ثمن سكّة — وأحيانًا تجميد.',
   'game.detail.coin.what': '‏Meesh هي عملة Meeshy النادرة. كل عملة تحمل رقمها.',
   'game.detail.coin.how': 'اسكّها بنقاطك حين يصير لديك ما يكفي.',
   'game.detail.ring.what': 'الحلقة تُظهر مستواك: تمتلئ بنقاطك.',

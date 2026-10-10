@@ -7,6 +7,8 @@ const fr = {
   'game.meeshes.none': 'Aucune Meesh',
   'game.meeshes.one': '{count} Meesh',
   'game.meeshes.other': '{count} Meeshes',
+  'game.meesh_fragments.one': '{count} fragment de Meesh',
+  'game.meesh_fragments.other': '{count} fragments de Meesh',
   'game.tier.etincelle': 'Étincelle',
   'game.tier.lueur': 'Lueur',
   'game.tier.lumiere': 'Lumière',

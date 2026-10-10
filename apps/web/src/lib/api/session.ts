@@ -238,7 +238,10 @@ export function sessionIdentityKey(session: SessionState): string | null {
   return null;
 }
 
-const STORAGE_KEY = 'meeshy.session';
+/** La clé de la session tenue — exportée pour la landing (#10002), dont le
+ * script lit SANS ce module si un compte est déjà là. */
+export const SESSION_STORAGE_KEY = 'meeshy.session';
+const STORAGE_KEY = SESSION_STORAGE_KEY;
 
 /**
  * L'HORIZON D'UNE SESSION D'INVITÉ — la valeur du legacy

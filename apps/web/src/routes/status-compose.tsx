@@ -16,7 +16,7 @@ import { useMentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { selfRailEntry } from '@/lib/view/story-rail-self';
-import { Link } from '@/routes/route-table';
+import { Link, href } from '@/routes/route-table';
 
 /**
  * **MON HUMEUR** (#6150) — la seconde porte de ma cellule du rail, à son
@@ -206,7 +206,7 @@ export default function StatusComposeScreen() {
     });
     setEnVol(false);
     if (out.status === 'saved') {
-      navigate('/', true);
+      navigate(href('list'), true);
       return;
     }
     if (out.status === 'refused') setRefus(true);

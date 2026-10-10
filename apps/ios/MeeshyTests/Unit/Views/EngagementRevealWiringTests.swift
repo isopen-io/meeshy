@@ -98,7 +98,7 @@ final class EngagementRevealWiringTests: XCTestCase {
 
         let ipad = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView.swift"))
-        XCTAssertEqual(ipad.components(separatedBy: "router.openGame(at: GameNavigationMap.entry(for:").count - 1, 6,
-                       "jeu et paliers, sur les trois gestionnaires iPad")
+        XCTAssertEqual(ipad.components(separatedBy: "router.openGame(at: GameNavigationMap.entry(for:").count - 1, 7,
+                       "jeu et paliers sur les trois gestionnaires iPad, plus le lien du Jeu (#9947)")
     }
 }

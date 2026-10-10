@@ -50,6 +50,15 @@ export type MissionGloryDifficulty = keyof typeof MISSION_GLORY;
 
 export const gloryForMission = (difficulty: MissionGloryDifficulty): number => MISSION_GLORY[difficulty];
 
+/**
+ * La Gloire du coffre du jour (#10011) : un point de Gloire pour dix points du coffre — de 10 (100 points)
+ * à 1 000 (10 000 points, autant qu'une frappe). Elle suit la complexité des missions, comme ses points.
+ */
+export const CHEST_GLORY_DIVISOR = 10;
+
+export const gloryForChest = (points: number): number =>
+  Number.isFinite(points) ? Math.floor(Math.max(0, Math.trunc(points)) / CHEST_GLORY_DIVISOR) : 0;
+
 export const ACHIEVEMENT_RARITIES = ['common', 'rare', 'epic', 'legendary', 'mythic'] as const;
 export type AchievementRarity = (typeof ACHIEVEMENT_RARITIES)[number];
 

@@ -181,7 +181,15 @@ const notificationsScreen = () =>
   Promise.all([import('@/routes/notifications'), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 export const ROUTES = {
-  list: { pattern: '/', screen: () => import('@/routes/conversations') },
+  /* LA LANDING (#10002) — `/` est la page d'accueil de meeshy.me pour TOUS,
+     prérendue par langue (`scripts/prerender-landing.tsx`) ; nginx sert le
+     document statique, et cet écran ne rend `/` que lorsque c'est la coquille
+     qui la reçoit (service worker, développement). Dans la coque, `/` ouvre la
+     liste : c'est l'adresse que ses liens, ses pushs et son démarrage visaient. */
+  home: { pattern: '/', screen: () => (__SHELL__ ? import('@/routes/home-shell') : import('@/routes/home')) },
+  /* LA LISTE DES CONVERSATIONS déménage sur `/chats` (#10002, décision porteur
+     du 2026-10-10) ; les adresses de fil (`/c/…`) ne changent pas. */
+  list: { pattern: '/chats', screen: () => import('@/routes/conversations') },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
   /* NOUVELLE CONVERSATION (#5652) — nomenclature legacy reprise (D-5) :
      `apps/web/app/conversations/new` porte déjà ce chemin. */
@@ -220,8 +228,15 @@ export const ROUTES = {
   /* LA LIGUE (#9384, #9385) — la ligue publique, la ligue entre amis et la
      mission en duo. PRIVÉE : `session-guard.ts`. */
   progressionLigue: { pattern: '/me/progression/ligue', screen: progressionLigueScreen },
+  /* UNE SEMAINE DE LIGUE NOMMÉE (#9947) — le lien canonique d'une semaine, son lundi
+     (`leagueWeekLinkPath`, `packages/shared`) : celui que porte la carte d'un événement
+     in-app `COMPETITION`. PRIVÉE. */
+  progressionLigueSemaine: { pattern: '/me/progression/ligue/$semaine', screen: progressionLigueScreen },
   /* LA SAISON (#9386) — huit semaines, quarante étapes gratuites, la rangée Sceau. PRIVÉE. */
   progressionSaison: { pattern: '/me/progression/saison', screen: progressionSaisonScreen },
+  /* UNE SAISON NOMMÉE (#9947) — passée, en cours ou future (`seasonLinkPath`) : celle
+     que porte la carte d'un événement in-app `NEW_SEASON`. PRIVÉE. */
+  progressionSaisonNumero: { pattern: '/me/progression/saison/$saison', screen: progressionSaisonScreen },
   /* LA VITRINE, L'ATLAS ET LE PRESTIGE (#9387, #9388, #9389) — PRIVÉES. */
   progressionVitrine: { pattern: '/me/progression/vitrine', screen: progressionVitrineScreen },
   progressionAtlas: { pattern: '/me/progression/atlas', screen: progressionAtlasScreen },

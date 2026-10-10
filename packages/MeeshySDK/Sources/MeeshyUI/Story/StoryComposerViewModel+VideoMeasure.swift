@@ -58,6 +58,20 @@ extension StoryComposerViewModel {
         }
     }
 
+    /// **La VIGNETTE seule** (#9994) — pour une vidéo qui arrive DÉJÀ mesurée,
+    /// celle d'une story reprise : sa durée et son ratio sont ceux que l'auteur
+    /// d'origine a composés, et `measureVideo` réécrirait la durée qu'il avait
+    /// rognée. Même tâche suivie, même annulation à la fermeture.
+    func loadVideoThumbnail(objectId: String, fileURL: URL) {
+        videoMeasureTasks[objectId]?.cancel()
+        videoMeasureTasks[objectId] = Task { [weak self] in
+            let mesure = await Self.videoMeasurement(of: fileURL)
+            guard !Task.isCancelled, let self else { return }
+            if let thumbnail = mesure.thumbnail { self.registerLoadedImage(thumbnail, for: objectId) }
+            self.videoMeasureTasks.removeValue(forKey: objectId)
+        }
+    }
+
     /// **Attendre les mesures en cours** (#9126, #9131) — une mesure écrit
     /// ratio et durée APRÈS la pose. Qui prend un état de départ (la retouche
     /// d'une pièce du fil) le prend après elles, sinon une vidéo intacte se
