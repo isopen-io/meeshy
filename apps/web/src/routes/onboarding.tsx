@@ -88,6 +88,9 @@ import { href, navigate } from './route-table';
  *   l'accusé qui la fonde.
  * - **L'étape 5 n'existe que si 2, 3 ou 4 a produit quelque chose**, et la
  *   fenêtre système ne s'ouvre QUE sur « Oui ».
+ * - **L'âge se demande sans s'imposer** (#9928, D-182) : la carte se passe,
+ *   la passerelle seule juge la date, et sa réponse dit la carte suivante —
+ *   Meeshy Global n'est pas proposée à un compte qu'elle ferme en écriture.
  */
 
 export type OnboardingScreenDeps = {
