@@ -4,7 +4,6 @@ import { useEffect } from 'react';
 import type { Message } from '@/lib/api/types';
 
 import { deviceTranslationConsent } from './consent';
-import { offeredMessagesOf } from './offer';
 
 /**
  * **LE FIL CONFIE SES MESSAGES À L'APPAREIL** (#9898) — à chaque fenêtre
@@ -26,9 +25,9 @@ export function useDeviceTranslation(params: {
   useEffect(() => {
     if (!deviceTranslationConsent().granted()) return;
     let cancelled = false;
-    void import('./runtime').then(({ deviceTranslationScheduler }) => {
+    void import('./runtime').then(({ offerToDevice }) => {
       if (cancelled) return;
-      deviceTranslationScheduler(queryClient)?.offer({ messages: offeredMessagesOf(messages, viewerId), preferredLanguages: readerLanguages });
+      offerToDevice(queryClient, { messages, viewerId, preferredLanguages: readerLanguages });
     });
     return () => {
       cancelled = true;
