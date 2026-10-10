@@ -47,4 +47,30 @@ describe("la vidéo plein écran en image dans l'image dans la coque Android (#9
     expect(depart.indexOf('floatsInPictureInPicture()')).toBeGreaterThan(-1);
     expect(depart.indexOf('floatsInPictureInPicture()')).toBeLessThan(depart.indexOf('FullscreenPictureInPicture.floats('));
   });
+
+  test('la fenêtre flottante prend la forme de la vidéo que la page a transmise (#9845)', () => {
+    const activite = sansCommentaires(lire('MainActivity.java'));
+    const params = corpsDe(activite, 'PictureInPictureParams floatParams(');
+    expect(params).toContain('setAspectRatio(');
+    expect(corpsDe(activite, 'boolean enterFloat(')).toContain('floatParams()');
+    expect(corpsDe(activite, 'void onUserLeaveHint(')).toContain('floatParams()');
+    expect(corpsDe(activite, 'boolean floatVideo(')).toContain('CallShellRules.pictureInPictureAspect(');
+    expect(corpsDe(activite, 'void onHideCustomView(')).toContain('floatAspect = null');
+    const plugin = corpsDe(sansCommentaires(lire('MeeshyPlaybackPlugin.java')), 'void floatVideo(');
+    expect(plugin).toContain('call.getInt("width"');
+    expect(plugin).toContain('call.getInt("height"');
+  });
+
+  test('la fenêtre flottante d’une vidéo porte lecture/pause, remis à la page (#9847)', () => {
+    const activite = sansCommentaires(lire('MainActivity.java'));
+    const params = corpsDe(activite, 'PictureInPictureParams floatParams(');
+    expect(params).toContain('FullscreenPictureInPicture.toggleAction(floatPlaying)');
+    expect(params).toContain('setActions(');
+    expect(corpsDe(activite, 'void onHideCustomView(')).toContain('floatPlaying = null');
+    const plugin = sansCommentaires(lire('MeeshyPlaybackPlugin.java'));
+    expect(corpsDe(plugin, 'void setFloatPlaying(')).toContain('call.getBoolean("playing"');
+    expect(plugin).toContain('notifyListeners("floatToggleRequested"');
+    expect(plugin).toContain('RECEIVER_NOT_EXPORTED');
+  });
 });
+

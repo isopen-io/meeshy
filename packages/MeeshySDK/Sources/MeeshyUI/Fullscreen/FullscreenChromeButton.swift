@@ -128,26 +128,55 @@ public struct FullscreenChromeButton: View {
     }
 }
 
-/// **La porte de sortie** — `xmark`, au bord de DÉBUT de lecture de la barre haute
+public nonisolated enum FullscreenExitStyle: Sendable, Equatable {
+    case close
+    case back
+
+    public var systemImage: String {
+        switch self {
+        case .close: FullscreenChromeSymbol.close
+        case .back: FullscreenChromeSymbol.back
+        }
+    }
+
+    public var labelKey: String {
+        switch self {
+        case .close: "common.close"
+        case .back: "common.back"
+        }
+    }
+}
+
+/// **La porte de sortie** — `xmark`, ou `chevron.backward` pour une navigation qu'on quitte aussi par le bord (#9931), au bord de DÉBUT de lecture de la barre haute
 /// (à gauche, à droite en arabe), la même dans chaque visualiseur.
 public struct FullscreenCloseButton: View {
 
     private let tone: FullscreenChromeTone
+    private let exit: FullscreenExitStyle
     private let hint: String?
     private let action: () -> Void
 
     public init(tone: FullscreenChromeTone = .onMedia,
+                exit: FullscreenExitStyle = .close,
                 hint: String? = nil,
                 action: @escaping () -> Void) {
         self.tone = tone
+        self.exit = exit
         self.hint = hint
         self.action = action
     }
 
+    private var label: String {
+        switch exit {
+        case .close: String(localized: "common.close", defaultValue: "Fermer", bundle: .module)
+        case .back: String(localized: "common.back", defaultValue: "Retour", bundle: .module)
+        }
+    }
+
     public var body: some View {
         FullscreenChromeButton(
-            systemImage: FullscreenChromeSymbol.close,
-            label: String(localized: "common.close", defaultValue: "Fermer", bundle: .module),
+            systemImage: exit.systemImage,
+            label: label,
             hint: hint,
             tone: tone,
             action: action
@@ -161,19 +190,29 @@ public struct FullscreenMoreMenu<Content: View>: View {
 
     private let tone: FullscreenChromeTone
     private let isBusy: Bool
+    private let onPresentationChange: ((Bool) -> Void)?
     private let content: Content
 
+    /// `onPresentationChange` dit l'ouverture (`true`) et la fermeture
+    /// (`false`) du menu : un `Menu` n'a aucun état observable, mais son
+    /// contenu n'apparaît qu'à l'ouverture et disparaît à la fermeture. Un
+    /// lecteur qui doit savoir que son menu est ouvert (une story qui boucle
+    /// au lieu d'avancer, #9821) l'écoute.
     public init(tone: FullscreenChromeTone = .onMedia,
                 isBusy: Bool = false,
+                onPresentationChange: ((Bool) -> Void)? = nil,
                 @ViewBuilder content: () -> Content) {
         self.tone = tone
         self.isBusy = isBusy
+        self.onPresentationChange = onPresentationChange
         self.content = content()
     }
 
     public var body: some View {
         Menu {
             content
+                .onAppear { onPresentationChange?(true) }
+                .onDisappear { onPresentationChange?(false) }
         } label: {
             if isBusy {
                 ProgressView()

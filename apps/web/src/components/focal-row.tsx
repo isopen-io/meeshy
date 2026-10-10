@@ -1,3 +1,4 @@
+import { quotedPieceIdOf } from '@/lib/view/quoted-preview';
 import { memo, useRef } from 'react';
 
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
@@ -205,7 +206,8 @@ export const FocalRow = memo(function FocalRow({
    */
   revealable?: boolean;
   /** Saute au message cité (défaut #5566 défaut 10 : le bouton ne faisait rien). */
-  onJumpToMessage: (messageId: string) => void;
+  /** `pieceId` (#9911) — la pièce que la citation nomme : le saut met sa tuile en évidence. */
+  onJumpToMessage: (messageId: string, pieceId?: string) => void;
   /**
    * Ouvre la story citée (#5936) — `undefined` ⇒ la carte se rend quand même
    * (« la citation qui subsiste »), mais AUCUN geste ne s'arme (loi 4,
@@ -531,7 +533,7 @@ export const FocalRow = memo(function FocalRow({
             quote={message.replyTo}
             isMine={false}
             languages={languages}
-            onJump={() => onJumpToMessage(message.replyTo!.id)}
+            onJump={() => onJumpToMessage(message.replyTo!.id, quotedPieceIdOf(message.replyTo!))}
             citingId={message.id}
             now={new Date(nowMs)}
           />

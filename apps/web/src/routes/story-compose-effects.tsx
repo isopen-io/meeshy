@@ -5,7 +5,7 @@ import { STORY_FILTERS, storyFilterCss, type StoryFilterId } from '@/lib/canvas/
 import { SCENE_TRANSITIONS, type SceneTransition } from '@/lib/canvas/scene-transition';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { cachedFilterThumbnail, filterThumbnail } from '@/lib/stories/studio-filter-thumbnails';
+import { cachedFilterThumbnail, filterThumbnail, type FilterThumbnailRenderer } from '@/lib/stories/studio-filter-thumbnails';
 import { STUDIO_EFFECT_LABEL_KEYS, type StudioEffectChoice, type StudioSceneEffect } from '@/lib/stories/studio-scene-columns';
 import { STUDIO_PLATE } from '@/routes/story-compose-chrome';
 import { STUDIO_FILTER_KEYS } from '@/routes/story-compose-media-fields';
@@ -124,18 +124,18 @@ export function StudioTransitionRows({
 
 /** Le rendu réduit du fond — relu du cache au premier rendu, sinon calculé
  * hors du fil principal ; `null` le temps du calcul (la tuile garde sa place). */
-function useFilterThumbnail(source: string, aspectRatio: number | undefined): string | null {
+function useFilterThumbnail(source: string, aspectRatio: number | undefined, render: FilterThumbnailRenderer): string | null {
   const [url, setUrl] = useState<string | null>(() => cachedFilterThumbnail(source));
   useEffect(() => {
     let alive = true;
     setUrl(cachedFilterThumbnail(source));
-    void filterThumbnail({ source, aspectRatio }).then((rendered) => {
+    void render({ source, aspectRatio }).then((rendered) => {
       if (alive) setUrl(rendered ?? source);
     });
     return () => {
       alive = false;
     };
-  }, [source, aspectRatio]);
+  }, [source, aspectRatio, render]);
   return url;
 }
 
@@ -148,6 +148,7 @@ export function StudioVisualEffects({
   filter,
   onChoose,
   locked,
+  render = filterThumbnail,
 }: {
   readonly lang: InterfaceLanguage;
   readonly source: string;
@@ -155,8 +156,11 @@ export function StudioVisualEffects({
   readonly filter: StoryFilterId | null;
   readonly onChoose: (choice: StudioEffectChoice) => void;
   readonly locked: boolean;
+  /** Le rendu réduit du fond — injectable pour les témoins (#9828) : la
+   * production lit le fichier par le réseau. */
+  readonly render?: FilterThumbnailRenderer | undefined;
 }) {
-  const thumbnail = useFilterThumbnail(source, aspectRatio);
+  const thumbnail = useFilterThumbnail(source, aspectRatio, render);
   const tile = (id: StoryFilterId | null) => {
     const label = translate(lang, id === null ? 'story.studio.editor.none' : STUDIO_FILTER_KEYS[id]);
     const pressed = filter === id;

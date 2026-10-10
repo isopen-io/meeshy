@@ -35,8 +35,20 @@ extension ConversationView {
         // sous le doigt de l'utilisateur : tout ce que la fabrique grave (avatar,
         // faits du média, texte élu par le Prisme, protection) est déjà connu.
         composerState.pendingReplyReference = viewModel.optimisticReplyReference(quoting: msg)
+        composerState.pendingReplyPieceId = nil
         requestReplyFocus(openingConversation: false)
         HapticFeedback.medium()
+    }
+
+    /// **Répondre à UNE pièce** (#9908) — le même geste, mais la citation NOMME
+    /// la pièce visée (`citing:`) et l'envoi l'ancre (`attachmentReplyTo`),
+    /// comme la réponse du plein écran. Une pièce protégée ne se cite pas :
+    /// le menu ne l'offre pas, et ce site ne la nomme pas non plus.
+    func triggerReply(for msg: Message, citing piece: MessageAttachment) {
+        triggerReply(for: msg)
+        guard !MessagePieceTarget.isProtected(piece, in: msg) else { return }
+        composerState.pendingReplyReference = viewModel.optimisticReplyReference(quoting: msg, citing: piece)
+        composerState.pendingReplyPieceId = piece.id
     }
 
     /// Pose la citation d'une réponse reçue par `ReplyContext` — story, mood,
@@ -60,6 +72,12 @@ extension ConversationView {
     /// conversation (#7883) — le site unique des chemins texte, média et sticker.
     var outgoingReplyRoute: OutgoingReplyRoute {
         OutgoingReplyRoute(pending: composerState.pendingReplyReference, conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId)
+    }
+
+    /// L'ancre de la pièce citée (#9908), ou `nil` quand la réponse vise le
+    /// message entier — l'envoi la transmet sous `attachmentReplyTo`.
+    var outgoingAttachmentAnchor: QuotedAttachmentSend? {
+        MessagePieceTarget.replyAnchor(pending: composerState.pendingReplyReference, pieceId: composerState.pendingReplyPieceId)
     }
 
     /// Demande le focus du composer par un FRONT bas → haut (#6003).

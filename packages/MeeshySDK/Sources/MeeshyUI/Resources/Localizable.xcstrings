@@ -60384,6 +60384,396 @@
         }
       }
     },
+    "story.sound.library.remove": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة من مكتبتي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus meiner Bibliothek entfernen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from my library"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitar de mi biblioteca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer de ma bibliothèque"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rimuovi dalla mia libreria"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover da minha biblioteca"
+          }
+        }
+      }
+    },
+    "story.sound.library.removeConfirm": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rimuovi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover"
+          }
+        }
+      }
+    },
+    "story.sound.library.removeFailed": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّرت إزالة الصوت. حاول مرة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Sound konnte nicht entfernt werden. Versuche es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The sound couldn't be removed. Try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo quitar el sonido. Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le son n'a pas pu être retiré. Réessayez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile rimuovere il suono. Riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível remover o som. Tente novamente."
+          }
+        }
+      }
+    },
+    "story.sound.library.removeMessageUnused": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيختفي هذا الصوت من مكتبتك ولن يمكن إضافته إلى أي منشور."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Sound verschwindet aus deiner Bibliothek und kann keinem Beitrag mehr hinzugefügt werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This sound will disappear from your library and can no longer be added to a post."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este sonido desaparecerá de tu biblioteca y ya no podrá añadirse a una publicación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce son disparaîtra de votre bibliothèque et ne pourra plus être ajouté à une publication."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo suono scomparirà dalla tua libreria e non potrà più essere aggiunto a un post."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este som vai sumir da sua biblioteca e não poderá mais ser adicionado a uma publicação."
+          }
+        }
+      }
+    },
+    "story.sound.library.removeMessageUsed": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld publication l'utilise encore : elle continuera de le jouer. Il disparaîtra de votre bibliothèque et ne pourra plus être ajouté à une nouvelle publication."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld publications l'utilisent encore : elles continueront de le jouer. Il disparaîtra de votre bibliothèque et ne pourra plus être ajouté à une nouvelle publication."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld post still uses it and will keep playing it. It will disappear from your library and can no longer be added to a new post."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld posts still use it and will keep playing it. It will disappear from your library and can no longer be added to a new post."
+                }
+              }
+            }
+          }
+        },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Beitrag verwendet ihn noch und spielt ihn weiter ab. Er verschwindet aus deiner Bibliothek und kann keinem neuen Beitrag mehr hinzugefügt werden."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Beiträge verwenden ihn noch und spielen ihn weiter ab. Er verschwindet aus deiner Bibliothek und kann keinem neuen Beitrag mehr hinzugefügt werden."
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld publicación aún lo usa y lo seguirá reproduciendo. Desaparecerá de tu biblioteca y ya no podrá añadirse a una nueva publicación."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld publicaciones aún lo usan y lo seguirán reproduciendo. Desaparecerá de tu biblioteca y ya no podrá añadirse a una nueva publicación."
+                }
+              }
+            }
+          }
+        },
+        "it": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld post lo usa ancora e continuerà a riprodurlo. Scomparirà dalla tua libreria e non potrà più essere aggiunto a un nuovo post."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld post lo usano ancora e continueranno a riprodurlo. Scomparirà dalla tua libreria e non potrà più essere aggiunto a un nuovo post."
+                }
+              }
+            }
+          }
+        },
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld publicação ainda o usa e continuará a tocá-lo. Ele vai sumir da sua biblioteca e não poderá mais ser adicionado a uma nova publicação."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld publicações ainda o usam e continuarão a tocá-lo. Ele vai sumir da sua biblioteca e não poderá mais ser adicionado a uma nova publicação."
+                }
+              }
+            }
+          }
+        },
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا توجد منشورات تستخدمه. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد."
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال منشور واحد يستخدمه وسيواصل تشغيله. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد."
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال منشوران يستخدمانه وسيواصلان تشغيله. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد."
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا تزال %lld منشورات تستخدمه وستواصل تشغيله. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد."
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال %lld منشورًا يستخدمه وسيواصل تشغيله. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال %lld منشور يستخدمه وسيواصل تشغيله. سيختفي من مكتبتك ولن يمكن إضافته إلى منشور جديد."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "story.sound.library.removeTitle": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة هذا الصوت من مكتبتك؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Sound aus deiner Bibliothek entfernen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove this sound from your library?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Quitar este sonido de tu biblioteca?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer ce son de votre bibliothèque ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rimuovere questo suono dalla tua libreria?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover este som da sua biblioteca?"
+          }
+        }
+      }
+    },
     "story.sound.library.renameConfirm": {
       "extractionState": "extracted_with_value",
       "localizations": {

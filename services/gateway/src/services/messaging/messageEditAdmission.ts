@@ -43,11 +43,25 @@
  * sans écran pour le dire. Voir `tasks/lessons.md`, leçon 88.
  */
 
+import { isDeclaredMinor } from '@meeshy/shared/utils/age';
+import { GLOBAL_CONVERSATION_TYPE } from '@meeshy/shared/utils/global-minor-restriction';
 import { captureNoticeOf } from './captureNoticeVisibility.js';
 import {
   isConversationClosed,
+  MINOR_GLOBAL_REFUSAL_MESSAGE,
   type ConversationTerminalStateRow,
 } from './conversationWriteAdmission.js';
+
+/**
+ * L'état du conteneur que l'édition lit : son état TERMINAL, et son TYPE — la
+ * règle des 13-17 ans (#9927) ne vaut que dans Meeshy Global. `type` est une
+ * clé EXIGÉE (même raison que `conversation` ci-dessous) : un transport qui
+ * l'oublierait dans son `select` ne compilerait pas, au lieu de rendre la
+ * règle inerte chez lui.
+ */
+export type ConversationEditStateRow = ConversationTerminalStateRow & {
+  readonly type: string | null | undefined;
+};
 
 /**
  * Les rôles GLOBAUX (`User.role`, en MAJUSCULES) qui ouvrent une porte de
@@ -67,7 +81,9 @@ export type MessageEditRefusal =
   | 'not-a-member'
   | 'edit-window-expired'
   /** Le conteneur porte son état terminal — son contenu est gelé pour tous. */
-  | 'conversation-closed';
+  | 'conversation-closed'
+  /** #9927 — l'éditeur est un mineur déclaré (13-17 ans) et le conteneur est Meeshy Global. */
+  | 'minor-global';
 
 export type MessageEditAdmission =
   | {
@@ -117,8 +133,8 @@ export interface EditAdmissionReader {
   user: {
     findUnique(args: {
       where: { id: string };
-      select: { role: true };
-    }): Promise<{ role?: string | null } | null>;
+      select: { role: true } | { birthDate: true };
+    }): Promise<{ role?: string | null; birthDate?: Date | null } | null>;
   };
   /**
    * Appartenance ET rôle en UNE lecture — c'est la forme que la route
@@ -154,7 +170,7 @@ export interface MessageEditAdmissionParams {
      * `null` reste permissif : une conversation absente de la projection de
      * l'appelant ne ferme rien — même contrat qu'`isConversationClosed`.
      */
-    conversation: ConversationTerminalStateRow | null | undefined;
+    conversation: ConversationEditStateRow | null | undefined;
     createdAt: Date | string | null | undefined;
     /** Le type et la métadonnée — REQUIS : un avis de capture ne s'édite pas par celui qui a capturé (#9641). */
     messageType: string | null | undefined;
@@ -241,11 +257,45 @@ export async function admitMessageEdit(
 ): Promise<MessageEditAdmission> {
   const decision = await decideMessageEdit(params);
 
-  if (decision.admitted && isConversationClosed(params.message.conversation)) {
-    return REFUSE('conversation-closed');
-  }
+  if (!decision.admitted) return decision;
+  if (isConversationClosed(params.message.conversation)) return REFUSE('conversation-closed');
+  if (await editorIsMinorInGlobal(params)) return REFUSE('minor-global');
 
   return decision;
+}
+
+/**
+ * #9927 — un mineur déclaré ne réécrit rien dans Meeshy Global : éditer un
+ * message posté avant sa déclaration serait y écrire. Comme la clôture, la
+ * règle n'est posée que sur une décision qui allait être ADMISE (aucun oracle
+ * d'existence), et ne coûte une lecture que dans Global. Aucun rôle n'en
+ * dispense. La lecture n'est pas enveloppée : une base illisible fait échouer
+ * l'édition (500 du transport), elle n'admet pas un mineur.
+ */
+async function editorIsMinorInGlobal(params: MessageEditAdmissionParams): Promise<boolean> {
+  if (params.message.conversation?.type !== GLOBAL_CONVERSATION_TYPE) return false;
+  const editor = await params.prisma.user.findUnique({
+    where: { id: params.editorUserId },
+    select: { birthDate: true },
+  });
+  return isDeclaredMinor(editor?.birthDate, new Date(params.now ?? Date.now()));
+}
+
+/**
+ * La phrase d'un refus d'édition sur le transport SOCKET — en un exemplaire,
+ * pour que le handler n'empile plus de ternaire à chaque motif ajouté.
+ */
+export function describeEditRefusalForSocket(reason: MessageEditRefusal): string {
+  switch (reason) {
+    case 'conversation-closed':
+      return CONVERSATION_CLOSED_EDIT_MESSAGE;
+    case 'edit-window-expired':
+      return 'You can no longer edit this message (24-hour limit exceeded)';
+    case 'minor-global':
+      return MINOR_GLOBAL_REFUSAL_MESSAGE;
+    default:
+      return 'Message not found or you are not authorized to edit it';
+  }
 }
 
 async function decideMessageEdit(

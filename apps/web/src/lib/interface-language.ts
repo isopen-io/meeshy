@@ -26,6 +26,7 @@ import {
   interfaceDirection,
   resolveInterfaceLanguageCode,
 } from './inline-interface-language-bootstrap.js';
+import { syncShellLocale } from './shell-locale';
 
 export type InterfaceLanguage = (typeof SUPPORTED_INTERFACE_LANGUAGES)[number];
 
@@ -80,6 +81,7 @@ export async function setInterfaceLanguage(language: InterfaceLanguage): Promise
     /* Stockage refusé : la langue tient pour la session, sans se souvenir. */
   }
   notify();
+  void syncShellLocale(language);
 }
 
 /**
@@ -145,4 +147,5 @@ export async function followBrowserInterfaceLanguage(languages: readonly string[
   }
   applyToDocument(language);
   notify();
+  void syncShellLocale('');
 }

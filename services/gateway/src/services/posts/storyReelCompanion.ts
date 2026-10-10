@@ -71,10 +71,12 @@ export async function borrowedSoundReelEntries(
   if (soundIds.length === 0) return [];
   const sounds = await prisma.sound.findMany({
     where: { id: { in: soundIds } },
-    select: { durationMs: true, isPublic: true, uploaderId: true, mutedAt: true },
+    select: { durationMs: true, isPublic: true, uploaderId: true, mutedAt: true, deletedAt: true },
   });
+  // #9848 — un son retiré de la bibliothèque ne s'emprunte plus : il ne
+  // qualifie pas davantage un réel.
   return sounds
-    .filter((s) => !s.mutedAt && (s.isPublic || s.uploaderId === authorId))
+    .filter((s) => !s.mutedAt && !s.deletedAt && (s.isPublic || s.uploaderId === authorId))
     .map((s) => ({ mimeType: 'audio/mp4', duration: s.durationMs ?? null }));
 }
 

@@ -19,7 +19,7 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
-import { attachmentFullSelect, MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
+import { attachmentFullSelect, MESSAGE_ATTACHMENT_ORDER, QUOTED_VISUAL_ATTACHMENT_COUNT } from '../attachments/attachmentIncludes';
 import { performanceLogger, enhancedLogger } from '../../utils/logger-enhanced';
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 import {
@@ -80,7 +80,8 @@ export async function findExistingMessage(params: {
                   }
                 }
               },
-              attachments: { select: attachmentFullSelect, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 4 }
+              attachments: { select: attachmentFullSelect, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 4 },
+              ...QUOTED_VISUAL_ATTACHMENT_COUNT
             }
           }
         }

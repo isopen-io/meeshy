@@ -230,6 +230,8 @@ struct MessageOverlayMenu: View {
             onShowCallDetail?()
         case .exportImage, .exportQuick:
             onExportImage?(action == .exportQuick)
+        case .wholeMessage, .replyToPiece, .deletePiece:
+            return
         }
         dismiss()
     }
@@ -667,7 +669,7 @@ struct MessageOverlayMenu: View {
 
     private var previewSenderHeader: some View {
         let isMe = message.isMe
-        let name = isMe ? "Moi" : (message.senderName ?? "?")
+        let name = isMe ? String(localized: "common.me", defaultValue: "Moi", bundle: .main) : (message.senderName ?? "?")
         let color = isMe ? contactColor : (message.senderColor ?? contactColor)
 
         return HStack(spacing: MeeshySpacing.xsPlus) {

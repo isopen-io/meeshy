@@ -31,6 +31,12 @@ const it = {
   'onboarding.email.sent': 'Link inviato. Aprilo, poi torna qui.',
   'onboarding.email.failed': 'Il link non è partito. Riprova.',
 
+  'onboarding.age.title': 'La tua data di nascita',
+  'onboarding.age.body': 'Per proporti gli spazi giusti. Puoi saltare.',
+  'onboarding.age.skip': 'Salta',
+  'onboarding.age.check': 'Controlla la tua data di nascita.',
+  'onboarding.age.failed': 'La tua data non è stata salvata. Riprova.',
+
   'onboarding.global.title': 'Saluta il mondo',
   'onboarding.global.body': 'Meeshy Global è il salotto dove passano tutti. Lascia un saluto, senza pressione.',
   'onboarding.global.field': 'Il tuo saluto, modificabile',

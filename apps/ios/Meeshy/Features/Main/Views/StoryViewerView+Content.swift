@@ -319,7 +319,7 @@ extension StoryViewerView {
                         groupTransition(forward: true) {
                             currentGroupIndex += 1
                             currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                            progress = 0
+                            progressClock.reset()
                         }
                     } else if (dx > 60 || predicted > 150) && currentGroupIndex > 0 {
                         // Swipe right -> prev group
@@ -327,7 +327,7 @@ extension StoryViewerView {
                         groupTransition(forward: false) {
                             currentGroupIndex -= 1
                             currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-                            progress = 0
+                            progressClock.reset()
                         }
                     } else {
                         // Snap back — animate groupSlide to 0. La face du cube
@@ -469,7 +469,7 @@ extension StoryViewerView {
         if currentStoryIndex < group.stories.count - 1 {
             crossFadeStory {
                 currentStoryIndex += 1
-                progress = 0
+                progressClock.reset()
             }
         } else if currentGroupIndex < groups.count - 1 {
             if isPreviewMode {
@@ -479,7 +479,7 @@ extension StoryViewerView {
             groupTransition(forward: true) {
                 currentGroupIndex += 1
                 currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                progress = 0
+                progressClock.reset()
             }
         } else {
             if isPreviewMode {
@@ -496,13 +496,13 @@ extension StoryViewerView {
         if currentStoryIndex > 0 {
             crossFadeStory {
                 currentStoryIndex -= 1
-                progress = 0
+                progressClock.reset()
             }
         } else if currentGroupIndex > 0 {
             groupTransition(forward: false) {
                 currentGroupIndex -= 1
                 currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-                progress = 0
+                progressClock.reset()
             }
         }
     }
@@ -659,73 +659,10 @@ extension StoryViewerView {
 
     // MARK: - Timer
 
-    /// State-driven pause: the timer checks ALL active UI states each tick
-    /// instead of relying on paired pauseTimer/resumeTimer event calls.
-    ///
-    /// - `isPaused` : pauses du timer pour sheets, drag-to-dismiss, etc.
-    ///   (timer-only — le canvas continue à jouer).
-    /// - `isLongPressPaused` : toggle long-press utilisateur (timer + canvas
-    ///   gelés ensemble via `.storyPlayerPause`).
-    /// Internal car lu depuis `StoryViewerView.swift` (cross-file extension) :
-    /// le helper `storyCard(geometry:)` passe cette valeur à `StoryCardView`
-    /// pour propager la pause au canvas via `StoryReaderRepresentable.isPaused`.
-    /// Composers + pickers + transitions pause the slide timer. Comments
-    /// overlay does NOT (the user wants to read comments while the story
-    /// keeps playing/looping behind). Focus on the comment composer engages
-    /// `isComposerEngaged` which DOES pause — that's the intended trigger,
-    /// not the overlay visibility alone (user spec 2026-05-28).
-    var shouldPauseTimer: Bool {
-        // Un peek Notification Center / Control Center (aperçu app-switcher,
-        // scenePhase devenant transitoirement inactif) n'apparaît DÉLIBÉRÉMENT
-        // PAS dans cet agrégat : la lecture doit continuer sans coupure pendant
-        // ce genre de peek, comme une vidéo en PIP ou une app de musique en
-        // arrière-plan (directive user 2026-07-14, qui annule une tentative
-        // précédente de gate sur la phase de scène — celle-ci coupait l'audio
-        // de fond et le faisait recommencer à 0 au retour). Le vrai
-        // `.background` (dismiss complet du viewer) reste géré séparément via
-        // `.adaptiveOnChange(of: scenePhase)` plus haut dans ce fichier.
-        isPaused
-        || isLongPressPaused
-        || isComposerEngaged
-        || hasComposerContent
-        || showEmojiStrip
-        || showFullEmojiPicker
-        || showTextEmojiPicker
-        || showLanguageOptions
-        || showFullLanguagePicker
-        // Scrub du rail + vol de réaction : la lecture attend la fin du geste et
-        // de l'animation (spec scrub 2026-08-11).
-        || isScrubbingRail
-        || reactionFlight != nil
-        // L'overlay commentaires ouvert met la story en pause : lire / répondre à
-        // un commentaire ne doit pas laisser la slide auto-avancer sous l'overlay
-        // (bug 2026-06-01 — l'utilisateur lit les commentaires et la story passe
-        // à la slide suivante). Parité Instagram : ouvrir les commentaires gèle
-        // la lecture (timer + médias via `isCanvasPlaybackPaused`).
-        || showCommentsOverlay
-        || isTransitioning
-        || isDismissing
-        // Interstitiel d'identité inter-groupes : la lecture (timer + canvas +
-        // audio) attend la fin des ~2,2 s (ou le tap skip) — reprise sans saut.
-        || showGroupIntro
-        // Drag du lecteur en cours (axe décidé). ÉTAT-DIRIGÉ et non
-        // événementiel : le drag ne pose plus de `pauseTimer()` à la décision
-        // d'axe, car son `resumeTimer()` symétrique n'arrive jamais quand un
-        // recognizer concurrent (un `UIScrollView` de surface, typiquement)
-        // emporte la séquence et que SwiftUI saute le `onEnded` — la story
-        // restait alors gelée pour de bon. Adossée à `gestureAxis`, la reprise
-        // est automatique dès que l'axe retombe à 0 : le cas dégénéré se
-        // rattrape tout seul au geste suivant.
-        || gestureAxis != 0
-        // Légende dépliée : lire un texte plein écran pendant que la slide
-        // avance dessous n'a aucun sens. Cause PROPRE dans l'agrégat, jamais un
-        // `isPaused = true` — ce drapeau appartient déjà à d'autres causes, et
-        // le relâcher au repli relâcherait la leur (#4474).
-        || isCaptionExpanded
-    }
-
+    /// L'agrégat de pause (`shouldPauseTimer`) et la boucle vivent dans
+    /// `StoryViewerView+PlaybackHold.swift` (#9821).
     func startTimer() {
-        progress = 0
+        progressClock.reset()
         isContentReady = false
         hasFiredFadeOut = false
         hasFiredNextPrefetch = false
@@ -835,11 +772,9 @@ extension StoryViewerView {
         computedStoryDuration = renderable.computedTotalDuration()
     }
 
-    /// Manual pause — sheets, drag-to-dismiss, composer engaged, etc.
-    /// **Timer-only** : le canvas (vidéo BG, audios, effets) continue à
-    /// jouer. Cela évite un blip audible au cycle pause/resume rapide
-    /// d'un drag de transition. Le toggle long-press passe par
-    /// `isLongPressPaused` (qui, lui, freeze le canvas via notification).
+    /// Un écran PLEIN recouvre la story (composeur, citer ou republier en post,
+    /// lieu plein écran) : elle se fige, rien ne joue derrière (#9821). Les
+    /// feuilles posées SUR la story ne l'appellent pas — elles la font boucler.
     func pauseTimer() { isPaused = true }
 
     /// Manual resume — symétrique de `pauseTimer()`. N'inverse pas le
@@ -868,13 +803,11 @@ extension StoryViewerView {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showCommentsOverlay = true
                 }
-                pauseTimer()
                 if storyComments.isEmpty {
                     loadStoryComments()
                 }
             case .showViewersSheet:
                 showViewersSheet = true
-                pauseTimer()
             }
         }
     }
@@ -904,7 +837,7 @@ extension StoryViewerView {
         // to the backend so the comment graph stays correct, but rendering
         // does not yet visually indent replies. See SOTA audit Pilier 19.
         let currentUser = AuthManager.shared.currentUser
-        let authorName: String = currentUser?.displayName ?? currentUser?.username ?? "Moi"
+        let authorName: String = currentUser?.displayName ?? currentUser?.username ?? String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)
         let authorId: String = currentUser?.id ?? ""
         // La ligne optimiste est keyée par le cmid : envoyé au REST ET réutilisé
         // par le repli outbox, il fait dédoublonner le serveur (MutationLog) et
@@ -1460,27 +1393,15 @@ struct StoryCommentsOverlayView: View {
     @State private var hasRequestedTargetHunt = false
 
     @Binding var showCommentsOverlay: Bool
-    /// Réservation visuelle. Quand non-nil, le composer principal (un
-    /// `StoryComposerBarView` rendu dans la canvas « Bottom area ») affiche
-    /// sa reply banner. L'overlay s'en sert seulement pour étirer sa
-    /// `composerSpaceReservation` afin que la liste ne passe pas sous la
-    /// banner.
+    /// Quand non-nil, le composer principal affiche sa reply banner ; la liste
+    /// défile jusqu'au commentaire visé (la plaque mesurée, banner comprise,
+    /// déplace `zone`).
     @Binding var replyingToStoryComment: FeedComment?
 
-    /// Drives the dynamic max-height of the comment list — with keyboard the
-    /// list expands toward the top, without it the list caps at ~50 % of the
-    /// screen so the underlying story stays manipulable above the list.
-    @ObservedObject var keyboard: KeyboardObserver
-
-    /// Vrai safe area bas lu sur la keyWindow par le parent
-    /// (`StoryViewerView.windowBottomInset`). Necessaire parce que cet
-    /// overlay est rendu dans le ZStack canvas qui herite du
-    /// `.ignoresSafeArea()` root — `geometry.safeAreaInsets.bottom` y vaut 0.
-    /// Sans cette valeur, `composerSpaceReservation` retombait sur une
-    /// constante hardcodee (54pt pour iPhone Pro) qui derivait sur iPhone
-    /// SE / iPad / pliables (bug 2026-05-28 : « le commentaire sort du
-    /// viewport EXACTEMENT comme la zone de composition »).
-    let safeBottom: CGFloat
+    /// Où la liste se pose et jusqu'où elle monte : la carte la place sur son
+    /// composeur (`StoryCommentsZone`, #9893). Elle suit le clavier dans SA
+    /// transaction — même courbe, même durée que le composeur.
+    let zone: StoryCommentsZone.Frame
 
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: @MainActor (String) async -> Void
@@ -1503,19 +1424,6 @@ struct StoryCommentsOverlayView: View {
             startPoint: .top,
             endPoint: .bottom
         )
-    }
-
-    /// Cap the comment list to ~half the screen when the keyboard is hidden
-    /// so the rest of the story (head, mid-frame) stays visible and tappable.
-    /// When the keyboard rises the list can grow into the space the keyboard
-    /// uncovered.
-    private var listMaxHeight: CGFloat {
-        // `DeviceLayout.windowSize`, pas `UIScreen.main.bounds` : en Split View
-        // la fraction était prise sur le DISPLAY, donc plus haute que la fenêtre
-        // entière — le plafond ne plafonnait plus rien et la liste recouvrait la
-        // story qu'elle est censée laisser visible.
-        let window = DeviceLayout.windowSize.height
-        return keyboard.isVisible ? window * 0.62 : window * 0.42
     }
 
     /// Instagram-style overlay: comments float above the composer with a top
@@ -1558,7 +1466,7 @@ struct StoryCommentsOverlayView: View {
                 // Les médias de TOUS les commentaires de la story (racines +
                 // réponses dépliées) se feuillettent ensemble en plein écran.
                 .commentMediaGallery(topLevel: topLevel, replies: storyCommentRepliesMap)
-                .frame(maxHeight: listMaxHeight)
+                .frame(maxHeight: zone.maxHeight)
                 // Bord supérieur RÉEL de la zone défilante, remonté au viewer :
                 // c'est lui qui sépare « geste né dans la liste » (au scroll) de
                 // « geste né dans la story encore visible au-dessus » (au drag
@@ -1588,7 +1496,7 @@ struct StoryCommentsOverlayView: View {
                 // apparaît et fait disparaître l'autre »). On unifie sur
                 // UN SEUL composer (le principal) et on laisse la liste
                 // s'arrêter juste au-dessus.
-                .padding(.bottom, composerSpaceReservation)
+                .padding(.bottom, zone.bottomInset)
         }
         // **CRITIQUE** : forcer la VStack à remplir toute la hauteur du
         // canvas. Sans `.frame(maxHeight: .infinity)`, le `Spacer(minLength:
@@ -1600,35 +1508,7 @@ struct StoryCommentsOverlayView: View {
         // avec son `Rectangle.ignoresSafeArea(.bottom)` étirait
         // implicitement la VStack ; maintenant il faut le déclarer.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .animation(.easeInOut(duration: 0.25), value: keyboard.isVisible)
         .animation(.easeInOut(duration: 0.2), value: replyingToStoryComment?.id)
-    }
-
-    /// Hauteur réservée pour le composer principal (StoryComposerBarView)
-    /// + son safe area / sa montée clavier. La liste s'arrête au MILIEU du
-    /// composer (et non au-dessus) pour que les nouveaux commentaires
-    /// paraissent « émerger » de la zone de composition au scroll — le
-    /// composer recouvre visuellement la moitié inférieure de la liste,
-    /// et la masque-gradient `listFadeMask` cache déjà les rows arrivant
-    /// par le haut. User spec 2026-05-28 : « le composant pour remonter
-    /// les commentaires doit débuter en milieu de la zone de composition
-    /// […] on verra les commentaires sortir de cette zone ».
-    /// - clavier visible : `keyboard.height` + composer ~ 92pt (sans banner)
-    ///   ou ~140pt (avec reply banner)
-    /// - clavier caché : safe area ~34pt + 20pt breathing room + composer/2.
-    private var composerSpaceReservation: CGFloat {
-        let composerHeight: CGFloat = replyingToStoryComment != nil ? 142 : 92
-        // Mirror `composerBottomPadding(geometry:)` cote canvas : safe area
-        // reel + 20pt breathing room quand clavier cache, sinon hauteur clavier.
-        // `safeBottom` arrive du parent via `windowBottomInset` (keyWindow),
-        // pas via `geometry.safeAreaInsets.bottom` qui vaut 0 sous
-        // `.ignoresSafeArea()` (bug 2026-05-28).
-        let bottomPadding: CGFloat = keyboard.isVisible
-            ? keyboard.height
-            : safeBottom + 20
-        // Half-composer overlap — list ends at composer.middle, the lower
-        // half is the « emerge » zone where new rows transition into view.
-        return composerHeight / 2 + bottomPadding
     }
 
     // MARK: - Comments List

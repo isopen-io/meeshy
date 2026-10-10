@@ -16,4 +16,14 @@ public final class FullscreenPictureInPicture {
     public static boolean floats(int sdk, boolean fullscreenShown, boolean systemSupports) {
         return sdk >= MIN_SDK && fullscreenShown && systemSupports;
     }
+
+    /**
+     * #9847 — le bouton de la fenetre flottante d'une video, comme dans
+     * Chrome Android : « pause » quand elle joue, « play » quand elle est en
+     * pause. Aucun bouton tant que la page n'a pas dit l'etat de la video.
+     */
+    public static String toggleAction(Boolean playing) {
+        if (playing == null) return null;
+        return playing ? "pause" : "play";
+    }
 }

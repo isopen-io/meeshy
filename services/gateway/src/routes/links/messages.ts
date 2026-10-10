@@ -56,7 +56,8 @@ function sendWriteRefusal(reply: FastifyReply, refusal: ConversationWriteRefused
     return sendError(reply, 429, message, { code: response.code });
   }
 
-  return response.status === 410 ? sendError(reply, 410, message) : sendForbidden(reply, message);
+  if (response.status === 410) return sendError(reply, 410, message);
+  return 'code' in response ? sendForbidden(reply, message, { code: response.code }) : sendForbidden(reply, message);
 }
 
 /**

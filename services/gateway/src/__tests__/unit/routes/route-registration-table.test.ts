@@ -201,7 +201,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // `/api/v1/users`. Les douze autres routes de la vague 2 du jeu rejoignent
     // `me-game` (même préfixe) : aucune entrée de plus pour elles. Aucun alias,
     // aucune route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(75);
+    // 76 : #9927 ajoute `me-birth-date` — l'adresse NEUVE `PUT
+    // /api/v1/me/birth-date` (la date de naissance, déclarée une fois),
+    // montage autonome. Aucun alias, aucune route retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(76);
   });
 });
 

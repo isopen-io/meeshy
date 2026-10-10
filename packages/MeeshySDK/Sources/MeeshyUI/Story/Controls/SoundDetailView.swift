@@ -11,6 +11,9 @@ public struct SoundDetailView: View {
     private let sound: APISound
     private let onUse: (APISound) -> Void
     private let onClose: () -> Void
+    /// Présent seulement quand la page s'ouvre sur un de SES sons (#9848) :
+    /// l'hôte ferme la page et porte la confirmation.
+    private let onRemove: ((APISound) -> Void)?
 
     @StateObject private var model: SoundDetailModel
     @Environment(\.colorScheme) private var colorScheme
@@ -18,10 +21,12 @@ public struct SoundDetailView: View {
     public init(sound: APISound,
                 service: SoundLibraryServiceProviding = SoundLibraryService.shared,
                 onUse: @escaping (APISound) -> Void,
-                onClose: @escaping () -> Void) {
+                onClose: @escaping () -> Void,
+                onRemove: ((APISound) -> Void)? = nil) {
         self.sound = sound
         self.onUse = onUse
         self.onClose = onClose
+        self.onRemove = onRemove
         _model = StateObject(wrappedValue: SoundDetailModel(soundId: sound.id, service: service))
     }
 
@@ -41,6 +46,16 @@ public struct SoundDetailView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(String(localized: "story.composer.cancel",
                                   defaultValue: "Annuler", bundle: .module), action: onClose)
+                }
+                if let onRemove {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(role: .destructive) { onRemove(sound) } label: {
+                            Image(systemName: "trash")
+                        }
+                        .foregroundStyle(MeeshyColors.error)
+                        .accessibilityLabel(String(localized: "story.sound.library.remove",
+                                                   defaultValue: "Retirer de ma bibliothèque", bundle: .module))
+                    }
                 }
             }
         }

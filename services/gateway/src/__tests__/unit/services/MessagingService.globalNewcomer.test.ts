@@ -313,6 +313,37 @@ describe('MessagingService.handleMessage — mode lent des nouveaux comptes dans
     expect(second.code).toBe('NEWCOMER_SLOW_MODE');
   });
 
+  // #9927 — même point de convergence, refus DÉFINITIF : un mineur déclaré
+  // (13-17 ans) n'écrit pas dans Global. Le code permet au client de le dire,
+  // le texte reste lisible pour un client antérieur qui l'ignore.
+  it('refuse l’envoi d’un mineur déclaré dans Global, code GLOBAL_ADULTS_ONLY sans décompte (#9927)', async () => {
+    mockPrisma.conversation.findUnique.mockResolvedValue({ id: testConversationId, type: 'global', isActive: true });
+    mockPrisma.participant.findUnique.mockResolvedValue({
+      ...globalMember(ESTABLISHED_CREATED_AT()),
+      user: { role: 'USER', createdAt: ESTABLISHED_CREATED_AT(), birthDate: new Date('2010-03-01T00:00:00.000Z') }
+    });
+
+    const response = await service.handleMessage(validRequest, testParticipantId);
+
+    expect(response.success).toBe(false);
+    expect(response.code).toBe('GLOBAL_ADULTS_ONLY');
+    expect(response.retryAfter).toBeUndefined();
+    expect(response.error).toMatch(/18 ans/);
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('laisse écrire dans Global un compte qui a eu 18 ans aujourd’hui (#9927)', async () => {
+    mockPrisma.conversation.findUnique.mockResolvedValue({ id: testConversationId, type: 'global', isActive: true });
+    mockPrisma.participant.findUnique.mockResolvedValue({
+      ...globalMember(ESTABLISHED_CREATED_AT()),
+      user: { role: 'USER', createdAt: ESTABLISHED_CREATED_AT(), birthDate: new Date('2008-09-24T00:00:00.000Z') }
+    });
+
+    const response = await service.handleMessage(validRequest, testParticipantId);
+
+    expect(response.success).toBe(true);
+  });
+
   it('ne porte ni code ni décompte sur un refus définitif', async () => {
     mockPrisma.conversation.findUnique.mockResolvedValue({ id: testConversationId, type: 'global', isActive: false });
     mockPrisma.participant.findUnique.mockResolvedValue(globalMember(NEWCOMER_CREATED_AT()));

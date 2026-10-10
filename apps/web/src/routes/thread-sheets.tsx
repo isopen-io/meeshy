@@ -27,6 +27,8 @@ export type ThreadSheetsMenu = Pick<
   | 'onCloseMenu'
   | 'onMenuReact'
   | 'onMenuAction'
+  | 'onPieceChange'
+  | 'onPieceAction'
   | 'onPickLanguage'
   | 'reactionSheetFor'
   | 'setReactionSheetFor'
@@ -100,7 +102,23 @@ export function ThreadMessageSheets({
             forwardItems={data.forwardItems}
             subjectLabel={data.subjectLabel}
             onClose={messageMenu.onCloseMenu}
-            onReact={(emoji) => messageMenu.onMenuReact(target.messageId, emoji)}
+            /* LA PIÈCE VISÉE (#9907, #9908) — l'aperçu la montre seule, le
+               défilement change la cible, le rail réagit sur elle. */
+            {...(data.piece === undefined || target.pieceId === undefined
+              ? {}
+              : ((pieceData, pieceId) => ({
+                  piece: {
+                    data: pieceData,
+                    onIndex: (index: number) => {
+                      const next = pieceData.pieces[index];
+                      if (next !== undefined) messageMenu.onPieceChange(next.id);
+                    },
+                    onWholeMessage: () => messageMenu.onPieceChange(undefined),
+                    onAction: (actionId: Parameters<typeof messageMenu.onPieceAction>[2]) =>
+                      messageMenu.onPieceAction(target.messageId, pieceId, actionId),
+                  },
+                }))(data.piece, target.pieceId))}
+            onReact={(emoji) => messageMenu.onMenuReact(target.messageId, emoji, data.piece === undefined || !data.piece.canReact ? undefined : target.pieceId)}
             onExpandReactions={() => messageMenu.setReactionSheetFor(target.messageId)}
             onAction={(actionId) => messageMenu.onMenuAction(target.messageId, actionId)}
             onPickLanguage={(code) => messageMenu.onPickLanguage(target.messageId, code)}

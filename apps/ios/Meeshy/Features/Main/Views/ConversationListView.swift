@@ -928,10 +928,9 @@ struct ConversationListView: View {
     }
 
     private func trailingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
-        // Per-user archive state (same source as the list filter + `.setArchived`
-        // mutation). NOT `conversation.isActive` (server lifecycle flag, never
-        // toggled by archiving) — reading it froze this swipe on "Archiver" so
-        // archived conversations could never be unarchived from the swipe.
+        // Per-user archive state (same source as the list filter + `.setArchived`),
+        // NOT `conversation.isActive` (server lifecycle flag) — reading it froze this
+        // swipe on "Archiver". Global d'un mineur ne se désarchive pas (#9929).
         let isArchived = conversation.userState.isArchived
         let isRead = conversation.userState.unreadCount == 0
         var actions: [SwipeAction] = [
@@ -959,6 +958,7 @@ struct ConversationListView: View {
             }
         ]
 
+        if conversation.isArchiveImposed { actions.removeAll { $0.label == SwipeLabels.unarchive } }
         if conversation.type == .direct, let userId = conversation.participantUserId {
             let isBlocked = BlockService.shared.isBlocked(userId: userId)
             actions.append(SwipeAction(

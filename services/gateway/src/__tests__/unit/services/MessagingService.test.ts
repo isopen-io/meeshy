@@ -113,6 +113,7 @@ import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 import { armForwardSourceReader, readableForwardSource } from './forwardSourceReaderDouble';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../../services/attachments/attachmentIncludes';
 
 describe('MessagingService', () => {
   let service: MessagingService;
@@ -496,7 +497,7 @@ describe('MessagingService', () => {
         // Preuve que la branche copie a bien tourné (pas un simple message
         // texte vide qui laisserait passer l'assertion ci-dessus par hasard).
         expect(mockPrisma.messageAttachment.findMany).toHaveBeenCalledWith({
-          where: { messageId: '507f1f77bcf86cd799439099' }
+          where: { messageId: '507f1f77bcf86cd799439099' }, orderBy: MESSAGE_ATTACHMENT_ORDER
         });
       });
     });
@@ -1836,11 +1837,9 @@ describe('MessagingService', () => {
       );
     });
 
-    // PREREQUISITE check (NOT a regression guard) — passes regardless of the
-    // fix because handleAttachments() linking was never broken; the bug was
-    // that the in-memory message.attachments array wasn't refreshed AFTER
-    // the link. Kept here so future readers see the linking call is still
-    // wired up; the regression guard is the test above.
+    // PREREQUISITE check (NOT a regression guard): the linking call is still
+    // wired up, one write per piece carrying its composer rank (#9776). The
+    // guard for the in-memory refresh AFTER the link is the test above.
     it('should call messageAttachment.updateMany to link attachments (prerequisite)', async () => {
       await service.handleMessage(
         {
@@ -1851,10 +1850,10 @@ describe('MessagingService', () => {
         testParticipantId
       );
 
-      expect(mockPrisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: attachmentIds }, OR: [{ messageId: null }, { messageId: { isSet: false } }] },
-        data: { messageId: testMessageId }
-      });
+      expect(mockPrisma.messageAttachment.updateMany.mock.calls.map(([args]) => args)).toEqual(attachmentIds.map((id, rank) => ({
+        where: { id: { in: [id] }, OR: [{ messageId: null }, { messageId: { isSet: false } }] },
+        data: { messageId: testMessageId, rank }
+      })));
     });
 
     // LE témoin du cycle. `handleMessage` est l'entrée COMMUNE du socket et de

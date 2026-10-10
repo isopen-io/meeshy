@@ -155,10 +155,19 @@ const PDF_HEADER = Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n', 'binary');
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
-function makePrisma(shareLink: any = { allowAnonymousFiles: true, allowAnonymousImages: true }) {
+function makePrisma(
+  shareLink: any = { allowAnonymousFiles: true, allowAnonymousImages: true },
+  target: { conversationType?: string; birthDate?: Date | null } = {}
+) {
   return {
     conversationShareLink: {
       findUnique: jest.fn<any>().mockResolvedValue(shareLink),
+    },
+    message: {
+      findFirst: jest.fn<any>().mockResolvedValue({ conversation: { type: target.conversationType ?? 'group' } }),
+    },
+    user: {
+      findUnique: jest.fn<any>().mockResolvedValue({ birthDate: target.birthDate ?? null }),
     },
   };
 }

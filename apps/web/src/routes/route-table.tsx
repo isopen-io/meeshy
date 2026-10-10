@@ -1,10 +1,10 @@
 import { currentAdminLanguage, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
 import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
-import { loadGameScreenCatalog } from '@/lib/i18n-game-catalog';
+import type { GameScreen } from '@/lib/i18n-game-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
 
@@ -119,6 +119,12 @@ const adminEngagementScaleScreen = () =>
    (`onboarding.*`), en parallèle, comme l'administration : un compte ne voit
    ce parcours qu'une fois, aucun autre lecteur n'en paie les octets, et
    `translateOnboarding` lève sur un catalogue non chargé. */
+/* LE CHARGEUR DES CATALOGUES DU JEU (#9928, première peinture) — sa table de
+   28 `import()` entrait dans le module d'entrée pour des routes que la
+   première peinture ne sert jamais : il se charge avec elles. */
+const loadGameScreenCatalog = (language: InterfaceLanguage, screen: GameScreen): Promise<void> =>
+  import('@/lib/i18n-game-catalog').then((catalogs) => catalogs.loadGameScreenCatalog(language, screen));
+
 const onboardingScreen = () =>
   Promise.all([import('@/routes/onboarding'), loadOnboardingCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
@@ -244,6 +250,11 @@ export const ROUTES = {
      est littéral et aucune adresse paramétrée à deux segments n'existe sous
      `/me`. */
   bookmarks: { pattern: '/me/bookmarks', screen: () => import('@/routes/bookmarks') },
+  /* « MES SONS » (#9848) — la bibliothèque de sons de l'auteur et le retrait
+     d'un son, atteinte depuis Réglages › Outils. Sous `/me` pour la raison des
+     enregistrées : `GET sounds.mine` rend 401 sans session, d'où `soundsMine`
+     dans `PRIVATE_ROUTES`. Adresse NEUVE — le legacy n'avait pas cet écran. */
+  soundsMine: { pattern: '/me/sounds', screen: () => import('@/routes/sounds-mine') },
   /* LES MESSAGES FAVORIS (#7286) — miroir `Route.starredMessages`
      (`Router.swift`), atteinte depuis Réglages › Outils, en PREMIÈRE rangée,
      comme sur iOS. Sous `/me` pour la raison des enregistrées : un corpus qui

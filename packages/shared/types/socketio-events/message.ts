@@ -318,6 +318,14 @@ export interface MentionCreatedEventData {
 }
 
 /**
+ * Ce qu'un client DÉCLARE en citant une pièce : son identifiant, rien d'autre.
+ * La nature n'est jamais crue — la passerelle la relit du MIME en base.
+ */
+export interface AttachmentReplyToInput {
+  readonly attachmentId: string;
+}
+
+/**
  * Données pour l'envoi de message
  *
  * `clientMessageId` est OBLIGATOIRE — format `cid_<UUID v4 lowercase>`.
@@ -331,6 +339,13 @@ export interface MessageSendData {
   readonly originalLanguage?: string;
   readonly messageType?: string;
   readonly replyToId?: string;
+  /**
+   * La PIÈCE NOMMÉE que cette réponse vise (#9909) — la même que
+   * `POST /messages`. Exige `replyToId` : la pièce doit appartenir au message
+   * cité, sans quoi l'envoi est REFUSÉ. La passerelle en relit la nature dans
+   * la base et grave l'instantané dans `metadata.attachmentReplyTo`.
+   */
+  readonly attachmentReplyTo?: AttachmentReplyToInput;
   readonly clientMessageId: string;
   /** Réponse privée à une story — DM porteur du contexte de la story. */
   readonly storyReplyToId?: string;
@@ -420,6 +435,8 @@ export interface MessageSendWithAttachmentsData {
   readonly originalLanguage?: string;
   readonly attachmentIds: readonly string[];
   readonly replyToId?: string;
+  /** La pièce nommée citée (#9909) — même contrat que `MessageSendData`. */
+  readonly attachmentReplyTo?: AttachmentReplyToInput;
   readonly clientMessageId: string;
   readonly storyReplyToId?: string;
   readonly forwardedFromId?: string;

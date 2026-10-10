@@ -13,6 +13,7 @@ import Foundation
 
 public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case accountDeletion
+    case birthDate
     case categories
     case categoriesByCategoryId(categoryId: String)
     case categoriesReorder
@@ -69,6 +70,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     public var path: String {
         switch self {
         case .accountDeletion: return "/api/v1/me/account/deletion"
+        case .birthDate: return "/api/v1/me/birth-date"
         case .categories: return "/api/v1/me/categories"
         case .categoriesByCategoryId(let categoryId): return "/api/v1/me/categories/\(categoryId)"
         case .categoriesReorder: return "/api/v1/me/categories/reorder"

@@ -627,6 +627,16 @@ export function ToolsSection({ language, showAdmin = false }: { readonly languag
         <RowText label={translate(language, 'settings.tools.bookmarks')} />
         <Chevron />
       </Link>
+      {/* « MES SONS » (#9848) — la bibliothèque de sons de l'auteur, et le
+          seul endroit du web où l'on retire un son. Rangée d'archive, comme les
+          enregistrées : à leur suite, avant le jeu. */}
+      <Link to="soundsMine" data-settings-sounds className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <GlyphSvg glyph={SETTINGS_GLYPHS.speakerHigh} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.sounds')} />
+        <Chevron />
+      </Link>
       <Link to="progression" data-settings-progression className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-warning)">
           <Glyph name="trophy" size={15} />

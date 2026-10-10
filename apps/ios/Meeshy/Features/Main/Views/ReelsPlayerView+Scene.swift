@@ -141,6 +141,10 @@ struct ReelSceneView: View {
                                       scrubber: clock.scrubber)
                         .onPlaybackTime { seconds in
                             clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
+                            // L'horloge de la scène avance : le réel joue (#9837).
+                            if isPlaying, seconds > 0 {
+                                ReelSwitchSignpost.mediaStarted(reel.id, kind: "scene")
+                            }
                         }
                 }
 

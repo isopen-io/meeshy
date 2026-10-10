@@ -52,6 +52,7 @@ import {
   type StoryPlaybackGroup,
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
+import { resolveStoryPlaybackHold } from '@/lib/stories/playback-hold';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { useProfilePeekOpen } from '@/lib/view/profile-peek';
@@ -60,12 +61,11 @@ import { useStoryGestures } from '@/lib/view/use-story-gestures';
 import { useCallFreezesStory } from '@/lib/view/use-call-freezes-story';
 import { useStoryHiddenTabPause } from '@/lib/view/use-story-hidden-tab-pause';
 import { useStoryLanguage } from '@/lib/view/use-story-language';
-import { useStoryPauseWhile } from '@/lib/view/use-story-pause-while';
 import { useStoryKeyboardShortcuts } from '@/lib/view/use-story-keyboard-shortcuts';
 import { useStoryOwnerRail } from '@/lib/view/use-story-owner-rail';
 import { useStorySend } from '@/lib/view/use-story-send';
 import { chromeYields } from '@/lib/view/chrome-yields';
-import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
+import { sceneYieldOf, yieldingScene } from '@/lib/view/scene-yields';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useElementSize } from '@/lib/view/use-element-size';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -364,6 +364,8 @@ export default function StoryScreen() {
   const painterRef = useRef<SceneScrubPainter | null>(null);
   /** Le segment actif se parcourt au doigt (#7879) — loi d'hôte extraite. */
   const scrub = useStoryScrub({ storyId: currentStory?.id, elapsedRef, startTsRef });
+  /** Ce qui retient la story (#9821) — lu par le minuteur à la fin du tour. */
+  const holdRef = useRef<ReturnType<typeof resolveStoryPlaybackHold>>(null);
 
   /** L'UNIQUE écriture de la progression — hors de React, à chaque image. */
   const paintProgress = useCallback((ratio: number) => painterRef.current?.(ratio), []);
@@ -420,14 +422,18 @@ export default function StoryScreen() {
       const ratio = Math.min(1, elapsed / dureeMs);
       paintProgress(ratio);
       if (ratio >= 1) {
-        advance('next');
-        return;
+        if (holdRef.current !== 'loop') {
+          advance('next');
+          return;
+        }
+        /* En boucle : la story repart de zéro, la barre suit à l'image suivante. */
+        scrub.onScrub(0);
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [currentStory, paused, scrub.scrubbing, contentReady, dureeMs, advance, paintProgress]);
+  }, [currentStory, paused, scrub.scrubbing, scrub.onScrub, contentReady, dureeMs, advance, paintProgress]);
 
   /* L'ONGLET CACHÉ NE CONSOMME PAS UNE STORY — extrait dans
      `use-story-hidden-tab-pause.ts` (§ budget de la spécification #7116),
@@ -453,16 +459,16 @@ export default function StoryScreen() {
 
   /**
    * **LE PLAN AUTEUR** (#7116) — « Vues », « Partager », « Enregistrer ».
-   * La loi vit dans `use-story-owner-rail.ts` (pause/reprise de la feuille,
+   * La loi vit dans `use-story-owner-rail.ts` (feuille « Vues »,
    * téléchargement + livraison de l'export, idempotence du job) : ce lecteur
-   * ne fait que la BRANCHER sur SA région d'annonce et SA pause, exactement
+   * ne fait que la BRANCHER sur SA région d'annonce, exactement
    * comme `commentsHost` deux blocs plus haut. Déclaré ICI, AVANT le clavier,
    * pour que `viewersOpen` puisse rejoindre la cession `layerOpen`.
    */
-  const ownerRail = useStoryOwnerRail({ story: currentStory, online, pause, resume, announce, language: interfaceLanguage });
+  const ownerRail = useStoryOwnerRail({ story: currentStory, online, announce, language: interfaceLanguage });
   const viewersOpen = ownerRail.viewers.postId !== null;
   /* « ENVOYER » (#8884) : la feuille d'envoi commune, ouverte avec la story
-     regardée ; la lecture attend dessous (`useStoryPauseWhile` plus bas). */
+     regardée ; la story boucle dessous (`engaged` plus bas, #9821). */
   const storySend = useStorySend(currentStory);
   /* L'ANNEAU DU CŒUR SUR CHAQUE GESTE DÉJÀ FAIT (directive porteur
      2026-10-01) : la réaction vient de la story servie (`currentUserReactions`,
@@ -470,6 +476,7 @@ export default function StoryScreen() {
      la session — la passerelle ne les sert pas sur une story. */
   const participationMarks = usePublicationParticipation(currentStory?.id);
   const profilePeekOpen = useProfilePeekOpen();
+  const sheetOpen = commentsOpen || viewersOpen;
   /* LES GESTES COMMUNS DES PLEIN ÉCRANS (#8879, `viewer-chrome-gestures.ts`) :
      glisser vers le BAS ferme — le geste de sortie d'iOS
      (`StoryViewerView+Canvas.swift`, `.dismissViewer`) et celui de la
@@ -480,7 +487,7 @@ export default function StoryScreen() {
     onDismiss: closeViewer,
     onNext: () => advance('next'),
     onPrevious: () => advance('previous'),
-    enabled: !(commentsOpen || viewersOpen || profilePeekOpen),
+    enabled: !(sheetOpen || profilePeekOpen),
     rtl: typeof document !== 'undefined' && document.documentElement.dir === 'rtl',
   });
   /* LES GESTES (§ 1.3) — EXTRAITS dans `use-story-gestures.ts` (§ budget,
@@ -488,14 +495,16 @@ export default function StoryScreen() {
      relâchement ne reprend pas, le tap suivant reprend sans naviguer ; le
      balayage commun des plein écrans (`swipe`) y est relayé aux mêmes points
      qu'avant ; `dismissLayer` AVALE le tap qui ferme la barre rapide des
-     langues (« un toucher n'importe où les referme »). */
+     langues (« un toucher n'importe où les referme »). Une feuille ouverte
+     (commentaires ou « Vues ») est une couche : un toucher dedans ne reprend
+     ni n'avance la story dessous. */
   const gestures = useStoryGestures({
     paused,
     pause,
     resume,
     advance,
     setChromeHidden,
-    layerOpen: commentsOpen,
+    layerOpen: sheetOpen,
     swipe: swipe.handlers,
     dismissLayer: () => {
       if (!language.barOpen) return false;
@@ -505,14 +514,14 @@ export default function StoryScreen() {
   });
   /* UNE loi (#8601, `chrome-yields.ts`) : feuille ouverte ou appui long ⇒
      l'en-tête, la légende et le rail cèdent ENSEMBLE ; feuille et média restent. */
-  const chromeYielded = chromeYields({ sheetOpen: commentsOpen || viewersOpen, held: chromeHidden });
+  const chromeYielded = chromeYields({ sheetOpen, held: chromeHidden });
   /* LA SCÈNE CÈDE AUSSI (#8643, `scene-yields.ts`) : floutée pendant qu'on lit
-     le fil (ou les vues), nette et RÉDUITE au-dessus de la barre pendant
-     qu'on écrit — ancrée sous l'encoche, comme sa carte. */
-  const writingBar = commentsHost.writing;
+     le fil (ou les vues). Écrire ne la réduit plus : la zone de commentaires
+     MONTE avec le composeur et le clavier (#9894, `comments-zone.ts`), et
+     recouvrirait une scène réduite au-dessus d'elle. */
   const scene = yieldingScene({
-    yieldTo: sceneYieldOf({ sheetOpen: commentsOpen || viewersOpen, writing: writingBar !== null }),
-    scale: writingBar === null ? 1 : writingSceneScale({ ...writingBar, anchorTop: safeTopSize.height }),
+    yieldTo: sceneYieldOf({ sheetOpen, writing: false }),
+    scale: 1,
     anchorTop: safeTopSize.height,
     reducedMotion: prefersReducedMotion(),
   });
@@ -522,6 +531,7 @@ export default function StoryScreen() {
      une flèche tapée pendant que « Vues » est ouverte ne doit pas faire
      avancer la story recouverte (D-91, même loi que la feuille de
      commentaires). */
+  const layerOpen = sheetOpen || profilePeekOpen || storySend.sheetOpen || language.barOpen;
   useStoryKeyboardShortcuts({
     advance,
     paused,
@@ -530,24 +540,18 @@ export default function StoryScreen() {
     closeViewer,
     showsSound,
     onToggleMute: toggleSound,
-    layerOpen: commentsOpen || viewersOpen || profilePeekOpen || storySend.sheetOpen || language.barOpen,
+    layerOpen,
   });
 
-  /* LA FEUILLE MET LA LECTURE EN PAUSE — sans cela, la story avancerait sous
-     le fil qu'on lit, et le composeur changerait de publication à mi-phrase.
-     Le focus et la fermeture au changement de story sont la loi PARTAGÉE de
-     `useCommentsSheetHost` ci-dessus — plus dupliqués ici. Le profil de
-     l'auteur (ou d'un commentateur, d'un spectateur) ouvert par-dessus
-     attend de même, et UNE seule condition les réunit : fermer le profil
-     ouvert depuis une feuille ne doit pas relancer la story sous elle. La
-     BARRE rapide des langues (#7114) rejoint la même condition : la lecture
-     est en pause tant que l'une de ces surfaces recouvre la scène. */
+  /* UNE SURFACE PAR-DESSUS LA STORY LA FAIT BOUCLER (#9821) — commentaires
+     (et leur composeur), « Vues », profil, menu « … », feuille d'envoi, barre
+     des langues : la story JOUE, et à sa fin repart à son début au lieu de
+     passer à la suivante (le composeur ne change jamais de publication à
+     mi-phrase). Seule la pause demandée la fige. */
   const [optionsOpen, setOptionsOpen] = useState(false);
-  useStoryPauseWhile(
-    commentsOpen || viewersOpen || profilePeekOpen || optionsOpen || storySend.sheetOpen || language.barOpen,
-    pause,
-    resume,
-  );
+  const engaged = layerOpen || optionsOpen;
+  const hold = resolveStoryPlaybackHold({ paused, engaged });
+  holdRef.current = hold;
 
   /* LE RAIL D'ACTIONS, CÔTÉ HÔTE — le GEL et les GESTIONNAIRES vivent dans
      `use-story-action-rail.ts` (§ budget, #7114) ; ce lecteur BRANCHE ce
@@ -735,6 +739,7 @@ export default function StoryScreen() {
           className="relative flex flex-1 flex-col overflow-hidden select-none"
           data-story-scene={currentStory.id}
           data-story-paused={paused ? 'true' : undefined}
+          data-story-hold={hold}
           onPointerDown={gestures.onPointerDown}
           onPointerUp={gestures.onPointerUp}
           onPointerMove={gestures.onPointerMove}
@@ -850,7 +855,7 @@ export default function StoryScreen() {
               (loi 4). La capsule n'existe que si la loi offre la réponse
               (`showsReply` : la story d'autrui, jamais la sienne). */}
           <StoryBottomBar
-            hidden={chromeYields({ sheetOpen: commentsOpen || viewersOpen })}
+            hidden={chromeYields({ sheetOpen })}
             held={chromeHidden}
             language={interfaceLanguage}
             showsCaption={hasMedia}
@@ -924,7 +929,7 @@ export default function StoryScreen() {
             }
           />
 
-          <CommentsSheetPortal host={commentsHost} />
+          <CommentsSheetPortal host={commentsHost} risesWithComposer />
           <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} />
         </div>
       ) : null}

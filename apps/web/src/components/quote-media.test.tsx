@@ -278,3 +278,29 @@ describe('Quote — un message cité protégé garde son secret (#7556)', () => 
     });
   }
 });
+
+/**
+ * #9911 — LA CITATION DIT COMBIEN DE PIÈCES PORTE LE MESSAGE : « +6 » sur la
+ * vignette de la première de sept photos, dans les DEUX peaux ; rien pour une
+ * pièce NOMMÉE, qui vise une pièce et non le lot.
+ */
+describe('Quote — « +N » sur la citation d’un message à plusieurs pièces (#9911)', () => {
+  const lot: Message = {
+    ...BASE,
+    id: 'm-quoted',
+    attachments: Array.from({ length: 7 }, (_, i) => ({ ...MEDIA[0].piece, id: `a-${i + 1}` })),
+  } as Message;
+
+  for (const [peau, render] of SKINS) {
+    test(`${peau} — sept photos citées : « +6 » sur la vignette`, () => {
+      const quote = quoteOf(render(replyTo(lot)));
+      expect(quote).toContain('data-quote-more="6"');
+      expect(quote).toContain('+6');
+    });
+
+    test(`${peau} — une pièce nommée : aucun « +N »`, () => {
+      const named = Object.assign({ ...lot }, { attachmentReplyTo: { attachmentId: 'a-3', kind: 'image' } }) as Message;
+      expect(quoteOf(render(replyTo(named)))).not.toContain('data-quote-more');
+    });
+  }
+});

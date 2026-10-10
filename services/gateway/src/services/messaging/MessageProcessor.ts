@@ -25,7 +25,7 @@ import { MessageTranslationService } from '../message-translation/MessageTransla
 import { AttachmentService } from '../attachments';
 import { copyAttachmentsFromMessage } from './copyAttachments';
 import { deriveMessageTypeForAttachments } from './attachmentMessageType';
-import { attachmentFullSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
+import { attachmentFullSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER, QUOTED_VISUAL_ATTACHMENT_COUNT } from '../attachments/attachmentIncludes';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
 import {
@@ -522,7 +522,9 @@ export class MessageProcessor {
                 // Parité avec le chemin REST (messages.ts) : le snapshot du
                 // message cité doit porter ses pièces jointes, sinon l'aperçu
                 // de citation n'affiche rien sur les messages reçus en socket.
-                attachments: { select: attachmentFullSelect, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 4 }
+                attachments: { select: attachmentFullSelect, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 4 },
+                // #9915 — le « +N » de la citation compte TOUTES ses tuiles.
+                ...QUOTED_VISUAL_ATTACHMENT_COUNT
               }
             }
           }

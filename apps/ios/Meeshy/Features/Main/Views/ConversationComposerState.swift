@@ -103,6 +103,10 @@ struct ConversationComposerState {
 
     // Reply & Edit
     var pendingReplyReference: ReplyReference? = nil
+    /// **La pièce que la réponse en attente cite** (#9908) — posée par
+    /// « Répondre » du menu d'une pièce. Elle ne voyage que tant que la citation
+    /// la NOMME encore (`MessagePieceTarget.replyAnchor`).
+    var pendingReplyPieceId: String? = nil
     /// **La porte de focus du composer** (#6003), liée à
     /// `UniversalComposerBar.focusTrigger`. Levée par `requestReplyFocus`,
     /// remise à `false` par la barre dès qu'elle a pris le focus.

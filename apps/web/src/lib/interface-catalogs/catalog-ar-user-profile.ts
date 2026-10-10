@@ -5,7 +5,6 @@ const arUserProfile = {
   'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'userProfile.title': 'الملف الشخصي',
   'userProfile.loading': 'جارٍ تحميل الملف الشخصي',
-  'userProfile.section.publications': 'المنشورات',
   'userProfile.section.relation': 'الاتصال',
   'userProfile.section.conversations': 'المحادثات',
   'userProfile.conversations.empty': 'لا توجد محادثة مشتركة',

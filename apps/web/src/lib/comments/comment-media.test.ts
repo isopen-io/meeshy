@@ -19,7 +19,13 @@ import { ownerPresent } from '@/test-support/comment-owner';
  * `POST /posts/:postId/comments` (`CreateCommentSchema`, borné à `MAX_POST_MEDIA`).
  */
 
-const file = (name: string, type: string) => new File([new Uint8Array([1, 2, 3])], name, { type });
+/**
+ * Une date de modification FIXE : la signature d'une pièce (`fileSignature`) la
+ * compte, et un `File` sans date prend l'instant de sa construction — deux
+ * « x.jpg » construits à cheval sur une milliseconde seraient deux pièces.
+ */
+const FILE_MODIFIED_AT = Date.UTC(2026, 9, 9, 12, 0, 0);
+const file = (name: string, type: string) => new File([new Uint8Array([1, 2, 3])], name, { type, lastModified: FILE_MODIFIED_AT });
 
 describe('acceptCommentFiles — photos, vidéos et sons (#9167, #9318)', () => {
   test('ouvre les photos, les vidéos et les sons', () => {

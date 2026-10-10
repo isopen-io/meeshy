@@ -107,6 +107,16 @@ extension ConversationView {
     func startRecording() {
         audioRecorder.startRecording()
         HapticFeedback.medium()
+        // #9784 — la prise se suit dans l'îlot quand on quitte l'app, et s'y
+        // arrête par les MÊMES gestes que le composeur.
+        let recorder = audioRecorder
+        VoiceRecordingLiveActivityCoordinator.shared.track(
+            recorder: recorder,
+            conversationId: viewModel.conversationId,
+            title: viewModel.currentConversationName,
+            onStop: { _ = stopRecordingToAttachment() },
+            onCancel: { recorder.cancelRecording() }
+        )
     }
 
     /// Stop the recorder and drop the audio into the composer's attachment
@@ -163,6 +173,7 @@ extension ConversationView {
         }
 
         let route = outgoingReplyRoute
+        let replyAnchor = outgoingAttachmentAnchor
         let replyId = route.replyToId
         let storyReplyId = route.storyReplyToId
         let storyRef = route.storyReference
@@ -220,7 +231,7 @@ extension ConversationView {
             HapticFeedback.light()
             Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
             Task {
-                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, protection: protection, originalLanguage: lang, location: place)
+                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, protection: protection, originalLanguage: lang, location: place, attachmentReplyTo: replyAnchor)
                 restorePlaceTile(place, sent: ok)
             }
             return
@@ -317,7 +328,7 @@ extension ConversationView {
             )
             viewModel.insertOptimisticMediaMessage(
                 tempId: send.tempId,
-                content: "",
+                content: send.group.messageContent,
                 attachments: send.locals,
                 messageType: msgType,
                 replyToId: send.group.carriesReply ? replyId : nil,
@@ -337,12 +348,13 @@ extension ConversationView {
         }
 
         // --- Optimistic TEXT insert: upfront, like every media group ---
-        // Le groupe texte est ENVOYÉ en dernier (règle A2.2 de la spec
-        // multi-pièces : le texte est toujours son propre message, après les
-        // pièces). Mais son insert optimiste vivait À L'INTÉRIEUR de
-        // `sendMessage`, appelé après la boucle d'upload : la bulle texte
-        // n'apparaissait donc qu'une fois le DERNIER octet du dernier fichier
-        // monté — l'utilisateur voyait « les pièces d'abord, le message
+        // La légende d'un lot VISUEL voyage avec ses pièces, dans le même
+        // message (#9860) : le plan n'a alors pas de groupe texte. Sans pièce
+        // visuelle (vocaux seuls), le texte reste son propre message, ENVOYÉ
+        // en dernier (règle A2.2 de la spec multi-pièces). Mais son insert
+        // optimiste vivait À L'INTÉRIEUR de `sendMessage`, appelé après la
+        // boucle d'upload : la bulle texte n'apparaissait donc qu'une fois le
+        // DERNIER octet du dernier fichier monté — l'utilisateur voyait « les pièces d'abord, le message
         // ensuite ». On pose la ligne ici, dans le même tour MainActor que les
         // bulles média, en conservant l'ordre d'affichage : `createdAt` est
         // postérieur aux groupes média puisque l'insert suit, et l'envoi réel
@@ -436,7 +448,7 @@ extension ConversationView {
                         _ = try await OfflineQueue.shared.enqueueAudios(
                             sourceAudioURLs: urls,
                             conversationId: viewModel.conversationId,
-                            content: nil,
+                            content: send.group.text,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
                             replyToId: send.group.carriesReply ? replyId : nil,
@@ -473,7 +485,7 @@ extension ConversationView {
                             sourceMediaURLs: pairs.map { $0.url },
                             kinds: pairs.map { $0.kind },
                             conversationId: viewModel.conversationId,
-                            content: nil,
+                            content: send.group.text,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
                             replyToId: send.group.carriesReply ? replyId : nil,
@@ -629,7 +641,7 @@ extension ConversationView {
                         }
                     }
                     let ok = await viewModel.sendMessage(
-                        content: "",
+                        content: send.group.messageContent,
                         replyToId: send.group.carriesReply ? replyId : nil,
                         storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
                         storyReplyReference: send.group.carriesReply ? storyRef : nil,
@@ -637,7 +649,8 @@ extension ConversationView {
                         localAttachments: localAttachments.isEmpty ? nil : localAttachments,
                         protection: protection,
                         originalLanguage: lang,
-                        existingTempId: send.tempId
+                        existingTempId: send.tempId,
+                        attachmentReplyTo: send.group.carriesReply ? replyAnchor : nil
                     )
                     anySuccess = anySuccess || ok
                 } catch {
@@ -661,7 +674,7 @@ extension ConversationView {
                             requeued = (try? await OfflineQueue.shared.enqueueAudios(
                                 sourceAudioURLs: urls,
                                 conversationId: viewModel.conversationId,
-                                content: nil,
+                                content: send.group.text,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
                                 replyToId: send.group.carriesReply ? replyId : nil,
@@ -679,7 +692,7 @@ extension ConversationView {
                                 sourceMediaURLs: pairs.map { $0.url },
                                 kinds: pairs.map { $0.kind },
                                 conversationId: viewModel.conversationId,
-                                content: nil,
+                                content: send.group.text,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
                                 replyToId: send.group.carriesReply ? replyId : nil,
@@ -726,7 +739,8 @@ extension ConversationView {
                     protection: protection,
                     originalLanguage: lang,
                     existingTempId: textTempId,
-                    location: place
+                    location: place,
+                    attachmentReplyTo: textGroup.carriesReply ? replyAnchor : nil
                 )
                 restorePlaceTile(place, sent: ok)
                 anySuccess = anySuccess || ok

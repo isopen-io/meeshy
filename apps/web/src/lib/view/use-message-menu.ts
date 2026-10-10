@@ -1,13 +1,19 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { QueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { prismFor, served, type Served } from '@/lib/api/prism';
 import { reactAction } from '@/lib/api/query';
+import { appQueryClient } from '@/lib/api/query-client';
+import { apiDeps } from '@/lib/api/deps';
+import type { ApiResult, HttpRequest } from '@/lib/api/http';
 import { reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
 import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { readDefaultMessageCardFormat } from '@/lib/export/message-card-format';
 import { translate } from '@/lib/i18n-catalog';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { safeLocalStorage } from '@/lib/storage';
@@ -25,6 +31,8 @@ import {
 import { contentExitOf, exitOffers } from './content-exit';
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
+import { pieceIdAt, targetedPieceOf } from './message-piece';
+import { prewarmPieceReaction, usePieceMenu, type PieceMenuData } from './use-piece-menu';
 import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
@@ -44,6 +52,8 @@ import { useMessageStar, type MessageStarEntry } from './use-message-star';
  * les COMPOSER derrière une surface stable pour l'hôte.
  */
 
+type PieceMenuTransport = { readonly request: <T>(request: HttpRequest) => Promise<ApiResult<T>> };
+
 const FORWARD_REFUSAL_KEY = {
   'view-once': 'forward.refusal.viewOnce',
   'after-read': 'forward.refusal.afterRead',
@@ -53,7 +63,17 @@ const FORWARD_REFUSAL_KEY = {
 /** `scope: 'discussion'` (#9039) — la carte de la discussion qui mène à ce message ; absent : la carte du seul message. */
 export type MessageExportRequest = { readonly messageId: string; readonly quick: boolean; readonly scope?: 'message' | 'discussion' };
 
-export type MessageMenuTargetState = { readonly messageId: string; readonly element: HTMLElement; readonly isMine: boolean };
+/**
+ * `pieceId` (#9907) — la PIÈCE que l'appui long a touchée dans un message à
+ * plusieurs pièces : l'aperçu la montre seule, le défilement la change, et le
+ * menu agit sur elle. Absente : le menu vise le message entier.
+ */
+export type MessageMenuTargetState = {
+  readonly messageId: string;
+  readonly element: HTMLElement;
+  readonly isMine: boolean;
+  readonly pieceId?: string;
+};
 
 export function useMessageMenu(params: {
   readonly conversationId: string;
@@ -63,9 +83,16 @@ export function useMessageMenu(params: {
   readonly viewerId: string;
   /** Le lecteur a un COMPTE : le favori est réservé aux inscrits (#7377), l'invité d'un lien n'en a pas. */
   readonly canStar: boolean;
-  /** ARME LA RÉPONSE au message — `onCompose` jusqu'à #7555, où le mot est
-   * rendu au sens iOS (créer une story ou un post avec ce média). */
-  readonly onReply: (messageId: string) => void;
+  /**
+   * ARME LA RÉPONSE — au message (`setReplyTarget`, `onCompose` jusqu'à #7555,
+   * où le mot est rendu au sens iOS) ou à UNE pièce (`setReplyToMedia`, #9908,
+   * la porte de la visionneuse). Le composeur du fil (`useThreadCompose`) les
+   * porte toutes deux.
+   */
+  readonly reply: {
+    readonly setReplyTarget: (messageId: string) => void;
+    readonly setReplyToMedia: (messageId: string, attachmentId: string) => void;
+  };
   /**
    * LA RÉGION LIVE PARTAGÉE (revue #5814, défaut majeur 9) — remplace
    * l'ancien `actionNotice` local : ce hook POSE ses annonces sur
@@ -74,6 +101,9 @@ export function useMessageMenu(params: {
    * `use-live-announcer.ts`).
    */
   readonly announce: (message: string) => void;
+  /** INJECTABLES pour les témoins — le cache et le transport de l'application par défaut. */
+  readonly queryClient?: QueryClient;
+  readonly transport?: PieceMenuTransport;
 }) {
   const { conversationId, messages, readerLanguages, viewerId, announce } = params;
 
@@ -87,6 +117,20 @@ export function useMessageMenu(params: {
   const mine = useStore(reactionStore, (s) => s.mine);
 
   const messageOf = useCallback((id: string) => messages.find((m) => m.id === id), [messages]);
+  const piece = usePieceMenu({
+    conversationId,
+    viewerId,
+    messageOf,
+    onReplyToMedia: params.reply.setReplyToMedia,
+    announce,
+    queryClient: params.queryClient ?? appQueryClient,
+    transport: params.transport ?? apiDeps.transport,
+  });
+  const { onPieceReact } = piece;
+  /* LES LIBELLÉS D'UNE PIÈCE (#9907) arrivent avec le fil, hors du catalogue d'interface. */
+  useEffect(() => {
+    void loadMessagePiecesCatalog(currentInterfaceLanguage()).catch(() => undefined);
+  }, []);
 
   /** LE FAVORI (#7378) — l'état CONNU dès l'ouverture du fil, offert par « Plus… » (`use-message-star.ts`). */
   const starEntryOf = useMessageStar({ enabled: params.canStar, announce });
@@ -152,10 +196,11 @@ export function useMessageMenu(params: {
   // Sélectionner l'ont pris (miroir `restoreStateAfterLongPressIfNeeded`,
   // `ConversationView+LongPressMenu.swift:92-108`).
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const originRef = useRef<EventTarget | null>(null);
   const focusTakenRef = useRef(false);
 
   const openMenuFor = useCallback(
-    (anchor: LongPressAnchor) => {
+    (anchor: LongPressAnchor & { readonly origin: EventTarget | null }) => {
       if (selection !== null) return; // en sélection, un tap bascule déjà (§ hôte).
       const messageId = anchor.element.dataset.row;
       if (messageId === undefined) return;
@@ -165,12 +210,47 @@ export function useMessageMenu(params: {
       restoreFocusRef.current = active instanceof HTMLElement ? active : null;
       if (active instanceof HTMLTextAreaElement) active.blur();
       focusTakenRef.current = false;
-      setMenuTarget({ messageId, element: anchor.element, isMine: isMineOf(message, viewerId) });
+      /* LA PIÈCE TOUCHÉE (#9907) — seulement si l'aperçu sait la parcourir
+         (au moins deux pièces visuelles) ; sinon le message entier. */
+      const pieceId = pieceIdAt(anchor.origin, anchor.element);
+      if (pieceId !== undefined) prewarmPieceReaction();
+      setMenuTarget({
+        messageId,
+        element: anchor.element,
+        isMine: isMineOf(message, viewerId),
+        ...(targetedPieceOf(message, pieceId, Date.now()) === null || pieceId === undefined ? {} : { pieceId }),
+      });
     },
     [selection, messageOf, viewerId],
   );
 
-  const longPress = useLongPress({ onOpen: openMenuFor });
+  /**
+   * L'ORIGINE DU GESTE (#9907) — l'élément que l'appui, le clic droit ou la
+   * touche Menu a TOUCHÉ, retenu avant que `useLongPress` ne remonte la rangée
+   * (`currentTarget`). Retenu ici plutôt que dans `long-press.ts`, qui vit dans
+   * la première peinture (menu de l'avatar) : le fil seul en paie le poids.
+   */
+  const gesture = useLongPress({ onOpen: (anchor) => openMenuFor({ ...anchor, origin: originRef.current }) });
+  const longPress = useMemo(() => {
+    const note = (event: { readonly target: EventTarget | null }) => {
+      originRef.current = event.target;
+    };
+    return {
+      ...gesture,
+      onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+        note(event);
+        gesture.onPointerDown(event);
+      },
+      onContextMenu: (event: ReactMouseEvent<HTMLElement>) => {
+        note(event);
+        gesture.onContextMenu(event);
+      },
+      onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
+        note(event);
+        gesture.onKeyDown(event);
+      },
+    };
+  }, [gesture]);
 
   const onCloseMenu = useCallback(() => {
     setMenuTarget(null);
@@ -178,8 +258,21 @@ export function useMessageMenu(params: {
     restoreFocusRef.current = null;
   }, []);
 
+  /** LE DÉFILEMENT DE L'APERÇU CHANGE LA CIBLE (#9907) ; `undefined` : « Tout le message ». */
+  const onPieceChange = useCallback((pieceId: string | undefined) => {
+    setMenuTarget((current) => {
+      if (current === null) return current;
+      const { pieceId: _previous, ...rest } = current;
+      return pieceId === undefined ? rest : { ...rest, pieceId };
+    });
+  }, []);
+
   const onMenuReact = useCallback(
-    (messageId: string, emoji: string) => {
+    (messageId: string, emoji: string, pieceId?: string) => {
+      if (pieceId !== undefined) {
+        onPieceReact(messageId, pieceId, emoji);
+        return;
+      }
       void reactAction(conversationId, messageId, emoji).then((result) => {
         if (!result.ok) announce(result.message);
         // `notice` (revue #5814, défaut majeur 3) — l'optimiste RESTE
@@ -189,7 +282,7 @@ export function useMessageMenu(params: {
         else if (result.notice !== undefined) announce(result.notice);
       });
     },
-    [conversationId, announce],
+    [conversationId, announce, onPieceReact],
   );
 
   /**
@@ -224,7 +317,7 @@ export function useMessageMenu(params: {
       }
       if (id === 'reply') {
         focusTakenRef.current = true;
-        params.onReply(messageId);
+        params.reply.setReplyTarget(messageId);
         return;
       }
       /**
@@ -392,6 +485,7 @@ export function useMessageMenu(params: {
         readonly forwardItems: readonly MessageMenuItem[];
         readonly choices: readonly TranslationChoice[];
         readonly subjectLabel: string;
+        readonly piece?: PieceMenuData;
       }
     | undefined = (() => {
     if (menuTarget === null) return undefined;
@@ -408,11 +502,13 @@ export function useMessageMenu(params: {
     const text = copyableTextOf(menuTarget.messageId);
     const excerpt =
       text === undefined ? translate(lang, 'message.excerpt.protected') : text.length > 80 ? `${text.slice(0, 80)}…` : text;
+    const pieceData = piece.pieceDataOf(menuTarget.messageId, menuTarget.pieceId);
     return {
       items: messageMenuItems(ctx),
       forwardItems: forwardMenuItems(ctx),
       choices: translationChoices({ message, preferredLanguages: readerLanguages, servedLanguage }),
       subjectLabel: translate(lang, 'a11y.message.menu.subject', { author, excerpt }),
+      ...(pieceData === undefined ? {} : { piece: pieceData }),
     };
   })();
 
@@ -423,6 +519,8 @@ export function useMessageMenu(params: {
     onCloseMenu,
     onMenuReact,
     onMenuAction,
+    onPieceChange,
+    onPieceAction: piece.onPieceAction,
     onPickLanguage,
     displayLanguageOf: (id: string) => displayLanguages.get(id),
     myReactionsOf: (id: string) => mine[id],

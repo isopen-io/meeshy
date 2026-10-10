@@ -1,5 +1,11 @@
 package me.meeshy.app;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.media.AudioManager;
+import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -17,6 +23,18 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class MeeshyPlaybackPlugin extends Plugin {
 
     private static volatile MeeshyPlaybackPlugin live;
+
+    /** #9847 — le bouton lecture/pause de la fenetre flottante d'une video ({@link MainActivity}). */
+    static final String ACTION_FLOAT_TOGGLE = "me.meeshy.app.VIDEO_PIP_TOGGLE";
+
+    private BroadcastReceiver floatToggle;
+
+    /**
+     * #9985 — un casque debranche ou deconnecte, remis a la page qui met en
+     * pause la video qui s'entend, comme Chrome. Le vocal suit la voie de
+     * {@link PlaybackForegroundService} (#9946).
+     */
+    private BroadcastReceiver noisy;
 
     /**
      * La « Pause » de la notification (#9301) remise a la page. Rend `false`
@@ -43,6 +61,31 @@ public class MeeshyPlaybackPlugin extends Plugin {
     @Override
     public void load() {
         live = this;
+        floatToggle = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                notifyListeners("floatToggleRequested", new JSObject());
+            }
+        };
+        ContextCompat.registerReceiver(getContext(), floatToggle, new IntentFilter(ACTION_FLOAT_TOGGLE), ContextCompat.RECEIVER_NOT_EXPORTED);
+        noisy = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                notifyListeners("becomingNoisy", new JSObject());
+            }
+        };
+        ContextCompat.registerReceiver(getContext(), noisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_NOT_EXPORTED);
+    }
+
+    /** #9847 — la page dit si la video qui flotte joue ; le bouton de la fenetre suit. */
+    @PluginMethod
+    public void setFloatPlaying(PluginCall call) {
+        boolean playing = Boolean.TRUE.equals(call.getBoolean("playing", false));
+        getActivity()
+            .runOnUiThread(() -> {
+                if (getActivity() instanceof MainActivity) ((MainActivity) getActivity()).floatPlaying(playing);
+                call.resolve();
+            });
     }
 
     @PluginMethod
@@ -65,10 +108,12 @@ public class MeeshyPlaybackPlugin extends Plugin {
      */
     @PluginMethod
     public void floatVideo(PluginCall call) {
+        int width = call.getInt("width", 0);
+        int height = call.getInt("height", 0);
         getActivity()
             .runOnUiThread(() -> {
                 JSObject result = new JSObject();
-                result.put("floated", getActivity() instanceof MainActivity && ((MainActivity) getActivity()).floatVideo());
+                result.put("floated", getActivity() instanceof MainActivity && ((MainActivity) getActivity()).floatVideo(width, height));
                 call.resolve(result);
             });
     }
@@ -82,6 +127,14 @@ public class MeeshyPlaybackPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         if (live == this) live = null;
+        if (floatToggle != null) {
+            getContext().unregisterReceiver(floatToggle);
+            floatToggle = null;
+        }
+        if (noisy != null) {
+            getContext().unregisterReceiver(noisy);
+            noisy = null;
+        }
         PlaybackForegroundService.stop(getContext());
         super.handleOnDestroy();
     }

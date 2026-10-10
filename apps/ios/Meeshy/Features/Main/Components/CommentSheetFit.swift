@@ -37,13 +37,6 @@ nonisolated enum CommentSheetFit {
     }
 }
 
-struct CommentSheetComposerTopKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 // MARK: - Le panneau cède avant que le composeur ne déborde
 
 /// Un hôte dont la hauteur est COMPTÉE (une feuille) demande au panneau
@@ -107,14 +100,20 @@ extension View {
     /// Le composeur d'une feuille : il est servi AVANT la liste (qui cède
     /// jusqu'à zéro), et sondé — s'il dépasse encore le haut de la zone, la
     /// feuille passe à sa grande détente.
+    ///
+    /// **La sonde suit la GÉOMÉTRIE, pas une préférence** (#9743). Une
+    /// préférence posée par un `GeometryReader` d'arrière-plan n'était émise
+    /// qu'au premier passage, composeur encore à zéro : quand la mise en page
+    /// le poussait ensuite sous l'en-tête, sa TAILLE ne changeait pas, le
+    /// lecteur ne se réévaluait pas, et la feuille restait à mi-hauteur (mesuré :
+    /// haut à −138 pt, une seule valeur reçue, 0). `onGeometryChange` rend
+    /// chaque déplacement, avec une transformation non isolée.
     func keepsComposerBelowSheetHeader(detent: Binding<PresentationDetent>) -> some View {
-        layoutPriority(1)
-        .background(GeometryReader { proxy in
-            Color.clear.preference(key: CommentSheetComposerTopKey.self,
-                                   value: proxy.frame(in: .named(CommentSheetFit.space)).minY)
-                .onChange(of: proxy.size.height) { _ in CommentSheetFit.trace("composeur", proxy.frame(in: .global)) }
-        })
-        .onPreferenceChange(CommentSheetComposerTopKey.self) { top in
+        let space = CommentSheetFit.space
+        return layoutPriority(1)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(space)) } action: { frame in
+            CommentSheetFit.trace("composeur", frame)
+            let top = frame.minY
             let needed = CommentSheetFit.detent(composerTop: top, current: detent.wrappedValue)
             CommentSheetFit.trace("sonde haut=\(String(format: "%.0f", top)) détente=\(CommentSheetFit.name(detent.wrappedValue)) demandée=\(CommentSheetFit.name(needed))", nil)
             guard needed != detent.wrappedValue else { return }

@@ -6,7 +6,8 @@ import MeeshyUI
 
 // MARK: - StoryExportShareViewModel
 //
-// Drives the author-only "Export to share" flow :
+// Drives the "Export to share" flow, for the author and, since #9953, for any
+// reader (the author's handle then signs the watermark) :
 //   - Take a `StoryItem` (published story) + an export language code
 //   - Reconstruct a `StorySlide` honouring the Prisme Linguistique
 //   - Bake an MP4 via `StoryVideoExportService`
@@ -16,6 +17,25 @@ import MeeshyUI
 // The export is NEVER uploaded to the Meeshy backend — stories publish RAW
 // (assets + JSON effects). The MP4 is for partage hors-Meeshy (Photos,
 // Messages, WhatsApp, AirDrop, etc.).
+
+/// **Qui signe l'export** (#9953) — la même règle que
+/// `StoryPhotoSaveService.save(story:authorUsername:)` : le filigrane nomme
+/// l'AUTEUR de la story ; l'interlude d'identité de l'utilisateur connecté ne
+/// précède que SA propre story — un lecteur qui exporte la story d'un autre ne
+/// la signe pas de son visage. Sans auteur connu, l'utilisateur connecté est
+/// l'auteur (« Mes stories »).
+nonisolated struct StoryExportAuthorship: Equatable {
+    let watermarkHandle: String?
+    let showsViewerIntro: Bool
+
+    static func resolve(authorUsername: String?, viewerUsername: String?) -> StoryExportAuthorship {
+        guard let authorUsername else {
+            return StoryExportAuthorship(watermarkHandle: viewerUsername, showsViewerIntro: true)
+        }
+        let isViewer = viewerUsername.map { authorUsername.caseInsensitiveCompare($0) == .orderedSame } ?? false
+        return StoryExportAuthorship(watermarkHandle: authorUsername, showsViewerIntro: isViewer)
+    }
+}
 
 /// Lifecycle phase observed by the share UI.
 enum StoryExportSharePhase: Equatable, Sendable {
@@ -103,7 +123,7 @@ final class StoryExportShareViewModel: ObservableObject {
     /// resolve through the same pipeline the live viewer uses.
     ///
     /// - Returns: nothing — observe `phase` / `sharedURL` to drive the UI.
-    func startExport(story: StoryItem) async {
+    func startExport(story: StoryItem, authorUsername: String? = nil) async {
         guard phase != .exporting && phase != .sharing else { return }
         let langs: [String] = selectedLanguage.map { [$0] } ?? []
         let slide = story.toRenderableSlide(preferredLanguages: langs)
@@ -131,10 +151,14 @@ final class StoryExportShareViewModel: ObservableObject {
         // (AVAssetWriter), mais le résultat tardif est nettoyé ici.
         exportTask?.cancel()
         let exporter = self.exporter
-        // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'auteur), baké sur
+        // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'AUTEUR), baké sur
         // chaque frame et alternant les coins toutes les 5 s. L'export est
-        // auteur-only, donc `currentUser` EST l'auteur de la story.
-        let watermark = MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)
+        // offert à tout lecteur (#9953) : l'auteur vient de la story, pas de la
+        // session.
+        let authorship = StoryExportAuthorship.resolve(authorUsername: authorUsername,
+                                                       viewerUsername: AuthManager.shared.currentUser?.username)
+        let watermark = MeeshyExportWatermark.make(username: authorship.watermarkHandle)
+        let showsViewerIntro = authorship.showsViewerIntro
         let brandIntro = self.brandIntro
         let introTimeout = self.introTimeout
         let task = Task { [weak self] in
@@ -144,7 +168,12 @@ final class StoryExportShareViewModel: ObservableObject {
             // chemins — voir `BoundedAsyncResolution.resolve` et la doc de
             // `introTimeout`. `brandIntro` est la closure injectée à l'init,
             // pas le singleton : l'injection en test reste honorée.
-            let intro = await BoundedAsyncResolution.resolve(brandIntro, timeout: introTimeout)
+            let intro: StoryExportIntroContent?
+            if showsViewerIntro {
+                intro = await BoundedAsyncResolution.resolve(brandIntro, timeout: introTimeout)
+            } else {
+                intro = nil
+            }
             // Sheet fermée ou « Annuler » tapé pendant la résolution : ne pas
             // démarrer un bake derrière une surface déjà partie.
             guard !Task.isCancelled else { return }

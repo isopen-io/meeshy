@@ -276,6 +276,7 @@ extension CallManager {
         hasLocalVideoTrack = false
         hasRemoteVideoTrack = false
         remoteTranscriptionActive = false
+        isOnHold = false
         listeningPeers = []
         publishedListeningIntent = false
         callStartDate = nil

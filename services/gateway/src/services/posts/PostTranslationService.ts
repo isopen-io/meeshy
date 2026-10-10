@@ -20,6 +20,15 @@ const log = enhancedLogger.child({ module: 'PostTranslationService' });
 
 const TOP_LANGUAGES = ['fr', 'en', 'es', 'ar', 'pt'];
 
+/**
+ * Une traduction vers la langue d'ORIGINE n'est pas une traduction : c'est une
+ * paraphrase de l'original que le Prisme servirait à sa place (#9861). La
+ * garde vit dans le filtre de l'écriture (`originalLanguage: { $ne: cible }`),
+ * atomique ; une ligne non appariée ne se diffuse pas non plus.
+ */
+const refusedBySourceGuard = (written: unknown): boolean =>
+  (written as { n?: unknown } | null)?.n === 0;
+
 export class PostTranslationService {
   private static _shared: PostTranslationService | null = null;
 
@@ -373,13 +382,18 @@ export class PostTranslationService {
     };
 
     try {
-      await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
+      const written = await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
         update: 'Post',
         updates: [{
-          q: { _id: { $oid: postId } },
+          q: { _id: { $oid: postId }, originalLanguage: { $ne: targetLanguage } },
           u: { $set: { [`translations.${targetLanguage}`]: translationData } },
         }],
       });
+
+      if (refusedBySourceGuard(written)) {
+        log.info('PostTranslation: target is the original language, not persisted', { postId, targetLanguage });
+        return;
+      }
 
       log.info('PostTranslation: persisted', { postId, targetLanguage });
 
@@ -421,13 +435,18 @@ export class PostTranslationService {
     };
 
     try {
-      await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
+      const written = await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
         update: 'PostComment',
         updates: [{
-          q: { _id: { $oid: commentId } },
+          q: { _id: { $oid: commentId }, originalLanguage: { $ne: targetLanguage } },
           u: { $set: { [`translations.${targetLanguage}`]: translationData } },
         }],
       });
+
+      if (refusedBySourceGuard(written)) {
+        log.info('CommentTranslation: target is the original language, not persisted', { commentId, targetLanguage });
+        return;
+      }
 
       log.info('CommentTranslation: persisted', { commentId, targetLanguage });
 

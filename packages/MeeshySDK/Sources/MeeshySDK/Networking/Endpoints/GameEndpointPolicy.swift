@@ -21,9 +21,14 @@ import Foundation
 //    depuis le jeu — aucun appelant n'a à y penser.
 
 /// Les écritures du jeu sont un 409 d'ÉTAT : la requête est bien formée, c'est le compte qui la refuse.
+/// La date de naissance (#9929) partage cette redéfinition — `MeEndpoint` n'en
+/// a qu'une : son contrat documente `BIRTH_DATE_ALREADY_SET` (409) et
+/// `AGE_BELOW_MINIMUM` (422), que l'onboarding doit LIRE pour dire pourquoi.
 public extension MeEndpoint {
     var rejectionPolicy: MeeshyEndpointRejectionPolicy {
         switch self {
+        case .birthDate:
+            return .structured
         case .gameChestClaim, .gameDuoByDuoIdAbandon, .gameDuoByDuoIdAccept, .gameDuoInvite,
              .gameFlameFreezes, .gameFlameRelight, .gameGuideSeen, .gameLeagueConsent,
              .gameLeagueFriends, .gameLeaguePseudonym, .gameLeagueWeek,

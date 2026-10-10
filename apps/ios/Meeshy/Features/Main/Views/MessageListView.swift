@@ -571,6 +571,8 @@ struct MessageListView: UIViewControllerRepresentable {
     /// `MessageFramePreferenceKey` ne traverse la frontière UIKit qu'en mode
     /// Rivière (`RiverBubbleView`), jamais pour la liste standard.
     var onLongPress: ((String, CGRect?) -> Void)?
+    /// L'appui long d'une TUILE (#9907) — message, pièce visée, frame réel.
+    var onLongPressPiece: ((String, String, CGRect?) -> Void)?
     /// id de la bulle présentée dans l'overlay custom d'appui long — la
     /// cellule live correspondante est masquée (opacity 0) le temps de
     /// l'overlay (anti double-bulle fantôme). `nil` = aucune.
@@ -725,6 +727,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
+        vc.onLongPressPiece = onLongPressPiece
         vc.overlaidMessageId = overlaidMessageId
         // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
         vc.isSelectionModeActive = isSelectionModeActive
@@ -844,6 +847,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
+        vc.onLongPressPiece = onLongPressPiece
         vc.overlaidMessageId = overlaidMessageId
         // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
         vc.isSelectionModeActive = isSelectionModeActive

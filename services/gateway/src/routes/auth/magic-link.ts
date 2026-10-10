@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { AgeBelowMinimumError } from '../../errors/custom-errors';
 import jwt from 'jsonwebtoken';
 import {
   userSchema,
@@ -15,7 +16,8 @@ import { createUnifiedAuthMiddleware, findTrustedSession} from '../../middleware
 import { logWarn } from '../../utils/logger';
 import { AuthRouteContext, formatUserResponse, formatSessionResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { accountIsBelowMinimumAge } from '../../services/auth/minimum-age-gate';
 import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { disconnectSession } from '../../socketio/disconnectSession';
@@ -120,6 +122,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           }
         },
         401: errorResponseSchema,
+        403: errorResponseSchema,
         404: errorResponseSchema
       },
       security: []
@@ -274,6 +277,16 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // existante ne se renouvelle plus ; la connexion mènera au code.
       if (user.activation?.phase === 'blocked') {
         return sendUnauthorized(reply, 'Confirmez votre adresse e-mail pour continuer', { code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+      }
+
+      // #9927 — un compte de moins de 13 ans déclarés ne prolonge aucune
+      // session. Posé APRÈS toutes les preuves d'identité et de session, dans
+      // leur ordre d'origine (signature, session nommée, compte, délai de
+      // grâce) : le refus ne se dit qu'à qui les a toutes franchies, et AVANT
+      // l'émission du jeton.
+      if (await accountIsBelowMinimumAge(context.prisma, user.id, new Date())) {
+        const refusal = new AgeBelowMinimumError();
+        return sendError(reply, refusal.statusCode, refusal.message, { code: refusal.code });
       }
 
       // Le jeton renouvelé garde le nom de SA session (#4264, critère 1 :
@@ -445,6 +458,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('[AUTH] ❌ Erreur lors de la vérification email', error);
       return sendInternalError(reply, 'Erreur lors de la vérification');
     }

@@ -494,70 +494,66 @@ async function runScheme(colorScheme) {
       `${tag} st-amie-2 : une flèche PENDANT la frappe ne doit ni avancer la story ni emporter le brouillon — ${JSON.stringify(afterArrow)}`,
     );
 
-    /* ── 7 sexies. #8643 — ÉCRIRE RÉDUIT LA SCÈNE AU-DESSUS DE LA BARRE, LE
-           REPLI ⌄ VIT DANS LA PLAQUE, LIRE FLOUTE LA SCÈNE ─────────────────
-       Le champ a le focus : la liste se retire, la scène revient NETTE et se
-       réduit pour tenir ENTIÈRE au-dessus de la feuille (bord bas de la scène
-       ≤ bord haut de la feuille) ; le ⌄ est DANS la plaque du champ, à son
-       angle haut-droit. Replier rend la lecture : la liste revient, la scène
-       reprend sa taille et se floute. */
-    await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAttribute('data-scene-yields') === 'writing', null, { timeout: 1500 })
-      .catch(() => undefined);
-    /* La TRANSITION finie, jamais un délai : la géométrie lue en vol serait celle d'une scène à mi-réduction. */
-    await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAnimations().length === 0, null, { timeout: 1500 })
-      .catch(() => undefined);
-    const ecriture = await page.evaluate(() => {
-      const layer = document.querySelector('[data-story-scene-yield]');
-      const sheet = document.querySelector('[data-story-comments-sheet]');
-      const plate = document.querySelector('[data-comment-plate]');
-      const fold = document.querySelector('[data-comment-fold]');
-      const list = document.querySelector('[data-comment-thread-list]');
-      if (layer === null || sheet === null || plate === null || fold === null || list === null) return { manque: true };
-      const [l, s, p, f] = [layer, sheet, plate, fold].map((el) => el.getBoundingClientRect());
-      return {
-        etat: layer.getAttribute('data-scene-yields'),
-        filtre: getComputedStyle(layer).filter,
-        basScene: Math.round(l.bottom),
-        hautFeuille: Math.round(s.top),
-        echelle: Math.round((l.height / layer.offsetHeight) * 100) / 100,
-        listeCachee: list.hidden,
-        foldDansPlaque: f.top >= p.top - 0.5 && f.right <= p.right + 0.5 && f.left >= p.left - 0.5,
-        foldAngle: Math.abs(f.top - p.top) <= 1 && Math.abs(f.right - p.right) <= 1,
-      };
-    });
+    /* ── 7 sexies. #9894 (jumelle de #9893) — LA ZONE DE COMMENTAIRES MONTE
+           AVEC LE COMPOSEUR, LE CHEVRON ⌄ TOUT À DROITE LA FAIT REDESCENDRE ──
+       Le champ a le focus (Chromium de bureau : aucun clavier virtuel) : la
+       zone est HAUTE (`open`, 78 % du cadre), la liste RESTE visible et la
+       scène reste floutée derrière elle — écrire ne la réduit plus (#8643 ne
+       vaut plus que pour les Réels). Le ⌄ est le DERNIER contrôle de la
+       rangée, à droite de l'envoi. Le replier : la zone redescend (`folded`),
+       la bulle paraît, la liste et le brouillon restent. */
+    const zoneSettled = (want) =>
+      page
+        .waitForFunction(
+          (stage) => {
+            const sheet = document.querySelector('[data-story-comments-sheet]');
+            return sheet?.getAttribute('data-comments-zone') === stage && sheet.getAnimations().length === 0;
+          },
+          want,
+          { timeout: 1500 },
+        )
+        .catch(() => undefined);
+    await zoneSettled('open');
+    const zoneOf = () =>
+      page.evaluate(() => {
+        const layer = document.querySelector('[data-story-scene-yield]');
+        const sheet = document.querySelector('[data-story-comments-sheet]');
+        const send = document.querySelector('[data-comment-send]');
+        const fold = document.querySelector('[data-comment-fold]');
+        const list = document.querySelector('[data-comment-thread-list]');
+        if (layer === null || !(sheet instanceof HTMLElement) || list === null) return { manque: true };
+        const frame = sheet.offsetParent instanceof HTMLElement ? sheet.offsetParent.clientHeight : window.innerHeight;
+        const s = send?.getBoundingClientRect() ?? null;
+        const f = fold?.getBoundingClientRect() ?? null;
+        return {
+          zone: sheet.getAttribute('data-comments-zone'),
+          etat: layer.getAttribute('data-scene-yields'),
+          filtre: getComputedStyle(layer).filter,
+          transform: getComputedStyle(layer).transform,
+          part: Math.round((sheet.getBoundingClientRect().height / frame) * 100) / 100,
+          listeCachee: list.hidden,
+          foldADroite: s !== null && f !== null && f.left >= s.right - 0.5 && fold?.closest('[data-comment-plate]') === null,
+          foldTaille: f === null ? null : [Math.round(f.width), Math.round(f.height)],
+          bulle: document.querySelector('[data-comment-unfold]') !== null,
+          brouillon: document.querySelector('[data-comment-field]')?.value ?? null,
+        };
+      });
+    const ecriture = await zoneOf();
     check(
-      ecriture.etat === 'writing' && ecriture.filtre === 'none' && ecriture.basScene <= ecriture.hautFeuille && ecriture.echelle < 1 && ecriture.listeCachee,
-      `${tag} st-amie-2 : champ pris, la scène doit être NETTE, réduite et ENTIÈRE au-dessus de la feuille, la liste retirée (#8643) — ${JSON.stringify(ecriture)}`,
+      ecriture.zone === 'open' && ecriture.part >= 0.75 && ecriture.listeCachee === false && ecriture.etat === 'reading' && /blur\(/.test(ecriture.filtre ?? '') && ecriture.transform === 'none',
+      `${tag} st-amie-2 : champ pris, la zone de commentaires doit être HAUTE (≥ 75 % du cadre), la liste visible, la scène floutée et non réduite (#9894) — ${JSON.stringify(ecriture)}`,
     );
     check(
-      ecriture.foldDansPlaque && ecriture.foldAngle,
-      `${tag} st-amie-2 : le repli ⌄ doit vivre DANS la plaque du champ, à son angle haut-droit (#8643) — ${JSON.stringify(ecriture)}`,
+      ecriture.foldADroite && ecriture.foldTaille?.[0] >= 44 && ecriture.foldTaille?.[1] >= 44,
+      `${tag} st-amie-2 : le chevron ⌄ doit être TOUT À DROITE du composeur, après l'envoi, hors de la plaque, cible de 44 px (#9894) — ${JSON.stringify(ecriture)}`,
     );
     if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-ecrire-${colorScheme}-${viewport.width}.png` });
     await page.click('[data-comment-fold]');
-    await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAttribute('data-scene-yields') === 'reading', null, { timeout: 1500 })
-      .catch(() => undefined);
-    /* La TRANSITION finie, jamais un délai : la géométrie lue en vol serait celle d'une scène à mi-réduction. */
-    await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAnimations().length === 0, null, { timeout: 1500 })
-      .catch(() => undefined);
-    const lecture = await page.evaluate(() => {
-      const layer = document.querySelector('[data-story-scene-yield]');
-      return {
-        etat: layer?.getAttribute('data-scene-yields') ?? null,
-        filtre: layer === null ? null : getComputedStyle(layer).filter,
-        transform: layer === null ? null : getComputedStyle(layer).transform,
-        listeCachee: document.querySelector('[data-comment-thread-list]')?.hidden ?? null,
-        fold: document.querySelector('[data-comment-fold]') !== null,
-        brouillon: document.querySelector('[data-comment-field]')?.value ?? null,
-      };
-    });
+    await zoneSettled('folded');
+    const lecture = await zoneOf();
     check(
-      lecture.etat === 'reading' && /blur\(/.test(lecture.filtre ?? '') && lecture.transform === 'none' && lecture.listeCachee === false && !lecture.fold && lecture.brouillon === typed,
-      `${tag} st-amie-2 : replier (⌄) rend la lecture — scène pleine et floutée, liste revenue, brouillon gardé (#8643) — ${JSON.stringify(lecture)}`,
+      lecture.zone === 'folded' && lecture.part < ecriture.part && lecture.bulle && lecture.listeCachee === false && lecture.brouillon === typed && /blur\(/.test(lecture.filtre ?? ''),
+      `${tag} st-amie-2 : replier (⌄) fait redescendre la zone en bulle — liste et brouillon gardés, scène floutée (#9894) — ${JSON.stringify(lecture)}`,
     );
     if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-lire-${colorScheme}-${viewport.width}.png` });
 
@@ -572,8 +568,8 @@ async function runScheme(colorScheme) {
 
        LE TÉMOIN MESURE LA CAUSE, PAS SON DÉLAI. Attendre les six secondes de
        la diapositive rendrait un gate lent ET fragile ; ce qui se mesure ici
-       est que la lecture N'A PAS REPRIS (`data-story-paused` tient) et que
-       DEUX taps au bord — reprendre, puis naviguer — ne déplacent rien.
+       est que la story BOUCLE toujours sous la feuille (`data-story-hold` vaut
+       `loop`, #9821) et que DEUX taps au bord ne déplacent rien.
        C'est le scénario exact de la recette manuelle, en un dixième du temps. */
     const bordDroit = await page.$eval('[data-story-scene]', (el) => {
       const r = el.getBoundingClientRect();
@@ -586,13 +582,13 @@ async function runScheme(colorScheme) {
     await page.waitForTimeout(350);
     const apresTap = await page.evaluate(() => ({
       story: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
-      pause: document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') ?? null,
+      hold: document.querySelector('[data-story-scene]')?.getAttribute('data-story-hold') ?? null,
       sheet: document.querySelector('[data-story-comments-sheet]') !== null,
       text: document.querySelector('[data-comment-field]')?.value ?? null,
     }));
     check(
-      apresTap.story === avantTap && apresTap.pause === 'true' && apresTap.sheet === true && apresTap.text === typed,
-      `${tag} st-amie-2 : DEUX taps sur la scène nue, feuille ouverte, ne doivent ni reprendre la lecture ni naviguer ni emporter le brouillon — ${avantTap} → ${JSON.stringify(apresTap)}`,
+      apresTap.story === avantTap && apresTap.hold === 'loop' && apresTap.sheet === true && apresTap.text === typed,
+      `${tag} st-amie-2 : DEUX taps sur la scène nue, feuille ouverte, ne doivent ni sortir la story de sa boucle ni naviguer ni emporter le brouillon — ${avantTap} → ${JSON.stringify(apresTap)}`,
     );
     /* MÊME DISCIPLINE QU'AU SYMPTÔME a : si celui-ci tombe, la feuille a été
        emportée et les témoins SUIVANTS mourraient d'un `page.click` en
@@ -623,7 +619,7 @@ async function runScheme(colorScheme) {
           const scene = document.querySelector('[data-story-scene]');
           return (
             scene?.getAttribute('data-story-scene') !== avant ||
-            scene?.getAttribute('data-story-paused') !== 'true' ||
+            scene?.getAttribute('data-story-hold') !== 'loop' ||
             document.querySelector('[data-story-comments-sheet]') === null
           );
         },
@@ -633,12 +629,12 @@ async function runScheme(colorScheme) {
       .catch(() => undefined);
     const apresPanneau = await page.evaluate(() => ({
       story: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
-      pause: document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') ?? null,
+      hold: document.querySelector('[data-story-scene]')?.getAttribute('data-story-hold') ?? null,
       sheet: document.querySelector('[data-story-comments-sheet]') !== null,
     }));
     check(
-      apresPanneau.story === avantPanneau && apresPanneau.pause === 'true' && apresPanneau.sheet === true,
-      `${tag} st-amie-2 : une flèche ou Espace sur la feuille nue ne doit ni avancer la story ni la relancer — ${avantPanneau} → ${JSON.stringify(apresPanneau)}`,
+      apresPanneau.story === avantPanneau && apresPanneau.hold === 'loop' && apresPanneau.sheet === true,
+      `${tag} st-amie-2 : une flèche ou Espace sur la feuille nue ne doit ni avancer la story ni la figer — ${avantPanneau} → ${JSON.stringify(apresPanneau)}`,
     );
     if (!apresPanneau.sheet) {
       await page.goto(`${BASE}/story/st-amie-2`, { waitUntil: 'load' });
@@ -882,10 +878,25 @@ async function runAuthorRail(colorScheme) {
     return {
       titre: dialog?.querySelector('h2')?.textContent ?? null,
       lignes: dialog?.querySelectorAll('[data-story-viewer]').length ?? 0,
-      liens: [...(dialog?.querySelectorAll('[data-story-viewer] a') ?? [])].map((a) => a.getAttribute('href')),
       railAtteignable: document.activeElement === views,
     };
   });
+  /* #9727 — une ligne ouvre le DÉTAIL de la personne (ce qu'elle a fait), et
+     le profil s'y ouvre par « Voir le profil » : chaque lecteur mène toujours
+     à son profil, à un toucher de plus. « Retour aux vues » rend la liste. */
+  const liens = [];
+  for (const id of await page.$$eval('dialog[open] [data-story-viewer]', (els) => els.map((e) => e.getAttribute('data-story-viewer')))) {
+    await page.click(`dialog[open] [data-story-viewer="${id}"] [data-story-viewer-open]`, { timeout: 3000 }).catch(() => {});
+    liens.push(
+      await page
+        .waitForSelector('dialog[open] [data-viewer-detail-profile]', { timeout: 3000 })
+        .then((lien) => lien.getAttribute('href'))
+        .catch(() => null),
+    );
+    await page.click('dialog[open] [data-viewer-detail-back]', { timeout: 3000 }).catch(() => {});
+    await page.waitForSelector(`dialog[open] [data-story-viewer="${id}"]`, { timeout: 3000 }).catch(() => {});
+  }
+  feuille.liens = liens;
   const pendantFeuille = await lecture();
   check(feuille.titre === '8 vues', `${tag} : l'en-tête de la feuille lit le compte AUTORITATIF — « ${feuille.titre} »`);
   check(feuille.lignes === 3, `${tag} : la feuille doit lister les trois lecteurs servis — ${feuille.lignes}`);
@@ -893,18 +904,19 @@ async function runAuthorRail(colorScheme) {
     JSON.stringify(feuille.liens) === JSON.stringify(['/u/noor.haddad', '/u/elan.roy', '/u/mika.sorel']),
     `${tag} : chaque lecteur mène à son profil — ${JSON.stringify(feuille.liens)}`,
   );
-  check(pendantFeuille.paused, `${tag} : la story doit être EN PAUSE sous la feuille — ${JSON.stringify(pendantFeuille)}`);
+  check(pendantFeuille.paused, `${tag} : la pause voulue (Espace) tient sous la feuille — ${JSON.stringify(pendantFeuille)}`);
   check(!feuille.railAtteignable, `${tag} : feuille ouverte, le rail ne doit plus être atteignable`);
 
   await page.keyboard.press('Escape');
   /* Un FAIT attendu, jamais un délai (`lib/fixed-delay-ratchet.test.ts`) : la
-     feuille fermée ET la lecture repartie — ou le lecteur parti, le défaut
-     que ce témoin existe pour attraper. */
+     feuille fermée ET le focus posé quelque part — ou le lecteur parti, le
+     défaut que ce témoin existe pour attraper. Échap ferme le `<dialog>` natif
+     AVANT que React ne démonte la feuille et ne rende le focus (un effet) :
+     lire le focus dès `open` retiré lisait l'entre-deux, `BODY`. */
   await page
     .waitForFunction(
       () =>
-        document.querySelector('dialog[open]') === null &&
-        (location.pathname !== '/story/st-mienne' || document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') !== 'true'),
+        document.querySelector('dialog[open]') === null && document.activeElement !== document.body,
       undefined,
       { timeout: 3000 },
     )
@@ -915,7 +927,9 @@ async function runAuthorRail(colorScheme) {
     apresEchap.path === '/story/st-mienne' && apresEchap.scene === 'st-mienne',
     `${tag} : Échap ferme la FEUILLE, jamais le lecteur — ${JSON.stringify(apresEchap)}`,
   );
-  check(!apresEchap.paused, `${tag} : la feuille fermée, la lecture doit REPRENDRE — ${JSON.stringify(apresEchap)}`);
+  /* La pause VOULUE (Espace, posée par `figer`) survit à la feuille : la
+     fermer ne relance pas une story que l'utilisateur a figée (#9821). */
+  check(apresEchap.paused, `${tag} : la feuille fermée, la pause voulue doit TENIR — ${JSON.stringify(apresEchap)}`);
   check(focusRendu === 'views', `${tag} : la feuille fermée rend le focus à « Vues » — reçu ${JSON.stringify(focusRendu)}`);
 
   /* MÊME DISCIPLINE QU'AU § 7 : si Échap a emporté le lecteur, les témoins

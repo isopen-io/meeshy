@@ -1050,20 +1050,20 @@ final class BubbleContentMatrixTests: XCTestCase {
                        "une seule nature de bulle accepte le geste : la standard")
     }
 
-    /// **Les deux gestes de la cellule média ouvrent le MÊME sélecteur, sous la
-    /// MÊME garde** (#4020).
+    /// **Les deux gestes de la cellule média ont chacun UNE destination**
+    /// (#4020, puis #9907).
     ///
-    /// Le double tap rejoint un appui long qui existait déjà. Rien n'oblige
-    /// mécaniquement les deux à rester d'accord : ils sont deux modificateurs
-    /// posés à douze lignes l'un de l'autre, et le jour où l'un des deux gagne
-    /// une condition que l'autre n'a pas, la cellule offrira deux chemins vers
-    /// deux comportements — sans qu'aucun test ne rougisse, chaque moitié
-    /// restant cohérente avec elle-même.
+    /// Jusqu'au 2026-10-10, double tap et appui long ouvraient le MÊME
+    /// sélecteur. La directive porteur du 2026-10-10 rend l'appui long à
+    /// l'APERÇU de la pièce (« l'appui long sur une pièce montre CETTE pièce
+    /// seule »), dont le menu porte la réaction ; le double tap reste le chemin
+    /// court vers le sélecteur. Le témoin tient les deux destinations : un
+    /// sélecteur ouvert par UN geste, et l'aperçu par l'autre.
     ///
     /// Le témoin est BORNÉ au corps de `standardBody` : le fichier contient
     /// d'autres `canReactPerImage` (la définition de la garde, la pastille),
     /// donc un `contains` sur le fichier entier serait vert avant comme après.
-    func test_lesDeuxGestesDeLaCelluleMedia_partagentGardeEtActe() throws {
+    func test_lesDeuxGestesDeLaCelluleMedia_ontChacunUneDestination() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -1078,11 +1078,13 @@ final class BubbleContentMatrixTests: XCTestCase {
         let corps = String(texte[debut.upperBound..<fin.lowerBound])
 
         XCTAssertTrue(corps.contains("QuickReactionDoubleTap(isEnabled: canReactPerImage)"),
-                      "le double tap doit porter la MÊME garde que l'appui long")
-        XCTAssertTrue(corps.contains("AttachmentReactionLongPress(enabled: canReactPerImage)"),
-                      "l'appui long est le geste de référence — s'il a bougé, ce témoin doit être repointé")
-        XCTAssertEqual(corps.components(separatedBy: "showReactionPicker = true").count - 1, 2,
-                       "les deux gestes ouvrent le MÊME sélecteur — ni un troisième, ni deux destinations")
+                      "le double tap ouvre le sélecteur, sous la garde de la réaction par pièce")
+        XCTAssertEqual(corps.components(separatedBy: "showReactionPicker = true").count - 1, 1,
+                       "un seul geste ouvre le sélecteur : le double tap")
+        XCTAssertTrue(corps.contains("MessagePieceLongPress(attachmentId: attachment.id"),
+                      "l'appui long ouvre l'aperçu de CETTE pièce (#9907)")
+        XCTAssertFalse(corps.contains("AttachmentReactionLongPress"),
+                       "l'appui long n'ouvre plus le sélecteur de la tuile")
     }
 }
 

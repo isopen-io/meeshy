@@ -6,6 +6,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { withVisualFilter, type StudioDraft } from '@/lib/stories/studio';
 import type { StudioBackgroundSection } from '@/lib/stories/studio-background-tools';
+import type { FilterThumbnailRenderer } from '@/lib/stories/studio-filter-thumbnails';
 import type { StudioOpenTool } from '@/lib/stories/studio-focus';
 import { STUDIO_INLINE_SECTION_KEYS, type StudioInlineSection } from '@/lib/stories/studio-inline-edit';
 import type { StudioPage } from '@/lib/stories/studio-page';
@@ -94,6 +95,7 @@ export function useStudioSceneColumns({
   backgroundTools,
   editing,
   hidden,
+  thumbnails,
 }: {
   readonly lang: InterfaceLanguage;
   readonly page: StudioPage;
@@ -128,6 +130,8 @@ export function useStudioSceneColumns({
     readonly onExit: () => void;
   };
   readonly hidden: boolean;
+  /** Le rendu des miniatures d'effet visuel — injectable pour les témoins (#9828). */
+  readonly thumbnails?: FilterThumbnailRenderer | undefined;
 }): {
   readonly trailing: ReactNode;
   readonly carousel: ReactNode;
@@ -313,6 +317,7 @@ export function useStudioSceneColumns({
               filter={page.background.filter ?? null}
               onChoose={choose}
               locked={locked}
+              render={thumbnails}
             />
           )}
         </StudioEffectCarousel>

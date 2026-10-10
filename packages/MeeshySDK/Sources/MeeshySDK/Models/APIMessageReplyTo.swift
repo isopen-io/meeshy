@@ -45,12 +45,16 @@ public struct APIMessageReplyTo: Decodable, Sendable {
     /// #7927 — le message cité est SUPPRIMÉ : la passerelle vide son texte et
     /// le dit ici ; la citation composée ne porte alors plus rien de lui.
     public let deletedAt: Date?
+    /// #9915 — le nombre TOTAL de photos et vidéos du message cité : la
+    /// passerelle n'en sert que quatre dans `attachments`. `nil` chez une
+    /// passerelle antérieure, et pour un message protégé.
+    public let visualAttachmentCount: Int?
 
     private enum CodingKeys: String, CodingKey {
         case id, content, senderId, sender, attachments
         case originalLanguage, translations
         case isViewOnce, isBlurred, expiresAt, effectFlags, isEncrypted, encryptionMode
-        case attachmentReplyTo, deletedAt
+        case attachmentReplyTo, deletedAt, visualAttachmentCount
     }
 
     public init(from decoder: Decoder) throws {
@@ -82,6 +86,7 @@ public struct APIMessageReplyTo: Decodable, Sendable {
                                                     forKey: .attachmentReplyTo)) ?? nil
         // `try?` : une date illisible ne fait pas tomber la citation entière.
         deletedAt = (try? c.decodeIfPresent(Date.self, forKey: .deletedAt)) ?? nil
+        visualAttachmentCount = (try? c.decodeIfPresent(Int.self, forKey: .visualAttachmentCount)) ?? nil
     }
 
     /// Le message cité ne doit pas republier son texte : vue unique, flouté ou
@@ -220,6 +225,17 @@ public extension APIMessageReplyTo {
                     ContentExitLaw.Piece(isViewOnce: $0.isViewOnce, isBlurred: $0.isBlurred, effectFlags: $0.effectFlags)
                 }
             )).nature
+        }
+        // #9911 — le compte des tuiles d'une citation du message ENTIER. La
+        // passerelle sert au plus quatre pièces du cité, et leur compte TOTAL
+        // à côté (#9915) ; sans lui, les pièces servies sont un plancher.
+        if attachmentReplyTo == nil, !isProtected {
+            let tiles = (attachments ?? []).filter { piece in
+                let kind = AttachmentKind(mimeType: piece.mimeType ?? "")
+                return kind == .image || kind == .video
+            }
+            let count = tiles.isEmpty ? 0 : max(tiles.count, visualAttachmentCount ?? 0)
+            reference.quotedPieceCount = count == 0 ? nil : count
         }
         if let representative, !reference.quotedMediaIsProtected, reference.attachmentFileUrl != nil,
            AttachmentKind(mimeType: representative.mimeType ?? "") == .audio {

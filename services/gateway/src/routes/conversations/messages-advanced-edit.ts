@@ -31,6 +31,7 @@ import {
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../../services/messaging/messageEditAdmission';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -188,7 +189,7 @@ export function registerEditMessagePutRoute(
             },
             // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
             // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-            conversation: { select: { isActive: true, closedAt: true } },
+            conversation: { select: { isActive: true, closedAt: true, type: true } },
             attachments: { select: { id: true } }
           }
         })
@@ -224,6 +225,9 @@ export function registerEditMessagePutRoute(
         // sujet est « plus personne, plus jamais ».
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
+        if (admission.reason === 'minor-global') {
+          return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
         }
         return admission.reason === 'edit-window-expired'
           ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
@@ -658,6 +662,9 @@ export function registerEditMessagePatchRoute(
       if (isEditRefused(admission)) {
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
+        if (admission.reason === 'minor-global') {
+          return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
         }
         if (admission.reason === 'edit-window-expired') {
           return sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)');

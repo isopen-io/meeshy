@@ -78,12 +78,11 @@ import MeeshyUI
 /// en zone 3, et le média garde son propre geste de révélation sur la rangée
 /// d'origine.
 ///
-/// **Carrousel** : la citation est une PORTE, pas une galerie.
-/// `ReplyReference` ne porte qu'UNE `attachmentThumbnailUrl` et aucun compte
-/// de pièces jointes (le gateway n'en sélectionne pas), donc ni liste de
-/// miniatures ni badge « +N » ne serait honnête. Le tap ouvre le pager plein
-/// écran de la conversation, où les images 2..N sont atteignables au
-/// balayage.
+/// **Carrousel** : la citation est une PORTE, pas une galerie : UNE
+/// miniature, et depuis #9911 le badge « +N » quand elle cite un message
+/// ENTIER à plusieurs tuiles (`ReplyReference.quotedPieceCount`). Le tap ouvre
+/// le pager plein écran de la conversation, où les images 2..N sont
+/// atteignables au balayage.
 ///
 /// Gardes : `FocalQuotedReplyRichTests.test_loiDesZones_*`.
 struct FocalQuotedReplyView: View, Equatable {
@@ -272,6 +271,7 @@ struct FocalQuotedReplyView: View, Equatable {
                 }
 
                 quotedThumbnail
+                    .quotedExtraPieces(reference)
 
                 // « 1024×768 · 0:42 · 1,2 Mo ». La rangée plate est dense :
                 // la ligne n'apparaît que lorsqu'un fait existe, et jamais

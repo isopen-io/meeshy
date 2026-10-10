@@ -219,6 +219,11 @@ public final class ReaderAudioMixer {
             try resumeWithoutRescheduling()
             return false
         }
+        if StoryAudioActivationPolicy.shouldHoldEngine(hasClips: !entries.isEmpty || backgroundEntry != nil,
+                                                       isMuted: isMuted) {
+            logger.info("ReaderAudioMixer.play held while muted — engine left idle slideKey=\(slideKey, privacy: .public)")
+            return false
+        }
         playbackStartHostTime = originHost
         pausedAtHostTime = nil
         guard !entries.isEmpty || backgroundEntry != nil else {
@@ -302,6 +307,23 @@ public final class ReaderAudioMixer {
             pausedAtHostTime = mach_absolute_time()
         }
         isPlaying = false
+    }
+
+    /// **Prépare le moteur dès que ses clips sont chargés** (#9837).
+    ///
+    /// Un canevas voisin naît en pause : sans préparation, `engine.start()`
+    /// alloue ses ressources au moment où la page devient active — sur le fil
+    /// principal, pendant le geste. `prepare()` les prend hors de ce moment.
+    public func prepareForPlayback() {
+        guard Self.shouldPrepareEngine(isRunning: engine.isRunning,
+                                       hasClips: !entries.isEmpty || backgroundEntry != nil) else { return }
+        engine.prepare()
+    }
+
+    /// Un moteur qui tourne déjà n'a rien à préparer ; un moteur sans clip non
+    /// plus — le préparer allouerait une sortie qui ne jouera rien.
+    nonisolated static func shouldPrepareEngine(isRunning: Bool, hasClips: Bool) -> Bool {
+        !isRunning && hasClips
     }
 
     public func stop() {

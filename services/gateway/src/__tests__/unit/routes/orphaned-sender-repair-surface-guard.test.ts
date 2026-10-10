@@ -112,6 +112,8 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'admin/user-member-stats.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'attachments/metadata.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  // #9927 — lit le TYPE de la conversation du message visé (règle des 13-17 ans), jamais son expéditeur.
+  'attachments/upload.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-advanced-reads.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-list-views.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-read-status.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },

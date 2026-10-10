@@ -239,6 +239,21 @@ extension ConversationView {
         .adaptiveOnChange(of: outgoingReplyRoute.replyToId, initial: true) { _, replyToId in
             viewModel.armReplyContagion(quoting: replyToId)
         }
+        // #9955 (directive porteur 2026-10-10) — le ⌄ tout à droite de la
+        // barre, en permanence sauf quand on écrit ou qu'on enregistre : il
+        // réduit la barre à son seul bouton « commentaire », comme la story.
+        // Replié, la barre reste montée : brouillon, pièces jointes et réponse
+        // en cours survivent. Une demande de focus (répondre, éditer) la rouvre.
+        .foldableConversationComposer(
+            isComposing: ConversationComposerFold.isComposing(
+                isFocused: isTyping || composerState.focusRequested,
+                isRecording: isRecording),
+            onFold: {
+                guard composerState.showTextEmojiPicker else { return }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    composerState.showTextEmojiPicker = false
+                }
+            })
     }
 
     /// 2e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :

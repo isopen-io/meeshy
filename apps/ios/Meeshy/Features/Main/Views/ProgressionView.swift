@@ -62,7 +62,9 @@ struct ProgressionView: View {
         .task {
             await viewModel.load()
             #if DEBUG
-            if viewModel.progress != nil {
+            // Le routeur n'est lu QUE si la vitrine tourne : un hôte qui ne l'injecte pas (les témoins de rendu)
+            // planterait sur l'`EnvironmentObject` absent.
+            if viewModel.progress != nil, VitrineLaunch.isActive {
                 let router = self.router
                 VitrineRendu.shared.progressionAffichee { router.openGame(at: $0) }
             }

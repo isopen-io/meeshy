@@ -110,7 +110,11 @@ describe('routes /sounds', () => {
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         uploaderId: 'user-abc',
-        AND: [{ OR: [{ mutedAt: null }, { mutedAt: { isSet: false } }] }],
+        // #9848 — un son retiré par son auteur quitte aussi « Mes sons ».
+        AND: [
+          { OR: [{ mutedAt: null }, { mutedAt: { isSet: false } }] },
+          { OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] },
+        ],
       }),
     }));
   });

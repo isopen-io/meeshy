@@ -12,7 +12,7 @@
  * Les paramètres sont encodés ICI (encodeURIComponent) : passer la valeur brute.
  */
 
-/** GET · PATCH /api/v1/sounds/:id */
+/** GET · PATCH · DELETE /api/v1/sounds/:id */
 export const byId = (id: string): string => `/api/v1/sounds/${encodeURIComponent(id)}`;
 
 /** GET /api/v1/sounds/:id/posts */

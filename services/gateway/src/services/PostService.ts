@@ -53,6 +53,7 @@ import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
 import { detectContentLanguage } from '../utils/content-language';
+import { unclaimedContentLanguage } from './posts/unclaimedContentLanguage';
 import { guardedTimeout } from '../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'PostService' });
@@ -171,17 +172,9 @@ export class PostService {
     const now = new Date();
     const expiresAt = ephemeralExpiresAt(data.type, now);
 
-    // Canonicalize the client claim at the write boundary — clients send the raw
-    // platform locale (iOS `fr_FR`, web `fr-FR`). `detectContentLanguage` already returns
-    // canonical codes, so only the claim path needs normalization. Irreducible
-    // codes (`bas`) fall back verbatim. Mirrors the message funnel (218/219).
-    const originalLanguage = data.originalLanguage
-      ? (normalizeLanguageCode(data.originalLanguage) ?? data.originalLanguage)
-      : (data.content ? detectContentLanguage(data.content) : undefined);
-
     // `detectedLanguage` (#5349/#5422) est déjà de l'ISO 639-1 mesuré
     // (`detectMeasuredLanguage`, tinyld) — normalisée par sûreté, comme la
-    // revendication ci-dessus, jamais recalculée : c'est une MESURE, pas une
+    // revendication plus bas, jamais recalculée : c'est une MESURE, pas une
     // détection à refaire ici.
     const detectedLanguage = data.detectedLanguage
       ? (normalizeLanguageCode(data.detectedLanguage) ?? data.detectedLanguage)
@@ -322,6 +315,14 @@ export class PostService {
       }
     }
 
+    // Canonicalize the client claim at the write boundary — clients send the raw
+    // platform locale (iOS `fr_FR`, web `fr-FR`). Irreducible codes (`bas`) fall
+    // back verbatim. Mirrors the message funnel (218/219). Sans revendication :
+    // `unclaimedContentLanguage` (#9861), résolue APRÈS les refus.
+    const originalLanguage = data.originalLanguage
+      ? (normalizeLanguageCode(data.originalLanguage) ?? data.originalLanguage)
+      : (data.content ? await unclaimedContentLanguage(this.prisma, { content: data.content, detectedLanguage, authorId: userId }) : undefined);
+
     const post = await this.prisma.post.create({
       data: {
         authorId: userId,
@@ -432,7 +433,7 @@ export class PostService {
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
     if (data.type === PostType.STORY && data.content) {
-      this.triggerStoryTextTranslation(post.id, data.content, userId).catch((err: unknown) => {
+      this.triggerStoryTextTranslation(post.id, data.content, userId, originalLanguage).catch((err: unknown) => {
         log.error('triggerStoryTextTranslation failed', err instanceof Error ? err : new Error(String(err)));
       });
     }
@@ -561,7 +562,7 @@ export class PostService {
           await (this.prisma as any).$runCommandRaw({
             update: 'Post',
             updates: [{
-              q: { _id: { $oid: postId } },
+              q: { _id: { $oid: postId }, originalLanguage: { $ne: event.targetLanguage } },
               u: { $set: { [`translations.${event.targetLanguage}`]: {
                 text: event.result.translatedText,
                 translationModel: event.result.translatorModel ?? 'nllb',

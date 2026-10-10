@@ -77,6 +77,31 @@ describe('une scène à fond IMAGE : les effets à droite, le carrousel à la pl
     expect(publishButton(el)).not.toBeNull();
   });
 
+  test('les miniatures passent par le rendu INJECTÉ : ouvrir « Effet visuel » ne touche jamais le réseau global (#9828)', async () => {
+    const bench = seeded({ background: 'image' });
+    const rendered: string[] = [];
+    const deps = { ...bench.deps, thumbnails: async ({ source }: { readonly source: string }) => (rendered.push(source), null) };
+    const global = globalThis as { fetch: typeof fetch };
+    const realFetch = global.fetch;
+    const escaped: string[] = [];
+    global.fetch = (async (input: RequestInfo | URL) => {
+      escaped.push(String(input));
+      throw new TypeError('réseau global interdit au banc');
+    }) as typeof fetch;
+    try {
+      const el = mount(deps, 'POST');
+      await flush(() => el.querySelector('[data-story-option="effect:visual"]') !== null);
+      click(el.querySelector('[data-story-option="effect:visual"]'));
+      await flush(() => el.querySelector('[data-story-visual-effects] img') !== null);
+      expect(escaped).toEqual([]);
+      expect(rendered.length).toBeGreaterThan(0);
+      expect(rendered.every((source) => source.includes('bg.jpg'))).toBe(true);
+      expect(el.querySelector<HTMLImageElement>('[data-story-option="filter:bw"] img')?.getAttribute('src')).toContain('bg.jpg');
+    } finally {
+      global.fetch = realFetch;
+    }
+  });
+
   test('choisir un effet visuel met la scène à jour EN DIRECT, et il part avec le fond', async () => {
     const bench = seeded({ background: 'image' });
     const el = mount(bench.deps, 'POST');

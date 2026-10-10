@@ -48,6 +48,7 @@ final class CallManagerHost: ObservableObject {
             CallPreviewBinding.shared.bind(candidate)
             CallNetworkJournalBinding.shared.bind(candidate)
             CallReturnBinding.shared.bind(candidate)
+            CallLiveActivityCoordinator.shared.bind(candidate)
         }
         return candidate
     }

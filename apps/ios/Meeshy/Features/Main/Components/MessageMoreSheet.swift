@@ -124,9 +124,13 @@ struct MessageMoreSheet: View {
                     dismiss()
                 }
             }
-            Button(String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main), role: .destructive) {
-                onDeleteMedia?()
-                dismiss()
+            // #9906 — un LOT sans pièce visée ne désigne rien : l'entrée
+            // n'existe pas plutôt que d'effacer la première pièce.
+            if MessagePieceTarget.deletableMedia(in: message, targeted: nil) != nil {
+                Button(String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main), role: .destructive) {
+                    onDeleteMedia?()
+                    dismiss()
+                }
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
         }

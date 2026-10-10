@@ -238,8 +238,13 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertTrue(barre.contains("ComposerCaptureCopy.cancelEdit"), "la croix dit ce qu'elle fait en édition")
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("editing: session.phase.isEditing"))
-        XCTAssertTrue(chrome.contains("guard !session.phase.isEditing else { return session.cancelEditing() }"),
+        // Depuis #9781, la croix d'une prise que Photos n'a pas encore demande d'abord confirmation ;
+        // sans confirmation à demander comme après elle, c'est la RETOUCHE qu'elle abandonne.
+        XCTAssertTrue(chrome.contains("return retouche ? session.cancelEditing() : onDisarm()"),
                       "la croix abandonne la retouche au lieu de fermer le viseur")
+        XCTAssertTrue(chrome.contains("guard discardsTake else { return onDisarm() }")
+                      && chrome.contains("guard session.phase.isEditing else { return }"),
+                      "l'abandon confirmé d'une prise en retouche revient viser, il ne ferme pas le viseur")
     }
 
     func test_editScreen_paintsTheEditedSource_reframesWithTheFingers_andOffersDone() throws {

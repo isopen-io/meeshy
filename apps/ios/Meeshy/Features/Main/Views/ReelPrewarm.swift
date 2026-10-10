@@ -235,6 +235,7 @@ final class ReelPagerPreloader {
             ReelPrewarm.prefetchFile(of: reels[step.index], center: center).map { (step: step, key: $0) }
         }
 
+        await prefetchAudio(reels: reels, plan: plan)
         for entry in nearKeys where entry.step.tier == .decode {
             guard !Task.isCancelled else { return }
             await ReelPrewarm.awaitFile(key: entry.key, center: center)
@@ -247,6 +248,22 @@ final class ReelPagerPreloader {
             guard !Task.isCancelled else { return }
             guard let key = ReelPrewarm.prefetchFile(of: reels[step.index], center: center) else { continue }
             await ReelPrewarm.awaitFile(key: key, center: center)
+        }
+    }
+
+    /// **Le son des voisins, avant leurs vidéos** (#9837) : une piste pèse
+    /// quelques centaines de Ko et fait le premier instant du réel ; sans elle,
+    /// le réel élu partait la chercher sur le réseau. Mis en cache sous la clé
+    /// que la lecture lira (`CacheCoordinator.audio`, URL résolue). Le cache
+    /// disque est borné par son budget ; rien à rendre en s'éloignant.
+    private func prefetchAudio(reels: [FeedPost], plan: [ReelPreloadWindow.Step]) async {
+        let languages = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        for step in plan where ReelAudioPrefetch.prefetches(tier: step.tier) {
+            for url in ReelAudioPrefetch.urls(for: reels[step.index], preferredLanguages: languages)
+            where CacheCoordinator.audioLocalFileURL(for: url.absoluteString) == nil {
+                guard !Task.isCancelled else { return }
+                _ = try? await CacheCoordinator.shared.audio.data(for: url.absoluteString)
+            }
         }
     }
 

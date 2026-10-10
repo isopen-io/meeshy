@@ -46,6 +46,25 @@ import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { announceConversationActivity } from '../../services/conversations/conversationActivity';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
+import { refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
+
+/**
+ * #9927 — épingler ou dépingler dans Meeshy Global met un message en avant pour
+ * tout le salon (`message:pinned`) : c'est y écrire, et un mineur déclaré ne le
+ * fait pas. Posé APRÈS l'existence du message (le 404 reste ce qu'il était), et
+ * sur le type déjà chargé avec lui : la date de naissance n'est lue que dans Global.
+ */
+const refusesMinorPin = (
+  prisma: PrismaClient,
+  authRequest: UnifiedAuthRequest,
+  conversationType: string | null | undefined
+): Promise<boolean> =>
+  refusesMinorInConversationOfType(prisma, {
+    conversationType,
+    userId: authRequest.authContext.isAnonymous ? null : authRequest.authContext.userId,
+    now: new Date(),
+  });
 
 /**
  * Enregistre les routes d'épinglage : pin, unpin, liste des messages épinglés.
@@ -153,10 +172,13 @@ export function registerMessagePinRoutes(
       // `tool.pin` (#8959) — ré-épingler n'est pas un geste nouveau.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true, pinnedAt: true, messageType: true, metadata: true }
+        select: { id: true, pinnedAt: true, messageType: true, metadata: true, conversation: { select: { type: true } } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
+      }
+      if (await refusesMinorPin(prisma, authRequest, message.conversation?.type)) {
+        return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
       }
       // #9629 — un avis de capture n'est pas un contenu : l'épingler le
       // diffuserait à toute la conversation (`message:pinned`).
@@ -274,10 +296,13 @@ export function registerMessagePinRoutes(
       // `deletedAt: null`) et le tombstone lui-même part au balayage.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true }
+        select: { id: true, conversation: { select: { type: true } } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
+      }
+      if (await refusesMinorPin(prisma, authRequest, message.conversation?.type)) {
+        return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
       }
 
       await prisma.message.update({

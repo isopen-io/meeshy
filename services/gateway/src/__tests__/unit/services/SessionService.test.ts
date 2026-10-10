@@ -53,6 +53,7 @@ import { RequestContext } from '../../../services/GeoIPService';
 
 // Mock Prisma Client
 const mockPrisma: any = {
+  user: { findUnique: jest.fn(async () => ({ birthDate: null })) },
   userSession: {
     create: jest.fn() as jest.Mock<any>,
     findFirst: jest.fn() as jest.Mock<any>,

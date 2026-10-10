@@ -175,6 +175,9 @@ public struct MeeshyMoodBadge: View {
                 }
                 text
             }
+            .padding(width)
+            .drawingGroup()
+            .padding(-width)
         } else {
             text
         }

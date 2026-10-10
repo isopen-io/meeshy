@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 
 import type { StoryActionRailHandlers } from '@/components/story-action-rail';
 import { currentCredential } from '@/lib/api/client';
@@ -133,8 +133,6 @@ async function runStoryExport(params: {
 export function useStoryOwnerRail(params: {
   readonly story: StoryPlaybackStory | undefined;
   readonly online: boolean;
-  readonly pause: () => void;
-  readonly resume: () => void;
   readonly announce: (message: string) => void;
   readonly language: InterfaceLanguage;
   /** Injectable pour les témoins ; le navigateur par défaut. */
@@ -142,7 +140,7 @@ export function useStoryOwnerRail(params: {
   /** Injectable pour les témoins ; la galerie de la coque, chargée au premier « Enregistrer », par défaut. */
   readonly gallerySaver?: GallerySaver | null;
 }): StoryOwnerRail {
-  const { story, online, pause, resume, announce, language, gallerySaver } = params;
+  const { story, online, announce, language, gallerySaver } = params;
   const storyId = story?.id;
   const viewers = useCommentsSheetHost(storyId);
   const host = useMemo(() => params.deliveryHost ?? browserFileDeliveryHost(), [params.deliveryHost]);
@@ -166,15 +164,8 @@ export function useStoryOwnerRail(params: {
    * de l'ATTEIGNABILITÉ, indépendamment bouton par bouton. */
   const exportMedia = useMemo(() => storyDownloadableMedia(story), [story]);
 
-  /* LA FEUILLE « VUES » MET LA LECTURE EN PAUSE, et la reprend en se
-     fermant — iOS : `.sheet(isPresented: $showViewersSheet, onDismiss:
-     { resumeTimer() … })`, `StoryViewerView.swift:834-858`. */
-  const viewersOpen = viewers.postId !== null;
-  useEffect(() => {
-    if (!viewersOpen) return;
-    pause();
-    return () => resume();
-  }, [viewersOpen, pause, resume]);
+  /* La story BOUCLE sous la feuille « Vues » (#9821) : c'est le lecteur
+     qui le décide (`resolveStoryPlaybackHold`), le rail ne la fige pas. */
 
   const saving = useSyncExternalStore(
     storySaveStore.subscribe,
@@ -185,15 +176,12 @@ export function useStoryOwnerRail(params: {
   const handlers = useMemo<StoryOwnerRail['handlers']>(() => {
     if (story === undefined) return {};
     const storyId = story.id;
-    /* La feuille « Vues » met la lecture en pause (effet ci-dessus) — iOS :
-       `pauseTimer(); showViewersSheet = true`, `StoryViewerView+Sidebar.swift:683-692`. */
     const views = () => viewers.open(storyId);
     if (exportMedia === null) return { views };
     /* « Partager » ouvre la feuille d'envoi COMMUNE (#8884) — une personne,
        plusieurs, un groupe, ou une publication ; « Plus d'options… » y garde
        la feuille du système (`MeeshySharePlugin` sur la coque Android). Le
-       lecteur met la lecture en attente sous elle (`useStorySend.sheetOpen`,
-       D-11 : une seule pause, celle du lecteur — pas de pause ici).
+       lecteur fait boucler la story sous elle (`useStorySend.sheetOpen`).
        INDÉPENDANT de `hasFileDeliveryDoor` — voir le commentaire d'`exportMedia`. */
     const share = () => void openStorySendSheet(story);
     /* `save` seul lit la porte FICHIER — l'hôte qui ne sait pas livrer de

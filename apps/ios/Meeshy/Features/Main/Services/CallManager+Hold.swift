@@ -23,6 +23,7 @@ extension CallManager {
     /// background is also suspending it.
     func handleHold(_ isOnHold: Bool) {
         guard callState.isActive, let callId = currentCallId else { return }
+        self.isOnHold = isOnHold
         if isOnHold {
             if isVideoEnabled {
                 isVideoSuspendedByHold = true

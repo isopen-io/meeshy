@@ -46,6 +46,7 @@ function postPrisma(persisted: Row) {
       create: jest.fn(async () => persisted),
       update: jest.fn(async () => persisted),
     },
+    user: { findUnique: jest.fn(async () => null) },
     postMedia: {
       updateMany: jest.fn(async () => ({ count: 1 })),
       findFirst: jest.fn(async () => null),

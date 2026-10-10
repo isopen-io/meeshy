@@ -100,6 +100,35 @@ const boxOf = (page, selector) =>
 
 const near = (a, b, tolerance = 1.5) => Math.abs(a - b) <= tolerance;
 
+/**
+ * LE BANDEAU DU HAUT EST ASSIS (#9536) — la bannière du joueur entre dans le
+ * bandeau fixe APRÈS le premier rendu du fil (chunk paresseux, progression du
+ * jeu), et la coquille ne réserve sa hauteur (`--top-band`) qu'au rappel du
+ * `ResizeObserver` qui suit. Entre les deux, une mesure synchrone
+ * (`elementFromPoint` force la mise en page) voit la bannière posée SUR
+ * l'en-tête : la porte de création « inatteignable » à un tirage sur quelques
+ * runs, selon l'instant où le témoin tombe. On mesure donc une fois le bandeau
+ * ASSIS : la place de la bannière, si elle est ouverte, peinte (sinon elle
+ * peut encore surgir entre l'attente et la mesure), et la réserve égale au
+ * bandeau. Une bannière jamais peinte ferme sa visite en 30 s
+ * (`PLAYER_BANNER_HOLD_MS`) et rend sa place : l'attente est bornée.
+ */
+const topBandSettled = (page) =>
+  page.waitForFunction(
+    () => {
+      const band = document.querySelector('[data-top-bars]');
+      if (band === null) return true;
+      const height = Math.ceil(band.getBoundingClientRect().height);
+      const awaitsPlayer = (band.getAttribute('data-top-band') ?? '').split(' ').includes('player') && height === 0;
+      if (awaitsPlayer) return false;
+      const host = document.querySelector('[data-top-band-host]');
+      const reserved = host === null ? 0 : Number.parseFloat(getComputedStyle(host).getPropertyValue('--top-band')) || 0;
+      return height === 0 ? reserved === 0 : reserved >= height;
+    },
+    undefined,
+    { timeout: 45_000 },
+  );
+
 const browser = await launchChromium();
 
 for (const scheme of ['light', 'dark']) {
@@ -182,6 +211,7 @@ for (const scheme of ['light', 'dark']) {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`${BASE}/feed`, { waitUntil: 'load' });
     await page.waitForSelector('[data-feed-card]');
+    await topBandSettled(page);
 
     // ------------------------------------------------- 3. la borne ne mord pas
     const carte = await boxOf(page, '[data-feed-card]');

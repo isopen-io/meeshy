@@ -588,6 +588,15 @@ extension ConversationSyncEngine {
         _conversationsDidChange.send()
     }
 
+    /// Un message optimiste RETIRÉ sans avoir existé côté serveur — un envoi
+    /// refusé pour de bon (403 `GLOBAL_ADULTS_ONLY`, #9929). L'aperçu de la
+    /// ligne avait été posé avant le refus (`updateConversationAfterSend`) : il
+    /// se recalcule exactement comme après une suppression, sur le dernier
+    /// message survivant ou, faute de cache, sur la ligne relue au serveur.
+    public func withdrawLocalMessage(conversationId: String, messageId: String) async {
+        await recomputeLastMessagePreviewAfterDeletion(conversationId: conversationId, deletedMessageId: messageId)
+    }
+
     /// Recomputes a conversation row's last-message fields when the deleted
     /// message was that row's `lastMessageId`, picking the most recent surviving
     /// (non-deleted) message from the messages cache. If the cache holds no

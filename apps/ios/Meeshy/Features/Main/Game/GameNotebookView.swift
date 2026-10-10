@@ -19,6 +19,7 @@ struct GameNotebookPage: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                 if viewModel.isLoaded && viewModel.isEmpty { emptyState }
                 if !viewModel.pending.isEmpty { pendingSection }
+                if !viewModel.catchUp.isEmpty { catchUpSection }
                 if !viewModel.kept.isEmpty { keptSection }
             }
         }
@@ -85,6 +86,72 @@ struct GameNotebookPage: View {
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.backgroundSecondary))
             }
         }
+    }
+
+    /// À RATTRAPER (#9961, #9962) : chaque étape déjà franchie sans photo, dans l'ordre. La première de sa
+    /// piste se photographie ; les suivantes, estompées et verrouillées, disent laquelle prendre d'abord.
+    private var catchUpSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            Text(String(localized: "game.notebook.catch_up", defaultValue: "À rattraper", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(viewModel.catchUp) { step in
+                catchUpRow(step)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func catchUpRow(_ step: PhotoCatchUpEntry) -> some View {
+        let blocker = step.blockedBy.map { viewModel.title(ofStep: $0) ?? $0 }
+        let lockedLine = blocker.map { name in
+            String(localized: "game.notebook.catch_up_locked", defaultValue: "Prends d’abord : \(name)", bundle: .main)
+        }
+        HStack(spacing: MeeshySpacing.md) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(step.moment.kicker)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                    .textCase(.uppercase)
+                    .foregroundColor(theme.textMuted)
+                Text(step.moment.title)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                    .foregroundColor(theme.textPrimary)
+                if let lockedLine {
+                    Text(lockedLine)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            Spacer(minLength: 0)
+            if step.isOpen {
+                Button {
+                    HapticFeedback.light()
+                    taking = viewModel.makeSession(for: step)
+                } label: {
+                    Text(String(localized: "game.photo.offer.start", defaultValue: "Photographier", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                        .foregroundColor(MeeshyColors.brandPrimary)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .frame(minHeight: 44)
+                        .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("game.notebook.catch_up.take")
+            } else {
+                Image(systemName: "lock.fill")
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(MeeshySpacing.md)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.backgroundSecondary))
+        .opacity(step.isOpen ? 1 : 0.55)
+        .accessibilityElement(children: step.isOpen ? .contain : .ignore)
+        .accessibilityLabel(lockedLine.map { "\(step.moment.title). \($0)" } ?? step.moment.title)
+        .accessibilityIdentifier(step.isOpen ? "game.notebook.catch_up.open" : "game.notebook.catch_up.locked")
     }
 
     private var keptSection: some View {

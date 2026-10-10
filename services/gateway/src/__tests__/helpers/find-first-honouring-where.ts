@@ -42,10 +42,16 @@
  *
  * Toute clé d'argument dont ce double ne sait rien fait ÉCHOUER le test. Un
  * double qui passe en ignorant ce qu'il ne comprend pas rejoue, un cran plus
- * bas, le défaut qu'il est venu corriger. L'ORDRE (`orderBy`) et les bornes
- * (`take` / `skip` / `cursor`) ne sont pas modélisés : les faire ignorer en
- * silence rendrait « la première ligne » sur une collection que la production
- * croyait triée. Qui en a besoin étend ce module DÉLIBÉRÉMENT.
+ * bas, le défaut qu'il est venu corriger. Les bornes (`take` / `skip` /
+ * `cursor`) ne sont pas modélisées : les faire ignorer en silence rendrait « la
+ * première ligne » sur une collection que la production croyait bornée. Qui en
+ * a besoin étend ce module DÉLIBÉRÉMENT.
+ *
+ * L'ORDRE (`orderBy`) l'est depuis #9776 : toute lecture des pièces d'un
+ * message passe `MESSAGE_ATTACHMENT_ORDER`. Il TRIE la liste (scalaires
+ * `asc` / `desc`, un champ absent ou nul EN TÊTE d'un tri ascendant, comme
+ * MongoDB) — le refuser obligeait à retirer l'ordre de la production pour
+ * tester, l'ignorer laisserait passer une lecture qui oublie de trier.
  */
 
 import { matchesMongoWhere, type MongoDocument } from './mongo-where';
@@ -58,9 +64,54 @@ export type PrismaQueryNode = {
   readonly where?: MongoDocument;
   readonly include?: Record<string, unknown>;
   readonly select?: Record<string, unknown>;
+  readonly orderBy?: unknown;
 };
 
-const CLES_SUPPORTEES: ReadonlySet<string> = new Set(['where', 'include', 'select']);
+const CLES_SUPPORTEES: ReadonlySet<string> = new Set(['where', 'include', 'select', 'orderBy']);
+
+type Critere = { readonly champ: string; readonly sens: 1 | -1 };
+
+function criteres(chemin: string, orderBy: unknown): ReadonlyArray<Critere> {
+  const liste = Array.isArray(orderBy) ? orderBy : [orderBy];
+  return liste.flatMap((entree) => {
+    if (typeof entree !== 'object' || entree === null) {
+      throw new Error(`double Prisma: « ${chemin}.orderBy » n'est pas un objet`);
+    }
+    return Object.entries(entree).map(([champ, sens]) => {
+      if (sens !== 'asc' && sens !== 'desc') {
+        throw new Error(`double Prisma: « ${chemin}.orderBy.${champ} » direction non supportée`);
+      }
+      return { champ, sens: sens === 'asc' ? 1 : -1 } as const;
+    });
+  });
+}
+
+const poids = (valeur: unknown): number | string | null => {
+  if (valeur === undefined || valeur === null) return null;
+  if (valeur instanceof Date) return valeur.getTime();
+  if (typeof valeur === 'number' || typeof valeur === 'string') return valeur;
+  throw new Error(`double Prisma: valeur non ordonnable ${JSON.stringify(valeur)}`);
+};
+
+function comparer(a: unknown, b: unknown): number {
+  const [pa, pb] = [poids(a), poids(b)];
+  if (pa === pb) return 0;
+  if (pa === null) return -1;
+  if (pb === null) return 1;
+  return pa < pb ? -1 : 1;
+}
+
+function trier(
+  lignes: ReadonlyArray<MongoDocument>,
+  orderBy: unknown,
+  chemin: string
+): ReadonlyArray<MongoDocument> {
+  if (orderBy === undefined) return lignes;
+  const ordre = criteres(chemin, orderBy);
+  return [...lignes].sort((a, b) =>
+    ordre.reduce((verdict, { champ, sens }) => verdict || sens * comparer(a[champ], b[champ]), 0)
+  );
+}
 
 const aLaCle = (ligne: MongoDocument, cle: string): boolean =>
   Object.prototype.hasOwnProperty.call(ligne, cle);
@@ -114,11 +165,15 @@ function selectionner(
 
 function projeterRelation(valeur: unknown, arbre: PrismaQueryNode, chemin: string): unknown {
   if (Array.isArray(valeur)) {
-    return valeur
-      .filter((element) => matchesMongoWhere(element as MongoDocument, arbre.where))
-      .map((element) => projeterLigne(element as MongoDocument, arbre, chemin));
+    const retenues = (valeur as ReadonlyArray<MongoDocument>).filter((element) =>
+      matchesMongoWhere(element, arbre.where)
+    );
+    return trier(retenues, arbre.orderBy, chemin).map((element) => projeterLigne(element, arbre, chemin));
   }
   if (valeur === null || valeur === undefined) return valeur;
+  if (arbre.orderBy !== undefined) {
+    throw new Error(`double Prisma: « ${chemin} » n'est pas une liste, son orderBy ne trie rien`);
+  }
   if (arbre.where) {
     // Prisma refuse `where` sur une relation to-one : l'accepter en silence
     // laisserait croire à un filtre qui n'a jamais existé.
@@ -139,7 +194,7 @@ function projeterRelation(valeur: unknown, arbre: PrismaQueryNode, chemin: strin
 export function findFirstHonouringWhere(rows: ReadonlyArray<MongoDocument>) {
   return (args?: unknown): Promise<MongoDocument | null> => {
     const arbre = args === undefined ? {} : noeud('findFirst', args);
-    const trouvee = rows.find((ligne) => matchesMongoWhere(ligne, arbre.where));
+    const trouvee = trier(rows, arbre.orderBy, 'findFirst').find((ligne) => matchesMongoWhere(ligne, arbre.where));
     return Promise.resolve(trouvee ? projeterLigne(trouvee, arbre, 'findFirst') : null);
   };
 }

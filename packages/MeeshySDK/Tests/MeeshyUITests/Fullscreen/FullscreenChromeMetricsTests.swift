@@ -54,6 +54,15 @@ struct FullscreenChromeMetricsTests {
         #expect(FullscreenChromeSymbol.comments == "bubble.right.fill")
     }
 
+    @Test("La sortie d'une navigation est un retour, celle d'un plein écran posé est une croix (#9931)")
+    func test_exitStyle_pinsItsGlyph() {
+        #expect(FullscreenChromeSymbol.back == "chevron.backward")
+        #expect(FullscreenExitStyle.close.systemImage == FullscreenChromeSymbol.close)
+        #expect(FullscreenExitStyle.back.systemImage == FullscreenChromeSymbol.back)
+        #expect(FullscreenExitStyle.close.labelKey == "common.close")
+        #expect(FullscreenExitStyle.back.labelKey == "common.back")
+    }
+
     @Test("Le voile garde les valeurs du lecteur de story (#6701)")
     func test_scrims_keepStoryValues() {
         #expect(FullscreenScrimMetrics.topExtent == 110)

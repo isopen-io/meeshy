@@ -113,8 +113,8 @@ describe('une célébration pendant que l’écran est ouvert', () => {
     expect(b.photo().offers).toEqual([]);
   });
 
-  test('la dixième Meesh', async () => {
-    const b = await bench(view({ mintedLifetime: 9 }));
+  test('la dixième Meesh, quand la première est déjà gardée', async () => {
+    const b = await bench(view({ mintedLifetime: 9 }), [{ momentId: 'meesh:1', status: 'kept' }]);
     await b.show(view({ mintedLifetime: 10 }));
     expect(ids(b.photo().offers)).toEqual(['meesh:10']);
   });
@@ -137,6 +137,40 @@ describe('une célébration pendant que l’écran est ouvert', () => {
     const b = await bench(view({ streak: 6 }));
     await b.show(resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE));
     expect(b.photo().offers).toEqual([]);
+  });
+});
+
+/**
+ * LE RYTHME (#9961, #9962) — une transition ne propose qu'UN moment, le plus
+ * marquant ; une étape qui en saute une autre cède la place à l'étape ouverte
+ * de sa piste ; et tant qu'une proposition attend un geste, aucune autre ne
+ * s'ajoute.
+ */
+describe('une seule proposition à la fois', () => {
+  test('une transition qui produit plusieurs moments n’en propose qu’un, le plus marquant', async () => {
+    const b = await bench(view({ streak: 6, mintedLifetime: 9 }), [{ momentId: 'meesh:1', status: 'kept' }]);
+    await b.show(view({ streak: 7, mintedLifetime: 10 }));
+    expect(ids(b.photo().offers)).toEqual(['flame:7']);
+  });
+
+  test('la dixième Meesh sans la première : c’est la première qui se propose', async () => {
+    const b = await bench(view({ mintedLifetime: 9 }));
+    await b.show(view({ mintedLifetime: 10 }));
+    expect(ids(b.photo().offers)).toEqual(['meesh:1']);
+    expect(b.photo().offers[0]?.title).toBe('Ma première Meesh');
+  });
+
+  test('l’étape ouverte de la piste, quand elle attend déjà (« plus tard »), ne se repropose pas', async () => {
+    const b = await bench(view({ mintedLifetime: 9 }), [{ momentId: 'meesh:1', status: 'pending' }]);
+    await b.show(view({ mintedLifetime: 10 }));
+    expect(b.photo().offers).toEqual([]);
+  });
+
+  test('une proposition qui attend un geste : aucune autre ne s’ajoute', async () => {
+    const b = await bench(view({ streak: 6, mintedLifetime: 9 }), [{ momentId: 'meesh:1', status: 'kept' }]);
+    await b.show(view({ streak: 7, mintedLifetime: 9 }));
+    await b.show(view({ streak: 7, mintedLifetime: 10 }));
+    expect(ids(b.photo().offers)).toEqual(['flame:7']);
   });
 });
 

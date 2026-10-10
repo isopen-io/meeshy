@@ -21,7 +21,8 @@ extension StoryCanvasUIView {
             // quand le canvas revient à l'écran sans repasser par `setMode`
             // (cover/sheet présenté au-dessus du viewer puis dismissé).
             if mode == .play, displayLink == nil {
-                registerAsActiveAndPreemptOthers()
+                // Un canvas en pause qui revient à l'écran ne coupe personne (#9827).
+                if !isPlaybackPaused { registerAsActiveAndPreemptOthers() }
                 startPlayback()
                 if isPlaybackPaused {
                     // Le canvas était long-press pausé au détachement : on

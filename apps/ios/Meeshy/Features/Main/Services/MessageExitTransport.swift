@@ -20,11 +20,18 @@ enum MessageExitTransport {
         return true
     }
 
-    /// La requête d'enregistrement de la pièce que le menu désigne — la première
-    /// qui n'est pas un lieu —, ou `nil` quand la loi de sortie la retient.
-    static func saveRequest(for message: Message) -> MediaSaveRequest? {
+    /// La requête d'enregistrement de la pièce que le menu désigne — la pièce
+    /// VISÉE quand il y en a une (#9908), sinon la première qui n'est pas un
+    /// lieu —, ou `nil` quand la loi de sortie la retient. Une pièce visée
+    /// protégée — elle ou son MESSAGE (vue unique, flou, chiffrement,
+    /// flamme) — ne s'enregistre jamais.
+    static func saveRequest(for message: Message, piece attachmentId: String? = nil) -> MediaSaveRequest? {
         guard message.exitOffer.offers(.save),
-              let attachment = message.attachments.first(where: { $0.type != .location }) else { return nil }
+              let attachment = message.attachments.first(where: { candidate in
+                  guard candidate.type != .location else { return false }
+                  guard let attachmentId else { return true }
+                  return candidate.id == attachmentId && !MessagePieceTarget.isProtected(candidate, in: message)
+              }) else { return nil }
         return MediaSaveRequest(
             kind: attachment.kind,
             origin: .transmitted,
@@ -38,9 +45,9 @@ enum MessageExitTransport {
     /// auquel il remet le portillon DE CE MESSAGE : le coordinateur refuse de
     /// lui-même si la loi retient la pièce. Rend `false` quand rien n'est parti.
     @discardableResult
-    static func save(_ message: Message, through coordinator: MediaSaveCoordinator) -> Bool {
+    static func save(_ message: Message, piece attachmentId: String? = nil, through coordinator: MediaSaveCoordinator) -> Bool {
         coordinator.exitGate = message.exitGate
-        guard let request = saveRequest(for: message) else { return false }
+        guard let request = saveRequest(for: message, piece: attachmentId) else { return false }
         coordinator.save(request)
         return true
     }

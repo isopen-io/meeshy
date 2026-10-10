@@ -10,7 +10,8 @@ import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
-import { currentInterfaceLanguage, subscribeInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, interfaceLanguageChoice, subscribeInterfaceLanguage } from '@/lib/interface-language';
+import { syncShellLocaleAtStart } from '@/lib/shell-locale';
 import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
 import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
@@ -189,15 +190,25 @@ if (__SHELL__) {
 }
 
 /**
+ * LA LANGUE CHOISIE DANS MEESHY REJOINT LES TEXTES NATIFS DE LA COQUE (#9749)
+ * — un choix fait avant cette version, ou qu'un Android antérieur au 13 a
+ * oublié, sans jamais écraser la langue posée depuis les réglages d'Android.
+ */
+if (__SHELL__) {
+  void syncShellLocaleAtStart(interfaceLanguageChoice());
+}
+
+/**
  * UN VOCAL CONTINUE DE JOUER QUAND ON QUITTE L'APP (#9257) — la coque Android
  * tient un service au premier plan tant qu'un `<audio>` de la page joue ;
  * sans lui, Android gèle le processus mis en cache au milieu du vocal. Un
  * navigateur tient lui-même la lecture : hors coque, rien ne se charge.
  */
 if (__SHELL__) {
-  void import('@/lib/view/shell-playback').then(({ holdWhileAudioPlays, shellPlaybackHold }) =>
-    holdWhileAudioPlays(document, shellPlaybackHold()),
-  );
+  void import('@/lib/view/shell-playback').then(({ holdWhileAudioPlays, pauseVideosWhenNoisy, shellNoisy, shellPlaybackHold }) => {
+    holdWhileAudioPlays(document, shellPlaybackHold());
+    pauseVideosWhenNoisy(document, shellNoisy());
+  });
 }
 
 /**

@@ -5,7 +5,6 @@ const deUserProfile = {
   'userProfile.self.edit': 'Mein Profil bearbeiten',
   'userProfile.title': 'Profil',
   'userProfile.loading': 'Profil wird geladen',
-  'userProfile.section.publications': 'BEITRÄGE',
   'userProfile.section.relation': 'VERBINDUNG',
   'userProfile.section.conversations': 'UNTERHALTUNGEN',
   'userProfile.conversations.empty': 'Keine gemeinsame Unterhaltung',

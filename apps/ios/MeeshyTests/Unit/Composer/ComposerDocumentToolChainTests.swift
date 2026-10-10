@@ -878,8 +878,12 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// réintroduire un littéral `durationMs: nil` dans un de ces corps.
     func test_lesTroisIngestions_sondentLaDureeReelle_neLaFigentPlusANil() throws {
         let code = try hostCode()
+        // La vitrine (#9810, `#if DEBUG`) prête au composeur un média de démonstration et le sonde
+        // comme la photothèque : elle n'est pas une ingestion du produit. La garde compte les
+        // ingestions LIVRÉES.
+        let livre = code.replacingOccurrences(of: #"#if DEBUG[\s\S]*?#endif"#, with: "", options: .regularExpression)
         XCTAssertEqual(
-            occurrences(of: "ComposerMediaProbe.durationMs(", in: code), 3,
+            occurrences(of: "ComposerMediaProbe.durationMs(", in: livre), 3,
             "Les trois ingestions (photothèque, caméra, importateur) doivent sonder la durée RÉELLE — sans "
                 + "quoi une vidéo composée dans le meuble partirait `durationMs: nil` et `ReelComposition` "
                 + "la classerait `.post` au lieu de `.reel`."

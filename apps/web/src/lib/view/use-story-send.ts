@@ -13,9 +13,9 @@ import { useSendSheetOpen } from './use-send-sheet-open';
  * une personne, plusieurs, un groupe, ou une publication — avec la story
  * regardée ; le lecteur ne monte jamais sa propre feuille.
  *
- * `sheetOpen` est l'état de la feuille, pour que le lecteur mette la lecture en
- * attente dessous (`useStoryPauseWhile`) : la story n'avance pas pendant qu'on
- * choisit à qui l'envoyer.
+ * `sheetOpen` est l'état de la feuille, pour que le lecteur fasse boucler la
+ * story dessous (`resolveStoryPlaybackHold`, #9821) : elle n'avance pas
+ * pendant qu'on choisit à qui l'envoyer.
  */
 export type StorySend = {
   readonly handlers: Pick<StoryActionRailHandlers, 'forward'>;

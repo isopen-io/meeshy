@@ -460,6 +460,28 @@ describe('MessageHandler — mode lent des nouveaux comptes dans Meeshy Global (
     expect(socket.emit).toHaveBeenCalledWith('error', expect.objectContaining({ code: 'NEWCOMER_SLOW_MODE', retryAfter: 20 }));
   });
 
+  // #9927 — le refus d'un mineur déclaré dans Global voyage par la même porte :
+  // l'ACK porte le code, sans décompte (refus définitif).
+  it('message:send — le refus d’un mineur dans Global porte GLOBAL_ADULTS_ONLY dans l’ACK (#9927)', async () => {
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket('socket-1');
+    const cb = jest.fn();
+    const data = makeValidSendData();
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+    const refusal = {
+      success: false,
+      error: 'Meeshy Global est en lecture seule jusqu’à vos 18 ans : vous pouvez la lire et réagir, pas y écrire.',
+      code: 'GLOBAL_ADULTS_ONLY',
+      data: null,
+    };
+    const messagingService = { handleMessage: jest.fn(async () => refusal) };
+
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, messagingService });
+    await handler.handleMessageSend(socket, data as any, cb);
+
+    expect(cb).toHaveBeenCalledWith({ success: false, error: refusal.error, code: 'GLOBAL_ADULTS_ONLY' });
+  });
+
   it('un refus ordinaire, sans code, ne déclenche aucun événement error en plus de l’ACK', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket('socket-1');

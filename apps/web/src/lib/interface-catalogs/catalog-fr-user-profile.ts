@@ -12,7 +12,6 @@ const frUserProfile = {
   'userProfile.self.edit': 'Modifier mon profil',
   'userProfile.title': 'Profil',
   'userProfile.loading': 'Chargement du profil',
-  'userProfile.section.publications': 'PUBLICATIONS',
   'userProfile.section.relation': 'CONNEXION',
   'userProfile.section.conversations': 'CONVERSATIONS',
   'userProfile.conversations.empty': 'Aucune conversation en commun',

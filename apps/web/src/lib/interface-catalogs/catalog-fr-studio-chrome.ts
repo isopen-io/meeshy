@@ -7,7 +7,6 @@
 const frStudioChrome = {
   'story.studio.more': 'Plus d’options',
   'story.studio.preview': 'Aperçu',
-  'story.studio.preview.close': 'Fermer l’aperçu',
   'story.studio.page.remove.current': 'Supprimer cette scène',
   'story.studio.postText': 'Texte du post',
   'story.studio.postText.placeholder': 'Écrivez le texte du post…',
@@ -19,7 +18,6 @@ const frStudioChrome = {
   'story.studio.tile.frame': 'Cadre',
   'story.studio.undo': 'Annuler',
   'story.studio.redo': 'Rétablir',
-  'story.studio.frame': 'Cadre',
   'story.studio.frame.media': 'Le média',
   'story.studio.frame.around': 'Autour du média',
   'story.studio.frame.fit': 'Ajuster',
@@ -65,7 +63,6 @@ const frStudioChrome = {
   'story.studio.object.duplicate': 'Dupliquer',
   'story.studio.object.edit': 'Modifier',
   'story.studio.object.remove': 'Retirer',
-  'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'Vers la gauche',
   'story.studio.pose.right': 'Vers la droite',
   'story.studio.pose.up': 'Vers le haut',

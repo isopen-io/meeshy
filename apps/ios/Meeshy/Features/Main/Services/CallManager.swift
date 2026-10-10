@@ -223,6 +223,8 @@ final class CallManager: ObservableObject {
     /// self-activation (when false, no CallKit means we own the session lifecycle).
     var callUsesCallKit = true
     @Published var isSpeaker: Bool = false
+    /// Mis en attente par CallKit (`CXSetHeldCallAction`) — lu par l'îlot (#9782).
+    @Published var isOnHold = false
     /// #8989 — NON publié : à 1 Hz, il recalculait tout ce qui observe le
     /// gestionnaire. La durée affichée se lit sous `CallDurationClock`.
     var callDuration: TimeInterval = 0

@@ -131,6 +131,7 @@ import { meMeeshRoutes } from './me/meesh';
 import { meGameRoutes } from './me/game';
 import { userGameShowcaseRoutes } from './users/game-showcase';
 import { meOnboardingRoutes } from './me/onboarding';
+import { meBirthDateRoutes } from './me/birth-date';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
@@ -317,6 +318,7 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // L'onboarding post-inscription (#7729) — état du parcours et étapes vues.
   // Montage AUTONOME, même patron que `me-engagement` juste au-dessus.
   { name: 'me-onboarding', prefix: `${API_PREFIX}/me`, module: meOnboardingRoutes },
+  { name: 'me-birth-date', prefix: `${API_PREFIX}/me`, module: meBirthDateRoutes },
   // Le favori de message (#7377) — l'étoile PERSONNELLE d'un lecteur, sa
   // liste et sa pose/son retrait. Montage AUTONOME, même patron que
   // `me-engagement` juste au-dessus.

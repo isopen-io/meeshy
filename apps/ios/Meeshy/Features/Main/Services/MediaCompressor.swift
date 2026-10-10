@@ -275,6 +275,7 @@ actor MediaCompressor {
         let videoSettings = encodage.merging(etiquette) { garde, _ in garde }
 
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+        writer.shouldOptimizeForNetworkUse = true
 
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         videoInput.expectsMediaDataInRealTime = false

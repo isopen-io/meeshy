@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 
-import { detectContentLanguage } from '../../../utils/content-language';
+import { detectContentLanguage, measureContentLanguage } from '../../../utils/content-language';
 
 describe('detectContentLanguage', () => {
   it('reads an accented French caption as French, never as Portuguese', () => {
@@ -39,5 +39,23 @@ describe('detectContentLanguage', () => {
   it('falls back to English on empty or unknown text', () => {
     expect(detectContentLanguage('')).toBe('en');
     expect(detectContentLanguage('Hello world, see you soon')).toBe('en');
+  });
+});
+
+describe('measureContentLanguage — une détection sans indice ne tranche pas (#9861)', () => {
+  it('rend null sur un texte court fait de mots inconnus et de chiffres', () => {
+    expect(measureContentLanguage('Story recette B 9743 r2')).toBeNull();
+  });
+
+  it('rend null sur un texte vide', () => {
+    expect(measureContentLanguage('')).toBeNull();
+  });
+
+  it('rend la langue quand ses mots sont là', () => {
+    expect(measureContentLanguage('Une légende pour la soirée')).toBe('fr');
+  });
+
+  it('rend la langue quand son écriture est là', () => {
+    expect(measureContentLanguage('مرحبا بكم')).toBe('ar');
   });
 });

@@ -37,6 +37,8 @@ const SCHEMA = join(__dirname, '../../../../packages/shared/prisma/schema.prisma
 const SITES_JUSTIFIES: Readonly<Record<string, string>> = {
   'routes/conversations/messages-search.ts#content': 'Message.content est requis ; seul Post.content est optionnel.',
   'routes/conversations/messages-list-views.ts#content': 'Message.content est requis ; seul Post.content est optionnel.',
+  'services/posts/viewerEngagement.ts#parentId':
+    "Écarter l'absence est VOULU : on compte les RÉPONSES, qui portent un parentId présent ET non nul — `isSet: true` le dit dans le même filtre.",
 };
 
 type Declaration = { readonly kind: 'list' | 'optional' | 'required'; readonly attributes: string };
