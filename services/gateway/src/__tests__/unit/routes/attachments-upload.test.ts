@@ -155,10 +155,19 @@ const PDF_HEADER = Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n', 'binary');
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
-function makePrisma(shareLink: any = { allowAnonymousFiles: true, allowAnonymousImages: true }) {
+function makePrisma(
+  shareLink: any = { allowAnonymousFiles: true, allowAnonymousImages: true },
+  target: { conversationType?: string; birthDate?: Date | null } = {}
+) {
   return {
     conversationShareLink: {
       findUnique: jest.fn<any>().mockResolvedValue(shareLink),
+    },
+    message: {
+      findFirst: jest.fn<any>().mockResolvedValue({ conversation: { type: target.conversationType ?? 'group' } }),
+    },
+    user: {
+      findUnique: jest.fn<any>().mockResolvedValue({ birthDate: target.birthDate ?? null }),
     },
   };
 }
@@ -968,5 +977,35 @@ describe('POST /attachments/upload-text — byte-based size cap, not codepoint-b
 
     expect(res.statusCode).toBe(400);
     expect(mockCreateTextAttachment).not.toHaveBeenCalled();
+  });
+});
+
+// #9927 — une pièce jointe ajoutée à un message EXISTANT paraît dans sa
+// conversation : dans Meeshy Global, un mineur déclaré ne le fait pas.
+describe('POST /attachments/upload-text — ajout à un message de Global par un mineur (#9927)', () => {
+  it('403 GLOBAL_ADULTS_ONLY, et rien n’est créé', async () => {
+    mockCreateTextAttachment.mockClear();
+    const app = await buildApp({ prisma: makePrisma(undefined, { conversationType: 'global', birthDate: new Date('2011-01-01T00:00:00.000Z') }) });
+    try {
+      const res = await app.inject({ method: 'POST', url: '/attachments/upload-text', payload: { content: 'coucou', messageId: '507f1f77bcf86cd799439033' } });
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toMatchObject({ success: false, code: 'GLOBAL_ADULTS_ONLY' });
+      expect(mockCreateTextAttachment).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('sans messageId, le fichier n’entre dans aucune conversation : rien n’est lu', async () => {
+    mockCreateTextAttachment.mockResolvedValue({ id: 'att-1', fileUrl: 'https://example.com/file.txt' });
+    const prisma = makePrisma(undefined, { conversationType: 'global', birthDate: new Date('2011-01-01T00:00:00.000Z') });
+    const app = await buildApp({ prisma });
+    try {
+      const res = await app.inject({ method: 'POST', url: '/attachments/upload-text', payload: { content: 'coucou' } });
+      expect(res.statusCode).toBe(200);
+      expect(prisma.message.findFirst).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
   });
 });

@@ -99,7 +99,12 @@ import type {
   LocationLiveStoppedEventData,
 } from '@meeshy/shared/types/socketio-events';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
-import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
+import {
+  isConversationClosed,
+  GLOBAL_ADULTS_ONLY_CODE,
+  MINOR_GLOBAL_REFUSAL_MESSAGE,
+} from '../../services/messaging/conversationWriteAdmission';
+import { refusesMinorInConversation, refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import {
   SocketLocationLiveStartSchema,
@@ -124,6 +129,8 @@ export interface LocationHandlerDependencies {
    * le moteur réel ; `null` ⇒ aucun crédit.
    */
   engagement?: Pick<EngagementService, 'recordActivity'> | null;
+  /** Injectable pour les tests ; l'horloge murale en production. */
+  now?: () => Date;
 }
 
 /** Un partage en cours, tel que le serveur le connaît. */
@@ -156,6 +163,7 @@ export class LocationHandler {
   private sessions = new Map<string, LiveLocationSession>();
   private expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly engagement: Pick<EngagementService, 'recordActivity'> | null;
+  private readonly now: () => Date;
 
   constructor(deps: LocationHandlerDependencies) {
     this.io = deps.io;
@@ -164,6 +172,7 @@ export class LocationHandler {
     this.socketToUser = deps.socketToUser;
     this.normalizeConversationId = deps.normalizeConversationId;
     this.engagement = deps.engagement === undefined ? new EngagementService(deps.prisma) : deps.engagement;
+    this.now = deps.now ?? (() => new Date());
   }
 
   async handleLiveLocationStart(
@@ -207,12 +216,25 @@ export class LocationHandler {
       // celle des quatre portes d'entrée (cycles 70/71/72) — même prédicat,
       // même source de vérité, et il lit les DEUX colonnes parce que les fils
       // fermés par l'ancien `leave.ts` n'ont qu'`isActive: false`.
-      if (await this._isConversationClosed(normalizedId)) {
+      const conversation = await this._readConversationGate(normalizedId);
+      if (isConversationClosed(conversation)) {
         this._sendError(callback, 'Conversation is closed');
         return;
       }
 
-      const now = new Date();
+      // #9927 — une épingle en direct paraît à tout le salon : un mineur
+      // déclaré ne la pose pas dans Meeshy Global (règle 5 de l'envoi).
+      const now = this.now();
+      const minorInGlobal = await refusesMinorInConversationOfType(this.prisma, {
+        conversationType: conversation?.type,
+        userId: context.isAnonymous ? null : context.userId,
+        now,
+      });
+      if (minorInGlobal) {
+        callback?.({ success: false, error: MINOR_GLOBAL_REFUSAL_MESSAGE, code: GLOBAL_ADULTS_ONLY_CODE });
+        return;
+      }
+
       const expiresAt = new Date(now.getTime() + validated.durationMinutes * 60_000);
 
       const eventData: LocationLiveStartedEventData = {
@@ -275,9 +297,18 @@ export class LocationHandler {
       const participantId = await this._resolveParticipantId(context, normalizedId);
       if (!participantId) return;
 
-      const now = new Date();
+      const now = this.now();
       const key = sessionKey(normalizedId, context.userId);
       const session = this.sessions.get(key);
+      // #9927 — une session CONNUE a passé la règle 5 à son départ. Une session
+      // INCONNUE (redémarrage, ou client qui n'a jamais démarré) passe la même
+      // vérification avant d'être relayée : sans elle, `live-update` seul
+      // posait une épingle dans Global sans jamais rencontrer la garde.
+      if (!session && await refusesMinorInConversation(this.prisma, {
+        conversationId: normalizedId,
+        userId: context.isAnonymous ? null : context.userId,
+        now,
+      })) return;
       // Passé le terme, la position n'est plus relayée. Sans cette borne le
       // retrait diffusé à l'expiration serait défait par la mise à jour
       // suivante : le pair recevrait un `stopped`, puis un `updated` qui
@@ -605,10 +636,12 @@ export class LocationHandler {
   }
 
   /**
-   * L'état terminal du fil, sur le seul verbe qui l'interroge.
+   * L'état terminal du fil ET son type (règle 5, #9927), sur le seul verbe qui
+   * les interroge.
    *
-   * Une lecture de plus, et seulement au DÉPART — jamais sur `live-update`, qui
-   * est le chemin chaud (une position par seconde et par partageur). Les mises à
+   * Une lecture de plus, et seulement au DÉPART — jamais sur `live-update` d'une
+   * session connue, qui est le chemin chaud (une position par seconde et par
+   * partageur ; seule une session INCONNUE du registre relit le type). Les mises à
    * jour d'un partage ouvert AVANT la clôture sont tues par le terme avancé que
    * `endSessionsForClosedConversation` leur pose, sans interroger la base.
    *
@@ -617,12 +650,13 @@ export class LocationHandler {
    * passer toute la population héritée. C'est la garde de REQUÊTE du cycle
    * 70-bis, et le témoin qui la tient est le seul que la mutation fait tomber.
    */
-  private async _isConversationClosed(conversationId: string): Promise<boolean> {
-    const conversation = await this.prisma.conversation.findUnique({
+  private async _readConversationGate(
+    conversationId: string
+  ): Promise<{ isActive: boolean; closedAt: Date | null; type: string } | null> {
+    return this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { isActive: true, closedAt: true },
+      select: { isActive: true, closedAt: true, type: true },
     });
-    return isConversationClosed(conversation);
   }
 
   private _sendError<T>(callback: ((response: SocketIOResponse<T>) => void) | undefined, message: string): void {
