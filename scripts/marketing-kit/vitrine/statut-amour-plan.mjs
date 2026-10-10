@@ -94,15 +94,7 @@ export const PLANS = [
   },
   {
     id: 'amis', de: 12, a: 23, sortie: 'toiles',
-<<<<<<< HEAD
     kit: 'amitie', revelations: [0, 1.25, 1.95, 2.65, 3.35],
-=======
-<<<<<<< HEAD
-    kit: 'amitie', revelations: [0, 1.25, 1.95, 2.65, 3.35],
-=======
-    kit: 'amitie', revelations: [0.55, 1.25, 1.95, 2.65, 3.35],
->>>>>>> origin/dev
->>>>>>> origin/dev
     camera: { de: fenetre(660, 1560, 1.04), a: fenetre(660, 1900, 1.07) },
   },
   {
@@ -224,15 +216,7 @@ export const planDuStatut = ({ lang, prises }) => {
     { son: 'souffle', instantS: plan('rire').debutS + plan('rire').etapesS['reel-2'], gainDb: -14 },
     { son: 'fouet', instantS: plan('amis').debutS - 0.12, gainDb: -6 },
     { son: 'tonnerre', instantS: plan('amis').debutS, gainDb: -3 },
-<<<<<<< HEAD
     ...plan('amis').revelations.filter((r) => r > 0).map((r) => ({ son: 'bulle', instantS: Number((plan('amis').debutS + r).toFixed(3)), gainDb: -9 })),
-=======
-<<<<<<< HEAD
-    ...plan('amis').revelations.filter((r) => r > 0).map((r) => ({ son: 'bulle', instantS: Number((plan('amis').debutS + r).toFixed(3)), gainDb: -9 })),
-=======
-    ...plan('amis').revelations.map((r) => ({ son: 'bulle', instantS: Number((plan('amis').debutS + r).toFixed(3)), gainDb: -9 })),
->>>>>>> origin/dev
->>>>>>> origin/dev
     { son: 'fleche', instantS: 8.0, gainDb: -8 },
     { son: 'coeur', instantS: 8.3, gainDb: -10 },
     { son: 'fleche', instantS: plan('complices').debutS - 0.75, gainDb: -10 },
@@ -261,21 +245,11 @@ export const planDuStatut = ({ lang, prises }) => {
 // ── Le mixage ──────────────────────────────────────────────────────────────────────────────────────────────
 
 export const CIBLE_LUFS = -16
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/dev
 // La crête vraie EXIGÉE du fichier livré, mesurée après l'AAC, qui la fait déborder de 0,5 à 1 dB : le mixage vise plus
 // bas, et se reprend tant que la mesure dépasse (`cibleSuivante`).
 export const CRETE_MAX_DBTP = -1.5
 export const CRETE_DBTP = -2.5
 export const cibleSuivante = ({ cible, mesuree, max = CRETE_MAX_DBTP }) => (mesuree <= max ? null : Number((cible - (mesuree - max) - 0.2).toFixed(2)))
-<<<<<<< HEAD
-=======
-=======
-export const CRETE_DBTP = -1.5
->>>>>>> origin/dev
->>>>>>> origin/dev
 
 // Les coups brefs creusent la musique (sidechain) ; un souffle ou une toile durent et l'éteindraient.
 export const SONS_DE_COUP = new Set(['tonnerre', 'pousse', 'croque', 'bague', 'bisou'])
@@ -309,37 +283,15 @@ export const filtreDeMixage = ({ reperes, musiqueGainDb = -5, effetsGainDb = 0 }
   return parties.join(';')
 }
 
-<<<<<<< HEAD
 export const filtreDeSonie = (mesure = null, crete = CRETE_DBTP) => {
   const base = `loudnorm=I=${CIBLE_LUFS}:TP=${crete}:LRA=11`
-=======
-<<<<<<< HEAD
-export const filtreDeSonie = (mesure = null, crete = CRETE_DBTP) => {
-  const base = `loudnorm=I=${CIBLE_LUFS}:TP=${crete}:LRA=11`
-=======
-export const filtreDeSonie = (mesure = null) => {
-  const base = `loudnorm=I=${CIBLE_LUFS}:TP=${CRETE_DBTP}:LRA=11`
->>>>>>> origin/dev
->>>>>>> origin/dev
   if (!mesure) return `${base}:print_format=json`
   return `${base}:measured_I=${mesure.input_i}:measured_TP=${mesure.input_tp}:measured_LRA=${mesure.input_lra}:measured_thresh=${mesure.input_thresh}:offset=${mesure.target_offset}:linear=true:print_format=json`
 }
 
-<<<<<<< HEAD
 export const argumentsDeMixage = ({ musique, sons, reperes, sortie, mesure = null, crete = CRETE_DBTP }) => [
   '-y', '-v', 'info', '-i', musique, ...reperes.flatMap((r) => ['-i', sons[r.son]]),
   '-filter_complex', `${filtreDeMixage({ reperes })};[mix]${filtreDeSonie(mesure, crete)},aresample=48000[out]`,
-=======
-<<<<<<< HEAD
-export const argumentsDeMixage = ({ musique, sons, reperes, sortie, mesure = null, crete = CRETE_DBTP }) => [
-  '-y', '-v', 'info', '-i', musique, ...reperes.flatMap((r) => ['-i', sons[r.son]]),
-  '-filter_complex', `${filtreDeMixage({ reperes })};[mix]${filtreDeSonie(mesure, crete)},aresample=48000[out]`,
-=======
-export const argumentsDeMixage = ({ musique, sons, reperes, sortie, mesure = null }) => [
-  '-y', '-v', 'info', '-i', musique, ...reperes.flatMap((r) => ['-i', sons[r.son]]),
-  '-filter_complex', `${filtreDeMixage({ reperes })};[mix]${filtreDeSonie(mesure)},aresample=48000[out]`,
->>>>>>> origin/dev
->>>>>>> origin/dev
   '-map', '[out]', '-ac', '2', '-ar', '48000', ...(sortie ? ['-c:a', 'pcm_s16le', sortie] : ['-f', 'null', '-']),
 ]
 

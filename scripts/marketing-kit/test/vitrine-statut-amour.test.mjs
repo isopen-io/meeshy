@@ -6,21 +6,9 @@ import { AMOUR } from '../textes/amour.mjs'
 import { partenaireDe } from '../textes/demo.mjs'
 import { documentDeLEcran, repliqueDAmitie } from '../vitrine/statut-amour-ecrans.mjs'
 import { svgDesApparitions } from '../vitrine/statut-amour-mee.mjs'
-<<<<<<< HEAD
 import { CARTE, documentDuStatut, modeleDeLaPage, mots } from '../vitrine/statut-amour-page.mjs'
 import {
   AMOUREUX, CRETE_DBTP, CRETE_MAX_DBTP, DUREE_S, ECRAN, cibleSuivante, filtreDeSonie, FESTIN, FPS, GLOUTONS, HAUTEUR, IMAGES, LARGEUR, PLANS, SONS, SONS_DE_COUP, STICKERS, TEMPS_S,
-=======
-<<<<<<< HEAD
-import { CARTE, documentDuStatut, modeleDeLaPage, mots } from '../vitrine/statut-amour-page.mjs'
-import {
-  AMOUREUX, CRETE_DBTP, CRETE_MAX_DBTP, DUREE_S, ECRAN, cibleSuivante, filtreDeSonie, FESTIN, FPS, GLOUTONS, HAUTEUR, IMAGES, LARGEUR, PLANS, SONS, SONS_DE_COUP, STICKERS, TEMPS_S,
-=======
-import { CARTE, documentDuStatut, modeleDeLaPage } from '../vitrine/statut-amour-page.mjs'
-import {
-  AMOUREUX, DUREE_S, ECRAN, FESTIN, FPS, GLOUTONS, HAUTEUR, IMAGES, LARGEUR, PLANS, SONS, SONS_DE_COUP, STICKERS, TEMPS_S,
->>>>>>> origin/dev
->>>>>>> origin/dev
   argumentsDeMixage, compteARebours, debitVideoKbps, enSecondes, entreeDuPlan, fenetre, fenetreDeLEffet, filtreDeMixage, planDuStatut,
 } from '../vitrine/statut-amour-plan.mjs'
 import { filtreDeLaPlanche, nomDeLaPlanche, nomDuFichier } from '../vitrine/statut-amour.mjs'
@@ -261,10 +249,6 @@ describe('la vidéo de statut : les textes de publication (#9988)', () => {
     })
   })
 })
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> origin/dev
 
 describe('la vidéo de statut : les corrections du porteur (#9988)', () => {
   test('« نصفك الآخر » ne se coupe jamais : une espace insécable les lie dans un même bloc de mots', () => {
@@ -299,12 +283,13 @@ describe('la vidéo de statut : les corrections du porteur (#9988)', () => {
     expect(filtreDeSonie(null, -3)).toContain('TP=-3')
     expect(cibleSuivante({ cible: -2.5, mesuree: -1.6 })).toBeNull()
     expect(cibleSuivante({ cible: -2.5, mesuree: -1.5 })).toBeNull()
-    const suivante = cibleSuivante({ cible: -2.5, mesuree: -0.9 })
-    expect(suivante).toBeCloseTo(-3.3, 5)
+    expect(cibleSuivante({ cible: -2.5, mesuree: -0.9 })).toBeCloseTo(-3.3, 5)
+  })
+
+  test('aucun fichier du module ne porte de marqueur de conflit', async () => {
+    const { readFileSync } = await import('node:fs')
+    for (const f of ['../vitrine/statut-amour.mjs', '../vitrine/statut-amour-plan.mjs', '../vitrine/statut-amour-page.mjs', '../vitrine/statut-amour-ecrans.mjs', '../vitrine/statut-amour-mee.mjs', '../textes/statut-amour.mjs']) {
+      expect(readFileSync(new URL(f, import.meta.url), 'utf8')).not.toMatch(/^(<{7}|={7}|>{7})( |$)/m)
+    }
   })
 })
-<<<<<<< HEAD
-=======
-=======
->>>>>>> origin/dev
->>>>>>> origin/dev
