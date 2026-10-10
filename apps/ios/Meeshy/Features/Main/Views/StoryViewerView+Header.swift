@@ -619,11 +619,12 @@ struct StoryHeaderView: View {
         }
     }
 
-    /// **La règle d'offre décide, pas le menu** (critère 2 de #6085). Une slide
-    /// à deux médias, une slide sans média ni texte : aucune cible, donc aucune
-    /// entrée. Le Prisme du lecteur descend sur le texte qui pré-remplira la
-    /// description — la graine d'un composer est du CONTENU, et le Prisme
-    /// s'applique à tout le contenu.
+    /// **La règle d'offre décide, pas le menu** (critère 2 de #6085). Depuis
+    /// #9994 elle reprend la SCÈNE entière — plusieurs médias, textes posés,
+    /// stickers, effets ; seule une slide qui ne porte rien, ou qu'on ne saurait
+    /// recréer à l'identique, n'a pas de cible, donc pas d'entrée. Le Prisme du
+    /// lecteur descend sur le texte qui pré-remplira la description — la graine
+    /// d'un composer est du CONTENU, et le Prisme s'applique à tout le contenu.
     private func resolveComposableSlide() -> ComposerSeedTarget? {
         guard demanderComposer != nil, let story = currentStory else { return nil }
         return ComposerSeedTarget(
