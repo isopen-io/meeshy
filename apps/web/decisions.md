@@ -5015,3 +5015,17 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Compromis ouvert (#9725).** Un compte qui lit en anonyme ferme sa socket au moment où celle de son invité s'ouvre et s'annonce « dans la conversation » : un ami membre du fil peut corréler les deux. iOS fait de même (`connectAnonymous`) ; la décision est au porteur.
 
 **Témoins.** `realtime-identity.test.ts` : la poignée de main de l'invité sans jeton, rien du compte tenu, les bascules compte ↔ invité, et la chaîne socket → cache du fil → texte servi par le Prisme de l'invité. Rétablir la garde `authenticated` dans `keepRealtimeConnection` rougit quatre témoins.
+
+## D-182 — Le navigateur traduit ce qu'il affiche vers la langue du lecteur, puis partage sa traduction scellée ; la passerelle la relaie sans la lire (2026-10-10, #9899)
+
+**Contexte.** Décision porteur du 2026-10-10 : l'appareil de chaque membre traduit vers SA langue et partage sa traduction aux autres, pour que la traduction survive au chiffrement de bout en bout (#9224, #9229). Le serveur ne traduit plus ce qu'il ne voit pas ; il garde et relaie une enveloppe qu'il n'ouvre pas (`packages/shared/types/shared-translation.ts`, protocole `meeshy-shared-translation/v1`).
+
+**Décision.**
+- **Moteur.** La Translator API du navigateur quand elle existe (Chrome 138+, ordinateur), sinon Opus-MT quantifié q8 en WASM (transformers.js) dans un Worker, pour les sept langues de base : fr, en, es, pt, de, it, ar (`opus-mt-routes.ts` : neuf couples directs, les autres par l'anglais, deux modèles en mémoire au plus). Le modèle ne part qu'avec l'accord du lecteur (« Traduire sur cet appareil », réglage LOCAL). Les langues africaines ne se traduisent pas sur l'appareil : le serveur les garde, hors chiffrement de bout en bout.
+- **Partage.** Chaque traduction livrée part scellée (dérivation `message-content`) depuis un Worker de scellement chargé au premier sceau ; un registre `shared|` en IndexedDB évite de reposter l'historique à chaque ouverture. Jamais pour un message chiffré de bout en bout tant que le secret par message ne voyage pas (#9959). Jamais pour qui a coupé ses accusés de lecture : un partage en est un, la passerelle refuse (`SHARED_TRANSLATION_READ_RECEIPTS_OFF`) et l'appareil se tait pour la session (`declined`).
+- **Réception.** Le fil relit les partages de ses cent messages les plus récents et n'ouvre que les langues du lecteur ; le temps réel arrive par `message:translation-shared`. Un refus 4xx ne se redemande pas pour la conversation, une panne attend trente secondes.
+- **Poids.** Moteur, sceau, consentement et session se chargent par `import()`. La première peinture ne porte que la route du catalogue et le nom de l'événement.
+
+**Ce que le sceau protège, et ce qu'il ne protège pas.** Dans une conversation NON chiffrée de bout en bout, la clé dérive du texte du message, que la passerelle détient : le sceau lie la traduction à son message et à sa langue, il ne la cache pas du serveur. Il la cachera quand le secret par message voyagera (#9959) — c'est l'architecture qui est prête, pas encore la confidentialité.
+
+**Témoins.** `share.test.ts` (scellé avec le vrai sceau puis ouvert, jamais E2EE, refus et déclin), `shared-translations.test.ts` (réception, langues du lecteur, rattrapage), `shared-translations-api.test.ts` (constantes relues contre le contrat), `opus-mt-routes.test.ts`, `use-device-translation-setting.test.tsx`.

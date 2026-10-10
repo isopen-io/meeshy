@@ -15,6 +15,7 @@ import { apiDeps } from './deps';
 import { appQueryClient } from './query-client';
 import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
 import { watchIdentityScopedStores } from './identity-scoped-stores';
+import { createLiveSocketWatchers } from './live-socket-watchers';
 import { sendAttachmentReaction } from './attachment-reaction-socket';
 import { setTypingEmitter } from './typing-emit';
 import { keepRealtimeConnection } from './realtime-identity';
@@ -62,6 +63,16 @@ let fixturesConnecting = false;
 let unbridgeCalls: (() => void) | null = null;
 
 /**
+ * Les écrans qui écoutent la socket vivante le temps où ils sont ouverts (#9899) :
+ * le fil, pour `message:translation-shared`. La connexion se reconstruit à chaque
+ * changement d'identité ; chaque observateur est détaché de l'ancienne et accroché
+ * à la nouvelle par `bridgeCalls`, sans que `socket.ts` (chemin du démarrage) ne
+ * connaisse l'événement.
+ */
+const liveWatchers = createLiveSocketWatchers();
+export const watchLiveSocket = liveWatchers.watch;
+
+/**
  * UNE SESSION RÉVOQUÉE DIT POURQUOI (#9613) — le motif est NOTÉ avant que la
  * session ne finisse, pour que l'écran de connexion l'explique
  * (`lib/session-end.ts`). Sans motif (jeton expiré), la session finit aussitôt ;
@@ -80,6 +91,7 @@ function endWithReason(reason?: string): void {
 
 function bridgeCalls(next: RealtimeConnection | null): void {
   unbridgeCalls?.();
+  liveWatchers.connect(next === null ? null : next.socket);
   if (next === null) {
     unbridgeCalls = null;
     return;

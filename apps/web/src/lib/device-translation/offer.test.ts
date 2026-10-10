@@ -1,11 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
 import { offeredMessagesOf, translationEventOf } from './offer';
 import type { Message } from '@/lib/api/types';
 
 const message = (over: Partial<Message> = {}): Message =>
   ({
     id: 'm1',
+    conversationId: 'c1',
     senderId: 'u-other',
     content: 'habari yako',
     originalLanguage: 'sw',
@@ -21,7 +24,7 @@ describe('offeredMessagesOf — ce que le fil confie à l’appareil (#9898)', (
   test('un message reçu, en clair, part avec ses langues déjà servies', () => {
     const translations = [{ targetLanguage: 'en', translatedContent: 'how are you' }] as unknown as Message['translations'];
     expect(offeredMessagesOf([message({ translations })], 'u-me')).toEqual([
-      { id: 'm1', content: 'habari yako', originalLanguage: 'sw', translatedLanguages: ['en'], encrypted: false },
+      { id: 'm1', conversationId: 'c1', content: 'habari yako', originalLanguage: 'sw', translatedLanguages: ['en'], encrypted: false },
     ]);
   });
 
@@ -41,6 +44,37 @@ describe('offeredMessagesOf — ce que le fil confie à l’appareil (#9898)', (
 
   test('un message chiffré de bout en bout est marqué : sans clair déchiffré, rien n’est calculé', () => {
     expect(offeredMessagesOf([message({ isEncrypted: true, encryptionMode: 'e2ee' })], 'u-me')[0]?.encrypted).toBe(true);
+  });
+
+  test('un chiffrement côté serveur laisse un clair : le message reste traduisible', () => {
+    expect(offeredMessagesOf([message({ isEncrypted: true, encryptionMode: 'server' })], 'u-me')[0]?.encrypted).toBe(false);
+  });
+
+  test('tout ce que la loi de sortie ne laisse pas sortir reste hors du cache et du partage', () => {
+    const protectedMessages = [
+      message({ id: 'timer', ephemeralDuration: 30 }),
+      message({ id: 'flame', effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL }),
+      message({ id: 'after-read', effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ }),
+      message({ id: 'once-bit', effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE }),
+      message({ id: 'blur-bit', effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }),
+      message({ id: 'once-piece', attachments: [{ id: 'a1', isViewOnce: true }] as unknown as NonNullable<Message['attachments']> }),
+      message({ id: 'deleted', deletedAt: new Date('2026-10-10T08:00:00Z') }),
+    ];
+    expect(offeredMessagesOf(protectedMessages, 'u-me')).toEqual([]);
+  });
+
+  test('un effet qui ne protège rien n’empêche pas la traduction', () => {
+    const shaken = message({ effectFlags: MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.GLOW });
+    expect(offeredMessagesOf([shaken], 'u-me').map((offered) => offered.id)).toEqual(['m1']);
+  });
+
+  test('mon message se reconnaît aussi par l’utilisateur de son expéditeur', () => {
+    const mine = message({ senderId: 'participant-9', sender: { userId: 'u-me' } as unknown as NonNullable<Message['sender']> });
+    expect(offeredMessagesOf([mine], 'u-me')).toEqual([]);
+  });
+
+  test('sans lecteur identifié, rien ne part : on ne sait pas lesquels sont les siens', () => {
+    expect(offeredMessagesOf([message()], '')).toEqual([]);
   });
 });
 

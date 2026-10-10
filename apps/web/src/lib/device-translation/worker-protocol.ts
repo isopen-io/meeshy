@@ -30,10 +30,17 @@ export type WorkerPort = {
   addEventListener(type: 'message', listener: (event: { readonly data: WorkerReply }) => void): void;
 };
 
-/** **LE CÔTÉ PAGE** — un `EmbeddedTranslator` dont le calcul vit dans le Worker. */
+const nllbSupports = (source: string, target: string): boolean => NLLB_CODES[source] !== undefined && NLLB_CODES[target] !== undefined;
+
+/**
+ * **LE CÔTÉ PAGE** — un `EmbeddedTranslator` dont le calcul vit dans le Worker.
+ * La page décide seule de ce que le modèle couvre, sans réveiller le Worker :
+ * `supports` est celui du moteur que le Worker charge (NLLB par défaut).
+ */
 export function createWorkerTranslator(params: {
   readonly port: WorkerPort;
   readonly name: string;
+  readonly supports?: (source: string, target: string) => boolean;
 }): EmbeddedTranslator {
   const waiting = new Map<number, { readonly resolve: (text: string) => void; readonly reject: (error: Error) => void }>();
   let next = 0;
@@ -48,7 +55,7 @@ export function createWorkerTranslator(params: {
 
   return {
     name: params.name,
-    supports: (source, target) => NLLB_CODES[source] !== undefined && NLLB_CODES[target] !== undefined,
+    supports: params.supports ?? nllbSupports,
     translate: (text, { source, target }) =>
       new Promise((resolve, reject) => {
         next += 1;

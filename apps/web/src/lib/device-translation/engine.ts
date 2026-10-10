@@ -33,6 +33,36 @@ export type Accelerator = {
 
 const LINE = /(\r?\n)/;
 
+/**
+ * **CE QUE LE DÉCOUPAGE EN LIGNES ATTEND D'UN MODÈLE** — compter les jetons
+ * d'une ligne et en générer la traduction sous un budget. NLLB (qui reçoit en
+ * plus ses codes de langue) et Opus-MT (qui reçoit un jeton de langue devant le
+ * texte) s'y ramènent chacun par un adaptateur d'une ligne.
+ */
+export type LineModel = {
+  readonly countTokens: (text: string) => number;
+  readonly generate: (text: string, maxNewTokens: number) => Promise<string>;
+};
+
+const translateLine = async (model: LineModel, line: string): Promise<string> => {
+  const text = line.trim();
+  if (text === '') return line;
+  const translated = await model.generate(text, generationBudget(model.countTokens(text)));
+  return line.replace(text, () => translated);
+};
+
+/**
+ * Chaque ligne se traduit à part : la mise en forme du message — retours à la
+ * ligne, retraits, lignes vides — survit, et aucune phrase ne dépasse ce que le
+ * modèle sait tenir. Le remplacement est littéral : une traduction qui contient
+ * « $& » ou « $1 » ne se lit pas comme un motif de `String.replace`.
+ */
+export async function translateByLine(text: string, model: LineModel): Promise<string> {
+  const translated: string[] = [];
+  for (const piece of text.split(LINE)) translated.push(LINE.test(piece) ? piece : await translateLine(model, piece));
+  return translated.join('');
+}
+
 export function createNllbTranslator(params: {
   readonly name: string;
   readonly load: () => Promise<TranslationPipeline>;
@@ -55,13 +85,6 @@ export function createNllbTranslator(params: {
     return code;
   };
 
-  const translateLine = async (model: TranslationPipeline, line: string, src_lang: string, tgt_lang: string): Promise<string> => {
-    const text = line.trim();
-    if (text === '') return line;
-    const translated = await model.generate(text, { src_lang, tgt_lang, max_new_tokens: generationBudget(model.countTokens(text)) });
-    return line.replace(text, translated);
-  };
-
   return {
     name: params.name,
     supports: (source, target) => codes[source] !== undefined && codes[target] !== undefined,
@@ -69,10 +92,10 @@ export function createNllbTranslator(params: {
       const src_lang = codeOf(source);
       const tgt_lang = codeOf(target);
       const model = await pipeline();
-      const pieces = text.split(LINE);
-      const translated: string[] = [];
-      for (const piece of pieces) translated.push(LINE.test(piece) ? piece : await translateLine(model, piece, src_lang, tgt_lang));
-      return translated.join('');
+      return translateByLine(text, {
+        countTokens: (line) => model.countTokens(line),
+        generate: (line, max_new_tokens) => model.generate(line, { src_lang, tgt_lang, max_new_tokens }),
+      });
     },
   };
 }

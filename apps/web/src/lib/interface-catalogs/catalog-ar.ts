@@ -24,6 +24,7 @@ import arCallRecording from './catalog-ar-call-recording';
 import arSignup from './catalog-ar-signup';
 
 import arGallery from './catalog-ar-gallery';
+import arDeviceTranslation from './catalog-ar-device-translation';
 import arMessageCard from './catalog-ar-message-card';
 import arMentions from './catalog-ar-mentions';
 import arStudioChrome from './catalog-ar-studio-chrome';
@@ -1094,6 +1095,7 @@ const ar = {
   ...arStudioChrome,
   ...arEphemeral,
   ...arGallery,
+  ...arDeviceTranslation,
   ...arMessageCard,
   ...arConversationCard,
   ...arStoriesMine,

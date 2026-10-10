@@ -8,6 +8,12 @@ name: Banc de traduction — moteurs de l'appareil
 # - nllb-600M-q8 : le code même de apps/web/src/lib/device-translation, servi par
 #   apps/web/scripts/device-translation-bench-server.ts, avec les poids ONNX int8 que
 #   les clients téléchargent (CC-BY-NC, permis tant que Meeshy est gratuit, #9227).
+#   C'est le moteur que le web embarquait avant Opus-MT : le point de comparaison.
+# - opus-mt-q8 : le moteur que le web embarque désormais (#9898) — les modèles Marian
+#   Xenova/opus-mt-* int8 (CC-BY-4.0), un par sens de paire, servis par le même serveur
+#   (DEVICE_ENGINE=opus-mt). Il ne couvre que sept langues, fixées par la matrice
+#   (fr,en,es,pt,de,it,ar) : l'entrée « languages » du déclenchement manuel ne lui
+#   est pas appliquée.
 # - afrislm-* : TranslatePsy-AfriSLM (Tether QVAC, Qwen3.5 affiné, Apache 2.0) en GGUF
 #   Q4_K_M via llama.cpp, le moteur que iOS et Android natif embarqueraient.
 #
@@ -58,6 +64,10 @@ jobs:
         include:
           - candidate: nllb-200-distilled-600M-q8
             kind: device
+          - candidate: opus-mt-q8
+            kind: device
+            engine: opus-mt
+            languages: fr,en,es,pt,de,it,ar
           - candidate: afrislm-0.8b-q4
             kind: llama
             gguf: qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF
@@ -100,6 +110,8 @@ jobs:
 
       - name: Servir le moteur des clients (transformers.js, ONNX int8)
         if: matrix.kind == 'device'
+        env:
+          DEVICE_ENGINE: ${{ matrix.engine || 'nllb' }}
         run: |
           mkdir -p "$RUNNER_TEMP/rt" "$RUNNER_TEMP/device-models"
           npm install --prefix "$RUNNER_TEMP/rt" --no-save --ignore-scripts=false "@huggingface/transformers@$TRANSFORMERS_JS_VERSION"
@@ -142,7 +154,7 @@ jobs:
             --base-url "$BASE_URL" \
             --golden benchmark/golden/meeshy-chat.jsonl \
             --flores-dir ~/flores200_dataset \
-            --languages "$LANGUAGES" \
+            --languages "${{ matrix.languages || env.LANGUAGES }}" \
             --pivots fr,en \
             --sentences "$SENTENCES" \
             --paragraphs 1 \

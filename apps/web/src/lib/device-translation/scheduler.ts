@@ -4,6 +4,7 @@ import { deviceTranslationTarget } from './target';
 
 export type OfferedMessage = {
   readonly id: string;
+  readonly conversationId: string;
   readonly content: string;
   readonly originalLanguage: string | null | undefined;
   readonly translatedLanguages: readonly string[];
@@ -19,7 +20,15 @@ export type DeliveredTranslation = {
   readonly engine: string;
 };
 
-type Job = { readonly key: string; readonly messageId: string; readonly text: string; readonly source: string; readonly target: string };
+type Job = {
+  readonly key: string;
+  readonly messageId: string;
+  readonly text: string;
+  readonly source: string;
+  readonly target: string;
+  /** Le message d'où le travail vient : sa livraison le nomme, le partage en lit le texte original et la conversation. */
+  readonly origin: OfferedMessage;
+};
 
 /**
  * **LA FILE DE TRADUCTION DE L'APPAREIL** (#9898) — un seul calcul à la fois
@@ -31,14 +40,24 @@ type Job = { readonly key: string; readonly messageId: string; readonly text: st
  * va à son terme, son résultat reste en cache. Un échec ne bloque pas la
  * suite et ne s'inscrit pas en cache : le message retentera à la prochaine
  * offre.
+ *
+ * **Une traduction livrée n'est pas une traduction acquise.** Le fil se recharge
+ * depuis le serveur (revalidation à l'ouverture), qui ne connaît pas les
+ * traductions de l'appareil : elles disparaissent de la page. Un message offert
+ * sans sa traduction est donc livré de nouveau, depuis le cache et sans calcul ;
+ * c'est idempotent (le puits fusionne par langue), et une livraison qui n'a pas
+ * encore atterri au moment de l'offre suivante n'en coûte qu'une de plus.
+ *
+ * Chaque livraison nomme le message d'où elle vient (`origin`) : le partage aux
+ * autres membres lie la traduction au texte EXACT qui a été traduit, pas à celui
+ * que le fil porte peut-être déjà modifié quand la livraison arrive.
  */
 export function createDeviceTranslationScheduler(params: {
   readonly translator: DeviceTranslator;
   readonly cache: DeviceTranslationCache;
-  readonly deliver: (translation: DeliveredTranslation) => void;
+  readonly deliver: (translation: DeliveredTranslation, origin: OfferedMessage) => void;
 }) {
   const { translator, cache, deliver } = params;
-  const settled = new Set<string>();
   let pending: Job[] = [];
   let running: Promise<void> | null = null;
   let active: string | null = null;
@@ -46,15 +65,13 @@ export function createDeviceTranslationScheduler(params: {
   const run = async (job: Job): Promise<void> => {
     const cached = await cache.read(job.key);
     if (cached !== undefined) {
-      deliver({ messageId: job.messageId, source: job.source, target: job.target, ...cached });
-      settled.add(job.key);
+      deliver({ messageId: job.messageId, source: job.source, target: job.target, ...cached }, job.origin);
       return;
     }
     try {
       const result = await translator.translate(job.text, { source: job.source, target: job.target });
       await cache.write(job.key, result);
-      settled.add(job.key);
-      deliver({ messageId: job.messageId, source: job.source, target: job.target, ...result });
+      deliver({ messageId: job.messageId, source: job.source, target: job.target, ...result }, job.origin);
     } catch {
       return;
     }
@@ -87,8 +104,8 @@ export function createDeviceTranslationScheduler(params: {
         });
         if (pair === null) continue;
         const key = deviceCacheKey({ messageId: message.id, target: pair.target, text: message.content });
-        if (settled.has(key) || key === active) continue;
-        jobs.push({ key, messageId: message.id, text: message.content, ...pair });
+        if (key === active) continue;
+        jobs.push({ key, messageId: message.id, text: message.content, origin: message, ...pair });
       }
       pending = jobs;
       kick();

@@ -1,4 +1,5 @@
 import type { TranslationPipeline } from './engine';
+import type { MarianPipeline } from './opus-mt-engine';
 
 /**
  * La seule surface de transformers.js que le moteur emploie : un pipeline
@@ -23,4 +24,22 @@ const translationTextOf = (output: unknown): string => {
 export const fromTransformersPipeline = (translator: TransformersTranslationPipeline): TranslationPipeline => ({
   countTokens: (text) => translator.tokenizer(text).input_ids.dims.at(-1) ?? 0,
   generate: async (text, options) => translationTextOf(await translator(text, options)),
+});
+
+/**
+ * La surface de transformers.js qu'un modèle Opus-MT (Marian) emploie : le
+ * même pipeline `translation`, sans `src_lang` ni `tgt_lang` — le modèle ne
+ * connaît qu'un sens d'une paire, le jeton de langue cible, s'il en exige un,
+ * précède le texte. `dispose` libère ses sessions ONNX.
+ */
+export type TransformersMarianPipeline = {
+  readonly tokenizer: (text: string) => { readonly input_ids: { readonly dims: readonly number[] } };
+  (text: string, options: { readonly max_new_tokens: number }): Promise<unknown>;
+  readonly dispose?: () => Promise<void> | void;
+};
+
+export const fromMarianPipeline = (translator: TransformersMarianPipeline): MarianPipeline => ({
+  countTokens: (text) => translator.tokenizer(text).input_ids.dims.at(-1) ?? 0,
+  generate: async (text, options) => translationTextOf(await translator(text, options)),
+  dispose: () => translator.dispose?.(),
 });

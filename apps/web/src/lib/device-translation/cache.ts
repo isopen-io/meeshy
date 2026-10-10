@@ -19,8 +19,11 @@ const fnv1a = (text: string): string => {
   return (hash >>> 0).toString(36);
 };
 
+/** L'empreinte courte d'un texte : sa longueur et son hachage. Deux états d'un message ne la partagent pas, sauf collision — qui ne coûte qu'un recalcul. */
+export const textStamp = (text: string): string => `${text.length}.${fnv1a(text)}`;
+
 export const deviceCacheKey = (params: { readonly messageId: string; readonly target: string; readonly text: string }): string =>
-  `${params.messageId}|${params.target}|${params.text.length}.${fnv1a(params.text)}`;
+  `${params.messageId}|${params.target}|${textStamp(params.text)}`;
 
 export type CachedDeviceTranslation = { readonly text: string; readonly engine: string };
 

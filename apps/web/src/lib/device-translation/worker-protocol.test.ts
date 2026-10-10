@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { EmbeddedTranslator } from './engine';
+import { opusMtSupports } from './opus-mt-routes';
 import { createWorkerHost, createWorkerTranslator, type WorkerPort, type WorkerReply, type WorkerRequest } from './worker-protocol';
 
 const rejection = async (promise: Promise<unknown>): Promise<string> => {
@@ -62,5 +63,13 @@ describe('le protocole page ↔ Worker de la traduction sur l’appareil (#9898)
     const translator = createWorkerTranslator({ port, name: 'nllb' });
     expect(translator.supports('ff', 'fr')).toBe(true);
     expect(translator.supports('fr', 'ewo')).toBe(false);
+  });
+
+  test('un Worker dont le modèle couvre moins de langues le dit à la page : c’est lui qui fait foi', () => {
+    const port: WorkerPort = { postMessage: () => undefined, addEventListener: () => {} };
+    const translator = createWorkerTranslator({ port, name: 'opus', supports: opusMtSupports });
+    expect(translator.supports('fr', 'pt')).toBe(true);
+    expect(translator.supports('ff', 'fr')).toBe(false);
+    expect(translator.supports('fr', 'fr')).toBe(false);
   });
 });

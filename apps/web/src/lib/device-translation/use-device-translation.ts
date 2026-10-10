@@ -3,7 +3,24 @@ import { useEffect } from 'react';
 
 import type { Message } from '@/lib/api/types';
 
-import { deviceTranslationConsent } from './consent';
+type RuntimeModule = typeof import('./runtime');
+
+type DeviceTranslationPorts = {
+  readonly granted: () => Promise<boolean>;
+  readonly runtime: () => Promise<Pick<RuntimeModule, 'offerToDevice'>>;
+};
+
+/**
+ * Le consentement ET le moteur se lisent par `import()`. L'écran de réglages
+ * pose le consentement (`use-device-translation-setting.ts`) : un module statique
+ * commun au fil et aux réglages ferait de leurs deux chunks de route un même
+ * chunk partagé, et son adresse grossirait le point d'entrée (budget de la
+ * première peinture). `ports` n'existe que pour les témoins.
+ */
+const defaultPorts: DeviceTranslationPorts = {
+  granted: async () => (await import('./consent')).deviceTranslationConsent().granted(),
+  runtime: () => import('./runtime'),
+};
 
 /**
  * **LE FIL CONFIE SES MESSAGES À L'APPAREIL** (#9898) — à chaque fenêtre
@@ -13,24 +30,30 @@ import { deviceTranslationConsent } from './consent';
  *
  * Sans consentement, rien ne se charge : la file, le Worker et le puits
  * temps réel n'entrent dans la page que par `import()`, au premier fil
- * ouvert après l'accord.
+ * ouvert après l'accord. Le consentement se relit à CHAQUE fenêtre : le lecteur
+ * qui l'accorde ou le retire dans les réglages est entendu au fil suivant, sans
+ * recharger la page.
  */
-export function useDeviceTranslation(params: {
-  readonly messages: readonly Message[];
-  readonly readerLanguages: readonly string[];
-  readonly viewerId: string;
-}): void {
+export function useDeviceTranslation(
+  params: {
+    readonly messages: readonly Message[];
+    readonly readerLanguages: readonly string[];
+    readonly viewerId: string;
+  },
+  ports: DeviceTranslationPorts = defaultPorts,
+): void {
   const queryClient = useQueryClient();
   const { messages, readerLanguages, viewerId } = params;
   useEffect(() => {
-    if (!deviceTranslationConsent().granted()) return;
     let cancelled = false;
-    void import('./runtime').then(({ offerToDevice }) => {
+    void (async () => {
+      if (!(await ports.granted()) || cancelled) return;
+      const { offerToDevice } = await ports.runtime();
       if (cancelled) return;
       offerToDevice(queryClient, { messages, viewerId, preferredLanguages: readerLanguages });
-    });
+    })().catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [queryClient, messages, readerLanguages, viewerId]);
+  }, [queryClient, messages, readerLanguages, viewerId, ports]);
 }

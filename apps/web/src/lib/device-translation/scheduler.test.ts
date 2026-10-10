@@ -6,6 +6,7 @@ import { createDeviceTranslationScheduler, type DeliveredTranslation, type Offer
 
 const message = (over: Partial<OfferedMessage> = {}): OfferedMessage => ({
   id: 'm1',
+  conversationId: 'c1',
   content: 'habari yako',
   originalLanguage: 'sw',
   translatedLanguages: [],
@@ -41,6 +42,35 @@ describe('createDeviceTranslationScheduler — l’appareil traduit ce que le se
     expect(delivered).toEqual([{ messageId: 'm1', source: 'sw', target: 'fr', text: 'fr:habari yako', engine: 'nllb' }]);
   });
 
+  test('chaque livraison nomme le message d’où elle vient : texte original et conversation voyagent avec elle', async () => {
+    const origins: OfferedMessage[] = [];
+    const scheduler = createDeviceTranslationScheduler({
+      translator: recordingTranslator([]),
+      cache: createDeviceTranslationCache({ store: createMemoryStore() }),
+      deliver: (_translation, origin) => origins.push(origin),
+    });
+    scheduler.offer({ messages: [message({ conversationId: 'c9', content: 'habari yako' })], preferredLanguages: ['fr'] });
+    await scheduler.idle();
+    expect(origins).toEqual([message({ conversationId: 'c9', content: 'habari yako' })]);
+  });
+
+  test('une livraison servie par le cache nomme, elle aussi, le message d’où elle vient', async () => {
+    const store = createMemoryStore();
+    const warm = createDeviceTranslationScheduler({ translator: recordingTranslator([]), cache: createDeviceTranslationCache({ store }), deliver: () => {} });
+    warm.offer({ messages: [message()], preferredLanguages: ['fr'] });
+    await warm.idle();
+
+    const origins: string[] = [];
+    const reopened = createDeviceTranslationScheduler({
+      translator: recordingTranslator([]),
+      cache: createDeviceTranslationCache({ store }),
+      deliver: (_translation, origin) => origins.push(`${origin.conversationId}/${origin.id}/${origin.content}`),
+    });
+    reopened.offer({ messages: [message()], preferredLanguages: ['fr'] });
+    await reopened.idle();
+    expect(origins).toEqual(['c1/m1/habari yako']);
+  });
+
   test('le cache sert sans recalcul : un fil rouvert se peint traduit tout de suite', async () => {
     const store = createMemoryStore();
     const first: string[] = [];
@@ -64,6 +94,24 @@ describe('createDeviceTranslationScheduler — l’appareil traduit ce que le se
 
     expect(second).toEqual([]);
     expect(delivered.map((d) => d.text)).toEqual(['fr:habari yako']);
+  });
+
+  test('un fil rechargé depuis le serveur a perdu la traduction : elle est livrée de nouveau, depuis le cache, sans recalcul', async () => {
+    const calls: string[] = [];
+    const delivered: DeliveredTranslation[] = [];
+    const scheduler = createDeviceTranslationScheduler({
+      translator: recordingTranslator(calls),
+      cache: createDeviceTranslationCache({ store: createMemoryStore() }),
+      deliver: (translation) => delivered.push(translation),
+    });
+
+    scheduler.offer({ messages: [message()], preferredLanguages: ['fr'] });
+    await scheduler.idle();
+    scheduler.offer({ messages: [message()], preferredLanguages: ['fr'] });
+    await scheduler.idle();
+
+    expect(calls).toEqual(['habari yako>fr']);
+    expect(delivered.map((d) => d.text)).toEqual(['fr:habari yako', 'fr:habari yako']);
   });
 
   test('un message modifié est retraduit : la clé du cache porte une empreinte du texte', () => {

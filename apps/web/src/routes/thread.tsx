@@ -37,11 +37,13 @@ import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods'
 import { topActiveMembers } from '@/lib/view/top-active-members';
 import { accentOf, withAccent } from '@/lib/accent';
 import { conversationStore } from '@/lib/conversation-store';
-import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conversation';
+import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useOptionalRoute } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useDeviceTranslation } from '@/lib/device-translation/use-device-translation';
+import { useSharedTranslations } from '@/lib/device-translation/use-shared-translations';
+import { useTypistAvatar } from '@/lib/view/use-typist-avatar';
 import { useSend } from '@/lib/view/use-send';
 import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
@@ -133,25 +135,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   const threadData = useThreadData(id);
   const conversation = threadData.conversation;
 
-  /**
-   * LA PHOTO D'UN FRAPPEUR (#6985) — résolue ICI, depuis les participants que
-   * cet hôte a DÉJÀ en cache, et remise à la cellule de frappe. Le fil
-   * `typing:start` ne porte pas d'avatar, et l'y ajouter dupliquerait
-   * l'information à chaque frappe de chaque personne.
-   *
-   * `participantAvatarOf` est la LOI PARTAGÉE (rang local puis rang compte,
-   * chaînes blanches normalisées), jamais une boucle écrite ici.
-   *
-   * Mémoïsé sur les participants : la cellule n'est pas `memo`-isée, donc
-   * l'identité ne change rien à son rendu — mais la CARTE, elle, se
-   * reconstruirait à chaque frappe reçue si on ne la retenait pas.
-   */
-  const typistAvatarOf = useMemo(() => {
-    const parParticipant = new Map(
-      (conversation?.participants ?? []).map((p) => [p.userId ?? p.id, participantAvatarOf(p)] as const),
-    );
-    return (userId: string) => parParticipant.get(userId) ?? undefined;
-  }, [conversation?.participants]);
+  /** LA PHOTO D'UN FRAPPEUR (#6985) — `useTypistAvatar` la résout depuis les participants déjà en cache. */
+  const typistAvatarOf = useTypistAvatar(conversation?.participants);
   /**
    * `conversationId` (revue-correction #5793, défaut MAJEUR 3) — LA clé de
    * cache et de socket, jamais le paramètre de route brut : voir le
@@ -329,6 +314,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   const isMine = useCallback((message: Message) => isMineOf(message, viewer.id ?? ''), [viewer.id]);
   const messages = useLivingMessages({ messages: timeline, isMine, destroyingIds, expiredIds });
   useDeviceTranslation({ messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '' });
+  useSharedTranslations({ conversationId, messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '' });
   const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
   const group = conversation !== undefined && isGroup(conversation);
   /** LES TROIS QUI PARLENT LE PLUS dans ce qui est chargé (#7830) — groupe seulement. */

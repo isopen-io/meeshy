@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createBuiltinTranslator, createDeviceTranslationRouter, createNllbTranslator, type TranslationPipeline } from './engine';
+import { createBuiltinTranslator, createDeviceTranslationRouter, createNllbTranslator, translateByLine, type TranslationPipeline } from './engine';
 
 const rejection = async (promise: Promise<unknown>): Promise<string> => {
   try {
@@ -69,6 +69,33 @@ describe('createNllbTranslator — NLLB embarqué derrière un pipeline injecté
     });
     expect(await rejection(engine.translate('a', { source: 'en', target: 'fr' }))).toBe('réseau coupé');
     expect(await engine.translate('a', { source: 'en', target: 'fr' })).toBe('«a»');
+  });
+});
+
+describe('translateByLine — le découpage que NLLB et Opus-MT partagent (#9898)', () => {
+  const model = (calls: { text: string; max: number }[], answer: (text: string) => string = (text) => `«${text}»`) => ({
+    countTokens: (text: string) => text.split(/\s+/).filter(Boolean).length,
+    generate: async (text: string, max: number) => (calls.push({ text, max }), answer(text)),
+  });
+
+  test('chaque ligne se traduit à part, séparateurs et retraits intacts, avec le budget du serveur', async () => {
+    const calls: { text: string; max: number }[] = [];
+    expect(await translateByLine('salut\r\n\n  ça va bien\n', model(calls))).toBe('«salut»\r\n\n  «ça va bien»\n');
+    expect(calls).toEqual([
+      { text: 'salut', max: 16 },
+      { text: 'ça va bien', max: 18 },
+    ]);
+  });
+
+  test('une ligne blanche ne part pas au modèle', async () => {
+    const calls: { text: string; max: number }[] = [];
+    expect(await translateByLine('  \n\t', model(calls))).toBe('  \n\t');
+    expect(calls).toEqual([]);
+  });
+
+  test('une traduction qui contient « $& » ou « $1 » reste littérale', async () => {
+    const calls: { text: string; max: number }[] = [];
+    expect(await translateByLine('  coûte cinq euros  ', model(calls, () => 'coûte $& et $1 et $$'))).toBe('  coûte $& et $1 et $$  ');
   });
 });
 

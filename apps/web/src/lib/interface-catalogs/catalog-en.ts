@@ -24,6 +24,7 @@ import enCallRecording from './catalog-en-call-recording';
 import enSignup from './catalog-en-signup';
 
 import enGallery from './catalog-en-gallery';
+import enDeviceTranslation from './catalog-en-device-translation';
 import enMessageCard from './catalog-en-message-card';
 import enMentions from './catalog-en-mentions';
 import enStudioChrome from './catalog-en-studio-chrome';
@@ -1097,6 +1098,7 @@ const en = {
   ...enStudioChrome,
   ...enEphemeral,
   ...enGallery,
+  ...enDeviceTranslation,
   ...enMessageCard,
   ...enConversationCard,
   ...enStoriesMine,

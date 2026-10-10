@@ -11,6 +11,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { useDeviceTranslationSetting } from '@/lib/device-translation/use-device-translation-setting';
 import { galleryAutoSaveEnabled, setGalleryAutoSaveEnabled } from '@/lib/gallery/auto-save';
 import { browserGalleryStorage } from '@/lib/gallery/auto-save-runtime';
 import { currentGallerySaver } from '@/lib/gallery/gallery-saver';
@@ -162,6 +163,7 @@ function SettingsHome() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const gallery = useGalleryToggle();
+  const deviceTranslation = useDeviceTranslationSetting();
 
   useEffect(() => {
     if (notice === null) return undefined;
@@ -231,7 +233,7 @@ function SettingsHome() {
             onToggle={toggle}
             onRetry={() => void query.refetch()}
           />
-          <DataSection language={language} {...(gallery === undefined ? {} : { gallery })} />
+          <DataSection language={language} {...(gallery === undefined ? {} : { gallery })} deviceTranslation={deviceTranslation} />
           <ToolsSection language={language} showAdmin={peutAdministrer} />
           <AboutSection language={language} version={__APP_VERSION__} />
           {sessionUser === null ? null : <SwitchAccountButton language={language} onPress={() => setSwitchingAccount(true)} />}
