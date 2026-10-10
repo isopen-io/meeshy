@@ -1,0 +1,184 @@
+name: Banc de traduction — moteurs de l'appareil
+
+# Mesure les moteurs de traduction qui peuvent tourner SUR L'APPAREIL (#9897) avec le
+# banc de #3662 : qualité par direction (chrF, COMET), latence CPU, taille du
+# téléchargement. C'est le choix du moteur que le web, la coque Android et iOS
+# embarquent pour traduire en conversation chiffrée (#9272, #9898).
+#
+# - nllb-600M-q8 : le code même de apps/web/src/lib/device-translation, servi par
+#   apps/web/scripts/device-translation-bench-server.ts, avec les poids ONNX int8 que
+#   les clients téléchargent (CC-BY-NC, permis tant que Meeshy est gratuit, #9227).
+# - afrislm-* : TranslatePsy-AfriSLM (Tether QVAC, Qwen3.5 affiné, Apache 2.0) en GGUF
+#   Q4_K_M via llama.cpp, le moteur que iOS et Android natif embarqueraient.
+#
+# Chaque rapport est comparé à la référence NLLB 600M fp32 du serveur : la comparaison
+# s'imprime, elle ne fait pas échouer le job (un candidat a le droit d'être moins bon).
+
+on:
+  workflow_dispatch:
+    inputs:
+      languages:
+        description: 'Langues Meeshy (codes ISO), mesurées dans les deux sens contre les pivots'
+        default: 'fr,en,sw,ha,yo,wo,ln,ff,pt,ar'
+      sentences:
+        description: 'Phrases FLORES par direction'
+        default: '6'
+  pull_request:
+    paths:
+      - 'apps/web/src/lib/device-translation/**'
+      - 'apps/web/scripts/device-translation-bench-server.ts'
+      - 'services/translator/src/benchmark/**'
+      - '.github/workflows/translation-benchmark-device.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: translation-benchmark-device-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.10'
+  BUN_VERSION: '1.3.14'
+  TRANSFORMERS_JS_VERSION: '4.3.1'
+  LANGUAGES: ${{ inputs.languages || 'fr,en,sw,ha,yo,wo,ln,ff,pt,ar' }}
+  SENTENCES: ${{ inputs.sentences || '6' }}
+  COMET_MODEL: Unbabel/wmt22-comet-da
+  FLORES_URL: https://dl.fbaipublicfiles.com/nllb/flores200_dataset.tar.gz
+  BASELINE: benchmark/baselines/nllb-200-distilled-600M.json
+
+jobs:
+  measure:
+    name: Mesurer ${{ matrix.candidate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - candidate: nllb-200-distilled-600M-q8
+            kind: device
+          - candidate: afrislm-0.8b-q4
+            kind: llama
+            gguf: qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF
+          - candidate: afrislm-2b-q4
+            kind: llama
+            gguf: qvac/TranslatePsy-AfriSLM-2B-Q4-GGUF
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache des modèles et de FLORES-200
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/llama.cpp
+            ~/flores200_dataset
+            ${{ runner.temp }}/device-models
+          key: translation-benchmark-device-${{ matrix.candidate }}-${{ env.COMET_MODEL }}-v1
+
+      - name: Installer le banc (torch CPU)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install "numpy<2" "transformers>=4.46,<5" sentencepiece sacrebleu unbabel-comet httpx
+
+      - name: Télécharger FLORES-200
+        run: |
+          if [ ! -d ~/flores200_dataset/devtest ]; then
+            curl -fsSL --retry 3 "$FLORES_URL" | tar -xz -C ~
+          fi
+
+      - uses: oven-sh/setup-bun@v2
+        if: matrix.kind == 'device'
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Servir le moteur des clients (transformers.js, ONNX int8)
+        if: matrix.kind == 'device'
+        run: |
+          mkdir -p "$RUNNER_TEMP/rt" "$RUNNER_TEMP/device-models"
+          npm install --prefix "$RUNNER_TEMP/rt" --no-save --ignore-scripts=false "@huggingface/transformers@$TRANSFORMERS_JS_VERSION"
+          export TRANSFORMERS_MODULE="$RUNNER_TEMP/rt/node_modules/@huggingface/transformers/dist/transformers.node.mjs"
+          export DEVICE_MODEL_CACHE="$RUNNER_TEMP/device-models"
+          (cd apps/web && PORT=8790 nohup bun scripts/device-translation-bench-server.ts > "$RUNNER_TEMP/engine.log" 2>&1 &)
+          for i in $(seq 1 180); do curl -fsS localhost:8790/health && break; sleep 5; done
+          curl -fsS localhost:8790/health
+          echo "ENGINE=device" >> "$GITHUB_ENV"
+          echo "BASE_URL=http://localhost:8790" >> "$GITHUB_ENV"
+          echo "WEIGHTS_DIR=$RUNNER_TEMP/device-models" >> "$GITHUB_ENV"
+
+      - name: Servir le GGUF (llama.cpp, CPU)
+        if: matrix.kind == 'llama'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/llama"
+          gh release download --repo ggml-org/llama.cpp --pattern '*-bin-ubuntu-x64.zip' --dir "$RUNNER_TEMP/llama"
+          gh release view --repo ggml-org/llama.cpp --json tagName --jq '"llama.cpp " + .tagName' | tee -a "$GITHUB_STEP_SUMMARY"
+          unzip -q "$RUNNER_TEMP"/llama/*.zip -d "$RUNNER_TEMP/llama"
+          SERVER=$(find "$RUNNER_TEMP/llama" -type f -name llama-server | head -1)
+          chmod +x "$SERVER"
+          export LD_LIBRARY_PATH="$(dirname "$SERVER"):${LD_LIBRARY_PATH:-}"
+          nohup "$SERVER" -hf "${{ matrix.gguf }}" --port 8080 --ctx-size 4096 --threads "$(nproc)" \
+            --temp 0 --reasoning-budget 0 > "$RUNNER_TEMP/engine.log" 2>&1 &
+          for i in $(seq 1 180); do curl -fsS localhost:8080/health && break; sleep 5; done
+          curl -fsS localhost:8080/health
+          echo "ENGINE=openai" >> "$GITHUB_ENV"
+          echo "BASE_URL=http://localhost:8080" >> "$GITHUB_ENV"
+          echo "WEIGHTS_DIR=$HOME/.cache/llama.cpp" >> "$GITHUB_ENV"
+
+      - name: Taille du téléchargement
+        run: |
+          BYTES=$(du -sb "$WEIGHTS_DIR" | cut -f1)
+          echo "### ${{ matrix.candidate }} — poids téléchargés : $((BYTES / 1048576)) Mo" | tee -a "$GITHUB_STEP_SUMMARY"
+          find "$WEIGHTS_DIR" -type f -size +1M -exec ls -l {} \; | awk '{print $5, $9}'
+
+      - name: Mesurer
+        working-directory: services/translator/src
+        run: |
+          mkdir -p "$RUNNER_TEMP/bench"
+          python -m benchmark run \
+            --engine "$ENGINE" \
+            --model "${{ matrix.candidate }}" \
+            --base-url "$BASE_URL" \
+            --golden benchmark/golden/meeshy-chat.jsonl \
+            --flores-dir ~/flores200_dataset \
+            --languages "$LANGUAGES" \
+            --pivots fr,en \
+            --sentences "$SENTENCES" \
+            --paragraphs 1 \
+            --comet-model "$COMET_MODEL" \
+            --out "$RUNNER_TEMP/bench/report.json" \
+            --markdown "$RUNNER_TEMP/bench/report.md"
+          cat "$RUNNER_TEMP/bench/report.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "::group::report.json"
+          cat "$RUNNER_TEMP/bench/report.json"
+          echo "::endgroup::"
+
+      - name: Comparer à NLLB 600M du serveur
+        if: always()
+        working-directory: services/translator/src
+        run: |
+          {
+            echo "#### Écarts face à NLLB 600M fp32 (serveur)"
+            echo '```'
+            python -m benchmark gate --current "$RUNNER_TEMP/bench/report.json" --baseline "$BASELINE" || true
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Journal du moteur
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/engine.log"
+
+      - name: Publier le rapport
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: translation-benchmark-device-${{ matrix.candidate }}
+          path: ${{ runner.temp }}/bench/
+          if-no-files-found: ignore
