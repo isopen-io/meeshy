@@ -5060,3 +5060,9 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Kotlin natif** : rien (gel). **iOS** : le parcours invité depuis l'écran de connexion est l'affaire de #10003.
 
 **Témoins.** `landing/landing.test.tsx` (balises par langue, script rejoué par son texte : session, langue, `GET /world` contre `worldEntrySchema`, 404, entrée encodée), `landing/landing-static.test.ts` (sitemap, robots, nginx, service worker, manifeste, images 1200 × 630), `landing/landing-routes.test.ts` et `routes/home.test.tsx` (`/chats`, `/` dans la coque et sur le web), `scripts/check-bascule-recette.mjs` (la recette sert la landing sur `/`).
+
+**Livraison (2026-10-10).** `bun run build` mesure les sept landings entre 8,43 Ko (/en) et 8,77 Ko (/ar) gzip. `landing_page.kb` est posé à 10 Ko (Ko supérieur + 1), à confirmer par le porteur. `first_paint` tient. Le gate complet a trouvé quatre défauts du lot, tous corrigés avant la fusion :
+- l'exemple « Ex. Amina » dans le champ du nom : c'est un nom de fixture, que `check-gateway-build` refuse. Il devient « Ex. Awa » et un témoin garde la copie ;
+- le sélecteur de langue était écrit à 13 px. Safari iOS zoomait au focus (`check-phone-frame`). Il passe à 16 px ;
+- deux visites de gate attendaient encore la liste sur `/` (`check-list-folded-unread`, retour du disque du Flux) ;
+- le témoin institutionnel installait le service worker par `/chats` sur un serveur sans repli. Il passe par `/index.html`.
