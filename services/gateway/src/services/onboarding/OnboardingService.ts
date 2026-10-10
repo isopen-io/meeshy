@@ -189,19 +189,28 @@ const knownSteps = (steps: readonly string[] | null): OnboardingStepId[] =>
 export class OnboardingService {
   constructor(private readonly prisma: OnboardingPrisma) {}
 
-  async getState(userId: string, now: Date = new Date()): Promise<OnboardingState | null> {
+  async getState(
+    userId: string,
+    now: Date = new Date(),
+    client: OnboardingClient = LEGACY_ONBOARDING_CLIENT,
+  ): Promise<OnboardingState | null> {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_STATE_SELECT });
     if (!user) return null;
-    return this.stateOf(user, now);
+    return servedToClient(await this.stateOf(user, now), client);
   }
 
-  async recordStep(userId: string, body: OnboardingPatchBody, now: Date = new Date()): Promise<OnboardingState | null> {
+  async recordStep(
+    userId: string,
+    body: OnboardingPatchBody,
+    now: Date = new Date(),
+    client: OnboardingClient = LEGACY_ONBOARDING_CLIENT,
+  ): Promise<OnboardingState | null> {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_STATE_SELECT });
     if (!user) return null;
     const data = nextOnboardingWrite(user, body, now);
-    if (!data) return this.stateOf(user, now);
+    if (!data) return servedToClient(await this.stateOf(user, now), client);
     await this.prisma.user.update({ where: { id: userId }, data });
-    return this.stateOf({ ...user, ...data }, now);
+    return servedToClient(await this.stateOf({ ...user, ...data }, now), client);
   }
 
   /**
@@ -416,9 +425,37 @@ export class OnboardingService {
 }
 
 /**
- * #9927 — `viewerWriteRestriction` est TOUJOURS servi : `'minor-global'` pour
- * un mineur déclaré, `null` sinon. Sa présence dit au client que la passerelle
- * connaît l'étape `age` (le web n'en propose la carte qu'à cette condition).
+ * Ce que le client sait lire de l'état (#9927, rétrocompatibilité #9223).
+ * `ageStepAware` : il a annoncé la capacité `onboarding-age` — il connaît
+ * l'étape `age` et `viewerWriteRestriction`. Un client antérieur décode l'état
+ * en objet STRICT (web `z.strictObject`, énumération d'étapes fermée) : une
+ * étape ou une clé qu'il ne connaît pas lui rendrait l'état illisible.
+ */
+export type OnboardingClient = { readonly ageStepAware: boolean };
+
+export const LEGACY_ONBOARDING_CLIENT: OnboardingClient = { ageStepAware: false };
+
+/**
+ * Sans la capacité, l'état servi est EXACTEMENT celui d'avant #9927 : ni
+ * l'étape `age` dans les listes d'étapes, ni `viewerWriteRestriction`. La
+ * règle elle-même ne dépend pas du client — un mineur reste refusé en écriture
+ * dans Global (403 `GLOBAL_ADULTS_ONLY`, message lisible par tout client).
+ */
+export function servedToClient(state: OnboardingState, client: OnboardingClient): OnboardingState {
+  if (client.ageStepAware) return state;
+  const { viewerWriteRestriction: _restriction, ...legacy } = state;
+  return {
+    ...legacy,
+    seenSteps: state.seenSteps.filter((step) => step !== 'age'),
+    prefilledSteps: state.prefilledSteps.filter((step) => step !== 'age'),
+  };
+}
+
+/**
+ * #9927 — `viewerWriteRestriction` est TOUJOURS servi au client qui annonce
+ * `onboarding-age` : `'minor-global'` pour un mineur déclaré, `null` sinon. Sa
+ * présence dit au client que la passerelle connaît l'étape `age` (le web n'en
+ * propose la carte qu'à cette condition).
  */
 function minorGlobalRestriction(birthDate: Date | null, now: Date): Pick<OnboardingState, 'viewerWriteRestriction'> {
   return { viewerWriteRestriction: viewerWriteRestrictionOf({ conversationType: GLOBAL_CONVERSATION_TYPE, birthDate, now }) };

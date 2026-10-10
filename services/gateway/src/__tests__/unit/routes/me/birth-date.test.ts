@@ -5,8 +5,10 @@
  * seconde déclaration est refusée — un mineur ne se redéclare pas majeur ;
  * une correction passe par le support.
  *
- * Et l'état d'onboarding (`GET /me/onboarding`) le dit, TOUJOURS :
- * `viewerWriteRestriction: 'minor-global'` pour un mineur déclaré, `null` sinon.
+ * Et l'état d'onboarding (`GET`/`PATCH /me/onboarding`) le dit au client qui
+ * annonce `X-Meeshy-Capabilities: onboarding-age` : `viewerWriteRestriction`
+ * (`'minor-global'` ou `null`) et l'étape `age`. Sans l'en-tête, l'état est
+ * EXACTEMENT celui d'avant le lot (#9223).
  *
  * @jest-environment node
  */
@@ -158,14 +160,24 @@ describe('PUT /me/birth-date (#9927)', () => {
   });
 });
 
-describe('GET /me/onboarding — la restriction de Global (#9927)', () => {
-  it('mineur déclaré : viewerWriteRestriction minor-global, conforme au contrat', async () => {
+const aware = { ...headers, 'x-meeshy-capabilities': 'onboarding-age' };
+
+/** Les clés de l'état d'onboarding AVANT #9927 — ce qu'un client antérieur sait décoder. */
+const PRE_9927_KEYS = [
+  'canPublishStory', 'completedAt', 'eligible', 'emailVerified', 'globalConversationId', 'pendingFriendRequests',
+  'prefilledSteps', 'protectedRegime', 'seenSteps', 'stepRewards', 'storyDefaultVisibility', 'suggestions',
+];
+const PRE_9927_STEPS = ['languages', 'email', 'global', 'story', 'friends', 'notifications'];
+
+describe('GET /me/onboarding — la restriction de Global, au client qui l’annonce (#9927)', () => {
+  it('mineur déclaré : viewerWriteRestriction minor-global, l’étape age, conforme au contrat', async () => {
     const app = await buildApp(makePrisma({ birthDate: new Date('2011-03-03T00:00:00.000Z'), onboardingSteps: ['languages', 'age'] }));
-    const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers: aware });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.viewerWriteRestriction).toBe('minor-global');
     expect(res.json().data.seenSteps).toEqual(['languages', 'age']);
     expect(OnboardingStateSchema.safeParse(res.json().data).success).toBe(true);
+    expect(String(res.headers.vary).toLowerCase()).toContain('x-meeshy-capabilities');
     await app.close();
   });
 
@@ -175,9 +187,47 @@ describe('GET /me/onboarding — la restriction de Global (#9927)', () => {
     ['18 ans le jour même', new Date('2008-10-10T00:00:00.000Z')],
   ])('%s : le champ est servi, à null — sa présence annonce l’étape age', async (_label, birthDate) => {
     const app = await buildApp(makePrisma({ birthDate }));
-    const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers: aware });
     expect(res.json().data).toHaveProperty('viewerWriteRestriction', null);
     expect(OnboardingStateSchema.safeParse(res.json().data).success).toBe(true);
+    await app.close();
+  });
+
+  it.each(['onboarding-age', 'ONBOARDING-AGE', 'other-cap, Onboarding-Age ,x'])('le jeton se lit dans une liste, sans casse : « %s »', async (value) => {
+    const app = await buildApp(makePrisma());
+    const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers: { ...headers, 'x-meeshy-capabilities': value } });
+    expect(res.json().data).toHaveProperty('viewerWriteRestriction', null);
+    await app.close();
+  });
+});
+
+describe('GET/PATCH /me/onboarding — un client antérieur reçoit EXACTEMENT l’état d’avant (#9927, #9223)', () => {
+  it.each([
+    ['sans en-tête', headers],
+    ['avec une autre capacité', { ...headers, 'x-meeshy-capabilities': 'something-else' }],
+  ])('%s : mêmes clés qu’avant, ni étape age ni viewerWriteRestriction — même pour un mineur', async (_label, h) => {
+    const app = await buildApp(makePrisma({ birthDate: new Date('2011-03-03T00:00:00.000Z'), onboardingSteps: ['languages', 'age', 'global'] }));
+    const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers: h });
+    const data = res.json().data;
+    expect(Object.keys(data).sort()).toEqual(PRE_9927_KEYS);
+    expect(data.seenSteps).toEqual(['languages', 'global']);
+    expect([...data.seenSteps, ...data.prefilledSteps].every((step: string) => PRE_9927_STEPS.includes(step))).toBe(true);
+    await app.close();
+  });
+
+  it('PATCH sans en-tête : même forme d’avant', async () => {
+    const app = await buildApp(makePrisma({ birthDate: new Date('2011-03-03T00:00:00.000Z'), onboardingSteps: ['languages', 'age'] }));
+    const res = await app.inject({ method: 'PATCH', url: '/api/v1/me/onboarding', headers, payload: { step: 'global', outcome: 'done' } });
+    expect(Object.keys(res.json().data).sort()).toEqual(PRE_9927_KEYS);
+    expect(res.json().data.seenSteps).not.toContain('age');
+    await app.close();
+  });
+
+  it('PATCH avec l’en-tête : l’étape age et la restriction reviennent', async () => {
+    const app = await buildApp(makePrisma({ birthDate: new Date('2011-03-03T00:00:00.000Z'), onboardingSteps: ['languages', 'age'] }));
+    const res = await app.inject({ method: 'PATCH', url: '/api/v1/me/onboarding', headers: aware, payload: { step: 'global', outcome: 'done' } });
+    expect(res.json().data.seenSteps).toContain('age');
+    expect(res.json().data.viewerWriteRestriction).toBe('minor-global');
     await app.close();
   });
 });

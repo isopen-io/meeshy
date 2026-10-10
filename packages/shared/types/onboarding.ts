@@ -84,9 +84,11 @@ export type OnboardingStepRewards = z.infer<typeof OnboardingStepRewardsSchema>;
  * - `stepRewards` (#7908) — ce que chaque geste créditera à l'élan courant ;
  * - `viewerWriteRestriction` (#9927) — `'minor-global'` : mineur déclaré (13-17
  *   ans), Global est en lecture seule et rangée dans ses archives jusqu'à ses
- *   18 ans ; `null` : aucune restriction. La passerelle le sert TOUJOURS — sa
- *   présence dit au client qu'elle connaît l'étape `age` ; ABSENT = passerelle
- *   antérieure, qui ne sait pas recevoir la date de naissance.
+ *   18 ans ; `null` : aucune restriction. La passerelle le sert TOUJOURS au
+ *   client qui annonce `X-Meeshy-Capabilities: onboarding-age` — sa présence
+ *   lui dit qu'elle connaît l'étape `age`. Sans l'en-tête, ni ce champ ni
+ *   l'étape `age` ne sont servis (un client antérieur décode en strict).
+ *   ABSENT malgré l'en-tête = passerelle antérieure.
  */
 export const OnboardingStateSchema = z
   .object({
