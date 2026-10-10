@@ -324,6 +324,8 @@ public struct GameBlock: Codable, Sendable, Equatable {
     public var league: GameLeagueBlock? { wave2.league }
     public var duo: GameDuoBlock? { wave2.duo }
     public var season: GameSeasonBlock? { wave2.season }
+    /// La saison à venir tant qu'aucune n'est ouverte (#10014).
+    public var seasonUpcoming: GameUpcomingSeasonBlock? { wave2.seasonUpcoming }
     public var trophies: GameTrophiesBlock? { wave2.trophies }
     public var atlas: GameAtlasBlock? { wave2.atlas }
     public var prestige: GamePrestigeBlock? { wave2.prestige }

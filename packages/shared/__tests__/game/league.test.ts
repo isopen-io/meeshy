@@ -32,8 +32,27 @@ import {
   previousLeague,
   settleLeagueGroup,
   weekdayIndex,
+  LEAGUE_FIRST_WEEK,
+  isLeagueWeekPlaceable,
 } from '../../utils/game/league.js';
 import { GLORY_POINTS } from '../../utils/game/glory.js';
+import { SEASON_ONE_START, seasonAt } from '../../utils/game/season.js';
+
+describe('la première semaine de ligue (#10014)', () => {
+  it('reste le lundi 2026-10-12, quand la saison 1 est repoussée au lundi 2026-12-21', () => {
+    expect(LEAGUE_FIRST_WEEK).toBe('2026-10-12');
+    expect(leagueWeekKey(LEAGUE_FIRST_WEEK)).toBe(LEAGUE_FIRST_WEEK);
+    expect(SEASON_ONE_START).toBe('2026-12-21');
+  });
+
+  it('se place sans attendre la saison : une semaine sans saison reste une semaine de ligue', () => {
+    expect(isLeagueWeekPlaceable('2026-10-05')).toBe(false);
+    expect(isLeagueWeekPlaceable('2026-10-12')).toBe(true);
+    expect(seasonAt('2026-10-12')).toBeNull();
+    expect(isLeagueWeekPlaceable('2026-12-14')).toBe(true);
+    expect(isLeagueWeekPlaceable('2026-12-21')).toBe(true);
+  });
+});
 
 const members = (points: readonly number[]) => points.map((weekPoints, i) => ({ userId: `u${i + 1}`, weekPoints }));
 

@@ -55,6 +55,17 @@ export const weekdayIndex = (dayKey: string): number => (((dayNumber(dayKey) + 3
 /** La clé de la semaine : le lundi local qui la commence. */
 export const leagueWeekKey = (dayKey: string): string => addDays(dayKey, -weekdayIndex(dayKey));
 
+/**
+ * La première semaine de ligue publique : le lundi 2026-10-12. Les ligues ne
+ * suivent PAS l'ouverture des saisons (#10014) : quand la saison 1 a été
+ * repoussée au lundi 2026-12-21, les ligues hebdomadaires ont gardé leur date.
+ * Avant cette semaine, aucun groupe ne se place.
+ */
+export const LEAGUE_FIRST_WEEK = '2026-10-12';
+
+/** Une semaine de ligue se place à partir de `LEAGUE_FIRST_WEEK`, jamais avant. */
+export const isLeagueWeekPlaceable = (weekKey: string): boolean => dayNumber(weekKey) >= dayNumber(LEAGUE_FIRST_WEEK);
+
 export type LeagueMoment = { readonly dayKey: string; readonly minuteOfDay: number };
 
 /** Le dimanche 20 h local de la semaine. */
