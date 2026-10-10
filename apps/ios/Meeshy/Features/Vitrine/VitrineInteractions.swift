@@ -28,12 +28,19 @@ nonisolated enum VitrineInteraction: String, CaseIterable, Sendable {
     case story
     /// Un vocal joue dans sa langue d'origine, puis se relit dans celle du lecteur (`setBubbleActiveDisplayLanguage`, #9904).
     case vocal
+    /// Un invité SANS compte ouvre un lien, choisit « sans compte » et donne son nom et sa langue (`proceedToForm`, #9904).
+    case invite
+    /// « Dis-moi tout » : la conversation d'un lien anonyme partagé aux proches, remplie de messages d'invités sans compte,
+    /// chacun dans sa langue, lus dans celle du lecteur (#9904).
+    case sonde
+    /// La liste des conversations de SAV, une par produit, chacune ouverte aux clients par son lien (#9904).
+    case sav
 
     /// La célébration du jeu que l'interaction déclenche : la passerelle fictive la prépare.
     var celebration: VitrineCelebration? {
         switch self {
         case .frappe: .frappe
-        case .emoji, .emojiPost, .commentaireAudio, .sticker, .reel, .defilement, .story, .vocal: nil
+        case .emoji, .emojiPost, .commentaireAudio, .sticker, .reel, .defilement, .story, .vocal, .invite, .sonde, .sav: nil
         }
     }
 }
@@ -50,6 +57,9 @@ extension VitrineScene {
         case .interactionDefilement: .defilement
         case .interactionStory: .story
         case .interactionVocal: .vocal
+        case .interactionInvite: .invite
+        case .interactionSonde: .sonde
+        case .interactionSav: .sav
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: nil
         }
     }
@@ -59,9 +69,10 @@ extension VitrineScene {
     nonisolated var sceneDuKit: VitrineScene {
         switch self {
         case .interactionEmoji, .interactionVocal: .amour
+        case .interactionInvite: .lien
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge,
              .interactionFrappe, .interactionEmojiPost, .interactionCommentaireAudio, .interactionSticker, .interactionReel,
-             .interactionDefilement, .interactionStory: self
+             .interactionDefilement, .interactionStory, .interactionSonde, .interactionSav: self
         }
     }
 
@@ -93,6 +104,8 @@ enum VitrineInteractions {
             case .defilement: await faireDefilerLesReels(scene, f)
             case .story: await ouvrirLaStory(scene, f)
             case .vocal: await faireEntendreLaTraduction(scene, f)
+            case .invite: await rejoindreSansCompte(scene, f)
+            case .sonde, .sav: await tenirLEcran(scene)
             }
         }
     }
