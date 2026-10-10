@@ -22,10 +22,11 @@ const CONVERSATION_ID = '507f1f77bcf86cd799439011';
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 
 function setup(params: { readonly type: string; readonly birthDate: Date | null }) {
+  const account: { birthDate: Date | null } = { birthDate: params.birthDate };
   const prisma = {
     participant: { findFirst: jest.fn(async () => ({ id: 'participant-teen' })) },
     conversation: { findUnique: jest.fn(async () => ({ isActive: true, closedAt: null, type: params.type })) },
-    user: { findUnique: jest.fn(async () => ({ birthDate: params.birthDate })) },
+    user: { findUnique: jest.fn(async () => ({ birthDate: account.birthDate })) },
   };
   const user: SocketUser = {
     id: USER_ID,
@@ -36,8 +37,9 @@ function setup(params: { readonly type: string; readonly birthDate: Date | null 
     userId: USER_ID,
     displayName: 'Teen',
   };
+  const ioEmit = jest.fn();
   const handler = new LocationHandler({
-    io: { to: jest.fn(() => ({ emit: jest.fn() })) } as never,
+    io: { to: jest.fn(() => ({ emit: ioEmit })) } as never,
     prisma: prisma as never,
     connectedUsers: new Map([[USER_ID, user]]),
     socketToUser: new Map([[SOCKET_ID, USER_ID]]),
@@ -47,7 +49,7 @@ function setup(params: { readonly type: string; readonly birthDate: Date | null 
   });
   const emit = jest.fn();
   const socket = { id: SOCKET_ID, to: jest.fn(() => ({ emit })), emit: jest.fn() };
-  return { handler, prisma, socket, emit };
+  return { handler, prisma, socket, emit, account, ioEmit };
 }
 
 const start = { conversationId: CONVERSATION_ID, latitude: 48.85, longitude: 2.35, durationMinutes: 15 };
@@ -101,5 +103,29 @@ describe('LocationHandler — la position partagée d’un mineur ne paraît pas
 
     expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
     expect(emit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_LIVE_UPDATED, expect.anything());
+  });
+
+  it('une session ouverte dans Global AVANT la déclaration de minorité s’éteint à la mise à jour suivante', async () => {
+    const { handler, socket, emit, account, ioEmit } = setup({ type: 'global', birthDate: null });
+    await handler.handleLiveLocationStart(socket as never, start as never, jest.fn());
+    emit.mockClear();
+    account.birthDate = new Date('2011-06-01T00:00:00.000Z');
+
+    await handler.handleLiveLocationUpdate(socket as never, update as never);
+
+    expect(emit).not.toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_LIVE_UPDATED, expect.anything());
+    expect(ioEmit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_LIVE_STOPPED, expect.objectContaining({ userId: USER_ID }));
+    handler.dispose();
+  });
+
+  it('une session ouverte dans Global par un compte resté sans restriction continue de relayer', async () => {
+    const { handler, socket, emit } = setup({ type: 'global', birthDate: null });
+    await handler.handleLiveLocationStart(socket as never, start as never, jest.fn());
+    emit.mockClear();
+
+    await handler.handleLiveLocationUpdate(socket as never, update as never);
+
+    expect(emit).toHaveBeenCalledWith(SERVER_EVENTS.LOCATION_LIVE_UPDATED, expect.anything());
+    handler.dispose();
   });
 });

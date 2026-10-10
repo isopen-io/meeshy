@@ -105,6 +105,7 @@ import {
   MINOR_GLOBAL_REFUSAL_MESSAGE,
 } from '../../services/messaging/conversationWriteAdmission';
 import { refusesMinorInConversation, refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
+import { GLOBAL_CONVERSATION_TYPE } from '@meeshy/shared/utils/global-minor-restriction';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import {
   SocketLocationLiveStartSchema,
@@ -145,6 +146,12 @@ interface LiveLocationSession {
   readonly durationMinutes: number;
   readonly startedAt: Date;
   readonly expiresAt: Date;
+  /**
+   * #9927 — le partage vit dans Meeshy Global : chaque mise à jour revérifie
+   * que le partageur n'est pas devenu mineur déclaré entre-temps (une lecture
+   * de date de naissance, et seulement pour ces partages-là).
+   */
+  readonly inGlobal: boolean;
 }
 
 // Préfixée par la longueur plutôt que jointe par un séparateur : les deux
@@ -258,6 +265,7 @@ export class LocationHandler {
         durationMinutes: validated.durationMinutes,
         startedAt: now,
         expiresAt,
+        inGlobal: conversation?.type === GLOBAL_CONVERSATION_TYPE,
       });
 
       callback?.({ success: true, data: eventData });
@@ -314,6 +322,14 @@ export class LocationHandler {
       // suivante : le pair recevrait un `stopped`, puis un `updated` qui
       // recrée l'épingle. Une session inconnue, elle, passe (cf. l'en-tête).
       if (session && now >= session.expiresAt) return;
+      if (session?.inGlobal && await refusesMinorInConversationOfType(this.prisma, {
+        conversationType: GLOBAL_CONVERSATION_TYPE,
+        userId: context.isAnonymous ? null : context.userId,
+        now,
+      })) {
+        this._expireSessionNow(key, session, now);
+        return;
+      }
       if (session) {
         // La dernière position connue est ce que le rattrapage rejouera : sans
         // ce rafraîchissement, un arrivant recevrait le point de DÉPART, qui
