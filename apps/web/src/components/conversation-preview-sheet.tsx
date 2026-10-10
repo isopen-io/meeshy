@@ -21,6 +21,9 @@ import { GLYPHS } from './glyphs';
  * dans l'en-tête du fil à la place de la loupe (#9031), ouvre la conversation
  * complète.
  *
+ * Sur un ordinateur (≥ 768 px, #10070), elle ne prend plus toute la hauteur :
+ * 85 % de l'écran, centrée, l'écran courant visible au-dessus et au-dessous.
+ *
  * POSÉE SUR `document.body`, et `#root` rendu INERTE tant qu'elle vit : le
  * clavier ne s'échappe pas vers l'écran recouvert. Pas de `<dialog>` modal :
  * la couche supérieure du navigateur recouvrirait les menus que le fil pose
@@ -137,9 +140,8 @@ export function ConversationPreviewSheet({
       />
       <div
         ref={panel}
-        className="absolute inset-x-0 bottom-0 mx-auto flex w-full flex-col sm:bottom-4"
+        className="absolute inset-x-0 top-[calc(var(--safe-top)+6px)] bottom-0 mx-auto flex w-full flex-col sm:bottom-4 md:top-[7.5dvh] md:bottom-[7.5dvh]"
         style={{
-          top: 'calc(var(--safe-top) + 6px)',
           maxWidth: 640,
           transform: dragY === 0 ? undefined : `translateY(${dragY}px)`,
         }}

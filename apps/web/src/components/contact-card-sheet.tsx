@@ -37,6 +37,9 @@ const systemClipboard: ClipboardWriter = async (text) => {
  * `<dialog>` + `showModal()` : piège de focus, Échap et inertie de l'arrière
  * sans une ligne de gestion de touches ; le retour matériel Android ferme la
  * fiche, pas l'écran (`useBackDismiss`).
+ *
+ * Sur un téléphone, la fiche monte du bas ; sur un ordinateur (≥ 768 px,
+ * #10070), elle se centre, bornée, sur le voile.
  */
 export function ContactCardSheet({
   card,
@@ -103,7 +106,7 @@ export function ContactCardSheet({
     >
       <div className="message-menu-backdrop" aria-hidden="true" onClick={close} data-contact-backdrop="" />
       <div
-        className="flex h-full items-end justify-center p-4"
+        className="flex h-full items-end justify-center p-4 md:items-center"
         style={{ position: 'relative', zIndex: 41, pointerEvents: 'none' }}
       >
         <section
