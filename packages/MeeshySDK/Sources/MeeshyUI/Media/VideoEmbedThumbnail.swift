@@ -27,14 +27,14 @@ public struct VideoEmbedThumbnail: View {
                 }
                 .aspectRatio(16.0 / 9.0, contentMode: .fill)
 
-                Color.black.opacity(0.18)
+                Color.black.opacity(MeeshyOpacity.light)
 
                 Image(systemName: "play.fill")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(18)
+                    .padding(MeeshySpacing.lg)
                     .background(.ultraThinMaterial, in: Circle())
-                    .overlay(Circle().stroke(accent.opacity(0.6), lineWidth: 1.5))
+                    .overlay(Circle().stroke(accent.opacity(0.6), lineWidth: MeeshyBorder.emphasis))
 
                 VStack {
                     Spacer()
@@ -42,16 +42,16 @@ public struct VideoEmbedThumbnail: View {
                         Text(providerLabel)
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.black.opacity(0.55), in: Capsule())
+                            .padding(.horizontal, MeeshySpacing.sm)
+                            .padding(.vertical, MeeshySpacing.xs)
+                            .background(.black.opacity(MeeshyOpacity.strong), in: Capsule())
                         Spacer()
                     }
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "media.embed.play_video", defaultValue: "Lire la vidéo \(providerLabel)", bundle: .module))

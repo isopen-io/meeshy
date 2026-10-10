@@ -166,6 +166,7 @@ extension OutboxUIItem {
              .markStoryViewed,
              .reportAttachmentStatus,
              .consumeAfterRead,
+             .reportContentCapture,
              .sendFriendRequest,
              .respondFriendRequest,
              .blockUser,

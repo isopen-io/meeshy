@@ -16,6 +16,9 @@ import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
 import { logError } from '../../utils/logger.js';
 import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
+import { refreshParticipantNameSnapshots, type AccountNameFields } from '../../services/participantNameSnapshots';
+
+const NAME_FIELDS = ['displayName', 'firstName', 'lastName', 'username'] as const;
 
 /**
  * Les écritures d'un compte administré, gouvernées par la loi de leur CHAMP (#4154).
@@ -160,7 +163,9 @@ const consentSchema = z.object({
   voiceData: z.boolean().optional(),
   dataProcessing: z.boolean().optional(),
   voiceCloning: z.boolean().optional(),
-  reason: z.string().min(10),
+  // Facultatif pour le rang souverain (le seul qui écrit un consentement, spec
+  // 2026-10-04 § 4) ; validé s'il est écrit — un blanc est un motif absent.
+  reason: z.union([z.string().trim().length(0), z.string().min(10)]).optional(),
 });
 const securitySchema = z.object({
   unlock: z.literal(true).optional(),
@@ -189,7 +194,7 @@ function servir(
   rendu: Rendu | undefined,
   messageParDefaut: string
 ): void {
-  const sanitise = sanitizationService.sanitizeUser(servi as never, role);
+  const sanitise = sanitizationService.sanitizeUser(servi as never, role, { withAdminMetadata: true });
   if (!rendu) {
     sendSuccess(reply, sanitise, { message: messageParDefaut });
     return;
@@ -223,6 +228,15 @@ function rendreErreur(
 
 export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): void {
   const { userManagementService, userAuditService } = deps;
+
+  /**
+   * La fiche RELUE après le geste : `prisma.user.update` rend la ligne nue,
+   * sans `_count` — que la fiche du web lit dans la réponse de chaque geste.
+   * Relire par `getUserById` sert la même forme que `GET /admin/users/:id`.
+   */
+  async function relire(userId: string, ecrit: unknown): Promise<unknown> {
+    return (await userManagementService.getUserById(userId)) ?? ecrit;
+  }
 
   /** La garde commune : la porte, puis le RANG. La loi du champ suit, en corps. */
   const gardes = [fastify.authenticate, requireUserModifyAccess, requireHierarchy({ param: 'userId' })];
@@ -280,6 +294,25 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
    * l'autre moitié est refusée. Un lot à moitié appliqué est plus difficile à
    * défaire qu'un lot refusé.
    */
+  /**
+   * Un renommage par l'administration se propage comme celui du porteur
+   * (#8890) : la copie du nom dans chaque conversation, puis le groupe des
+   * quatre composants vers les co-participants (`UserUpdatedEventData`).
+   * Best-effort — le nom est déjà écrit et tracé.
+   */
+  async function propagerLeNom(userId: string, servi: AccountNameFields): Promise<void> {
+    const changes = {
+      displayName: servi.displayName,
+      firstName: servi.firstName,
+      lastName: servi.lastName,
+      username: servi.username,
+    };
+    await refreshParticipantNameSnapshots(fastify.prisma, userId, changes)
+      .catch((err: unknown) => logError(fastify.log, '[ADMIN_USER_RENAME] participant name refresh failed', err));
+    fastify.notificationService?.emitUserUpdated({ userId, changes })
+      .catch((err: unknown) => logError(fastify.log, '[ADMIN_USER_RENAME] emitUserUpdated failed', err));
+  }
+
   async function ecrireCompte(request: FastifyRequest, reply: FastifyReply, corps: Corps, rendu?: Rendu): Promise<void> {
     try {
       const admis = await admettre(request, reply, corps);
@@ -315,6 +348,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         }
         servi = await userManagementService.updateUser(userId, profil);
         await tracer(request, { cible: userId, action: UserAuditAction.UPDATE_PROFILE, changes, motif });
+        if (NAME_FIELDS.some((champ) => champ in profil)) await propagerLeNom(userId, servi);
       }
 
       if (nouveauRole) {
@@ -342,7 +376,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         });
       }
 
-      servir(reply, moi.role, servi, corps, rendu, 'User updated successfully');
+      servir(reply, moi.role, await relire(userId, servi), corps, rendu, 'User updated successfully');
     } catch (error) {
       rendreErreur(fastify, reply, error, 'Failed to update user');
     }
@@ -399,7 +433,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         });
       }
 
-      servir(reply, moi.role, servi, corps, rendu, 'Security settings updated');
+      servir(reply, moi.role, await relire(userId, servi), corps, rendu, 'Security settings updated');
     } catch (error) {
       rendreErreur(fastify, reply, error, 'Failed to update security settings');
     }
@@ -446,7 +480,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         });
       }
 
-      servir(reply, moi.role, servi, corps, rendu, 'Verifications updated');
+      servir(reply, moi.role, await relire(userId, servi), corps, rendu, 'Verifications updated');
     } catch (error) {
       rendreErreur(fastify, reply, error, 'Failed to update verifications');
     }
@@ -490,7 +524,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         motif,
       });
 
-      servir(reply, moi.role, servi, corps, rendu, 'Consents updated');
+      servir(reply, moi.role, await relire(userId, servi), corps, rendu, 'Consents updated');
     } catch (error) {
       rendreErreur(fastify, reply, error, 'Failed to update consents');
     }

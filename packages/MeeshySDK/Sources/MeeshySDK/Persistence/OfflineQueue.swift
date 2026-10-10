@@ -230,6 +230,13 @@ public protocol OfflineQueueing: Sendable {
         conversationId: String?
     ) async throws -> String
 
+    /// **La SEULE entrée d'un commentaire dans la file** (#9743). La file
+    /// réelle n'écrit la ligne que dans la base PROUVÉE de son auteur
+    /// (`OfflineQueue.enqueueComment`) ; aucun site n'enfile un commentaire
+    /// par l'entrée générique ci-dessus.
+    @discardableResult
+    func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String
+
     func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome>
 
     /// **Une ligne de ce `kind`, rangée sous cette `anchor`, est-elle encore en
@@ -699,6 +706,21 @@ public actor OfflineQueue {
     /// Called from `retryAll()` (sendMessage success), from the
     /// `OutboxFlusher.onOutcome` callback (generic dispatch success /
     /// exhaustion), and from `retryItem(_:)` if the row is missing.
+    /// Oublie l'issue mémorisée d'un identifiant que l'on vient de réarmer :
+    /// sans cela, un abonné recevrait aussitôt le `.exhausted` périmé.
+    func forgetOutcome(for cmid: String) {
+        outcomeTombstones.removeValue(forKey: cmid)
+    }
+
+    /// **Témoins seulement** : joué entre la saisie du triplet d'une opération
+    /// de commentaire et sa transaction — pour y rebrancher la file et prouver
+    /// que l'opération n'agit que sur ce qu'elle a saisi.
+    var commentTransactionHook: (@Sendable @concurrent () async -> Void)?
+
+    func setCommentTransactionHook(_ hook: (@Sendable @concurrent () async -> Void)?) {
+        commentTransactionHook = hook
+    }
+
     public func publishOutcome(_ outcome: OutboxOutcome) {
         // Le flusher vient de supprimer (.applied) ou d'épuiser (.exhausted)
         // la ligne outbox de ce cmid — le nombre de writes en attente a changé.
@@ -755,6 +777,15 @@ public actor OfflineQueue {
 
         guard let record else {
             throw OfflineQueueError.itemNotFound
+        }
+        // **Une ligne de commentaire ne se réarme que par sa porte** (#9743,
+        // M3) : sous le compte que le JETON désigne, auteur de la ligne, dans
+        // sa base prouvée — jamais par cette relance générique.
+        if record.kind == .createComment {
+            let payload = try decoder.decode(CreateCommentPayload.self, from: record.payload)
+            try await retryCreateComment(clientMutationId: payload.clientMutationId,
+                                         ownerId: CommentOwnership.userId(inToken: APIClient.shared.authToken))
+            return
         }
         // Le retry ré-arme la ligne avec le MÊME cmid : sans cette purge, un
         // abonné post-retry (`outcomeStream(for:)`) recevait instantanément
@@ -940,10 +971,16 @@ public actor OfflineQueue {
         }
         let limit = Self.pendingUIItemsLimit
         let excludedKinds = Self.syncIndicatorExcludedKinds
+        // Une ligne de commentaire ne se montre que sous preuve (#9743, M3) :
+        // compte du jeton, auteur de la ligne, base prouvée dans CETTE lecture.
+        let commentContext = CommentOwnership.userId(inToken: APIClient.shared.authToken).map {
+            CommentContext(ownerId: $0, serverOrigin: MeeshyConfig.shared.persistedServerOrigin, pool: pool)
+        }
         let records: [OutboxRecord]
         do {
             records = try await pool.read { db in
-                try OutboxRecord
+                let baseProven = try commentContext?.proves(db) ?? false
+                return try OutboxRecord
                     .filter([
                         OutboxStatus.pending.rawValue,
                         OutboxStatus.inflight.rawValue,
@@ -957,6 +994,14 @@ public actor OfflineQueue {
                     .order(Column("createdAt").asc)
                     .limit(limit)
                     .fetchAll(db)
+                    .filter { record in
+                        guard record.kind == .createComment else { return true }
+                        guard baseProven, let owner = commentContext?.ownerId,
+                              let payload = try? JSONDecoder().decode(CreateCommentPayload.self, from: record.payload) else {
+                            return false
+                        }
+                        return CommentOwnership.mayHandle(payload, ownerId: owner, baseIsHis: true)
+                    }
             }
         } catch {
             logger.error("refreshPendingUIItems read failed — reporting [] to keep the degraded invariant: \(error.localizedDescription, privacy: .public)")
@@ -1197,6 +1242,11 @@ public actor OfflineQueue {
         conversationId: String? = nil
     ) async throws -> String {
         switch kind {
+        case .createComment:
+            // Un commentaire n'entre que par `enqueueComment` /
+            // `enqueueCommentMedia`, qui prouvent sa base et son auteur (#9743).
+            logger.error("enqueue(.createComment) refusé : un commentaire n'entre que par enqueueComment")
+            throw CommentOwnership.Refusal.notTheAuthor
         case .sendMessage, .editMessage, .deleteMessage, .sendReaction:
             assertionFailure("enqueue(kind:payload:) is for non-message outbox kinds. Use the dedicated enqueue/enqueueEdit/enqueueDelete paths for \(kind).")
         default:

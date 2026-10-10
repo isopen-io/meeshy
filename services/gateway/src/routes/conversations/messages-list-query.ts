@@ -27,8 +27,10 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/locat
 import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
+import { FORWARD_PIECE_PROTECTION_SELECT, FORWARD_SOURCE_PROTECTION_SELECT, forwardPreviewOf, signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
+import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
 import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
-import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER, QUOTED_VISUAL_ATTACHMENT_COUNT_SELECT } from '../../services/attachments/attachmentIncludes';
 import {
   resolveParticipantAvatar,
   resolveParticipantDisplayName,
@@ -315,7 +317,7 @@ export function buildMessageListSelect(options: {
         // nu, délibérément SANS drapeau de protection, ni une union locale des
         // deux) : c'est littéralement la forme du canal socket que #7014 a
         // nommée, et que cette route écrivait à la main jusqu'ici.
-        attachments: { select: attachmentSocketSelect },
+        attachments: { select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
         _count: {
           select: {
             reactions: true,
@@ -413,14 +415,10 @@ export function buildMessageListSelect(options: {
             // par page (`backfillCitedAttachments`).
             attachments: {
               select: attachmentFullSelect,
-              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              orderBy: MESSAGE_ATTACHMENT_ORDER,
               take: 4,
             },
-            _count: {
-              select: {
-                reactions: true
-              }
-            }
+            _count: { select: { reactions: true, ...QUOTED_VISUAL_ATTACHMENT_COUNT_SELECT } }
           }
         };
       }
@@ -593,6 +591,11 @@ export type MessageRowMappingContext = {
   ephemeralDeadlines?: Map<string, EphemeralReaderResolution>;
   /** #7936 — les emojis que CE lecteur a posés, par message. Absente ⇒ `[]`. */
   readerReactions?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * #9600 — signe, pour `currentParticipantId`, les adresses des pièces
+   * protégées. Absent ou `null` (aucune clé posée) ⇒ l'adresse d'avant.
+   */
+  readerFileUrlSigner?: ReaderFileUrlSigner | null;
 };
 
 /** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
@@ -722,7 +725,13 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
               { onMissingEntry: listMissingEntry },
             );
           })() : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, ctx.consumptionMap),
+          // #9600 — en DERNIER : l'adresse servie d'une pièce protégée est
+          // celle de CE lecteur. La protection se lit sur la ligne BRUTE
+          // (`expiresAt` de la colonne, pas l'échéance servie au lecteur).
+          attachments: signReaderAttachmentsIn(
+            cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, ctx.consumptionMap),
+            { message, readerParticipantId: currentParticipantId, signer: ctx.readerFileUrlSigner },
+          ),
           _count: message._count
         };
 
@@ -757,6 +766,8 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
               // `message.replyTo.metadata` (qui porterait la pièce que le
               // message CITÉ visait lui-même, un cran plus haut dans le fil).
               attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
+              // #8562 — l'échéance du LECTEUR sur le message cité.
+              ephemeralReader: { resolution: ephemeralDeadlines?.get(message.replyTo.id), now: new Date() },
             }),
             sender: replySender ? {
               ...replySender,
@@ -847,7 +858,8 @@ export async function enrichForwardedMessagesForList(
                 sender: {
                   select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
                 },
-                attachments: { select: attachmentForwardPreviewSelect, take: 1 }
+                ...FORWARD_SOURCE_PROTECTION_SELECT, // #9646 — `forwardPreviewOf`
+                attachments: { select: { ...attachmentForwardPreviewSelect, ...FORWARD_PIECE_PROTECTION_SELECT }, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 1 }
               }
             })
         );
@@ -929,7 +941,7 @@ export async function enrichForwardedMessagesForList(
                   displayName: resolveParticipantDisplayName(originalSender),
                   avatar: resolveParticipantAvatar(originalSender),
                 } : null,
-                attachments: original.attachments,
+                attachments: forwardPreviewOf(original),
                 ...(forwardedPlace ? { location: forwardedPlace } : {}),
                 ...(forwardedSticker ? { sticker: forwardedSticker } : {}),
               };

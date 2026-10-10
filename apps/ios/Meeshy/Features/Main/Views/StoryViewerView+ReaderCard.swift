@@ -77,11 +77,29 @@ extension View {
     func readerCard(layout: SceneShape.Layout,
                     framing: StoryCanvasFraming.Result,
                     thumbHash: String?) -> some View {
+        modifier(ReaderCardPlacement(layout: layout, framing: framing, thumbHash: thumbHash))
+    }
+}
+
+/// **La carte anime SON recadrage** (#8642). Écrire un commentaire réduit la
+/// scène au-dessus du composeur sans changer de présentation (`.carded` des
+/// deux côtés) : le ressort lié à `canvasIsExpanded` ne voyait rien passer et
+/// la carte sautait. Le ressort suit désormais le cadrage lui-même, au seul
+/// site que les trois couches partagent — et Reduce Motion y pose la carte
+/// sans mouvement.
+private struct ReaderCardPlacement: ViewModifier {
+    let layout: SceneShape.Layout
+    let framing: StoryCanvasFraming.Result
+    let thumbHash: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
         SceneCard(layout: layout,
                   thumbHash: thumbHash,
                   cornerRadius: framing.cornerRadius,
-                  hostScale: framing.scale) { self }
+                  hostScale: framing.scale) { content }
             .scaleEffect(framing.scale)
             .offset(y: framing.offset.height)
+            .animation(StorySceneFocus.reframeAnimation(reduceMotion: reduceMotion), value: framing)
     }
 }

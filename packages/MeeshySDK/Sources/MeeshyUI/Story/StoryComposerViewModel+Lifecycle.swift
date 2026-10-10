@@ -26,33 +26,22 @@ extension StoryComposerViewModel {
         }
     }
 
-    /// Evict cached media for slides not currently visible. Triggered by
-    /// `UIApplication.didReceiveMemoryWarningNotification` via `startMemoryObserver`.
-    /// Previously only `slideImages` (background thumbnails) and the global thumbnail
-    /// cache were purged — `loadedImages` / `loadedVideoURLs` / `loadedAudioURLs` /
-    /// `mediaAspectRatios` of foreground media on non-visible slides leaked, which
-    /// could keep ~50 MB of UIImages around with 10 slides × 5 photos.
-    /// Active-slide caches are preserved; the user is currently editing them and
-    /// their re-decoding cost would be visible.
+    /// **Une alerte mémoire purge des CACHES, jamais la composition** (#6922).
+    ///
+    /// Cette fonction retirait de `loadedImages`, `slideImages`,
+    /// `loadedVideoURLs` et `loadedAudioURLs` tout ce qui n'était pas sur la
+    /// scène courante. Or ces dictionnaires ne sont pas des caches : ce sont les
+    /// SEULES références de ce que l'auteur a posé, et la publication les lit
+    /// telles quelles (`onPublishAllInBackground`). Une alerte mémoire pendant
+    /// la troisième scène d'un post faisait donc partir les deux premières
+    /// sans leur photo ni leur vidéo — en silence, sans retour possible.
+    ///
+    /// Ce qui borne la mémoire désormais, c'est la TAILLE de chaque photo
+    /// (`SceneImageDownsampling.workingMaxPixelSize`, la taille publiée). Sous
+    /// pression, on ne lâche que ce qui se recalcule : vignettes de scène et
+    /// vignettes vidéo.
     func evictNonVisibleSlideMedia() {
-        let currentSlideId = slides[safe: currentSlideIndex]?.id
-        var keepIds = Set<String>()
-        if currentSlideId != nil {
-            for obj in (currentEffects.mediaObjects ?? []) { keepIds.insert(obj.id) }
-            for obj in (currentEffects.audioPlayerObjects ?? []) { keepIds.insert(obj.id) }
-        }
-
-        for (index, slide) in slides.enumerated() where index != currentSlideIndex {
-            slideImages.removeValue(forKey: slide.id)
-            for obj in (slide.effects.mediaObjects ?? []) where !keepIds.contains(obj.id) {
-                loadedImages.removeValue(forKey: obj.id)
-                loadedVideoURLs.removeValue(forKey: obj.id)
-                mediaAspectRatios.removeValue(forKey: obj.id)
-            }
-            for obj in (slide.effects.audioPlayerObjects ?? []) where !keepIds.contains(obj.id) {
-                loadedAudioURLs.removeValue(forKey: obj.id)
-            }
-        }
+        SceneThumbnailCache.shared.removeAll()
         StoryMediaLoader.shared.clearThumbnailCache()
     }
 

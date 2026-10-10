@@ -213,6 +213,33 @@ public enum StickerTemplateRenderer {
                              metrics: metrics, screenScale: screenScale)
     }
 
+    /// **Le gabarit avec son contour blanc découpé** (#9060), et sa taille
+    /// contour compris. Pour la feuille, la bulle et le PNG envoyé ; la scène
+    /// d'une story garde `image`, dont la taille est celle du document.
+    @MainActor
+    public static func dieCutImage(templateID: String,
+                                   slots: [String: String],
+                                   metrics: StickerTemplateMetrics,
+                                   screenScale: CGFloat) -> (UIImage?, CGSize)? {
+        guard let dessinateur = drawer(for: templateID) else { return nil }
+        let clé = (renderCacheKey(drawerID: dessinateur.id, slots: slots,
+                                  metrics: metrics, screenScale: screenScale) + "|découpe") as NSString
+        if let mémoïsé = renderCache.object(forKey: clé) {
+            return (mémoïsé.image, mémoïsé.size)
+        }
+        guard let rendu = image(templateID: templateID, slots: slots,
+                                metrics: metrics, screenScale: screenScale) else { return nil }
+        guard let nu = rendu.0, rendu.1.width > 0, rendu.1.height > 0 else { return rendu }
+        let marge = StickerDieCut.margin(for: nu.size)
+        let ratio = rendu.1.width / nu.size.width
+        let découpé = StickerDieCut.apply(to: nu)
+        let taille = CGSize(width: rendu.1.width + 2 * marge * ratio,
+                            height: rendu.1.height + 2 * marge * ratio)
+        renderCache.setObject(StickerTemplateRender(image: découpé, size: taille),
+                              forKey: clé, cost: bitmapCost(of: découpé))
+        return (découpé, taille)
+    }
+
     // MARK: La mémoïsation du dessin
 
     /// **Le même gabarit ne se redessine pas** (#4947).

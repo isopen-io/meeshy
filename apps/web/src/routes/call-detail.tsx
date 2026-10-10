@@ -97,7 +97,7 @@ export default function CallDetailScreen() {
     ) : plan === 'not-found' ? (
       <CallDetailState language={language} kind="not-found" />
     ) : detail !== null ? (
-      <CallDetailCard language={language} detail={detail} now={now} onCall={onCall} />
+      <CallDetailCard language={language} detail={detail} now={now} onCall={onCall} viewerId={viewerId} />
     ) : cold === 'error' ? (
       <CallDetailState language={language} kind="error" onRetry={() => void served.refetch()} />
     ) : cold === 'offline' ? (

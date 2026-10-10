@@ -23,9 +23,14 @@ public enum EngagementAxisKey: String, CaseIterable, Codable, Sendable, Hashable
     case privateConversation = "conversation.private"
     case publicConversation = "conversation.public"
     case communityConversation = "conversation.community"
+    // Créer un groupe (#8906) — une fois par ENSEMBLE de membres.
+    case groupCreated = "conversation.group_created"
     case sticker = "tool.sticker"
     case inAppEdit = "tool.in_app_edit"
     case directPublish = "tool.direct_publish"
+    // Les gestes de CONVERSATION (#8906) — réagir, joindre un fichier.
+    case reaction = "tool.reaction"
+    case attachment = "tool.attachment"
     // Le LIEN SOCIAL (#5766) — ce que l'auteur TISSE, là où les treize
     // premiers axes ne mesuraient que ce qu'il PRODUIT.
     case trackedLink = "social.tracked_link"
@@ -79,7 +84,7 @@ public enum EngagementCatalog {
     /// La garde `progression-layout-mirror-parity` compare les cinq nombres.
     ///
     /// Par FAMILLE et non par axe : c'est ainsi que le TypeScript les décide
-    /// (cinq constantes, dix-sept axes), et un miroir plus fin inventerait une
+    /// (cinq constantes, dix-neuf axes), et un miroir plus fin inventerait une
     /// granularité que la source n'a pas.
     public static let familyWeights: [EngagementAxisFamily: Int] = [
         .content: 9,
@@ -89,7 +94,22 @@ public enum EngagementCatalog {
         .tool: 1,
     ]
 
-    public static let badgeThresholds: [Int] = [1, 10, 50, 100, 500]
+    /// « COMMENT GAGNER » (#9667) : ce qu'un geste de chaque famille rapporte AU PLUS,
+    /// avant multiplicateurs — miroir de `ENGAGEMENT_FAMILY_TOP_POINTS` (TS), dérivé du
+    /// catalogue des opérations ; la garde `engagement-family-top-points` compare les cinq
+    /// nombres. Les limites quotidiennes comptent des GESTES, jamais ces points.
+    public static let familyTopPoints: [EngagementAxisFamily: Int] = [
+        .content: 1000,
+        .comment: 100,
+        .social: 7,
+        .conversation: 5,
+        .tool: 4,
+    ]
+
+    /// Les cinq paliers d'origine — ce qu'un client qui ignore les deux derniers lit (#9392).
+    public static let legacyBadgeThresholds: [Int] = [1, 10, 50, 100, 500]
+    /// Sept paliers : 1 000 (Obsidienne) et 5 000 (Prisme) s'ajoutent, rien n'est retiré (#9392).
+    public static let badgeThresholds: [Int] = [1, 10, 50, 100, 500, 1000, 5000]
     public static let streakThresholds: [Int] = [3, 7, 14, 30, 60, 100]
     public static let levelThresholds: [Int] = [10, 50, 150, 400, 1000, 2500]
 

@@ -14,7 +14,13 @@ extension View {
     func callControlGlass(diameter: CGFloat, isActive: Bool, tint: Color) -> some View {
         self
             .frame(width: diameter, height: diameter)
-            .adaptiveGlass(in: Circle(), tint: isActive ? tint.opacity(0.55) : nil, interactive: true)
+            .adaptiveGlass(in: Circle(), tint: isActive ? tint.opacity(MeeshyOpacity.strong) : nil, interactive: true)
+    }
+
+    /// #8742 — une puce d'ambiance du Montage : la même capsule de verre
+    /// interactive, teintée quand elle est choisie.
+    func callChipGlass(isActive: Bool, tint: Color) -> some View {
+        adaptiveGlass(in: Capsule(), tint: isActive ? tint.opacity(MeeshyOpacity.strong) : nil, interactive: true)
     }
 
     /// Prominent red Liquid Glass circle for the hang-up button.
@@ -42,19 +48,74 @@ extension View {
     /// image claire (écran partagé, document filmé).
     func callControlsGlass<S: Shape>(in shape: S) -> some View {
         self
-            .background(shape.fill(Color.black.opacity(0.18)))
+            .background(shape.fill(Color.black.opacity(MeeshyOpacity.light)))
             .adaptiveGlass(in: shape)
     }
 
     /// #8394 — le masquage automatique (vidéo, 4 s) retire ENSEMBLE la
     /// pilule, les actions et l'en-tête : invisibles, ils ne captent plus rien,
-    /// ni un toucher ni VoiceOver.
+    /// ni un toucher ni VoiceOver. #8735 — « invisibles » s'entend au terme du
+    /// fondu : tant qu'on les voit encore, ils répondent, et le toucher reçu
+    /// pendant le fondu les rallume.
     func callChromeVisibility(_ isVisible: Bool) -> some View {
-        self
+        modifier(CallChromeVisibilityModifier(isVisible: isVisible))
+    }
+}
+
+/// La grâce du fondu (`CallChromeVisibility.acceptsTouches`) : le toucher
+/// est coupé à la FIN de la disparition, jamais à son début — sinon le
+/// bouton encore visible laissait passer le doigt jusqu'à la vidéo, qui ne
+/// faisait que rallumer le chrome, et l'action ne partait jamais.
+private struct CallChromeVisibilityModifier: ViewModifier {
+    let isVisible: Bool
+
+    @State private var hiddenAt: Date?
+    @State private var clock = Date()
+    @Environment(\.callChromeInteraction) private var reportInteraction
+
+    private var acceptsTouches: Bool {
+        CallChromeVisibility.acceptsTouches(
+            isVisible: isVisible,
+            hiddenFor: hiddenAt.map { clock.timeIntervalSince($0) } ?? .infinity
+        )
+    }
+
+    func body(content: Content) -> some View {
+        let accepts = acceptsTouches
+        let isFadingOut = accepts && !isVisible
+        // Au terme du fondu, le contenu est RETIRÉ du rendu, pas seulement
+        // rendu transparent : dans un `GlassEffectContainer` (iOS 26) le verre
+        // est composé par le conteneur, qui ignore l'opacité de ses enfants.
+        // La pilule restait donc dessinée après le masquage automatique —
+        // visible mais sourde : le premier toucher sur « Micro » ne faisait
+        // que rallumer le chrome (2026-09-30, simulateur). `hidden()` garde
+        // sa place dans la mise en page : rien ne saute.
+        Group {
+            if accepts {
+                content
+            } else {
+                content.hidden()
+            }
+        }
             .opacity(isVisible ? 1 : 0)
-            .allowsHitTesting(isVisible)
+            .simultaneousGesture(
+                TapGesture().onEnded { reportInteraction?(.revive) },
+                including: isFadingOut ? .all : .subviews
+            )
+            .allowsHitTesting(accepts)
             .accessibilityHidden(!isVisible)
-            .animation(.easeInOut(duration: 0.25), value: isVisible)
+            .animation(.easeInOut(duration: CallChromeVisibility.fadeDuration), value: isVisible)
+            .adaptiveOnChange(of: isVisible) { _, visible in
+                let now = Date()
+                hiddenAt = visible ? nil : now
+                clock = now
+            }
+            .task(id: hiddenAt) {
+                guard hiddenAt != nil else { return }
+                try? await Task.sleep(nanoseconds: CallChromeVisibility.fadeDurationNanoseconds)
+                guard !Task.isCancelled else { return }
+                clock = Date()
+            }
     }
 }
 
@@ -68,5 +129,11 @@ enum CallButtonFill {
         case .active: return .white
         case .destructive: return MeeshyColors.error
         }
+    }
+
+    /// #8735 — sous le doigt, le disque s'éclaircit (0,16 → ~0,34 sur un
+    /// disque neutre) : l'enfoncement se voit, même sans rétrécissement.
+    static func pressedHighlight(isPressed: Bool) -> Color {
+        Color.white.opacity(isPressed ? 0.22 : 0)
     }
 }

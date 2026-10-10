@@ -75,6 +75,20 @@ nonisolated struct CameraZoomProfile: Equatable, Sendable {
         return clampedDisplay(nearest ?? display)
     }
 
+    /// Les facteurs qu'on choisit d'un doigt : les objectifs, plus 2× (le
+    /// recadrage du capteur principal) quand l'appareil l'atteint.
+    var quickStops: [CGFloat] {
+        Array(Set(lensStops + [CameraZoomPolicy.quickCropStop]))
+            .filter { $0 >= minDisplay && $0 <= maxDisplay }
+            .sorted()
+    }
+
+    /// Le bouton replié passe au facteur suivant, puis revient au plus large.
+    func nextQuickStop(after display: CGFloat) -> CGFloat {
+        let stops = quickStops
+        return stops.first { $0 > display * (1 + CameraZoomPolicy.stepTolerance) } ?? stops.first ?? baselineDisplay
+    }
+
     func stepped(from display: CGFloat, _ step: CameraZoomStep) -> CGFloat {
         let tolerance = CameraZoomPolicy.stepTolerance
         switch step {
@@ -92,6 +106,7 @@ nonisolated enum CameraZoomPolicy {
     /// La caméra avant n'a qu'un objectif : tout est numérique.
     static let frontDisplayCap: CGFloat = 3
     static let digitalStops: [CGFloat] = [1, 2, 3, 5, 10]
+    static let quickCropStop: CGFloat = 2
     static let snapTolerance: CGFloat = 0.06
     static let stepTolerance: CGFloat = 0.01
     /// Puissances de deux par seconde : pendant le geste la rampe suit le doigt,

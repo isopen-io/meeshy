@@ -24,10 +24,16 @@ import { CommunityRole } from './types';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import type { CommunityEngagementOptions } from './types';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembershipRoutes' });
 
-export async function registerMembershipRoutes(fastify: FastifyInstance) {
+export async function registerMembershipRoutes(
+  fastify: FastifyInstance,
+  options: CommunityEngagementOptions = {}
+) {
+  const engagement = options.engagement ?? new EngagementService(fastify.prisma);
   // Route pour obtenir les communautes de l'utilisateur courant
   fastify.get('/communities/mine', {
     onRequest: [fastify.authenticate],
@@ -87,6 +93,8 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         where: {
           userId,
           isActive: true,
+          // #8876 — « mes communautés » ne montre pas celles que l'administration a désactivées.
+          community: { isActive: true },
           ...(roleFilter && roleFilter.length > 0 ? { role: { in: roleFilter } } : {})
         },
         include: {
@@ -174,8 +182,9 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
-        select: { id: true, isPrivate: true }
+        // #8876 — on ne rejoint pas une communauté désactivée par l'administration.
+        where: { id, isActive: true },
+        select: { id: true, isPrivate: true, createdBy: true }
       });
 
       if (!community) {
@@ -243,6 +252,12 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         userId,
         communityId: id,
       }).catch(() => undefined);
+
+      // `social.community_joined` (#8959) — une fois par communauté ; le
+      // créateur qui revient dans la sienne ne se paie pas (`targetOwnerId`).
+      engagement
+        .recordActivity(userId, 'social.community_joined', { targetId: id, targetOwnerId: community.createdBy })
+        .catch((err: unknown) => logger.warn('engagement social.community_joined failed', { err }));
 
       // Pas de gate ici : le membre rendu est l'APPELANT lui-même, et une
       // préférence de visibilité ne se cache pas à celui qui l'a posée.
@@ -420,8 +435,11 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
 
       const userId = authContext.userId;
 
+      // #8876 — une communauté DÉSACTIVÉE par l'administration ne reçoit plus personne ni aucun réglage :
+      // elle n'existe plus pour ce geste (404), comme pour les lecteurs publics. Quitter, changer un rôle,
+      // retirer un membre et supprimer restent ouverts : les propriétaires peuvent la clore.
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        where: { id, isActive: true },
         select: {
           id: true,
           isPrivate: true,

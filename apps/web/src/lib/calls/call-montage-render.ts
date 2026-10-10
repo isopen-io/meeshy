@@ -10,7 +10,8 @@ import { isGlamourOrnament, paintGlamourOrnament } from './call-montage-glamour-
 
 type Surface2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
-export type Paintable = { readonly source: CanvasImageSource; readonly size: Size; readonly mirrored: boolean; readonly fit: 'cover' | 'contain' };
+/** Une image à peindre — jamais en miroir : une capture montre ce que l'autre voit (#8696, `cameraMirrored`). */
+export type Paintable = { readonly source: CanvasImageSource; readonly size: Size; readonly fit: 'cover' | 'contain' };
 
 /** Les mots d'un montage : la bulle de la BD, la date, les trois accroches d'une couverture (#8580). */
 export type MontageText = { readonly bubble: string; readonly date: string; readonly coverlines: readonly string[] };
@@ -35,18 +36,12 @@ const rounded = (context: Surface2D, rect: Rect, radius: number): void => {
   else context.rect(rect.x, rect.y, rect.width, rect.height);
 };
 
-/** Une image dans son rectangle : rognée pour le remplir (ou entière pour un écran), retournée si c'est un miroir. */
+/** Une image dans son rectangle : rognée pour le remplir (ou entière pour un écran). */
 export function paintInto(context: Surface2D, tile: Paintable, rect: Rect, crop: Rect | null = null): void {
   if (tile.size.width <= 0 || tile.size.height <= 0 || rect.width <= 0 || rect.height <= 0) return;
   const target = tile.fit === 'contain' && crop === null ? containRect(tile.size, rect) : rect;
   const source = crop ?? (tile.fit === 'contain' ? { x: 0, y: 0, width: tile.size.width, height: tile.size.height } : coverCrop(tile.size, rect));
-  context.save();
-  if (tile.mirrored) {
-    context.translate(target.x * 2 + target.width, 0);
-    context.scale(-1, 1);
-  }
   context.drawImage(tile.source, source.x, source.y, source.width, source.height, target.x, target.y, target.width, target.height);
-  context.restore();
 }
 
 function paintCell(context: Surface2D, cell: MontageCell, tile: Paintable): void {

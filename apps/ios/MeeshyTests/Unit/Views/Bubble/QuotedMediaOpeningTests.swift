@@ -74,4 +74,35 @@ final class QuotedMediaOpeningTests: XCTestCase {
     func test_attachment_document_isNil_theJumpOffersItsCard() {
         XCTAssertNil(QuotedMediaOpening.attachment(for: reference(), quoted: cited([piece(id: "a1", mime: "application/pdf")])))
     }
+
+    // MARK: - Le geste de la zone média (#8320, repris par la Rivière #8283)
+
+    func test_gesture_quotedAudio_playsInPlace_neverOpensTheFullscreen() {
+        let inWindow = QuotedMediaOpening.gesture(
+            for: reference(type: "audio/m4a", attachmentId: "a1"),
+            quoted: cited([piece(id: "a1", mime: "audio/m4a")])
+        )
+        let outOfWindow = QuotedMediaOpening.gesture(for: reference(type: "audio/m4a"), quoted: nil)
+
+        guard case .playInPlace = inWindow else { return XCTFail("un audio cité se JOUE sur place (#8320), il n'ouvre rien : \(inWindow)") }
+        guard case .playInPlace = outOfWindow else { return XCTFail("hors de la fenêtre aussi : \(outOfWindow)") }
+    }
+
+    func test_gesture_quotedVideo_opensTheElectedPieceInTheFullscreen() {
+        let gesture = QuotedMediaOpening.gesture(
+            for: reference(attachmentId: "a2"),
+            quoted: cited([piece(id: "a1", mime: "image/jpeg"), piece(id: "a2", mime: "video/mp4")])
+        )
+
+        guard case .open(let attachment) = gesture else { return XCTFail("une vidéo citée s'ouvre en plein écran : \(gesture)") }
+        XCTAssertEqual(attachment.id, "a2")
+    }
+
+    func test_gesture_protectedOrDocument_followsTheQuote() {
+        let protected = QuotedMediaOpening.gesture(for: reference(isProtected: true), quoted: nil)
+        let document = QuotedMediaOpening.gesture(for: reference(), quoted: cited([piece(id: "a1", mime: "application/pdf")]))
+
+        guard case .followQuote = protected else { return XCTFail("un secret n'ouvre rien : \(protected)") }
+        guard case .followQuote = document else { return XCTFail("un document se trouve sur le message d'origine : \(document)") }
+    }
 }

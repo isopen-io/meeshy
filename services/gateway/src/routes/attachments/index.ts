@@ -63,7 +63,7 @@ export async function attachmentLegacyFileRoutes(fastify: FastifyInstance) {
       retraitLe: dateDeRetrait(DEPUIS_ALIAS_NON_VERSIONNE),
     })
   );
-  registerFileStreamRoute(fastify);
+  registerFileStreamRoute(fastify, fastify.prisma);
 }
 
 const DEPUIS_ALIAS_NON_VERSIONNE = '2026-08-30';

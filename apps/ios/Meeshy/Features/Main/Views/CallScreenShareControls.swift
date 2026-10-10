@@ -110,7 +110,7 @@ struct CallScreenShareBanner: View, Equatable {
     }
 
     private func banner(text: String, showsStop: Bool) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "rectangle.on.rectangle")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(MeeshyColors.error)
@@ -125,17 +125,17 @@ struct CallScreenShareBanner: View, Equatable {
                     Text(CallScreenShareCopy.stopCaption)
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel(CallScreenShareCopy.label(isSharing: true))
             }
         }
-        .padding(.leading, 14)
+        .padding(.leading, MeeshySpacing.mdPlus)
         .padding(.trailing, showsStop ? 4 : 14)
         .frame(minHeight: 44)
-        .adaptiveGlass(in: Capsule(), tint: MeeshyColors.error.opacity(0.35), interactive: showsStop)
+        .adaptiveGlass(in: Capsule(), tint: MeeshyColors.error.opacity(MeeshyOpacity.medium), interactive: showsStop)
         .accessibilityElement(children: .contain)
     }
 }

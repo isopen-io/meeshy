@@ -120,13 +120,18 @@ export function unmatchedEndpointLiterals(
   servedPaths: readonly string[],
   apiPrefix: string
 ): readonly EndpointLiteralSite[] {
-  const served = servedPaths.map((path) => canonicalPath(path).split('/'));
+  // Le joker FINAL d'une route Fastify (`/attachments/file/*`) sert tout le
+  // reste du chemin, sur un segment ou plus ; un `:param` n'en vaut qu'un.
+  const served = servedPaths.map((path) => ({
+    segments: canonicalPath(path).split('/'),
+    rest: (path.split('?')[0] ?? '').endsWith('/*'),
+  }));
   const matches = (candidate: string): boolean => {
     const wanted = candidate.split('/');
     return served.some(
-      (route) =>
-        route.length === wanted.length &&
-        route.every((segment, index) => {
+      ({ segments, rest }) =>
+        (rest ? wanted.length >= segments.length : wanted.length === segments.length) &&
+        segments.every((segment, index) => {
           const other = wanted[index] ?? '';
           return segment === '*' || other === '*' || segment === other;
         })

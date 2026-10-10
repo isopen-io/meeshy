@@ -109,7 +109,12 @@ final class StoryComposerPublishFormatTests: XCTestCase {
         XCTAssertTrue(flat.contains("letpublishedType=Self.publishedType(requested:"),
                       "L'arbitrage doit être nommé une fois, pour l'annonce ET le hand-off.")
         let handoff = try XCTUnwrap(flat.range(of: "onPublishAllInBackground("))
-        let argument = try XCTUnwrap(flat.range(of: "Self.accessibilityHandoff(from:accessibilityStore),publishedType)"))
+        // #9476 : le porteur d'accessibilité transporte aussi « aussi en réel »
+        // (`carryingAlsoAsReel`, arbitré contre le format servi) ; le format,
+        // lui, reste le DERNIER argument du hand-off.
+        let argument = try XCTUnwrap(flat.range(of: "Self.accessibilityHandoff(from:accessibilityStore).carryingAlsoAsReel("))
+        XCTAssertTrue(flat.contains("served:publishedType)),publishedType)"),
+                      "Le format arbitré reste le dernier argument du hand-off, après le porteur d'accessibilité.")
         XCTAssertTrue(
             handoff.upperBound <= argument.lowerBound,
             "Le format doit être un ARGUMENT du hand-off, pas un calcul posé à côté."

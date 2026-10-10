@@ -4,6 +4,7 @@
  * Point d'entrée : `agent.ts` (#4284).
  */
 
+import { auditAgentGesture } from './agent-audit';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { listArchetypes, getArchetype } from '@meeshy/shared/agent/archetypes';
@@ -101,6 +102,7 @@ export function registerAgentRolesRoutes(fastify: FastifyInstance, deps: AgentRo
       });
 
       notifyAdminDashboards('config', conversationId);
+      await auditAgentGesture(request, { action: 'AGENT_ROLE_ASSIGNED', entity: 'User', entityId: userId, changes: { conversationId, archetypeId } });
       return sendSuccess(reply, role);
     } catch (error) {
       logError(fastify.log, 'Error assigning archetype:', error);
@@ -131,6 +133,7 @@ export function registerAgentRolesRoutes(fastify: FastifyInstance, deps: AgentRo
         data: { locked: false, confidence: 0 },
       });
       notifyAdminDashboards('config', conversationId);
+      await auditAgentGesture(request, { action: 'AGENT_ROLE_UNLOCKED', entity: 'User', entityId: userId, changes: { conversationId } });
       return sendSuccess(reply, role);
     } catch (error) {
       logError(fastify.log, 'Error unlocking role:', error);

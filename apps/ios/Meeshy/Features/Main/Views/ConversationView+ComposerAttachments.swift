@@ -12,121 +12,40 @@ import MeeshyUI
 extension ConversationView {
 
     // MARK: - Pending Attachments Preview
+    //
+    // La zone et sa tuile sont celles de TOUT le produit
+    // (`ComposerAttachmentZone`, `ComposerAttachmentTile`, #9736) : cette
+    // surface n'y verse que ses pièces.
     var pendingAttachmentsPreview: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(composerState.preparingAttachments) { prep in
-                    AttachmentLoadingTile(prep: prep) {
-                        cancelPreparation(prep)
-                    }
-                }
-                ForEach(composerState.pendingAttachments) { attachment in
-                    attachmentPreviewTile(attachment)
-                }
-                if let place = composerState.pendingPlace {
-                    pendingPlaceTile(place)
+        ComposerAttachmentZone(accentColor: accentColor) {
+            ForEach(composerState.preparingAttachments) { prep in
+                AttachmentLoadingTile(prep: prep) {
+                    cancelPreparation(prep)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            ForEach(composerState.pendingAttachments) { attachment in
+                attachmentPreviewTile(attachment)
+            }
+            if let place = composerState.pendingPlace {
+                ComposerPlaceTile(place: place, onRemove: removePendingPlace)
+            }
         }
-        .frame(height: 100)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(theme.surfaceGradient(tint: accentColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
-                )
-        )
     }
 
     // MARK: - Attachment Preview Tile
     func attachmentPreviewTile(_ attachment: MessageAttachment) -> some View {
-        VStack(spacing: 4) {
-            ZStack(alignment: .topTrailing) {
-                // Tappable preview area
-                Button {
-                    HapticFeedback.light()
-                    handleAttachmentPreviewTap(attachment)
-                } label: {
-                    ZStack {
-                        if let thumb = composerState.pendingThumbnails[attachment.id] {
-                            Image(uiImage: thumb)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 56, height: 56)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                            if attachment.type == .video {
-                                Image(systemName: "play.circle.fill")
-                                    // Doctrine 86i : overlay décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(.white, .black.opacity(0.4))
-                                    .accessibilityHidden(true)
-                            } else if attachment.type == .image {
-                                Image(systemName: "eye.fill")
-                                    // Doctrine 86i : indicateur décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(4)
-                                    .background(Circle().fill(.black.opacity(0.4)))
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                                    .padding(3)
-                                    .accessibilityHidden(true)
-                            }
-                        } else if attachment.type == .audio {
-                            PendingAudioTile(attachment: attachment, player: pendingAudioPlayer)
-                        } else if attachment.type == .location {
-                            locationTileFallback()
-                        } else {
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 56, height: 56)
-
-                            Image(systemName: attachment.type.composerGlyph)
-                                // Doctrine 86i : glyphe de type décoratif borné par la tuile fixe 56×56 → figé + masqué
-                                // (le libellé sous la tuile porte le nom du fichier).
-                                .font(.system(size: 22))
-                                .foregroundColor(.white)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                    .frame(width: 56, height: 56)
-                }
-                .accessibilityLabel(String(localized: "conversation.composer.attachment.preview", defaultValue: "Aperçu \(labelForAttachment(attachment))", bundle: .main))
-
-                // Delete button — top-right corner
-                Button {
-                    removePendingAttachment(attachment)
-                } label: {
-                    Image(systemName: "xmark")
-                        // Doctrine 82i : glyphe de suppression dans un cadre tap fixe 18×18 → figé.
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 18, height: 18)
-                        .background(
-                            Circle()
-                                .fill(MeeshyColors.error)
-                                .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
-                        )
-                }
-                .accessibilityLabel(String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(labelForAttachment(attachment))", bundle: .main))
-                .offset(x: 5, y: -5)
-            }
-
-            Text(labelForAttachment(attachment))
-                .font(MeeshyFont.relative(10, weight: .medium))
-                .foregroundColor(theme.textSecondary)
-                .lineLimit(1)
-                .frame(width: 60)
-        }
+        ComposerAttachmentTile(
+            thumbnail: composerState.pendingThumbnails[attachment.id],
+            art: pendingTileArt(attachment),
+            tint: attachment.thumbnailColor,
+            typeGlyph: attachment.type.composerGlyph,
+            centerGlyph: ComposerPendingTileGlyph.center(for: attachment.type, mimeType: attachment.mimeType),
+            label: labelForAttachment(attachment),
+            tapAccessibilityLabel: pendingTileAccessibilityLabel(attachment),
+            removeAccessibilityLabel: String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(labelForAttachment(attachment))", bundle: .main),
+            onTap: { handleAttachmentPreviewTap(attachment) },
+            onRemove: { removePendingAttachment(attachment) }
+        )
         // Long-press → full-screen quick-look (image enlarged / video playing),
         // mirroring the recent-media strip's context-menu preview pattern
         // (RecentMediaStrip.swift). Staged attachments already have their
@@ -157,14 +76,25 @@ extension ConversationView {
     /// Shared by the tile's delete button and its long-press menu action.
     private func removePendingAttachment(_ attachment: MessageAttachment) {
         HapticFeedback.light()
+        detachPendingPieces([attachment.id])
+    }
+
+    /// Retire des pièces de la zone, prêtes ou en préparation, avec leurs
+    /// fichiers et leurs vignettes. Le retrait d'un toucher et le décochage
+    /// dans le sélecteur système (#9697) passent tous deux par ici.
+    func detachPendingPieces(_ ids: [String]) {
+        let gone = Set(ids)
+        guard !gone.isEmpty else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            let id = attachment.id
             if pendingAudioPlayer.isPlaying { pendingAudioPlayer.stop() }
-            composerState.pendingAttachments.removeAll { $0.id == id }
-            if let url = composerState.pendingMediaFiles.removeValue(forKey: id) {
-                try? FileManager.default.removeItem(at: url)
+            composerState.pendingAttachments.removeAll { gone.contains($0.id) }
+            composerState.preparingAttachments.removeAll { gone.contains($0.id) }
+            for id in gone {
+                if let url = composerState.pendingMediaFiles.removeValue(forKey: id) {
+                    try? FileManager.default.removeItem(at: url)
+                }
+                composerState.pendingThumbnails.removeValue(forKey: id)
             }
-            composerState.pendingThumbnails.removeValue(forKey: id)
         }
     }
 
@@ -177,36 +107,11 @@ extension ConversationView {
         composerState.preparingAttachments.removeAll { $0.id == prep.id }
     }
 
-    /// Ferme la retouche et oublie sa source décodée (#8524) — l'image à
-    /// 2 048 px ne survit pas à la couverture.
-    func closePendingImageRetouche() {
-        scrollState.editingPendingAttachmentId = nil
-        scrollState.editingPendingSource = nil
-    }
-
     // MARK: - Attachment Preview Tap Handler
     func handleAttachmentPreviewTap(_ attachment: MessageAttachment) {
         switch attachment.type {
-        case .image:
-            // Guard at the source: only open the editor when a thumbnail
-            // genuinely exists to show. The fullScreenCover below has its own
-            // defense-in-depth fallback for the (rarer) case where the
-            // thumbnail vanishes AFTER presentation starts, but there is no
-            // reason to open the cover at all for an id that has none now.
-            guard let vignette = composerState.pendingThumbnails[attachment.id],
-                  ConversationImageRetouche.offersRetouche(mimeType: attachment.mimeType) else { return }
-            let id = attachment.id
-            let fichier = composerState.pendingMediaFiles[id]
-            Task {
-                var source: UIImage?
-                if let fichier { source = await ConversationImageRetouche.loadSource(fileURL: fichier) }
-                scrollState.editingPendingSource = source ?? vignette
-                scrollState.editingPendingAttachmentId = id
-            }
-        case .video:
-            if let url = composerState.pendingMediaFiles[attachment.id] {
-                scrollState.videoToEdit = PendingVideoEdit(id: attachment.id, url: url)
-            }
+        case .image, .video:
+            openRetouchSeries(focusId: attachment.id)
         case .audio:
             if let url = composerState.pendingMediaFiles[attachment.id] {
                 scrollState.audioToEdit = PendingAudioEdit(id: attachment.id, url: url)
@@ -216,94 +121,15 @@ extension ConversationView {
         }
     }
 
-    /// Dismissable full-screen fallback for the (rare) race where a pending
-    /// attachment's thumbnail is gone by the time its editor cover presents —
-    /// see the doc-comment on the "C. Tap pending image" fullScreenCover.
-    func attachmentPreviewUnavailableFallback(onDismiss: @escaping () -> Void) -> some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: 16) {
-                Image(systemName: "photo.badge.exclamationmark")
-                    .font(.system(size: 40))
-                    .foregroundColor(.white.opacity(0.7))
-                Text(String(localized: "conversation.view.composer.attachmentUnavailable",
-                            defaultValue: "Pièce jointe indisponible", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .medium))
-                    .foregroundColor(.white)
-                Button(action: onDismiss) {
-                    Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(.white.opacity(0.15)))
-                }
-            }
-        }
-    }
-
     // MARK: - Rich Tile Fallbacks
 
-    private func locationTileFallback() -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(
-                    LinearGradient(
-                        colors: [MeeshyColors.success, MeeshyColors.successDeep],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 56, height: 56)
-
-            VStack(spacing: 2) {
-                Image(systemName: "mappin.circle.fill")
-                    // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                    .font(.system(size: 22))
-                    .foregroundStyle(.white, .white.opacity(0.3))
-                    .accessibilityHidden(true)
-                Circle()
-                    .fill(Color.white.opacity(0.3))
-                    .frame(width: 8, height: 4)
-                    .scaleEffect(x: 1.8, y: 1)
-            }
-        }
-    }
-
-    /// Tuile d'aperçu du lieu en attente d'envoi — même gabarit 56×56 que
-    /// `attachmentPreviewTile`, mais pour un `SharedPlace` : depuis la Task
-    /// 11/12 il ne vit plus dans `pendingAttachments`, donc sans cette tuile
-    /// dédiée le choix d'un lieu ne produirait plus aucun retour visuel dans
-    /// le composer (régression que l'ancien `MessageAttachment.location`
-    /// couvrait par accident).
-    private func pendingPlaceTile(_ place: SharedPlace) -> some View {
-        let label = MediaKindLabel.placeLabel(place.name)
-        return VStack(spacing: 4) {
-            ZStack(alignment: .topTrailing) {
-                locationTileFallback()
-
-                Button {
-                    removePendingPlace()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 18, height: 18)
-                        .background(
-                            Circle()
-                                .fill(MeeshyColors.error)
-                                .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
-                        )
-                }
-                .accessibilityLabel(String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(label)", bundle: .main))
-                .offset(x: 5, y: -5)
-            }
-
-            Text(label)
-                .font(MeeshyFont.relative(10, weight: .medium))
-                .foregroundColor(theme.textSecondary)
-                .lineLimit(1)
-                .frame(width: 60)
+    /// Le dessin d'une pièce sans vignette : l'onde d'un son (qui suit le
+    /// lecteur du composeur), l'épingle d'un lieu.
+    private func pendingTileArt(_ attachment: MessageAttachment) -> AnyView? {
+        switch attachment.type {
+        case .audio: return AnyView(PendingAudioTile(attachment: attachment, player: pendingAudioPlayer))
+        case .location: return AnyView(ComposerLocationTileArt())
+        default: return nil
         }
     }
 
@@ -312,6 +138,14 @@ extension ConversationView {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             composerState.pendingPlace = nil
         }
+    }
+
+    private func pendingTileAccessibilityLabel(_ attachment: MessageAttachment) -> String {
+        let label = labelForAttachment(attachment)
+        guard ComposerPendingTileGlyph.center(for: attachment.type, mimeType: attachment.mimeType) != nil else {
+            return String(localized: "conversation.composer.attachment.preview", defaultValue: "Aperçu \(label)", bundle: .main)
+        }
+        return String(localized: "conversation.composer.attachment.edit", defaultValue: "Éditer \(label)", bundle: .main)
     }
 
     func labelForAttachment(_ attachment: MessageAttachment) -> String {
@@ -337,36 +171,6 @@ struct PendingAudioTile: View {
     @ObservedObject var player: AudioPlaybackManager
 
     var body: some View {
-        let color = Color(hex: attachment.thumbnailColor)
-        let isPlaying = player.isPlaying
-        return ZStack {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 56, height: 56)
-
-            VStack(spacing: 3) {
-                HStack(spacing: 1.5) {
-                    ForEach(0..<7, id: \.self) { i in
-                        let h: CGFloat = [0.3, 0.8, 0.5, 1.0, 0.4, 0.9, 0.6][i]
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white.opacity(isPlaying ? 0.9 : 0.6))
-                            .frame(width: 2, height: 4 + 14 * h)
-                    }
-                }
-                .frame(height: 20)
-
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
-                    .accessibilityHidden(true)
-            }
-        }
+        ComposerAudioTileArt(tint: attachment.thumbnailColor, isPlaying: player.isPlaying)
     }
 }

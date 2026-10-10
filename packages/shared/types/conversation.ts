@@ -130,6 +130,12 @@ export interface Message {
   // ===== REPONSE & FORWARDING =====
   readonly replyToId?: string;
   readonly replyTo?: Message;
+  /**
+   * #9915 — sur un message CITÉ (`replyTo`) seulement : le nombre total de
+   * photos et vidéos qu'il porte, quand la passerelle n'en sert que quatre.
+   * Absent pour un message protégé, et chez une passerelle antérieure.
+   */
+  readonly visualAttachmentCount?: number;
   /** ID du post cité (status/story/reel/post) quand le message répond à un post. Snapshot figé dans `metadata.postReplyTo`. @see schema.prisma */
   readonly storyReplyToId?: string;
   readonly forwardedFromId?: string;
@@ -297,6 +303,13 @@ export interface MessageWithTranslations extends Message {
 export type ConversationType = 'direct' | 'group' | 'public' | 'global' | 'broadcast';
 
 /**
+ * Les restrictions d'écriture qu'un lecteur peut porter sur une conversation
+ * (#9927). Une seule aujourd'hui : un mineur déclaré dans Meeshy Global.
+ */
+export const VIEWER_WRITE_RESTRICTIONS = ['minor-global'] as const;
+export type ViewerWriteRestriction = (typeof VIEWER_WRITE_RESTRICTIONS)[number];
+
+/**
  * Statut de conversation
  */
 export type ConversationStatus = 'active' | 'archived' | 'deleted';
@@ -427,6 +440,15 @@ export interface Conversation {
    */
   readonly currentUserRole?: string | null;
 
+  /**
+   * Ce que le LECTEUR n'a pas le droit d'écrire ici (#9927), calculé serveur
+   * depuis sa date de naissance déclarée : `'minor-global'` = mineur (13-17
+   * ans) dans Meeshy Global, en lecture seule et rangée dans ses archives
+   * jusqu'à ses 18 ans. `null` = aucune restriction. ABSENT = serveur antérieur.
+   * Source : `viewerWriteRestrictionOf` (`utils/global-minor-restriction.ts`).
+   */
+  readonly viewerWriteRestriction?: ViewerWriteRestriction | null;
+
   /** Date d'adhésion du lecteur — borne son historique visible. */
   readonly currentUserJoinedAt?: Date | string;
 
@@ -437,10 +459,10 @@ export interface Conversation {
   readonly lastMessage?: Message;
   readonly lastMessageAt?: Date;
   /**
-   * Rang de la ligne POUR CE LECTEUR (#7592), chaîne ISO : max(`lastMessageAt`,
-   * dernière réaction quand elle vise un message du lecteur). `GET
-   * /conversations` trie dessus ; les clients trient sur cette valeur servie
-   * (`conversationListRank`, `utils/conversation-list-rank.ts`).
+   * Rang de la ligne (#9026), chaîne ISO : max(`lastMessageAt`,
+   * `lastActivityAt` — réaction, appel, épingle), le même pour tous les
+   * participants. `GET /conversations` trie dessus ; les clients trient sur
+   * cette valeur servie (`conversationListRank`, `utils/conversation-list-rank.ts`).
    */
   readonly listRankAt?: string | null;
   readonly messageCount?: number;

@@ -33,7 +33,7 @@ struct BubbleFooter: View, Equatable {
         // pas de capsule de fond : juste timestamp + delivery check (si
         // message envoye). Le tout dans un HStack tres serre pour rester
         // visuellement attache a l'emoji.
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             editMark
             if let timestamp = model.timestamp {
                 Text(timestamp)
@@ -43,7 +43,7 @@ struct BubbleFooter: View, Equatable {
             if model.delivery != nil {
                 if model.isFailed, let onRetry = actions.onRetry {
                     Button(action: { onRetry(); HapticFeedback.light() }) {
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             deliveryView(tint: compactMetaColor, readTint: readColor)
                             Image(systemName: "arrow.clockwise")
                                 .font(.caption2.weight(.bold))
@@ -64,7 +64,7 @@ struct BubbleFooter: View, Equatable {
         // Le compact footer s'affiche TOUJOURS hors d'une bulle (free-floating
         // emoji), donc on n'a pas de fond brand a contraster. On utilise la
         // couleur meta neutre quel que soit isMe.
-        isDark ? .white.opacity(0.55) : .black.opacity(0.5)
+        MeeshyColors.textMuted(isDark: isDark)
     }
 
     // MARK: - Row style (text / emoji / audio / story-reply)
@@ -72,7 +72,7 @@ struct BubbleFooter: View, Equatable {
     @ViewBuilder
     private var rowFooter: some View {
         if let sender = model.sender {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                 MeeshyAvatar(
                     name: sender.name,
                     context: .messageBubble,
@@ -81,14 +81,15 @@ struct BubbleFooter: View, Equatable {
                     storyState: sender.storyRing,
                     moodEmoji: sender.moodEmoji,
                     presenceState: sender.presence,
+                    isHere: sender.isHere,
                     enablePulse: false,
                     onTap: actions.onSenderTap,
                     onViewProfile: actions.onSenderTap,
                     onViewStory: actions.onViewStory,
                     contextMenuItems: avatarMenu(sender: sender)
                 )
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         // Nom borné à 16 caractères (directive user 2026-07-30) :
                         // au-delà, le pseudo mangeait la rangée et repoussait
                         // l'heure + l'accusé de lecture contre le bord. Le
@@ -105,13 +106,13 @@ struct BubbleFooter: View, Equatable {
                     if let username = sender.username {
                         Text(username)
                             .font(.caption2)
-                            .foregroundColor(metaColor.opacity(0.8))
+                            .foregroundColor(metaColor.opacity(MeeshyOpacity.intense))
                             .lineLimit(1)
                     }
                 }
             }
         } else {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 metaLeading
                 Spacer(minLength: 4)
                 metaTrailing
@@ -124,17 +125,17 @@ struct BubbleFooter: View, Equatable {
     @ViewBuilder
     private var overlayFooter: some View {
         if model.timestamp != nil || model.delivery != nil {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 if let timestamp = model.timestamp {
                     Text(timestamp)
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.white)
                 }
-                deliveryView(tint: .white.opacity(0.85), readTint: MeeshyColors.indigo400)
+                deliveryView(tint: .white.opacity(MeeshyOpacity.intense), readTint: MeeshyColors.indigo400)
             }
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(Color.black.opacity(0.55)))
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
+            .background(Capsule().fill(MeeshyColors.mediaScrim))
         }
     }
 
@@ -165,7 +166,7 @@ struct BubbleFooter: View, Equatable {
             .accessibilityLabel(String(localized: "bubble.footer.translation.request", defaultValue: "Demander la traduction", bundle: .main))
         }
         if !model.flags.isEmpty {
-            HStack(spacing: 2) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 ForEach(model.flags, id: \.code) { flag in
                     footerFlagPill(flag)
                 }
@@ -185,7 +186,7 @@ struct BubbleFooter: View, Equatable {
         if model.delivery != nil {
             if model.isFailed, let onRetry = actions.onRetry {
                 Button(action: { onRetry(); HapticFeedback.light() }) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         deliveryView(tint: metaColor, readTint: readColor)
                         Image(systemName: "arrow.clockwise")
                             .font(.caption2.weight(.bold))
@@ -291,7 +292,7 @@ struct BubbleFooter: View, Equatable {
     }
 
     private var metaColor: Color {
-        model.isMe ? .white.opacity(0.7) : (isDark ? .white.opacity(0.55) : .black.opacity(0.5))
+        model.isMe ? .white.opacity(MeeshyOpacity.heavy) : MeeshyColors.textMuted(isDark: isDark)
     }
 
     private var readColor: Color {

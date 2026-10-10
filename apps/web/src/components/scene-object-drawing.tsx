@@ -26,6 +26,7 @@ export function SceneObjectDrawing({ object, clock }: { readonly object: CanvasO
             key={i}
             points={stroke.points.map((p) => `${p.x},${p.y}`).join(' ')}
             fill="none"
+            // harmony-exempt: trait par défaut d'un dessin, couleur choisie par l'auteur
             stroke={hexColorCss(stroke.colorHex) ?? '#000000'}
             strokeWidth={strokeWidth(stroke, meanPressure(stroke.points))}
             strokeOpacity={stroke.tool === 'marker' ? MARKER_ALPHA : 1}

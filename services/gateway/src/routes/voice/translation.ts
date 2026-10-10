@@ -9,6 +9,11 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
 import { logger } from '../../utils/logger';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+import {
+  creditAcceptedTranslationRequest,
+  lazyTranslationRequestEngagement
+} from '../../services/messaging/translationRequestCredit';
 import {
   voiceTranslationResultSchema,
   translationJobSchema,
@@ -89,6 +94,17 @@ export function registerTranslationRoutes(
   prefix: string,
   prisma: PrismaClient
 ): void {
+  // #8959 — traduire ou transcrire une voix À LA DEMANDE rapporte
+  // `tool.translation_request` ; le crochet ne voit que les réponses 2xx.
+  // Les routes de SUIVI de tâche (`/job/:jobId`) ne sont pas des demandes.
+  const creditAccepted = creditAcceptedTranslationRequest({
+    engagement: lazyTranslationRequestEngagement(() => prisma),
+    requesterOf: (request) => ({
+      userId: getUserId(request),
+      isAnonymous: (request as UnifiedAuthRequest).authContext?.isAnonymous ?? false
+    }),
+    onError: (error) => logger.warn('[VoiceRoutes] tool.translation_request engagement credit failed', { error })
+  });
   /**
    * POST /api/v1/voice/translate
    * Flexible voice translation - accepts audioBase64 OR attachmentId
@@ -103,6 +119,7 @@ export function registerTranslationRoutes(
     // déjà utilisé par routes/translation.ts (`/translate-blocking`) et
     // routes/translation-non-blocking.ts:268.
     preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
+    onResponse: creditAccepted,
     schema: {
       description: 'Translate audio to one or more target languages with voice cloning support. Accepts either direct audio (audioBase64) or an existing attachment (attachmentId). When using attachmentId, returns existing translations if available.',
       tags: ['voice'],
@@ -280,6 +297,7 @@ export function registerTranslationRoutes(
     // SECURITY: authentification obligatoire — voir commentaire sur
     // POST /translate ci-dessus. Même faille, même correctif.
     preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
+    onResponse: creditAccepted,
     schema: {
       description: 'Asynchronous voice translation with advanced options. Accepts audioBase64 or attachmentId. Supports webhooks for completion notification, priority queuing, and custom metadata.',
       tags: ['voice'],
@@ -598,6 +616,7 @@ export function registerTranslationRoutes(
     // SECURITY: authentification obligatoire — voir commentaire sur
     // POST /translate ci-dessus. Même faille, même correctif.
     preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
+    onResponse: creditAccepted,
     schema: {
       description: 'Transcribe audio to text using Whisper. Accepts file upload (multipart/form-data), direct audio (audioBase64), or existing attachment (attachmentId). Returns transcription with detected language, confidence score, and word-level timestamps. OpenAI-compatible when using file upload.',
       tags: ['voice'],

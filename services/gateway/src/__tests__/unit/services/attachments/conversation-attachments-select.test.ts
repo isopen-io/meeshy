@@ -23,6 +23,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { attachmentServiceRowSelect } from '../../../../services/attachments/attachmentIncludes';
+import { carrierMessageStillServesWhere } from '../../../../services/attachments/carrierMessageLifecycle';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
@@ -159,13 +160,33 @@ describe('AttachmentService.getConversationAttachments — ce que la REQUÊTE de
     }
   });
 
-  it("borne la page et n'invente aucun filtre — la conversation et la tombstone restent posées APRÈS le filtre de l'appelant", async () => {
+  /**
+   * Mis à jour au #9244, et son intention est INCHANGÉE : la conversation et le
+   * cycle de vie du porteur restent posés APRÈS le filtre de l'appelant, qui
+   * survit intact.
+   *
+   * Ce qui change est l'étendue de ce cycle de vie. Ce témoin épinglait
+   * `deletedAt: null` SEUL, et c'est précisément ce qu'il attestait : la liste
+   * ne bornait pas les échéances (`expiresAt`, `viewOnceBurnAt`) que le DÉTAIL
+   * bornait depuis #4923. Il a donc rougi comme il devait au moment de la
+   * correction — un témoin qui épingle une forme fait son travail en refusant
+   * qu'elle change en silence.
+   *
+   * La borne n'est pas « un filtre inventé » : elle vient de la SSOT
+   * `carrierMessageStillServesWhere`, la forme-requête de la même loi que
+   * `carrierMessageStillServesBytes` applique au détail. C'est pourquoi elle
+   * est comparée à la SSOT plutôt que recopiée ici : une copie dériverait, et
+   * c'est la dérive entre les deux formes qui a laissé la liste en retard.
+   */
+  it("borne la page, le porteur et rien d'autre — le filtre de l'appelant survit intact", async () => {
     const { service, findMany } = makeService([]);
+    const now = new Date('2026-10-03T12:00:00.000Z');
 
     await service.getConversationAttachments(CONVERSATION_ID, {
       limit: 100,
       offset: 20,
       messageFilter: { createdAt: { gte: new Date('2026-06-15T00:00:00Z') } },
+      now,
     });
 
     expect(findMany).toHaveBeenCalledWith(
@@ -177,7 +198,7 @@ describe('AttachmentService.getConversationAttachments — ce que la REQUÊTE de
           message: {
             createdAt: { gte: new Date('2026-06-15T00:00:00Z') },
             conversationId: CONVERSATION_ID,
-            deletedAt: null,
+            ...carrierMessageStillServesWhere(now),
           },
         },
       })

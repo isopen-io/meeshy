@@ -58,7 +58,7 @@ final class CallRecordingService: CallRecordingServiceProviding {
             commonFormat: format.commonFormat,
             interleaved: format.isInterleaved
         )
-        nonisolated(unsafe) let capturedFile = output
+        let capturedFile = output
         let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
             try? capturedFile.write(from: buffer)
         }

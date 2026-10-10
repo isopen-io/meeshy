@@ -185,7 +185,7 @@ export function AvatarMenu({
             roving.closeAndFocusButton();
             run(entry);
           }}
-          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-title font-medium"
+          className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-title font-medium"
           style={{ color: 'var(--color-ios-ink)', minHeight: MENU_ITEM_HEIGHT }}
         >
           <span aria-hidden className="grid place-items-center" style={{ color: 'var(--color-ios-ink-2)' }}>

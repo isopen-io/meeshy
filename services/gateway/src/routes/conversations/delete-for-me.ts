@@ -11,6 +11,7 @@ import { announceConversationClosed } from '../../socketio/announceConversationC
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
 
 /** Ce que rend un « delete-for-me » réussi — identique sur les deux adresses qui le servent. */
 export type ConversationDeleteForMeResult = {
@@ -161,6 +162,7 @@ export async function performConversationDeleteForMe(
     await prisma.participant.update(hideSelf)
   }
   invalidateParticipantLookup(participant.id, conversationId)
+  announceConversationLanguageChange({ kind: 'departure', conversationId })
 
   // Remove user from socket room silently
   const manager = socketIOHandler?.getManager()

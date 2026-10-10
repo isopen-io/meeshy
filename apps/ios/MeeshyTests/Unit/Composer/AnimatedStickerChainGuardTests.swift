@@ -64,21 +64,23 @@ final class AnimatedStickerChainGuardTests: XCTestCase {
 
     // MARK: - Maillon 3 — la pose EMPORTE les octets
 
-    /// Les deux sites de pose — celui du composer SDK et celui du meuble — sont
-    /// des JUMEAUX : un seul câblé ferait animer le sticker par une porte et le
-    /// figerait par l'autre, pour le même geste utilisateur.
-    func test_lesDeuxSitesDePose_emportentLesOctets() throws {
-        let sdkPose = try sdkSource("MeeshyUI/Story/StoryComposerView+Media.swift")
-        // #6069 — la pose du sticker suit son SÉLECTEUR : `stickerPickerSheet`
-        // a quitté `+Intake` (1 265 lignes) pour `+Pickers`. Le chemin est mis à
-        // jour dans le MÊME commit que l'extraction, sinon cette garde lirait un
-        // fichier où les octets ne sont plus et rougirait pour un déménagement.
-        let hostPose = try appSource("Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift")
+    /// **UN site de pose depuis #9189.** Le composer SDK et le meuble étaient
+    /// deux JUMEAUX : un seul câblé aurait animé le sticker par une porte et
+    /// figé par l'autre. L'atelier ne monte plus de feuille — sa porte la
+    /// demande au meuble —, et les poses vivent dans `SceneStickerPose`, qui
+    /// emporte les octets de « Mes stickers », d'un Mee et d'un pack cinématique.
+    func test_leSiteUniqueDePose_emporteLesOctets() throws {
+        let sdkAtelier = try sdkSource("MeeshyUI/Story/StoryComposerView+Media.swift")
+        let pose = try appSource("Meeshy/Features/Main/Composer/SceneStickerPose.swift")
 
-        XCTAssertTrue(sdkPose.contains("animatedData: item.animatedData"),
-                      "poser depuis le composer SDK doit emporter les octets du sticker.")
-        XCTAssertTrue(hostPose.contains("animatedData: item.animatedData"),
-                      "poser depuis le meuble doit emporter les mêmes octets — sinon une porte anime et l'autre fige.")
+        XCTAssertFalse(sdkAtelier.contains("StickerPickerView("),
+                       "l'atelier ne pose plus : une seconde pose redeviendrait une jumelle à tenir d'accord.")
+        XCTAssertTrue(pose.contains("animatedData: item.animatedData"),
+                      "poser depuis « Mes stickers » doit emporter les octets du sticker.")
+        XCTAssertTrue(pose.contains("animatedData: film"),
+                      "poser un Mee doit emporter son film — sinon la scène le fige.")
+        XCTAssertTrue(pose.contains("animatedData: loaded.isAnimated ? loaded.data : nil"),
+                      "un sticker de pack cinématique garde son mouvement.")
     }
 
     // MARK: - Maillon 4 — la scène REÇOIT les octets

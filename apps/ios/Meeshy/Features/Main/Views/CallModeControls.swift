@@ -18,7 +18,7 @@ struct CallEffectsModeControls: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             if showsSettings {
                 settingsRow
                     .transition(.opacity)
@@ -78,12 +78,12 @@ struct CallEffectsModeControls: View {
     }
 
     private var categoryPicker: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(CallEffectsCategory.allCases, id: \.self) { item in
                 if item != CallEffectsCategory.allCases.first {
                     Text(verbatim: "·")
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.white.opacity(MeeshyOpacity.strong))
                         .accessibilityHidden(true)
                 }
                 Button {
@@ -93,7 +93,7 @@ struct CallEffectsModeControls: View {
                     Text(CallModeCopy.categoryName(item))
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(.white.opacity(category == item ? 1 : 0.55))
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, MeeshySpacing.sm)
                         .frame(minHeight: 44)
                         .contentShape(Rectangle())
                 }
@@ -101,7 +101,7 @@ struct CallEffectsModeControls: View {
                 .accessibilityAddTraits(category == item ? [.isButton, .isSelected] : [.isButton])
             }
         }
-        .shadow(color: .black.opacity(0.5), radius: 3)
+        .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
     }
 
     @ViewBuilder
@@ -173,14 +173,52 @@ struct CallEffectsModeControls: View {
         )
     }
 
+    private var smoothingBinding: Binding<Double> {
+        Binding(
+            get: { Double(config.skinSmoothingIntensity) },
+            set: { config = config.withSmoothingIntensity(Float($0)) }
+        )
+    }
+
+    /// #9289 — la Peau lissée choisie se règle ici, au même endroit que la luminosité.
+    @ViewBuilder
+    private var smoothingRow: some View {
+        if config.activeFaceEffect == .smoothing {
+            let range = VideoFilterConfig.smoothingIntensityRange
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: "wand.and.rays.inverse")
+                    .font(.footnote)
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .accessibilityHidden(true)
+                Slider(value: smoothingBinding, in: Double(range.lowerBound) ... Double(range.upperBound))
+                    .tint(.white)
+                    .accessibilityLabel(CallEffectsCopy.smoothingStrength)
+                    .accessibilityValue(LocalizedNumber.percent(Int((config.skinSmoothingIntensity * 100).rounded())))
+                Image(systemName: "wand.and.rays")
+                    .font(.footnote)
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .padding(.horizontal, MeeshySpacing.xxl)
+        }
+    }
+
     private var settingsRow: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            smoothingRow
+            brightnessAndBlurRow
+        }
+    }
+
+    private var brightnessAndBlurRow: some View {
         let limit = Double(VideoFilterConfig.brightnessLimit)
         let percent = LocalizedNumber.percent(Int((Double(config.brightness) / limit * 100).rounded()))
-        return HStack(spacing: 14) {
-            HStack(spacing: 8) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "sun.min")
                     .font(.footnote)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
                 Slider(value: brightnessBinding, in: -limit ... limit)
                     .tint(.white)
@@ -188,7 +226,7 @@ struct CallEffectsModeControls: View {
                     .accessibilityValue(percent)
                 Image(systemName: "sun.max")
                     .font(.footnote)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
             }
             .frame(minHeight: 44)
@@ -202,7 +240,7 @@ struct CallEffectsModeControls: View {
                 HapticFeedback.light()
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
     }
 }
 
@@ -210,6 +248,11 @@ struct CallMontageModeControls: View {
     @ObservedObject var capture: CallCaptureController
     let subjects: [CallCaptureSubject]
     let tracks: [String: Any]
+    /// #8743 — la conversation de l'appel, pour le nom du groupe et l'accent d'un cadre.
+    let call: CallFrameCallContext
+    var textsProvider: any CallFrameTextsProviding = CallFrameTextsResolver.shared
+    /// #9287 — l'interrupteur qui garde le cadre choisi pendant tout l'appel.
+    var hold: CallLiveFrameHold = .unavailable
     let onExit: () -> Void
 
     @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
@@ -217,25 +260,36 @@ struct CallMontageModeControls: View {
     private static let thumbnailSize = CGSize(width: 48, height: 85)
 
     var body: some View {
-        VStack(spacing: 14) {
+        let people = subjects.count
+        let selection = CallMontageFrameRule.reconcile(capture.choice, people: people)
+        let chip = CallMontageFrameRule.chip(of: selection)
+        VStack(spacing: MeeshySpacing.mdPlus) {
+            CallFrameMoodChips(
+                chips: CallMontageFrameRule.chips(forPeople: people),
+                selected: chip,
+                isEnabled: !capture.isRecording
+            ) { tapped in
+                capture.show(tapped, people: people)
+            }
             CallModeCarousel(
-                items: CallMontageStyle.allCases,
-                selection: styleBinding,
+                items: CallMontageFrameRule.items(for: chip, people: people),
+                selection: choiceBinding(people: people),
                 title: CallModeCopy.montageTitle,
-                name: CallCaptureCopy.styleName,
+                name: CallFrameCopy.choiceName,
                 itemSize: Self.thumbnailSize,
                 spacing: 12,
                 isRecording: capture.isRecording,
                 hint: CallModeGestureRule.showsHint(hasSeenHint: hasSeenGestureHint, isRecording: capture.isRecording) ? CallModeCopy.gestureHint : nil,
                 onCapturePhoto: shoot,
                 onStartRecording: film
-            ) { style, isSelected in
-                CallModeThumbnail(image: capture.thumbnails[style], symbol: CallCaptureCopy.styleSymbol(style), isSelected: isSelected)
+            ) { item, isSelected in
+                CallModeThumbnail(image: thumbnail(item), symbol: CallFrameCopy.choiceSymbol(item), isSelected: isSelected)
             }
+            .id(CallMontageCarouselKey(chip: chip, people: people))
             CallModeActionBar(
                 exitHint: CallModeCopy.quitMontageHint,
                 onExit: onExit,
-                options: [
+                options: holdOptions(for: selection) + [
                     CallModeOption(
                         id: "faces",
                         symbol: "person.crop.square",
@@ -252,9 +306,46 @@ struct CallMontageModeControls: View {
         .task(id: CallCaptureSourceKey(subjects: subjects, tracks: tracks)) {
             capture.start(subjects: subjects, tracks: tracks)
         }
+        .onAppear {
+            guard let held = hold.heldFrameId else { return }
+            capture.select(choice: .frame(held))
+        }
+        .task(id: call) {
+            capture.setFrameTexts(textsProvider.immediateTexts(for: call))
+            let resolved = await textsProvider.texts(for: call)
+            guard !Task.isCancelled else { return }
+            capture.setFrameTexts(resolved)
+        }
         .onDisappear {
             hasSeenGestureHint = true
             capture.stop()
+        }
+    }
+
+    /// Le cadre affiché se garde pendant l'appel d'un toucher sur l'icône « Cadre » ; rien ne
+    /// s'offre sur un montage classique ni hors d'un duo vidéo.
+    private func holdOptions(for selection: CallMontageChoice) -> [CallModeOption] {
+        guard case .frame(let id) = selection, CallLiveFrameRule.mayHold(frameId: id, isOffered: hold.isOffered) else { return [] }
+        let isHeld = hold.heldFrameId == id
+        return [
+            CallModeOption(
+                id: "hold-frame",
+                symbol: "photo.artframe",
+                label: CallLiveFrameCopy.label,
+                caption: CallLiveFrameCopy.caption,
+                hint: CallLiveFrameCopy.hint,
+                isOn: isHeld,
+                isEnabled: !capture.isRecording
+            ) {
+                hold.toggle(id)
+            }
+        ]
+    }
+
+    private func thumbnail(_ item: CallMontageChoice) -> CGImage? {
+        switch item {
+        case .classic(let style): return capture.thumbnails[style]
+        case .frame(let id): return capture.frameThumbnail(id)
         }
     }
 
@@ -268,12 +359,29 @@ struct CallMontageModeControls: View {
         Task { await capture.startRecording() }
     }
 
-    private var styleBinding: Binding<CallMontageStyle> {
+    private func choiceBinding(people: Int) -> Binding<CallMontageChoice> {
         Binding(
-            get: { capture.style },
-            set: { capture.select($0) }
+            get: { CallMontageFrameRule.reconcile(capture.choice, people: people) },
+            set: { capture.select(choice: $0) }
         )
     }
+}
+
+/// #9287 — ce que la capture sait du cadre en direct : le cadre gardé, si l'appel en sert un,
+/// et le geste qui le garde ou le retire.
+struct CallLiveFrameHold {
+    let heldFrameId: String?
+    let isOffered: Bool
+    let toggle: (String) -> Void
+
+    static let unavailable = CallLiveFrameHold(heldFrameId: nil, isOffered: false, toggle: { _ in })
+}
+
+/// L'identité du carrousel : une autre ambiance ou un autre nombre, c'est une autre piste,
+/// qui se pose d'emblée sur son choix.
+private struct CallMontageCarouselKey: Hashable {
+    let chip: CallMontageMoodChip
+    let people: Int
 }
 
 /// #8625 — la scène du Montage lit l'aperçu sur son flux : à chaque trame,
@@ -284,9 +392,46 @@ struct CallMontageLiveStage: View {
     var body: some View {
         CallMontageFeedStage(
             feed: capture.previewFeed,
-            styleName: CallCaptureCopy.styleName(capture.style),
+            styleName: CallFrameCopy.choiceName(capture.choice),
             isWorking: capture.status == .working
         )
+    }
+}
+
+/// #9287 — la scène de la capture : un cadre servi en direct se montre sur le FLUX VIDÉO, à
+/// pleine cadence (`CallLiveFrameSurface`) ; un classique, ou un cadre trop riche pour le
+/// direct, garde l'aperçu peint quelques fois par seconde. La scène observe le choix seule.
+struct CallMontageFrameStage: View {
+    @ObservedObject var capture: CallCaptureController
+    let isLiveOffered: Bool
+    let reduceMotion: Bool
+    let people: [CallFramePerson]
+    let texts: CallFrameTexts
+    let sources: [String: CallLiveFrameVideoSource]
+
+    private var liveDesign: CallFrameDesign? {
+        guard isLiveOffered, case .frame(let id) = capture.choice else { return nil }
+        return CallLiveFrameRule.display(
+            frameId: id,
+            participants: people.count,
+            isDeviceConstrained: CallVideoDegradation.isDeviceConstrained(),
+            reduceMotion: reduceMotion
+        ).design
+    }
+
+    var body: some View {
+        if let design = liveDesign {
+            ZStack {
+                Color.black
+                CallLiveFrameSurface(design: design, people: people, texts: texts, sources: sources)
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityElement()
+            .accessibilityLabel(CallLiveFrameCopy.surface(design.name))
+        } else {
+            CallMontageLiveStage(capture: capture)
+        }
     }
 }
 

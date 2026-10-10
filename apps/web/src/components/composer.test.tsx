@@ -37,6 +37,17 @@ describe('Composer — la citation porte la langue dans laquelle elle est SERVIE
     expect(html).toContain('Do you confirm the mockup?');
   });
 
+  test('« +N » (#9911) — la bande dit combien d’autres pièces porte le message cité', () => {
+    const html = renderToStaticMarkup(<Composer onSend={() => {}} replyTo={{ author: 'Amina', excerpt: 'Photo', more: 6 }} />);
+    expect(html).toContain('data-composer-reply-more="6"');
+    expect(html).toContain('+6');
+  });
+
+  test('sans autre pièce, aucun « +N »', () => {
+    const html = renderToStaticMarkup(<Composer onSend={() => {}} replyTo={{ author: 'Amina', excerpt: 'Photo' }} />);
+    expect(html).not.toContain('data-composer-reply-more');
+  });
+
   test('sans langue servie, aucun lang n’est posé — jamais un « fr » fabriqué', () => {
     const html = renderToStaticMarkup(
       <Composer onSend={() => {}} replyTo={{ author: 'Amina', excerpt: 'Tu valides la maquette ?' }} />,
@@ -557,7 +568,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
    * `NotReadableError` (micro pris par une autre application) et
    * `NotSupportedError` (constaté, mesuré, en Chromium HEADLESS) ne sont PAS
    * un refus : aucun réglage à changer ne les résout, donc AUCUN
-   * « Réessayer » — seulement « Micro indisponible sur ce navigateur » et
+   * « Réessayer » — seulement « Micro indisponible sur cet appareil » et
    * une sortie. La version livrée les envoyait tous vers la bande de refus,
    * avec un « Réessayer » qui ne pouvait jamais aboutir (loi 4).
    */
@@ -570,7 +581,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
   ] as const;
 
   for (const domExceptionName of unsupportedRecorderNames) {
-    test(`${domExceptionName} ⇒ « Micro indisponible sur ce navigateur », SANS « Réessayer »`, async () => {
+    test(`${domExceptionName} ⇒ « Micro indisponible sur cet appareil », SANS « Réessayer »`, async () => {
       Object.defineProperty(globalThis, 'MediaRecorder', { value: class {}, configurable: true });
       Object.defineProperty(navigator, 'mediaDevices', {
         value: { getUserMedia: () => Promise.reject(new DOMException('indisponible', domExceptionName)) },
@@ -583,7 +594,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
         });
         await flush();
 
-        expect(el.textContent).toContain('Micro indisponible sur ce navigateur');
+        expect(el.textContent).toContain('Micro indisponible sur cet appareil');
         expect(el.textContent).not.toContain('Réessayer');
         expect(el.textContent).not.toContain('Micro refusé');
       } finally {

@@ -5,7 +5,7 @@ import type { CanvasScene } from '@/lib/canvas/document';
 import { SCENE_RATIO } from '@/lib/canvas/fit';
 import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
-import { isDocumentAudible } from '@/lib/feed/scene-motion';
+import { documentSoundsOnStage } from '@/lib/feed/scene-motion';
 import type { SceneGalleryEntry } from '@/lib/feed/gallery-lot';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -35,6 +35,8 @@ import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
 import type { SceneClockHandle } from './scene-clock';
 import { lazyScenePlayer } from './scene-player-lazy';
 import { SceneScrubBar, type SceneScrubPainter } from './scene-scrub-bar';
+import { GLYPH_SIZE } from './ui-chrome';
+import { VIEWER_GLASS } from './viewer-chrome';
 
 /**
  * `ViewerScenePage` (#6902, § B de la spécification `scenes-plein-ecran`) —
@@ -63,7 +65,7 @@ import { SceneScrubBar, type SceneScrubPainter } from './scene-scrub-bar';
  * **LES DEUX BOUTONS N'EXISTENT QUE S'ILS ONT UN EFFET** (loi 4, miroir
  * `GalleryScenePlayPause`, `ConversationMediaGalleryView+ScenePage.swift:
  * 236-263`) : lecture/pause seulement si la scène BOUGE (`entry.moves`), son
- * seulement si le document PORTE du son à couper (`isDocumentAudible`) — et
+ * seulement si le document PORTE du son à couper (`documentSoundsOnStage`) — et
  * chaque libellé SUIT l'état, jamais un nom figé.
  *
  * **LE CURSEUR DE LA SCÈNE** (#8598) — une scène qui a une TIMELINE (un objet
@@ -83,9 +85,13 @@ import { SceneScrubBar, type SceneScrubPainter } from './scene-scrub-bar';
  */
 const ScenePlayer = lazyScenePlayer.Component;
 
+/** Les deux contrôles de la scène sont le MÊME disque que le rail du chrome commun (#8879) : 40 de verre dans 44 de cible. */
+const SCENE_CONTROL_HIT = 'grid size-11 place-items-center text-on-media';
+const SCENE_CONTROL_DISC = `${VIEWER_GLASS} viewer-disc grid place-items-center rounded-full`;
+
 function sceneBackgroundColor(scene: CanvasScene | undefined): string {
   const color = scene === undefined ? undefined : backgroundMedia(scene)?.payload.background;
-  return typeof color === 'string' && color !== '' ? color : '#000';
+  return typeof color === 'string' && color !== '' ? color : 'var(--color-media-backdrop)';
 }
 
 export type ViewerScenePageProps = {
@@ -142,7 +148,11 @@ export function ViewerScenePage({
   }, [pausedOnEntry]);
   const toggle = useCallback(() => setPlayback(scenePlaybackToggled), []);
 
-  const audible = isDocumentAudible(entry.document);
+  /* CE QUI SONNE SUR LA SCÈNE (#9737) — une vidéo, un son de premier plan : ce
+     que ce bouton coupe réellement. Le son de FOND d'une scène de publication
+     n'est pas joué par cette visionneuse : lui offrir un baffle posé sur la
+     scène serait un contrôle sans effet (loi 4). */
+  const audible = documentSoundsOnStage(entry.document);
   const scene = entry.document.scenes[entry.sceneIndex];
   const declaredDuration = scene !== undefined && hasTimedObjects(scene) ? sceneDurationSeconds(scene) : null;
   const duration = entry.moves && declaredDuration !== null && declaredDuration > 0 ? declaredDuration : null;
@@ -264,9 +274,11 @@ export function ViewerScenePage({
                 e.stopPropagation();
                 toggle();
               }}
-              className="media-viewer-scene-control tap-target-34 grid place-items-center rounded-full text-white"
+              className={SCENE_CONTROL_HIT}
             >
-              {scenePlaybackShowsPlay(playback) ? <Glyph name="fillPlay" size={15} /> : <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={15} />}
+              <span className={SCENE_CONTROL_DISC}>
+                {scenePlaybackShowsPlay(playback) ? <Glyph name="fillPlay" size={GLYPH_SIZE.sm} /> : <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={GLYPH_SIZE.sm} />}
+              </span>
             </button>
           ) : null}
           {audible ? (
@@ -278,9 +290,11 @@ export function ViewerScenePage({
                 e.stopPropagation();
                 setMuted((m) => !m);
               }}
-              className="media-viewer-scene-control tap-target-34 grid place-items-center rounded-full text-white"
+              className={SCENE_CONTROL_HIT}
             >
-              <GlyphSvg glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={15} />
+              <span className={SCENE_CONTROL_DISC}>
+                <GlyphSvg glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={GLYPH_SIZE.sm} />
+              </span>
             </button>
           ) : null}
         </div>
@@ -307,7 +321,7 @@ export function ViewerScenePage({
                 durationSeconds={duration}
                 language={language}
                 align="center"
-                fill="#fff"
+                fill="var(--color-on-media)"
                 painterRef={painterRef}
                 onScrubStart={() => setScrubbing(true)}
                 onScrub={(seconds) => clockRef.current?.seek(seconds)}

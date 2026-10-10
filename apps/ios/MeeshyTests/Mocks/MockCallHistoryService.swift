@@ -17,6 +17,10 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
     /// call id (#8066 pagination).
     var historyResultByCursor: [String: Result<CallHistoryPage, Error>] = [:]
 
+    /// Per-search override (#8203), consulted after the cursor — the first
+    /// page the gateway answers for a typed name.
+    var historyResultBySearch: [String: Result<CallHistoryPage, Error>] = [:]
+
     var hideResult: Result<Void, Error> = .success(())
     var clearAllResult: Result<Int, Error> = .success(0)
 
@@ -33,6 +37,8 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
     var lastLimit: Int?
     var lastCursor: String?
     var lastFilter: CallHistoryFilter?
+    var lastType: CallHistoryType?
+    var lastSearch: String?
 
     /// Every filter `history(...)` has been invoked with, appended BEFORE any
     /// gate wait — lets a test detect "the gated call has actually started
@@ -70,7 +76,13 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
 
     // MARK: - Protocol Conformance
 
-    func history(limit: Int, cursor: String?, filter: CallHistoryFilter) async throws -> CallHistoryPage {
+    func history(
+        limit: Int,
+        cursor: String?,
+        filter: CallHistoryFilter,
+        type: CallHistoryType,
+        search: String?
+    ) async throws -> CallHistoryPage {
         invokedFilters.append(filter)
         if let gate = gates[filter] {
             await gate.wait()
@@ -79,9 +91,14 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
         lastLimit = limit
         lastCursor = cursor
         lastFilter = filter
+        lastType = type
+        lastSearch = search
         requestedCursors.append(cursor)
         if let cursor, let perCursor = historyResultByCursor[cursor] {
             return try perCursor.get()
+        }
+        if let search, let perSearch = historyResultBySearch[search] {
+            return try perSearch.get()
         }
         if let perFilter = historyResultByFilter[filter] {
             return try perFilter.get()
@@ -113,6 +130,7 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
         historyResult = .success(CallHistoryPage(records: [], nextCursor: nil, hasMore: false))
         historyResultByFilter = [:]
         historyResultByCursor = [:]
+        historyResultBySearch = [:]
         hideResult = .success(())
         clearAllResult = .success(0)
         gates = [:]
@@ -126,6 +144,8 @@ final class MockCallHistoryService: CallHistoryServiceProviding, @unchecked Send
         lastLimit = nil
         lastCursor = nil
         lastFilter = nil
+        lastType = nil
+        lastSearch = nil
     }
 }
 

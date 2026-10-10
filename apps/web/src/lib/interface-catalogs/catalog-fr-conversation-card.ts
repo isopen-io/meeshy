@@ -10,7 +10,6 @@ const frConversationCard = {
   'conversation.card.messages.one': '{count} message',
   'conversation.card.messages.other': '{count} messages',
   'conversation.card.languages': 'Langues parlées',
-  'conversation.card.join': 'Rejoindre',
   'conversation.card.joinAnonymously': 'Rejoindre en anonyme',
   'conversation.card.open': 'Ouvrir',
   'conversation.card.leave': 'Quitter',
@@ -30,6 +29,11 @@ const frConversationCard = {
   'conversation.card.join.error': 'Impossible de rejoindre. Réessayez.',
   'conversation.card.leave.error': 'Impossible de quitter. Réessayez.',
   'conversation.card.a11y': 'Conversation : {title}',
+  'conversation.card.joinPrompt': 'Rejoindre ?',
+  'conversation.card.joinChoice.anonymous': 'Anonyme',
+  'conversation.card.joinChoice.account': 'Mon compte',
+  'conversation.card.a11y.joinWithAccount': 'Rejoindre avec mon compte',
+  'conversation.card.a11y.joinWithNamedAccount': 'Rejoindre avec le compte {account}',
 } as const;
 
 export type ConversationCardCatalogSlice = Readonly<Record<keyof typeof frConversationCard, string>>;

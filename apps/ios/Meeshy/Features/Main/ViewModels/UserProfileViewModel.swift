@@ -39,6 +39,7 @@ final class UserProfileViewModel: ObservableObject {
 
     private let authManager: AuthManaging
     private let blockService: BlockServiceProviding
+    private let userService: UserServiceProviding
 
     var isCurrentUser: Bool {
         guard let currentId = authManager.currentUser?.id else { return false }
@@ -52,10 +53,12 @@ final class UserProfileViewModel: ObservableObject {
     init(
         user: ProfileSheetUser,
         authManager: AuthManaging = AuthManager.shared,
-        blockService: BlockServiceProviding = BlockService.shared
+        blockService: BlockServiceProviding = BlockService.shared,
+        userService: UserServiceProviding = UserService.shared
     ) {
         self.authManager = authManager
         self.blockService = blockService
+        self.userService = userService
         self.profileUser = user
         self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager, blockService: blockService)
     }
@@ -90,8 +93,10 @@ final class UserProfileViewModel: ObservableObject {
             // systématiquement le profil PUIS les statistiques, à deux
             // adresses. `?expand=stats` les sert ensemble, pour le même coût
             // serveur, et la garde des compteurs intimes reste celle de la
-            // route dédiée — soi et l'administration.
-            let profil = try await UserService.shared.getProfile(handle: idOrUsername, expand: [.stats])
+            // route dédiée — soi et l'administration. `presence` POSE la
+            // question de la présence (#9063) : la passerelle ne la sert qu'à
+            // un ami accepté, sous les réglages de la personne regardée.
+            let profil = try await userService.getProfile(handle: idOrUsername, expand: [.stats, .presence])
             let user = profil.user
             if let stats = profil.stats {
                 userStats = stats
@@ -153,7 +158,7 @@ final class UserProfileViewModel: ObservableObject {
     private func refreshStats(userId: String) async {
         defer { isLoadingStats = false }
         do {
-            let stats = try await UserService.shared.getUserStats(userId: userId)
+            let stats = try await userService.getUserStats(userId: userId)
             userStats = stats
             try? await CacheCoordinator.shared.stats.save([stats], for: userId)
         } catch {

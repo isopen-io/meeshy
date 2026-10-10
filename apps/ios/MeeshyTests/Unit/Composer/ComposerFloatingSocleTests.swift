@@ -136,9 +136,9 @@ final class ComposerFloatingSocleTests: XCTestCase {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
             .components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(code.contains("varsocle:someView"), "Source du socle introuvable — la garde ne mesurerait rien.")
-        XCTAssertTrue(code.contains(".adaptiveGlass(in:Capsule(),tint:tint.color.opacity(0.55))"),
+        XCTAssertTrue(code.contains(".adaptiveLiquidGlass(in:Capsule(),tint:tint.color.opacity(0.55),interactive:true)"),
                       "L'audience doit porter un verre teinté du plateau.")
-        XCTAssertTrue(code.contains(".adaptiveGlass(in:Circle(),tint:tint.color.opacity(0.55))"),
+        XCTAssertTrue(code.contains(".adaptiveLiquidGlass(in:Circle(),tint:tint.color.opacity(0.55),interactive:true)"),
                       "L'œil doit porter un verre teinté du plateau.")
         XCTAssertFalse(code.contains(".adaptiveGlass(in:Capsule())"),
                        "Un verre nu dans le socle choisit seul sa luminance, et le libellé blanc s'y perd.")
@@ -151,7 +151,7 @@ final class ComposerFloatingSocleTests: XCTestCase {
         let barre = AppSourceGuard.stripComments(try AppSourceGuard.unit(
             "Meeshy/Features/Main/Composer/ComposerTopBar.swift"))
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(barre.contains(".adaptiveGlass(in:Circle(),tint:plateauTint.opacity(0.55))"),
+        XCTAssertTrue(barre.contains(".adaptiveLiquidGlass(in:Circle(),tint:plateauTint.opacity(0.55),interactive:true)"),
                       "La croix doit porter un verre teinté du plateau.")
         let hote = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
             .components(separatedBy: .whitespacesAndNewlines).joined()

@@ -48,6 +48,7 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { hidingServedTo } from '../../services/messaging/captureNoticeVisibility';
 import {
   backfillCitedAttachments,
   type MessageRattrapable,
@@ -67,13 +68,20 @@ import {
   enrichPostReplyMessagesForList,
   parseLanguageFilterParam
 } from './messages-list-query';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import type { RawMessageRow } from './messages-list-query-types';
 import { loadReaderReactionsByMessage } from './messages-reader-reactions';
 import {
   isEphemeralServableToReader,
   loadEphemeralReaderDeadlines,
+  withQuotedMessages,
 } from './ephemeralReaderDeadlines';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../../services/messaging/viewOnceAudience';
+import {
+  isServableThroughQuotes,
+  loadInheritedEphemeralDeadlines,
+  withInheritedExpiry,
+} from '../../services/messaging/quoteCascade';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -310,7 +318,14 @@ export function registerMessagesListRoute(
       const historyStartDate: Date | null = participant ? historyFloorFor(participant, shareLink) : null;
 
       t0 = performance.now();
-      const personalHiding = await personalHidingPromise;
+      // #9629 — les avis de capture que ce lecteur ne doit pas voir rejoignent
+      // son masquage : chaque requête de la page (compte, vues, around) les écarte.
+      const personalHiding = await hidingServedTo(prisma, {
+        conversationId,
+        participant,
+        floor: historyStartDate,
+        hiding: await personalHidingPromise,
+      });
       timings.personalHiding = performance.now() - t0;
 
       // #4340 — la SOUS-COLLECTION lue. Résolue APRÈS toutes les portes
@@ -634,9 +649,11 @@ export function registerMessagesListRoute(
       // Le retrait a lieu ICI, sur `messages`, et pas sur la projection : les
       // deux tableaux avancent ensemble jusqu'à la pagination (`splice`), et
       // ne filtrer que le second les aurait désynchronisés.
+      // #8562 — les messages CITÉS aussi : la citation d'un éphémère échu
+      // pour ce lecteur sort scellée, même s'il n'est pas sur la page.
       const ephemeralDeadlines = await loadEphemeralReaderDeadlines(
         prisma,
-        messages,
+        withQuotedMessages(messages),
         currentParticipantId
       );
       if (ephemeralDeadlines.size > 0) {
@@ -651,6 +668,20 @@ export function registerMessagesListRoute(
         if (served.length !== messages.length) {
           messages.length = 0;
           messages.push(...served);
+        }
+      }
+
+      // #8630 — une réponse meurt, pour CE lecteur, avec ce qu'elle cite
+      // (transitivement) : même grâce d'une heure, même retrait en place.
+      const inheritedDeadlines = await loadInheritedEphemeralDeadlines(prisma, messages, currentParticipantId);
+      if (inheritedDeadlines.size > 0) {
+        const inheritedAt = new Date();
+        const alive = messages.filter((message: { id: string }) =>
+          isServableThroughQuotes(inheritedDeadlines, message.id, inheritedAt)
+        );
+        if (alive.length !== messages.length) {
+          messages.length = 0;
+          messages.push(...alive);
         }
       }
 
@@ -704,6 +735,7 @@ export function registerMessagesListRoute(
         consumptionMap,
         ephemeralDeadlines,
         readerReactions,
+        readerFileUrlSigner: readerFileUrlSignerFromEnv(new Date()),
       }));
 
       // ===== ENRICHIR LES MESSAGES FORWARDÉS =====
@@ -745,6 +777,14 @@ export function registerMessagesListRoute(
       if (viewOnceStates.size > 0) {
         mappedMessages.forEach((m, index) => {
           mappedMessages[index] = projectViewOnceForReader(m, viewOnceStates.get(m.id));
+        });
+      }
+
+      // #8630 — l'échéance servie d'une réponse est la plus proche de la
+      // sienne et de celle de ce qu'elle cite : les clients la retirent alors.
+      if (inheritedDeadlines.size > 0) {
+        mappedMessages.forEach((m, index) => {
+          mappedMessages[index] = withInheritedExpiry(m, inheritedDeadlines);
         });
       }
 

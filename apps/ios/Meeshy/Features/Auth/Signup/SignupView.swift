@@ -9,8 +9,9 @@ import MeeshyUI
 /// tenant ; la directive porteur du 2026-09-27 la réagence en quatre temps :
 ///
 /// 1. le téléphone, dans un verre liquide qui ondule à la frappe
-///    (`SignupView+Phone.swift`), et « Continuer avec l'e-mail seulement » ;
-/// 2. l'adresse ;
+///    (`SignupView+Phone.swift`) — REQUIS (#9343) : rien ne le passe, son
+///    refus se dit sous le champ ;
+/// 2. l'adresse, qui paraît à un numéro plausible ;
 /// 3. la carte d'identité en verre : nom affiché et @pseudo pré-dérivés et
 ///    modifiables, refus, « Valider mon compte maintenant »
 ///    (`SignupView+Card.swift`) ;
@@ -120,6 +121,15 @@ struct SignupView: View {
                     .padding(.top, MeeshySpacing.xxl)
                     .padding(.bottom, MeeshySpacing.xxxl)
                     .iPadFormWidth()
+                    // Un toucher HORS des champs leur retire la main (#9362) — et
+                    // le numéro quitté dit alors son refus (`notePhoneFieldLeft`).
+                    // En FOND : les champs et les boutons gardent leurs touchers.
+                    .background(
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { focusedField = nil }
+                            .accessibilityHidden(true)
+                    )
                 }
                 // Le clavier suit le doigt et remonte si on relâche avant la fin —
                 // le mécanisme système, jamais un `DragGesture.onEnded` maison
@@ -145,21 +155,6 @@ struct SignupView: View {
                 notification: .announcement,
                 argument: String(localized: "auth.signup.card.verified", defaultValue: "Compte validé !", bundle: .main)
             )
-        }
-        // UNE ALERTE, JAMAIS UN BLOCAGE (#8040) : sans numéro, dire à quoi il
-        // sert ; « Continuer quand même » crée le compte comme avant.
-        .alert(
-            String(localized: "auth.signup.phoneNudge.title", defaultValue: "Continuer sans numéro ?", bundle: .main),
-            isPresented: $viewModel.isPhoneNudgePresented
-        ) {
-            Button(String(localized: "auth.signup.phoneNudge.addPhone", defaultValue: "Ajouter mon numéro", bundle: .main), role: .cancel) {
-                focusedField = viewModel.addPhoneInstead()
-            }
-            Button(String(localized: "auth.signup.phoneNudge.continue", defaultValue: "Continuer quand même", bundle: .main)) {
-                continueWithoutPhone()
-            }
-        } message: {
-            Text(String(localized: "auth.signup.phoneNudge.message", defaultValue: "Votre numéro sécurise votre compte et permet de le récupérer si vous perdez l’accès à votre e-mail.", bundle: .main))
         }
         .sheet(isPresented: $isShowingLanguageSheet) { languageSheet }
         .sheet(isPresented: $isShowingTerms) { TermsOfServiceView() }
@@ -336,7 +331,7 @@ struct SignupView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(MeeshyColors.error.opacity(0.12))
+                        .fill(MeeshyColors.error.opacity(MeeshyOpacity.light))
                 )
                 .accessibilityElement(children: .combine)
             }
@@ -345,7 +340,7 @@ struct SignupView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(MeeshyColors.brandGradient)
-                        .frame(minHeight: 52)
+                        .frame(minHeight: MeeshyControlSize.buttonHeight)
 
                     if viewModel.isSubmitting {
                         ProgressView().tint(.white)
@@ -356,10 +351,12 @@ struct SignupView: View {
                     }
                 }
             }
-            .disabled(!isPrimaryEnabled)
+            // INACTIF à l'œil, jamais sourd au doigt (#9362) : le toucher dit
+            // pourquoi (`explainInactivePrimary`) au lieu de ne rien faire.
             .opacity(isPrimaryEnabled ? 1 : 0.6)
             .bounceOnTap()
             .accessibilityLabel(primaryTitle)
+            .accessibilityHint(viewModel.inactivePrimaryReason ?? "")
             .accessibilityValue(viewModel.isSubmitting
                                 ? String(localized: "auth.signup.submit.inProgress", defaultValue: "Création en cours", bundle: .main)
                                 : "")
@@ -399,7 +396,7 @@ struct SignupView: View {
                     Text(String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(MeeshyColors.indigo500)
-                        .frame(minHeight: 44)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
                 }
                 Button {
                     isShowingPrivacy = true
@@ -407,7 +404,7 @@ struct SignupView: View {
                     Text(String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialité", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(MeeshyColors.indigo500)
-                        .frame(minHeight: 44)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
                 }
             }
         }
@@ -440,10 +437,22 @@ struct SignupView: View {
         case .talk:
             enterWithCreatedAccount()
         case .signUp(let enabled):
-            guard enabled else { return }
+            guard enabled else { return explainInactivePrimary() }
             if case .awaitingCode = viewModel.card { return enterWithCreatedAccount() }
             attemptSubmit()
         }
+    }
+
+    /// Le motif paraît sous le champ refusé, qui reprend la main. Un motif DÉJÀ
+    /// affiché ne change pas : VoiceOver le relit ici, sinon le toucher
+    /// resterait muet pour lui (l'annonce du champ ne part qu'à l'apparition).
+    private func explainInactivePrimary() {
+        let alreadySaid = viewModel.error(for: .phoneNumber)
+        guard let field = viewModel.explainInactivePrimary() else { return }
+        HapticFeedback.error()
+        focusedField = field
+        guard let alreadySaid else { return }
+        UIAccessibility.post(notification: .announcement, argument: alreadySaid)
     }
 
     /// Le compte existe : sa session TENUE s'ouvre, IMMÉDIATEMENT — sans pause.
@@ -465,15 +474,8 @@ struct SignupView: View {
             switch await viewModel.requestSubmit() {
             case .created: land(created: true)
             case .rejected: land(created: false)
-            // L'alerte EST le retour : aucune haptique d'échec pour une
-            // question posée (#8040).
-            case .phoneNudged: break
             }
         }
-    }
-
-    private func continueWithoutPhone() {
-        Task { land(created: await viewModel.continueWithoutPhone()) }
     }
 
     private func land(created: Bool) {
@@ -551,7 +553,7 @@ struct SignupView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .stroke(
-                        isFocused ? MeeshyColors.indigo500.opacity(0.6) : theme.inputBorder.opacity(0.3),
+                        isFocused ? MeeshyColors.indigo500.opacity(0.6) : theme.inputBorder.opacity(MeeshyOpacity.medium),
                         lineWidth: 1
                     )
             )

@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { CALL_REJOIN_GRACE_MS } from '@meeshy/shared/types/call-rules';
 
 // ─── Mocks (must be defined before SUT import) ──────────────────────────────
 
@@ -872,7 +873,7 @@ describe('CallEventsHandler', () => {
 
       // The original grace timer must still be live: advancing past its
       // window still triggers the terminal leaveCall.
-      await jest.advanceTimersByTimeAsync(31_000);
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 1_000);
 
       expect(mockCallServiceLeaveCall).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_ID }));
       jest.useRealTimers();
@@ -2344,7 +2345,7 @@ describe('CallEventsHandler', () => {
       // No immediate teardown — grace armed.
       expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
 
-      await jest.advanceTimersByTimeAsync(31_000);
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 1_000);
 
       expect(mockCallServiceLeaveCall).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_ID }));
       expect(io.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
@@ -2372,7 +2373,7 @@ describe('CallEventsHandler', () => {
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
 
       await socket._trigger('disconnect');
-      await jest.advanceTimersByTimeAsync(31_000);
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 1_000);
 
       const toCalls = (io.to as jest.Mock<any>).mock.calls.map((c: any[]) => c[0]).flat();
       expect(toCalls).toContain(`conversation:${CONV_ID}`);
@@ -2412,7 +2413,7 @@ describe('CallEventsHandler', () => {
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
 
       await socket._trigger('disconnect');
-      await jest.advanceTimersByTimeAsync(31_000);
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 1_000);
 
       expect(mockTx.callParticipant.update).toHaveBeenCalled();
       expect(io.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
@@ -4193,7 +4194,7 @@ describe('CallEventsHandler', () => {
       });
 
       await socket._trigger('disconnect');
-      await jest.advanceTimersByTimeAsync(31_000);
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 1_000);
       const roomEmitCalls = (io._roomEmit as jest.Mock<any>).mock.calls;
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:ended')).toBe(true);
     });
@@ -4206,7 +4207,7 @@ describe('CallEventsHandler', () => {
       });
 
       await socket._trigger('disconnect');
-      await jest.advanceTimersByTimeAsync(31_000);
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 1_000);
       // participant-left still broadcast via force cleanup
       const roomEmitCalls = (io._roomEmit as jest.Mock<any>).mock.calls;
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:participant-left')).toBe(true);
@@ -4232,7 +4233,7 @@ describe('CallEventsHandler', () => {
       });
 
       await socket._trigger('disconnect');
-      await jest.advanceTimersByTimeAsync(31_000);
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 1_000);
       const roomEmitCalls = (io._roomEmit as jest.Mock<any>).mock.calls;
       // both participant-left and call:ended should be emitted
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:participant-left')).toBe(true);
@@ -4254,7 +4255,7 @@ describe('CallEventsHandler', () => {
       });
 
       await socket._trigger('disconnect');
-      await jest.advanceTimersByTimeAsync(31_000);
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 1_000);
       expect(mockCallServiceForceEndOrphanedCallSession).not.toHaveBeenCalled();
     });
 
@@ -4273,7 +4274,7 @@ describe('CallEventsHandler', () => {
       });
 
       await socket._trigger('disconnect');
-      await jest.advanceTimersByTimeAsync(31_000);
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 1_000);
       const roomEmitCalls = (io._roomEmit as jest.Mock<any>).mock.calls;
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:participant-left')).toBe(true);
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:ended')).toBe(false);

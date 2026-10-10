@@ -194,6 +194,18 @@ export class ActivationRequiresEmailProofError extends EmailNotVerifiedError {
   }
 }
 
+/**
+ * #9927 — la date de naissance déclarée donne moins de 13 ans révolus : le
+ * compte n'ouvre ni ne rafraîchit aucune session tant qu'il n'a pas 13 ans
+ * (calculé, la porte se rouvre seule). 403, code `AGE_BELOW_MINIMUM` ; le
+ * gestionnaire global le rend tel quel.
+ */
+export class AgeBelowMinimumError extends BaseAppError {
+  constructor() {
+    super('Meeshy est réservé aux personnes de 13 ans et plus.', 403, 'AGE_BELOW_MINIMUM');
+  }
+}
+
 // ========== RATE LIMITING ==========
 
 export class RateLimitError extends BaseAppError {

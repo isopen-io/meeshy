@@ -196,6 +196,11 @@ final class MessageListViewController: UIViewController {
     /// menu longpress ferme le clavier et remonte le message vers le centre
     /// s'il est trop bas, ce qui exige le VRAI frame de la cellule.
     var onLongPress: ((String, CGRect?) -> Void)?
+    /// L'appui long d'une TUILE (#9907) : message, pièce, frame de la cellule.
+    var onLongPressPiece: ((String, String, CGRect?) -> Void)?
+    /// #9911 — la pièce citée à mettre en évidence quand le saut se pose, et le canal des tuiles.
+    var pendingPieceSpotlight: (localId: String, pieceId: String)?
+    let pieceSpotlight = PassthroughSubject<String, Never>()
     /// id de la bulle présentée dans l'overlay d'appui long. La cellule live
     /// correspondante passe à `opacity 0` (masquée) le temps de l'overlay —
     /// seule la copie élevée reste visible (anti double-bulle fantôme). Ne
@@ -264,12 +269,11 @@ final class MessageListViewController: UIViewController {
     /// mutation (plafond `ConversationOverlayState.selectionCap` compris),
     /// ce contrôleur ne fait que relayer l'id tapé.
     var onToggleSelection: ((String) -> Void)?
-    /// **Les trois opérations servies EN PREMIER par le menu système**
-    /// (#6117 — « les options qu'il faut en premier c'est editer, selectionner
-    /// et composer »), plus la porte du GRAND menu.
+    /// **Les opérations servies EN PREMIER par le menu système** (#6117 ; « Imager » y remplace « Composer », #8692), plus la porte du GRAND menu.
     var onEditMessage: ((String) -> Void)?
     var onSelectMessage: ((String) -> Void)?
     var onComposeFromMessage: ((String) -> Void)?
+    var onImagineFromMessage: ((String) -> Void)?
     /// « Plus… » ouvre `MessageMoreSheet` — la feuille COMPLÈTE — et non
     /// l'overlay d'appui long. Les deux sont des menus distincts.
     var onOpenMoreSheet: ((String) -> Void)?
@@ -1164,12 +1168,14 @@ final class MessageListViewController: UIViewController {
             // pastille 22 de l'auteur + points pulsants accent SANS capsule ;
             // la capsule reste le rendu du mode bulles.
             let typingFlat = self.readingMode != .bubbles
+            let typingHere = self.conversationHere
             cell.contentConfiguration = UIHostingConfiguration {
                 TypingIndicatorBubble(
                     participants: typingRoster,
                     accentHex: typingAccent,
                     isDark: typingDark,
-                    isFlat: typingFlat
+                    isFlat: typingFlat,
+                    here: typingHere
                 )
                 .scaleEffect(x: 1, y: -1)
             }
@@ -1397,6 +1403,14 @@ final class MessageListViewController: UIViewController {
                 guard let self else { return }
                 self.onLongPress?(tappedId, self.cellFrameInWindow(messageId: tappedId))
             }
+            let quotedReference = message.replyTo
+            let quoteJumpHandler: ((String) -> Void) = { [weak self] targetId in
+                self?.followQuote(quotedReference, to: targetId)
+            }
+            let pieceLongPressHandler: ((String) -> Void) = { [weak self] pieceId in
+                guard let self else { return }
+                self.onLongPressPiece?(messageId, pieceId, self.cellFrameInWindow(messageId: messageId))
+            }
             let toggleReactionHandler = self.onToggleReaction
             let attachmentReactionHandler = self.onReactToAttachment
             let selectionModeActive = self.isSelectionModeActive
@@ -1405,6 +1419,7 @@ final class MessageListViewController: UIViewController {
             let editHandler = self.onEditMessage
             let selectHandler = self.onSelectMessage
             let composeHandler = self.onComposeFromMessage
+            let imagineHandler = self.onImagineFromMessage
             let moreSheetHandler = self.onOpenMoreSheet
             let canEdit = self.canEditMessage
             let openReactPickerHandler = self.onOpenReactPicker
@@ -1429,6 +1444,7 @@ final class MessageListViewController: UIViewController {
             let senderRingState: StoryRingState = isMine
                 ? .none
                 : stories.storyRingState(forUserId: senderId)
+            let senderIsHere: ConversationHere = isMine ? .absent : self.conversationHere[message.viewingKey]
             let viewSenderStoryHandler = self.onViewSenderStory
 
             // Menu d'appui long — DEUX chemins par version d'OS (miroir des
@@ -1530,6 +1546,7 @@ final class MessageListViewController: UIViewController {
                         // évaluation de son body (audit fluidité 2026-08-21).
                         preferredAudioLangCode: preferredAudioLang,
                         showAvatar: !direct,
+                        senderIsHere: senderIsHere,
                         senderStoryRingState: senderRingState,
                         onViewStory: (senderRingState != .none)
                             ? { viewSenderStoryHandler?(senderId) }
@@ -1541,7 +1558,7 @@ final class MessageListViewController: UIViewController {
                         onShowReactions: showReactionsHandler,
                         onShowReadStatus: showReadStatusHandler,
                         onRetry: retryHandler,
-                        onReplyTap: scrollHandler,
+                        onReplyTap: quoteJumpHandler,
                         onStoryReplyTap: storyReplyHandler,
                         onMediaTap: mediaTapHandler,
                         // LOI DES ZONES (2026-08-24) — les MEMES deux
@@ -1672,6 +1689,7 @@ final class MessageListViewController: UIViewController {
                     senderThumbHash: nil,
                     senderColorHex: message.senderColor ?? accent,
                     senderPresence: PresenceManager.shared.presenceState(for: senderId),
+                    senderIsHere: senderIsHere,
                     senderStoryRing: senderRingState,
                     senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,
                     senderIsAnonymous: message.senderIsAnonymous,
@@ -1725,7 +1743,7 @@ final class MessageListViewController: UIViewController {
                 focalActions.onShowReadStatus = showReadStatusHandler
                 focalActions.onShowMessageInfo = showInfoHandler
                 focalActions.onRetry = retryHandler
-                focalActions.onReplyTap = scrollHandler
+                focalActions.onReplyTap = quoteJumpHandler
                 focalActions.onStoryReplyTap = storyReplyHandler
                 focalActions.onMediaTap = mediaTapHandler
                 focalActions.onConsumeViewOnce = consumeViewOnceHandler
@@ -1820,18 +1838,17 @@ final class MessageListViewController: UIViewController {
                     isSelectionModeActive: selectionModeActive,
                     isSelected: selectedIds.contains(messageId),
                     onToggleSelection: { toggleSelectionHandler?(messageId) },
-                    // Les opérations primaires du menu SYSTÈME, ouvert au
-                    // double tap. Elles sont composées ici parce que c'est le
-                    // seul étage qui tient à la fois le `messageId` et les
-                    // rappels déjà résolus par `ConversationView`.
+                    // Les opérations primaires du menu SYSTÈME (double tap), composées ici : seul étage qui
+                    // tient à la fois le `messageId` et les rappels déjà résolus par `ConversationView`.
                     editMenuActions: MessageEditMenuAction.primaires(
                         messageId: messageId,
                         peutEditer: canEdit?(messageId) ?? false,
                         editer: editHandler,
                         selectionner: selectHandler,
-                        composer: message.holdsBlur ? nil : composeHandler,
+                        composer: message.exitOffer.offers(.publish) ? composeHandler : nil,
+                        imager: message.exitOffer.offers(.imagine) && MessageCardSubject.isExportable(message, now: Date()) ? imagineHandler : nil,
                         repondre: swipeReplyHandler,
-                        transferer: message.holdsBlur ? nil : swipeForwardHandler,
+                        transferer: message.isForwardable ? swipeForwardHandler : nil,
                         plus: moreSheetHandler
                     )
                 ) {
@@ -1844,7 +1861,10 @@ final class MessageListViewController: UIViewController {
                 .environmentObject(host)
                 .environmentObject(stories)
                 .environmentObject(statuses)
-                .conversationListObject(convList)
+                // #9907 — l'appui long d'une tuile vise CETTE pièce ; aucun en sélection.
+                .environment(\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)
+                .environment(\.pieceSpotlight, self.pieceSpotlight.eraseToAnyPublisher())
+                .conversationListObject(convList).announcesCaptures() // #9617 — le fil déclare ce qu'il montre
                 // Révélé des heures au défilement (successeur de la pilule
                 // « jour · heure »). Observé par `FocalRevealedTime` SEULE —
                 // une `Text` et rien d'autre — donc son basculement
@@ -2254,7 +2274,7 @@ final class MessageListViewController: UIViewController {
     /// et re-vise tant que l'écart dépasse la tolérance, budget borné.
     /// Annulée dès que le doigt reprend la main (`scrollViewWillBeginDragging`)
     /// ou qu'un autre scroll voulu part (`scrollToBottom`, slow-scroll).
-    private var scrollSettleTarget: ScrollToMessageSettleLaw.PendingTarget?
+    var scrollSettleTarget: ScrollToMessageSettleLaw.PendingTarget?
 
     /// Démarre une visée vérifiée vers `localId` (déjà résolu, présent dans le
     /// snapshot à `indexPath`). Le flash n'est plus émis à l'AVEUGLE sur un
@@ -2277,53 +2297,13 @@ final class MessageListViewController: UIViewController {
     /// n'a pas bougé d'ici là (aucune animation n'a démarré), la vérification
     /// se joue ici ; s'il a bougé, l'animation vit encore et son épilogue
     /// (`scrollViewDidEndScrollingAnimation`) s'en charge.
-    private func scheduleScrollSettleFallback() {
+    func scheduleScrollSettleFallback() {
         let capturedOffsetY = collectionView.contentOffset.y
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             guard let self, self.scrollSettleTarget != nil else { return }
             guard !self.collectionView.isDragging, !self.collectionView.isDecelerating else { return }
             guard abs(self.collectionView.contentOffset.y - capturedOffsetY) < 0.5 else { return }
             self.verifyScrollSettleTarget()
-        }
-    }
-
-    /// Fin d'une passe : la loi tranche — posé (flash), re-visée (nouvelle
-    /// animation, budget décrémenté), ou abandon (flash sur place, la cible
-    /// est de toute façon à l'écran ou presque).
-    private func verifyScrollSettleTarget() {
-        guard var target = scrollSettleTarget else { return }
-        guard let dataSource,
-              let indexPath = dataSource.indexPath(for: .message(localId: target.localId)),
-              let attrs = collectionView.layoutAttributesForItem(at: indexPath)
-        else {
-            // Cible sortie du snapshot (changement de fenêtre) — le chemin
-            // parent (jumpToQuotedMessage) reprendra avec son propre trigger.
-            scrollSettleTarget = nil
-            return
-        }
-        let desired = ScrollToMessageSettleLaw.centeredOffsetY(
-            itemFrame: attrs.frame,
-            boundsHeight: collectionView.bounds.height,
-            contentHeight: collectionView.contentSize.height,
-            topContentInset: collectionView.contentInset.top,
-            bottomContentInset: collectionView.contentInset.bottom
-        )
-        switch ScrollToMessageSettleLaw.verdict(
-            currentOffsetY: collectionView.contentOffset.y,
-            desiredOffsetY: desired,
-            passesRemaining: target.passesRemaining
-        ) {
-        case .settled, .giveUp:
-            scrollSettleTarget = nil
-            isIntentionalProgrammaticScroll = false
-            captureSceneLockAnchor()
-            flashCell(at: indexPath, strong: target.strong)
-        case .correct:
-            target.passesRemaining -= 1
-            scrollSettleTarget = target
-            isIntentionalProgrammaticScroll = true
-            collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
-            scheduleScrollSettleFallback()
         }
     }
 
@@ -2825,8 +2805,9 @@ final class MessageListViewController: UIViewController {
     /// RETRAIT FOCAL iOS (2026-08-18) : le flash CALayer de la décoration
     /// est parti avec le pass — l'historique (transform + alpha de cellule)
     /// sert TOUS les modes, il n'y a plus de perspective à préserver.
-    private func flashCell(at indexPath: IndexPath, strong: Bool = false) {
+    func flashCell(at indexPath: IndexPath, strong: Bool = false) {
         legacyFlashCell(at: indexPath, strong: strong)
+        releasePieceSpotlight(at: indexPath)
     }
 
     /// Comportement HISTORIQUE, verbatim — Script / bulles (R1 sans objet :
@@ -3096,128 +3077,4 @@ extension MessageListViewController: UICollectionViewDelegate {
         flushDeferredReconfigureAtSettle()
     }
 
-}
-
-// MARK: - Typing Indicator Cell
-
-/// Bulle « X écrit… » rendue comme dernière cellule du flux de messages
-/// (bas visuel de la liste inversée). Alignée côté expéditeur ; les points
-/// s'animent en autonomie via `@State` (pas de timer externe).
-///
-/// **`internal`, pas `private` (2026-08-25, constat L2b/2b-7).** La Rivière
-/// monte la MÊME vue en tenue plate (la peau de `Riviere/View/`) : `private` étant à
-/// portée de FICHIER, elle était invisible depuis `Riviere/View/` et la seule
-/// façon d'y rendre la frappe aurait été d'en déclarer une SECONDE — deux
-/// vues qui divergeraient sur les timings, le libellé et l'accessibilité, et
-/// la frappe n'aurait pas le même visage selon le mode de lecture.
-struct TypingIndicatorBubble: View {
-    let participants: [TypingParticipant]
-    let accentHex: String
-    let isDark: Bool
-    /// Rangée PLATE (Focal/Script, matrice §5) : pastille 22 de l'auteur +
-    /// trois points pulsants accent, SANS capsule ni libellé visible (mêmes
-    /// timings 0.5 s / 0.18 s). `false` = capsule historique du mode bulles.
-    var isFlat: Bool = false
-
-    @State private var animating = false
-
-    private var names: [String] { participants.displayNames }
-
-    private var label: String {
-        switch names.count {
-        case 0: return ""
-        case 1: return String(format: String(localized: "typing.named", bundle: .main), names[0])
-        case 2: return String(format: String(localized: "typing.double", bundle: .main), names[0], names[1])
-        default: return String(localized: "typing.several", bundle: .main)
-        }
-    }
-
-    /// Le frappeur dont on montre le visage : le premier du roster, dans
-    /// l'ordre de première apparition tenu par `ConversationSocketHandler`.
-    private var lead: TypingParticipant? { participants.first }
-
-    /// Pastille de l'auteur — sa VRAIE photo dès qu'elle est connue localement,
-    /// ses initiales déterministes sinon. `MeeshyAvatar` porte déjà la cascade
-    /// (cache disque → réseau → initiales) : lui passer `avatarURL` suffit.
-    @ViewBuilder
-    private func leadAvatar(size: CGFloat) -> some View {
-        if let lead {
-            MeeshyAvatar(
-                name: lead.displayName,
-                context: .custom(size),
-                accentColor: accentHex,
-                avatarURL: lead.avatarURL,
-                isDark: isDark
-            )
-        }
-    }
-
-    /// Les trois points pulsants — mêmes timings dans les deux tenues.
-    private func pulsingDots(accent: Color) -> some View {
-        HStack(spacing: 3) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(accent)
-                    .frame(width: 5, height: 5)
-                    .scaleEffect(animating ? 1.0 : 0.5)
-                    .opacity(animating ? 1.0 : 0.4)
-                    // Ici le repos EST la cible (`animating == true` : pleine
-                    // taille, pleine opacité) — l'inverse du point d'appel juste
-                    // à côté. En tenue plate il n'y a aucun libellé : ce qui dit
-                    // « quelqu'un écrit » est la PRÉSENCE des trois points, pas
-                    // leur mouvement. Les rendre à demi-taille et à 40 %
-                    // d'opacité les ferait passer pour une décoration éteinte.
-                    .meeshyAnimation(
-                        .easeInOut(duration: 0.5)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(i) * 0.18),
-                        value: animating
-                    )
-            }
-        }
-    }
-
-    var body: some View {
-        let accent = Color(hex: accentHex)
-        HStack(spacing: 0) {
-            if isFlat {
-                HStack(spacing: 7) {
-                    leadAvatar(size: 22)
-                    pulsingDots(accent: accent)
-                }
-                // Aligné sur la colonne d'identité de FocalRow (retrait
-                // horizontal de rangée) — aucune capsule, aucun bord.
-                .padding(.horizontal, FocalMetrics.Row.paddingHorizontal)
-            } else {
-                HStack(spacing: 6) {
-                    // Le visage AVANT le libellé : « qui écrit » se lit d'un
-                    // coup d'œil, sans lire le nom. La capsule du mode bulles
-                    // ne le portait pas — seule la rangée plate en avait un, et
-                    // sans photo (initiales seules).
-                    leadAvatar(size: 18)
-                    if !label.isEmpty {
-                        Text(label)
-                            // Dynamic Type (153i) : libellé « X écrit… » réel et localisé —
-                            // scale via MeeshyFont.relative. La bulle est dimensionnée par
-                            // padding (pas de frame figée), donc elle grandit proprement ;
-                            // les 3 points restent des `Circle` décoratifs de 5pt.
-                            .font(MeeshyFont.relative(12, weight: .medium))
-                            .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
-                            .lineLimit(1)
-                    }
-                    pulsingDots(accent: accent)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.05)))
-                .overlay(Capsule().strokeBorder(accent.opacity(isDark ? 0.25 : 0.18), lineWidth: 1))
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .onAppear { animating = true }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(label)
-    }
 }

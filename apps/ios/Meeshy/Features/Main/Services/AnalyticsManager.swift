@@ -66,6 +66,11 @@ extension Route {
         // qui rendraient le même écran d'analytique ne diraient laquelle est
         // ouverte, et c'est précisément la question qu'on posera à cette mesure.
         case .progressionSection(let section): return "Progression.\(section.rawValue)"
+        case .progressionRules: return "Progression.Rules"
+        case .progressionNotebook: return "Progression.Notebook"
+        case .gamePage(let page): return page.analyticsName
+        case .progressionConcept(let concept, _): return "Progression.Concept.\(concept.rawValue)"
+        case .progressionDashboard: return "Progression.Dashboard"
         case .links: return "Links"
         case .affiliate: return "Affiliate"
         case .trackingLinks: return "TrackingLinks"

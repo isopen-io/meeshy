@@ -7,8 +7,8 @@ import MeeshySDK
 /// `MeeshyVideoEditorView` puis jetaient son résultat : l'auteur rognait sa
 /// vidéo, validait, et c'était l'originale qui partait — un contrôle qui ment
 /// (loi 4). Même contrat que l'audio (`applyEditedAudio`) : remplacement par
-/// id, jamais un second chip ; `didEdit == false` ne change rien, l'éditeur
-/// rendant alors la source elle-même.
+/// id, jamais un second chip ; `didEdit == false` ne change rien. La retouche
+/// se fait désormais dans la scène du composeur (#9124, #9166).
 nonisolated enum PendingVideoEditReplacement {
 
     struct Outcome {
@@ -37,6 +37,7 @@ nonisolated enum PendingVideoEditReplacement {
                 mimeType: "video/mp4",
                 fileSize: taille ?? ancienne.fileSize,
                 fileUrl: result.url.absoluteString,
+                capturedInApp: ancienne.capturedInApp,
                 width: ancienne.width,
                 height: ancienne.height,
                 duration: result.duration > 0 ? Int(result.duration * 1000) : ancienne.duration,

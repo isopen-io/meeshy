@@ -1,3 +1,7 @@
+import { createStore } from 'zustand/vanilla';
+
+import { cameraMirrored } from '@/lib/media/camera-mirror';
+
 import { hasVideo } from './call-view';
 import type { ActiveCall } from './call-store';
 
@@ -12,7 +16,8 @@ import type { ActiveCall } from './call-store';
  *   où la première manque (Safari, Firefox).
  *
  * La coque Android (WebView) n'offre ni l'un ni l'autre : le bouton n'y est
- * pas dessiné. La bascule AUTOMATIQUE quand l'onglet se masque passe par
+ * pas dessiné. C'est l'ACTIVITÉ qui y flotte quand on quitte l'app (#8144) ;
+ * `shellPipStore` dit à la page qu'elle est devenue la fenêtre flottante. La bascule AUTOMATIQUE quand l'onglet se masque passe par
  * l'action Media Session `enterpictureinpicture` : un navigateur refuse toute
  * image dans l'image sans geste, sauf par ce chemin.
  */
@@ -33,6 +38,9 @@ export function browserPipSupport(): PipSupport {
   return pipSupport({ documentPictureInPicture: env.documentPictureInPicture, pictureInPictureEnabled: (document as { readonly pictureInPictureEnabled?: boolean }).pictureInPictureEnabled });
 }
 
+/** Écrit par `shell-call.ts` depuis l'événement de la coque, lu par `call-pip-window.tsx`. */
+export const shellPipStore = createStore<{ readonly active: boolean }>(() => ({ active: false }));
+
 let opener: (() => Promise<boolean>) | null = null;
 
 /**
@@ -52,18 +60,34 @@ export function requestCallPip(): void {
   void opener?.();
 }
 
-export type PipSource = { readonly stream: MediaStream; readonly mirrored: boolean };
+/** `contain` pour un écran partagé (#8164) : un document ou un tableau se lit ENTIER, sur le fond neutre ; une caméra reste recadrée. */
+export type PipSource = { readonly stream: MediaStream; readonly mirrored: boolean; readonly fit: 'cover' | 'contain' };
 
-type PipCall = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase'>;
+type PipCall = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase' | 'facing' | 'screenSharing'>;
 
-/** Ce qui flotte : un écran partagé d'abord (#8063), puis la vidéo du premier pair qui en envoie, sinon ma caméra (en miroir, comme la vignette). */
+/** Ce qui flotte : un écran partagé d'abord (#8063), puis la vidéo du premier pair qui en envoie, sinon ma caméra (dans le miroir de son aperçu, `cameraMirrored`). */
 export function pipSource(call: PipCall): PipSource | null {
   const members = Object.values(call.members);
-  const remote = [...members.filter((member) => member.screenSharing), ...members.filter((member) => member.cameraOn && !member.screenSharing)]
-    .map((member) => call.remoteStreams[member.userId])
-    .find((stream) => hasVideo(stream));
-  if (remote !== undefined) return { stream: remote, mirrored: false };
-  return call.cameraOn && call.localStream !== null && hasVideo(call.localStream) ? { stream: call.localStream, mirrored: true } : null;
+  const shown = (userId: string): MediaStream | undefined => {
+    const stream = call.remoteStreams[userId];
+    return hasVideo(stream) ? stream : undefined;
+  };
+  const screen = members.filter((member) => member.screenSharing).map((member) => shown(member.userId)).find((stream) => stream !== undefined);
+  if (screen !== undefined) return { stream: screen, mirrored: false, fit: 'contain' };
+  const camera = members.filter((member) => member.cameraOn && !member.screenSharing).map((member) => shown(member.userId)).find((stream) => stream !== undefined);
+  if (camera !== undefined) return { stream: camera, mirrored: false, fit: 'cover' };
+  if (!call.cameraOn || call.localStream === null || !hasVideo(call.localStream)) return null;
+  return { stream: call.localStream, mirrored: cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing }), fit: call.screenSharing ? 'contain' : 'cover' };
+}
+
+export type PipAspect = { readonly width: number; readonly height: number };
+
+/** Le format de l'image qui flotte (#8144) : la coque Android y cale sa fenêtre. `null` tant que la piste ignore sa taille. */
+export function pipAspect(source: PipSource | null): PipAspect | null {
+  const track = source?.stream.getVideoTracks().find((candidate) => candidate.readyState !== 'ended');
+  const settings = typeof track?.getSettings === 'function' ? track.getSettings() : {};
+  const { width, height } = settings;
+  return width !== undefined && height !== undefined && width > 0 && height > 0 ? { width, height } : null;
 }
 
 export function shouldOfferPip(call: PipCall, support: PipSupport): boolean {

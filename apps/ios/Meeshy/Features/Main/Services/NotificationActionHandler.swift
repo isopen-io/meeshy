@@ -71,6 +71,10 @@ nonisolated protocol NotificationReplyQueueing {
         payload: P,
         conversationId: String?
     ) async throws -> String
+    /// La seule entrée d'un commentaire dans la file (#9743) : dans la base
+    /// PROUVÉE de son auteur, et dans aucune autre.
+    @discardableResult
+    func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String
 }
 
 extension OfflineQueue: NotificationReplyQueueing {}
@@ -124,6 +128,12 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let messageService: MessageServiceProviding
     private let conversationService: ConversationServiceProviding
     private let postService: PostServiceProviding
+    /// Le seul chemin réseau d'un commentaire (#9743) — il lie la requête au
+    /// compte de l'auteur.
+    private let commentPublisher: CommentPublisher
+    /// Une réponse rapide à un commentaire n'a pu ni partir ni rejoindre la
+    /// file : l'utilisateur, hors de l'app, l'apprend par une notification.
+    private let notifyUnsentComment: @MainActor () -> Void
     private let friendService: FriendServiceProviding
     private let replyQueue: NotificationReplyQueueing
     private let injectedPersistence: OptimisticMessagePersisting?
@@ -144,6 +154,11 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let removeDeliveredForConversation: @MainActor (String) -> Void
     private let removeDeliveredForPost: @MainActor (String) -> Void
     private let removeDeliveredForNotificationIds: @MainActor ([String]) async -> Void
+    /// #8858 — les trois gestes du DÉTAIL d'un message : Plans, Contacts, et
+    /// le parcours de lien de conversation (Anonyme / Mon compte, #8726).
+    private let openExternalURL: @MainActor (URL) -> Void
+    private let openDeepLink: @MainActor (URL) -> Void
+    private let presentNewContact: @MainActor (NotificationContactCard) -> Void
     private var revocationSubscription: AnyCancellable?
     /// #7453 — l'abonnement au retour au premier plan, qui rejoue le balayage
     /// des bannières éphémères échues. Un nouvel appel REMPLACE l'abonnement :
@@ -175,6 +190,8 @@ final class NotificationActionHandler: NotificationActionHandling {
         messageService: MessageServiceProviding = MessageService.shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
         postService: PostServiceProviding = PostService.shared,
+        commentPublisher: CommentPublisher = .live,
+        notifyUnsentComment: @escaping @MainActor () -> Void = { NotificationReplyFailure.post() },
         friendService: FriendServiceProviding = FriendService.shared,
         replyQueue: NotificationReplyQueueing = OfflineQueue.shared,
         messagePersistence: OptimisticMessagePersisting? = nil,
@@ -223,11 +240,18 @@ final class NotificationActionHandler: NotificationActionHandling {
                 matching: { revocation.covers($0) }
             )
         },
-        prepareReplyQueue: (@MainActor () async -> Void)? = nil
+        prepareReplyQueue: (@MainActor () async -> Void)? = nil,
+        openExternalURL: @escaping @MainActor (URL) -> Void = { UIApplication.shared.open($0) },
+        openDeepLink: @escaping @MainActor (URL) -> Void = { _ = DeepLinkRouter.shared.handle(url: $0) },
+        presentNewContact: @escaping @MainActor (NotificationContactCard) -> Void = {
+            NotificationContactPresenter.present($0)
+        }
     ) {
         self.messageService = messageService
         self.conversationService = conversationService
         self.postService = postService
+        self.commentPublisher = commentPublisher
+        self.notifyUnsentComment = notifyUnsentComment
         self.friendService = friendService
         self.replyQueue = replyQueue
         self.injectedPersistence = messagePersistence
@@ -245,6 +269,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.removeDeliveredForConversation = removeDeliveredForConversation
         self.removeDeliveredForPost = removeDeliveredForPost
         self.removeDeliveredForNotificationIds = removeDeliveredForNotificationIds
+        self.openExternalURL = openExternalURL
+        self.openDeepLink = openDeepLink
+        self.presentNewContact = presentNewContact
     }
 
     // MARK: - Révocation (features 4/5)
@@ -380,6 +407,12 @@ final class NotificationActionHandler: NotificationActionHandling {
             await consumeTapped(payload)
             openNotification(userInfo)
 
+        case MeeshyNotificationAction.openInMaps.rawValue,
+             MeeshyNotificationAction.addContact.rawValue,
+             MeeshyNotificationAction.joinInvite.rawValue:
+            await consumeTapped(payload)
+            handleDetailAction(actionIdentifier, userInfo: userInfo)
+
         case MeeshyNotificationAction.declineCall.rawValue:
             // Silent decline — no navigation. The VoIP layer handles the
             // actual decline via CallKit; APNs declineCall is just
@@ -388,6 +421,27 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         default:
             await consumeTapped(payload)
+            openNotification(userInfo)
+        }
+    }
+
+    // MARK: - Détail d'un message (#8858)
+
+    /// Exécute le geste que la catégorie du détail propose. Le détail se relit
+    /// par la MÊME politique que l'extension a appliquée pour choisir la
+    /// catégorie — protection comprise. Faute de détail lisible, le geste
+    /// ouvre la notification : un bouton ne reste jamais inerte.
+    private func handleDetailAction(_ actionIdentifier: String, userInfo: [AnyHashable: Any]) {
+        switch (actionIdentifier, NotificationDetailPolicy.detail(userInfo: userInfo)) {
+        case (MeeshyNotificationAction.openInMaps.rawValue, .location(let place)?):
+            guard let url = place.mapsURL else { return openNotification(userInfo) }
+            openExternalURL(url)
+        case (MeeshyNotificationAction.addContact.rawValue, .contact(let card)?):
+            openNotification(userInfo)
+            presentNewContact(card)
+        case (MeeshyNotificationAction.joinInvite.rawValue, .invite(let invite)?):
+            openDeepLink(invite.url)
+        default:
             openNotification(userInfo)
         }
     }
@@ -551,12 +605,14 @@ final class NotificationActionHandler: NotificationActionHandling {
             notifiedCommentId: userInfo["commentId"] as? String
         )
         let clientMutationId = ClientMutationId.generate()
-
-        await prepareReplyQueue()
-        do {
-            try await replyQueue.enqueue(
-                .createComment,
-                payload: CreateCommentPayload(
+        // #9743, M2 — l'auteur est le compte que le JETON désigne, et la
+        // notification doit s'adresser à lui.
+        guard let owner = NotificationReplyFailure.author(token: authTokenProvider(), userInfo: userInfo) else {
+            CommentSendTrace.log("notification : réponse refusée — le jeton ne désigne pas le destinataire")
+            notifyUnsentComment()
+            return
+        }
+        let comment = CreateCommentPayload(
                     clientMutationId: clientMutationId,
                     postId: postId,
                     parentCommentId: parentId,
@@ -567,25 +623,29 @@ final class NotificationActionHandler: NotificationActionHandling {
                     // comme sur la tentative REST jumelle ci-dessous — les deux
                     // chemins partagent le même cmid et doivent donner le même
                     // commentaire, quel que soit celui qui atterrit le premier.
-                    originalLanguage: nil
-                ),
-                conversationId: nil
-            )
+                    originalLanguage: nil,
+                    authorId: owner
+        )
+
+        await prepareReplyQueue()
+        var kept = false
+        do {
+            try await replyQueue.enqueueComment(comment, ownerId: owner)
+            kept = true
         } catch {
-            logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .private)")
         }
 
         do {
-            _ = try await postService.addComment(
-                postId: postId,
-                content: text,
-                parentId: parentId,
-                effectFlags: nil,
-                clientMutationId: clientMutationId
-            )
-            logger.info("notification comment sent for post \(postId, privacy: .public)")
+            try await commentPublisher.publish(comment, pieces: [])
+            kept = true
+            logger.info("notification comment sent")
         } catch {
-            logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .public)")
+            logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .private)")
+        }
+        if !kept {
+            CommentSendTrace.log("notification : ni envoyée ni gardée — l'utilisateur est prévenu")
+            notifyUnsentComment()
         }
 
         // #6999 — commenter, c'est consommer : la notification commentée passe

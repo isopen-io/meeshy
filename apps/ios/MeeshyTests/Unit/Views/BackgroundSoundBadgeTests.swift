@@ -54,7 +54,7 @@ final class BackgroundSoundBadgeTests: XCTestCase {
         let text = try source()
         let originalBlock = block(from: "case .original:", to: "case .credit", in: text)
         XCTAssertFalse(originalBlock.isEmpty, "case .original: introuvable dans BackgroundSoundBadge.swift")
-        guard let note = originalBlock.range(of: #"Image(systemName: "music.note")"#),
+        guard let note = originalBlock.range(of: "BackgroundSoundNote("),
               let waveform = originalBlock.range(of: "StoryHeaderAudioWaveform(") else {
             XCTFail("Une piste ORIGINALE doit afficher la note musicale ET l'onde animée (♫〰).")
             return
@@ -81,34 +81,55 @@ final class BackgroundSoundBadgeTests: XCTestCase {
 
     // MARK: - Texte du crédit — fonction pure, testable sans instancier la vue
 
-    func test_creditText_withFullMetadata_joinsTitleHandleAndDuration() {
+    func test_creditText_withFullMetadata_joinsTitleAndHandle_withoutDuration() {
         XCTAssertEqual(
-            BackgroundSoundBadge.creditText(title: "Nuits d'été", username: "sam", duration: 15),
-            "Nuits d'été · @sam · 0:15"
+            BackgroundSoundBadge.creditText(title: "Nuits d'été", username: "sam", releasedAt: nil),
+            "Nuits d'été · @sam",
+            "#9677 : « ♫ titre · @auteur » — la note est un glyphe, la durée n'est plus dite."
         )
     }
 
-    func test_creditText_withNoMetadata_isGenericCreditNote() {
+    func test_creditText_withNoMetadata_isTheDashAfterTheNote() {
         XCTAssertEqual(
-            BackgroundSoundBadge.creditText(title: nil, username: nil, duration: nil),
-            "♫ —",
-            "Cache froid (aucune métadonnée résolue) ⇒ crédit générique — jamais un repli " +
+            BackgroundSoundBadge.creditText(title: nil, username: nil, releasedAt: nil),
+            BackgroundSoundBadge.unknownCreditText,
+            "Cache froid (aucune métadonnée résolue) ⇒ « ♫ — » — jamais un repli " +
             "vers la note+onde (B3.4, « si et seulement si »)."
         )
     }
 
     func test_creditText_stripsLeadingAtFromUsername() {
         XCTAssertEqual(
-            BackgroundSoundBadge.creditText(title: nil, username: "@sam", duration: nil),
+            BackgroundSoundBadge.creditText(title: nil, username: "@sam", releasedAt: nil),
             "@sam"
         )
     }
 
     func test_creditText_withTitleOnly_omitsDanglingSeparators() {
         XCTAssertEqual(
-            BackgroundSoundBadge.creditText(title: "Nuits d'été", username: nil, duration: nil),
+            BackgroundSoundBadge.creditText(title: "Nuits d'été", username: nil, releasedAt: nil),
             "Nuits d'été"
         )
+    }
+
+    /// Sans titre, la date du son tient sa place : « @auteur · date ».
+    func test_creditText_withoutTitle_saysTheAuthorThenTheSoundDate() {
+        let utc = TimeZone(identifier: "UTC")!
+        let fr = Locale(identifier: "fr_FR")
+        let released = Date(timeIntervalSince1970: 1_773_316_800)
+        XCTAssertEqual(
+            BackgroundSoundBadge.creditText(title: nil, username: "sam", releasedAt: released,
+                                            locale: fr, timeZone: utc),
+            "@sam · " + AudioChipDisplay.creditDate(released, locale: fr, timeZone: utc)
+        )
+    }
+
+    /// VoiceOver dit la nature de la piste, puis son crédit ; « — » ne se lit pas.
+    func test_creditAccessibilityLabel_namesTheTrackThenItsCredit() {
+        XCTAssertTrue(BackgroundSoundBadge.creditAccessibilityLabel("Nuits d'été · @sam")
+            .hasSuffix(" · Nuits d'été · @sam"))
+        XCTAssertFalse(BackgroundSoundBadge.creditAccessibilityLabel(BackgroundSoundBadge.unknownCreditText)
+            .contains("—"))
     }
 
     // MARK: - `announcement(for:)` — comportement RÉEL du résolveur (DoD, constats 1/2/3)
@@ -139,7 +160,7 @@ final class BackgroundSoundBadgeTests: XCTestCase {
             BackgroundSoundBadge.announcement(for: effects),
             .credit(title: "Nuits d'été", username: "sam", duration: 15),
             "Un son emprunté à la bibliothèque (forme BorrowedSoundPost) doit " +
-            "produire le crédit « titre · @pseudo · M:SS » — pas EmptyView."
+            "produire le crédit « titre · @pseudo » — pas EmptyView."
         )
     }
 
@@ -261,5 +282,190 @@ final class BackgroundSoundBadgeServedTintTests: XCTestCase {
         let queue = String(src[creditBranch.upperBound...])
         XCTAssertTrue(queue.contains("tint:"),
             "La branche .credit doit passer `tint:` à AudioChipMarquee — sans quoi l'atome repeint en blanc.")
+    }
+}
+
+// MARK: - Une annonce par surface, une ligne, une source (#9677)
+
+/// **Le son de fond défile « ♫ titre · @auteur » sur UNE ligne, une seule fois
+/// par surface, et une story republiée annonce le son qu'elle JOUE.**
+///
+/// Constats d'origine : le réel « son emprunté seul » disait son crédit DEUX fois
+/// (une pastille statique au-dessus de la rangée, le défilant dedans), dans deux
+/// formats ; le badge tenait 124 pt fixes ; la carte d'une story republiée sans
+/// effets propres se taisait pendant que son embed jouait le son de la source.
+@MainActor
+final class BackgroundSoundSingleCreditTests: XCTestCase {
+
+    private func source(_ path: String) throws -> String {
+        try MyStoriesSourceCorpus.text(of: path)
+    }
+
+    private func borrowedEffects() -> StoryEffects {
+        var effects = StoryEffects()
+        effects.audioPlayerObjects = [
+            StoryAudioPlayerObject(id: "bg", isBackground: true, name: "Nuits blanches",
+                                   soundId: "6a97198de19ad1985081d6a6", soundAuthorUsername: "lume")
+        ]
+        return effects
+    }
+
+    // MARK: Une source pour la story republiée
+
+    func test_aRepublishedStoryWithoutItsOwnEffects_announcesTheSourceSound() {
+        var post = FeedPost(author: "A", type: "POST", content: "")
+        post.repost = RepostContent(author: "B", content: "", type: "STORY", storyEffects: borrowedEffects())
+        XCTAssertEqual(
+            BackgroundSoundBadge.announcement(for: post),
+            .credit(title: "Nuits blanches", username: "lume", duration: nil),
+            "La carte doit annoncer le son que l'embed joue — celui de la source.")
+        XCTAssertEqual(
+            BackgroundSoundBadge.announcement(for: post),
+            BackgroundSoundBadge.announcement(for: StoryItem(feedPost: post).storyEffects),
+            "Carte et détail lisent le MÊME repli.")
+    }
+
+    func test_aPostWithItsOwnSound_keepsAnnouncingIt() {
+        var post = FeedPost(author: "A", type: "POST", content: "")
+        post.storyEffects = borrowedEffects()
+        XCTAssertEqual(BackgroundSoundBadge.announcement(for: post),
+                       .credit(title: "Nuits blanches", username: "lume", duration: nil))
+    }
+
+    func test_theCard_resolvesThroughThePostFallback() throws {
+        let card = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
+        XCTAssertTrue(card.contains("BackgroundSoundBadge.announcement(for: post)"))
+        XCTAssertFalse(card.contains("BackgroundSoundBadge.announcement(for: post.storyEffects)"),
+                       "lire post.storyEffects seul tait le son d'une story republiée")
+    }
+
+    // MARK: Une seule annonce sur le réel
+
+    func test_theReel_saysItsCreditOnce() throws {
+        let host = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        XCTAssertFalse(host.contains("borrowedSoundBadge("),
+                       "la pastille statique doublait le crédit défilant de la rangée auteur")
+        let info = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
+        XCTAssertEqual(info.components(separatedBy: "BackgroundSoundBadge(").count - 1, 1,
+                       "un seul crédit monté sur le réel")
+    }
+
+    func test_theReelCredit_wearsTheOverMediaAccent_andThePseudoKeepsItsLine() throws {
+        let info = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
+        XCTAssertTrue(info.contains("accentHex: BackgroundSoundBadge.overMediaAccentHex"),
+                      "le crédit est posé sur le MÉDIA : l'accent du réel n'y est pas garanti lisible")
+        XCTAssertFalse(info.contains("accentHex: accentColor"))
+        let pseudo = try XCTUnwrap(info.range(of: "Text(\"@\\(username)\")"))
+        let suite = String(info[pseudo.upperBound...].prefix(300))
+        XCTAssertTrue(suite.contains(".lineLimit(1)"), "le @pseudo ne se replie jamais")
+    }
+
+    // MARK: Une ligne, largeur flexible
+
+    func test_theBadge_hasNoFixedWidth_andYieldsToItsNeighbours() throws {
+        let badge = try source("Meeshy/Features/Main/Components/BackgroundSoundBadge.swift")
+        XCTAssertFalse(badge.contains(".frame(width: 124)"),
+                       "une largeur fixe tronque un crédit court et déborde à 320 pt")
+        XCTAssertTrue(badge.contains(".layoutPriority(-1)"),
+                      "le crédit cède la place au nom et au @pseudo")
+        XCTAssertTrue(badge.contains("AudioChipMarquee("), "le crédit défile quand il dépasse")
+    }
+
+    /// **Le crédit du réel a SA ligne** (recette 2026-10-08 : ≈ 40 pt à 402,
+    /// « ♫ ɪbeth » ; directive porteur du même jour). Il vit sous la rangée de
+    /// l'auteur, hors du bouton du profil, sur toute la largeur du bloc
+    /// d'infos — rien ne la partage. Le bloc = l'écran moins les deux
+    /// gouttières, le rail d'actions et leur espacement : le crédit en garde
+    /// donc 100 %, au-dessus des 60 % exigés, à 402 comme à 320 pt.
+    func test_theReelCredit_hasItsOwnFullWidthRow_at402And320() throws {
+        let info = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
+        let ligneAuteur = try XCTUnwrap(info.range(of: "var authorMetaLine: some View {"))
+        let finAuteur = try XCTUnwrap(info.range(of: "var soundCreditRow: some View {"))
+        let meta = String(info[ligneAuteur.upperBound..<finAuteur.lowerBound])
+        XCTAssertFalse(meta.contains("BackgroundSound"),
+                       "le crédit ne partage plus la ligne @pseudo / vues / impressions")
+        let rangee = String(info[finAuteur.upperBound...].prefix(1_500))
+        XCTAssertTrue(rangee.contains(".frame(maxWidth: .infinity, alignment: .leading)"),
+                      "la ligne du crédit prend toute la largeur du bloc")
+        let profil = try XCTUnwrap(info.range(of: "\"reels.author.profile\""))
+        let montage = try XCTUnwrap(info.range(of: "soundCreditRow\n", range: profil.upperBound..<info.endIndex))
+        XCTAssertTrue(profil.lowerBound < montage.lowerBound, "monté APRÈS (sous) la rangée de l'auteur")
+
+        for screen: CGFloat in [402, 320] {
+            let bloc = screen - 2 * MeeshySpacing.lg
+                - FullscreenChromeMetrics.floatingCellWidth - MeeshySpacing.md
+            let credit = bloc
+            XCTAssertGreaterThanOrEqual(credit, bloc * 0.6)
+            XCTAssertGreaterThan(credit, 120, "à \(Int(screen)) pt le crédit garde \(Int(credit)) pt")
+        }
+    }
+
+    /// La ligne n'existe que s'il y a un son de fond.
+    func test_theReelCreditRow_existsOnlyWithABackgroundSound() throws {
+        let info = try source("Meeshy/Features/Main/Views/ReelPageView+Info.swift")
+        let debut = try XCTUnwrap(info.range(of: "var soundCreditRow: some View {"))
+        let rangee = String(info[debut.upperBound...].prefix(400))
+        XCTAssertTrue(rangee.contains("if BackgroundSoundBadge.showsMuteButton(for: announcement) {"))
+    }
+
+    // MARK: La NOTE coupe le son — plus de baffle (directive porteur 2026-10-08)
+
+    func test_theMuteControl_saysTheActionAndTheState() {
+        XCTAssertNotEqual(BackgroundSoundMuteControl.accessibilityLabel(isMuted: false),
+                          BackgroundSoundMuteControl.accessibilityLabel(isMuted: true))
+        XCTAssertNotEqual(BackgroundSoundMuteControl.accessibilityValue(isMuted: false),
+                          BackgroundSoundMuteControl.accessibilityValue(isMuted: true))
+    }
+
+    /// Toucher la note bascule l'état que l'hôte possède — une fois coupe,
+    /// deux fois rétablit — et le badge le dessine : note BARRÉE.
+    func test_touchingTheNote_togglesTheHostState_andBarsTheNote() throws {
+        var coupe = false
+        let controle = BackgroundSoundMuteControl(announcement: .original, accentHex: "FFFFFF",
+                                                  isMuted: coupe, onToggle: { coupe.toggle() })
+        controle.onToggle()
+        XCTAssertTrue(coupe)
+        controle.onToggle()
+        XCTAssertFalse(coupe)
+        XCTAssertNotEqual(BackgroundSoundBadge(announcement: .original, accentHex: "FFFFFF", isMuted: true),
+                          BackgroundSoundBadge(announcement: .original, accentHex: "FFFFFF", isMuted: false),
+                          "la note barrée est un AUTRE rendu — `.equatable()` doit le repeindre")
+        let badge = try source("Meeshy/Features/Main/Components/BackgroundSoundBadge.swift")
+        XCTAssertTrue(badge.contains(".opacity(isMuted ? 1 : 0)"), "la barre ne paraît que coupée")
+        XCTAssertTrue(badge.contains("BackgroundSoundNote(isMuted: isMuted"),
+                      "les DEUX formes (sinusoïde et crédit) portent la note qui se barre")
+        XCTAssertTrue(badge.contains(".frame(minHeight: MeeshyControlSize.tapTarget"),
+                      "cible ≥ 44 pt")
+    }
+
+    /// **Aucun baffle pour le son de fond sur les trois vues de lecture.**
+    func test_noSpeakerButton_forTheBackgroundSound_onTheThreeViews() throws {
+        for path in ["Meeshy/Features/Main/Views/ReelPageView+Info.swift",
+                     "Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
+                     "Meeshy/Features/Main/Views/PostSceneSoundHeader.swift",
+                     "Meeshy/Features/Main/Views/StoryViewerView+Header.swift"] {
+            XCTAssertFalse(try source(path).contains("muteIconName("), "\(path) monte encore un baffle")
+        }
+        XCTAssertFalse(try source("Meeshy/Features/Main/Views/PostDetailView.swift")
+            .contains("muteIconName(isMuted: isCanvasMuted)"))
+        let story = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        XCTAssertTrue(story.contains("StoryAudioAvailability.needsSoundButton("),
+                      "le rail de la story n'affiche son baffle que pour un AUTRE son que le fond")
+        let header = try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift")
+        XCTAssertTrue(header.contains("isMuted: isGlobalMuted"))
+        XCTAssertTrue(header.contains("StoryGlobalMute.toggle($isGlobalMuted)"),
+                      "la note de la story bascule le MÊME muet que le rail")
+        XCTAssertTrue(header.contains(".accessibilityAction(named:"),
+                      "VoiceOver atteint la note par une action nommée du bouton du profil")
+    }
+
+    /// La carte d'un réel dans le FIL annonce son son, comme la carte de post.
+    func test_theReelFeedCard_announcesItsBackgroundSound() throws {
+        let card = try source("Meeshy/Features/Main/Views/ReelFeedCard.swift")
+        XCTAssertTrue(card.contains("BackgroundSoundBadge("),
+                      "recette : un réel à son de bibliothèque s'affichait dans le fil sans « ♫ … »")
+        XCTAssertTrue(card.contains("BackgroundSoundBadge.announcement(for:"))
+        XCTAssertTrue(card.contains("accentHex: BackgroundSoundBadge.overMediaAccentHex"),
+                      "la carte du réel pose son crédit sur le média")
     }
 }

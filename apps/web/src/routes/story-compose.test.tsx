@@ -12,7 +12,6 @@ import { buttonNamed } from '@/test-support/act-mount';
 import StoryComposeScreen from './story-compose';
 import {
   VIEWER_ID,
-  fakeRect,
   flush,
   harness,
   image,
@@ -94,35 +93,29 @@ describe('StoryComposeScreen — l’aperçu par le moteur PARTAGÉ (D-79)', () 
     expect(textarea?.getAttribute('style') ?? '').not.toContain('text-shadow');
   });
 
-  test('la saisie ADOPTE la boîte RÉELLEMENT peinte par [data-scene-text], au pixel près — jamais une largeur/hauteur fixes (défaut 1, revue-correction)', () => {
+  test('la saisie ADOPTE la boîte RÉELLEMENT peinte par [data-scene-text] et la POSE de l’objet — jamais une largeur/hauteur fixes (défaut 1, #8681)', () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
-    const stage = el.querySelector<HTMLElement>('[data-scene-stage]');
     const textNode = el.querySelector<HTMLElement>('[data-scene-text]');
-    expect(stage).not.toBeNull();
     expect(textNode).not.toBeNull();
 
-    // La carte occupe (50,100)-(350,600) sur l'écran ; le moteur peint le
-    // texte dans une boîte NARROW, décentrée verticalement — exactement ce
-    // qu'un texte court, shrink-to-fit, rend en pratique.
-    stage!.getBoundingClientRect = () => fakeRect({ top: 100, left: 50, width: 300, height: 500 });
-    textNode!.getBoundingClientRect = () => fakeRect({ top: 260, left: 140, width: 120, height: 30 });
+    // Le moteur peint le texte dans une boîte NARROW (shrink-to-fit) : sa
+    // taille de MISE EN PAGE, fractionnaire, avant toute transformation.
+    textNode!.style.width = '120.4px';
+    textNode!.style.height = '30px';
 
-    // Un second caractère force `useLayoutEffect` (dépendance `draft.text`) à
+    // Un second caractère force `useLayoutEffect` (dépendance `texts`) à
     // remesurer SYNCHRONEMENT, dans le MÊME tour — jamais un `flush` qui
     // masquerait un défaut d'alignement d'un frame.
     typeText(el, 'Bonjour!');
 
     const textarea = el.querySelector<HTMLTextAreaElement>('#story-studio-text')!;
-    // Relatif à la carte : top 260-100=160, left 140-50=90.
-    expect(textarea.style.top).toBe('160px');
-    expect(textarea.style.left).toBe('90px');
-    expect(textarea.style.width).toBe('120px');
+    expect(textarea.style.width).toBe('121.4px');
     expect(textarea.style.height).toBe('30px');
-    // La forme centrée par défaut (translation à 50 %) ne doit PLUS gouverner
-    // une fois la boîte réelle connue — elle décalait le curseur d'une ligne
-    // entière au-dessus du texte (défaut 1).
-    expect(textarea.style.transform).toBe('');
+    // La pose de `SceneObjectFrame` : ancre en %, puis translate / rotate / scale.
+    expect(textarea.style.left).toBe('50%');
+    expect(textarea.style.top).toBe('50%');
+    expect(textarea.style.transform).toBe('translate(-50%, -50%) rotate(0deg) scale(1)');
   });
 });
 
@@ -259,6 +252,24 @@ describe('StoryComposeScreen — le brouillon SURVIT, et un média PRÊT n’est
     expect(retrying.posts[0]!.mediaIds).toEqual(['pm-1']);
     const effects = retrying.posts[0]!.storyEffects as { scenes: Array<{ objects: Array<{ payload: Record<string, unknown> }> }> };
     expect(effects.scenes[0]!.objects.map((o) => o.payload.postMediaId).filter(Boolean)).toEqual(['pm-1']);
+  });
+
+  /** #8849 (jumelle de #8848) — la création en cours se sauvegarde seule, son
+   * FORMAT compris : rouverte (rechargement, onglet tué, autre entrée), elle
+   * revient en post, pas en story. */
+  test('un POST en cours, rouvert par l’entrée story, revient en POST avec son texte', async () => {
+    const drafts = createStudioDraftStore(null);
+    const el = mount(harness({ drafts }).deps, 'POST');
+    typeText(el, 'Un post pas fini');
+    await flush(() => drafts.get(VIEWER_ID)?.kind === 'POST');
+
+    unmountAll();
+    const bench = harness({ drafts });
+    const remounted = mount(bench.deps, 'STORY');
+    expect(remounted.querySelector<HTMLTextAreaElement>('#story-studio-text')?.value).toBe('Un post pas fini');
+    act(() => publishButton(remounted)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.type).toBe('POST');
   });
 
   test('une publication qui RÉUSSIT purge le brouillon', async () => {

@@ -34,6 +34,13 @@ export const GLASS_INVENTORY = {
         "le VOILE du menu du message : un scrim qui floute le fil ENTIER derrière le menu ouvert, sans texte ni contrôle — pas une surface de verre",
     },
   },
+  'src/components/conversation-preview-sheet.tsx': {
+    blur: {
+      count: 2,
+      reason:
+        "le VOILE de l'aperçu tiré d'une bannière (#8821) : un scrim qui floute l'écran ENTIER derrière l'aperçu, sans texte ni contrôle — pas une surface de verre ; la déclaration préfixée `WebkitBackdropFilter` compte pour la seconde",
+    },
+  },
   'src/components/row-actions.tsx': {
     'translucent-tone': {
       count: 1,

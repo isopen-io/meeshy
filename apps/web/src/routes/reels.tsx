@@ -1,24 +1,30 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { Glyph, GlyphSvg } from '@/components/glyph';
+import { GlyphSvg, Glyph } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
 import { ReelPage } from '@/components/reel-page';
+import { isContentRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
+import { BUTTON, GLYPH_SIZE } from '@/components/ui-chrome';
+import { ViewerTopBar } from '@/components/viewer-chrome';
 import { cachedCardSeed } from '@/lib/api/card-caches';
 import { apiDeps } from '@/lib/api/deps';
 import { feedQuery } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { postQueryOptions } from '@/lib/api/publication-detail';
 import { reelsQuery } from '@/lib/api/reels';
-import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { resolveFeedCardModel, type FeedCardModel } from '@/lib/feed/card-model';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
-import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
+import { reelPrimeSourceOf } from '@/lib/reels/scene';
+import { useReelPreload } from '@/lib/reels/use-reel-preload';
+import { activeIndexOf, composeReelThread, entryReelIds, holdReelThread, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
-import { chromeYields, yieldingChrome } from '@/lib/view/chrome-yields';
+import { chromeYields } from '@/lib/view/chrome-yields';
+import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
 import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
@@ -98,6 +104,15 @@ function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+/**
+ * **« RETOUR » DU LECTEUR** — la barre haute COMMUNE des plein écrans
+ * (`ViewerTopBar`, #8879), sans identité : ici l'auteur reste en BAS avec la
+ * légende, dans la page (divergence admise — un pager VERTICAL porte son
+ * identité dans le contenu de la page, qui défile avec lui ; la barre fixe ne
+ * tient que la sortie). Le réel se QUITTE par ‹ (`kind: 'back'`, en TÊTE de
+ * barre, retournée en RTL) — Échap ou le retour matériel —, jamais d'un
+ * glissé vers le bas, qui passe au réel suivant.
+ */
 export function ReelsBackButton({
   language,
   onBack,
@@ -108,31 +123,23 @@ export function ReelsBackButton({
   /** La feuille de commentaires est ouverte (`chromeYields`, #8601). */
   readonly hidden?: boolean;
 }) {
-  const chrome = yieldingChrome({ hidden, reducedMotion: prefersReducedMotion() });
   return (
-    <button
-      type="button"
-      data-reels-back
-      data-chrome-yields={chrome['data-chrome-yields']}
-      inert={chrome.inert}
-      aria-label={translate(language, 'reels.back')}
-      onClick={onBack}
-      className="absolute start-3 z-10 grid size-11 place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)', backgroundColor: 'rgba(0,0,0,0.42)', outlineColor: 'white', ...chrome.style }}
-    >
-      <Glyph name="caretLeft" size={20} />
-    </button>
+    <ViewerTopBar
+      placement="overlay"
+      hidden={hidden}
+      exit={{ kind: 'back', label: translate(language, 'reels.back'), onExit: onBack, probe: { 'data-reels-back': '' } }}
+    />
   );
 }
 
 /** Le démarrage à froid SEUL — jamais sur un rafraîchissement de fond. */
 export function ReelsSkeleton({ language }: { readonly language: InterfaceLanguage }) {
   return (
-    <div role="status" aria-busy="true" data-reels-skeleton className="absolute inset-0 bg-black">
+    <div role="status" aria-busy="true" data-reels-skeleton className="absolute inset-0 bg-media-backdrop">
       <span className="sr-only">{translate(language, 'reels.loading')}</span>
       <div aria-hidden="true" className="absolute inset-x-4 flex flex-col gap-2.5" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 28px)' }}>
-        <div className="rounded-chip" style={{ width: 150, height: 14, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-        <div className="rounded-chip" style={{ width: 230, height: 12, backgroundColor: 'rgba(255,255,255,0.14)' }} />
+        <div className="rounded-chip" style={{ width: 150, height: 14, backgroundColor: 'var(--color-media-hairline)' }} />
+        <div className="rounded-chip" style={{ width: 230, height: 12, backgroundColor: 'var(--color-media-fill)' }} />
       </div>
     </div>
   );
@@ -140,7 +147,7 @@ export function ReelsSkeleton({ language }: { readonly language: InterfaceLangua
 
 function StateFrame({ children, ...rest }: { readonly children: React.ReactNode } & Readonly<Record<`data-${string}`, string>> & { readonly role?: string }) {
   return (
-    <div {...rest} className="absolute inset-0 grid content-center justify-items-center gap-3 bg-black px-8 text-center">
+    <div {...rest} className="absolute inset-0 grid content-center justify-items-center gap-3 bg-media-backdrop px-8 text-center">
       {children}
     </div>
   );
@@ -149,9 +156,9 @@ function StateFrame({ children, ...rest }: { readonly children: React.ReactNode 
 export function ReelsEmpty({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <StateFrame data-reels-empty="">
-      <GlyphSvg glyph={FEED_GLYPHS.monitorPlay} size={44} style={{ color: 'rgba(255,255,255,0.72)' }} />
-      <p className="text-body font-semibold text-white">{translate(language, 'reels.empty')}</p>
-      <p className="text-caption" style={{ color: 'rgba(255,255,255,0.78)' }}>
+      <GlyphSvg glyph={FEED_GLYPHS.monitorPlay} size={44} style={{ color: 'var(--color-on-media-3)' }} />
+      <p className="text-body font-semibold text-on-media">{translate(language, 'reels.empty')}</p>
+      <p className="text-caption" style={{ color: 'var(--color-on-media-3)' }}>
         {translate(language, 'reels.empty.hint')}
       </p>
     </StateFrame>
@@ -163,19 +170,14 @@ export function ReelsEmpty({ language }: { readonly language: InterfaceLanguage 
 export function ReelsFailure({ language, online, onRetry }: { readonly language: InterfaceLanguage; readonly online: boolean; readonly onRetry: () => void }) {
   return (
     <StateFrame role="alert" data-reels-failure={online ? 'error' : 'offline'}>
-      <span style={{ color: online ? 'var(--color-error)' : 'rgba(255,255,255,0.72)' }}>
-        <Glyph name="warningCircle" size={28} />
+      <span style={{ color: online ? 'var(--color-error)' : 'var(--color-on-media-3)' }}>
+        <Glyph name="warningCircle" size={GLYPH_SIZE.xl} />
       </span>
-      <p className="text-body font-semibold text-white">{translate(language, online ? 'reels.error' : 'reels.offline')}</p>
-      <p className="text-caption" style={{ color: 'rgba(255,255,255,0.78)' }}>
+      <p className="text-body font-semibold text-on-media">{translate(language, online ? 'reels.error' : 'reels.offline')}</p>
+      <p className="text-caption" style={{ color: 'var(--color-on-media-3)' }}>
         {translate(language, online ? 'reels.error.hint' : 'reels.offline.cold')}
       </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
-        style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
-      >
+      <button type="button" onClick={onRetry} className={BUTTON.primary}>
         {translate(language, 'reels.retry')}
       </button>
     </StateFrame>
@@ -195,6 +197,8 @@ export default function ReelsScreen() {
   const minute = useMinute();
   const { announcement, onGesture, onShare, onRepost, repostConfirm } = usePostGesture();
   const [soundOn, setSoundOn] = useState(hasUserActivation);
+  const toggleSound = useCallback(() => setSoundOn((on) => !on), []);
+  const soundBlocked = useCallback(() => setSoundOn(false), []);
 
   /* UN VISITEUR ANONYME N'A NI L'UN NI L'AUTRE (#6484) — les deux routes
      exigent un `registeredUser`, même garde que `CommentThread.canWrite`.
@@ -202,6 +206,11 @@ export default function ReelsScreen() {
      `lib/view/use-viewer.ts`) : aucun des deux ne le paie deux fois. */
   const viewer = useViewer();
   const canWrite = viewer.id !== null && !viewer.isAnonymous;
+  /* LE VISITEUR D'UN LIEN PARTAGÉ (#9149) — sans compte, il lit le réel
+     NOMMÉ (`GET /posts/:id` le sert s'il est public), jamais le fil des réels
+     (`scope=reels` exige une session) : le pager ne porte que la graine, et
+     l'invitation se pose par-dessus. */
+  const visitor = !canWrite;
 
   /* Le Flux est OBSERVÉ, jamais rechargé d'ici : ses réels ouvrent le lecteur,
      et ses bascules (aimer, enregistrer) s'y reflètent. */
@@ -222,18 +231,43 @@ export default function ReelsScreen() {
     enabled: seed !== undefined,
     retry: false,
   });
-  const reels = useInfiniteQuery(reelsQuery(apiDeps, seed));
+  const reels = useInfiniteQuery({ ...reelsQuery(apiDeps, seed), enabled: !visitor });
 
   const known = useMemo(
     () => new Map([...feedPosts, ...(seedPost.data !== undefined ? [seedPost.data] : [])].map((post) => [post.id, post] as const)),
     [feedPosts, seedPost.data],
   );
-  const thread = useMemo(() => composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }), [entryIds, known, reels.data]);
+  /* LE RÉEL REGARDÉ NE CHANGE PAS DE PLACE (#9702) : le fil rouvert depuis sa
+     caisse se relit en fond, et la passerelle reclasse sa page à chaque
+     lecture. Ce qui est tenu — l'ordre peint et le réel visible — est relu au
+     moment de composer, jamais une dépendance : une relecture réordonne la
+     suite, pas ce qu'on regarde. */
+  const held = useRef<{ readonly ids: readonly string[]; readonly activeId: string }>({ ids: [], activeId: '' });
+  const thread = useMemo(
+    () =>
+      holdReelThread({
+        heldIds: held.current.ids,
+        activeId: held.current.activeId,
+        composed: composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }),
+      }),
+    [entryIds, known, reels.data],
+  );
+  /* UN MODÈLE PAR PUBLICATION, GARDÉ tant que la publication, la langue et la
+     minute ne changent pas (#9277) : une page de réels de plus ne recompose
+     pas les modèles déjà peints — `ReelPage` (mémoïsée) ne se re-rend donc pas.
+     `minute` rafraîchit l'heure relative (motif `feed.tsx`). */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const modelCache = useMemo(() => new WeakMap<FeedPost, FeedCardModel>(), [readerLanguages, minute]);
   const models = useMemo(
-    () => thread.map((post) => resolveFeedCardModel(post, { preferredLanguages: readerLanguages, now: new Date() })),
-    // `minute` rafraîchit l'heure relative (motif `feed.tsx`).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thread, readerLanguages, minute],
+    () =>
+      thread.map((post) => {
+        const cached = modelCache.get(post);
+        if (cached !== undefined) return cached;
+        const model = resolveFeedCardModel(post, { preferredLanguages: readerLanguages, now: new Date() });
+        modelCache.set(post, model);
+        return model;
+      }),
+    [thread, readerLanguages, modelCache],
   );
   const count = models.length;
 
@@ -241,6 +275,13 @@ export default function ReelsScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const active = Math.min(activeIndex, Math.max(0, count - 1));
   const activeId = models[active]?.id ?? '';
+  useLayoutEffect(() => {
+    held.current = { ids: thread.map((post) => post.id), activeId };
+  }, [thread, activeId]);
+  /* LA FENÊTRE ÉLARGIE (#9702) : au-delà de N±2, les têtes des réels se
+     téléchargent selon la cadence du lecteur, jusqu'à N±10. */
+  const primeSources = useMemo(() => models.map(reelPrimeSourceOf), [models]);
+  useReelPreload({ urls: primeSources, activeIndex: active });
   usePublicationRoom(useSettled(activeId, REEL_ROOM_SETTLE_MS));
   /* LA FEUILLE DE COMMENTAIRES, PARTAGÉE avec le lecteur de stories (D-89,
      #6484) — la loi d'hôte (focus, fermeture au changement de réel) vit dans
@@ -250,6 +291,14 @@ export default function ReelsScreen() {
   /* Commenter fait céder le chrome — retour, identité, légende, rail —
      par la loi unique du lecteur (#8601, `lib/view/chrome-yields.ts`). */
   const chromeYielded = chromeYields({ sheetOpen });
+  /* Et le réel lui-même cède (#8643, même loi que la story) : flouté quand on
+     lit le fil, net et réduit au-dessus de la barre quand on écrit. */
+  const scene = yieldingScene({
+    yieldTo: sceneYieldOf({ sheetOpen, writing: comments.writing !== null }),
+    scale: comments.writing === null ? 1 : writingSceneScale({ ...comments.writing, anchorTop: 0 }),
+    anchorTop: 0,
+    reducedMotion: prefersReducedMotion(),
+  });
   const frame = useRef<number | null>(null);
   const onScroll = useCallback(() => {
     if (frame.current !== null) return;
@@ -313,16 +362,22 @@ export default function ReelsScreen() {
   }, [active, count, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const seedPending = seed !== undefined && !known.has(seed) && seedPost.fetchStatus === 'fetching';
-  const coldOffline = count === 0 && reels.data === undefined && reels.fetchStatus === 'paused';
-  const failed = count === 0 && reels.data === undefined && reels.isError;
-  const loading = seedPending || (count === 0 && reels.data === undefined && !reels.isError && !coldOffline);
+  const coldOffline = !visitor && count === 0 && reels.data === undefined && reels.fetchStatus === 'paused';
+  const seedRefused = isContentRefusal(seedPost.error);
+  const failed = visitor ? count === 0 && seedPost.isError && !seedRefused : count === 0 && reels.data === undefined && reels.isError;
+  const loading = seedPending || (!visitor && count === 0 && reels.data === undefined && !reels.isError && !coldOffline);
+  const invitation = useVisitorInvitation({
+    kind: 'reel',
+    state: reelVisitorState({ count, hasSeed: seed !== undefined, seedRefused }),
+  });
+  const ask = invitation.ask;
 
   const body = loading ? (
     <ReelsSkeleton language={language} />
   ) : failed || coldOffline ? (
-    <ReelsFailure language={language} online={online && !coldOffline} onRetry={() => void reels.refetch()} />
+    <ReelsFailure language={language} online={online && !coldOffline} onRetry={() => void (visitor ? seedPost.refetch() : reels.refetch())} />
   ) : count === 0 ? (
-    <ReelsEmpty language={language} />
+    visitor ? null : <ReelsEmpty language={language} />
   ) : (
     <>
       <div
@@ -338,6 +393,7 @@ export default function ReelsScreen() {
            doigt ni le clavier : sans elle, un balayage sous la feuille
            ferait avancer le pager derrière le fil qu'on lit. */
         inert={sheetOpen}
+        {...scene}
         /* `isolate` (revue-correction #6484) : un contexte d'empilement PROPRE
            au pager. La barre de progression d'un réel est en `z-10` pour
            passer au-dessus de son voile (#6903) ; sans lui, elle passait
@@ -355,12 +411,12 @@ export default function ReelsScreen() {
             soundOn={soundOn}
             language={language}
             preferredLanguages={readerLanguages}
-            onToggleSound={() => setSoundOn((on) => !on)}
-            onGesture={onGesture}
-            onShare={onShare}
-            onSoundBlocked={() => setSoundOn(false)}
+            onToggleSound={toggleSound}
+            onGesture={visitor ? ask : onGesture}
+            onShare={visitor ? ask : onShare}
+            onSoundBlocked={soundBlocked}
             chromeHidden={chromeYielded}
-            {...(canWrite ? { onComment: comments.open, onRepost } : {})}
+            {...(canWrite ? { onComment: comments.open, onRepost } : { onComment: ask })}
           />
         ))}
       </div>
@@ -372,6 +428,7 @@ export default function ReelsScreen() {
     <ReelsFrame language={language} onBack={close} announcement={announcement} chromeHidden={chromeYielded}>
       {body}
       {repostConfirm}
+      {invitation.dialog}
     </ReelsFrame>
   );
 }
@@ -390,7 +447,7 @@ export function ReelsFrame({
   readonly chromeHidden?: boolean;
 }) {
   return (
-    <div data-reels className="h-dvh overflow-hidden bg-black text-white">
+    <div data-reels className="h-dvh overflow-hidden bg-media-backdrop text-on-media">
       {/* LA COLONNE DES RÉELS (#7449) — `REEL_COLUMN_STYLE`
           (`lib/view/reading-column.ts`) : un réel est en 9:16, sa largeur utile
           est donc `hauteur × 9/16` et tout le reste n'est que du noir — du noir

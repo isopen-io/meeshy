@@ -36,9 +36,9 @@ final class StoryViewerScenePhasePauseGuardTests: XCTestCase {
     /// fermeture correspondante) pour ne pas matcher `scenePhase`/`isPaused`
     /// ailleurs dans le fichier.
     private func shouldPauseTimerBody() throws -> String {
-        let contentSource = try source("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
-        guard let declRange = contentSource.range(of: "var shouldPauseTimer: Bool {") else {
-            XCTFail("shouldPauseTimer introuvable dans StoryViewerView+Content.swift")
+        let contentSource = try source("Meeshy/Features/Main/Views/StoryViewerView+PlaybackHold.swift")
+        guard let declRange = contentSource.range(of: "var playbackCauses: StoryPlaybackCauses {") else {
+            XCTFail("playbackCauses introuvable dans StoryViewerView+PlaybackHold.swift")
             return ""
         }
         guard let closeRange = contentSource.range(of: "\n    }", range: declRange.upperBound..<contentSource.endIndex) else {
@@ -57,7 +57,7 @@ final class StoryViewerScenePhasePauseGuardTests: XCTestCase {
     func test_shouldPauseTimer_doesNotContainScenePhaseCheck() throws {
         let block = try shouldPauseTimerBody()
         XCTAssertFalse(
-            block.contains("scenePhase != .active"),
+            block.contains("scenePhase"),
             "shouldPauseTimer ne doit PAS inclure `scenePhase != .active` — un " +
             "peek Notification Center / Control Center doit laisser le média et " +
             "la progress bar continuer sans coupure (comme une vidéo en PIP)."

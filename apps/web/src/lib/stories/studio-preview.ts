@@ -23,6 +23,9 @@ export function studioPreviewDocument(page: StudioPage): CanvasDocument | null {
             ...(page.background.aspectRatio !== undefined ? { aspectRatio: page.background.aspectRatio } : {}),
             ...(page.background.frame !== undefined ? { frame: page.background.frame } : {}),
             ...(page.background.filter !== undefined ? { filter: page.background.filter } : {}),
+            ...(page.background.trim !== undefined ? { trim: page.background.trim } : {}),
+            ...(page.background.muted !== undefined ? { muted: page.background.muted } : {}),
+            ...(page.background.crop !== undefined ? { crop: page.background.crop } : {}),
           },
         }
       : {}),
@@ -40,5 +43,7 @@ export function studioPreviewDocument(page: StudioPage): CanvasDocument | null {
       : {}),
     ...(page.sound !== null ? { sound: { source: page.sound.previewUrl, plane: page.sound.plane } } : {}),
     ...(page.duration !== undefined ? { duration: page.duration } : {}),
+    ...(page.opening !== undefined ? { opening: page.opening } : {}),
+    ...(page.closing !== undefined ? { closing: page.closing } : {}),
   });
 }

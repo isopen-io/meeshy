@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import MeeshyUI
 
 /// La règle qui décide QUELLE ligne de transcription s'allume (#4657).

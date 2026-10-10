@@ -88,6 +88,8 @@ struct FeedPostCard: View {
     /// d'un commentaire de l'aperçu (#8582), effacé à la fermeture.
     @State var commentsReplyTarget: FeedComment?
     @State var showTranslationSheet = false
+    /// La feuille « Vues » de l'auteur — qui a vu, et ce que chacun a fait (#9727).
+    @State var showViewersSheet = false
     @State private var showRepostOptions = false
     @State var selectedProfileUser: ProfileSheetUser?
     @State var audioFullscreen: AudioFullscreenSource?
@@ -103,7 +105,7 @@ struct FeedPostCard: View {
     @State var fullscreenPlace: BubbleFullscreenPlace?
     /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
     /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
-    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator(exitGate: .open)
 
     var accentColor: String { post.authorColor }
 
@@ -298,7 +300,7 @@ struct FeedPostCard: View {
     /// (B3.6, Task E2) partage cette valeur avec le badge, jamais une
     /// seconde condition d'existence qui pourrait diverger.
     var backgroundSoundAnnouncement: BackgroundAudioAnnouncement {
-        BackgroundSoundBadge.announcement(for: post.storyEffects)
+        BackgroundSoundBadge.announcement(for: post)
     }
 
     /// Document canvas v3 PROPRE au post (Task E3) — distinct du canvas d'un
@@ -405,9 +407,9 @@ struct FeedPostCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main content
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                 // Tappable content area (author, text, media, repost)
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     // Author header
                     authorHeader
 
@@ -481,15 +483,15 @@ struct FeedPostCard: View {
                         let display = LanguageDisplay.from(code: code)
 
                         VStack(spacing: 0) {
-                            HStack(spacing: 6) {
+                            HStack(spacing: MeeshySpacing.xsPlus) {
                                 Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                                 Circle().fill(langColor).frame(width: 4, height: 4)
                                 Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                             }
 
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                                 if let display {
-                                    HStack(spacing: 4) {
+                                    HStack(spacing: MeeshySpacing.xs) {
                                         Text(display.flag).font(.caption)
                                         Text(display.name)
                                             .font(.caption2.weight(.semibold))
@@ -501,11 +503,11 @@ struct FeedPostCard: View {
                                     .foregroundColor(theme.textPrimary.opacity(0.8))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 10)
+                            .padding(.vertical, MeeshySpacing.sm)
+                            .padding(.horizontal, MeeshySpacing.smPlus)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(langColor.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         .accessibilityElement(children: .combine)
@@ -686,7 +688,7 @@ struct FeedPostCard: View {
                 // Actions bar (not inside the tap target)
                 actionsBar
             }
-            .padding(16)
+            .padding(MeeshySpacing.lg)
 
             // Comments preview (compact)
             if !post.comments.isEmpty {
@@ -695,14 +697,14 @@ struct FeedPostCard: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .stroke(theme.border(tint: accentColor, intensity: 0.25), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .sheet(isPresented: $showCommentsSheet, onDismiss: { commentsReplyTarget = nil }) {
             CommentsSheetView(post: post, accentColor: accentColor, initialReplyTarget: commentsReplyTarget)
         }
@@ -782,27 +784,21 @@ struct FeedPostCard: View {
         )
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .mediaSaveFlow(mediaSaveCoordinator)
+        #if DEBUG
+        .onAppear { VitrineRendu.shared.signaler(.fil) }
+        #endif
     }
 
-    /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
-    /// du post (repost-aware via `primaryReelDisplayMedia`). No-op si absent —
-    /// gardé par l'appelant (`post.primaryReelDisplayMedia != nil`).
+    /// « Sauvegarder » (#9681) : la règle UNIQUE `PostSaveRoute` — post composé
+    /// rendu comme une story, média simple enregistré tel quel.
     func requestSaveMedia() {
-        guard let media = post.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
-        HapticFeedback.light()
-        let attachmentKind: AttachmentKind
-        switch media.type {
-        case .video: attachmentKind = .video
-        case .audio: attachmentKind = .audio
-        case .document: attachmentKind = .document
-        case .image: attachmentKind = .image
-        }
-        mediaSaveCoordinator.save(MediaSaveRequest(
-            kind: attachmentKind,
-            origin: .composed,
-            remoteURLString: url,
-            suggestedFileName: media.fileName
-        ))
+        PostSaveAction.perform(post, coordinator: mediaSaveCoordinator)
+    }
+
+    /// Le menu offre « Sauvegarder » ssi la règle a quelque chose à enregistrer ;
+    /// sinon le même item reste le favori.
+    var canSaveMedia: Bool {
+        PostSaveAction.route(for: post, coordinator: mediaSaveCoordinator) != .unavailable
     }
 
 
@@ -812,9 +808,9 @@ struct FeedPostCard: View {
             HapticFeedback.light()
             onTapRepost?(Self.repostTapTargetId(for: repost))
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 // Original author
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     MeeshyAvatar(
                         name: repost.author,
                         context: .postComment,
@@ -836,7 +832,7 @@ struct FeedPostCard: View {
 
                 // Original content — préfixé du mood emoji pour un STATUS
                 // reposté (sinon un mood republié n'afficherait qu'un corps vide).
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
                     if let mood = repost.moodEmoji, !mood.isEmpty {
                         Text(mood)
                             .font(.body)
@@ -866,8 +862,8 @@ struct FeedPostCard: View {
                 }
 
                 // Original stats
-                HStack(spacing: 12) {
-                    HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.md) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "heart.fill")
                             .font(.caption2)
                             .accessibilityHidden(true)
@@ -880,13 +876,13 @@ struct FeedPostCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(theme.accentText(repost.authorColor).opacity(0.2), lineWidth: 1)
                     )
             )
@@ -920,7 +916,7 @@ struct FeedPostCard: View {
                 onLike?(post.id)
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ZStack {
                         // Burst ring behind heart
                         if effectiveIsLiked {
@@ -932,7 +928,7 @@ struct FeedPostCard: View {
 
                         let heartColor: Color = effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
                         Image(systemName: effectiveIsLiked || effectiveLikeCount > 0 ? "heart.fill" : "heart")
-                            .font(MeeshyFont.relative(18))
+                            .font(MeeshyFont.relative(MeeshyIconSize.lg))
                             .foregroundColor(heartColor)
                             .scaleEffect(likeAnimating ? 1.3 : (effectiveIsLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -940,7 +936,7 @@ struct FeedPostCard: View {
                         // Accent BORDER on the glyph when the current user liked.
                         if effectiveIsLiked {
                             Image(systemName: "heart")
-                                .font(MeeshyFont.relative(18))
+                                .font(MeeshyFont.relative(MeeshyIconSize.lg))
                                 .foregroundColor(Color(hex: accentColor))
                                 .scaleEffect(likeAnimating ? 1.3 : 1.1)
                                 .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -975,7 +971,7 @@ struct FeedPostCard: View {
                 }
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "bubble.right")
                         .font(MeeshyFont.relative(17))
 
@@ -1001,7 +997,7 @@ struct FeedPostCard: View {
                 showRepostOptions = true
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ZStack {
                         Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
                             .font(MeeshyFont.relative(17))
@@ -1047,7 +1043,7 @@ struct FeedPostCard: View {
                 onBookmark?(post.id)
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ZStack {
                         Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                             .font(MeeshyFont.relative(17))
@@ -1088,7 +1084,7 @@ struct FeedPostCard: View {
                 onShare?(post.id)
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ZStack {
                         Image(systemName: "square.and.arrow.up")
                             .font(MeeshyFont.relative(17))
@@ -1128,7 +1124,7 @@ struct FeedPostCard: View {
             // (`backgroundSoundAnnouncement`, rangée auteur, E1) reste seul
             // — un bouton sans lecteur à piloter serait décoratif.
         }
-        .padding(.top, 4)
+        .padding(.top, MeeshySpacing.xs)
     }
 }
 

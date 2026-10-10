@@ -38,6 +38,21 @@ export const BRAND_SIGNATURE_MASK_PATH = '/brand/signature-mask.png';
 export const BRAND_CREDIT = 'Services CEO';
 
 /**
+ * LES TROIS TRAITS DE LA MARQUE, dans le repère 1024 de
+ * `MeeshyDashesShape.path(in:)` (`AnimatedLogoView.swift:12-34`) : chaque
+ * trait part de `x1` et finit à `x2`, bouts ronds, à l'opacité de l'état au
+ * repos (0,7 · 1 · 0,75). UNE table, que le glyphe SVG (`BrandMark`) et le
+ * peintre de canevas des cadres de capture (#8743) lisent tous deux.
+ */
+export const BRAND_DASH_BOX = 1024;
+
+export const BRAND_DASHES = [
+  { x1: 262, x2: 762, y: 384, opacity: 0.7 },
+  { x1: 262, x2: 662, y: 512, opacity: 1 },
+  { x1: 262, x2: 562, y: 640, opacity: 0.75 },
+] as const;
+
+/**
  * `Meeshy {version}` — la ligne de version de `BrandSignature.swift`, sans
  * numéro de build (le web n'en a pas d'équivalent). La version ENTRE en
  * paramètre plutôt que d'être lue ici : une seule lecture de

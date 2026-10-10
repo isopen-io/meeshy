@@ -360,6 +360,10 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/anonymous/refresh', why: 'sessionToken du corps haché puis vérifié en base (fail-closed)' },
   { method: 'POST', url: '/api/v1/anonymous/leave', why: 'idem' },
   { method: 'GET', url: '/api/v1/anonymous/link/:identifier', why: "aperçu pré-jointure d'un lien de partage, sans contenu de messages" },
+  // #10000 — l'entrée de World Wide que lit la landing de meeshy.me, servie à
+  // des visiteurs SANS compte ni session : identique pour tous, sans identité
+  // lue, ni id ni participant ni présence (schéma de réponse fermé).
+  { method: 'GET', url: '/api/v1/world', why: "entrée publique de World Wide pour la landing : clé du lien de partage et effectif agrégé, aucun id ni identité" },
   // #4167 — porte CANONIQUE de jointure par lien (S1 invité, S2 inscrit) et ses
   // deux jumelles de session invitée : mêmes raisons que les quatre `anonymous/*`
   // ci-dessus, sous les nouveaux noms cibles (`docs/product/api-simplification/conversations.md`).
@@ -371,11 +375,12 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'DELETE', url: '/api/v1/guest-sessions/me', why: 'X-Session-Token haché puis vérifié en base (fail-closed) — remplace POST /anonymous/leave' },
   { method: 'GET', url: '/api/v1/links/:identifier', why: "aperçu public d'un lien d'invitation (design volontaire \"allowViewHistory\")" },
   { method: 'GET', url: '/api/v1/links/:identifier/card', why: "carte d'un lien de partage (#8099) : ce que le lien autorise déjà, sans participant ni message" },
+  { method: 'GET', url: '/api/v1/links/:identifier/og', why: "page d'aperçu des robots (#9712) : l'hôte et le titre que l'aperçu public sert déjà, sans participant ni message ; lien mort ou inconnu ⇒ aperçu générique" },
   { method: 'POST', url: '/api/v1/links/:identifier/messages', why: "x-session-token haché puis vérifié en base dans le handler (fail-closed), conversation dérivée du token pas de l'URL" },
   { method: 'GET', url: '/api/v1/links/:identifier/messages', why: 'accès conditionné à un match membre/participant anonyme vérifié dans le handler' },
   { method: 'POST', url: '/api/v1/tracking-links', why: "création d'un lien de suivi NON rattaché : ouverte par conception. Le rattachement à une conversation (`conversationId` dans le corps) exige désormais d'y participer, vérifié dans le handler — c'était le trou." },
   { method: 'GET', url: '/api/v1/tracking-links/:token', why: 'résolution publique de lien court (design assumé, commentaire explicite dans le code)' },
-  { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: 'idem, aucune donnée sensible exposée' },
+  { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: "idem ; `sharer` (#9149) n'expose que nom affiché, pseudo et avatar du partageur d'un CONTENU (link-sharer.ts, resolve-sharer.test.ts)" },
   { method: 'GET', url: '/api/v1/l/:token', why: 'redirection publique de lien court' },
   { method: 'POST', url: '/api/v1/tracking-links/:token/click', why: "comptage de clic public par design" },
   { method: 'POST', url: '/api/v1/tracking-links/:token/redirect-status', why: "signal sendBeacon, explicitement documenté \"No authentication required\"" },
@@ -396,6 +401,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   //     appelants anonymes (vérifié par lecture de PostFeedService/PostService) ---
   { method: 'GET', url: '/api/v1/posts/user/:userId', why: 'optionalAuth ; PostFeedService.getUserPosts applique buildVisibilityFilter — un anonyme ne voit que le PUBLIC' },
   { method: 'GET', url: '/api/v1/posts/community/:communityId', why: 'idem' },
+  { method: 'GET', url: '/api/v1/posts/:postId', why: "optionalAuth (#9149) — le lien partagé d'un visiteur ; anonymousPostGate ne sert que le PUBLIC vivant d'un auteur actif (original compris), le reste rend le 404 d'une publication inexistante (prouvé par unit/routes/posts/anonymous-post-read.test.ts)" },
   // #4149 — `GET /api/v1/social/posts` remplace neuf routes de fil social.
   // Elle est ici pour la MEME raison que les deux lignes ci-dessus : optionalAuth,
   // et PostFeedService applique `buildVisibilityFilter`, donc un anonyme ne voit
@@ -438,6 +444,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   //     réel (pas l'ObjectId de l'attachment), anti-path-traversal vérifié ---
   { method: 'GET', url: '/api/v1/attachments/file/*', why: 'noms de fichiers UUIDv4 non énumérables + garde anti path-traversal, CDN de fichiers publics par design' },
   { method: 'GET', url: '/api/attachments/file/*', why: 'même route, montage legacy sans /v1' },
+  { method: 'GET', url: '/api/v1/attachments/signed/:token/*', why: "adresse SIGNÉE par lecteur (#9600) : l'autorisation EST le jeton — HMAC-SHA-256 sur la clé de stockage, la pièce, le participant lecteur et l'échéance, comparé en temps constant ; puis la pièce vivante et l'état du lecteur (membre actif, message vivant, échéance, vue unique non ouverte). Tout refus rend 404, jamais 401/403, pour ne rien révéler de l'existence du fichier." },
 ];
 
 // ---------------------------------------------------------------------------

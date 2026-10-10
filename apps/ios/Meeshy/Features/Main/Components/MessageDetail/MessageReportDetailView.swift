@@ -21,7 +21,7 @@ struct MessageReportDetailView: View {
     @State private var showReportConfirm = false
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             Text(String(localized: "message-detail.report.title", defaultValue: "Pourquoi signalez-vous ce message ?", bundle: .main))
                 .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
@@ -32,7 +32,7 @@ struct MessageReportDetailView: View {
             }
 
             if selectedReportType != nil {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                     Text(String(localized: "message-detail.report.details", defaultValue: "Détails (facultatif)", bundle: .main))
                         .font(.footnote.weight(.medium))
                         .foregroundColor(theme.textSecondary)
@@ -40,12 +40,12 @@ struct MessageReportDetailView: View {
                     TextField(String(localized: "message-detail.report.placeholder", defaultValue: "Décrivez le problème…", bundle: .main), text: $reportReason, axis: .vertical)
                         .font(.subheadline)
                         .lineLimit(3...6)
-                        .padding(12)
+                        .padding(MeeshySpacing.md)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                 .fill(theme.inputBackground)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                         .stroke(theme.textMuted.opacity(0.2), lineWidth: 1)
                                 )
                         )
@@ -69,7 +69,7 @@ struct MessageReportDetailView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(MeeshyColors.error)
                 )
                 // While submitting, the label is a bare `ProgressView`: the button
@@ -107,7 +107,7 @@ struct MessageReportDetailView: View {
             HapticFeedback.light()
             selectedReportType = type
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: type.icon)
                     .font(.callout)
                     .foregroundColor(isSelected ? accent : theme.textSecondary)
@@ -116,7 +116,7 @@ struct MessageReportDetailView: View {
                     // VoiceOver from announcing the raw SF Symbol name.
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(type.label)
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
@@ -138,13 +138,13 @@ struct MessageReportDetailView: View {
                         .accessibilityHidden(true)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(isSelected ? accent.opacity(0.08) : theme.inputBackground)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .stroke(isSelected ? accent.opacity(0.3) : theme.textMuted.opacity(0.1), lineWidth: 1)
                     )
             )

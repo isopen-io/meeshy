@@ -14,7 +14,7 @@ import { VIEWER_ID, fakeRect, flush, harness, mount, registerStudioBench, typeTe
 registerStudioBench();
 
 const field = (el: ParentNode) => el.querySelector<HTMLTextAreaElement>('#story-studio-text');
-const plaque = (el: ParentNode) => el.querySelector('[data-story-edit-plaque]');
+const plaque = (el: ParentNode) => el.querySelector('[data-story-option="edit:exit"]');
 
 async function editing(text: string) {
   const drafts = createStudioDraftStore(null);
@@ -68,6 +68,10 @@ describe('pendant l’édition d’un texte, le doigt le manipule sur la scène 
     expect(pose()?.scale).toBeCloseTo(2, 6);
     expect(pose()?.rotation).toBeCloseTo(45, 6);
     expect(plaque(el)).not.toBeNull();
+    // La saisie suit : son curseur a la taille et l'angle du texte pincé (#8681).
+    const [, rotation, scale] = /rotate\(([^)]+)deg\) scale\(([^)]+)\)/.exec(field(el)?.style.transform ?? '') ?? [];
+    expect(Number(rotation)).toBeCloseTo(45, 6);
+    expect(Number(scale)).toBeCloseTo(2, 6);
   });
 
   test('toucher le texte sans glisser ne déplace rien : le curseur se pose, l’édition reste', async () => {

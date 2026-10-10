@@ -101,7 +101,7 @@ final class DeclarationBodyScannerTests: XCTestCase {
     }
 
     func test_body_capteLeCodeQueLesFenetresFixesRataient() throws {
-        let callManager = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let callManager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
 
         let answer = DeclarationBodyScanner.body(containing: "perform action: CXAnswerCallAction", in: callManager)
         XCTAssertNotNil(answer)

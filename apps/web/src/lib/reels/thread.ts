@@ -1,6 +1,8 @@
 import type { FeedPost } from '@/lib/api/feed-pages';
 import type { MediaPlaybackStatus } from '@/lib/view/use-media-playback';
 
+import { PRELOAD_MIN_RADIUS, preloadTierOf } from './preload-window';
+
 /**
  * LA LOI DU FIL DES RÉELS (#6457) — PURE. Miroir de `ReelsViewModel.swift`
  * (`seed(posts:startId:)`, `loadMoreIfNeeded`) et du pager vertical de
@@ -17,12 +19,19 @@ import type { MediaPlaybackStatus } from '@/lib/view/use-media-playback';
  * depuis sa donnée la plus récente (`known`) : un geste qui bascule un cache se
  * voit aussitôt, sans réordonner.
  */
-export const REEL_WINDOW_RADIUS = 1;
+export const REEL_WINDOW_RADIUS = PRELOAD_MIN_RADIUS;
 
 /** À trois réels du bout — `index >= reels.count - 3` (`ReelsViewModel.loadMoreIfNeeded`). */
 const LOAD_MORE_DISTANCE = 3;
 
-export type ReelPageMode = 'active' | 'near' | 'far';
+/**
+ * Le PALIER d'une page, lu dans la fenêtre de préchargement (#9702) :
+ * `active` joue, `near` (N±1) monte son élément en `preload="auto"` — sa
+ * première image est décodée avant le balayage —, `warm` (N±2) le monte en
+ * attente de métadonnées, `far` ne porte que son affiche (ses octets de tête
+ * sont amorcés à part, `media-primer.ts`, tant qu'il reste dans la fenêtre).
+ */
+export type ReelPageMode = 'active' | 'near' | 'warm' | 'far';
 
 export type ReelPlaybackIntent = 'play' | 'pause';
 
@@ -77,16 +86,51 @@ export function composeReelThread(params: {
   });
 }
 
+/**
+ * **UNE RELECTURE NE DÉPLACE PAS LE RÉEL REGARDÉ** (#9702) — PURE, jumelle de
+ * `ReelThreadOrder.refreshed` (`packages/MeeshySDK/.../Media/ReelThreadOrder.swift`).
+ *
+ * `composeReelThread` gèle l'ENTRÉE ; la suite servie, elle, suit l'ordre de
+ * la passerelle — qui RECLASSE sa page à chaque lecture (les réels déjà vus
+ * coulent, `PostFeedService.getReels`). Un fil rouvert depuis sa caisse se
+ * relit en fond : sans cette tenue, le réel regardé changeait de place et
+ * l'écran, qui lit le réel visible sur la POSITION (`activeIndexOf`), en
+ * peignait un autre sous le doigt.
+ *
+ * Le réel regardé et ce qui le PRÉCÈDE gardent l'ordre tenu ; ce qui le SUIT
+ * prend l'ordre composé. La donnée vient toujours de la composition : un réel
+ * tenu qu'elle ne porte plus (supprimé) quitte le fil.
+ */
+export function holdReelThread(params: {
+  readonly heldIds: readonly string[];
+  readonly activeId: string;
+  readonly composed: readonly FeedPost[];
+}): readonly FeedPost[] {
+  const { heldIds, activeId, composed } = params;
+  const activeAt = heldIds.indexOf(activeId);
+  if (activeAt < 0) return composed;
+  const byId = new Map(composed.map((post) => [post.id, post] as const));
+  const head = heldIds.slice(0, activeAt + 1).flatMap((id) => {
+    const post = byId.get(id);
+    return post !== undefined ? [post] : [];
+  });
+  const kept = new Set(head.map((post) => post.id));
+  const thread = [...head, ...composed.filter((post) => !kept.has(post.id))];
+  return thread.every((post, index) => post === composed[index]) ? composed : thread;
+}
+
 export function activeIndexOf(params: { readonly scrollTop: number; readonly pageHeight: number; readonly count: number }): number {
   const { scrollTop, pageHeight, count } = params;
   if (pageHeight <= 0 || count <= 0) return 0;
   return Math.min(count - 1, Math.max(0, Math.round(scrollTop / pageHeight)));
 }
 
+const MODE_OF_TIER = { play: 'active', decode: 'near', mount: 'warm', prime: 'far', idle: 'far' } as const;
+
+/** Le montage ne dépend que du PLANCHER de la fenêtre (N±2, toujours) : ce
+ * que la fenêtre élargie ajoute au-delà, ce sont des octets, pas des éléments. */
 export function pageModeOf(index: number, activeIndex: number): ReelPageMode {
-  const distance = Math.abs(index - activeIndex);
-  if (distance === 0) return 'active';
-  return distance <= REEL_WINDOW_RADIUS ? 'near' : 'far';
+  return MODE_OF_TIER[preloadTierOf(index - activeIndex, { ahead: REEL_WINDOW_RADIUS, behind: REEL_WINDOW_RADIUS })];
 }
 
 /**
@@ -130,4 +174,24 @@ export function reelDisplayOf<M extends { readonly kind: string }>(media: readon
 
 export function shouldLoadMoreReels(params: { readonly activeIndex: number; readonly count: number }): boolean {
   return params.count > 0 && params.activeIndex >= params.count - LOAD_MORE_DISTANCE;
+}
+
+/**
+ * **CE QUE L'ÉCRAN DES RÉELS OFFRE À UN VISITEUR SANS COMPTE** (#9149, #9172)
+ * — l'état que `useVisitorInvitation` attend. La passerelle ne sert à un
+ * visiteur que le réel NOMMÉ (`GET /posts/:id`, s'il est public) ; le fil
+ * (`scope=reels`) exige un compte et ne s'ouvrira pas sans une garde dédiée.
+ * Sans graine, il n'y a donc rien à montrer, et rien n'est refusé : c'est
+ * l'invitation à rejoindre (`invite`), jamais « ce contenu n'est pas
+ * accessible ». Miroir d'iOS, qui garde le lien en attente derrière l'écran de
+ * connexion (`VisitorContentRequest` ne connaît qu'un réel ou un post nommés).
+ */
+export function reelVisitorState(params: {
+  readonly count: number;
+  readonly hasSeed: boolean;
+  readonly seedRefused: boolean;
+}): 'pending' | 'served' | 'refused' | 'invite' {
+  if (params.count > 0) return 'served';
+  if (!params.hasSeed) return 'invite';
+  return params.seedRefused ? 'refused' : 'pending';
 }

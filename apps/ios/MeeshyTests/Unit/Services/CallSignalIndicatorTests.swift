@@ -203,7 +203,7 @@ final class CallHangupFastPathTests: XCTestCase {
     }
 
     func test_endCall_sendsInBandBye_beforeLocalTeardown() throws {
-        let manager = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         guard let endCallRange = manager.range(of: "func endCall()") else {
             XCTFail("CallManager must define endCall()")
             return
@@ -574,7 +574,7 @@ final class CallHangupFastPathTests: XCTestCase {
             "now gated on the panel being visible, so nothing can arrive while it is hidden."
         )
 
-        let manager = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let gate = "guard self.transcriptionService.isShowingOverlay else { return }"
 
         guard let socketRange = manager.range(of: "socket.callTranslatedSegmentReceived") else {
@@ -591,13 +591,15 @@ final class CallHangupFastPathTests: XCTestCase {
             "words with nothing shown, the exact consent-transparency gap this guard exists for."
         )
 
-        guard let channelRange = manager.range(of: "case .transcriptEntry(let entry):") else {
+        // #9085 — le canal de données vit dans `CallManager+DataChannel.swift`.
+        let dataChannel = try source("Meeshy/Features/Main/Services/CallManager+DataChannel.swift")
+        guard let channelRange = dataChannel.range(of: "case .transcriptEntry(let entry):") else {
             XCTFail("CallManager must route the data channel's .transcriptEntry case")
             return
         }
-        let channelEnd = manager.range(of: "case .ignored:", range: channelRange.upperBound ..< manager.endIndex)?
-            .lowerBound ?? manager.endIndex
-        let channelRoute = String(manager[channelRange.lowerBound ..< channelEnd])
+        let channelEnd = dataChannel.range(of: "case .ignored:", range: channelRange.upperBound ..< dataChannel.endIndex)?
+            .lowerBound ?? dataChannel.endIndex
+        let channelRoute = String(dataChannel[channelRange.lowerBound ..< channelEnd])
         XCTAssertTrue(
             channelRoute.contains(gate),
             "The P2P (data channel) reception path must carry the SAME panel gate as the socket " +

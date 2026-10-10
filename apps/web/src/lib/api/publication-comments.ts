@@ -9,15 +9,20 @@ import type {
   PostComment as SharedPostComment,
 } from '@meeshy/shared/types/post';
 import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
+import { unsentComments } from '@/lib/comments/unsent-comments';
 import { shiftedCount, withCommentCount } from '@/lib/feed/interactions';
+import type { PendingAttachment } from '@/lib/send/attachments';
 
 import { updateCardPost, writeCardCache } from './card-caches';
 import { appendReply, commentRepliesQueryKey, dropReply, settleReply } from './comment-replies';
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import type { FeedAuthor, FeedMedia } from './feed-pages';
-import type { ApiResult, HttpTransport } from './http';
+import type { ApiFailure, ApiResult, Credential, HttpTransport } from './http';
+import type { OwnerCredential } from './owner-session';
+import type { PostMediaUploadResult } from './post-media-upload';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
 import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
@@ -44,9 +49,10 @@ import { mergedTranslations, nonEmpty, translationDeliveryOf } from './translati
  *  - `POST posts.byPostIdComments`
  *    (`:179`, `requiredAuth` + `registeredUser` obligatoire ⇒ 401 anonyme).
  *    Corps `CreateCommentSchema` (`routes/posts/types.ts:428`) :
- *    `content` (≤ 2000, peut être vide SI un média est joint — ce port
- *    n'envoie pas de média, donc il exige du texte), `parentId?`,
- *    `effectFlags?`, `originalLanguage?`, `attachmentIds?`.
+ *    `content` (≤ 2000, peut être vide SI un média ou un sticker est joint
+ *    — ce port n'envoie de média que l'image d'un sticker, donc il exige du
+ *    texte OU un sticker), `parentId?`, `effectFlags?`, `originalLanguage?`,
+ *    `attachmentIds?`, `sticker?` (#9080).
  *    Refus propres à cette route : 403 `COMMENTS_DISABLED` (réglage auteur,
  *    `:214-216`), 404 `POST_NOT_FOUND` (hors audience d'INTERACTION — amis
  *    stricts, plus étroite que la lecture : « un contact DM non-ami peut lire
@@ -83,6 +89,15 @@ export type PostComment = {
   readonly effectFlags?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
   readonly media?: readonly FeedMedia[] | null;
+  /** La carte `{ url, token }` des adresses suivies (#9074) — `metadata.trackingLinks`
+   * en REST, hissée en `trackingLinks` par le socket ; décodée par `trackingLinksOf`,
+   * jamais lue telle quelle. Elle couvre le contenu ET la légende du média. */
+  readonly metadata?: unknown;
+  readonly trackingLinks?: unknown;
+  /** Le sticker (#9080) — la forme `MessageSticker` d'un message, HISSÉE de
+   * `metadata.sticker` par la passerelle (REST et socket) ; son image est le
+   * premier `media`. Décodé par `commentStickerOf`, jamais lu tel quel. */
+  readonly sticker?: unknown;
   /**
    * **LOCAL SEULEMENT** — vrai tant que la passerelle n'a pas confirmé. Aucun
    * champ de ce nom ne voyage sur le fil : c'est la marque qui permet au rendu
@@ -326,15 +341,73 @@ export const COMMENT_MAX_LENGTH = 2000;
 const mutationIdOf = (tempId: string): string => tempId.replace(/^cid_/, 'cmid_');
 
 /**
+ * **LE STICKER QU'UN COMMENTAIRE EMPORTE** (#9080) — la MÊME forme que celui
+ * d'un message (`composer.tsx`, `sendSticker`) : le descripteur
+ * `MessageSticker`, et l'image rendue DÉJÀ téléversée en `PostMedia`
+ * (`uploadPostMedia`, contexte `comment`). Sans `picture`, seul le
+ * descripteur part (un sticker emoji ou à gabarit) — la passerelle l'admet
+ * comme pour un message.
+ */
+export type CommentStickerSend = {
+  readonly sticker: MessageSticker;
+  readonly picture?: PostMediaUploadResult;
+};
+
+/** LES MÉDIAS JOINTS (#9167) — l'image du sticker d'abord (`commentStickerOf`
+ * la lit au premier rang), puis les photos et vidéos de la photothèque. */
+const joinedMedia = (send: CommentStickerSend | undefined, media: readonly PostMediaUploadResult[] | undefined): readonly PostMediaUploadResult[] => [
+  ...(send?.picture === undefined ? [] : [send.picture]),
+  ...(media ?? []),
+];
+
+/** Ce que le sticker et les médias ajoutent au CORPS envoyé — `sticker` et `attachmentIds`. */
+const stickerBodyOf = (send: CommentStickerSend | undefined, media?: readonly PostMediaUploadResult[]): Readonly<Record<string, unknown>> => {
+  const joined = joinedMedia(send, media);
+  return {
+    ...(send === undefined ? {} : { sticker: send.sticker }),
+    ...(joined.length === 0 ? {} : { attachmentIds: joined.map((piece) => piece.postMediaId) }),
+  };
+};
+
+/** Ce que le sticker et les médias ajoutent à la rangée PROVISOIRE — la forme que la passerelle servira. */
+const stickerRowOf = (send: CommentStickerSend | undefined, media?: readonly PostMediaUploadResult[]): Pick<PostComment, 'sticker' | 'media'> => {
+  const joined = joinedMedia(send, media);
+  return {
+    ...(send === undefined ? {} : { sticker: send.sticker }),
+    ...(joined.length === 0 ? {} : { media: joined.map((piece) => ({ id: piece.postMediaId, fileUrl: piece.fileUrl, mimeType: piece.mimeType })) }),
+  };
+};
+
+/**
+ * `owner` — LA SESSION DE L'AUTEUR, OBLIGATOIRE (#9743, `owner-session.ts`) :
+ * lue dans le tour de la requête, qui porte SON jeton ; relue au retour, avant
+ * toute écriture — le cache est celui du lecteur COURANT, et rien ne se range
+ * sous la portée d'un auteur parti. Absente ou muette : rien ne part.
+ */
+export type CommentSendDeps = CommentDeps & { readonly queryClient: QueryClient; readonly owner: OwnerCredential };
+
+const ownerOf = (deps: CommentSendDeps, authorId: string): Credential | null =>
+  typeof deps.owner === 'function' ? deps.owner(`u_${authorId}`) : null;
+
+/** 409 `MUTATION_IN_FLIGHT` — la première tentative est EN COURS sur la passerelle : attendre, jamais défaire. */
+export const commentStillInFlight = (failure: ApiFailure): boolean => failure.status === 409 && failure.code === 'MUTATION_IN_FLIGHT';
+
+const passing = (failure: ApiFailure): boolean => outcomeOf(failure) !== 'permanent' || commentStillInFlight(failure);
+
+/** L'auteur n'est plus le lecteur connecté au retour : on rend l'issue sans rien écrire. */
+const afterOwnerLeft = (result: ApiResult<PostComment> | null): CommentResult =>
+  result !== null && result.ok ? { ok: true } : { ok: false, message: COMMENT_FAILED_MESSAGE };
+
+/**
  * L'ENVOI — optimiste, puis l'issue, exactement la forme de
  * `performPostGesture` :
  *
  *  - texte vide ou trop long : AUCUN appel, aucun optimiste ;
  *  - succès : le servi remplace le provisoire, le compteur reste monté ;
  *  - panne PASSAGÈRE (réseau, 5xx, 408/425/429 — `outcomeOf`) : l'optimiste
- *    RESTE, marqué `pending`, et l'appelant l'ANNONCE. Aucune promesse de
- *    rejeu : la file de reprise est #5868, et promettre ce qu'on ne fait pas
- *    est le défaut que `REACTION_PENDING_MESSAGE` a déjà payé ;
+ *    RESTE, marqué `pending`, l'appelant l'ANNONCE, et le commentaire ATTEND
+ *    dans `unsentComments` avec son corps (ses `attachmentIds` compris) — son
+ *    rejeu est `comment-replay.ts` (#9743) ;
  *  - refus PERMANENT (403 commentaires fermés, 404 hors audience, 401) : le
  *    texte ET le compteur sont défaits.
  */
@@ -346,13 +419,24 @@ export async function performComment(params: {
   /** LA RACINE à laquelle cette réponse se rattache (#8583) — absent ⇒ un
    * commentaire de premier niveau. */
   readonly parentId?: string | undefined;
-  readonly deps: CommentDeps & { readonly queryClient: QueryClient };
+  /** Un sticker (#9080) — il suffit à rendre le commentaire non vide. */
+  readonly sticker?: CommentStickerSend | undefined;
+  /** Les photos et vidéos DÉJÀ téléversées (#9167) — elles suffisent aussi. */
+  readonly media?: readonly PostMediaUploadResult[] | undefined;
+  /** Les pièces d'ORIGINE de ces médias (#9743) — rendues au brouillon si un rejeu est refusé pour de bon. */
+  readonly pieces?: readonly PendingAttachment[] | undefined;
+  readonly deps: CommentSendDeps;
 }): Promise<CommentResult> {
   const { postId, author, deps } = params;
   const content = params.content.trim();
-  if (content === '' || content.length > COMMENT_MAX_LENGTH) return { ok: false, message: COMMENT_EMPTY_MESSAGE };
+  const bare = params.sticker === undefined && (params.media?.length ?? 0) === 0;
+  if ((content === '' && bare) || content.length > COMMENT_MAX_LENGTH) {
+    return { ok: false, message: COMMENT_EMPTY_MESSAGE };
+  }
   const parentId = typeof params.parentId === 'string' && params.parentId !== '' ? params.parentId : undefined;
   if (parentId !== undefined) return performReply({ ...params, content, parentId });
+  const credential = ownerOf(deps, author.id);
+  if (credential === null) return { ok: false, message: COMMENT_FAILED_MESSAGE };
 
   const tempId = newClientMessageId();
   const optimistic: PostComment = {
@@ -362,6 +446,7 @@ export async function performComment(params: {
     author,
     pending: true,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerRowOf(params.sticker, params.media),
   };
 
   const key = commentsQueryKey(postId);
@@ -371,11 +456,15 @@ export async function performComment(params: {
   const body = {
     content,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerBodyOf(params.sticker, params.media),
   };
 
-  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
+  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId), credential }).catch(() => null);
+  if (ownerOf(deps, author.id) === null) return afterOwnerLeft(result);
+  const wait = () => parkUnsent({ tempId, authorId: author.id, postId, body, row: optimistic, pieces: params.pieces });
 
   if (result === null) {
+    wait();
     return { ok: true, notice: readerIsOffline() ? COMMENT_PENDING_MESSAGE : COMMENT_UNCONFIRMED_MESSAGE };
   }
 
@@ -391,7 +480,10 @@ export async function performComment(params: {
   }
 
   /* Un STATUT servi est un fait de PASSERELLE, jamais de réseau. */
-  if (outcomeOf(result) !== 'permanent') return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
+  if (passing(result)) {
+    wait();
+    return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
+  }
 
   deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => dropComment(data, tempId));
   shiftCommentCount(deps.queryClient, postId, -1);
@@ -438,9 +530,14 @@ async function performReply(params: {
   readonly parentId: string;
   readonly author: FeedAuthor;
   readonly originalLanguage?: string | undefined;
-  readonly deps: CommentDeps & { readonly queryClient: QueryClient };
+  readonly sticker?: CommentStickerSend | undefined;
+  readonly media?: readonly PostMediaUploadResult[] | undefined;
+  readonly pieces?: readonly PendingAttachment[] | undefined;
+  readonly deps: CommentSendDeps;
 }): Promise<CommentResult> {
   const { postId, content, parentId, author, deps } = params;
+  const credential = ownerOf(deps, author.id);
+  if (credential === null) return { ok: false, message: COMMENT_FAILED_MESSAGE };
   const tempId = newClientMessageId();
   const optimistic: PostComment = {
     id: tempId,
@@ -450,6 +547,7 @@ async function performReply(params: {
     parentId,
     pending: true,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerRowOf(params.sticker, params.media),
   };
 
   const key = commentRepliesQueryKey(postId, parentId);
@@ -462,10 +560,14 @@ async function performReply(params: {
     content,
     parentId,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerBodyOf(params.sticker, params.media),
   };
-  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
+  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId), credential }).catch(() => null);
+  if (ownerOf(deps, author.id) === null) return afterOwnerLeft(result);
+  const wait = () => parkUnsent({ tempId, authorId: author.id, postId, parentId, body, row: optimistic, pieces: params.pieces });
 
   if (result === null) {
+    wait();
     return { ok: true, notice: readerIsOffline() ? COMMENT_PENDING_MESSAGE : COMMENT_UNCONFIRMED_MESSAGE };
   }
 
@@ -478,7 +580,10 @@ async function performReply(params: {
     return { ok: true };
   }
 
-  if (outcomeOf(result) !== 'permanent') return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
+  if (passing(result)) {
+    wait();
+    return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
+  }
 
   deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => dropReply(data, tempId));
   shiftReplyCount(deps.queryClient, postId, parentId, -1);
@@ -486,13 +591,29 @@ async function performReply(params: {
   return { ok: false, message: COMMENT_FAILED_MESSAGE };
 }
 
-function sendComment(
+/** LA CRÉATION N'A PAS ABOUTI (#9743) — le commentaire attend son rejeu, sous l'identifiant de CETTE tentative. */
+function parkUnsent(waiting: {
+  readonly tempId: string;
+  readonly authorId: string;
+  readonly postId: string;
+  readonly parentId?: string;
+  readonly body: Readonly<Record<string, unknown>>;
+  readonly row: PostComment;
+  readonly pieces: readonly PendingAttachment[] | undefined;
+}): void {
+  const { authorId, pieces, ...entry } = waiting;
+  unsentComments.getState().park({ ...entry, scope: `u_${authorId}`, clientMutationId: mutationIdOf(entry.tempId), pieces: pieces ?? [], state: 'unsent' });
+}
+
+export function sendComment(
   deps: CommentDeps,
   params: {
     readonly postId: string;
     readonly body: Readonly<Record<string, unknown>>;
     /** DÉRIVÉ du `tempId` de la rangée provisoire — voir `mutationIdOf`. */
     readonly clientMutationId: string;
+    /** Le jeton IMPOSÉ à cette requête — celui de l'auteur, lu avec son identité (#9743). */
+    readonly credential?: Credential;
   },
 ): Promise<ApiResult<PostComment>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
@@ -503,6 +624,7 @@ function sendComment(
     path: postsEndpoints.byPostIdComments(params.postId),
     body: params.body,
     headers: { 'X-Client-Mutation-Id': params.clientMutationId },
+    ...(params.credential === undefined ? {} : { credential: params.credential }),
   });
 }
 

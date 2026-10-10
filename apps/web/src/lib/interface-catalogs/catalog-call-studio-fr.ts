@@ -1,6 +1,8 @@
 /**
  * LE STUDIO D'UN APPEL VIDÉO, FRANÇAIS (#8551, #8552, #8625) — la SOURCE des clés :
- * les effets de visage, les montages, la photo et la vidéo. Les six autres langues
+ * les effets de visage, les montages, les ambiances des cadres (#8742 — les noms
+ * de motif, eux, sont des noms propres et ne se traduisent pas), la photo et la
+ * vidéo. Les six autres langues
  * portent exactement ces clés (`satisfies CallStudioCatalog`,
  * `i18n-call-studio-catalog.test.ts`).
  */
@@ -58,6 +60,25 @@ const fr = {
   'callStudio.record.failed': 'La vidéo n’a pas pu être enregistrée',
   'callStudio.record.unsupported': 'Ce navigateur ne sait pas filmer l’appel',
   'callStudio.record.clock': 'Vidéo en cours, {time}',
+  'callStudio.companions.label': 'Participants à l’appel',
+  'callStudio.companions.more': '{count} autres participants',
+  'callStudio.companions.move': 'Changer de côté',
+  'callStudio.frames.moods': 'Ambiances',
+  'callStudio.frames.mood.classics': 'Classiques',
+  'callStudio.frames.mood.signature': 'Signature',
+  'callStudio.frames.mood.distingue': 'Distingué',
+  'callStudio.frames.mood.elegant': 'Élégant',
+  'callStudio.frames.mood.jovial': 'Jovial',
+  'callStudio.frames.mood.deconnecte': 'Déconnecté',
+  'callStudio.frames.mood.corporate': 'Corporate',
+  'callStudio.frames.mood.fantastique': 'Fantastique',
+  'callStudio.frames.mood.futuriste': 'Futuriste',
+  'callStudio.frames.mood.glauque': 'Glauque',
+  'callStudio.frames.mood.hors-norme': 'Hors norme',
+  'callStudio.frames.mood.morbide': 'Morbide',
+  'callStudio.frames.mood.feerique': 'Féerique',
+  'callStudio.mode.pickFrame': 'Choisir un cadre',
+  'callStudio.capture.framePreview': 'Aperçu du cadre {name}',
 } as const;
 
 export default fr;

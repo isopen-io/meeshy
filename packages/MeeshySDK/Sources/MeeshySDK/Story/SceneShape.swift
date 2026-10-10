@@ -458,8 +458,13 @@ public enum SceneShape {
     /// resserre.
     nonisolated static let textPaintHalfWidth: CGFloat = 0.5
 
+    ///
+    /// Le plafond vaut à l'échelle 1 : depuis le #9139, pincer un texte
+    /// agrandit son CADRE entier (la coupe des lignes reste celle de
+    /// l'édition), donc la demi-largeur peinte grandit avec l'échelle.
     nonisolated static func paintHalfWidth(of object: ObjectV3) -> CGFloat {
-        object.kind == .text ? textPaintHalfWidth : 0
+        guard object.kind == .text else { return 0 }
+        return textPaintHalfWidth * CGFloat(max(object.transform.scale, 0))
     }
 
     public nonisolated static func anchorBox(of object: ObjectV3) -> CGRect {

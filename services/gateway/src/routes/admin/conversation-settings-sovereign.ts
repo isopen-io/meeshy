@@ -59,6 +59,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { updateConversationRequestSchema } from '@meeshy/shared/types/api-schemas';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { requireAdminRank, requireHierarchy, requirePermission, withAudit } from '../../middleware/authorize';
+import { requireReasonUnlessSovereign } from '../../middleware/sovereign-reason';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
@@ -76,6 +77,7 @@ import { participantListUserSelect } from '../conversations/utils/participant-pr
 import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conversation-metadata';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger.js';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import {
   conversationConfigurationSuccess,
   conversationMemberRoleSuccess,
@@ -84,7 +86,13 @@ import {
 /** Même seuil que la lecture souveraine des messages. */
 const MOTIF_MINIMAL = 10;
 
-const motif = { type: 'string', minLength: MOTIF_MINIMAL, maxLength: 500 } as const;
+/**
+ * La FORME seule : la présence et la longueur minimale se décident APRÈS le
+ * schéma, par `requireReasonUnlessSovereign` — obligatoire sauf pour le rang
+ * souverain (spec 2026-10-04 § 4), que le schéma ne connaît pas.
+ */
+const motif = { type: 'string', maxLength: 500 } as const;
+const gardeDuMotif = requireReasonUnlessSovereign({ source: 'body', min: MOTIF_MINIMAL });
 
 /**
  * La liste des champs qu'un administrateur peut écrire. `propertyNames` et non
@@ -102,7 +110,6 @@ const CHAMPS_ADMIS = [
 
 const corpsDeConfiguration = {
   type: 'object',
-  required: ['reason'],
   propertyNames: { enum: CHAMPS_ADMIS },
   properties: {
     ...updateConversationRequestSchema.properties,
@@ -117,7 +124,7 @@ const REGLAGES_DE_HIERARCHIE = ['defaultWriteRole', 'isAnnouncementChannel', 'sl
 type CorpsDeConfiguration = ConversationMetadataBody & {
   readonly isActive?: boolean;
   readonly closed?: boolean;
-  readonly reason: string;
+  readonly reason?: string;
 };
 
 const SELECT_ECRITURE = {
@@ -173,10 +180,11 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
 
   fastify.patch<{ Params: { conversationId: string }; Body: CorpsDeConfiguration }>('/admin/conversations/:conversationId', {
     onRequest: gardes,
+    preHandler: [gardeDuMotif],
     schema: {
       description:
         "Configure une conversation SANS en être membre : métadonnées, réglages, archive, fermeture. Rang d'administration, " +
-        'motif obligatoire, trace AdminAuditLog. #7845.',
+        'motif obligatoire sauf pour le rang souverain, trace AdminAuditLog. #7845.',
       tags: ['admin'],
       summary: 'Configure a conversation (admin)',
       params: params(['conversationId']),
@@ -312,9 +320,9 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
 
   fastify.patch<{
     Params: { conversationId: string; userId: string };
-    Body: { role: 'admin' | 'moderator' | 'member'; reason: string };
+    Body: { role: 'admin' | 'moderator' | 'member'; reason?: string };
   }>('/admin/conversations/:conversationId/participants/:userId', {
-    preHandler: gardesSurMembre,
+    preHandler: [...gardesSurMembre, gardeDuMotif],
     schema: {
       description: "Change le rang d'un membre dans une conversation, sans en être membre. Le créateur est protégé. #7845.",
       tags: ['admin'],
@@ -322,7 +330,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
       params: params(['conversationId', 'userId']),
       body: {
         type: 'object',
-        required: ['role', 'reason'],
+        required: ['role'],
         properties: { role: { type: 'string', enum: ['admin', 'moderator', 'member'] }, reason: motif },
       },
       response: { 200: conversationMemberRoleSuccess, ...adminErrorResponses },
@@ -367,15 +375,15 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
 
   fastify.post<{
     Params: { conversationId: string; userId: string };
-    Body: { reason: string };
+    Body: { reason?: string };
   }>('/admin/conversations/:conversationId/participants/:userId/remove', {
-    preHandler: gardesSurMembre,
+    preHandler: [...gardesSurMembre, gardeDuMotif],
     schema: {
       description: "Retire un membre d'une conversation, sans en être membre. Le créateur est protégé. #7845.",
       tags: ['admin'],
       summary: 'Remove a member from a conversation (admin)',
       params: params(['conversationId', 'userId']),
-      body: { type: 'object', required: ['reason'], properties: { reason: motif } },
+      body: { type: 'object', properties: { reason: motif } },
       response: { 200: conversationMemberRemovalSuccess, ...adminErrorResponses },
     },
   }, async (request, reply) => {
@@ -388,6 +396,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
       const leftAt = new Date();
       await fastify.prisma.participant.update({ where: { id: participant.id }, data: { isActive: false, leftAt } });
       invalidateParticipantLookup(participant.id, conversationId);
+      announceConversationLanguageChange({ kind: 'departure', conversationId });
 
       const { manager, io: serveur } = io(fastify);
       if (serveur) {
@@ -421,7 +430,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
         entity: 'Conversation',
         entityId: conversationId,
         userId,
-        reason: request.body.reason,
+        reason: request.body?.reason,
         changes: { isActive: { before: true, after: false } },
       });
 

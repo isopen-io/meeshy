@@ -141,16 +141,21 @@ struct ConversationPreviewLine: View {
 
     @ViewBuilder
     private func line(_ preview: ConversationPreview, at now: Date) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            // #9574, #9617 — l'aperçu d'une flamme à durée montre son texte,
+            // et la liste n'annonce aucune capture : il reste dans la couche
+            // sécurisée (annoncé OU noir, jamais en silence). Les autres
+            // protections ne montrent qu'un libellé.
             styledText(preview, at: now)
                 .lineLimit(lineLimit)
+                .captureShield(preview.icon == .ephemeral)
             if preview.offersJoin, let onJoin {
                 Button(action: onJoin) {
                     Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xs)
                         .background(Capsule().fill(MeeshyColors.success))
                 }
                 .buttonStyle(.plain)
@@ -250,7 +255,7 @@ struct ConversationPreviewLine: View {
         case .forward?: return "arrowshape.turn.up.right"
         case .viewOnce?: return MessageProtectionSymbols.viewOnce
         case .ephemeral?: return MessageProtectionSymbols.ephemeral
-        case .expired?: return "timer.badge.xmark"
+        case .expired?: return MessageProtectionSymbols.expired
         case .hidden?: return MessageProtectionSymbols.blurred
         case .encrypted?: return "lock.fill"
         }

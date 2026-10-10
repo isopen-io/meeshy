@@ -166,7 +166,7 @@ export default function ShareLinkScreen() {
                 {served === null || served === undefined ? null : (
                   <>
                     <ArrivalLanguages language={language} stats={served} />
-                    <RecentArrivals language={language} stats={served} now={now} />
+                    <RecentArrivals language={language} linkId={link.linkId} stats={served} now={now} />
                   </>
                 )}
                 <ConfigurationCard language={language} link={link} policy={link.policy} />

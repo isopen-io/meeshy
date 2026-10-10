@@ -16,14 +16,17 @@
 //   2. La purge doit PRÉCÉDER le `pull`. Après, elle arrive trop tard : ce qui
 //      manque de place, c'est l'écriture des couches téléchargées.
 //
-// ET LA SECONDE MOITIÉ DE LA RÈGLE (directive porteur 2026-09-15)
+// ET LA SECONDE MOITIÉ DE LA RÈGLE (directives porteur 2026-09-15 et 2026-10-04)
 //
-// **Le déploiement automatique ne se fait qu'en DEV, jamais sur `main` en
+// **Le déploiement AUTOMATIQUE ne se fait qu'en DEV, jamais sur `main` en
 // production.** Un job de workflow qui tient une clé SSH de déploiement est
 // donc épinglé à `refs/heads/dev` et ne peut mentionner ni `refs/heads/main`
-// ni `refs/tags/`. C'est aujourd'hui vrai de `deploy-staging` — ce garde
-// empêche qu'un futur job « deploy-prod » branche la production sur une
-// poussée, sans qu'aucun humain n'ait tranché.
+// ni `refs/tags/`.
+//
+// **La production se PROMEUT, à la main, jamais sur un événement** (#9223,
+// #9325) : une clé `PRODUCTION_*SSH_KEY` ne vit que dans un workflow déclenché
+// par `workflow_dispatch` SEUL, et dans l'environnement GitHub protégé
+// `production` (règle D).
 //
 // CE QU'IL NE FAIT PAS
 //
@@ -159,12 +162,51 @@ const leDeploiementAutomatiqueResteEnDev = (world) =>
       return failures;
     });
 
+// RÈGLE D — une clé de PRODUCTION ne vit que dans un workflow MANUEL.
+// La règle C garde l'épinglage à `dev` ; elle ne voit pas un `on: push`
+// ajouté au workflow de promotion. Celle-ci regarde les déclencheurs du
+// FICHIER et l'environnement protégé du JOB.
+const DECLENCHEURS = (source) => {
+  const rows = lignes(source);
+  const debut = rows.findIndex((line) => /^on:\s*$/.test(line));
+  if (debut === -1) return [];
+  const fin = rows.findIndex((line, index) => index > debut && /^\S/.test(line));
+  return rows
+    .slice(debut + 1, fin === -1 ? rows.length : fin)
+    .map((line) => /^ {2}([a-z_]+):/.exec(line)?.[1])
+    .filter((name) => name !== undefined);
+};
+
+const laProductionNePartQueSurDemande = (world) =>
+  world.files
+    .filter((file) => file.path.startsWith(WORKFLOW_DIR))
+    .flatMap((file) => jobsDe(file.source).map((job) => ({ file, job })))
+    .filter(({ job }) => /secrets\.PRODUCTION_[A-Z_]*SSH_KEY/.test(job.body))
+    .flatMap(({ file, job }) => {
+      const failures = [];
+      const autres = DECLENCHEURS(file.source).filter((name) => name !== 'workflow_dispatch');
+      if (autres.length > 0) {
+        failures.push(
+          `${file.path}:${job.line} : le job « ${job.name} » tient la clé de PRODUCTION dans un workflow déclenché aussi par ${autres.join(', ')}.\n` +
+            `  La production ne part que sur un déclenchement manuel (directive porteur 2026-10-04, #9223).`,
+        );
+      }
+      if (!/^ {4}environment:\s*(production\s*$|\n {6}name:\s*production\s*$)/m.test(job.body)) {
+        failures.push(
+          `${file.path}:${job.line} : le job « ${job.name} » tient la clé de PRODUCTION hors de l'environnement protégé \`production\`.`,
+        );
+      }
+      return failures;
+    });
+
 const leBalayageNEstPasVide = (world) => {
   const failures = [];
   if (world.files.length === 0) failures.push('aucun fichier balayé : la liste des répertoires a changé, ou la lecture est cassée.');
   if (world.files.flatMap(prunesDe).length === 0) failures.push('aucune purge Docker lue dans le dépôt : le motif de lecture est cassé.');
   if (!world.files.some((file) => file.path.startsWith(WORKFLOW_DIR) && /secrets\.[A-Z_]*SSH_KEY/.test(file.source)))
     failures.push('aucun job de déploiement SSH lu dans les workflows : le motif de lecture est cassé.');
+  if (!world.files.some((file) => file.path.startsWith(WORKFLOW_DIR) && /secrets\.PRODUCTION_[A-Z_]*SSH_KEY/.test(file.source)))
+    failures.push('aucun job de promotion production lu dans les workflows : le motif de lecture est cassé.');
   return failures;
 };
 
@@ -173,6 +215,7 @@ const CHECKS = Object.freeze([
   chaquePurgeEstNonInteractive,
   uneReleaseDistantePurgeAvantDeTirer,
   leDeploiementAutomatiqueResteEnDev,
+  laProductionNePartQueSurDemande,
 ]);
 
 const inspect = (world) => CHECKS.flatMap((check) => check(world));
@@ -237,6 +280,32 @@ const MUTATIONS = Object.freeze([
     }),
   },
   {
+    nom: 'une promotion production déclenchée par une poussée',
+    attendu: 'déclenché aussi par push',
+    muter: (world) => ({
+      files: [
+        ...world.files,
+        {
+          path: `${WORKFLOW_DIR}/${TEMOIN}-prod.yml`,
+          source: `on:\n  push:\n  workflow_dispatch:\njobs:\n  promote:\n    if: github.ref == 'refs/heads/dev'\n    environment:\n      name: production\n    steps:\n      - env:\n          K: \${{ secrets.PRODUCTION_SSH_KEY }}\n`,
+        },
+      ],
+    }),
+  },
+  {
+    nom: 'une promotion production hors environnement protégé',
+    attendu: "hors de l'environnement protégé",
+    muter: (world) => ({
+      files: [
+        ...world.files,
+        {
+          path: `${WORKFLOW_DIR}/${TEMOIN}-env.yml`,
+          source: `on:\n  workflow_dispatch:\njobs:\n  promote:\n    if: github.ref == 'refs/heads/dev'\n    steps:\n      - env:\n          K: \${{ secrets.PRODUCTION_SSH_KEY }}\n`,
+        },
+      ],
+    }),
+  },
+  {
     nom: 'un balayage vide',
     attendu: 'aucun fichier balayé',
     muter: () => ({ files: [] }),
@@ -267,7 +336,7 @@ const main = () => {
   const purges = world.files.flatMap(prunesDe).length;
   console.log(
     `release des images : ${purges} purge(s) Docker, toutes non interactives ; ` +
-      `les releases distantes purgent avant de tirer ; le déploiement automatique reste sur \`dev\`.`,
+      `les releases distantes purgent avant de tirer ; le déploiement automatique reste sur \`dev\`, la production ne part que sur demande.`,
   );
   return 0;
 };

@@ -150,7 +150,6 @@ final class AppInitWireupTests: XCTestCase {
             let src = try appUnit(unit)
             let path = "\(unit)+*.swift"
             let presentations = occurrences(of: "StoryComposerView(", in: src)
-                + occurrences(of: "UnifiedPostComposer(", in: src)
             let injections = occurrences(of: ".storyLocationPickerProvided()", in: src)
             XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
             XCTAssertEqual(
@@ -188,7 +187,6 @@ final class AppInitWireupTests: XCTestCase {
             let src = try appUnit(unit)
             let path = "\(unit)+*.swift"
             let presentations = occurrences(of: "StoryComposerView(", in: src)
-                + occurrences(of: "UnifiedPostComposer(", in: src)
             XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
             for (modifier, why) in injections {
                 XCTAssertEqual(
@@ -437,6 +435,15 @@ final class AppInitWireupTests: XCTestCase {
                 return line[line.startIndex..<comment.lowerBound]
             }
             .joined(separator: "\n")
+    }
+
+    func test_reelSwitchIntervals_reachMetricKit() throws {
+        let source = try appSource("Meeshy/Features/Main/Views/ReelInstantSwitch.swift")
+
+        XCTAssertTrue(source.contains("MXMetricManager.makeLogHandle(category: \"ReelSwitch\")"))
+        XCTAssertTrue(source.contains("mxSignpost(.begin"))
+        XCTAssertTrue(source.contains("mxSignpost(.end"))
+        XCTAssertTrue(MeeshyMetricsSubscriber.mediaCategories.contains("ReelSwitch"))
     }
 
     // MARK: - Helpers

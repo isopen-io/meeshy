@@ -460,6 +460,28 @@ describe('MessageHandler — mode lent des nouveaux comptes dans Meeshy Global (
     expect(socket.emit).toHaveBeenCalledWith('error', expect.objectContaining({ code: 'NEWCOMER_SLOW_MODE', retryAfter: 20 }));
   });
 
+  // #9927 — le refus d'un mineur déclaré dans Global voyage par la même porte :
+  // l'ACK porte le code, sans décompte (refus définitif).
+  it('message:send — le refus d’un mineur dans Global porte GLOBAL_ADULTS_ONLY dans l’ACK (#9927)', async () => {
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket('socket-1');
+    const cb = jest.fn();
+    const data = makeValidSendData();
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+    const refusal = {
+      success: false,
+      error: 'Meeshy Global est en lecture seule jusqu’à vos 18 ans : vous pouvez la lire et réagir, pas y écrire.',
+      code: 'GLOBAL_ADULTS_ONLY',
+      data: null,
+    };
+    const messagingService = { handleMessage: jest.fn(async () => refusal) };
+
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, messagingService });
+    await handler.handleMessageSend(socket, data as any, cb);
+
+    expect(cb).toHaveBeenCalledWith({ success: false, error: refusal.error, code: 'GLOBAL_ADULTS_ONLY' });
+  });
+
   it('un refus ordinaire, sans code, ne déclenche aucun événement error en plus de l’ACK', async () => {
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket('socket-1');
@@ -473,5 +495,53 @@ describe('MessageHandler — mode lent des nouveaux comptes dans Meeshy Global (
 
     expect(cb).toHaveBeenCalledWith({ success: false, error: 'Service failure' });
     expect(socket.emit).not.toHaveBeenCalledWith('error', expect.anything());
+  });
+});
+
+// #9587 — hébergé ici pour le harnais : `MessageHandler.core.test.ts` est au
+// plafond de son cliquet de taille.
+describe('MessageHandler — message:send-with-attachments ne ré-attache pas une pièce déjà attachée (#9587)', () => {
+  const ATTACHMENT_ID = '61a41a4b5c5e4f4a5c5e4f4a';
+  const CARRIER_ID = '61a41a4b5c5e4f4a5c5e4f4b';
+  const data = { conversationId: 'conv-abc', content: 'ordinaire', clientMessageId: VALID_CID, attachmentIds: [ATTACHMENT_ID] };
+
+  const send = async (carrier: { conversationId: string; clientMessageId: string }) => {
+    jest.clearAllMocks();
+    mockCheckLimit.mockResolvedValue(true);
+    mockValidateMessageLength.mockReturnValue({ isValid: true });
+    mockResolveParticipant.mockResolvedValue({ participantId: 'participant-1' });
+    mockIsBlockedBetween.mockResolvedValue(false);
+    cacheGet.mockResolvedValue(null);
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const messagingService = makeMockMessagingService();
+    const prisma = makeMockPrisma({
+      message: { findMany: jest.fn(async () => [{ id: CARRIER_ID, ...carrier, conversation: { identifier: null } }]) },
+    });
+    const { handler } = makeHandler({
+      connectedUsers: connectedUsers as any,
+      socketToUser,
+      messagingService,
+      prisma,
+      attachmentService: makeMockAttachmentService([
+        { id: ATTACHMENT_ID, uploadedBy: 'user-1', mimeType: 'image/jpeg', messageId: CARRIER_ID },
+      ]),
+    });
+    const cb = jest.fn();
+    await handler.handleMessageSendWithAttachments(makeSocket('socket-1'), data as any, cb);
+    return { cb, messagingService };
+  };
+
+  it('refuse la pièce portée par un AUTRE message, avant tout envoi', async () => {
+    const { cb, messagingService } = await send({ conversationId: 'conv-abc', clientMessageId: 'cid_00000000-0000-4000-8000-000000000000' });
+
+    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: `Attachment ${ATTACHMENT_ID} invalid` }));
+    expect(messagingService.handleMessage).not.toHaveBeenCalled();
+  });
+
+  it('laisse passer le réessai du même envoi', async () => {
+    const { messagingService } = await send({ conversationId: 'conv-abc', clientMessageId: VALID_CID });
+
+    expect(messagingService.handleMessage).toHaveBeenCalled();
   });
 });

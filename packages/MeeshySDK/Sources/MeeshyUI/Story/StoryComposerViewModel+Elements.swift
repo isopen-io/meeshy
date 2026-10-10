@@ -782,7 +782,8 @@ extension StoryComposerViewModel {
             name: sound.hasAuthoredTitle ? sound.title : nil,
             mediaURL: sound.fileUrl,
             soundId: sound.id,
-            soundAuthorUsername: sound.uploader?.username
+            soundAuthorUsername: sound.uploader?.username,
+            soundCreatedAt: StoryAudioPlayerObject.soundCreatedAtStamp(sound.createdAt)
         )
         // Le rognage se pose sur la SOURCE, pas sur un fichier : c'est ce qui
         // laisse `soundId` intact, donc le crédit de l'auteur (#4657).
@@ -1064,6 +1065,7 @@ extension StoryComposerViewModel {
             // → retour au canvas vertical par défaut (plus aucune image de fond).
             effects.canvasAspectRatio = Self.canvasAspectRatio(forBackgroundOf: effects)
             currentEffects = effects
+            refreshStaleCropPreviews(of: effects.mediaObjects ?? [])   // fond ⇄ posé : le bitmap suit (#9499)
             return
         }
 

@@ -32,7 +32,7 @@ struct DataStorageView: View {
     // MARK: - Content
 
     private var pageContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             cacheSection
             // Purge SÉLECTIVE (type × domaine). Vit dans MeeshyUI pour que
             // ses libellés soient servis par le catalogue du module —
@@ -40,48 +40,48 @@ struct DataStorageView: View {
             SelectiveCachePurgeView()
             Spacer().frame(height: 40)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
     }
 
     // MARK: - Cache Section
 
     private var cacheSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "settings.data.storage.section.cache", defaultValue: "Cache média", bundle: .main), icon: "externaldrive.fill", color: accentColor)
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+                HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("folder.fill", color: accentColor)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                        HStack(spacing: MeeshySpacing.sm) {
                             Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache média", bundle: .main))
-                                .font(MeeshyFont.relative(14, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                                 .foregroundColor(theme.textPrimary)
 
                             Spacer()
 
                             Text(formatCacheSize(cacheSize))
-                                .font(MeeshyFont.relative(14, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                                 .foregroundColor(Color(hex: accentColor))
                         }
 
                         Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et vidéos mis en cache", bundle: .main))
-                            .font(MeeshyFont.relative(12, weight: .regular))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                             .foregroundColor(theme.textMuted)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
                 .accessibilityElement(children: .combine)
 
                 Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les médias plus rapidement et réduit la consommation de données. Les fichiers mis en cache sont automatiquement supprimés après 7 jours.", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .lineSpacing(3)
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.bottom, MeeshySpacing.smPlus)
             }
             .background(sectionBackground(tint: accentColor))
         }
@@ -104,37 +104,37 @@ struct DataStorageView: View {
     // MARK: - Helpers
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 .foregroundColor(Color(hex: color))
                 // Décorative — jumelle de `SettingsView.settingsSection` : sans
                 // ce masque, VoiceOver annonce le nom du symbole avant le titre.
                 .accessibilityHidden(true)
             Text(title.uppercased())
-                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
-        .padding(.leading, 4)
+        .padding(.leading, MeeshySpacing.xs)
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
-            .font(MeeshyFont.relative(14, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(Color(hex: color).opacity(0.12))
             )
     }

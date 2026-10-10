@@ -70,6 +70,11 @@ final class NotificationActionHandlerTests: XCTestCase {
             onEnqueue?()
             return "ofqm_test"
         }
+
+        @discardableResult
+        func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String {
+            try await enqueue(.createComment, payload: comment, conversationId: comment.postId)
+        }
     }
 
     private final class MockOptimisticPersistence: OptimisticMessagePersisting {
@@ -142,6 +147,9 @@ final class NotificationActionHandlerTests: XCTestCase {
         let messageService: MockMessageService
         let conversationService: MockConversationService
         let postService: MockPostService
+        /// Ce que le SEUL chemin réseau d'un commentaire a créé (#9743).
+        let comments: CommentPublisherSpy
+        let unsentNotices: () -> Int
         let friendService: MockFriendService
         let queue: MockReplyQueue
         let persistence: MockOptimisticPersistence
@@ -159,7 +167,7 @@ final class NotificationActionHandlerTests: XCTestCase {
     }
 
     private func makeSUT(
-        authToken: String? = "jwt-token",
+        authToken: String? = nil,
         currentUserId: String? = "user1",
         preferredLanguage: String? = "fr",
         isRegisteredUser: Bool = true
@@ -167,6 +175,11 @@ final class NotificationActionHandlerTests: XCTestCase {
         let messageService = MockMessageService()
         let conversationService = MockConversationService()
         let postService = MockPostService()
+        // Le jeton de session porte le compte, comme un vrai JWT : c'est lui
+        // qui désigne l'auteur d'une réponse à un commentaire (#9743, M2).
+        let sessionToken = authToken ?? currentUserId.map { TestSessionToken.make(userId: $0) }
+        let comments = CommentPublisherSpy(token: currentUserId.map { TestSessionToken.make(userId: $0) })
+        var unsentNotices = 0
         let friendService = MockFriendService()
         let queue = MockReplyQueue()
         let persistence = MockOptimisticPersistence()
@@ -185,11 +198,13 @@ final class NotificationActionHandlerTests: XCTestCase {
             messageService: messageService,
             conversationService: conversationService,
             postService: postService,
+            commentPublisher: comments.publisher,
+            notifyUnsentComment: { unsentNotices += 1 },
             friendService: friendService,
             replyQueue: queue,
             messagePersistence: persistence,
             backgroundTasks: backgroundTasks,
-            authTokenProvider: { authToken },
+            authTokenProvider: { sessionToken },
             applyAuthToken: { appliedTokens.append($0) },
             currentUserId: { currentUserId },
             preferredLanguage: { preferredLanguage },
@@ -208,6 +223,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             messageService: messageService,
             conversationService: conversationService,
             postService: postService,
+            comments: comments,
+            unsentNotices: { unsentNotices },
             friendService: friendService,
             queue: queue,
             persistence: persistence,
@@ -566,10 +583,10 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "Bien vu !"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
-        XCTAssertEqual(ctx.postService.lastAddCommentPostId, "post1")
-        XCTAssertEqual(ctx.postService.lastAddCommentContent, "Bien vu !")
-        XCTAssertEqual(ctx.postService.lastAddCommentParentId, "c9",
+        XCTAssertEqual(ctx.comments.created.count, 1)
+        XCTAssertEqual(ctx.comments.created.last?.postId, "post1")
+        XCTAssertEqual(ctx.comments.created.last?.content, "Bien vu !")
+        XCTAssertEqual(ctx.comments.created.last?.parentCommentId, "c9",
                        "post_comment → threaded reply to THE notified comment")
     }
 
@@ -583,7 +600,7 @@ final class NotificationActionHandlerTests: XCTestCase {
                 replyText: "réponse"
             )
 
-            XCTAssertEqual(ctx.postService.lastAddCommentParentId, "c42",
+            XCTAssertEqual(ctx.comments.created.last?.parentCommentId, "c42",
                            "\(type) must thread under the notified comment")
         }
     }
@@ -597,8 +614,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "Premier !"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
-        XCTAssertNil(ctx.postService.lastAddCommentParentId,
+        XCTAssertEqual(ctx.comments.created.count, 1)
+        XCTAssertNil(ctx.comments.created.last?.parentCommentId,
                      "friend_new_post → root comment, never threaded")
     }
 
@@ -611,8 +628,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "ok"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
-        XCTAssertNil(ctx.postService.lastAddCommentParentId)
+        XCTAssertEqual(ctx.comments.created.count, 1)
+        XCTAssertNil(ctx.comments.created.last?.parentCommentId)
     }
 
     func test_handle_comment_anonymousSession_isLoggedNoop() async {
@@ -624,7 +641,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "anonyme"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 0,
+        XCTAssertEqual(ctx.comments.created.count, 0,
                        "The comments endpoint requires a registered user — no call")
         XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
         XCTAssertEqual(ctx.backgroundTasks.endCallCount, 1)
@@ -632,7 +649,7 @@ final class NotificationActionHandlerTests: XCTestCase {
 
     func test_handle_comment_networkFailure_keepsDurableOutboxRow() async throws {
         let ctx = makeSUT()
-        ctx.postService.addCommentResult = .failure(TestError())
+        ctx.comments.createFailure = TestError()
 
         await ctx.sut.handle(
             actionIdentifier: MeeshyNotificationAction.comment.rawValue,
@@ -648,6 +665,53 @@ final class NotificationActionHandlerTests: XCTestCase {
         XCTAssertEqual(payload.content, "durable")
     }
 
+    /// #9743, M2 — une réponse que rien ne garde prévient l'utilisateur.
+    func test_handle_comment_neitherSentNorQueued_warnsTheUser() async {
+        let ctx = makeSUT()
+        ctx.comments.createFailure = TestError()
+        ctx.queue.enqueueKindError = TestError()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c9"),
+            replyText: "perdu ?"
+        )
+
+        XCTAssertEqual(ctx.unsentNotices(), 1, "Une réponse ni envoyée ni gardée ne disparaît pas en silence.")
+    }
+
+    func test_handle_comment_sentOrQueued_warnsNoOne() async {
+        let ctx = makeSUT()
+        ctx.comments.createFailure = TestError()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c9"),
+            replyText: "gardée"
+        )
+
+        XCTAssertEqual(ctx.unsentNotices(), 0)
+        XCTAssertEqual(ctx.queue.enqueuedKinds, [.createComment])
+    }
+
+    /// La notification s'adressait à un autre compte que celui du jeton :
+    /// rien ne part, rien n'est enfilé, l'utilisateur est prévenu.
+    func test_handle_comment_addressedToAnotherAccount_isRefused() async {
+        let ctx = makeSUT()
+        var info = socialUserInfo(type: "post_comment", commentId: "c9")
+        info["recipientId"] = "66f0a1b2c3d4e5f6000000b0"
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: info,
+            replyText: "pas à moi"
+        )
+
+        XCTAssertTrue(ctx.comments.created.isEmpty)
+        XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
+        XCTAssertEqual(ctx.unsentNotices(), 1)
+    }
+
     func test_handle_comment_outboxAndRestShareSameClientMutationId() async throws {
         let ctx = makeSUT()
 
@@ -658,7 +722,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         )
 
         let payload = try decodedCommentPayload(ctx)
-        XCTAssertEqual(ctx.postService.lastAddCommentClientMutationId, payload.clientMutationId,
+        XCTAssertEqual(ctx.comments.created.last?.clientMutationId, payload.clientMutationId,
                        "Outbox replay and direct REST must share ONE mutation id so the gateway MutationLog dedups")
         XCTAssertTrue(payload.clientMutationId.hasPrefix("cmid_"))
     }
@@ -684,7 +748,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "sans cible"
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 0)
+        XCTAssertEqual(ctx.comments.created.count, 0)
         XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
     }
 
@@ -697,7 +761,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             replyText: "  \n "
         )
 
-        XCTAssertEqual(ctx.postService.addCommentCallCount, 0)
+        XCTAssertEqual(ctx.comments.created.count, 0)
         XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
     }
 
@@ -1185,5 +1249,31 @@ final class NotificationActionHandlerTests: XCTestCase {
         let code = AppSourceGuard.stripComments(try appSource("Meeshy/MeeshyApp.swift"))
         XCTAssertTrue(code.contains("observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted"),
                       "le socket `notification:deleted` doit retirer la bannière livrée par le même atome que le push")
+    }
+}
+
+// MARK: - #9743, M2 — la réponse s'adresse au compte du jeton
+
+@MainActor
+final class NotificationCommentReplyOwnerTests: XCTestCase {
+
+    private let alice = "66f0a1b2c3d4e5f6000000a1"
+    private let bob = "66f0a1b2c3d4e5f6000000b0"
+
+    func test_author_isTheTokensAccount() {
+        XCTAssertEqual(NotificationReplyFailure.author(token: TestSessionToken.make(userId: alice), userInfo: [:]), alice)
+    }
+
+    func test_author_refusesANotificationAddressedToAnotherAccount() {
+        XCTAssertNil(NotificationReplyFailure.author(token: TestSessionToken.make(userId: alice),
+                                                     userInfo: ["recipientId": bob]))
+        XCTAssertEqual(NotificationReplyFailure.author(token: TestSessionToken.make(userId: alice),
+                                                       userInfo: ["recipientId": alice]), alice)
+    }
+
+    func test_author_needsAReadableToken() {
+        for token in [String?.none, "", "pas-un-jeton", TestSessionToken.make(userId: nil)] {
+            XCTAssertNil(NotificationReplyFailure.author(token: token, userInfo: [:]))
+        }
     }
 }

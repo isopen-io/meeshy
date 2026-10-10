@@ -238,6 +238,7 @@ public struct AudioForegroundChip: View {
             // mettrait la coordonnée elle-même à l'échelle — une puce à droite
             // de la scène partirait hors cadre en grandissant.
             .scaleEffect(renderedScale)
+            .rotationEffect(.degrees(audioObject.rotation ?? 0))
             .position(
                 x: max(0, min(canvasSize.width, audioObject.x * canvasSize.width)) + dragOffset.width,
                 y: max(0, min(canvasSize.height, audioObject.y * canvasSize.height)) + dragOffset.height
@@ -253,7 +254,7 @@ public struct AudioForegroundChip: View {
     }
 
     private var chipContent: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             muteToggleIcon
                 .frame(width: 18, height: 18)
             // Son de bibliothèque → crédit défilant « titre · @pseudo · M:SS » ;
@@ -269,7 +270,8 @@ public struct AudioForegroundChip: View {
                 sound: AudioChipDisplay.borrowedSound(soundId: audioObject.soundId),
                 libraryTitle: audioObject.name,
                 libraryUsername: audioObject.soundAuthorUsername,
-                libraryDuration: nil
+                libraryDuration: nil,
+                libraryReleasedAt: audioObject.soundReleaseDate
             )) {
             case .marquee(let text):
                 AudioChipMarquee(text: text,
@@ -287,8 +289,8 @@ public struct AudioForegroundChip: View {
                     .opacity(isUserMuted ? 0.35 : 1.0)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(
             Capsule()
@@ -320,9 +322,9 @@ public struct AudioForegroundChip: View {
     @ViewBuilder
     private var iconView: some View {
         let icon = Image(systemName: iconName)
-            .font(.system(size: 14, weight: .bold))
+            .font(.system(size: MeeshyIconSize.sm, weight: .bold))
         if isUserMuted {
-            icon.foregroundColor(.white.opacity(0.55))
+            icon.foregroundColor(.white.opacity(MeeshyOpacity.strong))
         } else {
             icon.foregroundStyle(MeeshyColors.brandGradient)
         }
@@ -348,7 +350,7 @@ public struct AudioForegroundChip: View {
     private var strokeColor: Color {
         isSelected
             ? MeeshyColors.indigo400
-            : (colorScheme == .dark ? Color.white.opacity(0.25) : MeeshyColors.indigo950.opacity(0.18))
+            : (colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.medium) : MeeshyColors.indigo950.opacity(MeeshyOpacity.light))
     }
 
     // MARK: Accessibility strings
@@ -468,7 +470,7 @@ public struct StoryWaveformBadgeView: View {
                                                  width: barWidth * 0.6,
                                                  height: height),
                              cornerRadius: barWidth * 0.3),
-                        with: .color(.white.opacity(0.9))
+                        with: .color(.white.opacity(MeeshyOpacity.intense))
                     )
                 }
             }
@@ -518,8 +520,8 @@ struct AudioForegroundSineWave: View {
                     x += step
                 }
                 ctx.stroke(path,
-                           with: .color(.white.opacity(0.9)),
-                           style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                           with: .color(.white.opacity(MeeshyOpacity.intense)),
+                           style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, lineCap: .round, lineJoin: .round))
             }
         }
     }
@@ -675,7 +677,7 @@ public struct AudioForegroundReaderOverlay: View {
                                      elapsed: TimeInterval,
                                      slideDuration: TimeInterval) -> [StoryAudioPlayerObject] {
         audios.filter { audio in
-            guard audio.isBackground != true else { return false }
+            guard SceneAudioStageRule.isStaged(audio) else { return false }
             let start = Double(audio.startTime ?? 0)
             let end = audio.duration.map { start + Double($0) } ?? slideDuration
             return elapsed >= start && elapsed <= end

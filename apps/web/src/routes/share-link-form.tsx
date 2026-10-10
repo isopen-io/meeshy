@@ -117,7 +117,7 @@ function Switch({ checked }: { readonly checked: boolean }) {
     >
       <span
         className="absolute block rounded-chip"
-        style={{ top: 2, insetInlineStart: checked ? 22 : 2, width: 27, height: 27, backgroundColor: 'white', boxShadow: '0 1px 3px rgb(0 0 0 / 0.3)', transition: 'inset-inline-start 160ms ease' }}
+        style={{ top: 2, insetInlineStart: checked ? 22 : 2, width: 27, height: 27, backgroundColor: 'var(--color-ios-on-brand)', boxShadow: 'var(--shadow-sm)', transition: 'inset-inline-start 160ms ease' }}
       />
     </span>
   );

@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { createHttpTransport } from '@/lib/api/http';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { messagesQueryKey } from '@/lib/api/messages';
-import type { Conversation, Message } from '@/lib/api/types';
+import type { Conversation, Message, MessageTranslation } from '@/lib/api/types';
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
@@ -70,6 +70,16 @@ const m1: Message = {
   translations: [],
   createdAt: new Date('2026-09-09T09:00:00.000Z'),
   timestamp: new Date('2026-09-09T09:00:00.000Z'),
+};
+
+/** La traduction que seul l'écho socket porte — ce que la greffe de l'accusé ne doit pas effacer (#9262). */
+const echoTranslation: MessageTranslation = {
+  id: 'tr-en',
+  messageId: 'echo',
+  targetLanguage: 'en',
+  translatedContent: 'hi',
+  translationModel: 'basic',
+  createdAt: new Date('2026-09-09T09:00:01.000Z'),
 };
 
 /**
@@ -221,7 +231,19 @@ describe('performSend', () => {
     expect(entry?.message.replyTo).toBe(m1);
   });
 
-  test('pas de doublon : un message clientMessageId déjà présent (écho socket) est REMPLACÉ, jamais dupliqué', async () => {
+  /**
+   * #9262 — l'intitulé disait « REMPLACÉ » et le site FUSIONNE depuis
+   * `mergedThreadRow` (`api/messages.ts`). Ce qu'il mesurait n'a pas changé —
+   * l'identifiant SERVEUR gagne, la rangée reste UNIQUE — mais il dit
+   * désormais ce que la loi dit, et il porte la moitié qui manquait : ce que
+   * l'écho socket portait SEUL survit à la greffe de l'accusé.
+   *
+   * Cette assertion-ci passe par `performSend`, là où celles de
+   * `api/messages.test.ts` appellent `upsertThreadMessage` directement. C'est
+   * la même loi à une altitude de plus : elle garde le fait que le chemin
+   * d'envoi remet bien au site unique la rangée greffée, et pas une autre.
+   */
+  test('pas de doublon : un message clientMessageId déjà présent (écho socket) est FUSIONNÉ, jamais dupliqué', async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([]));
     const outbox = createOutboxStore();
@@ -232,7 +254,10 @@ describe('performSend', () => {
     // `clientMessageId` au moment où le 2xx arrive.
     const impl = (async (_url: RequestInfo | URL, init?: RequestInit) => {
       const cid = JSON.parse(String(init?.body)).clientMessageId as string;
-      queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([{ ...m1, id: 'echo', clientMessageId: cid } as Message]));
+      queryClient.setQueryData(
+        messagesQueryKey('c-a'),
+        threadPages([{ ...m1, id: 'echo', clientMessageId: cid, translations: [echoTranslation] } as Message]),
+      );
       return new Response(JSON.stringify(ackBody('m9', cid)), { status: 200 });
     }) as typeof fetch;
     const deps: SendDeps = {
@@ -253,6 +278,9 @@ describe('performSend', () => {
     const page = threadOf(queryClient, 'c-a');
     expect(page?.messages).toHaveLength(1);
     expect(page?.messages[0]?.id).toBe('m9');
+    // Ce que l'écho socket portait SEUL — la traduction que le Prisme sert —
+    // n'est pas effacé par la liste VIDE que le message local transporte.
+    expect(page?.messages[0]?.translations.map((t) => t.targetLanguage)).toEqual(['en']);
   });
 
   test('4xx (403 USER_BLOCKED) : entrée failed, lastError.status/code posés, page toBe-identique', async () => {
@@ -809,7 +837,7 @@ describe('performSend — la protection (#6175)', () => {
     return JSON.parse(String(calls[calls.length - 1]?.init.body)) as Record<string, unknown>;
   }
 
-  test('éphémère 60 s ⇒ expiresAt = now + 60 s (ISO) dans le corps ET sur la bulle optimiste ; effectFlags porte EPHEMERAL ; isBlurred ABSENT', async () => {
+  test('éphémère 60 s ⇒ la bulle optimiste porte la DURÉE, jamais une échéance (#8905) ; effectFlags porte EPHEMERAL ; isBlurred ABSENT', async () => {
     const outbox = createOutboxStore();
     const deps: SendDeps = {
       source: 'gateway',
@@ -828,13 +856,13 @@ describe('performSend — la protection (#6175)', () => {
     });
 
     const entry = entriesOf(outbox.getState(), 'c-a')[0]!;
-    const expected = new Date(NOW + 60_000);
-    expect(entry.message.expiresAt).toEqual(expected);
+    expect(entry.message.expiresAt).toBeUndefined();
+    expect(entry.message.ephemeralDuration).toBe(60);
     expect(entry.message.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL);
     expect(entry.message.isBlurred).toBe(false);
   });
 
-  test('éphémère 60 s, EN LIGNE ⇒ le corps POSTÉ porte expiresAt ISO et effectFlags, jamais isBlurred', async () => {
+  test('éphémère 60 s, EN LIGNE ⇒ le corps POSTÉ porte ephemeralDuration et effectFlags, jamais expiresAt ni isBlurred', async () => {
     const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
     const deps: SendDeps = {
       source: 'gateway',
@@ -853,7 +881,8 @@ describe('performSend — la protection (#6175)', () => {
     });
 
     const body = bodyOfLastCall(calls);
-    expect(body.expiresAt).toBe(new Date(NOW + 60_000).toISOString());
+    expect(body.ephemeralDuration).toBe(60);
+    expect('expiresAt' in body).toBe(false);
     expect(body.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL);
     expect(body.isBlurred).toBeUndefined();
     expect(body.isViewOnce).toBeUndefined();
@@ -880,7 +909,7 @@ describe('performSend — la protection (#6175)', () => {
     const body = bodyOfLastCall(calls);
     expect(body.isBlurred).toBe(true);
     expect(body.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.BLURRED);
-    expect(body.expiresAt).toBeUndefined();
+    expect(body.ephemeralDuration).toBeUndefined();
   });
 
   test('vue unique (loi seule — aucun contrôle ne l’arme en conversation) ⇒ isViewOnce: true, bit VIEW_ONCE', async () => {
@@ -954,11 +983,12 @@ describe('performSend — la protection (#6175)', () => {
     const body = bodyOfLastCall(calls);
     expect('isBlurred' in body).toBe(false);
     expect('expiresAt' in body).toBe(false);
+    expect('ephemeralDuration' in body).toBe(false);
     expect('effectFlags' in body).toBe(false);
     expect('isViewOnce' in body).toBe(false);
   });
 
-  test('retrySend rejoue le MÊME expiresAt — jamais recalculé depuis une horloge qui a avancé', async () => {
+  test('retrySend rejoue la MÊME durée, et aucune échéance — même quand l’horloge a avancé', async () => {
     const sequence = sequencedFetch([{ status: 0 }, { status: 200, body: ackBody('m9', 'x') }]);
     let clock = NOW;
     const outbox = createOutboxStore();
@@ -985,6 +1015,8 @@ describe('performSend — la protection (#6175)', () => {
     await retrySend({ conversationId: 'c-a', clientMessageId: failedEntry.message.clientMessageId, deps });
 
     const secondBody = bodyOfLastCall(sequence.calls);
-    expect(secondBody.expiresAt).toBe(firstBody.expiresAt); // le MÊME, jamais recalculé.
+    expect(secondBody.ephemeralDuration).toBe(60);
+    expect(firstBody.ephemeralDuration).toBe(60);
+    expect('expiresAt' in secondBody).toBe(false);
   });
 });

@@ -351,13 +351,13 @@ struct MediaComposerDoor: View {
         .overlay(alignment: .topLeading) {
             Button(action: onDismiss) {
                 Text(MediaComposerCopy.cancel)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
             }
-            .padding(.leading, 4)
+            .padding(.leading, MeeshySpacing.xs)
         }
     }
 
@@ -384,7 +384,8 @@ struct MediaComposerDoor: View {
                     references: references,
                     composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
                                                            caption: accessibility.mediaCaption ?? [:]),
-                    allowSoundExtraction: accessibility.allowSoundExtraction
+                    allowSoundExtraction: accessibility.allowSoundExtraction,
+                    alsoAsReel: accessibility.alsoAsReel
                 )
                 // La publication accepte TOUJOURS : hors-ligne, elle part en
                 // file d'attente plutôt que de rester dans le composer.

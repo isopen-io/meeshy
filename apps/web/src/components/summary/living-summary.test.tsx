@@ -68,10 +68,24 @@ type Expanded = { readonly props: Record<string, unknown> };
 function expand(node: Tree): Expanded | null {
   if (node === null || typeof node !== 'object') return null;
   if (typeof node.type === 'function') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return expand((node.type as (props: unknown) => Tree)(node.props) as Tree);
+    return expand(callComponent(node.type as (props: unknown) => Tree, node.props));
   }
   return node as Expanded;
+}
+
+/**
+ * Un composant qui tient un ÉTAT (hooks) ne se déplie pas hors d'un renderer :
+ * c'est une feuille opaque pour ce témoin, qui cherche les visages et les
+ * épisodes, jamais l'intérieur d'un avatar (dont le point de présence anime
+ * ses transitions, #9047).
+ */
+function callComponent(component: (props: unknown) => Tree, props: unknown): Tree {
+  try {
+    return component(props);
+  } catch (error) {
+    if (error instanceof Error && /Invalid hook call|resolveDispatcher\(\)/.test(error.message)) return null;
+    throw error;
+  }
 }
 
 function findAll(node: Tree, predicate: (n: Expanded) => boolean): Expanded[] {

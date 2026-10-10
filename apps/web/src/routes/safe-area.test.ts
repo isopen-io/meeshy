@@ -91,7 +91,7 @@ const SCANNED = [
 const screenFiles = () =>
   SCANNED.flatMap(({ dir, prefix }) =>
     readdirSync(dir, { withFileTypes: true })
-      .filter((e) => e.isFile() && e.name.endsWith('.tsx'))
+      .filter((e) => e.isFile() && e.name.endsWith('.tsx') && !e.name.endsWith('.test.tsx'))
       .map((e) => ({ name: `${prefix}${e.name}`, path: join(dir, e.name) })),
   );
 

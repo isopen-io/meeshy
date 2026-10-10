@@ -40,6 +40,10 @@ struct RiverConversationHost: View {
     /// #7452 — la consommation d'une vue unique, relayée jusqu'à la bulle.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
+    /// #8283 après #8320 — la lecture SUR PLACE d'un vocal cité, DITE par
+    /// l'appelant (`ConversationViewModel.toggleQuotedAudio`, le lecteur
+    /// PARTAGÉ du Fil). `false` ⇒ rien à jouer, la citation retombe sur son saut.
+    var onPlayQuotedAudio: ((ReplyReference) -> Bool)? = nil
     /// #3901 — appelé quand le curseur ATTEINT le présent (rang de la bulle
     /// la plus récente, `RiverConversationMapping.isAtPresent`) : c'est ici,
     /// et seulement ici, que l'appelant sait qu'il peut faire avancer le
@@ -84,6 +88,7 @@ struct RiverConversationHost: View {
         onReply: ((String) -> Void)? = nil,
         onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
         onMediaTap: ((MessageAttachment) -> Void)? = nil,
+        onPlayQuotedAudio: ((ReplyReference) -> Bool)? = nil,
         onReachPresent: (() -> Void)? = nil,
         text: @escaping (MeeshyMessage) -> String
     ) {
@@ -100,6 +105,7 @@ struct RiverConversationHost: View {
         self.onReply = onReply
         self.onConsumeViewOnce = onConsumeViewOnce
         self.onMediaTap = onMediaTap
+        self.onPlayQuotedAudio = onPlayQuotedAudio
         self.onReachPresent = onReachPresent
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
@@ -111,51 +117,55 @@ struct RiverConversationHost: View {
         ))
     }
 
-    /// Cache de rendu — un type RÉFÉRENCE, délibérément : le muter pendant
-    /// l'évaluation du `body` ne doit RIEN réinvalider. Un `@State` de VALEUR
-    /// écrit ici déclencherait la passe suivante, c'est-à-dire exactement la
-    /// boucle que #3946 corrige.
-    private final class ContentsMemo {
-        var key: RiverConversationMapping.ContentsKey?
-        var value: [RiverBubbleContent] = []
+    /// Le rendu mémoïsé (#3946) — voir `RiverRenderingMemo`.
+    @State private var memo = RiverRenderingMemo()
+    /// #9617 — ce que la Rivière montre à l'instant d'une capture : ses
+    /// messages, et les cadres que ses bulles mesurent déjà.
+    @State private var captureSurface = MeasuredCaptureSurface()
 
-        /// Sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, une deinit
-        /// synthétisée est ISOLÉE et double-libère sur iOS 26.1 quand SwiftUI
-        /// démonte la vue hors tâche (SE-0466,
-        /// `MainActorDeinitSourceGuardTests`). Un corps vide n'a rien à
-        /// toucher : la libération redevient non isolée.
-        nonisolated deinit {}
+    /// Ce qui change ce qu'une capture déclarerait : les messages, et les vues
+    /// uniques texte révélées sur place.
+    private var captureSignature: [String] {
+        messages.map { $0.isViewOnceRevealed ? $0.id + "*" : $0.id }
     }
 
-    @State private var memo = ContentsMemo()
-
-    /// #8283 — la zone média d'une citation ouvre le MÊME plein écran que
-    /// depuis Script : la pièce et son verrou sont ceux du Fil
-    /// (`QuotedMediaOpening`), l'ouverture celle du toucher d'un média
-    /// (`onMediaTap`). `false` ⇒ rien d'honnête à ouvrir (média protégé,
-    /// document, pièce introuvable), et la citation retombe sur son saut.
+    /// #8283 — la zone média d'une citation fait ce qu'elle fait en Script :
+    /// le geste, la pièce et son verrou sont ceux du Fil
+    /// (`QuotedMediaOpening.gesture`). Un vocal se JOUE sur place (#8320), une
+    /// image ou une vidéo s'ouvre par le toucher d'un média (`onMediaTap`).
+    /// `false` ⇒ rien d'honnête à jouer ni à ouvrir (média protégé, document,
+    /// pièce introuvable), et la citation retombe sur son saut.
     private var openQuotedMedia: ((ReplyReference) -> Bool)? {
-        guard let onMediaTap else { return nil }
+        let onMediaTap = onMediaTap
+        let onPlayQuotedAudio = onPlayQuotedAudio
+        guard onMediaTap != nil || onPlayQuotedAudio != nil else { return nil }
         let messages = messages
         return { reference in
             let quoted = messages.first { $0.id == reference.messageId }
-            guard let attachment = QuotedMediaOpening.attachment(for: reference, quoted: quoted) else { return false }
-            onMediaTap(attachment)
-            return true
+            switch QuotedMediaOpening.gesture(for: reference, quoted: quoted) {
+            case .playInPlace:
+                return onPlayQuotedAudio?(reference) ?? false
+            case .open(let attachment):
+                guard let onMediaTap else { return false }
+                onMediaTap(attachment)
+                return true
+            case .followQuote:
+                return false
+            }
         }
     }
 
     /// `RiverConversationMapping.contents` construit un dictionnaire de TOUS
     /// les messages puis, par bulle, résout nom d'affichage, heure, texte,
-    /// aperçu de réponse, avis système et `ProfileSheetUser`. C'était rejoué à
-    /// chaque passe de `body`, et la Rivière en fait beaucoup — la
-    /// republication des cadres réévalue la racine (#3946, pistes 1 et 2).
+    /// aperçu de réponse, avis système et `ProfileSheetUser` ; la peau
+    /// indexait ensuite le tout par rang et par message. C'était rejoué à
+    /// chaque passe de `body` (#3946).
     ///
-    /// La clé coûte un balayage de closures BON MARCHÉ ; la construction, elle,
-    /// n'a plus lieu que lorsqu'une de ses entrées a réellement changé. Ce que
-    /// la clé doit couvrir — et pourquoi l'empreinte n'y suffit pas — est dit
-    /// une seule fois, sur `RiverConversationMapping.ContentsKey`.
-    private var contents: [RiverBubbleContent] {
+    /// La clé coûte un balayage de closures BON MARCHÉ ; la construction — et
+    /// les index que la peau lit (`RiverRendering`) — n'a plus lieu que
+    /// lorsqu'une de ses entrées a réellement changé. Ce que la clé doit
+    /// couvrir est dit une seule fois, sur `RiverConversationMapping.ContentsKey`.
+    private var rendering: RiverRendering {
         let key = RiverConversationMapping.contentsKey(
             geometry: geometry,
             messages: messages,
@@ -164,20 +174,17 @@ struct RiverConversationHost: View {
             presence: presence,
             storyRing: storyRing
         )
-        if memo.key == key { return memo.value }
-
-        let built = RiverConversationMapping.contents(
-            geometry: geometry,
-            messages: messages,
-            viewerId: viewerId,
-            text: text,
-            time: { TimeStringCache.shared.format($0) },
-            presence: presence,
-            storyRing: storyRing
-        )
-        memo.key = key
-        memo.value = built
-        return built
+        return memo.rendering(for: key, geometry: geometry) {
+            RiverConversationMapping.contents(
+                geometry: geometry,
+                messages: messages,
+                viewerId: viewerId,
+                text: text,
+                time: { TimeStringCache.shared.format($0) },
+                presence: presence,
+                storyRing: storyRing
+            )
+        }
     }
 
     /// **Le pane reçoit une taille MESURÉE, pas une taille négociée.**
@@ -208,7 +215,7 @@ struct RiverConversationHost: View {
         GeometryReader { proxy in
             RiverStreamHost(
                 geometry: geometry,
-                contents: contents,
+                rendering: rendering,
                 laneWidth: laneWidth,
                 paneHeight: proxy.size.height,
                 paneWidth: proxy.size.width,
@@ -223,6 +230,7 @@ struct RiverConversationHost: View {
                 onConsumeViewOnce: onConsumeViewOnce,
                 onOpenQuotedMedia: openQuotedMedia,
                 onMediaTap: onMediaTap,
+                captureSurface: captureSurface,
                 navigation: navigation
             )
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -281,6 +289,12 @@ struct RiverConversationHost: View {
             guard RiverConversationMapping.isAtPresent(cursor: newCursor, geometry: geometry) else { return }
             onReachPresent?()
         }
+        .adaptiveOnChange(of: captureSignature) { _, _ in captureSurface.update(messages: messages) }
+        .onAppear {
+            captureSurface.update(messages: messages)
+            ContentCaptureReporter.shared.register(captureSurface)
+        }
+        .onDisappear { ContentCaptureReporter.shared.unregister(captureSurface) }
     }
 
 

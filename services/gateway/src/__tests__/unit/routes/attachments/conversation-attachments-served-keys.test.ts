@@ -88,9 +88,21 @@ const ATT_ID = '507f1f77bcf86cd799439033';
  * ce sont exactement les champs que `AttachmentGallery.tsx` rend, et qu'aucun
  * schéma ne déclarait — panneau d'information vide par construction.
  */
+// Treize jusqu'au #9249, quinze depuis : `isViewOnce` et `isBlurred` ont
+// rejoint le schéma. Ce témoin a ROUGI sur ce lot, et c'était son travail —
+// un témoin qui épingle un jeu de clés servies refuse qu'il change en
+// silence. Il se met à jour avec la RAISON, jamais en relâchant l'égalité.
+//
+// La raison : ce schéma épand `messageAttachmentMinimalSchema`, donc il sert
+// `fileUrl` ET `thumbnailUrl`. L'URL d'une pièce à vue unique ou floutée
+// partait sans les deux champs qui disent au client de poser un voile — la
+// protection était INEXPRIMABLE, pas contournée (cycle 125, #6189). Les deux
+// drapeaux sont déjà RENDUS par `AttachmentService.toAttachment` ; seule leur
+// déclaration manquait, et c'est le sérialiseur qui les retirait.
 const SERVED_KEYS = [
   'createdAt', 'duration', 'fileName', 'fileSize', 'fileUrl', 'height', 'id',
-  'messageId', 'mimeType', 'originalName', 'thumbnailUrl', 'uploadedBy', 'width',
+  'isBlurred', 'isViewOnce', 'messageId', 'mimeType', 'originalName',
+  'thumbnailUrl', 'uploadedBy', 'width',
 ] as const;
 
 /** L'arbitrage : les six champs que la galerie REND, et que la liste sert désormais. */
@@ -208,7 +220,7 @@ describe('GET /conversations/:id/attachments — CHARGÉ ≠ SERVI (#4392)', () 
     expect(attachment).not.toHaveProperty('translatedAudios');
   });
 
-  it('sert EXACTEMENT les treize clés de `conversationAttachmentListItemSchema`', async () => {
+  it('sert EXACTEMENT les quinze clés de `conversationAttachmentListItemSchema`', async () => {
     const attachment = await servedAttachment();
 
     expect(Object.keys(attachment).sort()).toEqual([...SERVED_KEYS]);
@@ -226,6 +238,8 @@ describe('GET /conversations/:id/attachments — CHARGÉ ≠ SERVI (#4392)', () 
       duration: 12480,
       uploadedBy: USER_ID,
       createdAt: '2026-09-01T10:00:00.000Z',
+      isViewOnce: false,
+      isBlurred: false,
     });
   });
 

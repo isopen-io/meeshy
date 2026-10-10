@@ -25,6 +25,8 @@ import { depreciee } from '../../utils/deprecation';
 // coûtait — c'est là qu'a vécu le premier écart de comportement (#4170,
 // `PATCH` ne révoquait pas les invités là où `/toggle` le faisait déjà).
 import { loadShareLinkForManagement, applyShareLinkUpdate } from './management';
+import { ShareLinkGraceRefusedError } from '../../services/auth/share-link-grace';
+import { sendShareLinkGraceRefusal } from '../../middleware/verification-gates';
 import { apiPath } from '@meeshy/shared/api/prefix';
 
 export async function registerAdminRoutes(fastify: FastifyInstance) {
@@ -319,6 +321,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, updatedLink, { message: isActive ? 'Lien activé avec succès' : 'Lien désactivé avec succès' });
 
     } catch (error) {
+      if (error instanceof ShareLinkGraceRefusedError) {
+        return sendShareLinkGraceRefusal(reply, error.verdict, 'reopen');
+      }
       logError(fastify.log, 'Toggle link status error:', error);
       return sendInternalError(reply, 'Erreur lors de la modification du statut du lien');
     }
@@ -423,6 +428,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, updatedLink, { message: 'Lien prolongé avec succès' });
 
     } catch (error) {
+      if (error instanceof ShareLinkGraceRefusedError) {
+        return sendShareLinkGraceRefusal(reply, error.verdict, 'reopen');
+      }
       logError(fastify.log, 'Extend link duration error:', error);
       return sendInternalError(reply, 'Erreur lors de la prolongation du lien');
     }

@@ -11,6 +11,7 @@
  * - Automatic session creation with full context
  */
 
+import { AgeBelowMinimumError } from '../errors/custom-errors';
 import crypto from 'crypto';
 import { passwordSettingsUrl, profileEditUrl } from './email/account-identity-block';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -227,9 +228,6 @@ export class MagicLinkService {
           userAgent,
           deviceFingerprint,
           geoLocation: geoData?.location || 'Unknown',
-          geoCoordinates: geoData?.latitude && geoData?.longitude
-            ? `${geoData.latitude},${geoData.longitude}`
-            : null,
           rememberDevice: rememberDevice || false // Store server-side for security
         }
       });
@@ -503,7 +501,8 @@ export class MagicLinkService {
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
-        requestContext
+        requestContext,
+        loginMethod: 'magic_link'
       });
 
       // 10. Signer le JWT, rattaché à la session qui vient de naître
@@ -519,6 +518,7 @@ export class MagicLinkService {
         where: { id: user.id },
         data: {
           lastActiveAt: new Date(),
+          lastLoginAt: new Date(),
           lastLoginIp: requestContext.ip,
           lastLoginLocation: requestContext.geoData?.location || null,
           lastLoginDevice: requestContext.deviceInfo?.type || null
@@ -571,6 +571,7 @@ export class MagicLinkService {
       };
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('Error validating token', error as Error);
       return { success: false, error: 'An error occurred. Please try again.' };
     }

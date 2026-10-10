@@ -33,6 +33,10 @@
  *     VITE_DATA_SOURCE=gateway node scripts/build-shells.mjs \
  *     --target android|ios|both [--no-native]
  *
+ * Release du Play Store (#8669, Android seulement — `lib/android-release.mjs`) :
+ *   VITE_API_BASE=https://gate.meeshy.me VITE_DATA_SOURCE=gateway \
+ *     node scripts/build-shells.mjs --target android --release
+ *
  * Les trois fonctions ci-dessous sont PURES et exportées pour un témoin sans
  * build (`build-shells.test.ts`) — même discipline que `check-shell-dist.mjs`
  * (`auditShellDist`) : le pilote ne s'exécute que lorsque ce fichier est le
@@ -43,6 +47,11 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import {
+  androidReleaseArtifacts,
+  androidReleaseGradleArgs,
+  auditAndroidReleaseInputs,
+} from './lib/android-release.mjs';
 import { allFiles } from './lib/files.mjs';
 import { FIXTURE_MARKERS } from './lib/fixture-markers.mjs';
 
@@ -632,12 +641,33 @@ function parseArgv(argv) {
   const targetIndex = argv.indexOf('--target');
   const target = targetIndex !== -1 ? argv[targetIndex + 1] : undefined;
   const noNative = argv.includes('--no-native');
-  return { target, noNative };
+  const release = argv.includes('--release');
+  return { target, noNative, release };
 }
 
 async function main() {
-  const { target: cliTarget, noNative } = parseArgv(process.argv.slice(2));
+  const { target: cliTarget, noNative, release } = parseArgv(process.argv.slice(2));
   const { apiBase, target } = resolveShellBuildEnv({ ...process.env, target: cliTarget });
+
+  if (release) {
+    const googleServicesPath = join(APP, 'android/app/google-services.json');
+    const releaseViolations =
+      target === 'android'
+        ? auditAndroidReleaseInputs({
+            apiBase,
+            env: process.env,
+            localKeystoreProperties: existsSync(join(APP, 'android/keystore.properties')),
+            googleServicesJson: existsSync(googleServicesPath) ? readFileSync(googleServicesPath, 'utf8') : null,
+          })
+        : ['--release ne construit que la coque Android : poser --target android.'];
+    if (releaseViolations.length > 0) {
+      console.error('\n  la release ne peut pas partir :\n');
+      for (const v of releaseViolations) console.error(`    · ${v}`);
+      console.error('');
+      process.exit(1);
+    }
+    console.log('  release du Play Store : clé, google-services.json et passerelle de production — ok');
+  }
 
   console.log(`  cible : ${target}${noNative ? ' (--no-native : pas de gradle/xcodebuild)' : ''}`);
   console.log(`  base d'API : ${apiBase}`);
@@ -735,7 +765,9 @@ async function main() {
   if (target !== 'ios') {
     run(
       './gradlew',
-      nativeBuildArgs({ target: 'android', buildNumber, version: shellVersion }),
+      release
+        ? androidReleaseGradleArgs(buildNumber)
+        : nativeBuildArgs({ target: 'android', buildNumber, version: shellVersion }),
       {
         cwd: join(APP, 'android'),
         env: {
@@ -744,12 +776,12 @@ async function main() {
           ANDROID_HOME: process.env.ANDROID_HOME ?? join(process.env.HOME ?? '', 'android-sdk'),
         },
       },
-      'construction Android (assembleDebug)',
+      release ? 'construction Android (bundleRelease + assembleRelease)' : 'construction Android (assembleDebug)',
     );
 
     const outputMetadataPath = join(
       APP,
-      'android/app/build/outputs/apk/debug/output-metadata.json',
+      release ? androidReleaseArtifacts.apkMetadata : 'android/app/build/outputs/apk/debug/output-metadata.json',
     );
     if (!existsSync(outputMetadataPath)) {
       console.error(
@@ -770,6 +802,11 @@ async function main() {
       process.exit(1);
     }
     console.log(`  audit de l'APK construit : versionName ${shellVersion}, versionCode ${buildNumber} — ok`);
+    if (release) {
+      console.log(`\n  bundle du Play Store : ${androidReleaseArtifacts.bundle}`);
+      console.log(`  APK signé (installation directe) : ${androidReleaseArtifacts.apk}\n`);
+      return;
+    }
     console.log(`\n  APK : android/app/build/outputs/apk/debug/app-debug.apk`);
     console.log(
       '  installation AVD : adb install -r android/app/build/outputs/apk/debug/app-debug.apk && ' +

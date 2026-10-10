@@ -34,6 +34,7 @@ const esActivation = {
   'activation.gate.publish': 'Para publicar, valida tu dirección. Tu publicación se conserva y saldrá en cuanto se valide el código.',
   'activation.gate.invite': 'Para invitar por correo, valida tu dirección. Tu invitación saldrá en cuanto se valide el código.',
   'activation.gate.link': 'Para crear un enlace, valida tu dirección. Tu enlace se creará en cuanto se valide el código.',
+  'activation.gate.moreLinks': 'Más allá de 5 enlaces activos, valida tu dirección para crear otros. Tu enlace se creará en cuanto se valide el código.',
 } as const;
 
 export default esActivation;

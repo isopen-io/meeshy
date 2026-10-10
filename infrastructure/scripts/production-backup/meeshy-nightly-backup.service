@@ -1,0 +1,13 @@
+[Unit]
+Description=Sauvegarde nocturne de la production Meeshy (base vérifiée, médias, configuration)
+Documentation=https://github.com/isopen-io/meeshy/issues/9665
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/meeshy/production/ops/meeshy-nightly-backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=4h

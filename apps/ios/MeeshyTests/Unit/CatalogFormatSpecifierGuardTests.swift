@@ -130,6 +130,84 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
         )
     }
 
+    /// Les `%` d'une traduction, comptés comme le formateur les lit : un spécificateur (`%@`, `%1$@`, `%lld`,
+    /// `%.1f`…) est un ARGUMENT, `%%` un pourcentage littéral, tout autre `%` est NU.
+    static func pourcents(dans texte: String) -> (arguments: Int, nus: Int) {
+        let conversions: Set<Character> = ["@", "d", "D", "i", "u", "U", "x", "X", "f", "F", "e", "E", "g", "G", "c", "s", "S"]
+        let caracteres = Array(texte)
+        var arguments = 0
+        var nus = 0
+        var index = 0
+        while index < caracteres.count {
+            guard caracteres[index] == "%" else {
+                index += 1
+                continue
+            }
+            var curseur = index + 1
+            if curseur < caracteres.count, caracteres[curseur] == "%" {
+                index = curseur + 1
+                continue
+            }
+            let debutPosition = curseur
+            while curseur < caracteres.count, caracteres[curseur].isASCII, caracteres[curseur].isNumber { curseur += 1 }
+            if curseur < caracteres.count, curseur > debutPosition, caracteres[curseur] == "$" {
+                curseur += 1
+            } else {
+                curseur = debutPosition
+            }
+            if curseur < caracteres.count, caracteres[curseur] == "." {
+                curseur += 1
+                while curseur < caracteres.count, caracteres[curseur].isASCII, caracteres[curseur].isNumber { curseur += 1 }
+            }
+            while curseur < caracteres.count, caracteres[curseur] == "l" { curseur += 1 }
+            if curseur < caracteres.count, conversions.contains(caracteres[curseur]) {
+                arguments += 1
+                index = curseur + 1
+            } else {
+                nus += 1
+                index += 1
+            }
+        }
+        return (arguments, nus)
+    }
+
+    /// Un `%` nu dans une traduction qui porte des arguments — c'est alors elle que le formateur lit. Sans
+    /// argument, rien n'est formaté : « entre 30% et 50% » sort tel quel.
+    static func porteUnPourcentNu(_ texte: String) -> Bool {
+        let compte = pourcents(dans: texte)
+        return compte.arguments > 0 && compte.nus > 0
+    }
+
+    /// **Un `%` littéral dans une traduction À ARGUMENTS s'écrit `%%`.** Le
+    /// formateur lit « % v » comme un spécificateur (drapeau espace, conversion
+    /// inconnue) et « % to » comme « % t o » — un OCTAL qui consomme un argument.
+    /// « 78 % vers le 35 » (`game2.banner.to_next`, la phrase VoiceOver de la
+    /// bannière du joueur) sortait ainsi tronquée ou chiffrée au hasard dans six
+    /// langues : la valeur par défaut Swift échappait le `%`, le catalogue non.
+    func test_uneTraductionAArguments_echappeSonPourcentLitteral() throws {
+        let table = try catalogue()
+        XCTAssertGreaterThan(table.count, 500, "catalogue introuvable — la garde ne mesurerait RIEN")
+
+        let fautes = table.keys.sorted().flatMap { cle in
+            (table[cle] ?? [:]).sorted(by: { $0.key < $1.key })
+                .filter { Self.porteUnPourcentNu($0.value) }
+                .map { "  \(cle) [\($0.key)] — « \($0.value) » : écrire %% pour un pourcentage littéral" }
+        }
+        XCTAssertTrue(
+            fautes.isEmpty,
+            "Un `%` nu dans une traduction formatée est lu comme un spécificateur :\n" + fautes.joined(separator: "\n")
+        )
+    }
+
+    func test_laGardeDuPourcentReconnaitLaFormeQuelleInterdit() {
+        XCTAssertTrue(Self.porteUnPourcentNu("%1$@ % vers le %2$@"))
+        XCTAssertTrue(Self.porteUnPourcentNu("%1$@% to %2$@"))
+        XCTAssertFalse(Self.porteUnPourcentNu("%1$@ %% vers le %2$@"))
+        XCTAssertFalse(Self.porteUnPourcentNu("%1$@%% to %2$@"))
+        XCTAssertFalse(Self.porteUnPourcentNu("entre 30% et 50%"), "sans argument, rien n'est formaté")
+        XCTAssertFalse(Self.porteUnPourcentNu("%lld jours, %.1f km"))
+    }
+
     /// La garde doit reconnaître la forme qu'elle interdit, sinon elle est verte
     /// pour de mauvaises raisons — et elle l'a été le jour où les deux clés sont
     /// entrées dans le catalogue.

@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { revokeShareLinkGuests, type GuestSocketRegistry } from '../socketio/revokeShareLinkGuests';
 import type { DepartedMemberEphemeralState } from '../socketio/endConversationMembership';
+import { guardedInterval } from '../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'ExpiredShareLinksCleanupService' });
 
@@ -101,9 +102,9 @@ export class ExpiredShareLinksCleanupService {
 
   start(intervalMs: number = EXPIRED_SHARE_LINKS_SWEEP_INTERVAL_MS): void {
     void this.cleanup().catch((err) => log.warn('initial sweep failed', { err }));
-    this.interval = setInterval(() => {
+    this.interval = guardedInterval({ name: 'expired-share-links-cleanup', everyMs: intervalMs, logger: log, run: () => {
       void this.cleanup().catch((err) => log.warn('scheduled sweep failed', { err }));
-    }, intervalMs);
+    } });
     this.interval.unref?.();
     log.info('expired-share-links sweep started', { intervalMs, batchSize: this.batchSize });
   }

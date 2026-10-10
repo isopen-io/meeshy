@@ -213,6 +213,37 @@ struct APIMessageReplyToPrismTests {
         #expect(!reference.offersMediaGate)
     }
 
+    // MARK: - La nature de disparition du cité (#9573)
+
+    @Test("sans effectFlags, la nature du cité n'est pas déclarée — la citation est illisible")
+    func quoteWithoutEffectFlagsDeclaresNoNature() throws {
+        let reference = try Self.decodeReplyTo(Self.quoted()).toReplyReference(currentUserId: "u-me", preferredLanguages: ["en"])
+        #expect(reference.quotedExitNature == nil)
+        #expect(!reference.quotedContentMayLeave(quotedMessage: nil))
+    }
+
+    @Test("effectFlags déclaré ⇒ la nature est celle que la loi de sortie lit")
+    func quoteWithEffectFlagsDeclaresItsNature() throws {
+        func nature(_ protection: String) throws -> ContentExitLaw.Nature? {
+            try Self.decodeReplyTo(Self.quoted(protection: protection))
+                .toReplyReference(currentUserId: "u-me", preferredLanguages: ["en"]).quotedExitNature
+        }
+        #expect(try nature("\"effectFlags\":0,") == .ordinary)
+        #expect(try nature("\"effectFlags\":1,") == .afterReadFlame, "éphémère sans durée lisible : fermé")
+        #expect(try nature("\"effectFlags\":9,") == .afterReadFlame)
+        #expect(try nature("\"effectFlags\":4,") == .viewOnce)
+        #expect(try nature("\"effectFlags\":0,\"isViewOnce\":true,") == .viewOnce)
+        #expect(try nature("\"effectFlags\":0,\"expiresAt\":\"2026-10-14T10:00:00Z\",") == .afterReadFlame)
+    }
+
+    @Test("une citation ordinaire déclarée laisse sortir son contenu ; changer son texte garde sa nature")
+    func ordinaryDeclaredQuoteMayLeave() throws {
+        let reference = try Self.decodeReplyTo(Self.quoted(protection: "\"effectFlags\":0,"))
+            .toReplyReference(currentUserId: "u-me", preferredLanguages: ["en"])
+        #expect(reference.quotedContentMayLeave(quotedMessage: nil))
+        #expect(reference.withPreviewText("autre").quotedExitNature == .ordinary)
+    }
+
     @Test("flouté ⇒ « 🌫️ 💬 » sur un message texte")
     func blurredTextQuoteServesPlaceholder() throws {
         let reply = try Self.decodeReplyTo(Self.quoted(content: "le secret", protection: "\"isBlurred\":true,"))

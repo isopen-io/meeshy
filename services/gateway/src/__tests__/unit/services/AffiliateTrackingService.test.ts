@@ -65,6 +65,11 @@ function makePrisma(overrides: {
       findMany: jest.fn<any>().mockResolvedValue(referrals),
       groupBy: jest.fn<any>().mockResolvedValue(stats),
     },
+    affiliateVisitSession: {
+      create: jest.fn<any>().mockResolvedValue({ id: 'visit-1' }),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: deleteCount }),
+    },
     userPreference: {
       create: jest.fn<any>().mockResolvedValue({ id: 'pref-1' }),
       findFirst: jest.fn<any>().mockResolvedValue(sessionPreference),
@@ -126,22 +131,26 @@ describe('trackAffiliateVisit', () => {
     expect(result.error).toContain('Limite');
   });
 
-  it('creates userPreference for session tracking on happy path', async () => {
+  it('crée une AffiliateVisitSession à durée de vie bornée, sans aucune donnée du visiteur (H-9)', async () => {
     const prisma = makePrisma();
 
     const result = await AffiliateTrackingService.trackAffiliateVisit(prisma, 'REF-ABC123', {
-      ipAddress: '127.0.0.1',
+      ipAddress: '203.0.113.7',
+      userAgent: 'Mozilla/5.0',
+      referrer: 'https://example.test/x',
+      country: 'FR',
+      language: 'fr',
     });
 
     expect(result.success).toBe(true);
-    expect(prisma.userPreference.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          userId: 'user-affiliate',
-          valueType: 'json',
-        }),
-      })
-    );
+    const data = (prisma.affiliateVisitSession.create as jest.Mock<any>).mock.calls[0][0].data;
+    expect(data).toMatchObject({ affiliateUserId: 'user-affiliate' });
+    expect(data.sessionKey).toMatch(/^affiliate_session_[0-9a-f-]{36}$/);
+    const ttlDays = (data.expiresAt.getTime() - Date.now()) / 86_400_000;
+    expect(ttlDays).toBeGreaterThan(29);
+    expect(ttlDays).toBeLessThanOrEqual(30);
+    expect(JSON.stringify(data)).not.toMatch(/203\.0\.113|Mozilla|example\.test|FR|"fr"/);
+    expect(prisma.userPreference.create).not.toHaveBeenCalled();
   });
 
   it('returns tokenId and sessionKey on happy path', async () => {
@@ -284,18 +293,18 @@ describe('convertAffiliateVisit', () => {
     expect(result.success).toBe(true);
   });
 
-  it('updates session preference when sessionKey provided and session exists', async () => {
-    const prisma = makePrisma({
-      sessionPreference: { id: 'pref-99', value: JSON.stringify({ converted: false }) },
-    });
+  it('marque la visite convertie, une seule fois, pour le parrain de CE jeton', async () => {
+    const prisma = makePrisma();
 
     await AffiliateTrackingService.convertAffiliateVisit(prisma, 'tok', 'user-new', 'session-key');
 
-    expect(prisma.userPreference.update).toHaveBeenCalledWith(
+    expect(prisma.affiliateVisitSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'pref-99' },
-      })
+        where: expect.objectContaining({ sessionKey: 'session-key', affiliateUserId: 'user-affiliate' }),
+        data: expect.objectContaining({ referredUserId: 'user-new' }),
+      }),
     );
+    expect(prisma.userPreference.update).not.toHaveBeenCalled();
   });
 
   it('returns success:false on DB error', async () => {
@@ -445,5 +454,23 @@ describe('cleanupExpiredSessions', () => {
     const result = await AffiliateTrackingService.cleanupExpiredSessions(prisma);
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('cleanupExpiredVisitSessions (H-9)', () => {
+  it('supprime les visites dont l’échéance est passée et rend le compte', async () => {
+    const prisma = makePrisma({ deleteCount: 4 });
+    const now = new Date('2026-10-06T00:00:00Z');
+
+    const result = await AffiliateTrackingService.cleanupExpiredVisitSessions(prisma, now);
+
+    expect(result).toEqual({ success: true, deletedCount: 4 });
+    expect(prisma.affiliateVisitSession.deleteMany).toHaveBeenCalledWith({ where: { expiresAt: { lt: now } } });
+  });
+
+  it('un échec de base est rapporté, jamais levé', async () => {
+    const prisma = makePrisma();
+    (prisma.affiliateVisitSession.deleteMany as jest.Mock<any>).mockRejectedValue(new Error('down'));
+    expect((await AffiliateTrackingService.cleanupExpiredVisitSessions(prisma)).success).toBe(false);
   });
 });

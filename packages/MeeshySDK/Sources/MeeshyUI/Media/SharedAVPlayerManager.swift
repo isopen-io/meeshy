@@ -63,7 +63,58 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// au lieu de stop(). Reset à `false` par `cleanup()` → ne traverse pas
     /// un changement de vidéo. Toggle exclusif via le fullscreen overlay
     /// (inline n'expose pas `.loop` dans son ControlSet).
-    @Published public var shouldLoop: Bool = false
+    ///
+    /// Posé sur le lecteur comme `actionAtItemEnd` (#9702) : en boucle, le
+    /// lecteur garde son rythme à la fin de l'élément et la tête revient au
+    /// début sans pause ni `play()` — sans retour au coordinateur ni
+    /// réactivation de la session audio à chaque tour.
+    @Published public var shouldLoop: Bool = false {
+        didSet { if let player { applyLoop(to: player) } }
+    }
+
+    /// **La boucle est une FILE, pas un retour en arrière (#9702).** Revenir au
+    /// début par `seek` à la notification de fin coûte un saut de fil, une
+    /// purge du décodeur et une image-clé à redécoder : ≈ 0,1 s de trou à
+    /// chaque tour (mesuré à la recette du 2026-10-09 : claps à 8,10–8,13 s
+    /// pour un média de 8,00 s). Avec un successeur du MÊME média déjà en file,
+    /// `.advance` l'enchaîne sans couture — c'est ce que fait `AVPlayerLooper`,
+    /// sans vider la file ni perdre l'élément déjà préparé.
+    ///
+    /// Sans successeur en file (lecteur qui n'est pas une file, insertion
+    /// refusée), `.advance` viderait le lecteur : `.none`, et le retour au
+    /// début par `seek` reste le repli.
+    public nonisolated static func actionAtItemEnd(looping: Bool, successorQueued: Bool = false) -> AVPlayer.ActionAtItemEnd {
+        guard looping else { return .pause }
+        return successorQueued ? .advance : .none
+    }
+
+    /// Les éléments que CE moteur a mis en lecture — l'élément chargé et ses
+    /// successeurs de boucle. La notification de fin s'écoute pour tous.
+    private var engineItems = Set<ObjectIdentifier>()
+
+    private func applyLoop(to player: AVPlayer) {
+        let queued = shouldLoop ? queueLoopSuccessor(on: player) : false
+        if !shouldLoop { Self.dropLoopSuccessors(of: player) }
+        player.actionAtItemEnd = Self.actionAtItemEnd(looping: shouldLoop, successorQueued: queued)
+    }
+
+    /// Met en file UN successeur du média en cours, s'il n'y est pas déjà.
+    private func queueLoopSuccessor(on player: AVPlayer) -> Bool {
+        guard let queue = player as? AVQueuePlayer, let current = queue.currentItem else { return false }
+        if queue.items().count > 1 { return true }
+        let successor = AVPlayerItem(asset: current.asset)
+        successor.preferredForwardBufferDuration = current.preferredForwardBufferDuration
+        successor.preferredPeakBitRate = current.preferredPeakBitRate
+        guard queue.canInsert(successor, after: current) else { return false }
+        queue.insert(successor, after: current)
+        engineItems.insert(ObjectIdentifier(successor))
+        return true
+    }
+
+    private static func dropLoopSuccessors(of player: AVPlayer) {
+        guard let queue = player as? AVQueuePlayer else { return }
+        queue.items().dropFirst().forEach { queue.remove($0) }
+    }
 
     public var attachmentId: String?
 
@@ -92,6 +143,10 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// l'utilisateur (X) et la lecture s'arrête, sinon l'audio continuerait
     /// invisible en arrière-plan.
     private var pipTeardownIsInternal = false
+    /// Une fenêtre PiP a été DEMANDÉE et n'a encore ni démarré ni échoué.
+    private var isPipStarting = false
+    /// La surface qui a demandé le PiP s'est fermée derrière sa demande.
+    private var pipFailureHaltsPlayback = false
     private var watchStartTime: Date?
 
     /// Guards `applyResumePositionIfAvailable()` against firing on every
@@ -141,21 +196,18 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     private init() {}
 
-    /// Le player DÉJÀ chargé pour cette pièce jointe, ou `nil` si le
-    /// gestionnaire en porte une autre (O16). Lecture seule : demander la
-    /// continuité ne charge rien et ne préempte aucune surface en cours.
-    public func loadedPlayer(matching attachmentId: String) -> AVPlayer? {
-        guard self.attachmentId == attachmentId else { return nil }
-        return player
-    }
-
     // MARK: - Load
 
     public func load(urlString: String, attachmentId: String? = nil) {
         guard !urlString.isEmpty else { return }
         guard urlString != activeURL else { return }
 
+        let outgoing = player
+        let outgoingURL = activeURL.isEmpty ? nil : MeeshyConfig.resolveMediaURL(activeURL)
         cleanup()
+        // Rendu au pool APRÈS l'adoption du lecteur entrant : rendu avant, il
+        // pourrait évincer (FIFO) précisément le lecteur préparé qu'on va adopter.
+        defer { if let outgoing, let outgoingURL { recycle(outgoing, for: outgoingURL) } }
         // Posé APRÈS `cleanup()` (qui le remet à `nil`) : tous les appelants
         // posaient auparavant `manager.attachmentId` AVANT `load()`, donc
         // `cleanup()` l'effaçait silencieusement à chaque chargement et
@@ -167,18 +219,30 @@ public final class SharedAVPlayerManager: ObservableObject {
         let resolved = url.absoluteString
 
         activeURL = urlString
+        let localURL = CacheCoordinator.videoLocalFileURL(for: resolved)
 
-        // 1. Check prerolled player cache (instant playback — already buffered)
+        // 1. Check prerolled player cache (instant playback — already buffered).
+        // Adopté seulement s'il lit le FICHIER (#9702) : un lecteur préparé sur
+        // l'URL distante jouerait en streaming un média déjà sur le disque, et
+        // le téléchargerait une seconde fois.
         if let cached = StoryMediaLoader.shared.cachedPlayer(for: url) {
-            player = cached
-            setupObservers(for: cached)
-            return
+            if Self.mayAdoptPrerolledPlayer(
+                playsLocalFile: Self.playsLocalFile(cached), localFileOnDisk: localURL != nil
+            ) {
+                player = cached
+                setupObservers(for: cached)
+                return
+            }
+            cached.pause()
+            cached.replaceCurrentItem(with: nil)
         }
 
         // 2. Check video disk cache (play from local file — no network)
-        let localURL = CacheCoordinator.videoLocalFileURL(for: resolved)
+        // Une FILE, comme le lecteur préparé : la boucle y enchaîne sans
+        // couture. Fichier local : rien à attendre du réseau avant de jouer.
         if let localURL {
-            let newPlayer = AVPlayer(url: localURL)
+            let newPlayer = AVQueuePlayer(url: localURL)
+            newPlayer.automaticallyWaitsToMinimizeStalling = false
             player = newPlayer
             setupObservers(for: newPlayer)
             return
@@ -193,6 +257,62 @@ public final class SharedAVPlayerManager: ObservableObject {
         // Stories don't pass through this manager (their pipeline is
         // StoryReaderPrefetcher + StoryMediaLoader), so removing the
         // fallback only affects conversation/feed video.
+    }
+
+    // MARK: - Prerolled players (#9702)
+
+    /// Un lecteur préparé s'adopte s'il lit le fichier local — ou, à défaut de
+    /// fichier sur le disque, tel quel (comportement d'avant, rien de mieux à
+    /// servir). Préparé sur le réseau alors que le fichier est là, il se jette.
+    public nonisolated static func mayAdoptPrerolledPlayer(playsLocalFile: Bool, localFileOnDisk: Bool) -> Bool {
+        playsLocalFile || !localFileOnDisk
+    }
+
+    /// Le lecteur sortant revient au pool s'il est PRÊT et lit le fichier :
+    /// un retour en arrière le retrouve décodé. Un lecteur en échec ou en
+    /// streaming n'y prendrait que la place d'un voisin utile.
+    public nonisolated static func mayRecycleOutgoingPlayer(isReadyToPlay: Bool, playsLocalFile: Bool) -> Bool {
+        isReadyToPlay && playsLocalFile
+    }
+
+    private static func playsLocalFile(_ player: AVPlayer) -> Bool {
+        (player.currentItem?.asset as? AVURLAsset)?.url.isFileURL == true
+    }
+
+    /// Rend le lecteur que `load()` remplace au pool de `StoryMediaLoader`
+    /// (borné à trois, FIFO) au lieu de le détruire — le retour en arrière
+    /// d'un réel ne repart plus à froid. Tête ramenée au début : on revient à
+    /// un réel, on ne reprend pas au milieu d'une boucle (la reprise servie,
+    /// elle, est réappliquée à l'adoption par `applyResumePositionIfAvailable`).
+    private func recycle(_ outgoing: AVPlayer, for url: URL) {
+        guard Self.mayRecycleOutgoingPlayer(
+            isReadyToPlay: outgoing.currentItem?.status == .readyToPlay,
+            playsLocalFile: Self.playsLocalFile(outgoing)
+        ) else { return }
+        Self.dropLoopSuccessors(of: outgoing)
+        outgoing.actionAtItemEnd = Self.actionAtItemEnd(looping: false)
+        // Ramené au début PUIS préroulé (#9702) : le lecteur préparé du réel
+        // suivant l'est, celui du réel précédent ne l'était pas — ses tampons
+        // se remplissaient au `play()` du retour en arrière, image figée.
+        outgoing.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { finished in
+            guard finished else { return }
+            Task { @MainActor in Self.prerollIfIdle(outgoing) }
+        }
+        StoryMediaLoader.shared.returnPlayer(outgoing, for: url)
+    }
+
+    /// `preroll` lève une exception sur un lecteur qui joue ou dont l'élément
+    /// n'est pas prêt : entre le `seek` et sa complétion, le lecteur a pu être
+    /// repris (il joue) ou évincé du pool (plus d'élément).
+    public nonisolated static func mayPrerollRecycledPlayer(rate: Float, isReadyToPlay: Bool) -> Bool {
+        rate == 0 && isReadyToPlay
+    }
+
+    private static func prerollIfIdle(_ player: AVPlayer) {
+        guard mayPrerollRecycledPlayer(
+            rate: player.rate, isReadyToPlay: player.currentItem?.status == .readyToPlay
+        ) else { return }
+        player.preroll(atRate: 1.0) { _ in }
     }
 
     // MARK: - Playback Controls
@@ -433,20 +553,42 @@ public final class SharedAVPlayerManager: ObservableObject {
     public func configurePip(playerLayer: AVPlayerLayer) {
         guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
         guard pipController?.playerLayer !== playerLayer else { return }
+        // Une fenêtre PiP ouverte (ou en train de s'ouvrir) garde SON
+        // contrôleur : une surface qui se monte pendant ce temps — la bulle
+        // restée sous un plein écran qu'on ferme — le remplacerait et tuerait
+        // la fenêtre que l'utilisateur vient de demander (#9575).
+        guard Self.mayReplacePipController(isPipActive: isPipActive || isPipEngaged || isPipStarting) else { return }
         pipController?.invalidatePlaybackState()
         let controller = AVPictureInPictureController(playerLayer: playerLayer)
         controller?.canStartPictureInPictureAutomaticallyFromInline = true
         let delegate = PipDelegate { [weak self] in
-            Task { @MainActor [weak self] in self?.isPipActive = true }
+            Task { @MainActor [weak self] in
+                self?.isPipStarting = false
+                self?.pipFailureHaltsPlayback = false
+                self?.isPipActive = true
+            }
         } onStop: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                self.isPipStarting = false
                 self.isPipActive = false
                 let wasInternal = self.pipTeardownIsInternal
                 self.pipTeardownIsInternal = false
                 if Self.shouldHaltPlaybackOnPipStop(teardownWasInternal: wasInternal) {
                     self.stop()
                 }
+            }
+        } onFailedToStart: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let halts = self.pipFailureHaltsPlayback
+                self.isPipStarting = false
+                self.pipFailureHaltsPlayback = false
+                if self.isPipActive { self.isPipActive = false }
+                // La surface qui a demandé la fenêtre s'est fermée derrière
+                // elle : plus rien ne montre cette lecture, donc elle s'arrête
+                // au lieu de reprendre dans une bulle sans qu'on l'ait demandé.
+                if halts { self.pause() }
             }
         } onRestore: { [weak self] completion in
             Task { @MainActor [weak self] in
@@ -462,9 +604,29 @@ public final class SharedAVPlayerManager: ObservableObject {
         self.pipDelegate = delegate
     }
 
-    public func startPip() {
-        guard let pipController, pipController.isPictureInPicturePossible else { return }
+    /// Une fenêtre PiP vivante ne change pas de contrôleur sous elle.
+    public nonisolated static func mayReplacePipController(isPipActive: Bool) -> Bool {
+        !isPipActive
+    }
+
+    /// Demande la fenêtre PiP. Rend `true` si la demande est PARTIE — la
+    /// surface qui se ferme derrière sait alors que la lecture a un autre lieu.
+    ///
+    /// `haltsOnFailure` : la surface qui demande va se FERMER (sortie du plein
+    /// écran). Si la fenêtre échoue à s'ouvrir, la lecture s'arrête plutôt que
+    /// de continuer sans lieu. Une surface qui reste à l'écran le laisse à
+    /// `false` : en cas d'échec, elle joue toujours.
+    ///
+    /// `isPipActive` ne se lève qu'au rappel `didStart` : la couche d'origine
+    /// doit rester montée pendant l'ouverture, et le verdict de montage la
+    /// démonterait. `isPipStarting` protège le contrôleur d'ici là.
+    @discardableResult
+    public func startPip(haltsOnFailure: Bool = false) -> Bool {
+        guard let pipController, pipController.isPictureInPicturePossible else { return false }
+        isPipStarting = true
+        pipFailureHaltsPlayback = haltsOnFailure
         pipController.startPictureInPicture()
+        return true
     }
 
     public func stopPip() {
@@ -475,6 +637,8 @@ public final class SharedAVPlayerManager: ObservableObject {
             pipTeardownIsInternal = true
         }
         pipController?.stopPictureInPicture()
+        isPipStarting = false
+        pipFailureHaltsPlayback = false
         if isPipActive { isPipActive = false }
     }
 
@@ -583,6 +747,8 @@ public final class SharedAVPlayerManager: ObservableObject {
         // ça, un user qui mute en fullscreen puis ouvre une nouvelle vidéo
         // entend le son revenir alors que l'icône mute reste activée.
         player.isMuted = effectiveMuted
+        if let item = player.currentItem { engineItems.insert(ObjectIdentifier(item)) }
+        applyLoop(to: player)
 
         // The active reel is on-screen: lift the offscreen preroll bitrate cap so
         // ABR can pick the best rendition (thermal-aware — stays capped when hot).
@@ -633,20 +799,31 @@ public final class SharedAVPlayerManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification, object: player.currentItem)
+        NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
+            .sink { [weak self] notification in
+                guard let self, let finished = notification.object as? AVPlayerItem,
+                      self.engineItems.remove(ObjectIdentifier(finished)) != nil else { return }
                 self.stretchTracker.completed(Int(self.duration * 1000))
                 self.reportWatchProgress(complete: true)
                 self.emitWatchSample(complete: true)
                 self.watchClockStart = self.shouldLoop ? Date() : nil
                 if self.shouldLoop {
-                    // Loop fullscreen : seek + replay, on garde le player +
-                    // activeURL + audio session. Reset watchStartTime pour que
-                    // la prochaine fin de cycle puisse encore report progress.
-                    self.seek(to: 0)
-                    self.play()
+                    // Boucle SANS couture (#9702) : la file a déjà enchaîné sur
+                    // le successeur, à son rythme — ni `seek`, ni `play()`
+                    // (qui repassait par le coordinateur et réactivait la
+                    // session audio à chaque tour). Le tour suivant reçoit son
+                    // successeur. Sans file, la tête revient au début.
+                    // Reset watchStartTime pour que la prochaine fin de cycle
+                    // puisse encore report progress.
+                    if self.player?.currentItem === finished {
+                        self.engineItems.insert(ObjectIdentifier(finished))
+                        self.seek(to: 0)
+                        self.player?.rate = Float(self.playbackSpeed.rawValue)
+                    }
+                    if let player = self.player { self.applyLoop(to: player) }
+                    self.stretchTracker.begin(0)
+                    self.emitWatchSample()
                     self.watchStartTime = Date()
                 } else {
                     // Comportement par défaut : tear-down complet → bubble
@@ -684,6 +861,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         }
         timeObserver = nil
         cancellables.removeAll()
+        engineItems.removeAll()
         player?.pause()
         if player != nil { player = nil }
         if isPlaying { isPlaying = false }
@@ -698,6 +876,12 @@ public final class SharedAVPlayerManager: ObservableObject {
         pipController = nil
         pipDelegate = nil
         pipTeardownIsInternal = false
+        isPipStarting = false
+        pipFailureHaltsPlayback = false
+        // Le contrôleur vient de partir, et son délégué avec lui : aucun
+        // `didStop` ne viendra rabaisser le drapeau. Resté levé, il refuserait
+        // le lecteur à toute surface en ligne (#9575).
+        if isPipActive { isPipActive = false }
         // shouldLoop reset : ne traverse pas un changement d'attachment.
         // isForceMuted reset : intention par-surface TRANSITOIRE, ne traverse
         // pas non plus un changement d'attachment/surface.
@@ -717,12 +901,22 @@ private final class PipDelegate: NSObject, AVPictureInPictureControllerDelegate 
     nonisolated deinit {}
     let onStart: () -> Void
     let onStop: () -> Void
+    let onFailedToStart: () -> Void
     let onRestore: (@escaping (Bool) -> Void) -> Void
 
-    init(onStart: @escaping () -> Void, onStop: @escaping () -> Void, onRestore: @escaping (@escaping (Bool) -> Void) -> Void) {
+    init(onStart: @escaping () -> Void,
+         onStop: @escaping () -> Void,
+         onFailedToStart: @escaping () -> Void,
+         onRestore: @escaping (@escaping (Bool) -> Void) -> Void) {
         self.onStart = onStart
         self.onStop = onStop
+        self.onFailedToStart = onFailedToStart
         self.onRestore = onRestore
+    }
+
+    func pictureInPictureController(_ controller: AVPictureInPictureController,
+                                     failedToStartPictureInPictureWithError error: Error) {
+        onFailedToStart()
     }
 
     func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {

@@ -93,7 +93,7 @@ describe('les quatre états', () => {
   test('PEUPLÉ — les favoris servis, la plus récente étoile d’abord', async () => {
     const el = mountNow();
     await settle();
-    expect(rowIds(el)).toEqual(['m1', 'm-amina', 'prot-2']);
+    expect(rowIds(el)).toEqual(['m1', 'm-amina', 'prot-2', 'arch-12']);
     expect(el.querySelector('#contenu')?.hasAttribute('aria-busy')).toBe(false);
   });
 
@@ -122,7 +122,7 @@ describe('les quatre états', () => {
     expect(el.querySelector('#contenu')?.hasAttribute('aria-busy')).toBe(false);
     expect(rowIds(el)).toEqual(['m1']);
     await settle();
-    expect(rowIds(el)).toEqual(['m1', 'm-amina', 'prot-2']);
+    expect(rowIds(el)).toEqual(['m1', 'm-amina', 'prot-2', 'arch-12']);
   });
 });
 
@@ -161,11 +161,17 @@ describe('une ligne', () => {
     expect(barre('m1')).not.toBe(barre('m-amina'));
   });
 
-  test('le TAP ouvre la conversation du message', async () => {
+  /**
+   * #7420 — le toucher ouvre la conversation SUR le message mis en favori, comme
+   * `StarredMessagesView.navigate(to:)` iOS : l'adresse le nomme (`?message=`),
+   * le fil s'y ancre et le met en évidence, même plus ancien que ses pages.
+   */
+  test('le TAP ouvre la conversation SUR le message', async () => {
     const el = mountNow();
     await settle();
-    expect(row(el, 'm1')?.querySelector('a[data-starred-open]')?.getAttribute('href')).toBe('/c/c-deploiement');
-    expect(row(el, 'm-amina')?.querySelector('a[data-starred-open]')?.getAttribute('href')).toBe('/c/c-amina');
+    expect(row(el, 'm1')?.querySelector('a[data-starred-open]')?.getAttribute('href')).toBe('/c/c-deploiement?message=m1');
+    expect(row(el, 'm-amina')?.querySelector('a[data-starred-open]')?.getAttribute('href')).toBe('/c/c-amina?message=m-amina');
+    expect(row(el, 'arch-12')?.querySelector('a[data-starred-open]')?.getAttribute('href')).toBe('/c/c-archives?message=arch-12');
   });
 });
 
@@ -183,13 +189,13 @@ describe('retirer DEPUIS l’écran', () => {
     await act(async () => {
       bouton?.click();
     });
-    expect(rowIds(el)).toEqual(['m1', 'prot-2']);
+    expect(rowIds(el)).toEqual(['m1', 'prot-2', 'arch-12']);
     await settle();
 
-    expect(rowIds(el)).toEqual(['m1', 'prot-2']);
+    expect(rowIds(el)).toEqual(['m1', 'prot-2', 'arch-12']);
     expect(appQueryClient.getQueryData<StarredMembership>(STARRED_MEMBERSHIP_QUERY_KEY)).toEqual({ m1: '2026-09-22T09:00:00.000Z' });
     expect(el.querySelector('[role="status"]')?.textContent).toBe('Retiré des favoris');
-    expect(fixtureStarredRows().map((line) => line.message.id)).toEqual(['m1', 'prot-2']);
+    expect(fixtureStarredRows().map((line) => line.message.id)).toEqual(['m1', 'prot-2', 'arch-12']);
   });
 
   test('le dernier retiré laisse l’état VIDE, jamais une liste muette', async () => {

@@ -59,10 +59,10 @@ struct ReadingModeChip: View {
 
     var body: some View {
         Button(action: onCycle) {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if model.isAuto {
                     Text(String(localized: "reading_mode.chip.auto_prefix", defaultValue: "AUTO", bundle: .main))
-                        .font(MeeshyFont.relative(9, weight: .heavy))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .heavy))
                         .foregroundColor(labelColor.opacity(0.65))
                         .fixedSize()
                 }
@@ -75,7 +75,7 @@ struct ReadingModeChip: View {
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(Color(hex: model.accentHex).opacity(0.28)))
-            .overlay(Capsule().strokeBorder(Color(hex: model.accentHex).opacity(0.5), lineWidth: 0.5))
+            .overlay(Capsule().strokeBorder(Color(hex: model.accentHex).opacity(0.5), lineWidth: MeeshyBorder.hairline))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

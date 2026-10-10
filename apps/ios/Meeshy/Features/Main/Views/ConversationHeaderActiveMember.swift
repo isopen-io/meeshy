@@ -17,6 +17,9 @@ struct ConversationActiveMember: Identifiable {
     let color: String
     let avatarURL: String?
     let profile: ProfileSheetUser
+    /// Clé de « est dans la conversation » (#8892) : `id` est l'identifiant de
+    /// PARTICIPATION, le serveur annonce un inscrit par son COMPTE.
+    let viewingKey: String
 
     static func ranked(from messages: [Message], fallbackColor: String, limit: Int = 3) -> [ConversationActiveMember] {
         let tally = messages
@@ -34,7 +37,8 @@ struct ConversationActiveMember: Identifiable {
                     name: entry.first.senderName ?? "?",
                     color: entry.first.senderColor ?? fallbackColor,
                     avatarURL: entry.first.senderAvatarURL,
-                    profile: .from(message: entry.first)
+                    profile: .from(message: entry.first),
+                    viewingKey: entry.first.viewingKey
                 )
             }
     }

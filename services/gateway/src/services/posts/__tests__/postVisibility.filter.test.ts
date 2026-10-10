@@ -11,6 +11,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { buildPostVisibilityOrFilter } from '../postVisibility';
 import { PostVisibility } from '@meeshy/shared/prisma/client';
+import { matchesMongoWhere, type MongoDocument } from '../../../__tests__/helpers/mongo-where';
 
 describe('buildPostVisibilityOrFilter (G5 canonical shape)', () => {
   const filter = buildPostVisibilityOrFilter('viewer-1', ['friend-a', 'friend-b'], ['co-member-x']);
@@ -44,5 +45,35 @@ describe('buildPostVisibilityOrFilter (G5 canonical shape)', () => {
       visibility: PostVisibility.COMMUNITY,
       authorId: { in: [] },
     });
+  });
+});
+
+/**
+ * La branche EXCEPT lit `visibilityUserIds` sous une négation (#8309). Sur
+ * MongoDB, Prisma n'apparie aucune négation quand la clé est ABSENTE : un post
+ * EXCEPT sans la liste se FERME à tous les amis — jamais il ne s'ouvre à la
+ * personne exclue. Le schéma la fait naître vide (`@default([])`) et la
+ * migration 022 la pose sur les posts qui ne la portent pas.
+ */
+describe('buildPostVisibilityOrFilter — EXCEPT évalué avec les sémantiques MongoDB mesurées (#8309)', () => {
+  const visibleTo = (viewer: string, post: MongoDocument) =>
+    matchesMongoWhere(post, buildPostVisibilityOrFilter(viewer, ['author-1']) as MongoDocument);
+  const except = (overrides: MongoDocument): MongoDocument => ({
+    id: 'post-1',
+    authorId: 'author-1',
+    visibility: PostVisibility.EXCEPT,
+    ...overrides,
+  });
+
+  it('ouvre le post à un ami que la liste n’exclut pas', () => {
+    expect(visibleTo('friend-a', except({ visibilityUserIds: [] }))).toBe(true);
+  });
+
+  it('le ferme à l’ami que la liste exclut', () => {
+    expect(visibleTo('friend-a', except({ visibilityUserIds: ['friend-a'] }))).toBe(false);
+  });
+
+  it('sans la liste, le ferme à tous — jamais ouvert à la personne exclue', () => {
+    expect(visibleTo('friend-a', except({}))).toBe(false);
   });
 });

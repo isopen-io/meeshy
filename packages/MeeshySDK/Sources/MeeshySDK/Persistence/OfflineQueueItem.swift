@@ -128,14 +128,18 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     public let createdAt: Date
 
     /// La protection que le dispatcher rejoue — l'intention reconstruite
-    /// depuis ce que la ligne a persisté.
+    /// depuis ce que la ligne a persisté, TELLE QUELLE : la ligne a déjà
+    /// traversé le composeur et la contagion, un flou et une vue unique qui y
+    /// cohabitent viennent d'une citation floue (#8567).
     public var replayProtection: MessageProtectionIntent {
         let flags = MessageEffectFlags(rawValue: protectionFlags ?? 0)
         return MessageProtectionIntent(
             ephemeralDurationSeconds: ephemeralDuration,
             ephemeralAfterRead: flags.contains(.ephemeralAfterRead),
             isBlurred: flags.contains(.blurred),
-            isViewOnce: flags.contains(.viewOnce)
+            isViewOnce: flags.contains(.viewOnce),
+            maxViewOnceCount: nil,
+            veilsMayCombine: ()
         )
     }
 
@@ -271,9 +275,9 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localMediaPaths = try c.decodeIfPresent([String].self, forKey: .localMediaPaths) ?? nil
         // Clé absente des lignes écrites avant ce champ → nil, jamais d'échec.
         self.location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
-        // Même tolérance : un sticker non rendable (clé présente mais vide)
-        // vaut absent, comme partout où `MessageSticker` est relu.
-        self.sticker = try c.decodeIfPresent(MessageSticker.self, forKey: .sticker)?.ifRenderable
+        // Même tolérance : un sticker sans rien à porter (clé présente mais vide)
+        // vaut absent ; celui de « Mes stickers » garde son `stickerId` au rejeu (#9635).
+        self.sticker = try c.decodeIfPresent(MessageSticker.self, forKey: .sticker)?.ifWireWorthy
         self.copyAttachmentsFromClientMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromClientMessageId)
         self.copyAttachmentsFromServerMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromServerMessageId)
         self.attachmentReplyTo = try c.decodeIfPresent(String.self, forKey: .attachmentReplyTo)

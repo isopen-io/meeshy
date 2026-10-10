@@ -39,6 +39,7 @@ final class LocalizationConsistencyTests: XCTestCase {
     static let sourceRoots = [
         "apps/ios/Meeshy",
         "apps/ios/MeeshyNotificationExtension",
+        "apps/ios/MeeshyNotificationContentExtension",
         "apps/ios/MeeshyWidgets",
         "apps/ios/MeeshyShareExtension",
         "packages/MeeshySDK/Sources",
@@ -185,6 +186,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",  // 12
+        // #9612 — ce que la ligne dit d'une session, et l'avis d'une session
+        // fermée par le serveur : épinglés dès leur création.
+        "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsPresentation.swift",
+        "apps/ios/Meeshy/Features/Auth/SessionClosedNoticeView.swift",
         "apps/ios/Meeshy/Features/Main/Views/ConversationListQuickActions.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Components/MediaKindLabel.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift",  // 10
@@ -206,7 +211,17 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageEditsDetailView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Services/CallManager.swift",  // 8
+        // 2026-10-02 — `CallManager.swift` découpé par responsabilité : ses clés
+        // ont suivi leur code, la liste suit les hôtes (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+Connection.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+Hold.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingSignal.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+MediaControls.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+Outgoing.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+RemoteEvents.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+Signaling.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+VideoFallback.swift",
         "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",  // 8
@@ -345,6 +360,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         // aucune réconciliation ne peut la satisfaire (suivi ouvert).
         "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",  // 60
         "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift",  // 58
+        // #8843 — le flux SMS du numéro a quitté l'écran ci-dessus pour être
+        // partagé avec la proposition faite avant la recherche de contacts :
+        // le cliquet suit les CLÉS jusqu'à leur nouveau fichier (leçon 578),
+        // et la proposition naît certifiée.
+        "apps/ios/Meeshy/Features/Main/ViewModels/PhoneChangeFlowModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Contacts/PhonePromptSheet.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift",  // 56
         "apps/ios/Meeshy/Features/Main/Views/ConversationView.swift",  // 49
         "apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift",  // 41
@@ -420,7 +441,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/RecentMediaStrip.swift",  // 17
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift",  // 17
-        "apps/ios/Meeshy/Features/Main/Components/CameraView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 15
         // #6600 — l'édition de commentaire a quitté l'hôte avec sa clé.
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentEdit.swift",  // 1
@@ -434,9 +454,16 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/EmojiPickerSheet.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Views/IncomingCallView.swift",  // 15
         "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift",  // 15
+        // #9727 — la feuille « Vues » quitte l'hôte ci-dessus et naît certifiée :
+        // ce que chaque personne a fait, sept locales, `defaultValue` alignés sur le `fr`.
+        "apps/ios/Meeshy/Features/Main/Views/PublicationViewersSheet.swift",  // 23
         // #8582 — la ligne de commentaire de story a QUITTÉ l'hôte ci-dessus
         // avec ses quatre clés : le cliquet suit le code (leçon 578).
-        "apps/ios/Meeshy/Features/Main/Views/StoryCommentRowView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/StoryCommentRowView.swift",  // 7
+        // #8709 — le menu « … » d'un commentaire (post ET story) naît certifié :
+        // ses dix clés, sept locales, `defaultValue` alignés sur le `fr`.
+        "apps/ios/Meeshy/Features/Main/Views/CommentMoreMenu.swift",  // 10
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CommentMenu.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/KeypadTab.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleSystemViews.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Views/DataExportView.swift",  // 14

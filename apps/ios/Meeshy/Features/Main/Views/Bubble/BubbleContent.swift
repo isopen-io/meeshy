@@ -352,6 +352,14 @@ nonisolated struct BubbleContent: Equatable {
     /// fait passer à « déjà ouvert ». Projection de
     /// `MeeshyMessage.isViewOnceRevealed`, posée par le builder.
     var isViewOnceRevealed: Bool = false
+    /// Ce que les visionneuses ouvertes depuis ce message peuvent laisser
+    /// sortir (#9573) — projection de `Message.exitGate`, posée par le builder.
+    var exitGate: ContentExitGate = .open
+    /// Le verdict de capture de ce message (#9574, #9617) — projection de
+    /// `Message.exitOffer.capture`, posée par le builder. La peau le lit avec
+    /// `shieldsCapture(surfaceAnnounces:)` : noir pour une vue unique, et pour
+    /// une flamme partout où la surface n'annonce pas sa capture.
+    var captureVerdict: ContentExitLaw.CaptureVerdict = .free
     /// Vue unique scellée dont le toucher ouvre un PLEIN ÉCRAN (#8009) —
     /// l'image ou la vidéo que le sceau a retirée du modèle.
     var viewOnceOpensFullscreen: Bool = false
@@ -471,6 +479,8 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.protection == rhs.protection
             && lhs.isBurning == rhs.isBurning
             && lhs.isViewOnceRevealed == rhs.isViewOnceRevealed
+            && lhs.exitGate == rhs.exitGate
+            && lhs.captureVerdict == rhs.captureVerdict
             && lhs.viewOnceOpensFullscreen == rhs.viewOnceOpensFullscreen
             && lhs.isBlurred == rhs.isBlurred
             && lhs.isViewOnce == rhs.isViewOnce

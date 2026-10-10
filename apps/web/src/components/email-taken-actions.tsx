@@ -73,7 +73,7 @@ export function EmailTakenActions({
 
   return (
     <div
-      className="grid gap-2 rounded-[14px] p-3"
+      className="grid gap-2 rounded-field p-3"
       style={{ backgroundColor: 'var(--color-ios-card)' }}
       data-signup-email-taken
       data-signup-email-owner
@@ -84,7 +84,7 @@ export function EmailTakenActions({
       <div className="flex items-center gap-3">
         <Avatar
           initials={owner.maskedDisplayName.slice(0, 1).toUpperCase()}
-          color="#6366F1"
+          color="var(--color-ios-brand)"
           size={40}
           {...(owner.avatar !== null ? { src: owner.avatar } : {})}
         />

@@ -129,6 +129,9 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
       'isBlurred',
       'isViewOnce',
       'maxViewOnceCount',
+      // #9629 — la marque d'un avis de capture, épinglée pour le classer.
+      'messageSource',
+      'messageType',
       'updatedAt',
       'viewOnceCount',
     ]);
@@ -159,7 +162,7 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
     // `conversations` n'est pas nommée : elle garde son profil par défaut ENTIER.
     expect(Object.keys(changedSelect(prisma.conversation.findMany)).length).toBeGreaterThan(10);
     expect(Object.keys(changedSelect(prisma.message.findMany)).sort())
-      .toEqual(['conversationId', 'createdAt', 'id', 'updatedAt']);
+      .toEqual(['conversationId', 'createdAt', 'expiresAt', 'id', 'messageSource', 'messageType', 'updatedAt']);
     await app.close();
   });
 });
@@ -284,7 +287,7 @@ describe('#4173 c.2 — la liste blanche est FERMÉE, même sur une ligne servie
     const prisma = makePrisma({
       message: {
         findMany: jest.fn<any>()
-          .mockResolvedValueOnce([{ id: MSG.id, conversationId: MSG.conversationId, content: MSG.content, createdAt: MSG.createdAt, updatedAt: MSG.updatedAt }])
+          .mockResolvedValueOnce([{ id: MSG.id, conversationId: MSG.conversationId, content: MSG.content, createdAt: MSG.createdAt, updatedAt: MSG.updatedAt, messageSource: 'user', messageType: 'text', expiresAt: null }])
           .mockResolvedValueOnce([]),
       },
     });

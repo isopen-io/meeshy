@@ -708,7 +708,7 @@ struct StoryCardView: View {
     let quickEmojis: [String]
 
     // Animation drivers (written by parent transition funcs)
-    let progress: CGFloat
+    let progressClock: StoryPlaybackProgressClock
     let currentSlideDuration: TimeInterval
     let outgoingOpacity: Double
     let closingScale: CGFloat
@@ -828,11 +828,11 @@ struct StoryCardView: View {
     /// uniquement sur ses transitions — pas sur celles de `isPaused`.
     @Binding var isLongPressPaused: Bool
 
-    /// Reflète `shouldPauseTimer` du parent (aggrégation des pauses UI : sheets,
-    /// composer, drag, long-press, transition). Propagée au canvas via
-    /// `MeeshyScenePlayer.isPlaying` (nié) pour que la timeline canvas (vidéo,
-    /// audio, displayLink) gèle EN PHASE avec la progress bar du viewer.
+    /// `shouldPauseTimer` du parent : le canvas gèle EN PHASE avec la barre, et
+    /// joue pendant une boucle (#9821).
     let isCanvasPlaybackPaused: Bool
+    /// Tour de boucle de la story courante : chaque tour rembobine le canvas.
+    let loopPass: Int
 
     /// Jeton de purge de l'état gestuel transient, relayé tel quel à
     /// `StoryGestureOverlayView` (cf. sa doc). Bumpé par le viewer sur les
@@ -855,15 +855,14 @@ struct StoryCardView: View {
     /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) — seul
     /// loader actif (l'ancien `ProgressView` blanc redondant a été retiré).
     /// Cf. spec stories-video-layers-text-sprint § 3.D.
-    /// **Le token de retour en tête du corpus** (#4831).
-    ///
-    /// État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
+    /// **Le token de retour en tête du corpus** (#4831). État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
     /// suspend l'horloge de lecture et appartient donc au parent — remonter une
     /// fenêtre de défilement ne regarde personne d'autre que cette carte.
     @State var captionScrollToTopToken: Int = 0 // internal for cross-file extension access
-    /// Repli du composeur et hauteur mesurée de son bloc (#8431).
+    /// Repli du composeur, hauteur mesurée de son bloc (#8431), prise vocale en cours (#9893).
     @State var isComposerFolded: Bool = false // internal for cross-file extension access
     @State var composerBlockHeight: CGFloat? // internal for cross-file extension access
+    @State var isComposerRecording: Bool = false // internal for cross-file extension access
     @State private var slideContentProgress: Double = 0
     /// Le pont du parcours au doigt (#7878) : la barre le pilote, le canvas de
     /// la story COURANTE s'y attache au montage.
@@ -924,7 +923,7 @@ struct StoryCardView: View {
     /// still tap React / Reply / Settings even with comments visible
     /// (user spec 2026-05-28 « le layer de commentaire doit apparaitre en
     /// dessous des layer des controles de la story »).
-    let makeCommentsOverlay: () -> StoryCommentsOverlayView
+    let makeCommentsOverlay: () -> StoryCommentsOverlayHost
 
     var topInset: CGFloat { // internal for cross-file extension access
         max(geometry.safeAreaInsets.top, 59)
@@ -1050,7 +1049,7 @@ struct StoryCardView: View {
                               carrier: outgoing,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isOutgoing: true,
-                              servesLetterboxFill: false,
+                              servesLetterboxFill: false, stagesSoundChips: false,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs)
@@ -1109,7 +1108,7 @@ struct StoryCardView: View {
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isMuted: isGlobalMuted,
                               servesLetterboxFill: false,
-                              scrubber: sceneScrubber,
+                              scrubber: sceneScrubber, stagesSoundChips: false,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs,
@@ -1196,9 +1195,10 @@ struct StoryCardView: View {
     /// (truth-table SDK pure, testée). Le long-press qui cache les contrôleurs
     /// agrandit ainsi le canvas pour épouser le viewport (user 2026-06-03).
     private var canvasPresentation: StoryCanvasFraming.Presentation {
-        StoryCanvasFraming.readerPresentation(
-            isFullscreenSession: isFullscreenStorySession,
-            chromeVisible: chromeVisible)
+        StorySceneFocus.presentation(
+            resting: StoryCanvasFraming.readerPresentation(isFullscreenSession: isFullscreenStorySession,
+                                                           chromeVisible: chromeVisible),
+            isComposing: isComposerEngaged)
     }
 
     /// `true` quand le canvas est étendu plein bord (`.free`) — pilote le voile,
@@ -1210,7 +1210,7 @@ struct StoryCardView: View {
     var canvasIsExpanded: Bool { canvasPresentation != .carded } // internal : idem
 
     var readerCanvasFraming: StoryCanvasFraming.Result { // internal : idem
-        StoryCanvasFraming.resolve(.init(
+        StoryCanvasFraming.resolve(StorySceneFocus.framingInput(resting: .init(
             viewport: geometry.size,
             headerInset: topInset + 72,   // barres progress (~8) + ligne auteur (~48) + gap — clairance chrome, flush sans occlusion
             bottomInset: 64,              // marge basse ÷2 (it.48) — carte plus proche du bord bas
@@ -1229,7 +1229,8 @@ struct StoryCardView: View {
             // vivent chez `StageChromeAlignment.verticalAlignment` — pas ici,
             // pour qu'une seule surface ne puisse pas les faire diverger.
             verticalAlignment: StageChromeAlignment.verticalAlignment(canvasRatio: readerCanvasRatio),
-            canvasRatio: readerCanvasRatio))
+            canvasRatio: readerCanvasRatio),
+            topInset: topInset, composerReserve: composingSceneReserve))
     }
 
     var body: some View {
@@ -1298,6 +1299,7 @@ struct StoryCardView: View {
                     .readerCard(layout: readerSceneLayout,
                                 framing: readerCanvasFraming,
                                 thumbHash: readerBackdropHash(of: outgoing))
+                    .storyCommentsReadingBlur(showCommentsOverlay)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -1310,10 +1312,10 @@ struct StoryCardView: View {
             if currentStoryIsUnpaintable {
                 sentinelLayer
             } else if let story = currentStory {
-                // La porte v3 et les fils du viewer vivent dans
-                // `currentContentHost(_:)`.
+                // La porte v3 et les fils du viewer : `currentContentHost(_:)`.
                 currentContentHost(story)
                     .id(story.id)
+                    .storyLoopRestart(pass: loopPass, scrubber: sceneScrubber)
                     // U6 inc.2 — la navigation prev/next est une gesture
                     // SPATIALE (position x du tap dans le canvas) que VoiceOver
                     // ne peut pas produire : on l'expose en actions custom du
@@ -1407,6 +1409,7 @@ struct StoryCardView: View {
                     // Le flou est posé APRÈS l'ombre et le cadrage : il porte
                     // sur la carte telle qu'elle est rendue, coins compris, et
                     // ne déborde donc pas de son clip.
+                    .storyCommentsReadingBlur(showCommentsOverlay)
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
 
                 // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
@@ -1450,6 +1453,7 @@ struct StoryCardView: View {
                     .readerCard(layout: readerSceneLayout,
                                 framing: readerCanvasFraming,
                                 thumbHash: readerBackdropHash(of: story))
+                    .storyCommentsReadingBlur(showCommentsOverlay)
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)
@@ -1539,8 +1543,7 @@ struct StoryCardView: View {
                !audios.isEmpty {
                 AudioForegroundReaderOverlay(
                     foregroundAudios: audios,
-                    slideDuration: currentSlideDuration,
-                    fallbackElapsedTime: progress > 0 ? TimeInterval(progress) * currentSlideDuration : nil
+                    slideDuration: currentSlideDuration
                 )
                 .storyFocusFade(readerDecorationsShown)
             }
@@ -1571,28 +1574,29 @@ struct StoryCardView: View {
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
             // min 59pt accounts for Dynamic Island when .statusBarHidden() zeroes safeAreaInsets
             VStack(spacing: 0) {
-                StoryProgressBarsView(
+                StoryLiveProgressBars(
+                    clock: progressClock,
                     group: currentGroup,
                     currentIndex: currentStoryIndex,
-                    progress: progress,
                     scrubber: sceneScrubber,
                     onScrubStateChanged: onScrubStateChanged,
                     onSeek: seekTimer
                 )
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, MeeshySpacing.md)
                     .padding(.top, topInset + 4)
 
                 StoryHeaderView(
                     currentGroup: currentGroup,
                     currentStory: currentStory,
                     isOwnStory: isOwnStory,
-                    backgroundSoundAnnouncement: backgroundSoundAnnouncement,
+                    backgroundSoundAnnouncement: backgroundSoundAnnouncement, isGlobalMuted: $isGlobalMutedBinding,
                     hasAudioTranscript: storyHasAudioTranscript,
                     showAudioTranscript: $showAudioTranscript,
                     selectedProfileUser: $selectedProfileUser,
                     editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,
                     sharedContentWrapper: $sharedContentWrapper,
+                    showExportShareSheet: $showExportShareSheet,
                     makeStoryExternalShareURL: makeStoryExternalShareURL,
                     deleteCurrentStory: deleteCurrentStory,
                     repostAsPostDirect: repostAsPostDirect,
@@ -1602,8 +1606,7 @@ struct StoryCardView: View {
                     isFullscreenStorySession: $isFullscreenStorySession,
                     chromeVisible: $chromeVisible
                 )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
+                    .padding(.top, MeeshySpacing.smPlus)
 
                 // Les personnes que la story NOMME en mode NOTE, sous l'auteur.
                 //
@@ -1630,8 +1633,8 @@ struct StoryCardView: View {
                     onTapReference: { selectedProfileUser = .from(reference: $0) }
                 )
                 .equatable()
-                .padding(.horizontal, 16)
-                .padding(.top, 6)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.xsPlus)
 
                 Spacer()
             }
@@ -1658,7 +1661,7 @@ struct StoryCardView: View {
             // are visible. Background story stays interactable (tap to pause,
             // long-press) through the overlay's transparent surface.
             if showCommentsOverlay {
-                makeCommentsOverlay()
+                makeCommentsOverlay().placed(commentsZoneReading(geometry: geometry)).equatable()
                     // Le UIViewRepresentable du canvas expanse le ZStack parent
                     // au-delà du viewport (même cause que Layer 7 header et
                     // Layer 8 sidebar, cf. note ligne ~1024). Sans contrainte de
@@ -1722,7 +1725,6 @@ struct StoryCardView: View {
                     showLanguageOptions: $showLanguageOptions,
                     showFullLanguagePicker: $showFullLanguagePicker,
                     showViewersSheet: $showViewersSheet,
-                    showExportShareSheet: $showExportShareSheet,
                     isGlobalMutedBinding: $isGlobalMutedBinding,
                     sharedContentWrapper: $sharedContentWrapper,
                     republishStorySource: $republishStorySource,
@@ -1739,7 +1741,7 @@ struct StoryCardView: View {
                     // visibly too tight — button labels « React », « Répondre »,
                     // « Envoyer », « Son » were clipped on the right
                     // (bug user 2026-05-28 « les elements sortent du viewport »).
-                    .padding(.trailing, 16)
+                    .padding(.trailing, MeeshySpacing.lg)
             }
             .padding(.top, topReserved)
             .padding(.bottom, bottomReserved)
@@ -2048,122 +2050,6 @@ struct StoryCardView: View {
 
     // Le badge de langue courante vit désormais dans le rail (accolé à « Abc »),
     // plus dans le canvas — voir `StoryActionSidebarView.displayedLanguageCode`.
-}
-
-// MARK: - Story Viewer Content
-
-/// Root canvas of the story viewer: opaque black base, offscreen prefetcher
-/// host, and the geometry-wrapped story card with its transform stack and
-/// lifecycle modifiers. Extracted from `StoryViewerView.viewerContent`
-/// (formerly an `AnyView`) so the whole subtree is its own type-metadata
-/// unit instead of inflating `StoryViewerView.body`'s opaque type.
-struct StoryViewerContentView: View {
-    let prefetcher: StoryReaderPrefetcher
-
-    // Card transform inputs
-    let cardScale: CGFloat
-    let cardCornerRadius: CGFloat
-    let cardOpacity: Double
-    let cardOffsetY: CGFloat
-    let totalSlideX: CGFloat
-    let slideProgress: CGFloat
-    let dragProgress: CGFloat
-
-    // Cube inter-groupes (Lot 3) : aperçu statique léger du groupe voisin
-    // rendu comme seconde face pendant le drag horizontal / le commit.
-    let neighborGroup: StoryGroup?
-    let neighborEntryStory: StoryItem?
-    let neighborDirection: Int
-    // Interlude du voisin révélé AU DOIGT (directive user 2026-07-25) —
-    // valeurs OPAQUES résolues par `StoryViewerView` (cache d'intros
-    // pré-résolues + présence + amitié) et descendues jusqu'à la face du cube.
-    // `nil` = pas encore résolu → la face reste sur son backdrop seul.
-    let neighborIntro: StoryViewModel.StoryGroupIntro?
-    let neighborPresence: UserPresence?
-    let neighborIsFriend: Bool
-
-    @Binding var isPresented: Bool
-
-    /// Builds the story card for the supplied geometry. The closure is owned by
-    /// `StoryViewerView` so the card receives the view's `@State` bindings.
-    let makeStoryCard: (GeometryProxy) -> StoryCardView
-
-    var body: some View {
-        ZStack {
-            // Opaque black base — prevents any white frame bleed
-            Color.black.ignoresSafeArea()
-
-            // === P3 wire-up : offscreen prefetcher host ===
-            PrefetcherHostView(prefetcher: prefetcher)
-                .frame(width: 1, height: 1)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .zIndex(-1000)
-
-            GeometryReader { geometry in
-                ZStack {
-                    // The story card with all transforms layered.
-                    // Pin to geometry size BEFORE applying scale/clip — the
-                    // story canvas itself (`StoryCardView`) hard-frames its
-                    // body, and we double-down here so neither the
-                    // `scaleEffect` nor any unexpected intrinsic content
-                    // size can leak beyond the viewport's actual bounds.
-                    // Vrai cube inter-groupes (Lot 3) : angle proportionnel à
-                    // la position écran, anchor sur l'arête intérieure — les
-                    // deux faces (carte sortante + aperçu voisin) tournent
-                    // autour de l'arête commune. À 90° la face est de profil :
-                    // le swap de contenu au commit y est invisible.
-                    let cubeWidth = max(geometry.size.width, 1)
-                    makeStoryCard(geometry)
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .scaleEffect(cardScale * (1.0 - slideProgress * 0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
-                        .opacity(cardOpacity)
-                        .offset(x: totalSlideX, y: cardOffsetY)
-                        .rotation3DEffect(
-                            .degrees(Double(totalSlideX / cubeWidth) * 90.0),
-                            axis: (x: 0, y: 1, z: 0),
-                            anchor: totalSlideX > 0 ? .leading : .trailing,
-                            perspective: 0.5
-                        )
-                        .shadow(
-                            color: .black.opacity(dragProgress > 0.05 || slideProgress > 0.02 ? 0.5 : 0),
-                            radius: 40, y: 15
-                        )
-
-                    if let neighborGroup, neighborDirection != 0 {
-                        let incomingX = totalSlideX + (neighborDirection == 1 ? cubeWidth : -cubeWidth)
-                        NeighborGroupCubeFace(
-                            entryStory: neighborEntryStory,
-                            intro: neighborIntro,
-                            avatarURL: neighborGroup.avatarURL,
-                            avatarColor: neighborGroup.avatarColor,
-                            presence: neighborPresence,
-                            isFriend: neighborIsFriend,
-                            revealProgress: slideProgress
-                        )
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
-                            .offset(x: incomingX, y: cardOffsetY)
-                            .rotation3DEffect(
-                                .degrees(Double(incomingX / cubeWidth) * 90.0),
-                                axis: (x: 0, y: 1, z: 0),
-                                anchor: incomingX > 0 ? .leading : .trailing,
-                                perspective: 0.5
-                            )
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
-                    }
-
-                    // La croix de fermeture du preview est portée par le
-                    // `StoryHeaderView` (coin haut-droit, `dismissViewer()`).
-                    // Pas de bouton ✕ additionnel en haut-gauche — une seule
-                    // croix de fermeture (directive user 2026-07-23).
-
-                }
-            }
-        }
-    }
 }
 
 // MARK: - R3 : indicateur de buffering mid-slide

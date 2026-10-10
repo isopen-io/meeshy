@@ -75,4 +75,12 @@ describe('GET /app/shell-version', () => {
     expect(res.json().data.storeUrl).toBe('https://apps.apple.com/app/meeshy/id1');
     await app.close();
   });
+
+  it('sans APP_STORE_URL, la fiche iOS par défaut est celle qui répond — `apps.apple.com/app/meeshy` rendait 404 (#8802)', async () => {
+    process.env.SHELL_LATEST_VERSION = '2.0.7';
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/app/shell-version?platform=ios' });
+    expect(res.json().data.storeUrl).toBe('https://apps.apple.com/app/id6760208591');
+    await app.close();
+  });
 });

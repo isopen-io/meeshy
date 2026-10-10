@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { logError } from '../../utils/logger';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { validatePagination } from '../../utils/pagination';
 import {
@@ -402,10 +403,16 @@ async function trancherDemande(
   // c'est lui qui a fait le premier geste.
   //
   // Tir-et-oublie, comme les treize autres axes : un compteur d'engagement ne
-  // fait jamais échouer l'acte qu'il mesure.
+  // fait jamais échouer l'acte qu'il mesure. La cible est l'AUTRE partie :
+  // l'opération paie une fois par personne, si bien qu'une amitié défaite puis
+  // renouée ne recrédite pas.
   const engagement = new EngagementService(fastify.prisma);
-  for (const partie of [demande.senderId, demande.receiverId]) {
-    engagement.recordActivity(partie, 'social.friendship')
+  const parties = [
+    { partie: demande.senderId, autre: demande.receiverId },
+    { partie: demande.receiverId, autre: demande.senderId },
+  ];
+  for (const { partie, autre } of parties) {
+    engagement.recordActivity(partie, 'social.friendship', { targetId: autre })
       .catch((err) => logError(fastify.log, 'engagement social.friendship failed:', err));
   }
 
@@ -461,8 +468,8 @@ async function conversationDirecte(
   // Identifiant COMPACT (17 car.) : il ne concatène plus les deux ObjectId des
   // participants — un identifiant public ne doit pas publier qui parle à qui.
   const [a, b] = await Promise.all([
-    fastify.prisma.user.findUnique({ where: { id: aId }, select: { displayName: true, username: true } }),
-    fastify.prisma.user.findUnique({ where: { id: bId }, select: { displayName: true, username: true } }),
+    fastify.prisma.user.findUnique({ where: { id: aId }, select: { displayName: true, username: true, ...RECIPIENT_LANG_SELECT } }),
+    fastify.prisma.user.findUnique({ where: { id: bId }, select: { displayName: true, username: true, ...RECIPIENT_LANG_SELECT } }),
   ]);
 
   // #6080 — la table vient du site UNIQUE (`services/participantRights.ts`).
@@ -478,8 +485,8 @@ async function conversationDirecte(
       type: 'direct',
       participants: {
         create: [
-          { userId: aId, type: 'user', displayName: a?.displayName || a?.username || 'User', role: 'member', permissions },
-          { userId: bId, type: 'user', displayName: b?.displayName || b?.username || 'User', role: 'member', permissions },
+          { userId: aId, type: 'user', displayName: a?.displayName || a?.username || 'User', role: 'member', language: recipientLanguage(a, 'fr'), permissions },
+          { userId: bId, type: 'user', displayName: b?.displayName || b?.username || 'User', role: 'member', language: recipientLanguage(b, 'fr'), permissions },
         ],
       },
     },

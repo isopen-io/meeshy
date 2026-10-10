@@ -11,7 +11,7 @@ import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
   isRegisteredUser,
-  requireEmailVerification
+  requireShareLinkGrace
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { mintConversationShareLink } from './utils/share-link-mint';
@@ -28,9 +28,9 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
   // Créer un lien - Les utilisateurs authentifiés peuvent créer des liens pour leurs conversations
   fastify.post('/links', {
-    // #6437 — un lien de partage peut être suivi par n'importe qui : le
-    // créer sort du compte vers d'autres personnes.
-    onRequest: [authRequired, requireEmailVerification],
+    // #9713 — une adresse non prouvée crée ses liens pendant le délai de
+    // grâce, au plus cinq actifs ; prouvée, sans limite.
+    onRequest: [authRequired, requireShareLinkGrace],
     schema: {
       description: 'Create a share link for an existing conversation or create a new conversation with a share link. Authenticated users can create links for conversations they are members of. For global conversations, only ADMIN and BIGBOSS roles can create links. Direct conversations cannot have share links. If conversationId is not provided, a new public conversation will be created.',
       tags: ['links'],

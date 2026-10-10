@@ -10,9 +10,9 @@ import {
   ShareLinkRefused,
   ShareLinkRow,
   ShareLinksEmpty,
-  ShareLinksFamilyCard,
   ShareLinksStats,
 } from './links-parts';
+import { LinkFamilyCard } from './link-families-parts';
 import { ROUTES } from './route-table';
 import { ACCESS_RULES, ConversationChoice, LimitsFields, RulesSection } from './share-link-form';
 
@@ -58,15 +58,9 @@ describe('les adresses', () => {
 
 describe('le hub', () => {
   test('la carte des liens de partage ouvre la liste, « + » ouvre la création', () => {
-    const html = renderToStaticMarkup(<ShareLinksFamilyCard language="fr" />);
+    const html = renderToStaticMarkup(<LinkFamilyCard language="fr" family="share" />);
     expect(html).toMatch(/<a[^>]*data-links-family-open[^>]*href="\/links\/share"/);
     expect(html).toMatch(/href="\/links\/share\/new"[^>]*aria-label="Créer un lien de partage"|aria-label="Créer un lien de partage"[^>]*href="\/links\/share\/new"/);
-  });
-
-  test('aucune famille que le web ne sert pas : ni suivi, ni affiliation, ni communauté', () => {
-    const html = renderToStaticMarkup(<ShareLinksFamilyCard language="fr" />);
-    expect(html.match(/data-links-family="/g)?.length).toBe(1);
-    expect(html).not.toMatch(/suivi|affili|communaut/i);
   });
 
   test('l’en-tête : un retour NOMMÉ, et « + » seulement quand on le lui donne', () => {

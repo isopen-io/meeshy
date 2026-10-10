@@ -219,7 +219,7 @@ function SegmentBar({
             className="shrink-0 rounded-chip px-4 text-body font-semibold"
             style={{
               minHeight: 44,
-              color: selected ? 'white' : 'var(--color-ios-ink)',
+              color: selected ? 'var(--color-ios-on-brand)' : 'var(--color-ios-ink)',
               backgroundColor: selected ? 'var(--accent)' : 'var(--color-ios-card)',
             }}
           >

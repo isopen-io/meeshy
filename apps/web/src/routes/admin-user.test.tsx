@@ -1,0 +1,509 @@
+import { describe, expect, test } from 'bun:test';
+import { act } from 'react';
+
+import { ADMIN_MEMBER_SECTIONS } from '@/lib/admin/member-summaries';
+import { visibleAdminSections } from '@/lib/admin/sections';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
+import type { AdminDeps } from '@/lib/api/admin';
+import type { ApiResult, HttpRequest } from '@/lib/api/http';
+import { appQueryClient } from '@/lib/api/query-client';
+import { createRouter, navigate } from '@/lib/router';
+import { adminIdentityFixture, expectNoRawIdentifiers, type AdminIdentityFixture } from '@/test-support/admin-assertions';
+import { setupAdminKitTests } from '@/test-support/admin-harness';
+import { pathOf, routedTransport, type RoutedReply } from '@/test-support/routed-transport';
+
+import { AdminUserFiche } from './admin-user';
+
+/**
+ * **LA FICHE D'UN MEMBRE, SUR LE KIT** (#8005, #8004) — ce qu'un administrateur lit :
+ * le VRAI nom, l'état dit en mots, quinze chiffres, des métadonnées INTERPRÉTÉES
+ * (langues nommées, pays, âge, consentements, appareil), et rien d'inventé pour
+ * qui ne reçoit pas le bloc sensible.
+ */
+const { mount, mounter } = setupAdminKitTests({ languages: ['fr', 'en'] });
+
+const BIGBOSS = adminIdentityFixture({ role: 'BIGBOSS' });
+const ID = '64f1c2a9e8b7d6c5b4a39281';
+const NOW = new Date('2026-09-30T12:00:00.000Z');
+
+const METADATA = {
+  deviceLocale: 'pt-BR',
+  deviceCountry: 'BR',
+  birthDate: '1994-03-12T12:00:00.000Z',
+  ageVerifiedAt: '2026-08-01T12:00:00.000Z',
+  voiceProfileConsentAt: '2026-08-02T12:00:00.000Z',
+  voiceDataConsentAt: null,
+  dataProcessingConsentAt: '2026-08-03T12:00:00.000Z',
+  analyticsConsentAt: null,
+  voiceCloningEnabledAt: null,
+  termsAcceptedAt: '2026-07-01T12:00:00.000Z',
+  termsVersion: '2026-06',
+  onboardingCompletedAt: '2026-07-02T12:00:00.000Z',
+  currentStreakDays: 4,
+  longestStreakDays: 21,
+  engagementScore: 73.5,
+  meeshBalance: 120,
+  blockedCount: 2,
+  hasPendingEmail: true,
+  hasPendingPhone: false,
+};
+
+const DETAIL = {
+  id: ID,
+  username: 'amina',
+  firstName: 'Amina',
+  lastName: 'Diallo',
+  displayName: '',
+  bio: 'Traductrice',
+  avatar: '',
+  banner: '',
+  profileCompletionRate: 80,
+  role: 'MODERATOR',
+  isActive: true,
+  isOnline: true,
+  emailVerifiedAt: '2026-01-02T12:00:00.000Z',
+  phoneVerifiedAt: null,
+  lastActiveAt: '2026-09-30T11:59:45.000Z',
+  createdAt: '2025-12-01T12:00:00.000Z',
+  updatedAt: '2026-09-15T12:00:00.000Z',
+  deactivatedAt: null,
+  email: 'amina@example.test',
+  phoneNumber: '',
+  timezone: 'Africa/Dakar',
+  systemLanguage: 'fr',
+  regionalLanguage: 'wo',
+  customDestinationLanguage: '',
+  lastPasswordChange: '2026-06-01T12:00:00.000Z',
+  failedLoginAttempts: 2,
+  lockedUntil: null,
+  lockedReason: null,
+  twoFactorEnabledAt: '2026-05-01T12:00:00.000Z',
+  twoFactorBackupCodesRemaining: 6,
+  deletedAt: null,
+  deletedBy: null,
+  registrationCountry: 'SN',
+  lastLoginLocation: 'Dakar, SN',
+  lastLoginDevice: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1',
+  registrationLocation: 'Thiès, SN',
+  registrationDevice: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0 Safari/537.36',
+  adminMetadata: METADATA,
+  _count: { createdShareLinks: 3, createdTrackingLinks: 2, createdAffiliateTokens: 1, affiliateRelations: 4, referredRelations: 5, sentFriendRequests: 6, receivedFriendRequests: 7 },
+};
+
+const STATS = {
+  messagesSent: 1204,
+  conversations: 31,
+  posts: 12,
+  reels: 2,
+  stories: 9,
+  comments: 40,
+  reactionsGiven: 300,
+  mediaUploaded: 15,
+  friends: 22,
+  pendingFriendRequestsIn: 1,
+  pendingFriendRequestsOut: 3,
+  reportsFiled: null,
+  reportsReceived: 2,
+  activeSessions: 2,
+  communities: 4,
+};
+
+const page = (rows: readonly unknown[]): ApiResult<unknown> => ({ ok: true, data: rows, pagination: { total: rows.length, offset: 0, limit: 20, hasMore: false } });
+
+const at = (suffix: string, reply: ApiResult<unknown>, method = 'GET'): RoutedReply => (request: HttpRequest) =>
+  request.method === method && pathOf(request) === `/api/v1/admin/users/${ID}${suffix}` ? reply : undefined;
+
+const base = (detail: Readonly<Record<string, unknown>> = DETAIL, bans: readonly unknown[] = []): readonly RoutedReply[] => [
+  at('', { ok: true, data: detail }),
+  at('/stats', { ok: true, data: STATS }),
+  at('/bans', { ok: true, data: bans }),
+  at('/media', page([])),
+  at('/conversations', page([])),
+];
+
+async function open(options: { readonly url?: string; readonly identity?: AdminIdentityFixture; readonly replies?: readonly RoutedReply[] } = {}) {
+  /* Un témoin peut ouvrir la fiche plusieurs fois : le membre déjà en cache ne doit pas survivre au montage suivant. */
+  appQueryClient.removeQueries({ queryKey: ['admin', 'user', ID] });
+  const gateway = routedTransport(...(options.replies ?? base()));
+  const deps: AdminDeps = { source: 'gateway', transport: gateway.transport };
+  const Screen = () => <AdminUserFiche userId={ID} language="fr" reach={useAdminReach()} deps={deps} now={() => NOW} />;
+  const { Router } = createRouter({ probe: { pattern: '/probe', screen: async () => ({ default: Screen }) } }, () => <p>absent</p>);
+  navigate(options.url ?? '/probe', true);
+  const host = await mount(<Router wrap={(children) => children} skeleton={null} />, options.identity ?? BIGBOSS);
+  for (let attempt = 0; attempt < 40 && host.querySelector('[data-admin-fiche], [data-admin-error], [data-admin-denied-inline]') === null; attempt += 1) await mounter.settle();
+  await mounter.settle();
+  return { host, calls: gateway.calls };
+}
+
+const textOf = (element: Element | null) => (element?.textContent ?? '').replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim();
+const meta = (host: ParentNode, anchor: string) => textOf(host.querySelector(`[data-admin-meta="${anchor}"]`));
+const auditOpens = () => visibleAdminSections(BIGBOSS.permissions, 'BIGBOSS').some((section) => section.id === 'audit');
+
+describe('l’en-tête d’identité — le vrai nom, l’état en mots', () => {
+  test('nom composé (sans nom affiché : « Prénom Nom »), @pseudo, avatar avec sa présence calculée', async () => {
+    const { host } = await open();
+    expect(host.querySelector('[data-admin-user]')?.getAttribute('data-admin-user')).toBe(ID);
+    expect(host.querySelector('[data-admin-fiche="user"]')).not.toBeNull();
+    const identity = host.querySelector('[data-admin-identity]');
+    expect(identity?.querySelector('h2')?.textContent).toBe('Amina Diallo');
+    expect(textOf(identity)).toContain('@amina');
+    expect(identity?.querySelector('[data-presence]')?.getAttribute('data-presence')).toBe('online');
+  });
+
+  test('rôle, état, preuve d’e-mail et double authentification se disent en mots', async () => {
+    const { host } = await open();
+    const identity = textOf(host.querySelector('[data-admin-identity]'));
+    expect(identity).toContain('Modérateur');
+    expect(identity).toContain('Actif');
+    expect(identity).toContain('E-mail vérifié');
+    expect(identity).toContain('Double authentification');
+    expect(identity).not.toContain('MODERATOR');
+  });
+
+  test('l’état le plus grave gagne : un bannissement en vigueur se dit « Banni »', async () => {
+    const { host } = await open({ replies: base(DETAIL, [{ id: 'b1', reason: 'spam', active: true, createdAt: '2026-09-29T12:00:00.000Z', expiresAt: null, liftedAt: null }]) });
+    expect(textOf(host.querySelector('[data-admin-identity]'))).toContain('Banni');
+  });
+
+  test('désactivé, verrouillé', async () => {
+    const off = await open({ replies: base({ ...DETAIL, isActive: false, deactivatedAt: '2026-09-20T12:00:00.000Z' }) });
+    expect(textOf(off.host.querySelector('[data-admin-identity]'))).toContain('Désactivé');
+    mounter.unmountAll();
+    const locked = await open({ replies: base({ ...DETAIL, lockedUntil: '2026-10-02T12:00:00.000Z' }) });
+    expect(textOf(locked.host.querySelector('[data-admin-identity]'))).toContain('Verrouillé');
+  });
+
+  test('le fil d’Ariane nomme le groupe, la section et le membre — jamais son identifiant', async () => {
+    const { host } = await open();
+    const crumbs = [...host.querySelectorAll('nav ol li')].map((item) => textOf(item));
+    expect(crumbs).toEqual(['Personnes', 'Comptes', 'Amina Diallo']);
+  });
+
+  test('« Journal de ce membre » n’existe que si la section d’audit est ouverte, et pointe vers ce membre', async () => {
+    const { host } = await open();
+    const link = host.querySelector<HTMLAnchorElement>('[data-admin-link="member-journal"]');
+    if (auditOpens()) {
+      expect(link?.getAttribute('href')).toBe(`/admin/audit?subject=${ID}`);
+    } else {
+      expect(link).toBeNull();
+      expect(textOf(host)).not.toContain('Journal de ce membre');
+    }
+  });
+});
+
+describe('le bandeau de chiffres — quinze, dont un que la passerelle retient', () => {
+  test('quinze cartes, formatées ; les signalements déposés se disent « Non communiqué », jamais 0', async () => {
+    const { host } = await open();
+    const cards = [...host.querySelectorAll('[data-admin-stat-strip] [data-admin-stat]')];
+    expect(cards).toHaveLength(15);
+    expect(textOf(host.querySelector('[data-admin-stat="messagesSent"]'))).toContain('1 204');
+    expect(textOf(host.querySelector('[data-admin-stat="reportsFiled"]'))).toContain('Non communiqué');
+    expect(textOf(host.querySelector('[data-admin-stat="reportsReceived"]'))).toContain('2');
+  });
+
+  test('les demandes envoyées EN ATTENTE mènent aux demandes en attente de ce membre, quand la section est ouverte', async () => {
+    const { host } = await open();
+    const link = host.querySelector('[data-admin-stat="pendingFriendRequestsOut"] a');
+    const opens = visibleAdminSections(BIGBOSS.permissions, 'BIGBOSS').some((section) => section.id === 'invitations');
+    if (opens) expect(link?.getAttribute('href')).toBe(`/admin/invitations?senderId=${ID}&status=pending`);
+    else expect(link).toBeNull();
+  });
+
+  test('un échec des chiffres se dit, avec « Réessayer », sans masquer le reste de la fiche', async () => {
+    const { host } = await open({ replies: [at('', { ok: true, data: DETAIL }), at('/stats', { ok: false, status: 500, error: 'boom' }), at('/bans', { ok: true, data: [] })] });
+    expect(host.querySelector('[data-admin-stat-strip]')).toBeNull();
+    expect(host.querySelector('[data-admin-notice="warning"] [data-admin-retry]')).not.toBeNull();
+    expect(host.querySelector('[data-admin-identity]')).not.toBeNull();
+  });
+});
+
+describe('les métadonnées interprétées (#8005)', () => {
+  test('identité et langues : les trois rangs du Prisme NOMMÉS, le fuseau, le pays d’inscription, la complétude', async () => {
+    const { host } = await open();
+    expect(meta(host, 'systemLanguage')).toContain('Français');
+    expect(meta(host, 'regionalLanguage')).toContain('Wolof');
+    expect(meta(host, 'customLanguage')).toContain('Aucune');
+    expect(meta(host, 'timezone')).toContain('Africa/Dakar');
+    expect(meta(host, 'registrationCountry')).toContain('Sénégal');
+    expect(meta(host, 'completion')).toContain('80 %');
+    expect(meta(host, 'systemLanguage')).toContain('Les messages sont lus dans cet ordre de langues');
+  });
+
+  test('dates en absolu ET en relatif ; la dernière activité masquée se dit « Non communiquée »', async () => {
+    const { host } = await open();
+    expect(host.querySelector('[data-admin-meta="createdAt"] time')?.getAttribute('title')).toContain('2025');
+    expect(meta(host, 'createdAt')).toContain('il y a');
+    mounter.unmountAll();
+    const hidden = await open({ replies: base({ ...DETAIL, lastActiveAt: null, isOnline: false }) });
+    expect(meta(hidden.host, 'lastActive')).toContain('Non communiquée');
+    expect(meta(hidden.host, 'lastActive')).toContain('La présence n’est partagée qu’avec');
+  });
+
+  test('métadonnées de compte : langue et pays de l’appareil, âge calculé, consentements, conditions, série, score, meesh, blocages, changements en attente', async () => {
+    const { host } = await open();
+    expect(meta(host, 'deviceLocale').toLowerCase()).toContain('portugais');
+    expect(meta(host, 'deviceCountry')).toContain('Brésil');
+    expect(meta(host, 'age')).toContain('32 ans');
+    expect(meta(host, 'age')).toContain('12 mars 1994');
+    expect(meta(host, 'ageVerified')).toContain('Vérifié le');
+    expect(meta(host, 'consent-voiceProfile')).toContain('Donné le');
+    expect(meta(host, 'consent-voiceData')).toContain('Non donné');
+    expect(meta(host, 'consent-analytics')).toContain('Non donné');
+    expect(meta(host, 'terms')).toContain('Version 2026-06');
+    expect(meta(host, 'onboarding')).toContain('Terminé le');
+    expect(meta(host, 'streak')).toContain('4 jours (record : 21 jours)');
+    expect(meta(host, 'engagement')).toContain('73,5');
+    expect(meta(host, 'meesh')).toContain('120');
+    expect(meta(host, 'blocked')).toContain('2 compte(s)');
+    expect(meta(host, 'pendingEmail')).toContain('Oui');
+    expect(meta(host, 'pendingEmail')).toContain('jamais affichée');
+    expect(meta(host, 'pendingPhone')).toContain('Non');
+  });
+
+  test('connexions : lieu et appareil LUS (navigateur · plateforme), tentatives, verrou, mot de passe, codes de secours', async () => {
+    const { host } = await open();
+    expect(meta(host, 'lastLogin')).toContain('Dakar, SN · Safari · iPhone / iPad');
+    expect(meta(host, 'registration')).toContain('Thiès, SN · Chrome · Ordinateur');
+    expect(meta(host, 'failedLogins')).toContain('2');
+    expect(meta(host, 'failedLogins')).toContain('repart de zéro');
+    expect(meta(host, 'lock')).toContain('Aucun verrou');
+    expect(meta(host, 'passwordChanged')).toContain('Changé le');
+    expect(meta(host, 'backupCodes')).toContain('6 code(s) de secours restant(s)');
+    expect(host.textContent).not.toContain('Mozilla');
+  });
+
+  test('compteurs de liens (`_count`) et identifiant technique, seule ligne où l’identifiant s’écrit', async () => {
+    const { host } = await open();
+    expect(meta(host, 'shareLinks')).toContain('3');
+    expect(meta(host, 'referralsReceived')).toContain('5');
+    expect(meta(host, 'requestsReceived')).toContain('7');
+    expect(host.querySelector('[data-admin-technical-id]')?.textContent).toBe(ID);
+  });
+
+  test('la fin d’un compte se date et se signe ; le pays du numéro et les conversations rejointes se disent (audit 2026-10-04)', async () => {
+    const ADMIN_ID = '64f1c2a9e8b7d6c5b4a39299';
+    const { host } = await open({
+      replies: base({
+        ...DETAIL,
+        isActive: false,
+        deactivatedAt: '2026-09-20T12:00:00.000Z',
+        deletedAt: '2026-09-20T12:00:00.000Z',
+        deletedBy: ADMIN_ID,
+        phoneNumber: '+221770000000',
+        phoneCountryCode: 'SN',
+        _count: { ...DETAIL._count, participations: 31 },
+      }),
+    });
+    expect(meta(host, 'deactivatedAt')).toContain('2026');
+    expect(meta(host, 'deletedAt')).toContain('20 sept. 2026');
+    expect(host.querySelector('[data-admin-meta="deletedBy"] a')?.getAttribute('href')).toBe(`/admin/users/${ADMIN_ID}`);
+    expect(meta(host, 'deletedBy')).not.toContain(ADMIN_ID);
+    expect(meta(host, 'phoneCountry')).toContain('Sénégal');
+    expect(meta(host, 'participations')).toContain('31');
+  });
+
+  test('sans le bloc sensible (rôle qui ne le reçoit pas) : ni métadonnées de compte, ni connexions, ni pays inventé', async () => {
+    const masked = {
+      ...DETAIL,
+      adminMetadata: undefined,
+      twoFactorBackupCodesRemaining: undefined,
+      registrationCountry: undefined,
+      lastLoginLocation: undefined,
+      lastLoginDevice: undefined,
+      registrationLocation: undefined,
+      registrationDevice: undefined,
+      email: 'a***@example.test',
+    };
+    const { host } = await open({ replies: base(masked) });
+    const text = textOf(host.querySelector('aside'));
+    expect(text).not.toContain('Métadonnées de compte');
+    expect(text).not.toContain('Connexions');
+    expect(host.querySelector('[data-admin-meta="registrationCountry"]')).toBeNull();
+    expect(host.querySelector('[data-admin-meta="deviceLocale"]')).toBeNull();
+    expect(text).toContain('Identité et langues');
+  });
+
+  test('aucun identifiant, horodatage ISO, booléen ou énumération bruts dans toute la fiche', async () => {
+    const { host } = await open();
+    expectNoRawIdentifiers(host);
+  });
+
+  test('aucun hexadécimal dans la fiche (la pastille de l’avatar lit la table centrale de la présence)', async () => {
+    const { host } = await open();
+    const clone = host.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('[data-presence]').forEach((dot) => dot.remove());
+    expect(clone.innerHTML).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
+
+describe('états dessinés et sections en modales (spec 2026-10-04 § 3)', () => {
+  test('membre introuvable (404), refus (403) et panne : chacun se dit à sa façon', async () => {
+    const notFound = await open({ replies: [at('', { ok: false, status: 404, error: 'User not found' }), at('/stats', { ok: true, data: STATS }), at('/bans', { ok: true, data: [] })] });
+    expect(textOf(notFound.host.querySelector('[data-admin-error]'))).toContain('n’existe pas');
+    mounter.unmountAll();
+    const denied = await open({ replies: [at('', { ok: false, status: 403, error: 'Forbidden' }), at('/stats', { ok: true, data: STATS }), at('/bans', { ok: true, data: [] })] });
+    expect(denied.host.querySelector('[data-admin-denied-inline]')).not.toBeNull();
+    expect(denied.host.querySelector('[data-admin-error]')).toBeNull();
+    mounter.unmountAll();
+    const down = await open({ replies: [at('', { ok: false, status: 500, error: 'boom' }), at('/stats', { ok: true, data: STATS }), at('/bans', { ok: true, data: [] })] });
+    expect(textOf(down.host.querySelector('[data-admin-error]'))).toContain('Fiche indisponible');
+    expect(down.host.querySelector('[data-admin-retry]')).not.toBeNull();
+  });
+
+  const openSection = async (host: HTMLElement, section: string) => {
+    await act(async () => host.querySelector<HTMLButtonElement>(`[data-admin-summary="${section}"] [data-admin-summary-open]`)?.click());
+    await mounter.settle();
+    await mounter.settle();
+  };
+  const panel = (section: string) => document.querySelector(`[data-admin-user-panel="${section}"]`);
+
+  test('le dossier est une grille de cartes, une par section ; aucune modale n’est montée au repos', async () => {
+    const { host } = await open();
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    const cards = [...host.querySelectorAll('[data-admin-member-cards] [data-admin-summary]')].map((card) => card.getAttribute('data-admin-summary'));
+    expect(cards).toEqual([...ADMIN_MEMBER_SECTIONS]);
+    expect(document.querySelector('[data-admin-user-panel]')).toBeNull();
+    const button = host.querySelector<HTMLButtonElement>('[data-admin-summary="profile"] [data-admin-summary-open]');
+    expect(button?.getAttribute('aria-label')).toContain('Identité');
+    expect(button?.style.minHeight).toBe('44px');
+  });
+
+  /**
+   * #8003 — la passerelle ne sert les préférences d'un membre qu'à `canViewSensitiveData`
+   * (BIGBOSS, ADMIN). Un MODERATOR ne se voit offrir ni la carte ni sa modale, et une
+   * adresse `?open=preferences` n'ouvre rien ni ne demande rien à la passerelle.
+   */
+  test('au rang d’administration, la carte Préférences est offerte (#8003)', async () => {
+    const { host } = await open();
+    expect(host.querySelector('[data-admin-summary="preferences"]')).not.toBeNull();
+  });
+
+  test('un MODERATOR ne se voit offrir ni la carte Préférences ni sa modale, même par l’adresse (#8003)', async () => {
+    const moderateur = await open({ url: '/probe?open=preferences', identity: adminIdentityFixture({ role: 'MODERATOR' }) });
+    expect(moderateur.host.querySelector('[data-admin-fiche]')).not.toBeNull();
+    /* Un booléen, pas le nœud : en échec, bun ne sait pas imprimer un élément happy-dom et la
+       suite resterait bloquée jusqu'au délai au lieu de rougir (audit adversarial de #9391). */
+    expect(moderateur.host.querySelector('[data-admin-summary="preferences"]') === null).toBe(true);
+    expect(moderateur.host.querySelector('[data-admin-summary="security"]')).not.toBeNull();
+    expect(panel('preferences') === null).toBe(true);
+    expect(moderateur.calls().some((call) => pathOf(call).endsWith('/preferences'))).toBe(false);
+  });
+
+  test('les cartes disent les chiffres DÉJÀ lus par la fiche — aucune requête de détail avant l’ouverture', async () => {
+    const { host, calls } = await open();
+    expect(textOf(host.querySelector('[data-admin-summary="conversations"]'))).toContain('31');
+    expect(textOf(host.querySelector('[data-admin-summary="conversations"]'))).toContain('1 204');
+    expect(textOf(host.querySelector('[data-admin-summary="contacts"]'))).toContain('22');
+    expect(textOf(host.querySelector('[data-admin-summary="reports"]'))).toContain('Non communiqué');
+    expect(textOf(host.querySelector('[data-admin-summary="role"]'))).toContain('Modérateur');
+    expect(textOf(host.querySelector('[data-admin-summary="access"]'))).toContain('Activée');
+    expect(textOf(host.querySelector('[data-admin-summary="contact"]'))).toContain('Vérifié');
+    const detailReads = calls().filter((call) => /\/(conversations|media|activity|sessions|security-events|voice-profile|preferences|reports|reported-messages|communities)/.test(pathOf(call)));
+    expect(detailReads).toEqual([]);
+  });
+
+  test('« Ouvrir » écrit la section dans l’adresse (?open=) et monte SA section — les conversations repliables y sont', async () => {
+    const { host, calls } = await open();
+    await openSection(host, 'conversations');
+    expect(window.location.search).toBe('?open=conversations');
+    expect(panel('conversations')).not.toBeNull();
+    expect(document.querySelector('[data-collapsible-toggle="admin-conv"]')).not.toBeNull();
+    expect(calls().some((call) => pathOf(call) === `/api/v1/admin/users/${ID}/conversations`)).toBe(true);
+  });
+
+  test('un lien d’hier `?tab=security` (la fiche d’un signalement le tire encore) ouvre la modale du même nom', async () => {
+    await open({ url: '/probe?tab=security' });
+    expect(panel('security')).not.toBeNull();
+    expect(document.querySelector('[data-admin-security]')).not.toBeNull();
+  });
+
+  test('le profil s’est scindé : identité (images), contact, mot de passe et protections, rôle — chacun dans sa modale', async () => {
+    const { host } = await open();
+    for (const [section, inner] of [
+      ['profile', ['images', 'identity']],
+      ['contact', ['contact']],
+      ['access', ['security']],
+      ['role', ['role']],
+    ] as const) {
+      await openSection(host, section);
+      for (const name of inner) expect(panel(section)?.querySelector(`[data-admin-member-section="${name}"]`)).not.toBeNull();
+    }
+  });
+
+  test('le menu de rôle nomme chaque rôle — jamais BIGBOSS', async () => {
+    const { host } = await open();
+    await openSection(host, 'role');
+    const options = [...(document.querySelectorAll('#admin-member-role option') ?? [])].map((option) => option.textContent);
+    expect(options).toEqual(['Créateur', 'Administrateur', 'Modérateur', 'Auditeur', 'Analyste', 'Membre']);
+  });
+});
+
+describe('supprimer et restaurer un compte (audit 2026-10-04)', () => {
+  const confirmButton = () => [...document.querySelectorAll<HTMLButtonElement>('[data-admin-confirm] button')].find((button) => /Supprimer|Restaurer/.test(button.textContent ?? '') && button.textContent !== 'Annuler');
+
+  test('le rang souverain supprime sans motif : DELETE part sans corps, la fiche et la liste se relisent, le verdict est annoncé', async () => {
+    let deleted = false;
+    const replies: RoutedReply[] = [
+      (request) => (request.method === 'DELETE' && pathOf(request) === `/api/v1/admin/users/${ID}` ? ((deleted = true), { ok: true, data: { message: 'User deleted successfully' } }) : undefined),
+      (request) =>
+        request.method === 'GET' && pathOf(request) === `/api/v1/admin/users/${ID}`
+          ? { ok: true, data: deleted ? { ...DETAIL, isActive: false, deletedAt: '2026-09-30T12:00:00.000Z', deactivatedAt: '2026-09-30T12:00:00.000Z' } : DETAIL }
+          : undefined,
+      ...base(),
+    ];
+    const { host, calls } = await open({ replies });
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="delete-user"]')?.click());
+    await mounter.settle();
+    expect(document.querySelector('[data-admin-confirm] textarea')).toBeNull();
+    await act(async () => confirmButton()?.click());
+    for (let attempt = 0; attempt < 10; attempt += 1) await mounter.settle();
+    const call = calls().find((request) => request.method === 'DELETE');
+    expect(call?.body).toBeUndefined();
+    expect(textOf(host.querySelector('[data-admin-identity]'))).toContain('Supprimé');
+    expect(host.querySelector('[data-admin-action="restore-user"]')).not.toBeNull();
+    expect(host.querySelector('[data-admin-action="delete-user"]')).toBeNull();
+    expect(textOf(host)).toContain('Compte supprimé');
+  });
+
+  test('un administrateur écrit un motif (trois caractères) : il part sous `reason`', async () => {
+    const replies: RoutedReply[] = [(request) => (request.method === 'DELETE' ? { ok: true, data: { message: 'ok' } } : undefined), ...base()];
+    const { host, calls } = await open({ identity: adminIdentityFixture({ role: 'ADMIN' }), replies });
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="delete-user"]')?.click());
+    await mounter.settle();
+    expect(confirmButton()?.disabled).toBe(true);
+    const field = document.querySelector<HTMLTextAreaElement>('[data-admin-confirm] textarea');
+    await act(async () => {
+      if (field === null) return;
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(field, 'Compte en double');
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await mounter.settle();
+    await act(async () => confirmButton()?.click());
+    for (let attempt = 0; attempt < 6; attempt += 1) await mounter.settle();
+    expect(calls().find((request) => request.method === 'DELETE')?.body).toEqual({ reason: 'Compte en double' });
+  });
+
+  test('un rang sans `canDeleteUsers` (modérateur) ne voit aucun des deux gestes', async () => {
+    const { host } = await open({ identity: adminIdentityFixture({ role: 'MODERATOR' }) });
+    expect(host.querySelector('[data-admin-lifecycle]')).toBeNull();
+  });
+
+  test('un compte supprimé offre « Restaurer » seul : POST …/restore, la fiche relue remplace la fiche', async () => {
+    const DELETED = { ...DETAIL, isActive: false, deletedAt: '2026-09-20T12:00:00.000Z', deactivatedAt: '2026-09-20T12:00:00.000Z', deletedBy: '64f1c2a9e8b7d6c5b4a39299' };
+    const replies: RoutedReply[] = [
+      (request) => (request.method === 'POST' && pathOf(request) === `/api/v1/admin/users/${ID}/restore` ? { ok: true, data: { ...DETAIL, isActive: true, deletedAt: null, deletedBy: null } } : undefined),
+      ...base(DELETED),
+    ];
+    const { host, calls } = await open({ replies });
+    expect(host.querySelector('[data-admin-action="delete-user"]')).toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="restore-user"]')?.click());
+    await mounter.settle();
+    await act(async () => confirmButton()?.click());
+    for (let attempt = 0; attempt < 6; attempt += 1) await mounter.settle();
+    expect(calls().some((request) => request.method === 'POST' && pathOf(request) === `/api/v1/admin/users/${ID}/restore`)).toBe(true);
+    expect(textOf(host.querySelector('[data-admin-identity]'))).toContain('Actif');
+    expect(host.querySelector('[data-admin-action="delete-user"]')).not.toBeNull();
+    expect(textOf(host)).toContain('Compte restauré');
+  });
+});

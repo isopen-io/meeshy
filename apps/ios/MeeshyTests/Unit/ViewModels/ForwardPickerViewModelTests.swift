@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import MeeshySDK
 @testable import Meeshy
 
@@ -404,6 +405,47 @@ final class ForwardPickerViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.targets.map(\.id), ["conv:cFresh"],
                        "la réponse tardive de « al » ne doit jamais écraser celle de « ali »")
+    }
+
+    // MARK: - user:updated (#9307)
+
+    func test_userUpdated_directConversationTarget_isRenamedAndRepaintedInTheOpenSheet() async throws {
+        let updates = PassthroughSubject<UserUpdatedEvent, Never>()
+        let service = MockConversationService()
+        service.listPageResult = .success(ConversationPage(items: [], rawItems: [], nextCursor: nil, hasMore: false))
+        let authManager = MockAuthManager()
+        authManager.currentUser = MeeshyUser(id: "me", username: "moi")
+        let cached = [makeConv("c-bob", participantUserId: "bob"), makeConv("c-alice", participantUserId: "alice")]
+        let sut = ForwardPickerViewModel(
+            conversationService: service, friendService: friendService,
+            contactDirectoryService: directoryService, authManager: authManager,
+            cachedConversations: { cached },
+            profileUpdates: updates.eraseToAnyPublisher()
+        )
+        await sut.loadInitial()
+        let repainted = expectation(description: "cibles repeintes")
+        let watch = sut.$targets.dropFirst().sink { _ in repainted.fulfill() }
+        let json = #"{"userId":"bob","changes":{"displayName":"Bobby","firstName":null,"lastName":null,"username":"bobby","avatar":"https://cdn/new.png"}}"#
+
+        updates.send(try JSONDecoder().decode(UserUpdatedEvent.self, from: Data(json.utf8)))
+
+        await fulfillment(of: [repainted], timeout: 1)
+        watch.cancel()
+        XCTAssertEqual(sut.targets.map(\.title), ["Bobby", "Conv c-alice"])
+        XCTAssertEqual(sut.targets.first?.avatarURL, "https://cdn/new.png")
+    }
+
+    func test_repaintedTarget_directoryContact_keepsTheAddressBookName() throws {
+        let target = ForwardTarget(id: "user:bob", kind: .contact, conversationId: nil, userId: "bob",
+                                   title: "Bob du bureau", subtitle: "+33 6", avatarURL: nil,
+                                   followsProfileName: false)
+        let json = #"{"userId":"bob","changes":{"displayName":"Bobby","username":"bobby","avatar":"https://cdn/new.png"}}"#
+
+        let repainted = try XCTUnwrap(target.repainted(by: try JSONDecoder().decode(UserUpdatedEvent.self, from: Data(json.utf8))))
+
+        XCTAssertEqual(repainted.title, "Bob du bureau")
+        XCTAssertEqual(repainted.subtitle, "+33 6")
+        XCTAssertEqual(repainted.avatarURL, "https://cdn/new.png")
     }
 }
 

@@ -179,7 +179,7 @@ describe('coverCrop et containRect', () => {
 describe('captureFileName', () => {
   test('le style et l’heure, puis le rang d’un portrait', () => {
     const at = new Date(2026, 8, 28, 9, 5, 3);
-    expect(captureFileName({ at, style: 'comic' })).toBe('meeshy-appel-comic-20260928-090503.png');
-    expect(captureFileName({ at, style: 'visage', index: 1 })).toBe('meeshy-appel-visage-20260928-090503-2.png');
+    expect(captureFileName({ at, style: 'comic' })).toBe('meeshy-appel-comic-20260928-090503.jpg');
+    expect(captureFileName({ at, style: 'visage', index: 1 })).toBe('meeshy-appel-visage-20260928-090503-2.jpg');
   });
 });

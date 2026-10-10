@@ -39,7 +39,10 @@ import { VOICE_CLONING_QUALITY_PRESETS } from '@meeshy/shared/types/preferences'
 import type { FastifyInstance } from 'fastify';
 import { emitPreferenceCategoryUpdated } from './preferences/preferences-broadcast';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { calculateAge } from '@meeshy/shared/utils/age';
+import { calculateAge, judgeDeclaredBirthDate, parseBirthDateDay } from '@meeshy/shared/utils/age';
+import { writeBirthDateOnce } from './auth/birth-date-write';
+import { EngagementService } from './engagement/EngagementService';
+import { guardedTimeout } from '../utils/guarded-timer';
 // Logger dédié pour VoiceProfileService
 const logger = enhancedLogger.child({ module: 'VoiceProfileService' });
 
@@ -126,6 +129,7 @@ export class VoiceProfileService extends EventEmitter {
   private prisma: PrismaClient;
   private zmqClient: ZmqTranslationClient;
   private fastify?: FastifyInstance;
+  private engagement?: Pick<EngagementService, 'recordActivity'>;
   private uploadBasePath: string;
   private pendingRequests: Map<string, {
     resolve: (value: VoiceProfileEvent) => void;
@@ -138,12 +142,21 @@ export class VoiceProfileService extends EventEmitter {
    * `preferences:updated` après une écriture de réglages de clonage vocal
    * (#3735) — un appelant de test qui construit le service sans instance
    * Fastify garde un service pleinement fonctionnel, juste muet sur ce canal.
+   *
+   * `engagement` se double en test ; absent, le moteur de `prisma` est créé au
+   * premier crédit (`profile.voice_profile`, #8959).
    */
-  constructor(prisma: PrismaClient, zmqClient: ZmqTranslationClient, fastify?: FastifyInstance) {
+  constructor(
+    prisma: PrismaClient,
+    zmqClient: ZmqTranslationClient,
+    fastify?: FastifyInstance,
+    engagement?: Pick<EngagementService, 'recordActivity'>,
+  ) {
     super();
     this.prisma = prisma;
     this.zmqClient = zmqClient;
     this.fastify = fastify;
+    this.engagement = engagement;
     // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
     this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
 
@@ -175,10 +188,10 @@ export class VoiceProfileService extends EventEmitter {
 
   private async waitForZmqResponse(requestId: string): Promise<VoiceProfileEvent> {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const timeout = guardedTimeout({ name: 'voice-profile-request-timeout', afterMs: ZMQ_RESPONSE_TIMEOUT_MS, logger, run: () => {
         this.pendingRequests.delete(requestId);
         reject(new Error('ZMQ request timeout'));
-      }, ZMQ_RESPONSE_TIMEOUT_MS);
+      } });
 
       this.pendingRequests.set(requestId, { resolve, reject, timeout });
     });
@@ -296,7 +309,9 @@ export class VoiceProfileService extends EventEmitter {
     consent: ConsentRequest
   ): Promise<ServiceResult<{ consentUpdated: boolean }>> {
     try {
-      logger.info('[VoiceProfileService] updateConsent called:', { userId, consent });
+      // #9927 — la date de naissance ne va jamais au journal : seulement sa présence.
+      const { birthDate: declaredBirthDateText, ...loggableConsent } = consent;
+      logger.info('[VoiceProfileService] updateConsent called:', { userId, consent: loggableConsent, birthDateProvided: Boolean(declaredBirthDateText) });
       const now = new Date();
       const userData: any = {};
 
@@ -307,9 +322,11 @@ export class VoiceProfileService extends EventEmitter {
           dataProcessingConsentAt: true,
           voiceDataConsentAt: true,
           voiceProfileConsentAt: true,
+          birthDate: true,
         }
       });
-      logger.info('[VoiceProfileService] Existing user consents:', existingUser);
+      const { birthDate: existingBirthDate, ...existingConsents } = existingUser ?? { birthDate: null };
+      logger.info('[VoiceProfileService] Existing user consents:', existingConsents);
 
       // Les consentements vocaux sont maintenant dans User
       // IMPORTANT: Respecter la chaîne de dépendances:
@@ -350,10 +367,13 @@ export class VoiceProfileService extends EventEmitter {
         }
       }
 
-      // birthDate et ageVerifiedAt sont tous deux sur User maintenant
-      if (consent.birthDate) {
-        userData.birthDate = new Date(consent.birthDate);
-        userData.ageVerifiedAt = now;
+      // #9927 — déclarée UNE fois (écriture conditionnée en base), jamais une date que PUT /me/birth-date refuserait.
+      const declaredBirthDate = declaredBirthDateText ? parseBirthDateDay(declaredBirthDateText) : null;
+      const birthDateToWrite = declaredBirthDate && !existingBirthDate && judgeDeclaredBirthDate(declaredBirthDate, now) === 'admitted'
+        ? declaredBirthDate : null;
+      if (birthDateToWrite) await writeBirthDateOnce(this.prisma, userId, { birthDate: birthDateToWrite, ageVerifiedAt: now });
+      if (Object.keys(userData).length === 0 && declaredBirthDateText) {
+        return { success: true, data: { consentUpdated: birthDateToWrite !== null } };
       }
 
       if (Object.keys(userData).length === 0) {
@@ -377,9 +397,7 @@ export class VoiceProfileService extends EventEmitter {
           ageVerifiedAt: true
         }
       });
-      logger.info('[VoiceProfileService] Update result:', result);
-
-      logger.info('[VoiceProfileService] Consent updated successfully');
+      logger.info('[VoiceProfileService] Consent updated successfully', result);
       return {
         success: true,
         data: { consentUpdated: true }
@@ -465,6 +483,22 @@ export class VoiceProfileService extends EventEmitter {
   // ═══════════════════════════════════════════════════════════════════════════
   // PROFILE REGISTRATION
   // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * `profile.voice_profile` (#8959) — le profil vocal ENREGISTRÉ, consentement
+   * donné (vérifié plus haut), une fois par compte. Hors du chemin de la
+   * réponse : une panne du moteur n'annule jamais l'inscription.
+   */
+  private creditVoiceProfile(userId: string): void {
+    try {
+      this.engagement ??= new EngagementService(this.prisma);
+      this.engagement
+        .recordActivity(userId, 'profile.voice_profile')
+        .catch((error: unknown) => logger.warn('[VoiceProfileService] engagement profile.voice_profile non crédité', { error }));
+    } catch (error) {
+      logger.warn('[VoiceProfileService] engagement profile.voice_profile non crédité', { error });
+    }
+  }
 
   async registerProfile(
     userId: string,
@@ -557,6 +591,8 @@ export class VoiceProfileService extends EventEmitter {
           nextRecalibrationAt: expiresAt
         }
       });
+
+      this.creditVoiceProfile(userId);
 
       // Save voice cloning settings to UserFeature if provided
       if (request.voiceCloningSettings) {

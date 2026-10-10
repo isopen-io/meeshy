@@ -28,7 +28,8 @@ jest.mock('socket.io', () => {
 
   const on = jest.fn();
   const emit = jest.fn();
-  const close = jest.fn();
+  // socket.io 4.8 : `Server.close()` rend une Promise<void> (#8297).
+  const close = jest.fn().mockResolvedValue(undefined);
   const sockets = {
     sockets: new Map<string, unknown>(),
     adapter: { rooms: new Map<string, Set<string>>() },
@@ -618,6 +619,7 @@ describe('MeeshySocketIOManager', () => {
     ioState.toEmit.mockClear();
     ioState.except.mockClear();
     ioState.close.mockClear();
+    ioState.close.mockResolvedValue(undefined);
     ioState.connectionHandler = null;
     ioState.sockets.sockets.clear();
     ioState.sockets.adapter.rooms.clear();
@@ -940,6 +942,12 @@ describe('MeeshySocketIOManager', () => {
     it('does not throw if agentAdminRelay.stop() rejects', async () => {
       mockAgentAdminRelayInstance.stop.mockRejectedValue(new Error('relay down'));
       await expect(manager.close()).resolves.not.toThrow();
+    });
+
+    it('still stops the relay if io.close() rejects', async () => {
+      ioState.close.mockRejectedValueOnce(new Error('server not running'));
+      await expect(manager.close()).resolves.not.toThrow();
+      expect(mockAgentAdminRelayInstance.stop).toHaveBeenCalled();
     });
   });
 
@@ -1934,7 +1942,13 @@ describe('MeeshySocketIOManager', () => {
       it('still broadcasts the translation when the preview refresh query fails', async () => {
         prisma.message.findUnique.mockResolvedValue({ conversationId: 'conv-prisme-0001', senderId: 'part-author' });
         prisma.conversation.findUnique.mockResolvedValue(null);
-        prisma.participant.findMany.mockRejectedValue(new Error('DB down'));
+        // Seule la lecture de l'APERÇU tombe : celle des lecteurs autorisés
+        // (`translationReaders`, #9709) répond — sans elle, la traduction ne
+        // part pas du tout (fail-closed), ce qu'un autre témoin garde.
+        prisma.participant.findMany.mockImplementation(async (args: any) => {
+          if (args?.select?.historyVisibleFrom) return [];
+          throw new Error('DB down');
+        });
 
         await expect((manager as any)._handleTextTranslationReady(frData)).resolves.not.toThrow();
 

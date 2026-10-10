@@ -7,6 +7,7 @@ import type {
 
 import { patchConversation } from './conversations';
 import { acceptsLastMessage, isListProtected, listSafeLastMessage, withListRank, withNature, withSideband } from './list-preview';
+import { keepLiveListOverFetch } from './realtime-thread-catch-up';
 import type { Conversation, Message, Participant } from './types';
 
 /**
@@ -182,9 +183,8 @@ export function applyConversationUpdated(queryClient: QueryClient, data: Convers
   if (!speaksOfPreview && !speaksOfSideband && !speaksOfRank) return;
 
   patchConversation(queryClient, data.conversationId, (served) => {
-    /* LE RANG SERVI (#7592) — posé tel quel par l'émission adressée à
-       l'auteur du message réagi ; les autres ne le reçoivent pas et ne
-       réordonnent rien. */
+    /* LE RANG SERVI (#9026) — posé tel quel : toute activité (réaction,
+       appel, épingle) le sert à CHAQUE participant, et la ligne remonte. */
     const row = withListRank(served, data);
     /* LA RÉACTION ET L'APPEL EN COURS (#7545) — posés d'abord, sans toucher au
        groupe d'aperçu. Une réaction seule ne remonte la ligne que par le
@@ -276,6 +276,10 @@ export function applyConversationUpdated(queryClient: QueryClient, data: Convers
 
     return next;
   });
+  /* Une relecture de la LISTE en vol remettrait l'aperçu précédent (#9637) —
+     seul l'aperçu relance : une réaction ou un appel ne la relance pas à
+     chaque évènement d'un groupe actif. */
+  if (speaksOfPreview) keepLiveListOverFetch(queryClient);
 }
 
 /**

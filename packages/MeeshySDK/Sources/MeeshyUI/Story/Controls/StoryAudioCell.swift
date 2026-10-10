@@ -37,12 +37,12 @@ struct StoryAudioCell: View {
     private var secondaryText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.78) }
     private var rowBgFill: Color {
         isBackground
-            ? MeeshyColors.indigo400.opacity(0.18)
-            : (colorScheme == .dark ? Color.white.opacity(0.07) : MeeshyColors.indigo950.opacity(0.05))
+            ? MeeshyColors.indigo400.opacity(MeeshyOpacity.light)
+            : (colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo950.opacity(MeeshyOpacity.faint))
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             playPauseButton
             waveformView
                 .frame(maxWidth: .infinity)
@@ -52,10 +52,10 @@ struct StoryAudioCell: View {
             volumeSlider
             deleteButton
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                 .fill(rowBgFill)
         )
         .onAppear {
@@ -98,9 +98,9 @@ struct StoryAudioCell: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                .font(.system(size: 26, weight: .medium))
+                .font(.system(size: MeeshyIconSize.xxxl, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 28, height: 28)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
         }
         .buttonStyle(.plain)
         .disabled(url == nil)
@@ -168,7 +168,7 @@ struct StoryAudioCell: View {
 
     private var durationLabel: some View {
         Text(formatDuration(playback.duration))
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .font(.system(size: MeeshyFont.captionSize, weight: .medium, design: .monospaced))
             .foregroundColor(secondaryText)
             .frame(minWidth: 32)
     }
@@ -179,9 +179,9 @@ struct StoryAudioCell: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: isBackground ? "speaker.wave.2.circle.fill" : "speaker.wave.2.circle")
-                .font(.system(size: 18, weight: .medium))
+                .font(.system(size: MeeshyIconSize.lg, weight: .medium))
                 .foregroundColor(isBackground ? MeeshyColors.indigo400 : secondaryText)
-                .frame(width: 28, height: 28)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isBackground
@@ -198,9 +198,9 @@ struct StoryAudioCell: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(muted ? .red.opacity(0.85) : secondaryText)
-                .frame(width: 28, height: 28)
+                .font(.system(size: MeeshyIconSize.sm, weight: .medium))
+                .foregroundColor(muted ? MeeshyColors.error.opacity(MeeshyOpacity.intense) : secondaryText)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -237,8 +237,8 @@ struct StoryAudioCell: View {
             HapticFeedback.medium()
         } label: {
             Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.red.opacity(0.85))
+                .font(.system(size: MeeshyIconSize.md, weight: .medium))
+                .foregroundColor(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                 .frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)

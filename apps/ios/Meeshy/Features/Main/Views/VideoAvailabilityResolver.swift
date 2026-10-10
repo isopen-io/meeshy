@@ -33,6 +33,12 @@ struct VideoAvailabilityResolver<Content: View>: View {
     /// `autoLoad`). Les bulles de conversation gardent `false` : la politique
     /// réseau (WiFi-only / data-saver) y est respectée.
     let autoDownload: Bool
+    /// `false` suspend TOUT démarrage automatique — forcé ou par politique —
+    /// sans toucher au téléchargement manuel ni à l'observation (#9702). Le
+    /// pager de réels le tient fermé hors de sa fenêtre de préchargement :
+    /// sous iOS 16, son `TabView` monte toutes les pages d'un coup, et chacune
+    /// téléchargeait son réel entier. Rouvert, l'auto-démarrage se rejoue.
+    let mayAutoStart: Bool
     let content: (VideoAvailability, @escaping () -> Void) -> Content
 
     @State private var resolvedAvailability: VideoAvailability = .needsDownload
@@ -51,10 +57,12 @@ struct VideoAvailabilityResolver<Content: View>: View {
     init(
         attachment: MessageAttachment,
         autoDownload: Bool = false,
+        mayAutoStart: Bool = true,
         @ViewBuilder content: @escaping (VideoAvailability, @escaping () -> Void) -> Content
     ) {
         self.attachment = attachment
         self.autoDownload = autoDownload
+        self.mayAutoStart = mayAutoStart
         self.content = content
     }
 
@@ -62,7 +70,7 @@ struct VideoAvailabilityResolver<Content: View>: View {
         content(availability) {
             downloader.start(attachment: attachment, origin: .manual, onShare: nil)
         }
-        .task(id: attachment.id) {
+        .task(id: AutoStartKey(attachmentId: attachment.id, mayAutoStart: mayAutoStart)) {
             // Branché sur le registre partagé AVANT toute résolution : un
             // téléchargement de cette vidéo lancé par une autre surface
             // (galerie, autre cellule) s'affiche ici, et sa fin la rend
@@ -74,7 +82,8 @@ struct VideoAvailabilityResolver<Content: View>: View {
                !downloader.isCached {
                 let condition = NetworkConditionMonitor.shared.condition
                 let prefs = MediaDownloadPreferencesStore.shared.preferences
-                if Self.shouldAutoStart(autoDownload: autoDownload, condition: condition, prefs: prefs) {
+                if Self.shouldAutoStart(autoDownload: autoDownload, mayAutoStart: mayAutoStart,
+                                        condition: condition, prefs: prefs) {
                     downloader.start(attachment: attachment, origin: .automatic, onShare: nil)
                 }
             }
@@ -87,13 +96,20 @@ struct VideoAvailabilityResolver<Content: View>: View {
     /// réseau de l'utilisateur l'autorise. `kind: .video` figé pour ce resolver.
     static func shouldAutoStart(
         autoDownload: Bool,
+        mayAutoStart: Bool = true,
         condition: NetworkCondition,
         prefs: MediaDownloadPreferences
     ) -> Bool {
-        guard condition != .offline else { return false }
+        guard mayAutoStart, condition != .offline else { return false }
         return autoDownload || MediaDownloadPolicyEngine.shouldAutoDownload(
             kind: .video, condition: condition, prefs: prefs
         )
+    }
+
+    /// L'identité de la tâche de résolution : rouvrir l'auto-démarrage la rejoue.
+    private struct AutoStartKey: Equatable {
+        let attachmentId: String
+        let mayAutoStart: Bool
     }
 
     /// Static resolver helper, testable without SwiftUI hosting.

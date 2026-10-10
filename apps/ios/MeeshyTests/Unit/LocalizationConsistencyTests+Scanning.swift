@@ -56,6 +56,7 @@ extension LocalizationConsistencyTests {
         static let catalogByTargetFragment: [String: String] = [
             "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
             "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
+            "/MeeshyNotificationContentExtension/": "apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings",
             "/MeeshyWidgets/": "apps/ios/MeeshyWidgets/Localizable.xcstrings",
             "/MeeshyBroadcastExtension/": "apps/ios/MeeshyBroadcastExtension/Localizable.xcstrings",
         ]

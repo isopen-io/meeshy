@@ -105,4 +105,12 @@ nonisolated enum ComposerCaptureSegments {
     static func needsMerge(_ segments: [ComposerCaptureSegment]) -> Bool {
         segments.count > 1
     }
+
+    /// **Des segments en attente ne partent jamais en silence** (#9351,
+    /// décision 2026-10-06) : la croix ou le glissé qui fermerait le viseur
+    /// demande d'abord « Abandonner la vidéo ? ». Sans segment, rien ne se perd :
+    /// la fermeture est immédiate.
+    static func asksBeforeClosing(_ segments: [ComposerCaptureSegment]) -> Bool {
+        !segments.isEmpty
+    }
 }

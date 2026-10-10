@@ -42,7 +42,6 @@ final class RightToLeftLayoutGuardTests: XCTestCase {
     /// Fichiers dont les flèches ET les chevrons décrivent une timeline ou une
     /// géométrie — jamais une direction de lecture.
     private static let directionalByDesign: Set<String> = [
-        "VideoEditorToolPanels.swift",
         "ClipTimingBar.swift",
         "MeeshyImageEditorView.swift",
         // Poignées du trimmer audio : la pointe désigne le bord de la bande

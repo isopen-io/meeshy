@@ -11,6 +11,7 @@ const frContactCard = {
   'contactCard.failed': 'La carte de visite n’a pas pu être lue',
   'contactCard.retry': 'Réessayer',
   'contactCard.download': 'Télécharger la carte',
+  'contactCard.downloadFailed': 'La carte n’a pas pu être téléchargée',
   'contactCard.onMeeshy': 'Sur Meeshy',
   'contactCard.connect': 'Se connecter',
   'contactCard.write': 'Écrire',

@@ -18,9 +18,38 @@ import MeeshyUI
 /// > vit dans la destination du tap. »
 extension FeedPostCard {
 
+    /// « Vues » — qui a vu, et ce que chacun a fait (#9727) — ne s'ouvre qu'à
+    /// ADMIN/BIGBOSS sur un post ou un réel ; l'auteur n'en voit que les
+    /// nombres (décision porteur 2026-10-09). Règle : `PublicationViewersAccess`.
+    var canListViewers: Bool {
+        PublicationViewersAccess.mayList(
+            postType: post.type,
+            isAuthor: isAuthor,
+            viewerRole: AuthManager.shared.currentUser?.role
+        )
+    }
+
+    private var reachMetrics: some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            ReachMetricLabel(
+                icon: "chart.bar.fill",
+                count: post.impressionCount,
+                label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
+                tint: theme.textMuted
+            )
+            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+            ReachMetricLabel(
+                icon: "eye.fill",
+                count: post.viewCount,
+                label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
+                tint: theme.textMuted
+            )
+        }
+    }
+
     // MARK: - Author Header
     var authorHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Avatar
             MeeshyAvatar(
                 name: post.author,
@@ -41,9 +70,9 @@ extension FeedPostCard {
             .accessibilityLabel(String(format: String(localized: "a11y.feed.post.author_avatar", defaultValue: "Profil de %@", bundle: .main), post.author))
             .accessibilityHint(String(localized: "a11y.feed.post.author_avatar.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 // Author name with repost indicator
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(post.author)
                         .font(.subheadline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
@@ -55,9 +84,10 @@ extension FeedPostCard {
                     // ensemble faisait lire « 2 h · 🇫🇷 · Impressions » comme une
                     // seule énumération, où la donnée la plus consultée — quand
                     // — se noyait dans la moins consultée.
-                    Text(RelativeTimeFormatter.shortString(for: post.timestamp))
-                        .font(.caption)
-                        .foregroundColor(theme.textMuted)
+                    // Suivie des points que ce post a rapportés (#9571).
+                    PostDateWithPoints(postId: post.id, seed: post.viewerPoints, color: theme.textMuted) {
+                        Text(RelativeTimeFormatter.shortString(for: post.timestamp))
+                    }
 
                     // Attribution de republication, juste après le pseudo :
                     // l'icône, puis l'AUTEUR D'ORIGINE — rien d'autre (directive
@@ -72,7 +102,7 @@ extension FeedPostCard {
                     // Elle serait sinon lue « @handle » sans dire pourquoi.
                     if post.repostAuthor != nil {
                         let handle = post.repost?.authorUsername ?? post.repostAuthor
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(.caption2)
                             if let handle {
@@ -121,7 +151,7 @@ extension FeedPostCard {
                 // la ligne du nom (vue `1h`) : elle qualifie l'auteur, pas le
                 // post. Ce qui reste ici est masqué entièrement quand il n'y a
                 // rien à dire, au lieu de laisser une ligne à un seul séparateur.
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     let flags = buildAvailableFlags()
                     if !flags.isEmpty || post.translations?.isEmpty == false {
 
@@ -138,22 +168,16 @@ extension FeedPostCard {
 
                     // Reach stats (impressions · views) — visible ONLY to the
                     // post's author, after the meta row (private analytics).
+                    // Les NOMBRES seulement : toucher la portée n'ouvre « Vues »
+                    // que pour ADMIN/BIGBOSS (#9727, décision 2026-10-09).
                     if isAuthor {
                         MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
-                        HStack(spacing: 3) {
-                            ReachMetricLabel(
-                                icon: "chart.bar.fill",
-                                count: post.impressionCount,
-                                label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
-                                tint: theme.textMuted
-                            )
-                            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
-                            ReachMetricLabel(
-                                icon: "eye.fill",
-                                count: post.viewCount,
-                                label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
-                                tint: theme.textMuted
-                            )
+                        if canListViewers {
+                            Button { showViewersSheet = true } label: { reachMetrics }
+                                .buttonStyle(GameBounceButtonStyle())
+                                .accessibilityHint(String(localized: "viewer.engagement.openList.hint", defaultValue: "Ouvre la liste des personnes qui ont vu ce contenu", bundle: .main))
+                        } else {
+                            reachMetrics
                         }
                     }
                 }
@@ -183,7 +207,7 @@ extension FeedPostCard {
                     Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
                 }
                 Button {
-                    if post.primaryReelDisplayMedia != nil {
+                    if canSaveMedia {
                         requestSaveMedia()
                     } else {
                         onBookmark?(post.id)
@@ -191,11 +215,14 @@ extension FeedPostCard {
                     }
                 } label: {
                     Label(
-                        post.primaryReelDisplayMedia != nil
+                        canSaveMedia
                             ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
                             : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
-                        systemImage: post.primaryReelDisplayMedia != nil ? "arrow.down.to.line" : "bookmark"
+                        systemImage: canSaveMedia ? "arrow.down.to.line" : "bookmark"
                     )
+                }
+                if canListViewers {
+                    PublicationViewersMenuButton { showViewersSheet = true }
                 }
                 if onPin != nil {
                     Button {
@@ -233,12 +260,90 @@ extension FeedPostCard {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(MeeshyFont.relative(16))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md))
                     .foregroundColor(theme.textMuted)
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
             }
             .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
             .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
         }
+        .publicationViewersSheet(isPresented: $showViewersSheet, post: post, moodLookup: moodLookup) { viewer in
+            selectedProfileUser = ProfileSheetUser(username: viewer.username)
+        }
+    }
+}
+
+// MARK: - Ce que le post a rapporté au lecteur « · ✦+99 » (#9571)
+
+/// La date d'un post, suivie — très discrètement — des points que ce post a
+/// rapportés au lecteur : « 2 h · ✦+99 ». Encre et corps de la date, ni
+/// capsule, ni couleur, ni flamme : plus discret que la marque des
+/// conversations (directive porteur 2026-10-07). Ce n'est pas un bouton.
+/// Champ absent (ancien serveur, invité), `0` : la date seule.
+///
+/// La lecture (`seed`) est notée à chaque nouvelle valeur — la date est
+/// toujours là, donc la note part même quand la marque se tait — et
+/// `engagement:post-updated` fait rouler le nombre (`PostViewerPointsStore`).
+struct PostDateWithPoints<DateLabel: View>: View {
+    let postId: String
+    let seed: Int?
+    let color: Color
+    @ObservedObject var store: PostViewerPointsStore = .shared
+    @ViewBuilder let date: () -> DateLabel
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            date()
+                .font(.caption)
+                .foregroundColor(color)
+            if let points = PostViewerPoints.shown(store.displayed(postId: postId, seed: seed)) {
+                PostPointsMark(points: points, color: color)
+                    .equatable()
+            }
+        }
+        .task(id: seed) { store.noteRead(postId: postId, viewerPoints: seed) }
+    }
+}
+
+/// « · ✦+99 » — feuille PURE, portillon `Equatable` ; le nombre roule vers sa
+/// nouvelle valeur, à la hausse comme à la baisse.
+struct PostPointsMark: View, Equatable {
+    let points: Int
+    let color: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static func == (lhs: PostPointsMark, rhs: PostPointsMark) -> Bool {
+        lhs.points == rhs.points && lhs.color == rhs.color
+    }
+
+    var body: some View {
+        HStack(spacing: 1) {
+            Text(verbatim: "·")
+                .padding(.trailing, 2)
+            Image(systemName: "sparkle")
+                .font(MeeshyFont.relative(MeeshyFont.microSize))
+                .imageScale(.small)
+            Text(verbatim: "+" + CompactCountLabel.text(points))
+                .monospacedDigit()
+                .contentTransition(.numericText())
+        }
+        .font(.caption)
+        .foregroundColor(color)
+        .lineLimit(1)
+        .fixedSize()
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: points)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.accessibilityText(points))
+    }
+
+    /// « Ce post t'a rapporté 99 points ».
+    static func accessibilityText(_ points: Int) -> String {
+        let number = "\(points)"
+        return points == 1
+            ? String(localized: "feed.post.points.a11y.one",
+                     defaultValue: "Ce post t'a rapporté \(number) point", bundle: .main)
+            : String(localized: "feed.post.points.a11y.other",
+                     defaultValue: "Ce post t'a rapporté \(number) points", bundle: .main)
     }
 }

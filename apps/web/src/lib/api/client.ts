@@ -3,7 +3,10 @@ import { withEmailGate } from '../activation/email-gated-transport';
 
 import { apiConfig } from './config';
 import { createHttpTransport, type ApiFailure, type ApiResult, type Credential, type HttpTransport } from './http';
-import { sessionStore, type SessionState } from './session';
+import { endRevokedSession } from './account-caches';
+import { VIEWER_ID } from './fixtures-base';
+import { ownerCredentialOf, ownerScopeOf, type OwnerCredential } from './owner-session';
+import { sessionIdentityKey, sessionStore, type SessionState } from './session';
 
 /**
  * LE TRANSPORT DE PRODUCTION — l'UNIQUE instance que toute l'application
@@ -59,6 +62,17 @@ export function currentDeviceLocale(): string | null {
  * sont pas (le client TUS, `post-media-upload.ts`). */
 export const currentCredential = (): Credential | null => credentialFromSession(sessionStore.getState().session);
 
+/**
+ * LE JETON DU PROPRIÉTAIRE D'UNE ATTENTE (#9743, `owner-session.ts`) — la
+ * session lue en UN instantané, ou, sur fixtures (ni session ni réseau : ce
+ * jeton ne voyage jamais), le lecteur de fixture et lui seul. Il vit ici, avec
+ * `currentCredential`, pour ne pas découper la session hors de ce module.
+ */
+export const currentOwnerCredential: OwnerCredential = (scope) => {
+  if (__FIXTURES__ && apiConfig.source === 'fixtures') return scope === ownerScopeOf(VIEWER_ID) ? { kind: 'registered', token: 'fixtures' } : null;
+  return ownerCredentialOf(scope, sessionStore.getState().session);
+};
+
 /** L'adresse du compte TENU est connue non prouvée (#8365) — lu par la garde
  * de l'e-mail pour ouvrir la validation AVANT d'envoyer une publication. */
 export function sessionEmailUnproven(session: SessionState): boolean {
@@ -72,8 +86,9 @@ export const httpTransport: HttpTransport = withEmailGate(
   createHttpTransport({
     base: apiConfig.base,
     credential: currentCredential,
+    identity: () => sessionIdentityKey(sessionStore.getState().session),
     deviceLocale: currentDeviceLocale,
-    onUnauthorized: () => sessionStore.getState().clearSession(),
+    onUnauthorized: () => endRevokedSession(sessionStore),
   }),
   { ask: emailGate.ask, emailUnproven: () => sessionEmailUnproven(sessionStore.getState().session) },
 );

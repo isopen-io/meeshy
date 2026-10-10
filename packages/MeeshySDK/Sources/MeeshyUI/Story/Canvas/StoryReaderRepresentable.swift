@@ -228,7 +228,10 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // jouent en double avec le canvas visible 350-400 ms le temps de
         // l'anim (user 2026-05-28 « les média jouent en double / s'entrevauche »).
         let initialMode: RenderMode = isOutgoing ? .edit : .play
-        let view = StoryCanvasUIView(slide: slide, mode: initialMode)
+        // Né EN PAUSE dès l'init (#9827) : la pause posée plus bas arrivait
+        // après que l'init avait préempté le canvas qui joue — une page voisine
+        // du lecteur de réels coupait ainsi le son du réel affiché.
+        let view = StoryCanvasUIView(slide: slide, mode: initialMode, startsPaused: true)
         view.servesLetterboxFill = servesLetterboxFill
         let mediaList = storyItem.media
         let completion = onCompletion

@@ -345,6 +345,7 @@ describe('POST /communities/:id/members — caller is not admin, proven by mutat
         findFirst: communityDoubleHonouringWhere([
           {
             id: COMMUNITY_ID,
+            isActive: true,
             createdBy: OTHER_USER_ID,
             members: [
               { userId: OTHER_USER_ID, role: 'admin', isActive: true },
@@ -546,6 +547,7 @@ describe('PATCH /communities/:id/members/:memberId/role — caller is not admin,
         findFirst: communityDoubleHonouringWhere([
           {
             id: COMMUNITY_ID,
+            isActive: true,
             createdBy: OTHER_USER_ID,
             members: [
               { userId: OTHER_USER_ID, role: 'admin', isActive: true },
@@ -695,6 +697,7 @@ describe('DELETE /communities/:id/members/:memberId — caller is not admin, pro
         findFirst: communityDoubleHonouringWhere([
           {
             id: COMMUNITY_ID,
+            isActive: true,
             createdBy: OTHER_USER_ID,
             members: [
               { userId: OTHER_USER_ID, role: 'admin', isActive: true },

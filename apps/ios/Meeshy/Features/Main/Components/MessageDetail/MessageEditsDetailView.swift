@@ -18,7 +18,7 @@ struct MessageEditsDetailView: View {
         let accent = Color(hex: message.senderColor ?? "#6366F1")
         let revisions = editRevisions.sorted { $0.editedAt > $1.editedAt }
 
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             MessageDetailTimelineBanner(
                 icon: "pencil.and.list.clipboard",
                 text: revisions.isEmpty
@@ -65,14 +65,14 @@ struct MessageEditsDetailView: View {
     // MARK: - Rows
 
     private func editRevisionRow(header: String, content: String, timestamp: Date, accent: Color, isCurrent: Bool) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
             RoundedRectangle(cornerRadius: 3, style: .continuous)
                 .fill(isCurrent ? accent : accent.opacity(0.4))
                 .frame(width: 3)
-                .padding(.vertical, 2)
+                .padding(.vertical, MeeshySpacing.xxs)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(header)
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(isCurrent ? accent : theme.textSecondary)
@@ -89,10 +89,10 @@ struct MessageEditsDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(10)
+        .padding(MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+                .fill(MeeshyColors.surfaceFill(isDark: isDark))
         )
         // Single VoiceOver stop per revision: "Actuel, 14:30, <contenu>".
         // The colored rail is decorative (state is carried by the header text,

@@ -1,5 +1,6 @@
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { guardedInterval } from '../utils/guarded-timer';
 
 /**
  * Sonde de DÉRIVE DE TYPAGE — « aucune ligne ne porte un type que le schéma ne déclare pas ».
@@ -468,7 +469,7 @@ export function demarrerSondeDeTypage(
     );
   };
   passe();
-  const minuterie = setInterval(passe, periodeMs);
+  const minuterie = guardedInterval({ name: 'schema-drift-probe', everyMs: periodeMs, logger: journal, run: passe });
   minuterie.unref?.();
   return { arreter: () => clearInterval(minuterie) };
 }

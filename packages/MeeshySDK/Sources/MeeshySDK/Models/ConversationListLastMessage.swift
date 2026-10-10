@@ -90,18 +90,19 @@ public enum ConversationListLastMessage {
             copy.lastReaction = engineRow.lastReaction
             copy.lastReactionTargetsReader = engineRow.lastReactionTargetsReader
             copy.activeCall = engineRow.activeCall
+            copy.listRankAt = engineRow.listRankAt
             return copy
         }
         return sortedNewestFirst(merged)
     }
 
-    /// Tri STABLE par `lastMessageAt` décroissant : `sorted(by:)` ne l'est pas,
-    /// et brasserait des lignes qui partagent un horodatage.
+    /// Tri STABLE par rang (`listActivityAt`, #9026) décroissant : `sorted(by:)`
+    /// ne l'est pas, et brasserait des lignes qui partagent un horodatage.
     static func sortedNewestFirst(_ conversations: [MeeshyConversation]) -> [MeeshyConversation] {
         conversations.enumerated()
             .sorted { lhs, rhs in
-                lhs.element.lastMessageAt != rhs.element.lastMessageAt
-                    ? lhs.element.lastMessageAt > rhs.element.lastMessageAt
+                lhs.element.listActivityAt != rhs.element.listActivityAt
+                    ? lhs.element.listActivityAt > rhs.element.listActivityAt
                     : lhs.offset < rhs.offset
             }
             .map(\.element)

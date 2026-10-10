@@ -26,6 +26,9 @@ import type { UploadedFile, UploadTextBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { classifyAnonymousAttachment } from '../../services/attachments/ContentSignature.js';
 import { normalizeContactCardMimeType } from '@meeshy/shared/utils/vcard';
+import { admittedUploadMimeType } from '../../services/attachments/uploadMimeType';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
+import { refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
 
 /**
  * Plafond RÉEL, en OCTETS, du champ `content` de `POST /attachments/upload-
@@ -148,7 +151,14 @@ export async function registerUploadRoutes(
             files.push({
               buffer,
               filename: part.filename,
-              mimeType: normalizeContactCardMimeType(part.mimetype, part.filename),
+              // #9693 — le type ADMIS est celui du média : `audio/x-wav`
+              // devient `audio/wav`, un MP3 sans type devient `audio/mpeg`
+              // quand ses octets le confirment.
+              mimeType: admittedUploadMimeType({
+                declared: normalizeContactCardMimeType(part.mimetype, part.filename),
+                fileName: part.filename,
+                head: buffer,
+              }),
               size: buffer.length,
             });
             fileIndex++;
@@ -177,6 +187,7 @@ export async function registerUploadRoutes(
             select: {
               allowAnonymousFiles: true,
               allowAnonymousImages: true,
+              conversation: { select: { identifier: true } },
             },
           });
 
@@ -363,6 +374,25 @@ export async function registerUploadRoutes(
 
           if (!shareLink.allowAnonymousFiles) {
             return sendForbidden(reply, 'File uploads are not allowed for anonymous users on this conversation');
+          }
+        }
+
+        // #9927 — un fichier rattaché à un message EXISTANT paraît dans sa
+        // conversation : dans Meeshy Global, un mineur déclaré ne l'y ajoute
+        // pas. Sans `messageId`, le fichier n'entre dans aucune conversation
+        // tant qu'un envoi ne l'y porte, et l'envoi a sa propre garde.
+        if (messageId && !isAnonymous) {
+          const target = await prisma.message.findFirst({
+            where: { id: messageId },
+            select: { conversation: { select: { type: true } } },
+          });
+          const minorInGlobal = await refusesMinorInConversationOfType(prisma, {
+            conversationType: target?.conversation?.type,
+            userId,
+            now: new Date(),
+          });
+          if (minorInGlobal) {
+            return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
           }
         }
 

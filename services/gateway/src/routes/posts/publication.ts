@@ -41,9 +41,14 @@
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Post } from '@meeshy/shared/types/post';
-import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import {
+  visibilityVariant,
+  type EngagementOperationKey,
+} from '@meeshy/shared/types/engagement-operations';
+import type { EngagementActivityOptions } from '../../services/engagement/EngagementService';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
+import { creditSource } from '../../services/posts/postEngagementCredits';
 import { postSignalText } from '../../services/posts/storyContentComposition';
 import { resolvePostMentions } from '../../services/posts/postMentions';
 import type {
@@ -112,7 +117,13 @@ export interface PostHashtagIndexer {
  * `EngagementService.recordActivity`, cette unité n'a qu'à l'appeler.
  */
 export interface PostPublicationEngagementService {
-  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
+  recordActivity(
+    userId: string,
+    operationKey: EngagementOperationKey,
+    options?: EngagementActivityOptions,
+  ): Promise<unknown>;
+  /** Un fait de jeu posé à la publication (#9635) — l'INTENTION « réel ». */
+  recordGameSignal?(userId: string, signal: 'reel-published', options?: { readonly key?: string }): Promise<void>;
 }
 
 /**
@@ -285,6 +296,87 @@ const asVisibilityUserIds = (value: unknown): string[] | undefined =>
   Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : undefined;
 
 /**
+ * L'opération de CONTENU qu'une ligne écrite crédite (#8959), ou `null`.
+ *
+ * Le type décidant est le type ÉCRIT — un REEL non qualifiant dégradé en POST
+ * par le service crédite `content.post`, jamais `content.reel`.
+ *
+ * Le brouillon n'est pas du contenu publié. `Post` n'a pas de champ `status` :
+ * le brouillon y est modélisé par `PostVisibility.PRIVATE` (« Brouillon /
+ * seulement l'auteur », schema.prisma), seul signal du dépôt qui porte cette
+ * distinction — un PRIVATE ne crédite donc rien. Toute autre audience crédite,
+ * sa valeur étant portée par la variante (`visibilityVariant`) : `EXCEPT` et
+ * `ONLY` tombent sur `other`, que le barème paie zéro par défaut, et une
+ * visibilité inconnue sur `friends`, jamais sur `public` (#9667).
+ */
+function contentOperationFor(
+  writtenType: PublishedPostType,
+  visibility: string | undefined,
+): EngagementOperationKey | null {
+  if (visibility === 'PRIVATE') return null;
+  switch (writtenType) {
+    case 'POST':
+      return 'content.post';
+    case 'STORY':
+      return 'content.story';
+    case 'REEL':
+      return 'content.reel';
+    case 'STATUS':
+      return 'content.status';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Les crédits d'une publication : l'opération de contenu, avec sa cible (le
+ * post — c'est elle qui porte l'unicité d'un contenu lourd et sa reprise à la
+ * suppression) et la variante de sa visibilité écrite (#9667) ; puis,
+ * orthogonaux, les axes mutuellement exclusifs « montage in-app » (#5542) /
+ * « publication directe » (#5543), réservés à POST, STORY et REEL. Le seul
+ * signal du montage est celui que le client DÉCLARE (`editedInApp`) : le
+ * serveur ne peut pas observer si un média a traversé l'éditeur.
+ */
+function recordPublicationEngagement(params: {
+  readonly engagementService: PostPublicationEngagementService;
+  readonly authorId: string;
+  readonly postId: string;
+  readonly writtenType: PublishedPostType;
+  readonly visibility: string | undefined;
+  readonly editedInApp: boolean | undefined;
+  readonly porte: string;
+  readonly log: FastifyInstance['log'];
+}): void {
+  const { engagementService, authorId, postId, writtenType, visibility, editedInApp, porte, log } = params;
+  const operation = contentOperationFor(writtenType, visibility);
+  if (!operation) return;
+
+  const credit = (key: EngagementOperationKey, options: EngagementActivityOptions): Promise<void> =>
+    engagementService.recordActivity(authorId, key, options).then(
+      () => undefined,
+      (err: unknown) => {
+        logError(log, `[${porte}] ${key} engagement recording failed`, err);
+      },
+    );
+
+  // La publication est la SOURCE de ses crédits : la retirer les reprend (#9584). Tout contenu
+  // (post, story, réel, humeur) vaut selon la visibilité ÉCRITE de sa ligne (#9667).
+  const source = creditSource.post(postId);
+  const content = credit(operation, { postId, targetId: postId, receipt: source, variant: visibilityVariant(visibility) });
+
+  if (operation === 'content.status') return;
+  // L'un APRÈS l'autre (#9569) : les deux crédits nomment le même post, et
+  // chacun annonce à l'auteur ce que ce post lui a rapporté. Lancés ensemble,
+  // leurs annonces pouvaient se croiser et laisser la valeur d'avant le second.
+  // `credit` ne rejette jamais : un contenu en échec n'empêche pas l'axe outil.
+  content
+    .then(() => credit(editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish', { postId, targetId: postId, receipt: source }))
+    .catch((err: unknown) => {
+      logError(log, `[${porte}] publication engagement chain failed`, err);
+    });
+}
+
+/**
  * Tout ce qu'une publication doit accomplir APRÈS que sa ligne est écrite —
  * et rien d'autre. Rend le corps à SERVIR à l'auteur.
  *
@@ -439,44 +531,15 @@ export async function runPublicationEffects(
     });
   }
 
-  // Axes d'engagement « stories » (#5534), « réels » (#5535) et « posts »
-  // (#5533) — suivent le type ÉCRIT comme l'éventail juste au-dessus,
-  // mutuellement exclusifs sur la même ligne : un REEL non qualifiant
-  // dégradé en POST par le service ne doit créditer ni l'un ni l'autre, mais
-  // doit alors créditer `content.post` s'il n'est pas un brouillon.
-  //
-  // #5533 demandait « status: PUBLISHED, pas un brouillon » — un champ qui
-  // n'existe pas sur `Post` (vérifié contre schema.prisma). Le brouillon y
-  // est modélisé par `PostVisibility.PRIVATE` (« Brouillon / seulement
-  // l'auteur », schema.prisma) : c'est le SEUL signal du dépôt qui porte
-  // cette distinction, donc le discriminant retenu ici. Un POST à toute
-  // autre visibilité EST publié.
-  if (engagementService && writtenType === 'STORY') {
-    engagementService.recordActivity(authorId, 'content.story').catch((err: unknown) => {
-      logError(fastify.log, `[${porte}] content.story engagement recording failed`, err);
-    });
-  } else if (engagementService && writtenType === 'REEL') {
-    engagementService.recordActivity(authorId, 'content.reel').catch((err: unknown) => {
-      logError(fastify.log, `[${porte}] content.reel engagement recording failed`, err);
-    });
-  } else if (engagementService && writtenType === 'POST' && visibility !== 'PRIVATE') {
-    engagementService.recordActivity(authorId, 'content.post').catch((err: unknown) => {
-      logError(fastify.log, `[${porte}] content.post engagement recording failed`, err);
-    });
+  if (engagementService) {
+    recordPublicationEngagement({ engagementService, authorId, postId, writtenType, visibility, editedInApp, porte, log: fastify.log });
   }
-
-  // Axes d'engagement « montage in-app » (#5542) et « publication simple
-  // directe » (#5543) — mutuellement exclusifs, orthogonaux au TYPE (POST,
-  // STORY ou REEL, jamais STATUS ni un brouillon PRIVATE — modèle § 2, même
-  // discriminant que `content.post`). Le seul signal existant est celui que
-  // le client DÉCLARE (`editedInApp`) : le serveur ne peut pas observer si un
-  // média a traversé l'éditeur de montage. Absent/`false` ⇒ direct.
-  const isPublishedContent =
-    writtenType === 'STORY' || writtenType === 'REEL' || (writtenType === 'POST' && visibility !== 'PRIVATE');
-  if (engagementService && isPublishedContent) {
-    const toolAxis: EngagementAxisKey = editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish';
-    engagementService.recordActivity(authorId, toolAxis).catch((err: unknown) => {
-      logError(fastify.log, `[${porte}] ${toolAxis} engagement recording failed`, err);
+  // L'INTENTION « réel » (#9635) : un réel demandé et publié compte pour son défi
+  // même quand le service l'a écrit en POST faute de média qualifiant — le geste
+  // de l'auteur est le même. Ses POINTS restent ceux du type écrit (ci-dessus).
+  if (postType === 'REEL' && visibility !== 'PRIVATE' && engagementService?.recordGameSignal) {
+    engagementService.recordGameSignal(authorId, 'reel-published', { key: postId }).catch((err: unknown) => {
+      logError(fastify.log, `[${porte}] reel intent game signal failed`, err);
     });
   }
 

@@ -43,11 +43,9 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// **Dette héritée, mesurée au 261i.** Cette liste ne s'ALLONGE jamais : un
     /// fichier qui la quitte (découpé, ou redescendu sous le budget) en sort pour
     /// toujours. Chaque découpe est un lot à elle seule — `CallManager.swift`
-    /// (6462 lignes) n'est pas un lot d'UI/UX.
+    /// (6462 lignes) n'était pas un lot d'UI/UX ; il a eu le sien (2026-10-02).
     private static let legacyOverBudget: Set<String> = [
-        "AudioFullscreenView.swift",
         "BubbleStandardLayout.swift",
-        "CallManager.swift",
         "ConversationDashboardView.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
@@ -551,7 +549,51 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `legacyOverBudget` ENTIER (−1 361). La feuille reçoit ensuite la cible de
     // réponse amorcée depuis l'aperçu (+11) : le plafond baisse du NET du lot,
     // pas de sa seule relocalisation — le mou antérieur reste à ses lots.
-    private static let legacyLineCeiling = 43_431
+    //
+    // #8642/#8644 — 43 431 → 43 322 (−109, NET du lot). La scène d'une story
+    // qui se floute et se réduit devait toucher `StoryViewerView+Canvas.swift` ;
+    // `StoryViewerContentView` en sort d'abord (−121), la loi rentre par ses
+    // appels (+10). La feuille de commentaires et le détail d'un post reçoivent
+    // une ligne chacun (+2) : la règle vit dans `CommentReplyFocus.swift`.
+    //
+    // #8709 — 43 322 → 43 276 (−46, NET du lot). Le menu « … » des commentaires
+    // de story devait toucher la fabrique de la ligne dans
+    // `StoryViewerView+Content.swift` : elle en sort d'abord pour
+    // `StoryViewerView+CommentMenu.swift` (−44), et l'écho `comment:updated`
+    // y délègue son remplacement en place à `StoryCommentEditing` (−2).
+    //
+    // #8878 — 43 276 → 42 092 (−1 184). La croix et l'enregistrement du plein écran audio
+    // montent les briques du chrome plein écran de MeeshyUI (`FullscreenCloseButton`,
+    // `FullscreenChromeDisc`) au lieu de peindre leurs disques : `AudioFullscreenView.swift`
+    // repasse SOUS le budget (1 184 lignes comptées), sort de `legacyOverBudget` ENTIER, et le
+    // plafond baisse d'exactement ce qu'il pesait à la sortie.
+    //
+    // #8878 — 42 092 → 42 091 (−1). Le lecteur de story monte son en-tête avec la marge
+    // latérale de `FullscreenTopBarLayout` : le `.padding(.horizontal, …)` que
+    // `StoryViewerView+Canvas.swift` posait autour de `StoryHeaderView` part (−1 ligne).
+    // L'hôte RESTE en dette ; le plafond baisse d'exactement ce que le lot retire.
+    //
+    // #9075 — 42 091 → 41 996 (−95). Les CINQ projections jumelles
+    // `APIPostComment → FeedComment` de `StoryViewerView+Content.swift` (premier
+    // chargement, page suivante, réponses, `comment:added`, `comment:updated`)
+    // délèguent au site UNIQUE `FeedComment(api:)` — qui porte la carte des liens
+    // suivis qu'aucune d'elles ne recopiait. L'hôte RESTE en dette.
+    //
+    // 2026-10-02 — 41 996 → 35 776 (−6 220). `CallManager.swift` repasse SOUS le
+    // budget : ses responsabilités partent dans les extensions `CallManager+*.swift`
+    // (délégués CallKit et WebRTC, reconnexion, signalisation, négociation, session
+    // et interruptions audio, réponse, raccroché, attente, commandes média,
+    // démontage…), toutes sous le budget, sans changer une ligne de comportement. Il
+    // sort de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
+    // pesait à la sortie.
+    //
+    // #9893 — 35 776 → 35 721 (−55). La liste des commentaires d'une story ne
+    // calcule plus sa place elle-même (réserve constante de 92/142 pt, fractions
+    // 42/62 %, clavier observé) : la loi `StoryCommentsZone` la pose sur le
+    // composeur, et `StoryViewerView+Content.swift` (−53) et `StoryViewerView.swift`
+    // (−1) perdent ce qu'elle remplace ; `StoryViewerView+Canvas.swift` (−1) gagne
+    // l'état de la prise vocale en resserrant un doc-comment. Les hôtes RESTENT en dette.
+    private static let legacyLineCeiling = 35_721
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

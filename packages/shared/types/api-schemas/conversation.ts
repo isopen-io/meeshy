@@ -260,7 +260,7 @@ export const conversationSchema = {
     lastReaction: lastReactionSchema,
     activeCall: activeCallSchema,
     lastMessageAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last message timestamp' },
-    listRankAt: { type: 'string', format: 'date-time', nullable: true, description: 'Rang de la ligne pour CE lecteur (#7592) : max(lastMessageAt, dernière réaction à un message du lecteur). Trier dessus.' },
+    listRankAt: { type: 'string', format: 'date-time', nullable: true, description: 'Rang de la ligne (#9026), le même pour tous les participants : max(lastMessageAt, lastActivityAt — réaction, appel, épingle). Trier dessus.' },
     messageCount: { type: 'number', nullable: true, description: 'Total message count' },
     unreadCount: { type: 'number', nullable: true, description: 'Unread message count for current user' },
 
@@ -356,6 +356,15 @@ export const conversationSchema = {
     // leur absence rendait les conversations non modifiables. `GET
     // /conversations/:id` résolvait déjà le rang (`callerConversationRole`) pour
     // décider du plafond d'effectif, et le jetait faute d'être déclaré ici.
+    // #9927 — ce que le LECTEUR n'a pas le droit d'écrire ici, calculé depuis
+    // sa date de naissance déclarée (`viewerWriteRestrictionOf`). Non déclaré,
+    // `fast-json-stringify` le retirerait du fil, comme `currentUserRole`.
+    viewerWriteRestriction: {
+      type: 'string',
+      enum: ['minor-global', null],
+      nullable: true,
+      description: "Restriction d'écriture du lecteur : 'minor-global' = mineur (13-17 ans) dans Meeshy Global, en lecture seule jusqu'à ses 18 ans ; null = aucune"
+    },
     currentUserRole: {
       type: 'string',
       nullable: true,
@@ -463,7 +472,7 @@ export const conversationMinimalSchema = {
     lastReaction: lastReactionSchema,
     activeCall: activeCallSchema,
     lastMessageAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last message timestamp' },
-    listRankAt: { type: 'string', format: 'date-time', nullable: true, description: 'Rang de la ligne pour CE lecteur (#7592) : max(lastMessageAt, dernière réaction à un message du lecteur). Trier dessus.' },
+    listRankAt: { type: 'string', format: 'date-time', nullable: true, description: 'Rang de la ligne (#9026), le même pour tous les participants : max(lastMessageAt, lastActivityAt — réaction, appel, épingle). Trier dessus.' },
     // Prisme Linguistique de la ligne de liste. Sans ces deux déclarations,
     // fast-json-stringify les retirerait silencieusement du payload (même piège
     // que `_count` et `location` plus haut) et l'aperçu resterait dans la langue
@@ -571,6 +580,15 @@ export const conversationMinimalSchema = {
     // Minuscules, comme la colonne `Participant.role` en base ('creator',
     // 'admin', 'moderator', 'member') — pas d'`enum` ici : le rang voyage tel
     // que la base le stocke, et un enum ne servirait que la documentation.
+    // #9927 — ce que le LECTEUR n'a pas le droit d'écrire ici, calculé depuis
+    // sa date de naissance déclarée (`viewerWriteRestrictionOf`). Non déclaré,
+    // `fast-json-stringify` le retirerait du fil, comme `currentUserRole`.
+    viewerWriteRestriction: {
+      type: 'string',
+      enum: ['minor-global', null],
+      nullable: true,
+      description: "Restriction d'écriture du lecteur : 'minor-global' = mineur (13-17 ans) dans Meeshy Global, en lecture seule jusqu'à ses 18 ans ; null = aucune"
+    },
     currentUserRole: {
       type: 'string',
       nullable: true,

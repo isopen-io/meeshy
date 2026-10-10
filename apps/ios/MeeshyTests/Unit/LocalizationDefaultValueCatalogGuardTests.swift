@@ -134,6 +134,18 @@ final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
         XCTAssertEqual(Self.clesDe(echantillon).map(\.cle), ["feed.demo.count"])
     }
 
+    /// `NSLocalizedString(_, value:)` est la MÊME famille : sa `value` est le
+    /// `defaultValue` d'une autre API. Le toast « Enregistré dans Photos »
+    /// s'affichait en français dans une interface anglaise (recette du
+    /// 2026-10-10) : ses clés `media.save.*` n'étaient pas au catalogue, et le
+    /// motif ne regardait que `String(localized:)`.
+    func test_leMotifReconnaitNSLocalizedStringAvecValue() {
+        let echantillon = """
+        return NSLocalizedString("media.demo.done", value: "Enregistré", comment: "")
+        """
+        XCTAssertEqual(Self.clesDe(echantillon).map(\.cle), ["media.demo.done"])
+    }
+
     /// Une chaîne SANS `defaultValue` n'est pas du ressort de cette garde —
     /// c'est l'autre qui la couvre. Sans cette contre-épreuve, un motif trop
     /// large ferait doublon et rougirait pour la mauvaise raison.
@@ -177,11 +189,12 @@ final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
     /// `.module` vise le catalogue du SDK, jamais celui de la cible hôte.
     static func clesDe(_ texte: String) -> [(cle: String, moduleSDK: Bool)] {
         let motif = try! NSRegularExpression(
-            pattern: #"String\(\s*localized:\s*"([^"\\]+)"\s*,\s*defaultValue:"#
+            pattern: #"String\(\s*localized:\s*"([^"\\]+)"\s*,\s*defaultValue:|NSLocalizedString\(\s*"([^"\\]+)"\s*,\s*value:"#
         )
         let plage = NSRange(texte.startIndex..., in: texte)
         return motif.matches(in: texte, range: plage).compactMap { m in
-            guard let r = Range(m.range(at: 1), in: texte) else { return nil }
+            let groupe = m.range(at: 1).location != NSNotFound ? 1 : 2
+            guard let r = Range(m.range(at: groupe), in: texte) else { return nil }
             let cle = String(texte[r])
             guard estIdentifiant(cle) else { return nil }
             let apres = texte.index(r.upperBound, offsetBy: 160, limitedBy: texte.endIndex) ?? texte.endIndex

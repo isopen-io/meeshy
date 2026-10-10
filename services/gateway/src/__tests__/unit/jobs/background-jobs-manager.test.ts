@@ -56,8 +56,18 @@ jest.mock('../../../services/CacheStore', () => ({
   getCacheStore: jest.fn().mockReturnValue({}),
 }));
 
+/**
+ * `cleanGeoCache` est ici parce que `startAll()` l'ORDONNANCE depuis #9239 :
+ * ce double ne portait que le constructeur, et son absence faisait tomber
+ * cinq cas sur `cleanGeoCache is not a function` — un double partiel d'un
+ * module ne dit pas que l'appelant a tort, il dit que le double a vieilli.
+ * Il rend 0 pour que la trace de l'ordonnanceur reste muette ici.
+ */
 jest.mock('../../../services/GeoIPService', () => ({
   GeoIPService: jest.fn().mockImplementation(() => ({})),
+  cleanGeoCache: jest.fn(() => 0),
+  // #9609 — `startAll()` charge la base géoIP locale au démarrage.
+  warmGeoIpDatabase: jest.fn(() => Promise.resolve('loaded')),
 }));
 
 jest.mock('../../../services/RedisDeliveryQueue', () => ({
@@ -78,6 +88,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { BackgroundJobsManager } from '../../../jobs/index';
+import { cleanGeoCache } from '../../../services/GeoIPService';
 
 function makePrisma() {
   return {} as any;
@@ -131,6 +142,71 @@ describe('BackgroundJobsManager', () => {
       const jobs = manager.getJobs();
       // Each job.start() should have been called exactly once
       expect(jobs.cleanupTokens.start).toHaveBeenCalledTimes(1);
+      manager.stopAll();
+    });
+
+    /**
+     * #9239 — l'ordonnancement de la purge du cache GeoIP est mesuré ICI, chez
+     * son hôte, et pas seulement par la garde de source qui vérifie que
+     * `cleanGeoCache()` a un appelant. Une garde de source dit qu'un appel
+     * EXISTE dans l'arbre ; ce cas-ci dit qu'il est bien SUR le chemin de
+     * `startAll()`, et il tombe si quelqu'un le déplace dans une branche
+     * jamais prise.
+     */
+    /**
+     * #9474 — la purge est un travail d'ENTRETIEN best-effort, et son rappel
+     * est SYNCHRONE : un `throw` dedans n'a aucun `try/catch` englobant à
+     * invoquer, parce que la pile d'un rappel de `setInterval` part de la
+     * boucle d'événements et non de `startAll()`. Il devient une exception
+     * non interceptée, et termine le processus — toute la passerelle tombée
+     * pour une table de cache qui n'a pas pu se vider.
+     *
+     * Les deux voisins de cette méthode étaient déjà gardés (le balayage des
+     * sessions par un `.catch`, les six jobs à classe chez eux) ; celui-ci ne
+     * l'était pas. Les deux cas qui suivent sont calqués sur ceux que portait
+     * `claude/brave-archimedes-ce1g42`, dont c'était la seule part que `dev`
+     * n'avait pas reprise.
+     */
+    it('une levée de la purge GeoIP ne remonte pas — startAll() aboutit', () => {
+      jest.mocked(cleanGeoCache).mockImplementationOnce(() => {
+        throw new Error('geo purge boom');
+      });
+
+      expect(() => manager.startAll()).not.toThrow();
+      expect(manager.isJobsRunning()).toBe(true);
+      manager.stopAll();
+    });
+
+    it('le battement suivant a lieu APRÈS une levée — l’intervalle n’est pas perdu', () => {
+      jest.useFakeTimers();
+      try {
+        jest.mocked(cleanGeoCache).mockClear();
+        jest.mocked(cleanGeoCache).mockImplementationOnce(() => {
+          throw new Error('geo purge boom');
+        });
+
+        manager.startAll();
+        expect(cleanGeoCache).toHaveBeenCalledTimes(1);
+
+        jest.advanceTimersByTime(10 * 60 * 1000);
+
+        /* Le deuxième appel est la MESURE : un rappel qui lève sans garde
+           n'arrive jamais là — le processus serait déjà tombé. */
+        expect(cleanGeoCache).toHaveBeenCalledTimes(2);
+        manager.stopAll();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('startAll() purge le cache GeoIP tout de suite, sans attendre le premier intervalle', () => {
+      /* Le compteur se remet à zéro ICI, pas dans un `beforeEach` : trois cas
+         de ce bloc appellent déjà `startAll()`, donc une assertion sur le
+         compteur ABSOLU mesurerait l'état que ses voisins lui laissent, et
+         rougirait au premier cas inséré avant elle. */
+      jest.mocked(cleanGeoCache).mockClear();
+      manager.startAll();
+      expect(cleanGeoCache).toHaveBeenCalledTimes(1);
       manager.stopAll();
     });
   });
@@ -200,6 +276,21 @@ describe('BackgroundJobsManager', () => {
       expect(jobs).toHaveProperty('mutationLogCleanup');
       expect(jobs).toHaveProperty('banExpirySweep');
     });
+  });
+
+  it('arme le contrôle de la sauvegarde nocturne quand BACKUP_STATUS_ALERTS_ENABLED=true, et le désarme à l’arrêt (#9668)', () => {
+    const previous = process.env.BACKUP_STATUS_ALERTS_ENABLED;
+    process.env.BACKUP_STATUS_ALERTS_ENABLED = 'true';
+    try {
+      const mgr = new BackgroundJobsManager(makePrisma(), makeEmailService());
+      mgr.startAll();
+      expect(mgr.getJobs().backupStatusCheck.isArmed()).toBe(true);
+      mgr.stopAll();
+      expect(mgr.getJobs().backupStatusCheck.isArmed()).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.BACKUP_STATUS_ALERTS_ENABLED;
+      else process.env.BACKUP_STATUS_ALERTS_ENABLED = previous;
+    }
   });
 
   // ─── custom deliveryQueue parameter ──────────────────────────────────────

@@ -3,6 +3,7 @@
  * Gestion des connexions, conversations et traductions en temps réel
  */
 
+import { presenceSnapshotContactsWhere } from './presence-snapshot-contacts';
 import { Server as SocketIOServer } from 'socket.io';
 // Cycle 107 — le `Socket` vient du contrat, pas de `socket.io`. Ce module
 // CONSTRUIT le serveur (d'où l'import de `Server` ci-dessus, immédiatement
@@ -13,7 +14,6 @@ import type { MeeshySocket as Socket } from './typed-socket';
 import { Server as HTTPServer } from 'http';
 import { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
-import { isMessageTranslationTarget } from '../services/zmq-translation/utils/zmq-helpers';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
@@ -28,6 +28,8 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../services/location
 import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
+import { ConversationViewingHandler } from './handlers/ConversationViewingHandler';
+import { captureNoticeDelivery, listenContentCapture } from './handlers/ContentCaptureHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
 import { AttachmentReactionService } from '../services/AttachmentReactionService';
@@ -40,12 +42,16 @@ import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { attachmentSocketSelect } from '../services/attachments/attachmentIncludes';
 import { serializeMessageAttachmentsForSocket } from './serializeAttachmentForSocket';
+import { emitMessageNew } from './messageNewEmission';
+import { readerSignedPlan } from './readerSignedDelivery';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
+import { deliverTextTranslation, type TextTranslationReady } from './deliverTextTranslation';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation.js';
 import { SocketTranslationRequestSchema } from '../validation/socket-event-schemas.js';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
+import { loadSealedQuoteAudience, sealedQuoteVariant } from './quotedEphemeralAudience';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
@@ -78,7 +84,6 @@ import type {
   ServerToClientEvents,
   ClientToServerEvents,
   SocketIOResponse,
-  TranslationEvent,
   MessageType,
   TranslationFailedEventData,
   AudioTranslationFailedEventData,
@@ -107,7 +112,9 @@ import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
+import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
 import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
+import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -236,6 +243,7 @@ export class MeeshySocketIOManager {
   }
 
   private prisma: PrismaClient;
+  private readonly translationRequestEngagement = lazyTranslationRequestEngagement(() => this.prisma);
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
   private statusService: StatusService;
@@ -259,6 +267,7 @@ export class MeeshySocketIOManager {
   private authHandler!: AuthHandler;
   private messageHandler!: MessageHandler;
   private statusHandler!: StatusHandler;
+  private conversationViewingHandler!: ConversationViewingHandler;
   private reactionHandler!: ReactionHandler;
   private attachmentReactionHandler!: AttachmentReactionHandler;
   private commentReactionHandler!: CommentReactionHandler;
@@ -342,16 +351,14 @@ export class MeeshySocketIOManager {
     // state actually being written by the socket handlers).
     this.callService = new CallService(prisma);
     this.callEventsHandler = new CallEventsHandler(prisma, this.callService);
-    // P3 — let the call handler post the call-summary system message through
-    // the canonical message broadcast path when a call ends.
-    this.callEventsHandler.setMessageBroadcaster(
-      (message, conversationId) => this.broadcastMessage(message as Message, conversationId)
-    );
-    // Live-call message — let the terminal upsert EDIT the live message
-    // in-place (message:edited full payload + preview + offline enqueue).
-    this.callEventsHandler.setMessageUpdateBroadcaster(
-      (message, conversationId) => this.broadcastMessageEdited(message as Message, conversationId)
-    );
+    // P3 + live-call message + #9026 (un appel remonte la conversation pour tous).
+    wireCallMessageBroadcasters({
+      handler: this.callEventsHandler,
+      prisma,
+      getIO: () => this.io,
+      broadcastMessage: (message, conversationId) => this.broadcastMessage(message as Message, conversationId),
+      broadcastMessageEdited: (message, conversationId) => this.broadcastMessageEdited(message as Message, conversationId)
+    });
 
     // CORRECTION: Configurer le callback de broadcast pour le MaintenanceService
     this.maintenanceService.setStatusBroadcastCallback(
@@ -455,6 +462,7 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
       emitPresenceSnapshot: (socket, userId, isAnonymous) =>
         this._emitPresenceSnapshot(socket, userId, isAnonymous),
+      emitViewingSnapshots: (socket) => this.conversationViewingHandler.afterAuthentication(socket),
       // CALL-RESILIENCE (Vague 44) — lets AuthHandler's anonymous-guest
       // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
       // call:ended fanout instead of leaving the other party's UI "in call".
@@ -500,6 +508,15 @@ export class MeeshySocketIOManager {
     this.statusHandler = new StatusHandler({
       prisma: this.prisma,
       statusService: this.statusService,
+      privacyPreferencesService: this.privacyPreferencesService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+      userSockets: this.userSockets,
+    });
+
+    this.conversationViewingHandler = new ConversationViewingHandler({
+      io: this.io,
+      prisma: this.prisma,
       privacyPreferencesService: this.privacyPreferencesService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
@@ -1065,6 +1082,7 @@ export class MeeshySocketIOManager {
     conversationId: string;
     actorUserId: string | null | undefined;
     messageId: string;
+    resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
   } & QueuedVariantFor<'pinned' | 'unpinned' | 'edited' | 'deleted' | 'expired'>): Promise<void> {
     await this._enqueueForOfflineParticipants(params);
   }
@@ -1409,13 +1427,7 @@ export class MeeshySocketIOManager {
 
           // Lister tous les autres participants (registered + anonymes) de ces conversations
           const contacts = await this.prisma.participant.findMany({
-            where: {
-              conversationId: { in: conversationIds },
-              isActive: true,
-              NOT: isAnonymous
-                ? { id: userId }
-                : { userId: userId }
-            },
+            where: presenceSnapshotContactsWhere({ conversationIds, viewerId: userId, isAnonymous }),
             select: {
               id: true,
               userId: true,
@@ -1803,7 +1815,13 @@ export class MeeshySocketIOManager {
 
       socket.on(CLIENT_EVENTS.CONVERSATION_LEAVE, async (data) => {
         try { await this.conversationHandler.handleConversationLeave(socket, data); } catch (error) { logger.error('[CONVERSATION_LEAVE] Error:', error); }
+        try { await this.conversationViewingHandler.handleStop(socket, data); } catch (error) { logger.error('[CONVERSATION_LEAVE] viewing Error:', error); }
       });
+
+      // « Est dans la conversation » (#8892) — l'écran ouvert au premier plan, et l'arrière-plan.
+      this.conversationViewingHandler.listen(socket);
+      // #9617 — une capture d'écran d'un contenu qui disparaît, annoncée au fil.
+      listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, deliver: captureNoticeDelivery({ io: this.io, prisma: this.prisma, readStatusService: this.readStatusService, bridgeService: this.bridgeService }) });
 
       this.callEventsHandler.setupCallEvents(
         socket,
@@ -1952,6 +1970,11 @@ export class MeeshySocketIOManager {
         // partageur, il n'a pas besoin d'une table qui, elle, peut déjà avoir
         // été vidée.
         this.locationHandler.handleSocketDisconnecting(socket.id);
+        // Ici et pas dans `disconnect` pour la même raison : `viewing:stop`
+        // part dans la room de la conversation.
+        void this.conversationViewingHandler.handleSocketDisconnecting(socket.id).catch((error) => {
+          logger.error('viewing handleSocketDisconnecting failed', { error, socketId: socket.id });
+        });
 
         const disconnectingUserId = this.socketToUser.get(socket.id);
         if (disconnectingUserId) {
@@ -2069,6 +2092,12 @@ export class MeeshySocketIOManager {
         socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
         return;
       }
+      const creditRequest = () => creditTranslationRequest({
+        engagement: this.translationRequestEngagement,
+        requester: { userId, isAnonymous: connectedUser?.isAnonymous ?? false },
+        conversationId: message.conversationId,
+        onError: (error) => logger.warn('[REQUEST_TRANSLATION] tool.translation_request credit failed', { error }),
+      });
 
       // Récupérer la traduction (depuis le cache ou la base de données)
       const translation = await this.translationService.getTranslation(messageId, targetLanguage);
@@ -2093,6 +2122,7 @@ export class MeeshySocketIOManager {
         }));
 
         this.stats.translations_sent++;
+        creditRequest();
 
       } else {
         // No cached translation — trigger on-demand translation via ZMQ
@@ -2108,6 +2138,7 @@ export class MeeshySocketIOManager {
           });
 
           logger.info(`🔄 On-demand translation requested for message ${messageId} -> ${targetLanguage}`);
+          creditRequest();
         } catch (translationError) {
           logger.error(`❌ On-demand translation failed: ${translationError}`);
           socket.emit(SERVER_EVENTS.ERROR, {
@@ -2207,133 +2238,17 @@ export class MeeshySocketIOManager {
    * @deprecated Cette fonction gère les anciennes traductions de texte (non audio).
    * Les nouvelles traductions audio utilisent _handleAudioTranslationReady et variants.
    */
-  private async _handleTextTranslationReady(data: { taskId: string; result: any; targetLanguage: string; translationId?: string; id?: string }) {
-    try {
-      const { result, targetLanguage} = data;
-
-      // Une traduction de post/commentaire/story emprunte le même bus que celle
-      // d'un message, sous un identifiant namespacé (`post:<id>`) : elle n'a ni
-      // ligne `Message`, ni room de conversation. La chercher ici envoyait
-      // `post:<24-hex>` à Prisma comme ObjectId (P2023) puis loggait un « No
-      // conversation found » alarmant pour un cas parfaitement normal — le
-      // broadcast social est fait par `SocialEventsHandler`.
-      if (!isMessageTranslationTarget(result?.messageId ?? '')) {
-        return;
-      }
-
-      // Récupérer la conversation du message pour broadcast
-      let conversationIdForBroadcast: string | null = null;
-      // `senderId` ne sert qu'à remplir `updatedBy`, OBLIGATOIRE dans
-      // ConversationUpdatedEventData, sur le rafraîchissement d'aperçu ci-dessous.
-      // Une traduction n'a pas d'acteur humain : l'auteur du message traduit est
-      // la seule identité honnête à porter là, et c'est déjà le repli que le
-      // chemin d'envoi utilise (`senderUserId ?? message.senderId`). La colonne
-      // est non-nullable et la ligne a forcément été lue quand on arrive au
-      // rafraîchissement — `conversationIdForBroadcast` sort du MÊME `msg`.
-      let senderIdForPreview = '';
-      try {
-        const msg = await this.prisma.message.findUnique({
-          where: { id: result.messageId },
-          select: { conversationId: true, senderId: true }
-        });
-        conversationIdForBroadcast = msg?.conversationId || null;
-        senderIdForPreview = msg?.senderId ?? '';
-      } catch (error) {
-        logger.error(`❌ [SocketIOManager] Erreur récupération conversation:`, error);
-      }
-      
-      // Préparer les données de traduction au format correct pour le frontend
-      // FORMAT: TranslationEvent avec un tableau de traductions
-      const translationData: TranslationEvent = buildTranslationEvent({
-        messageId: result.messageId,
-        targetLanguage,
-        translatedText: result.translatedText,
-        sourceLanguage: result.sourceLanguage,
-        translationModel: result.translationModel || result.modelType,
-        confidenceScore: result.confidenceScore,
-        cached: false,
-        translationId: data.translationId || data.id,
-      });
-      
-      
-      // Diffuser dans la room de conversation (méthode principale et UNIQUE)
-      if (conversationIdForBroadcast) {
-        // Normaliser l'ID de conversation
-        const normalizedId = await this.normalizeConversationId(conversationIdForBroadcast);
-        const roomName = ROOMS.conversation(normalizedId);
-        const roomClients = this.io.sockets.adapter.rooms.get(roomName);
-        const clientCount = roomClients ? roomClients.size : 0;
-        
-        
-        this.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
-        this.stats.translations_sent += clientCount;
-
-        // Troisième audience, la seule que rien ne servait : les participants
-        // HORS LIGNE à l'instant où NLLB répond. La room ne contient que des
-        // sockets connectées, et le `message:new` mis en file à l'ENVOI porte
-        // `translations: []` — la traduction atterrit une seconde plus tard, par
-        // ZMQ. Sans cette entrée, le message rejoué au reconnect reste
-        // définitivement dans la langue de l'expéditeur : aucun client ne
-        // refetch spontanément. Le Prisme devenait fonction de la CONNECTIVITÉ
-        // du lecteur — exactement le défaut que `emitAttachmentUpdated` ferme
-        // pour la transcription d'une note vocale, ici pour le texte.
-        //
-        // Aucun acteur à exclure : NLLB n'est pas une personne, et l'auteur du
-        // message est précisément un participant dont la copie ne porte aucune
-        // traduction à l'envoi.
-        //
-        // `dedupKey` scopé à la LANGUE CIBLE : un message se traduit vers autant
-        // de langues que la conversation compte de langues de lecture, et
-        // l'identité de dédup par défaut (messageId, eventType) les écraserait
-        // l'une après l'autre — le lecteur hors ligne ne convergerait que sur la
-        // dernière arrivée.
-        // Borné aux lecteurs dont le Prisme porte CETTE langue — la même règle
-        // que `emitConversationPreviewUpdate` applique juste en dessous avec
-        // `onlyIfPreviewCarriesLanguage`. Sans ce bornage, un message d'une
-        // conversation à L langues déposait L entrées chez CHAQUE absent, dont
-        // L−1 dans des langues qu'il ne peut pas afficher : la file qui porte
-        // les vrais messages était diluée d'autant, et le repli mémoire
-        // (plafonné à 50 entrées par utilisateur) évinçait des messages réels
-        // au profit de traductions illisibles.
-        await this._enqueueForOfflineParticipants({
-          conversationId: normalizedId,
-          eventType: 'translation',
-          messageId: result.messageId,
-          payload: translationData,
-          dedupKey: `${result.messageId}:${targetLanguage}`,
-          restrictToReadersOfLanguage: targetLanguage,
-        });
-
-        // `message:translation` ne porte QUE la room de conversation. Un lecteur
-        // resté sur l'écran de liste n'y apprend rien : sa ligne garde l'aperçu
-        // servi à l'ENVOI, quand aucune traduction n'existait encore, et rien ne
-        // repasse jamais. Le Prisme devenait donc fonction de l'ordre d'arrivée —
-        // ouvrir la conversation traduisait la ligne, ne pas l'ouvrir la laissait
-        // dans la langue de l'expéditeur, indéfiniment.
-        //
-        // Borné aux deux seuls cas où la ligne change VRAIMENT : le message
-        // traduit est encore le dernier de la conversation, et le destinataire
-        // lit la langue qui vient d'atterrir (cf. `PreviewUpdateScope`).
-        await emitConversationPreviewUpdate(
-          this.prisma,
-          this.io,
-          normalizedId,
-          senderIdForPreview,
-          (error) => logger.warn('preview refresh after translation failed (best-effort)', {
-            messageId: result.messageId,
-            targetLanguage,
-            error,
-          }),
-          { onlyIfLatestIs: result.messageId, onlyIfPreviewCarriesLanguage: targetLanguage },
-        );
-      } else {
-        logger.warn(`⚠️ [SocketIOManager] No conversation found for message ${result.messageId} — translation dropped (no room to broadcast to)`);
-      }
-
-    } catch (error) {
-      logger.error(`❌ Erreur envoi traduction: ${error}`);
-      this.stats.errors++;
-    }
+  private async _handleTextTranslationReady(data: TextTranslationReady) {
+    await deliverTextTranslation(
+      {
+        prisma: this.prisma,
+        io: this.io,
+        normalizeConversationId: (id) => this.normalizeConversationId(id),
+        enqueueForOfflineParticipants: (params) => this._enqueueForOfflineParticipants(params),
+        stats: this.stats,
+      },
+      data,
+    );
   }
 
   /**
@@ -3063,23 +2978,33 @@ export class MeeshySocketIOManager {
       // and sends a trimmed payload once per distinct language. Original content preserved.
       // Opt-in (OFF by default): enable explicitly with SOCKET_LANG_FILTER=true once
       // validated in staging (measured savings + multi-device + Prisme fallback check).
-      const langFilterOn = process.env.SOCKET_LANG_FILTER === 'true';
-
-      if (senderUserId) {
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, broadcastPayload, { excludeUserId: senderUserId });
-        } else {
-          this.io
-            .to(room)
-            .except(ROOMS.user(senderUserId))
-            .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
-        }
-        this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
-      } else if (langFilterOn) {
-        this._emitMessageNewByLanguage(room, broadcastPayload);
-      } else {
-        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
-      }
+      //
+      // #8562 — les lecteurs pour qui le message CITÉ est un éphémère déjà échu
+      // reçoivent la citation SCELLÉE sur leur room personnelle, et sont exclus
+      // de la room : une diffusion commune ne peut pas porter leur échéance.
+      // Leur exclusion désactive le filtre de langue, qui ne sait pas exclure
+      // de room utilisateur (même règle que le chemin WS).
+      const sealedQuote = await loadSealedQuoteAudience(this.prisma, message.replyTo);
+      const sealedKeys = [...sealedQuote.keys()].filter((key) => key !== senderUserId && key !== message.senderId);
+      // L'émission — la même cascade que le chemin socket, et la remise par
+      // destinataire avec adresses signées pour un message dont une pièce se
+      // lit par lecteur (#9646) : `messageNewEmission.ts`. Aucun socket
+      // d'expéditeur ici : il est rejoué plus bas, pour les appelants de test.
+      emitMessageNew({
+        io: this.io,
+        room,
+        senderPayload,
+        peerPayload: broadcastPayload,
+        senderUserId,
+        senderParticipantId: message.senderId,
+        senderSocket: null,
+        hiddenKeys: sealedKeys,
+        payloadForKey: (key) => sealedQuoteVariant(sealedQuote, key, broadcastPayload),
+        emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
+          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
+          : null,
+        readerSigned: await readerSignedPlan(this.prisma, { conversationId: normalizedId, message, attachments: broadcastPayload.attachments }),
+      });
 
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore).
       // Il reçoit le payload cid-aware : c'est SON socket, et c'est lui qui doit
@@ -3140,6 +3065,9 @@ export class MeeshySocketIOManager {
             message,
             broadcastPayload,
             resolvedSenderId,
+            ...(sealedKeys.length > 0
+              ? { payloadForReader: (key: string) => sealedQuoteVariant(sealedQuote, key, broadcastPayload) }
+              : {}),
           }
         );
       } catch (syncError) {
@@ -3429,8 +3357,6 @@ export class MeeshySocketIOManager {
     );
   }
 
-
-
   async healthCheck(): Promise<boolean> {
     try {
       const translationHealth = await this.translationService.healthCheck();
@@ -3442,20 +3368,21 @@ export class MeeshySocketIOManager {
   }
 
   async close(): Promise<void> {
-    try {
-      // ✅ FIX BUG #3: Ticker supprimé, plus besoin de le nettoyer
-      // Le système n'utilise plus de polling périodique
-
-      await this.agentAdminRelay?.stop();
-      await this.translationService.close();
-      // Les minuteries d'expiration des partages de position sont les seules
-      // que ce manager possède encore ; non désarmées, elles retiendraient la
-      // boucle d'événements jusqu'à 8 heures après l'arrêt.
-      this.locationHandler.dispose();
-      await this.redisAdapterHandle?.close();
-      this.io.close();
-    } catch (error) {
-      logger.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`);
+    // Les sockets d'abord, quoi qu'il arrive ensuite (#8297) ; `engine.close()` coupe
+    // les transports sans attendre les adaptateurs, que Redis peut retenir.
+    void this.io.close().catch((error: unknown) => logger.error(`❌ Fermeture des sockets échouée: ${error}`));
+    this.io.engine?.close();
+    const steps: ReadonlyArray<() => unknown> = [
+      () => this.agentAdminRelay?.stop(),
+      () => this.translationService.close(),
+      // Minuteries des partages de position : sinon la boucle vit 8 h de plus.
+      () => this.locationHandler.dispose(),
+      () => this.redisAdapterHandle?.close(),
+    ];
+    for (const step of steps) {
+      await Promise.resolve()
+        .then(step)
+        .catch((error: unknown) => logger.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`));
     }
   }
 

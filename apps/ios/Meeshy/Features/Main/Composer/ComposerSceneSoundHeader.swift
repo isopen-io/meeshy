@@ -89,7 +89,7 @@ struct ComposerSceneSoundHeader: View {
                 .modifier(ComposerSoundActionsMenu(supprimer: onDelete, promouvoir: onPromote))
                 .padding(.leading, leadingInset)
                 .padding(.trailing, leadingInset)
-                .padding(.bottom, 6)
+                .padding(.bottom, MeeshySpacing.xsPlus)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }

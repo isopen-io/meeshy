@@ -34,12 +34,13 @@ export interface EphemeralPushContext {
 export function ephemeralPushFields(
   context: EphemeralPushContext,
 ): { ephemeralDuration?: string; effectFlags?: string } {
-  // Flamme-œil (#8302) : aucune durée à porter, mais le bitfield dit à la NSE
-  // que la bulle est éphémère.
-  if (isAfterReadEphemeral(context.effectFlags)) return { effectFlags: String(context.effectFlags) };
-
   const duration = context.ephemeralDuration;
-  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) return {};
+  const timed = typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
+
+  // Flamme-œil (#8302) : aucune durée à porter, mais le bitfield dit à la NSE
+  // que la bulle est éphémère. La COPIE transférée (#9588) porte les deux, et
+  // sa durée voyage : elle décompte dès la réception.
+  if (!timed) return isAfterReadEphemeral(context.effectFlags) ? { effectFlags: String(context.effectFlags) } : {};
 
   return {
     // Chaînes : APNs et FCM ne transportent que du texte dans `data`, et la NSE

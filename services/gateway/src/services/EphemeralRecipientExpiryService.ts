@@ -8,6 +8,8 @@ import {
   type RetractedNotificationAnnouncer,
 } from './messaging/retractMessageNotifications';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
+import { loadQuoteDescendants } from './messaging/quoteCascade';
+import { guardedInterval } from '../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'EphemeralRecipientExpiryService' });
 
@@ -100,9 +102,9 @@ export class EphemeralRecipientExpiryService {
     // Une passe immédiate : les échéances échues pendant l'arrêt sont
     // précisément celles qui ont le plus dépassé leur heure.
     void this.sweep().catch((err) => log.warn('initial ephemeral expiry sweep failed', { err }));
-    this.interval = setInterval(() => {
+    this.interval = guardedInterval({ name: 'ephemeral-recipient-expiry-sweep', everyMs: intervalMs, logger: log, run: () => {
       void this.sweep().catch((err) => log.warn('scheduled ephemeral expiry sweep failed', { err }));
-    }, intervalMs);
+    } });
     this.interval.unref?.();
     log.info('ephemeral recipient expiry sweep started', { intervalMs, batchSize: this.batchSize });
   }
@@ -216,15 +218,35 @@ export class EphemeralRecipientExpiryService {
 
     const roomKey = await this._roomKeyOf(entry.participantId);
 
+    // #8630 — la mort entraîne, POUR CE LECTEUR, celle des réponses qui citent
+    // ce message (transitivement) : même annonce, mêmes bannières retirées.
+    const dead = [
+      { id: entry.messageId, conversationId: entry.conversationId },
+      ...(await loadQuoteDescendants(this.prisma, [entry.messageId])),
+    ];
+
+    for (const message of dead) {
+      await this._announceDeathTo(roomKey, message, entry.id, announcer);
+    }
+
+    return true;
+  }
+
+  private async _announceDeathTo(
+    roomKey: { room: string; userId: string | null } | null,
+    message: { id: string; conversationId: string },
+    entryId: string,
+    announcer: RetractedNotificationAnnouncer | undefined,
+  ): Promise<void> {
     if (roomKey) {
       const io = this.resolveIO();
       try {
         io?.to(ROOMS.user(roomKey.room)).emit(SERVER_EVENTS.MESSAGE_EXPIRED, {
-          messageId: entry.messageId,
-          conversationId: entry.conversationId,
+          messageId: message.id,
+          conversationId: message.conversationId,
         });
       } catch (err) {
-        log.warn('ephemeral expiry announce failed', { entryId: entry.id, err });
+        log.warn('ephemeral expiry announce failed', { entryId, messageId: message.id, err });
       }
     }
 
@@ -234,15 +256,13 @@ export class EphemeralRecipientExpiryService {
     // notification à retirer : `userId` nul, on passe.
     if (roomKey?.userId) {
       try {
-        await retractMessageNotifications(this.prisma, entry.messageId, announcer, {
+        await retractMessageNotifications(this.prisma, message.id, announcer, {
           userId: roomKey.userId,
         });
       } catch (err) {
-        log.warn('ephemeral expiry retraction failed', { entryId: entry.id, err });
+        log.warn('ephemeral expiry retraction failed', { entryId, messageId: message.id, err });
       }
     }
-
-    return true;
   }
 
   /**

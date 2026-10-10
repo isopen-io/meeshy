@@ -583,7 +583,7 @@ export function QuoteRail({ isMine = false, className = '' }: { readonly isMine?
     <span
       data-quote-rail
       className={`w-1 shrink-0 rounded-full ${className}`}
-      style={{ backgroundColor: isMine ? 'color-mix(in srgb, white 70%, transparent)' : 'var(--accent)' }}
+      style={{ backgroundColor: isMine ? 'color-mix(in srgb, var(--color-ios-on-brand) 70%, transparent)' : 'var(--accent)' }}
       aria-hidden
     />
   );
@@ -686,7 +686,7 @@ export function Quote({
   return (
     <div
       data-quote-card
-      className="mb-1.5 flex w-full rounded-quote text-left"
+      className="mb-1.5 flex w-full rounded-quote text-start"
       style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
     >
       <QuoteRail isMine={isMine} />
@@ -699,7 +699,7 @@ export function Quote({
           media={media}
           quote={quote}
           languages={languages}
-          className="relative my-1.5 ml-1.5 shrink-0 overflow-hidden rounded-media"
+          className="relative my-1.5 ms-1.5 shrink-0 overflow-hidden rounded-media"
           style={{
             width: QUOTE_THUMBNAIL_PX,
             height: QUOTE_THUMBNAIL_PX,
@@ -720,10 +720,22 @@ export function Quote({
           ) : still !== null ? (
             <QuoteVideoStill src={still} />
           ) : null}
-          {media.timebased ? <Glyph name="fillPlay" size={12} className="absolute inset-0 m-auto text-white" /> : null}
+          {media.timebased ? <Glyph name="fillPlay" size={12} className="absolute inset-0 m-auto text-on-media" /> : null}
+          {/* « +N » (#9911) — les AUTRES pièces du message cité, sur la vignette
+              comme sur la grille du fil (`OverflowVeil`). */}
+          {media.more > 0 ? (
+            <span
+              data-quote-more={media.more}
+              aria-hidden
+              className="absolute inset-0 grid place-items-center text-caption font-bold text-on-media"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-media-backdrop) 50%, transparent)' }}
+            >
+              +{media.more}
+            </span>
+          ) : null}
         </QuoteOpenZone>
       ) : null}
-      <span className="flex min-w-0 flex-1 flex-col items-start pr-2.5 pl-2">
+      <span className="flex min-w-0 flex-1 flex-col items-start pe-2.5 ps-2">
         {/* Le nom et le texte cite COULENT DANS LE MEME PARAGRAPHE (directive
             iOS #5103) : deux lignes separees feraient de la citation un bloc
             aussi haut que le message, et c'est le message qu'on vient lire. */}
@@ -731,18 +743,18 @@ export function Quote({
           type="button"
           onClick={onJump}
           data-quote-jump
-          className={`w-full min-w-0 pt-2 text-left text-title ${lowerZone ? '' : 'pb-2'}`}
+          className={`w-full min-w-0 pt-2 text-start text-title ${lowerZone ? '' : 'pb-2'}`}
           {...(media === null ? {} : { 'data-quote-media': media.kind })}
           aria-label={label}
         >
-          <span className="font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
+          <span className="font-semibold" style={{ color: isMine ? 'var(--color-ios-on-brand)' : 'var(--accent)' }}>
             {quote.sender?.displayName ?? ''}{' '}
           </span>
           {media !== null && media.frame === null && !hasThumb && !preview.isProtected ? (
             <GlyphSvg
               glyph={QUOTE_GLYPH[media.kind]}
               size={11}
-              className="mr-1 inline-block align-baseline"
+              className="me-1 inline-block align-baseline"
               style={{ color: ink }}
             />
           ) : null}
@@ -753,6 +765,11 @@ export function Quote({
           >
             {preview.text}
           </span>
+          {media !== null && media.more > 0 && !hasThumb ? (
+            <span data-quote-more={media.more} aria-hidden className="ms-1 font-semibold" style={{ color: ink }}>
+              +{media.more}
+            </span>
+          ) : null}
           {/* LA DURÉE, quand elle existe — `detailsLabel` (`QuotedReplyPresentation
               .swift:107-151`) : « un ZÉRO n'est pas un fait », donc rien plutôt
               qu'un « 0:00 » qu'on croirait. La capsule d'un vocal porte la sienne. */}
@@ -829,7 +846,7 @@ export function FailedSendBand({
     reason === undefined
       ? translate(language, 'message.send.failed')
       : translate(language, 'message.send.failed.reason', { reason });
-  const className = 'mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 text-left text-mini font-semibold';
+  const className = 'mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 text-start text-mini font-semibold';
   const style = {
     backgroundColor: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
     color: textColor,

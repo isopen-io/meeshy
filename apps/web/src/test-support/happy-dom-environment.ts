@@ -42,7 +42,41 @@ export const ensureHappyDomRegistered = (options?: Parameters<typeof GlobalRegis
   if (!GlobalRegistrator.isRegistered) {
     GlobalRegistrator.register(options);
   }
+  installNodePortrait(globalThis.Node.prototype);
 };
+
+const INSPECT = Symbol.for('nodejs.util.inspect.custom');
+const PORTRAIT_LENGTH = 240;
+
+const clip = (text: string): string => (text.length > PORTRAIT_LENGTH ? `${text.slice(0, PORTRAIT_LENGTH)}…` : text);
+
+/**
+ * LE PORTRAIT D'UN NŒUD DANS UN MESSAGE D'ÉCHEC (#9509).
+ *
+ * Sous bun 1.3.14, formater un nœud happy-dom MONTÉ PAR REACT (ses propriétés
+ * `__reactFiber$…` mènent à tout l'arbre de fibres, puis au document) prend
+ * ~13 s et rend une chaîne VIDE — mesuré sur le profil du jeu (345 nœuds) :
+ * `Bun.inspect(el)` 13 527 ms, longueur 0. Un `expect(el).toBeNull()` qui
+ * échoue formate son « Received » : il ne lève pas, et le témoin dépasse son
+ * délai. bun passe au suivant pendant que le corps abandonné poursuit ses
+ * `act()` par-dessus les fichiers suivants — 3 523 rouges en cascade (#9481).
+ *
+ * Le portrait — balise et début de `outerHTML` — remplace ce parcours : le même
+ * échec lève en 0,05 ms et dit ce qu'il a reçu. `Node` est une classe de MODULE
+ * de happy-dom, partagée par toutes les fenêtres que ce fichier enregistre :
+ * la poser une fois suffit, la reposer ne change rien.
+ */
+function installNodePortrait(prototype: object): void {
+  if (Object.prototype.hasOwnProperty.call(prototype, INSPECT)) return;
+  Object.defineProperty(prototype, INSPECT, {
+    configurable: true,
+    value(this: Node): string {
+      return 'outerHTML' in this && typeof this.outerHTML === 'string'
+        ? clip(this.outerHTML)
+        : `${this.nodeName} ${clip(JSON.stringify(this.textContent ?? ''))}`;
+    },
+  });
+}
 
 export const releaseHappyDomIfRegistered = async (): Promise<void> => {
   if (GlobalRegistrator.isRegistered) {

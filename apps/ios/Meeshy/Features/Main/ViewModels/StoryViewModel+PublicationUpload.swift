@@ -80,6 +80,25 @@ extension StoryViewModel {
         return result
     }
 
+    private func uploadStoryVideo(
+        _ videoURL: URL,
+        uploader: TusUploadManager,
+        token: String
+    ) async throws -> TusUploadResult {
+        let video = await StoryVideoUploadFile.prepared(from: videoURL) { source in
+            try await MediaCompressor.shared.compressVideo(source, context: .story)
+        }
+        defer {
+            if video.isDerived { try? FileManager.default.removeItem(at: video.fileURL) }
+        }
+        let result = try await uploader.uploadFile(
+            fileURL: video.fileURL, mimeType: video.mimeType,
+            credential: .bearer(token), uploadContext: "story"
+        )
+        await CacheCoordinator.shared.video.seed(copyingLocalFile: video.fileURL, for: result.fileUrl)
+        return result
+    }
+
     /// Headless story upload pipeline shared by:
     ///   1. `launchUploadTask` (composer flow) — wraps progress/phase/published
     ///       callbacks to drive the `activeUploads` surfaces and tray prepend.
@@ -165,13 +184,7 @@ extension StoryViewModel {
                     guard !Task.isCancelled else { return newPostIds }
                     let obj = mediaObjects[i]
                     if obj.kind == .video, let videoURL = upload.loadedVideoURLs[obj.id] {
-                        let result = try await uploader.uploadFile(
-                            fileURL: videoURL, mimeType: "video/mp4",
-                            credential: .bearer(token), uploadContext: "story"
-                        )
-                        // Seed the video cache under the server URL — metadata-only
-                        // reconciliation: viewer gets a cache hit, never re-downloads.
-                        await CacheCoordinator.shared.video.seed(copyingLocalFile: videoURL, for: result.fileUrl)
+                        let result = try await uploadStoryVideo(videoURL, uploader: uploader, token: token)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
@@ -379,9 +392,14 @@ extension StoryViewModel {
             // part avec lui : `create(content:type:…)` ne porte aucun
             // `storyEffects`, et y router un post composé perdrait chaque objet
             // texte, autocollant et dessin sans la moindre erreur.
+            // #9179 — un réel sans texte publie sa légende de scène : la MÊME
+            // règle que le canal document (`PublishIntent.document`).
+            let legendes = (updatedEffects.mediaObjects ?? []).map { serverMediaCaption[$0.postMediaId] }
+                + [uploadResult?.id].compactMap { $0 }.map { serverMediaCaption[$0] }
             let post = try await postService.createCanvasPost(
                 type: upload.targetType,
-                content: slide.content,
+                content: ReelPublishedContent.content(type: upload.targetType, text: slide.content,
+                                                      captions: legendes),
                 storyEffects: updatedEffects,
                 visibility: upload.visibility,
                 visibilityUserIds: upload.visibilityUserIds,
@@ -391,7 +409,10 @@ extension StoryViewModel {
                 mentions: canvasMentions.isEmpty ? nil : canvasMentions,
                 allowSoundExtraction: upload.allowSoundExtraction,
                 mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt,
-                mediaCaption: serverMediaCaption.isEmpty ? nil : serverMediaCaption
+                mediaCaption: serverMediaCaption.isEmpty ? nil : serverMediaCaption,
+                alsoAsReel: StoryAlsoAsReelWire.flag(requested: upload.alsoAsReel, type: upload.targetType,
+                                                     slideCount: upload.slides.count,
+                                                     isRepost: upload.repostOfId != nil)
             )
 
             newPostIds.append(post.id)
@@ -570,11 +591,7 @@ extension StoryViewModel {
                         continue
                     }
                     if obj.kind == .video, let videoURL = loadedVideoURLs[obj.id] {
-                        let result = try await uploader.uploadFile(
-                            fileURL: videoURL, mimeType: "video/mp4",
-                            credential: .bearer(token), uploadContext: "story"
-                        )
-                        await CacheCoordinator.shared.video.seed(copyingLocalFile: videoURL, for: result.fileUrl)
+                        let result = try await uploadStoryVideo(videoURL, uploader: uploader, token: token)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         newMediaIds.append(result.id)
@@ -931,5 +948,16 @@ extension StoryViewModel {
         for (_, url) in upload.loadedAudioURLs {
             try? FileManager.default.removeItem(at: url)
         }
+    }
+}
+
+/// **Ce que le fil dit du réel** (#9476). « Aussi en réel » ne part qu'avec une
+/// STORY ORIGINALE d'UNE scène : un réel est une scène, une story de plusieurs
+/// slides partirait en autant de réels, et une republication désigne les médias
+/// de sa source. `nil` = la clé reste absente du corps — ce que
+/// tout client antérieur envoie, et ce que le serveur lit « story seule ».
+nonisolated enum StoryAlsoAsReelWire {
+    static func flag(requested: Bool, type: PostType, slideCount: Int, isRepost: Bool) -> Bool? {
+        requested && type == .story && slideCount == 1 && !isRepost ? true : nil
     }
 }

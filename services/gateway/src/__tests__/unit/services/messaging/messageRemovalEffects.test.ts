@@ -23,6 +23,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { matchesMongoWhere } from '../../../helpers/mongo-where';
 
 // Le singleton des compteurs est doublé ; `resolveAttachmentType` reste le VRAI
 // (même table MIME → compteur que `recompute()`, cf. le jumeau côté post-save).
@@ -307,10 +308,16 @@ describe('applyMessageRemovalEffects — lastMessageAt', () => {
     await applyMessageRemovalEffects(prisma, removedMessage());
 
     expect(messageFindFirst).toHaveBeenCalledWith({
-      where: { conversationId: CONVERSATION_ID, deletedAt: null },
+      where: expect.objectContaining({ conversationId: CONVERSATION_ID, deletedAt: null }),
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
+    // #9630 — l'horloge ne se pose jamais sur un avis de capture, et reste sur tout autre message.
+    const where = (messageFindFirst.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+    const at = { conversationId: CONVERSATION_ID, deletedAt: null, messageSource: 'system', messageType: 'system' };
+    expect(matchesMongoWhere({ ...at, expiresAt: new Date() }, where)).toBe(false);
+    expect(matchesMongoWhere(at, where)).toBe(true);
+    expect(matchesMongoWhere({ ...at, messageSource: 'user', messageType: 'text', expiresAt: new Date() }, where)).toBe(true);
     expect(conversationUpdateMany).toHaveBeenCalledWith({
       where: { id: CONVERSATION_ID, lastMessageAt: LAST_MESSAGE_AT },
       data: { lastMessageAt: SURVIVOR_CREATED_AT },

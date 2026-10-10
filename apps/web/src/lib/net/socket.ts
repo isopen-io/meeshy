@@ -13,8 +13,10 @@
  * Aucun des trois ne connaît `api/socket.ts` — seule sa FORME compte.
  */
 
+/** `token` ABSENT pour l'invité d'un lien (#9724) : la passerelle l'authentifie
+ * alors par son seul `sessionToken`, en anonyme. */
 export type SocketAuth = {
-  readonly token: string;
+  readonly token?: string;
   readonly sessionToken: string;
 };
 

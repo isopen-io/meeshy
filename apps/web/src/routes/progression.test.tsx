@@ -1,18 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES, ENGAGEMENT_AXIS_WEIGHTS } from '@meeshy/shared/types/engagement';
+import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import { ENGAGEMENT_FAMILY_TOP_POINTS } from '@meeshy/shared/types/engagement-operations';
 import { axesByFamily, resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { ACHIEVEMENT_COPY, AXIS_LABELS, FAMILY_LABELS } from '@/lib/view/progression';
 
-import { ElansHero, MeeshDetail, MeeshEntry, ProgressionBody } from './progression';
+import { progressionConcepts } from '@meeshy/shared/utils/progression-layout';
+import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+
+import { ElansHero, MeeshDetail, ProgressionBody } from './progression';
+import { ConceptFiche } from './progression-concept';
+import type { GameActions } from './progression-game-actions';
 import {
   AchievementsSection,
   AxisRow,
   GeneratedAchievements,
-  MeeshHero,
   ProgressionError,
   ProgressionSkeleton,
 } from './progression-parts';
@@ -28,7 +33,38 @@ import {
  */
 
 const fixture = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
-const html = renderToStaticMarkup(<ProgressionBody onMint={() => {}} isMinting={false} progress={fixture} />);
+
+const repos: GameActions = {
+  mint: () => undefined,
+  reroll: () => undefined,
+  claimChest: () => undefined,
+  buyFreeze: () => undefined,
+  relight: () => undefined,
+  pending: { mint: false, rerollId: null, chest: false, freeze: false, relight: false },
+  errors: {},
+  celebration: null,
+  strikeKey: 0,
+};
+
+/** La première page SEULE : ses cartes de concept. */
+const premierePage = (progress: EngagementProgress): string => renderToStaticMarkup(<ProgressionBody progress={progress} />);
+
+/**
+ * L'ÉCRAN ENTIER (#9563) : la première page ET chaque fiche qu'elle ouvre. Ce
+ * que la progression dit n'est plus empilé sur une page ; un témoin de « qui
+ * AFFICHE ce que la loi décide » suit donc le contenu jusque dans sa fiche.
+ */
+const ecran = (progress: EngagementProgress): string =>
+  renderToStaticMarkup(
+    <>
+      <ProgressionBody progress={progress} />
+      {progressionConcepts(progress).map((concept) => (
+        <ConceptFiche key={concept} concept={concept} progress={progress} host={{ actions: repos, online: true }} />
+      ))}
+    </>,
+  );
+
+const html = ecran(fixture);
 
 /**
  * Le MÊME écran, servi par une passerelle qui ne connaît AUCUN des trois blocs
@@ -41,7 +77,7 @@ const sansBlocsOptionnels = (() => {
   // `exactOptionalPropertyTypes`, « absent » et « présent et undefined » sont
   // deux types distincts, et c'est bien l'ABSENCE que ce rendu doit servir.
   const { meesh: _m, elan: _e, achievementReach: _r, ...sansOptions } = ENGAGEMENT_PROGRESS_FIXTURE;
-  return renderToStaticMarkup(<ProgressionBody onMint={() => {}} isMinting={false} progress={resolveEngagementProgress(sansOptions)} />);
+  return ecran(resolveEngagementProgress(sansOptions));
 })();
 
 /**
@@ -82,9 +118,9 @@ describe('le hub — un utilisateur à mi-chemin', () => {
    * pas ce bloc ne compile même plus : la séquence partagée est un type
    * SOMME, `ProgressionBody` doit épuiser ses cas.
    */
+  /* La série EST la valeur de tête (« N jours ») : aucune ligne « Série » ne la redit (#9563, amendement n° 4, règle 2). */
   test('le hero de la flamme dit la série qu\'il a recueillie', () => {
-    expect(html).toContain('Série');
-    expect(html).toContain(`${fixture.streak.value} jours d’affilée`);
+    expect(html).toContain(`>${fixture.streak.value} jours<`);
     expect(html).toContain(`Record : ${ENGAGEMENT_PROGRESS_FIXTURE.streak.longestStreakDays} jours`);
   });
 
@@ -95,14 +131,13 @@ describe('le hub — un utilisateur à mi-chemin', () => {
   });
 
   /**
-   * Le barème est DÉRIVÉ de `ENGAGEMENT_AXIS_WEIGHTS`. Ce témoin le vérifie en
-   * cherchant les poids RÉELS : s'il les recopiait, il passerait au vert sur
-   * une énumération figée, c'est-à-dire sur le défaut qu'il doit attraper.
+   * Le barème est DÉRIVÉ du catalogue des opérations (`ENGAGEMENT_FAMILY_TOP_POINTS`,
+   * #9667) : ce qu'un geste de chaque famille rapporte AU PLUS. Ce témoin cherche
+   * les valeurs RÉELLES : les recopier passerait au vert sur une énumération figée.
    */
-  test('le hero du niveau ÉNUMÈRE comment gagner, avec les poids du catalogue', () => {
+  test('le hero du niveau ÉNUMÈRE comment gagner, avec les points du catalogue', () => {
     expect(html).toContain('Comment gagner des points');
-    const poids = [...new Set(Object.values(ENGAGEMENT_AXIS_WEIGHTS))];
-    for (const p of poids) expect(html).toContain(`+${p}`);
+    for (const p of Object.values(ENGAGEMENT_FAMILY_TOP_POINTS)) expect(html).toContain(`jusqu’à\u00a0+${p}`);
   });
 
   test('le hero du niveau dit le prix d\'une Meesh, servi par le serveur', () => {
@@ -134,7 +169,7 @@ describe('le hub — un utilisateur à mi-chemin', () => {
 
   /** Le DÉTAIL n'est plus ici : il a sa page. Le hub doit tenir court. */
   test('ne rend PAS le détail des axes — il a sa page', () => {
-    expect(html).not.toContain('Palier');
+    expect(premierePage(fixture)).not.toContain('Palier');
   });
 });
 
@@ -186,17 +221,13 @@ describe('la page des succès', () => {
  * sans rien ajouter.
  */
 describe('le hub — un compte VIDE parle quand même', () => {
-  const empty = renderToStaticMarkup(
-    <ProgressionBody
-      onMint={() => {}}
-      isMinting={false}
-      progress={resolveEngagementProgress({
-        counters: [],
-        milestones: [],
-        streak: { currentStreakDays: 0, longestStreakDays: 0 },
-        level: { engagementScore: 0 },
-      })}
-    />,
+  const empty = ecran(
+    resolveEngagementProgress({
+      counters: [],
+      milestones: [],
+      streak: { currentStreakDays: 0, longestStreakDays: 0 },
+      level: { engagementScore: 0 },
+    }),
   );
 
   test('le hero des succès dit comment décrocher le PREMIER', () => {
@@ -272,7 +303,9 @@ describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
    * données. Un témoin d'absence doit RETIRER ce qu'il prétend absent.
    */
   test('n’affiche RIEN quand la passerelle ne sert pas le bloc', () => {
-    expect(sansBlocsOptionnels).not.toContain('Meesh');
+    expect(sansBlocsOptionnels).not.toContain('data-concept-card="meesh"');
+    expect(sansBlocsOptionnels).not.toContain('data-meesh-mint');
+    expect(sansBlocsOptionnels).not.toContain('Aucune Meesh');
   });
 
   test('sans assez de points : le solde, le manque, et AUCUN bouton', () => {
@@ -323,35 +356,6 @@ describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
 });
 
 /**
- * LA PIÈCE D'ARGENT (#6427) — une Meesh est une MONNAIE : son glyphe dit
- * « pièce », pas « récompense ». La médaille reste aux badges.
- *
- * Le témoin cherche le TRACÉ, pas un nom de glyphe : un nom se renomme sans que
- * le dessin change, et c'est le dessin que l'œil voit. `coin-fill` (Phosphor)
- * s'ouvre sur `M207.58,63.84`, `medal` sur `M216,96A88,88`.
- */
-const TRACE_PIECE = 'M207.58,63.84';
-const TRACE_MEDAILLE = 'M216,96A88,88';
-const TEINTE_ARGENT = 'var(--ios-meesh-silver)';
-const meeshDeLaFixture = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE).meesh!;
-
-describe('la pièce d’argent des Meeshes', () => {
-  test('l’entrée de l’en-tête montre la pièce, en argent, et plus la médaille', () => {
-    const rendu = renderToStaticMarkup(<MeeshEntry meesh={meeshDeLaFixture} onMint={() => {}} isMinting={false} />);
-    expect(rendu).toContain(TRACE_PIECE);
-    expect(rendu).toContain(TEINTE_ARGENT);
-    expect(rendu).not.toContain(TRACE_MEDAILLE);
-  });
-
-  test('le héros des Meeshes montre la même pièce', () => {
-    const rendu = renderToStaticMarkup(<MeeshHero meesh={meeshDeLaFixture} onMint={() => {}} isMinting={false} />);
-    expect(rendu).toContain(TRACE_PIECE);
-    expect(rendu).toContain(TEINTE_ARGENT);
-    expect(rendu).not.toContain(TRACE_MEDAILLE);
-  });
-});
-
-/**
  * L'ÉLAN AFFICHÉ (#5749) — « un accélérateur qu'on ne voit pas n'accélère rien,
  * il surprend ». Et son corollaire, tout aussi important : au neutre il ne doit
  * RIEN occuper.
@@ -380,7 +384,8 @@ describe('ElansHero — le bandeau d’élan (#5749)', () => {
   });
 
   test('n’affiche rien non plus quand la passerelle ne sert pas le bloc', () => {
-    expect(sansBlocsOptionnels).not.toContain('Élan');
+    expect(sansBlocsOptionnels).not.toContain('Élan ×');
+    expect(sansBlocsOptionnels).not.toContain('Points ×');
   });
 
   test('dit le facteur ET ce qui le porte — sinon il se subit au lieu de se piloter', () => {
@@ -641,75 +646,42 @@ describe('MeeshDetail — l’activité et l’échec se DISENT (#6470)', () => 
     expect(rendre({ isMinting: false })).not.toContain('data-meesh-mint-error'));
 });
 
-describe('MeeshEntry — la forme suit iOS (#6466, repris #6470)', () => {
-  /**
-   * `rounded-chip` donnait une gélule là où iOS pose
-   * `RoundedRectangle(cornerRadius: 12)`. Et UNE seule surface, pas deux
-   * bulles : la directive du 2026-09-14 demandait d'abord un groupe séparé, le
-   * porteur l'a vu au simulateur et a tranché l'inverse.
-   */
-  test('l’entrée est un rectangle arrondi, pas une capsule', () => {
-    const rendu = renderToStaticMarkup(<MeeshEntry meesh={meeshDeLaFixture} onMint={() => {}} isMinting={false} />);
-    expect(rendu).toContain('border-radius:12px');
-    expect(rendu).not.toContain('rounded-chip');
+/**
+ * LE DÉTAIL DES MEESHES EST MONTÉ, DANS SA FICHE (#6497, #9563).
+ *
+ * Le défaut de #6497 n'était pas un rendu fautif : le composant était exporté,
+ * testé, et monté NULLE PART — un fichier de test n'est pas un consommateur. Ce
+ * témoin part donc de l'ÉCRAN. Depuis #9563 la première page ne porte plus aucun
+ * geste : la frappe d'avant le jeu vit dans la fiche des Meeshes, et là seulement.
+ */
+describe('la frappe d’avant le jeu vit dans la fiche des Meeshes', () => {
+  const frappable = resolveEngagementProgress({
+    ...ENGAGEMENT_PROGRESS_FIXTURE,
+    meesh: { balance: 2, mintedLifetime: 2, debitablePoints: 2400, floorPoints: 0, missingPoints: 0, mintCost: 1200 },
+  });
+  const fiche = renderToStaticMarkup(<ConceptFiche concept="meesh" progress={frappable} host={{ actions: repos, online: true }} />);
+
+  test('la fiche des Meeshes porte le bouton de frappe', () => expect(fiche).toContain('data-meesh-mint'));
+
+  test('la première page, non : sa carte dit le solde et ouvre la fiche', () => {
+    const page = premierePage(frappable);
+    expect(page).not.toContain('data-meesh-mint');
+    expect(page).toContain('data-concept-card="meesh"');
+    expect(page).toContain('2 Meeshes');
   });
 
-  test('un seul contrôle, un seul libellé accessible', () => {
-    const rendu = renderToStaticMarkup(<MeeshEntry meesh={meeshDeLaFixture} onMint={() => {}} isMinting={false} />);
-    expect(rendu.match(/<button/g)).toHaveLength(1);
-    expect(rendu.match(/aria-label="/g)).toHaveLength(1);
-  });
-});
-
-describe('MeeshHero est MONTÉ, et sous le niveau (#6497)', () => {
-  /**
-   * Le défaut de #6497 n'était pas un rendu fautif : le composant était
-   * exporté, testé, et monté NULLE PART. Ses deux témoins le rendaient
-   * directement — un fichier de test n'est pas un consommateur, et la
-   * couverture le comptait vivant.
-   *
-   * Ce témoin-ci part donc de l'ÉCRAN, jamais du composant : c'est la seule
-   * façon de mesurer qu'il atteint un pixel.
-   */
-  const avecMeesh = renderToStaticMarkup(
-    <ProgressionBody
-      onMint={() => {}}
-      isMinting={false}
-      progress={resolveEngagementProgress({
-        ...ENGAGEMENT_PROGRESS_FIXTURE,
-        meesh: { balance: 2, mintedLifetime: 2, debitablePoints: 2400, floorPoints: 0, missingPoints: 0, mintCost: 1200 },
-      })}
-    />,
-  );
-
-  test('le hero des Meeshes est rendu par le CORPS de l’écran', () =>
-    expect(avecMeesh).toContain('progression-meesh'));
-
-  /**
-   * L'ordre se mesure par la POSITION, jamais par la présence : « les deux
-   * blocs existent » resterait vrai après n'importe quelle permutation, et
-   * c'est la permutation que la directive demande.
-   */
-  test('il vient APRÈS le niveau', () => {
-    const niveau = avecMeesh.indexOf('progression-niveau');
-    const meesh = avecMeesh.indexOf('progression-meesh');
+  test('la carte des Meeshes vient APRÈS le niveau et AVANT les élans — la séquence partagée la place là', () => {
+    const page = premierePage(frappable);
+    const [niveau, meesh, elans] = ['level', 'meesh', 'elans'].map((concept) => page.indexOf(`data-concept-card="${concept}"`));
     expect(niveau).toBeGreaterThan(-1);
-    expect(meesh).toBeGreaterThan(niveau);
+    expect(meesh).toBeGreaterThan(niveau ?? -1);
+    expect(elans).toBeGreaterThan(meesh ?? -1);
   });
 
-  test('et AVANT les élans — la séquence partagée le place là', () => {
-    const meesh = avecMeesh.indexOf('progression-meesh');
-    const elans = avecMeesh.indexOf('progression-elans');
-    expect(elans).toBeGreaterThan(meesh);
-  });
-
-  /** Sans solde servi, aucun hero : on ne parle pas à la place du serveur. */
-  test('aucun hero quand la passerelle ne sert pas le solde', () => {
+  /** Sans solde servi, ni carte ni fiche : on ne parle pas à la place du serveur. */
+  test('aucune carte quand la passerelle ne sert pas le solde', () => {
     const sansMeesh = { ...ENGAGEMENT_PROGRESS_FIXTURE };
     delete (sansMeesh as { meesh?: unknown }).meesh;
-    const rendu = renderToStaticMarkup(
-      <ProgressionBody onMint={() => {}} isMinting={false} progress={resolveEngagementProgress(sansMeesh)} />,
-    );
-    expect(rendu).not.toContain('progression-meesh');
+    expect(premierePage(resolveEngagementProgress(sansMeesh))).not.toContain('data-concept-card="meesh"');
   });
 });

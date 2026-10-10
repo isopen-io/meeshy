@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { parseCanvasDocument } from '@/lib/canvas/document';
 
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
-import { loadReelsPage, reelsQueryKey, REELS_PAGE_SIZE } from './reels';
+import { loadReelsPage, reelsInfiniteOptions, reelsQueryKey, REELS_PAGE_SIZE } from './reels';
 
 /**
  * LE PORT DES RÉELS (#6457) — `GET /api/v1/social/posts?scope=reels`, la route
@@ -111,5 +111,22 @@ describe('reelsQueryKey — un fil par graine, sous une même racine', () => {
   test('la racine `reels` couvre toutes les graines', () => {
     expect(reelsQueryKey()).toEqual(['reels', '']);
     expect(reelsQueryKey('r1')).toEqual(['reels', 'r1']);
+  });
+});
+
+/**
+ * D-66 l'annonçait, rien ne l'appliquait : la caisse héritait de
+ * `refetchOnWindowFocus` / `refetchOnReconnect` (`query-client.ts`). Passé
+ * trente secondes, revenir sur l'onglet relisait TOUTES les pages, que la
+ * passerelle reclasse à chaque lecture — le fil bougeait sous le réel regardé
+ * et ses voisins déjà montés étaient démontés (#9702).
+ */
+describe('reelsInfiniteOptions — le fil ne se relit ni au focus ni à la reconnexion', () => {
+  test('les deux relectures automatiques sont coupées, avec ou sans graine', () => {
+    const { transport } = scripted({ ok: true, data: [] });
+    [reelsInfiniteOptions({ source: 'gateway', transport }), reelsInfiniteOptions({ source: 'gateway', transport }, 'r1')].forEach((options) => {
+      expect(options.refetchOnWindowFocus).toBe(false);
+      expect(options.refetchOnReconnect).toBe(false);
+    });
   });
 });

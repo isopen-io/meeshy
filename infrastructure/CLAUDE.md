@@ -52,9 +52,9 @@ The `docker-entrypoint.sh` uses `sed` to replace `__RUNTIME_*__` placeholders. Q
 
 **Et la purge PRÉCÈDE le `pull`** : après, elle arrive trop tard, puisque c'est l'écriture des couches téléchargées qui manque de place. `docker image prune -a` n'ôte jamais une image portée par un conteneur — la version servie survit ; la fenêtre `--filter "until=168h"` garde de quoi revenir en arrière d'une semaine. Les volumes ne se purgent pas au passage (`system prune --volumes` emporterait des données qu'on croit anonymes).
 
-**Le déploiement automatique s'arrête à `dev` → staging. La production ne part JAMAIS toute seule** — ni sur une poussée dans `main`, ni sur un tag : elle se déploie à la main, par un humain qui l'a décidé.
+**Le déploiement automatique s'arrête à `dev` → staging. La production ne part JAMAIS toute seule** — ni sur une poussée dans `main`, ni sur un tag. Elle se PROMEUT sur demande (directive 2026-10-04, #9223) par `.github/workflows/promote-production.yml` : un digest déjà servi par staging, `workflow_dispatch` seul, environnement protégé `production`, retour arrière en une commande. Côté hôte : `infrastructure/scripts/meeshy-promote-production.sh` ; installation unique : `infrastructure/scripts/meeshy-promote-production.md` (#9325).
 
-Sites : `infrastructure/scripts/meeshy-deploy-staging.sh` (**la source de `/usr/local/bin/meeshy-deploy-staging.sh`**, ce que la clé SSH contrainte de la CI exécute sur l'hôte — son installation reste un geste manuel, documenté en tête du fichier), les scripts de release de `infrastructure/scripts/` et `scripts/`, et le job `deploy-staging` de `.github/workflows/docker.yml`. Garde : `scripts/check-docker-prune-noninteractive.mjs` (job `quality` de `ci.yml`), qui tient les trois règles ensemble.
+Sites : `infrastructure/scripts/meeshy-deploy-staging.sh` (**la source de `/usr/local/bin/meeshy-deploy-staging.sh`**, ce que la clé SSH contrainte de la CI exécute sur l'hôte — son installation reste un geste manuel, documenté en tête du fichier), les scripts de release de `infrastructure/scripts/` et `scripts/`, et le job `deploy-staging` de `.github/workflows/docker.yml`. Garde : `scripts/check-docker-prune-noninteractive.mjs` (job `quality` de `ci.yml`), qui tient les quatre règles ensemble.
 
 ### Production vs Repo Differences
 | | Repo | Production |
@@ -89,6 +89,7 @@ REDIS_URL=redis://redis:6379
 # Auth
 JWT_SECRET=<change-in-production>
 ATTACHMENT_MASTER_KEY=<base64-32-bytes>
+SECRETS_AT_REST_KEY=<base64-32-bytes>   # chiffre la clé d'API LLM de l'agent au repos ; sans elle hors development/test, son écriture est refusée
 
 # Services
 ZMQ_PUSH_URL=tcp://translator:5555
@@ -105,6 +106,12 @@ TTS_MAX_NEW_TOKENS=2048
 HF_TOKEN=<huggingface-token>
 HF_HOME=/workspace/models/huggingface
 ```
+
+**Mise en place de `SECRETS_AT_REST_KEY`** (base64 strict de 32 octets : `openssl rand -base64 32`) :
+1. poser la variable dans l'environnement du gateway (staging d'abord) et redéployer ;
+2. dans le conteneur du gateway, lancer `services/gateway/scripts/reseal-agent-llm-secrets.ts` avec `bunx tsx` : à blanc d'abord (n'affiche que des nombres de lignes), puis avec `--apply` ; relancé, il ne trouve plus rien à re-sceller ;
+3. production : mêmes étapes, seulement APRÈS le feu vert du porteur et une sauvegarde vérifiée ;
+4. faire tourner chez le fournisseur toute clé d'API LLM déjà enregistrée avant cette mise en place : elle a pu être stockée en clair et figurer dans des sauvegardes.
 
 ## Deployment Commands
 ```bash

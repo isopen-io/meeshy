@@ -143,15 +143,33 @@ jobs:
           ref, sha = os.environ["GIT_REF"], os.environ["GIT_SHA"]
           client = make_managers(load_account("primary")).client
 
-          payload = {"data": {
-              "type": "ciBuildRuns",
-              "attributes": {},
-              "relationships": {
-                  "workflow": {"data": {"type": "ciWorkflows", "id": workflow_id}},
-              },
-          }}
+          # Sans `sourceBranchOrTag`, App Store Connect construit la branche
+          # PAR DÉFAUT du dépôt (`dev`), que la condition de démarrage du
+          # workflow n'accepte pas : HTTP 409 « branch dev is not associated ».
+          # On résout donc la référence git de la ref déclenchée.
+          def git_reference_id():
+              repo = client.get(f"/v1/ciWorkflows/{workflow_id}/repository")["data"]
+              refs = client.get_all(f"/v1/scmRepositories/{repo['id']}/gitReferences",
+                                    params={"limit": 200})
+              wanted = {f"refs/heads/{ref}", f"refs/tags/{ref}"}
+              match = [r for r in refs
+                       if r.get("attributes", {}).get("canonicalName") in wanted
+                       and not r.get("attributes", {}).get("isDeleted")]
+              if not match:
+                  print(f"::error::Aucune référence git « {ref} » connue de Xcode Cloud.")
+                  sys.exit(1)
+              return match[0]["id"]
 
           try:
+              payload = {"data": {
+                  "type": "ciBuildRuns",
+                  "attributes": {},
+                  "relationships": {
+                      "workflow": {"data": {"type": "ciWorkflows", "id": workflow_id}},
+                      "sourceBranchOrTag": {"data": {"type": "scmGitReferences",
+                                                     "id": git_reference_id()}},
+                  },
+              }}
               run = client.post("/v1/ciBuildRuns", payload).get("data") or {}
           except ASCAPIError as err:
               print(f"::error::Xcode Cloud a refusé le démarrage (HTTP {err.status}).")

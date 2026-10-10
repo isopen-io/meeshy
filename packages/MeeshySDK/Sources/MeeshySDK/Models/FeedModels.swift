@@ -472,6 +472,9 @@ public struct FeedComment: Identifiable, Sendable {
     /// peuvent coexister : « regarde la deuxième photo » + ses propres clichés.
     /// `nil` ⇒ le commentaire parle du post, pas d'un média en particulier.
     public var quotedMedia: CommentQuotedMedia? = nil
+    /// `[rawURL: token]` — la carte des liens suivis du commentaire, pour son
+    /// texte ET la légende de son média (`APIPostComment.trackedLinkMap`, #9075).
+    public var trackedLinkMap: [String: String] = [:]
 
     public var displayContent: String { translatedContent ?? content }
 
@@ -495,7 +498,8 @@ public struct FeedComment: Identifiable, Sendable {
             currentUserReactions: currentUserReactions, media: media, location: location,
             // Une ÉDITION ne change pas ce dont le commentaire PARLE : la
             // citation survit au nouveau texte, comme elle survit en base.
-            quotedMedia: quotedMedia
+            quotedMedia: quotedMedia,
+            trackedLinkMap: trackedLinkMap
         )
     }
 
@@ -505,7 +509,8 @@ public struct FeedComment: Identifiable, Sendable {
                 parentId: String? = nil, effectFlags: Int = 0,
                 originalLanguage: String? = nil, translatedContent: String? = nil,
                 currentUserReactions: [String]? = nil, media: [FeedMedia] = [],
-                location: SharedPlace? = nil, quotedMedia: CommentQuotedMedia? = nil) {
+                location: SharedPlace? = nil, quotedMedia: CommentQuotedMedia? = nil,
+                trackedLinkMap: [String: String] = [:]) {
         self.id = id; self.author = author; self.authorId = authorId; self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL; self.parentId = parentId
@@ -516,6 +521,7 @@ public struct FeedComment: Identifiable, Sendable {
         self.media = media
         self.location = location
         self.quotedMedia = quotedMedia
+        self.trackedLinkMap = trackedLinkMap
     }
 }
 
@@ -525,7 +531,7 @@ extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp, likes, replies
         case effectFlags, originalLanguage, translatedContent, currentUserReactions, media, location
-        case quotedMedia
+        case quotedMedia, trackedLinkMap
     }
 
     public init(from decoder: Decoder) throws {
@@ -549,6 +555,7 @@ extension FeedComment: Codable {
         // `decodeIfPresent` : les blobs de cache gravés AVANT le champ se
         // relisent sans perte — un commentaire d'avant #6578 ne cite rien.
         quotedMedia = try c.decodeIfPresent(CommentQuotedMedia.self, forKey: .quotedMedia)
+        trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -573,6 +580,7 @@ extension FeedComment: Codable {
         }
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(quotedMedia, forKey: .quotedMedia)
+        if !trackedLinkMap.isEmpty { try c.encode(trackedLinkMap, forKey: .trackedLinkMap) }
     }
 }
 
@@ -665,10 +673,15 @@ public struct FeedPost: Identifiable, Sendable {
     public var translatedContent: String?
     /// `[rawURL: token]` outbound-link tracking map carried from
     /// `APIPost.trackedLinkMap`. Empty when the post has no tracked links.
-    /// Runtime-only (set via `toFeedPost`, like the engagement counters) —
+    /// Set via `toFeedPost` and persisted through the Codable round-trip, so a
+    /// cache-first render keeps its tracked links (#9075) —
     /// consumed by the post body renderer (`/l/<token>` rewrite) and the
     /// embedded-video façade destination. Backward-compatible by construction.
     public var trackedLinkMap: [String: String] = [:]
+    /// Les points que ce post a rapportés au lecteur (`APIPost.viewerPoints`),
+    /// `nil` quand le serveur ne l'a pas servi. Persisté par le cache : un
+    /// rendu cache-first montre déjà la marque « · ✦+N » (#9571).
+    public var viewerPoints: Int? = nil
 
     /// Story canvas payload (`StoryEffects`) when this post is a story. `nil`
     /// for normal posts. Mirrors `RepostContent.storyEffects`. Carried on the
@@ -800,7 +813,7 @@ extension FeedPost: Codable {
         case repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
         case storyEffects, audioUrl, location, mentions
-        case visibility, visibilityUserIds
+        case visibility, visibilityUserIds, trackedLinkMap, viewerPoints
     }
 
     public init(from decoder: Decoder) throws {
@@ -853,6 +866,8 @@ extension FeedPost: Codable {
         audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
+        trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
+        viewerPoints = try? c.decodeIfPresent(Int.self, forKey: .viewerPoints)
         let stableId = authorId.isEmpty ? author : authorId
         authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
     }
@@ -894,6 +909,8 @@ extension FeedPost: Codable {
         try c.encodeIfPresent(audioUrl, forKey: .audioUrl)
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(mentions, forKey: .mentions)
+        if !trackedLinkMap.isEmpty { try c.encode(trackedLinkMap, forKey: .trackedLinkMap) }
+        try c.encodeIfPresent(viewerPoints, forKey: .viewerPoints)
     }
 }
 
@@ -1079,24 +1096,22 @@ public extension StoryItem {
     /// ici en profondeur pour ne jamais dépendre de cette garantie côté
     /// composer (post-revue 2026-07-13).
     init(feedPost: FeedPost) {
-        let storySource: RepostContent? = {
-            guard let repost = feedPost.repost,
-                  (repost.type ?? "").uppercased() == "STORY" else { return nil }
-            return repost
-        }()
-        let hasOwnContent = !feedPost.media.isEmpty || feedPost.storyEffects != nil
+        let storySource = feedPost.republishedStory
+        let hasOwnContent = StoryEffects.republicationHasOwnContent(own: feedPost.storyEffects,
+                                                                    ownMediaIsEmpty: feedPost.media.isEmpty)
         self.init(
             id: feedPost.id,
             content: feedPost.content,
             media: hasOwnContent ? feedPost.media : (storySource?.media ?? []),
-            storyEffects: hasOwnContent ? feedPost.storyEffects : storySource?.storyEffects,
+            storyEffects: feedPost.playedStoryEffects,
             createdAt: feedPost.timestamp,
             expiresAt: nil,
             repostOfId: storySource?.id,
             repostAuthorName: storySource?.author,
             repostAuthorUsername: storySource?.authorUsername,
             audioUrl: feedPost.audioUrl ?? storySource?.audioUrl,
-            isViewed: false
+            isViewed: false,
+            trackingLinks: feedPost.trackedLinkMap.map { TrackedLink(url: $0.key, token: $0.value) }
         )
     }
 }

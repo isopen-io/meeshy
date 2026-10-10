@@ -31,7 +31,7 @@ export function EpisodeList({
               data-episode-id={episode.id}
               onClick={() => onOpen(episode)}
               aria-describedby="episode-hint"
-              className="flex min-h-11 w-full items-center gap-2 rounded-row-ios px-3 py-2 text-left"
+              className="flex min-h-11 w-full items-center gap-2 rounded-row-ios px-3 py-2 text-start"
               style={{ backgroundColor: 'var(--color-summary-surface-tint)' }}
             >
               {isAgentTitled(episode) ? (

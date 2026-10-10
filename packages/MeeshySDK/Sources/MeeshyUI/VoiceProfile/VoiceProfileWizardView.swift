@@ -42,15 +42,15 @@ public struct VoiceProfileWizardView: View {
     // MARK: - Progress
 
     private var progressIndicator: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             ForEach(VoiceProfileWizardStep.allCases, id: \.rawValue) { step in
                 Capsule()
                     .fill(step.rawValue <= viewModel.currentStep.rawValue ? Color(hex: accentColor) : Color.gray.opacity(0.2))
                     .frame(height: 3)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.md)
     }
 
     // MARK: - Step Content
@@ -75,31 +75,31 @@ public struct VoiceProfileWizardView: View {
 
     private var consentStep: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 Spacer().frame(height: 20)
 
                 Image(systemName: "waveform.and.mic")
-                    .font(.system(size: 48))
+                    .font(.system(size: MeeshyIconSize.hero))
                     .foregroundColor(Color(hex: accentColor))
 
                 Text(String(localized: "voiceProfile.consent.title", defaultValue: "Clonage vocal", bundle: .module))
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: MeeshyFont.titleSize, weight: .bold))
                     .foregroundColor(.primary)
 
                 Text(String(localized: "voiceProfile.consent.description", defaultValue: "Meeshy peut cloner votre voix pour traduire vos messages audio dans d'autres langues avec votre propre voix.", bundle: .module))
-                    .font(.system(size: 14))
+                    .font(.system(size: MeeshyFont.labelSize))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, MeeshySpacing.xl)
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     consentPoint(icon: "mic.fill", text: String(localized: "voiceProfile.consent.point1", defaultValue: "Enregistrez quelques echantillons de votre voix", bundle: .module))
                     consentPoint(icon: "brain.head.profile", text: String(localized: "voiceProfile.consent.point2", defaultValue: "Un modele vocal unique est cree a partir de vos echantillons", bundle: .module))
                     consentPoint(icon: "globe", text: String(localized: "voiceProfile.consent.point3", defaultValue: "Vos traductions audio utiliseront votre voix clonee", bundle: .module))
                     consentPoint(icon: "trash.fill", text: String(localized: "voiceProfile.consent.point4", defaultValue: "Vous pouvez supprimer vos donnees vocales a tout moment (RGPD)", bundle: .module))
                     consentPoint(icon: "lock.shield.fill", text: String(localized: "voiceProfile.consent.point5", defaultValue: "Vos echantillons sont chiffres et ne sont jamais partages", bundle: .module))
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
 
                 Spacer().frame(height: 10)
 
@@ -109,7 +109,7 @@ public struct VoiceProfileWizardView: View {
                         .foregroundColor(.primary)
                 }
                 .tint(Color(hex: accentColor))
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
 
                 Button {
                     viewModel.advanceFromConsent()
@@ -118,14 +118,14 @@ public struct VoiceProfileWizardView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                        .padding(.vertical, MeeshySpacing.mdPlus)
                         .background(
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                                 .fill(viewModel.consentGiven ? Color(hex: accentColor) : Color.gray.opacity(0.3))
                         )
                 }
                 .disabled(!viewModel.consentGiven)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
 
                 Spacer()
             }
@@ -133,9 +133,9 @@ public struct VoiceProfileWizardView: View {
     }
 
     private func consentPoint(icon: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(Color(hex: accentColor))
                 .frame(width: 24)
             Text(text)
@@ -147,26 +147,26 @@ public struct VoiceProfileWizardView: View {
     // MARK: - Age Verification Step
 
     private var ageVerificationStep: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             Spacer()
 
             Image(systemName: "person.badge.shield.checkmark.fill")
-                .font(.system(size: 48))
+                .font(.system(size: MeeshyIconSize.hero))
                 .foregroundColor(Color(hex: accentColor))
 
             Text(String(localized: "voiceProfile.age.title", defaultValue: "Verification d'age", bundle: .module))
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: MeeshyFont.titleSize, weight: .bold))
 
             Text(String(localized: "voiceProfile.age.description", defaultValue: "Le clonage vocal est reserve aux personnes de 18 ans et plus.", bundle: .module))
-                .font(.system(size: 14))
+                .font(.system(size: MeeshyFont.labelSize))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
 
             DatePicker(String(localized: "voiceProfile.age.birthDate", defaultValue: "Date de naissance", bundle: .module), selection: $viewModel.birthDate, displayedComponents: .date)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
 
             Button {
                 viewModel.advanceFromAgeVerification()
@@ -175,14 +175,14 @@ public struct VoiceProfileWizardView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(viewModel.isAgeVerified ? Color(hex: accentColor) : Color.gray.opacity(0.3))
                     )
             }
             .disabled(!viewModel.isAgeVerified)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, MeeshySpacing.xxl)
 
             Spacer()
         }
@@ -191,17 +191,17 @@ public struct VoiceProfileWizardView: View {
     // MARK: - Recording Step
 
     private var recordingStep: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             Spacer()
 
             Text(String(localized: "voiceProfile.recording.title", defaultValue: "Enregistrez votre voix", bundle: .module))
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: MeeshyFont.titleSize, weight: .bold))
 
             Text(String(localized: "voiceProfile.recording.description", defaultValue: "Lisez à voix haute les deux ou trois phrases affichées, sans forcer le ton. Trois enregistrements de dix secondes suffisent.", bundle: .module))
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
 
             VoiceRecordingView(
                 accentColor: accentColor,
@@ -224,7 +224,7 @@ public struct VoiceProfileWizardView: View {
     // MARK: - Processing Step
 
     private var processingStep: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             Spacer()
 
             ProgressView()
@@ -232,7 +232,7 @@ public struct VoiceProfileWizardView: View {
                 .tint(Color(hex: accentColor))
 
             Text(String(localized: "voiceProfile.processing.title", defaultValue: "Creation du profil vocal...", bundle: .module))
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: MeeshyFont.subtitleSize, weight: .semibold))
 
             Text(String(localized: "voiceProfile.processing.description", defaultValue: "Vos echantillons sont en cours de traitement. Cela peut prendre quelques minutes.", bundle: .module))
                 .font(.system(size: 13))
@@ -250,7 +250,7 @@ public struct VoiceProfileWizardView: View {
     // MARK: - Complete Step
 
     private var completeStep: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
@@ -258,13 +258,13 @@ public struct VoiceProfileWizardView: View {
                 .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "voiceProfile.complete.title", defaultValue: "Profil vocal cree !", bundle: .module))
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: MeeshyFont.titleSize, weight: .bold))
 
             Text(String(localized: "voiceProfile.complete.description", defaultValue: "Vos traductions audio utiliseront desormais votre voix clonee.", bundle: .module))
-                .font(.system(size: 14))
+                .font(.system(size: MeeshyFont.labelSize))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
 
             Button {
                 onComplete?()
@@ -274,13 +274,13 @@ public struct VoiceProfileWizardView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(Color(hex: accentColor))
                     )
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, MeeshySpacing.xxl)
 
             Spacer()
         }

@@ -75,19 +75,16 @@ function render(node: ReactNode): HTMLDivElement {
 }
 
 /**
- * L'ADRESSE NE PARAÎT QU'APRÈS LE TÉLÉPHONE (#8288) — un numéro donné puis
- * effacé la fait paraître SANS choisir « l'e-mail seulement » : l'alerte
- * « sans numéro » (#8040) reste alors due, comme avant le réagencement.
+ * L'ADRESSE NE PARAÎT QU'APRÈS LE TÉLÉPHONE (#8288), et le numéro est REQUIS
+ * par l'écran (#9343) : un numéro plausible la fait paraître, et reste.
  */
 function revealEmail(el: HTMLElement) {
   if (el.querySelector('#signup-email') !== null) return;
-  for (const value of ['612345678', '']) {
-    const phone = el.querySelector('#signup-phone') as HTMLInputElement;
-    act(() => {
-      phone.value = value;
-      phone.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-  }
+  const phone = el.querySelector('#signup-phone') as HTMLInputElement;
+  act(() => {
+    phone.value = '612345678';
+    phone.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 }
 
 function type(el: HTMLElement, selector: string, value: string) {
@@ -245,6 +242,16 @@ describe('EMAIL_TAKEN avec son détenteur masqué', () => {
     expect(sent[1]).toEqual({ ...sent[0], claimEmail: true } as RegisterBody);
     expect(window.location.pathname).toBe('/signup');
     expect(el.querySelector('[data-signup-card] #verify-email-code')).not.toBeNull();
+  });
+
+  test('« Ce n’est pas moi » hérite de la règle : numéro effacé ⇒ rien ne part, le refus se dit sous le champ (#9343)', async () => {
+    const { el, sent } = await refusedWithOwner();
+    type(el, '#signup-phone', '');
+    await act(async () => {
+      button(el, 'Ce n’est pas moi')?.click();
+    });
+    expect(sent.length).toBe(1);
+    expect(text(el.querySelector('#signup-phone-error'))).toBe('Saisissez votre numéro de téléphone pour continuer.');
   });
 
   test('sans `emailOwner` (ancienne passerelle) : aucune carte « Est-ce vous ? », la récupération seule', async () => {

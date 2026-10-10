@@ -28,12 +28,14 @@
  *
  * 1. Sous horloge EN PAUSE posée AVANT `goto`, la page ne démarre PAS toute
  *    seule (le démarrage consomme des minuteurs) : il faut avancer par pas
- *    pendant qu'on attend le premier fait. Mesuré : `live-1` est monté après
- *    150 ms simulées (3 pas de 50 ms).
+ *    pendant qu'on attend le premier fait. Mesuré alors : `live-1` monté
+ *    après 150 ms simulées (3 pas de 50 ms) — mesure CORRIGÉE au § 7 : ce
+ *    nombre dépendait de l'heure d'arrivée des chunks.
  * 2. Les faits de la chronologie tombent à `origine + atMs`, et le DOM les
- *    montre sur le PAS MÊME qui tire le minuteur — l'origine d'une
- *    chronologie (le moment où le premier fait est monté) est donc une
- *    CONSTANTE du build, jamais de la machine.
+ *    montre sur le PAS MÊME qui tire le minuteur. L'origine est l'instant où
+ *    la chronologie COMMENCE (`connect()` du bouchon, qui l'annonce — #9267),
+ *    jamais celui où le premier nœud monte : ce dernier n'est pas une
+ *    constante du build (§ 7).
  * 3. Le sondage propre de Playwright (`locator.waitFor`, `waitForFunction`
  *    avec `polling` numérique — `await-fact.mjs`) n'est PAS truqué : il lit
  *    les minuteurs ORIGINAUX capturés par l'horloge. Ce qui fait avancer le
@@ -76,9 +78,81 @@
  * ne vaut que pour un fait MONOTONE (une rangée qui apparaît et ne repart
  * jamais) ; un fait qu'un fait SUIVANT efface (le rang 2 du Prisme, repris
  * par le rang 1) exige que le gate TIENNE l'horloge — c'est `factBefore`.
+ *
+ * ## 7. Aucun pas pendant que le CODE arrive (#9267)
+ *
+ * Le § 2.1 disait « `live-1` est monté après 150 ms simulées » : ce n'est
+ * plus vrai, et ce ne l'était que par chance. Le fil, le temps réel et le
+ * bouchon de fixtures sont des chunks chargés à la demande (`import()` de
+ * `main.tsx`, `route-table.tsx`, `realtime.ts`) : ils arrivent en temps
+ * MURAL, pendant que `factBefore` franchit ses pas aussi vite que le
+ * protocole le permet. Mesuré sur le dist de `dev` (2026-10-06) : `live-1`
+ * monte entre 800 et 1 400 ms SIMULÉES selon l'ordre d'arrivée des chunks,
+ * et une latence de 0 à 400 ms par chunk fait rougir le premier fait de
+ * `c-live` 5 fois sur 5 — budget de 1 500 ms épuisé AVANT que le code du
+ * fil n'existe, puis horloge figée : `innerText` attend 30 s un nœud que
+ * plus aucun minuteur ne peut monter. Le budget SIMULÉ mesurait la vitesse
+ * du réseau local.
+ *
+ * Chaque avancée attend donc d'abord que le code demandé par les pages du
+ * contexte soit ARRIVÉ — une condition observable (`request` →
+ * `requestfinished`/`requestfailed`), jamais un délai. Seul le CODE retient
+ * (script, feuille de style, `fetch`/`xhr` de la même origine que la page) :
+ * une image ou une ressource tierce ne conditionne aucun minuteur du
+ * produit, et un hôte injoignable figerait le gate. Le plafond MURAL
+ * (`FACT_CEILING_MS`) rend la main sans lever si une requête ne finit
+ * jamais : le fait, ensuite, dira ce qu'il a vu.
  */
 
+import { FACT_CEILING_MS } from './await-fact.mjs';
+
 export const CHRONOLOGY_STEP_MS = 50;
+
+const CODE_RESOURCE_TYPES = new Set(['script', 'stylesheet', 'fetch', 'xhr']);
+
+const sameOriginAsItsPage = (request) => {
+  try {
+    return new URL(request.url()).origin === new URL(request.frame().url()).origin;
+  } catch {
+    return false;
+  }
+};
+
+const isCode = (request) => CODE_RESOURCE_TYPES.has(request.resourceType()) && sameOriginAsItsPage(request);
+
+/**
+ * Le code EN VOL d'un contexte — toutes ses pages, puisque l'horloge est
+ * celle du contexte (§ 4) : la liste de `c-live` vit sur une page sœur.
+ * `arrived(ceilingMs)` se résout quand plus aucun code n'est en vol, ou au
+ * plafond mural.
+ */
+const codeInFlight = (context) => {
+  const pending = new Set();
+  let waiters = [];
+  const settle = (request) => {
+    if (!pending.delete(request) || pending.size > 0) return;
+    const released = waiters;
+    waiters = [];
+    for (const release of released) release();
+  };
+  context.on('request', (request) => {
+    if (isCode(request)) pending.add(request);
+  });
+  context.on('requestfinished', settle);
+  context.on('requestfailed', settle);
+
+  const arrived = (ceilingMs) => {
+    if (pending.size === 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      const ceiling = setTimeout(resolve, ceilingMs);
+      waiters.push(() => {
+        clearTimeout(ceiling);
+        resolve();
+      });
+    });
+  };
+  return { arrived };
+};
 
 /**
  * Installe une horloge EN PAUSE sur `page` (poser AVANT toute navigation :
@@ -99,10 +173,19 @@ export const CHRONOLOGY_STEP_MS = 50;
  * - `factBefore(beforeMs, fact)` : avance par pas de `stepMs` jusqu'à ce que
  *   `fait()` rende vrai, sans jamais atteindre `beforeMs`. Rend `true`/`false`,
  *   ne lève JAMAIS (même discipline que `await-fact.mjs`).
+ *
+ * Toute avancée attend d'abord le code en vol (§ 7), au plus `codeCeilingMs`
+ * de temps mural.
  */
-export async function pausedChronology(page, { time, stepMs = CHRONOLOGY_STEP_MS }) {
+export async function pausedChronology(page, { time, stepMs = CHRONOLOGY_STEP_MS, codeCeilingMs = FACT_CEILING_MS }) {
+  const code = codeInFlight(page.context());
   await page.clock.install({ time });
   await page.clock.pauseAt(time);
+
+  const runFor = async (ms) => {
+    await code.arrived(codeCeilingMs);
+    await page.clock.runFor(ms);
+  };
 
   let elapsed = 0;
   const now = () => elapsed;
@@ -112,7 +195,7 @@ export async function pausedChronology(page, { time, stepMs = CHRONOLOGY_STEP_MS
       throw new RangeError(`advanceTo(${targetMs}) : la chronologie est déjà à ${elapsed} ms`);
     }
     if (targetMs === elapsed) return;
-    await page.clock.runFor(targetMs - elapsed);
+    await runFor(targetMs - elapsed);
     elapsed = targetMs;
   };
 
@@ -127,7 +210,7 @@ export async function pausedChronology(page, { time, stepMs = CHRONOLOGY_STEP_MS
     for (;;) {
       if (await fact()) return true;
       if (elapsed + stepMs >= beforeMs) return false;
-      await page.clock.runFor(stepMs);
+      await runFor(stepMs);
       elapsed += stepMs;
     }
   };

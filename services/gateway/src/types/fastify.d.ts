@@ -17,6 +17,7 @@ import { MentionService } from '../services/MentionService';
 import { MultiLevelJobMappingCache } from '../services/MultiLevelJobMappingCache';
 import { MeeshySocketIOHandler } from '../socketio/MeeshySocketIOHandler';
 import { CallService } from '../services/CallService';
+import { StatusService } from '../services/StatusService';
 import { FastifyRequest, FastifyReply } from 'fastify';
 
 declare module '@fastify/jwt' {
@@ -44,6 +45,7 @@ declare module 'fastify' {
     mentionService: MentionService;
     jobMappingCache: MultiLevelJobMappingCache;
     socketIOHandler: MeeshySocketIOHandler;
+    statusService: StatusService;
     // Shared with the Socket.IO layer's CallEventsHandler (see
     // MeeshySocketIOManager.getCallService()) so REST call routes observe the
     // same in-memory ringingTimeouts/heartbeats/backgroundedParticipants maps

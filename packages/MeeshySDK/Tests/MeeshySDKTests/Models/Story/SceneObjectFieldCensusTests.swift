@@ -54,7 +54,21 @@ final class SceneObjectFieldCensusTests: XCTestCase {
     /// objet posé (le filtre de slide reste celui du fond). À la question du
     /// témoin : le gateway le valide (`StoryMediaObjectSchema.filter`) ; le web
     /// le reçoit au lot 7 web (#8474, en cours) ; Android natif est gelé.
-    private static let recensementEcrit = 122
+    ///
+    /// **123 depuis #9175** — `StoryMediaObject.adjustments`, les réglages
+    /// d'une image posée. À la question du témoin : il est EXERCÉ par
+    /// `CanvasV3ExhaustivityTests` (peuplé, aller-retour v1 et v3) ; le gateway
+    /// le borne (`StoryMediaObjectSchema.adjustments`) ; le web ne le peint pas
+    /// encore (suivi à ouvrir) ; Android natif est gelé.
+    ///
+    /// **124 depuis #9677** — `StoryAudioPlayerObject.soundCreatedAt`, la date
+    /// d'un son EMPRUNTÉ, qui remplace son titre absent dans le crédit. À la
+    /// question du témoin : il est EXERCÉ par le blob v1 PARTAGÉ
+    /// (`v1-legacy-rich.json` → `.v3.json`, jugé par les DEUX convertisseurs,
+    /// Swift et passerelle) et par `CanvasV3ExhaustivityTests` ; le gateway le
+    /// laisse passer (schéma `passthrough`, branche audio qui répand le
+    /// reste) ; le web ne le lit pas encore (#9698) ; Android natif est gelé.
+    private static let recensementEcrit = 124
 
     private func champs<T>(_ instance: T) -> Int {
         Mirror(reflecting: instance).children.count

@@ -12,7 +12,7 @@ struct CallQualitySheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             header
             if model.isWaitingForFirstReading {
                 Text(String(localized: "call.quality.waiting", defaultValue: "Mesure en cours…", bundle: .main))
@@ -27,19 +27,22 @@ struct CallQualitySheet: View {
                             Divider()
                         }
                     }
+                    if let network = model.network {
+                        CallQualityNetworkRowsView(context: network)
+                    }
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(20)
-        .presentationDetents([.medium])
+        .padding(MeeshySpacing.xl)
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .onAppear { model.start() }
         .onDisappear { model.stop() }
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Text(String(localized: "call.quality.detail", defaultValue: "Qualité de l’appel", bundle: .main))
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
@@ -47,9 +50,9 @@ struct CallQualitySheet: View {
                 Text(overall.label)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(overall.tint)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(overall.tint.opacity(0.15)))
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xxs)
+                    .background(Capsule().fill(overall.tint.opacity(MeeshyOpacity.light)))
             }
             Spacer()
             Button {
@@ -70,7 +73,7 @@ struct CallQualityRowView: View {
     let row: CallQualityRow
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Text(row.metric.title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -87,6 +90,41 @@ struct CallQualityRowView: View {
         .accessibilityLabel(row.metric.title)
         .accessibilityValue(row.accessibilityValue)
         .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
+struct CallQualityNetworkRowsView: View {
+    let context: CallQualityNetworkContext
+
+    var body: some View {
+        if let profile = context.profile {
+            Divider()
+            CallQualityLabelRow(title: CallQualityNetworkContext.profileTitle, value: profile.label)
+        }
+        if let route = context.routeLabel {
+            Divider()
+            CallQualityLabelRow(title: CallQualityNetworkContext.routeTitle, value: route)
+        }
+    }
+}
+
+struct CallQualityLabelRow: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.smPlus) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+        }
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 }
 

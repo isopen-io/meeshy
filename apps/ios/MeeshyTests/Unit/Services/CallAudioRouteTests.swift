@@ -14,12 +14,12 @@ final class MockCallAudioRouteService: CallAudioRouteProviding {
 
     var routeChanges: AnyPublisher<Void, Never> { routeChangeSubject.eraseToAnyPublisher() }
 
-    func currentRoute() -> CallAudioRouteState {
+    func currentRoute() async -> CallAudioRouteState {
         currentRouteCallCount += 1
         return currentRouteResult
     }
 
-    func selectInput(id: String) throws {
+    func selectInput(id: String) async throws {
         selectInputCallCount += 1
         lastSelectedInputId = id
         try selectInputResult.get()
@@ -123,6 +123,28 @@ final class CallAudioRouteStateTests: XCTestCase {
 
         XCTAssertEqual(state.selectedInput, airpods)
     }
+
+    func test_outputSymbol_bluetoothOutput_showsTheAccessory_whateverTheSpeakerFlag() {
+        let state = CallAudioRouteState(inputs: [], selectedInputId: nil, output: airpods)
+
+        XCTAssertEqual(state.outputSymbol(isSpeaker: false), "headphones")
+        XCTAssertEqual(state.outputSymbol(isSpeaker: true), "headphones")
+        XCTAssertTrue(state.routesExternally)
+    }
+
+    func test_outputSymbol_builtInOutput_followsTheSpeakerFlag() {
+        let receiver = CallAudioPort(id: "rcv", name: "Receiver", kind: .receiver)
+        let state = CallAudioRouteState(inputs: [], selectedInputId: nil, output: receiver)
+
+        XCTAssertEqual(state.outputSymbol(isSpeaker: true), "speaker.wave.3.fill")
+        XCTAssertEqual(state.outputSymbol(isSpeaker: false), "speaker.fill")
+        XCTAssertFalse(state.routesExternally)
+    }
+
+    func test_outputSymbol_unknownRoute_followsTheSpeakerFlag() {
+        XCTAssertEqual(CallAudioRouteState.empty.outputSymbol(isSpeaker: false), "speaker.fill")
+        XCTAssertFalse(CallAudioRouteState.empty.routesExternally)
+    }
 }
 
 @MainActor
@@ -139,54 +161,64 @@ final class CallAudioRouteViewModelTests: XCTestCase {
         return (sut, service)
     }
 
-    func test_start_readsTheCurrentRoute() {
+    func test_start_readsTheCurrentRoute() async {
         let (sut, _) = makeSUT()
 
         sut.start()
+        await sut.refreshTask?.value
 
         XCTAssertEqual(sut.state.selectedInputId, "mic")
         XCTAssertEqual(sut.state.output, receiver)
     }
 
-    func test_routeChange_refreshesTheState() {
+    func test_routeChange_refreshesTheState() async {
         let (sut, service) = makeSUT()
         sut.start()
+        await sut.refreshTask?.value
         service.currentRouteResult = CallAudioRouteState(inputs: [iphoneMic, airpods], selectedInputId: "bt", output: airpods)
 
         service.routeChangeSubject.send(())
+        await sut.refreshTask?.value
 
         XCTAssertEqual(sut.state.output, airpods)
         XCTAssertEqual(sut.state.selectedInputId, "bt")
     }
 
-    func test_selectInput_success_appliesAndForwardsToService() {
+    func test_selectInput_success_appliesAndForwardsToService() async {
         let (sut, service) = makeSUT()
         sut.start()
+        await sut.refreshTask?.value
 
         sut.selectInput(id: "bt")
+        XCTAssertEqual(sut.state.selectedInputId, "bt", "le choix s'affiche avant que la session audio ne réponde")
+        await sut.selectionTask?.value
 
         XCTAssertEqual(service.selectInputCallCount, 1)
         XCTAssertEqual(service.lastSelectedInputId, "bt")
         XCTAssertEqual(sut.state.selectedInputId, "bt")
     }
 
-    func test_selectInput_failure_rollsBack() {
+    func test_selectInput_failure_rollsBack() async {
         let (sut, service) = makeSUT()
         sut.start()
+        await sut.refreshTask?.value
         service.selectInputResult = .failure(CallAudioRouteError.inputUnavailable)
 
         sut.selectInput(id: "bt")
+        await sut.selectionTask?.value
 
         XCTAssertEqual(sut.state.selectedInputId, "mic")
     }
 
-    func test_stop_ignoresLaterRouteChanges() {
+    func test_stop_ignoresLaterRouteChanges() async {
         let (sut, service) = makeSUT()
         sut.start()
+        await sut.refreshTask?.value
         sut.stop()
         service.currentRouteResult = CallAudioRouteState(inputs: [iphoneMic], selectedInputId: "mic", output: airpods)
 
         service.routeChangeSubject.send(())
+        await sut.refreshTask?.value
 
         XCTAssertEqual(sut.state.output, receiver)
     }

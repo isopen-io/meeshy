@@ -107,6 +107,7 @@ struct QuickReactionDoubleTap: ViewModifier {
 }
 
 struct ThemedMessageBubble: View {
+    @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
     // MARK: - Public init API (preserved unchanged for all call sites)
 
     let message: Message
@@ -129,6 +130,9 @@ struct ThemedMessageBubble: View {
     var preferredAudioLangCode: String? = nil
     var showAvatar: Bool = true
     var presenceState: PresenceState? = nil
+    /// L'auteur a l'écran de CETTE conversation ouvert (#8892) — résolu par
+    /// l'hôte, jamais lu ici sur `PresenceManager`.
+    var senderIsHere: ConversationHere = .absent
     var senderMoodEmoji: String? = nil
     var senderStoryRingState: StoryRingState = .none
     var onViewStory: (() -> Void)? = nil
@@ -348,6 +352,11 @@ struct ThemedMessageBubble: View {
                         standardLayout(content: content)
                     }
                 }
+                // #9574, #9617 — annoncé OU noir : une vue unique, et une
+                // flamme hors d'une surface qui annonce, se rendent dans la
+                // couche sécurisée. Posé AVANT le cycle de vie : la brûlure et
+                // le filigrane enveloppent la bulle protégée.
+                .captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces: announcesCapture))
                 // #4020 — le double tap ouvre la barre de réaction rapide.
                 // Posé ICI, sur la seule branche que la règle accepte : le
                 // `switch` au-dessus a déjà écarté système, supprimé et
@@ -391,7 +400,7 @@ struct ThemedMessageBubble: View {
                 // #8303 — la flamme-œil en filigrane, à cheval sur le bord d'attaque de la bulle.
                 .afterReadWatermark(content.protection.isAfterRead, gutter: 24, tint: ComposerProtection.ephemeral.tint,
                                     edge: content.isMe ? .trailing : .leading, overhang: 10)
-                .viewOnceRetouch(isActive: content.isViewOnceRevealed) { [messageId = content.messageId, onConsumeViewOnce] in
+                .viewOnceRetouch(isActive: content.viewOnceRetouchIsActive) { [messageId = content.messageId, onConsumeViewOnce] in
                     onConsumeViewOnce?(messageId) { _ in }
                 }
                 .onAppear {
@@ -486,6 +495,7 @@ struct ThemedMessageBubble: View {
             preferredTranslation: preferredTranslation,
             showAvatar: showAvatar,
             presenceState: presenceState,
+            senderIsHere: senderIsHere,
             senderMoodEmoji: senderMoodEmoji,
             senderStoryRingState: senderStoryRingState,
             allAudioItems: allAudioItems,
@@ -551,6 +561,9 @@ struct ThemedMessageBubble: View {
             onTapConsentNotice: onTapConsentNotice,
             standalone: standalone
         )
+        // Ce que les visionneuses ouvertes depuis cette bulle peuvent laisser
+        // sortir — enregistrer, partager, copier (#9573, `Message.exitGate`).
+        .contentExitGate(message.exitGate)
         // Cycle de vie (éphémère, flou, profil) et effets : voir le `Group`
         // du `body`, commun à la bulle standard et au sticker.
     }
@@ -662,6 +675,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.highlightSearchTerm == rhs.highlightSearchTerm &&
         // Sender state — pushed by the server without bumping message.updatedAt
         lhs.presenceState == rhs.presenceState &&
+        lhs.senderIsHere == rhs.senderIsHere &&
         lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
         lhs.senderStoryRingState == rhs.senderStoryRingState &&
         // Group state — recomputed by parent on neighbor changes

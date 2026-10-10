@@ -43,6 +43,8 @@ protocol CameraZoomProviding: AnyObject {
     func endPinch()
     func resetToBaseline()
     func step(_ step: CameraZoomStep)
+    func select(_ display: CGFloat)
+    func cycleQuickStop()
 }
 
 @MainActor
@@ -111,6 +113,18 @@ final class CameraZoomController: ObservableObject, CameraZoomProviding {
     func step(_ step: CameraZoomStep) {
         guard let profile else { return }
         move(to: profile.stepped(from: displayFactor, step), rampRate: CameraZoomPolicy.settleRampRate)
+    }
+
+    /// #8441 — une pastille « 0,5× · 1× · 2× · 3× » touchée.
+    func select(_ display: CGFloat) {
+        guard profile != nil else { return }
+        move(to: display, rampRate: CameraZoomPolicy.settleRampRate)
+    }
+
+    /// #8441 — le bouton replié de la vignette : facteur suivant, puis retour.
+    func cycleQuickStop() {
+        guard let profile else { return }
+        move(to: profile.nextQuickStop(after: displayFactor), rampRate: CameraZoomPolicy.settleRampRate)
     }
 
     private func move(to display: CGFloat, rampRate: Float?) {

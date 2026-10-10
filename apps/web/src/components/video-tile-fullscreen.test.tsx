@@ -200,6 +200,50 @@ describe('VideoTile — la lecture dans le fil ne garde que trois contrôles (#8
   });
 });
 
+describe('VideoTile — agrandir à gauche, son à droite (#9575)', () => {
+  test('en lecture, agrandir tient le bord de début et le son le bord de fin — plus de groupe centré', async () => {
+    const host = mountTile(video('a-20'));
+    await click(host.querySelector('[data-video-control="play-pause"]'));
+    const expand = host.querySelector('[data-video-control="expand"]');
+    const mute = host.querySelector('[data-video-control="mute"]');
+    expect(expand?.getAttribute('data-video-edge')).toBe('start');
+    expect(mute?.getAttribute('data-video-edge')).toBe('end');
+    expect(expand?.parentElement?.className ?? '').not.toContain('justify-center');
+    expect(mute?.parentElement?.className ?? '').not.toContain('justify-center');
+  });
+
+  test('agrandir précède le son dans l’ordre de lecture : le clavier et le lecteur d’écran suivent l’œil', async () => {
+    const host = mountTile(video('a-21'));
+    await click(host.querySelector('[data-video-control="play-pause"]'));
+    const head = controlsOf(host).filter((control) => control !== 'play-pause');
+    expect(head).toEqual(['expand', 'mute']);
+  });
+});
+
+describe('VideoTile — la même vidéo ne joue qu’à un endroit (#9575)', () => {
+  test('relancer la tuile pendant que la visionneuse lit la même pièce met la visionneuse en pause', async () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<Attachments attachments={[video('a-22')]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />);
+    });
+    await click(container.querySelector('[data-video-surface]'));
+    for (let attempt = 0; attempt < 50 && document.querySelector('[role="dialog"] video') === null; attempt += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+    }
+    const viewerToggle = (): Element | null => document.querySelector('[role="dialog"] [data-viewer-center-toggle]');
+    expect(viewerToggle()?.getAttribute('aria-label')).toBe('Pause');
+
+    await click(container.querySelector('[data-video-control="play-pause"]'));
+
+    expect(container.querySelector('[data-attachment]')?.getAttribute('data-video-status')).toBe('playing');
+    expect(viewerToggle()?.getAttribute('aria-label')).toBe('Lire la vidéo');
+  });
+});
+
 describe('VideoTile — le plein écran reprend à la même position (#8234)', () => {
   test('toucher la surface pendant la lecture ouvre la visionneuse sur l’image qu’on regardait', async () => {
     container = document.createElement('div');

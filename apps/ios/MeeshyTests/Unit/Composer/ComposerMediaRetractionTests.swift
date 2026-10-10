@@ -332,7 +332,10 @@ final class ComposerMediaRetractionTests: XCTestCase {
         XCTAssertFalse(compacte.contains("onDelete:{viewModel.removeSlide(at:$0)}"),
             "La corbeille du rail de scènes appelle `removeSlide` en DIRECT : elle retire la "
             + "page de l'écran et laisse son fichier dans `documentLocalMedia`.")
-        XCTAssertTrue(compacte.contains("onDelete:{retractScene(at:$0)}"),
+        XCTAssertFalse(compacte.contains("onDelete:returnsToConversation?nil:{viewModel.removeSlide(at:$0)}"),
+            "La corbeille du rail de scènes appelle `removeSlide` en DIRECT hors retouche.")
+        // #9126 : nil quand le meuble retouche pour la conversation (`returnsToConversation`) — une scène y est une pièce du message.
+        XCTAssertTrue(compacte.contains("onDelete:returnsToConversation?nil:{retractScene(at:$0)}"),
             "La corbeille du rail de scènes doit passer par l'adaptateur du meuble — "
             + "le seul lieu qui voie les DEUX porteurs.")
         guard let corps = body(after: "func retractScene(", in: source).map(compact) else {

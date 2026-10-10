@@ -14,6 +14,7 @@ import {
   settleFog,
   showsAffordance,
   surrogateOf,
+  viewOnceOpeningOf,
 } from './protection';
 import type { ProtectionKind, RevealPhase } from './protection';
 
@@ -351,5 +352,26 @@ describe('surrogateOf — le substitut ne transporte rien du contenu', () => {
       expect(blocks).toBeLessThanOrEqual(Math.round(length / 2) + 8);
       expect(blocks).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * CE QUE L'OUVERTURE D'UNE VUE UNIQUE LÈVE (#8567, décision porteur du
+ * 2026-09-29) : « l'ouverture de la vue unique n'enlève pas le flou, sauf si
+ * c'est un attachement directement, alors c'est ouvert en plein écran en
+ * clair ».
+ */
+describe('viewOnceOpeningOf — ce que l’ouverture d’une vue unique lève (#8567)', () => {
+  test('un TEXTE flouté s’ouvre à sa place ET reste flouté', () => {
+    expect(viewOnceOpeningOf({ isBlurred: true, attachmentCount: 0 })).toBe('veiled-text');
+  });
+
+  test('un TEXTE non flouté s’ouvre à sa place, en clair', () => {
+    expect(viewOnceOpeningOf({ isBlurred: false, attachmentCount: 0 })).toBe('text');
+  });
+
+  test('une PIÈCE JOINTE s’ouvre en plein écran, en clair, flou ou non', () => {
+    expect(viewOnceOpeningOf({ isBlurred: true, attachmentCount: 1 })).toBe('fullscreen');
+    expect(viewOnceOpeningOf({ isBlurred: false, attachmentCount: 2 })).toBe('fullscreen');
   });
 });

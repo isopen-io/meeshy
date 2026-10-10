@@ -610,6 +610,82 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         )
     }
 
+    /// **UNE requête, sous UN identifiant figé par l'appelant** (#9743).
+    ///
+    /// `requestWithHeaders` lit le jeton COURANT au moment de bâtir la
+    /// requête, puis, sur un 401, le rafraîchit et REJOUE sous celui de la
+    /// session du moment. Un appelant qui a vérifié « ce contenu appartient
+    /// au compte A » ne peut donc pas garantir que la requête partira sous A :
+    /// entre sa vérification et l'envoi, le compte a pu changer.
+    ///
+    /// Ici le jeton est un ARGUMENT : c'est celui que l'appelant vient de
+    /// vérifier, il signe cette requête et aucune autre, et rien ne le
+    /// remplace — ni rafraîchissement, ni rejeu. Un 401 est rendu tel quel,
+    /// sans déconnecter la session courante, qui n'est peut-être pas la sienne.
+    public func requestPinned<T: Decodable>(
+        _ endpoint: any MeeshyEndpoint,
+        method: String,
+        body: Data?,
+        headers: [String: String],
+        bearerToken: String
+    ) async throws -> T {
+        let resolved = ResolvedEndpoint(endpoint: endpoint)
+        guard !bearerToken.isEmpty,
+              let components = URLComponents(string: resolved.urlString),
+              !Self.containsEmptyPathSegment(components.path),
+              let url = components.url else {
+            throw MeeshyError.server(statusCode: 0, message: "URL invalide")
+        }
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = method
+        urlRequest.assumesHTTP3Capable = true
+        for (key, value) in await ClientInfoProvider.shared.buildHeaders() {
+            urlRequest.setValue(value, forHTTPHeaderField: key)
+        }
+        if let body {
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            urlRequest.httpBody = body
+        }
+        for (key, value) in headers where key.caseInsensitiveCompare("Authorization") != .orderedSame {
+            urlRequest.setValue(value, forHTTPHeaderField: key)
+        }
+        // Posé EN DERNIER, et jamais remplaçable par un en-tête de l'appelant.
+        urlRequest.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await session.data(for: urlRequest)
+        guard let statusCode = (response as? HTTPURLResponse)?.statusCode else {
+            throw MeeshyError.server(statusCode: 0, message: "Aucune donnee recue")
+        }
+        guard (200...299).contains(statusCode) else {
+            let errBody = try? decoder.decode(ErrorBody.self, from: data)
+            let message = errBody?.message ?? errBody?.error
+            switch statusCode {
+            case 401:
+                throw MeeshyError.auth(.sessionExpired)
+            case 403:
+                throw MeeshyError.forbidden(reason: message, body: data)
+            case 429:
+                if let limit = DailyGestureLimit.fromBody(data) {
+                    throw MeeshyError.rejected(APIRejection(
+                        statusCode: 429, code: limit.gesture.rawValue, message: message ?? "Limite du jour atteinte",
+                        resetAt: limit.resetAt, limit: limit.limit))
+                }
+                throw MeeshyError.server(statusCode: 429, message: "Trop de requetes")
+            default:
+                throw MeeshyError.server(statusCode: statusCode, message: message ?? "Erreur inconnue")
+            }
+        }
+        return try await Self.decodeOffMain(T.self, from: data)
+    }
+
+    /// Un chemin porte-t-il un segment VIDE (`//`, ou `/` final) ? C'est la
+    /// trace d'un identifiant vide interpolé dans une route
+    /// (`/conversations/\(id)/messages` avec `id == ""`), qu'un intermédiaire
+    /// normalise ensuite en une AUTRE route (#8651).
+    nonisolated static func containsEmptyPathSegment(_ path: String) -> Bool {
+        path.count > 1 && (path.contains("//") || path.hasSuffix("/"))
+    }
+
     /// La requête NUE — `requestWithHeaders(resolved:…)` l'enveloppe de la garde
     /// de l'e-mail (#8365, `EmailVerificationGate.swift`).
     func performRequestWithHeaders<T: Decodable>(
@@ -620,7 +696,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         headers: [String: String]?
     ) async throws -> T {
         var hasRefreshedOn401 = false
-        guard var components = URLComponents(string: resolved.urlString) else {
+        guard var components = URLComponents(string: resolved.urlString),
+              !Self.containsEmptyPathSegment(components.path) else {
             throw MeeshyError.server(statusCode: 0, message: "URL invalide")
         }
 
@@ -722,7 +799,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 lastHTTPResponse = httpResponse
                 lastStatusCode = statusCode
 
-                if endpointAllowsRetry && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
+                // Une limite QUOTIDIENNE de gestes (429 `DAILY_*`, #9571) ne se
+                // rejoue pas : elle tient jusqu'à `resetAt`, des heures plus tard.
+                let dailyLimit = statusCode == 429 ? DailyGestureLimit.fromBody(data) : nil
+                if endpointAllowsRetry && dailyLimit == nil && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
                     continue
                 }
 
@@ -819,7 +899,14 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                         // The raw body is forwarded so callers that need
                         // structured 403 payloads (e.g. consent-required
                         // errors) can decode them without a second request.
+                        AgeGateSignal.signal(statusCode: statusCode, body: data)
                         throw MeeshyError.forbidden(reason: errorMsg, body: data)
+                    }
+
+                    if let dailyLimit {
+                        throw MeeshyError.rejected(APIRejection(
+                            statusCode: 429, code: dailyLimit.gesture.rawValue, message: errorMsg ?? "Limite du jour atteinte",
+                            resetAt: dailyLimit.resetAt, limit: dailyLimit.limit))
                     }
 
                     if statusCode == 429 {

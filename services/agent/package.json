@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/agent",
-  "version": "1.0.57",
+  "version": "1.0.61",
   "description": "Autonomous conversation agent service for Meeshy",
   "private": true,
   "main": "dist/src/server.js",
@@ -16,7 +16,7 @@
     "clean": "rm -rf dist node_modules coverage"
   },
   "dependencies": {
-    "@langchain/core": "^1.2.9",
+    "@langchain/core": "^1.2.17",
     "@langchain/langgraph": "^1.4.12",
     "@meeshy/shared": "workspace:*",
     "@prisma/client": "^6.19.3",

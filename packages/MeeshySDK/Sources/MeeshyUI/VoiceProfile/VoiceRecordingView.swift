@@ -62,7 +62,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     }
 
     public var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             sampleTextCard
 
             samplesList
@@ -71,7 +71,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
 
             if let permissionMessage {
                 Text(permissionMessage)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .transition(.opacity)
@@ -84,7 +84,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                 submitButton
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, MeeshySpacing.xl)
         .onAppear {
             // Tiré une seule fois : le décalage doit rester stable pendant
             // toute la session, sinon le texte changerait sous les yeux de
@@ -105,23 +105,23 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     // MARK: - Sample Text
 
     private var sampleTextCard: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             HStack {
                 Image(systemName: "text.quote")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyIconSize.xs, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
                 Text(String(localized: "voiceProfile.recording.readAloud", defaultValue: "Lisez ce texte à voix haute", bundle: .module))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(.secondary)
                 Spacer()
                 Text("\(recordedSamples.count + 1)/\(minimumSamples)")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .bold, design: .monospaced))
                     .foregroundColor(Color(hex: accentColor))
             }
 
             if let prompt = currentPrompt {
                 Text(prompt.text)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(.primary)
                     .multilineTextAlignment(prompt.isRightToLeft ? .trailing : .leading)
                     .frame(maxWidth: .infinity, alignment: prompt.isRightToLeft ? .trailing : .leading)
@@ -130,9 +130,9 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                     // droite à gauche.
                     .environment(\.layoutDirection, prompt.isRightToLeft ? .rightToLeft : .leftToRight)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(12)
+                    .padding(MeeshySpacing.md)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .fill(Color(hex: accentColor).opacity(0.06))
                     )
                     // Sans cette clé, SwiftUI réutilise le rendu précédent et le
@@ -154,12 +154,12 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
         let codes = VoiceProfilePrompts.supportedLanguageCodes
         if codes.count > 1 {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ForEach(codes, id: \.self) { code in
                         languageChip(code)
                     }
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, MeeshySpacing.xxs)
             }
             // Changer de langue en cours d'enregistrement produirait un profil
             // mi-figue mi-raisin : le choix se fige au premier échantillon.
@@ -180,9 +180,9 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             HapticFeedback.light()
         } label: {
             Text("\(info?.flag ?? "") \(info?.nativeName ?? code.uppercased())")
-                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                .font(.system(size: MeeshyFont.footnoteSize, weight: isSelected ? .bold : .medium))
                 .foregroundColor(isSelected ? Color(hex: accentColor) : .secondary)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, MeeshySpacing.smPlus)
                 .padding(.vertical, 5)
                 .background(
                     Capsule(style: .continuous)
@@ -196,16 +196,16 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     // MARK: - Recording Controls
 
     private var recordingControls: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             if recorder.isRecording {
                 waveformIndicator
             }
 
-            HStack(spacing: 20) {
+            HStack(spacing: MeeshySpacing.xl) {
                 if recorder.isRecording {
                     Text(formattedDuration(recorder.duration))
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color(hex: "FF6B6B"))
+                        .font(.system(size: MeeshyFont.labelSize, weight: .bold, design: .monospaced))
+                        .foregroundColor(MeeshyColors.tileCoral)
 
                     Spacer()
                 }
@@ -219,9 +219,9 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(recorder.isRecording ? Color(hex: "FF6B6B") : Color(hex: accentColor))
+                            .fill(recorder.isRecording ? MeeshyColors.tileCoral : Color(hex: accentColor))
                             .frame(width: 64, height: 64)
-                            .shadow(color: (recorder.isRecording ? Color(hex: "FF6B6B") : Color(hex: accentColor)).opacity(0.3), radius: 8, y: 2)
+                            .shadow(color: (recorder.isRecording ? MeeshyColors.tileCoral : Color(hex: accentColor)).opacity(0.3), radius: 8, y: 2)
 
                         Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
                             .font(.system(size: 24, weight: .bold))
@@ -233,7 +233,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                     Spacer()
 
                     Text(String(localized: "voiceProfile.recording.min_duration", defaultValue: "min \(minimumDurationSeconds) s", bundle: .module))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(.secondary)
                 }
             }
@@ -259,35 +259,35 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     // MARK: - Samples List
 
     private var samplesList: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(Array(recordedSamples.enumerated()), id: \.element.id) { index, sample in
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(.system(size: MeeshyIconSize.md))
                         .foregroundColor(MeeshyColors.success)
 
                     Text(String(localized: "voiceProfile.recording.sample", defaultValue: "Échantillon \(index + 1)", bundle: .module))
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(.primary)
 
                     Spacer()
 
                     Text(formattedDuration(sample.duration))
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.system(size: MeeshyFont.smallSize, weight: .medium, design: .monospaced))
                         .foregroundColor(.secondary)
 
                     Button {
                         recordedSamples.remove(at: index)
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(Color(hex: "FF6B6B").opacity(0.7))
+                            .font(.system(size: MeeshyIconSize.md))
+                            .foregroundColor(MeeshyColors.tileCoral.opacity(0.7))
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(Color(.systemBackground))
                 )
             }
@@ -301,17 +301,17 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             let data = recordedSamples.compactMap { $0.data }
             onSamplesReady?(data)
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "arrow.forward.circle.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                 Text(String(localized: "voiceProfile.recording.createProfile", defaultValue: "Creer le profil vocal", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(Color(hex: accentColor))
             )
         }

@@ -16,8 +16,13 @@ import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rat
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { liveSessionFilter, requiresLiveSession } from './live-session-gate';
+import { readClientSessionAuth } from '@meeshy/shared/utils/client-session';
+import { recordSessionClientInfo } from '../../services/auth/session-client-info';
 import { ACTIVATION_SELECT, isActivationBlocked } from '../../services/auth/account-activation';
 import { scheduleContactRecentlyActiveAnnouncement } from '../../services/notifications/contact-recently-active';
+import { guardedTimeout } from '../../utils/guarded-timer.js';
+import { attestedSocketAddress } from '../utils/attested-address';
+import { resolveTrustProxy } from '../../config/trust-proxy';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -36,6 +41,11 @@ export interface AuthHandlerDependencies {
    * (rétrocompat).
    */
   emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
+  /**
+   * « Est dans la conversation » (#8892) : redit à l'arrivant, une fois ses
+   * rooms jointes, qui a déjà l'écran de chacune de ses conversations ouvert.
+   */
+  emitViewingSnapshots?: (socket: Socket) => Promise<void>;
   /**
    * CALL-RESILIENCE (Vague 44) — broadcasts PARTICIPANT_LEFT/call:ended for the
    * anonymous-guest auto-leave below. Injected by MeeshySocketIOManager (owns
@@ -87,6 +97,7 @@ export class AuthHandler {
   private socketToUser: Map<string, string>;
   private userSockets: Map<string, Set<string>>;
   private emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
+  private emitViewingSnapshots?: (socket: Socket) => Promise<void>;
   private broadcastCallParticipantLeft?: AuthHandlerDependencies['broadcastCallParticipantLeft'];
   private forceCleanupCallParticipant?: AuthHandlerDependencies['forceCleanupCallParticipant'];
   private absorbAlreadyEndedCallLeave?: AuthHandlerDependencies['absorbAlreadyEndedCallLeave'];
@@ -101,6 +112,7 @@ export class AuthHandler {
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets;
     this.emitPresenceSnapshot = deps.emitPresenceSnapshot;
+    this.emitViewingSnapshots = deps.emitViewingSnapshots;
     this.broadcastCallParticipantLeft = deps.broadcastCallParticipantLeft;
     this.forceCleanupCallParticipant = deps.forceCleanupCallParticipant;
     this.absorbAlreadyEndedCallLeave = deps.absorbAlreadyEndedCallLeave;
@@ -114,12 +126,12 @@ export class AuthHandler {
 
       if (!token && !sessionToken) {
         logger.warn('socket sans token — déconnexion dans 10s si non authentifié', { socketId: socket.id });
-        const authTimeout = setTimeout(() => {
+        const authTimeout = guardedTimeout({ name: 'socket-auth-timeout', afterMs: 10_000, logger, run: () => {
           if (!this.socketToUser.has(socket.id)) {
             logger.warn('socket toujours non authentifié après 10s — déconnexion', { socketId: socket.id });
             socket.disconnect(true);
           }
-        }, 10_000);
+        } });
         socket.on('disconnect', () => clearTimeout(authTimeout));
         return;
       }
@@ -159,8 +171,9 @@ export class AuthHandler {
       const validated = schemaValidation.data;
 
       // Rate-limit auth attempts by IP to prevent credential stuffing.
-      // Key: socket IP so the limit spans multiple socket connections from the same host.
-      const clientIp = socket.handshake.address ?? socket.id;
+      // Key: the ATTESTED client address (audit #9608, P3) — the same value as
+      // REST's `request.ip`. `handshake.address` is Traefik's, one bucket for all.
+      const clientIp = attestedSocketAddress(socket.handshake, resolveTrustProxy()) ?? socket.id;
       const rateLimiter = getSocketRateLimiter();
       const allowed = await rateLimiter.checkLimit(clientIp, SOCKET_RATE_LIMITS.SOCKET_AUTH);
       if (!allowed) {
@@ -291,6 +304,14 @@ export class AuthHandler {
         socket.disconnect(true);
         return;
       }
+
+      // #9610 — la socket remet sous `auth.client` ce qu'une requête porte en
+      // en-têtes ; la session nommée le retient. Détaché, ne lève jamais.
+      void recordSessionClientInfo(this.prisma, {
+        sessionId: namedSession.id,
+        userId: user.id,
+        declared: readClientSessionAuth(socket.handshake.auth),
+      }).catch(() => undefined);
     }
 
     const resolvedLanguages = resolveUserLanguagesOrdered(user, {
@@ -339,7 +360,7 @@ export class AuthHandler {
     //
     // On range l'IDENTIFIANT, jamais le jeton : le clair n'a aucune raison de
     // survivre à cette ligne.
-    await this._attachSessionId(socket, user.id);
+    await this._attachSessionId(socket, user.id, decoded.sid);
 
     await this._joinUserConversations(socket, user.id, false);
 
@@ -399,22 +420,35 @@ export class AuthHandler {
         logger.error('failed to emit presence snapshot (JWT auth)', { userId: user.id, error });
       });
     }
+    this.emitViewingSnapshots?.(socket).catch(error => {
+      logger.error('failed to emit viewing snapshots (JWT auth)', { userId: user.id, error });
+    });
   }
 
   /**
-   * Range `UserSession.id` sur le socket, quand le client a transmis son jeton.
+   * Range `UserSession.id` sur le socket — d'abord le `sid` du JWT, VÉRIFIÉ
+   * plus haut (session nommée, valide, non expirée, de cet utilisateur) ; à
+   * défaut, la session du jeton transmis au handshake (audit #9608, P3 : seul
+   * le jeton était lu, et un client qui ne l'envoie pas gardait son socket
+   * ouvert après la révocation de sa session — `disconnectSession` filtre sur
+   * cette étiquette).
    *
-   * Best-effort et SILENCIEUX en cas d'absence : un client antérieur à ce lot
-   * n'envoie rien, et son socket reste sans identifiant. C'est le repli assumé
-   * de `disconnectSession` — la révocation en base, elle, est déjà effective.
+   * Best-effort et SILENCIEUX en cas d'absence : un client sans `sid` ni jeton
+   * garde un socket sans identifiant. C'est le repli assumé de
+   * `disconnectSession` — la révocation en base, elle, est déjà effective.
    *
    * La lecture est bornée à l'utilisateur AUTHENTIFIÉ : un jeton de session
    * appartenant à quelqu'un d'autre ne peut pas étiqueter ce socket, faute de
    * quoi une personne pourrait faire couper le socket d'une autre en présentant
    * un jeton qu'elle aurait intercepté.
    */
-  private async _attachSessionId(socket: Socket, userId: string): Promise<void> {
+  private async _attachSessionId(socket: Socket, userId: string, verifiedSid?: string): Promise<void> {
     try {
+      if (verifiedSid) {
+        (socket.data as Record<string, unknown>)[SOCKET_SESSION_ID] = verifiedSid;
+        return;
+      }
+
       const sessionToken = extractSessionToken(socket);
       if (!sessionToken) return;
 
@@ -534,6 +568,9 @@ export class AuthHandler {
         logger.error('failed to emit presence snapshot for anonymous', { anonymousId: socketUser.id, error });
       });
     }
+    this.emitViewingSnapshots?.(socket).catch(error => {
+      logger.error('failed to emit viewing snapshots for anonymous', { anonymousId: socketUser.id, error });
+    });
   }
 
   // Node's `setTimeout` truncates any delay above ~24.8 days (a 32-bit signed
@@ -575,7 +612,7 @@ export class AuthHandler {
         socket.disconnect(true);
         return;
       }
-      timer = setTimeout(arm, Math.min(msRemaining, AuthHandler.MAX_EXPIRY_TIMER_MS));
+      timer = guardedTimeout({ name: 'socket-token-expiry', afterMs: Math.min(msRemaining, AuthHandler.MAX_EXPIRY_TIMER_MS), logger, run: arm });
     };
 
     arm();

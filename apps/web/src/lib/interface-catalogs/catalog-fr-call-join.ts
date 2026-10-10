@@ -26,7 +26,6 @@ const frCallJoin = {
   'keypad.input.placeholder': 'Numéro ou nom',
   'keypad.input.label': 'Numéro ou nom à rechercher',
   'keypad.delete': 'Effacer',
-  'keypad.clear': 'Tout effacer',
   'keypad.prompt.title': 'Composez un numéro ou un nom',
   'keypad.prompt.subtitle': 'Trouvez une personne par numéro de téléphone ou par nom.',
   'keypad.searching': 'Recherche…',

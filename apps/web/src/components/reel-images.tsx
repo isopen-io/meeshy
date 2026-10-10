@@ -39,7 +39,7 @@ export default function ReelImages({ images, language }: { readonly images: read
       {images.length > 1 ? (
         <div aria-hidden="true" data-reel-image-dots className="pointer-events-none absolute inset-x-0 flex justify-center gap-1.5" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 28px)' }}>
           {images.map((image, i) => (
-            <span key={image.id} className="rounded-full" style={{ width: 6, height: 6, backgroundColor: i === page ? 'white' : 'rgba(255,255,255,0.45)' }} />
+            <span key={image.id} className="rounded-full" style={{ width: 6, height: 6, backgroundColor: i === page ? 'var(--color-on-media)' : 'color-mix(in srgb, var(--color-on-media) 45%, transparent)' }} />
           ))}
         </div>
       ) : null}

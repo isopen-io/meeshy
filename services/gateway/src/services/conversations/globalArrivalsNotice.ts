@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Message } from '@meeshy/shared/types/index';
+import type { LastMessageSystemEvent } from '@meeshy/shared/types/conversation-preview';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import {
   ARRIVALS_NOTICE_WINDOW_MINUTES,
@@ -11,6 +12,7 @@ import {
 } from '@meeshy/shared/utils/arrivals-notice';
 import { postSystemNotice } from './conversationNotice';
 import { buildMessageEditedCore } from '../../socketio/messageEditedPayload';
+import { systemEventFromMessage } from '../../routes/conversations/utils/last-message-nature';
 import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
@@ -156,6 +158,9 @@ export function postGlobalArrival(deps: GlobalArrivalsDeps, input: GlobalArrival
  * conversation, sans file hors ligne : le salon global compte tous les
  * inscrits, et un absent relit la ligne à jour à sa prochaine ouverture.
  * `isEdited: false` — personne n'a édité ce message, le serveur l'a complété.
+ * `systemEvent` (#8565) — la clé, les noms et le compte que la ligne de liste
+ * affiche : ce chemin n'émet aucun `conversation:updated` (le salon global
+ * compte tous les inscrits), la ligne se recompose donc depuis cette charge.
  */
 export function emitArrivalsLineUpdate(io: ConversationRoomEmitter, message: unknown, conversationId: string): void {
   const row = message as Message;
@@ -164,5 +169,11 @@ export function emitArrivalsLineUpdate(io: ConversationRoomEmitter, message: unk
     ...buildMessageEditedCore(row, { conversationId, content: row.content, isEdited: false, editedAt: at }),
     messageSource: 'system',
     metadata: row.metadata,
+    ...systemEventField(row),
   });
+}
+
+function systemEventField(row: Message): { systemEvent?: LastMessageSystemEvent } {
+  const systemEvent = systemEventFromMessage({ messageType: row.messageType, messageSource: 'system', metadata: row.metadata });
+  return systemEvent ? { systemEvent } : {};
 }

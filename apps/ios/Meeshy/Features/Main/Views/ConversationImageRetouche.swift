@@ -21,7 +21,7 @@ enum ConversationImageRetouche {
     static let sourceMaxPixelSize: CGFloat = 2048
 
     /// Un GIF ne s'offre pas à la retouche : la scène le rendrait en image fixe.
-    static func offersRetouche(mimeType: String) -> Bool {
+    nonisolated static func offersRetouche(mimeType: String) -> Bool {
         mimeType.lowercased() != "image/gif"
     }
 

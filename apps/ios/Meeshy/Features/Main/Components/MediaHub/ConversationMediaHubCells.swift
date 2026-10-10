@@ -38,13 +38,13 @@ struct MediaHubVisualTile: View, Equatable {
                     fullUrl: full,
                     targetSize: CGSize(width: 180, height: 180)
                 ) {
-                    placeholderColor.opacity(0.35)
+                    placeholderColor.opacity(MeeshyOpacity.medium)
                 }
                 .aspectRatio(contentMode: .fill)
             }
             .overlay(alignment: .bottomLeading) {
                 if attachment.type == .video {
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xxs) {
                         Image(systemName: "play.fill")
                         if let duration = attachment.duration, duration > 0 {
                             Text(Self.durationLabel(milliseconds: duration))
@@ -52,11 +52,11 @@ struct MediaHubVisualTile: View, Equatable {
                         }
                     }
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(.black.opacity(0.45)))
-                    .padding(5)
+                    .foregroundStyle(MeeshyColors.mediaChromeForeground)
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xxs)
+                    .background(Capsule().fill(MeeshyColors.mediaScrim))
+                    .padding(MeeshySpacing.xs)
                 }
             }
             .clipped()
@@ -87,25 +87,25 @@ struct MediaHubPlaceRow: View, Equatable {
 
     var body: some View {
         Button(action: openInMaps) {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "mappin.circle.fill")
                     .font(.title2)
                     .foregroundStyle(Color(hex: accentHex))
-                    .frame(width: 44, height: 44)
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(place.name ?? ConversationMediaHubCopy.placeFallback)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(isDark ? .white : MeeshyColors.indigo950)
+                        .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
                         .lineLimit(2)
                     Text(place.address ?? subtitle)
                         .font(.caption)
-                        .foregroundColor(isDark ? .white.opacity(0.6) : MeeshyColors.indigo950.opacity(0.55))
+                        .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
                         .lineLimit(2)
                 }
                 Spacer(minLength: 0)
             }
-            .frame(minHeight: 44)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -127,7 +127,7 @@ struct MediaHubSegmentChip: View, Equatable {
     let isDark: Bool
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: ConversationMediaHubCopy.icon(kind))
                 .font(.caption.weight(.semibold))
                 .accessibilityHidden(true)
@@ -135,11 +135,11 @@ struct MediaHubSegmentChip: View, Equatable {
                 .font(.subheadline.weight(isSelected ? .bold : .medium))
                 .lineLimit(1)
         }
-        .foregroundColor(isSelected ? .white : (isDark ? .white.opacity(0.75) : MeeshyColors.indigo950.opacity(0.7)))
-        .padding(.horizontal, 12)
-        .frame(minHeight: 44)
+        .foregroundColor(isSelected ? .white : MeeshyColors.textSecondary(isDark: isDark))
+        .padding(.horizontal, MeeshySpacing.md)
+        .frame(minHeight: MeeshyControlSize.tapTarget)
         .background(
-            Capsule().fill(isSelected ? Color(hex: accentHex) : (isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04)))
+            Capsule().fill(isSelected ? Color(hex: accentHex) : (MeeshyColors.surfaceFill(isDark: isDark)))
         )
         .contentShape(Capsule())
     }
@@ -154,23 +154,23 @@ struct MediaHubStateView: View {
     var action: (() -> Void)? = nil
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(.largeTitle.weight(.light))
-                .foregroundColor(isDark ? .white.opacity(0.3) : MeeshyColors.indigo950.opacity(0.25))
+                .foregroundColor(isDark ? .white.opacity(MeeshyOpacity.medium) : MeeshyColors.indigo950.opacity(MeeshyOpacity.medium))
                 .accessibilityHidden(true)
             Text(message)
                 .font(.subheadline.weight(.medium))
                 .multilineTextAlignment(.center)
-                .foregroundColor(isDark ? .white.opacity(0.6) : MeeshyColors.indigo950.opacity(0.55))
+                .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .font(.subheadline.weight(.semibold))
-                    .frame(minHeight: 44)
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 32)
+        .padding(.horizontal, MeeshySpacing.xxxl)
         .padding(.top, 48)
     }
 }
@@ -182,7 +182,7 @@ struct MediaHubSkeleton: View {
     var body: some View {
         Group {
             if kind == .visual {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3), spacing: 2) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xxs), count: 3), spacing: 2) {
                     ForEach(0..<9, id: \.self) { _ in
                         Color.clear
                             .aspectRatio(1, contentMode: .fit)
@@ -191,16 +191,16 @@ struct MediaHubSkeleton: View {
                     }
                 }
             } else {
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     ForEach(0..<5, id: \.self) { _ in
-                        HStack(spacing: 12) {
+                        HStack(spacing: MeeshySpacing.md) {
                             SkeletonShape(width: 44, height: 44, cornerRadius: 10)
-                            VStack(alignment: .leading, spacing: 6) {
+                            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                                 SkeletonShape(height: 12)
                                 SkeletonShape(width: 120, height: 10)
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                     }
                 }
             }

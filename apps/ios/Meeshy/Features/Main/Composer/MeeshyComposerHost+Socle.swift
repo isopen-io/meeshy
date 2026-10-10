@@ -41,8 +41,8 @@ extension MeeshyComposerHost {
     }
 
     var socle: some View {
-        HStack(spacing: 10) {
-            if returnsImageToConversation { Spacer(); returnImageButton } else {
+        HStack(spacing: MeeshySpacing.smPlus) {
+            if returnsToConversation { Spacer(); returnImageButton } else {
                 if paintedSocleZones.contains(.audience) { audienceChip }
                 Spacer()
                 if socleServesPostText { postTextButton }
@@ -53,8 +53,8 @@ extension MeeshyComposerHost {
         .padding(.horizontal, horizontalSizeClass == .regular ? ComposerRailGeometry.roomyMargin : 14)
         // **Plus bas, sous la scène** (directive porteur 2026-09-27) : il
         // frôle la zone du geste d'accueil au lieu de mordre sur le dessin.
-        .padding(.top, 4)
-        .padding(.bottom, 2)
+        .padding(.top, MeeshySpacing.xs)
+        .padding(.bottom, MeeshySpacing.xxs)
     }
 
     /// **Le texte du post, là où était l'œil** (#8370, directive porteur
@@ -85,7 +85,7 @@ extension MeeshyComposerHost {
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: 44, height: 44)
                 .contentShape(Circle())
-                .adaptiveGlass(in: Circle(), tint: tint.color.opacity(0.55))
+                .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
         }
         .accessibilityLabel(Text(ComposerRailCopy.label(ComposerSceneFloatingRail.socleDoor)))
     }
@@ -223,7 +223,7 @@ extension MeeshyComposerHost {
             HapticFeedback.light()
             presentedPortal = .audience
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: composerVisibility.icon)
                     .accessibilityHidden(true)
                 // #4057 — le mot s'efface aux paliers d'accessibilité ; le nom
@@ -242,9 +242,9 @@ extension MeeshyComposerHost {
             // d'iOS 26 a viré au clair sous le libellé blanc (simulateur,
             // 2026-09-27).
             .padding(.horizontal, socleShowsLabels ? 14 : 0)
-            .frame(minWidth: 44, minHeight: 44)
+            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .contentShape(Capsule())
-            .adaptiveGlass(in: Capsule(), tint: tint.color.opacity(0.55))
+            .adaptiveLiquidGlass(in: Capsule(), tint: tint.color.opacity(0.55), interactive: true)
         }
         // Le LIBELLÉ reste « Audience » et ne s'échange pas contre la valeur —
         // c'est la faute que la flèche évite déjà : un contrôle qui perd son nom
@@ -397,15 +397,23 @@ extension MeeshyComposerHost {
         // La frise ouverte rend ses pistes à la slide AVANT l'envoi (#8415) :
         // sinon un timing réglé à l'instant partirait sans elle.
         if viewModel.timelineIsOpen { viewModel.closeTimelinePanel() }
-        switch ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice) {
-        case .atelier:
+        // Le texte du post ARMÉ depuis une scène part avec elle (#8473) :
+        // l'atelier publie le contenu de la slide, pas `documentText`.
+        if let texte = ComposerPublishMenuRule.atelierCarriedPostText(
+            route: ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice),
+            choice: choice, documentText: documentText) {
+            viewModel.applyContentText(texte)
+        }
+        switch ComposerPublishMenuRule.dispatch(surface: mountedSurface, choice: choice) {
+        case .atelier(let type, let alsoAsReel):
             publishTrigger.requestPublish(
-                as: choice.format.postType,
+                as: type,
                 visibility: composerVisibility.rawValue,
-                visibilityUserIds: composerVisibilityUserIds
+                visibilityUserIds: composerVisibilityUserIds,
+                alsoAsReel: alsoAsReel
             )
-        case .storyScene:  publishStoryScene(as: choice.format)
-        case .document:    publishDocument(choice)
+        case .storyScene(let format, let alsoAsReel): publishStoryScene(as: format, alsoAsReel: alsoAsReel)
+        case .document(let choice): publishDocument(choice)
         case .unsupported: refuseUnsupportedFormat()
         }
     }
@@ -443,7 +451,7 @@ extension MeeshyComposerHost {
     /// greffe : ce qui change ici est la BASE qu'on lui donne — `.empty`, parce
     /// que le meuble n'a pas de magasin d'atelier à relayer sur ce chemin, et
     /// c'est toujours honnête.
-    func publishStoryScene(as format: ComposerFormat) {
+    func publishStoryScene(as format: ComposerFormat, alsoAsReel: Bool = false) {
         guard canPublishDocument(as: format) else { return }
         isPublishingDocument = true
         let accepted = onPublishAllInBackground(
@@ -458,11 +466,13 @@ extension MeeshyComposerHost {
             composerVisibilityUserIds,
             viewModel.draftId,
             composerReferences,
-            accessibilityCarryingComposerCaptions(.empty, slides: viewModel.slides),
+            accessibilityCarryingComposerCaptions(.empty, slides: viewModel.slides)
+                .carryingAlsoAsReel(ComposerPublishTrigger.publishedAlsoAsReel(requested: alsoAsReel,
+                                                                               served: format.postType)),
             format.postType
         )
         isPublishingDocument = false
-        if accepted { onDismiss() }
+        if accepted { discardAutosavedDraft(); onDismiss() }
     }
 
     /// **Le refus d'un format qu'aucun canal ne sait porter** (#4869).
@@ -493,13 +503,13 @@ extension MeeshyComposerHost {
     /// casse en syllabes empilées — l'action TERMINALE du composer devenue une
     /// colonne de fragments.
     var publishCapsuleLabel: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "arrow.up")
                 .accessibilityHidden(true)
             if socleShowsLabels {
                 // #7497 — la partie principale NOMME le format qui partira si
                 // l'auteur ne touche pas au chevron ; le mood garde « Publier ».
-                if let titre = ComposerPublishMenuCopy.publishTitle(armedChoice.format) {
+                if let titre = ComposerPublishMenuCopy.publishTitle(for: armedChoice) {
                     Text(titre)
                         .lineLimit(1)
                 } else {
@@ -510,12 +520,12 @@ extension MeeshyComposerHost {
         }
         .font(.footnote.weight(.bold))
         .foregroundColor(.white)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
         // Plancher HIG de 44 pt, comme sa jumelle — pas
         // `ComposerControlMetrics.visualDiameter` (36 pt), qui dimensionne le
         // CERCLE de la croix et dont le complément de contact est `internal` à
         // `MeeshyUI`.
-        .frame(minWidth: 44, minHeight: 44)
+        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
     }
 
     /// **La capsule PROÉMINENTE — l'habillage commun des deux flèches** (#4995,
@@ -543,7 +553,7 @@ extension MeeshyComposerHost {
         // `.overlay` ne le consulte pas. La pile, elle, n'a rien à supposer :
         // elle place l'un au-dessus de l'autre quelle que soit la hauteur du
         // texte — deux lignes en français, trois en allemand.
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .trailing, spacing: MeeshySpacing.xsPlus) {
             publishBlockedNotice
             contenu
                 .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
@@ -596,7 +606,7 @@ extension MeeshyComposerHost {
     var publishBlockedNotice: some View {
         if !publishBlockedHint.isEmpty {
             Text(publishBlockedHint)
-                .font(MeeshyFont.relative(11, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
                 // TROIS lignes, pas deux : à 190 pt la phrase française se
                 // coupait sur « une photo ou u… », mesuré au simulateur. Le
@@ -633,7 +643,7 @@ extension MeeshyComposerHost {
                     publishCapsuleLabel
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(armedChoice.format)
+                .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(for: armedChoice)
                                     ?? String(localized: "composer.socle.publish", bundle: .main))
                 if let entries = publishMenuEntries {
                     Rectangle()
@@ -641,7 +651,8 @@ extension MeeshyComposerHost {
                         .frame(width: 1, height: 20)
                         .accessibilityHidden(true)
                     ComposerPublishMenu(entries: entries, armed: armedChoice,
-                                        onChoose: { armedPublishChoice = $0 }) {
+                                        companionReelOffered: companionReelOffered,
+                                        onChoose: { chooseArmedPublish($0) }) {
                         publishChevronLabel
                     }
                     .accessibilityLabel(ComposerPublishMenuCopy.title)
@@ -657,7 +668,16 @@ extension MeeshyComposerHost {
     var armedChoice: ComposerPublishChoice {
         ComposerPublishMenuRule.armed(chosen: armedPublishChoice,
                                       defaultFormat: selectedFormat,
-                                      entries: publishMenuEntries)
+                                      entries: publishMenuEntries,
+                                      companionReelOffered: companionReelOffered)
+    }
+
+    /// **La story peut-elle partir AUSSI en réel ?** (#9476) — la lecture de
+    /// `ComposerPublishMenuRule.companionReelOffered` sur le menu du moment.
+    var companionReelOffered: Bool {
+        ComposerPublishMenuRule.companionReelOffered(entries: publishMenuEntries,
+                                                     slideCount: viewModel.slides.count,
+                                                     isRepost: intent.origin.repostedPostId != nil)
     }
 
     /// Le chevron — 44 pt de cible, comme la partie principale.
@@ -665,7 +685,7 @@ extension MeeshyComposerHost {
         Image(systemName: "chevron.down")
             .font(.footnote.weight(.bold))
             .foregroundColor(.white)
-            .frame(minWidth: 44, minHeight: 44)
+            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .contentShape(Rectangle())
     }
 
@@ -918,7 +938,7 @@ extension MeeshyComposerHost {
         Task {
             let accepted = await onPublishDocument(draft)
             isPublishingDocument = false
-            if accepted { onDismiss() }
+            if accepted { discardAutosavedDraft(); onDismiss() }
         }
     }
 }

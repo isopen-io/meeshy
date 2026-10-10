@@ -40,6 +40,24 @@ public class MeeshyNotificationSettingsPlugin extends Plugin {
         }
     }
 
+    /**
+     * #8882 — la fiche de l'app, seul endroit qui rend une permission refusee
+     * deux fois (micro, position) : Android ne la redemande plus, et le
+     * « Reessayer » du composeur rejetterait en silence. Miroir de
+     * `openSettingsURLString` iOS.
+     */
+    @PluginMethod
+    public void openApp(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", getContext().getPackageName(), null));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("settings-unavailable", error);
+        }
+    }
+
     @PluginMethod
     public void fcmStatus(PluginCall call) {
         JSObject result = new JSObject();

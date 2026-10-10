@@ -137,6 +137,13 @@ extension MessageListViewController {
     /// le suivi tactile, si bien qu'un doigt posé sur la liste gelait le suivi
     /// de lecture jusqu'au relâchement.
     func startSeenTracking() {
+        #if DEBUG
+        // La vitrine (#9810) ouvre le menu unifié par CE gestionnaire, celui de l'appui long d'une bulle.
+        VitrineRendu.shared.listeDeMessagesAffichee { [weak self] messageId in
+            guard let self else { return }
+            self.onLongPress?(messageId, self.cellFrameInWindow(messageId: messageId))
+        }
+        #endif
         seenTimer?.invalidate()
         let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] firing in
             guard self != nil else { return firing.invalidate() }

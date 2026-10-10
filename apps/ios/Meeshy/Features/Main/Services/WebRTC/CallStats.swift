@@ -37,6 +37,10 @@ struct CallStats: Equatable, Sendable {
     /// fort) — nourrit « qui parle » dans un appel de groupe (#3585). Éphémère :
     /// jamais persisté avec le diagnostic.
     let inboundAudioLevel: Double
+    /// #8698 — whether the selected ICE pair rides a TURN relay (`true`) or a
+    /// direct host/srflx path (`false`); `nil` while no pair is selected.
+    /// Ephemeral like `inboundAudioLevel`: never persisted with the diagnostic.
+    let relayed: Bool?
 
     init(
         roundTripTimeMs: Double = 0,
@@ -52,7 +56,8 @@ struct CallStats: Equatable, Sendable {
         jitterMs: Double = 0,
         inboundAudioBytes: Int = 0,
         inboundVideoBytes: Int = 0,
-        inboundAudioLevel: Double = 0
+        inboundAudioLevel: Double = 0,
+        relayed: Bool? = nil
     ) {
         self.roundTripTimeMs = roundTripTimeMs
         self.packetsLost = packetsLost
@@ -68,6 +73,7 @@ struct CallStats: Equatable, Sendable {
         self.inboundAudioBytes = inboundAudioBytes
         self.inboundVideoBytes = inboundVideoBytes
         self.inboundAudioLevel = inboundAudioLevel
+        self.relayed = relayed
     }
 }
 
@@ -99,6 +105,7 @@ extension CallStats: Codable {
         inboundAudioBytes = try c.decodeIfPresent(Int.self, forKey: .inboundAudioBytes) ?? 0
         inboundVideoBytes = try c.decodeIfPresent(Int.self, forKey: .inboundVideoBytes) ?? 0
         inboundAudioLevel = 0
+        relayed = nil
     }
 
     func encode(to encoder: Encoder) throws {
@@ -135,6 +142,7 @@ extension CallStats {
         let codecId: String?        // points at a "codec" entry's id
         let mimeType: String?       // only on "codec" entries, e.g. "audio/opus"
         let values: [String: Double]
+        let strings: [String: String]
 
         // `nonisolated` : `RawEntry` est un value type pur `Sendable` construit dans
         // le callback nonisolated `RTCPeerConnection.statistics` (thread du framework
@@ -148,7 +156,8 @@ extension CallStats {
             kind: String? = nil,
             codecId: String? = nil,
             mimeType: String? = nil,
-            values: [String: Double] = [:]
+            values: [String: Double] = [:],
+            strings: [String: String] = [:]
         ) {
             self.id = id
             self.type = type
@@ -156,7 +165,55 @@ extension CallStats {
             self.codecId = codecId
             self.mimeType = mimeType
             self.values = values
+            self.strings = strings
         }
+
+        nonisolated static let numericKeys = [
+            "currentRoundTripTime", "availableOutgoingBitrate",
+            "packetsLost", "packetsReceived",
+            "packetsSent", "bytesSent", "bytesReceived", "jitter", "audioLevel",
+            "nominated"
+        ]
+
+        nonisolated static let stringKeys = [
+            "selectedCandidatePairId", "localCandidateId", "remoteCandidateId",
+            "candidateType", "state"
+        ]
+
+        /// Projects one libwebrtc stats entry (`RTCStatistics.values`) onto the
+        /// `Sendable` fields the reducer reads — numbers as `Double`, the ICE
+        /// route identifiers as `String`.
+        nonisolated init(id: String, type: String, raw: [String: NSObject]) {
+            self.init(
+                id: id,
+                type: type,
+                kind: (raw["kind"] as? String) ?? (raw["mediaType"] as? String),
+                codecId: raw["codecId"] as? String,
+                mimeType: raw["mimeType"] as? String,
+                values: Self.numericKeys.reduce(into: [:]) { map, key in
+                    if let number = raw[key] as? NSNumber { map[key] = number.doubleValue }
+                },
+                strings: Self.stringKeys.reduce(into: [:]) { map, key in
+                    if let text = raw[key] as? String { map[key] = text }
+                }
+            )
+        }
+    }
+
+    /// #8698 — the route of the SELECTED ICE pair: the transport's
+    /// `selectedCandidatePairId`, else the nominated succeeded pair. Relayed as
+    /// soon as either end is a `relay` candidate; `nil` when nothing is known.
+    static func relayedRoute(in entries: [RawEntry]) -> Bool? {
+        let byId = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let selectedId = entries.first { $0.type == "transport" }?.strings["selectedCandidatePairId"]
+        let nominated = entries.first {
+            $0.type == "candidate-pair" && $0.strings["state"] == "succeeded" && ($0.values["nominated"] ?? 0) > 0
+        }
+        guard let pair = selectedId.flatMap({ byId[$0] }) ?? nominated else { return nil }
+        let candidateTypes = [pair.strings["localCandidateId"], pair.strings["remoteCandidateId"]]
+            .compactMap { $0.flatMap { byId[$0]?.strings["candidateType"] } }
+        guard !candidateTypes.isEmpty else { return nil }
+        return candidateTypes.contains("relay")
     }
 
     /// Pure reducer (§5.7 fix for bug j). Resolves the real codec name via
@@ -233,7 +290,8 @@ extension CallStats {
             jitterMs: jitterMs,
             inboundAudioBytes: inboundAudioBytes,
             inboundVideoBytes: inboundVideoBytes,
-            inboundAudioLevel: audioLevel
+            inboundAudioLevel: audioLevel,
+            relayed: relayedRoute(in: entries)
         )
     }
 }

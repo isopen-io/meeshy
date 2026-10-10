@@ -34,5 +34,9 @@
 # Ce préchargement rejoue le CONTRAT du démarrage pour la langue du HTML
 # statique (`fr`) — ce n'est pas un repli : un témoin qui pose une autre
 # langue charge son catalogue lui-même, et une clé absente reste rouge.
+#
+# LA GARDE DES `act()` ABANDONNÉS passe EN PREMIER (#9509) : elle remplace
+# `act` sur l'objet de module de React, ce qui doit précéder tout import de
+# `react` par un autre préchargement ou un témoin.
 [test]
-preload = ["./src/test-support/interface-catalog-preload.ts"]
+preload = ["./src/test-support/act-leak-guard.ts", "./src/test-support/interface-catalog-preload.ts"]

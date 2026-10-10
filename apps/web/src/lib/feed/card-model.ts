@@ -14,6 +14,7 @@ import type { SceneCarrier } from '@/lib/canvas/carrier';
 import { feedMediaKindOf, postMediaRatio, reelCardRatio, type FeedMediaKind } from './layout';
 import { resolveMosaicLayout, type MosaicLayoutMode } from './mosaic-layout';
 import { resolveFeedText } from './text';
+import { servedViewerPoints } from './viewer-points';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 
 /**
@@ -78,6 +79,10 @@ export type FeedCardMedia = {
    * Absent quand `caption` l'est.
    */
   readonly captionOrigin?: 'media' | 'post';
+  /** LA CARTE DES ADRESSES SUIVIES DU POST (#9074) — elle couvre le corps ET
+   * chaque légende de média (#9073), donc elle voyage avec `caption` quelle
+   * que soit sa provenance. Absente sans légende ou sans carte servie. */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
   /** LE TEXTE D'ACCESSIBILITÉ SERVI PAR LA PASSERELLE — `PostMedia.alt`
    * (`schema.prisma:3618`, « Accessibilité »). Il était DÉCLARÉ sur le wire
    * (`FeedMedia.alt`) et jeté par le modèle : chaque image du fil partait en
@@ -205,12 +210,23 @@ export type FeedCardModel = {
    * tout handle est cliquable ; `[]` ⇒ aucun. Voir `FeedPost.mentions`.
    */
   readonly validatedMentions?: readonly string[];
+  /** La carte des adresses suivies du post (#9074) — celle que la visionneuse
+   * plein écran remet à ses légendes. Absente quand le post n'en porte aucune. */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
   readonly media: readonly FeedCardMedia[];
   readonly scene?: FeedCardScene;
   /** L'agencement CHOISI par l'auteur (#6514, `resolveMosaicLayout`) —
    * `carousel` quand le document n'en dit rien. */
   readonly layout: MosaicLayoutMode;
   readonly stats: FeedCardStats;
+  /**
+   * CE QUE CE POST A RAPPORTÉ AU LECTEUR (#9570) — `FeedPost.viewerPoints`,
+   * présent seulement quand il vaut plus que zéro : absent (ancien serveur,
+   * lecteur sans compte) ou nul, la carte ne porte aucune marque. Toujours
+   * celui de CE post : une republication porte le sien, jamais celui de son
+   * original.
+   */
+  readonly viewerPoints?: number;
 };
 
 const FALLBACK_AUTHOR_NAME = 'Quelqu’un';
@@ -270,6 +286,7 @@ function resolveMedia(
    * même valeur que `model.text`) — jamais recalculé ici (D-14). Repli
    * possible pour la légende d'un média SEUL (#6864), voir plus bas. */
   soleMediaCaptionFallback: FeedCardText | undefined,
+  trackingLinks: readonly ContentTrackingLink[],
 ): readonly FeedCardMedia[] {
   const media = post.media ?? [];
   const ordered = [...media].sort((a, b) => (numberOrUndefined(a.order) ?? 0) - (numberOrUndefined(b.order) ?? 0));
@@ -338,6 +355,7 @@ function resolveMedia(
       ...(caption !== undefined
         ? { caption: caption.text, captionTranslated: caption.translated, captionOrigin: caption.origin }
         : {}),
+      ...(caption !== undefined && trackingLinks.length > 0 ? { trackingLinks } : {}),
       ...(captionLanguage !== undefined ? { captionLanguage } : {}),
       ...(altText !== undefined ? { altText } : {}),
     };
@@ -460,7 +478,7 @@ export function resolveFeedCardModel(
 
   const avatarSrc = resolveAuthorSrc(post.author?.avatar);
   const repostEmbed = resolveFeedRepostEmbed(post.repostOf, params.preferredLanguages, params.now);
-  const media = resolveMedia(post, isReel, params.preferredLanguages, text);
+  const media = resolveMedia(post, isReel, params.preferredLanguages, text, trackingLinks);
   const document = parseCanvasDocument(post.storyEffects);
   // Le PORTEUR d'une scène est fait des médias DÉJÀ résolus par le Prisme
   // (`media` ci-dessus) — jamais une seconde descente (cycle 128 du
@@ -498,6 +516,8 @@ export function resolveFeedCardModel(
           },
         };
 
+  const viewerPoints = servedViewerPoints(post.viewerPoints);
+
   return {
     id: post.id,
     viewer: { liked: post.isLikedByMe === true, bookmarked: post.isBookmarkedByMe === true, reposted: post.isRepostedByMe === true },
@@ -516,6 +536,7 @@ export function resolveFeedCardModel(
     createdAt: new Date(post.createdAt).toISOString(),
     ...(repostEmbed !== undefined ? { repostOf: repostEmbed } : {}),
     ...(text !== undefined ? { text } : {}),
+    ...(trackingLinks.length > 0 ? { trackingLinks } : {}),
     // `null` et `undefined` RETOMBENT tous deux sur « le serveur ne s'est pas
     // prononcé » : la passerelle sert `null` pour un champ optionnel absent
     // (doc-comment de `FeedAuthor`), et un `[]` fabriqué ici tuerait tous les
@@ -533,6 +554,7 @@ export function resolveFeedCardModel(
       bookmarkCount: numberOrUndefined(post.bookmarkCount) ?? 0,
       shareCount: numberOrUndefined(post.shareCount) ?? 0,
     },
+    ...(viewerPoints !== undefined && viewerPoints > 0 ? { viewerPoints } : {}),
   };
 }
 
@@ -562,4 +584,15 @@ export function feedCardBody(model: Pick<FeedCardModel, 'scene' | 'media' | 'rep
   if (model.scene !== undefined || model.repostOf === undefined) return { visual: hasVisual };
   if (model.repostOf.isStory || model.repostOf.isReel) return { visual: false, repostOf: model.repostOf };
   return { visual: hasVisual, repostOf: model.repostOf };
+}
+
+/**
+ * L'AFFICHE D'UN RÉEL DANS LE FIL (#9737) — sans scène, le premier média : un
+ * réel PUREMENT audio garde son visuel d'onde, c'est son contenu. Avec une
+ * scène, un média audio du porteur est un SON de la scène (son fond, ou un son
+ * posé) : il ne se dessine jamais en affiche — le fond se dit par le crédit,
+ * hors scène. L'affiche est alors le premier média VISUEL, ou rien.
+ */
+export function reelPosterOf(model: Pick<FeedCardModel, 'scene' | 'media'>): FeedCardMedia | undefined {
+  return model.scene === undefined ? model.media[0] : model.media.find((media) => media.kind !== 'audio');
 }

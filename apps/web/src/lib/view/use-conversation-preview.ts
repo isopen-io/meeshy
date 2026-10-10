@@ -7,7 +7,7 @@ import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { draftStore, type DraftStore } from '@/lib/send/draft-store';
 
 import { previewInputOf } from './conversation-preview-input';
-import { noteEphemeralReception, receptionOf, servedDeadlineOf } from './ephemeral-reception';
+import { noteEphemeralReception, receptionOf, servedDeadlineFor } from './ephemeral-reception';
 import { secondClock, type IntervalClock } from './interval-clock';
 import { useDraftLine } from './use-draft-line';
 import { useLiveNow } from './use-live-now';
@@ -67,7 +67,7 @@ export function useConversationPreview(params: {
       preferredLanguages: languages,
       now,
       receivedAt: last === undefined || last === null ? null : receptionOf(last.id),
-      servedDeadline: last === undefined || last === null ? null : servedDeadlineOf(last.id),
+      servedDeadline: last === undefined || last === null ? null : servedDeadlineFor(last, isMine(conversation, viewerId)),
       typing: typists ?? null,
       draft,
     }),

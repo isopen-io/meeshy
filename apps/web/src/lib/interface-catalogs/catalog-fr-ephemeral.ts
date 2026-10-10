@@ -18,6 +18,13 @@ const frEphemeral = {
   'composer.ephemeral.rail': 'Durée avant disparition du message',
   'composer.protection.imposed.blur': 'Flou imposé par le message cité',
   'composer.protection.imposed.ephemeral': 'Mode éphémère imposé par le message cité : {duration}',
+  /* #8635 — ce que le lecteur d'écran dit de la protection d'un message. */
+  'message.afterRead.a11y': 'Message éphémère, disparaît après lecture',
+  'message.ephemeral.label.a11y': 'Message éphémère',
+  'message.blurred.a11y': 'Flouté',
+  'message.viewOnce.a11y': 'Vue unique',
+  /* #9573 — le refus de transfert d'une flamme après lecture. */
+  'forward.refusal.afterRead': 'Un message qui disparaît après lecture ne peut pas être transféré',
 } as const;
 
 export type EphemeralCatalogSlice = Readonly<Record<keyof typeof frEphemeral, string>>;

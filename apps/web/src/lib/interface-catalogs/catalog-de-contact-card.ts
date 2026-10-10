@@ -9,6 +9,7 @@ const deContactCard = {
   'contactCard.failed': 'Die Visitenkarte konnte nicht gelesen werden',
   'contactCard.retry': 'Erneut versuchen',
   'contactCard.download': 'Karte herunterladen',
+  'contactCard.downloadFailed': 'Die Kontaktkarte konnte nicht heruntergeladen werden',
   'contactCard.onMeeshy': 'Auf Meeshy',
   'contactCard.connect': 'Verbinden',
   'contactCard.write': 'Schreiben',

@@ -21,7 +21,7 @@ final class ConversationStoreUserUpdatedTests: XCTestCase {
         {"userId":"u-1","changes":{"displayName":"Bob Jones","firstName":"Bob","lastName":"Jones","username":"bob"}}
         """)
         XCTAssertTrue(event.hasNameGroup)
-        XCTAssertEqual(event.resolvedDisplayName, "Bob Jones")
+        XCTAssertEqual(event.composedName, "Bob Jones")
         XCTAssertEqual(event.username, "bob")
     }
 
@@ -31,7 +31,17 @@ final class ConversationStoreUserUpdatedTests: XCTestCase {
         let event = try decodeEvent("""
         {"userId":"u-1","changes":{"displayName":null,"firstName":null,"lastName":null,"username":"bob"}}
         """)
-        XCTAssertEqual(event.resolvedDisplayName, "bob")
+        XCTAssertEqual(event.composedName, "bob")
+    }
+
+    /// #9307 — la ligne d'un direct porte le nom COMPOSÉ, celui que la
+    /// passerelle écrit dans `Participant.displayName` et que la relecture REST
+    /// sert : sans nom d'affichage, « Prénom Nom » passe avant le pseudo.
+    func test_merging_directConversation_clearedDisplayName_takesTheFullName() throws {
+        let event = try decodeEvent("""
+        {"userId":"u-1","changes":{"displayName":null,"firstName":"Robert","lastName":"Jones","username":"bob"}}
+        """)
+        XCTAssertEqual(ConversationStore.merging(directConv(), withUserUpdate: event)?.title, "Robert Jones")
     }
 
     /// Sans le groupe, aucun nom ne peut être recomposé : un payload d'avatar
@@ -41,7 +51,7 @@ final class ConversationStoreUserUpdatedTests: XCTestCase {
         {"userId":"u-1","changes":{"avatar":"https://cdn/a.png"}}
         """)
         XCTAssertFalse(event.hasNameGroup)
-        XCTAssertNil(event.resolvedDisplayName)
+        XCTAssertNil(event.composedName)
         XCTAssertEqual(event.avatar, .replaced("https://cdn/a.png"))
         XCTAssertEqual(event.banner, .unchanged)
     }

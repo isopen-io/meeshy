@@ -47,6 +47,18 @@ final class TextEditOptionsLayoutTests: XCTestCase {
         XCTAssertEqual(Set(enroulés), Set([TextEditTool.background, .effect, .style]))
     }
 
+    /// **La COLONNE enroule les MÊMES outils que la grille** (#9138) : seul le
+    /// compte de colonnes change, il suit la largeur du panneau à droite de la
+    /// scène. Une colonne qui enroulerait d'autres outils ferait changer
+    /// d'anatomie une option selon l'écran qui la monte.
+    func test_laColonne_enrouleLesMemesOutilsQueLaGrille() {
+        for outil in TextEditTool.allCases {
+            XCTAssertEqual(TextEditOptionsLayout.column.wraps(outil),
+                           TextEditOptionsLayout.grid.wraps(outil),
+                           "\(outil) changerait d'anatomie entre la grille et la colonne")
+        }
+    }
+
     /// **Le témoin qui parle au PROCHAIN outil.** `wraps` est un `switch`
     /// exhaustif : un neuvième cas ajouté à `TextEditTool` ne compile pas tant
     /// que quelqu'un n'a pas décidé de sa disposition. Ce témoin épingle le

@@ -176,7 +176,7 @@ struct EmojiPickerView: View {
     @AppStorage("frequentEmojis") private var frequentEmojisData: Data = Data()
     @State private var decodedFrequentEmojis: [String]?
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 8)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xs), count: 8)
 
     private var frequentEmojis: [String] {
         decodedFrequentEmojis ?? recentEmojis
@@ -195,13 +195,13 @@ struct EmojiPickerView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Search bar
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "magnifyingglass")
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
                     .foregroundColor(.secondary)
 
                 TextField(String(localized: "emoji.search", defaultValue: "Rechercher un emoji"), text: $searchText)
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     .autocorrectionDisabled()
 
                 if !searchText.isEmpty {
@@ -209,23 +209,23 @@ struct EmojiPickerView: View {
                         searchText = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(MeeshyFont.relative(14))
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm))
                             .foregroundColor(.secondary)
                     }
                     .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(Color(UIColor.systemGray6))
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.sm)
 
             // Category tabs (hidden during search)
             if searchText.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         ForEach(EmojiGridCategory.allCases.filter { $0 != .recent || !frequentEmojis.isEmpty }) { category in
                             Button {
                                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -235,11 +235,11 @@ struct EmojiPickerView: View {
                                 Image(systemName: category.icon)
                                     // Doctrine 82i : glyphe d'onglet de catégorie dans un cadre tap fixe
                                     // 36×28 → taille figée (l'icône ne doit pas déborder de l'onglet).
-                                    .font(MeeshyFont.relative(13, weight: .medium))
+                                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                                     .foregroundColor(selectedCategory == category ? .white : .primary)
                                     .frame(width: 36, height: 28)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 8)
+                                        RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                                             .fill(selectedCategory == category ? Color.accentColor : Color(.systemGray6))
                                     )
                             }
@@ -248,52 +248,52 @@ struct EmojiPickerView: View {
                             .accessibilityAddTraits(selectedCategory == category ? [.isSelected] : [])
                         }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, MeeshySpacing.md)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, MeeshySpacing.xs)
             }
 
             Divider()
 
             // Content
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
+                LazyVStack(alignment: .leading, spacing: MeeshySpacing.lg) {
                     // Quick reactions (only when on recent tab and not searching)
                     if searchText.isEmpty && selectedCategory == .recent {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                             sectionHeader(icon: "face.smiling", title: String(localized: "emoji.quickReactions", defaultValue: "Réactions rapides"))
 
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: MeeshySpacing.md) {
                                 ForEach(recentEmojis.prefix(9), id: \.self) { emoji in
                                     emojiButton(emoji, size: 44)
                                 }
                             }
-                            .padding(.horizontal, 32)
+                            .padding(.horizontal, MeeshySpacing.xxxl)
                         }
 
-                        Divider().padding(.vertical, 4)
+                        Divider().padding(.vertical, MeeshySpacing.xs)
 
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                             sectionHeader(icon: "clock", title: String(localized: "emoji.recent", defaultValue: "Utilisés récemment"))
 
-                            LazyVGrid(columns: columns, spacing: 8) {
+                            LazyVGrid(columns: columns, spacing: MeeshySpacing.sm) {
                                 ForEach(frequentEmojis.prefix(24), id: \.self) { emoji in
                                     emojiButton(emoji)
                                 }
                             }
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, MeeshySpacing.md)
                         }
                     } else {
                         // Category emojis or search results
-                        LazyVGrid(columns: columns, spacing: 4) {
+                        LazyVGrid(columns: columns, spacing: MeeshySpacing.xs) {
                             ForEach(emojisToDisplay, id: \.self) { emoji in
                                 emojiButton(emoji)
                             }
                         }
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, MeeshySpacing.md)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, MeeshySpacing.sm)
             }
         }
         .task(id: frequentEmojisData) {
@@ -304,17 +304,17 @@ struct EmojiPickerView: View {
     // MARK: - Subviews
 
     private func sectionHeader(icon: String, title: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .foregroundColor(.secondary)
-                .font(MeeshyFont.relative(12))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs))
                 .accessibilityHidden(true)
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundColor(.secondary)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private func emojiButton(_ emoji: String, size: CGFloat = 36) -> some View {

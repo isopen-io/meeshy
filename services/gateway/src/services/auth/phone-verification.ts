@@ -13,6 +13,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { generateNumericCode } from '../../utils/verification-code';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { smsService } from '../SmsService';
+import { creditContactProof, type ContactProofRecorder } from './contact-proof-engagement';
 
 const logger = enhancedLogger.child({ module: 'AuthService' });
 
@@ -86,9 +87,10 @@ export async function sendPhoneVerificationCode(
  * Verify phone with SMS code
  */
 export async function verifyPhoneCode(
-  prisma: PhoneVerificationStore,
+  prisma: PrismaClient,
   phoneNumber: string,
   code: string,
+  options: { readonly engagement?: ContactProofRecorder } = {},
 ): Promise<{ success: boolean; error?: string; verifiedUserId?: string }> {
   try {
     const cleanPhone = phoneNumber.replace(/\s+/g, '').trim();
@@ -134,6 +136,7 @@ export async function verifyPhoneCode(
     });
 
     logger.info(`[AUTH_SERVICE] ✅ Téléphone vérifié pour user.phoneNumber=${user.phoneNumber}`);
+    creditContactProof({ prisma, engagement: options.engagement }, user.id, 'profile.phone_verified');
     // `verifiedUserId` n'est posé que sur une vérification NEUVE : c'est elle, et
     // elle seule, qui peut annoncer une arrivée aux carnets (#8105).
     return { success: true, verifiedUserId: user.id };

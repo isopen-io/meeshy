@@ -16,14 +16,16 @@ import { RichText } from './rich-text';
 
 /**
  * **UN LIEN DE SUIVI S'OUVRE PAR `/l/<token>`** (#7827) — la route qui compte
- * le clic puis redirige (`routes/tracking-link.tsx`). Deux formes arrivent de
- * la passerelle :
+ * le clic puis redirige (`routes/tracking-link.tsx`). Le RENDU suit la loi
+ * `resolveLinkDisplay` (#9093, directive porteur 2026-10-02 : « un lien normal
+ * s'affiche m+token cliquable ») :
  *
- *  1. `m+<token>`, écrit à la place d'un `[[url]]` / `<url>` — rendu comme un
- *     lien INTERNE, avec un libellé lisible plutôt que le code brut ;
+ *  1. `m+<token>` historique — LITTÉRAL, lien INTERNE (le libellé
+ *     `meeshy.me/l/<token>` de #7827 est retiré) ;
  *  2. une URL BRUTE dont `{ url, token }` voyage dans `metadata.trackingLinks`
- *     (REST) ou hissé en `trackingLinks` (socket) — le TEXTE affiché reste
- *     l'adresse, seul le lien SUIVI passe par `/l/<token>`.
+ *     (REST) ou hissé en `trackingLinks` (socket) — affichée `m+<token>` ;
+ *  3. `[libellé](url)` — le libellé, mais l'adresse SUIVIE quand la carte l'a ;
+ *  4. `[[url]]` — l'adresse sans crochets, en DIRECT, jamais suivie.
  *
  * Et la donnée doit ARRIVER jusqu'au rendu : un décodeur qui la jette rend la
  * loi inatteignable une couche plus haut (#7328).
@@ -80,10 +82,10 @@ describe('RichText — le lien court m+<token>', () => {
     expect(hrefsOf(html).every(resolvesAgainstRouteTable)).toBe(true);
   });
 
-  test('montre un libellé LISIBLE, jamais le code brut « m+… »', () => {
+  test('s’affiche LITTÉRAL « m+<token> » (#9093)', () => {
     const html = renderToStaticMarkup(<RichText text="regarde m+Ab12cd" />);
-    expect(html).toContain('meeshy.me/l/Ab12cd');
-    expect(html).not.toContain('m+Ab12cd');
+    expect(html).toContain('>m+Ab12cd</a>');
+    expect(html).not.toContain('meeshy.me/l/');
   });
 
   test('est un lien INTERNE : pas de nouvel onglet, et un clic change l’adresse sans recharger', () => {
@@ -99,15 +101,34 @@ describe('RichText — le lien court m+<token>', () => {
 });
 
 describe('RichText — l’URL brute suivie', () => {
-  test('garde son texte, mais son lien passe par /l/<token>', () => {
+  test('s’affiche m+<token> et son lien passe par /l/<token> (#9093)', () => {
     const html = renderToStaticMarkup(<RichText text="lis https://meeshy.me/notes." trackingLinks={TRACKED} />);
     expect(hrefsOf(html)).toEqual(['/l/Tok123']);
-    expect(html).toContain('https://meeshy.me/notes</a>.');
+    expect(html).toContain('>m+Tok123</a>.');
+    expect(html).not.toContain('https://meeshy.me/notes');
   });
 
   test('sans trackingLinks, la même URL reste un lien externe direct', () => {
     const html = renderToStaticMarkup(<RichText text="lis https://meeshy.me/notes" />);
     expect(hrefsOf(html)).toEqual(['https://meeshy.me/notes']);
+  });
+});
+
+describe('RichText — les deux formes qui choisissent leur rendu (#9093)', () => {
+  test('[libellé](url) suivie : le libellé, l’adresse /l/<token>', () => {
+    const html = renderToStaticMarkup(<RichText text="lis [mes notes](https://meeshy.me/notes)" trackingLinks={TRACKED} />);
+    expect(hrefsOf(html)).toEqual(['/l/Tok123']);
+    expect(html).toContain('>mes notes</a>');
+  });
+
+  test('[[url]] : l’adresse sans crochets, lien direct dans un nouvel onglet, même suivie par la carte', () => {
+    const html = renderToStaticMarkup(<RichText text="lis [[https://meeshy.me/notes]] !" trackingLinks={TRACKED} />);
+    expect(hrefsOf(html)).toEqual(['https://meeshy.me/notes']);
+    expect(html).toContain('lis <a');
+    expect(html).toContain('>https://meeshy.me/notes</a> !');
+    expect(html).not.toContain('[[');
+    expect(html).not.toContain(']]');
+    expect(html).toContain('target="_blank"');
   });
 });
 

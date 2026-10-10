@@ -102,4 +102,16 @@ final class CommentDraftStore {
         pendingTexts.removeValue(forKey: postId)
         defaults.removeObject(forKey: key(for: postId))
     }
+
+    /// Fin de session (#8656) : les clés sont rangées par post, sans compte —
+    /// un post vu des deux comptes d'un appareil rendait au second le
+    /// brouillon du premier. Tout part, y compris les écritures en vol.
+    func clearAll() {
+        pendingSaves.values.forEach { $0.cancel() }
+        pendingSaves.removeAll()
+        pendingTexts.removeAll()
+        defaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix(prefix) }
+            .forEach { defaults.removeObject(forKey: $0) }
+    }
 }

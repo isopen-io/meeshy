@@ -43,7 +43,7 @@ struct CallEffectsOverlay: View {
 
                     ZStack(alignment: .bottom) {
                         // Backdrop
-                        Color.black.opacity(0.25)
+                        Color.black.opacity(MeeshyOpacity.medium)
                             .ignoresSafeArea()
                             .onTapGesture { dismiss() }
                             .accessibilityAddTraits(.isButton)
@@ -51,7 +51,7 @@ struct CallEffectsOverlay: View {
                             .accessibilityHint(String(localized: "call.effects.backdrop.hint", defaultValue: "Ferme le panneau d'effets", bundle: .main))
 
                         // Content
-                        VStack(spacing: 12) {
+                        VStack(spacing: MeeshySpacing.md) {
                             if let panel = activePanel {
                                 ScrollView(.vertical, showsIndicators: false) {
                                     switch panel {
@@ -92,7 +92,7 @@ struct CallEffectsOverlay: View {
     // MARK: - Secondary Toolbar
 
     private var secondaryToolbar: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: MeeshySpacing.xl) {
             if isVideoEnabled {
                 toolbarButton(
                     icon: "camera.filters",
@@ -104,8 +104,8 @@ struct CallEffectsOverlay: View {
                 )
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xxl)
+        .padding(.vertical, MeeshySpacing.md)
         // iOS 26 Liquid Glass — floating control toolbar above the call video
         // (textbook Apple chrome-over-content). SDK Compatibility wrapper owns
         // the gating + `.ultraThinMaterial` fallback. Applied after sizing.
@@ -124,19 +124,19 @@ struct CallEffectsOverlay: View {
             }
             HapticFeedback.light()
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
                 ZStack {
                     Circle()
-                        .fill(isActive ? MeeshyColors.indigo500.opacity(0.2) : Color.white.opacity(0.1))
+                        .fill(isActive ? MeeshyColors.indigo500.opacity(MeeshyOpacity.light) : Color.white.opacity(MeeshyOpacity.subtle))
                         .frame(width: 48, height: 48)
                         .overlay(
                             Circle()
-                                .stroke(isActive ? MeeshyColors.indigo500.opacity(0.5) : Color.white.opacity(0.2), lineWidth: 1)
+                                .stroke(isActive ? MeeshyColors.indigo500.opacity(MeeshyOpacity.strong) : Color.white.opacity(MeeshyOpacity.light), lineWidth: 1)
                         )
 
                     Image(systemName: icon)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(isActive ? MeeshyColors.indigo500 : .white.opacity(0.9))
+                        .font(.system(size: MeeshyIconSize.lg, weight: .medium))
+                        .foregroundColor(isActive ? MeeshyColors.indigo500 : .white.opacity(MeeshyOpacity.intense))
                 }
 
                 Text(label)

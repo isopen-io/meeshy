@@ -23,6 +23,7 @@ import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { logger } from '../utils/logger';
 import type { CallService } from './CallService';
+import { guardedInterval } from '../utils/guarded-timer';
 
 export class CallCleanupService {
   // Static + public so other services/tests can tie their own limits to the
@@ -183,11 +184,11 @@ export class CallCleanupService {
       logger.error('[CallCleanupService] Initial cleanup failed', { error });
     });
 
-    this.cleanupInterval = setInterval(() => {
+    this.cleanupInterval = guardedInterval({ name: 'call-cleanup', everyMs: this.CLEANUP_INTERVAL_MS, logger, run: () => {
       this.runCleanup().catch((error) => {
         logger.error('[CallCleanupService] Scheduled cleanup failed', { error });
       });
-    }, this.CLEANUP_INTERVAL_MS);
+    } });
     this.cleanupInterval.unref?.();
   }
 

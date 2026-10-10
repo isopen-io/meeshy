@@ -27,6 +27,7 @@ import {
 } from './messages';
 import { messageReceiptsPeopleQueryKey } from './receipts';
 import type { Attachment, Message, Participant } from './types';
+import { keepLiveListOverFetch, keepLiveMessageOverFetch } from './realtime-thread-catch-up';
 import { purgeViewOnceIn, sealViewOnceIn } from './view-once-seal';
 
 /* Le puits de `conversation:updated` vit chez lui (#7547, budget de taille) ;
@@ -210,10 +211,16 @@ export function applyMessageNew(
   const cid = raw.clientMessageId;
 
   /* `upsertThreadMessage` (#6972, étape 1) — le SITE UNIQUE qui porte la loi
-     « remplace par id OU clientMessageId, sinon append » (`api/messages.ts`) :
+     « FUSIONNE par id OU clientMessageId, sinon append » (`api/messages.ts`) :
      elle était écrite ICI et dans `upsertConfirmed` (`send/perform-send.ts`),
-     deux copies que leurs doc-comments déclaraient déjà identiques. */
+     deux copies que leurs doc-comments déclaraient déjà identiques. Elle
+     remplaçait jusqu'à #9262 ; `rawMessageFromSocket` sert un message
+     serveur COMPLET, donc ce chemin-ci ne perdait rien — c'est l'autre
+     appelant qui régressait. */
   upsertThreadMessage(queryClient, raw.conversationId, message);
+  /* Une requête du fil EN VOL écraserait cette pose par sa réponse, partie
+     avant le message (#9291) : elle est relancée. */
+  keepLiveMessageOverFetch(queryClient, raw.conversationId);
 
   /* Le cid ne voyage QUE vers la room personnelle de l'expéditeur
      (`stripClientMessageId`, `MeeshySocketIOManager.ts:3011-3039`) : sa
@@ -226,6 +233,8 @@ export function applyMessageNew(
      remplace jamais, et un message protégé n'entre dans la ligne (cache
      PERSISTÉ) que par son identité et ses drapeaux. */
   offerLastMessage(queryClient, raw.conversationId, message, buildTranslationRecord(raw.translations));
+  /* Une relecture de la LISTE en vol remettrait l'aperçu précédent (#9637). */
+  keepLiveListOverFetch(queryClient);
 }
 
 /** Garde de FORME pour `conversation:unread-updated` (§ 3.4 de la

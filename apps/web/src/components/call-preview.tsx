@@ -34,12 +34,12 @@ export function CallPreview({ stream, language, kit }: { readonly stream: MediaS
       {stream.getVideoTracks().length > 0 ? (
         <div className="pointer-events-none absolute inset-0" aria-hidden="true" data-call-preview="">
           <kit.Video stream={stream} mirrored={false} className="h-full w-full" />
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(7,6,11,0.55) 0%, rgba(7,6,11,0.25) 40%, rgba(7,6,11,0.8) 100%)' }} />
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--color-media-backdrop) 55%, transparent) 0%, color-mix(in srgb, var(--color-media-backdrop) 25%, transparent) 40%, color-mix(in srgb, var(--color-media-backdrop) 80%, transparent) 100%)' }} />
         </div>
       ) : null}
       <button
         type="button"
-        className="glass-call-prominent absolute left-1/2 top-4 z-10 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full px-4 text-body font-semibold text-white"
+        className="glass-call-prominent absolute left-1/2 top-4 z-10 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full px-4 text-body font-semibold text-on-media"
         style={{ marginTop: 'env(safe-area-inset-top)' }}
         aria-label={label}
         aria-pressed={audible}

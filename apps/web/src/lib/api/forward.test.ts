@@ -120,3 +120,49 @@ describe('forwardMessages — N messages sélectionnés ⇒ N envois', () => {
     if (!result.ok) expect(result.error).toBe('Un message à vue unique ne peut pas être transféré');
   });
 });
+
+/**
+ * LA DURÉE D'UNE FLAMME TRANSFÉRÉE (#9573) — la valeur choisie dans la feuille
+ * part dans `ephemeralDuration`, pour les flammes à durée SEULEMENT, et jamais
+ * au-delà de la durée de chaque source.
+ */
+describe('forwardMessages — la durée choisie part dans `ephemeralDuration`', () => {
+  const sent = (calls: readonly { readonly init: RequestInit }[]) => calls.map((call) => JSON.parse(String(call.init.body)) as Record<string, unknown>);
+
+  test('la flamme reçoit la durée choisie ; le message ordinaire du même lot n’en reçoit aucune', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ACK });
+    await forwardMessages({
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      messages: [
+        { id: 'a', content: 'ordinaire', originalLanguage: 'fr' },
+        { id: 'b', content: 'flamme', originalLanguage: 'fr', maxDurationSeconds: 300 },
+      ],
+      targetConversationId: 'c-cible',
+      ephemeralDuration: 60,
+    });
+    const [ordinary, flame] = sent(calls);
+    expect(ordinary !== undefined && 'ephemeralDuration' in ordinary).toBe(false);
+    expect(flame?.['ephemeralDuration']).toBe(60);
+    expect(flame !== undefined && 'maxDurationSeconds' in flame).toBe(false);
+  });
+
+  test('sans choix, la flamme part avec SA durée ; un choix plus long est rabattu sur elle', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ACK });
+    const deps = { source: 'gateway' as const, transport: createHttpTransport({ base: '', fetchImpl: impl }), targetConversationId: 'c-cible' };
+    await forwardMessages({ ...deps, messages: [{ id: 'b', content: '', originalLanguage: 'fr', maxDurationSeconds: 300 }] });
+    await forwardMessages({ ...deps, messages: [{ id: 'b', content: '', originalLanguage: 'fr', maxDurationSeconds: 300 }], ephemeralDuration: 86400 });
+    expect(sent(calls).map((body) => body['ephemeralDuration'])).toEqual([300, 300]);
+  });
+
+  test('un refus porte le statut et le code du serveur, pas seulement sa phrase', async () => {
+    const { impl } = fakeFetch({ status: 400, body: { success: false, error: 'Un message qui disparaît après lecture ne peut pas être transféré', code: 'ephemeral-not-forwardable' } });
+    const result = await forwardMessages({
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      messages: [{ id: 'a', content: 'un', originalLanguage: 'fr' }],
+      targetConversationId: 'c-cible',
+    });
+    expect(result).toEqual({ ok: false, error: 'Un message qui disparaît après lecture ne peut pas être transféré', status: 400, code: 'ephemeral-not-forwardable' });
+  });
+});

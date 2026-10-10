@@ -27,6 +27,12 @@ import {
   type StickerOrigin,
 } from '@meeshy/shared/types/sticker-definition';
 import { normalizeStickerImage, type StickerImageOutcome, type StickerImageRefusal } from './stickerImage';
+import { EngagementService } from '../engagement/EngagementService';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'StickerLibrary' });
+
+type StickerEngagement = Pick<EngagementService, 'recordActivity'>;
 
 export interface StickerFileStore {
   write(relativePath: string, bytes: Buffer): Promise<void>;
@@ -65,6 +71,8 @@ export type StickerLibraryDeps = {
   readonly normalize?: (bytes: Buffer) => Promise<StickerImageOutcome>;
   readonly now?: () => Date;
   readonly newFileId?: () => string;
+  /** Un double en test ; absent ⇒ le moteur de `prisma`, créé au premier crédit. */
+  readonly engagement?: StickerEngagement;
 };
 
 const EXTENSION: Readonly<Record<StickerMimeType, string>> = {
@@ -106,6 +114,7 @@ export class StickerLibrary {
   private readonly normalize: (bytes: Buffer) => Promise<StickerImageOutcome>;
   private readonly now: () => Date;
   private readonly newFileId: () => string;
+  private engagement?: StickerEngagement;
 
   constructor(deps: StickerLibraryDeps) {
     this.prisma = deps.prisma;
@@ -113,6 +122,7 @@ export class StickerLibrary {
     this.normalize = deps.normalize ?? normalizeStickerImage;
     this.now = deps.now ?? (() => new Date());
     this.newFileId = deps.newFileId ?? randomUUID;
+    this.engagement = deps.engagement;
   }
 
   async list(userId: string): Promise<readonly StickerDefinition[]> {
@@ -157,6 +167,7 @@ export class StickerLibrary {
           lastUsedAt: at,
         },
       });
+      if (input.origin !== 'received') this.creditCreation(userId);
       return { kind: 'created', sticker: toStickerDefinition(row) };
     } catch (error) {
       await this.files.remove(filePath).catch(() => undefined);
@@ -183,6 +194,22 @@ export class StickerLibrary {
     await this.prisma.userSticker.delete({ where: { id: owned.id } });
     await this.files.remove(owned.filePath).catch(() => undefined);
     return true;
+  }
+
+  /**
+   * `tool.sticker_created` (#8959) — un sticker NEUF que l'utilisateur a fait
+   * (fichier, collage, détourage). Un sticker reçu et gardé n'est pas une
+   * création, et une image déjà connue remonte l'existant sans rien créditer.
+   */
+  private creditCreation(userId: string): void {
+    try {
+      this.engagement ??= new EngagementService(this.prisma);
+      this.engagement
+        .recordActivity(userId, 'tool.sticker_created')
+        .catch((error: unknown) => logger.warn('engagement tool.sticker_created non crédité', { error }));
+    } catch (error) {
+      logger.warn('engagement tool.sticker_created non crédité', { error });
+    }
   }
 
   private async touchByHash(userId: string, contentHash: string): Promise<StickerDefinition | null> {

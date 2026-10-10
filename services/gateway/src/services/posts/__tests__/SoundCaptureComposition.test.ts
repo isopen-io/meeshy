@@ -14,7 +14,7 @@ import type { SoundCaptureService, CaptureContext } from '../SoundCaptureService
 
 function buildPrisma() {
   const created = {
-    id: 'post-1', authorId: 'user-1', metadata: null,
+    id: 'post-1', authorId: '0a0a0a0a0a0a0a0a0a0a0a01', metadata: null,
     visibility: 'PUBLIC', repostOfId: null,
   };
   return {
@@ -63,7 +63,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
     const { spy, captureSounds } = buildCaptureSpy();
     await buildService(spy).createPost(
       { type: 'STORY' as never, visibility: 'PUBLIC' as never, storyEffects: STORY_EFFECTS },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     );
 
     expect(captureSounds).toHaveBeenCalledTimes(1);
@@ -77,7 +77,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
       { trackId: 'track-b', postMediaId: undefined, soundId: '507f1f77bcf86cd799439011', startMs: 0, endMs: undefined },
     ]);
     expect(ctx.postId).toBe('post-1');
-    expect(ctx.authorId).toBe('user-1');
+    expect(ctx.authorId).toBe('0a0a0a0a0a0a0a0a0a0a0a01');
     expect(ctx.feedsLibrary).toBe(true);
   });
 
@@ -85,7 +85,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
     const { spy, captureSounds } = buildCaptureSpy();
     await buildService(spy).createPost(
       { type: 'STORY' as never, visibility: 'PRIVATE' as never, storyEffects: STORY_EFFECTS },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     );
     expect(captureSounds.mock.calls[0][0].feedsLibrary).toBe(false);
   });
@@ -118,7 +118,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
     const { spy, captureSounds } = buildCaptureSpy();
     await buildService(spy).createPost(
       { type: 'STORY' as never, visibility: 'COMMUNITY' as never, storyEffects: STORY_EFFECTS },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     );
     expect(captureSounds.mock.calls[0][0].feedsLibrary).toBe(true);
   });
@@ -127,7 +127,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
     const { spy, captureSounds } = buildCaptureSpy();
     await buildService(spy).createPost(
       { type: 'STORY' as never, visibility: 'FRIENDS' as never, storyEffects: STORY_EFFECTS },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     );
     expect(captureSounds.mock.calls[0][0].feedsLibrary).toBe(false);
   });
@@ -150,7 +150,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
     const { spy, captureSounds } = buildCaptureSpy();
     await buildService(spy).createPost(
       { type: 'POST' as never, visibility: 'PUBLIC' as never },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     );
     // Appelée quand même : c'est elle qui libère les usages d'une édition qui
     // retire toutes les pistes.
@@ -173,7 +173,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
 
     await service.createPost(
       { type: 'POST' as never, visibility: 'PUBLIC' as never, mediaIds: ['media-audio'] },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     );
 
     expect(captureSounds.mock.calls[0][0].tracks).toEqual([
@@ -209,7 +209,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
           type: 'POST' as never, visibility: 'PUBLIC' as never,
           mediaIds: ['media-video'], allowSoundExtraction: allow,
         },
-        'user-1',
+        '0a0a0a0a0a0a0a0a0a0a0a01',
       );
 
       expect(captureSounds.mock.calls[0][0].tracks).toEqual(expected);
@@ -230,7 +230,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
         type: 'STORY' as never, visibility: 'PUBLIC' as never,
         storyEffects: STORY_EFFECTS, mediaIds: ['media-a'],
       },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     );
     expect(captureSounds.mock.calls[0][0].tracks).toHaveLength(2);
   });
@@ -241,7 +241,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
     const spy = { captureSounds } as unknown as SoundCaptureService;
     await expect(buildService(spy).createPost(
       { type: 'STORY' as never, visibility: 'PUBLIC' as never, storyEffects: STORY_EFFECTS },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     )).resolves.toBeDefined();
   });
 
@@ -270,7 +270,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
     const service = new PostService(prisma, undefined, undefined, undefined, undefined, spy);
     await service.createPost(
       { type: 'REEL' as never, visibility: 'PUBLIC' as never, storyEffects: borrowedOnlyEffects },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     );
     const createArgs = (prisma as any).post.create.mock.calls[0][0];
     return createArgs.data.type as string;
@@ -301,7 +301,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
 
   it('test_createPost_ownPrivateSound_qualifiesTheReel', async () => {
     expect(await createdTypeFor({
-      durationMs: 5000, isPublic: false, uploaderId: 'user-1', mutedAt: null,
+      durationMs: 5000, isPublic: false, uploaderId: '0a0a0a0a0a0a0a0a0a0a0a01', mutedAt: null,
     })).toBe('REEL');
   });
 
@@ -337,7 +337,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
           ] }],
         },
       },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     );
 
     const claim = ((prisma as any).postMedia.updateMany as jest.Mock).mock.calls[0][0] as {
@@ -369,7 +369,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
           }] }],
         },
       },
-      'user-1',
+      '0a0a0a0a0a0a0a0a0a0a0a01',
     );
 
     expect((prisma as any).postMedia.updateMany).not.toHaveBeenCalled();

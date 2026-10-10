@@ -56,7 +56,7 @@ afterEach(() => {
 
 type Gestures = {
   photos?: (files: FileList | null) => void;
-  camera?: (files: FileList | null) => void;
+  camera?: (files: readonly File[]) => void;
   file?: (files: FileList | null) => void;
   location?: () => void;
   emoji?: () => void;
@@ -112,11 +112,41 @@ function pickFileOn(tile: HTMLElement): void {
 }
 
 describe('Caméra (#7280) — la source la plus utilisée après Photos', () => {
-  test('la tuile PRODUIT un effet : revenir de l’appareil photo remet les fichiers au composeur', () => {
-    let calls = 0;
-    const el = mountPanel({ camera: () => (calls += 1) });
+  test('la tuile PRODUIT un effet : revenir de l’appareil photo remet les fichiers au composeur', async () => {
+    const received: Array<readonly File[]> = [];
+    const el = mountPanel({ camera: (files) => void received.push(files) });
     pickFileOn(sourceOf(el, 'camera'));
-    expect(calls).toBe(1);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(received).toHaveLength(1);
+  });
+
+  test('la photo prise passe par le développement unique avant d’être remise (#8695)', async () => {
+    const received: Array<readonly File[]> = [];
+    const el = mountPanel({ camera: (files) => void received.push(files) });
+    const input = sourceOf(el, 'camera').querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('champ absent');
+    const shot = new File(['x'], 'IMG_0001.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(input, 'files', { configurable: true, get: () => [shot] });
+    const decoded: File[] = [];
+    const original = globalThis.createImageBitmap;
+    globalThis.createImageBitmap = (async (file: File) => {
+      decoded.push(file);
+      throw new Error('pas de canevas ici');
+    }) as unknown as typeof createImageBitmap;
+    try {
+      act(() => {
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    } finally {
+      globalThis.createImageBitmap = original;
+    }
+    expect(decoded).toEqual([shot]);
+    expect(received).toEqual([[shot]]);
   });
 
   /**

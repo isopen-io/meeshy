@@ -132,14 +132,17 @@ export type ShareLinkCardSource = {
  * Le lien par l'une de ses trois adresses : id de base, `linkId` (`mshy_…`) ou
  * `identifier` lisible — même résolution que `findShareLinkByIdentifier`.
  */
+export function shareLinkWhereByIdentifier(identifier: string) {
+  return isValidMongoId(identifier)
+    ? { id: identifier }
+    : { OR: [{ linkId: identifier }, { identifier }] };
+}
+
 export async function loadShareLinkCardSource(
   prisma: PrismaClient,
   identifier: string
 ): Promise<ShareLinkCardSource | null> {
-  const where = isValidMongoId(identifier)
-    ? { id: identifier }
-    : { OR: [{ linkId: identifier }, { identifier }] };
-  return prisma.conversationShareLink.findFirst({ where, select: shareLinkCardSelect });
+  return prisma.conversationShareLink.findFirst({ where: shareLinkWhereByIdentifier(identifier), select: shareLinkCardSelect });
 }
 
 const sampleSelect = {
@@ -201,7 +204,14 @@ async function loadStats(params: {
 
 const EMPTY_STATS: ConversationCardStats = { memberCount: 0, onlineCount: null, messageCount: null, languages: [] };
 
-function inviterOf(creator: ShareLinkCardSource['creator']): ConversationCardInviter | null {
+/**
+ * L'hôte qu'une invitation peut NOMMER : un compte actif, par son nom affiché
+ * sinon son pseudo. Site unique, que la carte et l'aperçu des robots (#9712)
+ * partagent.
+ */
+export function shareLinkInviterOf(
+  creator: (Omit<NonNullable<ShareLinkCardSource['creator']>, 'avatar'> & { readonly avatar?: string | null }) | null
+): ConversationCardInviter | null {
   if (!creator || !creator.isActive) return null;
   const displayName = creator.displayName?.trim() || creator.username?.trim() || '';
   if (displayName.length === 0) return null;
@@ -258,7 +268,7 @@ export async function composeShareLinkCard(params: {
       requiresAccount: link.requireAccount,
       canJoinAnonymously: !isMember && !link.requireAccount
     },
-    inviter: inviterOf(link.creator),
+    inviter: shareLinkInviterOf(link.creator),
     inviteMessage: truncateCardText(link.description, CONVERSATION_CARD_INVITE_MESSAGE_MAX)
   };
 }

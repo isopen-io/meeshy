@@ -219,12 +219,16 @@ export async function uploadPostMedia(params: PostMediaUploadParams): Promise<Ap
 
   while (offset < total) {
     const end = Math.min(offset + chunkSize, total);
+    /* L'IDENTITÉ EST RELUE À CHAQUE TRANCHE, ET SON ABSENCE ARRÊTE TOUT (#9743) —
+       une tranche ne part jamais sans jeton, ni après la sortie de son auteur. */
+    const live = params.credential();
+    if (live === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
     const patched = await exchange(
       location,
       {
         method: 'PATCH',
         headers: {
-          ...credentialHeaders(params.credential()),
+          ...credentialHeaders(live),
           'Tus-Resumable': TUS_RESUMABLE,
           'Content-Type': 'application/offset+octet-stream',
           'Upload-Offset': String(offset),
@@ -250,11 +254,9 @@ export async function uploadPostMedia(params: PostMediaUploadParams): Promise<Ap
     if (response.status === 409) {
       realignments += 1;
       if (realignments > MAX_OFFSET_REALIGNMENTS) return refusal(response);
-      const head = await exchange(
-        location,
-        { method: 'HEAD', headers: { ...credentialHeaders(params.credential()), 'Tus-Resumable': TUS_RESUMABLE } },
-        params,
-      );
+      const relive = params.credential();
+      if (relive === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+      const head = await exchange(location, { method: 'HEAD', headers: { ...credentialHeaders(relive), 'Tus-Resumable': TUS_RESUMABLE } }, params);
       if (head.kind === 'failure') return head.failure;
       const served = head.response.status === 200 ? offsetOf(head.response) : null;
       if (served === null) return failure(409, 'Décalage serveur illisible', 'TUS_OFFSET_UNKNOWN');
@@ -265,7 +267,9 @@ export async function uploadPostMedia(params: PostMediaUploadParams): Promise<Ap
     if (response.status === 404 || response.status === 410) {
       if (restarted) return failure(response.status, 'Session de téléversement perdue', 'TUS_SESSION_LOST');
       restarted = true;
-      const recreated = await createUpload(params, credential);
+      const again = params.credential();
+      if (again === null || again.kind !== credential.kind) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+      const recreated = await createUpload(params, again);
       if (typeof recreated !== 'string') return recreated;
       location = recreated;
       offset = 0;

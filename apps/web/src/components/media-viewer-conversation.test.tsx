@@ -98,9 +98,9 @@ describe('MediaViewer — pellicule conversation-entière', () => {
   test('l’auteur du pied suit la PAGE courante, pas la première', () => {
     const names = ['Nour', 'Ali', 'Mia'];
     mount({ items: photos(3), startIndex: 0, carrierAt: (index) => carrierOf(names[index] ?? '') });
-    expect(dialog().querySelector('[data-viewer-footer]')?.textContent).toContain('Nour');
+    expect(dialog().querySelector('[data-viewer-top-bar]')?.textContent).toContain('Nour');
     press('ArrowRight');
-    expect(dialog().querySelector('[data-viewer-footer]')?.textContent).toContain('Ali');
+    expect(dialog().querySelector('[data-viewer-top-bar]')?.textContent).toContain('Ali');
   });
 
   test('approcher du bout demande la suite ; la liste étendue garde la page courante', () => {

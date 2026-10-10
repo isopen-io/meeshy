@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  infoDuration,
   PLAYBACK_SPEEDS,
   SEEK_STEP_SECONDS,
   attachmentDurationLabel,
@@ -206,5 +207,38 @@ describe('lateralSeek — le saut latéral, borné aux extrémités', () => {
 
   test('le pas est configurable, par défaut celui du clavier (10 s)', () => {
     expect(lateralSeek({ x: 40, width, position: 60, duration: 180, step: 3 })?.to).toBe(57);
+  });
+});
+
+/**
+ * LA DURÉE DE LA LIGNE D'INFORMATIONS (#9577) — « largeur × hauteur · poids ·
+ * durée » : pendant la lecture, le temps RESTANT, qui décompte ; à l'arrêt, la
+ * durée totale.
+ */
+describe('infoDuration — la durée décompte pendant la lecture (#9577)', () => {
+  test('à l’arrêt, la durée totale de l’élément', () => {
+    expect(infoDuration({ playing: false, position: 0, duration: 65, durationMs: 65_000 })).toEqual({ label: '1:05', remaining: false });
+  });
+
+  test('en lecture, le temps restant — et il décroît avec la position', () => {
+    expect(infoDuration({ playing: true, position: 12, duration: 65, durationMs: 65_000 })).toEqual({ label: '0:53', remaining: true });
+    expect(infoDuration({ playing: true, position: 13, duration: 65, durationMs: 65_000 })).toEqual({ label: '0:52', remaining: true });
+  });
+
+  test('en pause au milieu, de nouveau la durée totale', () => {
+    expect(infoDuration({ playing: false, position: 30, duration: 65, durationMs: 65_000 })).toEqual({ label: '1:05', remaining: false });
+  });
+
+  test('avant les métadonnées, la durée de la PIÈCE — lisible avant la première image', () => {
+    expect(infoDuration({ playing: false, position: 0, duration: 0, durationMs: 7_000 })).toEqual({ label: '0:07', remaining: false });
+    expect(infoDuration({ playing: true, position: 0, duration: 0, durationMs: 7_000 })).toEqual({ label: '0:07', remaining: false });
+  });
+
+  test('sans aucune durée connue, rien : un « 0:00 » faux se croit', () => {
+    expect(infoDuration({ playing: false, position: 0, duration: 0, durationMs: undefined })).toBeNull();
+  });
+
+  test('le temps restant ne passe jamais sous zéro', () => {
+    expect(infoDuration({ playing: true, position: 70, duration: 65, durationMs: 65_000 })).toEqual({ label: '0:00', remaining: true });
   });
 });

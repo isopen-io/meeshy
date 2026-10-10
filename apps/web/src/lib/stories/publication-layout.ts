@@ -10,7 +10,13 @@ import type { PublicationKind } from './publication-kind';
  * objet voyage du menu au corps de `POST /posts`, et survit à une intention
  * armée hors ligne comme à un échec.
  */
-export type PublishChoice = { readonly kind: PublicationKind; readonly layout: MosaicLayoutMode | null };
+export type PublishChoice = {
+  readonly kind: PublicationKind;
+  readonly layout: MosaicLayoutMode | null;
+  /** **LA STORY PART AUSSI EN RÉEL** (#9476) — absent ⇒ le format seul. Le
+   * menu coche alors les DEUX formats (`publish-also-as-reel.ts`). */
+  readonly alsoAsReel?: boolean;
+};
 
 /**
  * **LE SOUS-MENU DES AGENCEMENTS, POUR "POST" SEUL** — miroir de

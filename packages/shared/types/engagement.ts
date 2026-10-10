@@ -20,9 +20,12 @@ export const ENGAGEMENT_AXES = [
   'conversation.private',
   'conversation.public',
   'conversation.community',
+  'conversation.group_created',
   'tool.sticker',
   'tool.in_app_edit',
   'tool.direct_publish',
+  'tool.reaction',
+  'tool.attachment',
   'social.tracked_link',
   'social.share',
   'social.invite_joined',
@@ -88,8 +91,18 @@ export const ENGAGEMENT_ACHIEVEMENT_KEYS = [
 
 export type EngagementAchievementKey = (typeof ENGAGEMENT_ACHIEVEMENT_KEYS)[number];
 
-/** Paliers par échelle — socle initial, tunable (§ 7). */
-export const BADGE_THRESHOLDS = [1, 10, 50, 100, 500] as const;
+/**
+ * Les cinq paliers d'ORIGINE d'un badge d'accumulation. Ils restent servis tels
+ * quels à un client qui ne connaît pas les deux ajoutés par #9392
+ * (`servedBadgeThresholds`, `utils/game/badge-tiers.ts`), jusqu'à zéro usage mesuré.
+ */
+export const LEGACY_BADGE_THRESHOLDS = [1, 10, 50, 100, 500] as const;
+/**
+ * Paliers par échelle — socle initial, tunable (§ 7). **Sept paliers depuis #9392** :
+ * 1 000 (Obsidienne) et 5 000 (Prisme) s'AJOUTENT à la suite des cinq d'origine,
+ * rien ne se retire — la clé gravée (`badgeMilestoneKey`) des anciens paliers ne bouge pas.
+ */
+export const BADGE_THRESHOLDS = [...LEGACY_BADGE_THRESHOLDS, 1000, 5000] as const;
 export const STREAK_THRESHOLDS = [3, 7, 14, 30, 60, 100] as const;
 export const LEVEL_THRESHOLDS = [10, 50, 150, 400, 1000, 2500] as const;
 
@@ -132,6 +145,11 @@ export const COMMENT_AXIS_WEIGHT = 3;
 export const CONVERSATION_AXIS_WEIGHT = 5;
 export const TOOL_AXIS_WEIGHT = 1;
 /**
+ * **1** (arbitrage porteur, 2026-09-30, #8906) : créer un groupe « apporte un
+ * point » — une fois par ENSEMBLE de membres, jamais pour un groupe identique.
+ */
+export const GROUP_CREATION_AXIS_WEIGHT = 1;
+/**
  * **7 — deuxième poids du catalogue** (arbitrage porteur, 2026-09-09, qui a
  * renversé la proposition initiale de 4).
  *
@@ -154,9 +172,12 @@ export const ENGAGEMENT_AXIS_WEIGHTS: Record<EngagementAxisKey, number> = {
   'conversation.private': CONVERSATION_AXIS_WEIGHT,
   'conversation.public': CONVERSATION_AXIS_WEIGHT,
   'conversation.community': CONVERSATION_AXIS_WEIGHT,
+  'conversation.group_created': GROUP_CREATION_AXIS_WEIGHT,
   'tool.sticker': TOOL_AXIS_WEIGHT,
   'tool.in_app_edit': TOOL_AXIS_WEIGHT,
   'tool.direct_publish': TOOL_AXIS_WEIGHT,
+  'tool.reaction': TOOL_AXIS_WEIGHT,
+  'tool.attachment': TOOL_AXIS_WEIGHT,
   'social.tracked_link': SOCIAL_AXIS_WEIGHT,
   'social.share': SOCIAL_AXIS_WEIGHT,
   'social.invite_joined': SOCIAL_AXIS_WEIGHT,

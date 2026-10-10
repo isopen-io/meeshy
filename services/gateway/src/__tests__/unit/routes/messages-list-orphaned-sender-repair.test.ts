@@ -20,6 +20,13 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
+// #9629 — la loi d'audience des avis de capture a ses témoins de câblage
+// (`capture-notice-served-surfaces.test.ts`) ; ces témoins-ci ne servent aucun avis.
+jest.mock('../../../services/messaging/captureNoticeVisibility', () => ({
+  ...(jest.requireActual('../../../services/messaging/captureNoticeVisibility') as object),
+  hidingServedTo: async (_prisma: unknown, params: { hiding: unknown }) => params.hiding,
+  hidingServedToReader: async (_prisma: unknown, params: { hiding: unknown }) => params.hiding,
+}));
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
   performanceLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },

@@ -9,7 +9,7 @@ import {
 } from '../../services/personalHistoryFilter';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { applyHistoryFloor, historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
-import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -21,6 +21,12 @@ import { MESSAGE_PROTECTION_SELECT } from './messages-list-query';
 import { servedQuotedMessage, type QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
 import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { loadQuotedEphemeralReaders, type EphemeralReaderResolution } from './ephemeralReaderDeadlines';
+import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
+import { readerParticipantIdOf } from './readerParticipant';
+import { signMessagesAttachmentsForReader } from '../../services/attachments/signServedAttachments';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
+import { captureNoticeWithheldFrom } from '../../services/messaging/captureNoticeVisibility';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -76,7 +82,7 @@ const threadMessageSelect = {
       }
     }
   },
-  attachments: { select: attachmentMediaSelect },
+  attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
   replyTo: {
     select: {
       id: true,
@@ -98,6 +104,10 @@ const threadMessageSelect = {
       isBlurred: true,
       isEncrypted: true,
       effectFlags: true,
+      // #8562 — l'échéance du LECTEUR se résout depuis ces deux champs ; la
+      // colonne brute n'est jamais resservie pour un éphémère.
+      ephemeralDuration: true,
+      expiresAt: true,
       sender: {
         select: {
           id: true,
@@ -119,6 +129,7 @@ const threadMessageSelect = {
         }
       },
       attachments: {
+        orderBy: MESSAGE_ATTACHMENT_ORDER,
         select: {
           id: true,
           fileName: true,
@@ -205,7 +216,7 @@ function serializeThreadMessage<T extends Record<string, unknown>>(message: T): 
  * relais, l'aperçu du parent d'un fil désigne le média représentatif quand la
  * liste du même fil désigne la pièce nommée.
  */
-function maskThreadMessageQuote<T extends Record<string, unknown>>(message: T): T {
+function maskThreadMessageQuote<T extends Record<string, unknown>>(message: T, readers: QuotedReaders): T {
   const replyTo = (message as { replyTo?: unknown }).replyTo;
   if (!replyTo || typeof replyTo !== 'object' || Array.isArray(replyTo)) {
     return message;
@@ -218,13 +229,16 @@ function maskThreadMessageQuote<T extends Record<string, unknown>>(message: T): 
       ...servedQuotedMessage(quotedRow, {
         includeTranslations: false,
         attachmentReplyTo: attachmentReplyToFromMetadata(message['metadata']),
+        ephemeralReader: { resolution: quotedRow.id ? readers.deadlines.get(quotedRow.id) : undefined, now: readers.now },
       }),
     },
   };
 }
 
-const formatThreadMessage = <T extends Record<string, unknown>>(message: T): T =>
-  hoistThreadMessageLocation(maskThreadMessageQuote(serializeThreadMessage(message)));
+type QuotedReaders = { readonly deadlines: ReadonlyMap<string, EphemeralReaderResolution>; readonly now: Date };
+
+const formatThreadMessage = <T extends Record<string, unknown>>(message: T, readers: QuotedReaders): T =>
+  hoistThreadMessageLocation(maskThreadMessageQuote(serializeThreadMessage(message), readers));
 
 const REFUS_DE_FIL = {
   sansSession: 'Authentication required to read this thread'
@@ -313,18 +327,44 @@ export function registerThreadsRoutes(
       if (!parent) {
         return sendNotFound(reply, 'Message not found');
       }
+      if (await captureNoticeWithheldFrom(prisma, { row: parent, reader: historyReaderFromAuthContext(authContext) })) {
+        return sendNotFound(reply, 'Message not found');
+      }
 
-      const replies = await collectThreadReplies(prisma, conversationId, messageId, hiding, historyFloor);
+      const collected = await collectThreadReplies(prisma, conversationId, messageId, hiding, historyFloor);
+
+      // #7451 × #8630 — ce qui est mort pour CE lecteur ne se sert pas : un
+      // éphémère échu, et toute réponse à ce qui l'est. Une racine morte
+      // n'est pas un fil tronqué : le fil n'existe plus pour lui.
+      const readerParticipantId = await readerParticipantIdOf(prisma, conversationId, authContext);
+      const now = new Date();
+      const readerPage = await keepAliveForReader(prisma, [parent, ...collected], readerParticipantId, now);
+      if (!readerPage.alive.some((m) => m.id === parent.id)) {
+        return sendNotFound(reply, 'Message not found');
+      }
+      const replies = readerPage.alive.filter((m) => m.id !== parent.id);
 
       // #7950 — la citation d'une story retirée sort expurgée : UNE requête
       // pour le parent et toutes ses réponses.
+      const readers: QuotedReaders = {
+        deadlines: await loadQuotedEphemeralReaders(prisma, [parent, ...replies], async () => readerParticipantId),
+        now,
+      };
+      const served = (m: ThreadMessage) =>
+        withInheritedExpiry(formatThreadMessage(m as unknown as Record<string, unknown>, readers) as Record<string, unknown> & { id: string }, readerPage.inherited);
       const [servedParent, ...servedReplies] = await servePostReplyCitations(prisma, [
-        formatThreadMessage(parent as unknown as Record<string, unknown>),
-        ...replies.map((m) => formatThreadMessage(m as unknown as Record<string, unknown>)),
+        served(parent),
+        ...replies.map(served),
       ]);
+      // #9646 — les pièces d'un message protégé du fil, signées pour CE lecteur.
+      const [signedParent, ...signedReplies] = await signMessagesAttachmentsForReader(prisma, {
+        messages: [servedParent, ...servedReplies],
+        readerParticipantId,
+        signer: readerFileUrlSignerFromEnv(new Date()),
+      });
       return sendSuccess(reply, {
-        parent: servedParent,
-        replies: servedReplies,
+        parent: signedParent,
+        replies: signedReplies,
         totalCount: replies.length
       });
     } catch (error) {

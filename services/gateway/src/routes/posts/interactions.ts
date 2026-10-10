@@ -18,6 +18,8 @@ import {
   hardenedRateLimitConfig,
 } from './socialRateLimit';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
+import { DailyGestureLimitReached } from '../../services/engagement/DailyGestureGate';
+import { refuseDailyGesture } from '../../utils/daily-gesture-refusal';
 import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLog';
 import { MutationInFlight } from '../../services/MutationLogService';
 import { validatePagination } from '../../utils/pagination';
@@ -37,6 +39,7 @@ import {
   type SocialEventsDeps,
 } from '../social/events';
 import { registerShareRoutes } from './share';
+import { viewerListRequest, viewerListRefused } from './viewerListRequest';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -147,7 +150,9 @@ export function registerInteractionRoutes(
         // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
         replayCost: 'converges',
         op: async () => {
-          const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji);
+          // #9584 — venu d'une republication simple, le like la crédite AUSSI,
+          // pour de vrai : la résolution ci-dessus l'a traversée et la rend.
+          const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji, { through: target.redirectedFrom });
           if (!res) throw new Error('POST_NOT_FOUND');
           // Les deux branches rendent la MÊME forme de post : `likePost` porte
           // la relation brute `postMentions`, `getPostById` sa forme aplatie et
@@ -230,7 +235,6 @@ export function registerInteractionRoutes(
           postAuthorId: post.authorId,
           emoji,
           postType: post.type,
-          postPreview: (post as { content?: string | null }).content?.slice(0, 80) ?? undefined,
           postCreatedAt: (post as { createdAt?: Date | string | null }).createdAt ?? undefined,
           postExpiresAt: (post as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
         }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: notify post like failed', { err }));
@@ -243,6 +247,9 @@ export function registerInteractionRoutes(
       // while keeping a reachable domain error out of INTERNAL_ERROR.
       if (error instanceof ConflictError) {
         return sendConflict(reply, error.message, { code: error.code });
+      }
+      if (error instanceof DailyGestureLimitReached) {
+        return refuseDailyGesture(reply, error);
       }
       enhancedLogger.error('[POST /posts/:postId/like]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -631,7 +638,8 @@ export function registerInteractionRoutes(
     }
   });
 
-  // GET /posts/:postId/views — Story/post seen-by list (author only)
+  // GET /posts/:postId/views — l'ancienne liste « Vu par », sous la porte de la liste enrichie
+  // (`viewerListAccess` : auteur d'une story ; ADMIN/BIGBOSS pour tout contenu, lecture tracée)
   fastify.get('/posts/:postId/views', {
     schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
@@ -648,7 +656,8 @@ export function registerInteractionRoutes(
       // unbounded client `limit` into Prisma `take`), and treats `limit=0` as 1.
       const { limit, offset } = validatePagination(query.offset, query.limit, { defaultLimit: 50, maxLimit: 100 });
 
-      const result = await postService.getPostViews(postId, authContext.registeredUser.id, limit, offset);
+      const asked = viewerListRequest(request, authContext.registeredUser.role);
+      const result = await postService.getPostViews(postId, authContext.registeredUser.id, limit, offset, asked);
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
@@ -657,15 +666,16 @@ export function registerInteractionRoutes(
         pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
       });
     } catch (error) {
-      if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return sendForbidden(reply, 'Only the author can view this list', { code: 'FORBIDDEN' });
-      }
+      if (viewerListRefused(reply, error)) return;
       enhancedLogger.error('[GET /posts/:postId/views]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
-  // GET /posts/:postId/interactions — Story viewers enriched with reactions & replies (author only)
+  // GET /posts/:postId/interactions — la liste des vues d'un contenu, chaque personne avec ce qu'elle
+  // y a fait (#9727) — l'auteur d'une story ; pour un post ou un réel, ADMIN/BIGBOSS seuls (l'auteur
+  // n'en voit que les nombres), chaque lecture administrateur tracée (#9733) ;
+  // `engagement: 'unavailable'` dit que le détail n'a pas pu être établi
   fastify.get('/posts/:postId/interactions', {
     schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
@@ -682,18 +692,19 @@ export function registerInteractionRoutes(
       // unbounded client `limit` into Prisma `take`), and treats `limit=0` as 1.
       const { limit, offset } = validatePagination(query.offset, query.limit, { defaultLimit: 50, maxLimit: 100 });
 
-      const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset);
+      const asked = viewerListRequest(request, authContext.registeredUser.role);
+      const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset, asked);
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      return sendSuccess(reply, { viewers: result.viewers }, {
-        pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
-      });
+      return sendSuccess(
+        reply,
+        { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}) },
+        { pagination: { total: result.total, offset, limit, hasMore: result.hasMore } },
+      );
     } catch (error) {
-      if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return sendForbidden(reply, 'Only the author can view interactions', { code: 'FORBIDDEN' });
-      }
+      if (viewerListRefused(reply, error)) return;
       enhancedLogger.error('[GET /posts/:postId/interactions]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
@@ -959,7 +970,6 @@ export function registerInteractionRoutes(
             postAuthorId: original.authorId,
             repostId: repost.id,
             postType: (original as { type?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' }).type,
-            postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
             postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
             postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
           });

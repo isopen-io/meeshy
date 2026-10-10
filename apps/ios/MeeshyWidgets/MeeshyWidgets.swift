@@ -155,6 +155,10 @@ struct MeeshyWidgetBundle: WidgetBundle {
         #if canImport(ActivityKit)
         if #available(iOS 16.2, *) {
             MeeshyLiveActivity()
+            OutboxLiveActivity()
+            CallLiveActivity()
+            VoicePlaybackLiveActivity()
+            VoiceRecordingLiveActivity()
         }
         #endif
     }

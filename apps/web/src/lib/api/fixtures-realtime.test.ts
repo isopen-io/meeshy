@@ -15,7 +15,12 @@ import {
   LIVE_CONVERSATION_ID,
   LIVE_MESSAGES,
 } from './fixtures-live';
-import { createFixturesSocketClient, LIVE_SCHEDULE, recordSurgedFromEntry } from './fixtures-realtime';
+import {
+  createFixturesSocketClient,
+  FIXTURES_CONNECTED_AT_GLOBAL,
+  LIVE_SCHEDULE,
+  recordSurgedFromEntry,
+} from './fixtures-realtime';
 
 describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => {
   test('`connect()` émet `authenticated` SYNCHRONEMENT, avec l’identité du POC', () => {
@@ -33,6 +38,28 @@ describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => 
       user: { id: 'u-viewer', language: 'fr', isAnonymous: false },
       version: 'fixtures',
     });
+  });
+
+  /**
+   * LE ZÉRO DE LA CHRONOLOGIE EST OBSERVABLE (#9267) — `LIVE_SCHEDULE` se
+   * compte depuis `connect()`, qui survient quand les chunks `realtime` et
+   * `fixtures-realtime` ont fini d'arriver : un instant MURAL, jamais une
+   * constante du build. Le gate navigateur le lit ici au lieu de le supposer.
+   */
+  test('`connect()` annonce son instant sous FIXTURES_CONNECTED_AT_GLOBAL — le zéro de la chronologie', () => {
+    Reflect.deleteProperty(globalThis, FIXTURES_CONNECTED_AT_GLOBAL);
+    const client = createFixturesSocketClient({ base: '', auth: { token: 't', sessionToken: 's' } });
+    expect(Reflect.get(globalThis, FIXTURES_CONNECTED_AT_GLOBAL)).toBeUndefined();
+
+    const before = Date.now();
+    client.connect();
+    const announced: unknown = Reflect.get(globalThis, FIXTURES_CONNECTED_AT_GLOBAL);
+    client.disconnect();
+    Reflect.deleteProperty(globalThis, FIXTURES_CONNECTED_AT_GLOBAL);
+
+    expect(typeof announced).toBe('number');
+    expect(announced as number).toBeGreaterThanOrEqual(before);
+    expect(announced as number).toBeLessThanOrEqual(Date.now());
   });
 
   test('`disconnect()` coupe le keepalive de frappe — aucun `typing:start` après', async () => {

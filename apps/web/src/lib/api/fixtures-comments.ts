@@ -184,6 +184,8 @@ export function fixtureAddComment(postId: string, body: Readonly<Record<string, 
     replyCount: 0,
     ...(typeof body.originalLanguage === 'string' ? { originalLanguage: body.originalLanguage } : {}),
     ...(typeof body.parentId === 'string' ? { parentId: body.parentId } : {}),
+    /* Le sticker revient HISSÉ, comme la passerelle le sert (#9080, #9318). */
+    ...(body.sticker === undefined ? {} : { sticker: body.sticker }),
   };
   if (typeof body.parentId === 'string') {
     reponsesAjoutees.set(body.parentId, [...(reponsesAjoutees.get(body.parentId) ?? []), created]);

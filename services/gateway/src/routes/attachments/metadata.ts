@@ -18,9 +18,13 @@ import type {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { createHash } from 'crypto';
+import { signAttachmentsForReader } from '../../services/attachments/signServedAttachments';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
 import { carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
+import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from '../../services/attachments/readerAttachmentLifecycle';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
@@ -69,6 +73,29 @@ const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
  * par un élargissement du schéma. La distinction liste / détail établie par
  * #4392 tient : le DÉTAIL (`GET /attachments/:id/metadata`,
  * `messageAttachmentSchema`) reste le seul à les servir.
+ *
+ * CE QUI Y EST ENTRÉ AU #9249 : `isViewOnce` et `isBlurred`, les drapeaux de
+ * protection PROPRES à la pièce jointe. Ce schéma épand
+ * `messageAttachmentMinimalSchema`, donc il hérite de `fileUrl` ET de
+ * `thumbnailUrl` : l'URL d'un média à vue unique ou flouté partait, et les deux
+ * champs qui disent au client de poser un voile étaient supprimés par
+ * `fast-json-stringify`. La projection les REND déjà
+ * (`AttachmentService.toAttachment`) ; seule la déclaration manquait.
+ *
+ * La protection d'une pièce jointe est DÉCLARÉE par ses champs et APPLIQUÉE
+ * par le client — c'est la décision du cycle 125 / #6189, qui a fait monter la
+ * loi dans `packages/shared/utils/attachment-protection.ts` pour que les trois
+ * clients puissent la lire. Une porte qui sert l'URL sans les drapeaux ne
+ * contourne pas cette garde : elle la rend INEXPRIMABLE. Les autres portes qui
+ * servent une pièce jointe brute ont rejoint cette règle une par une —
+ * `routes/admin/content.ts` (#4333), le producteur `message:new` /
+ * `message:edited` (#7070), la liste de messages (#5125) ; la galerie était la
+ * dernière restée en arrière.
+ *
+ * `effectFlags`, le TROISIÈME canal du OU, n'y entre pas : il est absent de
+ * l'interface `Attachment` elle-même (`packages/shared/types/attachment.ts`),
+ * donc de la projection de ce service. Le porter jusqu'ici élargit un type que
+ * trois services et trois clients lisent — un lot à soi, consigné dans #9249.
  */
 const conversationAttachmentListItemSchema = {
   ...messageAttachmentMinimalSchema,
@@ -81,6 +108,8 @@ const conversationAttachmentListItemSchema = {
     createdAt: { type: 'string', description: 'Upload date (ISO 8601)' },
     width: { type: 'number', nullable: true, description: 'Image/video width (px)' },
     height: { type: 'number', nullable: true, description: 'Image/video height (px)' },
+    isViewOnce: { type: 'boolean', description: 'Attachment-level view-once flag — the client must veil and count the view' },
+    isBlurred: { type: 'boolean', description: 'Attachment-level blur flag — the client must veil until the reader lifts it' },
   },
 } as const;
 
@@ -105,30 +134,30 @@ export async function registerMetadataRoutes(
    * d'appel, sinon la route redevient un oracle d'existence de pièce jointe —
    * le défaut que #4150 a fermé sur les impressions.
    */
-  async function attachmentDetailIsVisible(
+  async function attachmentDetailReader(
     request: FastifyRequest,
-    attachment: { messageId: string | null; uploadedBy: string | null }
-  ): Promise<boolean> {
+    attachment: { messageId: string | null; uploadedBy: string | null; isViewOnce?: boolean | null }
+  ): Promise<{ readonly readerParticipantId: string | null } | null> {
     const authContext = (request as UnifiedAuthRequest).authContext;
 
     if (!attachment.messageId) {
       // Pas encore rattachée à un message (envoi en cours) : seul le
       // déposant y accède. Même repli que `resolveAttachmentReadVerdict`.
       const caller = authContext.isAnonymous ? authContext.participantId : authContext.userId;
-      return Boolean(caller) && caller === attachment.uploadedBy;
+      return Boolean(caller) && caller === attachment.uploadedBy ? { readerParticipantId: null } : null;
     }
 
     const message = await prisma.message.findUnique({
       where: { id: attachment.messageId },
-      select: { id: true, conversationId: true, deletedAt: true, expiresAt: true, viewOnceBurnAt: true },
+      select: { id: true, conversationId: true, deletedAt: true, viewOnceBurnAt: true, ...READER_LIFECYCLE_MESSAGE_SELECT },
     });
-    if (!message) return false;
+    if (!message) return null;
 
     // Même discriminant et même projection que la LISTE ci-dessous : un
     // participant sans ligne `User` (invité de lien) se résout par `id`,
     // jamais par `userId`.
     const isAnonymous = Boolean(authContext.isAnonymous && authContext.participantId);
-    const participantSelect = { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT } as const;
+    const participantSelect = { id: true, conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT } as const;
     const participant = isAnonymous
       ? await prisma.participant.findUnique({ where: { id: authContext.participantId }, select: participantSelect })
       : await prisma.participant.findFirst({
@@ -136,11 +165,23 @@ export async function registerMetadataRoutes(
           select: participantSelect,
         });
 
-    if (!participant || participant.conversationId !== message.conversationId) return false;
+    if (!participant || participant.conversationId !== message.conversationId) return null;
 
     // Les octets suivent la vie du message porteur — rappelé, expiré, ou
     // brûlure de vue unique consommée (cf. `carrierMessageLifecycle.ts`).
-    if (!carrierMessageStillServesBytes(message, new Date())) return false;
+    const now = new Date();
+    if (!carrierMessageStillServesBytes(message, now)) return null;
+
+    // #9589 — puis l'échéance de CE lecteur (décompte, consommation après
+    // lecture, vue unique ouverte) : même loi que `GET /attachments/:id`.
+    const readerReads = await readerStillReadsBytes(prisma, {
+      messageId: message.id,
+      message,
+      attachmentIsViewOnce: attachment.isViewOnce,
+      readerParticipantId: participant.id,
+      now,
+    });
+    if (!readerReads) return null;
 
     const [historyFloor, personalHiding] = await Promise.all([
       loadHistoryFloor(prisma, participant),
@@ -160,7 +201,7 @@ export async function registerMetadataRoutes(
       ),
       select: { id: true },
     });
-    return visible !== null;
+    return visible !== null ? { readerParticipantId: participant.id } : null;
   }
 
   /**
@@ -208,7 +249,7 @@ export async function registerMetadataRoutes(
             ...errorResponseSchema
           },
           // #4923 — sert aussi le cas « existe, mais hors de la portée de
-          // l'appelant » : voir `attachmentDetailIsVisible`.
+          // l’appelant » : voir `attachmentDetailReader`.
           404: {
             description: 'Attachment not found (or not visible to this caller)',
             ...errorResponseSchema
@@ -229,17 +270,29 @@ export async function registerMetadataRoutes(
 
         const { attachmentId } = request.params as AttachmentParams;
 
-        const attachment = await attachmentService.getAttachmentWithMetadata(attachmentId);
-        if (!attachment || !(await attachmentDetailIsVisible(request, attachment))) {
+        const stored = await attachmentService.getAttachmentWithMetadata(attachmentId);
+        const reader = stored ? await attachmentDetailReader(request, stored) : null;
+        if (!stored || !reader) {
           return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
-        const etag = `"${attachment.id}-${(attachment as { updatedAt?: Date }).updatedAt?.getTime() ?? 0}"`;
+        // #9646 — les adresses d'une pièce protégée sont celles de CE lecteur.
+        // Signées, elles changent à chaque pas d'échéance : l'ETag les suit et
+        // la réponse se revalide, sans quoi un 304 rendrait une adresse échue.
+        const [attachment] = await signAttachmentsForReader(prisma, {
+          attachments: [stored],
+          readerParticipantId: reader.readerParticipantId,
+          signer: readerFileUrlSignerFromEnv(new Date()),
+        });
+        const signed = attachment !== stored;
+        const etag = signed
+          ? `"${stored.id}-${createHash('sha256').update(String(attachment.fileUrl)).digest('base64url').slice(0, 16)}"`
+          : `"${stored.id}-${(stored as { updatedAt?: Date }).updatedAt?.getTime() ?? 0}"`;
         if (request.headers['if-none-match'] === etag) {
           return reply.code(304).send();
         }
 
-        reply.header('Cache-Control', 'private, max-age=3600, stale-while-revalidate=86400');
+        reply.header('Cache-Control', signed ? 'private, no-cache' : 'private, max-age=3600, stale-while-revalidate=86400');
         reply.header('ETag', etag);
 
         return sendSuccess(reply, { attachment });
@@ -358,10 +411,11 @@ export async function registerMetadataRoutes(
    * Ce que cette LISTE sert, et pourquoi (#4392, critère 3 : « pour que le
    * prochain lot n'ait pas à reposer la question » ; #4887, critères 2 et 3).
    *
-   * SERVI : les TREIZE clés de `conversationAttachmentListItemSchema` (voir son
+   * SERVI : les QUINZE clés de `conversationAttachmentListItemSchema` (voir son
    * doc-comment) — les sept de `messageAttachmentMinimalSchema` qu'il épand,
-   * plus les six que la galerie REND. Et rien d'autre : `fast-json-stringify`
-   * supprime toute clé qu'aucun schéma ne déclare.
+   * plus les six que la galerie REND, plus les deux drapeaux de protection
+   * ajoutés au #9249. Et rien d'autre : `fast-json-stringify` supprime toute
+   * clé qu'aucun schéma ne déclare — c'est ce qui retenait les drapeaux.
    *
    * NI CHARGÉ NI SERVI : `transcription` et `translations`. #4392 avait mesuré
    * que `AttachmentService.getConversationAttachments` les demandait à MongoDB
@@ -498,6 +552,7 @@ export async function registerMetadataRoutes(
         // pendant que les deux autres appliquent la ligne, soit la règle à
         // deux énoncés que ce bloc s'interdit.
         const participantSelect = {
+          id: true,
           conversationId: true,
           ...HISTORY_FLOOR_PARTICIPANT_SELECT,
         } as const;
@@ -573,7 +628,14 @@ export async function registerMetadataRoutes(
           }
         );
 
-        return sendSuccess(reply, { attachments });
+        // #9646 — la galerie sert les pièces protégées sous les adresses de CE lecteur.
+        const served = await signAttachmentsForReader(prisma, {
+          attachments,
+          readerParticipantId: participant.id,
+          signer: readerFileUrlSignerFromEnv(new Date()),
+        });
+
+        return sendSuccess(reply, { attachments: served });
       } catch (error: unknown) {
         logger.error('error fetching conversation attachments', { conversationId: (request.params as ConversationParams)?.conversationId, error });
         return sendInternalError(reply, error instanceof Error ? error.message : 'Error fetching attachments');

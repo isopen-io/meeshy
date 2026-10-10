@@ -22,6 +22,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { JOIN_NOTICE_KIND } from '@meeshy/shared/utils/join-notice';
+import { CAPTURE_NOTICE_KIND } from '@meeshy/shared/utils/capture-notice';
 import {
   repairOrphanedMessageSenders,
   tombstoneSessionMarker,
@@ -100,6 +101,18 @@ const callSummary = (id: string, senderId: string, createdAt: Date): OrphanDbMes
   createdAt,
 });
 
+const captureNotice = (id: string, senderId: string, createdAt: Date): OrphanDbMessage => ({
+  id,
+  conversationId: CONV,
+  senderId,
+  messageSource: 'system',
+  messageType: 'system',
+  content: 'Alice a fait une capture',
+  metadata: { kind: CAPTURE_NOTICE_KIND, capturedMessageId: 'm1' },
+  expiresAt: new Date('2026-09-15T05:00:00.000Z'),
+  createdAt,
+});
+
 const seeded = (seed: OrphanDbSeed) =>
   makeOrphanedSenderDb({ conversations: [conversation(CONV, T3)], participants: [member()], ...seed });
 
@@ -118,6 +131,21 @@ describe("#6501 — l'avis d'arrivée d'un participant disparu", () => {
     expect(result).toEqual({ deletedNotices: 1, tombstoned: 0, reassignedMessages: 0, failures: 0 });
     expect(db.state.messages.map((message) => message.id)).toEqual(['m1']);
     expect(db.state.participants.map((participant) => participant.id)).toEqual([MEMBER]);
+    expect(db.state.conversations[0].lastMessageAt).toEqual(T1);
+  });
+
+  // #9630 — l'horloge du fil ne se pose jamais sur un avis de capture : un avis
+  // d'ARRIVÉE n'en est pas un (aucune échéance), mais un avis de capture plus
+  // récent que le dernier message ne remonte pas l'horloge.
+  it("l'horloge redescend sur le dernier message, jamais sur un avis de capture plus récent", async () => {
+    const db = seeded({
+      conversations: [conversation(CONV, T3)],
+      messages: [written('m1', MEMBER, T1), joinNotice('avis', GHOST, T2), captureNotice('capture', MEMBER, T3)],
+    });
+
+    await repairOrphanedMessageSenders(db.prisma as never, { conversationId: CONV });
+
+    expect(db.state.messages.map((message) => message.id)).toEqual(['m1', 'capture']);
     expect(db.state.conversations[0].lastMessageAt).toEqual(T1);
   });
 

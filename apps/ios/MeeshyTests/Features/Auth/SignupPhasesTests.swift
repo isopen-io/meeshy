@@ -2,7 +2,7 @@ import XCTest
 @testable import Meeshy
 
 /// #8288 — l'inscription en phases vivantes, la LOI sans vue : téléphone
-/// d'abord ; l'adresse au numéro donné ou passé ; la carte d'identité à
+/// d'abord ; l'adresse au numéro donné — il ne se passe plus (#9343) ; la carte d'identité à
 /// l'adresse cohérente ; le code dans la carte ; « Parler aux autres » au
 /// compte validé. Miroir web : `apps/web/src/lib/view/signup-phases.ts`.
 final class SignupPhasesTests: XCTestCase {
@@ -16,31 +16,28 @@ final class SignupPhasesTests: XCTestCase {
     }
 
     func test_advanced_incompletePhone_opensNothing() {
-        XCTAssertEqual(SignupProgress.initial.advanced(phoneGiven: false, phoneSkipped: false, emailValid: false), .initial)
+        XCTAssertEqual(SignupProgress.initial.advanced(phoneGiven: false, emailValid: false), .initial)
     }
 
     func test_advanced_phoneGiven_revealsEmail() {
-        let progress = SignupProgress.initial.advanced(phoneGiven: true, phoneSkipped: false, emailValid: false)
+        let progress = SignupProgress.initial.advanced(phoneGiven: true, emailValid: false)
         XCTAssertEqual(SignupPhases.phase(progress: progress, card: .editing), .email)
     }
 
-    func test_advanced_phoneSkipped_revealsEmail() {
-        let progress = SignupProgress.initial.advanced(phoneGiven: false, phoneSkipped: true, emailValid: false)
-        XCTAssertTrue(progress.emailShown)
+    /// #9343 — sans numéro donné, une adresse valide n'ouvre RIEN : la phase
+    /// du téléphone ne se passe pas.
+    func test_advanced_validEmailWithoutPhone_opensNothing() {
+        XCTAssertEqual(SignupProgress.initial.advanced(phoneGiven: false, emailValid: true), .initial)
     }
 
     func test_advanced_validEmailAfterEmailShown_revealsCard() {
-        let email = SignupProgress.initial.advanced(phoneGiven: false, phoneSkipped: true, emailValid: false)
-        let progress = email.advanced(phoneGiven: false, phoneSkipped: true, emailValid: true)
+        let email = SignupProgress.initial.advanced(phoneGiven: true, emailValid: false)
+        let progress = email.advanced(phoneGiven: true, emailValid: true)
         XCTAssertEqual(SignupPhases.phase(progress: progress, card: .editing), .card)
     }
 
-    func test_advanced_validEmailWithoutPhoneOrSkip_neverOpensCard() {
-        XCTAssertFalse(SignupProgress.initial.advanced(phoneGiven: false, phoneSkipped: false, emailValid: true).cardShown)
-    }
-
     func test_advanced_isMonotone_correctingTheAddressClosesNothing() {
-        XCTAssertEqual(card.advanced(phoneGiven: false, phoneSkipped: false, emailValid: false), card)
+        XCTAssertEqual(card.advanced(phoneGiven: false, emailValid: false), card)
     }
 
     func test_phase_accountAwaitingItsCode_isCode() {
@@ -77,18 +74,22 @@ final class SignupPhasesTests: XCTestCase {
         XCTAssertEqual(SignupPhases.primaryAction(progress: card, card: .verified, formReady: false), .talk)
     }
 
-    // MARK: - Alerte « sans numéro » (#8040)
+    // MARK: - Le refus du numéro, sous le champ (#9343)
 
-    func test_shouldNudgePhone_noPhone_nudges() {
-        XCTAssertTrue(SignupPhases.shouldNudgePhone(hasPhone: false, phoneSkipped: false))
+    func test_phoneRefusalShown_whileFirstTyping_staysSilent() {
+        XCTAssertFalse(SignupPhases.phoneRefusalShown(refused: true, checked: false, progress: .initial))
     }
 
-    func test_shouldNudgePhone_emailOnlyChosen_staysSilent() {
-        XCTAssertFalse(SignupPhases.shouldNudgePhone(hasPhone: false, phoneSkipped: true))
+    func test_phoneRefusalShown_fieldLeftWithAnImplausibleNumber_speaks() {
+        XCTAssertTrue(SignupPhases.phoneRefusalShown(refused: true, checked: true, progress: .initial))
     }
 
-    func test_shouldNudgePhone_phoneGiven_staysSilent() {
-        XCTAssertFalse(SignupPhases.shouldNudgePhone(hasPhone: true, phoneSkipped: false))
+    func test_phoneRefusalShown_numberGivenThenErased_speaks() {
+        XCTAssertTrue(SignupPhases.phoneRefusalShown(refused: true, checked: false, progress: SignupProgress(emailShown: true, cardShown: false)))
+    }
+
+    func test_phoneRefusalShown_plausibleNumber_staysSilent() {
+        XCTAssertFalse(SignupPhases.phoneRefusalShown(refused: false, checked: true, progress: card))
     }
 }
 

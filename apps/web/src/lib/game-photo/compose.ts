@@ -1,0 +1,303 @@
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
+import { resolveCssVars } from './css-vars';
+import { containFit, coverFit, type BannerLayout, type PhotoLayout, type Rect } from './layout';
+import { fitBannerLine } from './referral';
+import { QR_DARK, QR_LIGHT, type QrSquare } from './referral-qr';
+import type { PhotoMoment } from './moments';
+
+/**
+ * LA COMPOSITION DE L'IMAGE (#9382) — conception, partie VI : « cadre du moment
+ * en surimpression (emblème en haut, titre et date, Mee et Meo en bas) ».
+ *
+ * `paintPhoto` est une SUITE d'appels sur un contexte 2D — pas de DOM, pas de
+ * `canvas` : un faux contexte les enregistre, l'ordre des couches se prouve
+ * sans navigateur. La mise en page est celle de l'aperçu en direct
+ * (`layout.ts`), les dessins sont ceux de l'écran (`prepareSvgMarkup` sérialise
+ * les SVG du document, jetons résolus) : le cadre qu'on voit au moment de
+ * déclencher est celui qu'on obtient.
+ *
+ * Un selfie est retourné, comme dans l'aperçu (le miroir qu'on attend d'une
+ * caméra avant) ; le retournement est borné par `save`/`restore` et ne touche
+ * pas les couches suivantes — le texte ne s'écrit jamais à l'envers. Une photo
+ * de la galerie n'est pas retournée. Sans photo : une carte aux couleurs de la
+ * marque, même mise en page.
+ */
+
+/** Le sous-ensemble du contexte 2D que la composition utilise. */
+export type PaintContext = {
+  save(): void;
+  restore(): void;
+  translate(x: number, y: number): void;
+  scale(x: number, y: number): void;
+  drawImage(image: CanvasImageSource, ...args: number[]): void;
+  fillRect(x: number, y: number, w: number, h: number): void;
+  fillText(text: string, x: number, y: number): void;
+  createLinearGradient(x0: number, y0: number, x1: number, y1: number): { addColorStop(offset: number, color: string): void };
+  /** Le tracé d'un rectangle arrondi (le fond du bandeau) ; absent d'un vieux moteur : `fillRect` le remplace. */
+  beginPath?(): void;
+  roundRect?(x: number, y: number, w: number, h: number, radius: number): void;
+  fill?(): void;
+  /** Les pointillés de l'EMPLACEMENT du carré QR ; absents d'un vieux moteur : l'emplacement n'est pas cerné. */
+  setLineDash?(segments: number[]): void;
+  strokeRect?(x: number, y: number, w: number, h: number): void;
+  strokeStyle?: string | CanvasGradient | CanvasPattern;
+  lineWidth?: number;
+  fillStyle: string | CanvasGradient | CanvasPattern;
+  font: string;
+  textAlign: CanvasTextAlign;
+  textBaseline: CanvasTextBaseline;
+  shadowColor: string;
+  shadowBlur: number;
+};
+
+export type PhotoArt = {
+  readonly emblem: CanvasImageSource;
+  readonly mee: CanvasImageSource;
+  readonly meo: CanvasImageSource;
+  readonly signature: CanvasImageSource;
+  /** La Flamme du bandeau de parrainage ; absente sans bandeau ou si elle n'a pas pu être dessinée. */
+  readonly flame?: CanvasImageSource;
+};
+
+/** Les textes du bandeau de parrainage (#7742), déjà localisés par l'appelant. */
+export type PhotoBanner = {
+  readonly headline: string;
+  /** Le lien, en carré QR (#9554) ; `null` : pas de lien encore, ou un lien que la place ne rendrait pas lisible. */
+  readonly qr: QrSquare | null;
+  /** « 23 j » ; `null` : la Flamme est éteinte, ni dessin ni jours. */
+  readonly flameLabel: string | null;
+  /** Le lien n'existe pas encore (aucun jeton) : l'aperçu cerne l'emplacement VIDE du carré de pointillés. */
+  readonly placeholder?: true;
+};
+
+export type PhotoPalette = {
+  /** Le fond de la carte seule, du haut vers le bas. */
+  readonly top: string;
+  readonly bottom: string;
+  readonly ink: string;
+  readonly inkSoft: string;
+  /** Le voile qui garde le texte lisible sur une photo. */
+  readonly scrim: string;
+};
+
+export type PhotoSource = {
+  readonly image: CanvasImageSource;
+  readonly width: number;
+  readonly height: number;
+  /** `true` pour un selfie : l'image est retournée comme dans l'aperçu. */
+  readonly mirror: boolean;
+  /**
+   * Rend la mémoire de l'image décodée : un `ImageBitmap` la tient jusqu'à
+   * `close()` — le ramasse-miettes ne la rend pas (#9382). Absent pour une
+   * image que le navigateur gère seul (le canvas d'une prise de vue).
+   */
+  readonly release?: () => void;
+};
+
+export type PaintInput = {
+  readonly layout: PhotoLayout;
+  readonly moment: PhotoMoment;
+  readonly dateLabel: string;
+  readonly photo: PhotoSource | null;
+  readonly art: PhotoArt;
+  readonly palette: PhotoPalette;
+  readonly fontFamily: string;
+  /** Présent avec `layout.banner` : le lien de parrainage au pied de la carte. */
+  readonly banner?: PhotoBanner;
+};
+
+/**
+ * Une couleur à une opacité donnée. `#rrggbb` devient `#rrggbbaa` ; toute autre
+ * forme (un jeton résolu en `oklch(…)`, `rgb(…)`) passe par `color-mix` —
+ * jamais rendue telle quelle : un voile « à 0 % » qui resterait opaque
+ * recouvrirait la photo entière.
+ */
+export const withAlpha = (color: string, alpha: number): string =>
+  /^#[0-9a-f]{6}$/i.test(color)
+    ? `${color}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`
+    : `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
+
+function paintBackground(ctx: PaintContext, input: PaintInput): void {
+  const { layout, photo, palette } = input;
+  const { width, height } = layout;
+  if (photo === null) {
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, palette.top);
+    gradient.addColorStop(1, palette.bottom);
+    ctx.fillStyle = gradient as unknown as CanvasGradient;
+    ctx.fillRect(0, 0, width, height);
+    return;
+  }
+
+  const fit = coverFit({ width: photo.width, height: photo.height }, { width, height });
+  ctx.save();
+  if (photo.mirror) {
+    ctx.translate(width, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(photo.image, fit.sx, fit.sy, fit.sw, fit.sh, 0, 0, width, height);
+  ctx.restore();
+
+  const top = ctx.createLinearGradient(0, 0, 0, height * 0.4);
+  top.addColorStop(0, withAlpha(palette.scrim, 0.55));
+  top.addColorStop(1, withAlpha(palette.scrim, 0));
+  ctx.fillStyle = top as unknown as CanvasGradient;
+  ctx.fillRect(0, 0, width, height * 0.4);
+
+  const bottom = ctx.createLinearGradient(0, height * 0.35, 0, height);
+  bottom.addColorStop(0, withAlpha(palette.scrim, 0));
+  bottom.addColorStop(1, withAlpha(palette.scrim, 0.7));
+  ctx.fillStyle = bottom as unknown as CanvasGradient;
+  ctx.fillRect(0, height * 0.35, width, height * 0.65);
+}
+
+function paintText(ctx: PaintContext, input: PaintInput): void {
+  const { layout, moment, dateLabel, palette, fontFamily } = input;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowColor = withAlpha(palette.scrim, 0.6);
+  ctx.shadowBlur = layout.width * 0.012;
+
+  ctx.fillStyle = palette.inkSoft;
+  ctx.font = `600 ${layout.kicker.size}px ${fontFamily}`;
+  ctx.fillText(moment.kicker.toLocaleUpperCase(currentInterfaceLanguage()), layout.kicker.x, layout.kicker.y);
+
+  ctx.fillStyle = palette.ink;
+  ctx.font = `700 ${layout.title.size}px ${fontFamily}`;
+  ctx.fillText(moment.title, layout.title.x, layout.title.y);
+
+  ctx.fillStyle = palette.inkSoft;
+  ctx.font = `500 ${layout.date.size}px ${fontFamily}`;
+  ctx.fillText(dateLabel, layout.date.x, layout.date.y);
+
+  ctx.shadowBlur = 0;
+}
+
+/** La taille propre d'une image décodée, quand elle en porte une ; sinon le cadre la remplit. */
+const naturalSize = (image: CanvasImageSource): { width: number; height: number } => {
+  const { width, height } = image as { width?: unknown; height?: unknown };
+  return typeof width === 'number' && typeof height === 'number' ? { width, height } : { width: 0, height: 0 };
+};
+
+/** Un dessin garde SA proportion dans son cadre : l'emblème de rang n'est pas carré (200 × 184). */
+function drawContained(ctx: PaintContext, image: CanvasImageSource, frame: Rect): void {
+  const rect = containFit(naturalSize(image), frame);
+  ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
+}
+
+const BANNER_RADIUS = 0.2;
+/** Largeur d'un caractère, en fraction du corps : le gras sans empattement. */
+const SANS_ADVANCE = 0.58;
+
+function paintBannerFrame(ctx: PaintContext, banner: BannerLayout, palette: PhotoPalette): void {
+  const { x, y, w, h } = banner.frame;
+  ctx.fillStyle = withAlpha(palette.scrim, 0.86);
+  if (ctx.beginPath !== undefined && ctx.roundRect !== undefined && ctx.fill !== undefined) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, h * BANNER_RADIUS);
+    ctx.fill();
+    return;
+  }
+  ctx.fillRect(x, y, w, h);
+}
+
+/** L'EMPLACEMENT du carré (aucun jeton encore) : un cadre en pointillé, VIDE — jamais le QR d'un lien qui n'existe pas. */
+function traceQrPlaceholder(ctx: PaintContext, slot: Rect, palette: PhotoPalette): void {
+  if (ctx.setLineDash === undefined || ctx.strokeRect === undefined) return;
+  const line = Math.max(2, slot.w * 0.02);
+  ctx.strokeStyle = palette.inkSoft;
+  ctx.lineWidth = line;
+  ctx.setLineDash([slot.w * 0.08, slot.w * 0.06]);
+  ctx.strokeRect(slot.x + line / 2, slot.y + line / 2, slot.w - line, slot.h - line);
+  ctx.setLineDash([]);
+}
+
+/** Le carré QR : un fond clair sur toute sa place (la marge de silence en fait partie), puis les modules sombres, au pixel entier. */
+function paintQr(ctx: PaintContext, slot: Rect, square: QrSquare): void {
+  ctx.fillStyle = QR_LIGHT;
+  ctx.fillRect(slot.x, slot.y, slot.w, slot.h);
+  ctx.fillStyle = QR_DARK;
+  for (const run of square.runs) ctx.fillRect(slot.x + run.x, slot.y + run.y, run.w, run.h);
+}
+
+/** Le contenu du bandeau, après sa Signature : la phrase, la Flamme et ses jours, puis le carré QR du lien en fin de ligne. */
+function paintBannerContent(ctx: PaintContext, banner: BannerLayout, input: PaintInput, text: PhotoBanner): void {
+  const { palette, fontFamily, art } = input;
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowBlur = 0;
+  ctx.textAlign = banner.direction === 'rtl' ? 'right' : 'left';
+
+  const headline = fitBannerLine({ text: text.headline, size: banner.headline.size, maxWidth: banner.maxTextWidth, minSize: banner.headline.size * 0.6, advance: SANS_ADVANCE });
+  ctx.fillStyle = palette.ink;
+  ctx.font = `800 ${headline.size}px ${fontFamily}`;
+  ctx.fillText(headline.text, banner.headline.x, banner.headline.y);
+
+  if (text.flameLabel !== null && art.flame !== undefined) {
+    drawContained(ctx, art.flame, banner.flame);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = palette.ink;
+    ctx.font = `600 ${banner.flameDays.size}px ${fontFamily}`;
+    ctx.fillText(text.flameLabel, banner.flameDays.x, banner.flameDays.y);
+  }
+
+  if (text.placeholder === true) return traceQrPlaceholder(ctx, banner.qr, palette);
+  if (text.qr !== null) paintQr(ctx, banner.qr, text.qr);
+}
+
+export function paintPhoto(ctx: PaintContext, input: PaintInput): void {
+  const { layout, art, banner } = input;
+  paintBackground(ctx, input);
+  drawContained(ctx, art.emblem, layout.emblem);
+  paintText(ctx, input);
+  drawContained(ctx, art.mee, layout.mee);
+  drawContained(ctx, art.meo, layout.meo);
+  if (layout.banner !== undefined && banner !== undefined) paintBannerFrame(ctx, layout.banner, input.palette);
+  drawContained(ctx, art.signature, layout.signature);
+  if (layout.banner !== undefined && banner !== undefined) paintBannerContent(ctx, layout.banner, input, banner);
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const ROOT_TAG = /<svg\b[^>]*>/;
+
+/**
+ * Un SVG du document → une image autonome : jetons CSS résolus, espace de noms
+ * posé, taille imposée. Une image SVG chargée dans un `<img>` ne voit rien de
+ * la page, ni ses variables ni ses polices.
+ */
+export function prepareSvgMarkup(
+  markup: string,
+  options: { readonly size: number; readonly read: (name: string) => string },
+): { readonly markup: string; readonly unresolved: readonly string[] } {
+  const { markup: resolved, unresolved } = resolveCssVars(markup, options.read);
+  const root = ROOT_TAG.exec(resolved)?.[0];
+  if (root === undefined) return { markup: resolved, unresolved };
+  const box = /viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/.exec(root);
+  const ratio = box === null || Number(box[1]) <= 0 ? 1 : Number(box[2]) / Number(box[1]);
+  const height = Math.round(options.size * ratio);
+  const sized = root
+    .replace(/\s(?:width|height)="[^"]*"/g, '')
+    .replace(/^<svg\b/, `<svg width="${options.size}" height="${height}"${root.includes('xmlns=') ? '' : ` xmlns="${SVG_NS}"`}`);
+  return { markup: resolved.replace(root, sized), unresolved };
+}
+
+export type RasterEnv = {
+  readonly createImage: () => HTMLImageElement;
+  readonly createObjectUrl: (blob: Blob) => string;
+  readonly revokeObjectUrl: (url: string) => void;
+};
+
+/** Un SVG autonome → une image décodée, ou `null` : un dessin illisible ne fait pas échouer la photo entière. */
+export async function rasterizeSvg(markup: string, env: RasterEnv): Promise<HTMLImageElement | null> {
+  const url = env.createObjectUrl(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }));
+  try {
+    return await new Promise<HTMLImageElement | null>((resolve) => {
+      const image = env.createImage();
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = url;
+    });
+  } finally {
+    env.revokeObjectUrl(url);
+  }
+}

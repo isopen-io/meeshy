@@ -411,20 +411,16 @@ describe('MagicLinkService', () => {
 
         expect(mockPrisma.magicLinkToken.create).toHaveBeenCalledWith({
           data: expect.objectContaining({
-            geoLocation: 'Unknown',
-            geoCoordinates: null
+            geoLocation: 'Unknown'
           })
         });
       });
 
-      it('should include geo coordinates when available', async () => {
+      it('n’écrit jamais de coordonnées, même quand le lieu est connu (#9609)', async () => {
         await service.requestMagicLink(validMagicLinkRequest);
 
-        expect(mockPrisma.magicLinkToken.create).toHaveBeenCalledWith({
-          data: expect.objectContaining({
-            geoCoordinates: '40.7128,-74.006'
-          })
-        });
+        const { data } = mockPrisma.magicLinkToken.create.mock.calls[0][0];
+        expect(data).not.toHaveProperty('geoCoordinates');
       });
 
       it('should store rememberDevice flag server-side', async () => {
@@ -631,7 +627,8 @@ describe('MagicLinkService', () => {
         expect(mockCreateSession).toHaveBeenCalledWith({
           userId: mockUser.id,
           token: 'mock-session-token',
-          requestContext: mockRequestContext
+          requestContext: mockRequestContext,
+          loginMethod: 'magic_link'
         });
       });
 
@@ -642,6 +639,7 @@ describe('MagicLinkService', () => {
           where: { id: mockUser.id },
           data: {
             lastActiveAt: expect.any(Date),
+            lastLoginAt: expect.any(Date),
             lastLoginIp: mockRequestContext.ip,
             lastLoginLocation: mockRequestContext.geoData?.location,
             lastLoginDevice: mockRequestContext.deviceInfo?.type
@@ -975,11 +973,7 @@ describe('MagicLinkService - Edge Cases', () => {
 
     await service.requestMagicLink(validMagicLinkRequest);
 
-    expect(mockPrisma.magicLinkToken.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        geoCoordinates: null
-      })
-    });
+    expect(mockPrisma.magicLinkToken.create.mock.calls[0][0].data).not.toHaveProperty('geoCoordinates');
   });
 
   it('should handle validation with null geo data in request context', async () => {

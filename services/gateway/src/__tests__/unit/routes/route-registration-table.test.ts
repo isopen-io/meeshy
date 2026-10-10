@@ -179,7 +179,36 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 70 : #8101 ajoute `contacts-resolve` — l'adresse NEUVE `POST
     // /api/v1/contacts/resolve` (la carte de visite partagée), montage
     // autonome. Aucun alias, aucune route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(70);
+    // 71 : #8876 ajoute `admin-oversight` — le montage AUTONOME des surfaces de
+    // supervision de la « vue de dieu » de l'administration (journal d'audit,
+    // liens de suivi, fiche de communauté, supervision). Une seule entrée sous
+    // `/api/v1/admin`, qui enregistre ses quatre modules elle-même ; aucun
+    // alias, aucune route retirée ni renommée.
+    // 72 : #8906 ajoute `admin-engagement-scale` — les adresses NEUVES
+    // `GET`/`PUT /api/v1/admin/engagement-scale` (le barème d'engagement).
+    // Aucun alias, aucune route retirée ni renommée.
+    // 73 : #9141 ajoute `sticker-packs` — le montage AUTONOME des packs de
+    // stickers sous `/api/v1/sticker-packs` (boutique, installation,
+    // proposition par des tiers, modération). Aucun alias, aucune route
+    // retirée ni renommée.
+    // 74 : #9378 ajoute `me-game` — les cinq écritures NEUVES du jeu sous
+    // `/api/v1/me/game` (changer une mission, ouvrir le coffre, acheter un gel,
+    // rallumer la Flamme, mémoriser les clés de guide), montage autonome. Aucun
+    // alias, aucune route retirée ni renommée ; `POST /me/meesh/mint` garde son
+    // adresse et sa forme (sa réponse s'étend, additivement).
+    // 75 : #9387 ajoute `users-game-showcase` — `GET /api/v1/users/:userId/game/showcase`,
+    // la vitrine d'un autre membre selon son réglage, montage autonome sous
+    // `/api/v1/users`. Les douze autres routes de la vague 2 du jeu rejoignent
+    // `me-game` (même préfixe) : aucune entrée de plus pour elles. Aucun alias,
+    // aucune route retirée ni renommée.
+    // 76 : #9927 ajoute `me-birth-date` — l'adresse NEUVE `PUT
+    // /api/v1/me/birth-date` (la date de naissance, déclarée une fois),
+    // montage autonome. Aucun alias, aucune route retirée ni renommée.
+    // 77 : #10000 ajoute `world` — l'adresse NEUVE et PUBLIQUE `GET
+    // /api/v1/world` (l'entrée de World Wide que lit la landing de
+    // meeshy.me), montage autonome. Aucun alias, aucune route retirée ni
+    // renommée.
+    expect(ROUTE_TABLE.length).toBe(77);
   });
 });
 

@@ -93,10 +93,10 @@ struct StorySaveProgressRing: View {
     var body: some View {
         let appearance = Self.appearance(isCancellable: isCancellable, reduceMotion: reduceMotion)
         ZStack {
-            Circle().stroke(Color.secondary.opacity(0.25), lineWidth: 2.5)
+            Circle().stroke(Color.secondary.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.strong)
             Circle()
                 .trim(from: 0, to: clamped)
-                .stroke(appearance.arcColor(accent: tint), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .stroke(appearance.arcColor(accent: tint), style: StrokeStyle(lineWidth: MeeshyBorder.strong, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 0.2), value: clamped)
             if appearance.showsIndeterminateSweep {
@@ -105,17 +105,47 @@ struct StorySaveProgressRing: View {
                 // simplement plus interruptible.
                 Circle()
                     .trim(from: 0, to: 0.18)
-                    .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .stroke(tint, style: StrokeStyle(lineWidth: MeeshyBorder.strong, lineCap: .round))
                     .rotationEffect(.degrees(sweepPhase * 360 - 90))
                     .animation(.linear(duration: 1.1).repeatForever(autoreverses: false), value: sweepPhase)
                     .onAppear { sweepPhase += 1 }
             }
             Text("\(Self.percent(progress))")
-                .font(MeeshyFont.relative(9, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .foregroundColor(.secondary)
         }
         .frame(width: diameter, height: diameter)
+    }
+}
+
+// MARK: - SceneSaveProgressButton
+
+/// **L'anneau d'un enregistrement de scène en vol, tappable pour l'annuler** (#9681)
+/// — monté par les surfaces de réel et de post. Feuille isolée : c'est ELLE, et
+/// non l'écran hôte, qui observe le service ; un tour de progression ne republie
+/// qu'elle. Rien ne s'affiche tant qu'aucun job n'existe pour `jobKey`.
+struct SceneSaveProgressButton: View {
+    let jobKey: String
+    var tint: Color = MeeshyColors.indigo400
+    var diameter: CGFloat = MeeshyControlSize.compact
+    @ObservedObject private var service = StoryPhotoSaveService.shared
+
+    var body: some View {
+        if let progress = service.progress(for: jobKey) {
+            let cancellable = service.isCancellable(storyId: jobKey)
+            Button {
+                HapticFeedback.light()
+                service.cancel(storyId: jobKey)
+            } label: {
+                StorySaveProgressRing(progress: progress, tint: tint, diameter: diameter, isCancellable: cancellable)
+            }
+            .buttonStyle(.plain)
+            .disabled(!cancellable)
+            .accessibilityLabel(String(localized: "feed.reel.save_progress.cancel",
+                                       defaultValue: "Enregistrement en cours, toucher pour annuler", bundle: .main))
+            .transition(.opacity)
+        }
     }
 }

@@ -58,9 +58,8 @@ extension MessageRecord {
             decoder.decodeOrLog(CallSummaryMetadata.self, from: $0, field: "callSummaryJson", id: localId)
         }
 
-        let uiJoinNotice = joinNoticeJson.flatMap {
-            decoder.decodeOrLog(JoinNoticeMetadata.self, from: $0, field: "joinNoticeJson", id: localId)
-        }
+        // Arrivée OU capture (#9617) — la colonne porte l'avis du message système.
+        let systemNotice = SystemNoticeColumn.decode(joinNoticeJson, decoder: decoder, id: localId)
 
         let uiLocation = locationJson.flatMap { json -> SharedPlace? in
             guard let data = json.data(using: .utf8) else { return nil }
@@ -164,13 +163,16 @@ extension MessageRecord {
             recipientCount: recipientCount,
             cachedTimeString: cachedTimeString,
             callSummary: uiCallSummary,
-            joinNotice: uiJoinNotice,
+            joinNotice: systemNotice.join,
+            captureNotice: systemNotice.capture,
             location: uiLocation,
             sticker: uiSticker
         )
         // #7579 — l'état « déjà ouvert » d'une vue unique vit dans la colonne ;
         // le fil, qui ne lit que GRDB, le reçoit d'ici.
         message.viewOnceOpenedAt = viewOnceOpenedAt
+        message.trackedLinkMap = Self.decodeJSONText([TrackedLink].self, trackedLinksJson,
+                                                     field: "trackedLinksJson", id: localId)?.trackedLinkMap ?? [:]
         return message
     }
 }

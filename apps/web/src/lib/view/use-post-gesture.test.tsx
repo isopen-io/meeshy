@@ -8,27 +8,21 @@ import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { FEED_QUERY_KEY } from '@/lib/api/feed';
 import type { FeedInfiniteData, FeedPost } from '@/lib/api/feed-pages';
 import { appQueryClient } from '@/lib/api/query-client';
+import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 
 import { usePostGesture } from './use-post-gesture';
 
 /**
- * `usePostGesture` ANNONCE DANS LA LANGUE D'INTERFACE (#6488) — la couche
- * réseau (`RETOUR_PARTAGE_PUBLICATION`, `share-url.ts`) ne rend plus un texte
- * déjà traduit mais une CLÉ de catalogue ; ce hook est le SEUL point qui
- * connaît la langue et doit la traduire avant d'`announce()`r. Sans ce
- * témoin, un partage indisponible annoncerait la clé brute (`feed.share.
- * error`) au lieu d'un texte lisible.
+ * `usePostGesture().onShare` OUVRE LA FEUILLE D'ENVOI (#8884) — « Partager »
+ * n'est plus la feuille du système : c'est la base commune de transfert et de
+ * partage (à une ou plusieurs personnes, à un groupe, ou publier en post,
+ * story ou réel), avec le partage du système derrière « Plus d'options… ».
+ * Le hook ne monte rien : il DEMANDE l'ouverture au magasin de la feuille.
  *
- * LE PARTAGE, PAS LE « LIKE » : sous `bun test`, `apiDeps.source` vaut
- * `'fixtures'` (`__FIXTURES__`, `bunfig.toml`) — `sendGesture`
- * (`feed-gestures.ts`) y court-circuite TOUJOURS sur `ok:true`, si bien
- * qu'aucun scénario public ne peut faire passer `onGesture` par la branche
- * `ok:false` sous ce harnais. Le partage, lui, dépend de la détection de
- * fonctionnalité du NAVIGATEUR (`navigator.share`/`navigator.clipboard`) —
- * happy-dom expose `navigator.clipboard.writeText`, jamais `navigator.share`,
- * donc `partagerLien` retombe de façon fiable sur `'copie'` — même chemin de
- * code (`RETOUR_PARTAGE_PUBLICATION[result]` → `translate` → `announce`) que
- * `onGesture`.
+ * Avant #8884 ce bloc prouvait que l'issue du partage s'annonçait dans la
+ * langue d'interface (#6488) ; cette annonce vit désormais dans la feuille
+ * (`sendSheet.*`) et dans `sharePublicationLink`, que le rail auteur des
+ * stories appelle encore (`publication-share.test.ts`).
  *
  * Patron `use-live-announcer.test.tsx` (happy-dom + `createRoot` + `act`).
  */
@@ -58,6 +52,7 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  closeSendSheet();
 });
 
 function Harness({ postId }: { readonly postId: string }) {
@@ -82,32 +77,42 @@ function mount(postId = 'p1'): HTMLDivElement {
 
 const liveOf = (el: HTMLDivElement): string => el.querySelector('[data-live]')!.textContent ?? '';
 
-/** Laisse la promesse de `partagerLien().then()` s'écouler, DANS `act`. */
+/** Laisse une promesse s'écouler, DANS `act`. */
 const laisserPasser = () => act(async () => Promise.resolve());
 
-describe('usePostGesture — l’annonce suit la langue d’interface (#6488)', () => {
-  test('en : le lien copié s’annonce en anglais, jamais la clé brute', async () => {
-    document.documentElement.lang = 'en';
-    const el = mount();
+describe('usePostGesture — « Partager » ouvre la feuille d’envoi (#8884)', () => {
+  test('le geste demande UNE feuille de partage portant la publication et son adresse publique', () => {
+    const el = mount('p9');
+    expect(sendSheetStore.getState().request).toBeNull();
     act(() => {
       el.querySelector<HTMLButtonElement>('[data-share]')!.click();
     });
-    await laisserPasser();
-    const texte = liveOf(el);
-    expect(texte).not.toBe('feed.share.copied');
-    expect(texte).toBe(translate('en', 'feed.share.copied'));
-    expect(texte).toBe('Link copied — just paste it.');
+    const request = sendSheetStore.getState().request;
+    expect(request?.intent).toBe('share');
+    expect(request?.payload).toMatchObject({ kind: 'publication', postId: 'p9', url: 'https://meeshy.me/feeds/post/p9' });
+    expect(request?.moreOptions).toEqual({ url: 'https://meeshy.me/feeds/post/p9' });
   });
 
-  test('fr : la MÊME issue s’annonce en français une fois la langue reposée', async () => {
-    document.documentElement.lang = 'fr';
+  test('rien n’est annoncé ni copié à l’ouverture : la feuille parle pour elle-même', async () => {
     const el = mount();
     act(() => {
       el.querySelector<HTMLButtonElement>('[data-share]')!.click();
     });
     await laisserPasser();
-    expect(liveOf(el)).toBe(translate('fr', 'feed.share.copied'));
-    expect(liveOf(el)).toBe('Lien copié — il ne reste qu’à le coller.');
+    expect(liveOf(el)).toBe('');
+  });
+
+  test('la carte déjà peinte donne son format et son texte à l’aperçu', () => {
+    appQueryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, {
+      pages: [{ posts: [{ id: 'reel-1', type: 'REEL', createdAt: '2026-09-30T10:00:00Z', content: 'Mon réel' } satisfies FeedPost], pagination: { limit: 20, hasMore: false, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    const el = mount('reel-1');
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-share]')!.click();
+    });
+    expect(sendSheetStore.getState().request?.payload).toMatchObject({ postType: 'REEL', preview: { kind: 'publication', text: 'Mon réel' } });
+    appQueryClient.removeQueries({ queryKey: FEED_QUERY_KEY });
   });
 });
 

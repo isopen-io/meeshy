@@ -169,7 +169,7 @@ struct PostSceneCard: View {
         }
         .frame(maxWidth: Self.maxWidth)
         .frame(maxWidth: .infinity, alignment: .center)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         // **Le son est COUPÉ, et il faut le dire** (constat porteur 2026-09-06 :
         // « les scènes cinématiques jouent avec signe audio barré »).
         //
@@ -190,7 +190,7 @@ struct PostSceneCard: View {
                     .foregroundColor(.white)
                     .frame(width: UIFontMetrics.default.scaledValue(for: 26), height: UIFontMetrics.default.scaledValue(for: 26))
                     .background(Circle().fill(.black.opacity(0.45)))
-                    .padding(10)
+                    .padding(MeeshySpacing.smPlus)
                     .allowsHitTesting(false)
                     .accessibilityLabel(Text(String(
                         localized: "feed.scene.sound.muted",
@@ -298,6 +298,52 @@ struct PostSceneSurface: View {
             )
             .equatable()
         }
+    }
+}
+
+// MARK: - Scène d'un réel dont le seul fichier est un son (#9737)
+
+/// Le fond de la carte d'un RÉEL composé dont le seul fichier est un son : sa
+/// scène, rejouée muette (`.card`) et recadrée comme la vidéo d'un réel. Le son
+/// de fond n'y produit aucun pixel — il se dit par le crédit de la carte ; un
+/// son posé y garde sa place d'objet.
+///
+/// Elle ne rapporte PAS sa frame : `ReelFeedCard`, qui la monte, la rapporte
+/// déjà sous l'id du post et se déclare alors `.scene`. Deux rapports pour une
+/// carte feraient deux candidats à l'élection.
+struct ReelCardSceneBackdrop: View, Equatable {
+    let post: FeedPost
+    let document: CanvasV3
+    let isActive: Bool
+    let accentColor: String
+    let preferredContentLanguages: [String]
+
+    nonisolated static func == (lhs: ReelCardSceneBackdrop, rhs: ReelCardSceneBackdrop) -> Bool {
+        lhs.post.id == rhs.post.id
+            && lhs.isActive == rhs.isActive
+            && lhs.accentColor == rhs.accentColor
+            && lhs.preferredContentLanguages == rhs.preferredContentLanguages
+            && lhs.document == rhs.document
+    }
+
+    var body: some View {
+        MeeshyScenePlayer(
+            document: document,
+            mode: .card,
+            sceneIndex: .constant(0),
+            isPlaying: .constant(isActive),
+            accentColorHex: accentColor,
+            carrier: post.reelPlayedSceneCarrier,
+            preferredContentLanguages: preferredContentLanguages
+        )
+        .aspectRatio(SceneShape.aspect, contentMode: .fill)
+        // **Le SOL de la scène.** Le canvas ne peint un fond que si la scène
+        // en déclare un (couleur, dégradé, média) ; sans lui il est
+        // transparent, et le texte de la scène se lisait à même le fil. Le
+        // lecteur de réels pose la même scène sur du noir : la carte aussi.
+        .background(Color.black)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

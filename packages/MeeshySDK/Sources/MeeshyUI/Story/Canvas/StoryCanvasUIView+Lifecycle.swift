@@ -21,7 +21,8 @@ extension StoryCanvasUIView {
             // quand le canvas revient à l'écran sans repasser par `setMode`
             // (cover/sheet présenté au-dessus du viewer puis dismissé).
             if mode == .play, displayLink == nil {
-                registerAsActiveAndPreemptOthers()
+                // Un canvas en pause qui revient à l'écran ne coupe personne (#9827).
+                if !isPlaybackPaused { registerAsActiveAndPreemptOthers() }
                 startPlayback()
                 if isPlaybackPaused {
                     // Le canvas était long-press pausé au détachement : on
@@ -115,6 +116,9 @@ extension StoryCanvasUIView {
                        selector: #selector(handleStoryPlayerResume),
                        name: .storyPlayerResume,
                        object: nil)
+        playbackInterruptionCancellable = PlaybackInterruption.shared.$isActive
+            .removeDuplicates()
+            .sink { [weak self] active in self?.setPlaybackInterrupted(active) }
     }
 
     @objc func handleDidEnterBackground() {
@@ -173,6 +177,7 @@ extension StoryCanvasUIView {
     public override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
         guard newWindow == nil else { return }
+        endTransitionRehearsal()
         unregisterFromActive()
         // RC5 — `stopPlayback()` (pas seulement la pause des médias) : le
         // CADisplayLink de lecture cible `self` et le RETIENT. Détaché de la

@@ -93,6 +93,14 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
         return { count: 0 };
       }),
     },
+    // Ce que les posts détruits ont rapporté à leurs lecteurs (#9569) : même
+    // régime — sans ce double la passe rejette et rien n'est détruit.
+    engagementPostPoints: {
+      deleteMany: jest.fn(async () => {
+        calls.push('engagementPostPoints.deleteMany');
+        return { count: 0 };
+      }),
+    },
     // Le hard-delete purge aussi les usages de sons (le Sound, lui, survit).
     // Sans ces doubles, l'accès à `prisma.soundUsage` lève et le try/catch de
     // la passe avale l'erreur : postMedia.deleteMany n'est jamais atteint.
@@ -166,6 +174,9 @@ function makeSimplePrisma() {
     },
     trackingLink: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    engagementPostPoints: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     soundUsage: {
       findMany: jest.fn<any>().mockResolvedValue([]),

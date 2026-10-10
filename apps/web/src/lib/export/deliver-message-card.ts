@@ -40,12 +40,14 @@ export async function deliverMessageCard(
   intent: MessageCardIntent,
   doors: Doors = currentDoors(),
 ): Promise<MessageCardDelivery> {
+  /* Une image, un GIF ou une vidéo (#8693) : le type voyage avec le fichier, jamais supposé. */
+  const mimeType = blob.type === '' ? 'image/png' : (blob.type.split(';')[0] ?? blob.type);
   if (intent === 'save' && doors.gallery !== null) {
-    const saved = await doors.gallery.save({ blob, fileName, mimeType: 'image/png' });
+    const saved = await doors.gallery.save({ blob, fileName, mimeType });
     if (saved === 'saved') return 'gallery';
   }
   const portal = await doors.portal();
   if (portal === null) return 'unavailable';
-  const outcome = await portal.deliver(blob, fileName, 'image/png');
+  const outcome = await portal.deliver(blob, fileName, mimeType);
   return outcome === 'delivered' ? 'shared' : outcome;
 }

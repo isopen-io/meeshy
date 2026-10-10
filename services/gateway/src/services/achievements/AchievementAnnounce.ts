@@ -31,13 +31,16 @@
  * ## Ce que ce module ne fait pas
  *
  * Il ne crédite AUCUN point (#5758) — un succès nomme un fait, il n'alimente
- * pas la monnaie. Et il n'échoue jamais vers l'appelant : la ligne
+ * pas la monnaie. Sa GLOIRE (#9390), elle, est gravée à l'obtention et FIGÉE à
+ * sa rareté du moment (`GloryService.creditAchievement`) : la Gloire n'est pas
+ * un point, c'est un registre en ajout seul qui ne se dépense jamais. Et il n'échoue jamais vers l'appelant : la ligne
  * `EngagementMilestone` est ce qui fait foi, la bannière n'en est que l'écho.
  * Une bannière perdue laisse un succès ACQUIS, que l'écran restituera ;
  * l'inverse — un geste métier qui échoue parce qu'une notification n'est pas
  * partie — serait un très mauvais échange.
  */
 
+import { GloryService } from '../game/GloryService';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   achievementKey,
@@ -103,6 +106,7 @@ export async function graveEtAnnonce(params: {
         data: { userId, milestoneType: 'achievement', milestoneKey: achievementKey(family, palier) },
       });
       plusHautNeuf = palier;
+      await creditAchievementGlory(prisma, userId, achievementKey(family, palier));
     } catch (err) {
       // P2002 : déjà gravé — l'anti-rejeu a joué, et ce palier n'est PAS neuf,
       // donc il ne concourt pas à l'annonce.
@@ -160,5 +164,18 @@ async function annonce(params: {
       achievementKey: achievementKey(family, tier),
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+}
+
+/**
+ * La Gloire du succès gravé (#9390) — best-effort : la ligne `EngagementMilestone`
+ * fait foi, la Gloire n'en est qu'une conséquence rejouable (une clé par succès).
+ * Elle ne fait JAMAIS échouer une attribution.
+ */
+async function creditAchievementGlory(prisma: PrismaClient, userId: string, milestoneKey: string): Promise<void> {
+  try {
+    await new GloryService(prisma).creditAchievement(userId, milestoneKey);
+  } catch {
+    // Rattrapée par un prochain balayage : la clé du registre empêche le double paiement.
   }
 }

@@ -54,6 +54,8 @@ struct ConversationMediaGalleryView: View {
     /// Vide, ou avec des `alternatives` vides, ⇒ aucun contrôle n'est peint
     /// (loi 4 : un contrôle sans effet est ABSENT, jamais grisé).
     var captionServings: [String: SocialMediaCaptionServing] = [:]
+    /// attachment.id → la carte des liens suivis du PORTEUR de la légende (#9075).
+    var captionLinks: [String: [String: String]] = [:]
 
     /// **Le repli de la légende est un état d'ÉCRAN, pas de média** (#4768) —
     /// mais il se REMET à chaque page. Feuilleter vers un autre média présente
@@ -169,8 +171,8 @@ struct ConversationMediaGalleryView: View {
     var composableMedia: ((MessageAttachment) -> Bool)?
 
     /// **« Réagir » existe-t-il sur CETTE pièce ?** (#8095) `nil` ⇒ sur toutes.
-    /// Une pièce dont le porteur n'est pas chargé ne peut pas refléter sa
-    /// réaction : le bouton n'y existe pas (loi 4).
+    /// Une pièce dont le porteur est inconnu ne peut pas refléter sa réaction :
+    /// le bouton n'y existe pas (loi 4). Hors fenêtre, l'index la repeint (#9910).
     var reactableMedia: ((MessageAttachment) -> Bool)?
 
     /// **Où la colonne d'actions est posée sur le plateau** (#6709) — mesurée, parce
@@ -221,6 +223,10 @@ struct ConversationMediaGalleryView: View {
     /// contraire de ce qu'on voit. `isPlaying` ne publie qu'aux TRANSITIONS,
     /// contrairement au `currentTime` qui interdit d'observer le manager en bloc.
     @State var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
+    /// #9577 — le bouton pause central s'efface une seconde après le début de
+    /// la lecture ; la règle est au SDK, `+Transport.swift` la peint.
+    @State var playPauseFade = FullscreenPlayPauseFade()
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     /// **La pièce à laquelle la barre RÉPOND** (#6165) — `nil` au repos, ce qui
     /// est l'état nominal : le visualiseur est NU tant qu'on n'a pas demandé à
@@ -265,6 +271,7 @@ struct ConversationMediaGalleryView: View {
         accentColor: String,
         captionServings: [String: SocialMediaCaptionServing] = [:],
         captionMap: [String: String] = [:],
+        captionLinks: [String: [String: String]] = [:],
         senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
         reportsAttachmentConsumption: Bool = true,
         onComposeWithMedia: ((MessageAttachment) -> Void)? = nil,
@@ -282,6 +289,7 @@ struct ConversationMediaGalleryView: View {
         self.accentColor = accentColor
         self.captionServings = captionServings
         self.captionMap = captionMap
+        self.captionLinks = captionLinks
         self.senderInfoMap = senderInfoMap
         self.reportsAttachmentConsumption = reportsAttachmentConsumption
         self.onComposeWithMedia = onComposeWithMedia
@@ -392,7 +400,11 @@ struct ConversationMediaGalleryView: View {
         .onDisappear { trackImageOpen(leaving: currentPageID, entering: nil) }
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
-        .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
+        .onReceive(videoManager.$isPlaying) {
+            videoManagerIsPlaying = $0
+            playPauseFade = playPauseFade.playback(isPlaying: $0)
+        }
+        .task(id: playPauseFade) { await fadePlayPauseAfterDelay() }
         .sheet(isPresented: $showFullEmojiPicker) { fullEmojiPickerSheet }
     }
 
@@ -654,7 +666,7 @@ struct ConversationMediaGalleryView: View {
         let langues = captionLanguages(id)
         if !langues.isEmpty {
             let active = activeCaptionLanguage(id)
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach(langues, id: \.self) { code in
                     LanguageFlagChip(code: code,
                                      isActive: active == code,
@@ -667,17 +679,18 @@ struct ConversationMediaGalleryView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 2)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.xxs)
             .accessibilityLabel(String(localized: "gallery.caption.languages",
                                        defaultValue: "Langue de la légende",
                                        bundle: .main))
         }
     }
 
-    private func captionOverlay(_ text: String) -> some View {
+    private func captionOverlay(_ text: String, links: [String: String]) -> some View {
         MediaCaptionOverlay(caption: text,
                             isExpanded: captionExpanded,
+                            trackedLinks: links,
                             horizontalInset: 16,
                             maxExpandedHeight: cadreCaptionMaxHeight,
                             // **« JUSTE afficher le texte déplié avec effet
@@ -692,7 +705,7 @@ struct ConversationMediaGalleryView: View {
                                     captionExpanded.toggle()
                                 }
                             })
-            .padding(.vertical, 8)
+            .padding(.vertical, MeeshySpacing.sm)
     }
 
     // MARK: - Controls Overlay
@@ -700,18 +713,7 @@ struct ConversationMediaGalleryView: View {
     private var controlsOverlay: some View {
         VStack(spacing: 0) {
             HStack {
-                Button {
-                    dismissGallery()
-                } label: {
-                    // Chrome : glyphe `xmark` figé dans un cercle glass 40pt
-                    // (doctrine 82i) — ne pas scaler. Glass APRÈS le sizing.
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 40, height: 40)
-                        .adaptiveGlass(in: Circle(), interactive: true)
-                }
-                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+                FullscreenCloseButton(tone: .onMedia) { dismissGallery() }
 
                 // La capsule « n / N » a quitté ce couloir (#6144, directive
                 // porteur « enlever les N/M au centre ! ») : le rail du couloir
@@ -815,7 +817,7 @@ struct ConversationMediaGalleryView: View {
                     .id(att.id)
                 } else if let caption = servedCaption(att.id) {
                     captionLanguageRow(att.id)
-                    captionOverlay(caption)
+                    captionOverlay(caption, links: captionLinks[att.id] ?? [:])
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -861,10 +863,13 @@ struct ConversationMediaGalleryView: View {
     /// 12 pt de `padding(.top)`, qui valent la gouttière. Une colonne vide ne
     /// prend donc RIEN — ni largeur, ni hauteur (loi 4).
     var cadreActionColumn: some View {
-        VStack(spacing: MediaStageActionColumn.spacing) {
+        FullscreenActionRail {
             if currentIndex < allAttachments.count {
                 mediaActions(allAttachments[currentIndex])
             }
+            // #9577 — le son et (...) ont quitté la ligne de la barre : ils
+            // se rangent ici, sous « Composer » (`+Transport.swift`).
+            cadreTransportRail
         }
         // #6709 — la colonne MESURE sa place sur le plateau : c'est elle, et non le
         // média de la page, qui dit ce qui est peint sous ses boutons.
@@ -909,36 +914,20 @@ struct ConversationMediaGalleryView: View {
         if AttachmentReactionOffer.offersReaction(surface: .fullscreen,
                                                   attachment: att,
                                                   hasHandler: onReactToMedia != nil && (reactableMedia?(att) ?? true)) {
-            Button {
+            FullscreenActionButton.react(
+                label: String(localized: "media.react.title",
+                              defaultValue: "Réagir", bundle: .main),
+                hint: String(localized: "media.react.hint",
+                             defaultValue: "Affiche la rangée d'émojis pour réagir à ce média.",
+                             bundle: .main),
+                style: .disc(.adaptive),
+                isOpen: reactionBarOpen
+            ) {
                 HapticFeedback.light()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     reactionBarOpen.toggle()
                 }
-            } label: {
-                // Chrome : glyphe figé dans un cercle glass 40 pt (doctrine 82i)
-                // — ne pas scaler, glass APRÈS le sizing. Le « + » est un BADGE
-                // sur l'émoji, écho du « + » que la rangée porte en fin de course :
-                // le même signe pour la même promesse, « il y en a plus ».
-                Image(systemName: "face.smiling")
-                    .font(.system(size: 17, weight: .semibold))
-                    .mediaChromeForeground(reactionBarOpen ? MeeshyColors.indigo400 : nil)
-                    .overlay(alignment: .topTrailing) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 9, weight: .black))
-                            .mediaChromeForeground(reactionBarOpen ? MeeshyColors.indigo400 : nil)
-                            .offset(x: 6, y: -5)
-                    }
-                    .frame(width: MediaStageActionColumn.glass,
-                           height: MediaStageActionColumn.glass)
-                    .adaptiveGlass(in: Circle(), interactive: true)
-                    .mediaStageActionTarget()
             }
-            .accessibilityLabel(String(localized: "media.react.title",
-                                       defaultValue: "Réagir", bundle: .main))
-            .accessibilityHint(String(localized: "media.react.hint",
-                                      defaultValue: "Affiche la rangée d'émojis pour réagir à ce média.",
-                                      bundle: .main))
-            .accessibilityAddTraits(reactionBarOpen ? [.isSelected] : [])
         }
         // **Un média PROTÉGÉ ne se cite pas** (#4013) : la bannière de citation
         // porte la vignette du média, ce qui ferait sortir de la conversation
@@ -958,7 +947,18 @@ struct ConversationMediaGalleryView: View {
             hasThreadHandOff: onReplyToMedia != nil && (replyableMedia?(att) ?? true)
         )
         if route != .none {
-            Button {
+            FullscreenActionButton.reply(
+                label: String(localized: "media.reply.title",
+                              defaultValue: "Répondre", bundle: .main),
+                hint: route == .composeInPlace
+                    ? String(localized: "media.reply.hint.inPlace",
+                             defaultValue: "Ouvre la zone de saisie au-dessus de ce média, en le citant.",
+                             bundle: .main)
+                    : String(localized: "media.reply.hint",
+                             defaultValue: "Cite le message qui porte ce média et revient au composer.",
+                             bundle: .main),
+                style: .disc(.adaptive)
+            ) {
                 HapticFeedback.light()
                 switch route {
                 case .composeInPlace:
@@ -979,103 +979,83 @@ struct ConversationMediaGalleryView: View {
                 case .none:
                     break
                 }
-            } label: {
-                Image(systemName: "arrowshape.turn.up.left.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .glassControlForeground()
-                    .frame(width: MediaStageActionColumn.glass,
-                           height: MediaStageActionColumn.glass)
-                    .adaptiveGlass(in: Circle(), interactive: true)
-                    .mediaStageActionTarget()
             }
-            .accessibilityLabel(String(localized: "media.reply.title",
-                                       defaultValue: "Répondre", bundle: .main))
-            .accessibilityHint(route == .composeInPlace
-                ? String(localized: "media.reply.hint.inPlace",
-                         defaultValue: "Ouvre la zone de saisie au-dessus de ce média, en le citant.",
-                         bundle: .main)
-                : String(localized: "media.reply.hint",
-                         defaultValue: "Cite le message qui porte ce média et revient au composer.",
-                         bundle: .main))
         }
         // `composableMedia` (#6709) : un hôte de post n'offre « Créer avec ce média »
         // que sur une pièce qui a sa cible — jamais un bouton qui n'armerait rien.
         if let onComposeWithMedia, composableMedia?(att) ?? true {
-            Button {
+            FullscreenActionButton(
+                systemImage: FullscreenChromeSymbol.compose,
+                label: String(localized: "media.compose.title",
+                              defaultValue: "Créer avec ce média", bundle: .main),
+                hint: String(localized: "media.compose.hint",
+                             defaultValue: "Ouvre le composer avec ce média posé.",
+                             bundle: .main),
+                style: .disc(.adaptive)
+            ) {
                 HapticFeedback.light()
                 onComposeWithMedia(att)
-            } label: {
-                // Chrome : glyphe figé dans un cercle glass 40 pt (doctrine
-                // 82i) — ne pas scaler. Le glass APRÈS le sizing.
-                Image(systemName: "wand.and.stars")
-                    .font(.system(size: 17, weight: .semibold))
-                    .glassControlForeground()
-                    .frame(width: MediaStageActionColumn.glass,
-                           height: MediaStageActionColumn.glass)
-                    .adaptiveGlass(in: Circle(), interactive: true)
-                    .mediaStageActionTarget()
             }
-            .accessibilityLabel(String(localized: "media.compose.title",
-                                       defaultValue: "Créer avec ce média", bundle: .main))
-            .accessibilityHint(String(localized: "media.compose.hint",
-                                      defaultValue: "Ouvre le composer avec ce média posé.",
-                                      bundle: .main))
         }
     }
 
     private func bottomMetadataOverlay(_ att: MessageAttachment) -> some View {
         let info = senderInfoMap[att.id]
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             // Rangée auteur : affichée seulement si l'info est fournie par le call
             // site — sinon on masque (pas d'avatar « ? » vide au-dessus des dimensions).
             if let info {
-                HStack(spacing: 10) {
+                // **Les actions ont quitté cette rangée** (#6161) : elles
+                // sont une colonne verticale posée à droite du cadre
+                // (`cadreActionColumn`). Ce qui reste ici est ce que le
+                // porteur a explicitement gardé sous le voile — l'auteur, sa
+                // date, la légende, la ligne format / dimensions / poids.
+                FullscreenIdentityRow(
+                    name: info.senderName,
+                    subtitle: info.sentAt.formatted(.dateTime.day().month(.abbreviated).hour().minute())
+                ) {
                     MeeshyAvatar(
                         name: info.senderName,
                         context: .messageBubble,
                         accentColor: info.senderColor,
                         avatarURL: info.senderAvatarURL
                     )
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(info.senderName)
-                            .font(MeeshyFont.relative(14, weight: .semibold))
-                            .foregroundColor(.white)
-                        Text(info.sentAt, format: .dateTime.day().month(.abbreviated).hour().minute())
-                            .font(MeeshyFont.relative(12, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                    // **Les actions ont quitté cette rangée** (#6161) : elles
-                    // sont une colonne verticale posée à droite du cadre
-                    // (`cadreActionColumn`). Ce qui reste ici est ce que le
-                    // porteur a explicitement gardé sous le voile — l'auteur, sa
-                    // date, la légende, la ligne format / dimensions / poids.
-                    Spacer()
                 }
-                .accessibilityElement(children: .contain)
             }
             // **Une scène n'a ni format, ni dimensions, ni poids** (#6709) : sa
             // pièce est synthétique, et la ligne n'y montrerait qu'un glyphe
             // « photo » qui ment sur ce qu'on regarde. L'auteur et sa date restent.
             if sceneContext?.scenes[att.id] == nil {
-                HStack(spacing: 8) {
+                // **`largeur × hauteur · poids · durée`** (#9577) — les
+                // segments et leur point médian viennent de `MediaInfoLine` ;
+                // la durée est la feuille qui observe le moteur : temps restant
+                // pendant la lecture, durée totale à l'arrêt.
+                HStack(spacing: MeeshySpacing.xs) {
                     // Glyphe de type média décoratif (apparié aux dimensions) —
                     // scale avec le texte mais masqué de VoiceOver.
                     Image(systemName: att.type == .video ? "video.fill" : "photo")
-                        .font(MeeshyFont.relative(11))
-                        .foregroundColor(.white.opacity(0.6))
                         .accessibilityHidden(true)
-                    if let w = att.width, let h = att.height, w > 0, h > 0 {
-                        Text("\(w) \u{00D7} \(h)")
-                            .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                    if att.fileSize > 0 {
-                        Text(att.fileSizeFormatted)
-                            .font(MeeshyFont.relative(11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.5))
+                        .padding(.trailing, MeeshySpacing.xs)
+                    let segments = MediaInfoLine.segments(
+                        width: att.width, height: att.height,
+                        fileSizeLabel: att.fileSize > 0 ? att.fileSizeFormatted : nil,
+                        hasDuration: MediaGalleryStage.carriesDuration([att]))
+                    ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                        if index > 0 { Text(MediaInfoLine.separatorGlyph) }
+                        switch segment {
+                        case .dimensions(let texte), .fileSize(let texte):
+                            Text(texte)
+                        case .duration:
+                            MediaPlaybackDurationText(
+                                manager: videoManager,
+                                declaredSeconds: Double(att.duration ?? 0) / 1000,
+                                followsEngine: currentAttachmentIsActiveTrack)
+                        }
                     }
                     Spacer()
                 }
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 // Regroupe dimensions + poids en un seul arrêt VoiceOver et
                 // remplace le « × » (lu « multiplication ») par un « par » localisé.
                 .accessibilityElement(children: .ignore)
@@ -1083,9 +1063,9 @@ struct ConversationMediaGalleryView: View {
                 .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     // MARK: - Actions

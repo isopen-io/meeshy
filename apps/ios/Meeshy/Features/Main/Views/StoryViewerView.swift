@@ -38,6 +38,9 @@ struct StoryReaderPlaceWrapper: Identifiable {
 struct StoryDraft {
     var text: String = ""
     var attachments: [ComposerAttachment] = []
+    /// Posé quand la file a REFUSÉ ce commentaire (#9743, M1) : le composeur
+    /// rouvert reprend alors ses pièces.
+    var refusedAt: Date? = nil
 }
 
 // MARK: - Prefetcher host (P3 wire-up)
@@ -113,7 +116,9 @@ struct StoryViewerView: View {
     static let heartEmoji = MeeshyQuickReactions.heart
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
-    @State var progress: CGFloat = 0 // internal for cross-file extension access
+    /// La progression vit dans une horloge que SEULE la barre observe (#9859) :
+    /// tenue par référence, jamais observée ici, elle ne réévalue pas le lecteur.
+    @State var progressClock = StoryPlaybackProgressClock() // internal for cross-file extension access
     /// Interstitiel d'identité inter-groupes (directive user 2026-07-03) :
     /// au passage au groupe d'une AUTRE personne, bannière en fond + pseudo,
     /// nom, présence, mood pendant `groupIntroDuration` avant le slide.
@@ -151,6 +156,10 @@ struct StoryViewerView: View {
     /// and the centered loading spinner.
     @State var isContentReady: Bool = false // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
+    @State var storyLoopPass = 0 // tours de boucle de la story courante (#9821)
+    @State var isCallInterrupting = false // un appel sonne ou se tient (#9821)
+    @State var isGameMomentShown = false // un événement du jeu passe devant (#9821)
+    @State var optionsMenuWatch = StoryOptionsMenuWatch() // le menu « … » ouvert fait boucler la story (#9821, #9949)
     /// Légende dépliée. Vit ici parce que déplier SUSPEND la lecture : la carte
     /// de contenu porte la vue, le lecteur porte l'horloge.
     @State var isCaptionExpanded = false // internal for cross-file extension access
@@ -232,7 +241,7 @@ struct StoryViewerView: View {
 
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access
-    @State private var selectedProfileUser: ProfileSheetUser?
+    @State var selectedProfileUser: ProfileSheetUser? // internal : cause de boucle (#9821)
     // Deferred profile open from the viewers sheet: set when a viewer row is
     // tapped, consumed in the viewers sheet's `onDismiss` so the profile sheet
     // presents cleanly after the viewers sheet closes (avoids stacking two
@@ -342,6 +351,8 @@ struct StoryViewerView: View {
     /// selon `StoryReactionStripGesture`, lu par `unifiedDragGesture`, purgé par
     /// `resetGestureTracking()` et à la fermeture de la barre.
     @State var reactionStripOwnsDrag: Bool = false // internal for cross-file extension access
+    /// Cadre `.global` de la barre ouverte (`StoryReactionStripFrameKey`, #9062).
+    @State var reactionStripFrame: CGRect? // internal for cross-file extension access
     @State var composerOwnsDrag: Bool = false // #8431 — le glissé né sur le composeur
     /// Bord SUPÉRIEUR (coordonnées `.global`) de la surface scrollable ouverte,
     /// remonté par `StoryReaderScrollableSurfaceTopKey`. `nil` = aucune surface
@@ -620,9 +631,7 @@ struct StoryViewerView: View {
             }
         }
         // Long-press toggle UNIQUEMENT — pas les autres pauses du timer.
-        //
-        // Sheets, drag-to-dismiss, composer engaged… mutent `isPaused`
-        // (timer-only). Si on postait `.storyPlayerPause` dessus, chaque
+        // Si on postait `.storyPlayerPause` sur les autres causes, chaque
         // ouverture/fermeture de sheet ferait un cycle pause/play sur
         // l'audio mixer et la vidéo BG — blip audible. Le canvas ne se
         // freeze comme une vidéo que quand l'utilisateur le demande
@@ -633,9 +642,9 @@ struct StoryViewerView: View {
                 object: nil
             )
         }
-        // Toutes les pauses UI (sheets, composer engaged, pickers, overlay
-        // commentaires, transitions, dismiss, long-press) convergent vers le
-        // timer gated — ex-gate par-tick `guard !shouldPauseTimer` du proxy.
+        // Seule une PAUSE arrête le timer gated ; une boucle le laisse courir (#9821).
+        .storyPlaybackInterruptions(callInterrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown)
+        .storyOptionsMenuPresence(optionsMenuWatch)
         .adaptiveOnChange(of: shouldPauseTimer) { _, paused in
             slideTimer.setPaused(paused)
         }
@@ -751,8 +760,12 @@ struct StoryViewerView: View {
         // Filet du drapeau de revendication : la barre refermée, plus personne
         // ne peut le retirer. Le `UIScrollView` de la rangée peut priver la
         // barre de son `onEnded` — un drapeau collé gèlerait la navigation.
+        .onPreferenceChange(StoryReactionStripFrameKey.self) { reactionStripFrame = $0 }
         .adaptiveOnChange(of: showEmojiStrip) { _, isOpen in
-            if !isOpen { reactionStripOwnsDrag = false }
+            if !isOpen {
+                reactionStripOwnsDrag = false
+                reactionStripFrame = nil
+            }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             // **La légende se replie à CHAQUE changement de story.** Laissée
@@ -857,7 +870,7 @@ struct StoryViewerView: View {
             if let story = currentStory {
                 StoryExportShareSheet(
                     story: story,
-                    viewModel: exportShareViewModel
+                    viewModel: exportShareViewModel, authorUsername: currentGroup?.username
                 )
                 .presentationDetents([.medium, .large] as Set<PresentationDetent>)
                 .presentationDragIndicator(.visible)
@@ -1010,13 +1023,9 @@ struct StoryViewerView: View {
         // vivent ici ; la pause est asservie à `shouldPauseTimer` via
         // `adaptiveOnChange` (+ `setPaused` initial dans `startTimer()`).
         t.onProgressChange = { [self] p in
-            let raw = CGFloat(min(1.0, p))
-            // Granularité 1/300 : évite de committer le @State `progress`
-            // à chaque tick 60 Hz pour des deltas invisibles (la barre fait
-            // ~300 pt de large au maximum).
-            if abs(raw - progress) >= 1.0 / 300.0 || raw >= 1.0 || raw == 0 {
-                progress = raw
-            }
+            // Le tick n'écrit AUCUN état du lecteur (#9859) : il publie dans
+            // l'horloge de la barre, seule à se redessiner.
+            progressClock.publish(p)
             // Seuil d'amorçage du prefetch de la slide suivante : 5 s avant
             // la fin, borné à 50 % minimum (cf. rationale historique dans
             // l'ancien `startTimer()` — conservée à l'identique).
@@ -1028,7 +1037,7 @@ struct StoryViewerView: View {
             }
         }
         t.onCompletion = { [self] in
-            goToNext()
+            storyDidReachItsEnd()
         }
     }
 
@@ -1369,7 +1378,7 @@ struct StoryViewerView: View {
     /// scrub, or full-screen picker). Drives the heart-button bounce in the
     /// sidebar.
     @State private var heartBouncePulse: Int = 0
-    @State private var sharedContentWrapper: SharedContentWrapper?
+    @State var sharedContentWrapper: SharedContentWrapper? // internal : cause de boucle (#9821)
     @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
     /// Republication d'une story d'AUTRUI dans une story à soi — ouvre le
     /// composeur prérempli (« Phase C » annoncée depuis l'écriture de
@@ -1393,7 +1402,7 @@ struct StoryViewerView: View {
     /// NOT inside it, so the overlay does not inherit the card's drag offset,
     /// scale, or 3D rotation (bug 2026-05-28: overlay shifted left during
     /// drag / scale transitions).
-    private func storyCommentsOverlay() -> StoryCommentsOverlayView {
+    func storyCommentsOverlay(zone: StoryCommentsZone.Frame) -> StoryCommentsOverlayView {
         // L'overlay commentaires n'embarque PLUS son propre composer. Il
         // affiche uniquement : (1) la liste des commentaires, (2) les
         // actions « Répondre » / « like » de chaque row qui mutent
@@ -1421,8 +1430,7 @@ struct StoryViewerView: View {
             },
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
-            keyboard: keyboard,
-            safeBottom: windowBottomInset,
+            zone: zone,
             makeStoryCommentRow: makeStoryCommentRow,
             toggleStoryCommentThread: toggleStoryCommentThread
         )
@@ -1464,7 +1472,7 @@ struct StoryViewerView: View {
             isContentTranslated: isContentTranslated,
             isOwnStory: isOwnStory,
             quickEmojis: quickEmojis,
-            progress: progress,
+            progressClock: progressClock,
             currentSlideDuration: currentSlideDuration,
             outgoingOpacity: outgoingOpacity,
             closingScale: closingScale,
@@ -1534,7 +1542,7 @@ struct StoryViewerView: View {
             chromeVisible: $chromeVisible,
             isFullscreenStorySession: $isFullscreenStorySession,
             isLongPressPaused: $isLongPressPaused,
-            isCanvasPlaybackPaused: shouldPauseTimer,
+            isCanvasPlaybackPaused: shouldPauseTimer, loopPass: storyLoopPass,
             gestureResetToken: gestureResetToken,
             readerFeatureConsumedByTouch: $readerFeatureConsumedByTouch,
             reactionStripOwnsDrag: $reactionStripOwnsDrag,
@@ -1567,7 +1575,7 @@ struct StoryViewerView: View {
                 try await ReportService.shared.reportStory(storyId: storyId, reportType: reportType, reason: reason)
             },
             composerBottomPadding: { composerBottomPadding(geometry: $0) },
-            makeCommentsOverlay: { storyCommentsOverlay() }
+            makeCommentsOverlay: { storyCommentsOverlayHost() }
         )
     }
 
@@ -1801,9 +1809,9 @@ struct StoryViewerView: View {
     /// or shot without an audio track) keeps the button hidden — the video-track
     /// presence is resolved asynchronously by `refreshVideoAudioTrackPresence()`.
     var storyHasAudibleSound: Bool { // internal for cross-file extension access
-        StoryAudioAvailability.hasAudibleSound(
-            effects: currentStory?.storyEffects,
-            videoAudioTracks: videoAudioTrackPresence
+        StoryAudioAvailability.needsSoundButton(
+            effects: currentStory?.storyEffects, videoAudioTracks: videoAudioTrackPresence,
+            backgroundSoundIsAnnounced: BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement)
         )
     }
 
@@ -1969,7 +1977,7 @@ struct StoryViewerView: View {
 
     /// Used by `StoryHeaderView`'s report sheet — owned here so the sheet
     /// presentation survives header re-renders.
-    @State private var showReportSheet = false
+    @State var showReportSheet = false // internal : cause de boucle (#9821)
 
     // MARK: - Content, Gestures, Navigation, Timer & Actions (see StoryViewerView+Content.swift)
 }
@@ -2148,7 +2156,7 @@ extension StoryViewerView {
         groupTransition(forward: false) {
             currentGroupIndex -= 1
             currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-            progress = 0
+            progressClock.reset()
         }
     }
 

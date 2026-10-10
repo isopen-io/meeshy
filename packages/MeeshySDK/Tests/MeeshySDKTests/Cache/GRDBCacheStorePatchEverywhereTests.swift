@@ -131,4 +131,33 @@ final class GRDBCacheStorePatchEverywhereTests: XCTestCase {
             return XCTFail("l'entrée doit rester .stale après un patch, got \(result)")
         }
     }
+
+    // MARK: - repaintEverywhere (#9307)
+
+    func test_repaintEverywhere_rewritesMatchingItemsUnderEveryKey_loadedOrNot() async throws {
+        let db = try makeDB()
+        let writer = try makeStore(db: db)
+        try await writer.save([PatchTestItem(id: "p1", likes: 1)], for: "cold-key")
+        await writer.flushDirtyKeys()
+        let store = try makeStore(db: db)
+        try await store.save([PatchTestItem(id: "p1", likes: 1), PatchTestItem(id: "p2", likes: 7)], for: "warm-key")
+
+        await store.repaintEverywhere { item in item.id == "p1" ? PatchTestItem(id: "p1", likes: 42) : nil }
+
+        let cold = await store.load(for: "cold-key").snapshot()
+        let warm = await store.load(for: "warm-key").snapshot()
+        XCTAssertEqual(cold?.first?.likes, 42)
+        XCTAssertEqual(warm?.map(\.likes), [42, 7])
+    }
+
+    func test_repaintEverywhere_nothingMatches_leavesTheStoreClean() async throws {
+        let store = try makeStore()
+        try await store.save([PatchTestItem(id: "p1", likes: 1)], for: "main-feed")
+        await store.flushDirtyKeys()
+
+        await store.repaintEverywhere { _ in nil }
+
+        let dirty = await store.dirtyKeyCount()
+        XCTAssertEqual(dirty, 0, "aucun item ne change ⇒ aucune réécriture")
+    }
 }

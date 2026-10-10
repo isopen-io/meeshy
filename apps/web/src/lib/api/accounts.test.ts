@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createAccountSwitcher, createAccountVault, purgeAccountLocalData, type PreservedSession } from './accounts';
+import { forgetAccountCaches } from './account-caches';
+import {
+  createAccountSwitcher,
+  createAccountVault,
+  forgettingLocalData,
+  purgeAccountLocalData,
+  type PreservedSession,
+} from './accounts';
+import { createAppQueryClient } from './query-client';
 import { createSessionStore, type SessionStorage, type SessionUser } from './session';
 
 /**
@@ -161,6 +169,24 @@ describe('déconnexion', () => {
     expect(device.vault.list()).toEqual([]);
     expect(device.storage.raw.get('meeshy.accounts') ?? '').not.toContain('tA');
   });
+
+  test('retirer un compte efface aussi le cache rangé de ce compte (#8674)', () => {
+    const device = makeDevice();
+    const client = createAppQueryClient({ storage: device.storage, buster: 't', session: device.store });
+    const vault = forgettingLocalData(device.vault, (userId) =>
+      forgetAccountCaches({ userId, storage: device.storage, cacheStorage: { keys: async () => [], delete: async () => false } }),
+    );
+    device.signIn(alice, 'tA');
+    client.setQueryData(['conversations'], [{ id: 'c-a', title: 'liste d’Alice' }]);
+    device.switcher.suspend();
+    device.signIn(bob, 'tB');
+    expect([...device.storage.raw.values()].join('\n')).toContain('liste d’Alice');
+
+    vault.forget('a1');
+
+    expect([...device.storage.raw.values()].join('\n')).not.toContain('liste d’Alice');
+    expect(vault.list().map((a) => a.user.username)).toEqual(['bob']);
+  });
 });
 
 describe('le coffre', () => {
@@ -210,11 +236,61 @@ describe('les données locales d’un compte déconnecté', () => {
       'meeshy.last-opened.u_a1.c1': '1',
       'meeshy.draft.u_b2.c1': '{}',
       'meeshy.draft.story.b2': '{}',
+      'meeshy.call-journal.u_a1': '[]',
+      'meeshy.call-journal.u_a1.call-1': '[]',
+      'meeshy.call-journal.u_b2': '[]',
       'meeshy.scheme': 'dark',
     });
 
     purgeAccountLocalData({ storage, userId: 'a1', keys: [...storage.raw.keys()] });
 
-    expect([...storage.raw.keys()].sort()).toEqual(['meeshy.draft.story.b2', 'meeshy.draft.u_b2.c1', 'meeshy.scheme']);
+    expect([...storage.raw.keys()].sort()).toEqual(['meeshy.call-journal.u_b2', 'meeshy.draft.story.b2', 'meeshy.draft.u_b2.c1', 'meeshy.scheme']);
+  });
+
+  test('ses identités anonymes tenues partent avec lui (#8816), jamais celles d’un autre compte', () => {
+    const storage = memoryStorage({
+      'meeshy.anonymous-sessions.u_a1': '[]',
+      'meeshy.anonymous-sessions.u_b2': '[]',
+    });
+
+    purgeAccountLocalData({ storage, userId: 'a1', keys: [...storage.raw.keys()] });
+
+    expect([...storage.raw.keys()]).toEqual(['meeshy.anonymous-sessions.u_b2']);
+  });
+});
+
+describe('la liste des comptes montre MA photo du moment (#8886)', () => {
+  test('une photo confirmée réécrit ma ligne, sans me faire remonter ni toucher aux autres', () => {
+    const device = makeDevice();
+    device.signIn(alice, 't-alice');
+    device.clock.now = NOW + 1000;
+    device.signIn(bob, 't-bob');
+    device.clock.now = NOW + 2000;
+
+    device.vault.refreshUser({ ...bob, avatar: '2026/09/b2/avatar_2.webp' });
+
+    const listed = device.vault.list();
+    expect(listed.map((account) => account.user.id)).toEqual(['b2', 'a1']);
+    expect(listed[0]?.user.avatar).toBe('2026/09/b2/avatar_2.webp');
+    expect(listed[0]?.lastActiveAt).toBe(NOW + 1000);
+    expect(listed[1]?.user.avatar).toBe('https://cdn/a.png');
+  });
+
+  test('un compte que l’appareil ne connaît pas n’est pas ajouté par une photo', () => {
+    const device = makeDevice();
+    device.signIn(alice, 't-alice');
+    device.vault.refreshUser({ ...bob, avatar: 'x.webp' });
+    expect(device.vault.list().map((account) => account.user.id)).toEqual(['a1']);
+  });
+
+  test('quitter un compte range son identité du MOMENT, pas celle de sa première connexion', () => {
+    const device = makeDevice();
+    device.signIn(alice, 't-alice');
+    device.store.getState().updateUser({ avatar: '2026/09/a1/avatar_2.webp' });
+
+    device.switcher.suspend();
+
+    expect(device.vault.list()[0]?.user.avatar).toBe('2026/09/a1/avatar_2.webp');
+    expect(device.vault.hasPreservedSession('a1')).toBe(true);
   });
 });

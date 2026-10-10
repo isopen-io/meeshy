@@ -110,12 +110,18 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// en échec de décodage de toute la ligne. `nil` = row antérieure au champ
     /// → story, ce qu'elle était.
     public let targetTypePayload: String?
+    /// « Publier AUSSI en réel » (#9476) : la story part avec son réel, en UN
+    /// geste. Persisté pour la même raison que `targetTypePayload` — un rejeu
+    /// au retour du réseau publierait la story seule. `nil` = row antérieure au
+    /// champ, ou story seule : rien d'autre ne part.
+    public let alsoAsReelPayload: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
         case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
         case originalLanguage, draftId, mentionsPayload, mentionsBySlidePayload
         case mediaAltPayload, mediaCaptionPayload, allowSoundExtractionPayload, targetTypePayload
+        case alsoAsReelPayload
     }
 
     public init(
@@ -132,7 +138,8 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         mediaAltPayload: [String: String]? = nil,
         mediaCaptionPayload: [String: String]? = nil,
         allowSoundExtractionPayload: Bool? = nil,
-        targetTypePayload: String? = nil
+        targetTypePayload: String? = nil,
+        alsoAsReelPayload: Bool? = nil
     ) {
         let queueId = UUID().uuidString
         self.id = queueId
@@ -153,6 +160,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.mediaCaptionPayload = mediaCaptionPayload
         self.allowSoundExtractionPayload = allowSoundExtractionPayload
         self.targetTypePayload = targetTypePayload
+        self.alsoAsReelPayload = alsoAsReelPayload
     }
 
     public init(from decoder: Decoder) throws {
@@ -180,6 +188,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.mediaCaptionPayload = try container.decodeIfPresent([String: String].self, forKey: .mediaCaptionPayload)
         self.allowSoundExtractionPayload = try container.decodeIfPresent(Bool.self, forKey: .allowSoundExtractionPayload)
         self.targetTypePayload = try container.decodeIfPresent(String.self, forKey: .targetTypePayload)
+        self.alsoAsReelPayload = try container.decodeIfPresent(Bool.self, forKey: .alsoAsReelPayload)
     }
 }
 

@@ -38,8 +38,9 @@ const stageOf = (count: number): Element => {
 const env: CaptureEnv = {
   canvas: () => ({
     context: new Proxy({}, { get: (_t, key) => (key === 'createLinearGradient' ? () => ({ addColorStop: () => undefined }) : () => undefined), set: () => true }) as unknown as CanvasRenderingContext2D,
-    toBlob: async () => new Blob(['png'], { type: 'image/png' }),
+    image: {} as CanvasImageSource,
   }),
+  photo: { surface: () => ({ paint: () => undefined, pixels: () => null, put: () => undefined, encode: async (mime) => new Blob(['jpeg'], { type: mime }) }) },
   detector: null,
   now: () => new Date(2026, 8, 28, 9, 5, 3),
 };
@@ -156,7 +157,7 @@ describe('CallMontageMode', () => {
     await view.press('[data-carousel-item="polaroid"]');
     expect(view.saved).toEqual([]);
     await view.press('[data-carousel-item="polaroid"]');
-    expect(view.saved.map((files) => files.map((file) => file.fileName))).toEqual([['meeshy-appel-polaroid-20260928-090503.png']]);
+    expect(view.saved.map((files) => files.map((file) => file.fileName))).toEqual([['meeshy-appel-polaroid-20260928-090503.jpg']]);
     expect(view.find('[data-call-capture-status]')?.textContent).toBe('Capture enregistrée');
     expect(view.find('[data-call-capture-status]')?.getAttribute('role')).toBe('status');
     view.done();
@@ -189,7 +190,7 @@ describe('CallMontageMode', () => {
     const view = mount();
     await act(async () => view.find('[data-carousel-item="grid"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })));
     await act(async () => {});
-    expect(view.saved.map((files) => files.map((file) => file.fileName))).toEqual([['meeshy-appel-grid-20260928-090503.png']]);
+    expect(view.saved.map((files) => files.map((file) => file.fileName))).toEqual([['meeshy-appel-grid-20260928-090503.jpg']]);
     view.done();
   });
 

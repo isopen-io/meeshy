@@ -1,6 +1,7 @@
 import * as z from 'zod/mini';
 
 import { isSupportedLanguage } from '@meeshy/shared/utils/languages';
+import { isProfileImageReference } from '@meeshy/shared/utils/profile-image-reference';
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
@@ -206,10 +207,6 @@ export function validateProfilePatch(raw: unknown): PatchValidation {
   return { ok: false, field: typeof key === 'string' ? key : 'unknown' };
 }
 
-const ImageUrl = z.string().check(
-  z.refine((url) => url.startsWith('https://') || url.startsWith('http://') || url.startsWith('/api/')),
-);
-
 const Envelope = z.object({ user: z.unknown() });
 
 function profileResult(result: ApiResult<unknown>): ApiResult<MyProfile> {
@@ -257,7 +254,7 @@ export async function patchMyImage(deps: ProfileDeps, kind: ProfileImageKind, ur
     const { fixturePatchMyImage } = await import('./fixtures-profile');
     return { ok: true, data: fixturePatchMyImage(kind, url) };
   }
-  if (!ImageUrl.safeParse(url).success) {
+  if (!isProfileImageReference(url)) {
     return { ok: false, status: 0, error: 'Adresse d’image refusée', code: 'INVALID_IMAGE_URL', field: kind };
   }
   return profileResult(

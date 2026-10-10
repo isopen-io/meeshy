@@ -695,7 +695,7 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
         // #8283 — le verrou vit dans le site partagé avec la Rivière :
         // l'hôte n'ouvre QUE ce que `QuotedMediaOpening` lui rend.
         XCTAssertTrue(
-            body.contains("QuotedMediaOpening.attachment(for: reference"),
+            body.contains("QuotedMediaOpening.gesture(for: reference"),
             "l'hôte doit élire la pièce par la règle partagée, qui porte le verrou."
         )
         let rule = try anchored(

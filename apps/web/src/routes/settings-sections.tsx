@@ -52,6 +52,10 @@ import { Link } from '@/routes/route-table';
 
 export const SETTINGS_HEADER_HEIGHT = 64;
 
+/** Le volet Sécurité des réglages (#6720) — `/settings?volet=securite`. */
+export const SECURITY_PANEL_PARAM = 'volet';
+export const SECURITY_PANEL = 'securite';
+
 /**
  * **LE COULOIR DES DISQUES FLOTTANTS** — la loi de `floating-corridor.ts`, portée
  * comme la cloche et le Flux (`FEED_TOP_RESERVE`) : au repos, la carte de profil,
@@ -95,7 +99,7 @@ function RowText({ label, caption, captionId }: { readonly label: string; readon
 function Chevron() {
   return (
     <span aria-hidden="true" className="shrink-0" style={{ color: SECTION_INK_2 }}>
-      <GlyphSvg glyph={SETTINGS_GLYPHS.caretRight} size={12} />
+      <GlyphSvg glyph={SETTINGS_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
     </span>
   );
 }
@@ -110,7 +114,7 @@ export function SettingsHeaderBar({ language }: { readonly language: InterfaceLa
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: SECTION_INK }}>
@@ -145,8 +149,10 @@ export function ProfileCard({ language, user }: { readonly language: InterfaceLa
   );
 }
 
-/* La SÉCURITÉ n'a plus d'adresse depuis le décommissionnement du legacy
-   (#6702) : MASQUÉE jusqu'à son portage.
+/* La SÉCURITÉ revient (#6720) — `?volet=securite` sur les réglages eux-mêmes,
+   miroir de `SecurityView` poussé depuis `SettingsView` : l'écran des sessions
+   se charge à la demande, et aucune route neuve n'entre dans la table du socle
+   (première peinture). Elle ne vise plus aucune adresse legacy.
 
    La SUPPRESSION DE COMPTE mène à sa page de la v2 (`/account/deletion`,
    #6715) — même onglet, même origine, sans légende. Elle y ouvre la demande
@@ -157,6 +163,13 @@ export function ProfileCard({ language, user }: { readonly language: InterfaceLa
 export function AccountSection({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <GroupedSection id="settings-account" title={upper(language, 'settings.section.account')} icon={SECTION_ICON({ set: 'ecran', name: 'userCircle' })}>
+      <Link to="settings" search={{ [SECURITY_PANEL_PARAM]: SECURITY_PANEL }} data-settings-security className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon>
+          <IconOf icon={{ set: 'ecran', name: 'shieldCheck' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.security.title')} />
+        <Chevron />
+      </Link>
       <Link to="accountDeletion" data-settings-account-deletion className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-error)">
           <IconOf icon={{ set: 'ecran', name: 'userMinus' }} size={15} />
@@ -253,8 +266,8 @@ function Switch({ checked }: { readonly checked: boolean }) {
           insetInlineStart: checked ? 22 : 2,
           width: 27,
           height: 27,
-          backgroundColor: 'white',
-          boxShadow: '0 1px 3px rgb(0 0 0 / 0.3)',
+          backgroundColor: 'var(--color-ios-on-brand)',
+          boxShadow: 'var(--shadow-sm)',
           transition: 'inset-inline-start 160ms ease',
         }}
       />
@@ -519,7 +532,7 @@ export function AppearanceSection({
                 style={{
                   minHeight: 44,
                   outlineColor: 'var(--color-ios-brand)',
-                  color: pressed ? 'white' : SECTION_INK,
+                  color: pressed ? 'var(--color-ios-on-brand)' : SECTION_INK,
                   backgroundColor: pressed ? 'var(--ios-indigo-600)' : 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)',
                 }}
               >
@@ -614,11 +627,31 @@ export function ToolsSection({ language, showAdmin = false }: { readonly languag
         <RowText label={translate(language, 'settings.tools.bookmarks')} />
         <Chevron />
       </Link>
+      {/* « MES SONS » (#9848) — la bibliothèque de sons de l'auteur, et le
+          seul endroit du web où l'on retire un son. Rangée d'archive, comme les
+          enregistrées : à leur suite, avant le jeu. */}
+      <Link to="soundsMine" data-settings-sounds className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <GlyphSvg glyph={SETTINGS_GLYPHS.speakerHigh} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.sounds')} />
+        <Chevron />
+      </Link>
       <Link to="progression" data-settings-progression className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-warning)">
           <Glyph name="trophy" size={15} />
         </RowIcon>
         <RowText label={translate(language, 'settings.tools.progression')} />
+        <Chevron />
+      </Link>
+      {/* LES RÉGLAGES DU JEU (#9481) — la porte des réglages « Jeu » : célébrations,
+          « Jeu masqué », qui voit quoi, ligue publique. Juste sous Progression :
+          c'est le même univers, et c'est là qu'on la cherche. */}
+      <Link to="progressionReglages" data-settings-game className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <Glyph name="trophy" size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.game')} />
         <Chevron />
       </Link>
       {showAdmin ? (

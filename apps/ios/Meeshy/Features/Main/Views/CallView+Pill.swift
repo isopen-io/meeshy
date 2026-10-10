@@ -10,11 +10,6 @@ import MeeshyUI
 // rangées, jamais empilé. La conversation n'est pas une action : sa seule
 // porte est l'en-tête (#8436).
 
-struct AutoHideKey: Equatable {
-    let isVisible: Bool
-    let layer: CallScreenLayer
-}
-
 enum CallControlsCopy {
     static var more: String {
         String(localized: "call.control.more", defaultValue: "Plus d'actions", bundle: .main)
@@ -151,9 +146,9 @@ extension CallView {
             }
             if isGroupStage && showTranscript {
                 captionsBand(hasOwnGlass: false)
-                    .padding(.leading, 14)
-                    .padding(.trailing, 4)
-                    .padding(.top, 6)
+                    .padding(.leading, MeeshySpacing.mdPlus)
+                    .padding(.trailing, MeeshySpacing.xs)
+                    .padding(.top, MeeshySpacing.xsPlus)
                 pillHairline
             }
             baseRow
@@ -168,7 +163,7 @@ extension CallView {
         Rectangle()
             .fill(Color.white.opacity(0.14))
             .frame(height: 0.5)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .accessibilityHidden(true)
     }
 
@@ -212,8 +207,8 @@ extension CallView {
             }
             .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     private func moreButton(captioned: Bool) -> some View {
@@ -255,19 +250,27 @@ extension CallView {
 
     // MARK: - Family rows
 
+    /// Les rangées et leurs boutons sont CONSTRUITS ici, sur le fil principal :
+    /// `unfoldedRows` est un `ViewThatFits`, que la rotation ou une hauteur
+    /// compacte fait mesurer sur le rendu asynchrone d'iOS 26, où un `ForEach`
+    /// ne doit appeler aucune fermeture isolée (#9456, `AsyncRenderRow`).
     private func familyRows(_ rows: [CallActionFamilyRow]) -> some View {
-        VStack(spacing: 0) {
-            ForEach(rows) { row in
-                CallPillRow(title: CallControlsCopy.familyTitle(row.family)) {
-                    ForEach(row.actions, id: \.self) { action in
-                        actionButton(action)
-                            .frame(width: Self.rowCellWidth)
-                    }
-                }
-            }
+        let sized = CallGroupStageSizing.rows(rows, isCompactHeight: isGroupStage && isStageCompactHeight)
+        return VStack(spacing: 0) {
+            ForEach(sized.map { AsyncRenderRow(id: $0.id, content: familyRow($0)) },
+                    content: asyncRenderRowContent)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallControlsCopy.actions)
+    }
+
+    private func familyRow(_ row: CallPillRowContent) -> some View {
+        let cells = row.actions.map { action in
+            AsyncRenderRow(id: action, content: actionButton(action).frame(width: Self.rowCellWidth))
+        }
+        return CallPillRow(title: row.family.map { CallControlsCopy.familyTitle($0) }) {
+            ForEach(cells, content: asyncRenderRowContent)
+        }
     }
 
     // MARK: - Actions
@@ -374,14 +377,15 @@ extension CallView {
     /// Mac / iPad avec caméra Continuity ou USB : un choix de caméra remplace
     /// le simple retournement avant/arrière.
     private func cameraPickerActionButton(captioned: Bool, diameter: CGFloat) -> some View {
-        Menu {
-            ForEach(callManager.availableCameras) { camera in
-                Button {
-                    callManager.selectCamera(id: camera.id)
-                } label: {
-                    Label(camera.displayName, systemImage: callManager.selectedCameraId == camera.id ? "checkmark" : "camera")
-                }
-            }
+        let choices = callManager.availableCameras.map { camera in
+            AsyncRenderRow(id: camera.id, content: Button {
+                callManager.selectCamera(id: camera.id)
+            } label: {
+                Label(camera.displayName, systemImage: callManager.selectedCameraId == camera.id ? "checkmark" : "camera")
+            })
+        }
+        return Menu {
+            ForEach(choices, content: asyncRenderRowContent)
         } label: {
             CallPillButtonLabel(
                 symbol: "camera.badge.ellipsis",

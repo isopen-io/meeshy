@@ -26,7 +26,6 @@ const esCallJoin = {
   'keypad.input.placeholder': 'Número o nombre',
   'keypad.input.label': 'Número o nombre que buscar',
   'keypad.delete': 'Borrar',
-  'keypad.clear': 'Borrar todo',
   'keypad.prompt.title': 'Marca un número o un nombre',
   'keypad.prompt.subtitle': 'Encuentra a alguien por número de teléfono o por nombre.',
   'keypad.searching': 'Buscando…',

@@ -35,7 +35,7 @@ const recorder = () => {
   return { log, context };
 };
 
-const tiles = (count: number): readonly Paintable[] => Array.from({ length: count }, () => ({ source: {} as CanvasImageSource, size: { width: 1280, height: 720 }, mirrored: false, fit: 'cover' as const }));
+const tiles = (count: number): readonly Paintable[] => Array.from({ length: count }, () => ({ source: {} as CanvasImageSource, size: { width: 1280, height: 720 }, fit: 'cover' as const }));
 
 const TEXT: MontageText = { bubble: 'Quel appel !', date: '28 septembre 2026', coverlines: ['L’appel de l’année', 'Tous réunis', 'Exclusif'] };
 

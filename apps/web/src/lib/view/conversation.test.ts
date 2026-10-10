@@ -60,6 +60,47 @@ describe('presenceOf — les fenêtres 1/3/5, `now` INJECTÉ (#5559 T10)', () =>
   });
 });
 
+/**
+ * LA PRÉSENCE EST CELLE DU COMPTE (#9065, recette staging 2026-10-02) — la
+ * passerelle sert DEUX niveaux : `Participant.lastActiveAt` (la colonne de la
+ * LIGNE de participant, figée à son entrée dans la conversation) et
+ * `user.lastActiveAt` (le compte, tenu à jour par la présence). Lire le premier
+ * avec `isOnline: true` faisait tomber un pair EN LIGNE dans la décroissance
+ * anti-stale : ni point vert, ni contour.
+ */
+describe('presenceOf — le compte d’abord, la ligne de participant en repli', () => {
+  test('en ligne au compte, ligne de participant figée depuis la veille ⇒ online', () => {
+    const p = participant({
+      isOnline: true,
+      lastActiveAt: minutesAgo(14 * 60),
+      user: { id: 'u1', username: 'fatou', isOnline: true, lastActiveAt: minutesAgo(0.3) } as Participant['user'],
+    });
+    expect(presenceOf(p, NOW)).toBe('online');
+  });
+
+  test('le compte dit hors ligne depuis 10 min ⇒ offline, même si la ligne prétend le contraire', () => {
+    const p = participant({
+      isOnline: true,
+      lastActiveAt: minutesAgo(0.2),
+      user: { id: 'u1', username: 'fatou', isOnline: false, lastActiveAt: minutesAgo(10) } as Participant['user'],
+    });
+    expect(presenceOf(p, NOW)).toBe('offline');
+  });
+
+  test('un invité sans compte garde la présence de sa ligne', () => {
+    const p = participant({ userId: undefined, isOnline: false, lastActiveAt: minutesAgo(2) });
+    expect(presenceOf(p, NOW)).toBe('away');
+  });
+
+  test('un compte dont la présence est masquée ne fabrique rien', () => {
+    const p = participant({
+      isOnline: false,
+      user: { id: 'u1', username: 'fatou', isOnline: false } as Participant['user'],
+    });
+    expect(presenceOf(p, NOW)).toBe('offline');
+  });
+});
+
 const conversation = (partial: Partial<Conversation>): Conversation =>
   ({
     id: 'c1',

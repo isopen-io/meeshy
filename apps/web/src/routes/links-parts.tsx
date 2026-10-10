@@ -41,21 +41,21 @@ const BRAND = 'var(--color-ios-brand)';
 export const SHARE_TINT = 'var(--ios-indigo-500)';
 const NEUTRAL_TINT = 'var(--color-ios-ink-3)';
 const HUB_TINT = 'var(--color-warning)';
-const SKELETON_TINT = 'color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)';
-const STRETCHED = "before:absolute before:inset-0 before:rounded-card before:content-['']";
+export const SKELETON_TINT = 'color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)';
+export const STRETCHED = "before:absolute before:inset-0 before:rounded-card before:content-['']";
 export const SECTION_TITLE_CLASS = 'ps-1 text-check font-bold uppercase tracking-wide';
 export const BRAND_BUTTON_STYLE = {
   backgroundColor: 'var(--ios-indigo-600)',
-  backgroundImage: 'linear-gradient(90deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-indigo-600) 78%, black))',
-  color: 'white',
+  backgroundImage: 'linear-gradient(90deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-indigo-600) 78%, var(--color-media-backdrop)))',
+  color: 'var(--color-ios-on-brand)',
   outlineColor: BRAND,
 } as const;
 
 export function LinksGlyph({ name, size }: { readonly name: LinksGlyphName; readonly size: number }) {
-  return <GlyphSvg glyph={LINKS_GLYPHS[name]} size={size} />;
+  return <GlyphSvg glyph={LINKS_GLYPHS[name]} size={size} {...(name === 'caretRight' ? { className: 'rtl:-scale-x-100' } : {})} />;
 }
 
-const tinted = (tint: string, percent: number) => `color-mix(in srgb, ${tint} ${percent}%, transparent)`;
+export const tinted = (tint: string, percent: number) => `color-mix(in srgb, ${tint} ${percent}%, transparent)`;
 
 function StatusDisc({ active, size }: { readonly active: boolean; readonly size: number }) {
   const tint = active ? SHARE_TINT : NEUTRAL_TINT;
@@ -73,32 +73,47 @@ export const statusLabel = (language: InterfaceLanguage, active: boolean): strin
 export const joinedLabel = (language: InterfaceLanguage, count: number): string =>
   translate(language, count === 1 ? 'links.share.joined.one' : 'links.share.joined.other', { count: new Intl.NumberFormat(language).format(count) });
 
+export type LinksBackTarget = 'list' | 'links' | 'shareLinks' | 'myTrackingLinks' | 'communityLinks' | 'affiliateLinks';
+export type LinksCreateTarget = 'shareLinkNew' | 'myTrackingLinkNew' | 'affiliateLinkNew' | 'communityNew';
+
 export function LinksHeader({
   language,
   back,
   backLabel,
   title,
   createLabel,
+  createTo = 'shareLinkNew',
 }: {
   readonly language: InterfaceLanguage;
-  readonly back: 'list' | 'links' | 'shareLinks';
+  /** Un écran de la famille, ou la page d'UN lien (`{ shareLink: linkId }`). */
+  readonly back: LinksBackTarget | { readonly shareLink: string };
   readonly backLabel: string;
   readonly title: string;
   readonly createLabel?: string;
+  readonly createTo?: LinksCreateTarget;
 }) {
+  const backProps = {
+    'aria-label': backLabel,
+    'data-links-back': true,
+    className: `${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`,
+    style: { color: BRAND, outlineColor: BRAND },
+  } as const;
+  const backDisc = (
+    <ChromeActionDisc>
+      <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
+    </ChromeActionDisc>
+  );
   return (
     <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: LINKS_HEADER_HEIGHT }} lang={language}>
-      <Link
-        to={back}
-        aria-label={backLabel}
-        data-links-back
-        className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
-        style={{ color: BRAND, outlineColor: BRAND }}
-      >
-        <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
-        </ChromeActionDisc>
-      </Link>
+      {typeof back === 'string' ? (
+        <Link to={back} {...backProps}>
+          {backDisc}
+        </Link>
+      ) : (
+        <Link to="shareLink" params={{ link: back.shareLink }} {...backProps}>
+          {backDisc}
+        </Link>
+      )}
       <h1 className="min-w-0 flex-1 truncate text-center text-body font-semibold" style={{ color: INK }}>
         {title}
       </h1>
@@ -106,7 +121,7 @@ export function LinksHeader({
         <span aria-hidden="true" className="block shrink-0" style={{ width: 44 }} />
       ) : (
         <Link
-          to="shareLinkNew"
+          to={createTo}
           aria-label={createLabel}
           data-links-create
           className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
@@ -135,48 +150,6 @@ export function LinksBanner({ language }: { readonly language: InterfaceLanguage
         <span className="text-caption" style={{ color: INK_2 }}>
           {translate(language, 'links.hub.banner.subtitle')}
         </span>
-      </span>
-    </div>
-  );
-}
-
-/**
- * Miroir `LinksHubView.linkCard(.shareLinks)` — la carte ouvre la famille, « + »
- * ouvre la création. Les trois autres familles d'iOS (suivi, communauté,
- * affiliation) ne sont pas dessinées tant que le web ne les sert pas (D-63).
- */
-export function ShareLinksFamilyCard({ language }: { readonly language: InterfaceLanguage }) {
-  return (
-    <div data-links-family="share" className="relative flex items-center gap-1 rounded-card ps-3.5 pe-1" style={{ ...CARD_STYLE, minHeight: 80 }}>
-      <Link
-        to="shareLinks"
-        data-links-family-open
-        className={`flex min-w-0 flex-1 items-center gap-3.5 py-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${STRETCHED}`}
-        style={{ outlineColor: BRAND }}
-      >
-        <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-full" style={{ color: SHARE_TINT, backgroundColor: tinted(SHARE_TINT, 15) }}>
-          <Glyph name="linkSimple" size={22} />
-        </span>
-        <span className="relative grid min-w-0 gap-0.5">
-          <span data-links-family-title className="text-body font-semibold" style={{ color: INK }}>
-            {translate(language, 'links.hub.share.title')}
-          </span>
-          <span className="line-clamp-2 text-caption" style={{ color: INK_2 }}>
-            {translate(language, 'links.hub.share.description')}
-          </span>
-        </span>
-      </Link>
-      <Link
-        to="shareLinkNew"
-        aria-label={translate(language, 'links.hub.share.create')}
-        data-links-family-create
-        className={`${CHROME_ACTION_HIT_CLASS} z-[1] focus-visible:outline-2`}
-        style={{ color: SHARE_TINT, outlineColor: BRAND }}
-      >
-        <LinksGlyph name="plusCircle" size={26} />
-      </Link>
-      <span aria-hidden="true" className="pointer-events-none pe-2" style={{ color: INK_2 }}>
-        <LinksGlyph name="caretRight" size={14} />
       </span>
     </div>
   );

@@ -16,7 +16,6 @@ const esIdentity = {
   'avatar.menu.view_story': 'Ver la historia',
   'avatar.menu.conversation_details': 'Detalles de la conversación',
   'conversation.details.title': 'Detalles de la conversación',
-  'conversation.details.open': 'Ver los detalles de {name}',
   'conversation.details.type.direct': 'Chat privado',
   'conversation.details.type.group': 'Grupo',
   'conversation.details.type.public': 'Conversación pública',

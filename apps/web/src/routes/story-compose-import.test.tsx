@@ -2,6 +2,7 @@ import { act } from 'react';
 import { describe, expect, test } from 'bun:test';
 
 import { STUDIO_PAGE_MAX } from '@/lib/stories/studio';
+import { offerStudioSeedOf } from '@/lib/stories/studio-seed';
 import { flush, harness, mount, registerStudioBench } from '@/test-support/story-studio-bench';
 
 /**
@@ -78,5 +79,22 @@ describe('StoryComposeScreen — la montée ne recharge jamais le média de la s
     await flush();
     expect(el.querySelector('[data-scene-player] img')).toBe(painted);
     expect(painted.getAttribute('src')).toBe(local);
+  });
+});
+
+describe('StoryComposeScreen — « Modifier avant de publier » un partage entrant (#9286)', () => {
+  test('les fichiers partagés font une scène chacun, et leur texte devient le corps du post', async () => {
+    offerStudioSeedOf({ files: [media('a.jpg'), media('b.mp4', 'video/mp4')], text: 'Vu ce matin' });
+    const bench = harness({});
+    const el = mount(bench.deps, 'POST');
+    await flush(() => pageTiles(el).length === 2 && bench.uploadCreations() === 2);
+    expect(el.querySelector('[data-story-post-text]')?.getAttribute('data-story-post-text')).toBe('written');
+  });
+
+  test('un partage sans fichier sème le seul corps : le studio s’ouvre sans fond', async () => {
+    offerStudioSeedOf({ files: [], text: 'https://meeshy.me/a' });
+    const el = mount(harness({}).deps, 'POST');
+    await flush(() => el.querySelector('[data-story-post-text="written"]') !== null);
+    expect(el.querySelector('[data-scene-player] img')).toBeNull();
   });
 });

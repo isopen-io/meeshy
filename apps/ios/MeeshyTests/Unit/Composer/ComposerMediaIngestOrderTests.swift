@@ -44,9 +44,12 @@ final class ComposerMediaIngestOrderTests: XCTestCase {
         .deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Meeshy/Features/Main/Composer")
 
+    /// `+Intake` ET `+Ingestion` : les feuilles d'ingestion sont sorties du
+    /// premier pour le second (#9138) — l'écrivain unique, lui, est resté.
     private func intakeSource() throws -> String {
-        try String(contentsOf: Self.composerDirectory
-            .appendingPathComponent("MeeshyComposerHost+Intake.swift"), encoding: .utf8)
+        try ["MeeshyComposerHost+Intake.swift", "MeeshyComposerHost+Ingestion.swift"]
+            .map { try String(contentsOf: Self.composerDirectory.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     /// **Tout le composer, pas le seul fichier où la règle est ÉCRITE** (#6008).

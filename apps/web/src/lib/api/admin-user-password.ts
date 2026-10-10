@@ -28,12 +28,22 @@ import type { ApiResult } from './http';
  * la valeur du champ qui voyage. Un refus de la passerelle sur un secret
  * saisi à la main revient en `error`, et la feuille l'affiche sous le champ.
  *
- * ## Ce que le corps ne porte pas
+ * ## Prévenir le membre, sur demande
  *
- * `sendEmail` est accepté par le schéma et **n'envoie rien** (#6831) :
- * `resetPassword` ne le lit jamais. L'offrir afficherait une case dont la
- * seule fonction serait de rassurer celui qui la coche.
+ * `sendEmail: true` fait envoyer par la passerelle une alerte de sécurité au
+ * membre, dans sa langue (`UserManagementService.resetPassword` →
+ * `notifyPasswordResetBestEffort`, #6831) ; le secret n'y figure pas. C'est un
+ * OPT-IN : la clé ne part que cochée — un administrateur qui répond à un compte
+ * compromis ne veut pas forcément alerter son détenteur.
+ *
+ * ## Le motif
+ *
+ * Facultatif, consigné au journal quand il est écrit (`logResetPassword`) ; la
+ * passerelle en exige alors dix caractères (`resetPasswordValidationSchema`).
  */
+
+/** Le plancher d'un motif ÉCRIT (`resetPasswordValidationSchema` : `min(10)`). */
+export const ADMIN_PASSWORD_MOTIVE_MIN_LENGTH = 10;
 
 /**
  * Le plancher SERVEUR (`PASSWORD_MIN_LENGTH` = 6). On refuse en dessous sans
@@ -68,6 +78,8 @@ export async function resetAdminUserPassword(
     readonly userId: string;
     readonly newPassword: string;
     readonly reason?: string;
+    /** Prévenir le membre par e-mail — la clé ne part que si c'est `true`. */
+    readonly sendEmail?: boolean;
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<null>> {
@@ -77,7 +89,11 @@ export async function resetAdminUserPassword(
 
   const motif = params.reason?.trim() ?? '';
   const corps: Record<string, unknown> = { newPassword: params.newPassword };
+  if (motif !== '' && motif.length < ADMIN_PASSWORD_MOTIVE_MIN_LENGTH) {
+    return { ok: false, status: 0, error: `Motif trop court (min ${ADMIN_PASSWORD_MOTIVE_MIN_LENGTH} caractères)` };
+  }
   if (motif !== '') corps.reason = motif;
+  if (params.sendEmail === true) corps.sendEmail = true;
 
   const result = await params.transport.request<unknown>({
     method: 'POST',

@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+
+import { PRESENCE_HERE_HEX, PRESENCE_HEX, presenceTone } from '@meeshy/shared/utils/user-presence';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -39,6 +42,12 @@ afterAll(async () => {
 
 const avatar = (props: Record<string, unknown>) =>
   renderToStaticMarkup(<Avatar initials="NO" color="#4455ff" size={40} name="Nour" {...props} />);
+
+/** La balise du GLYPHE du mood — celle qui porte le contour. */
+const glyph = (html: string): string => {
+  const start = html.indexOf('data-mood-glyph');
+  return start < 0 ? '' : html.slice(html.lastIndexOf('<', start), html.indexOf('>', start) + 1);
+};
 
 describe('la pastille ne se peint que s’il y a une humeur', () => {
   test('sans humeur, aucune pastille', () => {
@@ -115,5 +124,102 @@ describe('elle respire, puis se pose', () => {
     const pastille = html.slice(html.indexOf('data-mood='));
 
     expect(pastille).toContain('aria-hidden');
+  });
+});
+
+describe('le contour du mood dit la présence (#9065)', () => {
+  /**
+   * DEMANDE PORTEUR 2026-10-02 : le mood MASQUE le point, donc c'est son
+   * CONTOUR — la silhouette dilatée de l'emoji, jamais un anneau de plus — qui
+   * porte la présence : indigo dans la conversation, vert en ligne, rien sinon.
+   */
+  test('dans la conversation : contour indigo, même s’il est aussi en ligne', () => {
+    const html = avatar({ mood: '☕', here: true, presence: 'online' });
+
+    expect(glyph(html)).toContain('data-mood-outline="here"');
+    expect(glyph(html)).toContain(`--mood-outline:${PRESENCE_HERE_HEX}`);
+    expect(html).not.toContain('data-presence');
+  });
+
+  test('en ligne hors de la conversation : contour vert', () => {
+    const html = avatar({ mood: '☕', presence: 'online' });
+
+    expect(glyph(html)).toContain('data-mood-outline="online"');
+    expect(glyph(html)).toContain(`--mood-outline:${PRESENCE_HEX[presenceTone('online')]}`);
+  });
+
+  test('absent, inactif ou présence masquée : aucun contour', () => {
+    for (const props of [{}, { presence: 'away' }, { presence: 'offline' }]) {
+      const html = avatar({ mood: '☕', ...props });
+      expect(glyph(html)).not.toContain('data-mood-outline');
+      expect(glyph(html)).not.toContain('--mood-outline');
+    }
+  });
+
+  test('le contour suit la silhouette du glyphe : un filtre, jamais un anneau', () => {
+    const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
+    const rule = css.match(/\[data-mood-outline\]\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(rule).toMatch(/filter:\s*drop-shadow\(/);
+    expect(rule.match(/drop-shadow\([^;]*?var\(--mood-outline\)\)/g)).toHaveLength(4);
+    expect(rule).not.toMatch(/border|box-shadow|outline:/);
+  });
+});
+
+describe('le mood pulse à peine quand le pair regarde en plein écran (#9065)', () => {
+  test('ici au repos, il respire comme d’habitude', () => {
+    const html = avatar({ mood: '😴', here: true });
+    expect(html).toContain('mood-breathe');
+    expect(html).not.toContain('mood-stir');
+    expect(html).not.toContain('mood-hush');
+  });
+
+  test('actif sans plein écran, il respire plus amplement', () => {
+    const html = avatar({ mood: '😴', here: true, hereActive: true });
+    expect(html).toContain('mood-stir');
+    expect(html).not.toContain('mood-breathe');
+    expect(html).not.toContain('mood-hush');
+  });
+
+  test('le plein écran prime sur l’activité', () => {
+    const html = avatar({ mood: '😴', here: true, hereActive: true, hereFocused: true });
+    expect(html).toContain('mood-hush');
+    expect(html).not.toContain('mood-stir');
+  });
+
+  test('l’activité sans « ici » ne change rien', () => {
+    expect(avatar({ mood: '😴', hereActive: true })).toContain('mood-breathe');
+  });
+
+  test('une seule échelle : à peine < ample, une respiration à peine plus élevée — et le mouvement réduit coupe tout', () => {
+    const css = readFileSync(new URL('../styles/app.css', import.meta.url), 'utf8');
+    const peak = (name: string) => Math.max(...[...(new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(css)?.[1] ?? '').matchAll(/scale\(([\d.]+)\)/g)].map((m) => Number(m[1])));
+    expect(peak('moodHush')).toBeLessThan(peak('moodBreathe'));
+    expect(peak('moodHush')).toBeLessThan(peak('moodStir'));
+    expect(peak('moodStir')).toBeCloseTo(1.2, 5);
+    expect(css).toMatch(/\.mood-stir\s*\{[^}]*animation-name:\s*moodStir[^}]*animation-duration:\s*2s[^}]*infinite/);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^@]*\.mood-stir/);
+  });
+
+  test('en plein écran, il quitte sa respiration pour un pulse à peine perceptible', () => {
+    const html = avatar({ mood: '😴', here: true, hereFocused: true });
+
+    expect(html).not.toContain('mood-breathe');
+    expect(html).toContain('mood-hush');
+    expect(html).toContain('data-mood-focused="true"');
+    expect(glyph(html)).toContain('data-mood-outline="here"');
+  });
+
+  test('le pulse du plein écran est à peine perceptible et se tait en mouvement réduit', () => {
+    const css = readFileSync(new URL('../styles/app.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.mood-hush\s*\{[^}]*animation-name:\s*moodHush[^}]*infinite/);
+    const peak = Number(/@keyframes moodHush[\s\S]*?scale\(([\d.]+)\)\s*;?\s*\}\s*\}/.exec(css)?.[1]);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(1.06);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^@]*\.mood-hush/);
+  });
+
+  test('un focus sans « ici » ne change rien', () => {
+    expect(avatar({ mood: '😴', hereFocused: true })).toContain('mood-breathe');
   });
 });

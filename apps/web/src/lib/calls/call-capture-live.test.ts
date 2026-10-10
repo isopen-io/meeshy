@@ -3,7 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import type { GallerySaver } from '@/lib/gallery/gallery-saver';
 import type { FileDeliveryPortal } from '@/lib/media/deliver-file';
 
-import { clipFileName, pickClipFormat, startClip, type ClipEnv } from './call-capture-live';
+import type { PhotoEnv } from '@/lib/media/photo-develop';
+
+import { captureStill, clipFileName, pickClipFormat, startClip, type ClipEnv } from './call-capture-live';
 import { saveCaptures } from './call-capture-save';
 
 /**
@@ -123,5 +125,30 @@ describe('enregistrer une vidéo', () => {
     const portal: FileDeliveryPortal = { deliver: async (_blob, _name, mime) => (types.push(mime), 'delivered') };
     expect(await saveCaptures([video], { saver: null, portal: async () => portal })).toEqual({ saved: 1, failed: 0, cancelled: 0 });
     expect(types).toEqual(['video/mp4', 'video/mp4']);
+  });
+});
+
+describe('captureStill', () => {
+  const videoOf = (width: number, mirrored: boolean) => ({ videoWidth: width, videoHeight: 720, hasAttribute: (name: string) => mirrored && name === 'data-call-mirrored' }) as unknown as HTMLVideoElement;
+
+  const photoEnv = (painted: unknown[]): PhotoEnv => ({
+    surface: () => ({
+      paint: (_image, crop, size) => void painted.push({ crop, size }),
+      pixels: () => null,
+      put: () => undefined,
+      encode: async (mime) => new Blob(['jpeg'], { type: mime }),
+    }),
+  });
+
+  test('l’image de ma vidéo passe par le développement unique : JPEG, à l’endroit, nommée par son style (#8695, #8696)', async () => {
+    const painted: unknown[] = [];
+    const file = await captureStill({ video: videoOf(1280, true), style: 'angel', now: new Date(2026, 8, 29, 18, 4, 9), photo: photoEnv(painted) });
+    expect(file?.fileName).toBe('meeshy-appel-angel-20260929-180409.jpg');
+    expect(file?.mimeType).toBe('image/jpeg');
+    expect(painted).toEqual([{ crop: { x: 0, y: 0, width: 1280, height: 720 }, size: { width: 1280, height: 720 } }]);
+  });
+
+  test('une vidéo sans image : rien', async () => {
+    expect(await captureStill({ video: videoOf(0, false), style: 'angel', now: new Date(), photo: photoEnv([]) })).toBeNull();
   });
 });

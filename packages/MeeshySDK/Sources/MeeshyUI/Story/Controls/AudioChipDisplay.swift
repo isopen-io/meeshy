@@ -9,7 +9,9 @@ import MeeshySDK
 public nonisolated enum BackgroundAudioAnnouncement: Equatable, Sendable {
     case none
     case original
-    case credit(title: String?, username: String?, duration: TimeInterval?)
+    /// `releasedAt` : date de publication du son dans la bibliothèque (#9677) —
+    /// elle remplace le titre absent : « @auteur · date ».
+    case credit(title: String?, username: String?, duration: TimeInterval?, releasedAt: Date? = nil)
 }
 
 /// Contenu de la chip audio, à droite de la note (reader ET preview).
@@ -39,23 +41,44 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
         switch announcement {
         case .none, .original:
             return .waveform
-        case .credit(let title, let username, _):
-            return .marquee(text: creditMarqueeText(title: title, username: username))
+        case .credit(let title, let username, _, let releasedAt):
+            return .marquee(text: creditLine(title: title, username: username, releasedAt: releasedAt)
+                ?? genericCredit)
         }
     }
 
-    private static func creditMarqueeText(title: String?, username: String?) -> String {
+    /// Le crédit d'un son de bibliothèque dont rien n'est connu (cache froid).
+    public static let genericCredit = "♫ —"
+
+    /// **LE crédit d'un son emprunté, une seule forme partout** (#9677) :
+    /// « titre · @auteur » ; sans titre, « @auteur · date » quand la date du son
+    /// est connue ; sinon ce qui existe. `nil` quand rien n'est connu — l'hôte
+    /// choisit alors son crédit générique. Jamais la durée : c'est le crédit
+    /// d'une ŒUVRE, pas un compteur, et la jumelle web (#9678) ne la dit pas.
+    public static func creditLine(title: String?,
+                                  username: String?,
+                                  releasedAt: Date?,
+                                  locale: Locale = .current,
+                                  timeZone: TimeZone = .current) -> String? {
         let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
         let author = username?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .drop(while: { $0 == "@" })
-        let authorTag = (author?.isEmpty == false) ? "@\(author!)" : nil
-        switch (cleanTitle?.isEmpty == false ? cleanTitle : nil, authorTag) {
-        case let (t?, a?): return "\(t) · \(a)"
-        case let (nil, a?): return a
-        case let (t?, nil): return t
-        case (nil, nil):   return "♫ —"
-        }
+        let authorTag = (author?.isEmpty == false) ? author.map { "@\($0)" } : nil
+        let titlePart = (cleanTitle?.isEmpty == false) ? cleanTitle : nil
+        let datePart = titlePart == nil
+            ? releasedAt.map { creditDate($0, locale: locale, timeZone: timeZone) }
+            : nil
+        let parts = [titlePart, authorTag, authorTag == nil ? nil : datePart].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// « 12 mars 2026 » — la date courte de la langue du lecteur.
+    public static func creditDate(_ date: Date, locale: Locale, timeZone: TimeZone) -> String {
+        var style = Date.FormatStyle(date: .abbreviated, time: .omitted)
+        style.locale = locale
+        style.timeZone = timeZone
+        return date.formatted(style)
     }
 
     // MARK: - Annonce du fond (B3.4 provenance, B3.5 existence)
@@ -66,13 +89,15 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
     public static func backgroundAnnouncement(sound: BackgroundSoundV3?,
                                                libraryTitle: String?,
                                                libraryUsername: String?,
-                                               libraryDuration: TimeInterval?) -> BackgroundAudioAnnouncement {
+                                               libraryDuration: TimeInterval?,
+                                               libraryReleasedAt: Date? = nil) -> BackgroundAudioAnnouncement {
         guard let sound else { return .none }
         switch sound.source {
         case .original:
             return .original
         case .library:
-            return .credit(title: libraryTitle, username: libraryUsername, duration: libraryDuration)
+            return .credit(title: libraryTitle, username: libraryUsername, duration: libraryDuration,
+                           releasedAt: libraryReleasedAt)
         }
     }
 
@@ -257,7 +282,10 @@ public struct AudioChipMarquee: View {
         GeometryReader { geo in
             let reduceMotion = MeeshyMotion.shouldReduce(system: systemReduceMotion,
                                                          userForced: userForcedReduceMotion)
-            let fits = contentWidth > 0 && contentWidth <= geo.size.width
+            // Une demi-pointe de tolérance : un hôte qui DIMENSIONNE la boîte sur
+            // le texte lui-même (`BackgroundSoundBadge`) mesure la même largeur,
+            // à l'arrondi près — le crédit qui tient ne doit pas défiler.
+            let fits = contentWidth > 0 && contentWidth <= geo.size.width + 0.5
             Group {
                 if reduceMotion {
                     truncatedContent
