@@ -1,7 +1,7 @@
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import type { NotificationRecord } from './record';
-import { notificationRowPresentation, type ContentKind, type MilestoneGlyph } from './row-presentation';
+import { notificationRowPresentation, type ContentKind, type ConversationScope, type MilestoneGlyph } from './row-presentation';
 
 /**
  * **CE QUE LA BANNIÈRE IN-APP DIT** (#8727, jumelle de
@@ -16,6 +16,8 @@ import { notificationRowPresentation, type ContentKind, type MilestoneGlyph } fr
 export type BannerPresentation = {
   readonly headline: string;
   readonly body: string | null;
+  /** OÙ un message a été écrit (#9992) — son groupe, ou « Message privé » ; `null` hors conversation. */
+  readonly context: { readonly scope: ConversationScope; readonly text: string } | null;
   /** Le contenu visé (sa case porte son icône quand il n'a pas de vignette) — `null` hors contenu social. */
   readonly content: ContentKind | null;
   readonly milestone: MilestoneGlyph | null;
@@ -28,7 +30,8 @@ export function bannerPresentation(notification: NotificationRecord, options: { 
   const footer = row.footer;
   const content = footer?.kind === 'content' ? footer.content : null;
   const body = row.body ?? row.quote ?? (footer?.kind === 'content' || footer?.kind === 'plain' ? footer.text : null);
-  return { headline: row.title, body, content, milestone: row.leading.kind === 'milestone' ? row.leading.glyph : null, game: row.leading.kind === 'game' };
+  const context = footer?.kind === 'conversation' ? { scope: footer.scope, text: footer.text } : null;
+  return { headline: row.title, body, context, content, milestone: row.leading.kind === 'milestone' ? row.leading.glyph : null, game: row.leading.kind === 'game' };
 }
 
 /**
