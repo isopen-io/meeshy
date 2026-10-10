@@ -46,9 +46,27 @@
  * (`pe-12`) reste celle du bouton d'actions. En clair, l'accent descend à
  * 12 % → 4 % : à 16 %, l'aperçu (`--color-ios-ink-2`) tombait à 4,47:1 sur
  * l'accent de World Wide (#5D9AC6) — sous l'AA ; à 12 %, il la tient.
+ *
+ * LA PEAU VIT SUR UN PSEUDO-ÉLÉMENT, PAS SUR LA RANGÉE (revue #10004) : le
+ * conteneur visuel mesure 100 et déborde de 8 de chaque côté de sa case
+ * (`VISUAL_HEIGHT`, `lens-row.tsx`) — un débord invisible tant qu'il n'a pas
+ * de fond. Peinte sur lui, la carte faisait 100 de haut et mordait sur la
+ * barre de filtres et sur le premier en-tête de section. Rentrée de 12, elle
+ * mesure 76, comme la planche, et laisse 4 d'air dans la case. `z-index: -1`
+ * la pose sous le contenu, dans le contexte d'empilement que la transformée
+ * de la scène donne à la rangée.
  */
 .lens-row.lens-row--card {
   inset-inline: 12px;
+}
+
+.lens-row.lens-row--card::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block: 12px;
+  z-index: -1;
+  pointer-events: none;
   border-radius: 16px;
   background: linear-gradient(
     135deg,
@@ -58,7 +76,7 @@
   border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
-:root.light .lens-row.lens-row--card {
+:root.light .lens-row.lens-row--card::before {
   background: linear-gradient(
     135deg,
     color-mix(in srgb, var(--accent) 12%, transparent),
