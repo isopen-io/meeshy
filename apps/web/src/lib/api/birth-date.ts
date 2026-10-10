@@ -1,22 +1,19 @@
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 import * as z from 'zod/mini';
 
 import type { OnboardingDeps } from './onboarding';
 
 /**
- * **LA DÉCLARATION DE L'ÂGE** (#9928, contrat #9927) — `PUT
- * /api/v1/me/birth-date` `{ birthDate: 'AAAA-MM-JJ' }`, écrite UNE fois.
+ * **LA DÉCLARATION DE L'ÂGE** (#9928, contrat #9927) — `PUT me.birthDate`
+ * `{ birthDate: 'AAAA-MM-JJ' }`, écrite UNE fois.
  *
  * La passerelle seule calcule la classe d'âge : ce port ne compare aucune
  * date, il rend ce que le serveur a tranché. Les refus nommés deviennent des
  * issues que l'écran sait dire — `409` (déjà posée) vaut une étape faite,
  * `422` (moins de 13 ans) ferme le compte, `404` (passerelle antérieure à la
- * route) ne bloque rien.
- *
- * Le chemin vit ici tant que `@meeshy/shared/api/endpoints/me` ne le déclare
- * pas : le lot passerelle (#9927) porte le fichier partagé, ce lot ne l'écrit
- * pas.
+ * route) ne bloque rien. Le chemin est l'entrée générée `me.birthDate`.
  */
-export const BIRTH_DATE_PATH = '/api/v1/me/birth-date';
+export const BIRTH_DATE_PATH = meEndpoints.birthDate;
 
 export type BirthDateOutcome =
   | { readonly kind: 'saved'; readonly minorGlobal: boolean }

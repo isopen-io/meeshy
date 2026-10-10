@@ -73,7 +73,7 @@ describe('applyFilter — corpus archivé (#5559 T7)', () => {
      sert archivée, et le client suit la restriction même si une préférence ou
      un override disait le contraire — elle revient d'elle-même à ses 18 ans. */
   test('Global fermée à un mineur vit dans les archives, quoi que disent la préférence ou un override', () => {
-    const global = conversation({ id: 'c-global', type: 'global', identifier: 'meeshy', ...({ viewerWriteRestriction: 'minor-global' } as Partial<Conversation>) });
+    const global = conversation({ id: 'c-global', type: 'global', identifier: 'meeshy', viewerWriteRestriction: 'minor-global' });
     const run = (filter: 'all' | 'archived', overrides = NO_OVERRIDES) =>
       applyFilter({ conversations: [global], filter, search: '', viewerId: VIEWER, overrides }).map((c) => c.id);
 
@@ -83,7 +83,7 @@ describe('applyFilter — corpus archivé (#5559 T7)', () => {
   });
 
   test('Global sans restriction servie reste dans la liste', () => {
-    const global = conversation({ id: 'c-global', type: 'global', identifier: 'meeshy', ...({ viewerWriteRestriction: null } as Partial<Conversation>) });
+    const global = conversation({ id: 'c-global', type: 'global', identifier: 'meeshy', viewerWriteRestriction: null });
     expect(applyFilter({ conversations: [global], filter: 'all', search: '', viewerId: VIEWER, overrides: NO_OVERRIDES }).map((c) => c.id)).toEqual(['c-global']);
   });
 });

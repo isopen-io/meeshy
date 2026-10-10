@@ -1,5 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
+import type { ViewerWriteRestriction } from '@meeshy/shared/types/conversation';
+
 import type { Conversation } from '@/lib/api/types';
 import type { OutboxState } from '@/lib/send/outbox-store';
 
@@ -11,17 +13,14 @@ import type { OutboxState } from '@/lib/send/outbox-store';
  * date ; il lit ce qui est servi, et apprend d'un refus `GLOBAL_ADULTS_ONLY`
  * ce qu'un cache périmé ne disait pas encore.
  *
- * `Conversation` (partagé) ne déclare pas encore le champ — le lot passerelle
- * porte le type —, d'où la lecture par `in` : aucune assertion, et une valeur
- * inconnue ne restreint rien (le serveur refuse de toute façon).
+ * Une valeur inconnue ne restreint rien : le serveur refuse de toute façon.
  */
-export type WriteRestriction = 'minor-global';
+export type WriteRestriction = ViewerWriteRestriction;
 
 export const GLOBAL_ADULTS_ONLY = 'GLOBAL_ADULTS_ONLY';
 
 export function servedWriteRestriction(conversation: Conversation | undefined): WriteRestriction | null {
-  if (conversation === undefined || !('viewerWriteRestriction' in conversation)) return null;
-  return conversation.viewerWriteRestriction === 'minor-global' ? 'minor-global' : null;
+  return conversation?.viewerWriteRestriction === 'minor-global' ? 'minor-global' : null;
 }
 
 /** Les conversations qu'un refus a fermées pendant CETTE session — mémoire seule. */

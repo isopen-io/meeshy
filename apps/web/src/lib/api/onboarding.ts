@@ -1,10 +1,6 @@
 import * as z from 'zod/mini';
 
-import type {
-  OnboardingState as SharedOnboardingState,
-  OnboardingStepId as SharedOnboardingStepId,
-  OnboardingStepOutcome,
-} from '@meeshy/shared/types/onboarding';
+import type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@meeshy/shared/types/onboarding';
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import { unwrap } from './client';
@@ -41,47 +37,22 @@ export type OnboardingDeps = { readonly source: DataSource; readonly transport: 
 
 const PATH = meEndpoints.onboarding;
 
-/**
- * **L'ÂGE** (#9928) — l'étape FACULTATIVE que le lot passerelle (#9927) ajoute
- * à `ONBOARDING_STEP_IDS`. Le web la connaît avant que le fichier partagé la
- * déclare : l'union reste juste dans les deux états du dépôt (`'age'` y est
- * absorbé quand le partagé l'ajoute), et une passerelle qui l'ignore ne
- * bloque rien — son `PATCH` refusé laisse simplement l'étape à reproposer.
- */
-export type OnboardingStepId = SharedOnboardingStepId | 'age';
-
-/** La restriction d'écriture que la passerelle calcule pour le lecteur (#9927). */
-export type ViewerWriteRestriction = 'minor-global';
-
-/**
- * L'état servi, tel que CE client le lit : la forme partagée, plus l'étape de
- * l'âge et la restriction d'écriture (optionnelle, `null` = aucune ; absente
- * = serveur antérieur).
- */
-export type OnboardingState = Omit<SharedOnboardingState, 'seenSteps' | 'prefilledSteps'> & {
-  readonly seenSteps: OnboardingStepId[];
-  readonly prefilledSteps: OnboardingStepId[];
-  readonly viewerWriteRestriction?: ViewerWriteRestriction | null | undefined;
-};
-
-export type OnboardingPatchBody =
-  | { readonly step: OnboardingStepId; readonly outcome: OnboardingStepOutcome }
-  | { readonly finish: true };
+/* Les types de l'accueil sont ceux du contrat partagé (#9927 : l'étape `age`
+   et `viewerWriteRestriction` y sont déclarées) ; ils passent par ce module
+   pour que l'écran n'importe qu'un seul port. `import type` : rien ne pèse. */
+export type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@meeshy/shared/types/onboarding';
 
 /** L'ordre du parcours — celui de `ONBOARDING_STEP_IDS` (shared), lu sans
- * importer `zod`, l'âge juste avant Meeshy Global : c'est lui qui dit si le
- * salut peut y partir. `satisfies` + `ExhaustiveSteps` le tiennent complet. */
-export const ONBOARDING_STEPS = ['languages', 'email', 'age', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
+ * importer `zod` : l'âge juste après les langues, avant Meeshy Global, dont il
+ * dit si le salut peut y partir. `satisfies` + `ExhaustiveSteps` le tiennent
+ * complet. */
+export const ONBOARDING_STEPS = ['languages', 'age', 'email', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
 
 /** Les étapes dont la vue clôt le parcours — `ONBOARDING_COMPLETION_STEP_IDS`
  * (shared) : `email`, proposée au seul courriel non vérifié, n'en est pas. */
 export const ONBOARDING_COMPLETION_STEPS = ['languages', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
 
-/* `age` (#9927) est au contrat partagé mais pas encore dans ce parcours : la passerelle ne
-   la sert qu'au client qui annonce `X-Meeshy-Capabilities: onboarding-age`, et sa carte arrive
-   avec #9928. Purement de TYPE, ce gabarit ne pèse rien dans la première peinture. */
-type ServedStepId = Exclude<OnboardingStepId, 'age'>;
-type ExhaustiveSteps = [ServedStepId] extends [(typeof ONBOARDING_STEPS)[number]] ? true : never;
+type ExhaustiveSteps = [OnboardingStepId] extends [(typeof ONBOARDING_STEPS)[number]] ? true : never;
 const stepsAreExhaustive: ExhaustiveSteps = true;
 void stepsAreExhaustive;
 
@@ -122,11 +93,7 @@ const Served = z.strictObject({
 });
 
 type SameShape<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
-type ServedState = Omit<OnboardingState, 'seenSteps' | 'prefilledSteps' | 'viewerWriteRestriction'> & {
-  seenSteps: ServedStepId[];
-  prefilledSteps: ServedStepId[];
-};
-const sameShape: SameShape<z.infer<typeof Served>, ServedState> = true;
+const sameShape: SameShape<z.infer<typeof Served>, OnboardingState> = true;
 void sameShape;
 
 export function decodeOnboardingState(raw: unknown): OnboardingState | null {

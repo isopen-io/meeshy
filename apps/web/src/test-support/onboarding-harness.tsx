@@ -5,6 +5,7 @@ import type { OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
 
 import type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@/lib/api/onboarding';
 
+import { BIRTH_DATE_PATH } from '@/lib/api/birth-date';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
 import { ONBOARDING_QUERY_KEY } from '@/lib/api/onboarding';
 import { sessionStore } from '@/lib/api/session';
@@ -96,7 +97,7 @@ export function harness(options: HarnessOptions = {}) {
 
   const { transport } = scriptedTransport({});
   transport.request = (async (request: HttpRequest) => {
-    if (request.method === 'PUT' && request.path === '/api/v1/me/birth-date') {
+    if (request.method === 'PUT' && request.path === BIRTH_DATE_PATH) {
       declared.push(request.body);
       return options.birthDate ?? { ok: true, data: { ageClass: 'adult', viewerWriteRestrictionGlobal: false } };
     }
