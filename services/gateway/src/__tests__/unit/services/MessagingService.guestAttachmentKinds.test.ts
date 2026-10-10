@@ -6,7 +6,8 @@
  * l'instantané du join (#10029) : un invité entré quand le lien fermait la
  * porte des fichiers joint quand même son `.txt`. Seul un refus EXPLICITE de
  * l'hôte (`anonymousSession.rights`) reste souverain. Un compte n'est jamais
- * concerné.
+ * concerné. Un TRANSFERT ou une DIFFUSION porte les pièces de sa source : elles
+ * passent la même garde que les pièces rattachées (#10051).
  *
  * Même harnais que `MessagingService.attachmentRights.test.ts`.
  *
@@ -84,6 +85,15 @@ jest.mock('../../../utils/logger', () => ({
     warn: jest.fn(),
     error: jest.fn()
   }
+}));
+
+jest.mock('../../../services/messaging/messageReadAccess', () => ({
+  ...(jest.requireActual('../../../services/messaging/messageReadAccess') as object),
+  loadMessageReadableByParticipant: jest.fn(async () => ({
+    id: '507f1f77bcf86cd799439099', conversationId: '507f1f77bcf86cd799439012', createdAt: new Date(), deletedAt: null,
+    replyToId: null, senderId: '507f1f77bcf86cd799439098', ephemeralDuration: null, effectFlags: 0,
+    expiresAt: null, isViewOnce: false, viewOnceBurnedAt: null
+  }))
 }));
 
 import { MessagingService } from '../../../services/MessagingService';
@@ -311,5 +321,114 @@ describe('MessagingService.handleMessage — familles des pièces jointes d’un
       })
     );
     expect(mockPrisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
+  });
+
+  describe('le TRANSFERT et la DIFFUSION portent les pièces de leur source (#10051)', () => {
+    const SOURCE_ID = '507f1f77bcf86cd799439099';
+
+    type StoredAttachment = { id: string; messageId: string; mimeType: string };
+
+    const sourceAttachment = (mimeType: string): StoredAttachment => ({ id: `src-${mimeType}`, messageId: SOURCE_ID, mimeType });
+
+    const matches = (row: StoredAttachment, where: any): boolean => {
+      if (!where) return true;
+      if (Array.isArray(where.OR)) return where.OR.some((clause: any) => matches(row, clause));
+      const fieldMatches = (value: string, condition: any) =>
+        condition === undefined || (typeof condition === 'string' ? value === condition : condition.in.includes(value));
+      return fieldMatches(row.id, where.id) && fieldMatches(row.messageId, where.messageId);
+    };
+
+    const storeAttachments = (rows: readonly StoredAttachment[]) => {
+      mockPrisma.messageAttachment.findMany.mockImplementation(async (args: any) =>
+        rows.filter((row) => matches(row, args?.where)).map((row) => ({
+          ...row, fileName: 'f', originalName: 'f', fileUrl: 'u', filePath: 'p', fileSize: 10
+        })));
+      mockPrisma.messageAttachment.create = jest.fn(async ({ data }: any) => ({ id: 'copy', ...data }));
+    };
+
+    const readableSource = () =>
+      mockPrisma.message.findUnique.mockResolvedValue({
+        isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null,
+        attachments: [{ isViewOnce: false, isBlurred: false, effectFlags: 0 }], _count: { attachments: 1 },
+        messageType: 'image', metadata: null, sender: { id: testParticipantId, userId: null }
+      });
+
+    const copiedMimeTypes = () =>
+      (mockPrisma.messageAttachment.create?.mock?.calls ?? []).map((call: any) => call[0].data.mimeType);
+
+    it.each([['image/jpeg'], ['application/pdf'], ['video/mp4']])(
+      'refuse à un invité de World Wide le transfert d’un message portant une pièce %s, sans rien créer ni recopier',
+      async (mimeType) => {
+        mockPrisma.participant.findUnique.mockResolvedValue(worldGuest());
+        storeAttachments([sourceAttachment(mimeType)]);
+        readableSource();
+
+        const response = await service.handleMessage(
+          { conversationId: testConversationId, content: '', forwardedFromId: SOURCE_ID },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(false);
+        expect((response as unknown as { code?: string }).code).toBe('GUEST_ATTACHMENT_KIND_NOT_ALLOWED');
+        expect(mockPrisma.message.create).not.toHaveBeenCalled();
+        expect(copiedMimeTypes()).toEqual([]);
+      }
+    );
+
+    it('refuse à un invité de World Wide la diffusion d’un message portant une image', async () => {
+      mockPrisma.participant.findUnique.mockResolvedValue(worldGuest());
+      storeAttachments([sourceAttachment('image/png')]);
+      readableSource();
+
+      const response = await service.handleMessage(
+        { conversationId: testConversationId, content: '', copyAttachmentsFromMessageId: SOURCE_ID },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(false);
+      expect((response as unknown as { code?: string }).code).toBe('GUEST_ATTACHMENT_KIND_NOT_ALLOWED');
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('laisse un invité de World Wide transférer un vocal, famille ouverte', async () => {
+      mockPrisma.participant.findUnique.mockResolvedValue(worldGuest());
+      storeAttachments([sourceAttachment('audio/mpeg')]);
+      readableSource();
+
+      const response = await service.handleMessage(
+        { conversationId: testConversationId, content: '', forwardedFromId: SOURCE_ID },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+    });
+
+    it('laisse un invité de World Wide transférer un message de texte seul', async () => {
+      mockPrisma.participant.findUnique.mockResolvedValue(worldGuest());
+      storeAttachments([]);
+      readableSource();
+
+      const response = await service.handleMessage(
+        { conversationId: testConversationId, content: 'Bonjour', forwardedFromId: SOURCE_ID },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+    });
+
+    it('un compte de World Wide transfère une image, et la copie la porte', async () => {
+      mockPrisma.participant.findUnique.mockResolvedValue(account());
+      storeAttachments([sourceAttachment('image/jpeg')]);
+      readableSource();
+
+      const response = await service.handleMessage(
+        { conversationId: testConversationId, content: '', forwardedFromId: SOURCE_ID },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+      expect(copiedMimeTypes()).toEqual(['image/jpeg']);
+      expect(mockPrisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
+    });
   });
 });
