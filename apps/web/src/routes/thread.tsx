@@ -523,7 +523,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     readerLocale,
     viewerId: viewer.id ?? '',
     canStar: !viewer.isAnonymous,
-    onReply: (messageId) => compose.setReplyTarget(messageId),
+    reply: compose,
     announce: announcer.announce,
   });
 
@@ -837,6 +837,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             group={group}
             storyRingOf={storyRingOf}
             highlightedId={jump.highlightedId}
+            highlightedPieceId={jump.highlightedPieceId}
             expiredIds={expiredIds}
             destroyingIds={destroyingIds}
             jumpToMessage={jump.jumpToMessage}

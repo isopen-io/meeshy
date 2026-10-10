@@ -26,7 +26,6 @@ const ptCallJoin = {
   'keypad.input.placeholder': 'Número ou nome',
   'keypad.input.label': 'Número ou nome a pesquisar',
   'keypad.delete': 'Apagar',
-  'keypad.clear': 'Apagar tudo',
   'keypad.prompt.title': 'Disque um número ou um nome',
   'keypad.prompt.subtitle': 'Encontre alguém pelo número de telefone ou pelo nome.',
   'keypad.searching': 'Pesquisando…',

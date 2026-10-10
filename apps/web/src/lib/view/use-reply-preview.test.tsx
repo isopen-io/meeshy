@@ -2,6 +2,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { attachmentDefaults } from '@/lib/api/fixtures-base';
+import type { Attachment } from '@/lib/api/types';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { Message } from '@/lib/api/types';
 
@@ -9,7 +12,8 @@ import { useReplyToPreview, type ReplyToPreview } from './use-reply-preview';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+beforeAll(async () => {
+  await loadInterfaceCatalog('fr');
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -115,5 +119,14 @@ describe('useReplyToPreview — stabilité d’identité pendant le défilement 
   test('aucun message ciblé ⇒ undefined, jamais un objet vide', () => {
     const { captured } = mount({ message: undefined, readerLanguages: ['fr'] });
     expect(captured().length).toBe(0);
+  });
+});
+
+describe('useReplyToPreview — « +N » (#9911)', () => {
+  test('citer un message de trois photos : la bande en compte deux de plus', () => {
+    const photo = (id: string): Attachment =>
+      ({ ...attachmentDefaults, id, messageId: 'm1', fileName: 'p.jpg', originalName: 'p.jpg', mimeType: 'image/jpeg', fileSize: 1, fileUrl: 'https://cdn.meeshy.me/p.jpg', uploadedBy: 'u-bruno', createdAt: '2026-09-10T09:00:00.000Z' }) as Attachment;
+    const { captured } = mount({ message: message({ content: '', attachments: [photo('a1'), photo('a2'), photo('a3')] }), readerLanguages: ['fr'] });
+    expect(captured()[0]?.more).toBe(2);
   });
 });

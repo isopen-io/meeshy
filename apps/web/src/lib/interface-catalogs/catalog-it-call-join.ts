@@ -26,7 +26,6 @@ const itCallJoin = {
   'keypad.input.placeholder': 'Numero o nome',
   'keypad.input.label': 'Numero o nome da cercare',
   'keypad.delete': 'Cancella',
-  'keypad.clear': 'Cancella tutto',
   'keypad.prompt.title': 'Componi un numero o un nome',
   'keypad.prompt.subtitle': 'Trova qualcuno per numero di telefono o per nome.',
   'keypad.searching': 'Ricerca…',

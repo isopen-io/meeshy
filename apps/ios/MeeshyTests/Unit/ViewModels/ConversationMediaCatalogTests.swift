@@ -74,6 +74,22 @@ final class ConversationMediaCatalogTests: XCTestCase {
 
     private struct ViewRejected: Error {}
 
+    // MARK: - #9910 — réagir hors de la fenêtre chargée
+
+    func test_applyReaction_pieceOnlyTheIndexHolds_isRepaintedAtOnce() async {
+        let store = InMemoryConversationMediaIndexStore(seed: [carrier(1), carrier(2)], completed: true, fresh: true)
+        let (sut, _, _) = makeSUT(store: store)
+        await sut.load(preferredLanguages: ["fr"])
+        let bascule = AttachmentReactionToggle.apply("🔥", summary: nil, mine: nil)
+
+        sut.applyReaction(bascule, toAttachment: "att-2")
+
+        let piece = sut.snapshot.attachments.first { $0.id == "att-2" }
+        XCTAssertEqual(piece?.reactionSummary, ["🔥": 1])
+        XCTAssertEqual(piece?.currentUserReactions, ["🔥"])
+        XCTAssertNil(sut.snapshot.attachments.first { $0.id == "att-1" }?.reactionSummary, "la voisine n'est pas touchée")
+    }
+
     // MARK: - La fusion
 
     func test_load_indexHoldsCarriersAbsentFromMemory_galleryListsThemBeforeTheLoadedOnes() async {

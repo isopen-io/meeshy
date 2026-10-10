@@ -51,8 +51,11 @@ extension ConversationView {
     /// `overlayState.restoreAfterLongPress` et restitué par
     /// `restoreStateAfterLongPressIfNeeded()`, appelée quand le menu se
     /// referme.
-    func presentLongPressMenu(for message: Message, cellFrame: CGRect?) {
+    func presentLongPressMenu(for message: Message, cellFrame: CGRect?, pieceId: String? = nil) {
         overlayState.overlayMessage = message
+        // Fail-closed : un message protégé n'ouvre que l'aperçu du message entier.
+        let pieceId = MessagePieceTarget.piece(pieceId, in: message)?.id
+        overlayState.overlayPieceId = pieceId
         overlayState.restoreAfterLongPress = (isTyping: isTyping, showOptions: composerState.showOptions)
         isTyping = false
         composerState.showOptions = false
@@ -62,6 +65,9 @@ extension ConversationView {
         // View ou Slide Over, la seconde est bien plus haute que la première —
         // une cellule au bas de la fenêtre restait alors sous le seuil, et le
         // menu paraissait sans le recentrage qu'il exige.
+        // #9907 — l'aperçu d'une PIÈCE se présente au centre de l'écran,
+        // indépendamment de la cellule : aucun recentrage à attendre.
+        let cellFrame = pieceId == nil ? cellFrame : nil
         guard let frame = cellFrame,
               frame.midY > DeviceLayout.windowSize.height * Self.longPressRepositionThreshold
         else {
@@ -117,5 +123,67 @@ extension ConversationView {
             onSetActiveDisplayLanguage: { viewModel.setBubbleActiveDisplayLanguage($0, for: messageId) },
             onSetSecondaryLanguage: { viewModel.setBubbleSecondaryLanguage($0, for: messageId) }
         )
+    }
+}
+
+// MARK: - Supprimer UNE pièce (#9906)
+
+extension ConversationView {
+
+    /// Supprime la pièce VISÉE — jamais `attachments.first` par défaut. Sans
+    /// visée, un lot ne désigne rien et rien n'est supprimé
+    /// (`MessagePieceTarget.deletableMedia`).
+    func deleteMedia(targeted attachmentId: String?, of message: Message) {
+        guard let target = MessagePieceTarget.deletableMedia(in: message, targeted: attachmentId) else { return }
+        Task { await viewModel.deleteAttachment(messageId: message.id, attachmentId: target) }
+    }
+}
+
+// MARK: - L'aperçu d'UNE pièce (#9907)
+
+extension ConversationView {
+
+    /// L'aperçu de la pièce visée, ou `nil` quand l'appui long vise le message
+    /// entier — l'hôte monte alors `MessageOverlayMenu`. « Tout le message »
+    /// remet `overlayPieceId` à `nil` : la même surcouche bascule sur l'aperçu
+    /// du message, sans se refermer.
+    ///
+    /// `AnyView`, comme `overlayMenuContent` : le type de l'aperçu n'entre pas
+    /// dans celui de `ConversationView.body`.
+    func pieceOverlayContent(for message: Message) -> AnyView? {
+        guard MessagePieceTarget.piece(overlayState.overlayPieceId, in: message) != nil else { return nil }
+        let messageId = message.id
+        return AnyView(
+            MessagePieceOverlay(
+                message: message,
+                accentHex: accentColor,
+                focusedPieceId: $overlayState.overlayPieceId,
+                isPresented: $overlayState.showOverlayMenu,
+                canDelete: message.isMe || isCurrentUserAdminOrMod,
+                onReact: { piece, emoji in
+                    viewModel.toggleAttachmentReaction(attachmentId: piece.id, messageId: messageId, emoji: emoji)
+                },
+                onAction: { action, piece in performPieceAction(action, on: piece, of: message) }
+            )
+            .transition(.opacity)
+            .zIndex(999)
+        )
+    }
+
+    /// **Le menu d'une pièce agit sur CETTE pièce** (#9908) — chaque entrée
+    /// emprunte le chemin que le fil connaît déjà : la citation nommée (le
+    /// chemin du plein écran), l'enregistrement par la loi de sortie, la
+    /// suppression de la pièce désignée.
+    func performPieceAction(_ action: PrimaryAction, on piece: MessageAttachment, of message: Message) {
+        switch action {
+        case .replyToPiece:
+            triggerReply(for: message, citing: piece)
+        case .saveMedia:
+            if MessageExitTransport.save(message, piece: piece.id, through: mediaSaveCoordinator) { HapticFeedback.light() }
+        case .deletePiece:
+            deleteMedia(targeted: piece.id, of: message)
+        default:
+            break
+        }
     }
 }

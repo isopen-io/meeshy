@@ -13,63 +13,6 @@ import MeeshyUI
 // hub de progression en ont besoin aussi (#5843), et une jumelle recopiée
 // aurait perdu la politique `allowsEdgeSwipe` dont la Rivière dépend.
 
-struct ConversationOverlayState {
-    @Indirect var overlayMessage: Message? = nil
-    /// Aperçu d'appui long en Focal : pixels de la cellule vivante + frame
-    /// écran, capturés par le contrôleur au moment du geste. `nil` en mode
-    /// bulles — l'overlay garde alors son `ThemedMessageBubble` historique.
-    var showOverlayMenu = false
-    var longPressEnabled = false
-    /// **L'état à restituer à la fermeture du menu longpress (#4004).**
-    /// `presentLongPressMenu` désactive le clavier/le panneau d'options AVANT
-    /// de présenter le menu — sans cette mémoire, ils resteraient fermés une
-    /// fois le menu refermé, même si l'auteur était en train de taper.
-    /// `nil` tant qu'aucun longpress n'a capturé d'état à restituer.
-    var restoreAfterLongPress: (isTyping: Bool, showOptions: Bool)? = nil
-    /// **Mode sélection multiple (#4005).** `true` pendant que la liste bascule
-    /// en sélection ; chaque bulle devient tappable pour ajouter/retirer de
-    /// `selectedMessageIds`, plafonné à `ConversationOverlayState.
-    /// selectionCap`. Quitter le mode (bouton Annuler) vide la sélection —
-    /// jamais de sélection résiduelle qui réapparaît au prochain appui long.
-    var isSelectionModeActive = false
-    var selectedMessageIds: Set<String> = []
-    /// Maximum de messages ET pièces jointes sélectionnables au total
-    /// (retour porteur 2026-08-27, #4005).
-    static let selectionCap = 100
-    @Indirect var detailSheetMessage: Message? = nil
-    /// Message whose call-detail sheet (transcript-aware, `CallSummaryDetailSheet`)
-    /// is presented — separate from `detailSheetMessage`, which stays wired to
-    /// `MessageMoreSheet` for regular messages.
-    @Indirect var callDetailMessage: Message? = nil
-    var moreSheetInitialItem: MoreItem? = nil
-    /// Message dont le picker d'emoji complet (réaction) est présenté.
-    @Indirect var fullReactionPickerMessage: Message? = nil
-    var quickReactionMessageId: String? = nil
-
-    /// Bubble cell frame (window coordinates) of the message whose
-    /// add-reaction button opened the quick-reaction bar. Anchors the bar's
-    /// placement; `nil` falls back to the legacy bottom-pinned position.
-    var quickReactionAnchorFrame: CGRect? = nil
-    var emojiOnlyMode = false
-    var deleteConfirmMessageId: String? = nil
-    /// #4024 — confirmation de suppression GROUPÉE (mode sélection multiple),
-    /// distincte de `deleteConfirmMessageId` (suppression d'UN message).
-    var deleteConfirmSelectionActive = false
-    /// Message dont la feuille de partage système (`UIActivityViewController`)
-    /// est présentée — action « Partager » du menu « Plus… ».
-    @Indirect var shareMessage: Message? = nil
-    var showStoryViewer = false
-    var storyViewerUserId: String? = nil
-    var storyViewerGroupIndex: Int = 0
-    var storyViewerSlideIndex: Int = 0
-    /// `true` quand le viewer est ouvert depuis l'avatar d'un expéditeur
-    /// (première non-vue) ; `false` quand une story-reply cible une slide
-    /// précise via `storyViewerSlideIndex`.
-    var storyViewerStartAtFirstUnviewed = false
-    var showReplyThread = false
-    var replyThreadParentId: String? = nil
-}
-
 struct ConversationScrollState {
     var isNearBottom: Bool = true
     var unreadBadgeCount: Int = 0
@@ -874,11 +817,7 @@ struct ConversationView: View {
                     onSaveMedia: {
                         if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() }
                     },
-                    onDeleteMedia: {
-                        if let attId = msg.attachments.first?.id {
-                            Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attId) }
-                        }
-                    },
+                    onDeleteMedia: { deleteMedia(targeted: nil, of: msg) },
                     onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                     onToggleStar: {
                         _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
@@ -1432,6 +1371,12 @@ struct ConversationView: View {
                     // point d'interception avant ouverture — ce site est le
                     // SEUL point d'entrée (menu custom, < iOS 26).
                     presentLongPressMenu(for: msg, cellFrame: cellFrame)
+                },
+                // #9907 — l'appui long d'une TUILE : mêmes gardes, CETTE pièce visée.
+                onLongPressPiece: { messageId, pieceId, cellFrame in
+                    guard overlayState.longPressEnabled, overlayState.quickReactionMessageId == nil,
+                          let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    presentLongPressMenu(for: msg, cellFrame: cellFrame, pieceId: pieceId)
                 },
                 // iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) des
                 // bulles — mêmes actions que l'overlay custom (SSOT). `nil`
@@ -2398,6 +2343,7 @@ struct ConversationView: View {
         guard overlayState.showOverlayMenu, let msg = overlayState.overlayMessage else {
             return AnyView(EmptyView())
         }
+        if let pieceOverlay = pieceOverlayContent(for: msg) { return pieceOverlay }
         return AnyView(
             MessageOverlayMenu(
                 message: msg,

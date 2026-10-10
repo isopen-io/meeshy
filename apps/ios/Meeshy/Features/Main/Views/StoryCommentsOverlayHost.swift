@@ -10,16 +10,19 @@ import MeeshySDK
 /// eux (#9821) coûtait 75 à 90 % du processeur, et l'app a figé une fois à
 /// 100 %, le fil principal tournant dans la mise en page de la liste paresseuse
 /// des commentaires (`CommentMoreMenu` dans l'échantillon). La cause : la
-/// progression est un `@State` du lecteur, rafraîchie jusqu'à 60 fois par
-/// seconde. Chaque tick réévaluait le lecteur, sa carte, et l'overlay des
+/// progression était un `@State` du lecteur (elle vit désormais dans
+/// `StoryPlaybackProgressClock`, que seule la barre observe). Chaque tick
+/// réévaluait le lecteur, sa carte, et l'overlay des
 /// commentaires — dont les fermetures (`makeStoryCommentRow`, les chasses)
 /// changent d'identité à chaque passe : SwiftUI ne pouvait pas prouver que rien
 /// n'avait changé, il reconstruisait chaque rangée, chaque menu « … », et
 /// remesurait la `LazyVStack` à chaque image. Dès qu'une passe dépassait une
 /// image, le fil principal ne rendait plus la main.
 ///
-/// L'hôte compare ce que la liste AFFICHE — les commentaires, les fils, l'état
-/// de chaque rangée — et rien d'autre. La progression n'en fait pas partie.
+/// Le tick ne réévalue plus le lecteur ; l'hôte reste la seconde ligne : quand
+/// le lecteur se réévalue pour un vrai événement (boucle, pause, réaction), il
+/// compare ce que la liste AFFICHE — les commentaires, les fils, l'état de
+/// chaque rangée — et rien d'autre.
 nonisolated struct StoryCommentsRenderInputs: Equatable {
     var comments: [FeedComment]
     var commentCount: Int

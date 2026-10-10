@@ -15,6 +15,8 @@ export type ReplyToPreview = {
   readonly author: string;
   readonly excerpt: string;
   readonly language?: string;
+  /** Les AUTRES pièces du message cité en entier (#9911) — la bande les dit « +N ». */
+  readonly more?: number;
 };
 
 /**
@@ -59,6 +61,7 @@ export function useReplyToPreview(params: {
          précisément pour que l'hôte puisse DIRE dans quelle langue il sert
          (`lang`), comme `bubble.tsx` et `focal-row.tsx`. */
       ...(preview.language === '' ? {} : { language: preview.language }),
+      ...(preview.media !== null && preview.media.more > 0 ? { more: preview.media.more } : {}),
     };
   }, [message, readerLanguages, interfaceLanguage]);
 }

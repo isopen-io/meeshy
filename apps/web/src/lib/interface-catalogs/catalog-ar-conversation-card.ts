@@ -8,7 +8,6 @@ const arConversationCard = {
   'conversation.card.messages.one': '{count} رسالة',
   'conversation.card.messages.other': '{count} رسائل',
   'conversation.card.languages': 'اللغات المستخدمة',
-  'conversation.card.join': 'انضمام',
   'conversation.card.joinAnonymously': 'انضمام دون اسم',
   'conversation.card.open': 'فتح',
   'conversation.card.leave': 'مغادرة',
