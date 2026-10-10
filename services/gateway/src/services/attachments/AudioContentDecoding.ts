@@ -1,5 +1,7 @@
 /**
- * L'audio d'un INVITÉ se prouve par le fichier ENTIER (#10001, #10029).
+ * Le CONTENEUR audio d'un INVITÉ se parcourt jusqu'au dernier octet (#10001,
+ * #10029) — ce qui ne prouve pas que le fichier ne porte que du son (voir la
+ * fin de ce commentaire).
  *
  * `matchesAudioSignature` (`ContentSignature.ts`) ne lit qu'un préfixe : deux
  * octets de synchro MPEG suivis de HTML, ou une vidéo MP4 déclarée audio,
@@ -19,10 +21,23 @@
  * - WAV : le bloc RIFF couvre le fichier exactement, ses sous-blocs sont des
  *   blocs audio connus, `fmt ` et `data` présents.
  *
- * Ce qui RESTE possible, et qu'il faut dire : les octets À L'INTÉRIEUR d'une
- * trame, d'une boîte `mdat` ou d'un bloc Matroska ne sont pas décodés en son.
- * Le dernier recours contre un polyglotte qui s'y logerait est la recherche
- * d'une fin d'archive ZIP dans la fenêtre où les lecteurs ZIP la cherchent.
+ * Ce qui RESTE possible, et qu'il faut dire : ce parcours vérifie la FORME du
+ * conteneur, jamais le SON. Une charge arbitraire peut se loger partout où il
+ * ne lit pas les octets — l'intérieur d'une trame, d'une boîte `mdat` ou d'un
+ * bloc Matroska, mais aussi les zones LIBRES qu'il saute : l'étiquette ID3v2
+ * (`id3v2Length`, sans borne), les boîtes `free`, `skip`, `uuid`, `udta`,
+ * `meta` et `wide` de premier niveau (`ISO_TOP_LEVEL_BOXES`, sans borne), les
+ * éléments WebM `Tags` et `Chapters`, les blocs WAV `LIST` et `JUNK`,
+ * l'étiquette ID3v1. Un `%PDF-` au début d'une trame fait un polyglotte PDF ; un
+ * `ftyp` + `moov` sans échantillon est un « audio » sans son. Les métadonnées
+ * (localisation `©xyz` d'un M4A iOS, ID3 `APIC`) sont servies telles quelles.
+ * Le seul recours contre un polyglotte est la recherche d'une fin d'archive
+ * ZIP dans la fenêtre où les lecteurs ZIP la cherchent.
+ *
+ * Seul un transcodage prouverait « rien d'autre que du son » (#10045). En
+ * attendant, le pré-vol de World Wide nomme les cas démontrés et bloque la
+ * production tant que le porteur ne les a pas acceptés (#10057,
+ * `worldGuestAttachments.ts`).
  */
 
 export type AudioContainer = 'mpeg' | 'adts' | 'iso-bmff' | 'webm' | 'ogg' | 'wav';
