@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, test } from 'bun:test';
 
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
-import { AUTHOR_INK_BACKGROUNDS, authorInk, authorInkStyle } from './author-ink';
+import { AUTHOR_INK_BACKGROUNDS, AUTHOR_INK_SURFACES, authorInk, authorInkStyle } from './author-ink';
 
 /**
  * LE NOM D'AUTEUR TEINTÉ, STABLE PAR PERSONNE (#10004, note « look » de la
@@ -66,8 +68,8 @@ describe('le nom d’auteur teinté (#10004)', () => {
   });
 
   test('les fonds mesurés couvrent la surface, la carte, le fond du fil et sa lueur d’accent', () => {
-    expect(AUTHOR_INK_BACKGROUNDS.dark).toEqual(expect.arrayContaining(['#09090b', '#13111c', '#24243e']));
-    expect(AUTHOR_INK_BACKGROUNDS.light).toEqual(expect.arrayContaining(['#ffffff', '#f8f7ff']));
+    for (const surface of ['#09090b', '#13111c', '#24243e']) expect(AUTHOR_INK_BACKGROUNDS.dark).toContain(surface);
+    for (const surface of ['#ffffff', '#f8f7ff']) expect(AUTHOR_INK_BACKGROUNDS.light).toContain(surface);
     expect(AUTHOR_INK_BACKGROUNDS.dark.length).toBeGreaterThan(3);
     expect(AUTHOR_INK_BACKGROUNDS.light.length).toBeGreaterThan(2);
   });
@@ -77,5 +79,21 @@ describe('le nom d’auteur teinté (#10004)', () => {
     const ink = authorInk({ authorId: 'u-omar', name: 'Omar' });
     expect(style['--author-ink-dark']).toBe(ink.dark);
     expect(style['--author-ink-light']).toBe(ink.light);
+  });
+
+  test('les fonds de mesure sont les jetons iOS, schéma par schéma — un jeton qui bouge rougit ici', () => {
+    const tokens = readFileSync(new URL('../../../../../packages/design-tokens/ios.css', import.meta.url).pathname, 'utf8');
+    const lightStart = tokens.indexOf(':root.light');
+    const valueOf = (name: string, from: number): string => {
+      const match = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`).exec(tokens.slice(from));
+      return match?.[1]?.toLowerCase() ?? '';
+    };
+    const darkStart = tokens.lastIndexOf('--ios-surface:', lightStart);
+    expect(valueOf('ios-surface', darkStart)).toBe(AUTHOR_INK_SURFACES.dark.surface);
+    expect(valueOf('ios-surface-card', darkStart)).toBe(AUTHOR_INK_SURFACES.dark.card);
+    expect(valueOf('ios-ink', darkStart)).toBe(AUTHOR_INK_SURFACES.dark.ink);
+    expect(valueOf('ios-surface', lightStart)).toBe(AUTHOR_INK_SURFACES.light.surface);
+    expect(valueOf('ios-surface-card', lightStart)).toBe(AUTHOR_INK_SURFACES.light.card);
+    expect(valueOf('ios-ink', lightStart)).toBe(AUTHOR_INK_SURFACES.light.ink);
   });
 });

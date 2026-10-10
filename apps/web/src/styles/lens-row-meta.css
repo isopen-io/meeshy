@@ -37,3 +37,32 @@
     transition: none;
   }
 }
+
+/*
+ * WORLD WIDE ÉPINGLÉE EN CARTE EN TÊTE DE LISTE (#10004, planche « List ») —
+ * la rangée garde sa case de 84 et sa scène ; seule sa peau devient une carte
+ * de rayon 16 (le rayon des cartes du design actuel), dégradée à l'accent de
+ * la conversation, en retrait de 12 px de chaque bord. La réserve droite
+ * (`pe-12`) reste celle du bouton d'actions. En clair, l'accent descend à
+ * 12 % → 4 % : à 16 %, l'aperçu (`--color-ios-ink-2`) tombait à 4,47:1 sur
+ * l'accent de World Wide (#5D9AC6) — sous l'AA ; à 12 %, il la tient.
+ */
+.lens-row.lens-row--card {
+  inset-inline: 12px;
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 28%, transparent),
+    color-mix(in srgb, var(--accent) 10%, transparent)
+  );
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+:root.light .lens-row.lens-row--card {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 12%, transparent),
+    color-mix(in srgb, var(--accent) 4%, transparent)
+  );
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+}
