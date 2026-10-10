@@ -7,6 +7,7 @@
 // Le zoom est borné à ×2,2 de la largeur de l'écran (600 px natifs sur un iPhone de 1320) : au-delà, l'écran
 // réduit de l'aperçu (≈ 760 px de large) agrandirait chaque px natif de plus de 1,3 et pixeliserait.
 // La barre d'état de l'app (heure, batterie) est rognée en haut de chaque prise : ROGNAGE_HAUT.
+import { directionOf } from '../lib/locales.mjs'
 import { TAILLES_NATIVES } from './capturer.mjs'
 
 export const ZOOM_MAX = 2.2
@@ -25,17 +26,30 @@ export const ROGNAGE_HAUT = { iphone: 165, ipad: 60 }
 // - jeu-frappe : Mee, la pièce qui se retourne, Meo et « 2 187 points » : x 100…1040, y 500…700.
 // - jeu-badge : la médaille des messages texte qui se rallume, sa ligne et ses paliers : x 90…870, y 660…930.
 // - interaction-emoji : la bulle « Plus que 12 jours » et la réaction qui s'y pose : x 30…670, y 1150…1530.
-// Un autre agent ajoute les entrées iPad et des interactions : AJOUTER une entrée, ne pas réécrire les autres.
+// - interaction-commentaire-audio : « Commentaires (1) », le vocal, sa transcription et ses langues : x 20…1120,
+//   y 1560…2380.
+// - interaction-reel : la carte du réel publiée en tête du fil : x 30…1290, y 990…2530.
+// iPad (2064×2752, prises françaises du 2026-10-09) : l'écran est partagé — le fil à gauche, la fiche ou la
+// conversation à droite (x ≥ 830) ; le réel se publie dans le fil, à gauche. Le zoom y est borné à 938 px natifs.
+// AJOUTER une entrée, ne pas réécrire les autres.
 export const CADRAGES = {
-  'jeu-rang': { iphone: { x: 120, y: 780, largeur: 420, hauteur: 240 } },
-  'jeu-coffre': { iphone: { x: 330, y: 1950, largeur: 660, hauteur: 530 } },
-  'jeu-niveau': { iphone: { x: 40, y: 400, largeur: 780, hauteur: 400 } },
-  'jeu-frappe': { iphone: { x: 100, y: 500, largeur: 940, hauteur: 200 } },
-  'jeu-badge': { iphone: { x: 90, y: 660, largeur: 780, hauteur: 270 } },
-  'interaction-emoji': { iphone: { x: 30, y: 1150, largeur: 640, hauteur: 380 } },
+  'jeu-rang': { iphone: { x: 120, y: 780, largeur: 420, hauteur: 240 }, ipad: { x: 860, y: 270, largeur: 640, hauteur: 330 } },
+  'jeu-coffre': { iphone: { x: 330, y: 1950, largeur: 660, hauteur: 530 }, ipad: { x: 870, y: 1690, largeur: 1130, hauteur: 470 } },
+  'jeu-niveau': { iphone: { x: 40, y: 400, largeur: 780, hauteur: 400 }, ipad: { x: 870, y: 270, largeur: 700, hauteur: 330 } },
+  'jeu-frappe': { iphone: { x: 100, y: 500, largeur: 940, hauteur: 200 }, ipad: { x: 870, y: 260, largeur: 700, hauteur: 180 } },
+  'jeu-badge': { iphone: { x: 90, y: 660, largeur: 780, hauteur: 270 }, ipad: { x: 870, y: 780, largeur: 1000, hauteur: 200 } },
+  'interaction-emoji': { iphone: { x: 30, y: 1150, largeur: 640, hauteur: 380 }, ipad: { x: 830, y: 1750, largeur: 480, hauteur: 240 } },
+  'interaction-commentaire-audio': { iphone: { x: 20, y: 1560, largeur: 1100, hauteur: 820 }, ipad: { x: 840, y: 1370, largeur: 760, hauteur: 590 } },
+  'interaction-reel': { iphone: { x: 30, y: 990, largeur: 1260, hauteur: 1540 }, ipad: { x: 30, y: 480, largeur: 740, hauteur: 1270 } },
 }
 
-export const cadrageDe = ({ scene, appareil, cadrages = CADRAGES }) => cadrages[scene]?.[appareil] ?? null
+// En arabe, l'app se met en miroir (RTL) : l'action se joue de l'autre côté de l'écran, et le rectangle relevé sur une
+// prise française se retourne autour de l'axe vertical.
+export const cadrageDe = ({ scene, appareil, langue, cadrages = CADRAGES }) => {
+  const rect = cadrages[scene]?.[appareil] ?? null
+  if (!rect || directionOf(langue) !== 'rtl') return rect
+  return { ...rect, x: TAILLES_NATIVES[appareil][0] - rect.x - rect.largeur }
+}
 
 const borner = (v, min, max) => Math.min(max, Math.max(min, v))
 

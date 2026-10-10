@@ -310,6 +310,9 @@ extension StoryCanvasUIView {
             }
 
             self.audioMixer.setMute(self.readerContext.mute)
+            // Moteur préparé dès que ses clips sont là (#9837) : un canevas né
+            // en pause ne paie plus l'allocation au moment de reprendre.
+            self.audioMixer.prepareForPlayback()
 
             // Le ducking a besoin de savoir quelles vidéos portent réellement
             // du son — sondage une seule fois par clip, mémorisé.

@@ -476,6 +476,7 @@ export default function StoryScreen() {
      la session — la passerelle ne les sert pas sur une story. */
   const participationMarks = usePublicationParticipation(currentStory?.id);
   const profilePeekOpen = useProfilePeekOpen();
+  const sheetOpen = commentsOpen || viewersOpen;
   /* LES GESTES COMMUNS DES PLEIN ÉCRANS (#8879, `viewer-chrome-gestures.ts`) :
      glisser vers le BAS ferme — le geste de sortie d'iOS
      (`StoryViewerView+Canvas.swift`, `.dismissViewer`) et celui de la
@@ -486,7 +487,7 @@ export default function StoryScreen() {
     onDismiss: closeViewer,
     onNext: () => advance('next'),
     onPrevious: () => advance('previous'),
-    enabled: !(commentsOpen || viewersOpen || profilePeekOpen),
+    enabled: !(sheetOpen || profilePeekOpen),
     rtl: typeof document !== 'undefined' && document.documentElement.dir === 'rtl',
   });
   /* LES GESTES (§ 1.3) — EXTRAITS dans `use-story-gestures.ts` (§ budget,
@@ -494,14 +495,16 @@ export default function StoryScreen() {
      relâchement ne reprend pas, le tap suivant reprend sans naviguer ; le
      balayage commun des plein écrans (`swipe`) y est relayé aux mêmes points
      qu'avant ; `dismissLayer` AVALE le tap qui ferme la barre rapide des
-     langues (« un toucher n'importe où les referme »). */
+     langues (« un toucher n'importe où les referme »). Une feuille ouverte
+     (commentaires ou « Vues ») est une couche : un toucher dedans ne reprend
+     ni n'avance la story dessous. */
   const gestures = useStoryGestures({
     paused,
     pause,
     resume,
     advance,
     setChromeHidden,
-    layerOpen: commentsOpen,
+    layerOpen: sheetOpen,
     swipe: swipe.handlers,
     dismissLayer: () => {
       if (!language.barOpen) return false;
@@ -511,13 +514,13 @@ export default function StoryScreen() {
   });
   /* UNE loi (#8601, `chrome-yields.ts`) : feuille ouverte ou appui long ⇒
      l'en-tête, la légende et le rail cèdent ENSEMBLE ; feuille et média restent. */
-  const chromeYielded = chromeYields({ sheetOpen: commentsOpen || viewersOpen, held: chromeHidden });
+  const chromeYielded = chromeYields({ sheetOpen, held: chromeHidden });
   /* LA SCÈNE CÈDE AUSSI (#8643, `scene-yields.ts`) : floutée pendant qu'on lit
      le fil (ou les vues), nette et RÉDUITE au-dessus de la barre pendant
      qu'on écrit — ancrée sous l'encoche, comme sa carte. */
   const writingBar = commentsHost.writing;
   const scene = yieldingScene({
-    yieldTo: sceneYieldOf({ sheetOpen: commentsOpen || viewersOpen, writing: writingBar !== null }),
+    yieldTo: sceneYieldOf({ sheetOpen, writing: writingBar !== null }),
     scale: writingBar === null ? 1 : writingSceneScale({ ...writingBar, anchorTop: safeTopSize.height }),
     anchorTop: safeTopSize.height,
     reducedMotion: prefersReducedMotion(),
@@ -528,6 +531,7 @@ export default function StoryScreen() {
      une flèche tapée pendant que « Vues » est ouverte ne doit pas faire
      avancer la story recouverte (D-91, même loi que la feuille de
      commentaires). */
+  const layerOpen = sheetOpen || profilePeekOpen || storySend.sheetOpen || language.barOpen;
   useStoryKeyboardShortcuts({
     advance,
     paused,
@@ -536,7 +540,7 @@ export default function StoryScreen() {
     closeViewer,
     showsSound,
     onToggleMute: toggleSound,
-    layerOpen: commentsOpen || viewersOpen || profilePeekOpen || storySend.sheetOpen || language.barOpen,
+    layerOpen,
   });
 
   /* UNE SURFACE PAR-DESSUS LA STORY LA FAIT BOUCLER (#9821) — commentaires
@@ -545,7 +549,7 @@ export default function StoryScreen() {
      passer à la suivante (le composeur ne change jamais de publication à
      mi-phrase). Seule la pause demandée la fige. */
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const engaged = commentsOpen || viewersOpen || profilePeekOpen || optionsOpen || storySend.sheetOpen || language.barOpen;
+  const engaged = layerOpen || optionsOpen;
   const hold = resolveStoryPlaybackHold({ paused, engaged });
   holdRef.current = hold;
 
@@ -735,7 +739,7 @@ export default function StoryScreen() {
           className="relative flex flex-1 flex-col overflow-hidden select-none"
           data-story-scene={currentStory.id}
           data-story-paused={paused ? 'true' : undefined}
-          data-story-hold={hold ?? undefined}
+          data-story-hold={hold}
           onPointerDown={gestures.onPointerDown}
           onPointerUp={gestures.onPointerUp}
           onPointerMove={gestures.onPointerMove}
@@ -851,7 +855,7 @@ export default function StoryScreen() {
               (loi 4). La capsule n'existe que si la loi offre la réponse
               (`showsReply` : la story d'autrui, jamais la sienne). */}
           <StoryBottomBar
-            hidden={chromeYields({ sheetOpen: commentsOpen || viewersOpen })}
+            hidden={chromeYields({ sheetOpen })}
             held={chromeHidden}
             language={interfaceLanguage}
             showsCaption={hasMedia}

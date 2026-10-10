@@ -15,7 +15,9 @@
 //               { type: 'tap', x, y } · { type: 'swipe', de: [x, y], a: [x, y], dureeS }
 //               { type: 'attendre', ms } · { type: 'fichier', nom } (dépose un fichier dans Documents/vitrine)
 //
-// Les durées du jeu sont celles de `GameTimeline` (apps/ios/Meeshy/Features/Main/Game/Choreography).
+// Les durées du jeu sont celles de `GameTimeline` (apps/ios/Meeshy/Features/Main/Game/Choreography). Les scènes du jeu
+// s'ancrent sur leur PREMIER MOUVEMENT (étape virtuelle « mouvement », lue dans le film) : la célébration part quand
+// l'état servi est rendu, et ce rendu tarde avec la charge de la machine.
 //
 // Le CLAP (#9810) : après « prêt », l'app attend `go.txt` avant d'agir (repli 8 s sans tournage). Le
 // script le dépose comme dernier geste, AVANCE_MS après le démarrage de l'enregistreur — qui part
@@ -62,32 +64,32 @@ export const SCENES_FILMEES = {
   // Montée 0–0,5 s, trois traits à 0,55 / 0,8 / 1,05 s (0,3 s chacun), tenants 1,15–1,6 s.
   'jeu-rang': jeu('jeu-rang', {
     dureeMs: 1600,
-    mouvement: [[60, 440], [600, 1500]],
-    imagesCles: [{ nom: 'trait', instantMs: 800 }, { nom: 'rang-revele', instantMs: 1700 }],
+    mouvement: [{ etape: 'mouvement', de: 20, a: 400 }, { etape: 'mouvement', de: 560, a: 1460 }],
+    imagesCles: [{ nom: 'trait', etape: 'mouvement', instantMs: 760 }, { nom: 'rang-revele', etape: 'mouvement', instantMs: 1660 }],
   }),
   // Couvercle 0–0,4 s, récompenses à 0,5 / 0,8 / 1,1 s (0,3 s chacune).
   'jeu-coffre': jeu('jeu-coffre', {
     dureeMs: 1400,
-    mouvement: [[40, 340], [600, 1150]],
-    imagesCles: [{ nom: 'coffre-ouvert', instantMs: 450 }, { nom: 'recompenses', instantMs: 1500 }],
+    mouvement: [{ etape: 'mouvement', de: 40, a: 300 }, { etape: 'mouvement', de: 560, a: 1000 }],
+    imagesCles: [{ nom: 'coffre-ouvert', etape: 'mouvement', instantMs: 410 }, { nom: 'recompenses', etape: 'mouvement', instantMs: 1460 }],
   }),
   // Plaque 0–0,3 s, marteau jusqu'à l'impact 0,45 s, retournement 0,55–1,2 s.
   'jeu-frappe': jeu('jeu-frappe', {
     dureeMs: 1200,
-    mouvement: [[40, 1140]],
-    imagesCles: [{ nom: 'impact', instantMs: 450 }, { nom: 'piece-retournee', instantMs: 1300 }],
+    mouvement: [{ etape: 'mouvement', de: 20, a: 1100 }],
+    imagesCles: [{ nom: 'impact', etape: 'mouvement', instantMs: 410 }, { nom: 'piece-retournee', etape: 'mouvement', instantMs: 1260 }],
   }),
   'jeu-niveau': jeu('jeu-niveau', {
     dureeMs: 600,
-    mouvement: [[40, 520]],
-    imagesCles: [{ nom: 'niveau-monte', instantMs: 700 }],
+    mouvement: [{ etape: 'mouvement', de: 20, a: 480 }],
+    imagesCles: [{ nom: 'niveau-monte', etape: 'mouvement', instantMs: 660 }],
   }),
-  // La médaille se rallume quand la lecture servie arrive à la fiche (étape « servi », 0,2 s après le signal : l'étagère
-  // se recalcule) ; la matière remonte en 0,7 s.
+  // La médaille se rallume quand la lecture servie est rendue : l'étagère change d'abord ses compteurs (premier
+  // mouvement), se recalcule 0,1 à 0,15 s, puis la matière remonte en 0,7 s.
   'jeu-badge': jeu('jeu-badge', {
     dureeMs: 700,
-    mouvement: [{ etape: 'servi', de: 220, a: 640 }],
-    imagesCles: [{ nom: 'badge-gagne', etape: 'servi', instantMs: 750 }],
+    mouvement: [{ etape: 'mouvement', de: 220, a: 600 }],
+    imagesCles: [{ nom: 'badge-gagne', etape: 'mouvement', instantMs: 800 }],
   }),
   // Le toucher du compteur pousse la fiche des Meeshes : la poussée paraît 0,2 à 0,35 s après, le temps que la fiche se
   // bâtisse — aucune fenêtre n'y est posée. La fiche lue et posée (étape « frappe »), Mee et Meo frappent : la

@@ -196,12 +196,30 @@ describe('cadrage : la caméra va où l’action se joue', async () => {
     expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone' })).toEqual(CADRAGES['jeu-rang'].iphone)
     expect(cadrageDe({ scene: 'jeu-niveau', appareil: 'iphone' })).toEqual(CADRAGES['jeu-niveau'].iphone)
     expect(cadrageDe({ scene: 'jeu-coffre', appareil: 'iphone' })).toEqual(CADRAGES['jeu-coffre'].iphone)
-    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'ipad' })).toBeNull()
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'ipad' })).toEqual(CADRAGES['jeu-rang'].ipad)
+    expect(cadrageDe({ scene: 'interaction-sticker', appareil: 'ipad' })).toBeNull()
     expect(cadrageDe({ scene: 'jeu-badge', appareil: 'iphone' })).toEqual(CADRAGES['jeu-badge'].iphone)
     expect(cadrageDe({ scene: 'interaction-sticker', appareil: 'iphone' })).toBeNull()
-    for (const [scene, { iphone }] of Object.entries(CADRAGES)) {
-      if (iphone) expect({ scene, dansLEcran: iphone.x >= 0 && iphone.y >= 0 && iphone.x + iphone.largeur <= 1320 && iphone.y + iphone.hauteur <= 2868 }).toEqual({ scene, dansLEcran: true })
+    // En arabe, l'écran est en miroir : le rectangle se retourne, sa largeur et sa hauteur ne changent pas.
+    const rang = CADRAGES['jeu-rang'].iphone
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone', langue: 'ar' })).toEqual({ ...rang, x: 1320 - rang.x - rang.largeur })
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone', langue: 'de' })).toEqual(rang)
+    const ecrans = { iphone: [1320, 2868], ipad: [2064, 2752] }
+    for (const [scene, parAppareil] of Object.entries(CADRAGES)) {
+      for (const [appareil, r] of Object.entries(parAppareil)) {
+        const [l, h] = ecrans[appareil]
+        expect({ scene, appareil, dansLEcran: r.x >= 0 && r.y >= 0 && r.x + r.largeur <= l && r.y + r.hauteur <= h })
+          .toEqual({ scene, appareil, dansLEcran: true })
+      }
     }
+  })
+
+  test('la caméra d’un plan arabe vise l’action retournée : l’écran est en miroir', async () => {
+    const { cameraDuPlan } = await import('../vitrine/monter.mjs')
+    const clip = { largeur: 1320, hauteur: 2868 }
+    const camera = (langue) => cameraDuPlan({ scene: 'jeu-rang', appareil: 'iphone', langue, clip, rognageHaut: ROGNAGE_HAUT.iphone })
+    expect(camera('ar')).not.toEqual(camera('fr'))
+    expect(camera('de')).toEqual(camera('fr'))
   })
 
   test('zoom borné à ×2,2 : 600 px natifs sur un iPhone de 1320 ; la borne suit la taille du clip', () => {

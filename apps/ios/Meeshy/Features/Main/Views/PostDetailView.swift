@@ -404,9 +404,10 @@ struct PostDetailView: View {
 
     private var currentDisplayLangCode: String {
         guard let post = displayPost else { return "fr" }
-        return activeDisplayLangCode ?? post.translations?.keys.first(where: { lang in
-            AuthManager.shared.currentUser?.preferredContentLanguages.contains(where: { $0.caseInsensitiveCompare(lang) == .orderedSame }) ?? false
-        })?.lowercased() ?? post.originalLanguage?.lowercased() ?? "fr"
+        return activeDisplayLangCode ?? PostDisplayLanguage.code(
+            originalLanguage: post.originalLanguage, translations: post.translations,
+            prism: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+        ) ?? "fr"
     }
 
     private var effectiveContent: String {

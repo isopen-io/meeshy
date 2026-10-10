@@ -137,7 +137,7 @@ describe('balayage : tout appelant du cadrage charge les quatre colonnes (#4642)
   });
 
   it("l'exemption de la SSOT PORTE quelque chose — retirée, le balayage la nomme", () => {
-    expect(Object.keys(EXEMPTIONS)).toEqual(['utils/recipient-language.ts']);
+    expect(Object.keys(EXEMPTIONS)).toEqual(['utils/recipient-language.ts', 'services/linkUnfurl/page.ts']);
 
     const sansExemption = balayerAppelsDeCadrage(SRC, {}).filter(
       (appel) => appel.fichier === 'utils/recipient-language.ts',
@@ -149,6 +149,22 @@ describe('balayage : tout appelant du cadrage charge les quatre colonnes (#4642)
     expect(sansExemption.length).toBeGreaterThan(0);
     expect(sansExemption.every((appel) => appel.verdict === 'non-resolue')).toBe(true);
     expect(chainesNonRemontees(SRC, {})).not.toEqual([]);
+  });
+});
+
+describe("l'exemption de l'aperçu d'un lien PORTE quelque chose, et sa raison se vérifie", () => {
+  it('retirée, le balayage nomme l’appel de `services/linkUnfurl/page.ts` comme non remonté', () => {
+    const sansExemption = balayerAppelsDeCadrage(SRC, {}).filter(
+      (appel) => appel.fichier === 'services/linkUnfurl/page.ts',
+    );
+    expect(sansExemption.length).toBeGreaterThan(0);
+    expect(sansExemption.every((appel) => appel.verdict === 'non-resolue')).toBe(true);
+  });
+
+  it('la requête de la source étale les quatre colonnes sous `creator`', () => {
+    const page = readFileSync(join(SRC, 'services/linkUnfurl/page.ts'), 'utf8');
+    expect(page).toMatch(/creator:\s*\{\s*select:\s*\{[^}]*\.\.\.RECIPIENT_LANG_SELECT/);
+    expect(page).toMatch(/select:\s*linkUnfurlSelect/);
   });
 });
 
