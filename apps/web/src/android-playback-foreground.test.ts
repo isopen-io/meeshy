@@ -142,7 +142,7 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
     const flotter = corpsDe(plugin, 'public void floatVideo(');
     expect(flotter).toContain('runOnUiThread(');
-    expect(flotter).toContain('.floatVideo()');
+    expect(flotter).toContain('.floatVideo(width, height)');
     expect(flotter).toContain('"floated"');
     const activite = sansCommentaires(lire(...JAVA, 'MainActivity.java'));
     const demande = corpsDe(activite, 'boolean floatVideo(');

@@ -1,6 +1,8 @@
 package me.meeshy.app;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -27,5 +29,21 @@ public class FullscreenPictureInPictureTest {
     @Test
     public void nothingFloatsWhenTheDeviceHasNoPictureInPicture() {
         assertFalse(FullscreenPictureInPicture.floats(36, true, false));
+    }
+
+    /** #9847 — le bouton de la fenetre flottante d'une video, comme dans Chrome Android. */
+    @Test
+    public void aPlayingVideoOffersPause() {
+        assertEquals("pause", FullscreenPictureInPicture.toggleAction(Boolean.TRUE));
+    }
+
+    @Test
+    public void aPausedVideoOffersPlay() {
+        assertEquals("play", FullscreenPictureInPicture.toggleAction(Boolean.FALSE));
+    }
+
+    @Test
+    public void noButtonWhileThePageHasNotToldTheState() {
+        assertNull(FullscreenPictureInPicture.toggleAction(null));
     }
 }

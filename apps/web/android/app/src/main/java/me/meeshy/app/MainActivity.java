@@ -1,13 +1,18 @@
 package me.meeshy.app;
 
 import android.annotation.SuppressLint;
+import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
+import android.app.RemoteAction;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.RenderProcessGoneDetail;
@@ -22,6 +27,7 @@ import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
 import com.getcapacitor.PluginHandle;
 import com.getcapacitor.WebViewListener;
+import java.util.ArrayList;
 
 /**
  * Defaut de coque 3b (#5604, recette 2026-09-07) : `BridgeActivity` (Capacitor
@@ -63,6 +69,12 @@ public class MainActivity extends BridgeActivity {
     /** #9410 — le plein ecran demande pour flotter : il flotte des qu'il est montre. */
     private boolean floatOnFullscreen;
 
+    /** #9845 — la forme de la video que la page a fait flotter, tant que son plein ecran dure. */
+    private Rational floatAspect;
+
+    /** #9847 — la video qui flotte joue-t-elle ? null tant que la page ne l'a pas dit. */
+    private Boolean floatPlaying;
+
     static boolean isInForeground() {
         return inForeground;
     }
@@ -100,7 +112,7 @@ public class MainActivity extends BridgeActivity {
             }
             boolean supported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
             if (FullscreenPictureInPicture.floats(Build.VERSION.SDK_INT, fullscreenView != null, supported)) {
-                enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+                enterPictureInPictureMode(floatParams());
             }
         } catch (IllegalStateException refused) {
             // PiP coupee pour Meeshy dans les reglages : l'appel ou la video continue en arriere-plan.
@@ -112,18 +124,59 @@ public class MainActivity extends BridgeActivity {
      * n'offre pas : la page a passe la video en plein ecran, l'activite flotte
      * maintenant, ou des que la vue plein ecran lui est confiee.
      */
-    boolean floatVideo() {
+    boolean floatVideo(int width, int height) {
         boolean supported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
         if (!FullscreenPictureInPicture.floats(Build.VERSION.SDK_INT, true, supported)) return false;
+        int[] aspect = CallShellRules.pictureInPictureAspect(width, height);
+        floatAspect = aspect == null ? null : new Rational(aspect[0], aspect[1]);
         if (fullscreenView != null) return enterFloat();
         floatOnFullscreen = true;
         return true;
     }
 
     @SuppressLint("NewApi")
+    private PictureInPictureParams floatParams() {
+        PictureInPictureParams.Builder params = new PictureInPictureParams.Builder();
+        if (floatAspect != null) params.setAspectRatio(floatAspect);
+        ArrayList<RemoteAction> actions = new ArrayList<>();
+        String toggle = FullscreenPictureInPicture.toggleAction(floatPlaying);
+        if (toggle != null) actions.add(toggleAction("pause".equals(toggle)));
+        params.setActions(actions);
+        return params.build();
+    }
+
+    @SuppressLint("NewApi")
+    private RemoteAction toggleAction(boolean pause) {
+        PendingIntent pending = PendingIntent.getBroadcast(
+            this,
+            MeeshyPlaybackPlugin.ACTION_FLOAT_TOGGLE.hashCode(),
+            new Intent(MeeshyPlaybackPlugin.ACTION_FLOAT_TOGGLE).setPackage(getPackageName()),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        String label = getString(pause ? R.string.playback_pause : R.string.playback_play);
+        Icon icon = Icon.createWithResource(this, pause ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play);
+        return new RemoteAction(icon, label, label, pending);
+    }
+
+    /**
+     * #9847 — la page dit si la video qui flotte joue : le bouton de la
+     * fenetre suit, qu'elle flotte deja ou pas encore.
+     */
+    @SuppressLint("NewApi")
+    void floatPlaying(boolean playing) {
+        floatPlaying = playing;
+        if (fullscreenView == null || Build.VERSION.SDK_INT < FullscreenPictureInPicture.MIN_SDK) return;
+        try {
+            setPictureInPictureParams(floatParams());
+        } catch (IllegalStateException | IllegalArgumentException refused) {
+            // PiP coupee pour Meeshy : la video garde ses commandes dans la page.
+        }
+    }
+
+    @SuppressLint("NewApi")
     private boolean enterFloat() {
         try {
-            return enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+            return enterPictureInPictureMode(floatParams());
         } catch (IllegalStateException refused) {
             return false;
         }
@@ -197,6 +250,8 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onHideCustomView() {
                 floatOnFullscreen = false;
+                floatAspect = null;
+                floatPlaying = null;
                 if (fullscreenView == null) {
                     return;
                 }

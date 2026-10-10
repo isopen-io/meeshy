@@ -78,6 +78,7 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation "androidx.browser:browser:$androidxBrowserVersion"
     implementation project(':capacitor-android')
     // #8049 — MeeshyMessagingService (l'appel entrant data-only, app tuee) : la
     // coque recoit FCM elle-meme, le plugin n'etant atteint que par reflexion.
