@@ -14323,6 +14323,53 @@
         }
       }
     },
+    "ageGate.body": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن لهذا الحساب استخدام Meeshy بعد. يمكنك الانضمام إلينا عند بلوغك 13 عامًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Konto kann Meeshy noch nicht nutzen. Du kannst mit 13 dabei sein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This account can't use Meeshy yet. You can join us when you turn 13."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta cuenta todavía no puede usar Meeshy. Podrás unirte a nosotros a los 13 años."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce compte ne peut pas encore utiliser Meeshy. Tu pourras nous rejoindre à tes 13 ans."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo account non può ancora usare Meeshy. Potrai unirti a noi a 13 anni."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conta ainda não pode usar o Meeshy. Você poderá entrar aos 13 anos."
+          }
+        }
+      }
+    },
     "arrival.celebration.lead": {
       "extractionState": "manual",
       "localizations": {

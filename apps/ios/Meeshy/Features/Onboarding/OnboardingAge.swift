@@ -25,8 +25,11 @@ nonisolated enum OnboardingAgeState: Equatable {
 nonisolated enum OnboardingAgeRules {
     static let oldestAge = 120
     /// Le point de départ de la roue : il n'est jamais envoyé tel quel, la
-    /// confirmation attend que l'utilisateur ait choisi.
-    static let initialAge = 18
+    /// confirmation attend que l'utilisateur ait choisi. Jamais un âge MAJEUR :
+    /// une roue à peine effleurée ne doit pas ouvrir Global en écriture à un
+    /// mineur — elle part de l'âge minimum, l'erreur possible est du côté qui
+    /// protège.
+    static let initialAge = 13
 
     static func range(now: Date, calendar: Calendar = .current) -> ClosedRange<Date> {
         let oldest = calendar.date(byAdding: .year, value: -oldestAge, to: now) ?? now
