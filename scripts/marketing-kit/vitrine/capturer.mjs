@@ -13,7 +13,7 @@ import { CREDITS } from '../lib/photos.mjs'
 import { pngInfo } from '../lib/png.mjs'
 import { VITRINE } from '../templates/vitrine/plan.mjs'
 import { exporterVitrine } from './fixtures.mjs'
-import { DOSSIER_PHOTOS, fichierVoix, lireVoix, preparerVideo, synthetiser } from './medias.mjs'
+import { DOSSIER_PHOTOS, fichierVoix, lireVoix, preparerAffiche, preparerVideo, synthetiser } from './medias.mjs'
 import { SIMULATEURS, assurerSimulateur, barreDEtat, demarrer } from './simulateurs.mjs'
 
 export const BUNDLE = 'me.meeshy.app'
@@ -75,9 +75,9 @@ export const vocalTropCourt = (f, lang) => {
 
 // La source d'un média sur le Mac : la photo du kit, la vidéo du réel (téléchargée et réduite une fois), ou le vocal
 // synthétisé. `video` est injectable : un test n'a rien à télécharger.
-export const sourceDuMedia = (media, { video = preparerVideo } = {}) => {
+export const sourceDuMedia = (media, { video = preparerVideo, affiche = preparerAffiche } = {}) => {
   switch (media.genre) {
-    case 'image': return resolve(DOSSIER_PHOTOS, CREDITS[media.photo].fichier)
+    case 'image': return media.affiche ? affiche(media.affiche) : resolve(DOSSIER_PHOTOS, CREDITS[media.photo].fichier)
     case 'video': return video(media.video)
     default: return fichierVoix(media)
   }

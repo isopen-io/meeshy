@@ -4,8 +4,8 @@ import { resolve } from 'node:path'
 import { REPO_ROOT } from '../lib/catalog.mjs'
 import { KIT_LANGS } from '../lib/locales.mjs'
 import { DEMO, lecteurDe, partenaireDe, profilDe } from '../textes/demo.mjs'
-import { ID_DEBAT, ID_GLOBAL, ID_NOVA, LIEN_LISBOA, MESURE_PAR_DEFAUT, exporterVitrine, idAmour, languesDuCommentaireVocal, oid } from '../vitrine/fixtures.mjs'
-import { RACINE_MEDIAS, VIDEO_DU_REEL, videoMedia } from '../vitrine/medias.mjs'
+import { ID_DEBAT, ID_GLOBAL, ID_NOVA, LIEN_LISBOA, MESURE_PAR_DEFAUT, exporterVitrine, idAmour, languesDuCommentaireVocal, oid, storyDeLEntete } from '../vitrine/fixtures.mjs'
+import { RACINE_MEDIAS, VIDEOS_DES_REELS_DROLES, VIDEO_DU_REEL, afficheMedia, videoMedia } from '../vitrine/medias.mjs'
 
 const MAINTENANT = new Date('2026-09-30T12:00:00.000Z')
 const ECHANTILLON = resolve(REPO_ROOT, 'apps/ios/MeeshyTests/Resources/VitrineFixtures-fr.json')
@@ -215,7 +215,7 @@ describe('fixtures de la vitrine, lot 2 : ce que la capture montre (#8855)', () 
 describe('fixtures de la vitrine : le réel et le commentaire vocal (#9820)', () => {
   test.each(KIT_LANGS)('%s : la vidéo du réel est livrée avec les autres médias', (lang) => {
     const f = exporterVitrine({ lang, maintenant: MAINTENANT })
-    expect(f.medias.filter((m) => m.genre === 'video')).toEqual([videoMedia(VIDEO_DU_REEL)])
+    expect(f.medias.filter((m) => m.genre === 'video')).toEqual([VIDEO_DU_REEL, ...VIDEOS_DES_REELS_DROLES].map(videoMedia))
   })
 
   test.each(KIT_LANGS)('%s : le commentaire vocal est celui du lecteur, dans SA langue, en réponse au post d’Aiko — transcrit et traduit', (lang) => {
@@ -247,4 +247,60 @@ describe('fixtures de la vitrine : le réel et le commentaire vocal (#9820)', ()
     const plusAncienMontre = [...f.messages[idAmour(lang)], ...f.messages[ID_DEBAT], ...f.messages[ID_GLOBAL]].map((m) => m.createdAt).sort()[0]
     expect(vocal.createdAt > plusAncienMontre).toBe(true)
   })
+})
+
+describe('fixtures de la vitrine : les réels drôles et la story de l’en-tête (#9904)', () => {
+  test.each(KIT_LANGS)('%s : quatre réels vidéo, chacun écrit dans une AUTRE langue que celle du lecteur, et traduit dans la sienne', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    expect(f.reels).toHaveLength(4)
+    for (const reel of f.reels) {
+      expect(reel.type).toBe('REEL')
+      expect(reel.id).toMatch(HEX24)
+      expect(reel.originalLanguage).not.toBe(lang)
+      expect(LANGUE_DE[reel.author.id]).toBe(reel.originalLanguage)
+      expect(reel.translations[lang].text).toBeTruthy()
+      expect(reel.translations[lang].text).not.toBe(reel.content)
+      expect(reel.translations[reel.originalLanguage]).toBeUndefined()
+      expect(reel.createdAt).toMatch(ISO_MS)
+    }
+    expect(new Set(f.reels.map((r) => r.originalLanguage)).size).toBe(4)
+  })
+
+  test.each(KIT_LANGS)('%s : chaque réel porte sa vraie vidéo et son affiche, toutes deux livrées', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    const urls = new Set(f.medias.map((m) => m.url))
+    f.reels.forEach((reel, i) => {
+      const [media] = reel.media
+      expect(media.mimeType).toBe('video/mp4')
+      expect(media.fileUrl).toBe(videoMedia(VIDEOS_DES_REELS_DROLES[i]).url)
+      expect(media.thumbnailUrl).toBe(afficheMedia(VIDEOS_DES_REELS_DROLES[i]).url)
+      expect(media.duration).toBe(videoMedia(VIDEOS_DES_REELS_DROLES[i]).dureeMs)
+      expect(urls.has(media.fileUrl)).toBe(true)
+      expect(urls.has(media.thumbnailUrl)).toBe(true)
+    })
+  })
+
+  test.each(KIT_LANGS)('%s : la story est celle d’un autre, écrite dans sa langue sur la photo, traduite pour le lecteur, encore vivante', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    expect(f.stories).toHaveLength(1)
+    const [story] = f.stories
+    const attendue = storyDeLEntete(lang)
+    expect(story.type).toBe('STORY')
+    expect(story.id).toMatch(HEX24)
+    expect(story.author.id).not.toBe(f.lecteur.id)
+    expect(new Date(story.expiresAt) > MAINTENANT).toBe(true)
+    const [texte] = story.storyEffects.textObjects
+    expect(texte.sourceLanguage).toBe(attendue.lang)
+    expect(texte.sourceLanguage).not.toBe(lang)
+    expect(texte.text).toBe(attendue.text)
+    expect(texte.translations[lang]).toBe(attendue.translations[lang])
+    expect(f.medias.map((m) => m.url)).toContain(story.media[0].fileUrl)
+  })
+
+  test('la story de Lucas, sauf pour Lucas lui-même : il lit celle de Sofía', () => {
+    expect(storyDeLEntete('fr').id).toBe('story.lucas')
+    expect(storyDeLEntete('pt').id).toBe('story.sofia')
+    expect(storyDeLEntete('es').id).toBe('story.lucas')
+  })
+
 })

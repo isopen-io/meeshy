@@ -2955,6 +2955,15 @@
    "height": 1600
   },
   {
+   "url": "/api/v1/attachments/file/vitrine/sao-paulo-coucher.jpg",
+   "fichier": "sao-paulo-coucher.jpg",
+   "genre": "image",
+   "photo": "sao-paulo-coucher",
+   "taille": 478824,
+   "width": 1600,
+   "height": 2400
+  },
+  {
    "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-ko.m4a",
    "fichier": "vocal-minjun.p-ko.m4a",
    "genre": "audio",
@@ -3004,6 +3013,74 @@
    "width": 720,
    "height": 1280,
    "dureeMs": 6000
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/reel-miroir-brosse.mp4",
+   "fichier": "reel-miroir-brosse.mp4",
+   "genre": "video",
+   "video": "miroir-brosse",
+   "width": 720,
+   "height": 1280,
+   "dureeMs": 5000
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/reel-miroir-brosse.jpg",
+   "fichier": "reel-miroir-brosse.jpg",
+   "genre": "image",
+   "affiche": "miroir-brosse",
+   "width": 720,
+   "height": 1280
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/reel-louche-micro.mp4",
+   "fichier": "reel-louche-micro.mp4",
+   "genre": "video",
+   "video": "louche-micro",
+   "width": 720,
+   "height": 1280,
+   "dureeMs": 5000
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/reel-louche-micro.jpg",
+   "fichier": "reel-louche-micro.jpg",
+   "genre": "image",
+   "affiche": "louche-micro",
+   "width": 720,
+   "height": 1280
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/reel-emoji-reunion.mp4",
+   "fichier": "reel-emoji-reunion.mp4",
+   "genre": "video",
+   "video": "emoji-reunion",
+   "width": 720,
+   "height": 1280,
+   "dureeMs": 5000
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/reel-emoji-reunion.jpg",
+   "fichier": "reel-emoji-reunion.jpg",
+   "genre": "image",
+   "affiche": "emoji-reunion",
+   "width": 720,
+   "height": 1280
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/reel-menage-danse.mp4",
+   "fichier": "reel-menage-danse.mp4",
+   "genre": "video",
+   "video": "menage-danse",
+   "width": 720,
+   "height": 1280,
+   "dureeMs": 5000
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/reel-menage-danse.jpg",
+   "fichier": "reel-menage-danse.jpg",
+   "genre": "image",
+   "affiche": "menage-danse",
+   "width": 720,
+   "height": 1280
   }
  ],
  "posts": [
@@ -3112,6 +3189,318 @@
     "ar": {
      "text": "أول أسبوع هنا: أصدقاء جدد في سيول ومدريد وليون. مين التالي؟ 🌍"
     }
+   }
+  }
+ ],
+ "reels": [
+  {
+   "id": "4b97798777c6cab37856bcf7",
+   "type": "REEL",
+   "visibility": "PUBLIC",
+   "content": "아침 7시, 욕실 단독 콘서트 🎤🪥 오늘도 매진!",
+   "originalLanguage": "ko",
+   "createdAt": "2026-09-30T11:48:00.000Z",
+   "updatedAt": "2026-09-30T11:48:00.000Z",
+   "author": {
+    "id": "c1dcfc966154a301adabb8c7",
+    "username": "minjun.p",
+    "displayName": "Min-jun Park",
+    "firstName": "Min-jun",
+    "lastName": "Park"
+   },
+   "likeCount": 1840,
+   "commentCount": 96,
+   "repostCount": 0,
+   "viewCount": 23400,
+   "bookmarkCount": 0,
+   "shareCount": 41,
+   "reactionSummary": {
+    "😂": 1240,
+    "❤️": 600
+   },
+   "media": [
+    {
+     "id": "ebb3823ccf3fcb28ce04ba5a",
+     "fileName": "reel-miroir-brosse.mp4",
+     "originalName": "reel-miroir-brosse.mp4",
+     "mimeType": "video/mp4",
+     "fileUrl": "/api/v1/attachments/file/vitrine/reel-miroir-brosse.mp4",
+     "thumbnailUrl": "/api/v1/attachments/file/vitrine/reel-miroir-brosse.jpg",
+     "width": 720,
+     "height": 1280,
+     "duration": 5000,
+     "order": 0
+    }
+   ],
+   "translations": {
+    "fr": {
+     "text": "7 h du matin, concert privé dans la salle de bain 🎤🪥 Encore complet !"
+    },
+    "en": {
+     "text": "7 a.m., private bathroom concert 🎤🪥 Sold out again!"
+    },
+    "es": {
+     "text": "7 de la mañana, concierto privado en el baño 🎤🪥 ¡Otra vez agotado!"
+    },
+    "de": {
+     "text": "7 Uhr morgens, Privatkonzert im Bad 🎤🪥 Wieder ausverkauft!"
+    },
+    "it": {
+     "text": "Le 7 del mattino, concerto privato in bagno 🎤🪥 Di nuovo sold out!"
+    },
+    "pt": {
+     "text": "7 da manhã, show particular no banheiro 🎤🪥 Esgotado de novo!"
+    },
+    "ar": {
+     "text": "السابعة صباحًا، حفلة خاصة في الحمّام 🎤🪥 نفدت التذاكر مجددًا!"
+    }
+   }
+  },
+  {
+   "id": "3ed6a32bc88c45c88934bb8d",
+   "type": "REEL",
+   "visibility": "PUBLIC",
+   "content": "お玉マイクで熱唱中🎤 観客はスープだけ🍲",
+   "originalLanguage": "ja",
+   "createdAt": "2026-09-30T11:39:00.000Z",
+   "updatedAt": "2026-09-30T11:39:00.000Z",
+   "author": {
+    "id": "76cffb9b729978327d9e3fe0",
+    "username": "aiko.t",
+    "displayName": "Aiko Tanaka",
+    "firstName": "Aiko",
+    "lastName": "Tanaka"
+   },
+   "likeCount": 1463,
+   "commentCount": 79,
+   "repostCount": 0,
+   "viewCount": 19300,
+   "bookmarkCount": 0,
+   "shareCount": 35,
+   "reactionSummary": {
+    "😂": 980,
+    "❤️": 483
+   },
+   "media": [
+    {
+     "id": "d2a36b1213a7429a979b9cb7",
+     "fileName": "reel-louche-micro.mp4",
+     "originalName": "reel-louche-micro.mp4",
+     "mimeType": "video/mp4",
+     "fileUrl": "/api/v1/attachments/file/vitrine/reel-louche-micro.mp4",
+     "thumbnailUrl": "/api/v1/attachments/file/vitrine/reel-louche-micro.jpg",
+     "width": 720,
+     "height": 1280,
+     "duration": 5000,
+     "order": 0
+    }
+   ],
+   "translations": {
+    "fr": {
+     "text": "En plein concert à la louche 🎤 Mon seul public : la soupe 🍲"
+    },
+    "en": {
+     "text": "Belting it out on the ladle mic 🎤 My only audience: the soup 🍲"
+    },
+    "es": {
+     "text": "Cantando a todo pulmón con el cucharón 🎤 Mi único público: la sopa 🍲"
+    },
+    "de": {
+     "text": "Volle Power ins Schöpfkellen-Mikro 🎤 Mein einziges Publikum: die Suppe 🍲"
+    },
+    "it": {
+     "text": "A squarciagola col mestolo 🎤 Il mio unico pubblico: la zuppa 🍲"
+    },
+    "pt": {
+     "text": "Cantando com tudo no microfone-concha 🎤 Minha única plateia: a sopa 🍲"
+    },
+    "ar": {
+     "text": "أغني بكل قوتي في ميكروفون المغرفة 🎤 جمهوري الوحيد: الحساء 🍲"
+    }
+   }
+  },
+  {
+   "id": "43c15ec69273262e271b4f1f",
+   "type": "REEL",
+   "visibility": "PUBLIC",
+   "content": "Cuando el jefe dice «reunión rápida» 😂",
+   "originalLanguage": "es",
+   "createdAt": "2026-09-30T11:30:00.000Z",
+   "updatedAt": "2026-09-30T11:30:00.000Z",
+   "author": {
+    "id": "b65f1cd71cd29ed7ce30c5e5",
+    "username": "sofi.romero",
+    "displayName": "Sofía Romero",
+    "firstName": "Sofía",
+    "lastName": "Romero"
+   },
+   "likeCount": 1086,
+   "commentCount": 62,
+   "repostCount": 0,
+   "viewCount": 15200,
+   "bookmarkCount": 0,
+   "shareCount": 29,
+   "reactionSummary": {
+    "😂": 720,
+    "❤️": 366
+   },
+   "media": [
+    {
+     "id": "b856ef41ddda164a62c33626",
+     "fileName": "reel-emoji-reunion.mp4",
+     "originalName": "reel-emoji-reunion.mp4",
+     "mimeType": "video/mp4",
+     "fileUrl": "/api/v1/attachments/file/vitrine/reel-emoji-reunion.mp4",
+     "thumbnailUrl": "/api/v1/attachments/file/vitrine/reel-emoji-reunion.jpg",
+     "width": 720,
+     "height": 1280,
+     "duration": 5000,
+     "order": 0
+    }
+   ],
+   "translations": {
+    "fr": {
+     "text": "Quand le chef dit « réunion rapide » 😂"
+    },
+    "en": {
+     "text": "When the boss says “quick meeting” 😂"
+    },
+    "de": {
+     "text": "Wenn der Chef „kurzes Meeting“ sagt 😂"
+    },
+    "it": {
+     "text": "Quando il capo dice «riunione veloce» 😂"
+    },
+    "pt": {
+     "text": "Quando o chefe diz “reunião rápida” 😂"
+    },
+    "ar": {
+     "text": "عندما يقول المدير «اجتماع سريع» 😂"
+    }
+   }
+  },
+  {
+   "id": "5c233619586dfd314bfbb1f6",
+   "type": "REEL",
+   "visibility": "PUBLIC",
+   "content": "التنظيف: ٥ دقائق. الرقص: ساعة كاملة 🧹💃",
+   "originalLanguage": "ar",
+   "createdAt": "2026-09-30T11:21:00.000Z",
+   "updatedAt": "2026-09-30T11:21:00.000Z",
+   "author": {
+    "id": "b97389c5be1aa560990a0647",
+    "username": "yusuf.h",
+    "displayName": "Yusuf Haddad",
+    "firstName": "Yusuf",
+    "lastName": "Haddad"
+   },
+   "likeCount": 709,
+   "commentCount": 45,
+   "repostCount": 0,
+   "viewCount": 11100,
+   "bookmarkCount": 0,
+   "shareCount": 23,
+   "reactionSummary": {
+    "😂": 460,
+    "❤️": 249
+   },
+   "media": [
+    {
+     "id": "fd357937c50c4f24ace95384",
+     "fileName": "reel-menage-danse.mp4",
+     "originalName": "reel-menage-danse.mp4",
+     "mimeType": "video/mp4",
+     "fileUrl": "/api/v1/attachments/file/vitrine/reel-menage-danse.mp4",
+     "thumbnailUrl": "/api/v1/attachments/file/vitrine/reel-menage-danse.jpg",
+     "width": 720,
+     "height": 1280,
+     "duration": 5000,
+     "order": 0
+    }
+   ],
+   "translations": {
+    "fr": {
+     "text": "Le ménage : 5 minutes. La danse : une heure 🧹💃"
+    },
+    "en": {
+     "text": "Cleaning: 5 minutes. Dancing: one hour 🧹💃"
+    },
+    "es": {
+     "text": "Limpiar: 5 minutos. Bailar: una hora 🧹💃"
+    },
+    "de": {
+     "text": "Putzen: 5 Minuten. Tanzen: eine Stunde 🧹💃"
+    },
+    "it": {
+     "text": "Pulizie: 5 minuti. Ballo: un’ora 🧹💃"
+    },
+    "pt": {
+     "text": "Faxina: 5 minutos. Dança: uma hora 🧹💃"
+    }
+   }
+  }
+ ],
+ "stories": [
+  {
+   "id": "71deb4f61e8b00e92754100b",
+   "type": "STORY",
+   "visibility": "PUBLIC",
+   "content": null,
+   "originalLanguage": "pt",
+   "createdAt": "2026-09-30T11:35:00.000Z",
+   "updatedAt": "2026-09-30T11:35:00.000Z",
+   "expiresAt": "2026-10-01T10:35:00.000Z",
+   "author": {
+    "id": "655bb9940592461b29c7d9bd",
+    "username": "lucas.olv",
+    "displayName": "Lucas Oliveira",
+    "firstName": "Lucas",
+    "lastName": "Oliveira"
+   },
+   "likeCount": 64,
+   "commentCount": 0,
+   "repostCount": 0,
+   "viewCount": 212,
+   "bookmarkCount": 0,
+   "shareCount": 0,
+   "media": [
+    {
+     "id": "fadbc0b4a3d932aba0f9e677",
+     "fileName": "sao-paulo-coucher.jpg",
+     "originalName": "sao-paulo-coucher.jpg",
+     "mimeType": "image/jpeg",
+     "fileSize": 478824,
+     "fileUrl": "/api/v1/attachments/file/vitrine/sao-paulo-coucher.jpg",
+     "width": 1600,
+     "height": 2400,
+     "order": 0
+    }
+   ],
+   "storyEffects": {
+    "textObjects": [
+     {
+      "id": "2655ab2480db4f11f8816ae2",
+      "text": "Pôr do sol na Paulista 🧡 Quem vem no sábado?",
+      "sourceLanguage": "pt",
+      "translations": {
+       "fr": "Coucher de soleil sur la Paulista 🧡 Qui vient samedi ?",
+       "en": "Sunset on Paulista 🧡 Who’s coming Saturday?",
+       "es": "Atardecer en la Paulista 🧡 ¿Quién viene el sábado?",
+       "de": "Sonnenuntergang auf der Paulista 🧡 Wer kommt Samstag?",
+       "it": "Tramonto sulla Paulista 🧡 Chi viene sabato?",
+       "ar": "غروب الشمس في شارع باوليستا 🧡 مين جاي السبت؟"
+      },
+      "x": 0.5,
+      "y": 0.7,
+      "scale": 1,
+      "rotation": 0,
+      "zIndex": 1,
+      "fontSize": 84,
+      "textStyle": "bold",
+      "textColor": "FFFFFF",
+      "textAlign": "center"
+     }
+    ]
    }
   }
  ],
