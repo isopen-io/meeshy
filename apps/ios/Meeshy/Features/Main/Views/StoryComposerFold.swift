@@ -98,6 +98,16 @@ nonisolated enum StoryComposerFold {
         presentation == .expanded
     }
 
+    /// Ce qu'un toucher fait au composeur (#9893).
+    struct Tap: Equatable, Sendable {
+        let userFolded: Bool
+        let resignsKeyboard: Bool
+        let focusesField: Bool
+    }
+
+    static let chevronTapped = Tap(userFolded: false, resignsKeyboard: false, focusesField: false)
+    static let bubbleTapped = Tap(userFolded: false, resignsKeyboard: false, focusesField: false)
+
     static let foldSymbol = "chevron.down"
     static let unfoldSymbol = "bubble.left.fill"
 }
