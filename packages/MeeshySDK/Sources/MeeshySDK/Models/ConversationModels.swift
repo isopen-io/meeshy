@@ -209,6 +209,9 @@ public struct APIConversation: Decodable, Sendable {
     /// « 🔥 série · N (M) » du LECTEUR dans cette conversation (#8906) —
     /// absent tant qu'il n'y a rien gagné. `var` : décodé sans élargir l'init.
     public var viewerEngagement: ConversationEngagementSnapshot? = nil
+    /// Ce que le LECTEUR ne peut pas écrire ici (#9927) — `minor-global` pour
+    /// un 13-17 ans dans Global, `null` sinon. `var` : décodé sans élargir l'init.
+    public var viewerWriteRestriction: ConversationWriteRestriction? = nil
     /// Prisme Linguistique de la ligne de liste — `{ langue: aperçu traduit }`,
     /// déjà restreint par le gateway aux langues du prisme du LECTEUR et tronqué
     /// au même plafond que `lastMessage.content`.
@@ -516,6 +519,11 @@ extension APIConversation {
         conversation.listRankAt = listRankAt
         conversation.activeCall = activeCall
         conversation.viewerEngagement = viewerEngagement
+        // Global d'un mineur est SERVIE archivée (#9927) ; la règle est rejouée
+        // ici pour qu'une passerelle qui ne servirait que la restriction range
+        // quand même la conversation là où le produit l'attend.
+        conversation.viewerWriteRestriction = viewerWriteRestriction
+        conversation = conversation.imposingServedArchive()
 
         // La frontière de lecture (#7198, #7222) — même idiome que la Prisme
         // ci-dessus : arrivée après l'init memberwise, projetée post-init pour

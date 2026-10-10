@@ -21,9 +21,12 @@ import Foundation
 
 /// Les cartes, dans l'ordre du parcours. `email` (#7907) n'est proposée qu'à
 /// un compte dont l'adresse n'est pas vérifiée ; la passerelle la pré-coche
-/// sinon.
+/// sinon. `age` (#9929) est FACULTATIVE et ne naît que si la passerelle la
+/// connaît (`APIOnboardingState.servesAgeStep`) : un binaire plus ancien
+/// l'écarte au décodage (règle 1), sans rien perdre du reste du parcours.
 public enum OnboardingStepId: String, CaseIterable, Codable, Sendable, Hashable {
     case languages
+    case age
     case email
     case global
     case story
@@ -101,6 +104,14 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
     public let canPublishStory: Bool?
     /// `nil` : passerelle antérieure à #7908.
     public let stepRewards: APIOnboardingStepRewards?
+    /// La passerelle sait-elle l'âge (#9927) ? Vrai dès qu'elle SERT la clé
+    /// `viewerWriteRestriction`, même à `null`. Une passerelle antérieure ne
+    /// la sert pas et n'a pas la route `PUT /me/birth-date` : la carte « âge »
+    /// ne s'invente pas — même règle que `emailVerified`.
+    public let servesAgeStep: Bool
+    /// `minor-global` pour un compte de 13 à 17 ans : Global se lit sans
+    /// s'écrire, et la carte du salut n'a pas lieu d'être.
+    public let viewerWriteRestriction: ConversationWriteRestriction?
 
     public init(
         eligible: Bool,
@@ -113,7 +124,9 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
         suggestions: [APIOnboardingSuggestion],
         emailVerified: Bool? = nil,
         canPublishStory: Bool? = nil,
-        stepRewards: APIOnboardingStepRewards? = nil
+        stepRewards: APIOnboardingStepRewards? = nil,
+        servesAgeStep: Bool = false,
+        viewerWriteRestriction: ConversationWriteRestriction? = nil
     ) {
         self.eligible = eligible
         self.completedAt = completedAt
@@ -126,12 +139,15 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
         self.emailVerified = emailVerified
         self.canPublishStory = canPublishStory
         self.stepRewards = stepRewards
+        self.servesAgeStep = servesAgeStep
+        self.viewerWriteRestriction = viewerWriteRestriction
     }
 
     private enum CodingKeys: String, CodingKey {
         case eligible, completedAt, seenSteps, prefilledSteps, globalConversationId
         case protectedRegime, storyDefaultVisibility, suggestions
         case emailVerified, canPublishStory, stepRewards
+        case viewerWriteRestriction
     }
 
     public init(from decoder: Decoder) throws {
@@ -150,7 +166,9 @@ public struct APIOnboardingState: Codable, Sendable, Equatable {
             suggestions: try container.decodeIfPresent([APIOnboardingSuggestion].self, forKey: .suggestions) ?? [],
             emailVerified: try container.decodeIfPresent(Bool.self, forKey: .emailVerified),
             canPublishStory: try container.decodeIfPresent(Bool.self, forKey: .canPublishStory),
-            stepRewards: try? container.decodeIfPresent(APIOnboardingStepRewards.self, forKey: .stepRewards)
+            stepRewards: try? container.decodeIfPresent(APIOnboardingStepRewards.self, forKey: .stepRewards),
+            servesAgeStep: container.contains(.viewerWriteRestriction),
+            viewerWriteRestriction: (try? container.decodeIfPresent(ConversationWriteRestriction.self, forKey: .viewerWriteRestriction)) ?? nil
         )
     }
 
