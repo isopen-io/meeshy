@@ -387,6 +387,14 @@ body {
 .ld-row--you .ld-author {
   color: var(--ios-self-name-ink);
 }
+/* En clair, l'ambre et l'émeraude de la marque tombent sous 2:1 sur le blanc :
+ * les noms d'auteur s'assombrissent jusqu'à tenir 4,5:1, teinte gardée. */
+:root.light .ld-row--kenji .ld-author {
+  color: color-mix(in srgb, var(--ios-warning) 45%, black);
+}
+:root.light .ld-row--luiza .ld-author {
+  color: color-mix(in srgb, var(--ios-success) 45%, black);
+}
 .ld-text {
   font-size: 15px;
   line-height: 1.35;

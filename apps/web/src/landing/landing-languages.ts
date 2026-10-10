@@ -2,7 +2,7 @@ import {
   DEFAULT_INTERFACE_LANGUAGE,
   SUPPORTED_INTERFACE_LANGUAGES,
   interfaceDirection,
-} from '@/lib/inline-interface-language-bootstrap.js';
+} from '../lib/inline-interface-language-bootstrap.js';
 
 /**
  * LES SEPT LANDINGS (#10002) — une par langue d'interface, jamais une de plus :
