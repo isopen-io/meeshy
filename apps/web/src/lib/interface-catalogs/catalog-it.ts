@@ -28,6 +28,7 @@ import itMessageCard from './catalog-it-message-card';
 import itMentions from './catalog-it-mentions';
 import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
+import itWriteRestriction from './catalog-it-write-restriction';
 import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
 import itSoundsMine from './catalog-it-sounds-mine';
@@ -1120,6 +1121,7 @@ const it = {
   ...itMentions,
   ...itStudioChrome,
   ...itEphemeral,
+  ...itWriteRestriction,
   ...itGallery,
   ...itMessageCard,
   ...itConversationCard,

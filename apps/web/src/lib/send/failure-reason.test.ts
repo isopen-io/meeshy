@@ -62,6 +62,13 @@ describe('sendFailureReason', () => {
     );
   });
 
+  /* #9928 — un mineur qui écrit dans Global (état périmé) : la cause dit
+     quand Global s'ouvrira, jamais un refus générique. */
+  test('GLOBAL_ADULTS_ONLY dit que Global s’ouvre à l’écriture à 18 ans', () => {
+    expect(sendFailureReason(failure(403, { code: 'GLOBAL_ADULTS_ONLY' }))).toBe('Global s’ouvre à l’écriture à tes 18 ans');
+    expect(sendFailureReasonIn(failure(403, { code: 'GLOBAL_ADULTS_ONLY' }), 'en')).toBe('Global opens for writing when you turn 18');
+  });
+
   /* #7740 — le mode lent des nouveaux comptes dans Meeshy Global : un refus
      TEMPORAIRE, qui dit pourquoi et combien de temps, jamais « trop de
      messages » (le nouveau venu n'a rien fait de trop). */

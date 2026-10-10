@@ -10,7 +10,8 @@ import { ONBOARDING_STEPS } from './onboarding';
  * `onboarding.ts` sous la source `fixtures`, chargé en `import()` et élagué des
  * builds `VITE_DATA_SOURCE=gateway`.
  *
- * Un compte neuf, adulte, éligible, qui n'a encore rien vu : c'est l'état que
+ * Un compte neuf, éligible, d'âge encore inconnu (la carte de l'âge se
+ * propose, #9928), qui n'a encore rien vu : c'est l'état que
  * le parcours doit savoir peindre en entier. Meeshy Global y est le fil
  * historique du POC (`CONVERSATION_ID`), pour que « Dis salut » parte vers une
  * conversation que les fixtures connaissent.
@@ -34,6 +35,7 @@ const INITIAL: OnboardingState = {
   protectedRegime: false,
   storyDefaultVisibility: 'public',
   suggestions: SUGGESTIONS,
+  viewerWriteRestriction: null,
 };
 
 let state: OnboardingState = INITIAL;
