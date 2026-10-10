@@ -416,13 +416,12 @@ export class OnboardingService {
 }
 
 /**
- * #9927 — `viewerWriteRestriction` n'est servi QUE quand il restreint : un
- * client antérieur décode l'état en objet strict (web `Served`), et une clé de
- * plus le rendrait illisible pour TOUT compte. Absent = aucune restriction.
+ * #9927 — `viewerWriteRestriction` est TOUJOURS servi : `'minor-global'` pour
+ * un mineur déclaré, `null` sinon. Sa présence dit au client que la passerelle
+ * connaît l'étape `age` (le web n'en propose la carte qu'à cette condition).
  */
 function minorGlobalRestriction(birthDate: Date | null, now: Date): Pick<OnboardingState, 'viewerWriteRestriction'> {
-  const restriction = viewerWriteRestrictionOf({ conversationType: GLOBAL_CONVERSATION_TYPE, birthDate, now });
-  return restriction === null ? {} : { viewerWriteRestriction: restriction };
+  return { viewerWriteRestriction: viewerWriteRestrictionOf({ conversationType: GLOBAL_CONVERSATION_TYPE, birthDate, now }) };
 }
 
 /**

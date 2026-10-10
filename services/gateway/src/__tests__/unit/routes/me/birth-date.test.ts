@@ -5,9 +5,8 @@
  * seconde déclaration est refusée — un mineur ne se redéclare pas majeur ;
  * une correction passe par le support.
  *
- * Et l'état d'onboarding (`GET /me/onboarding`) le dit : `viewerWriteRestriction:
- * 'minor-global'` pour un mineur déclaré, absent sinon (un client antérieur
- * décode l'état en objet strict).
+ * Et l'état d'onboarding (`GET /me/onboarding`) le dit, TOUJOURS :
+ * `viewerWriteRestriction: 'minor-global'` pour un mineur déclaré, `null` sinon.
  *
  * @jest-environment node
  */
@@ -170,12 +169,15 @@ describe('GET /me/onboarding — la restriction de Global (#9927)', () => {
     await app.close();
   });
 
-  it('âge inconnu ou majeur : le champ n’est pas servi (un client antérieur décode en strict)', async () => {
-    for (const birthDate of [null, new Date('1990-01-01T00:00:00.000Z')]) {
-      const app = await buildApp(makePrisma({ birthDate }));
-      const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers });
-      expect('viewerWriteRestriction' in res.json().data).toBe(false);
-      await app.close();
-    }
+  it.each([
+    ['âge inconnu', null],
+    ['majeur', new Date('1990-01-01T00:00:00.000Z')],
+    ['18 ans le jour même', new Date('2008-10-10T00:00:00.000Z')],
+  ])('%s : le champ est servi, à null — sa présence annonce l’étape age', async (_label, birthDate) => {
+    const app = await buildApp(makePrisma({ birthDate }));
+    const res = await app.inject({ method: 'GET', url: '/api/v1/me/onboarding', headers });
+    expect(res.json().data).toHaveProperty('viewerWriteRestriction', null);
+    expect(OnboardingStateSchema.safeParse(res.json().data).success).toBe(true);
+    await app.close();
   });
 });

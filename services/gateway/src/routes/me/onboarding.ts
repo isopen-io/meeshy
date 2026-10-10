@@ -96,9 +96,10 @@ const onboardingResponseSchema = {
             friendship: { type: 'integer', minimum: 0 },
           },
         },
-        // #9927 — servi SEULEMENT quand il restreint (mineur déclaré) : Meeshy
-        // Global est en lecture seule et rangée dans les archives.
-        viewerWriteRestriction: { type: 'string', enum: ['minor-global'] },
+        // #9927 — toujours servi : 'minor-global' (mineur déclaré, Meeshy
+        // Global en lecture seule et archivée) ou null. Sa présence annonce au
+        // client que la passerelle connaît l'étape `age`.
+        viewerWriteRestriction: { type: ['string', 'null'], enum: ['minor-global', null] },
       },
     },
   },
