@@ -10,7 +10,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { drawDailyMissions } from '@meeshy/shared/utils/game/missions';
 import { prismHourWindow } from '@meeshy/shared/utils/game/boosts';
-import { dailyChest } from '@meeshy/shared/utils/game/chest';
+import { dailyChest, dayEffort } from '@meeshy/shared/utils/game/chest';
 import { MissionService } from '../MissionService';
 import { GameRefusal } from '../GameRefusal';
 import { fakeGameDb, seedUser, USER, type FakeGameDb } from './fakeGameDb';
@@ -445,16 +445,94 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     expect(error.code).toBe('CHEST_NOT_READY');
   });
 
-  it('s’ouvre une fois les trois faites : points du tirage du jour, crédités une seule fois', async () => {
+  it('s’ouvre une fois les trois faites : le contenu de la loi pour l’effort du jour, crédité une seule fois', async () => {
     const { db, service, creditPoints } = setup();
     allDone(db);
 
     const issue = await service.claimChest({ userId: USER, requestId: 'coffre-0002', now: NOW });
 
-    const drawn = dailyChest({ userId: USER, dayKey: DAY });
+    const rows = db.dailyMission.rows.map((r) => ({ templateKey: String(r.templateKey), difficulty: String(r.difficulty), target: Number(r.target) }));
+    const drawn = dailyChest({ userId: USER, dayKey: DAY, effort: dayEffort(rows) });
     expect(issue.status).toBe('claimed');
     expect(issue.reward).toEqual(drawn);
+    expect(drawn.points).toBe(371);
     expect(creditPoints).toHaveBeenCalledWith(USER, drawn.points, expect.any(String));
+  });
+
+  it('paie plus de points quand les missions du jour sont plus lourdes (#10011)', async () => {
+    const light = setup();
+    allDone(light.db);
+    const heavy = setup();
+    insertMission(heavy.db, { completedAt: NOW, templateKey: 'send-texts', target: 15 });
+    insertMission(heavy.db, { completedAt: NOW, difficulty: 'medium', templateKey: 'comment-text', signal: 'comment-others-post', target: 6 });
+    insertMission(heavy.db, { completedAt: NOW, difficulty: 'gold', templateKey: 'publish-posts', signal: 'axis:content.post', target: 3 });
+
+    const lightIssue = await light.service.claimChest({ userId: USER, requestId: 'coffre-leger-1', now: NOW });
+    const heavyIssue = await heavy.service.claimChest({ userId: USER, requestId: 'coffre-lourd-1', now: NOW });
+
+    expect(heavyIssue.reward.points).toBeGreaterThan(lightIssue.reward.points);
+    expect(heavyIssue.reward.points).toBe(10_000);
+    expect(heavyIssue.reward.glory).toBe(1000);
+  });
+
+  it('grave la Gloire du coffre UNE fois, sous la clé du jour, et la garde sur la journée', async () => {
+    const { db, service } = setup();
+    allDone(db);
+
+    const first = await service.claimChest({ userId: USER, requestId: 'coffre-gloire-1', now: NOW });
+    await service.claimChest({ userId: USER, requestId: 'coffre-gloire-1', now: NOW });
+
+    const lines = db.gloryLedger.rows.filter((r) => r.reason === 'chest');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ delta: first.reward.glory, requestId: `chest:${DAY}` });
+    expect(db.gameDay.rows[0]).toMatchObject({ chestGlory: first.reward.glory, chestMeeshFragments: first.reward.meeshFragments });
+  });
+
+  it('ajoute ses fragments de Meesh à ceux en poche, moins ceux qu\'une frappe gratuite a consommés', async () => {
+    const { db, creditPoints } = setup();
+    const service = new MissionService(db.prisma, {
+      creditPoints,
+      chest: () => ({ points: 100, fragment: true, freeze: false, glory: 10, meeshFragments: 2 }),
+    });
+    db.gameDay.rows.push({ id: 'veille', userId: USER, dayKey: '2026-10-01', rerollCount: 0, chestClaimedAt: NOW, chestMeeshFragments: 9 });
+    db.meeshLedger.rows.push({ id: 'gratuite', userId: USER, delta: 1, reason: 'mint', requestId: 'frappe-gratuite-1', fragmentsSpent: 5 });
+    allDone(db);
+
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-fragments-1', now: NOW });
+    const again = await service.claimChest({ userId: USER, requestId: 'coffre-fragments-1', now: NOW });
+
+    expect(issue).toMatchObject({ status: 'claimed', meeshFragments: { held: 6, perMeesh: 5 } });
+    expect(again).toMatchObject({ status: 'already-claimed', reward: { meeshFragments: 2 } });
+    expect(db.meeshLedger.rows).toHaveLength(1);
+  });
+
+  it('des points qui ne passent pas rendent le coffre : un nouvel essai ne paie la Gloire qu’une fois', async () => {
+    const { db } = setup();
+    const creditPoints = jest
+      .fn<(userId: string, points: number, axisKey: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('crédit indisponible'))
+      .mockResolvedValue(undefined);
+    const service = new MissionService(db.prisma, { creditPoints });
+    allDone(db);
+
+    await service.claimChest({ userId: USER, requestId: 'coffre-panne-1', now: NOW }).catch(() => undefined);
+    expect(db.gameDay.rows[0]).toMatchObject({ chestClaimedAt: null, chestMeeshFragments: null, chestGlory: null });
+    const retry = await service.claimChest({ userId: USER, requestId: 'coffre-panne-2', now: NOW });
+
+    expect(retry.status).toBe('claimed');
+    expect(db.gloryLedger.rows.filter((r) => r.reason === 'chest')).toHaveLength(1);
+    expect(creditPoints).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejouer un coffre ouvert AVANT #10011 rend zéro Gloire et zéro fragment, sans rien créditer', async () => {
+    const { db, service, creditPoints } = setup();
+    allDone(db);
+    db.gameDay.rows.push({ id: 'ancien', userId: USER, dayKey: DAY, rerollCount: 0, chestClaimedAt: NOW, chestPoints: 140, chestFragment: true, chestFreeze: false });
+
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-ancien', now: NOW });
+
+    expect(issue).toMatchObject({ status: 'already-claimed', reward: { points: 140, fragment: true, freeze: false, glory: 0, meeshFragments: 0 } });
+    expect(creditPoints).not.toHaveBeenCalled();
   });
 
   it('rejouer rend le même contenu sans rien créditer de plus', async () => {
@@ -472,13 +550,13 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 2 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: true, freeze: true }),
+      chest: () => ({ points: 100, fragment: true, freeze: true, glory: 0, meeshFragments: 0 }),
     });
     allDone(db);
 
     const issue = await service.claimChest({ userId: USER, requestId: 'coffre-0004', now: NOW });
 
-    expect(issue.reward).toEqual({ points: 100, fragment: true, freeze: true });
+    expect(issue.reward).toEqual({ points: 100, fragment: true, freeze: true, glory: 0, meeshFragments: 0 });
     expect(db.user.rows[0]?.flameFreezes).toBe(2);
   });
 
@@ -497,7 +575,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 1 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: false, freeze: true }),
+      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, meeshFragments: 0 }),
     });
     allDone(db);
     const update = db.user.update.bind(db.user);
@@ -520,7 +598,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 0 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: false, freeze: true }),
+      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, meeshFragments: 0 }),
     });
     allDone(db);
     const findUnique = db.user.findUnique.bind(db.user);
@@ -543,7 +621,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 1 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: false, freeze: true }),
+      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, meeshFragments: 0 }),
     });
     allDone(db);
 

@@ -48,6 +48,7 @@ import { awardedDate, dayLabel, languageName, leagueName, rarityName, trophyView
 import { generatedAchievementLabel } from '@/lib/view/progression';
 import { levelStepLine, levelStepWhat } from '@/lib/view/level-step-copy';
 import { conceptView, flameStateLabel, type ConceptFact, type DetailRef } from '@/lib/view/progression-concepts';
+import { chestRewardLines } from '@/lib/view/game-chest-copy';
 
 /**
  * LES PRÉCISIONS D'UN ÉLÉMENT (#9563, amendement n° 2) — ce que la modale dit
@@ -384,9 +385,7 @@ export function chestDetail(chest: GameChest): ElementDetail {
           fragment: chest.odds.fragment > 0 ? chance(chest.odds.fragment) : formatCount(0),
           freeze: chest.odds.freeze > 0 ? chance(chest.odds.freeze) : formatCount(0),
         })
-      : [pointsLabel(reward.points), reward.fragment ? gameText('game.chest.reward.fragment') : null, reward.freeze ? gameText('game.chest.reward.freeze') : null]
-          .filter((part): part is string => part !== null)
-          .join(' · ');
+      : chestRewardLines(reward).join(' · ');
   const line = gameText(`game.concept.chip.chest.${chest.status}`);
   return ofFamily('chest', 'day', 'missions', {
     emblem: { kind: 'chest', open: chest.status === 'claimed' },

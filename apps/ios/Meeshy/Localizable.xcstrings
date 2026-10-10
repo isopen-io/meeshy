@@ -233561,6 +233561,53 @@
         }
       }
     },
+    "game.chest.reward.glory": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "‎+%@ مجد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%@ Ruhm"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%@ Glory"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%@ de Gloria"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%@ Gloire"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%@ di Gloria"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%@ de Glória"
+          }
+        }
+      }
+    },
     "game.chest.reward.points": {
       "extractionState": "manual",
       "localizations": {
@@ -233933,6 +233980,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ pontos conversíveis"
+          }
+        }
+      }
+    },
+    "game.meeshFragments.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ جزء من Meesh"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Meesh-Fragment"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Meesh fragment"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragmento de Meesh"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragment de Meesh"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ frammento di Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragmento de Meesh"
+          }
+        }
+      }
+    },
+    "game.meeshFragments.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ أجزاء من Meesh"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Meesh-Fragmente"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Meesh fragments"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragmentos de Meesh"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragments de Meesh"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ frammenti di Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragmentos de Meesh"
           }
         }
       }
@@ -245875,6 +246016,100 @@
         }
       }
     },
+    "game.mint.fragments.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسكّ بـ %@ أجزاء"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit %@ Fragmenten prägen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mint with %@ fragments"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acuñar con %@ fragmentos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frapper avec %@ fragments"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conia con %@ frammenti"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cunhar com %@ fragmentos"
+          }
+        }
+      }
+    },
+    "game.mint.fragments.counter": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ أجزاء من Meesh"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ Meesh-Fragmente"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ Meesh fragments"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ fragmentos de Meesh"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ fragments de Meesh"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ frammenti di Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ fragmentos de Meesh"
+          }
+        }
+      }
+    },
     "game.mint.minted_line": {
       "extractionState": "manual",
       "localizations": {
@@ -247003,6 +247238,53 @@
         }
       }
     },
+    "game.chest.fragmentsProgress": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ أجزاء لسكّ مجاني"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ Fragmente für eine Gratis-Prägung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ fragments toward a free mint"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ fragmentos para una acuñación gratis"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ fragments pour une frappe gratuite"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ frammenti per un conio gratuito"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@ fragmentos para uma cunhagem grátis"
+          }
+        }
+      }
+    },
     "game.chest.locked": {
       "extractionState": "manual",
       "localizations": {
@@ -247197,43 +247479,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ إلى %@ · %@ لجزء · %@ لتجميد"
+            "value": "%1$@ إلى %2$@ حسب مهامك · %3$@ لجزء Meesh إضافي · %4$@ لتجميد"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ bis %@ · %@ auf ein Fragment · %@ auf ein Eis"
+            "value": "%1$@ bis %2$@ je nach Missionen · %3$@ auf ein Bonus-Meesh-Fragment · %4$@ auf ein Eis"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ to %@ · %@ of a fragment · %@ of a freeze"
+            "value": "%1$@ to %2$@ depending on your missions · %3$@ for a bonus Meesh fragment · %4$@ for a freeze"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ a %@ · %@ de un fragmento · %@ de una congelación"
+            "value": "%1$@ a %2$@ según tus misiones · %3$@ de un fragmento de Meesh extra · %4$@ de un congelador"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ à %@ · %@ d’un fragment · %@ d’un gel"
+            "value": "%1$@ à %2$@ selon tes missions · %3$@ d’un fragment de Meesh en prime · %4$@ d’un gel"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ a %@ · %@ di un frammento · %@ di un congelamento"
+            "value": "Da %1$@ a %2$@ secondo le tue missioni · %3$@ per un frammento di Meesh in più · %4$@ per un gelo"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ a %@ · %@ de um fragmento · %@ de um congelamento"
+            "value": "%1$@ a %2$@ conforme tuas missões · %3$@ de um fragmento de Meesh bônus · %4$@ de um congelamento"
           }
         }
       }
@@ -276801,6 +277083,53 @@
         }
       }
     },
+    "game.chest.today": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الصندوق: %1$@ · %2$@ · %3$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Truhe: %1$@ · %2$@ · %3$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This chest: %1$@ · %2$@ · %3$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este cofre: %1$@ · %2$@ · %3$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce coffre : %1$@ · %2$@ · %3$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo forziere: %1$@ · %2$@ · %3$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este baú: %1$@ · %2$@ · %3$@"
+          }
+        }
+      }
+    },
     "game.concept.atlas.how": {
       "extractionState": "manual",
       "localizations": {
@@ -279251,43 +279580,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نقاط، وأحيانًا جزء من Meesh أو تجميد."
+            "value": "نقاط حسب مهامك، ومجد، وأجزاء Meesh — خمسة تدفع ثمن سكّة — وأحيانًا تجميد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Punkte und manchmal ein Meesh-Fragment oder ein Eis."
+            "value": "Punkte je nach Missionen, Ruhm, Meesh-Fragmente – fünf bezahlen eine Prägung – und manchmal ein Eis."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Points, and sometimes a Meesh fragment or a freeze."
+            "value": "Points depending on your missions, Glory, Meesh fragments — five pay for a mint — and sometimes a freeze."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Puntos, y a veces un fragmento de Meesh o una congelación."
+            "value": "Puntos según tus misiones, Gloria, fragmentos de Meesh —cinco pagan una acuñación— y a veces un congelador."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Des points, et parfois un fragment de Meesh ou un gel."
+            "value": "Des points selon tes missions, de la Gloire, des fragments de Meesh — cinq paient une frappe —, et parfois un gel."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Punti e, a volte, un frammento di Meesh o un congelamento."
+            "value": "Punti secondo le tue missioni, Gloria, frammenti di Meesh — cinque pagano un conio — e a volte un gelo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pontos e, às vezes, um fragmento de Meesh ou um congelamento."
+            "value": "Pontos conforme tuas missões, Glória, fragmentos de Meesh — cinco pagam uma cunhagem — e às vezes um congelamento."
           }
         }
       }

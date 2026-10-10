@@ -33,7 +33,7 @@ struct GameLawVectorTests {
         #expect(vectors.count >= 500)
         let laws = Set(vectors.compactMap { $0["input"]["law"].stringValue })
         let wave1: Set<String> = [
-            "level", "level-record", "mint-price", "mint-preview", "glory-standing", "glory-gain", "treasury",
+            "level", "level-record", "mint-price", "mint-preview", "mint-fragments", "glory-standing", "glory-gain", "treasury",
             "flame-form", "flame-advance", "flame-status", "flame-relight", "tailwind", "prism-hour",
             "mission-objective", "mission-reward", "rng", "missions-draw", "mission-reroll", "chest", "guide",
         ]

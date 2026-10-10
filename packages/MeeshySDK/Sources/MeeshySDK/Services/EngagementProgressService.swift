@@ -23,6 +23,11 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
     public let gloryGained: Int?
     public let levelBefore: Int?
     public let levelAfter: Int?
+    /// « points » | « fragments » (#10011) — `nil` devant une passerelle antérieure (points).
+    public let paidWith: String?
+    /// Les fragments de Meesh que la frappe a consommés (cinq), et ceux qui restent en poche.
+    public let fragmentsSpent: Int?
+    public let meeshFragments: MeeshFragmentProgress?
 
     public init(
         status: String,
@@ -33,7 +38,10 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
         price: Int? = nil,
         gloryGained: Int? = nil,
         levelBefore: Int? = nil,
-        levelAfter: Int? = nil
+        levelAfter: Int? = nil,
+        paidWith: String? = nil,
+        fragmentsSpent: Int? = nil,
+        meeshFragments: MeeshFragmentProgress? = nil
     ) {
         self.status = status
         self.balance = balance
@@ -44,6 +52,9 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
         self.gloryGained = gloryGained
         self.levelBefore = levelBefore
         self.levelAfter = levelAfter
+        self.paidWith = paidWith
+        self.fragmentsSpent = fragmentsSpent
+        self.meeshFragments = meeshFragments
     }
 
     /// Une matière ajoutée par le serveur avant la mise à jour de l'app ne doit
@@ -60,10 +71,14 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
         gloryGained = try container.decodeIfPresent(Int.self, forKey: .gloryGained)
         levelBefore = try container.decodeIfPresent(Int.self, forKey: .levelBefore)
         levelAfter = try container.decodeIfPresent(Int.self, forKey: .levelAfter)
+        paidWith = try? container.decodeIfPresent(String.self, forKey: .paidWith)
+        fragmentsSpent = try? container.decodeIfPresent(Int.self, forKey: .fragmentsSpent)
+        meeshFragments = (try? container.decodeIfPresent(MeeshFragmentProgress.self, forKey: .meeshFragments)) ?? nil
     }
 
     private enum CodingKeys: String, CodingKey {
         case status, balance, mintedLifetime, number, edition, price, gloryGained, levelBefore, levelAfter
+        case paidWith, fragmentsSpent, meeshFragments
     }
 }
 
@@ -74,6 +89,20 @@ public protocol EngagementProgressProviding: Sendable {
     /// fois par INTENTION de frappe, jamais par requête — sinon un retry
     /// deviendrait une seconde frappe, ce que cet identifiant empêche.
     func mintMeesh(requestId: String) async throws -> APIMeeshMintResult
+
+    /// Frappe une Meesh GRATUITEMENT, contre cinq fragments de Meesh (#10011). Même idempotence que `mintMeesh`.
+    func mintMeeshWithFragments(requestId: String) async throws -> APIMeeshMintResult
+}
+
+/// Une frappe par fragments que ce fournisseur ne sait pas faire (aperçus, vitrine) : refusée, jamais payée en points.
+public struct FragmentMintUnavailable: Error, Equatable {
+    public init() {}
+}
+
+public extension EngagementProgressProviding {
+    func mintMeeshWithFragments(requestId: String) async throws -> APIMeeshMintResult {
+        throw FragmentMintUnavailable()
+    }
 }
 
 public final class EngagementProgressService: EngagementProgressProviding, @unchecked Sendable {
@@ -95,7 +124,15 @@ public final class EngagementProgressService: EngagementProgressProviding, @unch
         // faire.
         let response: APIResponse<APIMeeshMintResult> = try await api.post(
             MeEndpoint.meeshMint,
-            body: MintRequest(requestId: requestId)
+            body: MintRequest(requestId: requestId, payWith: nil)
+        )
+        return response.data
+    }
+
+    public func mintMeeshWithFragments(requestId: String) async throws -> APIMeeshMintResult {
+        let response: APIResponse<APIMeeshMintResult> = try await api.post(
+            MeEndpoint.meeshMint,
+            body: MintRequest(requestId: requestId, payWith: "fragments")
         )
         return response.data
     }
@@ -105,5 +142,15 @@ public final class EngagementProgressService: EngagementProgressProviding, @unch
     /// dériver sans qu'aucun compilateur ne le remarque.
     private struct MintRequest: Encodable {
         let requestId: String
+        /// Absent pour une frappe en points : le corps reste exactement celui d'hier (#10011).
+        let payWith: String?
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(requestId, forKey: .requestId)
+            try container.encodeIfPresent(payWith, forKey: .payWith)
+        }
+
+        private enum CodingKeys: String, CodingKey { case requestId, payWith }
     }
 }

@@ -344,8 +344,19 @@ private struct GameChestCard: View {
             case .claimed:
                 GameNote(text: String(localized: "game.chest.claimed", defaultValue: "Reviens demain pour le prochain.", bundle: .main))
             }
+            // Le contenu CERTAIN, dit avant l'ouverture (#10011) : il suit l'effort des missions du jour.
+            if phase == .locked || phase == .ready, let today = chest.today {
+                GameNote(text: GameCopy.chestToday(today))
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("game.chest.today")
+            }
             GameNote(text: oddsLine)
                 .multilineTextAlignment(.center)
+            if let progress = chest.meeshFragments {
+                GameNote(text: GameCopy.chestFragmentsProgress(progress))
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("game.chest.fragments")
+            }
             if !opening {
                 GameErrorLine(message: error, identifier: "game.chest.error")
             }
@@ -363,15 +374,17 @@ private struct GameChestCard: View {
             guard !rewarded else { return }
             rewarded = true
             play += 1
-            haptics.play(GameHapticPattern.chest(rewards: 1 + (reward.fragment ? 1 : 0) + (reward.freeze ? 1 : 0)))
+            haptics.play(GameHapticPattern.chest(rewards: GameChestLines.of(reward).count))
         }
     }
 
+    /// Les bornes et les deux tirages, avant l'ouverture : les points suivent les missions, le fragment en prime et
+    /// le gel ont leur chance dite (#10011).
     private var oddsLine: String {
         let odds = chest.odds
         return String(
             localized: "game.chest.odds",
-            defaultValue: "\(GameCopy.formatCount(odds.minPoints)) à \(GameCopy.points(odds.maxPoints)) · \(GameCopy.chance(odds.fragment)) d’un fragment · \(GameCopy.chance(odds.freeze)) d’un gel",
+            defaultValue: "\(GameCopy.formatCount(odds.minPoints)) à \(GameCopy.points(odds.maxPoints)) selon tes missions · \(GameCopy.chance(odds.fragment)) d’un fragment de Meesh en prime · \(GameCopy.chance(odds.freeze)) d’un gel",
             bundle: .main
         )
     }

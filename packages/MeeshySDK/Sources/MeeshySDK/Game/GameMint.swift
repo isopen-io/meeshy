@@ -5,10 +5,11 @@ import Foundation
 // MIROIR de `packages/shared/utils/game/mint.ts` — le prix monte avec le nombre
 // de Meeshes déjà frappées :
 //
-//     prix(n) = round(1221 × 1,06 ^ ⌊(n − 1) ÷ 10⌋), plafonné à 4 884
+//     prix(n) = round(1221 × 1,3 ^ ⌊(n − 1) ÷ 10⌋), plafonné à 16 556
 //
-// 1 221 reste la BASE (le prix des dix premières) et celui que les anciens
-// clients croient encore : le serveur recalcule et refuse SANS débit.
+// +30 % toutes les dix frappes (#10011) : le plafond tombe à la 101e. 1 221
+// reste la BASE (le prix des dix premières) et celui que les anciens clients
+// croient encore : le serveur recalcule et refuse SANS débit.
 
 /// Argent ; or à chaque centième ; prisme à chaque millième. Aucun avantage de jeu.
 public enum MeeshEdition: String, CaseIterable, Codable, Sendable, Hashable {
@@ -38,9 +39,12 @@ public struct GameMintPreview: Codable, Sendable, Equatable {
     /// Les niveaux ouverts par le rang (#9688) — `nil` devant un serveur antérieur ; les trois champs
     /// voisins gardent l'ancienne loi (bornés à 100) sur le fil.
     public let ladder: GameMintLadder?
+    /// La frappe GRATUITE par cinq fragments de Meesh (#10011) — `nil` devant un serveur antérieur.
+    public let withFragments: GameFragmentMintOffer?
 
     public init(number: Int, price: Int, edition: MeeshEdition, canMint: Bool, missingPoints: Int,
-                levelBefore: Int, levelAfter: Int, levelsLost: Int, gloryGained: Int, ladder: GameMintLadder? = nil) {
+                levelBefore: Int, levelAfter: Int, levelsLost: Int, gloryGained: Int, ladder: GameMintLadder? = nil,
+                withFragments: GameFragmentMintOffer? = nil) {
         self.number = number
         self.price = price
         self.edition = edition
@@ -51,11 +55,53 @@ public struct GameMintPreview: Codable, Sendable, Equatable {
         self.levelsLost = levelsLost
         self.gloryGained = gloryGained
         self.ladder = ladder
+        self.withFragments = withFragments
     }
 
     /// Les niveaux que l'écran montre : la lecture ouverte par le rang, ou ceux d'hier devant un serveur antérieur.
     public var shownLevels: GameMintLadder {
         ladder ?? GameMintLadder(levelBefore: levelBefore, levelAfter: levelAfter, levelsLost: levelsLost)
+    }
+}
+
+/// La frappe par fragments telle que la passerelle la sert à côté de l'aperçu (#10011).
+public struct GameFragmentMintOffer: Codable, Sendable, Equatable {
+    public let cost: Int
+    public let held: Int
+    public let canMint: Bool
+    public let missingFragments: Int
+
+    public init(cost: Int, held: Int, canMint: Bool, missingFragments: Int) {
+        self.cost = cost
+        self.held = held
+        self.canMint = canMint
+        self.missingFragments = missingFragments
+    }
+}
+
+/// Ce que la frappe par fragments coûterait et rapporterait — miroir de `previewFragmentMint` (`mint.ts`).
+public struct GameFragmentMintPreview: Codable, Sendable, Equatable {
+    public let number: Int
+    public let edition: MeeshEdition
+    public let cost: Int
+    public let held: Int
+    public let canMint: Bool
+    public let missingFragments: Int
+    public let levelBefore: Int
+    public let levelAfter: Int
+    public let gloryGained: Int
+
+    public init(number: Int, edition: MeeshEdition, cost: Int, held: Int, canMint: Bool, missingFragments: Int,
+                levelBefore: Int, levelAfter: Int, gloryGained: Int) {
+        self.number = number
+        self.edition = edition
+        self.cost = cost
+        self.held = held
+        self.canMint = canMint
+        self.missingFragments = missingFragments
+        self.levelBefore = levelBefore
+        self.levelAfter = levelAfter
+        self.gloryGained = gloryGained
     }
 }
 
@@ -76,9 +122,9 @@ public enum GameMint {
     /// Le prix des dix premières Meeshes.
     public static let basePrice = 1221
     public static let priceStepEvery = 10
-    public static let priceGrowth = 1.06
-    /// Quatre fois la base.
-    public static let priceCap = basePrice * 4
+    public static let priceGrowth = 1.3
+    /// Le plafond (porteur, 2026-10-10) : atteint à la 101e frappe.
+    public static let priceCap = 16_556
 
     /// Le prix de la n-ième Meesh frappée (n commence à 1 ; une valeur < 1 vaut 1).
     ///
@@ -142,6 +188,31 @@ public enum GameMint {
             levelBefore: levelBefore,
             levelAfter: levelAfter,
             levelsLost: max(0, levelBefore - levelAfter),
+            gloryGained: canMint ? GameGlory.points.mint : 0
+        )
+    }
+
+    /// La frappe GRATUITE par fragments (#10011) : cinq fragments, au prix courant ignoré — aucun point débité,
+    /// aucun niveau perdu. Elle reste une frappe : numéro, édition, Gloire.
+    public static func previewWithFragments(score: Int, mintedLifetime: Int, fragmentsHeld: Int, levelCap: Int?,
+                                            steps: GameLevelStepFacts? = nil) -> GameFragmentMintPreview {
+        let held = max(0, score)
+        let fragments = max(0, fragmentsHeld)
+        let cost = GameChest.fragmentsPerMeesh
+        let number = min(max(0, mintedLifetime), Int.max - 1) + 1
+        let canMint = fragments >= cost
+        let before = steps.map {
+            GameLevelStepFacts(minted: max(0, mintedLifetime), missionsDone: $0.missionsDone, flameRecord: $0.flameRecord,
+                               glory: $0.glory, rank: $0.rank)
+        }
+        let after = before.map(stepsAfterMint)
+        let capBefore = GameLevels.tighter(levelCap, GameLevelSteps.gate(before))
+        let capAfter = after.map { GameLevelSteps.cap(rank: $0.rank, steps: $0) } ?? capBefore
+        let levelBefore = GameLevels.level(forScore: held, cap: capBefore)
+        let levelAfter = canMint ? max(levelBefore, GameLevels.level(forScore: held, cap: capAfter)) : levelBefore
+        return GameFragmentMintPreview(
+            number: number, edition: edition(forNumber: number), cost: cost, held: fragments, canMint: canMint,
+            missingFragments: canMint ? 0 : cost - fragments, levelBefore: levelBefore, levelAfter: levelAfter,
             gloryGained: canMint ? GameGlory.points.mint : 0
         )
     }

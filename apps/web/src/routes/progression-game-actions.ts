@@ -7,7 +7,7 @@ import { GAME_ERROR_CODES } from '@meeshy/shared/types/game-routes';
 
 import { httpTransport, unwrap, ApiError } from '@/lib/api/client';
 import { newClientMessageId } from '@/lib/api/client-message-id';
-import { ENGAGEMENT_PROGRESS_QUERY_KEY, mintMeesh, type EngagementWithGame, type MeeshMintResult } from '@/lib/api/engagement';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY, mintMeesh, mintMeeshWithFragments, type EngagementWithGame, type MeeshMintResult } from '@/lib/api/engagement';
 import { buyFlameFreeze, claimChest, relightFlame, rerollMission } from '@/lib/api/game';
 import type { HttpTransport } from '@/lib/api/http';
 import { gameErrorMessage } from '@/lib/view/game-copy';
@@ -48,6 +48,8 @@ import { strikeGate, type StrikeGate } from '@/lib/game/strike-gate';
 
 export type GameActions = {
   readonly mint: () => void;
+  /** La frappe gratuite contre cinq fragments de Meesh (#10011) — absente d'un hôte qui ne la propose pas. */
+  readonly mintWithFragments?: () => void;
   readonly reroll: (missionId: string) => void;
   readonly claimChest: () => void;
   readonly buyFreeze: () => void;
@@ -171,6 +173,35 @@ export function useGameActions(
     },
   });
 
+  /*
+   * La frappe GRATUITE (#10011) : aucun point ne part, aucun niveau ne se perd — rien à poser en local avant la
+   * réponse. Le retour immédiat est le geste de Mee et Meo ; la pièce et les fragments se posent à la relecture.
+   */
+  const fragmentMint = useMutation<MeeshMintResult, Error, void, { readonly preview: GameMintPreview | undefined }>({
+    mutationKey: GAME_MUTATION_KEY,
+    mutationFn: async () => unwrap(await mintMeeshWithFragments(transport, idFor('mint-fragments'))),
+    onMutate: () => ({ preview: read()?.game?.mint }),
+    onError: (error) => {
+      if (isIdConflict(error)) spent('mint-fragments');
+      gate.cancel();
+    },
+    onSuccess: async (result, _vars, context) => {
+      spent('mint-fragments');
+      await gate.opened();
+      options.onMinted?.(result);
+      if (result.status === 'minted') {
+        celebrations.current += 1;
+        const number = result.number ?? context?.preview?.number;
+        const edition = result.edition ?? context?.preview?.edition;
+        if (number !== undefined && edition !== undefined) setCelebration({ number, edition, key: celebrations.current });
+      }
+    },
+    onSettled: async () => {
+      await gate.opened();
+      refresh();
+    },
+  });
+
   const reroll = useMutation<MissionRerollResponse, Error, string, Snapshot>({
     mutationKey: GAME_MUTATION_KEY,
     mutationFn: async (missionId) => unwrap(await rerollMission(transport, missionId, idFor(`reroll:${missionId}`))),
@@ -234,12 +265,17 @@ export function useGameActions(
       setStrikeKey((key) => key + 1);
       mint.mutate();
     },
+    mintWithFragments: () => {
+      gate.begin();
+      setStrikeKey((key) => key + 1);
+      fragmentMint.mutate();
+    },
     reroll: (missionId) => reroll.mutate(missionId),
     claimChest: () => chest.mutate(),
     buyFreeze: () => freeze.mutate(),
     relight: () => relight.mutate(),
     pending: {
-      mint: mint.isPending,
+      mint: mint.isPending || fragmentMint.isPending,
       rerollId: reroll.isPending ? reroll.variables ?? null : null,
       chest: chest.isPending,
       freeze: freeze.isPending,
@@ -247,6 +283,7 @@ export function useGameActions(
     },
     errors: {
       ...(mint.isError ? { mint: messageOf(mint.error) } : {}),
+      ...(fragmentMint.isError ? { mint: messageOf(fragmentMint.error) } : {}),
       ...(reroll.isError ? { reroll: messageOf(reroll.error) } : {}),
       ...(chest.isError ? { chest: messageOf(chest.error) } : {}),
       ...(freeze.isError ? { freeze: messageOf(freeze.error) } : {}),
