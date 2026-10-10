@@ -10,7 +10,6 @@ const frConversationCard = {
   'conversation.card.messages.one': '{count} message',
   'conversation.card.messages.other': '{count} messages',
   'conversation.card.languages': 'Langues parlées',
-  'conversation.card.join': 'Rejoindre',
   'conversation.card.joinAnonymously': 'Rejoindre en anonyme',
   'conversation.card.open': 'Ouvrir',
   'conversation.card.leave': 'Quitter',

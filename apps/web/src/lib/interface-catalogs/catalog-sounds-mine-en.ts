@@ -1,7 +1,7 @@
-/** « MES SONS » (#9848) — tranche du catalogue `catalog-en.ts`. Voir le
- * doc-comment de `catalog-fr-sounds-mine.ts`. */
-const enSoundsMine = {
-  'settings.tools.sounds': 'My sounds',
+import type { SoundsMineCatalog } from '@/lib/i18n-sounds-mine-catalog';
+
+/** « MES SONS » (#9848) — voir le doc-comment de `catalog-sounds-mine-fr.ts`. */
+const en = {
   'soundsMine.title': 'My sounds',
   'soundsMine.back': 'Back to settings',
   'soundsMine.empty.title': 'No sounds in your library',
@@ -19,6 +19,6 @@ const enSoundsMine = {
   'soundsMine.remove.success': 'Sound removed from your library',
   'soundsMine.remove.failure': 'The sound couldn’t be removed. Try again.',
   'soundsMine.offline': 'Offline — you can remove it once you’re back online.',
-};
+} satisfies SoundsMineCatalog;
 
-export default enSoundsMine;
+export default en;
