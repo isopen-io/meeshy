@@ -75,22 +75,28 @@ export type WorldSeedReport = {
 };
 
 /**
- * Les termes du lien d'entrée publique. Un INVITÉ écrit ; il ne joint RIEN
- * tant que la garde de SIGNATURE de contenu (#10001) n'est pas déployée.
+ * Les termes du lien d'entrée publique. Un INVITÉ écrit ; il ne joint RIEN,
+ * audio compris, tant que la garde décodante de #10001 / #10029 n'est pas
+ * livrée.
  *
- * `allowAnonymousFiles` est semé FERMÉ (audit adversarial de #10000) : la
- * classification actuelle range dans le seau « fichier » tout ce qui n'est pas,
- * par ses octets, une image ou un audio — un JPEG déclaré
- * `application/octet-stream`, un `text/html` à script, un SVG passaient. Et
- * l'ouvrir ne se rattrape pas : `link-admission.ts` GRAVE `canSendFiles` /
- * `canSendVideos` dans chaque participation à l'entrée, et le seed ne réécrit
- * jamais la ligne du lien. Le texte `.txt` et l'audio d'invité arrivent avec
- * #10001, dont la garde ne s'appuie ni sur ce drapeau ni sur les droits gravés
- * (#10029). `allowViewHistory: false` : un invité lit le salon depuis son
- * arrivée, comme tout anonyme (#4169) — la planche « Onboarding » montre
- * d'ailleurs un fil qui commence à « {nom} a rejoint World Wide ».
+ * Les drapeaux ci-dessous NE SUFFISENT PAS à le garantir (second passage de
+ * l'audit adversarial de #10000) : l'exemption « voix » de
+ * `classifyAnonymousAttachment` ne lit ni `allowAnonymousFiles` ni
+ * `allowAnonymousImages`, `link-admission.ts` grave `canSendAudios` d'après le
+ * droit d'ÉCRIRE, et un en-tête de deux octets suffisait à mériter « audio ».
+ * Ce qui ferme la porte est la garde elle-même, décidée sur la CONVERSATION
+ * World Wide (`ContentSignature.ts`, `WORLD_GUEST_ATTACHMENTS_CLOSED_REASON`),
+ * sur REST comme sur tus ; le pré-vol (`inspectWorldSeed`) la met à l'épreuve
+ * de contenus déguisés et bloque si l'un passe.
+ *
+ * `allowAnonymousFiles` reste semé FERMÉ : `link-admission.ts` GRAVE
+ * `canSendFiles` / `canSendVideos` dans chaque participation à l'entrée, et le
+ * seed ne réécrit jamais la ligne du lien. `allowViewHistory: false` : un
+ * invité lit le salon depuis son arrivée, comme tout anonyme (#4169) — la
+ * planche « Onboarding » montre d'ailleurs un fil qui commence à « {nom} a
+ * rejoint World Wide ».
  */
-const WORLD_SHARE_LINK_TERMS = {
+export const WORLD_SHARE_LINK_TERMS = {
   name: WORLD_CONVERSATION_TITLE,
   description: 'Entrée publique de World Wide depuis meeshy.me',
   isActive: true,
