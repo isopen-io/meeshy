@@ -559,10 +559,11 @@ describe('loadWorldEntry — ce que la landing reçoit', () => {
 });
 
 describe('inspectWorldSeed — le pré-vol en lecture seule avant la production (audit #10000)', () => {
+  const RESIDUAL_RISKS = ['id3v2-arbitrary-payload', 'mpeg-frame-pdf-header', 'mp4-free-box-payload', 'mp4-without-samples'];
   it('rend « prêt » sur une base sans World Wide dont les trois désignés sont légitimes, sans rien écrire', async () => {
     const prisma = makeDb();
 
-    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES);
+    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { acceptedResidualRisks: RESIDUAL_RISKS });
 
     expect(preflight).toMatchObject({ ready: true, conversation: 'absent', shareLink: 'absent', blockers: [] });
     expect(preflight.members).toEqual([
@@ -602,11 +603,35 @@ describe('inspectWorldSeed — le pré-vol en lecture seule avant la production 
     const audioOpenGuard = (mimeType: string): AnonymousAttachmentVerdict =>
       mimeType.startsWith('audio/') ? { allowed: true } : { allowed: false, reason: 'closed' };
 
-    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: audioOpenGuard });
+    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: audioOpenGuard, acceptedResidualRisks: RESIDUAL_RISKS });
 
     expect(preflight.ready).toBe(false);
     expect(preflight.blockers).toEqual(['guest-attachments-open:mpeg-sync-html,adts-sync-zip,mp4-video-as-audio,mp3-frames-then-zip']);
     expect(writes(prisma)).toBe(0);
+  });
+
+  it('bloque tant que le porteur n’a pas accepté, un par un, les risques résiduels que la garde laisse passer (audit #10001, #10057)', async () => {
+    const prisma = makeDb();
+
+    const unaccepted = await inspectWorldSeed(prisma as never, IDENTITIES);
+    const partly = await inspectWorldSeed(prisma as never, IDENTITIES, { acceptedResidualRisks: ['mp4-without-samples'] });
+    const accepted = await inspectWorldSeed(prisma as never, IDENTITIES, { acceptedResidualRisks: RESIDUAL_RISKS });
+
+    expect(unaccepted.ready).toBe(false);
+    expect(unaccepted.residualRisks).toEqual(RESIDUAL_RISKS);
+    expect(unaccepted.blockers).toEqual([`guest-attachments-residual-unaccepted:${RESIDUAL_RISKS.join(',')}`]);
+    expect(partly.blockers).toEqual(['guest-attachments-residual-unaccepted:id3v2-arbitrary-payload,mpeg-frame-pdf-header,mp4-free-box-payload']);
+    expect(accepted).toMatchObject({ ready: true, residualRisks: RESIDUAL_RISKS, blockers: [] });
+    expect(writes(prisma)).toBe(0);
+  });
+
+  it('ne demande plus rien au porteur quand la garde resserrée refuse les risques résiduels', async () => {
+    const prisma = makeDb();
+    const closedGuard = (): AnonymousAttachmentVerdict => ({ allowed: false, reason: 'closed' });
+
+    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: closedGuard });
+
+    expect(preflight).toMatchObject({ ready: true, residualRisks: [], blockers: [] });
   });
 });
 

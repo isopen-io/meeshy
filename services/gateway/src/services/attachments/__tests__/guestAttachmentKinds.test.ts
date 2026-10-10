@@ -9,7 +9,7 @@ import { describe, expect, it } from '@jest/globals';
 import { GUEST_ATTACHMENT_REFUSAL_CODES, GUEST_ATTACHMENT_MAX_BYTES } from '@meeshy/shared/types/guest-attachment-kinds';
 import { WORLD_CONVERSATION_IDENTIFIER } from '@meeshy/shared/types/world';
 import { classifyAnonymousAttachment, type ShareLinkAnonymousFlags } from '../ContentSignature';
-import { openWorldGuestAttachmentDoors } from '../../world/worldGuestAttachments';
+import { openWorldGuestAttachmentDoors, residualWorldGuestAttachmentDoors } from '../../world/worldGuestAttachments';
 import {
   EMPTY_ZIP,
   JPEG_PHOTO,
@@ -131,6 +131,15 @@ describe('invité de World Wide — ce qui est refusé, avec un code stable', ()
 
   it('le pré-vol du seed ne trouve plus aucune porte ouverte', () => {
     expect(openWorldGuestAttachmentDoors()).toEqual([]);
+  });
+
+  it('la garde laisse encore passer les quatre risques résiduels de l’audit, que le pré-vol nomme au porteur (#10045, #10057)', () => {
+    expect(residualWorldGuestAttachmentDoors()).toEqual([
+      'id3v2-arbitrary-payload',
+      'mpeg-frame-pdf-header',
+      'mp4-free-box-payload',
+      'mp4-without-samples',
+    ]);
   });
 });
 
