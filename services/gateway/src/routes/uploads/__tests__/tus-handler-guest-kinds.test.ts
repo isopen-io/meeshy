@@ -118,6 +118,8 @@ describe('tus-handler — un invité de World Wide ne joint que du texte .txt et
     filename: string;
     filetype: string;
     bytes: Buffer;
+    /** `false` : téléversement à longueur différée (`Upload-Defer-Length`), taille inconnue à la création. */
+    announceSize?: boolean;
   }) {
     process.env.UPLOAD_PATH = uploadDir;
     jest.resetModules();
@@ -128,7 +130,7 @@ describe('tus-handler — un invité de World Wide ne joint que du texte .txt et
     const uploadId = 'upload-1';
     const created = await captured.onUploadCreate(
       { headers: headersFrom(params.headers) },
-      { metadata: { filename: params.filename, filetype: params.filetype }, size: params.bytes.length }
+      { metadata: { filename: params.filename, filetype: params.filetype }, size: params.announceSize === false ? undefined : params.bytes.length }
     );
 
     const tusTempPath = path.join(uploadDir, '.tus-resumable');
@@ -191,14 +193,40 @@ describe('tus-handler — un invité de World Wide ne joint que du texte .txt et
     expect(stored.filter((entry) => String(entry).endsWith(path.extname(filename)))).toEqual([]);
   });
 
-  it('refuse un fichier au-delà du plafond des invités sans le charger, avec son propre code', async () => {
+  it('refuse à la fin un fichier à longueur différée au-delà du plafond, sans le charger, avec son propre code', async () => {
     const prisma = worldGuestPrisma();
     const oversized = Buffer.alloc(GUEST_ATTACHMENT_MAX_BYTES + 1, 0x61);
 
-    const result = await runFullUpload({ prisma, headers: guestHeaders, filename: 'big.txt', filetype: 'text/plain', bytes: oversized });
+    const result = await runFullUpload({
+      prisma,
+      headers: guestHeaders,
+      filename: 'big.txt',
+      filetype: 'text/plain',
+      bytes: oversized,
+      announceSize: false,
+    });
 
     expect(result.status_code).toBe(413);
     expect(JSON.parse(result.body ?? '{}')).toMatchObject({ code: GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE });
     expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
+  });
+
+  it('refuse AVANT le premier octet un téléversement d’invité annoncé au-delà du plafond', async () => {
+    const prisma = worldGuestPrisma();
+    process.env.UPLOAD_PATH = uploadDir;
+    jest.resetModules();
+    const { registerTusRoutes } = await import('../tus-handler');
+    await registerTusRoutes(buildFakeFastify(prisma));
+    if (!captured) throw new Error('onUploadCreate not captured');
+
+    const refusal = await captured
+      .onUploadCreate(
+        { headers: headersFrom(guestHeaders) },
+        { metadata: { filename: 'big.mp3', filetype: 'audio/mpeg' }, size: GUEST_ATTACHMENT_MAX_BYTES + 1 },
+      )
+      .then(() => null, (thrown: { status_code?: number; body?: string }) => thrown);
+
+    expect(refusal?.status_code).toBe(413);
+    expect(JSON.parse(refusal?.body ?? '{}')).toMatchObject({ code: GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE });
   });
 });

@@ -22,6 +22,7 @@ import {
   readFilePrefix,
   classifyGuestFileOnDisk,
   guestRefusalResponse,
+  guestUploadSizeRefusal,
 } from '../../services/attachments/AnonymousUploadIdentity';
 import {
   classifyAnonymousAttachment,
@@ -351,6 +352,14 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           status_code: 413,
           body: `File too large. Max size for ${attachmentType}: ${(sizeLimit / (1024 * 1024 * 1024)).toFixed(1)} GB\n`,
         };
+      }
+
+      // #10001 — un invité d'un lien à familles (World Wide) ne téléverse pas
+      // au-delà de `GUEST_ATTACHMENT_MAX_BYTES` : refusé avant le premier
+      // octet quand la taille est annoncée, et de toute façon à la fin.
+      if (isAnonymous && anonymousShareLinkId && upload.size) {
+        const oversized = guestUploadSizeRefusal(await fetchShareLinkAnonymousFlags(prisma, anonymousShareLinkId), upload.size);
+        if (oversized) throw guestRefusalResponse(oversized);
       }
 
       return {
