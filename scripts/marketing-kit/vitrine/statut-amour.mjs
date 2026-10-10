@@ -23,7 +23,11 @@ import { documentDeLEcran } from './statut-amour-ecrans.mjs'
 import { PUBLICATION } from '../textes/statut-amour.mjs'
 import { CSS_HAUTEUR, CSS_LARGEUR, FACTEUR, documentDuStatut, modeleDeLaPage } from './statut-amour-page.mjs'
 import {
+<<<<<<< HEAD
+  AMOUREUX, CRETE_DBTP, CRETE_MAX_DBTP, DUREE_S, GLOUTONS, cibleSuivante, HAUTEUR, IMAGES, LARGEUR, MUSIQUE, PLANS, POIDS_MAX_OCTETS, SONS, argumentsDeMixage, debitVideoKbps, planDuStatut,
+=======
   AMOUREUX, DUREE_S, GLOUTONS, HAUTEUR, IMAGES, LARGEUR, MUSIQUE, PLANS, POIDS_MAX_OCTETS, SONS, argumentsDeMixage, debitVideoKbps, planDuStatut,
+>>>>>>> origin/dev
 } from './statut-amour-plan.mjs'
 
 export const LIVRAISON = resolve(homedir(), 'Movies', 'Meeshy-amour-25s')
@@ -88,6 +92,21 @@ const rendreLeMaitre = async ({ page, sortie, jusqua }) => {
   await fini
 }
 
+<<<<<<< HEAD
+export const mixerLeSon = ({ plan, dossier, crete = CRETE_DBTP }) => {
+  const musique = sourceVerifiee(MUSIQUE, { dossier: CACHE_SONS })
+  const sons = Object.fromEntries(Object.entries(SONS).map(([nom, s]) => [nom, sourceVerifiee(s, { dossier: CACHE_SONS })]))
+  const journal = stderrDeFfmpeg(argumentsDeMixage({ musique, sons, reperes: plan.reperes, crete }))
+  const debut = journal.lastIndexOf('{')
+  const mesure = JSON.parse(journal.slice(debut, journal.lastIndexOf('}') + 1))
+  const sortie = resolve(dossier, 'mixage.wav')
+  ffmpeg(argumentsDeMixage({ musique, sons, reperes: plan.reperes, mesure, sortie, crete }).map((a) => (a === 'info' ? 'error' : a)))
+  return sortie
+}
+
+// La vidéo livrée : H.264 High en deux passes au débit qui tient le fichier sous 10 Mo (le son, 160 kb/s, compris).
+const encoderLaVideo = ({ maitre, sortie, dossier }) => {
+=======
 export const mixerLeSon = ({ plan, dossier }) => {
   const musique = sourceVerifiee(MUSIQUE, { dossier: CACHE_SONS })
   const sons = Object.fromEntries(Object.entries(SONS).map(([nom, s]) => [nom, sourceVerifiee(s, { dossier: CACHE_SONS })]))
@@ -101,15 +120,39 @@ export const mixerLeSon = ({ plan, dossier }) => {
 
 // L'encodage livré : H.264 High en deux passes au débit qui tient le fichier sous 10 Mo, AAC 160 kb/s.
 const encoderLaLivraison = ({ maitre, son, sortie, dossier }) => {
+>>>>>>> origin/dev
   const debit = debitVideoKbps()
   const commun = ['-i', maitre, '-c:v', 'libx264', '-preset', 'slow', '-profile:v', 'high', '-level:v', '4.2', '-pix_fmt', 'yuv420p',
     '-b:v', `${debit}k`, '-maxrate', `${Math.round(debit * 1.6)}k`, '-bufsize', `${debit * 2}k`, '-g', String(FPS * 2), '-passlogfile', resolve(dossier, 'passe')]
   ffmpeg(['-y', '-v', 'error', ...commun, '-pass', '1', '-an', '-f', 'mp4', '/dev/null'])
+<<<<<<< HEAD
+  ffmpeg(['-y', '-v', 'error', ...commun, '-pass', '2', '-an', '-t', String(DUREE_S), sortie])
+  return sortie
+}
+
+// Le son en AAC posé sur la vidéo déjà encodée ; la crête vraie se mesure sur CE fichier, après l'AAC. Tant qu'elle
+// dépasse -1,5 dBTP, le mixage se reprend avec une cible plus basse (au plus quatre fois).
+const assemblerSousLaCrete = ({ video, plan, dossier, sortie }) => {
+  let crete = CRETE_DBTP
+  for (let essai = 0; essai < 4; essai += 1) {
+    const son = mixerLeSon({ plan, dossier, crete })
+    ffmpeg(['-y', '-v', 'error', '-i', video, '-i', son, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2',
+      '-t', String(DUREE_S), '-movflags', '+faststart', sortie])
+    const mesure = mesurerLeSon(sortie)
+    const suivante = cibleSuivante({ cible: crete, mesuree: mesure.creteVraieDbfs })
+    if (suivante === null) return mesure
+    crete = suivante
+  }
+  throw new Error(`${sortie} : la crête vraie reste au-dessus de ${CRETE_MAX_DBTP} dBTP`)
+}
+
+=======
   ffmpeg(['-y', '-v', 'error', '-i', son, ...commun, '-pass', '2', '-map', '1:v', '-map', '0:a', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2',
     '-t', String(DUREE_S), '-movflags', '+faststart', sortie])
   return sortie
 }
 
+>>>>>>> origin/dev
 // La planche : une image toutes les 0,5 s, cinquante vignettes en dix colonnes, l'instant inscrit sous chacune.
 export const filtreDeLaPlanche = ({ colonnes = 10, largeur = 216 } = {}) => {
   const lignes = Math.ceil((DUREE_S * 2) / colonnes)
@@ -145,10 +188,19 @@ const preparer = ({ lang }) => {
 
 const livrer = ({ lang, dossier, plan }) => {
   mkdirSync(LIVRAISON, { recursive: true })
+<<<<<<< HEAD
+  const video = resolve(dossier, 'video.mp4')
+  if (!existsSync(video) || statSync(video).mtimeMs < statSync(resolve(dossier, 'maitre.mp4')).mtimeMs) encoderLaVideo({ maitre: resolve(dossier, 'maitre.mp4'), sortie: video, dossier })
+  const sortie = resolve(LIVRAISON, nomDuFichier(lang))
+  const son = assemblerSousLaCrete({ video, plan, dossier, sortie })
+  const planche = rendreLaPlanche({ video: sortie, sortie: resolve(LIVRAISON, nomDeLaPlanche(lang)) })
+  return { lang, chemin: sortie, planche, poids: statSync(sortie).size, son }
+=======
   const son = mixerLeSon({ plan, dossier })
   const sortie = encoderLaLivraison({ maitre: resolve(dossier, 'maitre.mp4'), son, sortie: resolve(LIVRAISON, nomDuFichier(lang)), dossier })
   const planche = rendreLaPlanche({ video: sortie, sortie: resolve(LIVRAISON, nomDeLaPlanche(lang)) })
   return { lang, chemin: sortie, planche, poids: statSync(sortie).size, son: mesurerLeSon(sortie) }
+>>>>>>> origin/dev
 }
 
 export const monterLeStatut = async ({ lang, navigateur, jusqua = DUREE_S }) => {
