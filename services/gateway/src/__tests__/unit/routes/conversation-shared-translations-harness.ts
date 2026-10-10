@@ -3,9 +3,12 @@
  *
  * La base est celle du favori de message — une base en mémoire qui ÉVALUE les
  * `where` qu'on lui passe —, augmentée de ce que la route lit en plus
- * (`conversation`, `sharedTranslation`). Elle applique l'unicité du triplet
- * `(messageId, targetLanguage, sourceVersion)` comme l'index unique de la
- * production : `create` lève `P2002` sur un doublon.
+ * (`conversation`, la ligne `participant` du partageur, `sharedTranslation`).
+ * Elle applique l'unicité du triplet `(messageId, targetLanguage, sourceVersion)`
+ * comme l'index unique de la production : `create` lève `P2002` sur un doublon.
+ * Sa lecture des traductions trie selon `orderBy` et ne rend, sous un `select`,
+ * que les colonnes demandées : une route qui servirait une enveloppe qu'elle n'a
+ * pas lue tomberait ici comme en production.
  *
  * La route est montée avec la VRAIE résolution d'identifiant de conversation :
  * `conversationRow()` porte l'identifiant lisible `mshy_equipe`, qui est donc
@@ -19,7 +22,10 @@
  */
 import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
-import { registerSharedTranslationRoutes } from '../../../routes/conversations/shared-translations';
+import {
+  registerSharedTranslationRoutes,
+  type SharedTranslationShareBudget,
+} from '../../../routes/conversations/shared-translations';
 import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
 import {
   CONV_A,
@@ -64,6 +70,7 @@ export const envelope = (overrides: Row = {}): Row => ({ v: 1, alg: 'A256GCM', k
 export const shareBody = (overrides: Row = {}): Row => ({
   messageId: MSG_1,
   targetLanguage: 'fr',
+  sourceVersion: 'original',
   envelope: envelope(),
   ...overrides,
 });
@@ -128,12 +135,48 @@ export type PrivacyFixture = {
   readonly legacyRows?: ReadonlyArray<{ readonly userId: string; readonly key: string; readonly value: string }>;
 };
 
+type Ordering = Readonly<Record<string, 'asc' | 'desc'>>;
+
+const compareValues = (a: unknown, b: unknown): number => {
+  const left = a instanceof Date ? a.getTime() : a;
+  const right = b instanceof Date ? b.getTime() : b;
+  if (typeof left === 'number' && typeof right === 'number') return left - right;
+  return String(left).localeCompare(String(right));
+};
+
+const ordered = (rows: readonly Row[], orderBy: Ordering | readonly Ordering[] | undefined): Row[] => {
+  const clauses: readonly Ordering[] = orderBy === undefined ? [] : Array.isArray(orderBy) ? orderBy : [orderBy as Ordering];
+  return [...rows].sort((a, b) =>
+    clauses.reduce((verdict, clause) => {
+      if (verdict !== 0) return verdict;
+      const [field, direction] = Object.entries(clause)[0];
+      const diff = compareValues(a[field], b[field]);
+      return direction === 'desc' ? -diff : diff;
+    }, 0),
+  );
+};
+
+/** Ce que Prisma rend sous un `select` : les seules colonnes demandées — un double qui rend tout cacherait une colonne qu'on n'a pas lue. */
+const projected = (row: Row, select: Readonly<Record<string, boolean>> | undefined): Row =>
+  select === undefined ? row : Object.fromEntries(Object.entries(select).filter(([, wanted]) => wanted).map(([key]) => [key, row[key]]));
+
+export type SharedTranslationRead = {
+  readonly where?: Row;
+  readonly select?: Readonly<Record<string, boolean>>;
+  readonly orderBy?: Ordering | readonly Ordering[];
+  readonly take?: number;
+};
+
 function database(store: Store, shares: Row[], privacy: PrivacyFixture) {
   const base = makePrisma(store);
   const issued = { next: 2 };
-  const reads: Array<{ where?: Row; take?: number }> = [];
+  const reads: SharedTranslationRead[] = [];
   const prisma = {
     ...base,
+    participant: {
+      ...base.participant,
+      findUnique: async (args: { where: { id: string } }) => store.participants.find((p) => p.id === args.where.id) ?? null,
+    },
     conversation: {
       ...base.conversation,
       findUnique: async (args: { where: { id: string } }) => store.conversations.find((c) => c.id === args.where.id) ?? null,
@@ -181,9 +224,17 @@ function database(store: Store, shares: Row[], privacy: PrivacyFixture) {
           ) ?? null
         );
       },
-      findMany: async (args: { where?: Row; take?: number }) => {
+      deleteMany: async (args: { where: Row }) => {
+        const doomed = shares.filter((row) => matchesWhere(row, args.where));
+        doomed.forEach((row) => shares.splice(shares.indexOf(row), 1));
+        return { count: doomed.length };
+      },
+      findMany: async (args: SharedTranslationRead) => {
         reads.push(args);
-        const rows = shares.filter((row) => matchesWhere(row, args.where));
+        const rows = ordered(
+          shares.filter((row) => matchesWhere(row, args.where)),
+          args.orderBy,
+        ).map((row) => projected(row, args.select));
         return typeof args.take === 'number' ? rows.slice(0, args.take) : rows;
       },
     },
@@ -191,12 +242,14 @@ function database(store: Store, shares: Row[], privacy: PrivacyFixture) {
   return { prisma, reads };
 }
 
+export type HarnessPrisma = ReturnType<typeof database>['prisma'];
+
 /**
  * Une base dont la lecture du masquage PERSONNEL (« supprimé pour moi ») ne
  * répond pas : la posture `'refuse'` de la loi de lecture doit la propager, jamais
  * en conclure que l'appelant ne masque rien.
  */
-export const personalHidingLookupDown = (prisma: ReturnType<typeof database>['prisma']) => ({
+export const personalHidingLookupDown = (prisma: HarnessPrisma) => ({
   ...prisma,
   userMessageDeletion: {
     ...prisma.userMessageDeletion,
@@ -211,7 +264,7 @@ export const personalHidingLookupDown = (prisma: ReturnType<typeof database>['pr
  * peut pas savoir si l'appelant montre ses accusés de lecture, et doit refuser
  * plutôt que d'en conclure qu'il n'a rien réglé.
  */
-export const privacyLookupDown = (prisma: ReturnType<typeof database>['prisma']) => ({
+export const privacyLookupDown = (prisma: HarnessPrisma) => ({
   ...prisma,
   userPreferences: {
     findMany: async () => {
@@ -228,7 +281,7 @@ export async function buildApp(
     shares?: Row[];
     authContext?: Row;
     io?: 'throwing' | 'absent';
-    prismaOverrides?: (prisma: ReturnType<typeof database>['prisma']) => unknown;
+    prismaOverrides?: (prisma: HarnessPrisma) => unknown;
     /** Le compte de CHAQUE requête, lu dans ses en-têtes — pour les témoins de débit à deux comptes. */
     authContextFor?: (headers: Record<string, unknown>) => Row;
     /**
@@ -240,6 +293,8 @@ export async function buildApp(
     rateLimit?: { skipOnError: boolean; store?: unknown };
     /** Les préférences de confidentialité stockées — aucune par défaut, donc les défauts s'appliquent. */
     privacy?: PrivacyFixture;
+    /** Le budget d'octets des partages — celui de la production par défaut. */
+    shareBudget?: SharedTranslationShareBudget;
   } = {},
 ) {
   const store = params.store ?? scene();
@@ -273,7 +328,10 @@ export async function buildApp(
       ...(params.rateLimit.store ? { store: params.rateLimit.store as never } : {}),
     });
   }
-  registerSharedTranslationRoutes(app, (params.prismaOverrides?.(prisma) ?? prisma) as never, auth, { now: () => HARNESS_NOW });
+  registerSharedTranslationRoutes(app, (params.prismaOverrides?.(prisma) ?? prisma) as never, auth, {
+    now: () => HARNESS_NOW,
+    ...(params.shareBudget ? { shareBudget: params.shareBudget } : {}),
+  });
   await app.ready();
   return { app, shares, emitted, reads };
 }

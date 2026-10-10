@@ -158,6 +158,18 @@
  * transfert VERS Global passe par ce point de convergence, les réactions ne
  * sont pas des écritures de message et restent permises.
  *
+ * ═══ LES ACTES DÉRIVÉS D'UN MESSAGE (#9899) ════════════════════════════════
+ *
+ * Partager la traduction d'un message n'écrit pas de message, mais fait
+ * afficher une ligne sous celui d'un autre, à tous les membres. Les règles qui
+ * disent QUI écrit ici s'y appliquent donc — l'état terminal, le rang, le
+ * mineur en Global — par `admitDerivedConversationWrite`, sur les lignes que
+ * l'appelant a déjà chargées. Les deux débits, eux, ne s'y appliquent pas : ils
+ * mesurent l'intervalle entre deux MESSAGES, lu dans la table `Message`, et un
+ * acte dérivé n'en écrit aucun — il attendrait sur un compteur qu'il n'avance
+ * pas, ou réserverait une fenêtre que l'envoi suivant paierait. Son débit est
+ * l'affaire de son propre limiteur.
+ *
  * ═══ CE QUE LA DÉCISION RETIENT ════════════════════════════════════════════
  *
  * - **L'état terminal ne connaît AUCUNE dispense** — ni la conversation
@@ -259,8 +271,8 @@ const SLOW_MODE_BYPASS_RANK = WRITE_ROLE_RANK.moderator;
  */
 const WRITE_HIERARCHY_FREE_TYPES: ReadonlySet<string> = new Set(['global', 'direct']);
 
-/** Le conteneur où la règle 4 s'applique — le salon que tout nouveau compte rejoint. */
-const NEWCOMER_THROTTLED_TYPE = 'global';
+/** Le salon que tout nouveau compte rejoint — celui des règles 4 (nouveaux comptes) et 5 (mineurs déclarés). */
+const GLOBAL_CONVERSATION_TYPE = 'global';
 
 /** Règle 4 — l'ancienneté de compte sous laquelle on est « nouveau », en heures. */
 export const GLOBAL_NEWCOMER_WINDOW_HOURS = 24;
@@ -590,7 +602,7 @@ export async function admitConversationWriteFor(
 
   if (isConversationClosed(conversation)) return REFUSED('conversation-closed');
   if (!conversation) return ADMITTED;
-  if (conversation.type === NEWCOMER_THROTTLED_TYPE) {
+  if (conversation.type === GLOBAL_CONVERSATION_TYPE) {
     return admitGlobalWrite(prisma, { conversationId, senderParticipantId, reservations, sendId, now });
   }
   if (!hasWriteHierarchy(conversation)) return ADMITTED;
@@ -624,6 +636,45 @@ export async function admitConversationWriteFor(
     conversationId, senderParticipantId, windowSeconds: slowModeSeconds, now
   });
   return retryAfterSeconds === 0 ? ADMITTED : THROTTLED(retryAfterSeconds);
+}
+
+/** Ce que la décision lit du participant qui pose un acte dérivé : son rang ici, et son compte. */
+export type DerivedWriteSenderRow = {
+  readonly role?: string | null;
+  readonly user?: { readonly role?: string | null; readonly birthDate?: Date | null } | null;
+};
+
+/**
+ * Les règles 1, 2 et 5 pour un acte DÉRIVÉ d'un message (voir l'en-tête), sur
+ * des lignes déjà chargées — aucune lecture, aucune réservation.
+ *
+ * Même ordre et mêmes dispenses qu'à l'envoi : l'état terminal sans exception,
+ * le mineur en Global sans dispense de rôle, puis le rang hors des conteneurs
+ * qui n'en ont pas, le staff plateforme passant. Un participant introuvable sur
+ * un conteneur restreint par le rang refuse : la restriction est connue, seule
+ * l'identité manque.
+ */
+export function admitDerivedConversationWrite(params: {
+  readonly conversation: ConversationWriteStateRow | null | undefined;
+  readonly sender: DerivedWriteSenderRow | null | undefined;
+  readonly now: Date;
+}): ConversationWriteAdmission {
+  const { conversation, sender, now } = params;
+  if (isConversationClosed(conversation)) return REFUSED('conversation-closed');
+  if (!conversation) return ADMITTED;
+  if (conversation.type === GLOBAL_CONVERSATION_TYPE && isDeclaredMinor(sender?.user?.birthDate, now)) {
+    return REFUSED('minor-global');
+  }
+  if (!hasWriteHierarchy(conversation)) return ADMITTED;
+
+  const requiredRank = requiredWriteRank(conversation);
+  if (requiredRank === 0) return ADMITTED;
+  if (!sender) return REFUSED('write-role-insufficient');
+
+  const senderRank = WRITE_ROLE_RANK[sender.role ?? ''] ?? 0;
+  const platformRole = sender.user?.role;
+  const isPlatformStaff = platformRole != null && PLATFORM_STAFF_ROLES.has(platformRole);
+  return senderRank >= requiredRank || isPlatformStaff ? ADMITTED : REFUSED('write-role-insufficient');
 }
 
 /**

@@ -9,9 +9,11 @@
  * de fil est confronté au schéma partagé (`sharedTranslationSchema`), pas à une
  * copie locale.
  *
- * Le serveur ne lit jamais ce qu'on lui confie : plusieurs témoins vérifient
+ * Le serveur n'ouvre jamais ce qu'on lui confie : plusieurs témoins vérifient
  * que l'enveloppe est gardée et relayée octet pour octet. La lecture de ce qui
- * est partagé a sa suite : `conversation-shared-translations-read.test.ts`.
+ * est partagé a sa suite (`conversation-shared-translations-read.test.ts`), ce
+ * que la conversation admet et le budget du compte la leur
+ * (`conversation-shared-translations-admission.test.ts`).
  *
  * @jest-environment node
  */
@@ -24,7 +26,10 @@ import {
   sharedTranslationSchema,
 } from '@meeshy/shared/types/shared-translation';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { SHARED_TRANSLATION_SHARE_RATE_LIMIT } from '../../../routes/conversations/shared-translations';
+import {
+  SHARED_TRANSLATION_BROADCAST_MAX_PAYLOAD,
+  SHARED_TRANSLATION_SHARE_RATE_LIMIT,
+} from '../../../routes/conversations/shared-translations';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
@@ -58,6 +63,8 @@ import {
   scene,
   share,
   shareBody,
+  type HarnessPrisma,
+  type Row,
 } from './conversation-shared-translations-harness';
 import {
   CONV_A,
@@ -162,12 +169,15 @@ describe('POST /conversations/:id/shared-translations', () => {
       expect(order).toEqual(['create', 'findUnique']);
     });
 
-    it('lit la version COURANTE : une édition ouvre un nouveau partage, sans effacer l’ancien', async () => {
+    it('range sous la version COURANTE : une édition ouvre un nouveau partage, sans effacer l’ancien', async () => {
       const stale = share({ sourceVersion: 'original' });
       const store = scene({ messages: [message({ editedAt: EDITED_AT })] });
       const h = await buildApp({ store, shares: [stale] });
 
-      const res = await post(h, shareBody({ envelope: envelope({ payload: OTHER_PAYLOAD }) }));
+      const res = await post(
+        h,
+        shareBody({ sourceVersion: EDITED_AT.toISOString(), envelope: envelope({ payload: OTHER_PAYLOAD }) }),
+      );
 
       expect(res.statusCode).toBe(201);
       expect(h.shares).toHaveLength(2);
@@ -242,9 +252,30 @@ describe('POST /conversations/:id/shared-translations', () => {
       const h = await buildApp();
       await post(h, shareBody());
 
-      const served = await get(h, { messageIds: MSG_1 });
+      const served = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
       expect(served.json().data.sharedTranslations).toEqual([h.emitted[0].payload]);
+    });
+
+    it(`diffuse une enveloppe jusqu’à ${SHARED_TRANSLATION_BROADCAST_MAX_PAYLOAD} caractères`, async () => {
+      const atTheThreshold = 'A'.repeat(SHARED_TRANSLATION_BROADCAST_MAX_PAYLOAD);
+      const h = await buildApp();
+
+      await post(h, shareBody({ envelope: envelope({ payload: atTheThreshold }) }));
+
+      expect(h.emitted.map((emission) => emission.payload.envelope)).toEqual([envelope({ payload: atTheThreshold })]);
+    });
+
+    it('range une enveloppe plus lourde sans la diffuser : la room ne porte pas ce que le GET sert à qui le demande', async () => {
+      const beyond = 'A'.repeat(SHARED_TRANSLATION_BROADCAST_MAX_PAYLOAD + 4);
+      const h = await buildApp();
+
+      const res = await post(h, shareBody({ envelope: envelope({ payload: beyond }) }));
+      const served = await get(h, { messageIds: MSG_1, languages: 'fr' });
+
+      expect(res.statusCode).toBe(201);
+      expect(h.emitted).toEqual([]);
+      expect(served.json().data.sharedTranslations.map((entry: { envelope: { payload: string } }) => entry.envelope.payload)).toEqual([beyond]);
     });
 
     it('n’émet rien quand la traduction existait déjà', async () => {
@@ -548,18 +579,23 @@ describe('POST /conversations/:id/shared-translations', () => {
   });
 
   describe('la dérivation de la clé', () => {
-    const e2eeConversation = (): Store =>
-      scene({ conversations: [conversationRow({ id: CONV_A, encryptionMode: 'e2ee' })] });
-    const e2eeMessage = (): Store =>
-      scene({ messages: [message({ isEncrypted: true, encryptionMode: 'e2ee' })] });
+    // `message-content` dérive la clé du texte du message : là seulement où le
+    // serveur lit DÉJÀ ce texte. Ailleurs, il pourrait deviner un message court
+    // en essayant d'ouvrir l'enveloppe. La règle se lit sur la PROPRIÉTÉ — le
+    // serveur lit-il ce message ? —, pas sur une étiquette exacte.
+    const refusedContentKey = async (store: Store) => {
+      const h = await buildApp({ store });
+      const res = await post(h, shareBody({ envelope: envelope({ kdf: 'message-content' }) }));
+      return { h, res };
+    };
 
     it.each([
-      ['une conversation chiffrée de bout en bout', e2eeConversation],
-      ['un message chiffré de bout en bout', e2eeMessage],
-    ])('refuse 422 `message-content` dans %s', async (_label, storeOf) => {
-      const h = await buildApp({ store: storeOf() });
-
-      const res = await post(h, shareBody({ envelope: envelope({ kdf: 'message-content' }) }));
+      ['e2ee', 'e2ee'],
+      ['écrite en majuscules', 'E2EE'],
+      ['entourée de blancs', ' e2ee '],
+      ['inconnue', 'signal-v2'],
+    ])('refuse 422 `message-content` dans une conversation dont l’étiquette de chiffrement est %s', async (_label, encryptionMode) => {
+      const { h, res } = await refusedContentKey(scene({ conversations: [conversationRow({ id: CONV_A, encryptionMode })] }));
 
       expect(res.statusCode).toBe(422);
       expect(res.json()).toMatchObject({ success: false, code: SHARED_TRANSLATION_ERROR_CODES.kdfRefused });
@@ -568,29 +604,170 @@ describe('POST /conversations/:id/shared-translations', () => {
     });
 
     it.each([
-      ['une conversation chiffrée de bout en bout', e2eeConversation],
-      ['un message chiffré de bout en bout', e2eeMessage],
-    ])('accepte `message-secret` dans %s', async (_label, storeOf) => {
-      const h = await buildApp({ store: storeOf() });
+      ['e2ee', 'e2ee'],
+      ['écrit en majuscules', 'E2EE'],
+      ['absent', null],
+      ['inconnu', 'x'],
+    ])('refuse 422 `message-content` pour un message chiffré dont le mode est %s, même dans une conversation que le serveur lit', async (_label, encryptionMode) => {
+      const { h, res } = await refusedContentKey(scene({ messages: [message({ isEncrypted: true, encryptionMode })] }));
 
-      const res = await post(h, shareBody({ envelope: envelope({ kdf: 'message-secret' }) }));
-
-      expect(res.statusCode).toBe(201);
-      expect(h.shares[0]).toMatchObject({ kdf: 'message-secret', payload: PAYLOAD });
+      expect(res.statusCode).toBe(422);
+      expect(res.json()).toMatchObject({ success: false, code: SHARED_TRANSLATION_ERROR_CODES.kdfRefused });
+      expect(h.shares).toEqual([]);
     });
 
     it.each([
       ['sans mode de chiffrement', null],
       ['chiffrée côté serveur', 'server'],
       ['hybride', 'hybrid'],
-    ])('accepte les deux dérivations dans une conversation %s', async (_label, encryptionMode) => {
-      const store = scene({ conversations: [conversationRow({ id: CONV_A, encryptionMode })] });
+    ])('accepte `message-content` dans une conversation %s', async (_label, encryptionMode) => {
+      const h = await buildApp({ store: scene({ conversations: [conversationRow({ id: CONV_A, encryptionMode })] }) });
+
+      const res = await post(h, shareBody({ envelope: envelope({ kdf: 'message-content' }) }));
+
+      expect(res.statusCode).toBe(201);
+    });
+
+    it.each([['server'], ['hybrid']])('accepte `message-content` pour un message chiffré PAR le serveur (%s)', async (encryptionMode) => {
+      const h = await buildApp({ store: scene({ messages: [message({ isEncrypted: true, encryptionMode })] }) });
+
+      const res = await post(h, shareBody({ envelope: envelope({ kdf: 'message-content' }) }));
+
+      expect(res.statusCode).toBe(201);
+    });
+
+    it.each([
+      ['une conversation chiffrée de bout en bout', () => scene({ conversations: [conversationRow({ id: CONV_A, encryptionMode: 'e2ee' })] })],
+      ['un message chiffré de bout en bout', () => scene({ messages: [message({ isEncrypted: true, encryptionMode: 'e2ee' })] })],
+      ['une conversation que le serveur lit', () => scene()],
+    ])('refuse 422 `message-secret` dans %s, tant que le message chiffré qui le transporte n’existe pas (#9959)', async (_label, storeOf) => {
+      const h = await buildApp({ store: storeOf() });
+
+      const res = await post(h, shareBody({ envelope: envelope({ kdf: 'message-secret' }) }));
+
+      expect(res.statusCode).toBe(422);
+      expect(res.json()).toMatchObject({ success: false, code: SHARED_TRANSLATION_ERROR_CODES.kdfRefused });
+      expect(h.shares).toEqual([]);
+      expect(h.emitted).toEqual([]);
+    });
+  });
+
+  describe('la version traduite', () => {
+    // L'appareil scelle la traduction d'un texte, puis la poste plus tard : si
+    // le message a été modifié entre-temps, elle ne traduit plus ce que les
+    // autres lisent — et rangée sous la version courante, elle ne s'ouvrirait
+    // jamais et prendrait la place de la bonne.
+    it('refuse 409 `SHARED_TRANSLATION_STALE_SOURCE` la traduction d’une version que le message a quittée', async () => {
+      const h = await buildApp({ store: scene({ messages: [message({ editedAt: EDITED_AT })] }) });
+
+      const res = await post(h, shareBody({ sourceVersion: 'original' }));
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ success: false, code: SHARED_TRANSLATION_ERROR_CODES.staleSource });
+      expect(h.shares).toEqual([]);
+      expect(h.emitted).toEqual([]);
+    });
+
+    it('refuse 409 une version que le message n’a jamais eue', async () => {
+      const h = await buildApp();
+
+      const res = await post(h, shareBody({ sourceVersion: EDITED_AT.toISOString() }));
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe(SHARED_TRANSLATION_ERROR_CODES.staleSource);
+    });
+
+    // Un appareil qui garde ses dates en virgule flottante, et les range dans une
+    // colonne texte à la milliseconde (GRDB, iOS), peut relire `…05:00.000` en
+    // `…04:59.999`. Deux modifications réelles ne tombent pas dans la même
+    // milliseconde, et l'enveloppe lie de toute façon l'empreinte du texte source.
+    it('admet la milliseconde d’écart d’un appareil, et range la version du SERVEUR', async () => {
+      const h = await buildApp({ store: scene({ messages: [message({ editedAt: EDITED_AT })] }) });
+
+      const res = await post(h, shareBody({ sourceVersion: new Date(EDITED_AT.getTime() - 1).toISOString() }));
+
+      expect(res.statusCode).toBe(201);
+      expect(h.shares.map((row) => row.sourceVersion)).toEqual([EDITED_AT.toISOString()]);
+    });
+
+    it('refuse 409 au-delà de la milliseconde, dans les deux sens', async () => {
+      const h = await buildApp({ store: scene({ messages: [message({ editedAt: EDITED_AT })] }) });
+
+      const statuses = [];
+      for (const offset of [-2, 2]) {
+        const res = await post(h, shareBody({ sourceVersion: new Date(EDITED_AT.getTime() + offset).toISOString() }));
+        statuses.push(res.statusCode);
+      }
+
+      expect(statuses).toEqual([409, 409]);
+      expect(h.shares).toEqual([]);
+    });
+
+    it('juge le droit de LIRE avant la version : un message qu’on ne lit pas reste un 404', async () => {
+      const store = scene({
+        messages: [message({ editedAt: EDITED_AT })],
+        participants: [
+          participantRow({ id: SHARER, userId: USER_ID, historyVisibleFrom: AFTER_THE_MESSAGE }),
+          participantRow({ id: PEER, userId: OTHER_USER_ID }),
+        ],
+      });
       const h = await buildApp({ store });
 
-      const contentKey = await post(h, shareBody({ targetLanguage: 'fr', envelope: envelope({ kdf: 'message-content' }) }));
-      const secretKey = await post(h, shareBody({ targetLanguage: 'es', envelope: envelope({ kdf: 'message-secret' }) }));
+      const res = await post(h, shareBody({ sourceVersion: 'original' }));
 
-      expect([contentKey.statusCode, secretKey.statusCode]).toEqual([201, 201]);
+      expect(res.statusCode).toBe(404);
+      expect(res.json().code).toBeUndefined();
+    });
+  });
+
+  describe('la course avec les écrivains', () => {
+    // Un écrivain efface les traductions partagées APRÈS avoir écrit
+    // (`sharedTranslationErasure`). Un partage validé avant son écriture, et rangé
+    // après son effacement, lui survivrait : la ligne d'un message supprimé
+    // resterait en base pour toujours.
+    const committedDuringPlacement =
+      (store: Store, change: Row, withdrawal: 'up' | 'down' = 'up') =>
+      (prisma: HarnessPrisma) => ({
+        ...prisma,
+        sharedTranslation: {
+          ...prisma.sharedTranslation,
+          create: async (args: { data: Row }) => {
+            Object.assign(store.messages[0], change);
+            return prisma.sharedTranslation.create(args);
+          },
+          deleteMany: async (args: { where: Row }) => {
+            if (withdrawal === 'down') throw new Error('mongo down');
+            return prisma.sharedTranslation.deleteMany(args);
+          },
+        },
+      });
+
+    it.each([
+      ['une édition', { editedAt: EDITED_AT }, 409, SHARED_TRANSLATION_ERROR_CODES.staleSource],
+      ['une suppression', { deletedAt: AFTER_THE_MESSAGE }, 404, undefined],
+      ['une protection', { isBlurred: true }, 422, SHARED_TRANSLATION_ERROR_CODES.protectedMessage],
+    ])('retire SA ligne et ne diffuse rien quand %s se glisse entre la validation et le rangement', async (_label, change, status, code) => {
+      const store = scene();
+      const anotherLanguage = share({ targetLanguage: 'de' });
+      const h = await buildApp({ store, shares: [anotherLanguage], prismaOverrides: committedDuringPlacement(store, change) });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(status);
+      expect(res.json().code).toBe(code);
+      expect(h.shares).toEqual([anotherLanguage]);
+      expect(h.emitted).toEqual([]);
+    });
+
+    it('refuse quand même si le retrait échoue : la ligne d’une version quittée n’est jamais servie', async () => {
+      const store = scene();
+      const h = await buildApp({ store, prismaOverrides: committedDuringPlacement(store, { editedAt: EDITED_AT }, 'down') });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(409);
+      expect(h.shares.map((row) => row.sourceVersion)).toEqual(['original']);
+      expect(h.emitted).toEqual([]);
     });
   });
 
@@ -603,7 +780,13 @@ describe('POST /conversations/:id/shared-translations', () => {
       ['avec une version d’enveloppe inconnue', shareBody({ envelope: envelope({ v: 2 }) })],
       ['avec un algorithme inconnu', shareBody({ envelope: envelope({ alg: 'A128GCM' }) })],
       ['avec une dérivation inconnue', shareBody({ envelope: envelope({ kdf: 'password' }) })],
+      ['sans version traduite', { messageId: MSG_1, targetLanguage: 'fr', envelope: envelope() }],
+      ['avec une version traduite qui n’est ni `original` ni un instant ISO', shareBody({ sourceVersion: '2026-09-20' })],
       ['avec une charge qui n’est pas du base64', shareBody({ envelope: envelope({ payload: `${'!'.repeat(60)}` }) })],
+      [
+        'avec une charge base64 privée de son remplissage',
+        shareBody({ envelope: envelope({ payload: Buffer.from(Array.from({ length: 61 }, (_, index) => index)).toString('base64').replace(/=+$/, '') }) }),
+      ],
       ['avec une charge trop courte pour contenir un nonce et un tag', shareBody({ envelope: envelope({ payload: 'QUJD' }) })],
       [
         'avec une charge au-delà de la borne',

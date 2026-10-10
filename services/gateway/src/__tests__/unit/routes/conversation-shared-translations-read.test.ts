@@ -3,9 +3,15 @@
  * membres ont partagées, scellées, lues par un autre membre (#9899).
  *
  * Même base en mémoire que l'écriture (`conversation-shared-translations-harness.ts`) :
- * elle évalue les `where`, donc ces témoins tombent quand la requête cesse de
- * restreindre aux versions courantes, aux messages lisibles et aux langues
- * demandées — pas seulement quand le handler cesse d'appeler.
+ * elle évalue les `where`, trie selon `orderBy` et ne rend que les colonnes d'un
+ * `select`, donc ces témoins tombent quand la requête cesse de restreindre aux
+ * versions courantes, aux messages lisibles et aux langues demandées — ou quand
+ * la route sert une enveloppe qu'elle n'a pas lue.
+ *
+ * `languages` est le prisme du lecteur, dans son ordre, et il est obligatoire :
+ * la route rend au plus UNE traduction par message, la première de ces langues
+ * qu'un membre a partagée. Elle lit d'abord QUI a partagé quoi, sans les
+ * enveloppes, puis les seules enveloppes qu'elle sert.
  *
  * Ce qui ne doit JAMAIS partir : la traduction d'un message qu'on ne lit pas
  * (supprimé, protégé, antérieur au plancher d'historique, retiré de sa vue,
@@ -23,6 +29,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   performanceLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
 }));
 
+import { SHARED_TRANSLATION_READ_RATE_LIMIT } from '../../../routes/conversations/shared-translations';
 import {
   EDITED_AT,
   GUEST,
@@ -43,6 +50,7 @@ import {
   registeredAs,
   scene,
   share,
+  type Harness,
   type Row,
 } from './conversation-shared-translations-harness';
 import {
@@ -56,14 +64,14 @@ import {
   participantRow,
 } from './me/starred-messages-harness';
 
-describe('GET /conversations/:id/shared-translations', () => {
-  const idsOf = (res: { json: () => { data: { sharedTranslations: Array<{ messageId: string; targetLanguage: string }> } } }) =>
-    res.json().data.sharedTranslations.map((entry) => `${entry.messageId}:${entry.targetLanguage}`).sort();
+const idsOf = (res: { json: () => { data: { sharedTranslations: Array<{ messageId: string; targetLanguage: string }> } } }) =>
+  res.json().data.sharedTranslations.map((entry) => `${entry.messageId}:${entry.targetLanguage}`).sort();
 
+describe('GET /conversations/:id/shared-translations', () => {
   it('sert la traduction partagée à tout membre qui lit le message, sous le contrat de fil', async () => {
     const h = await buildApp({ shares: [share({ sharedById: PEER })] });
 
-    const res = await get(h, { messageIds: MSG_1 });
+    const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
     expect(res.statusCode).toBe(200);
     const { sharedTranslations } = res.json().data;
@@ -89,7 +97,7 @@ describe('GET /conversations/:id/shared-translations', () => {
     ];
     const h = await buildApp({ store, shares });
 
-    const res = await get(h, { messageIds: `${MSG_1},${MSG_2}` });
+    const res = await get(h, { messageIds: `${MSG_1},${MSG_2}`, languages: 'fr,es' });
 
     expect(idsOf(res)).toEqual([`${MSG_1}:fr`, `${MSG_2}:es`]);
   });
@@ -98,41 +106,55 @@ describe('GET /conversations/:id/shared-translations', () => {
     const store = scene({ messages: [message({ editedAt: EDITED_AT })] });
     const h = await buildApp({ store, shares: [share({ sourceVersion: 'original' })] });
 
-    const res = await get(h, { messageIds: MSG_1 });
+    const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
     expect(res.json().data.sharedTranslations).toEqual([]);
   });
 
-  describe('le filtre par langues', () => {
+  describe('le prisme du lecteur : UNE traduction par message, la première de ses langues partagée', () => {
     const shares = () => [
-      share({ id: '68d000000000000000000001', targetLanguage: 'fr' }),
-      share({ id: '68d000000000000000000002', targetLanguage: 'es' }),
-      share({ id: '68d000000000000000000003', targetLanguage: 'de' }),
+      share({ id: '68d000000000000000000001', targetLanguage: 'fr', createdAt: new Date('2026-09-20T12:00:00.000Z') }),
+      share({ id: '68d000000000000000000002', targetLanguage: 'es', createdAt: new Date('2026-09-20T11:00:00.000Z') }),
+      share({ id: '68d000000000000000000003', targetLanguage: 'de', createdAt: new Date('2026-09-20T11:30:00.000Z') }),
     ];
 
     it.each([
-      ['une langue', 'fr', [`${MSG_1}:fr`]],
-      ['deux langues', 'fr,es', [`${MSG_1}:es`, `${MSG_1}:fr`]],
+      ['la langue demandée', 'fr', [`${MSG_1}:fr`]],
+      ['la PREMIÈRE langue du prisme, même partagée après une autre', 'fr,es', [`${MSG_1}:fr`]],
+      ['la première langue du prisme, dans l’ordre du lecteur', 'es,fr', [`${MSG_1}:es`]],
+      ['la langue suivante du prisme quand la première n’a rien', 'ja,de', [`${MSG_1}:de`]],
       ['une langue étiquetée avec sa région', 'es-MX', [`${MSG_1}:es`]],
       ['une langue en majuscules', 'DE', [`${MSG_1}:de`]],
-      ['une langue sans traduction partagée', 'ja', []],
-    ])('ne sert que %s demandée', async (_label, languages, expected) => {
+      ['rien quand aucune langue du prisme n’a été partagée', 'ja', []],
+    ])('sert %s', async (_label, languages, expected) => {
       const h = await buildApp({ shares: shares() });
 
       const res = await get(h, { messageIds: MSG_1, languages });
 
+      expect(res.statusCode).toBe(200);
       expect(idsOf(res)).toEqual(expected);
     });
 
     it.each([
-      ['absent', undefined],
-      ['vide', ''],
-    ])('sert toutes les langues quand le filtre est %s', async (_label, languages) => {
+      ['absent', { messageIds: MSG_1 }],
+      ['vide', { messageIds: MSG_1, languages: '' }],
+      ['fait de séparateurs', { messageIds: MSG_1, languages: ' , ,' }],
+    ])('refuse 400 un prisme %s, sans rien lire : le lecteur dit ce qu’il lit', async (_label, query) => {
       const h = await buildApp({ shares: shares() });
 
-      const res = await get(h, languages === undefined ? { messageIds: MSG_1 } : { messageIds: MSG_1, languages });
+      const res = await get(h, query);
 
-      expect(idsOf(res)).toEqual([`${MSG_1}:de`, `${MSG_1}:es`, `${MSG_1}:fr`]);
+      expect(res.statusCode).toBe(400);
+      expect(h.reads).toEqual([]);
+    });
+
+    it('garde une traduction par MESSAGE : la même langue sur deux messages reste deux', async () => {
+      const store = scene({ messages: [message(), message({ id: MSG_2 })] });
+      const h = await buildApp({ store, shares: [share(), share({ id: '68d000000000000000000003', messageId: MSG_2 })] });
+
+      const res = await get(h, { messageIds: `${MSG_1},${MSG_2}`, languages: 'fr' });
+
+      expect(idsOf(res)).toEqual([`${MSG_1}:fr`, `${MSG_2}:fr`]);
     });
   });
 
@@ -143,7 +165,7 @@ describe('GET /conversations/:id/shared-translations', () => {
       share({ id: '68d000000000000000000003', messageId: MSG_3 }),
       share({ id: '68d000000000000000000004', messageId: MSG_OTHER_CONVERSATION, conversationId: CONV_B }),
     ];
-    const ask = `${MSG_1},${MSG_2},${MSG_3},${MSG_OTHER_CONVERSATION},${UNKNOWN_MESSAGE}`;
+    const ask = { messageIds: `${MSG_1},${MSG_2},${MSG_3},${MSG_OTHER_CONVERSATION},${UNKNOWN_MESSAGE}`, languages: 'fr' };
 
     it.each([
       [
@@ -163,7 +185,7 @@ describe('GET /conversations/:id/shared-translations', () => {
     ])('écarte %s', async (_label, storeOf) => {
       const h = await buildApp({ store: storeOf(), shares: everywhere() });
 
-      const res = await get(h, { messageIds: ask });
+      const res = await get(h, ask);
 
       expect(res.statusCode).toBe(200);
       expect(idsOf(res)).toEqual([`${MSG_1}:fr`, `${MSG_3}:fr`]);
@@ -183,7 +205,7 @@ describe('GET /conversations/:id/shared-translations', () => {
       });
       const h = await buildApp({ store, shares: everywhere() });
 
-      const res = await get(h, { messageIds: ask });
+      const res = await get(h, ask);
 
       expect(idsOf(res)).toEqual([`${MSG_2}:fr`, `${MSG_3}:fr`]);
     });
@@ -194,7 +216,7 @@ describe('GET /conversations/:id/shared-translations', () => {
       });
       const h = await buildApp({ store, shares: everywhere() });
 
-      const res = await get(h, { messageIds: ask });
+      const res = await get(h, ask);
 
       expect(idsOf(res)).toEqual([`${MSG_1}:fr`]);
     });
@@ -208,7 +230,7 @@ describe('GET /conversations/:id/shared-translations', () => {
       });
       const h = await buildApp({ store, shares: [share()] });
 
-      const res = await get(h, { messageIds: MSG_1 });
+      const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
       expect(res.json().data.sharedTranslations).toEqual([]);
     });
@@ -216,7 +238,7 @@ describe('GET /conversations/:id/shared-translations', () => {
     it('répond 500 et ne sert rien quand le masquage personnel de l’appelant ne répond pas — jamais « il ne masque rien »', async () => {
       const h = await buildApp({ shares: [share()], prismaOverrides: personalHidingLookupDown });
 
-      const res = await get(h, { messageIds: MSG_1 });
+      const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
       expect(res.statusCode).toBe(500);
       expect(res.json().data).toBeUndefined();
@@ -228,46 +250,72 @@ describe('GET /conversations/:id/shared-translations', () => {
       });
       const h = await buildApp({ store, authContext: guestAs(GUEST), shares: [share()] });
 
-      const res = await get(h, { messageIds: MSG_1 });
+      const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
       expect(idsOf(res)).toEqual([`${MSG_1}:fr`]);
     });
   });
 
   describe('le coût de la lecture', () => {
-    it('lit les traductions en une requête BORNÉE, restreinte à la conversation et aux versions courantes', async () => {
+    it('lit d’abord QUI a partagé quoi, sans les enveloppes, en une requête BORNÉE et ORDONNÉE', async () => {
       const h = await buildApp({ shares: [share()] });
 
       await get(h, { messageIds: MSG_1, languages: 'fr' });
 
-      expect(h.reads).toHaveLength(1);
-      expect(h.reads[0].take).toBe(SHARED_TRANSLATION_LIMITS.messageIdsMaxCount * SHARED_TRANSLATION_LIMITS.languagesMaxCount);
-      expect(h.reads[0].where).toMatchObject({
+      const [inventory] = h.reads;
+      expect(inventory.take).toBe(SHARED_TRANSLATION_LIMITS.messageIdsMaxCount * SHARED_TRANSLATION_LIMITS.languagesMaxCount);
+      expect(inventory.orderBy).toEqual([{ createdAt: 'asc' }, { id: 'asc' }]);
+      expect(inventory.where).toMatchObject({
         conversationId: CONV_A,
         OR: [{ messageId: MSG_1, sourceVersion: 'original' }],
         targetLanguage: { in: ['fr'] },
       });
+      expect(inventory.select).toBeDefined();
+      expect(inventory.select?.payload).not.toBe(true);
+    });
+
+    it('ne lit ensuite que les enveloppes qu’elle SERT — jamais celles d’une langue que le prisme écarte', async () => {
+      const shares = [
+        share({ id: '68d000000000000000000001', targetLanguage: 'fr' }),
+        share({ id: '68d000000000000000000002', targetLanguage: 'es' }),
+      ];
+      const h = await buildApp({ shares });
+
+      await get(h, { messageIds: MSG_1, languages: 'fr,es' });
+
+      expect(h.reads).toHaveLength(2);
+      expect(h.reads[1].where).toEqual({ id: { in: ['68d000000000000000000001'] }, conversationId: CONV_A });
+    });
+
+    it('ne lit aucune enveloppe quand rien n’a été partagé', async () => {
+      const h = await buildApp({ shares: [] });
+
+      const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
+
+      expect(res.json().data.sharedTranslations).toEqual([]);
+      expect(h.reads).toHaveLength(1);
     });
 
     it('ne lit aucune traduction quand aucun message demandé n’est lisible', async () => {
       const h = await buildApp({ store: scene({ messages: [message({ isViewOnce: true })] }), shares: [share()] });
 
-      const res = await get(h, { messageIds: MSG_1 });
+      const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
       expect(res.json().data.sharedTranslations).toEqual([]);
       expect(h.reads).toEqual([]);
     });
 
     it('sert dans un ordre stable : la première partagée d’abord', async () => {
+      const store = scene({ messages: [message(), message({ id: MSG_2 })] });
       const shares = [
-        share({ id: '68d000000000000000000002', targetLanguage: 'es', createdAt: new Date('2026-09-20T12:00:00.000Z') }),
-        share({ id: '68d000000000000000000001', targetLanguage: 'fr', createdAt: new Date('2026-09-20T11:00:00.000Z') }),
+        share({ id: '68d000000000000000000002', messageId: MSG_1, createdAt: new Date('2026-09-20T12:00:00.000Z') }),
+        share({ id: '68d000000000000000000001', messageId: MSG_2, createdAt: new Date('2026-09-20T11:00:00.000Z') }),
       ];
-      const h = await buildApp({ shares });
+      const h = await buildApp({ store, shares });
 
-      const res = await get(h, { messageIds: MSG_1 });
+      const res = await get(h, { messageIds: `${MSG_1},${MSG_2}`, languages: 'fr' });
 
-      expect(res.json().data.sharedTranslations.map((entry: { targetLanguage: string }) => entry.targetLanguage)).toEqual(['fr', 'es']);
+      expect(res.json().data.sharedTranslations.map((entry: { messageId: string }) => entry.messageId)).toEqual([MSG_2, MSG_1]);
     });
   });
 
@@ -280,7 +328,7 @@ describe('GET /conversations/:id/shared-translations', () => {
     it('sert la PREMIÈRE partagée quand deux lignes portent la même clé — l’index unique se pose à la main et peut manquer', async () => {
       const h = await buildApp({ shares: twoShares() });
 
-      const res = await get(h, { messageIds: MSG_1 });
+      const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
       const { sharedTranslations } = res.json().data;
       expect(sharedTranslations).toHaveLength(1);
@@ -295,28 +343,9 @@ describe('GET /conversations/:id/shared-translations', () => {
       ];
       const h = await buildApp({ shares });
 
-      const res = await get(h, { messageIds: MSG_1 });
+      const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
       expect(res.json().data.sharedTranslations.map((entry: { id: string }) => entry.id)).toEqual(['68d000000000000000000004']);
-    });
-
-    it('garde une traduction par LANGUE : deux langues d’un même message restent deux', async () => {
-      const shares = [...twoShares(), share({ id: '68d000000000000000000003', targetLanguage: 'es' })];
-      const h = await buildApp({ shares });
-
-      const res = await get(h, { messageIds: MSG_1 });
-
-      expect(idsOf(res)).toEqual([`${MSG_1}:es`, `${MSG_1}:fr`]);
-    });
-
-    it('garde une traduction par MESSAGE : la même langue sur deux messages reste deux', async () => {
-      const store = scene({ messages: [message(), message({ id: MSG_2 })] });
-      const shares = [...twoShares(), share({ id: '68d000000000000000000003', messageId: MSG_2 })];
-      const h = await buildApp({ store, shares });
-
-      const res = await get(h, { messageIds: `${MSG_1},${MSG_2}` });
-
-      expect(idsOf(res)).toEqual([`${MSG_1}:fr`, `${MSG_2}:fr`]);
     });
   });
 
@@ -324,7 +353,7 @@ describe('GET /conversations/:id/shared-translations', () => {
     it('refuse 403 à qui ne participe pas à la conversation', async () => {
       const h = await buildApp({ authContext: registeredAs(OUTSIDER_USER), shares: [share()] });
 
-      const res = await get(h, { messageIds: MSG_1 });
+      const res = await get(h, { messageIds: MSG_1, languages: 'fr' });
 
       expect(res.statusCode).toBe(403);
       expect(h.reads).toEqual([]);
@@ -333,18 +362,24 @@ describe('GET /conversations/:id/shared-translations', () => {
     it('refuse 404 quand la conversation n’existe pas', async () => {
       const h = await buildApp();
 
-      const res = await get(h, { messageIds: MSG_1 }, UNKNOWN_CONVERSATION);
+      const res = await get(h, { messageIds: MSG_1, languages: 'fr' }, UNKNOWN_CONVERSATION);
 
       expect(res.statusCode).toBe(404);
     });
 
     it.each([
-      ['sans identifiant de message', {}],
-      ['avec un identifiant de message vide', { messageIds: '' }],
-      ['avec un identifiant qui n’est pas un ObjectId', { messageIds: 'not-an-object-id' }],
+      ['sans identifiant de message', { languages: 'fr' }],
+      ['avec un identifiant de message vide', { messageIds: '', languages: 'fr' }],
+      ['avec un identifiant qui n’est pas un ObjectId', { messageIds: 'not-an-object-id', languages: 'fr' }],
       [
         `avec plus de ${SHARED_TRANSLATION_LIMITS.messageIdsMaxCount} messages`,
-        { messageIds: Array.from({ length: SHARED_TRANSLATION_LIMITS.messageIdsMaxCount + 1 }, (_, index) => `68b0000000000000000003${index.toString(16).padStart(2, '0')}`).join(',') },
+        {
+          messageIds: Array.from(
+            { length: SHARED_TRANSLATION_LIMITS.messageIdsMaxCount + 1 },
+            (_, index) => `68b0000000000000000003${index.toString(16).padStart(2, '0')}`,
+          ).join(','),
+          languages: 'fr',
+        },
       ],
       [
         `avec plus de ${SHARED_TRANSLATION_LIMITS.languagesMaxCount} langues`,
@@ -359,5 +394,50 @@ describe('GET /conversations/:id/shared-translations', () => {
       expect(res.statusCode).toBe(400);
       expect(h.reads).toEqual([]);
     });
+  });
+});
+
+describe('GET /conversations/:id/shared-translations — le débit de lecture compte le COMPTE', () => {
+  const account = (headers: Record<string, unknown>) =>
+    registeredAs(headers['x-account'] === 'peer' ? OTHER_USER_ID : USER_ID);
+  const getAs = (h: Harness, who: 'reader' | 'peer') =>
+    h.app.inject({
+      method: 'GET',
+      url: `/conversations/${CONV_A}/shared-translations`,
+      query: { messageIds: MSG_1, languages: 'fr' },
+      headers: { 'x-account': who },
+    });
+
+  it('refuse 429 au-delà du plafond par minute, sans entamer le crédit d’un autre membre venu de la même adresse', async () => {
+    const h = await buildApp({ authContextFor: account, rateLimit: { skipOnError: true }, shares: [share()] });
+
+    const statuses = [];
+    for (let sent = 0; sent < SHARED_TRANSLATION_READ_RATE_LIMIT.max; sent += 1) {
+      statuses.push((await getAs(h, 'reader')).statusCode);
+    }
+    const beyond = await getAs(h, 'reader');
+    const otherMember = await getAs(h, 'peer');
+
+    expect(statuses.every((status) => status === 200)).toBe(true);
+    expect(beyond.statusCode).toBe(429);
+    expect(beyond.json()).toMatchObject({ success: false });
+    expect(otherMember.statusCode).toBe(200);
+  });
+
+  it('répond 500 quand le magasin de compteurs tombe, même sous un limiteur global qui laisserait passer', async () => {
+    class StoreDown {
+      child(): StoreDown {
+        return new StoreDown();
+      }
+      incr(_key: string, callback: (error: Error) => void): void {
+        callback(new Error('Redis indisponible'));
+      }
+    }
+    const h = await buildApp({ authContextFor: account, rateLimit: { skipOnError: true, store: StoreDown }, shares: [share()] });
+
+    const res = await getAs(h, 'reader');
+
+    expect(res.statusCode).toBe(500);
+    expect(h.reads).toEqual([]);
   });
 });
