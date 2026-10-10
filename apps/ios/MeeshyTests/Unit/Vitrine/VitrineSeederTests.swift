@@ -87,18 +87,44 @@ final class VitrineSeederTests: XCTestCase {
     }
 
     /// Un genre qu'un kit plus récent émet ne fait tomber ni le décodage ni la vitrine : le média seul est ignoré.
+    /// La scène de la story (#9904) range le bandeau sous la clé que `StoryViewModel.loadStories` lit d'abord : le groupe
+    /// de l'auteur de la story, jamais celui du lecteur.
+    func test_rangerLesStories_theStoryScene_storesTheAuthorsGroupUnderTheTrayKey() async throws {
+        let f = try fixtures()
+        let cibles = CiblesEnregistreuses()
+        try await VitrineSeeder.rangerLesStories(f, pour: .interactionStory, dans: cibles)
+
+        XCTAssertEqual(cibles.cleDesStories, StoryViewModel.storiesCacheKey)
+        let groupe = try XCTUnwrap(cibles.stories?.first)
+        XCTAssertEqual(cibles.stories?.count, 1)
+        XCTAssertEqual(groupe.id, f.stories?.first?.author.id)
+        XCTAssertNotEqual(groupe.id, f.lecteur.id)
+        XCTAssertEqual(groupe.stories.map(\.id), f.stories?.map(\.id))
+    }
+
+    /// Une prise de la story laisserait sa bague dans le bandeau des prises suivantes : toute autre scène le VIDE.
+    func test_rangerLesStories_anyOtherScene_emptiesTheTray() async throws {
+        let f = try fixtures()
+        let cibles = CiblesEnregistreuses()
+        try await VitrineSeeder.rangerLesStories(f, pour: .interactionDefilement, dans: cibles)
+
+        XCTAssertEqual(cibles.cleDesStories, StoryViewModel.storiesCacheKey)
+        XCTAssertEqual(cibles.stories?.count, 0)
+    }
+
     func test_unknownMediaGenre_isIgnored_neverFatal() async throws {
         let json = try XCTUnwrap(String(data: Data(contentsOf: echantillon), encoding: .utf8))
             .replacingOccurrences(of: "\"genre\": \"video\"", with: "\"genre\": \"hologramme\"")
         let f = try VitrineFixtures.decoder(Data(json.utf8))
-        let inconnu = try XCTUnwrap(f.medias.first { $0.genre == .inconnu })
+        let inconnus = f.medias.filter { $0.genre == .inconnu }
+        XCTAssertFalse(inconnus.isEmpty)
         let dossier = try Self.dossierDeMedias(f)
-        try FileManager.default.removeItem(at: dossier.appendingPathComponent(inconnu.fichier))
+        for inconnu in inconnus { try FileManager.default.removeItem(at: dossier.appendingPathComponent(inconnu.fichier)) }
         let cibles = CiblesEnregistreuses()
 
         try await VitrineSeeder.remplirLesCaches(f, medias: dossier, dans: cibles)
 
-        XCTAssertEqual(cibles.medias.count, f.medias.count - 1)
+        XCTAssertEqual(cibles.medias.count, f.medias.count - inconnus.count)
         XCTAssertFalse(cibles.medias.contains { $0.genre == .inconnu })
     }
 
@@ -196,6 +222,8 @@ private final class CiblesEnregistreuses: VitrineSeedTargets {
     private(set) var medias: [MediaRange] = []
     private(set) var fil: [FeedPost] = []
     private(set) var cleDuFil: String?
+    private(set) var stories: [StoryGroup]?
+    private(set) var cleDesStories: String?
 
     func enregistrerConversations(_ conversations: [MeeshyConversation]) async throws { self.conversations = conversations }
     func enregistrerMessages(_ messages: [APIMessage], langues: [String]) async throws { languesParLot.append(langues) }
@@ -212,6 +240,10 @@ private final class CiblesEnregistreuses: VitrineSeedTargets {
         fil = posts
         cleDuFil = cle
     }
+    func enregistrerStories(_ groupes: [StoryGroup], cle: String) async throws {
+        stories = groupes
+        cleDesStories = cle
+    }
 }
 
 @MainActor
@@ -226,4 +258,5 @@ private struct CiblesMessagesReels: VitrineSeedTargets {
     func fixerModeDeLecture(_ mode: ReadingModeOrchestrator.ConversationReadingMode, conversationId: String, userId: String) {}
     func enregistrerMedia(_ fichier: URL, genre: VitrineFixtures.Media.Genre, cle: String) async {}
     func enregistrerFil(_ posts: [FeedPost], cle: String) async throws {}
+    func enregistrerStories(_ groupes: [StoryGroup], cle: String) async throws {}
 }

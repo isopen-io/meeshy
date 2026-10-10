@@ -102,6 +102,13 @@ struct ReelsPlayerView: View {
         .offset(x: ReadingDirection.readingDelta(max(0, edgeDrag), layoutDirection: layoutDirection))
         .task {
             viewModel.seed(posts: seedPosts, startId: startId)
+            #if DEBUG
+            // La vitrine (#9904) : le passage au réel suivant, par la même liaison que le pager — comme le pouce.
+            VitrineRendu.shared.lecteurDeReelsAffiche { [viewModel] in
+                guard let rang = viewModel.currentIndex, viewModel.reels.indices.contains(rang + 1) else { return }
+                withAnimation(.easeInOut(duration: 0.45)) { viewModel.currentId = viewModel.reels[rang + 1].id }
+            }
+            #endif
             // Le réel affiché est CONSOMMÉ : ses notifications (nouveau réel,
             // commentaires, réactions) ne doivent plus apparaître non lues, et
             // `activePostId` fait naître consommées celles qui arrivent pendant

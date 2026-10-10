@@ -50,6 +50,17 @@ nonisolated struct VitrineFixtures: Decodable, Sendable {
     let modesDeLecture: [String: String]
     let medias: [Media]
     let posts: [APIPost]
+    /// Les réels drôles que la scène `interaction-defilement` fait défiler (#9904) — absents d'un kit plus ancien.
+    let reels: [APIPost]?
+    /// La story que la scène `interaction-story` ouvre (#9904) — absente d'un kit plus ancien.
+    let stories: [APIPost]?
+    /// Les conversations qu'une scène AJOUTE à la liste (#9904) — « Dis-moi tout », les conversations de SAV : les autres
+    /// scènes ne les montrent pas.
+    let conversationsDeScene: [String: [APIConversation]]?
+    /// Le lien de SAV par lequel un client arrive sans compte (#9904).
+    let lienSav: ShareLinkInfo?
+    /// Les liens d'affiliation du lecteur, leurs clics et leurs inscrits, que « Mes liens » montre (#9904).
+    let liensDAffiliation: [AffiliateToken]?
     let scenes: [String: Destination]
 
     func destination(_ scene: VitrineScene) -> Destination? {
@@ -59,8 +70,8 @@ nonisolated struct VitrineFixtures: Decodable, Sendable {
     /// Les conversations telles que la vitrine les range et les ouvre : sans mode de chiffrement.
     /// `toConversation` en pose un sur toute conversation directe ; la traduction serveur est coupée
     /// en E2EE, et un cadenas sur un écran traduit est hors champ (spec § 2).
-    func conversationsServies() -> [MeeshyConversation] {
-        conversations.map { api in
+    func conversationsServies(pour scene: VitrineScene? = nil) -> [MeeshyConversation] {
+        (conversations + (scene.flatMap { conversationsDeScene?[$0.rawValue] } ?? [])).map { api in
             var conversation = api.toConversation(currentUserId: lecteur.id)
             conversation.encryptionMode = nil
             return conversation
